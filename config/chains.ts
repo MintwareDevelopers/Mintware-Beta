@@ -1,4 +1,4 @@
-import { mainnet, base } from 'wagmi/chains'
+import { mainnet, base, arbitrum } from 'wagmi/chains'
 import type { Chain } from 'viem'
 
 export const coreChain: Chain = {
@@ -41,6 +41,14 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     feeBps: 10,
     name: 'Base',
     logoUrl: '/chains/base.svg',
+  },
+  {
+    chain: arbitrum,
+    swapProvider: '0x',
+    feeRecipient: process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS || '',
+    feeBps: 10,
+    name: 'Arbitrum',
+    logoUrl: '/chains/arbitrum.svg',
   },
   {
     chain: coreChain,

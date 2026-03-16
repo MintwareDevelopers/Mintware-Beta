@@ -3,9 +3,10 @@
   "configurations": [
     {
       "name": "mintware-phase1",
-      "runtimeExecutable": "/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin/node",
-      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "--port", "3001"],
-      "port": 3001
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && node node_modules/next/dist/bin/next dev"],
+      "port": 3000,
+      "autoPort": true
     }
   ]
 }

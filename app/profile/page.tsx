@@ -72,208 +72,317 @@ function ProfileContent() {
   const maxScore = data?.signals?.reduce((s, sig) => s + sig.max, 0) ?? 925
 
   return (
-    <div className="p-wrap">
-      {/* Header */}
-      <div className="p-header">
-        <div className="p-identity">
-          <div className="p-avatar">
-            {avatarLetter}
-            {score > 0 && <div className="p-score-badge">{score}</div>}
-          </div>
-          <div className="p-info">
-            <div className="p-name">
-              {shortAddr(wallet)}
-              {data && <span className="p-name-badge">{tier} tier</span>}
+    <div className="min-h-screen">
+      {/* Dark hero header */}
+      <div className="mw-grid-overlay bg-mw-ink relative overflow-hidden pt-9 animate-fade-up max-sm:pt-6">
+        <div className="absolute top-[-60px] right-[10%] w-[320px] h-[320px] rounded-full bg-[radial-gradient(circle,rgba(0,82,255,0.2)_0%,transparent_65%)] pointer-events-none" />
+        <div className="max-w-[960px] mx-auto px-12 max-sm:px-5">
+          <div className="flex items-start gap-[22px] pb-7 relative max-sm:flex-wrap">
+            <div className="w-[82px] h-[82px] rounded-[20px] bg-[rgba(255,255,255,0.07)] border-[1.5px] border-[rgba(255,255,255,0.12)] flex items-center justify-center text-[36px] font-bold text-[rgba(255,255,255,0.9)] shrink-0 relative font-[var(--font-mono),'DM_Mono',monospace]">
+              {avatarLetter}
+              {score > 0 && (
+                <div className="absolute bottom-[-1px] right-[-1px] bg-mw-brand text-white font-[var(--font-mono),'DM_Mono',monospace] text-[10px] font-semibold px-2 py-[3px] rounded-[8px_0_8px_0] whitespace-nowrap">
+                  {score}
+                </div>
+              )}
             </div>
-            <div className="p-addr">
-              {wallet}
-              <span className="p-addr-copy" onClick={copyAddress}>{copied ? 'copied!' : 'copy'}</span>
+            <div className="flex-1 pt-1">
+              <div className="text-[22px] font-bold text-[rgba(255,255,255,0.92)] tracking-[-0.5px] flex items-center gap-2 flex-wrap mb-1.5">
+                {shortAddr(wallet)}
+                {data && (
+                  <span className="text-[10px] font-semibold bg-[rgba(0,82,255,0.2)] text-[#6b9fff] px-2.5 py-[3px] rounded-full border border-[rgba(0,82,255,0.3)] tracking-[0.3px] whitespace-nowrap">
+                    {tier} tier
+                  </span>
+                )}
+              </div>
+              <div className="font-[var(--font-mono),'DM_Mono',monospace] text-[11px] text-[rgba(255,255,255,0.28)] mb-3 flex items-center gap-2 flex-wrap break-all">
+                {wallet}
+                <span
+                  className="bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.1)] rounded px-2 py-px text-[10px] cursor-pointer text-[rgba(255,255,255,0.4)] shrink-0 transition-all duration-150 hover:text-mw-brand hover:border-[rgba(0,82,255,0.4)] hover:bg-[rgba(0,82,255,0.08)]"
+                  onClick={copyAddress}
+                >
+                  {copied ? 'copied ✓' : 'copy'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {data?.walletAge && (
+                  <span className="bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] rounded-full px-3 py-1 text-[11px] text-[rgba(255,255,255,0.45)] flex items-center gap-[5px]">
+                    📅 {data.walletAge} old
+                  </span>
+                )}
+                {data?.chains != null && (
+                  <span className="bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] rounded-full px-3 py-1 text-[11px] text-[rgba(255,255,255,0.45)] flex items-center gap-[5px]">
+                    🔗 {data.chains} chains
+                  </span>
+                )}
+                {data?.totalTxCount != null && (
+                  <span className="bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] rounded-full px-3 py-1 text-[11px] text-[rgba(255,255,255,0.45)] flex items-center gap-[5px]">
+                    ⚡ {data.totalTxCount} txns
+                  </span>
+                )}
+                {data?.percentile != null && (
+                  <span className="bg-[rgba(0,82,255,0.15)] border border-[rgba(0,82,255,0.25)] text-[#6b9fff] rounded-full px-3 py-1 text-[11px] flex items-center gap-[5px]">
+                    top {100 - data.percentile}%
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="p-meta">
-              {data?.walletAge && <span className="p-meta-pill">📅 {data.walletAge} old</span>}
-              {data?.chains != null && <span className="p-meta-pill">🔗 {data.chains} chains</span>}
-              {data?.totalTxCount != null && <span className="p-meta-pill">⚡ {data.totalTxCount} txns</span>}
-              {data?.percentile != null && <span className="p-meta-pill" style={{background:'#e8f0ff',color:'#0052FF'}}>top {100 - data.percentile}%</span>}
-            </div>
-          </div>
 
-          <div className="p-value-block">
-            {data ? (
-              <>
-                <div className="p-value-num">${data.totalLo.toLocaleString()}–${data.totalHi.toLocaleString()}</div>
-                <div style={{fontSize:11,color:'#aaa',marginTop:4}}>Estimated annual earnings</div>
-              </>
-            ) : loading ? (
-              <div style={{fontSize:13,color:'#bbb'}}>Loading…</div>
-            ) : null}
+            <div className="text-right min-w-[160px] pt-1 shrink-0 max-sm:min-w-0 max-sm:w-full max-sm:text-left">
+              {data ? (
+                <>
+                  <div className="text-[22px] font-bold text-[#4ade80] tracking-[-0.5px] font-[var(--font-mono),'DM_Mono',monospace]">
+                    ${data.totalLo.toLocaleString()}–${data.totalHi.toLocaleString()}
+                  </div>
+                  <div className="text-[11px] text-[rgba(255,255,255,0.28)] mt-1">Estimated annual earnings</div>
+                </>
+              ) : loading ? (
+                <div className="text-[13px] text-[rgba(255,255,255,0.25)]">Loading…</div>
+              ) : null}
+            </div>
           </div>
         </div>
 
-        <div className="p-stats">
-          <div className="p-score-stat">
-            <span className="p-stat-label">Attribution score</span>
-            <span className="p-stat-val">{score > 0 ? `${score} / ${maxScore}` : '—'}</span>
-          </div>
-          <div className="p-stat">
-            <span className="p-stat-label">Percentile</span>
-            <span className="p-stat-val">{data ? `${data.percentile}th` : '—'}</span>
-          </div>
-          <div className="p-stat">
-            <span className="p-stat-label">First seen</span>
-            <span className="p-stat-val">{data?.firstSeen ?? '—'}</span>
-          </div>
-          <div className="p-stat">
-            <span className="p-stat-label">Chains</span>
-            <span className="p-stat-val">{data?.chains ?? '—'}</span>
-          </div>
-          <div className="p-stat">
-            <span className="p-stat-label">Network size</span>
-            <span className="p-stat-val">{data?.treeSize ?? 0} wallets</span>
-          </div>
-          <div className="p-stat">
-            <span className="p-stat-label">Character</span>
-            <span className="p-stat-val" style={{color: data?.character?.color}}>{data?.character?.icon} {data?.character?.label ?? '—'}</span>
+        <div className="border-t border-[rgba(255,255,255,0.06)]">
+          <div className="max-w-[960px] mx-auto px-12 max-sm:px-5 flex items-stretch overflow-x-auto">
+            <div className="flex flex-col gap-[3px] px-5 py-3.5 border-r border-[rgba(255,255,255,0.06)] shrink-0 bg-[rgba(0,82,255,0.1)] border-t-2 border-t-mw-brand -mt-px">
+              <span className="text-[10px] font-bold tracking-[0.8px] uppercase text-[rgba(255,255,255,0.25)] whitespace-nowrap">Attribution score</span>
+              <span className="text-[#6b9fff] font-[var(--font-mono),'DM_Mono',monospace] text-sm font-semibold whitespace-nowrap">
+                {score > 0 ? `${score} / ${maxScore}` : '—'}
+              </span>
+            </div>
+            <div className="flex flex-col gap-[3px] px-5 py-3.5 border-r border-[rgba(255,255,255,0.06)] shrink-0">
+              <span className="text-[10px] font-bold tracking-[0.8px] uppercase text-[rgba(255,255,255,0.25)] whitespace-nowrap">Percentile</span>
+              <span className="text-sm font-semibold text-[rgba(255,255,255,0.82)] whitespace-nowrap">{data ? `${data.percentile}th` : '—'}</span>
+            </div>
+            <div className="flex flex-col gap-[3px] px-5 py-3.5 border-r border-[rgba(255,255,255,0.06)] shrink-0">
+              <span className="text-[10px] font-bold tracking-[0.8px] uppercase text-[rgba(255,255,255,0.25)] whitespace-nowrap">First seen</span>
+              <span className="text-sm font-semibold text-[rgba(255,255,255,0.82)] whitespace-nowrap">{data?.firstSeen ?? '—'}</span>
+            </div>
+            <div className="flex flex-col gap-[3px] px-5 py-3.5 border-r border-[rgba(255,255,255,0.06)] shrink-0">
+              <span className="text-[10px] font-bold tracking-[0.8px] uppercase text-[rgba(255,255,255,0.25)] whitespace-nowrap">Chains</span>
+              <span className="text-sm font-semibold text-[rgba(255,255,255,0.82)] whitespace-nowrap">{data?.chains ?? '—'}</span>
+            </div>
+            <div className="flex flex-col gap-[3px] px-5 py-3.5 border-r border-[rgba(255,255,255,0.06)] shrink-0">
+              <span className="text-[10px] font-bold tracking-[0.8px] uppercase text-[rgba(255,255,255,0.25)] whitespace-nowrap">Network size</span>
+              <span className="text-sm font-semibold text-[rgba(255,255,255,0.82)] whitespace-nowrap">{data?.treeSize ?? 0} wallets</span>
+            </div>
+            <div className="flex flex-col gap-[3px] px-5 py-3.5 shrink-0">
+              <span className="text-[10px] font-bold tracking-[0.8px] uppercase text-[rgba(255,255,255,0.25)] whitespace-nowrap">Character</span>
+              <span
+                className="text-sm font-semibold whitespace-nowrap"
+                style={{ color: data?.character?.color ?? 'rgba(255,255,255,0.82)' }}
+              >
+                {data?.character?.icon} {data?.character?.label ?? '—'}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="p-tabs">
-        {(['portfolio','score','badge'] as Tab[]).map(t => (
-          <div key={t} className={`p-tab${activeTab === t ? ' active' : ''}`} onClick={() => setActiveTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+      <div className="pt-5 bg-mw-surface">
+        <div className="max-w-[960px] mx-auto px-12 max-sm:px-5">
+          <div className="flex gap-2 max-sm:flex-wrap max-sm:gap-1.5">
+            {(['portfolio', 'score', 'badge'] as Tab[]).map(t => (
+              <div
+                key={t}
+                className={[
+                  'px-[18px] py-2 text-[13px] font-medium cursor-pointer rounded-full transition-all duration-150 border select-none',
+                  'max-sm:px-3.5 max-sm:py-1.5 max-sm:text-xs',
+                  activeTab === t
+                    ? 'text-mw-brand bg-mw-brand-dim border-[rgba(0,82,255,0.18)] font-semibold'
+                    : 'text-mw-ink-3 border-transparent hover:text-mw-ink hover:bg-[rgba(26,26,46,0.06)] hover:border-mw-border',
+                ].join(' ')}
+                onClick={() => setActiveTab(t)}
+              >
+                {t === 'portfolio' ? '📊 Portfolio' : t === 'score' ? '⚡ Score' : '🏅 Badge'}
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
 
       {/* Body */}
-      <div className="p-body">
+      <div className="bg-mw-surface pb-20">
+        <div className="max-w-[960px] mx-auto px-12 max-sm:px-5 pt-5 [animation:fadeUp_0.4s_0.08s_ease_both]">
 
-        {activeTab === 'portfolio' && (
-          <>
-            {loading && <div style={{textAlign:'center',padding:'40px 0',color:'#bbb',fontSize:13}}>Loading score data…</div>}
+          {activeTab === 'portfolio' && (
+            <>
+              {loading && (
+                <div className="text-center py-12 text-mw-ink-3 text-[13px]">Loading score data…</div>
+              )}
 
-            {!loading && data && data.uvOpportunities?.length > 0 && (
-              <div style={{marginBottom:18}}>
-                <div style={{fontSize:11,fontWeight:700,letterSpacing:'1px',textTransform:'uppercase',color:'#0052FF',marginBottom:12}}>
-                  Earning opportunities for your wallet
-                </div>
-                <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                  {data.uvOpportunities.map((op, i) => (
-                    <div key={i} className="p-opp">
-                      <div className="p-opp-icon" style={{background: op.accentColor + '18', color: op.accentColor}}>{op.icon}</div>
-                      <div style={{flex:1}}>
-                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
-                          <span style={{fontSize:14,fontWeight:700,color:'#1a1a2e'}}>{op.name}</span>
-                          <span style={{fontSize:10,color:'#aaa'}}>{op.cat}</span>
-                          <span style={{fontSize:9,fontWeight:700,letterSpacing:'0.5px',textTransform:'uppercase',color:op.typeColor,background:op.typeColor+'18',padding:'2px 6px',borderRadius:4}}>{op.type}</span>
+              {!loading && data && data.uvOpportunities?.length > 0 && (
+                <div>
+                  <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-mw-brand mb-3.5 block">
+                    Earning opportunities for your wallet
+                  </span>
+                  <div className="flex flex-col gap-2.5">
+                    {data.uvOpportunities.map((op, i) => (
+                      <div
+                        key={i}
+                        className="flex items-start gap-3.5 px-[18px] py-4 border border-mw-border rounded-[14px] transition-all duration-150 bg-white shadow-[0_1px_4px_rgba(26,26,46,0.04)] hover:border-[rgba(0,82,255,0.25)] hover:shadow-md hover:-translate-y-px"
+                      >
+                        <div
+                          className="w-10 h-10 rounded-[10px] flex items-center justify-center text-lg shrink-0"
+                          style={{ background: op.accentColor + '18', color: op.accentColor }}
+                        >
+                          {op.icon}
                         </div>
-                        <div style={{fontSize:11,color:'#888',marginBottom:4}}>{op.mechanic}</div>
-                        <div style={{fontSize:11,color:'#555',lineHeight:1.5}} dangerouslySetInnerHTML={{__html: op.reason}} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-sm font-bold text-mw-ink">{op.name}</span>
+                            <span className="text-[10px] text-mw-ink-3">{op.cat}</span>
+                            <span
+                              className="text-[9px] font-bold tracking-[0.5px] uppercase px-[7px] py-px rounded"
+                              style={{ color: op.typeColor, background: op.typeColor + '18' }}
+                            >
+                              {op.type}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-mw-ink-3 mb-1">{op.mechanic}</div>
+                          <div
+                            className="text-[11px] text-mw-ink-2 leading-[1.55]"
+                            dangerouslySetInnerHTML={{ __html: op.reason }}
+                          />
+                        </div>
+                        <div className="text-right shrink-0 pl-2">
+                          <div className="text-[13px] font-bold text-mw-green font-[var(--font-mono),'DM_Mono',monospace]">
+                            ${op.lo}–${op.hi}
+                          </div>
+                          <div className="text-[10px] text-mw-ink-3 mt-0.5">est. / yr</div>
+                        </div>
                       </div>
-                      <div style={{textAlign:'right',flexShrink:0}}>
-                        <div style={{fontSize:13,fontWeight:700,color:'#16a34a',fontFamily:'DM Mono,monospace'}}>${op.lo}–${op.hi}</div>
-                        <div style={{fontSize:10,color:'#aaa',marginTop:2}}>est. / yr</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {!loading && !data && (
+                <div className="text-center py-12 text-mw-ink-3 text-[13px]">
+                  Could not load score data. The API may be indexing your wallet.
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'score' && (
+            <div className="bg-white border border-mw-border rounded-[20px] p-6 shadow-[0_1px_4px_rgba(26,26,46,0.04)]">
+              <div className="flex items-center justify-between mb-[22px]">
+                <span className="text-[10px] font-bold text-mw-brand tracking-[1.5px] uppercase">Attribution score</span>
+                <span className="text-[11px] text-white bg-mw-brand px-3 py-1 rounded-full font-semibold">{tier} tier</span>
+              </div>
+
+              {loading && <div className="text-center py-12 text-mw-ink-3 text-[13px]">Loading…</div>}
+
+              {data && (
+                <>
+                  <div className="flex items-start gap-5 mb-6">
+                    <div>
+                      <div className="text-[52px] font-bold text-mw-brand font-[var(--font-mono),'DM_Mono',monospace] tracking-[-2px] leading-none">
+                        {score}
+                      </div>
+                      <div className="text-[11px] text-mw-ink-3 mt-1.5 font-[var(--font-mono),'DM_Mono',monospace]">
+                        of {maxScore} max · {data.percentile}th percentile
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    {data.character && (
+                      <div className="flex-1 bg-mw-surface border border-mw-border rounded-xl px-4 py-3.5">
+                        <div className="text-[10px] font-bold tracking-[0.8px] uppercase text-mw-ink-3 mb-1.5">Wallet character</div>
+                        <div
+                          className="text-sm font-bold mb-[5px]"
+                          style={{ color: data.character.color }}
+                        >
+                          {data.character.icon} {data.character.label}
+                        </div>
+                        <div className="text-xs text-mw-ink-2 leading-[1.55]">{data.character.desc}</div>
+                      </div>
+                    )}
+                  </div>
 
-            {!loading && !data && (
-              <div style={{textAlign:'center',padding:'40px 0',color:'#aaa',fontSize:13}}>
-                Could not load score data. The API may be indexing your wallet.
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === 'score' && (
-          <div className="p-score-panel">
-            <div className="p-score-panel-header">
-              <span className="p-score-panel-title">Attribution score</span>
-              <span className="p-score-tier">{tier} tier</span>
+                  <div className="grid grid-cols-2 gap-3 max-sm:grid-cols-1">
+                    {data.signals.map(sig => (
+                      <div
+                        key={sig.key}
+                        className="flex flex-col gap-1.5 px-3.5 py-3 bg-mw-surface rounded-[10px] border border-mw-border"
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-mw-ink-2 font-medium">{sig.icon} {sig.name}</span>
+                          <span
+                            className="text-xs font-semibold font-[var(--font-mono),'DM_Mono',monospace]"
+                            style={{ color: sig.color }}
+                          >
+                            {sig.score} / {sig.max}
+                          </span>
+                        </div>
+                        <div className="h-[3px] bg-mw-border rounded-sm overflow-hidden">
+                          <div
+                            className="h-full rounded-sm transition-[width] duration-[800ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
+                            style={{ width: Math.round((sig.score / sig.max) * 100) + '%', background: sig.color }}
+                          />
+                        </div>
+                        {sig.insights?.length > 0 && (
+                          <div className="text-[10px] text-mw-ink-3 leading-[1.5]">{sig.insights[0]}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
+          )}
 
-            {loading && <div style={{textAlign:'center',padding:'24px 0',color:'#bbb',fontSize:13}}>Loading…</div>}
-
-            {data && (
-              <>
-                <div style={{display:'flex',alignItems:'flex-start',gap:24,marginBottom:20}}>
-                  <div>
-                    <div className="p-score-big">{score}</div>
-                    <div style={{fontSize:11,color:'#aaa',marginTop:4,fontFamily:'DM Mono,monospace'}}>
-                      of {maxScore} max · {data.percentile}th percentile
-                    </div>
+          {activeTab === 'badge' && (
+            <div className="text-center px-6 py-12 bg-white border border-mw-border rounded-[20px] shadow-[0_1px_4px_rgba(26,26,46,0.04)]">
+              {data ? (
+                <>
+                  <div className="text-[56px] mb-3.5 leading-none">{data.character?.icon ?? '🏅'}</div>
+                  <div
+                    className="text-xl font-bold tracking-[-0.3px] mb-1.5"
+                    style={{ color: data.character?.color ?? '#0052FF' }}
+                  >
+                    {data.character?.label ?? tier}
                   </div>
-                  {data.character && (
-                    <div style={{flex:1,background:'#f9f9f6',border:'1px solid #eee',borderRadius:10,padding:'10px 14px'}}>
-                      <div style={{fontSize:11,color:'#aaa',marginBottom:4}}>Wallet character</div>
-                      <div style={{fontSize:14,fontWeight:700,color:data.character.color,marginBottom:4}}>{data.character.icon} {data.character.label}</div>
-                      <div style={{fontSize:12,color:'#666',lineHeight:1.5}}>{data.character.desc}</div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-score-dims">
-                  {data.signals.map(sig => (
-                    <div key={sig.key} className="p-dim">
-                      <div className="p-dim-row">
-                        <span className="p-dim-name">{sig.icon} {sig.name}</span>
-                        <span className="p-dim-num" style={{color:sig.color}}>{sig.score} / {sig.max}</span>
+                  <div className="text-[13px] text-mw-ink-3 mb-4">
+                    {tier} tier · {data.percentile}th percentile
+                  </div>
+                  <div className="text-[13px] leading-[1.7] max-w-[380px] mx-auto mb-7 text-mw-ink-2">
+                    {data.character?.desc}
+                  </div>
+                  <div className="inline-flex bg-mw-surface border border-mw-border rounded-[14px] overflow-hidden max-sm:flex-col">
+                    <div className="px-7 py-4 border-r border-mw-border text-center max-sm:border-r-0 max-sm:border-b max-sm:border-b-mw-border">
+                      <div
+                        className="text-[22px] font-bold font-[var(--font-mono),'DM_Mono',monospace] tracking-[-0.5px]"
+                        style={{ color: '#0052FF' }}
+                      >
+                        {score}
                       </div>
-                      <div className="p-dim-bar">
-                        <div className="p-dim-fill" style={{width: Math.round((sig.score/sig.max)*100)+'%', background:sig.color}} />
-                      </div>
-                      {sig.insights?.length > 0 && (
-                        <div style={{fontSize:10,color:'#999',marginTop:4,lineHeight:1.5}}>
-                          {sig.insights[0]}
-                        </div>
-                      )}
+                      <div className="text-[10px] text-mw-ink-3 mt-[3px] font-semibold tracking-[0.5px] uppercase">Score</div>
                     </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        )}
+                    <div className="px-7 py-4 border-r border-mw-border text-center max-sm:border-r-0 max-sm:border-b max-sm:border-b-mw-border">
+                      <div className="text-[22px] font-bold text-mw-ink font-[var(--font-mono),'DM_Mono',monospace] tracking-[-0.5px]">
+                        {data.chains}
+                      </div>
+                      <div className="text-[10px] text-mw-ink-3 mt-[3px] font-semibold tracking-[0.5px] uppercase">Chains</div>
+                    </div>
+                    <div className="px-7 py-4 text-center">
+                      <div className="text-[22px] font-bold text-mw-ink font-[var(--font-mono),'DM_Mono',monospace] tracking-[-0.5px]">
+                        {data.treeSize}
+                      </div>
+                      <div className="text-[10px] text-mw-ink-3 mt-[3px] font-semibold tracking-[0.5px] uppercase">Network</div>
+                    </div>
+                  </div>
+                </>
+              ) : loading ? (
+                <div className="text-center py-12 text-mw-ink-3 text-[13px]">Loading…</div>
+              ) : (
+                <div className="text-center py-12 text-mw-ink-3 text-[13px]">Could not load badge data.</div>
+              )}
+            </div>
+          )}
 
-        {activeTab === 'badge' && (
-          <div style={{textAlign:'center',padding:'48px 24px',color:'#aaa'}}>
-            {data ? (
-              <>
-                <div style={{fontSize:52,marginBottom:12}}>{data.character?.icon ?? '🏅'}</div>
-                <div style={{fontSize:18,fontWeight:700,color:data.character?.color ?? '#1a1a2e',marginBottom:6}}>
-                  {data.character?.label ?? tier}
-                </div>
-                <div style={{fontSize:13,color:'#888',marginBottom:16}}>{tier} tier · {data.percentile}th percentile</div>
-                <div style={{fontSize:13,lineHeight:1.7,maxWidth:380,margin:'0 auto 24px',color:'#666'}}>
-                  {data.character?.desc}
-                </div>
-                <div style={{display:'inline-flex',gap:20,background:'#f9f9f6',border:'1px solid #eee',borderRadius:12,padding:'14px 24px'}}>
-                  <div style={{textAlign:'center'}}>
-                    <div style={{fontSize:20,fontWeight:700,color:'#0052FF',fontFamily:'DM Mono,monospace'}}>{score}</div>
-                    <div style={{fontSize:10,color:'#aaa',marginTop:2}}>Score</div>
-                  </div>
-                  <div style={{textAlign:'center'}}>
-                    <div style={{fontSize:20,fontWeight:700,color:'#1a1a2e'}}>{data.chains}</div>
-                    <div style={{fontSize:10,color:'#aaa',marginTop:2}}>Chains</div>
-                  </div>
-                  <div style={{textAlign:'center'}}>
-                    <div style={{fontSize:20,fontWeight:700,color:'#1a1a2e'}}>{data.treeSize}</div>
-                    <div style={{fontSize:10,color:'#aaa',marginTop:2}}>Network</div>
-                  </div>
-                </div>
-              </>
-            ) : loading ? (
-              <div style={{fontSize:13}}>Loading…</div>
-            ) : (
-              <div style={{fontSize:13}}>Could not load badge data.</div>
-            )}
-          </div>
-        )}
-
+        </div>
       </div>
     </div>
   )
@@ -283,63 +392,6 @@ function ProfileContent() {
 export default function ProfilePage() {
   return (
     <>
-      <style>{`
-        *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:var(--font-jakarta),'Plus Jakarta Sans',sans-serif;background:#f5f5f0;color:#1a1a2e}
-        .p-wrap{background:#fff;min-height:100vh}
-        .p-header{padding:24px 28px 0;border-bottom:1px solid #eeeee8}
-        .p-identity{display:flex;align-items:flex-start;gap:20px;padding-bottom:16px}
-        .p-avatar{width:80px;height:80px;border-radius:16px;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;color:#fff;flex-shrink:0;position:relative;border:2px solid #eeeee8;font-family:var(--font-mono),'DM Mono',monospace}
-        .p-score-badge{position:absolute;bottom:0;right:0;background:#0052FF;color:#fff;font-family:var(--font-mono),'DM Mono',monospace;font-size:10px;font-weight:500;padding:3px 6px;border-radius:6px 0 0 0;letter-spacing:0}
-        .p-info{flex:1;padding-top:2px}
-        .p-name{font-size:21px;font-weight:700;color:#1a1a2e;letter-spacing:-0.5px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
-        .p-name-badge{font-size:10px;font-weight:600;background:#e8f0ff;color:#0052FF;padding:3px 8px;border-radius:20px;letter-spacing:0.3px;white-space:nowrap}
-        .p-addr{font-family:var(--font-mono),'DM Mono',monospace;font-size:11px;color:#aaa;margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;overflow-wrap:anywhere}
-        .p-addr-copy{background:#f0f0ec;border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer;color:#888;flex-shrink:0}
-        .p-addr-copy:hover{color:#0052FF}
-        .p-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-        .p-meta-pill{background:#f5f5f0;border-radius:6px;padding:3px 9px;font-size:11px;color:#666;display:flex;align-items:center;gap:4px}
-        .p-value-block{text-align:right;min-width:160px;padding-top:2px;flex-shrink:0}
-        .p-value-num{font-size:20px;font-weight:700;color:#16a34a;letter-spacing:-0.5px;font-family:var(--font-mono),'DM Mono',monospace}
-        .p-stats{display:flex;align-items:stretch;gap:0;border-top:1px solid #eeeee8;flex-wrap:nowrap;overflow-x:auto}
-        .p-stat{display:flex;flex-direction:column;gap:2px;padding:12px 16px;border-right:1px solid #eeeee8;flex-shrink:0}
-        .p-stat:last-child{border-right:none}
-        .p-stat-label{font-size:11px;color:#bbb;white-space:nowrap}
-        .p-stat-val{font-size:14px;font-weight:600;color:#1a1a2e;white-space:nowrap}
-        .p-score-stat{background:#f0f4ff;border-top:2px solid #0052FF;padding:12px 16px;display:flex;flex-direction:column;gap:2px;flex-shrink:0;border-right:1px solid #eeeee8}
-        .p-score-stat .p-stat-label{color:#6b9fff}
-        .p-score-stat .p-stat-val{color:#0052FF;font-size:15px;font-family:var(--font-mono),'DM Mono',monospace}
-        .p-tabs{display:flex;gap:0;border-bottom:1px solid #eeeee8;padding:0 28px}
-        .p-tab{padding:12px 20px;font-size:14px;font-weight:500;color:#aaa;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.15s}
-        .p-tab:hover{color:#1a1a2e}
-        .p-tab.active{color:#0052FF;border-bottom-color:#0052FF;font-weight:600}
-        .p-body{padding:20px 28px}
-        .p-opp{display:flex;align-items:flex-start;gap:14px;padding:14px;border:1px solid #eeeee8;border-radius:10px;transition:border-color 0.15s;background:#fff}
-        .p-opp:hover{border-color:#0052FF}
-        .p-opp-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-        .p-score-panel{border:1px solid #d0deff;border-radius:12px;background:#f7f9ff;padding:16px 18px;margin-bottom:18px}
-        .p-score-panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
-        .p-score-panel-title{font-size:11px;font-weight:600;color:#0052FF;letter-spacing:1px;text-transform:uppercase}
-        .p-score-tier{font-size:11px;color:#fff;background:#0052FF;padding:3px 10px;border-radius:20px;font-weight:600}
-        .p-score-big{font-size:42px;font-weight:700;color:#0052FF;font-family:var(--font-mono),'DM Mono',monospace;letter-spacing:-1px;line-height:1}
-        .p-score-dims{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
-        .p-dim{display:flex;flex-direction:column;gap:5px}
-        .p-dim-row{display:flex;justify-content:space-between}
-        .p-dim-name{font-size:12px;color:#555;font-weight:500}
-        .p-dim-num{font-size:12px;font-weight:600;font-family:var(--font-mono),'DM Mono',monospace}
-        .p-dim-bar{height:4px;background:#e8eeff;border-radius:2px;overflow:hidden}
-        .p-dim-fill{height:100%;border-radius:2px;transition:width 0.6s ease}
-        @media(max-width:640px){
-          .p-identity{flex-wrap:wrap}
-          .p-value-block{min-width:0;width:100%;text-align:left}
-          .p-stats{flex-wrap:nowrap}
-          .p-score-dims{grid-template-columns:1fr}
-          .p-body{padding:16px}
-          .p-header{padding:16px 16px 0}
-          .p-tabs{padding:0 16px}
-          .p-opp{flex-wrap:wrap}
-        }
-      `}</style>
       <MwNav />
       <MwAuthGuard>
         <ProfileContent />

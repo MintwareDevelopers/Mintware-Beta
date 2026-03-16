@@ -12,47 +12,33 @@ export default function SwapPage() {
   return (
     <MwAuthGuard>
       <MwNav />
-      <main
-        style={{
-          minHeight: '100vh',
-          background: '#F7F6FF',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          paddingTop: 40,
-          paddingBottom: 80,
-          paddingLeft: 16,
-          paddingRight: 16,
-        }}
-      >
-        <div style={{ width: '100%', maxWidth: 440 }}>
-          <h1
-            style={{
-              fontFamily: 'Georgia, serif',
-              fontSize: 26,
-              fontWeight: 700,
-              color: '#1A1A2E',
-              marginBottom: 6,
-              letterSpacing: '-0.5px',
-            }}
-          >
-            Swap
+      <main className="min-h-screen bg-mw-surface flex flex-col items-center px-4 pt-[52px] pb-20 relative overflow-hidden">
+        <div className="mw-hero-radial" />
+        <div className="mw-light-grid" />
+
+        <div className="w-full max-w-[440px] relative">
+          {/* Eyebrow pill */}
+          <div className="inline-flex items-center gap-1.5 bg-white border border-mw-border-strong rounded-full px-3.5 py-1 text-[11px] font-bold text-mw-ink-2 tracking-[0.5px] mb-[18px] shadow-sm animate-fade-up">
+            <span className="w-1.5 h-1.5 rounded-full bg-mw-green animate-pulse-slow" />
+            Multi-chain · Attribution rewards
+          </div>
+
+          {/* Heading */}
+          <h1 className="font-[Georgia,serif] text-[32px] font-bold text-mw-ink tracking-[-1px] leading-[1.1] mb-2 [animation:fadeUp_0.4s_0.06s_ease_both]">
+            Swap &amp; <em className="not-italic text-mw-brand">earn.</em>
           </h1>
-          <p
-            style={{
-              fontFamily: "'Plus Jakarta Sans', sans-serif",
-              fontSize: 14,
-              color: '#8A8C9E',
-              marginBottom: 24,
-            }}
-          >
-            Trade tokens across chains and earn attribution rewards.
+
+          {/* Subheading */}
+          <p className="text-sm text-mw-ink-3 mb-7 leading-relaxed [animation:fadeUp_0.4s_0.12s_ease_both]">
+            Trade tokens across chains. Every swap builds your Attribution score and unlocks campaign rewards.
           </p>
 
-          {/* Suspense wrapper required for useSearchParams in useCampaign */}
-          <Suspense fallback={<SwapPageSkeleton />}>
-            <SwapWidget />
-          </Suspense>
+          {/* Widget — Suspense wrapper required for useSearchParams in useCampaign */}
+          <div className="[animation:fadeUp_0.5s_0.16s_ease_both]">
+            <Suspense fallback={<SwapPageSkeleton />}>
+              <SwapWidget />
+            </Suspense>
+          </div>
         </div>
       </main>
     </MwAuthGuard>
@@ -61,21 +47,7 @@ export default function SwapPage() {
 
 function SwapPageSkeleton() {
   return (
-    <div
-      style={{
-        background: '#fff',
-        borderRadius: 16,
-        border: '1px solid rgba(26,26,46,0.08)',
-        padding: 20,
-        height: 460,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#8A8C9E',
-        fontFamily: "'Plus Jakarta Sans', sans-serif",
-        fontSize: 14,
-      }}
-    >
+    <div className="bg-white rounded-[20px] border border-mw-border p-5 h-[460px] flex items-center justify-center text-mw-ink-3 text-sm shadow-[0_2px_12px_rgba(26,26,46,0.05)]">
       Loading swap…
     </div>
   )

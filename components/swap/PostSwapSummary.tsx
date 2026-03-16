@@ -164,7 +164,7 @@ export function PostSwapSummary({
                 <span className="mw-post-row-icon" style={{ color: '#8A8C9E' }}>↗</span>
                 <div className="mw-post-row-content">
                   <div className="mw-post-row-label" style={{ color: '#8A8C9E' }}>
-                    <strong style={{ fontFamily: 'var(--font-mono), DM Mono, monospace', fontSize: 12 }}>
+                    <strong style={{ fontFamily: "var(--font-mono), 'DM Mono', monospace", fontSize: 12 }}>
                       {shortAddr(referrer)}
                     </strong>{' '}
                     earned <span className="mw-post-row-value">${referrerReward.toFixed(2)}</span> from this swap

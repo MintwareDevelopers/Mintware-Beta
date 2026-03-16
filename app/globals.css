@@ -1,3 +1,174 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; }
-body { -webkit-font-smoothing: antialiased; }
+@import "tailwindcss";
+
+@theme {
+  /* ── Brand ── */
+  --color-mw-brand:      #0052FF;
+  --color-mw-brand-dim:  rgba(0, 82, 255, 0.07);
+  --color-mw-brand-mid:  rgba(0, 82, 255, 0.14);
+
+  /* ── Text ── */
+  --color-mw-ink:   #1A1A2E;
+  --color-mw-ink-2: #3A3C52;
+  --color-mw-ink-3: #8A8C9E;
+
+  /* ── Surfaces ── */
+  --color-mw-surface: #F7F6FF;
+
+  /* ── Green (live / success) ── */
+  --color-mw-green:        #16a34a;
+  --color-mw-green-muted:  #f0fdf4;
+  --color-mw-green-edge:   #bbf7d0;
+
+  /* ── Borders ── */
+  --color-mw-border:        rgba(26, 26, 46, 0.08);
+  --color-mw-border-strong: rgba(26, 26, 46, 0.13);
+
+  /* ── Dark sections ── */
+  --color-mw-dark:        #0A0D14;
+  --color-mw-dark-text:   rgba(255, 255, 255, 0.88);
+  --color-mw-dark-sub:    rgba(255, 255, 255, 0.38);
+  --color-mw-dark-border: rgba(255, 255, 255, 0.06);
+
+  /* ── Shadows (override Tailwind defaults) ── */
+  --shadow-sm: 0 1px 4px rgba(26, 26, 46, 0.06);
+  --shadow-md: 0 4px 16px rgba(26, 26, 46, 0.08);
+
+  /* ── Animations ── */
+  --animate-fade-up:    fadeUp 0.5s ease both;
+  --animate-pulse-slow: pulse-slow 2s ease infinite;
+  --animate-shimmer:    shimmer 1.4s infinite;
+  --animate-mw-pulse:   mw-pulse 2s ease infinite;
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse-slow {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+  @keyframes shimmer {
+    to { left: 150%; }
+  }
+  @keyframes mw-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.35; }
+  }
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
+    background-color: #F7F6FF;
+    color: #1A1A2E;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  /* ── Dark section decorations ──────────────────────────────── */
+
+  /* Grid overlay (::before) */
+  .mw-grid-overlay {
+    position: relative;
+    overflow: hidden;
+  }
+  .mw-grid-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 56px 56px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow — top-right corner */
+  .mw-glow-tr::after {
+    content: '';
+    position: absolute;
+    top: -40px;
+    right: -40px;
+    width: 220px;
+    height: 220px;
+    background: radial-gradient(circle, rgba(0, 82, 255, 0.18) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow — bottom-right corner */
+  .mw-glow-br::after {
+    content: '';
+    position: absolute;
+    bottom: -40px;
+    right: -20px;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(0, 82, 255, 0.15) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow — top-left corner (used on hero sections) */
+  .mw-glow-tl::after {
+    content: '';
+    position: absolute;
+    top: -60px;
+    left: -60px;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(0, 82, 255, 0.12) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Skeleton shimmer ───────────────────────────────────────── */
+  .mw-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .mw-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -150%;
+    width: 150%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+
+  /* ── Nav ────────────────────────────────────────────────────── */
+  .mw-nav-blur {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+
+  /* Wallet pill: hover swaps label for disconnect hint */
+  .mw-wallet-pill .mw-disconnect { display: none; }
+  .mw-wallet-pill:hover .mw-label { display: none; }
+  .mw-wallet-pill:hover .mw-disconnect { display: flex; }
+
+  /* ── Page-level hero radial bg (swap / landing) ─────────────── */
+  .mw-hero-radial {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(0, 82, 255, 0.05) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  /* Light-mode grid (used on lavender bg pages) */
+  .mw-light-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(26, 26, 46, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(26, 26, 46, 0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+    pointer-events: none;
+  }
+}

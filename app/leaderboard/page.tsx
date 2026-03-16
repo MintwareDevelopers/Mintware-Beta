@@ -41,7 +41,6 @@ function LeaderboardContent() {
   const [loading, setLoading] = useState(false)
   const [lbSubText, setLbSubText] = useState('Loading…')
 
-  // Load campaigns
   useEffect(() => {
     async function load() {
       try {
@@ -57,7 +56,6 @@ function LeaderboardContent() {
     load()
   }, [])
 
-  // Load leaderboard whenever activeCampaignId changes
   const loadLeaderboard = useCallback(async () => {
     if (!activeCampaignId) return
     setLoading(true)
@@ -101,37 +99,51 @@ function LeaderboardContent() {
 
   function buildRow(entry: LeaderboardEntry, rank: number, isMe: boolean) {
     return (
-      <div key={entry.wallet + rank} className={`lb-row${isMe ? ' my-row' : ''}`}>
-        <div className={`lb-col-rank${rank <= 3 ? ' top3' : ''}`}>{rank}</div>
-        <div className="lb-col-identity">
-          <div className="lb-row-avatar" style={{background:avatarBg(entry.wallet)}}>
+      <div
+        key={entry.wallet + rank}
+        className={[
+          'grid items-center py-[11px] border-b border-[rgba(26,26,46,0.04)] cursor-pointer transition-all duration-100 rounded-lg',
+          '[grid-template-columns:44px_1fr_90px_100px_80px] max-sm:[grid-template-columns:36px_1fr_70px_80px]',
+          isMe
+            ? 'bg-mw-brand-dim -mx-2 px-2 border-l-2 border-l-mw-brand rounded-none'
+            : 'hover:bg-mw-surface hover:-mx-2 hover:px-2',
+        ].join(' ')}
+      >
+        <div className={`text-xs font-bold font-[var(--font-mono),'DM_Mono',monospace] text-center ${rank <= 3 ? 'text-mw-ink text-sm' : 'text-mw-ink-3'}`}>{rank}</div>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-[13px] font-bold font-[var(--font-mono),'DM_Mono',monospace] text-mw-ink-2" style={{background:avatarBg(entry.wallet)}}>
             {entry.wallet.charAt(2).toUpperCase()}
           </div>
-          <div className="lb-row-addr">
+          <div className="text-xs font-semibold text-mw-ink font-[var(--font-mono),'DM_Mono',monospace] overflow-hidden text-ellipsis whitespace-nowrap">
             {shortAddr(entry.wallet)}
-            {isMe && <span className="you-tag">you</span>}
+            {isMe && <span className="text-[9px] font-bold text-mw-brand bg-mw-brand-dim border border-[rgba(0,82,255,0.2)] rounded-lg px-1.5 py-px ml-1 align-middle">you</span>}
           </div>
         </div>
-        <div className="lb-col-score">{entry.attribution_score || 0}</div>
-        <div className="lb-col-earnings">{fmtUSD(entry.total_earned_usd || 0)}</div>
-        <div className="lb-col-pts">{(entry.total_points || 0).toLocaleString()}</div>
+        <div className="text-[13px] font-bold text-mw-brand font-[var(--font-mono),'DM_Mono',monospace] text-right">{entry.attribution_score || 0}</div>
+        <div className="text-[13px] font-semibold text-mw-green text-right">{fmtUSD(entry.total_earned_usd || 0)}</div>
+        <div className="text-xs text-mw-ink-3 text-right font-[var(--font-mono),'DM_Mono',monospace] max-sm:hidden">{(entry.total_points || 0).toLocaleString()}</div>
       </div>
     )
   }
 
   return (
-    <div className="page">
+    <div className="max-w-[960px] mx-auto px-12 pt-10 pb-20 max-sm:px-5 max-sm:pt-6 max-sm:pb-[60px]">
       {/* Campaign selector */}
-      <div className="campaign-select-wrap">
-        <span className="campaign-select-label">Campaign</span>
-        <div className="campaign-select-row">
+      <div className="mb-6 animate-fade-up">
+        <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-mw-ink-3 mb-2 block">Campaign</span>
+        <div className="flex gap-2 flex-wrap">
           {campaigns.length === 0
-            ? <div className="campaign-pill active" style={{opacity:0.5}}>Loading campaigns…</div>
+            ? <div className="px-[18px] py-1.5 rounded-full border border-mw-border-strong bg-white text-mw-ink-3 text-[13px] font-medium opacity-50 shadow-[0_1px_3px_rgba(26,26,46,0.04)]">Loading campaigns…</div>
             : campaigns.map(c => (
               <button
                 key={c.id}
-                className={`campaign-pill${c.id === activeCampaignId ? ' active' : ''}`}
                 onClick={() => setActiveCampaignId(c.id)}
+                className={[
+                  'px-[18px] py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-all duration-150 font-[var(--font-jakarta),"Plus_Jakarta_Sans",sans-serif] shadow-[0_1px_3px_rgba(26,26,46,0.04)]',
+                  c.id === activeCampaignId
+                    ? 'bg-mw-ink text-white border-mw-ink shadow-sm'
+                    : 'bg-white text-mw-ink-3 border-mw-border-strong hover:border-mw-brand hover:text-mw-brand hover:bg-mw-brand-dim',
+                ].join(' ')}
               >
                 {c.name}
               </button>
@@ -141,105 +153,126 @@ function LeaderboardContent() {
 
       {/* Your rank banner */}
       {me && (
-        <div className="your-rank-banner">
-          <div>
-            <div className="yr-label">Your rank</div>
-            <div className="yr-rank-num">#{myIdx + 1}</div>
+        <div className="mw-grid-overlay mw-glow-tr bg-mw-ink rounded-[20px] px-7 py-[22px] flex items-center gap-6 mb-4 text-white [animation:fadeUp_0.45s_0.05s_ease_both] max-sm:flex-wrap max-sm:gap-4 max-sm:p-5">
+          <div className="relative z-[1]">
+            <div className="text-[10px] font-bold tracking-[1.2px] uppercase text-[rgba(255,255,255,0.35)] mb-1">Your rank</div>
+            <div className="font-[Georgia,serif] text-[38px] font-bold tracking-[-1.5px] leading-none shrink-0 text-mw-brand">#{myIdx + 1}</div>
           </div>
-          <div className="yr-divider" />
-          <div className="yr-meta">
-            <div className="yr-label">Points</div>
-            <div style={{fontSize:20,fontWeight:700,fontFamily:'var(--font-mono),DM Mono,monospace'}}>
+          <div className="w-px bg-[rgba(255,255,255,0.08)] self-stretch shrink-0 relative z-[1]" />
+          <div className="flex-1 min-w-0 relative z-[1]">
+            <div className="text-[10px] font-bold tracking-[1.2px] uppercase text-[rgba(255,255,255,0.35)] mb-1">Points</div>
+            <div className="text-xl font-bold font-[var(--font-mono),'DM_Mono',monospace]">
               {(me.total_points || 0).toLocaleString()} pts
             </div>
           </div>
-          <div className="yr-bar-wrap">
-            <div className="yr-bar">
-              <div className="yr-bar-fill" style={{width: Math.max(2, Math.round(((total - (myIdx+1)) / total) * 100)) + '%'}} />
+          <div className="flex-1 min-w-0 relative z-[1]">
+            <div className="h-1 bg-[rgba(255,255,255,0.1)] rounded-sm overflow-hidden mb-1.5">
+              <div
+                className="h-full bg-mw-brand rounded-sm transition-[width] duration-[800ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
+                style={{width: Math.max(2, Math.round(((total - (myIdx+1)) / total) * 100)) + '%'}}
+              />
             </div>
-            <div className="yr-bar-labels">
+            <div className="flex justify-between text-[10px] text-[rgba(255,255,255,0.28)]">
               <span>#1</span>
               <span>#{myIdx + 1} · top {100 - Math.round(((total - (myIdx+1)) / total) * 100)}%</span>
             </div>
           </div>
-          <div className="yr-score-box">
-            <div className="yr-score-label">Earned</div>
-            <div className="yr-score-val">{fmtUSD(me.total_earned_usd || 0)}</div>
+          <div className="text-right shrink-0 relative z-[1]">
+            <div className="text-[10px] font-bold tracking-[1px] uppercase text-[rgba(255,255,255,0.35)] mb-[3px]">Earned</div>
+            <div className="font-[var(--font-mono),'DM_Mono',monospace] text-[22px] font-bold text-[#4ade80]">{fmtUSD(me.total_earned_usd || 0)}</div>
           </div>
         </div>
       )}
 
       {/* Main leaderboard card */}
-      <div className="lb-card">
-        <div className="lb-header">
-          <div className="lb-title">Campaign leaderboard</div>
-          <div className="lb-sub">{lbSubText}</div>
-          <div className="lb-tabs">
+      <div className="bg-white border border-mw-border rounded-[20px] overflow-hidden mb-4 [animation:fadeUp_0.5s_0.1s_ease_both] shadow-[0_2px_12px_rgba(26,26,46,0.05)]">
+        <div className="px-7 pt-[22px]">
+          <div className="text-[17px] font-bold text-mw-ink mb-[3px] tracking-[-0.2px]">Campaign leaderboard</div>
+          <div className="text-xs text-mw-ink-3 font-[var(--font-mono),'DM_Mono',monospace] mb-4">{lbSubText}</div>
+          {/* Tabs */}
+          <div className="flex gap-0 border-b border-mw-border -mx-7 px-7 max-sm:-mx-5 max-sm:px-5">
             {(['points','score','referrals'] as const).map(tab => (
               <div
                 key={tab}
-                className={`lb-tab${sortBy === tab ? ' active' : ''}`}
                 onClick={() => setSortBy(tab)}
+                className={[
+                  'px-[18px] py-2.5 text-[13px] font-medium cursor-pointer border-b-2 -mb-px whitespace-nowrap transition-all duration-150',
+                  sortBy === tab
+                    ? 'text-mw-brand border-b-mw-brand font-semibold'
+                    : 'text-mw-ink-3 border-b-transparent hover:text-mw-ink',
+                ].join(' ')}
               >
                 {tab === 'points' ? 'Top earners' : tab === 'score' ? 'Top score' : 'Top referrers'}
               </div>
             ))}
           </div>
         </div>
-        <div className="lb-body">
+
+        <div className="px-7 pb-7 max-sm:px-5 max-sm:pb-5">
           {/* Podium */}
           {sorted.length >= 3 && !loading && (
-            <div className="lb-podium">
+            <div className="grid [grid-template-columns:1fr_1.15fr_1fr] gap-2.5 py-[22px] items-end max-sm:grid-cols-1">
               {[sorted[1], sorted[0], sorted[2]].map((entry, i) => {
                 const medals = ['🥈','🥇','🥉']
-                const podClasses = ['lb-pod-2','lb-pod-1','lb-pod-3']
+                const podStyles = [
+                  'bg-mw-surface border-mw-border-strong order-1',
+                  'bg-gradient-to-b from-[#fffef0] to-[#fffbf0] border-[#fde68a] order-2 max-sm:order-none',
+                  'bg-[#fff9f7] border-[#fed7aa] order-3',
+                ]
                 const isMe = wallet && entry.wallet === wallet
                 const val = sortBy === 'score' ? (entry.attribution_score || 0) : (entry.total_points || 0)
                 const valLabel = sortBy === 'score' ? 'score' : 'pts'
                 return (
-                  <div key={entry.wallet + i} className={`lb-pod ${podClasses[i]}${isMe ? ' you-pod' : ''}`}>
-                    <div className="lb-pod-rank">{medals[i]}</div>
-                    <div className="lb-pod-avatar" style={{background:avatarBg(entry.wallet)}}>
+                  <div
+                    key={entry.wallet + i}
+                    className={`${podStyles[i]} rounded-[14px] p-[18px] px-3.5 text-center cursor-pointer transition-all duration-150 border hover:-translate-y-0.5 hover:shadow-md max-sm:order-none ${isMe ? 'outline outline-2 outline-mw-brand outline-offset-[3px]' : ''}`}
+                  >
+                    <div className="text-2xl mb-2">{medals[i]}</div>
+                    <div className="w-11 h-11 rounded-xl mx-auto mb-2 flex items-center justify-center text-lg font-bold font-[var(--font-mono),'DM_Mono',monospace] text-mw-ink-2" style={{background:avatarBg(entry.wallet)}}>
                       {entry.wallet.charAt(2).toUpperCase()}
                     </div>
-                    <div className="lb-pod-addr">
-                      {shortAddr(entry.wallet)}{isMe && <span className="you-tag">you</span>}
+                    <div className="text-[11px] font-bold text-mw-ink mb-[3px] font-[var(--font-mono),'DM_Mono',monospace]">
+                      {shortAddr(entry.wallet)}{isMe && <span className="text-[9px] font-bold text-mw-brand bg-mw-brand-dim border border-[rgba(0,82,255,0.2)] rounded-lg px-1.5 py-px ml-1 align-middle">you</span>}
                     </div>
-                    <div className="lb-pod-score">{val.toLocaleString()}</div>
-                    <div className="lb-pod-score-label">{valLabel}</div>
-                    <div className="lb-pod-earnings">{fmtUSD(entry.total_earned_usd || 0)} earned</div>
+                    <div className="text-2xl font-bold font-[Georgia,serif] text-mw-ink tracking-[-0.5px]">{val.toLocaleString()}</div>
+                    <div className="text-[10px] text-mw-ink-3 mt-px font-semibold tracking-[0.5px] uppercase">{valLabel}</div>
+                    <div className="text-[11px] text-mw-green font-semibold mt-2 bg-mw-green-muted border border-mw-green-edge px-2.5 py-[3px] rounded-full inline-block">{fmtUSD(entry.total_earned_usd || 0)} earned</div>
                   </div>
                 )
               })}
             </div>
           )}
 
-          {/* Table */}
-          <div className="lb-table-header">
-            <div>#</div><div>Wallet</div><div>Score</div><div>Earned</div><div>Points</div>
+          {/* Table header */}
+          <div className="grid [grid-template-columns:44px_1fr_90px_100px_80px] max-sm:[grid-template-columns:36px_1fr_70px_80px] py-3 pb-2 border-b border-mw-border">
+            {['#','Wallet','Score','Earned','Points'].map((h, i) => (
+              <div key={h} className={`text-[10px] font-bold text-mw-ink-3 tracking-[0.5px] uppercase ${i === 0 ? 'text-center' : i === 1 ? 'text-left' : 'text-right'} ${i === 4 ? 'max-sm:hidden' : ''}`}>{h}</div>
+            ))}
           </div>
-          <div id="lb-table">
-            {loading ? (
-              <div className="lb-skeleton">
-                {[1,2,3,4,5].map(i => <div key={i} className="sk-row" />)}
-              </div>
-            ) : sorted.length === 0 ? (
-              <div className="lb-empty">No participants yet — be the first!</div>
-            ) : (
-              <>
-                {top10.map((entry, i) => buildRow(entry, i + 1, !!(wallet && entry.wallet === wallet)))}
-                {showUser && (
-                  <>
-                    <div className="lb-sep">· · ·</div>
-                    {userCtx.map((entry, i) => {
-                      const rank = Math.max(11, myIdx) - 1 + i + 1
-                      return buildRow(entry, rank, !!(wallet && entry.wallet === wallet))
-                    })}
-                  </>
-                )}
-              </>
-            )}
-          </div>
+
+          {/* Rows */}
+          {loading ? (
+            <div className="py-5">
+              {[1,2,3,4,5].map(i => (
+                <div key={i} className="mw-shimmer h-11 rounded-[10px] bg-mw-border mb-2" />
+              ))}
+            </div>
+          ) : sorted.length === 0 ? (
+            <div className="text-center py-12 text-mw-ink-3 text-sm">No participants yet — be the first!</div>
+          ) : (
+            <>
+              {top10.map((entry, i) => buildRow(entry, i + 1, !!(wallet && entry.wallet === wallet)))}
+              {showUser && (
+                <>
+                  <div className="py-2.5 text-center text-[11px] text-mw-ink-3 tracking-[3px] border-b border-mw-border">· · ·</div>
+                  {userCtx.map((entry, i) => {
+                    const rank = Math.max(11, myIdx) - 1 + i + 1
+                    return buildRow(entry, rank, !!(wallet && entry.wallet === wallet))
+                  })}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -250,89 +283,6 @@ function LeaderboardContent() {
 export default function LeaderboardPage() {
   return (
     <>
-      <style>{`
-        :root{
-          --blue:#0052FF;--blue-dim:rgba(0,82,255,0.07);
-          --ink:#1A1A2E;--ink-2:#3A3C52;--ink-3:#8A8C9E;
-          --surface:#F7F6FF;--white:#ffffff;
-          --green:#16a34a;--green-bg:#f0fdf4;--green-border:#bbf7d0;
-          --border:rgba(26,26,46,0.08);--border-strong:rgba(26,26,46,0.13);
-          --shadow-md:0 4px 16px rgba(26,26,46,0.08);
-        }
-        *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:var(--font-jakarta),'Plus Jakarta Sans',sans-serif;background:var(--surface);color:var(--ink);min-height:100vh}
-        @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes shimmer{to{left:150%}}
-        .page{max-width:960px;margin:0 auto;padding:40px 48px 80px}
-        .campaign-select-wrap{margin-bottom:28px;animation:fadeUp 0.4s ease both}
-        .campaign-select-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px;display:block}
-        .campaign-select-row{display:flex;gap:8px;flex-wrap:wrap}
-        .campaign-pill{padding:6px 16px;border-radius:20px;border:1px solid var(--border-strong);background:var(--white);color:var(--ink-3);font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;font-family:var(--font-jakarta),'Plus Jakarta Sans',sans-serif}
-        .campaign-pill:hover{border-color:var(--blue);color:var(--blue)}
-        .campaign-pill.active{background:var(--ink);color:white;border-color:var(--ink)}
-        .your-rank-banner{background:var(--blue);border-radius:16px;padding:20px 24px;display:flex;align-items:center;gap:20px;margin-bottom:16px;animation:fadeUp 0.45s 0.05s ease both;color:white}
-        .yr-rank-num{font-family:Georgia,serif;font-size:36px;font-weight:700;letter-spacing:-1px;line-height:1;flex-shrink:0}
-        .yr-divider{width:1px;background:rgba(255,255,255,0.15);align-self:stretch}
-        .yr-meta{flex:1}
-        .yr-label{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,0.45);margin-bottom:4px}
-        .yr-bar-wrap{flex:1;min-width:0}
-        .yr-bar{height:4px;background:rgba(255,255,255,0.15);border-radius:2px;overflow:hidden;margin-bottom:6px}
-        .yr-bar-fill{height:100%;background:rgba(255,255,255,0.7);border-radius:2px;transition:width 0.8s cubic-bezier(0.22,1,0.36,1)}
-        .yr-bar-labels{display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,0.35)}
-        .yr-score-box{text-align:right;flex-shrink:0}
-        .yr-score-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.45);margin-bottom:3px}
-        .yr-score-val{font-family:var(--font-mono),'DM Mono',monospace;font-size:22px;font-weight:700;color:white}
-        .lb-card{background:var(--white);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-bottom:16px;animation:fadeUp 0.5s 0.1s ease both}
-        .lb-header{padding:20px 24px 0}
-        .lb-title{font-size:16px;font-weight:700;color:var(--ink);margin-bottom:2px}
-        .lb-sub{font-size:12px;color:var(--ink-3);font-family:var(--font-mono),'DM Mono',monospace;margin-bottom:14px}
-        .lb-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin:0 -24px;padding:0 24px}
-        .lb-tab{padding:10px 16px;font-size:13px;font-weight:500;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:all 0.15s}
-        .lb-tab:hover{color:var(--ink)}
-        .lb-tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:600}
-        .lb-body{padding:0 24px 24px}
-        .lb-podium{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:20px 0;align-items:end}
-        .lb-pod{border-radius:12px;padding:16px;text-align:center;cursor:pointer;transition:all 0.15s;border:1px solid var(--border)}
-        .lb-pod:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
-        .lb-pod-1{background:#fffbf0;border-color:#fde68a;order:2}
-        .lb-pod-2{background:#f8f8f8;border-color:#e5e5e5;order:1}
-        .lb-pod-3{background:#fff8f5;border-color:#fed7aa;order:3}
-        .lb-pod-rank{font-size:22px;margin-bottom:6px}
-        .lb-pod-avatar{width:44px;height:44px;border-radius:12px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;font-family:var(--font-mono),'DM Mono',monospace;color:var(--ink-2)}
-        .lb-pod-addr{font-size:11px;font-weight:700;color:var(--ink);margin-bottom:2px;font-family:var(--font-mono),'DM Mono',monospace}
-        .lb-pod-score{font-size:22px;font-weight:700;font-family:var(--font-mono),'DM Mono',monospace;color:var(--ink)}
-        .lb-pod-score-label{font-size:10px;color:var(--ink-3);margin-top:1px}
-        .lb-pod-earnings{font-size:11px;color:var(--green);font-weight:600;margin-top:6px;background:var(--green-bg);padding:3px 8px;border-radius:20px;display:inline-block}
-        .lb-pod.you-pod{outline:2px solid var(--blue);outline-offset:2px}
-        .lb-table-header{display:grid;grid-template-columns:44px 1fr 90px 100px 80px;gap:0;padding:10px 0 6px;border-bottom:1px solid var(--border)}
-        .lb-table-header div{font-size:10px;font-weight:700;color:var(--ink-3);text-align:right;letter-spacing:0.5px;text-transform:uppercase}
-        .lb-table-header div:first-child{text-align:center}
-        .lb-table-header div:nth-child(2){text-align:left}
-        .lb-row{display:grid;grid-template-columns:44px 1fr 90px 100px 80px;gap:0;align-items:center;padding:11px 0;border-bottom:1px solid rgba(26,26,46,0.04);cursor:pointer;transition:background 0.1s;border-radius:8px}
-        .lb-row:hover{background:var(--surface);margin:0 -8px;padding:11px 8px}
-        .lb-row.my-row{background:var(--blue-dim);margin:0 -8px;padding:11px 8px;border-left:2px solid var(--blue);border-radius:0}
-        .lb-col-rank{font-size:12px;font-weight:700;color:var(--ink-3);font-family:var(--font-mono),'DM Mono',monospace;text-align:center}
-        .lb-col-rank.top3{color:var(--ink)}
-        .lb-col-identity{display:flex;align-items:center;gap:10px;min-width:0}
-        .lb-row-avatar{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-family:var(--font-mono),'DM Mono',monospace;flex-shrink:0;color:var(--ink-2)}
-        .lb-row-addr{font-size:12px;font-weight:600;color:var(--ink);font-family:var(--font-mono),'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .you-tag{font-size:9px;font-weight:700;color:var(--blue);background:var(--blue-dim);border:1px solid rgba(0,82,255,0.2);border-radius:8px;padding:1px 6px;margin-left:4px;vertical-align:middle}
-        .lb-col-score{font-size:13px;font-weight:700;color:var(--blue);font-family:var(--font-mono),'DM Mono',monospace;text-align:right}
-        .lb-col-earnings{font-size:13px;font-weight:600;color:var(--green);text-align:right}
-        .lb-col-pts{font-size:12px;color:var(--ink-3);text-align:right;font-family:var(--font-mono),'DM Mono',monospace}
-        .lb-sep{padding:10px 0;text-align:center;font-size:11px;color:var(--ink-3);letter-spacing:3px;border-bottom:1px solid var(--border)}
-        .lb-skeleton{padding:20px 0}
-        .sk-row{height:44px;border-radius:8px;background:var(--border);margin-bottom:8px;position:relative;overflow:hidden}
-        .sk-row::after{content:'';position:absolute;top:0;left:-150%;width:150%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.5),transparent);animation:shimmer 1.4s infinite}
-        .lb-empty{text-align:center;padding:48px 24px;color:var(--ink-3);font-size:14px}
-        @media(max-width:640px){
-          .page{padding:24px 20px 60px}
-          .lb-podium{grid-template-columns:1fr}
-          .lb-pod{order:unset!important}
-          .lb-table-header,.lb-row{grid-template-columns:36px 1fr 70px 80px}
-          .lb-col-pts,.lb-table-header div:last-child{display:none}
-        }
-      `}</style>
       <MwNav />
       <MwAuthGuard>
         <LeaderboardContent />

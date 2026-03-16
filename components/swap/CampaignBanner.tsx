@@ -48,7 +48,7 @@ export function CampaignBanner({ campaignId, referrer, campaign }: CampaignBanne
           {referrerDisplay && (
             <>
               <span className="mw-campaign-sep">·</span>
-              <span>Referred by <strong style={{ fontFamily: 'var(--font-mono), DM Mono, monospace', fontSize: 11 }}>{referrerDisplay}</strong></span>
+              <span>Referred by <strong style={{ fontFamily: "var(--font-mono), 'DM Mono', monospace", fontSize: 11 }}>{referrerDisplay}</strong></span>
             </>
           )}
           {campaign.campaignName && (

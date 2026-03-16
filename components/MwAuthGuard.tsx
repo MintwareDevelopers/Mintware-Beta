@@ -15,7 +15,7 @@ export function MwAuthGuard({ children }: { children: React.ReactNode }) {
   }, [isConnected, isConnecting, router])
 
   if (!isConnected) {
-    return <div style={{ minHeight: '100vh', background: '#F7F6FF' }} />
+    return <div className="min-h-screen bg-mw-surface" />
   }
 
   return <>{children}</>
