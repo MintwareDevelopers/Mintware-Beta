@@ -7,9 +7,9 @@ import { usePathname, useRouter } from 'next/navigation'
 
 // Tab base + state classes
 const tabBase =
-  'inline-flex items-center gap-1.5 px-3.5 py-[7px] rounded-[10px] text-[13px] font-medium text-mw-ink-3 no-underline whitespace-nowrap bg-transparent border border-transparent transition-all duration-150 cursor-pointer hover:bg-[rgba(26,26,46,0.05)] hover:border-mw-border hover:text-mw-ink'
+  'inline-flex items-center px-3.5 py-[7px] rounded-[8px] text-[13px] font-medium text-mw-ink-2 no-underline whitespace-nowrap bg-[rgba(26,26,46,0.04)] border border-mw-border transition-all duration-150 cursor-pointer hover:bg-[rgba(26,26,46,0.08)] hover:border-mw-border-strong hover:text-mw-ink'
 const tabActive =
-  'bg-mw-brand-dim border-[rgba(0,82,255,0.18)] text-mw-brand font-semibold'
+  'bg-mw-brand-dim border-[rgba(0,82,255,0.18)] text-mw-brand font-semibold hover:bg-mw-brand-dim'
 
 function tabCls(active: boolean) {
   return active ? `${tabBase} ${tabActive}` : tabBase
@@ -53,29 +53,25 @@ export function MwNav() {
                           !pathname.startsWith('/campaign/generate'))
                     )}
                   >
-                    <span>⚡</span>
-                    <span className="max-md:hidden">Earn</span>
+                    Earn
                   </Link>
                   <Link
                     href="/swap"
                     className={tabCls(pathname === '/swap')}
                   >
-                    <span>🔄</span>
-                    <span className="max-md:hidden">Swap</span>
+                    Swap
                   </Link>
                   <Link
                     href="/leaderboard"
                     className={tabCls(pathname === '/leaderboard')}
                   >
-                    <span>🏆</span>
-                    <span className="max-md:hidden">Leaderboard</span>
+                    Leaderboard
                   </Link>
                   <Link
                     href="/profile"
                     className={tabCls(pathname === '/profile')}
                   >
-                    <span>👤</span>
-                    <span className="max-md:hidden">Profile</span>
+                    Profile
                   </Link>
                 </div>
 
@@ -108,8 +104,7 @@ export function MwNav() {
                   href="/explorer"
                   className={tabCls(pathname === '/explorer')}
                 >
-                  <span>🔍</span>
-                  <span className="max-md:hidden">Explorer</span>
+                  Explorer
                 </Link>
               </div>
               <button
