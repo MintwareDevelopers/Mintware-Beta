@@ -1,0 +1,5 @@
+allowBuilds:
+  '@reown/appkit': true
+  bufferutil: true
+  sharp: true
+  utf-8-validate: true
