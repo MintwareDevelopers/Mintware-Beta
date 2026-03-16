@@ -1,0 +1,11 @@
+# Mintware — Netlify URL redirects
+# Clean URLs: /page → /page.html (200 = rewrite, not redirect)
+
+/explorer       /explorer.html      200
+/dashboard      /dashboard.html     200
+/leaderboard    /leaderboard.html   200
+/campaign       /campaign.html      200
+/campaign/*     /campaign.html      200
+
+# Fallback — anything else goes to index
+/*              /index.html         200

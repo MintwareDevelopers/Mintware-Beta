@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>For Protocols — Attribution</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #F7F6FF;
+  --surface:   #FFFFFF;
+  --surface2:  #FAF9FF;
+  --surface3:  #F0EFF8;
+  --blue:      #3A52CC;
+  --blue2:     #2A4DD4;
+  --blue-glow: rgba(58,82,204,0.15);
+  --blue-dim:  rgba(58,82,204,0.08);
+  --periwinkle:#6B8FFF;
+  --green:     #2A9E8A;
+  --green-dim: rgba(42,158,138,0.1);
+  --amber:     #C27A00;
+  --amber-dim: rgba(194,122,0,0.08);
+  --red:       #C2537A;
+  --text:      #1A1A2E;
+  --text-mid:  #7070A0;
+  --text-dim:  #9898C0;
+  --border:    #E4E2F5;
+  --border2:   #D0CDEB;
+  --shadow:    0 1px 3px rgba(26,26,46,0.07);
+  --shadow-md: 0 4px 16px rgba(26,26,46,0.09);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; overflow-x: hidden; }
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background-image: linear-gradient(rgba(58,82,204,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(58,82,204,0.025) 1px, transparent 1px);
+  background-size: 60px 60px; pointer-events: none; z-index: 0;
+}
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  padding: 20px 40px; display: flex; align-items: center; justify-content: space-between;
+  background: rgba(247,246,255,0.95); border-bottom: 1px solid var(--border); backdrop-filter: blur(20px);
+}
+.logo { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; color: var(--text); text-decoration: none; display: flex; align-items: center; gap: 6px; }
+.logo-attr { font-weight: 800; letter-spacing: 0.08em; }
+.logo-by { font-weight: 400; color: var(--text-mid); font-size: 13px; }
+.logo-mint { font-family: Georgia, serif; font-weight: 700; letter-spacing: -0.02em; }
+.nav-right { display: flex; align-items: center; gap: 28px; font-size: 13px; color: var(--text-mid); font-weight: 500; }
+.nav-right a { color: inherit; text-decoration: none; transition: color 0.2s; }
+.nav-right a:hover { color: var(--text); }
+.nav-right a.active { color: var(--blue); }
+.nav-badge { background: var(--blue-dim); border: 1px solid rgba(58,82,204,0.25); color: var(--blue); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-family: 'DM Mono', monospace; letter-spacing: 0.05em; }
+main { position: relative; z-index: 1; padding: 140px 40px 100px; max-width: 1100px; margin: 0 auto; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.page-label { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--blue); text-transform: uppercase; margin-bottom: 20px; opacity: 0; animation: fadeUp 0.7s ease forwards 0.1s; }
+.page-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: clamp(42px, 6vw, 72px); line-height: 1.05; color: var(--text); margin-bottom: 24px; opacity: 0; animation: fadeUp 0.7s ease forwards 0.2s; }
+.page-title em { font-style: normal; color: var(--red); }
+.page-sub { font-size: 18px; color: var(--text-mid); max-width: 620px; line-height: 1.65; margin-bottom: 80px; font-weight: 300; opacity: 0; animation: fadeUp 0.7s ease forwards 0.3s; }
+
+/* WASTE STAT ROW */
+.waste-row {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 16px; margin-bottom: 80px;
+  opacity: 0; animation: fadeUp 0.7s ease forwards 0.35s;
+}
+.waste-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-top: 2px solid var(--red);
+  border-radius: 14px; padding: 28px 24px;
+}
+.waste-num {
+  font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800;
+  font-size: 38px; color: var(--red); line-height: 1; margin-bottom: 8px;
+}
+.waste-label { font-size: 14px; color: var(--text); font-weight: 600; margin-bottom: 6px; }
+.waste-desc { font-size: 13px; color: var(--text-mid); line-height: 1.6; }
+
+/* THE PROBLEM + FIX */
+.problem-section { margin-bottom: 80px; opacity: 0; animation: fadeUp 0.7s ease forwards 0.4s; }
+.problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px; }
+.problem-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 28px;
+}
+.problem-card.bad { border-top: 2px solid var(--red); }
+.problem-card.good { border-top: 2px solid var(--green); }
+.problem-card-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 14px; }
+.problem-card.bad .problem-card-label { color: var(--red); }
+.problem-card.good .problem-card-label { color: var(--green); }
+.problem-card-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 17px; color: var(--text); margin-bottom: 12px; }
+.problem-card ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+.problem-card li { font-size: 14px; color: var(--text-mid); line-height: 1.5; display: flex; gap: 10px; align-items: flex-start; }
+.problem-card.bad li::before { content: '×'; color: var(--red); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.problem-card.good li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+
+/* PLAYER TYPES */
+.players-section { margin-bottom: 80px; opacity: 0; animation: fadeUp 0.7s ease forwards 0.45s; }
+.players-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 32px; }
+.player-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 28px; transition: border-color 0.3s;
+}
+.player-card:hover { border-color: rgba(58,82,204,0.25); }
+.player-icon { font-size: 24px; margin-bottom: 16px; }
+.player-name { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 17px; color: var(--text); margin-bottom: 8px; }
+.player-waste { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--amber); background: var(--amber-dim); border: 1px solid rgba(245,166,35,0.2); padding: 4px 10px; border-radius: 4px; display: inline-block; margin-bottom: 12px; }
+.player-desc { font-size: 14px; color: var(--text-mid); line-height: 1.65; }
+.player-fix { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--green); line-height: 1.6; }
+.player-fix::before { content: '→ '; }
+
+/* DATA CALLOUT */
+.data-callout { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--amber); border-radius: 14px; padding: 28px 32px; margin: 32px 0; }
+.data-callout-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.15em; color: var(--amber); text-transform: uppercase; margin-bottom: 10px; }
+.data-callout p { font-size: 15px; color: var(--text-mid); line-height: 1.7; }
+.data-callout p strong { color: var(--text); font-weight: 600; }
+
+/* HOW TO INTEGRATE */
+.integrate-section { margin-bottom: 80px; opacity: 0; animation: fadeUp 0.7s ease forwards 0.5s; }
+.integrate-steps { display: flex; flex-direction: column; gap: 0; margin-top: 32px; }
+.istep { display: grid; grid-template-columns: 52px 1fr; gap: 0 20px; position: relative; }
+.istep:not(:last-child)::after { content: ''; position: absolute; left: 25px; top: 52px; bottom: -10px; width: 2px; background: linear-gradient(to bottom, var(--blue2), transparent); }
+.istep-num { width: 36px; height: 36px; border-radius: 50%; background: var(--blue-dim); border: 1px solid rgba(58,82,204,0.25); display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--blue); flex-shrink: 0; margin-top: 2px; }
+.istep-body { padding-bottom: 36px; }
+.istep-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 17px; color: var(--text); margin-bottom: 6px; margin-top: 6px; }
+.istep-desc { font-size: 14px; color: var(--text-mid); line-height: 1.65; max-width: 560px; }
+
+/* SECTION SHARED */
+.section-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.2em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 10px; }
+.section-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 28px; color: var(--text); margin-bottom: 12px; }
+.section-body { font-size: 15px; color: var(--text-mid); line-height: 1.7; max-width: 680px; }
+
+.cta-bar { display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px 40px; margin-top: 60px; flex-wrap: wrap; gap: 24px; }
+.cta-bar-text h3 { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 22px; color: var(--text); margin-bottom: 6px; }
+.cta-bar-text p { font-size: 14px; color: var(--text-mid); }
+.cta-btn { background: var(--blue); color: white; border: none; border-radius: 10px; padding: 14px 28px; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; text-decoration: none; display: inline-block; transition: background 0.2s; }
+.cta-btn:hover { background: #2A4DD4; }
+
+@media(max-width:768px) {
+  main { padding: 120px 20px 60px; } nav { padding: 16px 20px; }
+  .waste-row, .problem-grid, .players-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<nav>
+  <a class="logo" href="index.html"><span class="logo-attr">ATTRIBUTION</span><span class="logo-by">by</span><span class="logo-mint">Mintware</span></a>
+  <div class="nav-right">
+    <a href="how-it-works.html">How it works</a>
+    <a href="for-protocols.html" class="active">For protocols</a>
+    <a href="for-people.html">For people</a>
+    <a href="for-agents.html">For agents</a>
+    <a href="index.html" style="font-size:13px;font-weight:600;color:var(--blue);padding:6px 14px;border:1px solid rgba(0,82,255,0.25);border-radius:20px;background:rgba(0,82,255,0.06);text-decoration:none">← Mintware</a><div class="nav-badge">BETA</div>
+  </div>
+</nav>
+
+<main>
+
+  <div class="page-label">For protocols</div>
+  <h1 class="page-title">You've been spending millions<br>rewarding the <em>wrong people.</em></h1>
+  <p class="page-sub">Token emissions. Liquidity mining. Airdrops. The budgets are enormous. The outcomes are broken. Attribution doesn't ask you to spend more — it makes what you're already spending actually work.</p>
+
+  <div class="waste-row">
+    <div class="waste-card">
+      <div class="waste-num">$170B+</div>
+      <div class="waste-label">TVL across DeFi in 2025</div>
+      <div class="waste-desc">Enormous capital — but TVL is a measure of who showed up, not who built anything. Most of it is mercenary capital waiting for the next opportunity.</div>
+    </div>
+    <div class="waste-card">
+      <div class="waste-num">~90%</div>
+      <div class="waste-label">Of LM rewards go to farmers</div>
+      <div class="waste-desc">Liquidity miners act as mercenary capital — moving to whatever protocol offers the highest yield, then dumping earned tokens as fast as possible.</div>
+    </div>
+    <div class="waste-card">
+      <div class="waste-num">$0</div>
+      <div class="waste-label">Lasting value from most airdrops</div>
+      <div class="waste-desc">The snapshot model rewards whoever gamed the snapshot date. Liquidity evaporates the moment emissions drop. The cycle repeats with the next protocol.</div>
+    </div>
+  </div>
+
+  <div class="data-callout">
+    <div class="data-callout-label">The pattern</div>
+    <p>Liquidity mining <strong>attracts capital that leaves once rewards decline</strong>, causing volatile TVL and unsustainable token economics. Protocols start with aggressive emissions — sometimes 500–1,000% APR — only to watch liquidity evaporate when incentives dry up. <strong>This doesn't build lasting value. It creates temporary illusions of success.</strong></p>
+  </div>
+
+  <!-- BEFORE/AFTER -->
+  <div class="problem-section">
+    <div class="section-label">Before and after</div>
+    <div class="section-title">Same budget. Different outcome.</div>
+    <div class="section-body">Attribution doesn't change how much you distribute. It changes who gets it — and what behavior that creates going forward.</div>
+
+    <div class="problem-grid">
+      <div class="problem-card bad">
+        <div class="problem-card-label">Today — without Attribution</div>
+        <div class="problem-card-title">Pro-rata by TVL</div>
+        <ul>
+          <li>Mercenary capital farms your snapshot and exits the moment emissions drop</li>
+          <li>Whales with massive TVL get outsized reward regardless of contribution quality</li>
+          <li>Token dumps on distribution day — every time</li>
+          <li>You can't tell your best contributors from your worst</li>
+          <li>The budget is spent. The community is gone. Repeat next quarter.</li>
+        </ul>
+      </div>
+      <div class="problem-card good">
+        <div class="problem-card-label">With Attribution</div>
+        <div class="problem-card-title">Weighted by contribution</div>
+        <ul>
+          <li>Rewards flow to wallets with proven, durable behavior — not snapshot gamers</li>
+          <li>Duration, governance participation, referrals, and quality all count</li>
+          <li>Farmers earn almost nothing. Real builders earn disproportionately.</li>
+          <li>Every distribution is verifiable on-chain — full audit trail</li>
+          <li>Community sticks around because they're being fairly recognized</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- PLAYER TYPES -->
+  <div class="players-section">
+    <div class="section-label">Protocol types</div>
+    <div class="section-title">Value left on the table — by player</div>
+    <div class="section-body">The problem looks different depending on what kind of protocol you are. But the root cause is the same: you have no way to see who actually built your ecosystem.</div>
+
+    <div class="players-grid">
+
+      <div class="player-card">
+        <div class="player-icon">⬡</div>
+        <div class="player-name">Token teams</div>
+        <div class="player-waste">Wasted: airdrop budget</div>
+        <div class="player-desc">You set a snapshot date. Bots and farmers game it for weeks in advance. On distribution day the price craters as recipients dump. The treasury is empty. The holders aren't your community — they're your exit liquidity.</div>
+        <div class="player-fix">Attribution replaces snapshots with contribution windows. Emissions stream continuously to wallets that score highest in your pool — forever, automatically, without a cliff.</div>
+      </div>
+
+      <div class="player-card">
+        <div class="player-icon">⇄</div>
+        <div class="player-name">AMMs & DEXes</div>
+        <div class="player-waste">Wasted: fee revenue</div>
+        <div class="player-desc">Fee revenue is distributed pro-rata by TVL. A whale who showed up yesterday earns the same fee percentage as an LP who's been providing deep liquidity through two bear markets. Quality is invisible to the current model.</div>
+        <div class="player-fix">Attribution scores every LP by duration, range quality, and volatility survival. Fee distributions at epoch end reward the LPs who actually built your market — not the ones with the biggest wallet.</div>
+      </div>
+
+      <div class="player-card">
+        <div class="player-icon">◈</div>
+        <div class="player-name">Launchpads</div>
+        <div class="player-waste">Wasted: allocation</div>
+        <div class="player-desc">Allocation goes to whoever has the most tokens staked — whales capture everything — or to a lottery — random, rewards nobody for contribution. Neither model attracts quality projects. Neither builds a community worth having.</div>
+        <div class="player-fix">Attribution scores every participant's history within your ecosystem. Allocation becomes merit-based, verifiable, sybil-resistant. Better participants get better access. Better projects follow the participants.</div>
+      </div>
+
+      <div class="player-card">
+        <div class="player-icon">◆</div>
+        <div class="player-name">Yield protocols</div>
+        <div class="player-waste">Wasted: boosted yield budget</div>
+        <div class="player-desc">You reward capital size, not commitment. A depositor who stayed through a brutal bear market gets the same yield as someone who showed up last week chasing APY. Loyalty is unrecognized. The moment rates drop, capital leaves.</div>
+        <div class="player-fix">Attribution-weighted boosted yield. Base yield for everyone. Boosted yield — the meaningful percentage on top — flows to depositors with proven long-term commitment. No token locking needed. Behavior is the proof.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- HOW TO INTEGRATE -->
+  <div class="integrate-section">
+    <div class="section-label">Integration</div>
+    <div class="section-title">How protocols plug in</div>
+    <div class="section-body">One deployment. Continuous, automatic, verifiable distributions from day one.</div>
+
+    <div class="integrate-steps">
+      <div class="istep">
+        <div class="istep-num">1</div>
+        <div class="istep-body">
+          <div class="istep-title">Deploy a V4 pool with Attribution hooks</div>
+          <div class="istep-desc">The hook fires on every LP interaction and swap. Attribution indexes the behavior in real time. You don't change anything about how your pool works — the hook observes and records.</div>
+        </div>
+      </div>
+      <div class="istep">
+        <div class="istep-num">2</div>
+        <div class="istep-body">
+          <div class="istep-title">Set your signal weights</div>
+          <div class="istep-desc">Tell Attribution what you want to reward. Duration at 60%? Governance participation at 20%? Referral quality at 20%? The weights are your incentive design. Attribution measures what you say matters.</div>
+        </div>
+      </div>
+      <div class="istep">
+        <div class="istep-num">3</div>
+        <div class="istep-body">
+          <div class="istep-title">Fund the distribution pool</div>
+          <div class="istep-desc">Token emissions, trading fees, treasury allocation — whatever you're already distributing flows into the Attribution distribution contract. Nothing new to budget for. Just smarter routing of what's already going out.</div>
+        </div>
+      </div>
+      <div class="istep">
+        <div class="istep-num">4</div>
+        <div class="istep-body">
+          <div class="istep-title">Distributions run automatically each epoch</div>
+          <div class="istep-desc">At epoch end, the contract reads every participant's contextual Attribution score, splits the pool proportionally, and executes the distribution in a single transaction. On-chain, verifiable, permanent. Attribution takes basis points on the transaction — you take the community.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cta-bar">
+    <div class="cta-bar-text">
+      <h3>Ready to stop burning budget on mercenaries?</h3>
+      <p>Talk to the team about integrating Attribution into your protocol.</p>
+    </div>
+    <a href="index.html" class="cta-btn">Get in touch →</a>
+  </div>
+
+</main>
+</body>
+</html>

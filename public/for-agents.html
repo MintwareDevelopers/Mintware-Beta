@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>For Agents — Attribution</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #F7F6FF;
+  --surface:   #FFFFFF;
+  --surface2:  #FAF9FF;
+  --surface3:  #F0EFF8;
+  --blue:      #3A52CC;
+  --blue2:     #2A4DD4;
+  --blue-glow: rgba(58,82,204,0.15);
+  --blue-dim:  rgba(58,82,204,0.08);
+  --periwinkle:#6B8FFF;
+  --green:     #2A9E8A;
+  --green-dim: rgba(42,158,138,0.1);
+  --amber:     #C27A00;
+  --amber-dim: rgba(194,122,0,0.08);
+  --red:       #C2537A;
+  --text:      #1A1A2E;
+  --text-mid:  #7070A0;
+  --text-dim:  #9898C0;
+  --border:    #E4E2F5;
+  --border2:   #D0CDEB;
+  --shadow:    0 1px 3px rgba(26,26,46,0.07);
+  --shadow-md: 0 4px 16px rgba(26,26,46,0.09);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; }
+body { background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', sans-serif; min-height: 100vh; overflow-x: hidden; }
+body::before {
+  content: ''; position: fixed; inset: 0;
+  background-image: linear-gradient(rgba(58,82,204,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(58,82,204,0.025) 1px, transparent 1px);
+  background-size: 60px 60px; pointer-events: none; z-index: 0;
+}
+nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; padding: 20px 40px; display: flex; align-items: center; justify-content: space-between; background: rgba(247,246,255,0.95); border-bottom: 1px solid var(--border); backdrop-filter: blur(20px); }
+.logo { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 15px; letter-spacing: 0.02em; color: var(--text); text-decoration: none; display: flex; align-items: center; gap: 6px; }
+.logo-attr { font-weight: 800; letter-spacing: 0.08em; }
+.logo-by { font-weight: 400; color: var(--text-mid); font-size: 13px; }
+.logo-mint { font-family: Georgia, serif; font-weight: 700; letter-spacing: -0.02em; }
+.nav-right { display: flex; align-items: center; gap: 28px; font-size: 13px; color: var(--text-mid); font-weight: 500; }
+.nav-right a { color: inherit; text-decoration: none; transition: color 0.2s; }
+.nav-right a:hover { color: var(--text); }
+.nav-right a.active { color: var(--blue); }
+.nav-badge { background: var(--blue-dim); border: 1px solid rgba(58,82,204,0.25); color: var(--blue); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-family: 'DM Mono', monospace; letter-spacing: 0.05em; }
+main { position: relative; z-index: 1; padding: 140px 40px 100px; max-width: 1100px; margin: 0 auto; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.page-label { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.2em; color: var(--purple); text-transform: uppercase; margin-bottom: 20px; opacity: 0; animation: fadeUp 0.7s ease forwards 0.1s; }
+.page-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: clamp(42px, 6vw, 72px); line-height: 1.05; color: var(--text); margin-bottom: 24px; opacity: 0; animation: fadeUp 0.7s ease forwards 0.2s; }
+.page-title em { font-style: normal; color: var(--purple); }
+.page-sub { font-size: 18px; color: var(--text-mid); max-width: 620px; line-height: 1.65; margin-bottom: 80px; font-weight: 300; opacity: 0; animation: fadeUp 0.7s ease forwards 0.3s; }
+
+.stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 80px; opacity: 0; animation: fadeUp 0.7s ease forwards 0.35s; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-top: 2px solid var(--purple); border-radius: 14px; padding: 28px 24px; }
+.stat-num { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; font-size: 38px; color: var(--purple); line-height: 1; margin-bottom: 8px; }
+.stat-label { font-size: 14px; color: var(--text); font-weight: 600; margin-bottom: 6px; }
+.stat-desc { font-size: 13px; color: var(--text-mid); line-height: 1.6; }
+
+.data-callout { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--purple); border-radius: 14px; padding: 28px 32px; margin: 32px 0; }
+.data-callout-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.15em; color: var(--purple); text-transform: uppercase; margin-bottom: 10px; }
+.data-callout p { font-size: 15px; color: var(--text-mid); line-height: 1.7; }
+.data-callout p strong { color: var(--text); font-weight: 600; }
+
+.section { margin-bottom: 80px; opacity: 0; animation: fadeUp 0.7s ease forwards 0.4s; }
+.section-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.2em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 10px; }
+.section-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 28px; color: var(--text); margin-bottom: 12px; }
+.section-body { font-size: 15px; color: var(--text-mid); line-height: 1.7; max-width: 680px; }
+
+/* AGENT PROBLEM */
+.problem-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; }
+.problem-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; }
+.problem-card.bad { border-top: 2px solid var(--red); }
+.problem-card.good { border-top: 2px solid var(--purple); }
+.problem-tag { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 12px; }
+.problem-card.bad .problem-tag { color: var(--red); }
+.problem-card.good .problem-tag { color: var(--purple); }
+.problem-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 17px; color: var(--text); margin-bottom: 14px; }
+.problem-card ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.problem-card li { font-size: 14px; color: var(--text-mid); line-height: 1.55; display: flex; gap: 10px; align-items: flex-start; }
+.problem-card.bad li::before { content: '×'; color: var(--red); font-weight: 700; flex-shrink: 0; }
+.problem-card.good li::before { content: '→'; color: var(--purple); font-weight: 700; flex-shrink: 0; }
+
+/* AGENT ROLES */
+.roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 32px; }
+.role-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; transition: border-color 0.3s; }
+.role-card:hover { border-color: rgba(167,139,250,0.3); }
+.role-icon { font-size: 24px; margin-bottom: 14px; }
+.role-name { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 16px; color: var(--text); margin-bottom: 6px; }
+.role-badge { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--purple); background: var(--purple-dim); border: 1px solid rgba(167,139,250,0.2); padding: 3px 9px; border-radius: 4px; display: inline-block; margin-bottom: 10px; }
+.role-desc { font-size: 13px; color: var(--text-mid); line-height: 1.65; }
+.role-earns { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--green); line-height: 1.55; }
+.role-earns::before { content: '↑ '; font-weight: 700; }
+
+/* REPUTATION LOOP */
+.rep-loop { display: flex; flex-direction: column; gap: 0; margin-top: 32px; }
+.rep-step { display: grid; grid-template-columns: 52px 1fr; gap: 0 20px; position: relative; }
+.rep-step:not(:last-child)::after { content: ''; position: absolute; left: 25px; top: 52px; bottom: -10px; width: 2px; background: linear-gradient(to bottom, var(--purple), transparent); }
+.rep-num { width: 36px; height: 36px; border-radius: 50%; background: var(--purple-dim); border: 1px solid rgba(167,139,250,0.3); display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 12px; color: var(--purple); flex-shrink: 0; margin-top: 2px; }
+.rep-body { padding-bottom: 36px; }
+.rep-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 17px; color: var(--text); margin-bottom: 6px; margin-top: 6px; }
+.rep-desc { font-size: 14px; color: var(--text-mid); line-height: 1.65; max-width: 560px; }
+
+/* FIRMA */
+.firma-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 32px; margin-top: 32px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; }
+.firma-label { font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.15em; color: var(--purple); text-transform: uppercase; margin-bottom: 10px; }
+.firma-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 20px; color: var(--text); margin-bottom: 10px; }
+.firma-desc { font-size: 14px; color: var(--text-mid); line-height: 1.65; }
+.firma-tag { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; white-space: nowrap; }
+
+.cta-bar { display: flex; align-items: center; justify-content: space-between; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 32px 40px; margin-top: 60px; flex-wrap: wrap; gap: 24px; }
+.cta-bar-text h3 { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 22px; color: var(--text); margin-bottom: 6px; }
+.cta-bar-text p { font-size: 14px; color: var(--text-mid); }
+.cta-btn { background: var(--purple); color: white; border: none; border-radius: 10px; padding: 14px 28px; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 14px; cursor: pointer; text-decoration: none; display: inline-block; transition: opacity 0.2s; }
+.cta-btn:hover { opacity: 0.85; }
+
+@media(max-width:768px) {
+  main { padding: 120px 20px 60px; } nav { padding: 16px 20px; }
+  .stat-row, .problem-row, .roles { grid-template-columns: 1fr; }
+  .firma-card { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<nav>
+  <a class="logo" href="index.html"><span class="logo-attr">ATTRIBUTION</span><span class="logo-by">by</span><span class="logo-mint">Mintware</span></a>
+  <div class="nav-right">
+    <a href="how-it-works.html">How it works</a>
+    <a href="for-protocols.html">For protocols</a>
+    <a href="for-people.html">For people</a>
+    <a href="for-agents.html" class="active">For agents</a>
+    <a href="index.html" style="font-size:13px;font-weight:600;color:var(--blue);padding:6px 14px;border:1px solid rgba(0,82,255,0.25);border-radius:20px;background:rgba(0,82,255,0.06);text-decoration:none">← Mintware</a><div class="nav-badge">BETA</div>
+  </div>
+</nav>
+
+<main>
+
+  <div class="page-label">For agents</div>
+  <h1 class="page-title">Agents transact.<br>Attribution makes them <em>trustworthy.</em></h1>
+  <p class="page-sub">Agents are becoming the dominant participants in DeFi. But today an agent wallet is indistinguishable from a bot, an attacker, or a sybil. Attribution gives agents an identity — and the reputation that compounds over time.</p>
+
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="stat-num">~90%</div>
+      <div class="stat-label">Of future on-chain transactions</div>
+      <div class="stat-desc">Analysts project that by 2026, the vast majority of on-chain activity will be executed by AI agents — rebalancing pools, executing strategies, allocating rewards.</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">115M+</div>
+      <div class="stat-label">Machine-to-machine micropayments</div>
+      <div class="stat-desc">Agent payment protocols already handled over 115 million micropayments between machines by early 2026. The machine economy is not hypothetical.</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num">$0</div>
+      <div class="stat-label">Reputation value for most agents</div>
+      <div class="stat-desc">Every agent's track record exists on-chain. But no protocol can read it meaningfully. An agent with three years of excellent behavior is indistinguishable from one that launched yesterday.</div>
+    </div>
+  </div>
+
+  <div class="data-callout">
+    <div class="data-callout-label">The trust gap</div>
+    <p>Traditional banking is built for humans — KYC, physical signatures, manual approvals. <strong>Crypto is permissionless. Any agent can generate a wallet and start transacting immediately.</strong> That's the promise. But it's also the problem. Without identity and reputation, agents can't be trusted by other agents. Protocols won't give them preferential terms. Vaults won't boost their yield. The track record exists — it just means nothing to anyone yet.</p>
+  </div>
+
+  <!-- THE PROBLEM -->
+  <div class="section">
+    <div class="section-label">Before and after</div>
+    <div class="section-title">Anonymous agents vs. credentialed agents.</div>
+
+    <div class="problem-row">
+      <div class="problem-card bad">
+        <div class="problem-tag">Today — without Attribution</div>
+        <div class="problem-title">Anonymous. Untrustworthy. Undifferentiated.</div>
+        <ul>
+          <li>Agent wallets are indistinguishable from bots and attackers</li>
+          <li>No protocol will extend preferential terms to an anonymous agent</li>
+          <li>No vault boosts yield for a wallet with no verifiable track record</li>
+          <li>Agent-to-agent trust doesn't exist — every interaction starts from zero</li>
+          <li>Excellent performance on-chain produces no lasting credential</li>
+        </ul>
+      </div>
+      <div class="problem-card good">
+        <div class="problem-tag">With Attribution</div>
+        <div class="problem-title">Identified. Credentialed. Rewarded.</div>
+        <ul>
+          <li>Agent registered in Attribution with on-chain identity via Firma Labs</li>
+          <li>Every transaction contributes to a verifiable reputation score</li>
+          <li>High-scoring agents get better fee splits, boosted yield, priority access</li>
+          <li>Other agents and protocols can verify track record instantly, trustlessly</li>
+          <li>Reputation compounds — early excellent agents build an insurmountable lead</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- THREE AGENT ROLES -->
+  <div class="section" style="animation-delay:0.45s">
+    <div class="section-label">Agent types</div>
+    <div class="section-title">Three roles. All earning reputation.</div>
+    <div class="section-body">Attribution has defined three agent roles — each measured differently, each building a distinct credential. The underlying measurement infrastructure is the same Attribution scoring engine.</div>
+
+    <div class="roles">
+      <div class="role-card">
+        <div class="role-icon">◆</div>
+        <div class="role-name">Strategy agents</div>
+        <div class="role-badge">Vault optimizer</div>
+        <div class="role-desc">Agents that manage liquidity positions, rebalance ranges, optimize yield allocation, and execute on-chain strategies. Measured on range quality, duration, volatility presence, and capital efficiency.</div>
+        <div class="role-earns">High-scoring strategy agents earn boosted fee share in every pool they actively manage — and carry that credential to every new protocol.</div>
+      </div>
+      <div class="role-card">
+        <div class="role-icon">⇄</div>
+        <div class="role-name">Recruiter agents</div>
+        <div class="role-badge">LP acquisition</div>
+        <div class="role-desc">Agents that identify and onboard quality liquidity providers into protocols. Measured on the quality of wallets they refer — not just quantity. Four levels of referral tree depth tracked.</div>
+        <div class="role-earns">Referral quality score builds continuously. A recruiter agent whose LPs stay and contribute well builds compounding reputation — and earns proportionally from every epoch distribution.</div>
+      </div>
+      <div class="role-card">
+        <div class="role-icon">◉</div>
+        <div class="role-name">Routing agents</div>
+        <div class="role-badge">Order flow</div>
+        <div class="role-desc">Agents that route order flow, manage MEV capture, and optimize execution across pools. Measured on execution quality, MEV redirect behavior, and consistency across market conditions.</div>
+        <div class="role-earns">Routing agents with Attribution credentials can demonstrate verifiable execution quality to protocols — unlocking better access, lower fees, and direct MEV sharing agreements.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REPUTATION LOOP -->
+  <div class="section" style="animation-delay:0.5s">
+    <div class="section-label">How agent reputation builds</div>
+    <div class="section-title">Reputation that compounds.</div>
+    <div class="section-body">Attribution's 4-hour agent fast lane means agent behavior is scored and updated continuously — not just on the 7-day standard cycle. Early agents build reputation faster and compound it longer.</div>
+
+    <div class="rep-loop">
+      <div class="rep-step">
+        <div class="rep-num">01</div>
+        <div class="rep-body">
+          <div class="rep-title">Agent registers via Firma Labs</div>
+          <div class="rep-desc">Firma Labs provides agent identity infrastructure, wallet management, and execution frameworks. Attribution reads the agent's on-chain behavior through its standard scoring engine — no special integration required.</div>
+        </div>
+      </div>
+      <div class="rep-step">
+        <div class="rep-num">02</div>
+        <div class="rep-body">
+          <div class="rep-title">Every transaction builds the score</div>
+          <div class="rep-desc">The attribution hooks on V4 pools fire on every agent interaction. Liquidity added, position modified, order routed — all of it feeds the real-time scoring engine. Updated every 4 hours on the agent fast lane.</div>
+        </div>
+      </div>
+      <div class="rep-step">
+        <div class="rep-num">03</div>
+        <div class="rep-body">
+          <div class="rep-title">Score is attested on-chain</div>
+          <div class="rep-desc">EAS attestations published continuously. Any protocol or agent can call meetsThreshold() to verify whether the agent qualifies for a given access tier — instantly, trustlessly, without involving Attribution.</div>
+        </div>
+      </div>
+      <div class="rep-step">
+        <div class="rep-num">04</div>
+        <div class="rep-body">
+          <div class="rep-title">High score unlocks better opportunities</div>
+          <div class="rep-desc">Protocols reward high-scoring agents with better fee splits, boosted yield, and priority access. Other agents trust high-scored agents more in collaborative strategies. The reward compounds with the reputation.</div>
+        </div>
+      </div>
+      <div class="rep-step">
+        <div class="rep-num">05</div>
+        <div class="rep-body">
+          <div class="rep-title">Reputation travels to every new protocol</div>
+          <div class="rep-desc">The agent's Attribution score is global — built across every protocol it's touched. When it deploys to a new pool, its track record is already there. No starting from zero. Reputation is portable, permanent, and growing.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FIRMA -->
+  <div class="section" style="animation-delay:0.55s">
+    <div class="section-label">Infrastructure partnership</div>
+    <div class="section-title">Built with Firma Labs</div>
+
+    <div class="firma-card">
+      <div>
+        <div class="firma-label">Partner</div>
+        <div class="firma-title">Firma Labs — Agentic Network States OS</div>
+        <div class="firma-desc">Firma Labs provides the agent identity and wallet infrastructure, agent execution frameworks, and distribution through network state agents. Attribution provides the financial primitives and reputation credentialing layer. Division of labour is explicit: Firma owns agent identity. Attribution owns what that identity earns.</div>
+      </div>
+      <div class="firma-tag">firmalabs.org</div>
+    </div>
+  </div>
+
+  <div class="cta-bar">
+    <div class="cta-bar-text">
+      <h3>Building an agent that needs reputation?</h3>
+      <p>Talk to us about the agent registration program and early access.</p>
+    </div>
+    <a href="index.html" class="cta-btn">Get early access →</a>
+  </div>
+
+</main>
+</body>
+</html>

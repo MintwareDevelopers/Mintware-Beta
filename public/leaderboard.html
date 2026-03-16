@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leaderboard — Mintware</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#0052FF;--blue-dim:rgba(0,82,255,0.07);
+  --ink:#1A1A2E;--ink-2:#3A3C52;--ink-3:#8A8C9E;
+  --surface:#F7F6FF;--white:#ffffff;
+  --green:#16a34a;--green-bg:#f0fdf4;--green-border:#bbf7d0;
+  --border:rgba(26,26,46,0.08);--border-strong:rgba(26,26,46,0.13);
+  --shadow-md:0 4px 16px rgba(26,26,46,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--surface);color:var(--ink);min-height:100vh}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+@keyframes shimmer{to{left:150%}}
+
+.page{max-width:960px;margin:0 auto;padding:40px 48px 80px}
+
+/* Campaign selector */
+.campaign-select-wrap{margin-bottom:28px;animation:fadeUp 0.4s ease both}
+.campaign-select-label{font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px;display:block}
+.campaign-select-row{display:flex;gap:8px;flex-wrap:wrap}
+.campaign-pill{padding:6px 16px;border-radius:20px;border:1px solid var(--border-strong);background:var(--white);color:var(--ink-3);font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s;font-family:'Plus Jakarta Sans',sans-serif}
+.campaign-pill:hover{border-color:var(--blue);color:var(--blue)}
+.campaign-pill.active{background:var(--ink);color:white;border-color:var(--ink)}
+
+/* Your rank banner */
+.your-rank-banner{background:var(--blue);border-radius:16px;padding:20px 24px;display:flex;align-items:center;gap:20px;margin-bottom:16px;animation:fadeUp 0.45s 0.05s ease both;color:white}
+.yr-rank-num{font-family:Georgia,serif;font-size:36px;font-weight:700;letter-spacing:-1px;line-height:1;flex-shrink:0}
+.yr-divider{width:1px;background:rgba(255,255,255,0.15);align-self:stretch}
+.yr-meta{flex:1}
+.yr-label{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,0.45);margin-bottom:4px}
+.yr-sub{font-size:13px;color:rgba(255,255,255,0.55)}
+.yr-bar-wrap{flex:1;min-width:0}
+.yr-bar{height:4px;background:rgba(255,255,255,0.15);border-radius:2px;overflow:hidden;margin-bottom:6px}
+.yr-bar-fill{height:100%;background:rgba(255,255,255,0.7);border-radius:2px;transition:width 0.8s cubic-bezier(0.22,1,0.36,1)}
+.yr-bar-labels{display:flex;justify-content:space-between;font-size:10px;color:rgba(255,255,255,0.35)}
+.yr-score-box{text-align:right;flex-shrink:0}
+.yr-score-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,0.45);margin-bottom:3px}
+.yr-score-val{font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:white}
+
+/* Podium */
+.lb-card{background:var(--white);border:1px solid var(--border);border-radius:20px;overflow:hidden;margin-bottom:16px;animation:fadeUp 0.5s 0.1s ease both}
+.lb-header{padding:20px 24px 0}
+.lb-title{font-size:16px;font-weight:700;color:var(--ink);margin-bottom:2px}
+.lb-sub{font-size:12px;color:var(--ink-3);font-family:'DM Mono',monospace;margin-bottom:14px}
+.lb-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin:0 -24px;padding:0 24px}
+.lb-tab{padding:10px 16px;font-size:13px;font-weight:500;color:var(--ink-3);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;transition:all 0.15s}
+.lb-tab:hover{color:var(--ink)}
+.lb-tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:600}
+
+.lb-body{padding:0 24px 24px}
+
+/* Podium */
+.lb-podium{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:20px 0;align-items:end}
+.lb-pod{border-radius:12px;padding:16px;text-align:center;cursor:pointer;transition:all 0.15s;border:1px solid var(--border)}
+.lb-pod:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.lb-pod-1{background:#fffbf0;border-color:#fde68a;order:2}
+.lb-pod-2{background:#f8f8f8;border-color:#e5e5e5;order:1}
+.lb-pod-3{background:#fff8f5;border-color:#fed7aa;order:3}
+.lb-pod-rank{font-size:22px;margin-bottom:6px}
+.lb-pod-avatar{width:44px;height:44px;border-radius:12px;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;font-family:'DM Mono',monospace;color:var(--ink-2)}
+.lb-pod-addr{font-size:11px;font-weight:700;color:var(--ink);margin-bottom:2px;font-family:'DM Mono',monospace}
+.lb-pod-score{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--ink)}
+.lb-pod-score-label{font-size:10px;color:var(--ink-3);margin-top:1px}
+.lb-pod-earnings{font-size:11px;color:var(--green);font-weight:600;margin-top:6px;background:var(--green-bg);padding:3px 8px;border-radius:20px;display:inline-block}
+.lb-pod.you-pod{outline:2px solid var(--blue);outline-offset:2px}
+
+/* Table */
+.lb-table-header{display:grid;grid-template-columns:44px 1fr 90px 100px 80px;gap:0;padding:10px 0 6px;border-bottom:1px solid var(--border)}
+.lb-table-header div{font-size:10px;font-weight:700;color:var(--ink-3);text-align:right;letter-spacing:0.5px;text-transform:uppercase}
+.lb-table-header div:first-child{text-align:center}
+.lb-table-header div:nth-child(2){text-align:left}
+.lb-row{display:grid;grid-template-columns:44px 1fr 90px 100px 80px;gap:0;align-items:center;padding:11px 0;border-bottom:1px solid rgba(26,26,46,0.04);cursor:pointer;transition:background 0.1s;border-radius:8px}
+.lb-row:hover{background:var(--surface);margin:0 -8px;padding:11px 8px}
+.lb-row.my-row{background:var(--blue-dim);margin:0 -8px;padding:11px 8px;border-left:2px solid var(--blue);border-radius:0}
+.lb-col-rank{font-size:12px;font-weight:700;color:var(--ink-3);font-family:'DM Mono',monospace;text-align:center}
+.lb-col-rank.top3{color:var(--ink)}
+.lb-col-identity{display:flex;align-items:center;gap:10px;min-width:0}
+.lb-row-avatar{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-family:'DM Mono',monospace;flex-shrink:0;color:var(--ink-2)}
+.lb-row-addr{font-size:12px;font-weight:600;color:var(--ink);font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.you-tag{font-size:9px;font-weight:700;color:var(--blue);background:var(--blue-dim);border:1px solid rgba(0,82,255,0.2);border-radius:8px;padding:1px 6px;margin-left:4px;vertical-align:middle}
+.lb-col-score{font-size:13px;font-weight:700;color:var(--blue);font-family:'DM Mono',monospace;text-align:right}
+.lb-col-earnings{font-size:13px;font-weight:600;color:var(--green);text-align:right}
+.lb-col-pts{font-size:12px;color:var(--ink-3);text-align:right;font-family:'DM Mono',monospace}
+.lb-sep{padding:10px 0;text-align:center;font-size:11px;color:var(--ink-3);letter-spacing:3px;border-bottom:1px solid var(--border)}
+
+/* Skeleton */
+.lb-skeleton{padding:20px 0}
+.sk-row{height:44px;border-radius:8px;background:var(--border);margin-bottom:8px;position:relative;overflow:hidden}
+.sk-row::after{content:'';position:absolute;top:0;left:-150%;width:150%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.5),transparent);animation:shimmer 1.4s infinite}
+
+/* Empty */
+.lb-empty{text-align:center;padding:48px 24px;color:var(--ink-3);font-size:14px}
+
+@media(max-width:640px){
+  .page{padding:24px 20px 60px}
+  .lb-podium{grid-template-columns:1fr}
+  .lb-pod{order:unset!important}
+  .lb-table-header,.lb-row{grid-template-columns:36px 1fr 70px 80px}
+  .lb-col-pts{display:none}
+  .lb-table-header div:last-child{display:none}
+}
+</style>
+</head>
+<body>
+
+<nav id="mw-nav"></nav>
+
+<div class="page">
+
+  <!-- Campaign selector -->
+  <div class="campaign-select-wrap">
+    <span class="campaign-select-label">Campaign</span>
+    <div class="campaign-select-row" id="campaign-pills">
+      <div class="campaign-pill active" style="opacity:0.5">Loading campaigns…</div>
+    </div>
+  </div>
+
+  <!-- Your rank -->
+  <div class="your-rank-banner" id="your-rank-banner" style="display:none">
+    <div>
+      <div class="yr-label">Your rank</div>
+      <div class="yr-rank-num" id="yr-rank">#—</div>
+    </div>
+    <div class="yr-divider"></div>
+    <div class="yr-meta">
+      <div class="yr-label">Points</div>
+      <div style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace" id="yr-pts">—</div>
+    </div>
+    <div class="yr-bar-wrap">
+      <div class="yr-bar"><div class="yr-bar-fill" id="yr-bar-fill" style="width:0%"></div></div>
+      <div class="yr-bar-labels">
+        <span>#1</span>
+        <span id="yr-bar-label">—</span>
+      </div>
+    </div>
+    <div class="yr-score-box">
+      <div class="yr-score-label">Earned</div>
+      <div class="yr-score-val" id="yr-earned">—</div>
+    </div>
+  </div>
+
+  <!-- Main leaderboard card -->
+  <div class="lb-card">
+    <div class="lb-header">
+      <div class="lb-title">Campaign leaderboard</div>
+      <div class="lb-sub" id="lb-sub-text">Loading…</div>
+      <div class="lb-tabs">
+        <div class="lb-tab active" data-sort="points" onclick="setTab(this)">Top earners</div>
+        <div class="lb-tab" data-sort="score" onclick="setTab(this)">Top score</div>
+        <div class="lb-tab" data-sort="referrals" onclick="setTab(this)">Top referrers</div>
+      </div>
+    </div>
+    <div class="lb-body">
+      <div id="lb-podium" class="lb-podium" style="display:none"></div>
+      <div class="lb-table-header">
+        <div>#</div><div>Wallet</div><div>Score</div><div>Earned</div><div>Points</div>
+      </div>
+      <div id="lb-table">
+        <div class="lb-skeleton"><div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="/mw-auth.js"></script>
+<script>
+// Auth guard
+const wallet = MW.requireWallet();
+if (!wallet) throw new Error('redirect');
+MW.renderNav({ active: 'leaderboard' });
+
+const API = MW.API;
+let allEntries = [];
+let campaigns  = [];
+let activeCampaignId = null;
+let sortBy = 'points';
+
+// ── Avatar helper ─────────────────────────────────────────────────────────────
+const AVATAR_BG = [
+  '#fff8f0','#f0f4ff','#f0fff4','#fff0f8','#f5f0ff','#fffbf0','#f0f8ff','#fff5f0'
+];
+function avatarBg(addr) {
+  let h = 0; for (let c of addr) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  return AVATAR_BG[h % AVATAR_BG.length];
+}
+function shortAddr(a) { return a ? a.slice(0,6) + '…' + a.slice(-4) : '—'; }
+function fmtUSD(n)   { return n >= 1000 ? '$' + (n/1000).toFixed(1) + 'k' : '$' + parseFloat(n||0).toFixed(0); }
+
+// ── Load campaigns ────────────────────────────────────────────────────────────
+async function loadCampaigns() {
+  try {
+    const res = await fetch(`${API}/campaigns`);
+    campaigns = await res.json();
+    if (!Array.isArray(campaigns) || campaigns.length === 0) return;
+    renderCampaignPills();
+    selectCampaign(campaigns[0].id);
+  } catch(e) {
+    document.getElementById('lb-sub-text').textContent = 'Failed to load campaigns';
+  }
+}
+
+function renderCampaignPills() {
+  const el = document.getElementById('campaign-pills');
+  el.innerHTML = campaigns.map(c => `
+    <div class="campaign-pill${c.id === activeCampaignId ? ' active' : ''}"
+         data-id="${c.id}"
+         onclick="selectCampaign('${c.id}')">
+      ${c.name}
+    </div>`).join('');
+}
+
+function selectCampaign(id) {
+  activeCampaignId = id;
+  renderCampaignPills();
+  loadLeaderboard();
+}
+
+// ── Load leaderboard ──────────────────────────────────────────────────────────
+async function loadLeaderboard() {
+  document.getElementById('lb-table').innerHTML =
+    '<div class="lb-skeleton"><div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div></div>';
+  document.getElementById('lb-podium').style.display = 'none';
+  document.getElementById('your-rank-banner').style.display = 'none';
+
+  try {
+    const res = await fetch(`${API}/leaderboard?campaign_id=${encodeURIComponent(activeCampaignId)}&limit=100`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    allEntries = await res.json();
+    if (!Array.isArray(allEntries)) throw new Error('Bad response');
+    renderLeaderboard();
+  } catch(e) {
+    document.getElementById('lb-table').innerHTML =
+      '<div class="lb-empty">Could not load leaderboard — try refreshing</div>';
+    document.getElementById('lb-sub-text').textContent = 'Error loading data';
+  }
+}
+
+// ── Sort ──────────────────────────────────────────────────────────────────────
+function setTab(el) {
+  document.querySelectorAll('.lb-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  sortBy = el.dataset.sort;
+  renderLeaderboard();
+}
+
+function getSorted() {
+  const list = [...allEntries];
+  if (sortBy === 'score')    list.sort((a,b) => (b.attribution_score||0) - (a.attribution_score||0));
+  if (sortBy === 'points')   list.sort((a,b) => (b.total_points||0) - (a.total_points||0));
+  if (sortBy === 'referrals') list.sort((a,b) => {
+    const ra = (a.referral_bridge_points||0) + (a.referral_trade_points||0);
+    const rb = (b.referral_bridge_points||0) + (b.referral_trade_points||0);
+    return rb - ra;
+  });
+  return list;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function renderLeaderboard() {
+  const sorted   = getSorted();
+  const total    = sorted.length;
+  const campaign = campaigns.find(c => c.id === activeCampaignId);
+
+  document.getElementById('lb-sub-text').textContent =
+    `${total} participant${total !== 1 ? 's' : ''} · ${campaign ? campaign.name : ''} · Live`;
+
+  // Your rank
+  const myIdx = wallet ? sorted.findIndex(r => r.wallet === wallet) : -1;
+  if (myIdx >= 0) {
+    const me = sorted[myIdx];
+    const rank = myIdx + 1;
+    const topPct = Math.round(((total - rank) / total) * 100);
+    const barPct = Math.max(2, Math.round(((total - rank) / total) * 100));
+    document.getElementById('yr-rank').textContent = `#${rank}`;
+    document.getElementById('yr-pts').textContent = (me.total_points||0).toLocaleString() + ' pts';
+    document.getElementById('yr-earned').textContent = fmtUSD(me.total_earned_usd||0);
+    document.getElementById('yr-bar-fill').style.width = barPct + '%';
+    document.getElementById('yr-bar-label').textContent = `#${rank} · top ${100-topPct}%`;
+    document.getElementById('your-rank-banner').style.display = 'flex';
+  }
+
+  // Podium (top 3)
+  if (sorted.length >= 3) {
+    const podEl = document.getElementById('lb-podium');
+    podEl.style.display = 'grid';
+    const podOrder = [sorted[1], sorted[0], sorted[2]]; // 2nd, 1st, 3rd
+    const medals = ['🥈','🥇','🥉'];
+    const podClasses = ['lb-pod-2','lb-pod-1','lb-pod-3'];
+    podEl.innerHTML = podOrder.map((entry, i) => {
+      const isMe = wallet && entry.wallet === wallet;
+      const val = sortBy === 'score' ? (entry.attribution_score||0) : (entry.total_points||0);
+      const valLabel = sortBy === 'score' ? 'score' : 'pts';
+      return `
+        <div class="lb-pod ${podClasses[i]}${isMe ? ' you-pod' : ''}">
+          <div class="lb-pod-rank">${medals[i]}</div>
+          <div class="lb-pod-avatar" style="background:${avatarBg(entry.wallet)}">${entry.wallet.charAt(2).toUpperCase()}</div>
+          <div class="lb-pod-addr">${shortAddr(entry.wallet)}${isMe ? ' <span class="you-tag">you</span>' : ''}</div>
+          <div class="lb-pod-score">${val.toLocaleString()}</div>
+          <div class="lb-pod-score-label">${valLabel}</div>
+          <div class="lb-pod-earnings">${fmtUSD(entry.total_earned_usd||0)} earned</div>
+        </div>`;
+    }).join('');
+  }
+
+  // Table — top 10 + separator + user's context rows
+  const top10    = sorted.slice(0, 10);
+  const showUser = myIdx >= 10;
+  const userCtx  = showUser ? sorted.slice(Math.max(10, myIdx - 1), myIdx + 2) : [];
+
+  let tableHTML = top10.map((entry, i) => buildRow(entry, i + 1, wallet && entry.wallet === wallet)).join('');
+
+  if (showUser) {
+    tableHTML += `<div class="lb-sep">· · ·</div>`;
+    tableHTML += userCtx.map((entry, i) => {
+      const rank = Math.max(11, myIdx) - 1 + i + 1;
+      return buildRow(entry, rank, wallet && entry.wallet === wallet);
+    }).join('');
+  }
+
+  if (sorted.length === 0) {
+    tableHTML = '<div class="lb-empty">No participants yet — be the first!</div>';
+  }
+
+  document.getElementById('lb-table').innerHTML = tableHTML;
+}
+
+function buildRow(entry, rank, isMe) {
+  const val    = sortBy === 'score' ? (entry.attribution_score||0) : (entry.total_points||0);
+  const earned = parseFloat(entry.total_earned_usd||0);
+  const pts    = entry.total_points || 0;
+  const score  = entry.attribution_score || 0;
+  return `
+    <div class="lb-row${isMe ? ' my-row' : ''}">
+      <div class="lb-col-rank${rank <= 3 ? ' top3' : ''}">${rank}</div>
+      <div class="lb-col-identity">
+        <div class="lb-row-avatar" style="background:${avatarBg(entry.wallet)}">${entry.wallet.charAt(2).toUpperCase()}</div>
+        <div class="lb-row-addr">${shortAddr(entry.wallet)}${isMe ? '<span class="you-tag">you</span>' : ''}</div>
+      </div>
+      <div class="lb-col-score">${score}</div>
+      <div class="lb-col-earnings">${fmtUSD(earned)}</div>
+      <div class="lb-col-pts">${pts.toLocaleString()}</div>
+    </div>`;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+loadCampaigns();
+</script>
+</body>
+</html>

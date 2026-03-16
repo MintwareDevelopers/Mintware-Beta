@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Read(//usr/local/bin/**)",
+      "Read(//Users/nicolasrobinson/.nvm/versions/node/**)",
+      "Read(//Users/nicolasrobinson/.volta/**)",
+      "Bash(chmod +x \"/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/start-dev.sh\")",
+      "Bash(grep -r \"cloudflare\\\\|wrangler\\\\|worker\" \"/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build\" --include=\"*.json\" --include=\"*.toml\" ! -path \"*/node_modules/*\")",
+      "Bash(grep -E \"\\\\.\\(js|ts|mjs\\)$\")",
+      "Bash(find /Users/nicolasrobinson/Downloads -maxdepth 3 -name *.tsx)",
+      "Bash(pnpm add:*)",
+      "Bash(npm install:*)",
+      "Bash(find /Users/nicolasrobinson/Downloads -name *.html -not -path */node_modules/*)",
+      "Bash(git -C \"/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build\" status)",
+      "Bash(git --version)",
+      "Bash(gh --version)"
+    ]
+  }
+}

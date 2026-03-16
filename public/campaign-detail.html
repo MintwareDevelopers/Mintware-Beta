@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campaign — Mintware</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --blue:#0052FF;--blue-dim:rgba(0,82,255,0.07);--blue-mid:rgba(0,82,255,0.14);
+  --ink:#1A1A2E;--ink-2:#3A3C52;--ink-3:#8A8C9E;
+  --surface:#F7F6FF;--white:#ffffff;
+  --green:#16a34a;--green-bg:#f0fdf4;--green-border:#bbf7d0;
+  --border:rgba(26,26,46,0.08);--border-strong:rgba(26,26,46,0.13);
+  --shadow:0 1px 4px rgba(26,26,46,0.06);--shadow-md:0 4px 16px rgba(26,26,46,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--surface);color:var(--ink);min-height:100vh}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+@keyframes barFill{from{width:0}to{width:var(--w)}}
+
+nav{display:flex;align-items:center;justify-content:space-between;padding:18px 48px;border-bottom:1px solid var(--border);background:rgba(255,255,255,0.92);backdrop-filter:blur(14px);position:sticky;top:0;z-index:100}
+.nav-logo{font-family:Georgia,serif;font-size:20px;font-weight:700;letter-spacing:-0.5px;text-decoration:none;color:var(--ink)}
+.nav-logo em{font-style:normal;color:var(--blue)}
+.nav-links{display:flex;align-items:center;gap:28px}
+.nav-links a{font-size:13px;font-weight:500;color:var(--ink-3);text-decoration:none;transition:color 0.15s}
+.nav-links a:hover{color:var(--ink)}
+.nav-links a.active{color:var(--blue);font-weight:600}
+.nav-wallet{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border-strong);border-radius:20px;padding:7px 16px;font-family:'DM Mono',monospace;font-size:12px;color:var(--ink-3);cursor:pointer;transition:border-color 0.15s;user-select:none}
+.nav-wallet:hover{border-color:var(--blue);color:var(--ink)}
+.nav-wallet-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s ease infinite;flex-shrink:0}
+.nav-wallet-dot.disconnected{background:var(--ink-3);animation:none}
+
+.page{max-width:960px;margin:0 auto;padding:40px 48px 80px}
+
+.breadcrumb{display:flex;align-items:center;gap:8px;margin-bottom:28px;animation:fadeUp 0.4s ease both}
+.breadcrumb a{font-size:13px;color:var(--ink-3);text-decoration:none;transition:color 0.15s}
+.breadcrumb a:hover{color:var(--ink)}
+.breadcrumb-sep{font-size:13px;color:var(--border-strong)}
+.breadcrumb-current{font-size:13px;color:var(--ink);font-weight:500}
+
+/* Loading / error states */
+.page-loader{text-align:center;padding:80px 24px;color:var(--ink-3)}
+.page-loader-icon{font-size:32px;margin-bottom:12px}
+.page-loader-text{font-size:15px}
+.error-banner{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.18);border-radius:12px;padding:12px 16px;font-size:13px;color:#dc2626;margin-bottom:16px;display:none}
+
+/* CAMPAIGN HERO */
+.campaign-hero{background:var(--ink);border-radius:20px;padding:32px;margin-bottom:12px;position:relative;overflow:hidden;animation:fadeUp 0.5s ease both}
+.campaign-hero::before{content:'';position:absolute;top:-60px;right:-60px;width:280px;height:280px;background:radial-gradient(circle,var(--hero-glow,rgba(249,115,22,0.12)) 0%,transparent 65%);pointer-events:none}
+.campaign-hero::after{content:'';position:absolute;bottom:-40px;left:-40px;width:200px;height:200px;background:radial-gradient(circle,rgba(0,82,255,0.1) 0%,transparent 65%);pointer-events:none}
+.hero-top{display:flex;align-items:flex-start;gap:20px;margin-bottom:24px;position:relative}
+.hero-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;flex-shrink:0}
+.hero-head{flex:1}
+.hero-name-row{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.hero-name{font-family:Georgia,serif;font-size:26px;font-weight:700;color:rgba(255,255,255,0.92);letter-spacing:-0.5px}
+.hero-live{display:inline-flex;align-items:center;gap:5px;background:rgba(22,163,74,0.15);border:1px solid rgba(22,163,74,0.3);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;color:#4ade80}
+.hero-live-dot{width:5px;height:5px;border-radius:50%;background:#4ade80;animation:pulse 2s ease infinite}
+.hero-soon{background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;color:rgba(255,255,255,0.4)}
+.hero-sub{font-size:13px;color:rgba(255,255,255,0.38);font-family:'DM Mono',monospace;margin-bottom:12px}
+.hero-desc{font-size:14px;color:rgba(255,255,255,0.55);line-height:1.6;max-width:520px}
+.hero-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:rgba(255,255,255,0.06);border-radius:14px;overflow:hidden;position:relative}
+.hero-stat{background:rgba(255,255,255,0.03);padding:18px 20px;text-align:center}
+.hero-stat-val{font-family:Georgia,serif;font-size:22px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px}
+.hero-stat-label{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,0.25)}
+.val-white{color:rgba(255,255,255,0.88)}.val-orange{color:#fb923c}.val-green{color:#4ade80}.val-blue{color:#6b9fff}
+
+/* ELIGIBILITY STRIP */
+.elig-strip{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:18px 24px;display:flex;align-items:center;gap:16px;margin-bottom:28px;animation:fadeUp 0.5s 0.08s ease both}
+.elig-icon{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.elig-text{flex:1}
+.elig-title{font-size:13px;font-weight:600;color:var(--ink);margin-bottom:3px}
+.elig-sub{font-size:12px;color:var(--ink-3)}
+.elig-bar-wrap{flex:1;display:flex;align-items:center;gap:10px;min-width:0}
+.elig-bar{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.elig-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--blue),#7C3AED);animation:barFill 1.2s cubic-bezier(0.22,1,0.36,1) forwards}
+.elig-pct{font-family:'DM Mono',monospace;font-size:12px;color:var(--blue);white-space:nowrap;font-weight:500}
+.elig-badge{flex-shrink:0;font-size:12px;font-weight:600;color:var(--green);background:var(--green-bg);border:1px solid var(--green-border);border-radius:20px;padding:4px 12px;white-space:nowrap}
+.join-btn{flex-shrink:0;padding:10px 22px;border-radius:10px;background:var(--blue);color:white;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:background 0.15s;white-space:nowrap}
+.join-btn:hover{background:#0040cc}
+.join-btn:disabled{background:var(--green);cursor:default}
+
+/* GRID LAYOUT */
+.grid{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}
+
+/* CARDS */
+.card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:16px}
+.card:last-child{margin-bottom:0}
+.card-title{font-size:13px;font-weight:700;letter-spacing:0.5px;color:var(--ink);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between}
+.card-title-badge{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);font-family:'DM Mono',monospace}
+
+/* ACTIONS */
+.action-list{display:flex;flex-direction:column;gap:10px}
+.action{display:flex;align-items:center;gap:14px;padding:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;transition:all 0.15s}
+.action:hover{border-color:var(--border-strong);transform:translateY(-1px);box-shadow:var(--shadow)}
+.action-icon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.action-body{flex:1}
+.action-name{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:3px}
+.action-desc{font-size:12px;color:var(--ink-3);line-height:1.5}
+.action-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.action-pts{font-family:'DM Mono',monospace;font-size:14px;font-weight:500;color:var(--blue);white-space:nowrap}
+.action-multiplied{font-size:11px;color:var(--green);font-weight:600;white-space:nowrap}
+.action-btn{padding:7px 16px;border-radius:8px;background:var(--blue);color:white;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:background 0.15s;white-space:nowrap}
+.action-btn:hover{background:#0040cc}
+.action-btn.done{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border);cursor:default}
+.action-btn.copy{background:transparent;color:var(--ink);border:1px solid var(--border-strong)}
+.action-btn.copy:hover{border-color:var(--blue);color:var(--blue)}
+
+/* PROGRESS */
+.progress-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px}
+.prog-stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.prog-stat-val{font-family:Georgia,serif;font-size:20px;font-weight:700;color:var(--ink);letter-spacing:-0.5px;margin-bottom:3px}
+.prog-stat-val.blue{color:var(--blue)}.prog-stat-val.green{color:var(--green)}
+.prog-stat-label{font-size:11px;color:var(--ink-3)}
+.prog-bar-wrap{margin-bottom:10px}
+.prog-bar-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px}
+.prog-bar-label span:first-child{color:var(--ink-3)}
+.prog-bar-label span:last-child{color:var(--ink);font-weight:600;font-family:'DM Mono',monospace}
+.prog-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;border-radius:3px}
+
+/* CONNECT PROMPT in card */
+.connect-prompt-card{text-align:center;padding:32px 24px;color:var(--ink-3)}
+.connect-prompt-icon{font-size:28px;margin-bottom:10px}
+.connect-prompt-text{font-size:13px;margin-bottom:16px;line-height:1.5}
+.connect-prompt-btn{padding:10px 24px;border-radius:10px;background:var(--blue);color:white;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:background 0.15s}
+.connect-prompt-btn:hover{background:#0040cc}
+
+/* LEADERBOARD */
+.lb-list{display:flex;flex-direction:column;gap:6px}
+.lb-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;transition:background 0.15s}
+.lb-row:hover{background:var(--surface)}
+.lb-row.you{background:var(--blue-dim);border:1px solid rgba(0,82,255,0.15)}
+.lb-rank{font-family:'DM Mono',monospace;font-size:12px;color:var(--ink-3);width:28px;text-align:right;flex-shrink:0}
+.lb-rank.gold{color:#B45309;font-weight:700}.lb-rank.silver{color:var(--ink-2);font-weight:700}.lb-rank.bronze{color:#92400E;font-weight:700}
+.lb-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.lb-addr{font-family:'DM Mono',monospace;font-size:12px;color:var(--ink-2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-you-tag{font-size:10px;font-weight:700;color:var(--blue);background:var(--blue-dim);border:1px solid rgba(0,82,255,0.2);border-radius:10px;padding:1px 7px;flex-shrink:0}
+.lb-pts{font-family:'DM Mono',monospace;font-size:12px;color:var(--ink);font-weight:500;white-space:nowrap}
+.lb-earned{font-size:11px;color:var(--green);font-weight:600;white-space:nowrap;margin-left:4px}
+
+/* SIDEBAR */
+.side-card{background:var(--white);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:16px}
+.side-card:last-child{margin-bottom:0}
+.side-title{font-size:13px;font-weight:700;color:var(--ink);margin-bottom:14px}
+.time-ring{display:flex;flex-direction:column;align-items:center;padding:8px 0 16px}
+.time-units{display:flex;gap:16px;justify-content:center}
+.time-unit{text-align:center}
+.time-num{font-family:Georgia,serif;font-size:28px;font-weight:700;color:var(--ink);letter-spacing:-1px;line-height:1}
+.time-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--ink-3);margin-top:4px}
+.time-sep{font-family:Georgia,serif;font-size:24px;color:var(--border-strong);line-height:1;margin-top:4px}
+.time-bar{margin-top:16px;height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.time-fill{height:100%;background:linear-gradient(90deg,var(--blue),#7C3AED);border-radius:2px}
+.ref-side-input{width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;font-family:'DM Mono',monospace;font-size:12px;color:var(--ink-2);outline:none;margin-bottom:8px}
+.ref-side-btn{width:100%;padding:10px;border-radius:8px;background:var(--blue);color:white;border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;transition:background 0.15s}
+.ref-side-btn:hover{background:#0040cc}
+.pool-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.pool-row:last-child{border-bottom:none}
+.pool-label{font-size:12px;color:var(--ink-3)}
+.pool-val{font-size:12px;font-weight:600;color:var(--ink);font-family:'DM Mono',monospace}
+.pool-val.blue{color:var(--blue)}.pool-val.green{color:var(--green)}
+
+@media(max-width:760px){
+  nav{padding:14px 20px}.nav-links{display:none}
+  .page{padding:24px 20px 60px}
+  .grid{grid-template-columns:1fr}
+  .hero-stats{grid-template-columns:repeat(2,1fr)}
+  .progress-grid{grid-template-columns:1fr}
+  .elig-strip{flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+
+<nav id="mw-nav"></nav>
+
+<div class="page" id="page-content">
+  <div class="page-loader">
+    <div class="page-loader-icon">⏳</div>
+    <div class="page-loader-text">Loading campaign…</div>
+  </div>
+</div>
+
+<script>
+const API = 'https://attribution-scorer.ceo-1f9.workers.dev';
+let wallet = null;
+let campaign = null;
+let participant = null;
+let leaderboard = [];
+
+// ─── URL param ───────────────────────────────────────────────────────────────
+const params = new URLSearchParams(window.location.search);
+const campaignId = params.get('id');
+if (!campaignId) window.location.href = 'earn.html';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function fmtUSD(n) {
+  if (!n && n !== 0) return '—';
+  if (n >= 1000000) return '$' + (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000)    return '$' + (n/1000).toFixed(0) + 'k';
+  return '$' + n;
+}
+function daysUntil(iso) {
+  return Math.max(0, Math.ceil((new Date(iso) - Date.now()) / 86400000));
+}
+function shortAddr(addr) {
+  return addr ? addr.slice(0,6) + '…' + addr.slice(-4) : '—';
+}
+const ICON_PALETTES = [
+  { bg:'rgba(249,115,22,0.15)', fg:'#f97316' },
+  { bg:'rgba(99,102,241,0.15)', fg:'#818cf8' },
+  { bg:'rgba(0,82,255,0.12)',   fg:'#6b9fff' },
+  { bg:'rgba(20,184,166,0.15)', fg:'#14b8a6' },
+  { bg:'rgba(239,68,68,0.12)',  fg:'#ef4444' },
+  { bg:'rgba(234,179,8,0.12)',  fg:'#ca8a04' },
+  { bg:'rgba(124,58,237,0.12)', fg:'#7c3aed' },
+  { bg:'rgba(16,185,129,0.12)', fg:'#10b981' },
+];
+function iconColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h*31 + name.charCodeAt(i)) & 0xffff;
+  return ICON_PALETTES[h % ICON_PALETTES.length];
+}
+function actionMeta(key) {
+  const map = {
+    bridge:          { icon:'🌉', bg:'var(--blue-dim)',            label:'Bridge to network',        desc:'Bridge assets to this chain. One-time action.' },
+    trade:           { icon:'📈', bg:'var(--green-bg)',            label:'Trade daily',              desc:'Trade each day to earn points. Repeatable daily.' },
+    referral_bridge: { icon:'🔗', bg:'rgba(124,58,237,0.08)',      label:'Invite someone to bridge', desc:'Share your bridge link. Earn when they bridge.' },
+    referral_trade:  { icon:'↗',  bg:'rgba(194,83,122,0.08)',      label:'Invite someone to trade',  desc:'Earn every time your referral trades.' },
+  };
+  return map[key] || { icon:'⚡', bg:'var(--surface)', label:key, desc:'' };
+}
+
+// ─── Wallet (sourced from MW auth guard in boot block) ───────────────────────
+async function onWalletConnected() {
+  // Reload campaign with wallet data
+  await loadCampaign();
+}
+
+// ─── Load campaign data ──────────────────────────────────────────────────────
+async function loadCampaign() {
+  try {
+    let url = `${API}/campaign?id=${encodeURIComponent(campaignId)}`;
+    if (wallet) url += `&address=${wallet}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    campaign    = data.campaign || data; // fallback if response is the campaign directly
+    participant = data.participant || null;
+  } catch(e) {
+    document.getElementById('page-content').innerHTML =
+      `<div class="page-loader"><div class="page-loader-icon">⚠️</div><div class="page-loader-text">Could not load campaign.<br><a href="earn.html" style="color:var(--blue)">← Back to campaigns</a></div></div>`;
+    return;
+  }
+
+  // Load leaderboard in parallel (non-blocking)
+  loadLeaderboard();
+  renderPage();
+}
+
+async function loadLeaderboard() {
+  try {
+    const res = await fetch(`${API}/leaderboard?campaign_id=${encodeURIComponent(campaignId)}&limit=10`);
+    if (!res.ok) return;
+    leaderboard = await res.json();
+    if (Array.isArray(leaderboard)) renderLeaderboard();
+  } catch {}
+}
+
+// ─── Join campaign ───────────────────────────────────────────────────────────
+async function joinCampaign() {
+  if (!wallet) { __mwConnectNav(); return; }
+  const btn = document.getElementById('join-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Joining…'; }
+  try {
+    const referrer = localStorage.getItem('mw_referrer') || null;
+    const body = { wallet, campaign_id: campaignId };
+    if (referrer) body.referred_by = referrer;
+    const res = await fetch(`${API}/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.error && !data.error.includes('already')) throw new Error(data.error);
+    // Reload with participant data
+    await loadCampaign();
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Join campaign'; }
+    alert('Could not join: ' + e.message);
+  }
+}
+
+// ─── Render full page ────────────────────────────────────────────────────────
+function renderPage() {
+  if (!campaign) return;
+  const c = campaign;
+  const p = participant;
+  const isLive = c.status === 'live';
+  const col     = iconColor(c.name);
+  const initial = c.name.charAt(0).toUpperCase();
+  const daysLeft = c.end_date ? daysUntil(c.end_date) : null;
+  const multiplier = p ? parseFloat(p.score_multiplier || 1) : 1;
+  const score      = p ? (p.attribution_score || 0) : 0;
+  const minScore   = c.min_score || 200;
+  const eligible   = score >= minScore;
+  const totalEarned = p ? parseFloat(p.total_earned_usd || 0) : 0;
+  const totalPoints = p ? (p.total_points || 0) : 0;
+  const actDays    = p ? (p.active_trading_days || 0) : 0;
+
+  // Hero description — describe actions
+  const actionCount = Object.keys(c.actions || {}).length;
+  const heroDesc = `${c.name} rewards ${actionCount} activities — bridge, trade, and invite others. All activity earns points. Every 24 hours, a portion of the ${fmtUSD(c.pool_usd)} ${c.token_symbol} pool distributes to all active participants, weighted by that day's score.`;
+
+  // Eligibility strip
+  let eligHTML = '';
+  if (wallet && p) {
+    const scorePct = Math.min(100, Math.round((score / 1000) * 100));
+    eligHTML = `
+      <div class="elig-strip">
+        <div class="elig-icon" style="background:${eligible ? 'var(--green-bg)' : 'rgba(251,191,36,0.1)'};border:1px solid ${eligible ? 'var(--green-border)' : 'rgba(180,83,9,0.2)'}">
+          ${eligible ? '✓' : '⚡'}
+        </div>
+        <div class="elig-text">
+          <div class="elig-title">${eligible ? `You're eligible — score ${score} qualifies for full participation` : `Score ${score} is below the minimum of ${minScore}`}</div>
+          <div class="elig-sub">Minimum score ${minScore} · ${eligible ? `Your ${multiplier.toFixed(1)}× multiplier is active` : 'Keep using DeFi to raise your attribution score'}</div>
+        </div>
+        <div class="elig-bar-wrap">
+          <div class="elig-bar"><div class="elig-fill" style="--w:${scorePct}%;width:${scorePct}%;background:${eligible ? 'linear-gradient(90deg,var(--blue),#7C3AED)' : '#f97316'}"></div></div>
+          <span class="elig-pct">${score} / 1000</span>
+        </div>
+        ${eligible ? `<div class="elig-badge">${multiplier.toFixed(1)}× weight</div>` : ''}
+      </div>`;
+  } else if (wallet && !p) {
+    // Connected but not joined
+    eligHTML = `
+      <div class="elig-strip">
+        <div class="elig-icon" style="background:var(--blue-dim);border:1px solid rgba(0,82,255,0.15)">🚀</div>
+        <div class="elig-text">
+          <div class="elig-title">Join this campaign to start earning</div>
+          <div class="elig-sub">Minimum score ${minScore} required · Joining links your wallet to this campaign</div>
+        </div>
+        <button class="join-btn" id="join-btn" onclick="joinCampaign()">Join campaign</button>
+      </div>`;
+  } else {
+    // Not connected
+    eligHTML = `
+      <div class="elig-strip">
+        <div class="elig-icon" style="background:var(--surface);border:1px solid var(--border)">🔗</div>
+        <div class="elig-text">
+          <div class="elig-title">Connect wallet to check eligibility</div>
+          <div class="elig-sub">Minimum score ${minScore} required to participate</div>
+        </div>
+        <button class="join-btn" onclick="__mwConnectNav()">Connect wallet</button>
+      </div>`;
+  }
+
+  // Actions
+  const actionsHTML = Object.entries(c.actions || {}).map(([key, action]) => {
+    const meta = actionMeta(key);
+    const pts = action.points;
+    const multiplied = Math.round(pts * multiplier);
+    const ptsLabel = action.per_day ? `+${pts} pts/day` : action.per_referral ? `+${pts} pts/ref` : action.per_referred_trade ? `+${pts} pts/their trade` : `+${pts} pts`;
+    const multLabel = (p && multiplier > 1) ? `→ +${multiplied} with ${multiplier.toFixed(1)}×` : '';
+
+    let btnHTML = '';
+    if (key === 'bridge') {
+      const done = p && (p.bridge_points || 0) > 0;
+      btnHTML = done
+        ? `<button class="action-btn done">Done ✓</button>`
+        : `<button class="action-btn" onclick="openExternal('bridge')">Bridge now</button>`;
+    } else if (key === 'trade') {
+      btnHTML = `<button class="action-btn" onclick="openExternal('trade')">Trade now</button>`;
+    } else if (key.startsWith('referral')) {
+      const refType = key === 'referral_bridge' ? 'bridge' : 'trade';
+      const refLink = wallet
+        ? `mintware.io/r/${wallet.slice(0,10)}/${campaignId}/${refType}`
+        : 'Connect wallet for link';
+      btnHTML = `<button class="action-btn copy" onclick="copyRefLink('${refLink}', this)">${wallet ? 'Copy link' : 'Connect'}</button>`;
+    }
+
+    return `
+      <div class="action">
+        <div class="action-icon" style="background:${meta.bg}">${meta.icon}</div>
+        <div class="action-body">
+          <div class="action-name">${action.label}</div>
+          <div class="action-desc">${meta.desc}</div>
+        </div>
+        <div class="action-right">
+          <div class="action-pts">${ptsLabel}</div>
+          ${multLabel ? `<div class="action-multiplied">${multLabel}</div>` : ''}
+          ${btnHTML}
+        </div>
+      </div>`;
+  }).join('');
+
+  // Progress card
+  let progressHTML = '';
+  if (wallet && p) {
+    const bPts = p.bridge_points || 0;
+    const tPts = p.trading_points || 0;
+    const rPts = (p.referral_bridge_points || 0) + (p.referral_trade_points || 0);
+    const totalForBar = Math.max(bPts + tPts + rPts, 1);
+    progressHTML = `
+      <div class="card" style="animation:fadeUp 0.5s 0.18s ease both">
+        <div class="card-title">Your progress <span class="card-title-badge">${actDays} days active</span></div>
+        <div class="progress-grid">
+          <div class="prog-stat">
+            <div class="prog-stat-val blue">${totalPoints.toLocaleString()}</div>
+            <div class="prog-stat-label">Points earned</div>
+          </div>
+          <div class="prog-stat">
+            <div class="prog-stat-val green">$${totalEarned.toFixed(2)}</div>
+            <div class="prog-stat-label">Already paid out</div>
+          </div>
+          <div class="prog-stat">
+            <div class="prog-stat-val">${actDays}</div>
+            <div class="prog-stat-label">Active days</div>
+          </div>
+          <div class="prog-stat">
+            <div class="prog-stat-val">${(p.referral_bridge_points || 0) > 0 ? Math.round((p.referral_bridge_points||0)/60) : (p.referral_trade_points||0) > 0 ? '1+' : '0'}</div>
+            <div class="prog-stat-label">Referrals active</div>
+          </div>
+        </div>
+        ${bPts > 0 ? `<div class="prog-bar-wrap"><div class="prog-bar-label"><span>🌉 Bridge</span><span>${bPts} pts</span></div><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.round(bPts/totalForBar*100))}%;background:var(--blue)"></div></div></div>` : ''}
+        ${tPts > 0 ? `<div class="prog-bar-wrap"><div class="prog-bar-label"><span>📈 Trading</span><span>${tPts} pts · ${actDays} days</span></div><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.round(tPts/totalForBar*100))}%;background:#2A9E8A"></div></div></div>` : ''}
+        ${rPts > 0 ? `<div class="prog-bar-wrap" style="margin-bottom:0"><div class="prog-bar-label"><span>🔗 Referrals</span><span>${rPts} pts</span></div><div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.round(rPts/totalForBar*100))}%;background:#7B6FCC"></div></div></div>` : ''}
+        <div style="margin-top:14px;padding:12px 14px;background:var(--surface);border-radius:10px;font-size:12px;color:var(--ink-3);line-height:1.5">
+          ${fmtUSD(c.daily_payout_usd)} ${c.token_symbol} distributes every 24 hours to all active participants, weighted by that day's score. Stay active daily to maximize earnings.
+        </div>
+      </div>`;
+  } else if (wallet) {
+    progressHTML = `
+      <div class="card" style="animation:fadeUp 0.5s 0.18s ease both">
+        <div class="card-title">Your progress</div>
+        <div class="connect-prompt-card">
+          <div class="connect-prompt-icon">🚀</div>
+          <div class="connect-prompt-text">Join this campaign to start tracking your points and earnings.</div>
+          <button class="connect-prompt-btn" onclick="joinCampaign()">Join campaign</button>
+        </div>
+      </div>`;
+  } else {
+    progressHTML = `
+      <div class="card" style="animation:fadeUp 0.5s 0.18s ease both">
+        <div class="card-title">Your progress</div>
+        <div class="connect-prompt-card">
+          <div class="connect-prompt-icon">🔗</div>
+          <div class="connect-prompt-text">Connect your wallet to see your points and earnings for this campaign.</div>
+          <button class="connect-prompt-btn" onclick="__mwConnectNav()">Connect wallet</button>
+        </div>
+      </div>`;
+  }
+
+  // Sidebar referral links
+  const bridgeLink = wallet ? `mintware.io/r/${wallet.slice(0,10)}/${campaignId}/bridge` : 'Connect wallet to get link';
+  const tradeLink  = wallet ? `mintware.io/r/${wallet.slice(0,10)}/${campaignId}/trade`  : 'Connect wallet to get link';
+
+  // Pool details sidebar
+  const poolSideHTML = `
+    <div class="side-card" style="animation:fadeUp 0.5s 0.18s ease both">
+      <div class="side-title">Reward pool</div>
+      <div class="pool-row"><span class="pool-label">Total pool</span><span class="pool-val">${fmtUSD(c.pool_usd)} ${c.token_symbol}</span></div>
+      <div class="pool-row"><span class="pool-label">Daily payout</span><span class="pool-val blue">${fmtUSD(c.daily_payout_usd)} ${c.token_symbol}</span></div>
+      <div class="pool-row"><span class="pool-label">Payout schedule</span><span class="pool-val">Every 24 hrs</span></div>
+      <div class="pool-row"><span class="pool-label">Minimum score</span><span class="pool-val">${minScore}+</span></div>
+      ${p ? `
+      <div class="pool-row"><span class="pool-label">Your weight</span><span class="pool-val">${multiplier.toFixed(1)}×</span></div>
+      <div class="pool-row"><span class="pool-label">You've earned</span><span class="pool-val green">$${totalEarned.toFixed(2)}</span></div>` : ''}
+      ${daysLeft !== null ? `<div class="pool-row"><span class="pool-label">Days remaining</span><span class="pool-val">${daysLeft}d</span></div>` : ''}
+    </div>`;
+
+  const refSideHTML = `
+    <div class="side-card" style="animation:fadeUp 0.5s 0.22s ease both">
+      <div class="side-title">Your referral links</div>
+      <div style="font-size:12px;color:var(--ink-3);line-height:1.55;margin-bottom:16px">Share the right link for what you want them to do. You earn points when they act.</div>
+      <div style="font-size:11px;font-weight:700;color:var(--ink-3);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px">Bridge link</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <input class="ref-side-input" id="ref-bridge-input" type="text" value="${bridgeLink}" readonly style="margin-bottom:0"/>
+        <button style="padding:9px 14px;border-radius:8px;background:transparent;border:1px solid var(--border-strong);color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap;transition:all 0.15s" onclick="copyRefLink('${bridgeLink}', this)">Copy</button>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--ink-3);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:6px">Trade link</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">
+        <input class="ref-side-input" id="ref-trade-input" type="text" value="${tradeLink}" readonly style="margin-bottom:0"/>
+        <button style="padding:9px 14px;border-radius:8px;background:transparent;border:1px solid var(--border-strong);color:var(--ink);font-size:12px;font-weight:600;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;white-space:nowrap;transition:all 0.15s" onclick="copyRefLink('${tradeLink}', this)">Copy</button>
+      </div>
+    </div>`;
+
+  document.title = `${c.name} Campaign — Mintware`;
+  document.getElementById('page-content').innerHTML = `
+    <div class="breadcrumb">
+      <a href="earn.html">Earn</a>
+      <span class="breadcrumb-sep">›</span>
+      <span class="breadcrumb-current">${c.name}</span>
+    </div>
+
+    <div class="campaign-hero">
+      <div class="hero-top">
+        <div class="hero-icon" style="background:${col.bg};color:${col.fg}">${initial}</div>
+        <div class="hero-head">
+          <div class="hero-name-row">
+            <div class="hero-name">${c.name}</div>
+            ${isLive
+              ? `<div class="hero-live"><span class="hero-live-dot"></span>Live</div>`
+              : `<div class="hero-soon">Upcoming</div>`}
+          </div>
+          <div class="hero-sub">${c.chain}${daysLeft !== null ? ` · Ends in ${daysLeft} days` : ''}${c.protocol ? ` · ${c.protocol}` : ''}</div>
+          <div class="hero-desc">${heroDesc}</div>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="hero-stat-val val-orange">${fmtUSD(c.pool_usd)}</div>
+          <div class="hero-stat-label">Total pool</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val val-blue">${fmtUSD(c.daily_payout_usd)}</div>
+          <div class="hero-stat-label">Daily payout</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val val-green">${p ? '$' + totalEarned.toFixed(2) : '—'}</div>
+          <div class="hero-stat-label">You've earned</div>
+        </div>
+        <div class="hero-stat">
+          <div class="hero-stat-val val-white">${daysLeft !== null ? daysLeft + 'd' : '—'}</div>
+          <div class="hero-stat-label">Remaining</div>
+        </div>
+      </div>
+    </div>
+
+    ${eligHTML}
+
+    <div class="grid">
+      <div>
+        <div class="card" style="animation:fadeUp 0.5s 0.12s ease both">
+          <div class="card-title">How to earn points <span class="card-title-badge">${actionCount} activities · 1 pool</span></div>
+          <div class="action-list">${actionsHTML}</div>
+        </div>
+
+        ${progressHTML}
+
+        <div class="card" id="leaderboard-card" style="animation:fadeUp 0.5s 0.24s ease both">
+          <div class="card-title">Campaign leaderboard <span class="card-title-badge" id="lb-count-badge">Loading…</span></div>
+          <div class="lb-list" id="lb-list">
+            <div style="text-align:center;padding:20px;color:var(--ink-3);font-size:13px">Loading leaderboard…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="side-card" style="animation:fadeUp 0.5s 0.14s ease both">
+          <div class="side-title">Next payout in</div>
+          <div class="time-ring">
+            <div class="time-units">
+              <div class="time-unit"><div class="time-num" id="cnt-h">--</div><div class="time-label">Hours</div></div>
+              <div class="time-sep">:</div>
+              <div class="time-unit"><div class="time-num" id="cnt-m">--</div><div class="time-label">Mins</div></div>
+              <div class="time-sep">:</div>
+              <div class="time-unit"><div class="time-num" id="cnt-s">--</div><div class="time-label">Secs</div></div>
+            </div>
+          </div>
+          <div class="time-bar"><div class="time-fill" id="time-fill-bar" style="width:0%"></div></div>
+          <div style="font-size:11px;color:var(--ink-3);text-align:center;margin-top:10px">${fmtUSD(c.daily_payout_usd)} ${c.token_symbol} distributes · ${daysLeft !== null ? daysLeft + ' days left' : 'ongoing'}</div>
+        </div>
+
+        ${poolSideHTML}
+        ${refSideHTML}
+      </div>
+    </div>`;
+
+  // Start countdown
+  startCountdown();
+}
+
+// ─── Leaderboard render ──────────────────────────────────────────────────────
+function renderLeaderboard() {
+  const el = document.getElementById('lb-list');
+  const badge = document.getElementById('lb-count-badge');
+  if (!el) return;
+
+  const rankClass = (i) => i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+  const avatarColors = [
+    { bg:'rgba(180,83,9,0.1)',    fg:'#B45309' },
+    { bg:'rgba(26,26,46,0.06)',   fg:'var(--ink-2)' },
+    { bg:'rgba(249,115,22,0.08)', fg:'#f97316' },
+  ];
+
+  // Find user's position
+  let userRow = '';
+  let userRank = -1;
+  if (wallet) {
+    const idx = leaderboard.findIndex(r => r.wallet === wallet);
+    if (idx >= 0) userRank = idx;
+  }
+
+  let rows = leaderboard.slice(0, 5).map((row, i) => {
+    const isYou = wallet && row.wallet === wallet;
+    const acol = avatarColors[i] || { bg:'var(--surface)', fg:'var(--ink-3)' };
+    return `
+      <div class="lb-row${isYou ? ' you' : ''}">
+        <span class="lb-rank ${rankClass(i)}">#${i+1}</span>
+        <div class="lb-avatar" style="background:${isYou ? 'var(--blue-dim)' : acol.bg};color:${isYou ? 'var(--blue)' : acol.fg}">${row.wallet.charAt(2).toUpperCase()}</div>
+        <span class="lb-addr">${shortAddr(row.wallet)}</span>
+        ${isYou ? '<span class="lb-you-tag">you</span>' : ''}
+        <span class="lb-pts">${(row.total_points||0).toLocaleString()} pts</span>
+        <span class="lb-earned">$${parseFloat(row.total_earned_usd||0).toFixed(0)}</span>
+      </div>`;
+  }).join('');
+
+  // If user is outside top 5, show separator + their row
+  if (wallet && userRank >= 5) {
+    const row = leaderboard[userRank];
+    rows += `
+      <div style="height:1px;background:var(--border);margin:6px 0"></div>
+      <div class="lb-row you">
+        <span class="lb-rank">#${userRank+1}</span>
+        <div class="lb-avatar" style="background:var(--blue-dim);color:var(--blue)">${wallet.charAt(2).toUpperCase()}</div>
+        <span class="lb-addr">${shortAddr(wallet)}</span>
+        <span class="lb-you-tag">you</span>
+        <span class="lb-pts">${(row.total_points||0).toLocaleString()} pts</span>
+        <span class="lb-earned">$${parseFloat(row.total_earned_usd||0).toFixed(0)}</span>
+      </div>`;
+  }
+
+  el.innerHTML = rows || '<div style="text-align:center;padding:20px;color:var(--ink-3);font-size:13px">No participants yet — be the first!</div>';
+  if (badge) badge.textContent = `${leaderboard.length} participant${leaderboard.length !== 1 ? 's' : ''}`;
+}
+
+// ─── Countdown ───────────────────────────────────────────────────────────────
+function startCountdown() {
+  function tick() {
+    const now  = Date.now();
+    const next = new Date(Date.UTC(
+      new Date().getUTCFullYear(),
+      new Date().getUTCMonth(),
+      new Date().getUTCDate() + 1
+    )).getTime();
+    const diff  = next - now;
+    const dayMs = 86400000;
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    const hEl = document.getElementById('cnt-h');
+    const mEl = document.getElementById('cnt-m');
+    const sEl = document.getElementById('cnt-s');
+    const bar  = document.getElementById('time-fill-bar');
+    if (hEl) hEl.textContent = String(h).padStart(2,'0');
+    if (mEl) mEl.textContent = String(m).padStart(2,'0');
+    if (sEl) sEl.textContent = String(s).padStart(2,'0');
+    if (bar)  bar.style.width = Math.round(((dayMs - diff) / dayMs) * 100) + '%';
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+// ─── Utility ─────────────────────────────────────────────────────────────────
+function copyRefLink(text, btn) {
+  if (!wallet) { __mwConnectNav(); return; }
+  navigator.clipboard.writeText(text).catch(()=>{});
+  const orig = btn.textContent;
+  btn.textContent = 'Copied ✓';
+  setTimeout(() => btn.textContent = orig, 2000);
+}
+function openExternal(type) {
+  const urls = {
+    bridge: 'https://bridge.coredao.org',
+    trade:  'https://app.coredao.org/swap',
+  };
+  window.open(urls[type] || '#', '_blank', 'noopener');
+}
+
+// ─── Boot (MW handles MetaMask listeners + account changes) ──────────────────
+</script>
+
+<script src="/mw-auth.js"></script>
+<script>
+  // Auth guard — redirect to / if no wallet
+  wallet = MW.requireWallet();
+  if (wallet) {
+    MW.renderNav({ active: 'dashboard' });
+    loadCampaign();
+  }
+</script>
+</body>
+</html>
