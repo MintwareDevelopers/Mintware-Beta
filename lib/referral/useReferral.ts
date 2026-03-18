@@ -6,11 +6,13 @@ import { generateRefCode } from '@/lib/referral/utils'
 import type { ReferralStats, ReferralRecord } from '@/lib/referral/types'
 
 export interface UseReferralReturn {
-  stats:           ReferralStats | null
-  referralRecords: ReferralRecord[]
-  isFirstConnect:  boolean
-  isLoading:       boolean
-  refetch:         () => void
+  stats:                ReferralStats | null
+  referralRecords:      ReferralRecord[]
+  isFirstConnect:       boolean
+  isLoading:            boolean
+  refetch:              () => void
+  showRefCodePrompt:    boolean
+  setShowRefCodePrompt: (v: boolean) => void
 }
 
 // Capture ?ref= param immediately on module load (before wallet connects)
@@ -23,11 +25,12 @@ if (typeof window !== 'undefined') {
 }
 
 export function useReferral(address: string | undefined): UseReferralReturn {
-  const [stats, setStats]                   = useState<ReferralStats | null>(null)
-  const [referralRecords, setReferralRecords] = useState<ReferralRecord[]>([])
-  const [isFirstConnect, setIsFirstConnect] = useState(false)
-  const [isLoading, setIsLoading]           = useState(false)
-  const initialized                         = useRef(false)
+  const [stats, setStats]                         = useState<ReferralStats | null>(null)
+  const [referralRecords, setReferralRecords]     = useState<ReferralRecord[]>([])
+  const [isFirstConnect, setIsFirstConnect]       = useState(false)
+  const [isLoading, setIsLoading]                 = useState(false)
+  const [showRefCodePrompt, setShowRefCodePrompt] = useState(false)
+  const initialized                               = useRef(false)
 
   const supabase = createSupabaseBrowserClient()
 
@@ -74,8 +77,10 @@ export function useReferral(address: string | undefined): UseReferralReturn {
       )
       if (upsertErr) console.error('[useReferral] upsert error:', upsertErr)
 
-      // 2. Handle pending referral attribution
-      const pendingRef = sessionStorage.getItem('mw_pending_ref')
+      // 2. Handle pending referral attribution from ?ref= URL param
+      const pendingRef    = sessionStorage.getItem('mw_pending_ref')
+      let   refWasApplied = false
+
       if (pendingRef && isNew) {
         // Look up referrer by ref_code
         const { data: referrerProfile } = await supabase
@@ -94,11 +99,31 @@ export function useReferral(address: string | undefined): UseReferralReturn {
             },
             { onConflict: 'referred', ignoreDuplicates: true }
           )
+          refWasApplied = true
         }
         sessionStorage.removeItem('mw_pending_ref')
       }
 
-      // 3. Fetch stats for display
+      // 3. If first connect, no URL ref was applied, check if prompt should show
+      if (isNew && !refWasApplied) {
+        const dismissedKey = `mw_ref_dismissed_${addr}`
+        const dismissed    = typeof window !== 'undefined' && localStorage.getItem(dismissedKey)
+
+        if (!dismissed) {
+          // Check if a referral record already exists for this wallet as the referred party
+          const { data: existingRef } = await supabase
+            .from('referral_records')
+            .select('referred')
+            .eq('referred', addr)
+            .maybeSingle()
+
+          if (!existingRef) {
+            setShowRefCodePrompt(true)
+          }
+        }
+      }
+
+      // 4. Fetch stats for display
       await fetchStats(addr)
     } finally {
       setIsLoading(false)
@@ -134,5 +159,8 @@ export function useReferral(address: string | undefined): UseReferralReturn {
     if (address) fetchStats(address)
   }, [address, fetchStats])
 
-  return { stats, referralRecords, isFirstConnect, isLoading, refetch }
+  return {
+    stats, referralRecords, isFirstConnect, isLoading, refetch,
+    showRefCodePrompt, setShowRefCodePrompt,
+  }
 }
