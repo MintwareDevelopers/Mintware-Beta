@@ -14,7 +14,7 @@ import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import type { CreatorFormState } from '@/lib/campaigns/creator'
 import {
-  computeWarnings, platformFeeUsd, netPoolUsd, fmtUSDShort, fmtPct,
+  computeWarnings, fmtUSDShort, fmtPct,
   ERC20_APPROVE_ABI, DISTRIBUTOR_ABI, DISTRIBUTOR_ADDRESS,
 } from '@/lib/campaigns/creator'
 import { GuardrailWarning } from '@/components/creator/GuardrailWarning'
@@ -88,8 +88,6 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
   const [errorMsg,  setErrorMsg]  = useState<string | null>(null)
 
   const warnings = computeWarnings(form)
-  const fee      = platformFeeUsd(form)
-  const net      = netPoolUsd(form)
 
   // wagmi write hooks
   const {
@@ -245,27 +243,16 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
         )}
       </SectionCard>
 
-      {/* Funding breakdown */}
+      {/* Funding */}
       <SectionCard title="Funding">
-        <ReviewRow label="Pool size"       value={fmtUSDShort(form.poolUsd)} />
-        <ReviewRow label="Platform fee (2%)" value={fmtUSDShort(fee)} />
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          paddingTop: 10, marginTop: 2,
-        }}>
-          <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1A2E' }}>
-            Net reward pool
-          </span>
-          <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 18, fontWeight: 700, color: '#3A5CE8' }}>
-            {fmtUSDShort(net)}
-          </span>
-        </div>
+        <ReviewRow label="Pool size" value={fmtUSDShort(form.poolUsd)} />
+        <ReviewRow label="Token"     value={form.token ? form.token.symbol : '—'} />
         <div style={{
           marginTop: 10,
           fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 12, color: '#8A8C9E',
         }}>
           {form.token
-            ? `Deposits ${fmtUSDShort(form.poolUsd)} worth of ${form.token.symbol} to MintwareDistributor`
+            ? `Deposits ${fmtUSDShort(form.poolUsd)} worth of ${form.token.symbol} to MintwareDistributor contract`
             : 'Select a token to see deposit amount'
           }
         </div>

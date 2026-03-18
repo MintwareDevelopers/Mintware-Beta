@@ -101,16 +101,6 @@ export function totalRewardRate(form: CreatorFormState): number {
   return (form.buyerRewardPct + form.referralRewardPct) / 100
 }
 
-/** Platform fee amount from pool */
-export function platformFeeUsd(form: CreatorFormState): number {
-  return form.poolUsd * 0.02
-}
-
-/** Net reward pool after platform fee */
-export function netPoolUsd(form: CreatorFormState): number {
-  return form.poolUsd * 0.98
-}
-
 /** Volume needed to deplete the pool at max rate */
 export function depletionVolumeUsd(form: CreatorFormState): number {
   const rate = totalRewardRate(form)
