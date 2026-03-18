@@ -108,28 +108,35 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
       <style>{`
         .rcp-backdrop {
           position: fixed; inset: 0;
-          background: rgba(0,0,0,0.3);
+          background: rgba(0,0,0,0.4);
           z-index: 1099;
           opacity: 0;
-          transition: opacity 0.3s ease-out;
+          transition: opacity 0.25s ease-out;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
         }
         .rcp-backdrop.in { opacity: 1; }
 
         .rcp-sheet {
-          position: fixed;
-          bottom: 0; left: 0; right: 0;
           background: #fff;
-          border-radius: 20px 20px 0 0;
-          box-shadow: 0 -4px 40px rgba(58,92,232,0.12);
+          border-radius: 20px;
+          box-shadow: 0 8px 48px rgba(58,92,232,0.18);
           z-index: 1100;
-          padding: 32px 24px 44px;
-          max-width: 520px;
-          margin: 0 auto;
-          transform: translateY(100%);
-          transition: transform 0.3s ease-out;
+          padding: 36px 28px 28px;
+          width: 100%;
+          max-width: 400px;
+          transform: scale(0.94) translateY(8px);
+          transition: transform 0.25s ease-out, opacity 0.25s ease-out;
+          opacity: 0;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
+          position: relative;
         }
-        .rcp-sheet.in { transform: translateY(0); }
+        .rcp-backdrop.in .rcp-sheet {
+          transform: scale(1) translateY(0);
+          opacity: 1;
+        }
 
         .rcp-handle {
           width: 36px; height: 4px;
@@ -191,10 +198,8 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
         .rcp-skip-btn:hover { color: #3A3C52; }
       `}</style>
 
-      <div className={`rcp-backdrop${animIn ? ' in' : ''}`} onClick={() => dismiss(true)} />
-
-      <div className={`rcp-sheet${animIn ? ' in' : ''}`}>
-        <div className="rcp-handle" />
+      <div className={`rcp-backdrop${animIn ? ' in' : ''}`} onClick={() => dismiss(true)}>
+      <div className={`rcp-sheet${animIn ? ' in' : ''}`} onClick={e => e.stopPropagation()}>
 
         {promptState === 'success' ? (
           /* ── Success state ── */
@@ -275,6 +280,7 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
             </button>
           </>
         )}
+      </div>
       </div>
     </>
   )
