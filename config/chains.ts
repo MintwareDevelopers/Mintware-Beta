@@ -7,56 +7,56 @@ export const coreChain: Chain = {
   nativeCurrency: { name: 'CORE', symbol: 'CORE', decimals: 18 },
   rpcUrls: {
     default: { http: ['https://rpc.coredao.org'] },
-    public: { http: ['https://rpc.coredao.org'] },
+    public:  { http: ['https://rpc.coredao.org'] },
   },
   blockExplorers: {
     default: { name: 'Core Explorer', url: 'https://scan.coredao.org' },
   },
 }
 
-export type SwapProvider = '0x' | 'molten'
+export type SwapProvider = 'lifi' | 'molten'
 
 export interface ChainConfig {
-  chain: Chain
+  chain:        Chain
   swapProvider: SwapProvider
   feeRecipient: string
-  feeBps: number
-  name: string
-  logoUrl: string
+  feeBps:       number
+  name:         string
+  logoUrl:      string
 }
 
 export const SUPPORTED_CHAINS: ChainConfig[] = [
   {
-    chain: mainnet,
-    swapProvider: '0x',
+    chain:        mainnet,
+    swapProvider: 'lifi',
     feeRecipient: process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS || '',
-    feeBps: 10,
-    name: 'Ethereum',
-    logoUrl: '/chains/eth.svg',
+    feeBps:       10,
+    name:         'Ethereum',
+    logoUrl:      '/chains/eth.svg',
   },
   {
-    chain: base,
-    swapProvider: '0x',
+    chain:        base,
+    swapProvider: 'lifi',
     feeRecipient: process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS || '',
-    feeBps: 10,
-    name: 'Base',
-    logoUrl: '/chains/base.svg',
+    feeBps:       10,
+    name:         'Base',
+    logoUrl:      '/chains/base.svg',
   },
   {
-    chain: arbitrum,
-    swapProvider: '0x',
+    chain:        arbitrum,
+    swapProvider: 'lifi',
     feeRecipient: process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS || '',
-    feeBps: 10,
-    name: 'Arbitrum',
-    logoUrl: '/chains/arbitrum.svg',
+    feeBps:       10,
+    name:         'Arbitrum',
+    logoUrl:      '/chains/arbitrum.svg',
   },
   {
-    chain: coreChain,
+    chain:        coreChain,
     swapProvider: 'molten',
     feeRecipient: process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS || '',
-    feeBps: 10,
-    name: 'Core',
-    logoUrl: '/chains/core.svg',
+    feeBps:       10,
+    name:         'Core',
+    logoUrl:      '/chains/core.svg',
   },
 ]
 

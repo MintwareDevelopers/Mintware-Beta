@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { API, fmtUSD, daysUntil, shortAddr, iconColor } from '@/lib/api'
+import { JoinButton } from '@/components/campaigns/JoinButton'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
@@ -37,6 +38,7 @@ interface Participant {
   referral_bridge_points?: number
   referral_trade_points?: number
   active_trading_days?: number
+  observer?: boolean
 }
 
 interface LbEntry {
@@ -139,7 +141,6 @@ function CampaignContent() {
   const [participant, setParticipant] = useState<Participant | null>(null)
   const [leaderboard, setLeaderboard] = useState<LbEntry[]>([])
   const [loadError, setLoadError] = useState(false)
-  const [joining, setJoining] = useState(false)
 
   // Load campaign data
   const loadCampaign = useCallback(async () => {
@@ -173,29 +174,6 @@ function CampaignContent() {
     loadCampaign()
     loadLeaderboard()
   }, [loadCampaign, loadLeaderboard])
-
-  // Join campaign
-  async function joinCampaign() {
-    if (!wallet) return
-    setJoining(true)
-    try {
-      const referrer = sessionStorage.getItem('mw_referrer') || null
-      const body: Record<string, unknown> = { wallet, campaign_id: campaignId }
-      if (referrer) body.referred_by = referrer
-      const res = await fetch(`${API}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const data = await res.json()
-      if (data.error && !data.error.includes('already')) throw new Error(data.error)
-      await loadCampaign()
-    } catch (e) {
-      alert('Could not join: ' + (e as Error).message)
-    } finally {
-      setJoining(false)
-    }
-  }
 
   function copyRefLink(text: string, btn: HTMLButtonElement) {
     if (!wallet) return
@@ -251,7 +229,6 @@ function CampaignContent() {
   const multiplier = p ? parseFloat(p.score_multiplier || '1') : 1
   const score = p?.attribution_score || 0
   const minScore = c.min_score || 200
-  const eligible = score >= minScore
   const totalEarned = p ? parseFloat(p.total_earned_usd || '0') : 0
   const totalPoints = p?.total_points || 0
   const actDays = p?.active_trading_days || 0
@@ -344,19 +321,16 @@ function CampaignContent() {
         <div className="bg-white border border-mw-border rounded-[14px] px-6 py-[18px] flex items-center gap-4 mb-7 [animation:fadeUp_0.5s_0.08s_ease_both] max-[760px]:flex-wrap">
           <div
             className="w-9 h-9 rounded-[10px] flex items-center justify-center text-base shrink-0"
-            style={{
-              background: eligible ? '#f0fdf4' : 'rgba(251,191,36,0.1)',
-              border: `1px solid ${eligible ? '#bbf7d0' : 'rgba(180,83,9,0.2)'}`,
-            }}
+            style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}
           >
-            {eligible ? '✓' : '⚡'}
+            ✓
           </div>
           <div className="flex-1">
             <div className="text-[13px] font-semibold text-mw-ink mb-[3px]">
-              {eligible ? `You're eligible — score ${score} qualifies for full participation` : `Score ${score} is below the minimum of ${minScore}`}
+              You&apos;re in — earning at {multiplier.toFixed(1)}×
             </div>
             <div className="text-xs text-mw-ink-3">
-              Minimum score {minScore} · {eligible ? `Your ${multiplier.toFixed(1)}× multiplier is active` : 'Keep using DeFi to raise your attribution score'}
+              Your Attribution score drives your reward multiplier. Keep trading to increase it.
             </div>
           </div>
           {/* elig-bar-wrap */}
@@ -366,17 +340,15 @@ function CampaignContent() {
                 className="h-full rounded-[3px]"
                 style={{
                   width: Math.min(100, Math.round((score / 1000) * 100)) + '%',
-                  background: eligible ? 'linear-gradient(90deg,#0052FF,#7C3AED)' : '#f97316',
+                  background: 'linear-gradient(90deg,#0052FF,#7C3AED)',
                 }}
               />
             </div>
             <span className="font-[var(--font-mono),'DM_Mono',monospace] text-xs text-mw-brand whitespace-nowrap font-medium">{score} / 1000</span>
           </div>
-          {eligible && (
-            <div className="shrink-0 text-xs font-semibold text-mw-green bg-mw-green-muted border border-mw-green-edge rounded-full px-3 py-1 whitespace-nowrap">
-              {multiplier.toFixed(1)}× weight
-            </div>
-          )}
+          <div className="shrink-0 text-xs font-semibold text-mw-green bg-mw-green-muted border border-mw-green-edge rounded-full px-3 py-1 whitespace-nowrap">
+            {multiplier.toFixed(1)}× weight
+          </div>
         </div>
       ) : wallet && !p ? (
         // elig-strip: not yet joined
@@ -389,15 +361,15 @@ function CampaignContent() {
           </div>
           <div className="flex-1">
             <div className="text-[13px] font-semibold text-mw-ink mb-[3px]">Join this campaign to start earning</div>
-            <div className="text-xs text-mw-ink-3">Minimum score {minScore} required · Joining links your wallet to this campaign</div>
+            <div className="text-xs text-mw-ink-3">Joining links your wallet to this campaign</div>
           </div>
-          <button
-            className="shrink-0 px-[22px] py-2.5 rounded-[10px] bg-mw-brand text-white border-none text-[13px] font-semibold cursor-pointer font-[var(--font-jakarta),'Plus_Jakarta_Sans',sans-serif] transition-colors duration-150 whitespace-nowrap hover:bg-[#0040cc] disabled:bg-mw-green disabled:cursor-default"
-            onClick={joinCampaign}
-            disabled={joining}
-          >
-            {joining ? 'Joining…' : 'Join campaign'}
-          </button>
+          <div className="shrink-0">
+            <JoinButton
+              campaignId={campaignId}
+              wallet={wallet || undefined}
+              onJoined={loadCampaign}
+            />
+          </div>
         </div>
       ) : (
         // elig-strip: not connected
@@ -409,8 +381,8 @@ function CampaignContent() {
             🔗
           </div>
           <div className="flex-1">
-            <div className="text-[13px] font-semibold text-mw-ink mb-[3px]">Connect wallet to check eligibility</div>
-            <div className="text-xs text-mw-ink-3">Minimum score {minScore} required to participate</div>
+            <div className="text-[13px] font-semibold text-mw-ink mb-[3px]">Connect wallet to join</div>
+            <div className="text-xs text-mw-ink-3">Connect your wallet to join this campaign and start earning</div>
           </div>
         </div>
       )}
@@ -587,12 +559,11 @@ function CampaignContent() {
               <div className="text-center py-8 px-6 text-mw-ink-3">
                 <div className="text-[28px] mb-2.5">🚀</div>
                 <div className="text-[13px] mb-4 leading-[1.5]">Join this campaign to start tracking your points and earnings.</div>
-                <button
-                  className="px-6 py-2.5 rounded-[10px] bg-mw-brand text-white border-none text-[13px] font-semibold cursor-pointer font-[var(--font-jakarta),'Plus_Jakarta_Sans',sans-serif] transition-colors duration-150 hover:bg-[#0040cc]"
-                  onClick={joinCampaign}
-                >
-                  Join campaign
-                </button>
+                <JoinButton
+                  campaignId={campaignId}
+                  wallet={wallet || undefined}
+                  onJoined={loadCampaign}
+                />
               </div>
             </div>
           ) : null}

@@ -218,3 +218,4 @@ This PATH setup is required — without it, Turbopack can't spawn child processe
 3. **No Tailwind in app pages** — Tailwind is installed as a devDependency but `globals.css` was intentionally stripped. Adding Tailwind back would require fixing PostCSS config.
 4. **shadcn/ui components exist but are unused** — they were scaffolded at project init. The app uses custom CSS instead.
 5. **Explorer stays static** — D3.js charts are complex; `/explorer` route just redirects to the static HTML file in `/public`.
+6. **`min_score` is informational only** — never gates campaign access. All wallets join as full participants. Score drives reward multipliers only (`score_multiplier` on the participant row). Observer boolean exists in DB schema but defaults to `false` for all new joins; no observer multiplier is applied anywhere in the codebase.

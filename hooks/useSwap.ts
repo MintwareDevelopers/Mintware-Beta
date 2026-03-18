@@ -3,38 +3,39 @@
 import { useState } from 'react'
 import { useChainId, useWalletClient } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
-import { executeSwap as executeZerox } from '@/lib/providers/zerox'
+import { executeSwap as executeLifi } from '@/lib/providers/lifi'
 import { executeSwap as executeMolten, isMoltenReady } from '@/lib/providers/molten'
+import type { LifiQuote } from '@/lib/providers/lifi'
 import type { Quote } from './useQuote'
 import type { Token } from '@/config/tokens'
 
 type SwapStatus = 'idle' | 'approving' | 'swapping' | 'success' | 'error'
 
 interface SwapState {
-  status: SwapStatus
-  txHash: `0x${string}` | null
-  error: string | null
-  isLoading: boolean
+  status:      SwapStatus
+  txHash:      `0x${string}` | null
+  error:       string | null
+  isLoading:   boolean
   executeSwap: (args: ExecuteArgs) => Promise<void>
-  reset: () => void
+  reset:       () => void
 }
 
 interface ExecuteArgs {
-  quote: Quote
-  sellToken: Token
-  buyToken: Token
-  sellAmount: string
+  quote:       Quote
+  sellToken:   Token
+  buyToken:    Token
+  sellAmount:  string
   campaignId?: string | null
-  referrer?: string | null
+  referrer?:   string | null
 }
 
 export function useSwap(): SwapState {
-  const chainId = useChainId()
+  const chainId                = useChainId()
   const { data: walletClient } = useWalletClient()
 
-  const [status, setStatus] = useState<SwapStatus>('idle')
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [status,  setStatus]  = useState<SwapStatus>('idle')
+  const [txHash,  setTxHash]  = useState<`0x${string}` | null>(null)
+  const [error,   setError]   = useState<string | null>(null)
 
   const reset = () => {
     setStatus('idle')
@@ -60,22 +61,22 @@ export function useSwap(): SwapState {
     try {
       let hash: `0x${string}`
 
-      if (chainConfig.swapProvider === '0x') {
-        // 0x provider — quote already contains the transaction to sign
-        hash = await executeZerox(args.quote as Parameters<typeof executeZerox>[0], walletClient)
+      if (chainConfig.swapProvider === 'lifi') {
+        // LI.FI — quote contains the signed transaction envelope from the aggregator
+        hash = await executeLifi(args.quote as LifiQuote, walletClient)
       } else {
-        // Molten (Core)
+        // Molten (Core DAO)
         if (!isMoltenReady()) {
           throw new Error('Core swaps coming soon — Molten router not deployed yet')
         }
         hash = await executeMolten(
           {
-            sellToken: args.sellToken,
-            buyToken: args.buyToken,
+            sellToken:  args.sellToken,
+            buyToken:   args.buyToken,
             sellAmount: args.sellAmount,
-            taker: walletClient.account.address,
+            taker:      walletClient.account.address,
             campaignId: args.campaignId ?? undefined,
-            referrer: args.referrer ?? undefined,
+            referrer:   args.referrer   ?? undefined,
           },
           walletClient
         )
@@ -94,7 +95,7 @@ export function useSwap(): SwapState {
     status,
     txHash,
     error,
-    isLoading: status === 'swapping' || status === 'approving',
+    isLoading:   status === 'swapping' || status === 'approving',
     executeSwap,
     reset,
   }

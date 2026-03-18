@@ -3,13 +3,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useChainId } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
-import { getQuote as getZeroxQuote } from '@/lib/providers/zerox'
+import { getQuote as getLifiQuote } from '@/lib/providers/lifi'
 import { getQuote as getMoltenQuote, isMoltenReady } from '@/lib/providers/molten'
 import type { Token } from '@/config/tokens'
-import type { ZeroxQuote } from '@/lib/providers/zerox'
+import type { LifiQuote } from '@/lib/providers/lifi'
 import type { MoltenQuote } from '@/lib/providers/molten'
 
-export type Quote = ZeroxQuote | MoltenQuote
+export type Quote = LifiQuote | MoltenQuote
 
 interface QuoteState {
   quote: Quote | null
@@ -85,7 +85,7 @@ export function useQuote(params: UseQuoteParams): QuoteState {
       try {
         const chainConfig = getChainConfig(chainId)
         if (!chainConfig) {
-          throw new Error('Unsupported chain — please switch to Ethereum, Base, or Core')
+          throw new Error('Unsupported chain — please switch to Ethereum, Base, Arbitrum, or Core')
         }
 
         // Convert decimal amount to wei
@@ -93,17 +93,16 @@ export function useQuote(params: UseQuoteParams): QuoteState {
 
         let quote: Quote
 
-        if (chainConfig.swapProvider === '0x') {
-          quote = await getZeroxQuote({
+        if (chainConfig.swapProvider === 'lifi') {
+          quote = await getLifiQuote({
             chainId,
-            sellToken: sellToken.address,
-            buyToken: buyToken.address,
+            sellToken:  sellToken.address,
+            buyToken:   buyToken.address,
             sellAmount: sellAmountWei,
             taker,
-            feeRecipient: feeRecipient || chainConfig.feeRecipient || undefined,
-            feeBps: feeBps ?? chainConfig.feeBps,
+            feeBps:     feeBps ?? chainConfig.feeBps,
             campaignId: campaignId ?? undefined,
-            referrer: referrer ?? undefined,
+            referrer:   referrer   ?? undefined,
           })
         } else {
           // Molten (Core chain)
@@ -116,14 +115,14 @@ export function useQuote(params: UseQuoteParams): QuoteState {
             sellAmount: sellAmountWei,
             taker,
             campaignId: campaignId ?? undefined,
-            referrer: referrer ?? undefined,
+            referrer:   referrer   ?? undefined,
           })
         }
 
         const buyAmountDecimal = fromWei(quote.buyAmount, buyToken.decimals)
 
-        // Simple price impact estimate: (1 - price / expectedPrice) * 100
-        // For now we just flag if buyAmount seems very low relative to sell
+        // Price impact: LI.FI returns price='0' so impact will be null (no warning shown)
+        // Molten returns a real price ratio so impact is calculated normally
         const impact = estimatePriceImpact(
           parseFloat(sellAmount),
           parseFloat(buyAmountDecimal),
@@ -178,18 +177,18 @@ function toWei(amount: string, decimals: number): string {
 }
 
 function fromWei(amount: string, decimals: number): string {
-  const big = BigInt(amount)
+  const big     = BigInt(amount)
   const divisor = BigInt(10 ** decimals)
-  const whole = big / divisor
-  const frac = big % divisor
+  const whole   = big / divisor
+  const frac    = big % divisor
   const fracStr = frac.toString().padStart(decimals, '0').replace(/0+$/, '')
   return fracStr ? `${whole}.${fracStr}` : whole.toString()
 }
 
 function estimatePriceImpact(
   sellAmt: number,
-  buyAmt: number,
-  price: number
+  buyAmt:  number,
+  price:   number
 ): number | null {
   if (!sellAmt || !buyAmt || !price) return null
   const expected = sellAmt * price
