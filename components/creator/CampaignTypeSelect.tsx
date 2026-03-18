@@ -4,10 +4,18 @@
 // CampaignTypeSelect.tsx — First screen: choose campaign type
 //
 // Card A: Token Reward Pool — self-serve, open to anyone
-// Card B: Points Campaign   — curated, whitelisted teams
+// Card B: Points Campaign   — curated, whitelisted teams only
+//
+// When Points is selected:
+//   1. Check GET /api/teams/whitelist?wallet=
+//   2. Whitelisted   → proceed to creator flow (onSelect('points'))
+//   3. Not listed    → show ApplicationForm inline
 // =============================================================================
 
+import { useState } from 'react'
+import { useAccount } from 'wagmi'
 import type { CampaignType } from '@/lib/campaigns/creator'
+import { ApplicationForm } from '@/components/creator/ApplicationForm'
 
 interface CampaignTypeSelectProps {
   onSelect: (type: CampaignType) => void
@@ -23,11 +31,12 @@ interface TypeCardProps {
   iconBg:     string
   iconColor:  string
   onSelect:   () => void
+  disabled?:  boolean
 }
 
 function TypeCard({
   title, subtitle, badge, badgeColor, highlights,
-  icon, iconBg, iconColor, onSelect,
+  icon, iconBg, iconColor, onSelect, disabled,
 }: TypeCardProps) {
   return (
     <>
@@ -50,9 +59,22 @@ function TypeCard({
           transform: translateY(-3px);
           border-color: #3A5CE8;
         }
+        .tc-card.tc-disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .tc-card.tc-disabled:hover {
+          box-shadow: none;
+          transform: none;
+          border-color: #E0DFFF;
+        }
       `}</style>
-      <div className="tc-card" onClick={onSelect} role="button" tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && onSelect()}
+      <div
+        className={`tc-card${disabled ? ' tc-disabled' : ''}`}
+        onClick={disabled ? undefined : onSelect}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => !disabled && e.key === 'Enter' && onSelect()}
       >
         {/* Icon + badge row */}
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -119,7 +141,7 @@ function TypeCard({
           fontSize: 13, fontWeight: 700, color: iconColor,
           display: 'flex', alignItems: 'center', gap: 6,
         }}>
-          Select →
+          {disabled ? 'Checking…' : 'Select →'}
         </div>
       </div>
     </>
@@ -127,6 +149,43 @@ function TypeCard({
 }
 
 export function CampaignTypeSelect({ onSelect }: CampaignTypeSelectProps) {
+  const { address } = useAccount()
+  const [checking,  setChecking]  = useState(false)
+  const [showForm,  setShowForm]  = useState(false)
+
+  async function handlePointsSelect() {
+    if (!address || checking) return
+    setChecking(true)
+
+    try {
+      const res  = await fetch(`/api/teams/whitelist?wallet=${encodeURIComponent(address)}`)
+      const data = await res.json() as { whitelisted?: boolean }
+
+      if (data.whitelisted) {
+        onSelect('points')
+      } else {
+        setShowForm(true)
+      }
+    } catch {
+      // On network error, show the form (apply flow)
+      setShowForm(true)
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  // ── Show ApplicationForm inline ─────────────────────────────────────────────
+  if (showForm) {
+    return (
+      <ApplicationForm
+        wallet={address ?? ''}
+        onBack={() => setShowForm(false)}
+        onTokenReward={() => onSelect('token_reward')}
+      />
+    )
+  }
+
+  // ── Type select cards ───────────────────────────────────────────────────────
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
       <div style={{ marginBottom: 36, textAlign: 'center' }}>
@@ -175,7 +234,8 @@ export function CampaignTypeSelect({ onSelect }: CampaignTypeSelectProps) {
             'Score multipliers reward loyal wallets',
             'Attribution-weighted payout distribution',
           ]}
-          onSelect={() => onSelect('points')}
+          onSelect={handlePointsSelect}
+          disabled={checking}
         />
       </div>
     </div>
