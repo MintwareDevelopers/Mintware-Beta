@@ -175,6 +175,33 @@ function CampaignDetailContent() {
               {/* Campaign header */}
               <CampaignHeader campaign={campaign} />
 
+              {/* Manage Campaign link — only visible to the creator */}
+              {address &&
+                (campaign as Campaign & { creator?: string }).creator?.toLowerCase() ===
+                  address.toLowerCase() && (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8, marginBottom: 16 }}>
+                  <a
+                    href={`/manage/${campaignId}`}
+                    style={{
+                      display: 'inline-block',
+                      border: '1px solid #3A5CE8',
+                      color: '#3A5CE8',
+                      borderRadius: 8,
+                      padding: '8px 16px',
+                      fontSize: 13,
+                      fontFamily: 'Plus Jakarta Sans, sans-serif',
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = '#EEF1FF' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent' }}
+                  >
+                    Manage Campaign →
+                  </a>
+                </div>
+              )}
+
               {/* Join / locked / joined state */}
               <div style={{ marginBottom: 24 }}>
                 <JoinButton
