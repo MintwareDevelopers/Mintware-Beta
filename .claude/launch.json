@@ -4,9 +4,15 @@
     {
       "name": "mintware-phase1",
       "runtimeExecutable": "/bin/bash",
-      "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && node node_modules/next/dist/bin/next dev"],
+      "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && cd '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build' && node node_modules/next/dist/bin/next dev"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "mintware-worktree",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && cd '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/hungry-moore' && node node_modules/next/dist/bin/next dev --port 3001"],
+      "port": 3001
     }
   ]
 }

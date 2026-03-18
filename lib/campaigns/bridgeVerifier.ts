@@ -24,6 +24,7 @@
 import { createSupabaseServiceClient } from '@/lib/supabase'
 import { fetchBridgeTransfers } from '@/lib/campaigns/chainRpc'
 import type { Campaign, Participant } from '@/lib/campaigns/types'
+import { getActionPoints } from '@/lib/campaigns/types'
 
 // Bridge verification is Core DAO only in this ticket.
 // Extend SUPPORTED_CHAINS as Mintware adds more chains.
@@ -115,8 +116,8 @@ async function verifyCampaign(
   chain: SupportedChain,
   summary: VerifierSummary
 ): Promise<BridgeCreditResult[]> {
-  const bridge_points = campaign.actions?.bridge ?? 15             // spec default: 15 pts
-  const referral_bridge_points = campaign.actions?.referral_bridge ?? 60  // spec default: 60 pts
+  const bridge_points = getActionPoints(campaign.actions?.bridge, 15)             // spec default: 15 pts
+  const referral_bridge_points = getActionPoints(campaign.actions?.referral_bridge, 60)  // spec default: 60 pts
   const credits: BridgeCreditResult[] = []
 
   // 1. Load participants for this campaign

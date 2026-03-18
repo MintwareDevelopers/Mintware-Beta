@@ -11,9 +11,29 @@ export type DistributionStatus = 'pending' | 'published' | 'finalized'
 export type PendingRewardStatus = 'locked' | 'claimable' | 'claimed' | 'expired'
 
 // Campaign actions config — stored as JSONB in campaigns.actions
-// Keys are ActionType, values are point amounts
-// Example: { bridge: 15, trade: 8, referral_bridge: 60, referral_trade: 8 }
-export type ActionsConfig = Partial<Record<ActionType, number>>
+// Each action can be a plain number (legacy) or a config object with a
+// required `points` field plus optional behaviour flags.
+// DB shape example:
+//   { "trade": { "label": "Trade CORE daily", "points": 8, "per_day": true } }
+export interface ActionConfig {
+  points: number
+  label?: string
+  per_day?: boolean
+  one_time?: boolean
+  per_referred_trade?: boolean
+  per_referral?: boolean
+}
+export type ActionsConfig = Partial<Record<ActionType, number | ActionConfig>>
+
+/** Extract the points value from an ActionsConfig entry regardless of shape */
+export function getActionPoints(
+  config: number | ActionConfig | undefined,
+  fallback: number
+): number {
+  if (config === undefined || config === null) return fallback
+  if (typeof config === 'number') return config
+  return config.points ?? fallback
+}
 
 export interface Campaign {
   id: string

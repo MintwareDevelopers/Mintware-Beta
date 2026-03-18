@@ -1,5 +1,6 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit'
 import { mainnet, base, arbitrum } from 'wagmi/chains'
+import { cookieStorage, createStorage } from 'wagmi'
 import { coreChain } from '@/config/chains'
 
 export const wagmiConfig = getDefaultConfig({
@@ -7,4 +8,7 @@ export const wagmiConfig = getDefaultConfig({
   projectId: '580f461c981a43d53fc25fe59b64306b',
   chains: [mainnet, base, arbitrum, coreChain],
   ssr: true,
+  storage: createStorage({
+    storage: cookieStorage,
+  }),
 })

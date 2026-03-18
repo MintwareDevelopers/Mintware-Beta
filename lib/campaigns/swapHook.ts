@@ -30,6 +30,7 @@ import type {
   RewardType,
   PendingRewardStatus,
 } from '@/lib/campaigns/types'
+import { getActionPoints } from '@/lib/campaigns/types'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -152,14 +153,13 @@ async function processTokenPool(
 
   // Activity row for this wallet's trade
   await supabase.from('activity').insert({
-    campaign_id: campaign.id,
-    wallet: event.wallet,
-    action: 'trade',
-    points: null,
-    reward_usd: buyer_reward_usd,
-    tx_hash: event.tx_hash,
-    referrer,
-    credited_at: event.timestamp,
+    campaign_id:  campaign.id,
+    wallet:       event.wallet,
+    action_type:  'trade',
+    points_earned: 0,             // token_pool rewards are in USD, not points
+    tx_hash:      event.tx_hash,
+    referred_by:  referrer,
+    recorded_at:  event.timestamp,
   })
 
   return {
@@ -188,8 +188,8 @@ async function processPoints(
   referrer: string | null
 ): Promise<AttributionResult> {
   const actions = campaign.actions ?? {}
-  const trade_points = actions['trade'] ?? 8           // default from spec
-  const referral_trade_points = actions['referral_trade'] ?? 8
+  const trade_points = getActionPoints(actions['trade'], 8)           // default from spec
+  const referral_trade_points = getActionPoints(actions['referral_trade'], 8)
 
   // Credit trade points to the swapping wallet
   const { error: ptsErr } = await supabase
@@ -207,14 +207,13 @@ async function processPoints(
 
   // Activity row — swapper trade credit
   await supabase.from('activity').insert({
-    campaign_id: campaign.id,
-    wallet: event.wallet,
-    action: 'trade',
-    points: trade_points,
-    reward_usd: null,
-    tx_hash: event.tx_hash,
-    referrer,
-    credited_at: event.timestamp,
+    campaign_id:   campaign.id,
+    wallet:        event.wallet,
+    action_type:   'trade',
+    points_earned: trade_points,
+    tx_hash:       event.tx_hash,
+    referred_by:   referrer,
+    recorded_at:   event.timestamp,
   })
 
   // Credit referral_trade points to referrer (if they are also a participant)
@@ -235,14 +234,13 @@ async function processPoints(
 
       // Activity row — referrer trade credit
       await supabase.from('activity').insert({
-        campaign_id: campaign.id,
-        wallet: referrer,
-        action: 'referral_trade',
-        points: referral_trade_points,
-        reward_usd: null,
-        tx_hash: event.tx_hash,
-        referrer,
-        credited_at: event.timestamp,
+        campaign_id:   campaign.id,
+        wallet:        referrer,
+        action_type:   'referral_trade',
+        points_earned: referral_trade_points,
+        tx_hash:       event.tx_hash,
+        referred_by:   referrer,
+        recorded_at:   event.timestamp,
       })
 
       credited_referral_points = referral_trade_points
@@ -280,7 +278,7 @@ export async function processSwapEvent(event: SwapEvent): Promise<AttributionRes
     .select('id')
     .eq('tx_hash', normalised.tx_hash)
     .eq('wallet', normalised.wallet)
-    .eq('action', 'trade')
+    .eq('action_type', 'trade')
     .maybeSingle()
 
   if (existing) {
@@ -341,9 +339,9 @@ export async function processSwapEvent(event: SwapEvent): Promise<AttributionRes
     .select('id')
     .eq('campaign_id', normalised.campaign_id)
     .eq('wallet', normalised.wallet)
-    .eq('action', 'trade')
-    .gte('credited_at', dayStart)
-    .lte('credited_at', dayEnd)
+    .eq('action_type', 'trade')
+    .gte('recorded_at', dayStart)
+    .lte('recorded_at', dayEnd)
     .limit(1)
     .maybeSingle()
 

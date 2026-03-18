@@ -21,6 +21,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/supabase'
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree'
 
+// ---------------------------------------------------------------------------
+// In-memory rate limiter — max 10 requests per address per 60s window.
+//
+// Note: Vercel serverless functions are single-process per instance, so this
+// state is per-instance, not globally shared. It caps abuse per function
+// instance and is sufficient for MVP traffic. For global rate limiting,
+// replace with Upstash Redis or Vercel KV.
+// ---------------------------------------------------------------------------
+interface RateLimitEntry { count: number; resetAt: number }
+const rateLimitMap = new Map<string, RateLimitEntry>()
+const RATE_LIMIT_MAX = 10
+const RATE_LIMIT_WINDOW_MS = 60_000
+
+function checkRateLimit(key: string): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(key)
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+    return true
+  }
+  if (entry.count >= RATE_LIMIT_MAX) {
+    return false
+  }
+  entry.count++
+  return true
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const rawAddress = searchParams.get('address')
@@ -39,6 +67,14 @@ export async function GET(req: NextRequest) {
   // Normalise address to lowercase for tree lookup — StandardMerkleTree
   // lowercases addresses when building leaves.
   const address = rawAddress.toLowerCase()
+
+  // Rate limit: 10 requests per address per 60s
+  if (!checkRateLimit(address)) {
+    return NextResponse.json(
+      { error: 'Too many requests — max 10 per minute per address' },
+      { status: 429 }
+    )
+  }
 
   const supabase = createSupabaseServiceClient()
 
