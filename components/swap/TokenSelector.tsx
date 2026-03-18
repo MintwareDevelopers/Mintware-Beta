@@ -1,222 +1,275 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { useChainId } from 'wagmi'
-import { useTokenList } from '@/hooks/useTokenList'
-import { COMMON_TOKENS } from '@/config/tokens'
-import type { Token } from '@/config/tokens'
+// =============================================================================
+// components/swap/TokenSelector.tsx
+//
+// Full-overlay bottom-sheet modal for token selection.
+// Receives tokens from parent (fetched via @lifi/sdk getTokens).
+// Filters by symbol / name / address; shows up to 150 results.
+// =============================================================================
+
+import { useState, useEffect, useRef } from 'react'
+import type { Token } from '@lifi/sdk'
+
+// Minimal shape required for display/comparison — compatible with both
+// the @lifi/sdk Token and the local config/tokens Token.
+type MinToken = Pick<Token, 'address' | 'symbol' | 'name'> & { logoURI?: string }
 
 interface TokenSelectorProps {
-  selected: Token | null
-  onSelect: (token: Token) => void
-  excludeAddress?: string
-  balances?: Record<string, string>
+  tokens?: Token[]
+  selected: MinToken | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onSelect: (token: any) => void
   onClose: () => void
+  chainName?: string
+  /** @deprecated — accepted for backward compatibility, unused */
+  excludeAddress?: string
+  /** @deprecated — accepted for backward compatibility, unused */
+  balances?: Record<string, string>
 }
 
-export function TokenSelector({
-  selected,
-  onSelect,
-  excludeAddress,
-  balances = {},
-  onClose,
-}: TokenSelectorProps) {
-  const chainId = useChainId()
-  const { tokens, isLoading } = useTokenList(chainId)
-  const [search, setSearch] = useState('')
-
-  const commonSymbols = COMMON_TOKENS[chainId] ?? []
-  const commonTokens = useMemo(
-    () => tokens.filter(t => commonSymbols.includes(t.symbol) && t.address !== excludeAddress),
-    [tokens, commonSymbols, excludeAddress]
+// Fallback icon rendered as a colored circle when logoURI is absent/broken
+function FallbackIcon({ symbol }: { symbol: string }) {
+  const palette = ['#3A5CE8', '#2A9E8A', '#C27A00', '#7B6FCC', '#C2537A']
+  const color   = palette[symbol.charCodeAt(0) % palette.length]
+  return (
+    <div style={{
+      width: 32, height: 32, borderRadius: '50%', background: color,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700,
+      color: '#fff', flexShrink: 0,
+    }}>
+      {symbol[0]}
+    </div>
   )
+}
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim()
-    if (!q) return tokens.filter(t => t.address !== excludeAddress)
-    return tokens.filter(
-      t =>
-        t.address !== excludeAddress &&
-        (t.symbol.toLowerCase().includes(q) ||
-          t.name.toLowerCase().includes(q) ||
-          t.address.toLowerCase().includes(q))
-    )
-  }, [tokens, search, excludeAddress])
+function TokenIcon({ token }: { token: MinToken }) {
+  const [err, setErr] = useState(false)
+  if (err || !token.logoURI) return <FallbackIcon symbol={token.symbol} />
+  return (
+    <img
+      src={token.logoURI}
+      alt={token.symbol}
+      width={32} height={32}
+      style={{ borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+      onError={() => setErr(true)}
+    />
+  )
+}
+
+export function TokenSelector({ tokens = [], selected, onSelect, onClose, chainName = '' }: TokenSelectorProps) {
+  const [query, setQuery]   = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Auto-focus search input
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 60)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Escape key closes modal
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  const q        = query.trim().toLowerCase()
+  const filtered = q
+    ? tokens.filter(
+        (t) =>
+          t.symbol.toLowerCase().includes(q) ||
+          t.name.toLowerCase().includes(q)   ||
+          t.address.toLowerCase() === q
+      )
+    : tokens
 
   return (
     <>
       <style>{`
-        .mw-token-overlay {
-          position: fixed; inset: 0; z-index: 1000;
-          background: rgba(26,26,46,0.35);
-          backdrop-filter: blur(4px);
-          display: flex; align-items: center; justify-content: center;
-          padding: 16px;
+        .ts-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(26, 26, 46, 0.48);
+          z-index: 9999;
+          display: flex;
+          align-items: flex-end;
+          justify-content: center;
+          animation: ts-fade 0.15s ease;
         }
-        .mw-token-modal {
+        @keyframes ts-fade {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        .ts-sheet {
           background: #fff;
-          border-radius: 16px;
-          width: 100%; max-width: 420px;
-          max-height: 80vh;
-          display: flex; flex-direction: column;
-          box-shadow: 0 20px 60px rgba(26,26,46,0.18);
+          border-radius: 20px 20px 0 0;
+          width: 100%;
+          max-width: 480px;
+          max-height: 76vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 -4px 40px rgba(58,92,232,0.14);
+          animation: ts-up 0.22s ease;
           overflow: hidden;
         }
-        .mw-token-header {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 20px 20px 0;
+        @keyframes ts-up {
+          from { transform: translateY(40px); opacity: 0.5; }
+          to   { transform: translateY(0);    opacity: 1;   }
         }
-        .mw-token-header h3 {
-          font-family: Georgia, serif;
-          font-size: 17px; font-weight: 700; color: #1A1A2E;
+        .ts-header {
+          padding: 16px 16px 10px;
+          border-bottom: 1px solid #F0EFFF;
+          flex-shrink: 0;
         }
-        .mw-token-close {
-          background: none; border: none;
-          font-size: 20px; color: #8A8C9E; cursor: pointer; padding: 4px 8px;
-          border-radius: 6px; transition: background 0.1s;
+        .ts-title-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 12px;
         }
-        .mw-token-close:hover { background: rgba(26,26,46,0.06); color: #1A1A2E; }
-        .mw-token-search {
-          margin: 14px 20px 12px;
-          padding: 10px 14px;
+        .ts-title {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 15px;
+          font-weight: 700;
+          color: #1A1A2E;
+        }
+        .ts-chain-badge {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 10px;
+          font-weight: 700;
+          background: #EEF1FF;
+          color: #3A5CE8;
+          border-radius: 4px;
+          padding: 2px 6px;
+        }
+        .ts-close {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: #8A8C9E;
+          font-size: 22px;
+          line-height: 1;
+          padding: 0 4px;
+          transition: color 0.15s;
+        }
+        .ts-close:hover { color: #1A1A2E; }
+        .ts-search-wrap { position: relative; }
+        .ts-search {
+          width: 100%;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 13px;
+          border: 1.5px solid #E0DFFF;
           border-radius: 10px;
-          border: 1px solid rgba(26,26,46,0.12);
-          background: rgba(26,26,46,0.03);
-          font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-          font-size: 14px; color: #1A1A2E;
-          outline: none; width: calc(100% - 40px);
-          transition: border-color 0.15s;
+          padding: 8px 10px 8px 32px;
+          outline: none;
+          color: #1A1A2E;
+          background: #F7F6FF;
+          box-sizing: border-box;
+          transition: border-color 0.15s, background 0.15s;
         }
-        .mw-token-search:focus { border-color: rgba(0,82,255,0.4); }
-        .mw-token-search::placeholder { color: #8A8C9E; }
-        .mw-common-label {
-          padding: 0 20px 8px;
-          font-size: 11px; font-weight: 600; color: #8A8C9E;
-          font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-          text-transform: uppercase; letter-spacing: 0.06em;
+        .ts-search:focus { border-color: #3A5CE8; background: #fff; }
+        .ts-search::placeholder { color: #8A8C9E; }
+        .ts-search-icon {
+          position: absolute;
+          left: 10px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #8A8C9E;
+          font-size: 14px;
+          pointer-events: none;
         }
-        .mw-common-pills {
-          display: flex; flex-wrap: wrap; gap: 6px;
-          padding: 0 20px 14px;
-        }
-        .mw-common-pill {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 5px 10px;
-          border-radius: 8px;
-          border: 1px solid rgba(26,26,46,0.10);
-          background: rgba(26,26,46,0.03);
-          font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px; font-weight: 500; color: #1A1A2E;
-          cursor: pointer; transition: all 0.12s;
-        }
-        .mw-common-pill:hover { background: rgba(0,82,255,0.07); border-color: rgba(0,82,255,0.2); color: #0052FF; }
-        .mw-common-pill.selected { background: rgba(0,82,255,0.09); border-color: rgba(0,82,255,0.25); color: #0052FF; }
-        .mw-token-divider { height: 1px; background: rgba(26,26,46,0.07); margin: 0 0 4px; }
-        .mw-token-list {
-          overflow-y: auto; flex: 1;
+        .ts-list {
+          overflow-y: auto;
+          flex: 1;
           padding: 4px 0 8px;
         }
-        .mw-token-row {
-          display: flex; align-items: center; gap: 12px;
-          padding: 10px 20px;
-          cursor: pointer; transition: background 0.1s;
+        .ts-token-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 8px 16px;
+          cursor: pointer;
+          transition: background 0.1s;
         }
-        .mw-token-row:hover { background: rgba(0,82,255,0.04); }
-        .mw-token-row.selected { background: rgba(0,82,255,0.06); }
-        .mw-token-icon {
-          width: 36px; height: 36px; border-radius: 50%;
-          background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 13px; font-weight: 700; color: #64748b;
-          flex-shrink: 0; overflow: hidden;
+        .ts-token-row:hover   { background: #F7F6FF; }
+        .ts-token-row.sel     { background: #EEF1FF; }
+        .ts-token-info        { flex: 1; min-width: 0; }
+        .ts-symbol {
+          font-family: 'DM Mono', monospace;
+          font-size: 13px;
+          font-weight: 600;
+          color: #1A1A2E;
         }
-        .mw-token-icon img { width: 100%; height: 100%; object-fit: cover; }
-        .mw-token-info { flex: 1; min-width: 0; }
-        .mw-token-symbol { font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif; font-size: 14px; font-weight: 600; color: #1A1A2E; }
-        .mw-token-name { font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif; font-size: 12px; color: #8A8C9E; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .mw-token-balance { font-family: var(--font-mono), 'DM Mono', monospace; font-size: 12px; color: #8A8C9E; }
-        .mw-token-loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: #8A8C9E; font-size: 14px; }
-        .mw-token-empty { display: flex; align-items: center; justify-content: center; padding: 40px; color: #8A8C9E; font-size: 14px; }
+        .ts-name {
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 11px;
+          color: #8A8C9E;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .ts-check { font-size: 16px; color: #3A5CE8; flex-shrink: 0; }
+        .ts-empty {
+          padding: 36px 16px;
+          text-align: center;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+          font-size: 13px;
+          color: #8A8C9E;
+        }
       `}</style>
 
-      <div className="mw-token-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-        <div className="mw-token-modal">
-          <div className="mw-token-header">
-            <h3>Select a token</h3>
-            <button className="mw-token-close" onClick={onClose}>✕</button>
+      {/* Backdrop — click to dismiss */}
+      <div className="ts-overlay" onClick={onClose}>
+        {/* Sheet — stop propagation */}
+        <div className="ts-sheet" onClick={(e) => e.stopPropagation()}>
+
+          <div className="ts-header">
+            <div className="ts-title-row">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="ts-title">Select token</span>
+                <span className="ts-chain-badge">{chainName}</span>
+              </div>
+              <button className="ts-close" onClick={onClose} aria-label="Close">×</button>
+            </div>
+            <div className="ts-search-wrap">
+              <span className="ts-search-icon">⌕</span>
+              <input
+                ref={inputRef}
+                className="ts-search"
+                type="text"
+                placeholder="Search by name, symbol, or address…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
           </div>
 
-          <input
-            className="mw-token-search"
-            placeholder="Search name or paste address"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            autoFocus
-          />
-
-          {commonTokens.length > 0 && !search && (
-            <>
-              <div className="mw-common-label">Common tokens</div>
-              <div className="mw-common-pills">
-                {commonTokens.map(t => (
-                  <button
-                    key={t.address}
-                    className={`mw-common-pill${selected?.address === t.address ? ' selected' : ''}`}
-                    onClick={() => { onSelect(t); onClose() }}
-                  >
-                    {t.logoURI && (
-                      <img
-                        src={t.logoURI}
-                        alt={t.symbol}
-                        style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover' }}
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                      />
-                    )}
-                    {t.symbol}
-                  </button>
-                ))}
-              </div>
-              <div className="mw-token-divider" />
-            </>
-          )}
-
-          <div className="mw-token-list">
-            {isLoading ? (
-              <div className="mw-token-loading">Loading tokens…</div>
-            ) : filtered.length === 0 ? (
-              <div className="mw-token-empty">No tokens found</div>
+          <div className="ts-list">
+            {filtered.length === 0 ? (
+              <div className="ts-empty">No tokens match "{query}"</div>
             ) : (
-              filtered.slice(0, 200).map(t => (
-                <div
-                  key={t.address}
-                  className={`mw-token-row${selected?.address === t.address ? ' selected' : ''}`}
-                  onClick={() => { onSelect(t); onClose() }}
-                >
-                  <div className="mw-token-icon">
-                    {t.logoURI ? (
-                      <img
-                        src={t.logoURI}
-                        alt={t.symbol}
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none'
-                          ;(e.target as HTMLImageElement).parentElement!.textContent = t.symbol.slice(0, 2)
-                        }}
-                      />
-                    ) : (
-                      t.symbol.slice(0, 2)
-                    )}
+              filtered.slice(0, 150).map((token) => {
+                const isSel = selected?.address?.toLowerCase() === token.address?.toLowerCase()
+                return (
+                  <div
+                    key={token.address}
+                    className={`ts-token-row${isSel ? ' sel' : ''}`}
+                    onClick={() => { onSelect(token); onClose() }}
+                  >
+                    <TokenIcon token={token} />
+                    <div className="ts-token-info">
+                      <div className="ts-symbol">{token.symbol}</div>
+                      <div className="ts-name">{token.name}</div>
+                    </div>
+                    {isSel && <span className="ts-check">✓</span>}
                   </div>
-                  <div className="mw-token-info">
-                    <div className="mw-token-symbol">{t.symbol}</div>
-                    <div className="mw-token-name">{t.name}</div>
-                  </div>
-                  {balances[t.address] && (
-                    <span className="mw-token-balance">{balances[t.address]}</span>
-                  )}
-                </div>
-              ))
+                )
+              })
             )}
           </div>
+
         </div>
       </div>
     </>

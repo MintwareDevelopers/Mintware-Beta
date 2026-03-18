@@ -5,6 +5,10 @@ import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { useEffect, useState } from 'react'
 import { API, shortAddr } from '@/lib/api'
+import { useReferral } from '@/lib/referral/useReferral'
+import { ReferralSheet } from '@/components/referral/ReferralSheet'
+import { InviteTab } from '@/components/referral/InviteTab'
+import { ClaimCard } from '@/components/campaigns/ClaimCard'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Signal {
@@ -39,7 +43,7 @@ interface ScoreResponse {
   totalHi: number
 }
 
-type Tab = 'portfolio' | 'score' | 'badge'
+type Tab = 'portfolio' | 'score' | 'badge' | 'invite' | 'rewards'
 
 // ─── Profile content ──────────────────────────────────────────────────────────
 function ProfileContent() {
@@ -49,6 +53,13 @@ function ProfileContent() {
   const [data, setData] = useState<ScoreResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  const {
+    stats: refStats,
+    referralRecords,
+    isFirstConnect,
+    isLoading: refLoading,
+  } = useReferral(wallet || undefined)
 
   useEffect(() => {
     if (!wallet) return
@@ -73,6 +84,10 @@ function ProfileContent() {
 
   return (
     <div className="min-h-screen">
+      <ReferralSheet
+        stats={refStats}
+        trigger={isFirstConnect && !loading && !!data}
+      />
       {/* Dark hero header */}
       <div className="mw-grid-overlay bg-mw-ink relative overflow-hidden pt-9 animate-fade-up max-sm:pt-6">
         <div className="absolute top-[-60px] right-[10%] w-[320px] h-[320px] rounded-full bg-[radial-gradient(circle,rgba(0,82,255,0.2)_0%,transparent_65%)] pointer-events-none" />
@@ -184,7 +199,7 @@ function ProfileContent() {
       <div className="pt-5 bg-mw-surface">
         <div className="max-w-[960px] mx-auto px-12 max-sm:px-5">
           <div className="flex gap-2 max-sm:flex-wrap max-sm:gap-1.5">
-            {(['portfolio', 'score', 'badge'] as Tab[]).map(t => (
+            {(['portfolio', 'score', 'badge', 'invite', 'rewards'] as Tab[]).map(t => (
               <div
                 key={t}
                 className={[
@@ -196,7 +211,7 @@ function ProfileContent() {
                 ].join(' ')}
                 onClick={() => setActiveTab(t)}
               >
-                {t === 'portfolio' ? '📊 Portfolio' : t === 'score' ? '⚡ Score' : '🏅 Badge'}
+                {t === 'portfolio' ? '📊 Portfolio' : t === 'score' ? '⚡ Score' : t === 'badge' ? '🏅 Badge' : t === 'invite' ? '◉ Invite' : '💰 Rewards'}
               </div>
             ))}
           </div>
@@ -331,6 +346,19 @@ function ProfileContent() {
                 </>
               )}
             </div>
+          )}
+
+          {activeTab === 'invite' && (
+            <InviteTab
+              wallet={wallet}
+              stats={refStats}
+              referralRecords={referralRecords}
+              isLoading={refLoading}
+            />
+          )}
+
+          {activeTab === 'rewards' && (
+            <ClaimCard wallet={wallet} />
           )}
 
           {activeTab === 'badge' && (

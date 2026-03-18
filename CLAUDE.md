@@ -5,7 +5,7 @@ Mintware is a DeFi reputation + rewards platform with two products:
 - **Attribution** (live) — on-chain reputation scoring for wallets across 100+ chains
 - **Mintware** (coming soon) — social LP vaults and reward pools weighted by Attribution score
 
-This is the **Phase 1 web app** — a Next.js 16 App Router application migrated from a set of static HTML files.
+This is the **Phase 1 web app** — a Next.js 16 App Router application.
 
 ---
 
@@ -17,6 +17,8 @@ This is the **Phase 1 web app** — a Next.js 16 App Router application migrated
 | Language | TypeScript 5.7 |
 | Wallet | RainbowKit 2 + wagmi 3 + viem 2 |
 | Data fetching | @tanstack/react-query 5 |
+| Styling | Tailwind CSS v4 (landing page); inline `<style>` blocks (all other app pages) |
+| Database | Supabase (`@supabase/ssr` v0.9.0) — referral system |
 | Fonts | Plus Jakarta Sans (`--font-jakarta`), DM Mono (`--font-mono`) via `next/font/google` |
 | Analytics | @vercel/analytics |
 | Package manager | **pnpm** (always use pnpm, never npm/yarn) |
@@ -29,28 +31,39 @@ This is the **Phase 1 web app** — a Next.js 16 App Router application migrated
 ```
 app/
   layout.tsx              # Root layout — fonts, metadata, <Providers>, <Analytics>
-  globals.css             # Minimal reset only (3 lines) — NO Tailwind, stripped intentionally
-  page.tsx                # Landing page ('use client')
-  page.css                # Landing page styles (extracted from component to avoid Turbopack panic)
+  globals.css             # Minimal reset only — Tailwind base imported here
+  page.tsx                # Landing page ('use client') — uses Tailwind CSS v4
   explorer/page.tsx       # Redirects to /explorer.html (D3-based, not yet converted)
   dashboard/page.tsx      # Earn/campaigns dashboard ('use client', auth-guarded)
   leaderboard/page.tsx    # Global leaderboard ('use client', auth-guarded)
+  swap/page.tsx           # Swap page — 0x/Molten routing, campaign rewards, Core chain
   campaign/[id]/page.tsx  # Campaign detail — dynamic route ('use client', auth-guarded)
   profile/page.tsx        # User profile + score ('use client', auth-guarded)
+  api/
+    referral/route.ts     # GET /api/referral?address=, POST /api/referral/generate
 
 components/
   providers.tsx           # WagmiProvider + QueryClientProvider + RainbowKitProvider
-  MwNav.tsx               # Sticky nav — wallet pill → /profile, hover reveals disconnect
+  MwNav.tsx               # Sticky nav — boxy tab style, wallet pill → /profile
   MwAuthGuard.tsx         # Redirects unauthenticated users to /
+  referral/
+    RefCodeInput.tsx      # Read-only copy input — "Copied!" for 2s
+    ReferralSheet.tsx     # First-connect slide-up bottom sheet
+    InviteTab.tsx         # Invite tab content — renders immediately from wallet address
 
 lib/
   wagmi.ts                # wagmiConfig via getDefaultConfig (RainbowKit)
   api.ts                  # API base URL + shared helpers
+  supabase.ts             # createSupabaseBrowserClient() factory
+  referral/
+    types.ts              # ReferralStats, ReferralRecord, WalletProfile
+    utils.ts              # generateRefCode(), truncateAddress()
+    useReferral.ts        # Core referral hook
 
 public/
-  explorer.html           # Static D3 explorer (served as-is)
+  explorer.html           # Static D3 explorer — no nav, logo-only back button
   mw-auth.js              # Legacy auth helper
-  (+ other static HTML pages: how-it-works.html, for-protocols.html, etc.)
+  (+ other static HTML pages)
 ```
 
 ---
@@ -110,6 +123,32 @@ Defined as `export const API` in `lib/api.ts`. Import from there — never hardc
 
 ---
 
+## Referral System
+
+Supabase tables (already exist, no migrations needed):
+- `wallet_profiles` — one row per wallet: `address`, `ref_code`, `last_seen_at`
+- `referral_records` — `referrer`, `referred`, `ref_code`, `status` (`pending` | `active`)
+- `referral_stats` — VIEW: `address`, `ref_code`, `ref_link`, `tree_size`, `tree_quality`, `sharing_score`
+
+**Key convention:** `ref_code` is **deterministic** — `"mw_" + address.slice(2, 8).toLowerCase()`. Never depends on Supabase to compute it.
+
+**`useReferral(address)` hook flow:**
+1. Captures `?ref=` URL param → `sessionStorage["mw_pending_ref"]`
+2. Upserts `wallet_profiles` on connect
+3. If new wallet + pending ref → inserts `referral_records`
+4. Fetches `referral_stats` view
+5. Subscribes to Supabase Realtime on `referral_records` for live updates
+
+**`InviteTab`** renders immediately from wallet address — ref code/link are computed locally. Supabase stats (sharing score, network size) load in as enhancement — tab never shows an error state.
+
+**`ReferralSheet`** slides up 1.5s after first wallet connect. Dismissed state in `localStorage["mw_ref_sheet_dismissed"]`.
+
+**API routes** (`app/api/referral/route.ts`):
+- `GET /api/referral?address=` — reads `referral_stats` (anon key)
+- `POST /api/referral/generate` — upserts `wallet_profiles`, returns stats (service role key)
+
+---
+
 ## Wallet / Auth
 
 **Config** (`lib/wagmi.ts`):
@@ -126,41 +165,35 @@ WagmiProvider → QueryClientProvider → RainbowKitProvider (lightTheme, accent
 - Wrap any auth-required page: `<MwAuthGuard><PageContent /></MwAuthGuard>`
 - Redirects to `/` if not connected, shows lavender blank during check
 
-**Connect flow:**
-Landing page "Connect wallet →" → RainbowKit modal → on connect, button changes to "Go to profile →" → navigates to `/profile`
-
 ---
 
 ## Navigation (`components/MwNav.tsx`)
 
-- **Logged-out:** shows "Explore" link + "Connect Wallet" button
-- **Logged-in:** shows "Earn" (→ /dashboard), "Leaderboard" (→ /leaderboard), wallet pill (→ /profile)
-- **Wallet pill:** clicking navigates to `/profile`. Hovering reveals a red "✕ disconnect" button that calls `disconnect()` + `router.push('/')`
-- CSS is inline `<style>` inside the component (same pattern as all other pages)
-- Active state: `pathname === route` adds `.active` class
+- **Logged-out:** "Connect Wallet" button only
+- **Logged-in:** boxy tab-style nav — "Earn" (→ /dashboard), "Swap" (→ /swap), "Leaderboard" (→ /leaderboard), "Profile" (→ /profile), wallet pill
+- **Wallet pill:** hover reveals red "✕ disconnect" → calls `disconnect()` + `router.push('/')`
+- CSS is inline `<style>` inside the component
 
 ---
 
 ## CSS Conventions
 
-**All app pages use inline `<style>` blocks** — this was an intentional migration choice to preserve the original HTML designs faithfully. Do not refactor to CSS modules unless asked.
+**Landing page (`app/page.tsx`)** — uses **Tailwind CSS v4** utility classes directly in JSX. No separate CSS file.
 
-**Exception:** `app/page.tsx` imports `./page.css` (the landing page CSS was extracted to a separate file to work around a Turbopack panic on large template literals).
+**All other app pages** — use inline `<style>` blocks. Do not refactor to CSS modules or Tailwind unless asked.
 
-**Design tokens** (defined in `app/page.css` and repeated per-page):
-```css
---blue: #0052FF        /* brand blue */
---ink: #1A1A2E         /* primary text */
---ink-2: #3A3C52       /* secondary text */
---ink-3: #8A8C9E       /* muted text */
---surface: #F7F6FF     /* light lavender background */
---green: #16a34a       /* success / live */
---dark: #0A0D14        /* dark section background */
---font-jakarta         /* CSS variable set by Next.js font */
---font-mono            /* CSS variable set by Next.js font */
+**Design tokens:**
 ```
-
-**Do NOT use Tailwind classes** — `globals.css` has no Tailwind, the PostCSS config has no plugins. The shadcn `components/ui/` components exist but are unused in the main app pages.
+#F7F6FF   surface / background
+#1A1A2E   ink (primary text)
+#3A3C52   ink-2 (secondary text)
+#8A8C9E   ink-3 (muted text)
+#3A5CE8   primary blue
+#C2537A   sharing/referral pink
+#2A9E8A   green (success/active)
+Plus Jakarta Sans — UI labels, body
+DM Mono   — addresses, codes, numbers
+```
 
 ---
 
@@ -183,7 +216,6 @@ This PATH setup is required — without it, Turbopack can't spawn child processe
 
 **Common issues:**
 - `Unable to acquire lock at .next/dev/lock` → another `next dev` is running. Kill with `pkill -f "next dev"` then delete `.next/dev/lock`
-- Turbopack panic "Failed to write app endpoint /page" → caused by PostCSS trying to spawn node. Fixed by keeping `globals.css` minimal (no Tailwind imports) and `postcss.config.js` with empty plugins `{}`
 - First compile is slow (~10–15s) due to RainbowKit + wagmi dependency graph
 
 ---
@@ -192,18 +224,125 @@ This PATH setup is required — without it, Turbopack can't spawn child processe
 
 | Route | File | Auth | Notes |
 |---|---|---|---|
-| `/` | `app/page.tsx` | No | Landing — imports `./page.css` |
-| `/explorer` | `app/explorer/page.tsx` | No | Server redirect to `/explorer.html` |
+| `/` | `app/page.tsx` | No | Landing — Tailwind CSS v4 |
+| `/explorer` | `app/explorer/page.tsx` | No | Redirects to `/explorer.html` |
 | `/dashboard` | `app/dashboard/page.tsx` | Yes | Campaign list, filter by status/chain |
 | `/leaderboard` | `app/leaderboard/page.tsx` | Yes | Campaign selector, podium, table |
+| `/swap` | `app/swap/page.tsx` | Yes | 0x/Molten routing, campaign rewards |
 | `/campaign/[id]` | `app/campaign/[id]/page.tsx` | Yes | `useParams()` for id, join flow via POST |
-| `/profile` | `app/profile/page.tsx` | Yes | Score, tier, earnings, tabs |
+| `/profile` | `app/profile/page.tsx` | Yes | Score, tier, tabs: Portfolio / Score / Badge / Invite |
 
 ---
 
-## Pending Work (as of last session)
+## Campaign Engine (branch: feature/campaign-engine)
 
-- [ ] **Waitlist form** — wire up email capture on landing page (currently just UI)
+Source of truth: `mintware_campaign_logic_model.docx` (in Downloads).
+
+### Two campaign types
+
+| | Token Reward Pool | Points Campaign |
+|---|---|---|
+| Created by | Anyone (self-serve) | Whitelisted teams only |
+| Reward trigger | Per swap transaction | Per epoch distribution |
+| Score multipliers | No | Yes — Attribution + Sharing |
+| Platform fee | 2% per tx | Flat sponsorship fee (B2B) |
+| Pool | Depletes until empty | Fixed, epoch-split |
+| Access | Open | `min_score` gated |
+
+### Score multipliers (Points Campaign)
+
+| Percentile | Attribution | Sharing |
+|---|---|---|
+| 0–33% | 1.0× | 1.0× |
+| 34–66% | 1.25× | 1.15× |
+| 67–100% | 1.5× | 1.3× |
+
+Combined multiplier is multiplicative: `attribution_multiplier × sharing_multiplier` (max 1.95×).
+
+### Actions (dynamic per campaign)
+- `bridge` — 15 pts, one-time per wallet
+- `trade` — 8 pts, once per calendar day
+- `referral_bridge` — 60 pts per referred wallet that bridges
+- `referral_trade` — 8 pts per referred wallet per trading day
+
+### Epoch reward formula
+```
+wallet_payout = (epoch_pool / epoch_count) × (wallet_points / total_points) × combined_multiplier
+```
+
+### Supabase migration: `supabase/migrations/20260317000001_campaign_engine_schema.sql`
+Three new tables added in Ticket 1:
+
+**`pending_rewards`** — Token Reward Pool per-tx reward locks
+- One row per reward type (`buyer`, `referrer`, `platform_fee`) per `tx_hash`
+- Unique index on `(tx_hash, reward_type)` prevents double-crediting
+- `claimable_at = now() + claim_duration_mins`; status: `locked → claimable → claimed`
+
+**`distributions`** — Points Campaign Merkle epoch distribution records
+- One row per `(campaign_id, epoch_number)`
+- `merkle_root` + `ipfs_cid` set at publish time; `tx_hash` confirms on-chain settlement
+- status: `pending → published → finalized`
+
+**`epoch_state`** — Current epoch window + running point accumulator
+- Unique partial index on `campaign_id where status = 'active'` enforces one active epoch per campaign
+- `total_points` incremented in real-time as actions are credited
+- status: `active → settling → complete`; `updated_at` auto-maintained by trigger
+
+**Tables NOT yet added (future tickets):**
+- `participants` — joined wallets per campaign
+- `activity` — per-action point credit ledger (with `tx_hash` uniqueness)
+- `daily_payouts` — per-wallet epoch payout history
+
+---
+
+## Contract Infrastructure (Ticket 5 — complete)
+
+### Files
+| File | Purpose |
+|---|---|
+| `contracts/MintwareDistributor.sol` | On-chain Merkle drop settlement contract |
+| `contracts/MockERC20.sol` | Test-only ERC-20 (mintable, dev only) |
+| `contracts/test/MintwareDistributor.test.cjs` | 32-test Hardhat suite |
+| `hardhat.config.cts` | Hardhat config (`.cts` = TypeScript CJS, required with `"type":"module"`) |
+| `tsconfig.hardhat.json` | Separate TS config for Hardhat (module: commonjs, not bundler) |
+| `scripts/deploy.cjs` | Deploy + auto-verify on Base/CoreDAO/BNB |
+
+### Running tests
+```bash
+pnpm hardhat:test          # 32 tests, all passing
+pnpm hardhat:compile       # Compile + typechain
+```
+`TS_NODE_PROJECT=tsconfig.hardhat.json` prefix is baked into all `hardhat:*` scripts in package.json — required because the root tsconfig uses `moduleResolution: bundler` which is incompatible with Hardhat.
+
+### Deploy targets
+```bash
+pnpm hardhat:deploy:base-sepolia   # Base Sepolia (84532) — testnet
+pnpm hardhat:deploy:base           # Base mainnet (8453)
+pnpm hardhat:deploy:core-dao       # Core DAO (1116)
+pnpm hardhat:deploy:bnb            # BNB Chain (56)
+```
+After deploy: set `NEXT_PUBLIC_MW_TREASURY_ADDRESS` in `.env.local` and update `campaigns.contract_address` in Supabase.
+
+### Leaf encoding — verified
+Both sides produce identical leaf hashes:
+- **Solidity**: `keccak256(bytes.concat(keccak256(abi.encode(address, uint256))))`
+- **TypeScript**: `StandardMerkleTree.of([[wallet, amount]], ['address', 'uint256'])` — `standardLeafHash = keccak256(keccak256(abi.encode(...)))`
+
+Uses `abi.encode` (64-byte padded), NOT `abi.encodePacked` (52 bytes). Critical — mismatch causes all claims to revert.
+
+### ESM/CJS notes (for future debugging)
+The project has `"type": "module"` in `package.json`, which creates Hardhat compatibility issues:
+- Config must be `.cts` (not `.ts`) — `.cts` forces CJS loading, Hardhat's `isRunningWithTypescript()` recognises it
+- Test files must be `.cjs` — Mocha 10.x with `"type":"module"` calls `import()` first; `.cjs` imports work via Node's CJS-in-ESM bridge; `.ts`/`.cts` test files don't
+- `TS_NODE_PROJECT=tsconfig.hardhat.json` must be set — prevents ts-node from picking up root tsconfig (`moduleResolution: bundler` breaks Hardhat)
+
+---
+
+## Pending Work
+
+- [ ] **Ticket 6** — Claim API endpoint: `GET /api/claim?address=&distribution_id=` (returns proof + amount), `POST /api/claim` (executes on-chain). `computeLeaf()` view function is already exposed for proof verification.
+- [ ] **`CORE_DAO_BRIDGE_CONTRACT`** — still `0x__PENDING_MOLTEN_CONFIRMATION__` in `.env.local`. Update when Molten confirms the bridge contract address.
+- [ ] **Waitlist form** — wire up email capture on landing page (UI exists, not wired)
 - [ ] **Deploy to Vercel** — not yet deployed
 - [ ] **Reown Cloud domain whitelist** — add `localhost:3000` and production domain at cloud.reown.com → project `580f461c981a43d53fc25fe59b64306b`
 - [ ] **Explorer page** — `explorer.html` uses D3.js, deferred full React conversion
@@ -214,7 +353,7 @@ This PATH setup is required — without it, Turbopack can't spawn child processe
 ## Key Design Decisions
 
 1. **`'use client'` on all pages** — RainbowKit/wagmi hooks require it. No server components in the app directory (except the explorer redirect).
-2. **Inline styles over CSS modules** — preserves original HTML design fidelity without renaming classes.
-3. **No Tailwind in app pages** — Tailwind is installed as a devDependency but `globals.css` was intentionally stripped. Adding Tailwind back would require fixing PostCSS config.
-4. **shadcn/ui components exist but are unused** — they were scaffolded at project init. The app uses custom CSS instead.
-5. **Explorer stays static** — D3.js charts are complex; `/explorer` route just redirects to the static HTML file in `/public`.
+2. **Inline styles on app pages** — preserves original HTML design fidelity. Landing page is the exception (Tailwind v4).
+3. **shadcn/ui components exist but are unused** — scaffolded at project init; app uses custom CSS instead.
+4. **Explorer stays static** — D3.js charts are complex; `/explorer` route redirects to the static HTML file in `/public`. Nav removed from explorer.html; logo-only back link to `/` added.
+5. **ref_code is deterministic** — computed from wallet address, never depends on a database round-trip. InviteTab always renders immediately.

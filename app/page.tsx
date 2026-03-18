@@ -21,7 +21,7 @@ export default function HomePage() {
   return (
     <>
       {/* ── Hero ── */}
-      <section className="flex flex-col items-center justify-center pt-[72px] px-[52px] pb-20 relative overflow-hidden text-center bg-mw-surface max-md:px-5 max-md:pt-[110px] max-md:pb-16">
+      <section className="flex flex-col items-center justify-center pt-[40px] px-[52px] pb-20 relative overflow-hidden text-center bg-mw-surface max-md:px-5 max-md:pt-[72px] max-md:pb-16">
         <div className="mw-hero-radial" />
         <div className="mw-light-grid" />
 

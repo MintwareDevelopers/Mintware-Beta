@@ -1,0 +1,136 @@
+// =============================================================================
+// Campaign Engine — Type Definitions
+// Source of truth: mintware_campaign_logic_model.docx
+// =============================================================================
+
+export type CampaignType = 'token_pool' | 'points'
+export type CampaignStatus = 'upcoming' | 'live' | 'ended' | 'paused'
+export type RewardType = 'buyer' | 'referrer' | 'platform_fee'
+export type ActionType = 'bridge' | 'trade' | 'referral_bridge' | 'referral_trade'
+export type DistributionStatus = 'pending' | 'published' | 'finalized'
+export type PendingRewardStatus = 'locked' | 'claimable' | 'claimed' | 'expired'
+
+// Campaign actions config — stored as JSONB in campaigns.actions
+// Keys are ActionType, values are point amounts
+// Example: { bridge: 15, trade: 8, referral_bridge: 60, referral_trade: 8 }
+export type ActionsConfig = Partial<Record<ActionType, number>>
+
+export interface Campaign {
+  id: string
+  campaign_type: CampaignType
+  name: string
+  status: CampaignStatus
+  start_date: string | null
+  end_date: string | null
+
+  // Token pool fields
+  token_contract: string | null
+  token_allocation_usd: number | null
+  buyer_reward_pct: number | null
+  referral_reward_pct: number | null
+  platform_fee_pct: number            // default 2
+  claim_duration_mins: number | null
+  pool_remaining_usd: number | null
+
+  // Points campaign fields
+  pool_usd: number | null
+  token_symbol: string | null
+  epoch_duration_days: number | null
+  epoch_count: number | null
+  actions: ActionsConfig | null
+  min_score: number                   // default 0
+  sponsorship_fee: number | null
+
+  // On-chain settlement (Ticket 5 / Ticket 6)
+  // Set by operator after deploying MintwareDistributor via scripts/deploy.ts
+  contract_address: string | null   // deployed MintwareDistributor address
+  chain: string | null              // 'base' | 'base_sepolia' | 'core_dao' | 'bnb'
+
+  // New columns from migration 000004
+  daily_wallet_cap_usd: number | null
+  daily_pool_cap_usd: number | null
+  use_score_multiplier: boolean
+
+  created_at: string
+  updated_at: string
+}
+
+export interface Participant {
+  id: string
+  campaign_id: string
+  wallet: string
+  joined_at: string
+  attribution_score: number
+  sharing_score: number
+  total_points: number
+  total_earned_usd: number
+  last_active_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ActivityRow {
+  id: string
+  campaign_id: string
+  wallet: string
+  action: ActionType
+  points: number | null       // null for token_pool campaigns
+  reward_usd: number | null   // null for points campaigns
+  tx_hash: string
+  referrer: string | null
+  credited_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Inbound swap event — posted by Molten callback (or our stub endpoint)
+// ---------------------------------------------------------------------------
+export interface SwapEvent {
+  tx_hash: string       // on-chain transaction hash — primary dedup key
+  wallet: string        // checksummed wallet address (lowercased before use)
+  campaign_id: string   // which campaign this swap is attributed to
+  token_in: string      // token address being sold
+  token_out: string     // token address being bought
+  amount_usd: number    // USD value of the swap at execution time
+  timestamp: string     // ISO 8601 — swap execution time from chain
+}
+
+// ---------------------------------------------------------------------------
+// Attribution result — returned by processSwapEvent
+// ---------------------------------------------------------------------------
+export type SkipReason =
+  | 'tx_already_credited'
+  | 'campaign_not_found'
+  | 'campaign_not_live'
+  | 'campaign_ended'
+  | 'wallet_not_participant'
+  | 'action_before_join'
+  | 'score_below_minimum'
+  | 'already_traded_today'
+  | 'pool_insufficient'
+  | 'db_error'
+
+export interface AttributionResult {
+  credited: boolean
+  skip_reason?: SkipReason
+  campaign_type?: CampaignType
+  // Token pool outcomes
+  buyer_reward_usd?: number
+  referral_reward_usd?: number
+  platform_fee_usd?: number
+  // Points outcomes
+  trade_points?: number
+  referral_trade_points?: number
+  referrer?: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Score multiplier — Points campaigns only
+// Source: campaign logic model §3
+// Attribution percentile and sharing percentile each produce a multiplier.
+// Combined multiplier is multiplicative. Max = 1.5 × 1.3 = 1.95×
+// ---------------------------------------------------------------------------
+export interface ScoreMultipliers {
+  attribution: number   // 1.0 | 1.25 | 1.5
+  sharing: number       // 1.0 | 1.15 | 1.3
+  combined: number      // attribution × sharing
+}

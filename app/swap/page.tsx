@@ -1,7 +1,6 @@
-import { Suspense } from 'react'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { MwNav } from '@/components/MwNav'
-import { SwapWidget } from '@/components/swap/SwapWidget'
+import { MintwareSwap } from '@/components/swap/MintwareSwap'
 
 export const metadata = {
   title: 'Swap · Mintware',
@@ -33,11 +32,9 @@ export default function SwapPage() {
             Trade tokens across chains. Every swap builds your Attribution score and unlocks campaign rewards.
           </p>
 
-          {/* Widget — Suspense wrapper required for useSearchParams in useCampaign */}
+          {/* Widget — MintwareSwap handles its own loading skeleton via dynamic import */}
           <div className="[animation:fadeUp_0.5s_0.16s_ease_both]">
-            <Suspense fallback={<SwapPageSkeleton />}>
-              <SwapWidget />
-            </Suspense>
+            <MintwareSwap />
           </div>
         </div>
       </main>
@@ -45,10 +42,3 @@ export default function SwapPage() {
   )
 }
 
-function SwapPageSkeleton() {
-  return (
-    <div className="bg-white rounded-[20px] border border-mw-border p-5 h-[460px] flex items-center justify-center text-mw-ink-3 text-sm shadow-[0_2px_12px_rgba(26,26,46,0.05)]">
-      Loading swap…
-    </div>
-  )
-}

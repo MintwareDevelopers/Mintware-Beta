@@ -1,0 +1,35 @@
+{
+  "ts-node": {
+    "transpileOnly": true,
+    "files": true,
+    "compilerOptions": {
+      "module": "commonjs",
+      "moduleResolution": "node"
+    }
+  },
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "outDir": "artifacts/ts",
+    "rootDir": "."
+  },
+  "include": [
+    "hardhat.config.ts",
+    "contracts/test/**/*.ts",
+    "contracts/test/**/*.cts",
+    "scripts/**/*.ts",
+    "scripts/**/*.cts"
+  ],
+  "exclude": [
+    "node_modules",
+    "app",
+    "lib",
+    "components",
+    ".next"
+  ]
+}

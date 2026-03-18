@@ -1,0 +1,35 @@
+diff --git a/dist/esm/jsonRpc/index.js b/dist/esm/jsonRpc/index.js
+index 1111111..2222222 100644
+--- a/dist/esm/jsonRpc/index.js
++++ b/dist/esm/jsonRpc/index.js
+@@ -1,14 +1,17 @@
+ import {
+   JsonRpcHTTPTransport
+ } from "./http-transport.js";
+ import {
+   isSuiJsonRpcClient,
+   SuiJsonRpcClient
+ } from "./client.js";
+ import { SuiHTTPStatusError, SuiHTTPTransportError, JsonRpcError } from "./errors.js";
++import { getFullnodeUrl } from "../client/network.js";
+ export {
+   JsonRpcError,
+   JsonRpcHTTPTransport,
+   SuiHTTPStatusError,
+   SuiHTTPTransportError,
+   SuiJsonRpcClient,
+-  isSuiJsonRpcClient
++  isSuiJsonRpcClient,
++  getFullnodeUrl as getJsonRpcFullnodeUrl
+ };
+ //# sourceMappingURL=index.js.map
+diff --git a/dist/esm/jsonRpc/index.d.ts b/dist/esm/jsonRpc/index.d.ts
+index 3333333..4444444 100644
+--- a/dist/esm/jsonRpc/index.d.ts
++++ b/dist/esm/jsonRpc/index.d.ts
+@@ -1,4 +1,5 @@
+ export { type JsonRpcTransport, type JsonRpcTransportRequestOptions, type JsonRpcTransportSubscribeOptions, type HttpHeaders, type JsonRpcHTTPTransportOptions, JsonRpcHTTPTransport, } from './http-transport.js';
+ export type * from './types/index.js';
+ export { type SuiJsonRpcClientOptions, type PaginationArguments, type OrderArguments, isSuiJsonRpcClient, SuiJsonRpcClient, } from './client.js';
+ export { SuiHTTPStatusError, SuiHTTPTransportError, JsonRpcError } from './errors.js';
++export { getFullnodeUrl as getJsonRpcFullnodeUrl } from '../client/network.js';

@@ -84,7 +84,7 @@ nav.scrolled {
   position: relative; min-height: 100vh;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  padding: 120px 40px 80px; z-index: 1;
+  padding: 60px 40px 80px; z-index: 1;
 }
 .hero-glow {
   position: absolute; width: 700px; height: 500px;
@@ -915,7 +915,7 @@ nav.scrolled {
 </head>
 <body>
 
-<nav id="mw-nav"></nav>
+<a href="/" style="position:fixed;top:20px;left:28px;z-index:100;font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:15px;color:#1A1A2E;text-decoration:none;letter-spacing:-0.01em;">Mint<em style="font-style:normal;color:#3A52CC;">ware</em></a>
 
 <section id="hero">
   <div class="hero-glow"></div>
@@ -2672,10 +2672,6 @@ document.getElementById('backToTop').addEventListener('click',()=>{
 });
 </script>
 
-<script src="/mw-auth.js"></script>
-<script>
-  MW.renderNav({ active: 'explorer' });
-</script>
 
 </body>
 </html>
