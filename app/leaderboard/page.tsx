@@ -4,13 +4,17 @@ import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
-import { API, fmtUSD, shortAddr } from '@/lib/api'
+import { API, fmtUSD, shortAddr, daysUntil } from '@/lib/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
   id: string
   name: string
   status: string
+  end_date?: string
+  pool_usd?: number
+  daily_payout_usd?: number
+  actions?: Record<string, { label: string; points: number; per_day?: boolean; per_referral?: boolean; per_referred_trade?: boolean }>
 }
 
 interface LeaderboardEntry {
@@ -22,29 +26,32 @@ interface LeaderboardEntry {
   referral_trade_points?: number
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const AVATAR_BG = ['#fff8f0','#f0f4ff','#f0fff4','#fff0f8','#f5f0ff','#fffbf0','#f0f8ff','#fff5f0']
-function avatarBg(addr: string) {
-  let h = 0; for (const c of addr) h = (h * 31 + c.charCodeAt(0)) & 0xffff
-  return AVATAR_BG[h % AVATAR_BG.length]
-}
-
 // ─── Leaderboard Content ──────────────────────────────────────────────────────
 function LeaderboardContent() {
   const { address } = useAccount()
   const wallet = address?.toLowerCase() ?? ''
 
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [campaigns, setCampaigns]             = useState<Campaign[]>([])
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null)
-  const [allEntries, setAllEntries] = useState<LeaderboardEntry[]>([])
-  const [sortBy, setSortBy] = useState<'points' | 'score' | 'referrals'>('points')
-  const [loading, setLoading] = useState(false)
-  const [lbSubText, setLbSubText] = useState('Loading…')
+  const [allEntries, setAllEntries]           = useState<LeaderboardEntry[]>([])
+  const [sortBy, setSortBy]                   = useState<'points' | 'score' | 'referrals'>('points')
+  const [loading, setLoading]                 = useState(false)
+  const [lbSubText, setLbSubText]             = useState('Loading…')
+  const [linkCopied, setLinkCopied]           = useState(false)
+
+  const refLink = wallet ? `mintware.app/r/${wallet.slice(0, 10)}` : ''
+
+  function copyLink() {
+    if (!refLink) return
+    navigator.clipboard.writeText(refLink).catch(() => {})
+    setLinkCopied(true)
+    setTimeout(() => setLinkCopied(false), 2000)
+  }
 
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`${API}/campaigns`)
+        const res  = await fetch(`${API}/campaigns`)
         const data = await res.json()
         if (!Array.isArray(data) || data.length === 0) return
         setCampaigns(data)
@@ -61,7 +68,7 @@ function LeaderboardContent() {
     setLoading(true)
     setAllEntries([])
     try {
-      const res = await fetch(`${API}/leaderboard?campaign_id=${encodeURIComponent(activeCampaignId)}&limit=100`)
+      const res  = await fetch(`${API}/leaderboard?campaign_id=${encodeURIComponent(activeCampaignId)}&limit=100`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (!Array.isArray(data)) throw new Error('Bad response')
@@ -79,8 +86,8 @@ function LeaderboardContent() {
 
   function getSorted(): LeaderboardEntry[] {
     const list = [...allEntries]
-    if (sortBy === 'score') list.sort((a, b) => (b.attribution_score || 0) - (a.attribution_score || 0))
-    if (sortBy === 'points') list.sort((a, b) => (b.total_points || 0) - (a.total_points || 0))
+    if (sortBy === 'score')    list.sort((a, b) => (b.attribution_score || 0) - (a.attribution_score || 0))
+    if (sortBy === 'points')   list.sort((a, b) => (b.total_points || 0) - (a.total_points || 0))
     if (sortBy === 'referrals') list.sort((a, b) => {
       const ra = (a.referral_bridge_points || 0) + (a.referral_trade_points || 0)
       const rb = (b.referral_bridge_points || 0) + (b.referral_trade_points || 0)
@@ -89,193 +96,343 @@ function LeaderboardContent() {
     return list
   }
 
-  const sorted = getSorted()
-  const total = sorted.length
-  const myIdx = wallet ? sorted.findIndex(r => r.wallet === wallet) : -1
-  const me = myIdx >= 0 ? sorted[myIdx] : null
-  const top10 = sorted.slice(0, 10)
-  const showUser = myIdx >= 10
-  const userCtx = showUser ? sorted.slice(Math.max(10, myIdx - 1), myIdx + 2) : []
+  const sorted    = getSorted()
+  const total     = sorted.length
+  const myIdx     = wallet ? sorted.findIndex(r => r.wallet === wallet) : -1
+  const me        = myIdx >= 0 ? sorted[myIdx] : null
+  const top10     = sorted.slice(0, 10)
+  const showUser  = myIdx >= 10
+  const userCtx   = showUser ? sorted.slice(Math.max(10, myIdx - 1), myIdx + 2) : []
+
+  const activeCampaign = campaigns.find(c => c.id === activeCampaignId)
+  const daysLeft       = activeCampaign?.end_date ? daysUntil(activeCampaign.end_date) : null
+
+  const myRefPts = me ? ((me.referral_bridge_points || 0) + (me.referral_trade_points || 0)) : 0
+  const topPct   = (me && total > 0) ? (100 - Math.round(((total - (myIdx + 1)) / total) * 100)) : null
 
   function buildRow(entry: LeaderboardEntry, rank: number, isMe: boolean) {
+    const RANK_COLORS: Record<number, string> = { 1: '#f59e0b', 2: '#9ca3af', 3: '#d97706' }
+    const rankColor = RANK_COLORS[rank] ?? '#6b7280'
     return (
-      <div
+      <tr
         key={entry.wallet + rank}
-        className={[
-          'grid items-center py-[11px] border-b border-[rgba(26,26,46,0.04)] cursor-pointer transition-all duration-100 rounded-lg',
-          '[grid-template-columns:44px_1fr_90px_100px_80px] max-sm:[grid-template-columns:36px_1fr_70px_80px]',
-          isMe
-            ? 'bg-mw-brand-dim -mx-2 px-2 border-l-2 border-l-mw-brand rounded-none'
-            : 'hover:bg-mw-surface hover:-mx-2 hover:px-2',
-        ].join(' ')}
+        style={{
+          background: isMe ? 'rgba(79,126,247,0.05)' : undefined,
+          cursor: 'pointer',
+        }}
+        className={isMe ? 'lb-row-me' : 'lb-row'}
       >
-        <div className={`text-xs font-bold font-[var(--font-mono),'DM_Mono',monospace] text-center ${rank <= 3 ? 'text-mw-ink text-sm' : 'text-mw-ink-3'}`}>{rank}</div>
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center text-[13px] font-bold font-[var(--font-mono),'DM_Mono',monospace] text-mw-ink-2" style={{background:avatarBg(entry.wallet)}}>
-            {entry.wallet.charAt(2).toUpperCase()}
+        <td className="lb-td lb-rank" style={{ color: rank <= 3 ? rankColor : '#9ca3af', fontWeight: rank <= 3 ? 700 : 500 }}>
+          {rank}
+        </td>
+        <td className="lb-td">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 30, height: 30, borderRadius: '50%',
+              background: 'rgba(79,126,247,0.12)', color: '#4f7ef7',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700, flexShrink: 0,
+              fontFamily: 'DM Mono, monospace',
+            }}>
+              {entry.wallet.charAt(2).toUpperCase()}
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 500, fontFamily: 'DM Mono, monospace' }}>
+              {shortAddr(entry.wallet)}
+              {isMe && <span style={{ fontSize: 11, color: '#22c55e', marginLeft: 6 }}>(you)</span>}
+            </span>
           </div>
-          <div className="text-xs font-semibold text-mw-ink font-[var(--font-mono),'DM_Mono',monospace] overflow-hidden text-ellipsis whitespace-nowrap">
-            {shortAddr(entry.wallet)}
-            {isMe && <span className="text-[9px] font-bold text-mw-brand bg-mw-brand-dim border border-[rgba(0,82,255,0.2)] rounded-lg px-1.5 py-px ml-1 align-middle">you</span>}
-          </div>
-        </div>
-        <div className="text-[13px] font-bold text-mw-brand font-[var(--font-mono),'DM_Mono',monospace] text-right">{entry.attribution_score || 0}</div>
-        <div className="text-[13px] font-semibold text-mw-green text-right">{fmtUSD(entry.total_earned_usd || 0)}</div>
-        <div className="text-xs text-mw-ink-3 text-right font-[var(--font-mono),'DM_Mono',monospace] max-sm:hidden">{(entry.total_points || 0).toLocaleString()}</div>
-      </div>
+        </td>
+        <td className="lb-td lb-right" style={{ fontWeight: 600, color: '#4f7ef7', fontFamily: 'DM Mono, monospace' }}>
+          {entry.attribution_score || 0}
+        </td>
+        <td className="lb-td lb-right" style={{ fontWeight: 600, color: '#22c55e', fontFamily: 'DM Mono, monospace' }}>
+          {fmtUSD(entry.total_earned_usd || 0)}
+        </td>
+        <td className="lb-td lb-right lb-pts-col" style={{ fontWeight: 500, color: '#1a1a1a', fontFamily: 'DM Mono, monospace' }}>
+          {(entry.total_points || 0).toLocaleString()}
+        </td>
+      </tr>
     )
   }
 
   return (
-    <div className="max-w-[960px] mx-auto px-12 pt-10 pb-20 max-sm:px-5 max-sm:pt-6 max-sm:pb-[60px]">
-      {/* Campaign selector */}
-      <div className="mb-6 animate-fade-up">
-        <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-mw-ink-3 mb-2 block">Campaign</span>
-        <div className="flex gap-2 flex-wrap">
-          {campaigns.length === 0
-            ? <div className="px-[18px] py-1.5 rounded-full border border-mw-border-strong bg-white text-mw-ink-3 text-[13px] font-medium opacity-50 shadow-[0_1px_3px_rgba(26,26,46,0.04)]">Loading campaigns…</div>
-            : campaigns.map(c => (
-              <button
-                key={c.id}
-                onClick={() => setActiveCampaignId(c.id)}
-                className={[
-                  'px-[18px] py-1.5 rounded-full border text-[13px] font-medium cursor-pointer transition-all duration-150 font-[var(--font-jakarta),"Plus_Jakarta_Sans",sans-serif] shadow-[0_1px_3px_rgba(26,26,46,0.04)]',
-                  c.id === activeCampaignId
-                    ? 'bg-mw-ink text-white border-mw-ink shadow-sm'
-                    : 'bg-white text-mw-ink-3 border-mw-border-strong hover:border-mw-brand hover:text-mw-brand hover:bg-mw-brand-dim',
-                ].join(' ')}
-              >
-                {c.name}
-              </button>
-            ))}
-        </div>
-      </div>
+    <>
+      <style>{`
+        .lb-layout { display: flex; align-items: flex-start; }
+        .lb-main { flex: 1; padding: 28px 28px 40px; min-width: 0; }
+        .lb-sidebar { width: 300px; flex-shrink: 0; padding: 28px 20px; border-left: 0.5px solid rgba(0,0,0,0.07); }
 
-      {/* Your rank banner */}
-      {me && (
-        <div className="mw-grid-overlay mw-glow-tr bg-mw-ink rounded-[20px] px-7 py-[22px] flex items-center gap-6 mb-4 text-white [animation:fadeUp_0.45s_0.05s_ease_both] max-sm:flex-wrap max-sm:gap-4 max-sm:p-5">
-          <div className="relative z-[1]">
-            <div className="text-[10px] font-bold tracking-[1.2px] uppercase text-[rgba(255,255,255,0.35)] mb-1">Your rank</div>
-            <div className="font-[Georgia,serif] text-[38px] font-bold tracking-[-1.5px] leading-none shrink-0 text-mw-brand">#{myIdx + 1}</div>
+        .lb-page-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: #4f7ef7; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-title    { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; color: #1a1a1a; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-sub      { font-size: 14px; color: #6b7280; margin-bottom: 24px; font-family: 'Plus Jakarta Sans', sans-serif; }
+
+        .lb-campaign-selector { display: flex; gap: 8px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
+        .lb-cs-label { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-cs-btn { padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; background: #1a1a1a; color: #fff; border: none; cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-cs-btn.inactive { background: #fff; color: #6b7280; border: 0.5px solid rgba(0,0,0,0.12); font-weight: 500; }
+        .lb-cs-btn.inactive:hover { border-color: #4f7ef7; color: #4f7ef7; background: rgba(79,126,247,0.06); }
+
+        .lb-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+        .lb-stat  { background: #f9f9fb; border-radius: 12px; padding: 16px 18px; border: 0.5px solid rgba(0,0,0,0.08); }
+        .lb-stat-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: #1a1a1a; font-family: 'DM Mono', monospace; }
+        .lb-stat-sub   { font-size: 11px; color: #6b7280; margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
+
+        .lb-card { background: #fff; border: 0.5px solid rgba(0,0,0,0.09); border-radius: 12px; overflow: hidden; }
+        .lb-card-header { padding: 16px 20px; border-bottom: 0.5px solid rgba(0,0,0,0.07); display: flex; align-items: center; justify-content: space-between; }
+        .lb-card-title  { font-size: 15px; font-weight: 600; color: #1a1a1a; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-card-meta   { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
+
+        .lb-tabs { display: flex; border-bottom: 0.5px solid rgba(0,0,0,0.07); }
+        .lb-tab  { padding: 10px 16px; font-size: 13px; cursor: pointer; color: #6b7280; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: 'Plus Jakarta Sans', sans-serif; transition: color 0.15s; }
+        .lb-tab.active { color: #4f7ef7; border-bottom-color: #4f7ef7; font-weight: 500; }
+        .lb-tab:hover:not(.active) { color: #1a1a1a; }
+
+        .lb-table { width: 100%; border-collapse: collapse; }
+        .lb-table th { padding: 12px 16px; font-size: 11px; font-weight: 500; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; text-align: left; border-bottom: 0.5px solid rgba(0,0,0,0.07); background: #f9f9fb; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-table th:not(:first-child) { text-align: right; }
+        .lb-td { padding: 14px 16px; font-size: 13px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
+        .lb-rank { font-weight: 600; font-size: 14px; width: 48px; text-align: center !important; }
+        .lb-right { text-align: right; }
+        .lb-pts-col { }
+        .lb-row:hover .lb-td { background: #f9f9fb; }
+        .lb-row-me .lb-td { background: rgba(79,126,247,0.05); }
+        .lb-row-me:hover .lb-td { background: rgba(79,126,247,0.08); }
+        .lb-table tr:last-child .lb-td { border-bottom: none; }
+        .lb-separator .lb-td { text-align: center; color: #9ca3af; font-size: 11px; letter-spacing: 3px; padding: 8px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
+
+        .lb-skeleton { height: 44px; border-radius: 8px; background: #f0f0f2; margin-bottom: 8px; }
+
+        /* Sidebar */
+        .lb-your-rank { background: rgba(79,126,247,0.06); border: 0.5px solid rgba(79,126,247,0.2); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
+        .lb-yr-label  { font-size: 11px; font-weight: 500; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-yr-rank   { font-size: 32px; font-weight: 700; letter-spacing: -1px; color: #1a1a1a; margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+        .lb-yr-sub    { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-yr-stats  { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+        .lb-yr-stat   { background: #fff; border-radius: 8px; padding: 10px; border: 0.5px solid rgba(0,0,0,0.08); }
+        .lb-yr-stat-val   { font-size: 16px; font-weight: 600; color: #1a1a1a; font-family: 'DM Mono', monospace; }
+        .lb-yr-stat-label { font-size: 11px; color: #6b7280; margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
+
+        .lb-hte { margin-top: 20px; }
+        .lb-hte-title { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-hte-item  { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid rgba(0,0,0,0.06); }
+        .lb-hte-item:last-child { border-bottom: none; }
+        .lb-hte-dot   { width: 8px; height: 8px; border-radius: 50%; background: #4f7ef7; flex-shrink: 0; }
+        .lb-hte-text  { flex: 1; font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-hte-pts   { font-size: 12px; font-weight: 700; color: #4f7ef7; font-family: 'DM Mono', monospace; }
+
+        .lb-invite { margin-top: 20px; }
+        .lb-invite-card { background: #f9f9fb; border-radius: 10px; padding: 14px; border: 0.5px solid rgba(0,0,0,0.08); }
+        .lb-invite-title { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-invite-sub   { font-size: 12px; color: #6b7280; margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-invite-link  { background: #fff; border: 0.5px solid rgba(0,0,0,0.12); border-radius: 8px; padding: 9px 12px; font-size: 11px; font-family: 'DM Mono', monospace; color: #6b7280; display: flex; align-items: center; justify-content: space-between; }
+        .lb-copy-btn { font-size: 11px; color: #4f7ef7; cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; background: none; border: none; }
+
+        @media (max-width: 820px) {
+          .lb-layout { flex-direction: column; }
+          .lb-sidebar { width: 100%; border-left: none; border-top: 0.5px solid rgba(0,0,0,0.07); padding: 20px; }
+          .lb-main { padding: 20px 16px; }
+          .lb-stats { grid-template-columns: 1fr 1fr; }
+          .lb-pts-col { display: none; }
+        }
+      `}</style>
+
+      <div className="lb-layout">
+        {/* ── Main column ── */}
+        <div className="lb-main">
+          <div className="lb-page-tag">🏆 LEADERBOARD</div>
+          <div className="lb-title">Rankings</div>
+          <div className="lb-sub">Top participants ranked by points, attribution score, and referral activity.</div>
+
+          {/* Campaign selector */}
+          <div className="lb-campaign-selector">
+            <span className="lb-cs-label">Campaign</span>
+            {campaigns.length === 0
+              ? <button className="lb-cs-btn inactive" disabled>Loading…</button>
+              : campaigns.map(c => (
+                <button
+                  key={c.id}
+                  className={`lb-cs-btn${c.id !== activeCampaignId ? ' inactive' : ''}`}
+                  onClick={() => setActiveCampaignId(c.id)}
+                >
+                  {c.name}
+                </button>
+              ))}
           </div>
-          <div className="w-px bg-[rgba(255,255,255,0.08)] self-stretch shrink-0 relative z-[1]" />
-          <div className="flex-1 min-w-0 relative z-[1]">
-            <div className="text-[10px] font-bold tracking-[1.2px] uppercase text-[rgba(255,255,255,0.35)] mb-1">Points</div>
-            <div className="text-xl font-bold font-[var(--font-mono),'DM_Mono',monospace]">
-              {(me.total_points || 0).toLocaleString()} pts
+
+          {/* Stats row */}
+          <div className="lb-stats">
+            <div className="lb-stat">
+              <div className="lb-stat-label">Total participants</div>
+              <div className="lb-stat-value">{loading ? '—' : total}</div>
+              <div className="lb-stat-sub">{total === 0 ? 'Be the first to join' : `Ranked wallets`}</div>
+            </div>
+            <div className="lb-stat">
+              <div className="lb-stat-label">Pool remaining</div>
+              <div className="lb-stat-value">{activeCampaign?.pool_usd != null ? fmtUSD(activeCampaign.pool_usd) : '—'}</div>
+              <div className="lb-stat-sub">{daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left` : ''}</div>
+            </div>
+            <div className="lb-stat">
+              <div className="lb-stat-label">Daily payout</div>
+              <div className="lb-stat-value">{activeCampaign?.daily_payout_usd != null ? fmtUSD(activeCampaign.daily_payout_usd) : '—'}</div>
+              <div className="lb-stat-sub">distributed to earners</div>
             </div>
           </div>
-          <div className="flex-1 min-w-0 relative z-[1]">
-            <div className="h-1 bg-[rgba(255,255,255,0.1)] rounded-sm overflow-hidden mb-1.5">
-              <div
-                className="h-full bg-mw-brand rounded-sm transition-[width] duration-[800ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
-                style={{width: Math.max(2, Math.round(((total - (myIdx+1)) / total) * 100)) + '%'}}
-              />
+
+          {/* Table card */}
+          <div className="lb-card">
+            <div className="lb-card-header">
+              <div className="lb-card-title">Campaign leaderboard</div>
+              <div className="lb-card-meta">Updates every 5 min</div>
             </div>
-            <div className="flex justify-between text-[10px] text-[rgba(255,255,255,0.28)]">
-              <span>#1</span>
-              <span>#{myIdx + 1} · top {100 - Math.round(((total - (myIdx+1)) / total) * 100)}%</span>
+
+            {/* Sort tabs */}
+            <div className="lb-tabs">
+              {(['points', 'score', 'referrals'] as const).map(tab => (
+                <button
+                  key={tab}
+                  className={`lb-tab${sortBy === tab ? ' active' : ''}`}
+                  onClick={() => setSortBy(tab)}
+                >
+                  {tab === 'points' ? 'Top earners' : tab === 'score' ? 'Top score' : 'Top referrers'}
+                </button>
+              ))}
             </div>
-          </div>
-          <div className="text-right shrink-0 relative z-[1]">
-            <div className="text-[10px] font-bold tracking-[1px] uppercase text-[rgba(255,255,255,0.35)] mb-[3px]">Earned</div>
-            <div className="font-[var(--font-mono),'DM_Mono',monospace] text-[22px] font-bold text-[#4ade80]">{fmtUSD(me.total_earned_usd || 0)}</div>
+
+            <table className="lb-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 48 }}>#</th>
+                  <th style={{ textAlign: 'left' }}>Wallet</th>
+                  <th>Score</th>
+                  <th>Earned</th>
+                  <th className="lb-pts-col">Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '16px 20px' }}>
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <div key={i} className="lb-skeleton" />
+                      ))}
+                    </td>
+                  </tr>
+                ) : sorted.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: '48px 20px', textAlign: 'center', color: '#6b7280', fontSize: 14, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                      No participants yet — be the first!
+                      <span style={{ fontSize: 12, display: 'block', marginTop: 6, color: '#9ca3af' }}>
+                        Trade on {activeCampaign?.name ?? 'the campaign'} to appear here.
+                      </span>
+                    </td>
+                  </tr>
+                ) : (
+                  <>
+                    {top10.map((entry, i) => buildRow(entry, i + 1, !!(wallet && entry.wallet === wallet)))}
+                    {showUser && (
+                      <>
+                        <tr className="lb-separator">
+                          <td colSpan={5} className="lb-td">· · ·</td>
+                        </tr>
+                        {userCtx.map((entry, i) => {
+                          const rank = Math.max(11, myIdx) - 1 + i + 1
+                          return buildRow(entry, rank, !!(wallet && entry.wallet === wallet))
+                        })}
+                      </>
+                    )}
+                  </>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
 
-      {/* Main leaderboard card */}
-      <div className="bg-white border border-mw-border rounded-[20px] overflow-hidden mb-4 [animation:fadeUp_0.5s_0.1s_ease_both] shadow-[0_2px_12px_rgba(26,26,46,0.05)]">
-        <div className="px-7 pt-[22px]">
-          <div className="text-[17px] font-bold text-mw-ink mb-[3px] tracking-[-0.2px]">Campaign leaderboard</div>
-          <div className="text-xs text-mw-ink-3 font-[var(--font-mono),'DM_Mono',monospace] mb-4">{lbSubText}</div>
-          {/* Tabs */}
-          <div className="flex gap-0 border-b border-mw-border -mx-7 px-7 max-sm:-mx-5 max-sm:px-5">
-            {(['points','score','referrals'] as const).map(tab => (
-              <div
-                key={tab}
-                onClick={() => setSortBy(tab)}
-                className={[
-                  'px-[18px] py-2.5 text-[13px] font-medium cursor-pointer border-b-2 -mb-px whitespace-nowrap transition-all duration-150',
-                  sortBy === tab
-                    ? 'text-mw-brand border-b-mw-brand font-semibold'
-                    : 'text-mw-ink-3 border-b-transparent hover:text-mw-ink',
-                ].join(' ')}
-              >
-                {tab === 'points' ? 'Top earners' : tab === 'score' ? 'Top score' : 'Top referrers'}
-              </div>
-            ))}
+        {/* ── Sidebar ── */}
+        <div className="lb-sidebar">
+          {/* Your standing card */}
+          <div className="lb-your-rank">
+            <div className="lb-yr-label">Your standing</div>
+            {me ? (
+              <>
+                <div className="lb-yr-rank">#{myIdx + 1}</div>
+                <div className="lb-yr-sub">Top {topPct}% · {total} total participants</div>
+                <div className="lb-yr-stats">
+                  <div className="lb-yr-stat">
+                    <div className="lb-yr-stat-val">{(me.total_points || 0).toLocaleString()}</div>
+                    <div className="lb-yr-stat-label">Points</div>
+                  </div>
+                  <div className="lb-yr-stat">
+                    <div className="lb-yr-stat-val">{me.attribution_score || 0}</div>
+                    <div className="lb-yr-stat-label">Score</div>
+                  </div>
+                  <div className="lb-yr-stat">
+                    <div className="lb-yr-stat-val" style={{ color: '#22c55e' }}>{fmtUSD(me.total_earned_usd || 0)}</div>
+                    <div className="lb-yr-stat-label">Earned</div>
+                  </div>
+                  <div className="lb-yr-stat">
+                    <div className="lb-yr-stat-val">{myRefPts}</div>
+                    <div className="lb-yr-stat-label">Ref pts</div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="lb-yr-rank" style={{ color: '#9ca3af' }}>—</div>
+                <div className="lb-yr-sub">{wallet ? 'No rank yet · start trading to qualify' : 'Connect wallet to see your rank'}</div>
+                <div className="lb-yr-stats">
+                  {['Points', 'Score', 'Earned', 'Referrals'].map(l => (
+                    <div key={l} className="lb-yr-stat">
+                      <div className="lb-yr-stat-val" style={{ color: '#9ca3af' }}>0</div>
+                      <div className="lb-yr-stat-label">{l}</div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        </div>
 
-        <div className="px-7 pb-7 max-sm:px-5 max-sm:pb-5">
-          {/* Podium */}
-          {sorted.length >= 3 && !loading && (
-            <div className="grid [grid-template-columns:1fr_1.15fr_1fr] gap-2.5 py-[22px] items-end max-sm:grid-cols-1">
-              {[sorted[1], sorted[0], sorted[2]].map((entry, i) => {
-                const medals = ['🥈','🥇','🥉']
-                const podStyles = [
-                  'bg-mw-surface border-mw-border-strong order-1',
-                  'bg-gradient-to-b from-[#fffef0] to-[#fffbf0] border-[#fde68a] order-2 max-sm:order-none',
-                  'bg-[#fff9f7] border-[#fed7aa] order-3',
-                ]
-                const isMe = wallet && entry.wallet === wallet
-                const val = sortBy === 'score' ? (entry.attribution_score || 0) : (entry.total_points || 0)
-                const valLabel = sortBy === 'score' ? 'score' : 'pts'
+          {/* How to earn */}
+          {activeCampaign?.actions && Object.keys(activeCampaign.actions).length > 0 && (
+            <div className="lb-hte">
+              <div className="lb-hte-title">How to earn points</div>
+              {Object.entries(activeCampaign.actions).map(([key, action]) => {
+                const suffix = action.per_day ? '/day' : action.per_referral ? '/ref' : action.per_referred_trade ? '/trade' : ''
+                const dotColors: Record<string, string> = {
+                  trade: '#2A9E8A',
+                  bridge: '#4f7ef7',
+                  hold: '#C27A00',
+                }
+                const dotColor = key.startsWith('referral') ? '#7B6FCC' : (dotColors[key] ?? '#4f7ef7')
                 return (
-                  <div
-                    key={entry.wallet + i}
-                    className={`${podStyles[i]} rounded-[14px] p-[18px] px-3.5 text-center cursor-pointer transition-all duration-150 border hover:-translate-y-0.5 hover:shadow-md max-sm:order-none ${isMe ? 'outline outline-2 outline-mw-brand outline-offset-[3px]' : ''}`}
-                  >
-                    <div className="text-2xl mb-2">{medals[i]}</div>
-                    <div className="w-11 h-11 rounded-xl mx-auto mb-2 flex items-center justify-center text-lg font-bold font-[var(--font-mono),'DM_Mono',monospace] text-mw-ink-2" style={{background:avatarBg(entry.wallet)}}>
-                      {entry.wallet.charAt(2).toUpperCase()}
-                    </div>
-                    <div className="text-[11px] font-bold text-mw-ink mb-[3px] font-[var(--font-mono),'DM_Mono',monospace]">
-                      {shortAddr(entry.wallet)}{isMe && <span className="text-[9px] font-bold text-mw-brand bg-mw-brand-dim border border-[rgba(0,82,255,0.2)] rounded-lg px-1.5 py-px ml-1 align-middle">you</span>}
-                    </div>
-                    <div className="text-2xl font-bold font-[Georgia,serif] text-mw-ink tracking-[-0.5px]">{val.toLocaleString()}</div>
-                    <div className="text-[10px] text-mw-ink-3 mt-px font-semibold tracking-[0.5px] uppercase">{valLabel}</div>
-                    <div className="text-[11px] text-mw-green font-semibold mt-2 bg-mw-green-muted border border-mw-green-edge px-2.5 py-[3px] rounded-full inline-block">{fmtUSD(entry.total_earned_usd || 0)} earned</div>
+                  <div key={key} className="lb-hte-item">
+                    <div className="lb-hte-dot" style={{ background: dotColor }} />
+                    <div className="lb-hte-text">{action.label}</div>
+                    <div className="lb-hte-pts">+{action.points}{suffix}</div>
                   </div>
                 )
               })}
             </div>
           )}
 
-          {/* Table header */}
-          <div className="grid [grid-template-columns:44px_1fr_90px_100px_80px] max-sm:[grid-template-columns:36px_1fr_70px_80px] py-3 pb-2 border-b border-mw-border">
-            {['#','Wallet','Score','Earned','Points'].map((h, i) => (
-              <div key={h} className={`text-[10px] font-bold text-mw-ink-3 tracking-[0.5px] uppercase ${i === 0 ? 'text-center' : i === 1 ? 'text-left' : 'text-right'} ${i === 4 ? 'max-sm:hidden' : ''}`}>{h}</div>
-            ))}
-          </div>
-
-          {/* Rows */}
-          {loading ? (
-            <div className="py-5">
-              {[1,2,3,4,5].map(i => (
-                <div key={i} className="mw-shimmer h-11 rounded-[10px] bg-mw-border mb-2" />
-              ))}
+          {/* Invite */}
+          {wallet && (
+            <div className="lb-invite">
+              <div className="lb-invite-card">
+                <div className="lb-invite-title">Invite friends</div>
+                <div className="lb-invite-sub">Share your link to earn +60 pts per completed referral</div>
+                <div className="lb-invite-link">
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{refLink}</span>
+                  <button className="lb-copy-btn" onClick={copyLink}>
+                    {linkCopied ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+              </div>
             </div>
-          ) : sorted.length === 0 ? (
-            <div className="text-center py-12 text-mw-ink-3 text-sm">No participants yet — be the first!</div>
-          ) : (
-            <>
-              {top10.map((entry, i) => buildRow(entry, i + 1, !!(wallet && entry.wallet === wallet)))}
-              {showUser && (
-                <>
-                  <div className="py-2.5 text-center text-[11px] text-mw-ink-3 tracking-[3px] border-b border-mw-border">· · ·</div>
-                  {userCtx.map((entry, i) => {
-                    const rank = Math.max(11, myIdx) - 1 + i + 1
-                    return buildRow(entry, rank, !!(wallet && entry.wallet === wallet))
-                  })}
-                </>
-              )}
-            </>
           )}
         </div>
       </div>
-    </div>
+    </>
   )
 }
 

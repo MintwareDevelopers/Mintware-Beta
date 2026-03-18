@@ -1,18 +1,18 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Brand ── */
-  --color-mw-brand:      #0052FF;
-  --color-mw-brand-dim:  rgba(0, 82, 255, 0.07);
-  --color-mw-brand-mid:  rgba(0, 82, 255, 0.14);
+  /* ── Brand (new flat blue) ── */
+  --color-mw-brand:      #4f7ef7;
+  --color-mw-brand-dim:  rgba(79, 126, 247, 0.07);
+  --color-mw-brand-mid:  rgba(79, 126, 247, 0.14);
 
   /* ── Text ── */
-  --color-mw-ink:   #1A1A2E;
-  --color-mw-ink-2: #3A3C52;
-  --color-mw-ink-3: #8A8C9E;
+  --color-mw-ink:   #1a1a1a;
+  --color-mw-ink-2: #3d3d3d;
+  --color-mw-ink-3: #6b7280;
 
   /* ── Surfaces ── */
-  --color-mw-surface: #F7F6FF;
+  --color-mw-surface: #f5f5f7;
 
   /* ── Green (live / success) ── */
   --color-mw-green:        #16a34a;
@@ -20,8 +20,8 @@
   --color-mw-green-edge:   #bbf7d0;
 
   /* ── Borders ── */
-  --color-mw-border:        rgba(26, 26, 46, 0.08);
-  --color-mw-border-strong: rgba(26, 26, 46, 0.13);
+  --color-mw-border:        rgba(0, 0, 0, 0.07);
+  --color-mw-border-strong: rgba(0, 0, 0, 0.13);
 
   /* ── Dark sections ── */
   --color-mw-dark:        #0A0D14;
@@ -29,9 +29,9 @@
   --color-mw-dark-sub:    rgba(255, 255, 255, 0.38);
   --color-mw-dark-border: rgba(255, 255, 255, 0.06);
 
-  /* ── Shadows (override Tailwind defaults) ── */
-  --shadow-sm: 0 1px 4px rgba(26, 26, 46, 0.06);
-  --shadow-md: 0 4px 16px rgba(26, 26, 46, 0.08);
+  /* ── Shadows ── */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.07);
 
   /* ── Animations ── */
   --animate-fade-up:    fadeUp 0.5s ease both;
@@ -40,7 +40,7 @@
   --animate-mw-pulse:   mw-pulse 2s ease infinite;
 
   @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(14px); }
+    from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
   }
   @keyframes pulse-slow {
@@ -60,8 +60,8 @@
   html { scroll-behavior: smooth; }
   body {
     font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-    background-color: #F7F6FF;
-    color: #1A1A2E;
+    background-color: #ffffff;
+    color: #1a1a1a;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
   }
@@ -95,33 +95,7 @@
     right: -40px;
     width: 220px;
     height: 220px;
-    background: radial-gradient(circle, rgba(0, 82, 255, 0.18) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  /* Glow — bottom-right corner */
-  .mw-glow-br::after {
-    content: '';
-    position: absolute;
-    bottom: -40px;
-    right: -20px;
-    width: 200px;
-    height: 200px;
-    background: radial-gradient(circle, rgba(0, 82, 255, 0.15) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  /* Glow — top-left corner (used on hero sections) */
-  .mw-glow-tl::after {
-    content: '';
-    position: absolute;
-    top: -60px;
-    left: -60px;
-    width: 300px;
-    height: 300px;
-    background: radial-gradient(circle, rgba(0, 82, 255, 0.12) 0%, transparent 70%);
+    background: radial-gradient(circle, rgba(79, 126, 247, 0.18) 0%, transparent 70%);
     pointer-events: none;
     z-index: 0;
   }
@@ -138,37 +112,13 @@
     left: -150%;
     width: 150%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
     animation: shimmer 1.4s infinite;
   }
 
   /* ── Nav ────────────────────────────────────────────────────── */
-  .mw-nav-blur {
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-  }
-
   /* Wallet pill: hover swaps label for disconnect hint */
   .mw-wallet-pill .mw-disconnect { display: none; }
   .mw-wallet-pill:hover .mw-label { display: none; }
   .mw-wallet-pill:hover .mw-disconnect { display: flex; }
-
-  /* ── Page-level hero radial bg (swap / landing) ─────────────── */
-  .mw-hero-radial {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(0, 82, 255, 0.05) 0%, transparent 65%);
-    pointer-events: none;
-  }
-
-  /* Light-mode grid (used on lavender bg pages) */
-  .mw-light-grid {
-    position: absolute;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(26, 26, 46, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(26, 26, 46, 0.04) 1px, transparent 1px);
-    background-size: 56px 56px;
-    pointer-events: none;
-  }
 }

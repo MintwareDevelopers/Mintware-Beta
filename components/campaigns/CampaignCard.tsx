@@ -2,11 +2,8 @@
 
 // =============================================================================
 // CampaignCard.tsx — Campaign list card for /dashboard
-//
-// Shows: protocol initial, name, chain badge, status badge, pool/daily payout,
-//        days remaining, min_score requirement, action tags.
-// Click → /campaign/[id]
-// Design: white card, #E0DFFF border, 16px radius, hover shadow lift.
+// Design: white card, 0.5px border, 12px radius, thin hover highlight.
+// Structure: header → 3-col stats → reward pills → progress bar
 // =============================================================================
 
 import { useRouter } from 'next/navigation'
@@ -34,26 +31,21 @@ export interface Campaign {
   }>
 }
 
-function actionTagStyle(key: string): React.CSSProperties {
-  const base: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600,
-    padding: '3px 10px', borderRadius: 20, border: '1px solid',
-    whiteSpace: 'nowrap', fontFamily: 'Plus Jakarta Sans, sans-serif',
-  }
-  if (key.startsWith('referral')) return { ...base, color: '#7B6FCC', borderColor: 'rgba(123,111,204,0.25)', background: 'rgba(123,111,204,0.07)' }
-  if (key === 'bridge')   return { ...base, color: '#3A5CE8', borderColor: 'rgba(58,92,232,0.2)',  background: 'rgba(58,92,232,0.07)' }
-  if (key === 'trade')    return { ...base, color: '#2A9E8A', borderColor: 'rgba(42,158,138,0.2)', background: 'rgba(42,158,138,0.07)' }
-  if (key === 'hold')     return { ...base, color: '#C27A00', borderColor: 'rgba(194,122,0,0.2)',  background: 'rgba(194,122,0,0.07)' }
-  return { ...base, color: '#8A8C9E', borderColor: '#E0DFFF', background: '#F7F6FF' }
-}
+type ActionItem = NonNullable<Campaign['actions']>[string]
 
-type ActionDef = NonNullable<Campaign['actions']>[string]
-
-function actionSuffix(action: ActionDef): string {
-  if (action.per_day)           return '/day'
-  if (action.per_referral)      return '/ref'
+function actionSuffix(action: ActionItem): string {
+  if (action.per_day)            return '/day'
+  if (action.per_referral)       return '/ref'
   if (action.per_referred_trade) return '/trade'
   return ''
+}
+
+function actionPillStyle(key: string): React.CSSProperties {
+  if (key.startsWith('referral')) return { background: 'rgba(123,111,204,0.08)', color: '#7B6FCC', border: '0.5px solid rgba(123,111,204,0.2)' }
+  if (key === 'bridge')           return { background: 'rgba(79,126,247,0.08)',   color: '#4f7ef7', border: '0.5px solid rgba(79,126,247,0.2)' }
+  if (key === 'trade')            return { background: 'rgba(42,158,138,0.08)',   color: '#2A9E8A', border: '0.5px solid rgba(42,158,138,0.2)' }
+  if (key === 'hold')             return { background: 'rgba(194,122,0,0.08)',    color: '#C27A00', border: '0.5px solid rgba(194,122,0,0.2)' }
+  return                                 { background: 'rgba(79,126,247,0.08)',   color: '#4f7ef7', border: '0.5px solid rgba(79,126,247,0.2)' }
 }
 
 interface CampaignCardProps {
@@ -64,33 +56,138 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   const router  = useRouter()
   const col     = iconColor(c.name)
   const initial = (c.protocol ?? c.name).charAt(0).toUpperCase()
+
   const isLive     = c.status === 'live'
   const isUpcoming = c.status === 'upcoming'
   const isEnded    = c.status === 'ended'
 
-  const daysLeft   = c.end_date ? daysUntil(c.end_date) : null
+  const daysLeft    = c.end_date   ? daysUntil(c.end_date)   : null
   const daysToStart = c.start_date ? daysUntil(c.start_date) : null
+
+  // Progress bar calculation
+  let progressPct = 0
+  let totalDays: number | null = null
+  let elapsedDays: number | null = null
+  if (c.start_date && c.end_date) {
+    const now = Date.now()
+    const s = new Date(c.start_date).getTime()
+    const e = new Date(c.end_date).getTime()
+    if (e > s) {
+      progressPct = Math.min(100, Math.max(0, ((now - s) / (e - s)) * 100))
+      totalDays   = Math.round((e - s) / 86400000)
+      elapsedDays = Math.max(0, totalDays - (daysLeft ?? 0))
+    }
+  }
+
+  const hasStats   = c.pool_usd != null || c.daily_payout_usd != null || c.min_score != null
+  const hasActions = c.actions && Object.keys(c.actions).length > 0
+  const showBar    = isLive && (totalDays !== null || daysLeft !== null)
 
   return (
     <>
       <style>{`
         .cc-card {
           background: #fff;
-          border: 1px solid #E0DFFF;
-          border-radius: 16px;
-          padding: 20px;
+          border: 0.5px solid rgba(0,0,0,0.09);
+          border-radius: 12px;
+          overflow: hidden;
           cursor: pointer;
-          transition: box-shadow 200ms ease, transform 200ms ease, border-color 200ms ease;
+          transition: border-color 0.2s;
           display: flex;
           flex-direction: column;
-          gap: 14px;
         }
-        .cc-card:hover {
-          box-shadow: 0 4px 24px rgba(58,92,232,0.10);
-          transform: translateY(-2px);
-          border-color: rgba(58,92,232,0.25);
+        .cc-card:hover { border-color: rgba(79,126,247,0.4); }
+        .cc-card.ended { opacity: 0.6; }
+        .cc-header {
+          padding: 16px 18px 14px;
+          border-bottom: 0.5px solid rgba(0,0,0,0.06);
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 10px;
         }
-        .cc-card.ended { opacity: 0.65; }
+        .cc-identity { display: flex; align-items: center; gap: 12px; }
+        .cc-icon {
+          width: 36px; height: 36px; border-radius: 9px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 14px; font-weight: 700; flex-shrink: 0;
+          border: 0.5px solid rgba(0,0,0,0.07);
+          font-family: 'DM Mono', monospace;
+        }
+        .cc-name {
+          font-size: 14px; font-weight: 600; color: #1a1a1a;
+          font-family: 'Plus Jakarta Sans', sans-serif; margin-bottom: 4px;
+        }
+        .cc-meta {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 12px; color: #6b7280; flex-wrap: wrap;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .cc-live-badge {
+          display: inline-flex; align-items: center; gap: 4px;
+          background: rgba(34,197,94,0.1); color: #16a34a;
+          border: 0.5px solid rgba(34,197,94,0.3);
+          border-radius: 20px; padding: 2px 7px;
+          font-size: 11px; font-weight: 500;
+        }
+        .cc-upcoming-badge {
+          background: rgba(245,158,11,0.1); color: #d97706;
+          border: 0.5px solid rgba(245,158,11,0.3);
+          border-radius: 20px; padding: 2px 7px;
+          font-size: 11px; font-weight: 500;
+        }
+        .cc-ended-badge {
+          background: rgba(107,114,128,0.08); color: #9ca3af;
+          border: 0.5px solid rgba(107,114,128,0.2);
+          border-radius: 20px; padding: 2px 7px;
+          font-size: 11px;
+        }
+        .cc-chain-tag {
+          flex-shrink: 0; padding: 3px 8px; border-radius: 6px;
+          font-size: 11px; font-weight: 500;
+          background: #f5f5f7; color: #6b7280;
+          border: 0.5px solid rgba(0,0,0,0.07);
+          font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .cc-stats {
+          display: grid; grid-template-columns: repeat(3, 1fr);
+          padding: 14px 18px; gap: 12px;
+          border-bottom: 0.5px solid rgba(0,0,0,0.06);
+        }
+        .cc-stat-val {
+          font-size: 17px; font-weight: 600; color: #1a1a1a;
+          font-family: 'DM Mono', monospace; letter-spacing: -0.3px;
+        }
+        .cc-stat-val span {
+          font-size: 11px; font-weight: 400; color: #9ca3af; margin-left: 2px;
+        }
+        .cc-stat-label {
+          font-size: 11px; color: #9ca3af; margin-top: 2px;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .cc-rewards {
+          padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 6px;
+          border-bottom: 0.5px solid rgba(0,0,0,0.06);
+        }
+        .cc-reward-pill {
+          padding: 4px 10px; border-radius: 20px;
+          font-size: 11px; font-weight: 500;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .cc-progress { padding: 12px 18px; }
+        .cc-prog-header {
+          display: flex; justify-content: space-between;
+          font-size: 11px; color: #9ca3af; margin-bottom: 6px;
+          font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .cc-prog-bar {
+          height: 4px; background: rgba(0,0,0,0.07);
+          border-radius: 4px; overflow: hidden;
+        }
+        .cc-prog-fill {
+          height: 100%; background: #4f7ef7; border-radius: 4px;
+          transition: width 0.6s ease;
+        }
       `}</style>
 
       <div
@@ -100,119 +197,94 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         tabIndex={0}
         onKeyDown={(e) => e.key === 'Enter' && router.push(`/campaign/${c.id}`)}
       >
-        {/* ── Row 1: icon + name + badges ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-            background: col.bg, color: col.fg,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'DM Mono, monospace', fontSize: 17, fontWeight: 700,
-          }}>
-            {initial}
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Name + status badge */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-              <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1A2E' }}>
-                {c.name}
-              </span>
-
-              {isLive && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  fontSize: 10, fontWeight: 700,
-                  background: 'rgba(42,158,138,0.10)', color: '#2A9E8A',
-                  border: '1px solid rgba(42,158,138,0.2)',
-                  borderRadius: 20, padding: '2px 8px',
-                }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#2A9E8A', animation: 'pulse 2s ease-in-out infinite', display: 'inline-block' }} />
-                  Live
-                </span>
-              )}
-              {isUpcoming && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  fontSize: 10, fontWeight: 700,
-                  background: 'rgba(194,122,0,0.10)', color: '#C27A00',
-                  border: '1px solid rgba(194,122,0,0.2)',
-                  borderRadius: 20, padding: '2px 8px',
-                }}>
-                  ◷ {daysToStart !== null ? `Starting in ${daysToStart}d` : 'Coming soon'}
-                </span>
-              )}
-              {isEnded && (
-                <span style={{
-                  fontSize: 10, fontWeight: 700, color: '#8A8C9E',
-                  background: 'rgba(138,140,158,0.1)', border: '1px solid rgba(138,140,158,0.2)',
-                  borderRadius: 20, padding: '2px 8px',
-                }}>
-                  Ended
-                </span>
-              )}
+        {/* ── Header ── */}
+        <div className="cc-header">
+          <div className="cc-identity">
+            <div className="cc-icon" style={{ background: col.bg, color: col.fg }}>
+              {initial}
             </div>
-
-            {/* Chain + days */}
-            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#8A8C9E' }}>
-              {c.chain}
-              {isLive && daysLeft !== null && ` · Ends in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`}
-              {isEnded && ' · Finished'}
+            <div>
+              <div className="cc-name">{c.name}</div>
+              <div className="cc-meta">
+                {isLive && (
+                  <span className="cc-live-badge">
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                    Live
+                  </span>
+                )}
+                {isUpcoming && (
+                  <span className="cc-upcoming-badge">
+                    ◷ {daysToStart !== null ? `In ${daysToStart}d` : 'Soon'}
+                  </span>
+                )}
+                {isEnded && <span className="cc-ended-badge">Ended</span>}
+                <span>{c.chain}</span>
+                {isLive && daysLeft !== null && <span>· {daysLeft}d left</span>}
+              </div>
             </div>
           </div>
-
-          {/* Chain badge */}
-          <span style={{
-            flexShrink: 0,
-            fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, fontWeight: 700,
-            background: '#EEF1FF', color: '#3A5CE8',
-            borderRadius: 6, padding: '3px 8px', letterSpacing: '0.3px',
-          }}>
-            {c.chain}
-          </span>
+          <span className="cc-chain-tag">{c.chain}</span>
         </div>
 
-        {/* ── Row 2: pool stats ── */}
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          {c.pool_usd != null && (
-            <div>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 600, color: '#1A1A2E' }}>
-                {fmtUSD(c.pool_usd)}{c.token_symbol ? ` ${c.token_symbol}` : ''}
+        {/* ── Stats ── */}
+        {hasStats && (
+          <div className="cc-stats">
+            {c.pool_usd != null && (
+              <div>
+                <div className="cc-stat-val">
+                  {fmtUSD(c.pool_usd)}{c.token_symbol && <span>{c.token_symbol}</span>}
+                </div>
+                <div className="cc-stat-label">pool size</div>
               </div>
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>
-                pool size
+            )}
+            {c.daily_payout_usd != null && (
+              <div>
+                <div className="cc-stat-val">{fmtUSD(c.daily_payout_usd)}</div>
+                <div className="cc-stat-label">daily payout</div>
               </div>
-            </div>
-          )}
-          {c.daily_payout_usd != null && (
-            <div>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 600, color: '#1A1A2E' }}>
-                {fmtUSD(c.daily_payout_usd)}<span style={{ fontSize: 11, color: '#8A8C9E', fontWeight: 400 }}>/day</span>
+            )}
+            {c.min_score != null && (
+              <div>
+                <div className="cc-stat-val">{c.min_score}+</div>
+                <div className="cc-stat-label">min score</div>
               </div>
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>
-                daily payout
-              </div>
-            </div>
-          )}
-          {c.min_score != null && (
-            <div>
-              <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 600, color: '#8A8C9E' }}>
-                {c.min_score}+
-              </div>
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>
-                min score
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* ── Row 3: action tags ── */}
-        {c.actions && Object.keys(c.actions).length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {Object.entries(c.actions).map(([key, action]) => (
-              <span key={key} style={actionTagStyle(key)}>
+        {/* ── Reward pills ── */}
+        {hasActions && (
+          <div className="cc-rewards">
+            {Object.entries(c.actions!).map(([key, action]) => (
+              <span
+                key={key}
+                className="cc-reward-pill"
+                style={actionPillStyle(key)}
+              >
                 +{action.points} {action.label.split(' ')[0].toLowerCase()}{actionSuffix(action)}
               </span>
             ))}
+          </div>
+        )}
+
+        {/* ── Progress bar ── */}
+        {showBar && (
+          <div className="cc-progress">
+            <div className="cc-prog-header">
+              <span>Campaign progress</span>
+              {totalDays !== null && elapsedDays !== null
+                ? <span>{elapsedDays} of {totalDays} days</span>
+                : daysLeft !== null
+                  ? <span>{daysLeft} day{daysLeft !== 1 ? 's' : ''} left</span>
+                  : null
+              }
+            </div>
+            <div className="cc-prog-bar">
+              <div
+                className="cc-prog-fill"
+                style={{ width: `${totalDays !== null ? progressPct : Math.max(5, 100 - (daysLeft! / 30) * 100)}%` }}
+              />
+            </div>
           </div>
         )}
       </div>
