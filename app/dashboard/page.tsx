@@ -5,7 +5,7 @@ import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { API, fmtUSD, iconColor, daysUntil } from '@/lib/api'
+import { API, fmtUSD, daysUntil } from '@/lib/api'
 import { CampaignCard, Campaign } from '@/components/campaigns/CampaignCard'
 
 // ─── Dashboard Content ─────────────────────────────────────────────────────────
@@ -111,13 +111,22 @@ function DashboardContent() {
         .db-section-title { font-size: 13px; font-weight: 500; color: #6b7280; margin-bottom: 12px; letter-spacing: 0.2px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-grid  { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
         .db-upcoming { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
-        .db-upc-row  { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: #f9f9fb; border: 0.5px dashed rgba(0,0,0,0.12); border-radius: 12px; cursor: pointer; transition: border-color 0.15s; }
-        .db-upc-row:hover { border-color: rgba(79,126,247,0.4); border-style: solid; }
-        .db-upc-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; border: 0.5px solid rgba(0,0,0,0.07); font-family: 'DM Mono', monospace; }
-        .db-upc-name { font-size: 14px; font-weight: 600; color: #1a1a1a; font-family: 'Plus Jakarta Sans', sans-serif; margin-bottom: 2px; }
+        .db-upc-row  { display: flex; align-items: center; gap: 16px; padding: 24px; background: #f9f9fb; border: 0.5px dashed rgba(0,0,0,0.15); border-radius: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+        .db-upc-row:hover { border-color: rgba(79,126,247,0.3); border-style: dashed; background: #f5f5f8; }
+        .db-upc-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; border: 0.5px solid rgba(0,0,0,0.08); background: #fff; color: #6b7280; font-family: 'DM Mono', monospace; }
+        .db-upc-name { font-size: 14px; font-weight: 600; color: #1a1a1a; font-family: 'Plus Jakarta Sans', sans-serif; margin-bottom: 3px; }
         .db-upc-meta { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .db-upc-badge { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; background: rgba(245,158,11,0.1); color: #d97706; border: 0.5px solid rgba(245,158,11,0.3); font-family: 'Plus Jakarta Sans', sans-serif; white-space: nowrap; }
-        .db-upc-pool  { font-size: 13px; font-weight: 600; color: #1a1a1a; font-family: 'DM Mono', monospace; white-space: nowrap; margin-right: 8px; }
+        .db-upc-right { margin-left: auto; text-align: right; flex-shrink: 0; }
+        .db-upc-pool  { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-upc-badge { font-size: 12px; font-weight: 500; color: #f59e0b; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-activity { margin-top: 28px; }
+        .db-act-list { display: flex; flex-direction: column; gap: 8px; }
+        .db-act-row  { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border: 0.5px solid rgba(0,0,0,0.08); border-radius: 10px; }
+        .db-act-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .db-act-text { flex: 1; font-size: 13px; color: #1a1a1a; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-act-time { font-size: 11px; color: #9ca3af; font-family: 'Plus Jakarta Sans', sans-serif; white-space: nowrap; }
+        .db-act-pts  { font-size: 13px; font-weight: 600; color: #22c55e; font-family: 'DM Mono', monospace; white-space: nowrap; }
+        .db-act-empty { padding: 24px; text-align: center; color: #9ca3af; font-size: 13px; font-family: 'Plus Jakarta Sans', sans-serif; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 10px; background: #f9f9fb; }
         .db-skeleton  { background: #f9f9fb; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.07); padding: 20px; min-height: 160px; }
         .db-coming-soon { padding: 28px; display: flex; flex-direction: column; justify-content: center; gap: 8px; border: 0.5px dashed rgba(0,0,0,0.12); border-radius: 12px; opacity: 0.65; }
         @media (max-width: 800px) {
@@ -203,18 +212,19 @@ function DashboardContent() {
                 <div className="db-section-title" style={{ marginTop: filteredLive.length > 0 ? 24 : 0 }}>Upcoming</div>
                 <div className="db-upcoming">
                   {filteredUpcoming.map(c => {
-                    const col         = iconColor(c.name)
                     const initial     = (c.protocol ?? c.name).charAt(0).toUpperCase()
                     const daysToStart = c.start_date ? daysUntil(c.start_date) : null
                     return (
                       <div key={c.id} className="db-upc-row">
-                        <div className="db-upc-icon" style={{ background: col.bg, color: col.fg }}>{initial}</div>
+                        <div className="db-upc-icon">{initial}</div>
                         <div>
                           <div className="db-upc-name">{c.name}</div>
                           <div className="db-upc-meta">{c.chain}{daysToStart !== null ? ` · Starts in ~${daysToStart}d` : ''}</div>
                         </div>
-                        {c.pool_usd != null && <div style={{ marginLeft: 'auto' }} className="db-upc-pool">Est. {fmtUSD(c.pool_usd)}</div>}
-                        <div className="db-upc-badge">◷ Upcoming</div>
+                        <div className="db-upc-right">
+                          {c.pool_usd != null && <div className="db-upc-pool">Est. pool: {fmtUSD(c.pool_usd)}</div>}
+                          <div className="db-upc-badge">Upcoming</div>
+                        </div>
                       </div>
                     )
                   })}
@@ -231,6 +241,18 @@ function DashboardContent() {
                 </div>
               </>
             )}
+
+            {/* Recent activity */}
+            <div className="db-activity">
+              <div className="db-section-title">Recent activity</div>
+              <div className="db-act-list">
+                {wallet ? (
+                  <div className="db-act-empty">No activity yet — join a campaign and start trading to see your history here.</div>
+                ) : (
+                  <div className="db-act-empty">Connect your wallet to see recent activity.</div>
+                )}
+              </div>
+            </div>
           </>
         )}
       </div>
