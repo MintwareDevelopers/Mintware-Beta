@@ -29,7 +29,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
   {
     chain:        mainnet,
     swapProvider: 'lifi',
-    feeRecipient: process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS || '',
+    feeRecipient: process.env.NEXT_PUBLIC_MINTWARE_TREASURY || '',
     feeBps:       50,
     name:         'Ethereum',
     logoUrl:      '/chains/eth.svg',
@@ -37,7 +37,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
   {
     chain:        base,
     swapProvider: 'lifi',
-    feeRecipient: process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS || '',
+    feeRecipient: process.env.NEXT_PUBLIC_MINTWARE_TREASURY || '',
     feeBps:       50,
     name:         'Base',
     logoUrl:      '/chains/base.svg',
@@ -45,7 +45,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
   {
     chain:        arbitrum,
     swapProvider: 'lifi',
-    feeRecipient: process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS || '',
+    feeRecipient: process.env.NEXT_PUBLIC_MINTWARE_TREASURY || '',
     feeBps:       50,
     name:         'Arbitrum',
     logoUrl:      '/chains/arbitrum.svg',
@@ -53,7 +53,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
   {
     chain:        coreChain,
     swapProvider: 'molten',
-    feeRecipient: process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS || '',
+    feeRecipient: process.env.NEXT_PUBLIC_MINTWARE_TREASURY || '',
     feeBps:       50,
     name:         'Core',
     logoUrl:      '/chains/core.svg',
