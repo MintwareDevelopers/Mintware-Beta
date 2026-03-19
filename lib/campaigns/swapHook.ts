@@ -22,6 +22,7 @@
 
 import { createSupabaseServiceClient } from '@/lib/supabase'
 import { calcBuyerReward, calcReferrerReward } from '@/lib/rewards'
+import { getTokenPrice, usdToWei } from '@/lib/campaigns/priceFeed'
 import type {
   SwapEvent,
   AttributionResult,
@@ -77,8 +78,11 @@ async function processTokenPool(
   const referral_reward_usd = referrer
     ? calcReferrerReward(event.amount_usd, campaign.referral_reward_pct ?? 0)
     : 0
-  // Fee percentage is fixed at campaign creation — comes out of pool, not added on top
-  const platform_fee_usd = (event.amount_usd * campaign.platform_fee_pct) / 100
+  // Platform fee is ONLY taken on successful referrals — no referrer, no Mintware cut.
+  // Fee comes out of the pool at the percentage set at campaign creation, not added on top.
+  const platform_fee_usd = referrer
+    ? (event.amount_usd * campaign.platform_fee_pct) / 100
+    : 0
 
   const total_deduction = buyer_reward_usd + referral_reward_usd + platform_fee_usd
 
@@ -99,10 +103,29 @@ async function processTokenPool(
     Date.now() + (campaign.claim_duration_mins ?? 0) * 60_000
   ).toISOString()
 
+  // Resolve token price now to lock amount_wei at the swap-time price.
+  // If price fetch fails, fall back to '0' — claim resolution will handle it.
+  // Non-blocking: a price failure doesn't cancel the reward credit.
+  const decimals = campaign.token_decimals ?? 18
+  let tokenPriceUsd = 0
+  try {
+    tokenPriceUsd = await getTokenPrice(campaign.token_symbol ?? '')
+  } catch (priceErr) {
+    console.warn(
+      `[swapHook] price fetch failed for ${campaign.token_symbol} — amount_wei will be 0 for tx ${event.tx_hash}:`,
+      priceErr instanceof Error ? priceErr.message : priceErr
+    )
+  }
+
+  function resolveWei(rewardUsd: number): string {
+    if (tokenPriceUsd <= 0 || rewardUsd <= 0) return '0'
+    return usdToWei(rewardUsd, tokenPriceUsd, decimals).toString()
+  }
+
   // Build pending_reward rows
   type RewardRow = {
     campaign_id: string; wallet: string; referrer: string | null
-    reward_type: RewardType; token_contract: string; amount_wei: number
+    reward_type: RewardType; token_contract: string; amount_wei: string
     reward_usd: number; purchase_amount_usd: number; tx_hash: string
     claimable_at: string; status: PendingRewardStatus
   }
@@ -113,21 +136,8 @@ async function processTokenPool(
       referrer,
       reward_type: 'buyer' as const,
       token_contract: campaign.token_contract ?? '',
-      amount_wei: 0,           // resolved by oracle TBD
+      amount_wei: resolveWei(buyer_reward_usd),  // price-locked at swap time
       reward_usd: buyer_reward_usd,
-      purchase_amount_usd: event.amount_usd,
-      tx_hash: event.tx_hash,
-      claimable_at,
-      status: 'locked' as const,
-    },
-    {
-      campaign_id: campaign.id,
-      wallet: treasuryWallet,   // Mintware treasury — fee comes out of pool to treasury
-      referrer: null,
-      reward_type: 'platform_fee' as const,
-      token_contract: campaign.token_contract ?? '',
-      amount_wei: 0,
-      reward_usd: platform_fee_usd,
       purchase_amount_usd: event.amount_usd,
       tx_hash: event.tx_hash,
       claimable_at,
@@ -136,20 +146,35 @@ async function processTokenPool(
   ]
 
   if (referrer && referral_reward_usd > 0) {
-    rewardRows.splice(1, 0, {
-
+    rewardRows.push({
       campaign_id: campaign.id,
-      wallet: referrer,         // referrer receives this reward
+      wallet: referrer,
       referrer,
       reward_type: 'referrer' as const,
       token_contract: campaign.token_contract ?? '',
-      amount_wei: 0,
+      amount_wei: resolveWei(referral_reward_usd),  // price-locked at swap time
       reward_usd: referral_reward_usd,
       purchase_amount_usd: event.amount_usd,
       tx_hash: event.tx_hash,
       claimable_at,
       status: 'locked' as const,
     })
+    // Platform fee: only on successful referrals, goes to Mintware treasury
+    if (platform_fee_usd > 0 && treasuryWallet) {
+      rewardRows.push({
+        campaign_id: campaign.id,
+        wallet: treasuryWallet,
+        referrer: null,
+        reward_type: 'platform_fee' as const,
+        token_contract: campaign.token_contract ?? '',
+        amount_wei: resolveWei(platform_fee_usd),  // price-locked at swap time
+        reward_usd: platform_fee_usd,
+        purchase_amount_usd: event.amount_usd,
+        tx_hash: event.tx_hash,
+        claimable_at,
+        status: 'locked' as const,
+      })
+    }
   }
 
   const { error: rewardErr } = await supabase
