@@ -10,8 +10,11 @@
 //   npx hardhat run scripts/deploy.cjs --network bnb          --config hardhat.config.cjs
 //
 // Required env vars (in .env.local):
-//   DEPLOYER_PRIVATE_KEY   — 64 hex chars, no 0x prefix
-//   OWNER_ADDRESS          — contract owner; defaults to deployer if unset
+//   DEPLOYER_PRIVATE_KEY   — 64 hex chars, no 0x prefix (pays deploy gas)
+//   ORACLE_SIGNER_ADDRESS  — address of the oracle signing key (DISTRIBUTOR_PRIVATE_KEY wallet)
+//                            This is immutable after deploy — must match the key that signs roots.
+//                            Defaults to deployer address if unset (convenient for testnet).
+//   OWNER_ADDRESS          — contract owner (can pause/unpause); defaults to deployer if unset
 //
 // Block explorer API keys (in .env.local):
 //   BASESCAN_API_KEY       — for base / base_sepolia
@@ -19,8 +22,9 @@
 //   BSCSCAN_API_KEY        — for bnb
 //
 // After deployment, update .env.local:
-//   NEXT_PUBLIC_MW_TREASURY_ADDRESS=<deployed address>
+//   NEXT_PUBLIC_MW_DISTRIBUTOR_ADDRESS=<deployed address>
 //   Also update campaigns.contract_address in Supabase for the relevant campaign.
+// IMPORTANT: campaigns.contract_address must match this deployed address exactly.
 // =============================================================================
 
 'use strict'
@@ -32,17 +36,21 @@ const path = require('path')
 async function main() {
   const [deployer] = await ethers.getSigners()
 
-  const ownerAddress = process.env.OWNER_ADDRESS || deployer.address
+  // oracleSigner: the address derived from DISTRIBUTOR_PRIVATE_KEY (the oracle signing key).
+  // This is immutable after deploy — if you rotate the oracle key, you must redeploy.
+  const oracleSignerAddress = process.env.ORACLE_SIGNER_ADDRESS || deployer.address
+  const ownerAddress        = process.env.OWNER_ADDRESS        || deployer.address
 
   console.log('='.repeat(60))
-  console.log('MintwareDistributor — Deploy Script')
+  console.log('MintwareDistributor — Deploy Script (zero oracle gas)')
   console.log('='.repeat(60))
-  console.log(`Network:    ${network.name} (chainId: ${network.config.chainId})`)
-  console.log(`Deployer:   ${deployer.address}`)
-  console.log(`Owner:      ${ownerAddress}`)
+  console.log(`Network:        ${network.name} (chainId: ${network.config.chainId})`)
+  console.log(`Deployer:       ${deployer.address}`)
+  console.log(`Oracle signer:  ${oracleSignerAddress}  ← ORACLE_SIGNER_ADDRESS (immutable)`)
+  console.log(`Owner:          ${ownerAddress}`)
 
   const balance = await ethers.provider.getBalance(deployer.address)
-  console.log(`Balance:    ${ethers.formatEther(balance)} ETH\n`)
+  console.log(`Balance:        ${ethers.formatEther(balance)} ETH\n`)
 
   if (balance === 0n) {
     throw new Error('Deployer has 0 balance — fund the deployer address before deploying')
@@ -53,7 +61,7 @@ async function main() {
   // ---------------------------------------------------------------------------
   console.log('Deploying MintwareDistributor...')
   const Distributor = await ethers.getContractFactory('MintwareDistributor')
-  const distributor = await Distributor.deploy(ownerAddress)
+  const distributor = await Distributor.deploy(oracleSignerAddress, ownerAddress)
   await distributor.waitForDeployment()
 
   const contractAddress = await distributor.getAddress()
@@ -77,6 +85,7 @@ async function main() {
     network: network.name,
     chainId: network.config.chainId,
     contractAddress,
+    oracleSigner: oracleSignerAddress,
     owner: ownerAddress,
     deployer: deployer.address,
     txHash: deployTx ? deployTx.hash : null,
@@ -103,7 +112,7 @@ async function main() {
   try {
     await run('verify:verify', {
       address: contractAddress,
-      constructorArguments: [ownerAddress],
+      constructorArguments: [oracleSignerAddress, ownerAddress],
     })
     console.log(`✓ Verified: ${getExplorerUrl(network.name, contractAddress)}`)
   } catch (err) {
@@ -113,11 +122,11 @@ async function main() {
       console.warn('⚠ Verification failed:', err && err.message ? err.message : err)
       console.log('  Retry manually:')
       console.log(`  npx hardhat verify --network ${network.name} --config hardhat.config.cjs \\`)
-      console.log(`    ${contractAddress} "${ownerAddress}"`)
+      console.log(`    ${contractAddress} "${oracleSignerAddress}" "${ownerAddress}"`)
     }
   }
 
-  printNextSteps(contractAddress, network.name)
+  printNextSteps(contractAddress, network.name, oracleSignerAddress)
 }
 
 function getExplorerUrl(networkName, address) {
@@ -130,14 +139,16 @@ function getExplorerUrl(networkName, address) {
   return map[networkName] || `(explorer unknown for ${networkName})`
 }
 
-function printNextSteps(address, networkName) {
+function printNextSteps(address, networkName, oracleSigner) {
   console.log('\n' + '='.repeat(60))
   console.log('Next steps:')
   console.log(`  1. Add to .env.local:`)
-  console.log(`       NEXT_PUBLIC_MW_TREASURY_ADDRESS=${address}`)
-  console.log(`  2. Set campaigns.contract_address in Supabase for your campaign`)
-  console.log(`  3. Fund the owner wallet to call createDistribution()`)
-  console.log(`  4. Wire Ticket 6 claim API: POST /api/claim`)
+  console.log(`       NEXT_PUBLIC_MW_DISTRIBUTOR_ADDRESS=${address}`)
+  console.log(`  2. Set campaigns.contract_address=${address} in Supabase`)
+  console.log(`  3. Confirm ORACLE_SIGNER_ADDRESS=${oracleSigner} matches DISTRIBUTOR_PRIVATE_KEY`)
+  console.log(`     (oracle key is immutable — rotating requires redeployment)`)
+  console.log(`  4. Teams call depositCampaign() to fund campaigns on-chain`)
+  console.log(`     (oracle never needs to hold or send tokens)`)
   console.log('='.repeat(60))
 }
 

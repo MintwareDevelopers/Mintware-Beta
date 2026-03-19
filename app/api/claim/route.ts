@@ -1,19 +1,27 @@
 // =============================================================================
 // GET /api/claim?address=&distribution_id=
 //
-// Returns the Merkle proof + metadata needed for a wallet to call claim() on
-// the MintwareDistributor contract.
+// Returns everything a wallet needs to call claim() on MintwareDistributor.
+//
+// New zero-gas oracle model: the oracle signed the Merkle root off-chain using
+// EIP-712. The oracle_signature is returned here so the user can submit it
+// alongside their proof in a single claim() transaction — no oracle gas ever.
+//
+// claim(campaignId, epochNumber, merkleRoot, oracleSignature, amount, proof)
+//   ↑ campaign_id   ↑ epoch_number  ↑ merkle_root  ↑ oracle_signature
+//   ↑ amount_wei (this wallet)       ↑ merkle_proof (this wallet)
 //
 // SECURITY: tree_json is fetched via service role and is NEVER included in the
 // response. Only the individual wallet's proof (a string[]) is returned.
 // Returning the full tree would expose every other wallet's allocation.
 //
 // Response:
-//   200 { amount_wei, merkle_proof, distribution_id, contract_address, chain,
-//          token_address, token_symbol, epoch_number }
+//   200 { distribution_id, campaign_id, epoch_number, merkle_root,
+//          oracle_signature, amount_wei, merkle_proof,
+//          contract_address, chain, token_address, token_symbol }
 //   400 Missing required params
 //   404 Distribution not found, or wallet not in this distribution
-//   409 Distribution not yet published on-chain (status: 'pending')
+//   409 Distribution not yet signed by oracle (status: 'pending')
 //   410 Wallet has already claimed this distribution
 // =============================================================================
 
@@ -82,6 +90,7 @@ export async function GET(req: NextRequest) {
   // Fetch distribution
   // Join campaigns to get chain routing + token metadata.
   // tree_json is fetched here but NEVER forwarded to the client.
+  // oracle_signature is returned so the user can submit it in claim().
   // ---------------------------------------------------------------------------
   const { data: dist, error: distErr } = await supabase
     .from('distributions')
@@ -90,9 +99,9 @@ export async function GET(req: NextRequest) {
       campaign_id,
       epoch_number,
       merkle_root,
+      oracle_signature,
       tree_json,
       status,
-      onchain_id,
       campaigns (
         token_contract,
         token_symbol,
@@ -111,13 +120,21 @@ export async function GET(req: NextRequest) {
   }
 
   // ---------------------------------------------------------------------------
-  // Guard: distribution must be published (root is on-chain)
-  // 'pending' means the Merkle root has not yet been posted to the contract.
+  // Guard: distribution must be published (oracle has signed the root)
+  // 'pending' means the oracle has not yet signed — users cannot claim yet.
   // ---------------------------------------------------------------------------
   if (dist.status === 'pending') {
     return NextResponse.json(
-      { error: 'Distribution is pending — rewards not yet claimable', status: dist.status },
+      { error: 'Distribution is pending — oracle has not yet signed this root', status: dist.status },
       { status: 409 }
+    )
+  }
+
+  // Guard: oracle_signature must be present (published distributions always have one)
+  if (!dist.oracle_signature) {
+    return NextResponse.json(
+      { error: 'Distribution is missing oracle signature — contact support' },
+      { status: 500 }
     )
   }
 
@@ -195,23 +212,25 @@ export async function GET(req: NextRequest) {
   }
 
   // ---------------------------------------------------------------------------
-  // Return proof + metadata
-  // campaign is returned as an array by Supabase join — access first element
+  // Return everything needed to call claim() on MintwareDistributor:
+  //   claim(campaignId, epochNumber, merkleRoot, oracleSignature, amount, proof)
+  //
+  // campaign is returned as an array by Supabase join — access first element.
   // ---------------------------------------------------------------------------
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const campaign = Array.isArray(dist.campaigns) ? dist.campaigns[0] : (dist.campaigns as any)
 
   return NextResponse.json({
-    distribution_id: dist.id,
-    // onchain_id is the uint256 passed to claim() on the MintwareDistributor contract.
-    // Null if the distribution has not yet been published on-chain.
-    onchain_id: dist.onchain_id !== null ? String(dist.onchain_id) : null,
-    epoch_number: dist.epoch_number,
-    amount_wei: amountWei,
-    merkle_proof: proof,
-    contract_address: campaign?.contract_address ?? null,
-    chain: campaign?.chain ?? null,
-    token_address: campaign?.token_contract ?? null,
-    token_symbol: campaign?.token_symbol ?? null,
+    distribution_id:   dist.id,
+    campaign_id:       dist.campaign_id,          // string — campaignId param for claim()
+    epoch_number:      dist.epoch_number,          // uint256 — epochNumber param for claim()
+    merkle_root:       dist.merkle_root,           // bytes32 — merkleRoot param for claim()
+    oracle_signature:  dist.oracle_signature,      // bytes   — oracleSignature param for claim()
+    amount_wei:        amountWei,                  // uint256 — amount param for claim()
+    merkle_proof:      proof,                      // bytes32[] — merkleProof param for claim()
+    contract_address:  campaign?.contract_address ?? null,
+    chain:             campaign?.chain ?? null,
+    token_address:     campaign?.token_contract ?? null,
+    token_symbol:      campaign?.token_symbol ?? null,
   })
 }

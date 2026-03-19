@@ -153,79 +153,76 @@ async function processExpiredEpoch(
     )
 
     // ── BEFORE this point: distribution row exists with status='pending',
-    //    onchain_id=null. The Merkle root is NOT on-chain. Wallets cannot claim.
+    //    oracle_signature=null. The root is NOT yet signed. Wallets cannot claim.
     //
-    // ── Step 6: Publish Merkle root on-chain ─────────────────────────────────
+    // ── Step 6: Oracle signs the Merkle root (zero gas) ──────────────────────
     //
-    // Calls MintwareDistributor.createDistribution(root, token, totalAmount):
-    //   • Pulls tokens from DISTRIBUTOR_PRIVATE_KEY wallet into contract
-    //   • Emits DistributionCreated(uint256 distributionId, ...)
+    // publishDistribution() signs { campaignId, epochNumber, merkleRoot } with
+    // DISTRIBUTOR_PRIVATE_KEY using EIP-712. No transaction, no gas.
     //
     // Then writes back to Supabase:
-    //   distributions.onchain_id  = distributionId (uint256 from event)
-    //   distributions.status      = 'published'
-    //   distributions.tx_hash     = transaction hash
-    //   distributions.published_at = now()
+    //   distributions.oracle_signature = EIP-712 sig
+    //   distributions.status           = 'published'
+    //   distributions.published_at     = now()
     //
-    // Without onchain_id, the claim API returns null and claim() reverts on-chain.
+    // Without oracle_signature, /api/claim returns 500. Users cannot claim until
+    // the root is signed.
     //
-    // Requires: campaigns.contract_address, campaigns.chain, campaigns.token_contract
-    // Requires env: DISTRIBUTOR_PRIVATE_KEY (wallet must hold reward tokens)
+    // Requires: campaigns.contract_address (for EIP-712 verifyingContract),
+    //           campaigns.chain (for EIP-712 chainId)
+    // Requires env: DISTRIBUTOR_PRIVATE_KEY (the oracle signing key)
     // ---------------------------------------------------------------------------
 
     const typedCampaign = campaign as Campaign
 
-    if (
-      typedCampaign.contract_address &&
-      typedCampaign.chain &&
-      typedCampaign.token_contract
-    ) {
+    if (typedCampaign.contract_address && typedCampaign.chain) {
       try {
         const publishResult = await publishDistribution({
           distribution_db_id: summary.distribution_id,
+          campaign_id_str:    summary.campaign_id,
+          epoch_number:       summary.epoch_number,
           merkle_root:        summary.merkle_root,
-          token_address:      typedCampaign.token_contract,
-          total_amount_wei:   summary.total_amount_wei,
           contract_address:   typedCampaign.contract_address,
           chain:              typedCampaign.chain,
+          // treasury_claim is not passed for points campaigns (no fee logic).
+          // Token pool fee settlement (future) passes treasury proof + amount.
         })
 
         console.log(
-          `[epoch-end] ✓ on-chain publish: campaign=${campaign_id} ` +
+          `[epoch-end] ✓ root signed: campaign=${campaign_id} ` +
           `epoch=${epoch_number} distribution=${summary.distribution_id} ` +
-          `onchain_id=${publishResult.onchain_id} tx=${publishResult.tx_hash}`
+          `sig=${publishResult.oracle_signature.slice(0, 12)}...` +
+          (publishResult.treasury_claim_tx ? ` treasury_claim_tx=${publishResult.treasury_claim_tx}` : '')
         )
 
         return {
           epoch_number,
-          result: { ...summary, onchain_id: publishResult.onchain_id, tx_hash: publishResult.tx_hash },
+          result: { ...summary, oracle_signature: publishResult.oracle_signature.slice(0, 12) + '...' },
         }
       } catch (publishErr) {
         // Non-fatal to epoch processing — Merkle data is safely in DB.
-        // The distribution stays 'pending' until the operator re-publishes manually
-        // (e.g. runs the deploy script with --distribution-id flag, or retries via admin endpoint).
+        // Distribution stays 'pending' until operator retries (cron auto-retries hourly).
         const msg = publishErr instanceof Error ? publishErr.message : String(publishErr)
         console.error(
-          `[epoch-end] ⚠ on-chain publish failed for distribution ${summary.distribution_id}: ${msg}. ` +
-          `Distribution is in DB (status='pending') and can be published manually via scripts/deploy.ts.`
+          `[epoch-end] ⚠ oracle signing failed for distribution ${summary.distribution_id}: ${msg}. ` +
+          `Distribution is in DB (status='pending') — oracle will retry next cron run.`
         )
-        // Return success for the epoch — the Merkle data is committed.
-        // Operator must monitor for 'pending' distributions older than expected.
-        return { epoch_number, result: { ...summary, publish_error: msg } }
+        return { epoch_number, result: { ...summary, sign_error: msg } }
       }
     } else {
       // Campaign not wired to a contract yet — common during initial setup.
       // Operator sets contract_address + chain in Supabase after running deploy.ts.
       console.warn(
-        `[epoch-end] campaign ${campaign_id} has no contract_address/chain/token_contract — ` +
+        `[epoch-end] campaign ${campaign_id} has no contract_address/chain — ` +
         `distribution ${summary.distribution_id} written as status='pending'. ` +
-        `Set campaigns.contract_address and campaigns.chain in Supabase to enable auto-publish.`
+        `Set campaigns.contract_address and campaigns.chain in Supabase to enable auto-signing.`
       )
       return { epoch_number, result: summary }
     }
-    // ── AFTER this point: distribution row has status='published', onchain_id set.
-    //    Wallets can call /api/claim?address=&distribution_id= to get their proof
-    //    and then call MintwareDistributor.claim(onchain_id, amount, proof).
+    // ── AFTER this point: distribution row has status='published', oracle_signature set.
+    //    Wallets call /api/claim?address=&distribution_id= to get proof + oracle_signature,
+    //    then call MintwareDistributor.claim(campaignId, epochNumber, merkleRoot,
+    //                                        oracleSignature, amount, proof).
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

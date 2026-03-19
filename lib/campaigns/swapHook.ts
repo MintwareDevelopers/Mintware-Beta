@@ -54,8 +54,11 @@ function utcDayEnd(iso: string): string {
 // Token pool branch
 //
 // Computes buyer, referrer, and platform fee rewards in USD.
+// Fees are deducted from the pool at the percentages set at campaign creation —
+// they come out of the pool, not on top of it.
 // Atomically deducts total from pool via deduct_token_pool_reward() RPC.
 // Writes up to three rows to pending_rewards (buyer, referrer if exists, fee).
+// Platform fee row goes to MINTWARE_TREASURY_ADDRESS, not the buyer wallet.
 // amount_wei is 0 — resolved by price oracle / claim contract step (TBD).
 // ---------------------------------------------------------------------------
 async function processTokenPool(
@@ -64,10 +67,17 @@ async function processTokenPool(
   campaign: Campaign,
   referrer: string | null
 ): Promise<AttributionResult> {
+  // Treasury wallet for platform fee — set at campaign creation, taken from pool
+  const treasuryWallet = (process.env.MINTWARE_TREASURY_ADDRESS ?? '').toLowerCase()
+  if (!treasuryWallet) {
+    console.warn('[swapHook] MINTWARE_TREASURY_ADDRESS not set — platform fee row will have empty wallet')
+  }
+
   const buyer_reward_usd = calcBuyerReward(event.amount_usd, campaign.buyer_reward_pct ?? 0)
   const referral_reward_usd = referrer
     ? calcReferrerReward(event.amount_usd, campaign.referral_reward_pct ?? 0)
     : 0
+  // Fee percentage is fixed at campaign creation — comes out of pool, not added on top
   const platform_fee_usd = (event.amount_usd * campaign.platform_fee_pct) / 100
 
   const total_deduction = buyer_reward_usd + referral_reward_usd + platform_fee_usd
@@ -112,7 +122,7 @@ async function processTokenPool(
     },
     {
       campaign_id: campaign.id,
-      wallet: event.wallet,
+      wallet: treasuryWallet,   // Mintware treasury — fee comes out of pool to treasury
       referrer: null,
       reward_type: 'platform_fee' as const,
       token_contract: campaign.token_contract ?? '',

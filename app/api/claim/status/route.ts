@@ -19,6 +19,8 @@
 //     campaign_id: string
 //     campaign_name: string
 //     epoch_number: number
+//     merkle_root: string | null
+//     oracle_signature: string | null   // EIP-712 sig; null while status='pending'
 //     amount_wei: string
 //     token_symbol: string | null
 //     token_address: string | null
@@ -69,7 +71,7 @@ export async function GET(req: NextRequest) {
         id,
         status,
         merkle_root,
-        onchain_id,
+        oracle_signature,
         published_at
       ),
       campaigns (
@@ -120,10 +122,8 @@ export async function GET(req: NextRequest) {
 
     return {
       distribution_id: dist?.id ?? null,
-      // String to avoid JS BigInt serialisation issues
-      onchain_id: dist?.onchain_id !== null && dist?.onchain_id !== undefined
-        ? String(dist.onchain_id)
-        : null,
+      merkle_root: dist?.merkle_root ?? null,
+      oracle_signature: dist?.oracle_signature ?? null,
       campaign_id: row.campaign_id,
       campaign_name: campaign?.name ?? 'Unknown Campaign',
       epoch_number: row.epoch_number,
