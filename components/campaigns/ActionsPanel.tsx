@@ -39,12 +39,12 @@ interface ActionsPanelProps {
 // Icon + description + CTA per action key
 function actionMeta(key: string): {
   icon: string; color: string; bg: string; desc: string
-  cta?: { label: string; href?: string; copy?: boolean }
+  cta?: { label: string; href?: string; copy?: boolean; comingSoon?: boolean }
 } {
   if (key === 'bridge') return {
     icon: '🌉', color: '#3A5CE8', bg: 'rgba(58,92,232,0.08)',
     desc: 'Bridge assets to this chain once to earn points.',
-    cta: { label: 'Bridge now →', href: '/swap' },
+    cta: { label: 'Coming soon', comingSoon: true },
   }
   if (key === 'trade') return {
     icon: '📈', color: '#2A9E8A', bg: 'rgba(42,158,138,0.08)',
@@ -54,7 +54,7 @@ function actionMeta(key: string): {
   if (key === 'referral_bridge') return {
     icon: '🔗', color: '#7B6FCC', bg: 'rgba(123,111,204,0.08)',
     desc: 'Refer wallets who bridge — earn per successful bridge.',
-    cta: { label: 'Copy referral link', copy: true },
+    cta: { label: 'Coming soon', comingSoon: true },
   }
   if (key === 'referral_trade') return {
     icon: '↗', color: '#C2537A', bg: 'rgba(194,83,122,0.08)',
@@ -277,18 +277,21 @@ export function ActionsPanel({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {entries.map(([key, action]) => {
           const meta = actionMeta(key)
-          const isCopyAction = meta.cta?.copy
-          const copyKey = `ref_${key}`
-          const copied = copiedKey === copyKey
+          const isCopyAction    = meta.cta?.copy
+          const isComingSoon    = meta.cta?.comingSoon
+          const copyKey         = `ref_${key}`
+          const copied          = copiedKey === copyKey
 
-          // Referral actions: only show CTA if joined (need a ref link to share)
-          const showCta = meta.cta && (isCopyAction ? isJoined && refLink : true)
+          // Referral copy actions: only show button if joined
+          const showCtaButton = meta.cta && !isComingSoon && (isCopyAction ? isJoined && refLink : true)
 
           return (
             <div key={key} style={{
               display: 'flex', alignItems: 'center', gap: 14,
-              background: '#fff', border: '1px solid #E0DFFF', borderRadius: 12,
+              background: isComingSoon ? '#FAFAFA' : '#fff',
+              border: '1px solid #E0DFFF', borderRadius: 12,
               padding: '14px 16px', flexWrap: 'wrap',
+              opacity: isComingSoon ? 0.7 : 1,
             }}>
               {/* Icon */}
               <div style={{
@@ -321,7 +324,20 @@ export function ActionsPanel({
                   +{pointsLabel(action)}
                 </div>
 
-                {showCta && (
+                {/* Coming soon tag */}
+                {isComingSoon && (
+                  <span style={{
+                    fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, fontWeight: 600,
+                    color: '#8A8C9E', background: '#F7F6FF',
+                    border: '1px solid #E0DFFF', borderRadius: 6,
+                    padding: '4px 8px', whiteSpace: 'nowrap',
+                  }}>
+                    Coming soon
+                  </span>
+                )}
+
+                {/* Active CTA button */}
+                {showCtaButton && (
                   <CtaButton
                     label={isCopyAction ? (copied ? '✓ Copied!' : meta.cta!.label) : meta.cta!.label}
                     href={meta.cta!.href}
@@ -332,7 +348,7 @@ export function ActionsPanel({
                 )}
 
                 {/* Not joined yet — soft prompt for referral actions */}
-                {isCopyAction && !isJoined && (
+                {isCopyAction && !isComingSoon && !isJoined && (
                   <span style={{
                     fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10,
                     color: '#8A8C9E', background: '#F7F6FF',
