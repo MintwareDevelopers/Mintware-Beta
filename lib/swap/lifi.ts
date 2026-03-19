@@ -4,7 +4,7 @@
 // Exports:
 //   lifiEvmProvider  — EVM wallet provider (call setOptions() with wagmi client)
 //   createLifiConfig — Initialises the SDK (browser-only, called once on mount)
-//   LIFI_FEE         — 1% integrator fee
+//   LIFI_FEE         — 0.5% integrator fee
 //   LIFI_INTEGRATOR  — integrator identifier string
 //   LIFI_TREASURY    — fee recipient address
 //   MINTWARE_CHAIN_IDS — supported chains
@@ -33,7 +33,7 @@ export function createLifiConfig() {
 // ---------------------------------------------------------------------------
 // Fee / attribution constants
 // ---------------------------------------------------------------------------
-export const LIFI_FEE        = 0.01
+export const LIFI_FEE        = 0.005
 export const LIFI_INTEGRATOR = process.env.NEXT_PUBLIC_LIFI_INTEGRATOR ?? 'mintware'
 export const LIFI_TREASURY   = process.env.NEXT_PUBLIC_MINTWARE_TREASURY
 
