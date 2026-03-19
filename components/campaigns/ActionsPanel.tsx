@@ -6,6 +6,9 @@
 // Accepts campaign.actions (Record<string, ActionDef>) and renders each
 // action with an appropriate icon, label, points description, and one-liner.
 // Works generically — no hardcoded action types.
+//
+// For token_pool campaigns: renders referral mechanic cards (green = earn,
+// teal = buyer rebate). For points campaigns: renders action cards.
 // =============================================================================
 
 export interface ActionDef {
@@ -45,14 +48,47 @@ function pointsLabel(action: ActionDef): string {
   return `${action.points} pts`
 }
 
-export function ActionsPanel({ actions, startDate, endDate, campaignType, referralRewardPct, buyerRewardPct, tokenSymbol }: ActionsPanelProps) {
+function fmtDate(iso: string) {
+  try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) }
+  catch { return iso }
+}
+
+function ScheduleBlock({ startDate, endDate }: { startDate?: string; endDate?: string }) {
+  if (!startDate && !endDate) return null
+  return (
+    <div style={{
+      marginTop: 16,
+      background: '#F7F6FF', border: '1px solid #E0DFFF', borderRadius: 10,
+      padding: '12px 14px',
+    }}>
+      <div style={{
+        fontFamily: 'Plus Jakarta Sans, sans-serif',
+        fontSize: 10, fontWeight: 700, letterSpacing: '1px',
+        textTransform: 'uppercase', color: '#8A8C9E', marginBottom: 8,
+      }}>
+        Schedule
+      </div>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+        {startDate && (
+          <div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 600, color: '#1A1A2E' }}>{fmtDate(startDate)}</div>
+            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>Start date</div>
+          </div>
+        )}
+        {endDate && (
+          <div>
+            <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 600, color: '#1A1A2E' }}>{fmtDate(endDate)}</div>
+            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>End date</div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export function ActionsPanel({ actions, startDate, endDate, campaignType, referralRewardPct, buyerRewardPct }: ActionsPanelProps) {
   const entries = Object.entries(actions)
   const isTokenPool = campaignType === 'token_pool'
-
-  function fmtDate(iso: string) {
-    try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) }
-    catch { return iso }
-  }
 
   // Token Reward Pool: show referral mechanic, not points actions
   if (isTokenPool) {
@@ -67,7 +103,7 @@ export function ActionsPanel({ actions, startDate, endDate, campaignType, referr
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {/* Referral earn — main mechanic */}
+          {/* Referral earn — main mechanic (GREEN) */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 14,
             background: '#fff', border: '1px solid #E0DFFF', borderRadius: 12,
@@ -75,7 +111,7 @@ export function ActionsPanel({ actions, startDate, endDate, campaignType, referr
           }}>
             <div style={{
               width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-              background: 'rgba(194,83,122,0.08)',
+              background: 'rgba(42,158,138,0.08)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
             }}>◉</div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -88,7 +124,7 @@ export function ActionsPanel({ actions, startDate, endDate, campaignType, referr
             </div>
             <div style={{
               flexShrink: 0, fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700,
-              color: '#C2537A', background: 'rgba(194,83,122,0.08)',
+              color: '#2A9E8A', background: 'rgba(42,158,138,0.08)',
               borderRadius: 8, padding: '4px 10px', whiteSpace: 'nowrap',
             }}>
               {referralRewardPct ?? 0}% per swap
@@ -104,7 +140,7 @@ export function ActionsPanel({ actions, startDate, endDate, campaignType, referr
             }}>
               <div style={{
                 width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-                background: 'rgba(42,158,138,0.08)',
+                background: 'rgba(58,92,232,0.08)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
               }}>⇄</div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -117,7 +153,7 @@ export function ActionsPanel({ actions, startDate, endDate, campaignType, referr
               </div>
               <div style={{
                 flexShrink: 0, fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700,
-                color: '#2A9E8A', background: 'rgba(42,158,138,0.08)',
+                color: '#3A5CE8', background: 'rgba(58,92,232,0.08)',
                 borderRadius: 8, padding: '4px 10px', whiteSpace: 'nowrap',
               }}>
                 {buyerRewardPct ?? 0}% rebate
@@ -126,35 +162,7 @@ export function ActionsPanel({ actions, startDate, endDate, campaignType, referr
           )}
         </div>
 
-        {(startDate || endDate) && (
-          <div style={{
-            marginTop: 16,
-            background: '#F7F6FF', border: '1px solid #E0DFFF', borderRadius: 10,
-            padding: '12px 14px',
-          }}>
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 10, fontWeight: 700, letterSpacing: '1px',
-              textTransform: 'uppercase', color: '#8A8C9E', marginBottom: 8,
-            }}>
-              Schedule
-            </div>
-            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-              {startDate && (
-                <div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 600, color: '#1A1A2E' }}>{fmtDate(startDate)}</div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>Start date</div>
-                </div>
-              )}
-              {endDate && (
-                <div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 600, color: '#1A1A2E' }}>{fmtDate(endDate)}</div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>End date</div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        <ScheduleBlock startDate={startDate} endDate={endDate} />
       </div>
     )
   }
@@ -228,44 +236,7 @@ export function ActionsPanel({ actions, startDate, endDate, campaignType, referr
         })}
       </div>
 
-      {/* Campaign rules summary */}
-      {(startDate || endDate) && (
-        <div style={{
-          marginTop: 16,
-          background: '#F7F6FF', border: '1px solid #E0DFFF', borderRadius: 10,
-          padding: '12px 14px',
-        }}>
-          <div style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 10, fontWeight: 700, letterSpacing: '1px',
-            textTransform: 'uppercase', color: '#8A8C9E', marginBottom: 8,
-          }}>
-            Schedule
-          </div>
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            {startDate && (
-              <div>
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 600, color: '#1A1A2E' }}>
-                  {fmtDate(startDate)}
-                </div>
-                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>
-                  Start date
-                </div>
-              </div>
-            )}
-            {endDate && (
-              <div>
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 600, color: '#1A1A2E' }}>
-                  {fmtDate(endDate)}
-                </div>
-                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>
-                  End date
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <ScheduleBlock startDate={startDate} endDate={endDate} />
     </div>
   )
 }

@@ -132,7 +132,7 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
             c.referral_reward_pct != null && {
               label: 'Referral earn',
               value: `${c.referral_reward_pct}% per swap`,
-              color: '#C2537A',
+              color: '#2A9E8A',
             },
             c.buyer_reward_pct != null && {
               label: 'Buyer rebate',

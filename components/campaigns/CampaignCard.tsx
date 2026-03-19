@@ -84,7 +84,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   }
 
   const isTokenPool = c.campaign_type === 'token_pool'
-  const hasStats   = c.pool_usd != null || c.pool_remaining_usd != null || c.daily_payout_usd != null || c.min_score != null
+  const hasStats   = c.pool_usd != null || c.pool_remaining_usd != null || c.daily_payout_usd != null || c.min_score != null || c.referral_reward_pct != null
   const hasActions = c.actions && Object.keys(c.actions).length > 0
   const showBar    = isLive && (totalDays !== null || daysLeft !== null)
 
@@ -248,7 +248,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
             {/* Token Reward Pool: referral earn % is the headline stat */}
             {isTokenPool && c.referral_reward_pct != null && (
               <div>
-                <div className="cc-stat-val" style={{ color: '#C2537A' }}>
+                <div className="cc-stat-val" style={{ color: '#2A9E8A' }}>
                   {c.referral_reward_pct}%
                 </div>
                 <div className="cc-stat-label">referral earn</div>
@@ -281,11 +281,11 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         {isTokenPool ? (
           /* Token Reward Pool: show referral mechanic clearly */
           <div className="cc-rewards">
-            <span className="cc-reward-pill" style={{ background: 'rgba(194,83,122,0.08)', color: '#C2537A', border: '0.5px solid rgba(194,83,122,0.2)' }}>
+            <span className="cc-reward-pill" style={{ background: 'rgba(42,158,138,0.08)', color: '#2A9E8A', border: '0.5px solid rgba(42,158,138,0.2)' }}>
               ◉ {c.referral_reward_pct ?? 0}% per swap you refer
             </span>
             {(c.buyer_reward_pct ?? 0) > 0 && (
-              <span className="cc-reward-pill" style={{ background: 'rgba(42,158,138,0.08)', color: '#2A9E8A', border: '0.5px solid rgba(42,158,138,0.2)' }}>
+              <span className="cc-reward-pill" style={{ background: 'rgba(58,92,232,0.08)', color: '#3A5CE8', border: '0.5px solid rgba(58,92,232,0.2)' }}>
                 + {c.buyer_reward_pct}% buyer rebate
               </span>
             )}

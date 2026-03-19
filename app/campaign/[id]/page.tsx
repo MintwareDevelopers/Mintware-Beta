@@ -14,6 +14,7 @@
 import { useAccount } from 'wagmi'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import type { ActionDef } from '@/components/campaigns/ActionsPanel'
 import { useEffect, useState, useCallback } from 'react'
 import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
@@ -180,7 +181,7 @@ function CampaignDetailContent() {
                 (campaign as Campaign & { creator?: string }).creator?.toLowerCase() ===
                   address.toLowerCase() && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8, marginBottom: 16 }}>
-                  <a
+                  <Link
                     href={`/manage/${campaignId}`}
                     style={{
                       display: 'inline-block',
@@ -198,7 +199,7 @@ function CampaignDetailContent() {
                     onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent' }}
                   >
                     Manage Campaign →
-                  </a>
+                  </Link>
                 </div>
               )}
 
@@ -243,7 +244,7 @@ function CampaignDetailContent() {
               {/* ── Tab content ── */}
               {activeTab === 'overview' && (
                 <ActionsPanel
-                  actions={campaign.actions ?? {}}
+                  actions={(campaign.actions ?? {}) as Record<string, ActionDef>}
                   startDate={(campaign as Campaign & { start_date?: string }).start_date}
                   endDate={campaign.end_date}
                   campaignType={(campaign as Campaign & { campaign_type?: 'token_pool' | 'points' }).campaign_type}
