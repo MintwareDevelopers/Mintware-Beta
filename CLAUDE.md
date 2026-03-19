@@ -1,98 +1,377 @@
-# Mintware — Claude Code Context
+# Mintware Phase 1 — Project Context for Claude
 
-## What is Mintware?
+> **Before building anything:** Read the `## Architecture Boundaries` section.
+> It explains the #1 source of confusion across past sessions.
 
-Mintware is a DeFi liquidity coordination protocol built on **Base** (Coinbase's L2) using **Uniswap V4** infrastructure. It is the community monetization layer for Web3 — a B2B2C model that lets Web3 communities activate their user bases as liquidity.
-
-**Core positioning:** Mintware sits between communities (supply) and DeFi liquidity markets (demand), using behavioral reputation as the coordination primitive.
-
----
-
-## Architecture Overview
-
-### Three-Role Model
-- **Teams** — Protocol/project teams that create liquidity vaults and incentivize community participation
-- **Communities** — DAOs, guilds, and social groups whose members provide liquidity
-- **Referrers** — Distribution agents who onboard LPs and earn referral rewards
-
-### V4 Hook Infrastructure
-Mintware is built on Uniswap V4 hooks. Key hook responsibilities:
-- **Vault enforcement** — Hook-enforced vault liquidity ensures LP positions meet protocol requirements
-- **Oracle-anchored price bands** — Prevent predatory LP positioning; keep liquidity concentrated in valid ranges
-- **Idle capital routing** — Uninvested vault capital routes to yield protocols (e.g., Morpho) while awaiting deployment
-- **Reward distribution** — Hook triggers behavioral reward payouts based on MW Score events
-
-### MW Score (Behavioral Reputation Primitive)
-The MW Score is Mintware's core innovation — an on-chain reputation system that scores LP behavior across three dimensions:
-- **Terminal Score** — Position quality, range accuracy, duration consistency
-- **Referral Score** — Quality and retention of referred LPs
-- **Social LP Score** — Community affiliation and cross-community activity
-
-MW Score drives: reward multipliers, vault access tiers, institutional LP risk intelligence, and referrer compensation.
-
-### Treasury Flywheel
-Protocol fees → Treasury → Buyback/burn + liquidity incentives → TVL growth → more fees. MW Score modulates reward distribution within this loop.
+**Production URL:** https://mintware-beta.vercel.app
+**GitHub:** https://github.com/MintwareDevelopers/Mintware-Beta
+**Supabase project:** `bqwcwrnqpayfndgmceal`
+**Full system docs:** `docs/` folder (ARCHITECTURE.md, API_MAP.md, ISSUES.md, schema.sql)
 
 ---
 
-## LP Tiers
-
-### Community LPs
-Individual community members providing liquidity. Rewarded via MW Score multipliers.
-
-### Partner LPs (Brokers / Syndicates)
-Distribution networks that aggregate LP flow. Treated as BD channels.
-
-### Institutional LPs (Family Offices / Funds)
-TVL foundation layer. MW Score serves as risk intelligence for their underwriting decisions.
+## What This Project Is
+Mintware is a DeFi reputation + rewards platform:
+- **Attribution** (live) — on-chain reputation scoring for wallets across 100+ chains
+- **Mintware** (Phase 1) — campaign reward engine weighted by Attribution score
 
 ---
 
 ## Tech Stack
 
-- **Chain:** Base (Coinbase L2)
-- **AMM:** Uniswap V4
-- **Hooks:** Custom Solidity hooks (V4 hook interface)
-- **Yield:** Morpho integration for idle capital
-- **Oracle:** Price band anchoring (Chainlink or equivalent)
-- **Docs:** docs.mintware.org
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 16.1.6 (App Router, Turbopack default) |
+| Language | TypeScript 5.7 |
+| Wallet | RainbowKit 2 + wagmi 3 + viem 2 |
+| Data fetching | @tanstack/react-query 5 |
+| Styling | Tailwind CSS v4 (landing page only); inline `<style>` blocks (all other pages) |
+| Database | Supabase (`@supabase/ssr` v0.9.0) |
+| Fonts | Plus Jakarta Sans (`--font-jakarta`), DM Mono (`--font-mono`) via `next/font/google` |
+| Analytics | @vercel/analytics |
+| Package manager | **pnpm** (always use pnpm, never npm/yarn) |
+| UI components | shadcn/ui in `components/ui/` — **scaffolded but unused in app pages** |
 
 ---
 
-## Brand & Design System
+## Architecture Boundaries
 
-- **Primary font:** Plus Jakarta Sans
-- **Data/labels font:** DM Mono
-- **Background:** Lavender-white `#F7F6FF`
-- **Primary button:** Solid periwinkle `#3A5CE8`
-- **Badges/tags:** Pastel palette
-- **Gradients:** Decorative only — never structural
+**This is the #1 source of confusion across past Claude sessions. Read before touching any API or campaign code.**
+
+There are two separate systems. Do not mix them up.
+
+### Attribution Worker (external, read-only — NOT our code)
+URL: `https://attribution-scorer.ceo-1f9.workers.dev`
+Defined as `export const API` in `lib/api.ts`.
+
+**What it does:** Wallet scoring, campaign list display data, leaderboard.
+**What it does NOT do:** Joins, writes, reward tracking, participant state.
+
+| Endpoint | Used for |
+|----------|---------|
+| `GET /score?address=` | Attribution score on profile page + join score check |
+| `GET /campaigns` | Campaign list on dashboard |
+| `GET /campaign?id=&address=` | Campaign detail display data |
+| `GET /leaderboard?campaign_id=` | Leaderboard data |
+| ~~`POST /join`~~ | **DEPRECATED** — returned "Invalid wallet". Replaced by our route. |
+
+**Critical gotcha:** `GET /campaign?id=&address=` always returns `participant: null` even for wallets that have joined. It reads its own separate database, not our Supabase. This is why `locallyJoined` state exists in `campaign/[id]/page.tsx`.
+
+### Our Next.js API (writes everything to Supabase)
+
+Joins, reward credits, claims, cron jobs, referrals — all go through our routes.
+
+| Route | Purpose |
+|-------|---------|
+| `POST /api/campaigns/join` | Join campaign — validates, fetches score, upserts `participants` |
+| `POST /api/campaigns/swap-event` | Swap webhook from Molten — credits rewards |
+| `GET /api/claim/status?address=` | List all claimable rewards for wallet |
+| `GET /api/claim?address=&distribution_id=` | Merkle proof + amount for claiming |
+| `POST /api/claim` | Mark distribution claimed after on-chain tx |
+| `GET /api/rewards/pending?address=` | Locked pending rewards (token pool) |
+| `GET /api/referral?address=` | Referral stats |
+| `POST /api/referral/generate` | Upsert wallet profile + return stats |
+| `GET /api/campaigns/manage?wallet=` | Creator's campaigns |
+| `GET /api/teams/whitelist?address=` | Check whitelist status |
+| `POST /api/teams/apply` | Submit whitelist application |
+| `GET /api/cron/pool-settle` | Settle token pool rewards → Merkle distributions (every 15 min) |
+| `GET /api/cron/epoch-end` | Close points epoch + publish distribution |
+| `GET /api/cron/bridge-verify` | Verify Core DAO bridge txs (**BLOCKED** — awaiting contract) |
+
+**Rule:** If you're writing data about a user or campaign — it goes through our API → Supabase. Never through the Attribution Worker.
 
 ---
 
-## Key Decisions & Conventions
+## Environment Variables
 
-- Protocol is **B2B2C** — Teams are the B2B customer, community members are the end users
-- MW Score is **behavioral**, not just capital-weighted — this is the core differentiator from generic LP incentive systems
-- Hooks enforce **vault rules at the contract level** — not reliant on off-chain enforcement
-- Idle capital yield is **non-custodial** — routed through Morpho with vault-level accounting
-- External documents (partner-facing) use **partner-focused framing**, not commercial/sales tone
+**Canonical reference:** `docs/.env.example`
+
+### Active variables (set in Vercel + `.env.local`)
+
+| Variable | Purpose | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (public, RLS enforced) | |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role (server only, bypasses RLS) | |
+| `NEXT_PUBLIC_LIFI_INTEGRATOR` | LI.FI integrator name — `"mintware"` | |
+| `NEXT_PUBLIC_LIFI_API_KEY` | LI.FI integrator API key | |
+| `NEXT_PUBLIC_0X_API_KEY` | 0x swap API key (fallback routing) | |
+| `NEXT_PUBLIC_MINTWARE_TREASURY` | Fee recipient wallet for LI.FI swaps | `0x3F9529e33273fcCec66BaE34B51397e1d01937Bf` |
+| `NEXT_PUBLIC_DISTRIBUTOR_ADDRESS` | MintwareDistributor contract for claim UI | Base mainnet: `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE` |
+| `NEXT_PUBLIC_REWARDS_MODE` | `"live"` — enables real reward calculation | |
+| `CRON_SECRET` | Bearer token securing all `/api/cron/*` routes | |
+| `SWAP_WEBHOOK_SECRET` | Auth header for Molten swap webhook | |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role for server API routes | |
+| `BASE_RPC_URL` | Base mainnet RPC | `https://mainnet.base.org` |
+| `CORE_DAO_RPC_URL` | Core DAO RPC | `https://rpc.coredao.org` |
+| `ORACLE_SIGNER_ADDRESS` | EIP-712 oracle signer public address | `0xc75D4b4bdB4D7ac103671f45E99D2FA6107B2e93` |
+| `DISTRIBUTOR_PRIVATE_KEY` | Oracle signer private key — signs Merkle roots (server only) | |
+| `COINGECKO_API_KEY` | Price feed (optional, falls back to free tier) | |
+
+### Deprecated — do NOT use these names
+
+| Variable | Why deprecated |
+|---|---|
+| `NEXT_PUBLIC_MW_TREASURY_ADDRESS` | Was set to the contract address, not the treasury. Use `NEXT_PUBLIC_DISTRIBUTOR_ADDRESS` for the contract and `NEXT_PUBLIC_MINTWARE_TREASURY` for fee recipient. |
+| `NEXT_PUBLIC_CAMPAIGN_WORKER_URL` | Pointed to unused second Worker (`mintware-campaigns.ceo-1f9.workers.dev`). Removed from all code. |
 
 ---
 
-## Active Workstreams
+## Database (Supabase `bqwcwrnqpayfndgmceal`)
 
-- Protocol architecture (V4 hooks, vault logic, MW Score)
-- docs.mintware.org — brand identity applied to documentation site
-- Business development — Firma Labs partnership (funding + resident entrepreneur arrangement)
-- Institutional LP strategy
+**Canonical schema:** `docs/schema.sql`
+**9 migrations applied** (latest: `20260319000001_participants_and_activity.sql`)
+
+### Tables
+
+| Table | Purpose |
+|-------|---------|
+| `campaigns` | Campaign config + state (both types) |
+| `participants` | One row per wallet per campaign. Created by `/api/campaigns/join`. |
+| `activity` | Per-action event log. Dedup by `(wallet, tx_hash, action_type)`. |
+| `pending_rewards` | Token pool reward locks per tx. `locked → claimable → claimed`. |
+| `distributions` | Merkle tree publication records. One per campaign per epoch. |
+| `epoch_state` | Active epoch window + point accumulator. One active epoch per campaign. |
+| `daily_payouts` | Per-wallet Merkle proof + payout per epoch. **Canonical claim table.** |
+| `campaign_payouts` | Legacy daily rank records. Do not write new data here. |
+| `swap_events` | Append-only webhook audit log from Molten. |
+| `wallet_profiles` | One row per connected wallet. `ref_code` deterministic. |
+| `referral_records` | Referral link conversions. |
+| `referral_stats` | VIEW — aggregated stats per wallet. |
+| `whitelisted_teams` | Teams approved for points campaigns. |
+| `team_applications` | Inbound whitelist applications. |
+
+### Key conventions
+- `ref_code` is deterministic: `"mw_" + address.slice(2, 8).toLowerCase()` — never depends on DB
+- `activity` dedup prevents double-crediting across retries
+- `pending_rewards` unique on `(tx_hash, reward_type)` — one lock per reward type per tx
+- One active epoch per campaign: enforced by partial unique index on `epoch_state`
+- All writes via service role. All reads public (anon key + RLS)
 
 ---
 
-## Notes for Claude
+## Campaign Types
 
-- Always assume Base L2 context unless told otherwise
-- MW Score components are distinct — don't conflate Terminal, Referral, and Social LP scores
-- "Cold-start problem" is a known concern: bootstrapping initial TVL before network effects kick in
-- The Firma Labs partnership is a potential solution to the cold-start problem — treat as high-priority context
-- Prefer precise DeFi terminology; Nicolas has strong technical fluency
+### Token Reward Pool — referral growth engine
+
+A sponsor funds a pool. Users share referral links and earn % of swap volume their referrals generate.
+
+- **Referrer** earns `referral_reward_pct`% of every swap their referrals make (main incentive)
+- **Buyer** gets `buyer_reward_pct`% rebate on their own swap (minor additive)
+- **Mintware** takes `platform_fee_pct`% (default 2%)
+- Pool depletes as rewards are paid. Settlement via pool-settle cron (every 15 min on Pro plan).
+
+**UI copy:** "Share your link → earn % of every swap your referrals make"
+**Do NOT say:** "earn $X per day" or "swap to earn"
+
+### Points Campaign — epoch-based scored payouts
+
+Whitelisted protocol sponsors a fixed pool. Users earn points for on-chain actions weighted by Attribution + Sharing scores.
+
+- `trade` — 8 pts, once per calendar day (**LIVE**)
+- `referral_trade` — 8 pts per referred wallet per trading day (**LIVE**)
+- `bridge` — 15 pts, one-time (**BLOCKED** — awaiting Core DAO bridge contract)
+- `referral_bridge` — 60 pts per referred bridge (**BLOCKED** — same reason)
+
+At epoch end: pool split proportionally by `points × attribution_multiplier × sharing_multiplier`.
+
+**Score multipliers:**
+
+| Percentile | Attribution | Sharing |
+|---|---|---|
+| 0–33% | 1.0× | 1.0× |
+| 34–66% | 1.25× | 1.15× |
+| 67–100% | 1.5× | 1.3× |
+
+Max combined multiplier: 1.95×. Formula: `wallet_payout = (epoch_pool / epoch_count) × (wallet_points / total_points) × multiplier`
+
+---
+
+## Join Flow
+
+**How it works (as of 2026-03-19):**
+
+1. User clicks "Join Campaign" → `JoinButton.tsx`
+2. `POST /api/campaigns/join` with `{ campaign_id, address }`
+3. Route fetches Attribution score (4s timeout, defaults 0 on failure)
+4. For points campaigns: checks `min_score` gate. For token_pool: always open.
+5. Upserts row into Supabase `participants` table
+6. Returns `{ ok: true, attribution_score }`
+7. `JoinButton` calls `onJoined()` → sets `locallyJoined = true` in page state
+8. `ReferralCard` appears immediately with copy link
+
+**Why `locallyJoined` exists:**
+After joining, the page re-fetches campaign data from the Attribution Worker (`GET /campaign?id=&address=`). The Worker always returns `participant: null` because it reads its own database, not our Supabase. Without `locallyJoined`, the UI would revert to "Join Campaign". This is a known gap — the long-term fix is to build our own `GET /api/campaigns/[id]` route.
+
+---
+
+## Claim Flow
+
+1. `GET /api/claim/status?address=` → list of claimable rewards with `distribution_id`
+2. `GET /api/claim?address=&distribution_id=` → `{ campaign_id, epoch_number, merkle_root, oracle_signature, cumulative_amount_wei, merkle_proof }`
+3. Browser calls `MintwareDistributor.claim(campaignId, epochNumber, merkleRoot, oracleSignature, cumulativeAmount, merkleProof)`
+4. `POST /api/claim` → marks `daily_payouts.claimed_at`
+
+**Cumulative model:** Each leaf encodes wallet's TOTAL earned across all epochs. Contract tracks `claimedCumulative[wallet]` and pays the delta. Wallets that skip epochs claim everything owed in one tx.
+
+---
+
+## Deployed Contracts
+
+### MintwareDistributor
+
+| Chain | Address |
+|-------|---------|
+| Base mainnet | `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE` |
+| Base Sepolia (testnet) | `0xcf2EA99639C038a475B710b2Be82b974D777C306` |
+| Core DAO | Not yet deployed (awaiting bridge contract) |
+
+**Owner:** `0x46BB4fea89DFfc5a8a1187EB4A524275568f42d7`
+**Oracle signer:** `0xc75D4b4bdB4D7ac103671f45E99D2FA6107B2e93`
+
+### Leaf encoding (critical — mismatch causes all claims to revert)
+- **Solidity:** `keccak256(bytes.concat(keccak256(abi.encode(address, uint256))))`
+- **TypeScript:** `StandardMerkleTree.of([[wallet, amount]], ['address', 'uint256'])`
+- Uses `abi.encode` (64-byte padded) — **NOT** `abi.encodePacked` (52 bytes)
+
+---
+
+## Referral System
+
+**`ref_code` is always:** `"mw_" + address.slice(2, 8).toLowerCase()` — computed client-side, no DB needed.
+
+**`useReferral(address)` hook:**
+1. Captures `?ref=` param → `sessionStorage["mw_pending_ref"]`
+2. Upserts `wallet_profiles` on connect
+3. If new wallet + pending ref → inserts `referral_records`
+4. Fetches `referral_stats` view
+5. Subscribes to Supabase Realtime for live updates
+
+**`InviteTab`** renders immediately from wallet address. Supabase stats load as enhancement.
+**`ReferralSheet`** slides up 1.5s after first connect. Dismissed in `localStorage["mw_ref_sheet_dismissed"]`.
+
+---
+
+## Cron Jobs
+
+| Route | Schedule | Purpose |
+|-------|---------|---------|
+| `/api/cron/pool-settle` | `*/15 * * * *` | Settle claimable `pending_rewards` → Merkle distributions |
+| `/api/cron/epoch-end` | `0 1 * * *` | Close active points epoch + publish distribution |
+| `/api/cron/bridge-verify` | `0 0 * * *` | Verify Core DAO bridge txs (**BLOCKED** — `CORE_DAO_BRIDGE_CONTRACT` not set) |
+
+All cron routes require `Authorization: Bearer {CRON_SECRET}`.
+**Note:** 15-min pool-settle requires Vercel Pro. Hobby plan = daily only.
+
+---
+
+## Navigation (`components/MwNav.tsx`)
+
+- **Logged-out:** "Connect Wallet" button only
+- **Logged-in:** "Earn" (→ /dashboard), "Swap" (→ /swap), "Leaderboard" (→ /leaderboard), "Profile" (→ /profile), wallet pill
+- **Wallet pill:** hover reveals red "✕ disconnect" → calls `disconnect()` + `router.push('/')`
+
+---
+
+## CSS Conventions
+
+**Landing page (`app/page.tsx`)** — Tailwind CSS v4 only.
+**All other app pages** — inline `<style>` blocks only. Do not refactor to CSS modules or Tailwind unless asked.
+
+**Design tokens:**
+```
+#F7F6FF   surface / background
+#1A1A2E   ink (primary text)
+#3A3C52   ink-2 (secondary text)
+#8A8C9E   ink-3 (muted text)
+#3A5CE8   primary blue
+#C2537A   sharing/referral pink
+#2A9E8A   green (success/active)
+Plus Jakarta Sans — UI labels, body
+DM Mono   — addresses, codes, numbers
+```
+
+---
+
+## Dev Server
+
+```bash
+cd "/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build"
+pnpm dev
+```
+
+**Preview tool (`.claude/launch.json`)** — must include nvm node in PATH:
+```json
+{
+  "runtimeExecutable": "/bin/bash",
+  "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && node node_modules/next/dist/bin/next dev"]
+}
+```
+
+**Common issues:**
+- `Unable to acquire lock at .next/dev/lock` → `pkill -f "next dev"` then delete `.next/dev/lock`
+
+---
+
+## Contract Commands
+
+```bash
+pnpm hardhat:test                  # 32 tests, all passing
+pnpm hardhat:compile               # Compile + typechain
+pnpm hardhat:deploy:base           # Deploy to Base mainnet
+pnpm hardhat:deploy:base-sepolia   # Deploy to Base Sepolia testnet
+```
+`TS_NODE_PROJECT=tsconfig.hardhat.json` is baked into all `hardhat:*` scripts.
+
+---
+
+## Pages Reference
+
+| Route | File | Auth | Notes |
+|---|---|---|---|
+| `/` | `app/page.tsx` | No | Landing — Tailwind CSS v4 |
+| `/explorer` | `app/explorer/page.tsx` | No | Redirects to `/explorer.html` (D3, not converted) |
+| `/dashboard` | `app/dashboard/page.tsx` | Yes | Campaign list |
+| `/leaderboard` | `app/leaderboard/page.tsx` | Yes | Campaign selector + leaderboard |
+| `/swap` | `app/swap/page.tsx` | Yes | LI.FI swap, campaign rewards |
+| `/campaign/[id]` | `app/campaign/[id]/page.tsx` | Yes | Detail + join + referral card |
+| `/profile` | `app/profile/page.tsx` | Yes | Score, tier, Portfolio/Score/Badge/Invite tabs |
+| `/create-campaign` | `app/create-campaign/page.tsx` | Yes | 5-step campaign creator wizard |
+| `/manage/[campaign_id]` | `app/manage/[campaign_id]/page.tsx` | Yes | Creator campaign management |
+
+---
+
+## Pending Work
+
+- [ ] **`CORE_DAO_BRIDGE_CONTRACT`** — still `0x__PENDING_MOLTEN_CONFIRMATION__`. Blocks bridge actions + bridge-verify cron.
+- [ ] **Molten webhook** — register `https://mintware-beta.vercel.app/api/campaigns/swap-event` in Molten dashboard + set matching `SWAP_WEBHOOK_SECRET`
+- [ ] **Vercel Pro plan** — needed for 15-min pool-settle cron schedule. Hobby plan limits to daily.
+- [ ] **locallyJoined gap** — build `GET /api/campaigns/[id]` reading from Supabase `participants` so page refresh shows correct join state
+- [ ] **Reown Cloud whitelist** — add `localhost:3000` + production domain at cloud.reown.com (project `580f461c981a43d53fc25fe59b64306b`)
+- [ ] **Waitlist form** — wire email capture on landing page (UI exists)
+- [ ] **Explorer page** — `explorer.html` uses D3.js, deferred React conversion
+- [ ] **MintwareDistributor — Core DAO** — deploy when bridge contract confirmed
+
+---
+
+## Key Design Decisions (Locked — do not re-debate)
+
+1. **Our API for writes, Attribution Worker for reads.** Joins, rewards, claims → our Supabase. Scores, campaign list → Worker. Never write to the Worker.
+
+2. **`locallyJoined` client-side flag** — the Worker's `GET /campaign` returns `participant: null` always. We set a boolean after join succeeds. Refresh = loses state (acceptable for now; proper fix tracked above).
+
+3. **Cumulative Merkle model** — `daily_payouts` stores wallet's TOTAL earned to date (not per-epoch delta). Contract pays `cumulative - alreadyClaimed`. Users who miss epochs claim everything owed in one tx. Matches Curve/Convex/Aura pattern.
+
+4. **Price locked at swap time** — `pending_rewards` stores `amount_usd` computed at tx time. Settlement never re-fetches price. Prevents oracle manipulation.
+
+5. **ref_code is deterministic** — `"mw_" + address.slice(2, 8).toLowerCase()`. Never needs a DB round-trip. `InviteTab` renders immediately.
+
+6. **`'use client'` on all pages** — RainbowKit/wagmi hooks require it. No server components in the app directory except the explorer redirect.
+
+7. **Inline styles on app pages** — preserves design fidelity from HTML mockups. Landing page uses Tailwind v4 only. Do not mix.
+
+8. **`NEXT_PUBLIC_MINTWARE_TREASURY`** is the LI.FI fee recipient wallet. **`NEXT_PUBLIC_DISTRIBUTOR_ADDRESS`** is the contract address. These are different things on different addresses. Do not conflate.
+
+9. **`campaign_payouts` is legacy** — the canonical payout table is `daily_payouts`. Do not write new data to `campaign_payouts`.
+
+10. **shadcn/ui is unused** — `components/ui/` was scaffolded at init. App pages use custom inline CSS. Do not add new shadcn components to app pages.
