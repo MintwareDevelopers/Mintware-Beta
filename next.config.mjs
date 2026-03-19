@@ -3,11 +3,11 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Explicitly set Turbopack workspace root to prevent it from picking up
-  // route files from .claude/worktrees/hungry-moore (which has its own
-  // pnpm-lock.yaml and app/api/ overrides).
+  // Set Turbopack workspace root to this worktree so that route discovery
+  // uses this worktree's app/ directory, not the main repo's app/.
+  // Node module resolution still finds node_modules via parent directory walk.
   turbopack: {
-    root: '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build',
+    root: '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/ecstatic-lewin',
   },
   async rewrites() {
     return [

@@ -14,6 +14,7 @@
 import { useAccount } from 'wagmi'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import type { ActionDef } from '@/components/campaigns/ActionsPanel'
 import { useEffect, useState, useCallback } from 'react'
 import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
@@ -52,6 +53,76 @@ function DetailSkeleton() {
   )
 }
 
+// ── Referral card ─────────────────────────────────────────────────────────────
+function ReferralCard({ refLink, earnDesc }: { refLink: string; earnDesc: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(refLink)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* silent */ }
+  }
+
+  return (
+    <div style={{
+      background: 'rgba(42,158,138,0.04)',
+      border: '1px solid rgba(42,158,138,0.2)',
+      borderRadius: 12,
+      padding: '14px 16px',
+      marginBottom: 24,
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 10,
+      }}>
+        <span style={{
+          fontFamily: 'Plus Jakarta Sans, sans-serif',
+          fontSize: 12, fontWeight: 700, letterSpacing: '0.5px',
+          textTransform: 'uppercase', color: '#2A9E8A',
+        }}>
+          ◉ Your referral link
+        </span>
+        <span style={{
+          fontFamily: 'Plus Jakarta Sans, sans-serif',
+          fontSize: 11, color: '#2A9E8A',
+        }}>
+          {earnDesc}
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{
+          flex: 1,
+          fontFamily: 'DM Mono, monospace', fontSize: 11,
+          color: '#3A3C52', background: '#fff',
+          border: '1px solid rgba(42,158,138,0.2)',
+          borderRadius: 8, padding: '9px 12px',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {refLink}
+        </div>
+        <button
+          onClick={handleCopy}
+          style={{
+            flexShrink: 0, padding: '9px 16px',
+            background: copied ? '#2A9E8A' : '#fff',
+            color: copied ? '#fff' : '#2A9E8A',
+            border: '1px solid rgba(42,158,138,0.4)',
+            borderRadius: 8, cursor: 'pointer',
+            fontFamily: 'Plus Jakarta Sans, sans-serif',
+            fontSize: 12, fontWeight: 600,
+            transition: 'background 0.15s, color 0.15s',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {copied ? '✓ Copied!' : 'Copy link'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Page content ──────────────────────────────────────────────────────────────
 function CampaignDetailContent() {
   const { address }   = useAccount()
@@ -64,6 +135,10 @@ function CampaignDetailContent() {
   const [loading,      setLoading]     = useState(true)
   const [error,        setError]       = useState<string | null>(null)
   const [activeTab,    setActiveTab]   = useState<Tab>('overview')
+  // Tracks join success locally — the Worker's /campaign endpoint doesn't know
+  // about our Supabase participants table, so participant stays null after join.
+  // This flag lets isJoined stay true even when participant is null.
+  const [locallyJoined, setLocallyJoined] = useState(false)
 
   // ── Fetch campaign + participant ────────────────────────────────────────────
   const fetchCampaign = useCallback(async () => {
@@ -107,7 +182,7 @@ function CampaignDetailContent() {
     ? participant.attribution_score
     : userScore
 
-  const isJoined = participant !== null
+  const isJoined = participant !== null || locallyJoined
   const minScore = campaign?.min_score ?? 0
 
   const tabs: { key: Tab; label: string; disabled?: boolean }[] = [
@@ -180,7 +255,7 @@ function CampaignDetailContent() {
                 (campaign as Campaign & { creator?: string }).creator?.toLowerCase() ===
                   address.toLowerCase() && (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8, marginBottom: 16 }}>
-                  <a
+                  <Link
                     href={`/manage/${campaignId}`}
                     style={{
                       display: 'inline-block',
@@ -198,21 +273,34 @@ function CampaignDetailContent() {
                     onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent' }}
                   >
                     Manage Campaign →
-                  </a>
+                  </Link>
                 </div>
               )}
 
               {/* Join / locked / joined state */}
-              <div style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: isJoined ? 16 : 24 }}>
                 <JoinButton
                   campaignId={campaignId}
                   minScore={minScore}
                   userScore={displayScore}
                   isJoined={isJoined}
                   wallet={address}
-                  onJoined={fetchCampaign}
+                  onJoined={() => { setLocallyJoined(true); fetchCampaign() }}
                 />
               </div>
+
+              {/* ── Referral link — shown immediately after joining ── */}
+              {isJoined && address && (() => {
+                const refCode = `mw_${address.slice(2, 8).toLowerCase()}`
+                const refLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://mintware-beta.vercel.app'}/campaign/${campaignId}?ref=${refCode}`
+                const isTokenPool = campaign.campaign_type === 'token_pool'
+                const earnDesc = isTokenPool
+                  ? `Earn ${(campaign as Campaign & { referral_reward_pct?: number }).referral_reward_pct ?? 0}% of every swap your referrals make`
+                  : 'Earn referral points for every wallet you bring in'
+                return (
+                  <ReferralCard refLink={refLink} earnDesc={earnDesc} />
+                )
+              })()}
 
               {/* ── Tab navigation ── */}
               <div style={{
@@ -243,9 +331,16 @@ function CampaignDetailContent() {
               {/* ── Tab content ── */}
               {activeTab === 'overview' && (
                 <ActionsPanel
-                  actions={campaign.actions ?? {}}
+                  actions={(campaign.actions ?? {}) as Record<string, ActionDef>}
                   startDate={(campaign as Campaign & { start_date?: string }).start_date}
                   endDate={campaign.end_date}
+                  campaignType={campaign.campaign_type}
+                  referralRewardPct={(campaign as Campaign & { referral_reward_pct?: number }).referral_reward_pct}
+                  buyerRewardPct={(campaign as Campaign & { buyer_reward_pct?: number }).buyer_reward_pct}
+                  tokenSymbol={campaign.token_symbol}
+                  isJoined={isJoined}
+                  walletAddress={address}
+                  campaignId={campaignId}
                 />
               )}
 
@@ -260,6 +355,7 @@ function CampaignDetailContent() {
                 <ParticipantStats
                   participant={participant}
                   campaignId={campaignId}
+                  walletAddress={address}
                 />
               )}
 

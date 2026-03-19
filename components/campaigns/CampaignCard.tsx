@@ -15,12 +15,16 @@ export interface Campaign {
   protocol?: string
   chain: string
   status: 'live' | 'upcoming' | 'ended' | string
+  campaign_type?: 'token_pool' | 'points'
   end_date?: string
   start_date?: string
   pool_usd?: number
+  pool_remaining_usd?: number
   daily_payout_usd?: number
   token_symbol?: string
   min_score?: number
+  buyer_reward_pct?: number
+  referral_reward_pct?: number
   actions?: Record<string, {
     label: string
     points: number
@@ -79,7 +83,8 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
     }
   }
 
-  const hasStats   = c.pool_usd != null || c.daily_payout_usd != null || c.min_score != null
+  const isTokenPool = c.campaign_type === 'token_pool'
+  const hasStats   = c.pool_usd != null || c.pool_remaining_usd != null || c.daily_payout_usd != null || c.min_score != null || c.referral_reward_pct != null
   const hasActions = c.actions && Object.keys(c.actions).length > 0
   const showBar    = isLive && (totalDays !== null || daysLeft !== null)
 
@@ -229,21 +234,41 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         {/* ── Stats ── */}
         {hasStats && (
           <div className="cc-stats">
-            {c.pool_usd != null && (
+            {/* Pool size — shown for both types */}
+            {(c.pool_remaining_usd != null || c.pool_usd != null) && (
               <div>
                 <div className="cc-stat-val">
-                  {fmtUSD(c.pool_usd)}{c.token_symbol && <span>{c.token_symbol}</span>}
+                  {fmtUSD(c.pool_remaining_usd ?? c.pool_usd ?? 0)}
+                  {c.token_symbol && <span>{c.token_symbol}</span>}
                 </div>
-                <div className="cc-stat-label">pool size</div>
+                <div className="cc-stat-label">{isTokenPool ? 'pool remaining' : 'pool size'}</div>
               </div>
             )}
-            {c.daily_payout_usd != null && (
+
+            {/* Token Reward Pool: referral earn % is the headline stat */}
+            {isTokenPool && c.referral_reward_pct != null && (
+              <div>
+                <div className="cc-stat-val" style={{ color: '#2A9E8A' }}>
+                  {c.referral_reward_pct}%
+                </div>
+                <div className="cc-stat-label">referral earn</div>
+              </div>
+            )}
+            {isTokenPool && c.buyer_reward_pct != null && (
+              <div>
+                <div className="cc-stat-val">{c.buyer_reward_pct}%</div>
+                <div className="cc-stat-label">buyer rebate</div>
+              </div>
+            )}
+
+            {/* Points Campaign: daily payout + min score */}
+            {!isTokenPool && c.daily_payout_usd != null && (
               <div>
                 <div className="cc-stat-val">{fmtUSD(c.daily_payout_usd)}</div>
                 <div className="cc-stat-label">daily payout</div>
               </div>
             )}
-            {c.min_score != null && (
+            {!isTokenPool && c.min_score != null && (
               <div>
                 <div className="cc-stat-val">{c.min_score}+</div>
                 <div className="cc-stat-label">min score</div>
@@ -253,7 +278,20 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         )}
 
         {/* ── Reward pills ── */}
-        {hasActions && (
+        {isTokenPool ? (
+          /* Token Reward Pool: show referral mechanic clearly */
+          <div className="cc-rewards">
+            <span className="cc-reward-pill" style={{ background: 'rgba(42,158,138,0.08)', color: '#2A9E8A', border: '0.5px solid rgba(42,158,138,0.2)' }}>
+              ◉ {c.referral_reward_pct ?? 0}% per swap you refer
+            </span>
+            {(c.buyer_reward_pct ?? 0) > 0 && (
+              <span className="cc-reward-pill" style={{ background: 'rgba(58,92,232,0.08)', color: '#3A5CE8', border: '0.5px solid rgba(58,92,232,0.2)' }}>
+                + {c.buyer_reward_pct}% buyer rebate
+              </span>
+            )}
+          </div>
+        ) : hasActions ? (
+          /* Points Campaign: show action pills */
           <div className="cc-rewards">
             {Object.entries(c.actions!).map(([key, action]) => (
               <span
@@ -265,7 +303,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
               </span>
             ))}
           </div>
-        )}
+        ) : null}
 
         {/* ── Progress bar ── */}
         {showBar && (

@@ -122,24 +122,51 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
           background: '#F7F6FF', borderRadius: 12,
           border: '1px solid #E0DFFF', overflow: 'hidden',
         }}>
-          {[
-            c.pool_usd != null && {
-              label: 'Pool size',
-              value: `${fmtUSD(c.pool_usd)}${c.token_symbol ? ` ${c.token_symbol}` : ''}`,
+          {(c.campaign_type === 'token_pool' ? [
+            // Token Reward Pool: referral earn is the headline
+            (c.pool_remaining_usd != null || c.pool_usd != null) && {
+              label: 'Pool remaining',
+              value: `${fmtUSD(c.pool_remaining_usd ?? c.pool_usd ?? 0)}${c.token_symbol ? ` ${c.token_symbol}` : ''}`,
+              color: '#1A1A2E',
             },
-            c.daily_payout_usd != null && {
-              label: 'Daily payout',
-              value: `${fmtUSD(c.daily_payout_usd)}/day`,
+            c.referral_reward_pct != null && {
+              label: 'Referral earn',
+              value: `${c.referral_reward_pct}% per swap`,
+              color: '#2A9E8A',
+            },
+            c.buyer_reward_pct != null && {
+              label: 'Buyer rebate',
+              value: `${c.buyer_reward_pct}% per swap`,
+              color: '#1A1A2E',
             },
             daysLeft !== null && isLive && {
               label: 'Days remaining',
               value: `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
+              color: '#1A1A2E',
+            },
+          ] : [
+            // Points Campaign: pool size, daily payout, days, min score
+            c.pool_usd != null && {
+              label: 'Pool size',
+              value: `${fmtUSD(c.pool_usd)}${c.token_symbol ? ` ${c.token_symbol}` : ''}`,
+              color: '#1A1A2E',
+            },
+            c.daily_payout_usd != null && {
+              label: 'Daily payout',
+              value: `${fmtUSD(c.daily_payout_usd)}/day`,
+              color: '#1A1A2E',
+            },
+            daysLeft !== null && isLive && {
+              label: 'Days remaining',
+              value: `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
+              color: '#1A1A2E',
             },
             c.min_score != null && {
               label: 'Min score',
               value: `${c.min_score}+`,
+              color: '#1A1A2E',
             },
-          ].filter(Boolean).map((stat, i, arr) => {
+          ]).filter(Boolean).map((stat, i, arr) => {
             if (!stat) return null
             return (
               <div key={i} style={{
@@ -148,7 +175,9 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
               }}>
                 <div style={{
                   fontFamily: 'DM Mono, monospace',
-                  fontSize: 15, fontWeight: 700, color: '#1A1A2E', marginBottom: 2,
+                  fontSize: 15, fontWeight: 700,
+                  color: (stat as { color: string }).color ?? '#1A1A2E',
+                  marginBottom: 2,
                 }}>
                   {(stat as { value: string }).value}
                 </div>

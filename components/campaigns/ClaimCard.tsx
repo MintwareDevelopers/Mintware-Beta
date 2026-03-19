@@ -32,6 +32,8 @@ import {
 
 // ---------------------------------------------------------------------------
 // MintwareDistributor ABI — only the functions we call
+// 6-param zero-oracle-gas signature: the user submits the oracle's EIP-712
+// signature alongside their Merkle proof in a single transaction.
 // ---------------------------------------------------------------------------
 const DISTRIBUTOR_ABI = [
   {
@@ -39,9 +41,12 @@ const DISTRIBUTOR_ABI = [
     type: 'function',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'distributionId', type: 'uint256' },
-      { name: 'amount',         type: 'uint256' },
-      { name: 'merkleProof',    type: 'bytes32[]' },
+      { name: 'campaignId',       type: 'string'   },
+      { name: 'epochNumber',      type: 'uint256'  },
+      { name: 'merkleRoot',       type: 'bytes32'  },
+      { name: 'oracleSignature',  type: 'bytes'    },
+      { name: 'amount',           type: 'uint256'  },
+      { name: 'merkleProof',      type: 'bytes32[]' },
     ],
     outputs: [],
   },
@@ -91,9 +96,9 @@ interface ClaimableReward {
   claimed_at: string | null
   published_at: string | null
   created_at: string
-  // on-chain uint256 from MintwareDistributor.createDistribution() return value
-  // Returned as a string to avoid JS BigInt serialisation issues.
-  onchain_id: string | null
+  // New zero-oracle-gas fields — returned by /api/claim
+  merkle_root: string | null
+  oracle_signature: string | null
 }
 
 interface StatusResponse {
@@ -190,7 +195,8 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
     setIsFetchingProof(true)
 
     try {
-      // Fetch Merkle proof server-side — tree_json never leaves the server
+      // Fetch Merkle proof + oracle signature server-side.
+      // tree_json and oracle key never leave the server.
       const res = await fetch(
         `/api/claim?address=${encodeURIComponent(wallet)}&distribution_id=${encodeURIComponent(reward.distribution_id)}`
       )
@@ -201,29 +207,34 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
         return
       }
 
-      const { amount_wei, merkle_proof, onchain_id } = json as {
+      const { amount_wei, merkle_proof, oracle_signature, merkle_root, campaign_id, epoch_number } = json as {
         amount_wei: string
         merkle_proof: string[]
-        onchain_id: string | null
+        oracle_signature: string
+        merkle_root: string
+        campaign_id: string
+        epoch_number: number
       }
 
-      // onchain_id is the uint256 distributionId from the MintwareDistributor contract.
-      // It is set when createDistribution() is called on-chain (Ticket 5 deploy flow).
-      if (!onchain_id) {
-        setClaimError('Distribution not yet finalized on-chain. Check back soon.')
+      if (!oracle_signature) {
+        setClaimError('Distribution is not yet signed. Check back soon.')
         return
       }
 
-      // Submit on-chain claim
+      // Submit on-chain claim — 6-param zero-oracle-gas signature:
+      //   claim(campaignId, epochNumber, merkleRoot, oracleSignature, amount, proof)
       writeContract(
         {
           address: reward.contract_address as `0x${string}`,
           abi: DISTRIBUTOR_ABI,
           functionName: 'claim',
           args: [
-            BigInt(onchain_id),       // uint256 distributionId from contract
-            BigInt(amount_wei),        // uint256 amount matching the Merkle leaf
-            merkle_proof as `0x${string}`[],  // bytes32[] inclusion proof
+            campaign_id,                         // string campaignId
+            BigInt(epoch_number),                 // uint256 epochNumber
+            merkle_root as `0x${string}`,         // bytes32 merkleRoot
+            oracle_signature as `0x${string}`,    // bytes oracleSignature (EIP-712)
+            BigInt(amount_wei),                   // uint256 amount
+            merkle_proof as `0x${string}`[],      // bytes32[] merkleProof
           ],
           chainId: targetChainId ?? undefined,
         },
