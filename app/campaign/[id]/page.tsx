@@ -135,6 +135,10 @@ function CampaignDetailContent() {
   const [loading,      setLoading]     = useState(true)
   const [error,        setError]       = useState<string | null>(null)
   const [activeTab,    setActiveTab]   = useState<Tab>('overview')
+  // Tracks join success locally — the Worker's /campaign endpoint doesn't know
+  // about our Supabase participants table, so participant stays null after join.
+  // This flag lets isJoined stay true even when participant is null.
+  const [locallyJoined, setLocallyJoined] = useState(false)
 
   // ── Fetch campaign + participant ────────────────────────────────────────────
   const fetchCampaign = useCallback(async () => {
@@ -178,7 +182,7 @@ function CampaignDetailContent() {
     ? participant.attribution_score
     : userScore
 
-  const isJoined = participant !== null
+  const isJoined = participant !== null || locallyJoined
   const minScore = campaign?.min_score ?? 0
 
   const tabs: { key: Tab; label: string; disabled?: boolean }[] = [
@@ -281,7 +285,7 @@ function CampaignDetailContent() {
                   userScore={displayScore}
                   isJoined={isJoined}
                   wallet={address}
-                  onJoined={fetchCampaign}
+                  onJoined={() => { setLocallyJoined(true); fetchCampaign() }}
                 />
               </div>
 
