@@ -15,7 +15,6 @@
 // =============================================================================
 
 import { useState } from 'react'
-import { API } from '@/lib/api'
 
 interface JoinButtonProps {
   campaignId: string
@@ -35,7 +34,7 @@ export function JoinButton({ campaignId, minScore, userScore, isJoined, wallet, 
     setLoading(true)
     setError(null)
     try {
-      const res  = await fetch(`${API}/join`, {
+      const res  = await fetch('/api/campaigns/join', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ campaign_id: campaignId, address: wallet }),
