@@ -20,6 +20,8 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [userScore, setUserScore] = useState<number | null>(null)
+  const [myCampaignIds, setMyCampaignIds] = useState<Set<string>>(new Set())
+  const [mineLoading, setMineLoading] = useState(false)
 
   // Track referrer from URL
   useEffect(() => {
@@ -53,6 +55,22 @@ function DashboardContent() {
 
   useEffect(() => { loadCampaigns() }, [loadCampaigns])
 
+  // Load "My Campaigns" membership when that tab is selected
+  useEffect(() => {
+    if (activeTab !== 'mine' || !wallet || allCampaigns.length === 0) return
+    setMineLoading(true)
+    Promise.all(
+      allCampaigns.map(c =>
+        fetch(`${API}/campaign?id=${encodeURIComponent(c.id)}&address=${wallet}`)
+          .then(r => r.json())
+          .then((d: { participant?: unknown }) => (d.participant ? c.id : null))
+          .catch(() => null)
+      )
+    ).then(results => {
+      setMyCampaignIds(new Set(results.filter(Boolean) as string[]))
+    }).finally(() => setMineLoading(false))
+  }, [activeTab, wallet, allCampaigns])
+
   // Derived stats
   const liveCampaigns   = allCampaigns.filter(c => c.status === 'live')
   const upcomingCampaigns = allCampaigns.filter(c => c.status === 'upcoming')
@@ -77,10 +95,11 @@ function DashboardContent() {
   ]
 
   function getFiltered() {
-    if (currentFilter === 'Live')     return allCampaigns.filter(c => c.status === 'live')
-    if (currentFilter === 'Upcoming') return allCampaigns.filter(c => c.status === 'upcoming')
-    if (currentFilter === 'Ended')    return allCampaigns.filter(c => c.status === 'ended')
-    return allCampaigns
+    const base = activeTab === 'mine' ? allCampaigns.filter(c => myCampaignIds.has(c.id)) : allCampaigns
+    if (currentFilter === 'Live')     return base.filter(c => c.status === 'live')
+    if (currentFilter === 'Upcoming') return base.filter(c => c.status === 'upcoming')
+    if (currentFilter === 'Ended')    return base.filter(c => c.status === 'ended')
+    return base
   }
 
   const filtered         = getFiltered()
@@ -178,10 +197,19 @@ function DashboardContent() {
           ))}
         </div>
 
-        {loading ? (
+        {(loading || mineLoading) ? (
           <div className="db-grid">
             <div className="db-skeleton" />
             <div className="db-skeleton" />
+          </div>
+        ) : activeTab === 'mine' && !wallet ? (
+          <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280', fontSize: 14, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            Connect your wallet to see your campaigns.
+          </div>
+        ) : activeTab === 'mine' && filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280', fontSize: 14, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            You haven&apos;t joined any campaigns yet.{' '}
+            <span style={{ color: '#4f7ef7', cursor: 'pointer' }} onClick={() => setActiveTab('explore')}>Browse campaigns →</span>
           </div>
         ) : filtered.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280', fontSize: 14, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>

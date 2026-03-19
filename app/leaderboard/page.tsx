@@ -5,6 +5,7 @@ import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
 import { API, fmtUSD, shortAddr, daysUntil } from '@/lib/api'
+import { generateRefCode } from '@/lib/referral/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
@@ -39,7 +40,8 @@ function LeaderboardContent() {
   const [lbSubText, setLbSubText]             = useState('Loading…')
   const [linkCopied, setLinkCopied]           = useState(false)
 
-  const refLink = wallet ? `mintware.app/r/${wallet.slice(0, 10)}` : ''
+  const refCode = wallet ? generateRefCode(wallet) : ''
+  const refLink = wallet ? `https://mintware.app?ref=${refCode}` : ''
 
   function copyLink() {
     if (!refLink) return
@@ -420,12 +422,15 @@ function LeaderboardContent() {
             <div className="lb-invite">
               <div className="lb-invite-card">
                 <div className="lb-invite-title">Invite friends</div>
-                <div className="lb-invite-sub">Share your link to earn +60 pts per completed referral</div>
-                <div className="lb-invite-link">
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{refLink}</span>
+                <div className="lb-invite-sub">Share your link to earn points for every referred trade</div>
+                <div className="lb-invite-link" style={{ marginBottom: 6 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>{refLink}</span>
                   <button className="lb-copy-btn" onClick={copyLink}>
                     {linkCopied ? '✓ Copied' : 'Copy'}
                   </button>
+                </div>
+                <div style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                  Your code: <span style={{ fontFamily: 'DM Mono, monospace', color: '#4f7ef7' }}>{refCode}</span>
                 </div>
               </div>
             </div>

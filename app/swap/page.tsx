@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
+import { useAccount } from 'wagmi'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { MwNav } from '@/components/MwNav'
 import { SwapWidget } from '@/components/swap/SwapWidget'
@@ -20,6 +21,22 @@ interface Campaign {
     per_referred_trade?: boolean
     one_time?: boolean
   }>
+}
+
+interface Participant {
+  trading_points?:         number
+  bridge_points?:          number
+  referral_trade_points?:  number
+  referral_bridge_points?: number
+  total_points?:           number
+  active_trading_days?:    number
+}
+
+const ACTION_FIELD_MAP: Record<string, keyof Participant> = {
+  trade:           'trading_points',
+  bridge:          'bridge_points',
+  referral_trade:  'referral_trade_points',
+  referral_bridge: 'referral_bridge_points',
 }
 
 type ActionValue = NonNullable<Campaign['actions']>[string]
@@ -42,7 +59,11 @@ function actionDesc(key: string, campaignName: string): string {
 
 // ─── Swap Page ─────────────────────────────────────────────────────────────────
 export default function SwapPage() {
+  const { address } = useAccount()
+  const wallet = address?.toLowerCase() ?? ''
+
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null)
+  const [participant, setParticipant]       = useState<Participant | null>(null)
 
   useEffect(() => {
     fetch(`${API}/campaigns`)
@@ -54,6 +75,30 @@ export default function SwapPage() {
       })
       .catch(() => {})
   }, [])
+
+  // Fetch participant data when campaign + wallet are known
+  useEffect(() => {
+    if (!activeCampaign || !wallet) { setParticipant(null); return }
+    fetch(`${API}/campaign?id=${encodeURIComponent(activeCampaign.id)}&address=${wallet}`)
+      .then(r => r.json())
+      .then((d: { participant?: Participant }) => setParticipant(d.participant ?? null))
+      .catch(() => {})
+  }, [activeCampaign, wallet])
+
+  function actionPts(key: string): number {
+    const field = ACTION_FIELD_MAP[key]
+    return field ? (participant?.[field] ?? 0) : 0
+  }
+
+  function actionBarPct(key: string, action: ActionValue): number {
+    const earned = actionPts(key)
+    if (earned === 0) return 0
+    if (action.one_time) return 100
+    const cap = action.per_referral || action.per_referred_trade
+      ? action.points * 10   // 10 referrals = 100%
+      : action.points * 30   // 30 days = 100%
+    return Math.min(Math.round((earned / cap) * 100), 100)
+  }
 
   const actions = activeCampaign?.actions ? Object.entries(activeCampaign.actions) : []
 
@@ -151,24 +196,33 @@ export default function SwapPage() {
               <>
                 <div className="sw-section">Earn points by action</div>
                 <div className="sw-actions-grid">
-                  {actions.map(([key, action]) => (
-                    <div key={key} className="sw-action-card">
-                      <div className="sw-action-head">
-                        <div className="sw-action-name">{action.label}</div>
-                        <div className="sw-action-pts">+{action.points}{actionSuffix(action)}</div>
-                      </div>
-                      <div className="sw-action-desc">{actionDesc(key, activeCampaign?.name ?? '')}</div>
-                      <div className="sw-action-prog-wrap">
-                        <div className="sw-action-prog-meta">
-                          <span>0 {action.per_day ? 'today' : 'completed'}</span>
-                          <span>0 pts earned</span>
+                  {actions.map(([key, action]) => {
+                    const earned  = actionPts(key)
+                    const pct     = actionBarPct(key, action)
+                    const countLabel = action.one_time
+                      ? (earned > 0 ? 'completed' : 'not completed')
+                      : action.per_day
+                      ? `${earned > 0 ? Math.floor(earned / action.points) : 0} day${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
+                      : `${earned > 0 ? Math.floor(earned / action.points) : 0} referral${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
+                    return (
+                      <div key={key} className="sw-action-card">
+                        <div className="sw-action-head">
+                          <div className="sw-action-name">{action.label}</div>
+                          <div className="sw-action-pts">+{action.points}{actionSuffix(action)}</div>
                         </div>
-                        <div className="sw-action-prog-bar">
-                          <div className="sw-action-prog-fill" style={{ width: '0%' }} />
+                        <div className="sw-action-desc">{actionDesc(key, activeCampaign?.name ?? '')}</div>
+                        <div className="sw-action-prog-wrap">
+                          <div className="sw-action-prog-meta">
+                            <span>{countLabel}</span>
+                            <span>{earned > 0 ? `${earned} pts earned` : '0 pts earned'}</span>
+                          </div>
+                          <div className="sw-action-prog-bar">
+                            <div className="sw-action-prog-fill" style={{ width: `${pct}%` }} />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </>
             )}

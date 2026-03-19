@@ -45,6 +45,7 @@ export interface Campaign {
 
   // Token pool fields
   token_contract: string | null
+  token_decimals: number              // default 18; set to 6 for USDC, 8 for WBTC etc.
   token_allocation_usd: number | null
   buyer_reward_pct: number | null
   referral_reward_pct: number | null

@@ -84,6 +84,29 @@ export function useSwap(): SwapState {
 
       setTxHash(hash)
       setStatus('success')
+
+      // ── Credit campaign points (fire-and-forget, non-fatal) ───────────────
+      // Parse USD value from the LI.FI quote; Molten computes it inline.
+      // Falls back to 0.01 if the field is absent so the webhook never rejects.
+      const amountUsd =
+        parseFloat((args.quote as LifiQuote).fromAmountUSD ?? '0') || 0.01
+
+      void fetch('/api/campaigns/swap-event', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          wallet:      walletClient.account.address.toLowerCase(),
+          tx_hash:     hash,
+          chain:       chainConfig.name.toLowerCase(),
+          token_in:    args.sellToken.address,
+          token_out:   args.buyToken.address,
+          amount_usd:  amountUsd,
+          timestamp:   new Date().toISOString(),
+          campaign_id: args.campaignId  ?? undefined,
+          is_bridge:   false,
+        }),
+      }).catch(() => { /* non-fatal — swap succeeded even if points don't credit */ })
+
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Swap failed'
       setError(msg)

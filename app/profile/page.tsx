@@ -196,7 +196,7 @@ function ProfileContent() {
       </div>
 
       {/* Tabs */}
-      <div className="pt-5 bg-mw-surface">
+      <div className="pt-5 bg-transparent">
         <div className="max-w-[960px] mx-auto px-12 max-sm:px-5">
           <div className="flex gap-2 max-sm:flex-wrap max-sm:gap-1.5">
             {(['portfolio', 'score', 'badge', 'invite', 'rewards'] as Tab[]).map(t => (
@@ -219,7 +219,7 @@ function ProfileContent() {
       </div>
 
       {/* Body */}
-      <div className="bg-mw-surface pb-20">
+      <div className="bg-transparent pb-20">
         <div className="max-w-[960px] mx-auto px-12 max-sm:px-5 pt-5 [animation:fadeUp_0.4s_0.08s_ease_both]">
 
           {activeTab === 'portfolio' && (

@@ -12,7 +12,7 @@ import { useState } from 'react'
 import type { CreatorFormState } from '@/lib/campaigns/creator'
 import {
   POOL_PRESETS, POINTS_DURATION_PRESETS, PAYOUT_PRESETS,
-  dailyBudget, fmtUSDShort,
+  dailyBudget, depletionVolumeUsd, fmtUSDShort,
 } from '@/lib/campaigns/creator'
 
 interface Step2PoolProps {
@@ -214,11 +214,13 @@ export function Step2Pool({ form, onChange }: Step2PoolProps) {
         {/* Auto-calc stats */}
         {form.poolUsd > 0 && form.durationDays > 0 && (
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <StatChip label="Daily pool cap" value={fmtUSDShort(daily)} />
+            {isPoints && (
+              <StatChip label="Daily pool cap" value={fmtUSDShort(daily)} />
+            )}
             {isTokenReward && (
               <StatChip
-                label="Pool depletes after"
-                value={`~${fmtUSDShort(form.poolUsd / 0.005)} volume`}
+                label="Rewards up to"
+                value={`~${fmtUSDShort(depletionVolumeUsd(form))} in swap volume`}
               />
             )}
             {isPoints && (

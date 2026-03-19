@@ -32,6 +32,14 @@ import {
 
 // ---------------------------------------------------------------------------
 // MintwareDistributor ABI — only the functions we call
+//
+// claim(campaignId, epochNumber, merkleRoot, oracleSignature, cumulativeAmount, merkleProof)
+//   - campaignId      string    — Supabase campaign UUID
+//   - epochNumber     uint256   — epoch for oracle sig domain separation
+//   - merkleRoot      bytes32   — root the oracle signed
+//   - oracleSignature bytes     — EIP-712 sig from oracle over (campaignId, epoch, root)
+//   - cumulativeAmount uint256  — wallet's TOTAL earned to date (not per-epoch)
+//   - merkleProof     bytes32[] — inclusion proof for (wallet, cumulativeAmount)
 // ---------------------------------------------------------------------------
 const DISTRIBUTOR_ABI = [
   {
@@ -39,9 +47,12 @@ const DISTRIBUTOR_ABI = [
     type: 'function',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'distributionId', type: 'uint256' },
-      { name: 'amount',         type: 'uint256' },
-      { name: 'merkleProof',    type: 'bytes32[]' },
+      { name: 'campaignId',        type: 'string'   },
+      { name: 'epochNumber',       type: 'uint256'  },
+      { name: 'merkleRoot',        type: 'bytes32'  },
+      { name: 'oracleSignature',   type: 'bytes'    },
+      { name: 'cumulativeAmount',  type: 'uint256'  },
+      { name: 'merkleProof',       type: 'bytes32[]' },
     ],
     outputs: [],
   },
@@ -201,29 +212,35 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
         return
       }
 
-      const { amount_wei, merkle_proof, onchain_id } = json as {
-        amount_wei: string
-        merkle_proof: string[]
-        onchain_id: string | null
+      const data = json as {
+        campaign_id:           string
+        epoch_number:          number
+        merkle_root:           string
+        oracle_signature:      string | null
+        cumulative_amount_wei: string
+        merkle_proof:          string[]
       }
 
-      // onchain_id is the uint256 distributionId from the MintwareDistributor contract.
-      // It is set when createDistribution() is called on-chain (Ticket 5 deploy flow).
-      if (!onchain_id) {
-        setClaimError('Distribution not yet finalized on-chain. Check back soon.')
+      if (!data.oracle_signature) {
+        setClaimError('Rewards not yet signed — check back in a few minutes.')
         return
       }
 
       // Submit on-chain claim
+      // MintwareDistributor.claim(campaignId, epochNumber, merkleRoot,
+      //                           oracleSignature, cumulativeAmount, merkleProof)
       writeContract(
         {
           address: reward.contract_address as `0x${string}`,
           abi: DISTRIBUTOR_ABI,
           functionName: 'claim',
           args: [
-            BigInt(onchain_id),       // uint256 distributionId from contract
-            BigInt(amount_wei),        // uint256 amount matching the Merkle leaf
-            merkle_proof as `0x${string}`[],  // bytes32[] inclusion proof
+            data.campaign_id,                                  // string
+            BigInt(data.epoch_number),                         // uint256
+            data.merkle_root as `0x${string}`,                 // bytes32
+            data.oracle_signature as `0x${string}`,            // bytes
+            BigInt(data.cumulative_amount_wei),                 // uint256 cumulative
+            data.merkle_proof as `0x${string}`[],              // bytes32[]
           ],
           chainId: targetChainId ?? undefined,
         },
