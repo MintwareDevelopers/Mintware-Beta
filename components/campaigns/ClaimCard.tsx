@@ -170,12 +170,23 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
     isSuccess: isTxSuccess,
   } = useWaitForTransactionReceipt({ hash: txHash })
 
-  // Notify parent on success so it can refetch
+  // On tx confirmed: mark claimed in DB, then notify parent to refetch
   useEffect(() => {
-    if (isTxSuccess) {
-      onClaimed()
-    }
-  }, [isTxSuccess, onClaimed])
+    if (!isTxSuccess) return
+    // Fire-and-forget POST — non-fatal if it fails (contract is source of truth)
+    fetch('/api/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        address: wallet,
+        distribution_id: reward.distribution_id,
+        tx_hash: txHash,
+      }),
+    }).catch(() => {
+      // Swallow — the on-chain tx succeeded, DB sync is best-effort
+    })
+    onClaimed()
+  }, [isTxSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Propagate wagmi write errors
   useEffect(() => {
