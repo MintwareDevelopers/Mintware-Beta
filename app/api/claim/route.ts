@@ -221,13 +221,14 @@ export async function GET(req: NextRequest) {
   const campaign = Array.isArray(dist.campaigns) ? dist.campaigns[0] : (dist.campaigns as any)
 
   return NextResponse.json({
-    distribution_id:   dist.id,
-    campaign_id:       dist.campaign_id,          // string — campaignId param for claim()
-    epoch_number:      dist.epoch_number,          // uint256 — epochNumber param for claim()
-    merkle_root:       dist.merkle_root,           // bytes32 — merkleRoot param for claim()
-    oracle_signature:  dist.oracle_signature,      // bytes   — oracleSignature param for claim()
-    amount_wei:        amountWei,                  // uint256 — amount param for claim()
-    merkle_proof:      proof,                      // bytes32[] — merkleProof param for claim()
+    distribution_id:       dist.id,
+    campaign_id:           dist.campaign_id,          // string — campaignId param for claim()
+    epoch_number:          dist.epoch_number,          // uint256 — epochNumber param for claim()
+    merkle_root:           dist.merkle_root,           // bytes32 — merkleRoot param for claim()
+    oracle_signature:      dist.oracle_signature,      // bytes   — oracleSignature param for claim()
+    amount_wei:            amountWei,                  // kept for backwards compat
+    cumulative_amount_wei: amountWei,                  // uint256 — cumulativeAmount param for claim()
+    merkle_proof:          proof,                      // bytes32[] — merkleProof param for claim()
     contract_address:  campaign?.contract_address ?? null,
     chain:             campaign?.chain ?? null,
     token_address:     campaign?.token_contract ?? null,
