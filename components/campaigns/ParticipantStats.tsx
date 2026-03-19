@@ -28,6 +28,7 @@ export interface Participant {
 interface ParticipantStatsProps {
   participant: Participant
   campaignId: string
+  walletAddress?: string
 }
 
 function StatRow({ label, value, mono = true }: { label: string; value: string | number; mono?: boolean }) {
@@ -52,14 +53,19 @@ function StatRow({ label, value, mono = true }: { label: string; value: string |
   )
 }
 
-export function ParticipantStats({ participant: p, campaignId }: ParticipantStatsProps) {
+export function ParticipantStats({ participant: p, campaignId, walletAddress }: ParticipantStatsProps) {
   const mult = typeof p.score_multiplier === 'string'
     ? parseFloat(p.score_multiplier)
     : p.score_multiplier ?? 1
 
+  // ref_code is deterministic: "mw_" + first 6 chars of address (after 0x), lowercase
+  const refCode = walletAddress
+    ? `mw_${walletAddress.slice(2, 8).toLowerCase()}`
+    : null
+
   const refLink = p.ref_link
-    ?? (typeof window !== 'undefined'
-      ? `${window.location.origin}/campaign/${campaignId}?ref=${p.attribution_score}`
+    ?? (typeof window !== 'undefined' && refCode
+      ? `${window.location.origin}/campaign/${campaignId}?ref=${refCode}`
       : '')
 
   async function copyRefLink() {

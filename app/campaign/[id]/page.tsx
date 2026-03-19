@@ -265,6 +265,7 @@ function CampaignDetailContent() {
                 <ParticipantStats
                   participant={participant}
                   campaignId={campaignId}
+                  walletAddress={address}
                 />
               )}
 
