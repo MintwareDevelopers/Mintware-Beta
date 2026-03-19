@@ -21,6 +21,10 @@ interface ActionsPanelProps {
   actions: Record<string, ActionDef>
   startDate?: string
   endDate?: string
+  campaignType?: 'token_pool' | 'points'
+  referralRewardPct?: number
+  buyerRewardPct?: number
+  tokenSymbol?: string
 }
 
 // Icon + description per action key
@@ -41,14 +45,122 @@ function pointsLabel(action: ActionDef): string {
   return `${action.points} pts`
 }
 
-export function ActionsPanel({ actions, startDate, endDate }: ActionsPanelProps) {
+export function ActionsPanel({ actions, startDate, endDate, campaignType, referralRewardPct, buyerRewardPct, tokenSymbol }: ActionsPanelProps) {
   const entries = Object.entries(actions)
-  if (entries.length === 0) return null
+  const isTokenPool = campaignType === 'token_pool'
 
   function fmtDate(iso: string) {
     try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) }
     catch { return iso }
   }
+
+  // Token Reward Pool: show referral mechanic, not points actions
+  if (isTokenPool) {
+    return (
+      <div>
+        <div style={{
+          fontFamily: 'Plus Jakarta Sans, sans-serif',
+          fontSize: 10, fontWeight: 700, letterSpacing: '1px',
+          textTransform: 'uppercase', color: '#8A8C9E', marginBottom: 12,
+        }}>
+          How you earn
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Referral earn — main mechanic */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 14,
+            background: '#fff', border: '1px solid #E0DFFF', borderRadius: 12,
+            padding: '14px 16px',
+          }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+              background: 'rgba(194,83,122,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+            }}>◉</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, fontWeight: 600, color: '#1A1A2E', marginBottom: 2 }}>
+                Share your referral link
+              </div>
+              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 11, color: '#8A8C9E', lineHeight: 1.4 }}>
+                Earn {referralRewardPct ?? 0}% of every swap your referrals make — automatically, with no cap.
+              </div>
+            </div>
+            <div style={{
+              flexShrink: 0, fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700,
+              color: '#C2537A', background: 'rgba(194,83,122,0.08)',
+              borderRadius: 8, padding: '4px 10px', whiteSpace: 'nowrap',
+            }}>
+              {referralRewardPct ?? 0}% per swap
+            </div>
+          </div>
+
+          {/* Buyer rebate — secondary */}
+          {(buyerRewardPct ?? 0) > 0 && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              background: '#fff', border: '1px solid #E0DFFF', borderRadius: 12,
+              padding: '14px 16px',
+            }}>
+              <div style={{
+                width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                background: 'rgba(42,158,138,0.08)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+              }}>⇄</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, fontWeight: 600, color: '#1A1A2E', marginBottom: 2 }}>
+                  Swap via a referral link
+                </div>
+                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 11, color: '#8A8C9E', lineHeight: 1.4 }}>
+                  Get a small rebate on your own swap when you use someone&apos;s referral link.
+                </div>
+              </div>
+              <div style={{
+                flexShrink: 0, fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700,
+                color: '#2A9E8A', background: 'rgba(42,158,138,0.08)',
+                borderRadius: 8, padding: '4px 10px', whiteSpace: 'nowrap',
+              }}>
+                {buyerRewardPct ?? 0}% rebate
+              </div>
+            </div>
+          )}
+        </div>
+
+        {(startDate || endDate) && (
+          <div style={{
+            marginTop: 16,
+            background: '#F7F6FF', border: '1px solid #E0DFFF', borderRadius: 10,
+            padding: '12px 14px',
+          }}>
+            <div style={{
+              fontFamily: 'Plus Jakarta Sans, sans-serif',
+              fontSize: 10, fontWeight: 700, letterSpacing: '1px',
+              textTransform: 'uppercase', color: '#8A8C9E', marginBottom: 8,
+            }}>
+              Schedule
+            </div>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              {startDate && (
+                <div>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 600, color: '#1A1A2E' }}>{fmtDate(startDate)}</div>
+                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>Start date</div>
+                </div>
+              )}
+              {endDate && (
+                <div>
+                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 600, color: '#1A1A2E' }}>{fmtDate(endDate)}</div>
+                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 1 }}>End date</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Points Campaign: show action cards
+  if (entries.length === 0) return null
 
   return (
     <div>

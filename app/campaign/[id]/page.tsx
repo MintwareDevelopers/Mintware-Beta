@@ -246,6 +246,10 @@ function CampaignDetailContent() {
                   actions={campaign.actions ?? {}}
                   startDate={(campaign as Campaign & { start_date?: string }).start_date}
                   endDate={campaign.end_date}
+                  campaignType={(campaign as Campaign & { campaign_type?: 'token_pool' | 'points' }).campaign_type}
+                  referralRewardPct={(campaign as Campaign & { referral_reward_pct?: number }).referral_reward_pct}
+                  buyerRewardPct={(campaign as Campaign & { buyer_reward_pct?: number }).buyer_reward_pct}
+                  tokenSymbol={campaign.token_symbol}
                 />
               )}
 
