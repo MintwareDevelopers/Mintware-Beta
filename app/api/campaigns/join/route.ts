@@ -1,22 +1,23 @@
 // =============================================================================
 // POST /api/campaigns/join
-//
-// Registers a wallet as a participant in a campaign.
-// Replaces the external Worker /join endpoint which was returning "Invalid wallet".
-//
-// Flow:
-//   1. Validate inputs
-//   2. Load campaign, check it's live
-//   3. Fetch user's Attribution score from Worker API
-//   4. Check min_score gate
-//   5. Upsert participant row (idempotent — safe to call twice)
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient }  from '@/lib/supabase'
+import { createSupabaseServiceClient } from '@/lib/supabase'
 import { API } from '@/lib/api'
 
 const ETH_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
+
+/** Fetch with a manual timeout — AbortSignal.timeout not reliable on all runtimes */
+async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 export async function POST(req: NextRequest) {
   let body: unknown
@@ -34,7 +35,14 @@ export async function POST(req: NextRequest) {
   }
 
   const wallet = address.toLowerCase()
-  const supabase = createSupabaseServiceClient()
+
+  let supabase: ReturnType<typeof createSupabaseServiceClient>
+  try {
+    supabase = createSupabaseServiceClient()
+  } catch (e) {
+    console.error('[join] supabase init error:', e)
+    return NextResponse.json({ error: 'server configuration error' }, { status: 500 })
+  }
 
   // 1. Load campaign
   const { data: campaign, error: campaignErr } = await supabase
@@ -43,29 +51,35 @@ export async function POST(req: NextRequest) {
     .eq('id', campaign_id)
     .single()
 
-  if (campaignErr || !campaign) {
+  if (campaignErr) {
+    console.error('[join] campaign query error:', campaignErr)
+    return NextResponse.json({ error: `campaign lookup failed: ${campaignErr.message}` }, { status: 500 })
+  }
+  if (!campaign) {
     return NextResponse.json({ error: 'campaign not found' }, { status: 404 })
   }
   if (campaign.status !== 'live' && campaign.status !== 'upcoming') {
     return NextResponse.json({ error: 'campaign is not accepting participants' }, { status: 409 })
   }
 
-  // 2. Fetch Attribution score (non-blocking — default 0 if API is down)
+  // 2. Fetch Attribution score — 4s timeout, default 0 on failure
   let attribution_score = 0
   try {
-    const scoreRes = await fetch(`${API}/score?address=${encodeURIComponent(address)}`, {
-      signal: AbortSignal.timeout(5000),
-    })
+    const scoreRes = await fetchWithTimeout(
+      `${API}/score?address=${encodeURIComponent(address)}`,
+      4000
+    )
     if (scoreRes.ok) {
       const scoreData = await scoreRes.json()
       attribution_score = typeof scoreData.score === 'number' ? scoreData.score : 0
     }
-  } catch {
-    // Score API unavailable — allow join with score 0, worker will refresh later
+  } catch (e) {
+    // Timeout or network error — allow join with score 0
+    console.warn('[join] score fetch failed, defaulting to 0:', e instanceof Error ? e.message : e)
   }
 
-  // 3. min_score gate (points campaigns only — token_pool is open access)
-  const minScore = campaign.min_score ?? 0
+  // 3. min_score gate (points campaigns only — token_pool is open)
+  const minScore = Number(campaign.min_score ?? 0)
   if (campaign.campaign_type === 'points' && minScore > 0 && attribution_score < minScore) {
     return NextResponse.json(
       { error: `Score too low. Required: ${minScore}, yours: ${attribution_score}` },
@@ -73,7 +87,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // 4. Upsert participant — idempotent, safe to call multiple times
+  // 4. Upsert participant
   const { error: upsertErr } = await supabase
     .from('participants')
     .upsert(
@@ -91,7 +105,7 @@ export async function POST(req: NextRequest) {
 
   if (upsertErr) {
     console.error('[join] upsert error:', upsertErr)
-    return NextResponse.json({ error: 'failed to join campaign' }, { status: 500 })
+    return NextResponse.json({ error: `join failed: ${upsertErr.message}` }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true, campaign_id, wallet, attribution_score })
