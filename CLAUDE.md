@@ -95,18 +95,29 @@ Joins, reward credits, claims, cron jobs, referrals — all go through our route
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role (server only, bypasses RLS) | |
 | `NEXT_PUBLIC_LIFI_INTEGRATOR` | LI.FI integrator name — `"mintware"` | |
 | `NEXT_PUBLIC_LIFI_API_KEY` | LI.FI integrator API key | |
+| `NEXT_PUBLIC_LIFI_INTEGRATOR_VERIFIED` | **Must be `"true"` to enable fee collection.** Gates `fee` + `referrer` params in `getRoutes()`. Without it, no fee is passed to LI.FI and Mintware earns nothing on swaps. | Set in Vercel. |
 | `NEXT_PUBLIC_0X_API_KEY` | 0x swap API key (fallback routing) | |
-| `NEXT_PUBLIC_MINTWARE_TREASURY` | Fee recipient wallet for LI.FI swaps | `0x3F9529e33273fcCec66BaE34B51397e1d01937Bf` |
+| `NEXT_PUBLIC_MINTWARE_TREASURY` | LI.FI fee recipient wallet. Passed as `referrer` to `getRoutes()`. | `0x3F9529e33273fcCec66BaE34B51397e1d01937Bf` |
+| `MINTWARE_TREASURY_ADDRESS` | **Server-side** treasury address. Used in `onchainPublisher` oracle≠treasury guard. Must match `NEXT_PUBLIC_MINTWARE_TREASURY`. | `0x3F9529e33273fcCec66BaE34B51397e1d01937Bf` |
 | `NEXT_PUBLIC_DISTRIBUTOR_ADDRESS` | MintwareDistributor contract for claim UI | Base mainnet: `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE` |
 | `NEXT_PUBLIC_REWARDS_MODE` | `"live"` — enables real reward calculation | |
 | `CRON_SECRET` | Bearer token securing all `/api/cron/*` routes | |
-| `SWAP_WEBHOOK_SECRET` | Auth header for Molten swap webhook | |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service role for server API routes | |
-| `BASE_RPC_URL` | Base mainnet RPC | `https://mainnet.base.org` |
-| `CORE_DAO_RPC_URL` | Core DAO RPC | `https://rpc.coredao.org` |
+| `SWAP_WEBHOOK_SECRET` | Auth for Molten server-side webhook. **See critical note below.** | |
+| `BASE_RPC_URL` | Base mainnet RPC | defaults to `https://mainnet.base.org` |
+| `CORE_DAO_RPC_URL` | Core DAO RPC | defaults to `https://rpc.coredao.org` |
 | `ORACLE_SIGNER_ADDRESS` | EIP-712 oracle signer public address | `0xc75D4b4bdB4D7ac103671f45E99D2FA6107B2e93` |
-| `DISTRIBUTOR_PRIVATE_KEY` | Oracle signer private key — signs Merkle roots (server only) | |
+| `DISTRIBUTOR_PRIVATE_KEY` | Oracle signer private key — signs Merkle roots (server only, never expose) | |
 | `COINGECKO_API_KEY` | Price feed (optional, falls back to free tier) | |
+
+### SWAP_WEBHOOK_SECRET — critical behaviour
+
+`/api/campaigns/swap-event` receives events from **two sources**:
+
+1. **LI.FI client-side** — the swap page calls it directly after `executeRoute()` completes. **No auth header** is sent. `SWAP_WEBHOOK_SECRET` must **NOT** be set in Vercel for this to work — if it is, all client-side reward credits return 401.
+
+2. **Molten server-side** — will call the same endpoint with an `Authorization: Bearer {SWAP_WEBHOOK_SECRET}` header once Molten is configured.
+
+**Current state:** `SWAP_WEBHOOK_SECRET` is deleted from Vercel. Client-side swap events work. When Molten is wired up, the secret will be added back and the route will accept both authenticated (Molten) and unauthenticated (client) requests — check the route auth logic before enabling.
 
 ### Deprecated — do NOT use these names
 
@@ -185,6 +196,35 @@ At epoch end: pool split proportionally by `points × attribution_multiplier × 
 
 Max combined multiplier: 1.95×. Formula: `wallet_payout = (epoch_pool / epoch_count) × (wallet_points / total_points) × multiplier`
 
+**Score multiplier implementation notes:**
+- `attribution_score` comes from the Attribution Worker `/score` API (max signal sum = 925). Percentile is computed across all participants in the epoch.
+- `sharing_score` is the Attribution API's `sharing` signal score. **Max is 400** (not 125 — old bug). Percentile bins: 0–33% = 1.0×, 34–66% = 1.15×, 67–100% = 1.3×.
+- Multipliers are **only applied when `campaign.use_score_multiplier = true`**. If the flag is false, all wallets get 1.0× combined regardless of scores.
+- Both of these are enforced in `lib/campaigns/epochProcessor.ts` (`SHARING_SCORE_MAX = 400`, `use_score_multiplier` guard).
+
+**Daily caps (token pool campaigns):**
+- `daily_wallet_cap_usd` — max a single wallet can earn per calendar day across all reward types
+- `daily_pool_cap_usd` — max the campaign pool can pay out in total per calendar day
+- Both are checked before calling `deduct_token_pool_reward`. If either cap is reached, the event is skipped with a `daily_wallet_cap_reached` or `daily_pool_cap_reached` reason.
+- Cap period = UTC calendar day (midnight to midnight).
+
+---
+
+## LI.FI Swap Fee (Mintware Platform Revenue)
+
+**This is entirely separate from campaign reward pool fees.**
+
+- **Fee:** 0.5% on every swap routed through the Mintware swap UI (`LIFI_FEE = 0.005` in `lib/swap/lifi.ts`)
+- **Recipient:** `NEXT_PUBLIC_MINTWARE_TREASURY` (`0x3F9529e33273fcCec66BaE34B51397e1d01937Bf`)
+- **Mechanism:** Passed as `{ fee: 0.005, referrer: LIFI_TREASURY }` to LI.FI's `getRoutes()`. LI.FI routes the fee to the referrer address on every completed swap.
+- **Gate:** Only active when `NEXT_PUBLIC_LIFI_INTEGRATOR_VERIFIED === "true"` (set in Vercel). Without this, `feeOptions` is `{}` and no fee is collected.
+- **Where it lives:** `components/swap/MintwareSwap.tsx` ~line 250.
+
+**What campaign pool fees are (completely different):**
+- Token pool campaigns: sponsors pre-fund a pool. `platform_fee_pct` (default 2%), `buyer_reward_pct`, and `referral_reward_pct` are all paid out of that pool per tx via the `pending_rewards` table and pool-settle cron.
+- Points campaigns: sponsors pay a flat B2B sponsorship fee. No per-tx fee logic.
+- Neither of these has anything to do with the LI.FI swap fee.
+
 ---
 
 ## Join Flow
@@ -227,7 +267,15 @@ After joining, the page re-fetches campaign data from the Attribution Worker (`G
 | Core DAO | Not yet deployed (awaiting bridge contract) |
 
 **Owner:** `0x46BB4fea89DFfc5a8a1187EB4A524275568f42d7`
-**Oracle signer:** `0xc75D4b4bdB4D7ac103671f45E99D2FA6107B2e93`
+**Oracle signer:** `0xc75D4b4bdB4D7ac103671f45E99D2FA6107B2e93` (derived from `DISTRIBUTOR_PRIVATE_KEY`)
+**Treasury:** `0x3F9529e33273fcCec66BaE34B51397e1d01937Bf`
+
+**⚠️ Oracle ≠ Treasury — important implication:**
+`claim()` sends tokens to `msg.sender`. When `onchainPublisher` auto-claims the treasury fee leaf after signing, it calls `claim()` from the oracle wallet — so fees would land in the oracle wallet, not the treasury.
+
+`onchainPublisher` detects this mismatch (`ORACLE_SIGNER_ADDRESS ≠ MINTWARE_TREASURY_ADDRESS`) and **skips auto-claim**, logging a warning. The oracle signature is still stored in Supabase. Treasury must manually call `claim()` using the stored `oracle_signature` from the `distributions` table.
+
+**Long-term fix:** Rotate `DISTRIBUTOR_PRIVATE_KEY` to a key whose derived address equals `NEXT_PUBLIC_MINTWARE_TREASURY`, or use a separate treasury claimer contract. Until then, treasury fees require manual claiming.
 
 ### Leaf encoding (critical — mismatch causes all claims to revert)
 - **Solidity:** `keccak256(bytes.concat(keccak256(abi.encode(address, uint256))))`
@@ -256,12 +304,13 @@ After joining, the page re-fetches campaign data from the Attribution Worker (`G
 
 | Route | Schedule | Purpose |
 |-------|---------|---------|
-| `/api/cron/pool-settle` | `*/15 * * * *` | Settle claimable `pending_rewards` → Merkle distributions |
+| `/api/cron/pool-settle` | `0 2 * * *` ⚠️ | Settle claimable `pending_rewards` → Merkle distributions |
 | `/api/cron/epoch-end` | `0 1 * * *` | Close active points epoch + publish distribution |
 | `/api/cron/bridge-verify` | `0 0 * * *` | Verify Core DAO bridge txs (**BLOCKED** — `CORE_DAO_BRIDGE_CONTRACT` not set) |
 
 All cron routes require `Authorization: Bearer {CRON_SECRET}`.
-**Note:** 15-min pool-settle requires Vercel Pro. Hobby plan = daily only.
+
+**⚠️ pool-settle is temporarily daily (2am UTC).** Intended schedule is `*/15 * * * *` (every 15 min). Vercel Hobby plan caps crons to daily. To restore: upgrade to Vercel Pro and change `pool-settle` cron in `vercel.json` back to `"*/15 * * * *"`.
 
 ---
 
@@ -343,12 +392,21 @@ pnpm hardhat:deploy:base-sepolia   # Deploy to Base Sepolia testnet
 
 ## Pending Work
 
+### Blocking (users can't claim rewards without these)
+- [ ] **Claim API — Ticket 6** — `GET /api/claim?address=&distribution_id=` and `POST /api/claim` are not yet implemented. Distributions are built + oracle-signed, but wallets have no way to fetch their proof and execute on-chain. This closes the full reward cycle.
+
+### Infrastructure
+- [ ] **Oracle = Treasury alignment** — Oracle signer (`0xc75D4...`) ≠ Treasury (`0x3F95...`). Treasury platform fees from token pool campaigns require manual claiming from the `distributions` table using the stored `oracle_signature`. Long-term fix: rotate `DISTRIBUTOR_PRIVATE_KEY` to a key whose address equals the treasury wallet.
+- [ ] **Vercel Pro plan** — restores pool-settle cron to `*/15 * * * *`. Currently daily at 2am UTC on Hobby plan.
 - [ ] **`CORE_DAO_BRIDGE_CONTRACT`** — still `0x__PENDING_MOLTEN_CONFIRMATION__`. Blocks bridge actions + bridge-verify cron.
-- [ ] **Molten webhook** — register `https://mintware-beta.vercel.app/api/campaigns/swap-event` in Molten dashboard + set matching `SWAP_WEBHOOK_SECRET`
-- [ ] **Vercel Pro plan** — needed for 15-min pool-settle cron schedule. Hobby plan limits to daily.
+- [ ] **Molten webhook** — register `https://mintware-beta.vercel.app/api/campaigns/swap-event` in Molten dashboard + set matching `SWAP_WEBHOOK_SECRET`. See SWAP_WEBHOOK_SECRET note above before enabling.
+
+### Configuration
+- [ ] **Reown Cloud whitelist** — add `mintware-beta.vercel.app` + `localhost:3000` at cloud.reown.com (project `580f461c981a43d53fc25fe59b64306b`)
 - [ ] **locallyJoined gap** — build `GET /api/campaigns/[id]` reading from Supabase `participants` so page refresh shows correct join state
-- [ ] **Reown Cloud whitelist** — add `localhost:3000` + production domain at cloud.reown.com (project `580f461c981a43d53fc25fe59b64306b`)
-- [ ] **Waitlist form** — wire email capture on landing page (UI exists)
+
+### Minor
+- [ ] **Waitlist form** — wire email capture on landing page (UI exists, not wired)
 - [ ] **Explorer page** — `explorer.html` uses D3.js, deferred React conversion
 - [ ] **MintwareDistributor — Core DAO** — deploy when bridge contract confirmed
 
@@ -375,3 +433,11 @@ pnpm hardhat:deploy:base-sepolia   # Deploy to Base Sepolia testnet
 9. **`campaign_payouts` is legacy** — the canonical payout table is `daily_payouts`. Do not write new data to `campaign_payouts`.
 
 10. **shadcn/ui is unused** — `components/ui/` was scaffolded at init. App pages use custom inline CSS. Do not add new shadcn components to app pages.
+
+11. **LI.FI swap fee ≠ campaign fees** — The 0.5% LI.FI fee is Mintware platform revenue, collected on every swap regardless of campaigns. Campaign reward pool fees (`platform_fee_pct`, `buyer_reward_pct`, `referral_reward_pct`) come entirely from sponsor-funded pools via `pending_rewards`. These are two completely separate revenue streams.
+
+12. **`use_score_multiplier` must be explicitly true** — Points campaigns do NOT apply Attribution/Sharing score multipliers unless `campaigns.use_score_multiplier = true`. Default is false. When false, all wallets get 1.0× combined.
+
+13. **`SHARING_SCORE_MAX = 400`** — The Attribution API's `sharing` signal has a max of 400 (not 125). Percentile thresholds for multiplier tiers are computed relative to 400. This is in `epochProcessor.ts`. Do not change this constant without verifying the Attribution API spec.
+
+14. **SWAP_WEBHOOK_SECRET must not be set for client-side events** — The swap page calls `/api/campaigns/swap-event` directly with no auth. Setting `SWAP_WEBHOOK_SECRET` in Vercel blocks all client-side reward credits with 401. Only set it when explicitly supporting the Molten server-side webhook path (and update the route to accept both authenticated and unauthenticated callers).
