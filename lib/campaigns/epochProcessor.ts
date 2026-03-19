@@ -61,7 +61,9 @@ export interface EpochProcessorResult {
 //   125 is the max Sharing signal score (from CLAUDE.md signal table)
 //   This is a proxy for sharing percentile since the API doesn't return one.
 // ---------------------------------------------------------------------------
-const SHARING_SCORE_MAX = 125
+// Max sharing signal score from the Attribution API (CLAUDE.md signal table: max=400).
+// Used to normalise sharing_score into a 0–100 percentile proxy for the multiplier bands.
+const SHARING_SCORE_MAX = 400
 
 export function computeMultipliers(
   attribution_percentile: number,
@@ -229,7 +231,11 @@ export async function processEpoch(
     const attribution_percentile = profile?.attribution_percentile ?? 0
     const sharing_score = profile?.sharing_score ?? participant.sharing_score
 
-    const multipliers = computeMultipliers(attribution_percentile, sharing_score)
+    // Only apply multipliers when the campaign explicitly opts in.
+    // Campaigns with use_score_multiplier = false get a flat 1.0× for all participants.
+    const multipliers = campaign.use_score_multiplier
+      ? computeMultipliers(attribution_percentile, sharing_score)
+      : { attribution: 1.0, sharing: 1.0, combined: 1.0 }
 
     const wallet_share = participant.total_points / total_points
     const payout_usd = epoch.epoch_pool_usd * wallet_share * multipliers.combined

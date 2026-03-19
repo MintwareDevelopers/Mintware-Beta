@@ -262,7 +262,24 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
   // Only for token pool campaign fee settlements. Points campaigns never pass this
   // (no fee logic runs for points campaigns per spec).
   // If auto-claim fails: non-fatal. Signature is stored. Treasury claims manually.
+  //
+  // GUARD: claim() sends tokens to msg.sender (the oracle wallet). For fees to land
+  // in MINTWARE_TREASURY_ADDRESS the oracle wallet MUST equal the treasury address.
+  // If they differ, skip auto-claim and log a warning — treasury claims manually.
   let treasury_claim_tx: string | undefined
+
+  if (params.treasury_claim) {
+    const treasuryAddr = (process.env.MINTWARE_TREASURY_ADDRESS ?? '').toLowerCase()
+    if (treasuryAddr && account.address.toLowerCase() !== treasuryAddr) {
+      console.warn(
+        `[onchainPublisher] Skipping treasury auto-claim for distribution ${distribution_db_id}: ` +
+        `oracle wallet (${account.address}) ≠ MINTWARE_TREASURY_ADDRESS (${treasuryAddr}). ` +
+        `claim() sends to msg.sender — fees would land in the oracle wallet, not the treasury. ` +
+        `Treasury must call claim() manually using the stored oracle_signature.`
+      )
+      return { oracle_signature: oracleSignature }
+    }
+  }
 
   if (params.treasury_claim) {
     const { amount_wei, proof } = params.treasury_claim

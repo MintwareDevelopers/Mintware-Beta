@@ -128,6 +128,8 @@ export type SkipReason =
   | 'score_below_minimum'
   | 'already_traded_today'
   | 'pool_insufficient'
+  | 'daily_wallet_cap_reached'
+  | 'daily_pool_cap_reached'
   | 'db_error'
 
 export interface AttributionResult {

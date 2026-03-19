@@ -86,6 +86,58 @@ async function processTokenPool(
 
   const total_deduction = buyer_reward_usd + referral_reward_usd + platform_fee_usd
 
+  // ---------------------------------------------------------------------------
+  // Daily wallet cap — cap on how much one wallet can earn per day from this campaign
+  // Only checked when campaign.daily_wallet_cap_usd > 0.
+  // Sums buyer reward_usd from pending_rewards created today for this wallet.
+  // ---------------------------------------------------------------------------
+  const walletCapUsd = Number(campaign.daily_wallet_cap_usd ?? 0)
+  if (walletCapUsd > 0) {
+    const dayStartW = utcDayStart(event.timestamp)
+    const dayEndW   = utcDayEnd(event.timestamp)
+    const { data: walletRows, error: walletCapErr } = await supabase
+      .from('pending_rewards')
+      .select('reward_usd')
+      .eq('campaign_id', campaign.id)
+      .eq('wallet', event.wallet)
+      .eq('reward_type', 'buyer')
+      .gte('created_at', dayStartW)
+      .lte('created_at', dayEndW)
+    if (walletCapErr) {
+      console.error('[swapHook] daily_wallet_cap query error:', walletCapErr)
+      return { credited: false, skip_reason: 'db_error' }
+    }
+    const walletTodayUsd = (walletRows ?? []).reduce((s, r) => s + Number(r.reward_usd), 0)
+    if (walletTodayUsd + buyer_reward_usd > walletCapUsd) {
+      return { credited: false, skip_reason: 'daily_wallet_cap_reached', campaign_type: 'token_pool' }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Daily pool cap — cap on total rewards the campaign can pay out per day
+  // Only checked when campaign.daily_pool_cap_usd > 0.
+  // Sums all reward_usd from pending_rewards created today for this campaign.
+  // ---------------------------------------------------------------------------
+  const poolCapUsd = Number(campaign.daily_pool_cap_usd ?? 0)
+  if (poolCapUsd > 0) {
+    const dayStartP = utcDayStart(event.timestamp)
+    const dayEndP   = utcDayEnd(event.timestamp)
+    const { data: poolRows, error: poolCapErr } = await supabase
+      .from('pending_rewards')
+      .select('reward_usd')
+      .eq('campaign_id', campaign.id)
+      .gte('created_at', dayStartP)
+      .lte('created_at', dayEndP)
+    if (poolCapErr) {
+      console.error('[swapHook] daily_pool_cap query error:', poolCapErr)
+      return { credited: false, skip_reason: 'db_error' }
+    }
+    const poolTodayUsd = (poolRows ?? []).reduce((s, r) => s + Number(r.reward_usd), 0)
+    if (poolTodayUsd + total_deduction > poolCapUsd) {
+      return { credited: false, skip_reason: 'daily_pool_cap_reached', campaign_type: 'token_pool' }
+    }
+  }
+
   // Atomic pool check-and-decrement (Postgres row lock)
   const { data: deducted, error: deductErr } = await supabase.rpc(
     'deduct_token_pool_reward',
