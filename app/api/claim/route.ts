@@ -23,6 +23,30 @@
 //   404 Distribution not found, or wallet not in this distribution
 //   409 Distribution not yet signed by oracle (status: 'pending')
 //   410 Wallet has already claimed this distribution
+//
+// ---------------------------------------------------------------------------
+// POST /api/claim
+//
+// Called by the claim UI after the on-chain claim() tx is confirmed.
+// Marks daily_payouts.claimed_at for the wallet so the UI reflects "Claimed".
+//
+// Body: { address, distribution_id, tx_hash }
+//   address         — the claiming wallet (must match the on-chain msg.sender)
+//   distribution_id — Supabase UUID of the distributions row
+//   tx_hash         — the on-chain transaction hash (stored for audit, not verified)
+//
+// Note: the contract is the authoritative double-claim guard. This endpoint
+// only keeps our off-chain DB in sync so the claim UI shows the correct state.
+// If this call fails after the on-chain tx succeeded, the user can retry — the
+// contract will reject a second on-chain claim, and this endpoint will just
+// update claimed_at again (idempotent).
+//
+// Response:
+//   200 { ok: true, claimed_at }
+//   400 Missing required params
+//   404 Distribution not found, or wallet not in this distribution
+//   409 Distribution not yet published (oracle hasn't signed)
+//   410 Already marked as claimed (idempotent — returns the existing claimed_at)
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -234,4 +258,100 @@ export async function GET(req: NextRequest) {
     token_address:     campaign?.token_contract ?? null,
     token_symbol:      campaign?.token_symbol ?? null,
   })
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/claim — mark daily_payouts.claimed_at after on-chain tx confirms
+// ---------------------------------------------------------------------------
+
+export async function POST(req: NextRequest) {
+  // ── Parse + validate body ─────────────────────────────────────────────────
+  let body: { address?: string; distribution_id?: string; tx_hash?: string }
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  const { address: rawAddress, distribution_id: distributionId, tx_hash: txHash } = body
+
+  if (!rawAddress || !distributionId) {
+    return NextResponse.json(
+      { error: 'address and distribution_id are required' },
+      { status: 400 }
+    )
+  }
+
+  const address = rawAddress.toLowerCase()
+  const supabase = createSupabaseServiceClient()
+
+  // ── Fetch distribution — must exist and be published ─────────────────────
+  const { data: dist, error: distErr } = await supabase
+    .from('distributions')
+    .select('id, campaign_id, epoch_number, status')
+    .eq('id', distributionId)
+    .single()
+
+  if (distErr || !dist) {
+    return NextResponse.json({ error: 'Distribution not found' }, { status: 404 })
+  }
+
+  if (dist.status === 'pending') {
+    return NextResponse.json(
+      { error: 'Distribution has not been published — oracle signature is missing', status: dist.status },
+      { status: 409 }
+    )
+  }
+
+  // ── Fetch the wallet's payout row ─────────────────────────────────────────
+  const { data: payoutRow, error: payoutErr } = await supabase
+    .from('daily_payouts')
+    .select('id, claimed_at')
+    .eq('campaign_id', dist.campaign_id)
+    .eq('epoch_number', dist.epoch_number)
+    .eq('wallet', address)
+    .maybeSingle()
+
+  if (payoutErr || !payoutRow) {
+    return NextResponse.json(
+      { error: 'Wallet is not included in this distribution' },
+      { status: 404 }
+    )
+  }
+
+  // ── Idempotent: already marked claimed ────────────────────────────────────
+  // Return 410 with the existing timestamp. The UI can treat this as success
+  // (the contract already rejected any second on-chain claim attempt).
+  if (payoutRow.claimed_at) {
+    return NextResponse.json(
+      { ok: true, claimed_at: payoutRow.claimed_at, already_claimed: true },
+      { status: 410 }
+    )
+  }
+
+  // ── Mark claimed ──────────────────────────────────────────────────────────
+  const claimedAt = new Date().toISOString()
+
+  const { error: updateErr } = await supabase
+    .from('daily_payouts')
+    .update({ claimed_at: claimedAt })
+    .eq('id', payoutRow.id)
+
+  if (updateErr) {
+    console.error(
+      `[claim POST] Failed to mark claimed for distribution=${distributionId} wallet=${address}:`,
+      updateErr.message
+    )
+    return NextResponse.json(
+      { error: 'Failed to record claim — please retry. Your on-chain claim succeeded.' },
+      { status: 500 }
+    )
+  }
+
+  console.log(
+    `[claim POST] ✓ Marked claimed: distribution=${distributionId} wallet=${address}` +
+    (txHash ? ` tx=${txHash}` : '')
+  )
+
+  return NextResponse.json({ ok: true, claimed_at: claimedAt })
 }

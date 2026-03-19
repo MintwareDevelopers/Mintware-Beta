@@ -393,7 +393,7 @@ pnpm hardhat:deploy:base-sepolia   # Deploy to Base Sepolia testnet
 ## Pending Work
 
 ### Blocking (users can't claim rewards without these)
-- [ ] **Claim API — Ticket 6** — `GET /api/claim?address=&distribution_id=` and `POST /api/claim` are not yet implemented. Distributions are built + oracle-signed, but wallets have no way to fetch their proof and execute on-chain. This closes the full reward cycle.
+- [x] **Claim API — Ticket 6** — `GET /api/claim`, `GET /api/claim/status`, and `POST /api/claim` all implemented. Claim flow is complete end-to-end.
 
 ### Infrastructure
 - [ ] **Oracle = Treasury alignment** — Oracle signer (`0xc75D4...`) ≠ Treasury (`0x3F95...`). Treasury platform fees from token pool campaigns require manual claiming from the `distributions` table using the stored `oracle_signature`. Long-term fix: rotate `DISTRIBUTOR_PRIVATE_KEY` to a key whose address equals the treasury wallet.
