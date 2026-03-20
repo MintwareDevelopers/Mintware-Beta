@@ -13,7 +13,7 @@
 // Existing wallets keep their codes — this only runs when ref_code is null.
 // =============================================================================
 
-import type { SupabaseClient } from '@supabase/supabase-js'
+import type { createBrowserClient } from '@supabase/ssr'
 import { resolveBasename, extractBasenameHandle } from '@/lib/identity'
 
 // ---------------------------------------------------------------------------
@@ -66,7 +66,7 @@ function addressToBase58Fragment(address: string): string {
 // Returns true if taken, false if available.
 // ---------------------------------------------------------------------------
 async function isCodeTaken(
-  supabase:   SupabaseClient,
+  supabase:   ReturnType<typeof createBrowserClient>,
   code:       string,
   ownAddress: string
 ): Promise<boolean> {
@@ -92,7 +92,7 @@ async function isCodeTaken(
 // ---------------------------------------------------------------------------
 export async function generateRefCodeForWallet(
   address:  string,
-  supabase: SupabaseClient
+  supabase: ReturnType<typeof createBrowserClient>
 ): Promise<string> {
   const addr = address.toLowerCase()
 

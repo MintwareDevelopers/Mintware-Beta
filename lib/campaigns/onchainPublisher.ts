@@ -50,7 +50,8 @@ import { createSupabaseServiceClient } from '@/lib/supabase'
 
 const DISTRIBUTOR_ABI = parseAbi([
   // claim() — used for optional treasury auto-claim after signing
-  'function claim(string calldata campaignId, uint256 epochNumber, bytes32 merkleRoot, bytes calldata oracleSignature, uint256 amount, bytes32[] calldata merkleProof)',
+  // v2: deadline param added between oracleSignature and amount
+  'function claim(string calldata campaignId, uint256 epochNumber, bytes32 merkleRoot, bytes calldata oracleSignature, uint256 deadline, uint256 amount, bytes32[] calldata merkleProof)',
   'event Claimed(string campaignId, uint256 indexed epochNumber, address indexed claimant, uint256 amount)',
 ])
 
@@ -103,6 +104,7 @@ const ROOT_TYPED_DATA = {
       { name: 'campaignId',   type: 'string'  },
       { name: 'epochNumber',  type: 'uint256' },
       { name: 'merkleRoot',   type: 'bytes32' },
+      { name: 'deadline',     type: 'uint256' },
     ],
   },
   primaryType: 'RootPublication' as const,
@@ -125,6 +127,12 @@ export interface PublishParams {
   contract_address: string
   /** Chain slug: 'base' | 'base_sepolia' | 'core_dao' | 'bnb' */
   chain: string
+  /**
+   * Unix timestamp deadline for the oracle signature.
+   * Defaults to 30 days from now if not provided.
+   * Stored in distributions.deadline and verified by the contract on claim().
+   */
+  deadline?: number
   /**
    * Optional: auto-claim the treasury's fee reward immediately after signing.
    *
@@ -164,6 +172,9 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
     contract_address,
     chain: chainSlug,
   } = params
+
+  // Default: 30 days from now. The contract requires block.timestamp <= deadline.
+  const deadline = params.deadline ?? Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
 
   // ── Oracle wallet setup ────────────────────────────────────────────────────
   const rawKey = process.env.DISTRIBUTOR_PRIVATE_KEY
@@ -215,6 +226,7 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
       campaignId:  campaign_id_str,
       epochNumber: BigInt(epoch_number),
       merkleRoot:  merkleRootBytes32,
+      deadline:    BigInt(deadline),
     },
   })
 
@@ -230,6 +242,7 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
     .from('distributions')
     .update({
       oracle_signature: oracleSignature,
+      deadline,
       status:           'published',
       published_at:     new Date().toISOString(),
     })
@@ -241,7 +254,7 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
     // Operator must run the recovery query below manually.
     const recovery =
       `UPDATE distributions ` +
-      `SET oracle_signature='${oracleSignature}', status='published', ` +
+      `SET oracle_signature='${oracleSignature}', deadline=${deadline}, status='published', ` +
       `published_at=NOW() WHERE id='${distribution_db_id}';`
 
     console.error(
@@ -293,6 +306,7 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
           BigInt(epoch_number),
           merkleRootBytes32,
           oracleSignature,
+          BigInt(deadline),
           BigInt(amount_wei),
           proof as `0x${string}`[],
         ],
