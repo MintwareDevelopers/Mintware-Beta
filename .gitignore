@@ -32,3 +32,4 @@ next-env.d.ts
 /deployments
 # Private reference files
 WEB3.md
+.claude/settings.local.json
