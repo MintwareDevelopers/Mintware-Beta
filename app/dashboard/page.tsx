@@ -82,9 +82,9 @@ function DashboardContent() {
   const upcomingCount = upcomingCampaigns.length
 
   const stats = [
-    { label: 'Total pool value', value: totalPool > 0 ? fmtUSD(totalPool) : '—', sub: `↑ ${liveCount} active campaign${liveCount !== 1 ? 's' : ''}` },
-    { label: 'Daily payout',     value: totalDaily > 0 ? fmtUSD(totalDaily) : '—', sub: 'distributed per day' },
-    { label: 'Your points',      value: userScore !== null ? userScore.toLocaleString() : '0', sub: wallet ? 'Attribution score' : 'Start trading to earn', subGray: !wallet },
+    { label: 'Total pool value', value: totalPool > 0 ? fmtUSD(totalPool) : '—', sub: `↑ ${liveCount} active campaign${liveCount !== 1 ? 's' : ''}`, valueColor: 'var(--color-mw-brand)' },
+    { label: 'Daily payout',     value: totalDaily > 0 ? fmtUSD(totalDaily) : '—', sub: 'distributed per day', valueColor: 'var(--color-mw-green)' },
+    { label: 'Your points',      value: userScore !== null ? userScore.toLocaleString() : '0', sub: wallet ? 'Attribution score' : 'Start trading to earn', subGray: !wallet, valueColor: 'var(--color-mw-brand)' },
     { label: 'Min score',        value: minScore !== null ? `${minScore}+` : '—', sub: 'to qualify', subGray: true },
   ]
 
@@ -111,13 +111,13 @@ function DashboardContent() {
   return (
     <>
       <style>{`
-        .db-page { padding: 28px 28px 48px; max-width: 1100px; margin: 0 auto; }
+        .db-page { padding: 20px 28px 40px; max-width: 1100px; margin: 0 auto; }
         .db-tag  { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--color-mw-live); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-tag-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-mw-live); }
         .db-title { font-size: 30px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); line-height: 1.1; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-sub   { font-size: 14px; color: var(--color-mw-ink-3); margin-top: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0 28px; }
-        .db-stat  { background: var(--color-mw-surface-card); border: 0.5px solid var(--color-mw-border); border-radius: var(--radius-md); padding: 16px 18px; }
+        .db-stat  { background: var(--color-mw-surface-card); border-radius: var(--radius-md); padding: 16px 18px; box-shadow: var(--shadow-sm); }
         .db-stat-label { font-size: 11px; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; }
         .db-stat-sub   { font-size: 11px; margin-top: 3px; font-family: 'Plus Jakarta Sans', sans-serif; }
@@ -128,16 +128,16 @@ function DashboardContent() {
         .db-filter  { padding: 5px 14px; border-radius: var(--radius-xl); font-size: 12px; cursor: pointer; border: 0.5px solid rgba(0,0,0,0.1); background: #fff; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; display: inline-flex; align-items: center; gap: 4px; }
         .db-filter.active { border-color: var(--color-mw-brand); color: var(--color-mw-brand); background: var(--color-mw-brand-dim); font-weight: 500; }
         .db-filter-count { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--color-mw-brand); color: #fff; font-size: 10px; font-weight: 600; }
-        .db-section-title { font-size: 13px; font-weight: 500; color: var(--color-mw-ink-3); margin-bottom: 12px; letter-spacing: 0.2px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-section-title { font-size: 11px; font-weight: 600; color: var(--color-mw-ink-3); margin-bottom: 12px; letter-spacing: 1px; text-transform: uppercase; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-grid  { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
         .db-upcoming { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
-        .db-upc-row  { display: flex; align-items: center; gap: 16px; padding: 24px; background: var(--color-mw-surface-card); border: 0.5px dashed rgba(0,0,0,0.15); border-radius: var(--radius-md); cursor: pointer; transition: border-color var(--transition-fast), background var(--transition-fast); }
+        .db-upc-row  { display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: var(--color-mw-surface-card); border: 0.5px dashed rgba(0,0,0,0.15); border-radius: var(--radius-md); cursor: pointer; transition: border-color var(--transition-fast), background var(--transition-fast); }
         .db-upc-row:hover { border-color: rgba(79,126,247,0.3); border-style: dashed; background: #f5f5f8; }
         .db-upc-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; border: 0.5px solid var(--color-mw-border); background: #fff; color: var(--color-mw-ink-3); font-family: 'DM Mono', monospace; }
         .db-upc-name { font-size: 14px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; margin-bottom: 3px; }
         .db-upc-meta { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-upc-right { margin-left: auto; text-align: right; flex-shrink: 0; }
-        .db-upc-pool  { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-upc-pool  { font-size: 12px; color: var(--color-mw-green); font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 500; }
         .db-upc-badge { font-size: 12px; font-weight: 500; color: #f59e0b; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-activity { margin-top: 28px; }
         .db-act-list { display: flex; flex-direction: column; gap: 8px; }
@@ -172,7 +172,7 @@ function DashboardContent() {
           {stats.map(s => (
             <div key={s.label} className="db-stat">
               <div className="db-stat-label">{s.label}</div>
-              <div className="db-stat-value">{s.value}</div>
+              <div className="db-stat-value" style={s.valueColor ? { color: s.valueColor } : undefined}>{s.value}</div>
               <div className="db-stat-sub" style={{ color: s.subGray ? 'var(--color-mw-ink-5)' : 'var(--color-mw-live)' }}>{s.sub}</div>
             </div>
           ))}

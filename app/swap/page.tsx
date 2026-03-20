@@ -129,14 +129,14 @@ export default function SwapPage() {
           .sw-banner-sub   { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-banner-badge { background: var(--color-mw-brand); color: #fff; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: var(--radius-xl); white-space: nowrap; font-family: 'Plus Jakarta Sans', sans-serif; flex-shrink: 0; }
 
-          .sw-section { font-size: 11px; font-weight: 500; color: var(--color-mw-ink-3); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
+          .sw-section { font-size: 11px; font-weight: 700; color: var(--color-mw-ink-3); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
 
           .sw-actions-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 28px; }
           .sw-action-card { background: var(--color-mw-surface-card); border: 0.5px solid var(--color-mw-border); border-radius: 10px; padding: 14px 16px; transition: border-color var(--transition-fast); }
           .sw-action-card:hover { border-color: rgba(0,0,0,0.15); }
           .sw-action-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
           .sw-action-name { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-action-pts  { font-size: 13px; font-weight: 700; color: var(--color-mw-brand); white-space: nowrap; font-family: 'DM Mono', monospace; }
+          .sw-action-pts  { font-size: 14px; font-weight: 700; color: var(--color-mw-brand); white-space: nowrap; font-family: 'DM Mono', monospace; }
           .sw-action-desc { font-size: 12px; color: var(--color-mw-ink-3); line-height: 1.4; font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-action-prog-wrap { margin-top: 10px; }
           .sw-action-prog-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-mw-ink-5); margin-bottom: 5px; font-family: 'Plus Jakarta Sans', sans-serif; }
@@ -148,7 +148,7 @@ export default function SwapPage() {
           .sw-route-row:hover { border-color: rgba(0,0,0,0.15); }
           .sw-route-dot   { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
           .sw-route-info  { flex: 1; min-width: 0; }
-          .sw-route-chain  { font-size: 12px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
+          .sw-route-chain  { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-route-tokens { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-route-badge  { font-size: 11px; padding: 3px 8px; border-radius: var(--radius-xl); font-weight: 500; white-space: nowrap; font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-route-badge.live { background: rgba(34,197,94,0.1); color: var(--color-mw-green); border: 0.5px solid rgba(34,197,94,0.25); }

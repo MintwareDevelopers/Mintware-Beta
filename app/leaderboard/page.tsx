@@ -176,7 +176,7 @@ function LeaderboardContent() {
         .lb-cs-btn.inactive:hover { border-color: var(--color-mw-brand); color: var(--color-mw-brand); background: var(--color-mw-brand-dim); }
 
         .lb-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
-        .lb-stat  { background: var(--color-mw-surface-card); border-radius: var(--radius-md); padding: 16px 18px; border: 0.5px solid var(--color-mw-border); }
+        .lb-stat  { background: var(--color-mw-surface-card); border-radius: var(--radius-md); padding: 16px 18px; box-shadow: var(--shadow-sm); }
         .lb-stat-label { font-size: 11px; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; }
         .lb-stat-sub   { font-size: 11px; color: var(--color-mw-ink-3); margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
@@ -209,7 +209,7 @@ function LeaderboardContent() {
         /* Sidebar */
         .lb-your-rank { background: var(--color-mw-brand-dim); border: 0.5px solid rgba(79,126,247,0.2); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px; }
         .lb-yr-label  { font-size: 11px; font-weight: 500; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-yr-rank   { font-size: 32px; font-weight: 700; letter-spacing: -1px; color: var(--color-mw-ink); margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+        .lb-yr-rank   { font-size: 32px; font-weight: 700; letter-spacing: -1px; color: var(--color-mw-brand); margin-bottom: 4px; font-family: 'DM Mono', monospace; }
         .lb-yr-sub    { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-yr-stats  { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
         .lb-yr-stat   { background: #fff; border-radius: var(--radius-sm); padding: 10px; border: 0.5px solid var(--color-mw-border); }
@@ -217,7 +217,7 @@ function LeaderboardContent() {
         .lb-yr-stat-label { font-size: 11px; color: var(--color-mw-ink-3); margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
 
         .lb-hte { margin-top: 20px; }
-        .lb-hte-title { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-hte-title { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--color-mw-ink-3); margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-hte-item  { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid rgba(0,0,0,0.06); }
         .lb-hte-item:last-child { border-bottom: none; }
         .lb-hte-dot   { width: 8px; height: 8px; border-radius: 50%; background: var(--color-mw-brand); flex-shrink: 0; }
@@ -226,7 +226,7 @@ function LeaderboardContent() {
 
         .lb-invite { margin-top: 20px; }
         .lb-invite-card { background: var(--color-mw-surface-card); border-radius: 10px; padding: 14px; border: 0.5px solid var(--color-mw-border); }
-        .lb-invite-title { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); margin-bottom: 4px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-invite-title { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: var(--color-mw-ink-3); margin-bottom: 8px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-invite-sub   { font-size: 12px; color: var(--color-mw-ink-3); margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-invite-link  { background: #fff; border: 0.5px solid rgba(0,0,0,0.12); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--color-mw-ink-3); display: flex; align-items: center; justify-content: space-between; }
         .lb-copy-btn { font-size: 11px; color: var(--color-mw-brand); cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; background: none; border: none; }
@@ -272,12 +272,12 @@ function LeaderboardContent() {
             </div>
             <div className="lb-stat">
               <div className="lb-stat-label">Pool remaining</div>
-              <div className="lb-stat-value">{activeCampaign?.pool_usd != null ? fmtUSD(activeCampaign.pool_usd) : '—'}</div>
+              <div className="lb-stat-value" style={{ color: 'var(--color-mw-green)' }}>{activeCampaign?.pool_usd != null ? fmtUSD(activeCampaign.pool_usd) : '—'}</div>
               <div className="lb-stat-sub">{daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left` : ''}</div>
             </div>
             <div className="lb-stat">
               <div className="lb-stat-label">Daily payout</div>
-              <div className="lb-stat-value">{activeCampaign?.daily_payout_usd != null ? fmtUSD(activeCampaign.daily_payout_usd) : '—'}</div>
+              <div className="lb-stat-value" style={{ color: 'var(--color-mw-green)' }}>{activeCampaign?.daily_payout_usd != null ? fmtUSD(activeCampaign.daily_payout_usd) : '—'}</div>
               <div className="lb-stat-sub">distributed to earners</div>
             </div>
           </div>
@@ -362,7 +362,7 @@ function LeaderboardContent() {
                 <div className="lb-yr-sub">Top {topPct}% · {total} total participants</div>
                 <div className="lb-yr-stats">
                   <div className="lb-yr-stat">
-                    <div className="lb-yr-stat-val">{(me.total_points || 0).toLocaleString()}</div>
+                    <div className="lb-yr-stat-val" style={{ color: 'var(--color-mw-brand)' }}>{(me.total_points || 0).toLocaleString()}</div>
                     <div className="lb-yr-stat-label">Points</div>
                   </div>
                   <div className="lb-yr-stat">
@@ -374,7 +374,7 @@ function LeaderboardContent() {
                     <div className="lb-yr-stat-label">Earned</div>
                   </div>
                   <div className="lb-yr-stat">
-                    <div className="lb-yr-stat-val">{myRefPts}</div>
+                    <div className="lb-yr-stat-val" style={{ color: '#7B6FCC' }}>{myRefPts}</div>
                     <div className="lb-yr-stat-label">Ref pts</div>
                   </div>
                 </div>
@@ -384,10 +384,15 @@ function LeaderboardContent() {
                 <div className="lb-yr-rank" style={{ color: 'var(--color-mw-ink-5)' }}>—</div>
                 <div className="lb-yr-sub">{wallet ? 'No rank yet · start trading to qualify' : 'Connect wallet to see your rank'}</div>
                 <div className="lb-yr-stats">
-                  {['Points', 'Score', 'Earned', 'Referrals'].map(l => (
-                    <div key={l} className="lb-yr-stat">
+                  {[
+                    { label: 'Points',    color: 'var(--color-mw-brand)' },
+                    { label: 'Score',     color: 'var(--color-mw-ink-5)' },
+                    { label: 'Earned',    color: 'var(--color-mw-ink-5)' },
+                    { label: 'Referrals', color: 'var(--color-mw-ink-5)' },
+                  ].map(({ label }) => (
+                    <div key={label} className="lb-yr-stat">
                       <div className="lb-yr-stat-val" style={{ color: 'var(--color-mw-ink-5)' }}>0</div>
-                      <div className="lb-yr-stat-label">{l}</div>
+                      <div className="lb-yr-stat-label">{label}</div>
                     </div>
                   ))}
                 </div>

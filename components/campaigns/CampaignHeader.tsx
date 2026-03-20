@@ -223,7 +223,7 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
             (c.pool_remaining_usd != null || c.pool_usd != null) && {
               label: 'Pool remaining',
               value: `${fmtUSD(c.pool_remaining_usd ?? c.pool_usd ?? 0)}${c.token_symbol ? ` ${c.token_symbol}` : ''}`,
-              color: '#1A1A2E',
+              color: 'var(--color-mw-brand)',
             },
             c.referral_reward_pct != null && {
               label: 'Referral earn',
@@ -233,29 +233,29 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
             c.buyer_reward_pct != null && {
               label: 'Buyer rebate',
               value: `${c.buyer_reward_pct}% per swap`,
-              color: '#1A1A2E',
+              color: 'var(--color-mw-brand-deep)',
             },
             daysLeft !== null && isLive && {
               label: 'Days remaining',
               value: `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
-              color: '#1A1A2E',
+              color: 'var(--color-mw-amber)',
             },
           ] : [
             // Points Campaign: pool size, daily payout, days, min score
             c.pool_usd != null && {
               label: 'Pool size',
               value: `${fmtUSD(c.pool_usd)}${c.token_symbol ? ` ${c.token_symbol}` : ''}`,
-              color: '#1A1A2E',
+              color: 'var(--color-mw-brand)',
             },
             c.daily_payout_usd != null && {
               label: 'Daily payout',
               value: `${fmtUSD(c.daily_payout_usd)}/day`,
-              color: '#1A1A2E',
+              color: 'var(--color-mw-green)',
             },
             daysLeft !== null && isLive && {
               label: 'Days remaining',
               value: `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
-              color: '#1A1A2E',
+              color: 'var(--color-mw-amber)',
             },
             c.min_score != null && {
               label: 'Min score',

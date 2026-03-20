@@ -365,7 +365,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
           <div className="cc-stats">
             {(c.pool_remaining_usd != null || c.pool_usd != null) && (
               <div>
-                <div className="cc-stat-val">
+                <div className="cc-stat-val" style={{ color: 'var(--color-mw-brand)' }}>
                   {fmtUSD(c.pool_remaining_usd ?? c.pool_usd ?? 0)}
                   {c.token_symbol && <span>{c.token_symbol}</span>}
                 </div>
@@ -382,7 +382,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
             )}
             {isTokenPool && c.buyer_reward_pct != null && (
               <div>
-                <div className="cc-stat-val">{c.buyer_reward_pct}%</div>
+                <div className="cc-stat-val" style={{ color: 'var(--color-mw-brand-deep)' }}>{c.buyer_reward_pct}%</div>
                 <div className="cc-stat-label">buyer rebate</div>
               </div>
             )}

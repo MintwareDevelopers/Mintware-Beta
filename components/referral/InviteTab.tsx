@@ -73,7 +73,7 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
         }
         .invite-hero-sub {
           font-size: 13px;
-          color: rgba(255,255,255,0.4);
+          color: rgba(255,255,255,0.55);
           line-height: 1.55;
           margin-bottom: 22px;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
@@ -110,7 +110,7 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.8px;
-          color: rgba(255,255,255,0.3);
+          color: rgba(255,255,255,0.5);
           margin-bottom: 6px;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
         }
@@ -353,14 +353,14 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
         <div className="invite-stat-box">
           {isLoading
             ? <div className="invite-stat-loading" />
-            : <div className="invite-stat-num">{treeSize}</div>
+            : <div className="invite-stat-num" style={{ color: 'var(--color-mw-brand-deep)' }}>{treeSize}</div>
           }
           <div className="invite-stat-label">Referred</div>
         </div>
         <div className="invite-stat-box">
           {isLoading
             ? <div className="invite-stat-loading" />
-            : <div className="invite-stat-num">{qualityPct}%</div>
+            : <div className="invite-stat-num" style={{ color: 'var(--color-mw-teal)' }}>{qualityPct}%</div>
           }
           <div className="invite-stat-label">Active</div>
         </div>

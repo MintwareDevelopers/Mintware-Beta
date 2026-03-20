@@ -51,13 +51,15 @@ export function MwNav() {
         position: 'sticky', top: 0, zIndex: 200,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 28px', height: 49,
-        background: '#ffffff',
+        background: 'rgba(255,255,255,0.92)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '0.5px solid var(--color-mw-border)',
       }}>
         <Link
           href="/"
           style={{
-            fontSize: 17, fontWeight: 500, letterSpacing: '-0.4px',
+            fontSize: 18, fontWeight: 600, letterSpacing: '-0.4px',
             textDecoration: 'none', color: 'var(--color-mw-ink)', flexShrink: 0,
             fontFamily: 'Plus Jakarta Sans, sans-serif',
           }}
@@ -93,9 +95,9 @@ export function MwNav() {
                           padding: '7px 14px',
                           borderRadius: 20,
                           fontSize: 13,
-                          fontWeight: isActive(href) ? 500 : 400,
-                          color: isActive(href) ? 'var(--color-mw-ink)' : 'var(--color-mw-ink-3)',
-                          background: isActive(href) ? 'var(--color-mw-surface)' : 'none',
+                          fontWeight: isActive(href) ? 600 : 400,
+                          color: isActive(href) ? 'var(--color-mw-brand)' : 'var(--color-mw-ink-3)',
+                          background: isActive(href) ? 'var(--color-mw-brand-dim)' : 'none',
                           textDecoration: 'none',
                           whiteSpace: 'nowrap',
                           fontFamily: 'Plus Jakarta Sans, sans-serif',
