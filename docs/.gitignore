@@ -1,0 +1,6 @@
+# Internal / sensitive docs — not for public GitBook
+API_MAP.md
+ARCHITECTURE.md
+ISSUES.md
+schema.sql
+*.docx
