@@ -3,17 +3,28 @@
 // =============================================================================
 // CampaignCard.tsx — Campaign list card for /dashboard
 // Design: white card, 0.5px border, 12px radius, thin hover highlight.
-// Structure: header → 3-col stats → reward pills → progress bar
+// Structure: header (real token logo) → stats → reward pills → progress → socials
+// Token logos: LI.FI API. Socials: DexScreener API. Both free, no key needed.
 // =============================================================================
 
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { fmtUSD, daysUntil, iconColor } from '@/lib/api'
+import { fetchTokenMeta, fetchDexMeta, dexUrl } from '@/lib/tokenMeta'
+
+export interface CampaignLinks {
+  dex?:      string
+  twitter?:  string
+  website?:  string
+  telegram?: string
+}
 
 export interface Campaign {
   id: string
   name: string
   protocol?: string
   chain: string
+  chain_id?: number
   status: 'live' | 'upcoming' | 'ended' | string
   campaign_type?: 'token_pool' | 'points'
   end_date?: string
@@ -22,9 +33,11 @@ export interface Campaign {
   pool_remaining_usd?: number
   daily_payout_usd?: number
   token_symbol?: string
+  token_contract?: string
   min_score?: number
   buyer_reward_pct?: number
   referral_reward_pct?: number
+  links?: CampaignLinks
   actions?: Record<string, {
     label: string
     points: number
@@ -52,6 +65,32 @@ function actionPillStyle(key: string): React.CSSProperties {
   return                                 { background: 'rgba(79,126,247,0.08)',   color: '#4f7ef7', border: '0.5px solid rgba(79,126,247,0.2)' }
 }
 
+// ─── SVG Icons ──────────────────────────────────────────────────────────────
+
+const IconDex = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </svg>
+)
+const IconX = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </svg>
+)
+const IconGlobe = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+  </svg>
+)
+const IconTelegram = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/>
+  </svg>
+)
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 interface CampaignCardProps {
   campaign: Campaign
 }
@@ -68,7 +107,56 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   const daysLeft    = c.end_date   ? daysUntil(c.end_date)   : null
   const daysToStart = c.start_date ? daysUntil(c.start_date) : null
 
-  // Progress bar calculation
+  // ── Token logo (LI.FI) ──
+  const [logoURI, setLogoURI] = useState<string | null>(null)
+  const [logoError, setLogoError] = useState(false)
+
+  // ── DexScreener links ──
+  const [dexLinks, setDexLinks] = useState<{
+    dexUrl: string | null
+    website: string | null
+    twitter: string | null
+    telegram: string | null
+  }>({ dexUrl: null, website: null, twitter: null, telegram: null })
+
+  useEffect(() => {
+    if (!c.token_contract || !c.chain_id) return
+
+    // Fetch logo
+    fetchTokenMeta(c.chain_id, c.token_contract).then(meta => {
+      if (meta?.logoURI) setLogoURI(meta.logoURI)
+    })
+
+    // Fetch socials — merge with manual links from Supabase
+    fetchDexMeta(c.chain_id, c.token_contract).then(meta => {
+      setDexLinks({
+        dexUrl:   c.links?.dex      ?? meta?.dexUrl   ?? dexUrl(c.chain_id!, c.token_contract!),
+        website:  c.links?.website  ?? meta?.website  ?? null,
+        twitter:  c.links?.twitter  ?? meta?.twitter  ?? null,
+        telegram: c.links?.telegram ?? meta?.telegram ?? null,
+      })
+    })
+  }, [c.token_contract, c.chain_id, c.links])
+
+  // For campaigns with no token_contract (Core DAO manual links)
+  useEffect(() => {
+    if (c.token_contract) return // handled above
+    if (!c.links) return
+    setDexLinks({
+      dexUrl:   c.links.dex      ?? null,
+      website:  c.links.website  ?? null,
+      twitter:  c.links.twitter  ?? null,
+      telegram: c.links.telegram ?? null,
+    })
+  }, [c.token_contract, c.links])
+
+  // DexScreener link always available if we have token_contract
+  const effectiveDexUrl = dexLinks.dexUrl
+    ?? (c.token_contract && c.chain_id ? dexUrl(c.chain_id, c.token_contract) : null)
+
+  const hasSocials = effectiveDexUrl || dexLinks.twitter || dexLinks.website || dexLinks.telegram
+
+  // ── Progress bar ──
   let progressPct = 0
   let totalDays: number | null = null
   let elapsedDays: number | null = null
@@ -87,6 +175,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   const hasStats   = c.pool_usd != null || c.pool_remaining_usd != null || c.daily_payout_usd != null || c.min_score != null || c.referral_reward_pct != null
   const hasActions = c.actions && Object.keys(c.actions).length > 0
   const showBar    = isLive && (totalDays !== null || daysLeft !== null)
+  const showLogo   = logoURI && !logoError
 
   return (
     <>
@@ -118,6 +207,10 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
           font-size: 14px; font-weight: 700; flex-shrink: 0;
           border: 0.5px solid rgba(0,0,0,0.07);
           font-family: 'DM Mono', monospace;
+          overflow: hidden;
+        }
+        .cc-icon img {
+          width: 36px; height: 36px; object-fit: cover; border-radius: 8px;
         }
         .cc-name {
           font-size: 14px; font-weight: 600; color: #1a1a1a;
@@ -193,6 +286,20 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
           height: 100%; background: #4f7ef7; border-radius: 4px;
           transition: width 0.6s ease;
         }
+        .cc-socials {
+          display: flex; align-items: center; gap: 2px;
+          padding: 9px 14px;
+          border-top: 0.5px solid rgba(0,0,0,0.06);
+          margin-top: auto;
+        }
+        .cc-social-btn {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 28px; height: 28px; border-radius: 7px;
+          color: #9ca3af;
+          transition: background 0.15s, color 0.15s;
+          text-decoration: none;
+        }
+        .cc-social-btn:hover { background: rgba(0,0,0,0.05); color: #3d3d3d; }
       `}</style>
 
       <div
@@ -205,8 +312,14 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         {/* ── Header ── */}
         <div className="cc-header">
           <div className="cc-identity">
-            <div className="cc-icon" style={{ background: col.bg, color: col.fg }}>
-              {initial}
+            <div className="cc-icon" style={showLogo ? {} : { background: col.bg, color: col.fg }}>
+              {showLogo ? (
+                <img
+                  src={logoURI!}
+                  alt={c.name}
+                  onError={() => setLogoError(true)}
+                />
+              ) : initial}
             </div>
             <div>
               <div className="cc-name">{c.name}</div>
@@ -234,7 +347,6 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         {/* ── Stats ── */}
         {hasStats && (
           <div className="cc-stats">
-            {/* Pool size — shown for both types */}
             {(c.pool_remaining_usd != null || c.pool_usd != null) && (
               <div>
                 <div className="cc-stat-val">
@@ -244,8 +356,6 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
                 <div className="cc-stat-label">{isTokenPool ? 'pool remaining' : 'pool size'}</div>
               </div>
             )}
-
-            {/* Token Reward Pool: referral earn % is the headline stat */}
             {isTokenPool && c.referral_reward_pct != null && (
               <div>
                 <div className="cc-stat-val" style={{ color: '#2A9E8A' }}>
@@ -260,8 +370,6 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
                 <div className="cc-stat-label">buyer rebate</div>
               </div>
             )}
-
-            {/* Points Campaign: daily payout + min score */}
             {!isTokenPool && c.daily_payout_usd != null && (
               <div>
                 <div className="cc-stat-val">{fmtUSD(c.daily_payout_usd)}</div>
@@ -279,7 +387,6 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
 
         {/* ── Reward pills ── */}
         {isTokenPool ? (
-          /* Token Reward Pool: show referral mechanic clearly */
           <div className="cc-rewards">
             <span className="cc-reward-pill" style={{ background: 'rgba(42,158,138,0.08)', color: '#2A9E8A', border: '0.5px solid rgba(42,158,138,0.2)' }}>
               ◉ {c.referral_reward_pct ?? 0}% per swap you refer
@@ -291,14 +398,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
             )}
           </div>
         ) : hasActions ? (
-          /* Points Campaign: show action pills */
           <div className="cc-rewards">
             {Object.entries(c.actions!).map(([key, action]) => (
-              <span
-                key={key}
-                className="cc-reward-pill"
-                style={actionPillStyle(key)}
-              >
+              <span key={key} className="cc-reward-pill" style={actionPillStyle(key)}>
                 +{action.points} {action.label.split(' ')[0].toLowerCase()}{actionSuffix(action)}
               </span>
             ))}
@@ -323,6 +425,60 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
                 style={{ width: `${totalDays !== null ? progressPct : Math.max(5, 100 - (daysLeft! / 30) * 100)}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {/* ── Social links ── */}
+        {hasSocials && (
+          <div className="cc-socials">
+            {effectiveDexUrl && (
+              <a
+                href={effectiveDexUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cc-social-btn"
+                title="DexScreener"
+                onClick={e => e.stopPropagation()}
+              >
+                <IconDex />
+              </a>
+            )}
+            {dexLinks.twitter && (
+              <a
+                href={dexLinks.twitter}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cc-social-btn"
+                title="X / Twitter"
+                onClick={e => e.stopPropagation()}
+              >
+                <IconX />
+              </a>
+            )}
+            {dexLinks.website && (
+              <a
+                href={dexLinks.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cc-social-btn"
+                title="Website"
+                onClick={e => e.stopPropagation()}
+              >
+                <IconGlobe />
+              </a>
+            )}
+            {dexLinks.telegram && (
+              <a
+                href={dexLinks.telegram}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cc-social-btn"
+                title="Telegram"
+                onClick={e => e.stopPropagation()}
+              >
+                <IconTelegram />
+              </a>
+            )}
           </div>
         )}
       </div>
