@@ -24,6 +24,7 @@ export interface Campaign {
   daily_payout_usd?: number
   token_symbol?: string
   token_address?: string
+  token_contract?: string   // API field name — same as token_address
   logo_uri?: string
   chain_id?: number
   min_score?: number
@@ -210,7 +211,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
           <div className="cc-identity">
             <TokenIcon
               logoUri={c.logo_uri}
-              tokenAddress={c.token_address}
+              tokenAddress={c.token_address ?? c.token_contract}
               chain={c.chain_id ?? c.chain}
               name={iconName}
               size={36}
