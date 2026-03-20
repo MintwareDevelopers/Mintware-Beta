@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { API, fmtUSD, daysUntil } from '@/lib/api'
 import { CampaignCard, Campaign } from '@/components/campaigns/CampaignCard'
+import { TokenIcon } from '@/components/TokenIcon'
 
 // ─── Dashboard Content ─────────────────────────────────────────────────────────
 function DashboardContent() {
@@ -240,11 +241,17 @@ function DashboardContent() {
                 <div className="db-section-title" style={{ marginTop: filteredLive.length > 0 ? 24 : 0 }}>Upcoming</div>
                 <div className="db-upcoming">
                   {filteredUpcoming.map(c => {
-                    const initial     = (c.protocol ?? c.name).charAt(0).toUpperCase()
                     const daysToStart = c.start_date ? daysUntil(c.start_date) : null
                     return (
                       <div key={c.id} className="db-upc-row">
-                        <div className="db-upc-icon">{initial}</div>
+                        <TokenIcon
+                          logoUri={c.logo_uri}
+                          tokenAddress={c.token_address}
+                          chain={c.chain_id ?? c.chain}
+                          name={c.protocol ?? c.name}
+                          size={44}
+                          borderRadius={10}
+                        />
                         <div>
                           <div className="db-upc-name">{c.name}</div>
                           <div className="db-upc-meta">{c.chain}{daysToStart !== null ? ` · Starts in ~${daysToStart}d` : ''}</div>

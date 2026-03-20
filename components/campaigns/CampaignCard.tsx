@@ -7,7 +7,8 @@
 // =============================================================================
 
 import { useRouter } from 'next/navigation'
-import { fmtUSD, daysUntil, iconColor } from '@/lib/api'
+import { fmtUSD, daysUntil } from '@/lib/api'
+import { TokenIcon } from '@/components/TokenIcon'
 
 export interface Campaign {
   id: string
@@ -22,6 +23,9 @@ export interface Campaign {
   pool_remaining_usd?: number
   daily_payout_usd?: number
   token_symbol?: string
+  token_address?: string
+  logo_uri?: string
+  chain_id?: number
   min_score?: number
   buyer_reward_pct?: number
   referral_reward_pct?: number
@@ -57,9 +61,8 @@ interface CampaignCardProps {
 }
 
 export function CampaignCard({ campaign: c }: CampaignCardProps) {
-  const router  = useRouter()
-  const col     = iconColor(c.name)
-  const initial = (c.protocol ?? c.name).charAt(0).toUpperCase()
+  const router = useRouter()
+  const iconName = c.protocol ?? c.name
 
   const isLive     = c.status === 'live'
   const isUpcoming = c.status === 'upcoming'
@@ -205,9 +208,14 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         {/* ── Header ── */}
         <div className="cc-header">
           <div className="cc-identity">
-            <div className="cc-icon" style={{ background: col.bg, color: col.fg }}>
-              {initial}
-            </div>
+            <TokenIcon
+              logoUri={c.logo_uri}
+              tokenAddress={c.token_address}
+              chain={c.chain_id ?? c.chain}
+              name={iconName}
+              size={36}
+              borderRadius={9}
+            />
             <div>
               <div className="cc-name">{c.name}</div>
               <div className="cc-meta">
