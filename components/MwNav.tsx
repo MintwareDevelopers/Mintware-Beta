@@ -59,12 +59,12 @@ export function MwNav() {
         <Link
           href="/"
           style={{
-            fontSize: 18, fontWeight: 600, letterSpacing: '-0.4px',
+            fontSize: 19, fontWeight: 800, letterSpacing: '-0.6px',
             textDecoration: 'none', color: 'var(--color-mw-ink)', flexShrink: 0,
             fontFamily: 'Plus Jakarta Sans, sans-serif',
           }}
         >
-          Mint<span style={{ color: 'var(--color-mw-brand)' }}>ware</span>
+          mint<span style={{ color: 'var(--color-mw-brand)' }}>ware</span>
         </Link>
 
         <ConnectButton.Custom>

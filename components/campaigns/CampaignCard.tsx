@@ -198,15 +198,16 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
       <style>{`
         .cc-card {
           background: #fff;
-          border: 0.5px solid rgba(0,0,0,0.09);
           border-radius: 12px;
           overflow: hidden;
           cursor: pointer;
-          transition: border-color 0.2s;
+          transition: box-shadow 0.2s;
           display: flex;
           flex-direction: column;
+          box-shadow: var(--shadow-card);
+          border-left: 3px solid var(--color-mw-brand);
         }
-        .cc-card:hover { border-color: rgba(79,126,247,0.4); }
+        .cc-card:hover { box-shadow: var(--shadow-card-hover); }
         .cc-card.ended { opacity: 0.6; }
         .cc-header {
           padding: 16px 18px 14px;
@@ -258,8 +259,8 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         }
         .cc-chain-tag {
           flex-shrink: 0; padding: 3px 8px; border-radius: 6px;
-          font-size: 11px; font-weight: 500;
-          background: #f5f5f7; color: #6b7280;
+          font-size: 11px; font-weight: 600;
+          background: var(--color-mw-bg); color: #6b7280;
           border: 0.5px solid rgba(0,0,0,0.07);
           font-family: 'Plus Jakarta Sans', sans-serif;
         }
@@ -269,15 +270,16 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
           border-bottom: 0.5px solid rgba(0,0,0,0.06);
         }
         .cc-stat-val {
-          font-size: 17px; font-weight: 600; color: #1a1a1a;
-          font-family: 'DM Mono', monospace; letter-spacing: -0.3px;
+          font-size: 20px; font-weight: 700; color: #1a1a1a;
+          font-family: 'DM Mono', monospace; letter-spacing: -0.5px;
         }
         .cc-stat-val span {
           font-size: 11px; font-weight: 400; color: #9ca3af; margin-left: 2px;
         }
         .cc-stat-label {
-          font-size: 11px; color: #9ca3af; margin-top: 2px;
+          font-size: 10px; color: #9ca3af; margin-top: 3px;
           font-family: 'Plus Jakarta Sans', sans-serif;
+          text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
         }
         .cc-rewards {
           padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 6px;

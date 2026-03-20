@@ -100,7 +100,7 @@ function ProfileContent() {
   const maxScore = data?.signals?.reduce((s, sig) => s + sig.max, 0) ?? 925
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" style={{ background: 'var(--color-mw-bg)' }}>
       <ReferralSheet
         stats={refStats}
         trigger={isFirstConnect && !loading && !!data}
@@ -254,7 +254,7 @@ function ProfileContent() {
                     {data.uvOpportunities.map((op, i) => (
                       <div
                         key={i}
-                        className="flex items-start gap-3.5 px-[18px] py-4 border border-mw-border rounded-[14px] transition-all duration-150 bg-white shadow-[0_1px_4px_rgba(26,26,46,0.04)] hover:border-[rgba(0,82,255,0.25)] hover:shadow-md hover:-translate-y-px"
+                        className="flex items-start gap-3.5 px-[18px] py-4 border border-mw-border rounded-[14px] transition-all duration-150 bg-white shadow-[var(--shadow-card)] hover:border-[rgba(0,82,255,0.25)] hover:shadow-md hover:-translate-y-px"
                       >
                         <div
                           className="w-10 h-10 rounded-[10px] flex items-center justify-center text-lg shrink-0"
@@ -300,7 +300,7 @@ function ProfileContent() {
           )}
 
           {activeTab === 'score' && (
-            <div className="bg-white border border-mw-border rounded-[20px] p-6 shadow-[0_1px_4px_rgba(26,26,46,0.04)]">
+            <div className="bg-white border border-mw-border rounded-[20px] p-6 shadow-[var(--shadow-card)]">
               <div className="flex items-center justify-between mb-[22px]">
                 <span className="text-[10px] font-bold text-mw-brand tracking-[1.5px] uppercase">Attribution score</span>
                 <span className="text-[11px] text-white bg-mw-brand px-3 py-1 rounded-full font-semibold">{tier} tier</span>
@@ -455,7 +455,7 @@ function ProfileContent() {
           )}
 
           {activeTab === 'badge' && (
-            <div className="text-center px-6 py-12 bg-white border border-mw-border rounded-[20px] shadow-[0_1px_4px_rgba(26,26,46,0.04)]">
+            <div className="text-center px-6 py-12 bg-white border border-mw-border rounded-[20px] shadow-[var(--shadow-card)]">
               {data ? (
                 <>
                   <div className="text-[56px] mb-3.5 leading-none">{data.character?.icon ?? '🏅'}</div>
