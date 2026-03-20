@@ -3,22 +3,28 @@
 // =============================================================================
 // CampaignCard.tsx — Campaign list card for /dashboard
 // Design: white card, 0.5px border, 12px radius, thin hover highlight.
-// Structure: header → 3-col stats → reward pills → progress bar
+// Structure: header (real token logo) → stats → reward pills → progress → socials
+// Token logos: LI.FI API. Socials: DexScreener API. Both free, no key needed.
 // =============================================================================
-
-'use client'
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { fmtUSD, daysUntil } from '@/lib/api'
-import { TokenIcon } from '@/components/TokenIcon'
-import { fetchDexMeta, chainNameToId, type DexMeta } from '@/lib/tokenMeta'
+import { fmtUSD, daysUntil, iconColor } from '@/lib/api'
+import { fetchTokenMeta, fetchDexMeta, dexUrl } from '@/lib/tokenMeta'
+
+export interface CampaignLinks {
+  dex?:      string
+  twitter?:  string
+  website?:  string
+  telegram?: string
+}
 
 export interface Campaign {
   id: string
   name: string
   protocol?: string
   chain: string
+  chain_id?: number
   status: 'live' | 'upcoming' | 'ended' | string
   campaign_type?: 'token_pool' | 'points'
   end_date?: string
@@ -27,19 +33,11 @@ export interface Campaign {
   pool_remaining_usd?: number
   daily_payout_usd?: number
   token_symbol?: string
-  token_address?: string
-  token_contract?: string   // API field name — same as token_address
-  logo_uri?: string
-  chain_id?: number
-  links?: {
-    dex?:      string
-    website?:  string
-    twitter?:  string
-    telegram?: string
-  }
+  token_contract?: string
   min_score?: number
   buyer_reward_pct?: number
   referral_reward_pct?: number
+  links?: CampaignLinks
   actions?: Record<string, {
     label: string
     points: number
@@ -67,35 +65,56 @@ function actionPillStyle(key: string): React.CSSProperties {
   return                                 { background: 'rgba(79,126,247,0.08)',   color: '#4f7ef7', border: '0.5px solid rgba(79,126,247,0.2)' }
 }
 
+// ─── SVG Icons ──────────────────────────────────────────────────────────────
+
+const IconDex = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </svg>
+)
+const IconX = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </svg>
+)
+const IconGlobe = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+  </svg>
+)
+const IconTelegram = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/>
+  </svg>
+)
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 interface CampaignCardProps {
   campaign: Campaign
 }
 
+// ─── Chain name → ID mapping (API returns "base" not 8453) ──────────────────
+const CHAIN_NAME_TO_ID: Record<string, number> = {
+  base:      8453,
+  arbitrum:  42161,
+  ethereum:  1,
+  eth:       1,
+  bsc:       56,
+  polygon:   137,
+  optimism:  10,
+  coredao:   1116,
+  core:      1116,
+}
+
 export function CampaignCard({ campaign: c }: CampaignCardProps) {
-  const router   = useRouter()
-  const iconName = c.protocol ?? c.name
+  const router  = useRouter()
+  const col     = iconColor(c.name)
+  const initial = (c.protocol ?? c.name).charAt(0).toUpperCase()
 
-  // ── Social links — from Supabase override or DexScreener auto-fetch ──────────
-  const [dex, setDex] = useState<DexMeta | null>(null)
-
-  useEffect(() => {
-    // Use manually stored links if present
-    if (c.links?.dex || c.links?.twitter || c.links?.website) {
-      setDex({
-        dexUrl:   c.links.dex      ?? '',
-        website:  c.links.website  ?? null,
-        twitter:  c.links.twitter  ?? null,
-        telegram: c.links.telegram ?? null,
-      })
-      return
-    }
-    // Auto-fetch from DexScreener using token_contract
-    const addr = c.token_address ?? c.token_contract
-    if (!addr) return
-    const chainId = c.chain_id ?? (typeof c.chain === 'string' ? chainNameToId(c.chain) : c.chain)
-    if (!chainId) return
-    fetchDexMeta(chainId, addr).then(meta => { if (meta) setDex(meta) })
-  }, [c])
+  // Resolve chain_id from numeric field or chain name string
+  const chainId = c.chain_id ?? CHAIN_NAME_TO_ID[c.chain?.toLowerCase() ?? ''] ?? 0
 
   const isLive     = c.status === 'live'
   const isUpcoming = c.status === 'upcoming'
@@ -104,7 +123,56 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   const daysLeft    = c.end_date   ? daysUntil(c.end_date)   : null
   const daysToStart = c.start_date ? daysUntil(c.start_date) : null
 
-  // Progress bar calculation
+  // ── Token logo (LI.FI) ──
+  const [logoURI, setLogoURI] = useState<string | null>(null)
+  const [logoError, setLogoError] = useState(false)
+
+  // ── DexScreener links ──
+  const [dexLinks, setDexLinks] = useState<{
+    dexUrl: string | null
+    website: string | null
+    twitter: string | null
+    telegram: string | null
+  }>({ dexUrl: null, website: null, twitter: null, telegram: null })
+
+  useEffect(() => {
+    if (!c.token_contract || !chainId) return
+
+    // Fetch logo
+    fetchTokenMeta(chainId, c.token_contract).then(meta => {
+      if (meta?.logoURI) setLogoURI(meta.logoURI)
+    })
+
+    // Fetch socials — merge with manual links from Supabase
+    fetchDexMeta(chainId, c.token_contract).then(meta => {
+      setDexLinks({
+        dexUrl:   c.links?.dex      ?? meta?.dexUrl   ?? dexUrl(chainId, c.token_contract!),
+        website:  c.links?.website  ?? meta?.website  ?? null,
+        twitter:  c.links?.twitter  ?? meta?.twitter  ?? null,
+        telegram: c.links?.telegram ?? meta?.telegram ?? null,
+      })
+    })
+  }, [c.token_contract, chainId, c.links])
+
+  // For campaigns with no token_contract (Core DAO manual links)
+  useEffect(() => {
+    if (c.token_contract) return // handled above
+    if (!c.links) return
+    setDexLinks({
+      dexUrl:   c.links.dex      ?? null,
+      website:  c.links.website  ?? null,
+      twitter:  c.links.twitter  ?? null,
+      telegram: c.links.telegram ?? null,
+    })
+  }, [c.token_contract, c.links])
+
+  // DexScreener link always available if we have token_contract
+  const effectiveDexUrl = dexLinks.dexUrl
+    ?? (c.token_contract && chainId ? dexUrl(chainId, c.token_contract) : null)
+
+  const hasSocials = effectiveDexUrl || dexLinks.twitter || dexLinks.website || dexLinks.telegram
+
+  // ── Progress bar ──
   let progressPct = 0
   let totalDays: number | null = null
   let elapsedDays: number | null = null
@@ -123,6 +191,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   const hasStats   = c.pool_usd != null || c.pool_remaining_usd != null || c.daily_payout_usd != null || c.min_score != null || c.referral_reward_pct != null
   const hasActions = c.actions && Object.keys(c.actions).length > 0
   const showBar    = isLive && (totalDays !== null || daysLeft !== null)
+  const showLogo   = logoURI && !logoError
 
   return (
     <>
@@ -154,6 +223,10 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
           font-size: 14px; font-weight: 700; flex-shrink: 0;
           border: 0.5px solid rgba(0,0,0,0.07);
           font-family: 'DM Mono', monospace;
+          overflow: hidden;
+        }
+        .cc-icon img {
+          width: 36px; height: 36px; object-fit: cover; border-radius: 8px;
         }
         .cc-name {
           font-size: 14px; font-weight: 600; color: #1a1a1a;
@@ -230,21 +303,19 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
           transition: width 0.6s ease;
         }
         .cc-socials {
-          padding: 10px 18px;
+          display: flex; align-items: center; gap: 2px;
+          padding: 9px 14px;
           border-top: 0.5px solid rgba(0,0,0,0.06);
-          display: flex; align-items: center; gap: 8px;
+          margin-top: auto;
         }
-        .cc-social-link {
-          display: inline-flex; align-items: center; gap: 5px;
-          padding: 4px 9px; border-radius: 6px;
-          font-size: 11px; font-weight: 500;
-          color: #6b7280; background: #f5f5f7;
-          border: 0.5px solid rgba(0,0,0,0.07);
-          text-decoration: none; font-family: 'Plus Jakarta Sans', sans-serif;
-          transition: color 0.15s, background 0.15s, border-color 0.15s;
-          white-space: nowrap;
+        .cc-social-btn {
+          display: inline-flex; align-items: center; justify-content: center;
+          width: 28px; height: 28px; border-radius: 7px;
+          color: #9ca3af;
+          transition: background 0.15s, color 0.15s;
+          text-decoration: none;
         }
-        .cc-social-link:hover { color: #1a1a1a; background: #ececf0; border-color: rgba(0,0,0,0.13); }
+        .cc-social-btn:hover { background: rgba(0,0,0,0.05); color: #3d3d3d; }
       `}</style>
 
       <div
@@ -257,14 +328,15 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         {/* ── Header ── */}
         <div className="cc-header">
           <div className="cc-identity">
-            <TokenIcon
-              logoUri={c.logo_uri}
-              tokenAddress={c.token_address ?? c.token_contract}
-              chain={c.chain_id ?? c.chain}
-              name={iconName}
-              size={36}
-              borderRadius={9}
-            />
+            <div className="cc-icon" style={showLogo ? {} : { background: col.bg, color: col.fg }}>
+              {showLogo ? (
+                <img
+                  src={logoURI!}
+                  alt={c.name}
+                  onError={() => setLogoError(true)}
+                />
+              ) : initial}
+            </div>
             <div>
               <div className="cc-name">{c.name}</div>
               <div className="cc-meta">
@@ -291,7 +363,6 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         {/* ── Stats ── */}
         {hasStats && (
           <div className="cc-stats">
-            {/* Pool size — shown for both types */}
             {(c.pool_remaining_usd != null || c.pool_usd != null) && (
               <div>
                 <div className="cc-stat-val">
@@ -301,8 +372,6 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
                 <div className="cc-stat-label">{isTokenPool ? 'pool remaining' : 'pool size'}</div>
               </div>
             )}
-
-            {/* Token Reward Pool: referral earn % is the headline stat */}
             {isTokenPool && c.referral_reward_pct != null && (
               <div>
                 <div className="cc-stat-val" style={{ color: '#2A9E8A' }}>
@@ -317,8 +386,6 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
                 <div className="cc-stat-label">buyer rebate</div>
               </div>
             )}
-
-            {/* Points Campaign: daily payout + min score */}
             {!isTokenPool && c.daily_payout_usd != null && (
               <div>
                 <div className="cc-stat-val">{fmtUSD(c.daily_payout_usd)}</div>
@@ -336,7 +403,6 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
 
         {/* ── Reward pills ── */}
         {isTokenPool ? (
-          /* Token Reward Pool: show referral mechanic clearly */
           <div className="cc-rewards">
             <span className="cc-reward-pill" style={{ background: 'rgba(42,158,138,0.08)', color: '#2A9E8A', border: '0.5px solid rgba(42,158,138,0.2)' }}>
               ◉ {c.referral_reward_pct ?? 0}% per swap you refer
@@ -348,14 +414,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
             )}
           </div>
         ) : hasActions ? (
-          /* Points Campaign: show action pills */
           <div className="cc-rewards">
             {Object.entries(c.actions!).map(([key, action]) => (
-              <span
-                key={key}
-                className="cc-reward-pill"
-                style={actionPillStyle(key)}
-              >
+              <span key={key} className="cc-reward-pill" style={actionPillStyle(key)}>
                 +{action.points} {action.label.split(' ')[0].toLowerCase()}{actionSuffix(action)}
               </span>
             ))}
@@ -384,24 +445,54 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         )}
 
         {/* ── Social links ── */}
-        {dex && (dex.dexUrl || dex.twitter || dex.website) && (
-          <div className="cc-socials" onClick={e => e.stopPropagation()}>
-            {dex.dexUrl && (
-              <a href={dex.dexUrl} target="_blank" rel="noopener noreferrer" className="cc-social-link">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h7v2H5v14h14v-5h2v7H3V3zm11 0h7v7h-2V6.414l-9.293 9.293-1.414-1.414L17.586 5H14V3z"/></svg>
-                Chart
+        {hasSocials && (
+          <div className="cc-socials">
+            {effectiveDexUrl && (
+              <a
+                href={effectiveDexUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cc-social-btn"
+                title="DexScreener"
+                onClick={e => e.stopPropagation()}
+              >
+                <IconDex />
               </a>
             )}
-            {dex.twitter && (
-              <a href={dex.twitter} target="_blank" rel="noopener noreferrer" className="cc-social-link">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                𝕏
+            {dexLinks.twitter && (
+              <a
+                href={dexLinks.twitter}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cc-social-btn"
+                title="X / Twitter"
+                onClick={e => e.stopPropagation()}
+              >
+                <IconX />
               </a>
             )}
-            {dex.website && (
-              <a href={dex.website} target="_blank" rel="noopener noreferrer" className="cc-social-link">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                Website
+            {dexLinks.website && (
+              <a
+                href={dexLinks.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cc-social-btn"
+                title="Website"
+                onClick={e => e.stopPropagation()}
+              >
+                <IconGlobe />
+              </a>
+            )}
+            {dexLinks.telegram && (
+              <a
+                href={dexLinks.telegram}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="cc-social-btn"
+                title="Telegram"
+                onClick={e => e.stopPropagation()}
+              >
+                <IconTelegram />
               </a>
             )}
           </div>
