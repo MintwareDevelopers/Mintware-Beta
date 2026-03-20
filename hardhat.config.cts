@@ -76,6 +76,7 @@ const config: HardhatUserConfig = {
         enabled: true,
         runs: 200,
       },
+      viaIR: true,        // required — _claim() has many locals; viaIR lifts the stack limit
       evmVersion: 'cancun',
       viaIR: true,
     },

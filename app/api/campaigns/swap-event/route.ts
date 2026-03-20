@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { processSwapEvent } from '@/lib/campaigns/swapHook'
 import { createSupabaseServiceClient } from '@/lib/supabase'
+import { attestSwap } from '@/lib/eas'
 import type { SwapEvent } from '@/lib/campaigns/types'
 
 // ---------------------------------------------------------------------------
@@ -107,6 +108,38 @@ export async function POST(req: NextRequest) {
         )
       }
 
+      // Fire-and-forget: SwapActivity EAS attestation — never blocks the response
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const feeVerifiedA = (result as any).fee_verified ?? false
+      void attestSwap(event.wallet, {
+        txHash:      event.tx_hash,
+        fromChain:   1,
+        toChain:     8453,
+        fromToken:   event.token_in  as `0x${string}`,
+        toToken:     event.token_out as `0x${string}`,
+        amountIn:    BigInt(Math.round(event.amount_usd * 1e6)),
+        feeVerified: feeVerifiedA,
+        campaignId:  event.campaign_id,
+      })
+        .then(async (uid) => {
+          if (!uid) return
+          try {
+            await createSupabaseServiceClient()
+              .from('eas_attestations')
+              .upsert(
+                {
+                  wallet:      event.wallet.toLowerCase(),
+                  schema_name: 'SwapActivity',
+                  eas_uid:     uid,
+                  attested_at: new Date().toISOString(),
+                  metadata:    { tx_hash: event.tx_hash, campaign_id: event.campaign_id },
+                },
+                { onConflict: 'eas_uid' }
+              )
+          } catch (e) { console.error('[swap-event] EAS upsert error:', e) }
+        })
+        .catch(err => console.error('[swap-event] EAS attestation error:', err))
+
       return NextResponse.json(result, { status: 200 })
     } catch (err) {
       console.error('[swap-event] unhandled error:', err)
@@ -178,6 +211,40 @@ export async function POST(req: NextRequest) {
     try {
       const result = await processSwapEvent(event)
       results.push({ campaign_id, ...result })
+
+      // Fire-and-forget EAS attestation if credited
+      if (result.credited) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const feeVerifiedB = (result as any).fee_verified ?? false
+        void attestSwap(event.wallet, {
+          txHash:      event.tx_hash,
+          fromChain:   1,
+          toChain:     8453,
+          fromToken:   event.token_in  as `0x${string}`,
+          toToken:     event.token_out as `0x${string}`,
+          amountIn:    BigInt(Math.round(event.amount_usd * 1e6)),
+          feeVerified: feeVerifiedB,
+          campaignId:  campaign_id,
+        })
+          .then(async (uid) => {
+            if (!uid) return
+            try {
+              await createSupabaseServiceClient()
+                .from('eas_attestations')
+                .upsert(
+                  {
+                    wallet:      event.wallet.toLowerCase(),
+                    schema_name: 'SwapActivity',
+                    eas_uid:     uid,
+                    attested_at: new Date().toISOString(),
+                    metadata:    { tx_hash: event.tx_hash, campaign_id },
+                  },
+                  { onConflict: 'eas_uid' }
+                )
+            } catch (e) { console.error('[swap-event] EAS upsert error:', e) }
+          })
+          .catch(err => console.error('[swap-event] EAS attestation error:', err))
+      }
     } catch (err) {
       console.error(`[swap-event] processSwapEvent error for campaign ${campaign_id}:`, err)
       results.push({ campaign_id, credited: false, skip_reason: 'db_error' as const })

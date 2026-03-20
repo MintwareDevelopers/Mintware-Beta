@@ -5,6 +5,7 @@ import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { useEffect, useState } from 'react'
 import { API, shortAddr } from '@/lib/api'
+import { WalletDisplay } from '@/components/WalletDisplay'
 import { useReferral } from '@/lib/referral/useReferral'
 import { ReferralSheet } from '@/components/referral/ReferralSheet'
 import { InviteTab } from '@/components/referral/InviteTab'
@@ -53,10 +54,13 @@ function ProfileContent() {
   const [data, setData] = useState<ScoreResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [easAttestation, setEasAttestation] = useState<{ uid: string; eas_explorer_url: string; attested_at?: string } | null>(null)
+  const [easLoading, setEasLoading]         = useState(false)
 
   const {
     stats: refStats,
     referralRecords,
+    refCode,
     isFirstConnect,
     isLoading: refLoading,
   } = useReferral(wallet || undefined)
@@ -70,6 +74,19 @@ function ProfileContent() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [wallet])
+
+  // Fetch (or create) EAS attestation when the Score tab becomes active
+  useEffect(() => {
+    if (activeTab !== 'score' || !wallet || easAttestation || easLoading) return
+    setEasLoading(true)
+    fetch(`/api/eas/attest-score?address=${wallet}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d?.uid) setEasAttestation(d)
+      })
+      .catch(() => {})
+      .finally(() => setEasLoading(false))
+  }, [activeTab, wallet]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function copyAddress() {
     navigator.clipboard.writeText(wallet).catch(() => {})
@@ -103,7 +120,7 @@ function ProfileContent() {
             </div>
             <div className="flex-1 pt-1">
               <div className="text-[22px] font-bold text-[rgba(255,255,255,0.92)] tracking-[-0.5px] flex items-center gap-2 flex-wrap mb-1.5">
-                {shortAddr(wallet)}
+                <WalletDisplay address={wallet} mono style={{ color: 'rgba(255,255,255,0.92)', fontSize: 22, fontWeight: 700, letterSpacing: '-0.5px' }} />
                 {data && (
                   <span className="text-[10px] font-semibold bg-[rgba(0,82,255,0.2)] text-[#6b9fff] px-2.5 py-[3px] rounded-full border border-[rgba(0,82,255,0.3)] tracking-[0.3px] whitespace-nowrap">
                     {tier} tier
@@ -343,6 +360,81 @@ function ProfileContent() {
                       </div>
                     ))}
                   </div>
+
+                  {/* EAS Attestation card */}
+                  <div style={{
+                    marginTop: 16,
+                    background: 'var(--color-mw-surface-card)',
+                    border: '1.5px solid var(--color-mw-border)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '16px 20px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 16,
+                    flexWrap: 'wrap',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{
+                        width: 36, height: 36,
+                        borderRadius: 10,
+                        background: 'rgba(58,92,232,0.1)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 18, flexShrink: 0,
+                      }}>
+                        🔗
+                      </div>
+                      <div>
+                        <div style={{
+                          fontSize: 12, fontWeight: 700,
+                          color: 'var(--color-mw-ink)',
+                          fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+                          marginBottom: 3,
+                        }}>
+                          Attested on Base
+                        </div>
+                        {easLoading ? (
+                          <div style={{
+                            width: 140, height: 12, borderRadius: 4,
+                            background: 'rgba(26,26,46,0.07)',
+                            animation: 'pulse 1.4s ease-in-out infinite',
+                          }} />
+                        ) : easAttestation ? (
+                          <div style={{
+                            fontSize: 11, color: 'var(--color-mw-ink-3)',
+                            fontFamily: 'var(--font-mono, "DM Mono", monospace)',
+                          }}>
+                            {shortAddr(easAttestation.uid)}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)' }}>
+                            Your score is cryptographically signed
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {easAttestation && (
+                      <a
+                        href={easAttestation.eas_explorer_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          fontSize: 11, fontWeight: 600,
+                          color: 'var(--color-mw-brand-deep)',
+                          textDecoration: 'none',
+                          fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+                          whiteSpace: 'nowrap',
+                          padding: '6px 12px',
+                          background: 'rgba(58,92,232,0.08)',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid rgba(58,92,232,0.15)',
+                          transition: 'background 0.15s',
+                        }}
+                      >
+                        View on EAS ↗
+                      </a>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -351,6 +443,7 @@ function ProfileContent() {
           {activeTab === 'invite' && (
             <InviteTab
               wallet={wallet}
+              refCode={refCode}
               stats={refStats}
               referralRecords={referralRecords}
               isLoading={refLoading}

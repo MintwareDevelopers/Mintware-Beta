@@ -4,8 +4,8 @@ import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
-import { API, fmtUSD, shortAddr, daysUntil } from '@/lib/api'
-import { generateRefCode } from '@/lib/referral/utils'
+import { API, fmtUSD, daysUntil } from '@/lib/api'
+import { WalletDisplay } from '@/components/WalletDisplay'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
@@ -40,8 +40,7 @@ function LeaderboardContent() {
   const [lbSubText, setLbSubText]             = useState('Loading…')
   const [linkCopied, setLinkCopied]           = useState(false)
 
-  const refCode = wallet ? generateRefCode(wallet) : ''
-  const refLink = wallet ? `https://mintware.app?ref=${refCode}` : ''
+  const refLink = wallet ? `mintware.app/r/${wallet.slice(0, 10)}` : ''
 
   function copyLink() {
     if (!refLink) return
@@ -113,44 +112,46 @@ function LeaderboardContent() {
   const topPct   = (me && total > 0) ? (100 - Math.round(((total - (myIdx + 1)) / total) * 100)) : null
 
   function buildRow(entry: LeaderboardEntry, rank: number, isMe: boolean) {
-    const RANK_COLORS: Record<number, string> = { 1: '#f59e0b', 2: '#9ca3af', 3: '#d97706' }
-    const rankColor = RANK_COLORS[rank] ?? '#6b7280'
+    const RANK_COLORS: Record<number, string> = { 1: '#f59e0b', 2: 'var(--color-mw-ink-5)', 3: '#d97706' }
+    const rankColor = RANK_COLORS[rank] ?? 'var(--color-mw-ink-3)'
     return (
       <tr
         key={entry.wallet + rank}
         style={{
-          background: isMe ? 'rgba(79,126,247,0.05)' : undefined,
+          background: isMe ? 'var(--color-mw-brand-dim)' : undefined,
           cursor: 'pointer',
         }}
         className={isMe ? 'lb-row-me' : 'lb-row'}
       >
-        <td className="lb-td lb-rank" style={{ color: rank <= 3 ? rankColor : '#9ca3af', fontWeight: rank <= 3 ? 700 : 500 }}>
+        <td className="lb-td lb-rank" style={{ color: rank <= 3 ? rankColor : 'var(--color-mw-ink-5)', fontWeight: rank <= 3 ? 700 : 500 }}>
           {rank}
         </td>
         <td className="lb-td">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 30, height: 30, borderRadius: '50%',
-              background: 'rgba(79,126,247,0.12)', color: '#4f7ef7',
+              background: 'var(--color-mw-brand-mid)', color: 'var(--color-mw-brand)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 11, fontWeight: 700, flexShrink: 0,
               fontFamily: 'DM Mono, monospace',
             }}>
               {entry.wallet.charAt(2).toUpperCase()}
             </div>
-            <span style={{ fontSize: 13, fontWeight: 500, fontFamily: 'DM Mono, monospace' }}>
-              {shortAddr(entry.wallet)}
-              {isMe && <span style={{ fontSize: 11, color: '#22c55e', marginLeft: 6 }}>(you)</span>}
-            </span>
+            <WalletDisplay
+              address={entry.wallet}
+              mono
+              style={{ fontSize: 13, fontWeight: 500 }}
+            />
+            {isMe && <span style={{ fontSize: 11, color: 'var(--color-mw-live)', marginLeft: 6 }}>(you)</span>}
           </div>
         </td>
-        <td className="lb-td lb-right" style={{ fontWeight: 600, color: '#4f7ef7', fontFamily: 'DM Mono, monospace' }}>
+        <td className="lb-td lb-right" style={{ fontWeight: 600, color: 'var(--color-mw-brand)', fontFamily: 'DM Mono, monospace' }}>
           {entry.attribution_score || 0}
         </td>
-        <td className="lb-td lb-right" style={{ fontWeight: 600, color: '#22c55e', fontFamily: 'DM Mono, monospace' }}>
+        <td className="lb-td lb-right" style={{ fontWeight: 600, color: 'var(--color-mw-live)', fontFamily: 'DM Mono, monospace' }}>
           {fmtUSD(entry.total_earned_usd || 0)}
         </td>
-        <td className="lb-td lb-right lb-pts-col" style={{ fontWeight: 500, color: '#1a1a1a', fontFamily: 'DM Mono, monospace' }}>
+        <td className="lb-td lb-right lb-pts-col" style={{ fontWeight: 500, color: 'var(--color-mw-ink)', fontFamily: 'DM Mono, monospace' }}>
           {(entry.total_points || 0).toLocaleString()}
         </td>
       </tr>
@@ -162,77 +163,77 @@ function LeaderboardContent() {
       <style>{`
         .lb-layout { display: flex; align-items: flex-start; }
         .lb-main { flex: 1; padding: 28px 28px 40px; min-width: 0; }
-        .lb-sidebar { width: 300px; flex-shrink: 0; padding: 28px 20px; border-left: 0.5px solid rgba(0,0,0,0.07); }
+        .lb-sidebar { width: 300px; flex-shrink: 0; padding: 28px 20px; border-left: 0.5px solid var(--color-mw-border); }
 
-        .lb-page-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: #4f7ef7; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-title    { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; color: #1a1a1a; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-sub      { font-size: 14px; color: #6b7280; margin-bottom: 24px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-page-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--color-mw-brand); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-title    { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-sub      { font-size: 14px; color: var(--color-mw-ink-3); margin-bottom: 24px; font-family: 'Plus Jakarta Sans', sans-serif; }
 
         .lb-campaign-selector { display: flex; gap: 8px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
-        .lb-cs-label { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-cs-btn { padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; background: #1a1a1a; color: #fff; border: none; cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-cs-btn.inactive { background: #fff; color: #6b7280; border: 0.5px solid rgba(0,0,0,0.12); font-weight: 500; }
-        .lb-cs-btn.inactive:hover { border-color: #4f7ef7; color: #4f7ef7; background: rgba(79,126,247,0.06); }
+        .lb-cs-label { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-cs-btn { padding: 7px 16px; border-radius: var(--radius-xl); font-size: 13px; font-weight: 600; background: var(--color-mw-ink); color: #fff; border: none; cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-cs-btn.inactive { background: #fff; color: var(--color-mw-ink-3); border: 0.5px solid rgba(0,0,0,0.12); font-weight: 500; }
+        .lb-cs-btn.inactive:hover { border-color: var(--color-mw-brand); color: var(--color-mw-brand); background: var(--color-mw-brand-dim); }
 
         .lb-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
-        .lb-stat  { background: #f9f9fb; border-radius: 12px; padding: 16px 18px; border: 0.5px solid rgba(0,0,0,0.08); }
-        .lb-stat-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: #1a1a1a; font-family: 'DM Mono', monospace; }
-        .lb-stat-sub   { font-size: 11px; color: #6b7280; margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-stat  { background: var(--color-mw-surface-card); border-radius: var(--radius-md); padding: 16px 18px; border: 0.5px solid var(--color-mw-border); }
+        .lb-stat-label { font-size: 11px; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; }
+        .lb-stat-sub   { font-size: 11px; color: var(--color-mw-ink-3); margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
 
-        .lb-card { background: #fff; border: 0.5px solid rgba(0,0,0,0.09); border-radius: 12px; overflow: hidden; }
-        .lb-card-header { padding: 16px 20px; border-bottom: 0.5px solid rgba(0,0,0,0.07); display: flex; align-items: center; justify-content: space-between; }
-        .lb-card-title  { font-size: 15px; font-weight: 600; color: #1a1a1a; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-card-meta   { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-card { background: #fff; border: 0.5px solid rgba(0,0,0,0.09); border-radius: var(--radius-md); overflow: hidden; }
+        .lb-card-header { padding: 16px 20px; border-bottom: 0.5px solid var(--color-mw-border); display: flex; align-items: center; justify-content: space-between; }
+        .lb-card-title  { font-size: 15px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-card-meta   { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
 
-        .lb-tabs { display: flex; border-bottom: 0.5px solid rgba(0,0,0,0.07); }
-        .lb-tab  { padding: 10px 16px; font-size: 13px; cursor: pointer; color: #6b7280; border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: 'Plus Jakarta Sans', sans-serif; transition: color 0.15s; }
-        .lb-tab.active { color: #4f7ef7; border-bottom-color: #4f7ef7; font-weight: 500; }
-        .lb-tab:hover:not(.active) { color: #1a1a1a; }
+        .lb-tabs { display: flex; border-bottom: 0.5px solid var(--color-mw-border); }
+        .lb-tab  { padding: 10px 16px; font-size: 13px; cursor: pointer; color: var(--color-mw-ink-3); border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: 'Plus Jakarta Sans', sans-serif; transition: color var(--transition-fast); }
+        .lb-tab.active { color: var(--color-mw-brand); border-bottom-color: var(--color-mw-brand); font-weight: 500; }
+        .lb-tab:hover:not(.active) { color: var(--color-mw-ink); }
 
         .lb-table { width: 100%; border-collapse: collapse; }
-        .lb-table th { padding: 12px 16px; font-size: 11px; font-weight: 500; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; text-align: left; border-bottom: 0.5px solid rgba(0,0,0,0.07); background: #f9f9fb; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-table th { padding: 12px 16px; font-size: 11px; font-weight: 500; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.4px; text-align: left; border-bottom: 0.5px solid var(--color-mw-border); background: var(--color-mw-surface-card); font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-table th:not(:first-child) { text-align: right; }
         .lb-td { padding: 14px 16px; font-size: 13px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
         .lb-rank { font-weight: 600; font-size: 14px; width: 48px; text-align: center !important; }
         .lb-right { text-align: right; }
         .lb-pts-col { }
-        .lb-row:hover .lb-td { background: #f9f9fb; }
+        .lb-row:hover .lb-td { background: var(--color-mw-surface-card); }
         .lb-row-me .lb-td { background: rgba(79,126,247,0.05); }
         .lb-row-me:hover .lb-td { background: rgba(79,126,247,0.08); }
         .lb-table tr:last-child .lb-td { border-bottom: none; }
-        .lb-separator .lb-td { text-align: center; color: #9ca3af; font-size: 11px; letter-spacing: 3px; padding: 8px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
+        .lb-separator .lb-td { text-align: center; color: var(--color-mw-ink-5); font-size: 11px; letter-spacing: 3px; padding: 8px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
 
-        .lb-skeleton { height: 44px; border-radius: 8px; background: #f0f0f2; margin-bottom: 8px; }
+        .lb-skeleton { height: 44px; border-radius: var(--radius-sm); background: #f0f0f2; margin-bottom: 8px; }
 
         /* Sidebar */
-        .lb-your-rank { background: rgba(79,126,247,0.06); border: 0.5px solid rgba(79,126,247,0.2); border-radius: 12px; padding: 16px; margin-bottom: 20px; }
-        .lb-yr-label  { font-size: 11px; font-weight: 500; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-yr-rank   { font-size: 32px; font-weight: 700; letter-spacing: -1px; color: #1a1a1a; margin-bottom: 4px; font-family: 'DM Mono', monospace; }
-        .lb-yr-sub    { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-your-rank { background: var(--color-mw-brand-dim); border: 0.5px solid rgba(79,126,247,0.2); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px; }
+        .lb-yr-label  { font-size: 11px; font-weight: 500; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-yr-rank   { font-size: 32px; font-weight: 700; letter-spacing: -1px; color: var(--color-mw-ink); margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+        .lb-yr-sub    { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-yr-stats  { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
-        .lb-yr-stat   { background: #fff; border-radius: 8px; padding: 10px; border: 0.5px solid rgba(0,0,0,0.08); }
-        .lb-yr-stat-val   { font-size: 16px; font-weight: 600; color: #1a1a1a; font-family: 'DM Mono', monospace; }
-        .lb-yr-stat-label { font-size: 11px; color: #6b7280; margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-yr-stat   { background: #fff; border-radius: var(--radius-sm); padding: 10px; border: 0.5px solid var(--color-mw-border); }
+        .lb-yr-stat-val   { font-size: 16px; font-weight: 600; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; }
+        .lb-yr-stat-label { font-size: 11px; color: var(--color-mw-ink-3); margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
 
         .lb-hte { margin-top: 20px; }
-        .lb-hte-title { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-hte-title { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-hte-item  { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid rgba(0,0,0,0.06); }
         .lb-hte-item:last-child { border-bottom: none; }
-        .lb-hte-dot   { width: 8px; height: 8px; border-radius: 50%; background: #4f7ef7; flex-shrink: 0; }
-        .lb-hte-text  { flex: 1; font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-hte-pts   { font-size: 12px; font-weight: 700; color: #4f7ef7; font-family: 'DM Mono', monospace; }
+        .lb-hte-dot   { width: 8px; height: 8px; border-radius: 50%; background: var(--color-mw-brand); flex-shrink: 0; }
+        .lb-hte-text  { flex: 1; font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-hte-pts   { font-size: 12px; font-weight: 700; color: var(--color-mw-brand); font-family: 'DM Mono', monospace; }
 
         .lb-invite { margin-top: 20px; }
-        .lb-invite-card { background: #f9f9fb; border-radius: 10px; padding: 14px; border: 0.5px solid rgba(0,0,0,0.08); }
-        .lb-invite-title { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-invite-sub   { font-size: 12px; color: #6b7280; margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-invite-link  { background: #fff; border: 0.5px solid rgba(0,0,0,0.12); border-radius: 8px; padding: 9px 12px; font-size: 11px; font-family: 'DM Mono', monospace; color: #6b7280; display: flex; align-items: center; justify-content: space-between; }
-        .lb-copy-btn { font-size: 11px; color: #4f7ef7; cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; background: none; border: none; }
+        .lb-invite-card { background: var(--color-mw-surface-card); border-radius: 10px; padding: 14px; border: 0.5px solid var(--color-mw-border); }
+        .lb-invite-title { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); margin-bottom: 4px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-invite-sub   { font-size: 12px; color: var(--color-mw-ink-3); margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-invite-link  { background: #fff; border: 0.5px solid rgba(0,0,0,0.12); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--color-mw-ink-3); display: flex; align-items: center; justify-content: space-between; }
+        .lb-copy-btn { font-size: 11px; color: var(--color-mw-brand); cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; background: none; border: none; }
 
         @media (max-width: 820px) {
           .lb-layout { flex-direction: column; }
-          .lb-sidebar { width: 100%; border-left: none; border-top: 0.5px solid rgba(0,0,0,0.07); padding: 20px; }
+          .lb-sidebar { width: 100%; border-left: none; border-top: 0.5px solid var(--color-mw-border); padding: 20px; }
           .lb-main { padding: 20px 16px; }
           .lb-stats { grid-template-columns: 1fr 1fr; }
           .lb-pts-col { display: none; }
@@ -322,9 +323,9 @@ function LeaderboardContent() {
                   </tr>
                 ) : sorted.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ padding: '48px 20px', textAlign: 'center', color: '#6b7280', fontSize: 14, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                    <td colSpan={5} style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--color-mw-ink-3)', fontSize: 14, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                       No participants yet — be the first!
-                      <span style={{ fontSize: 12, display: 'block', marginTop: 6, color: '#9ca3af' }}>
+                      <span style={{ fontSize: 12, display: 'block', marginTop: 6, color: 'var(--color-mw-ink-5)' }}>
                         Trade on {activeCampaign?.name ?? 'the campaign'} to appear here.
                       </span>
                     </td>
@@ -369,7 +370,7 @@ function LeaderboardContent() {
                     <div className="lb-yr-stat-label">Score</div>
                   </div>
                   <div className="lb-yr-stat">
-                    <div className="lb-yr-stat-val" style={{ color: '#22c55e' }}>{fmtUSD(me.total_earned_usd || 0)}</div>
+                    <div className="lb-yr-stat-val" style={{ color: 'var(--color-mw-live)' }}>{fmtUSD(me.total_earned_usd || 0)}</div>
                     <div className="lb-yr-stat-label">Earned</div>
                   </div>
                   <div className="lb-yr-stat">
@@ -380,12 +381,12 @@ function LeaderboardContent() {
               </>
             ) : (
               <>
-                <div className="lb-yr-rank" style={{ color: '#9ca3af' }}>—</div>
+                <div className="lb-yr-rank" style={{ color: 'var(--color-mw-ink-5)' }}>—</div>
                 <div className="lb-yr-sub">{wallet ? 'No rank yet · start trading to qualify' : 'Connect wallet to see your rank'}</div>
                 <div className="lb-yr-stats">
                   {['Points', 'Score', 'Earned', 'Referrals'].map(l => (
                     <div key={l} className="lb-yr-stat">
-                      <div className="lb-yr-stat-val" style={{ color: '#9ca3af' }}>0</div>
+                      <div className="lb-yr-stat-val" style={{ color: 'var(--color-mw-ink-5)' }}>0</div>
                       <div className="lb-yr-stat-label">{l}</div>
                     </div>
                   ))}
@@ -401,11 +402,11 @@ function LeaderboardContent() {
               {Object.entries(activeCampaign.actions).map(([key, action]) => {
                 const suffix = action.per_day ? '/day' : action.per_referral ? '/ref' : action.per_referred_trade ? '/trade' : ''
                 const dotColors: Record<string, string> = {
-                  trade: '#2A9E8A',
-                  bridge: '#4f7ef7',
+                  trade: 'var(--color-mw-teal)',
+                  bridge: 'var(--color-mw-brand)',
                   hold: '#C27A00',
                 }
-                const dotColor = key.startsWith('referral') ? '#7B6FCC' : (dotColors[key] ?? '#4f7ef7')
+                const dotColor = key.startsWith('referral') ? '#7B6FCC' : (dotColors[key] ?? 'var(--color-mw-brand)')
                 return (
                   <div key={key} className="lb-hte-item">
                     <div className="lb-hte-dot" style={{ background: dotColor }} />
@@ -422,15 +423,12 @@ function LeaderboardContent() {
             <div className="lb-invite">
               <div className="lb-invite-card">
                 <div className="lb-invite-title">Invite friends</div>
-                <div className="lb-invite-sub">Share your link to earn points for every referred trade</div>
-                <div className="lb-invite-link" style={{ marginBottom: 6 }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10 }}>{refLink}</span>
+                <div className="lb-invite-sub">Share your link to earn +60 pts per completed referral</div>
+                <div className="lb-invite-link">
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{refLink}</span>
                   <button className="lb-copy-btn" onClick={copyLink}>
                     {linkCopied ? '✓ Copied' : 'Copy'}
                   </button>
-                </div>
-                <div style={{ fontSize: 11, color: '#9ca3af', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                  Your code: <span style={{ fontFamily: 'DM Mono, monospace', color: '#4f7ef7' }}>{refCode}</span>
                 </div>
               </div>
             </div>

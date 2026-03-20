@@ -1,19 +1,11 @@
 # Mintware Phase 1 — Project Context for Claude
 
-> **Before building anything:** Read the `## Architecture Boundaries` section.
-> It explains the #1 source of confusion across past sessions.
-
-**Production URL:** https://mintware-beta.vercel.app
-**GitHub:** https://github.com/MintwareDevelopers/Mintware-Beta
-**Supabase project:** `bqwcwrnqpayfndgmceal`
-**Full system docs:** `docs/` folder (ARCHITECTURE.md, API_MAP.md, ISSUES.md, schema.sql)
-
----
-
 ## What This Project Is
-Mintware is a DeFi reputation + rewards platform:
+Mintware is a DeFi reputation + rewards platform with two products:
 - **Attribution** (live) — on-chain reputation scoring for wallets across 100+ chains
-- **Mintware** (Phase 1) — campaign reward engine weighted by Attribution score
+- **Mintware** (coming soon) — social LP vaults and reward pools weighted by Attribution score
+
+This is the **Phase 1 web app** — a Next.js 16 App Router application.
 
 ---
 
@@ -25,352 +17,267 @@ Mintware is a DeFi reputation + rewards platform:
 | Language | TypeScript 5.7 |
 | Wallet | RainbowKit 2 + wagmi 3 + viem 2 |
 | Data fetching | @tanstack/react-query 5 |
-| Styling | Tailwind CSS v4 (landing page only); inline `<style>` blocks (all other pages) |
-| Database | Supabase (`@supabase/ssr` v0.9.0) |
+| Styling | Tailwind CSS v4 (landing page); inline `<style>` blocks (all other app pages) |
+| Database | Supabase (`@supabase/ssr` v0.9.0) — referral system |
 | Fonts | Plus Jakarta Sans (`--font-jakarta`), DM Mono (`--font-mono`) via `next/font/google` |
 | Analytics | @vercel/analytics |
 | Package manager | **pnpm** (always use pnpm, never npm/yarn) |
-| UI components | shadcn/ui in `components/ui/` — **scaffolded but unused in app pages** |
+| UI components | shadcn/ui (Radix-based, in `components/ui/`) — **not actively used in app pages** |
 
 ---
 
-## Architecture Boundaries
+## Project Structure
 
-**This is the #1 source of confusion across past Claude sessions. Read before touching any API or campaign code.**
+```
+app/
+  layout.tsx              # Root layout — fonts, metadata, <Providers>, <Analytics>
+  globals.css             # Tailwind base + full @theme token system + @layer components classes
+  page.tsx                # Landing page ('use client') — uses Tailwind CSS v4
+  explorer/page.tsx       # Redirects to /explorer.html (D3-based, not yet converted)
+  dashboard/page.tsx      # Earn/campaigns dashboard ('use client', auth-guarded)
+  leaderboard/page.tsx    # Global leaderboard ('use client', auth-guarded)
+  swap/page.tsx           # Swap page — 0x/Molten routing, campaign rewards, Core chain
+  campaign/[id]/page.tsx  # Campaign detail — dynamic route ('use client', auth-guarded)
+  profile/page.tsx        # User profile + score ('use client', auth-guarded)
+  api/
+    referral/route.ts         # GET /api/referral?address=, POST /api/referral
+    referral/apply/route.ts   # POST /api/referral/apply — time-gated referral insert
+    swap/quote/route.ts       # POST /api/swap/quote — LI.FI proxy (hides API key, enforces fee)
+    campaigns/swap-event/route.ts  # POST — on-chain tx verification before reward credit
 
-There are two separate systems. Do not mix them up.
+components/
+  providers.tsx           # WagmiProvider + QueryClientProvider + RainbowKitProvider
+  MwNav.tsx               # Sticky nav — boxy tab style, wallet pill → /profile
+  MwAuthGuard.tsx         # Redirects unauthenticated users to /
+  referral/
+    RefCodeInput.tsx      # Read-only copy input — "Copied!" for 2s
+    ReferralSheet.tsx     # First-connect slide-up bottom sheet
+    InviteTab.tsx         # Invite tab content — renders immediately from wallet address
 
-### Attribution Worker (external, read-only — NOT our code)
-URL: `https://attribution-scorer.ceo-1f9.workers.dev`
-Defined as `export const API` in `lib/api.ts`.
+lib/
+  wagmi.ts                # wagmiConfig via getDefaultConfig (RainbowKit)
+  api.ts                  # API base URL + shared helpers
+  supabase.ts             # createSupabaseBrowserClient() factory
+  referral/
+    types.ts              # ReferralStats, ReferralRecord, WalletProfile
+    utils.ts              # generateRefCode(), truncateAddress()
+    useReferral.ts        # Core referral hook
 
-**What it does:** Wallet scoring, campaign list display data, leaderboard.
-**What it does NOT do:** Joins, writes, reward tracking, participant state.
-
-| Endpoint | Used for |
-|----------|---------|
-| `GET /score?address=` | Attribution score on profile page + join score check |
-| `GET /campaigns` | Campaign list on dashboard |
-| `GET /campaign?id=&address=` | Campaign detail display data |
-| `GET /leaderboard?campaign_id=` | Leaderboard data |
-| ~~`POST /join`~~ | **DEPRECATED** — returned "Invalid wallet". Replaced by our route. |
-
-**Critical gotcha:** `GET /campaign?id=&address=` always returns `participant: null` even for wallets that have joined. It reads its own separate database, not our Supabase. This is why `locallyJoined` state exists in `campaign/[id]/page.tsx`.
-
-### Our Next.js API (writes everything to Supabase)
-
-Joins, reward credits, claims, cron jobs, referrals — all go through our routes.
-
-| Route | Purpose |
-|-------|---------|
-| `POST /api/campaigns/join` | Join campaign — validates, fetches score, upserts `participants` |
-| `POST /api/campaigns/swap-event` | Swap webhook from Molten — credits rewards |
-| `GET /api/claim/status?address=` | List all claimable rewards for wallet |
-| `GET /api/claim?address=&distribution_id=` | Merkle proof + amount for claiming |
-| `POST /api/claim` | Mark distribution claimed after on-chain tx |
-| `GET /api/rewards/pending?address=` | Locked pending rewards (token pool) |
-| `GET /api/referral?address=` | Referral stats |
-| `POST /api/referral/generate` | Upsert wallet profile + return stats |
-| `GET /api/campaigns/manage?wallet=` | Creator's campaigns |
-| `GET /api/teams/whitelist?address=` | Check whitelist status |
-| `POST /api/teams/apply` | Submit whitelist application |
-| `GET /api/cron/pool-settle` | Settle token pool rewards → Merkle distributions (every 15 min) |
-| `GET /api/cron/epoch-end` | Close points epoch + publish distribution |
-| `GET /api/cron/bridge-verify` | Verify Core DAO bridge txs (**BLOCKED** — awaiting contract) |
-
-**Rule:** If you're writing data about a user or campaign — it goes through our API → Supabase. Never through the Attribution Worker.
+public/
+  explorer.html           # Static D3 explorer — no nav, logo-only back button
+  mw-auth.js              # Legacy auth helper
+  (+ other static HTML pages)
+```
 
 ---
 
-## Environment Variables
+## API
 
-**Canonical reference:** `docs/.env.example`
+**Base URL:** `https://attribution-scorer.ceo-1f9.workers.dev`
+Defined as `export const API` in `lib/api.ts`. Import from there — never hardcode.
 
-### Active variables (set in Vercel + `.env.local`)
-
-| Variable | Purpose | Notes |
+### Key endpoints
+| Endpoint | Method | Description |
 |---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (public, RLS enforced) | |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role (server only, bypasses RLS) | |
-| `NEXT_PUBLIC_LIFI_INTEGRATOR` | LI.FI integrator name — `"mintware"` | |
-| `NEXT_PUBLIC_LIFI_API_KEY` | LI.FI integrator API key | |
-| `NEXT_PUBLIC_LIFI_INTEGRATOR_VERIFIED` | **Must be `"true"` to enable fee collection.** Gates `fee` + `referrer` params in `getRoutes()`. Without it, no fee is passed to LI.FI and Mintware earns nothing on swaps. | Set in Vercel. |
-| `NEXT_PUBLIC_0X_API_KEY` | 0x swap API key (fallback routing) | |
-| `NEXT_PUBLIC_MINTWARE_TREASURY` | LI.FI fee recipient wallet. Passed as `referrer` to `getRoutes()`. | `0x3F9529e33273fcCec66BaE34B51397e1d01937Bf` |
-| `MINTWARE_TREASURY_ADDRESS` | **Server-side** treasury address. Used in `onchainPublisher` oracle≠treasury guard. Must match `NEXT_PUBLIC_MINTWARE_TREASURY`. | `0x3F9529e33273fcCec66BaE34B51397e1d01937Bf` |
-| `NEXT_PUBLIC_DISTRIBUTOR_ADDRESS` | MintwareDistributor contract for claim UI | Base mainnet: `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE` |
-| `NEXT_PUBLIC_REWARDS_MODE` | `"live"` — enables real reward calculation | |
-| `CRON_SECRET` | Bearer token securing all `/api/cron/*` routes | |
-| `SWAP_WEBHOOK_SECRET` | Auth for Molten server-side webhook. **See critical note below.** | |
-| `BASE_RPC_URL` | Base mainnet RPC | defaults to `https://mainnet.base.org` |
-| `CORE_DAO_RPC_URL` | Core DAO RPC | defaults to `https://rpc.coredao.org` |
-| `ORACLE_SIGNER_ADDRESS` | EIP-712 oracle signer public address | `0xc75D4b4bdB4D7ac103671f45E99D2FA6107B2e93` |
-| `DISTRIBUTOR_PRIVATE_KEY` | Oracle signer private key — signs Merkle roots (server only, never expose) | |
-| `COINGECKO_API_KEY` | Price feed (optional, falls back to free tier) | |
+| `GET /campaigns` | GET | List all campaigns |
+| `GET /campaign?id=&address=` | GET | Single campaign + participant data for a wallet |
+| `POST /join` | POST | Join a campaign `{ campaign_id, address }` |
+| `GET /leaderboard?campaign_id=` | GET | Leaderboard for a campaign |
+| `GET /score?address=` | GET | Full Attribution score profile for a wallet |
 
-### SWAP_WEBHOOK_SECRET — critical behaviour
+### `/score` response shape (used by profile page)
+```json
+{
+  "score": 149,
+  "tier": "bronze",
+  "percentile": 12,
+  "walletAge": "117 months",
+  "firstSeen": "Jun 2016",
+  "chains": 2,
+  "totalTxCount": 168,
+  "treeSize": 0,
+  "treeQuality": "0.00",
+  "totalLo": 710,
+  "totalHi": 3250,
+  "signals": [
+    { "key": "volume", "name": "Volume", "icon": "⇄", "max": 100, "color": "#3A52CC", "score": 41, "insights": ["..."] },
+    { "key": "trading", "name": "Trading", "icon": "◈", "max": 75, "color": "#6B8FFF", "score": 24, "insights": ["..."] },
+    { "key": "holding", "name": "Holding", "icon": "◆", "max": 100, "color": "#2A9E8A", "score": 39, "insights": ["..."] },
+    { "key": "liquidity", "name": "Liquidity", "icon": "⬡", "max": 150, "color": "#C27A00", "score": 0, "insights": ["..."] },
+    { "key": "governance", "name": "Governance", "icon": "⊕", "max": 100, "color": "#7B6FCC", "score": 0, "insights": ["..."] },
+    { "key": "sharing", "name": "Sharing", "icon": "◉", "max": 400, "color": "#C2537A", "score": 0, "insights": ["..."] }
+  ],
+  "character": { "label": "Ghost", "color": "#9898C0", "desc": "Opportunistic. Shows up for calm markets, disappears in chaos.", "icon": "○" },
+  "uvOpportunities": [
+    { "name": "Jupiter", "cat": "Aggr · Solana", "icon": "♃", "type": "PROTOCOL FIT", "typeColor": "#7B6FCC", "accentColor": "#7B6FCC", "mechanic": "...", "lo": 110, "hi": 500, "reason": "HTML string" }
+  ],
+  "timeline": [{ "date": "2025-04", "score": 40, "events": [] }],
+  "projects": [{ "name": "Ether", "symbol": "ETH", "cat": "Token", "deployed": 40 }]
+}
+```
+**Max score = sum of all signal maxes** = 100+75+100+150+100+400 = **925**
+**Tier strings from API**: `"bronze"`, `"silver"`, `"gold"` etc. (capitalize for display)
 
-`/api/campaigns/swap-event` receives events from **two sources**:
-
-1. **LI.FI client-side** — the swap page calls it directly after `executeRoute()` completes. **No auth header** is sent. `SWAP_WEBHOOK_SECRET` must **NOT** be set in Vercel for this to work — if it is, all client-side reward credits return 401.
-
-2. **Molten server-side** — will call the same endpoint with an `Authorization: Bearer {SWAP_WEBHOOK_SECRET}` header once Molten is configured.
-
-**Current state:** `SWAP_WEBHOOK_SECRET` is deleted from Vercel. Client-side swap events work. When Molten is wired up, the secret will be added back and the route will accept both authenticated (Molten) and unauthenticated (client) requests — check the route auth logic before enabling.
-
-### Deprecated — do NOT use these names
-
-| Variable | Why deprecated |
-|---|---|
-| `NEXT_PUBLIC_MW_TREASURY_ADDRESS` | Was set to the contract address, not the treasury. Use `NEXT_PUBLIC_DISTRIBUTOR_ADDRESS` for the contract and `NEXT_PUBLIC_MINTWARE_TREASURY` for fee recipient. |
-| `NEXT_PUBLIC_CAMPAIGN_WORKER_URL` | Pointed to unused second Worker (`mintware-campaigns.ceo-1f9.workers.dev`). Removed from all code. |
-
----
-
-## Database (Supabase `bqwcwrnqpayfndgmceal`)
-
-**Canonical schema:** `docs/schema.sql`
-**9 migrations applied** (latest: `20260319000001_participants_and_activity.sql`)
-
-### Tables
-
-| Table | Purpose |
-|-------|---------|
-| `campaigns` | Campaign config + state (both types) |
-| `participants` | One row per wallet per campaign. Created by `/api/campaigns/join`. |
-| `activity` | Per-action event log. Dedup by `(wallet, tx_hash, action_type)`. |
-| `pending_rewards` | Token pool reward locks per tx. `locked → claimable → claimed`. |
-| `distributions` | Merkle tree publication records. One per campaign per epoch. |
-| `epoch_state` | Active epoch window + point accumulator. One active epoch per campaign. |
-| `daily_payouts` | Per-wallet Merkle proof + payout per epoch. **Canonical claim table.** |
-| `campaign_payouts` | Legacy daily rank records. Do not write new data here. |
-| `swap_events` | Append-only webhook audit log from Molten. |
-| `wallet_profiles` | One row per connected wallet. `ref_code` deterministic. |
-| `referral_records` | Referral link conversions. |
-| `referral_stats` | VIEW — aggregated stats per wallet. |
-| `whitelisted_teams` | Teams approved for points campaigns. |
-| `team_applications` | Inbound whitelist applications. |
-
-### Key conventions
-- `ref_code` is deterministic: `"mw_" + address.slice(2, 8).toLowerCase()` — never depends on DB
-- `activity` dedup prevents double-crediting across retries
-- `pending_rewards` unique on `(tx_hash, reward_type)` — one lock per reward type per tx
-- One active epoch per campaign: enforced by partial unique index on `epoch_state`
-- All writes via service role. All reads public (anon key + RLS)
-
----
-
-## Campaign Types
-
-### Token Reward Pool — referral growth engine
-
-A sponsor funds a pool. Users share referral links and earn % of swap volume their referrals generate.
-
-- **Referrer** earns `referral_reward_pct`% of every swap their referrals make (main incentive)
-- **Buyer** gets `buyer_reward_pct`% rebate on their own swap (minor additive)
-- **Mintware** takes `platform_fee_pct`% (default 2%)
-- Pool depletes as rewards are paid. Settlement via pool-settle cron (every 15 min on Pro plan).
-
-**UI copy:** "Share your link → earn % of every swap your referrals make"
-**Do NOT say:** "earn $X per day" or "swap to earn"
-
-### Points Campaign — epoch-based scored payouts
-
-Whitelisted protocol sponsors a fixed pool. Users earn points for on-chain actions weighted by Attribution + Sharing scores.
-
-- `trade` — 8 pts, once per calendar day (**LIVE**)
-- `referral_trade` — 8 pts per referred wallet per trading day (**LIVE**)
-- `bridge` — 15 pts, one-time (**BLOCKED** — awaiting Core DAO bridge contract)
-- `referral_bridge` — 60 pts per referred bridge (**BLOCKED** — same reason)
-
-At epoch end: pool split proportionally by `points × attribution_multiplier × sharing_multiplier`.
-
-**Score multipliers:**
-
-| Percentile | Attribution | Sharing |
-|---|---|---|
-| 0–33% | 1.0× | 1.0× |
-| 34–66% | 1.25× | 1.15× |
-| 67–100% | 1.5× | 1.3× |
-
-Max combined multiplier: 1.95×. Formula: `wallet_payout = (epoch_pool / epoch_count) × (wallet_points / total_points) × multiplier`
-
-**Score multiplier implementation notes:**
-- `attribution_score` comes from the Attribution Worker `/score` API (max signal sum = 925). Percentile is computed across all participants in the epoch.
-- `sharing_score` is the Attribution API's `sharing` signal score. **Max is 400** (not 125 — old bug). Percentile bins: 0–33% = 1.0×, 34–66% = 1.15×, 67–100% = 1.3×.
-- Multipliers are **only applied when `campaign.use_score_multiplier = true`**. If the flag is false, all wallets get 1.0× combined regardless of scores.
-- Both of these are enforced in `lib/campaigns/epochProcessor.ts` (`SHARING_SCORE_MAX = 400`, `use_score_multiplier` guard).
-
-**Daily caps (token pool campaigns):**
-- `daily_wallet_cap_usd` — max a single wallet can earn per calendar day across all reward types
-- `daily_pool_cap_usd` — max the campaign pool can pay out in total per calendar day
-- Both are checked before calling `deduct_token_pool_reward`. If either cap is reached, the event is skipped with a `daily_wallet_cap_reached` or `daily_pool_cap_reached` reason.
-- Cap period = UTC calendar day (midnight to midnight).
-
----
-
-## LI.FI Swap Fee (Mintware Platform Revenue)
-
-**This is entirely separate from campaign reward pool fees.**
-
-- **Fee:** 0.5% on every swap routed through the Mintware swap UI (`LIFI_FEE = 0.005` in `lib/swap/lifi.ts`)
-- **Recipient:** `NEXT_PUBLIC_MINTWARE_TREASURY` (`0x3F9529e33273fcCec66BaE34B51397e1d01937Bf`)
-- **Mechanism:** Passed as `{ fee: 0.005, referrer: LIFI_TREASURY }` to LI.FI's `getRoutes()`. LI.FI routes the fee to the referrer address on every completed swap.
-- **Gate:** Only active when `NEXT_PUBLIC_LIFI_INTEGRATOR_VERIFIED === "true"` (set in Vercel). Without this, `feeOptions` is `{}` and no fee is collected.
-- **Where it lives:** `components/swap/MintwareSwap.tsx` ~line 250.
-
-**What campaign pool fees are (completely different):**
-- Token pool campaigns: sponsors pre-fund a pool. `platform_fee_pct` (default 2%), `buyer_reward_pct`, and `referral_reward_pct` are all paid out of that pool per tx via the `pending_rewards` table and pool-settle cron.
-- Points campaigns: sponsors pay a flat B2B sponsorship fee. No per-tx fee logic.
-- Neither of these has anything to do with the LI.FI swap fee.
-
----
-
-## Join Flow
-
-**How it works (as of 2026-03-19):**
-
-1. User clicks "Join Campaign" → `JoinButton.tsx`
-2. `POST /api/campaigns/join` with `{ campaign_id, address }`
-3. Route fetches Attribution score (4s timeout, defaults 0 on failure)
-4. For points campaigns: checks `min_score` gate. For token_pool: always open.
-5. Upserts row into Supabase `participants` table
-6. Returns `{ ok: true, attribution_score }`
-7. `JoinButton` calls `onJoined()` → sets `locallyJoined = true` in page state
-8. `ReferralCard` appears immediately with copy link
-
-**Why `locallyJoined` exists:**
-After joining, the page re-fetches campaign data from the Attribution Worker (`GET /campaign?id=&address=`). The Worker always returns `participant: null` because it reads its own database, not our Supabase. Without `locallyJoined`, the UI would revert to "Join Campaign". This is a known gap — the long-term fix is to build our own `GET /api/campaigns/[id]` route.
-
----
-
-## Claim Flow
-
-1. `GET /api/claim/status?address=` → list of claimable rewards with `distribution_id`
-2. `GET /api/claim?address=&distribution_id=` → `{ campaign_id, epoch_number, merkle_root, oracle_signature, cumulative_amount_wei, merkle_proof }`
-3. Browser calls `MintwareDistributor.claim(campaignId, epochNumber, merkleRoot, oracleSignature, cumulativeAmount, merkleProof)`
-4. `POST /api/claim` → marks `daily_payouts.claimed_at`
-
-**Cumulative model:** Each leaf encodes wallet's TOTAL earned across all epochs. Contract tracks `claimedCumulative[wallet]` and pays the delta. Wallets that skip epochs claim everything owed in one tx.
-
----
-
-## Deployed Contracts
-
-### MintwareDistributor
-
-| Chain | Address |
-|-------|---------|
-| Base mainnet | `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE` |
-| Base Sepolia (testnet) | `0xcf2EA99639C038a475B710b2Be82b974D777C306` |
-| Core DAO | Not yet deployed (awaiting bridge contract) |
-
-**Owner:** `0x46BB4fea89DFfc5a8a1187EB4A524275568f42d7`
-**Oracle signer:** `0xc75D4b4bdB4D7ac103671f45E99D2FA6107B2e93` (derived from `DISTRIBUTOR_PRIVATE_KEY`)
-**Treasury:** `0x3F9529e33273fcCec66BaE34B51397e1d01937Bf`
-
-**⚠️ Oracle ≠ Treasury — important implication:**
-`claim()` sends tokens to `msg.sender`. When `onchainPublisher` auto-claims the treasury fee leaf after signing, it calls `claim()` from the oracle wallet — so fees would land in the oracle wallet, not the treasury.
-
-`onchainPublisher` detects this mismatch (`ORACLE_SIGNER_ADDRESS ≠ MINTWARE_TREASURY_ADDRESS`) and **skips auto-claim**, logging a warning. The oracle signature is still stored in Supabase. Treasury must manually call `claim()` using the stored `oracle_signature` from the `distributions` table.
-
-**Long-term fix:** Rotate `DISTRIBUTOR_PRIVATE_KEY` to a key whose derived address equals `NEXT_PUBLIC_MINTWARE_TREASURY`, or use a separate treasury claimer contract. Until then, treasury fees require manual claiming.
-
-### Leaf encoding (critical — mismatch causes all claims to revert)
-- **Solidity:** `keccak256(bytes.concat(keccak256(abi.encode(address, uint256))))`
-- **TypeScript:** `StandardMerkleTree.of([[wallet, amount]], ['address', 'uint256'])`
-- Uses `abi.encode` (64-byte padded) — **NOT** `abi.encodePacked` (52 bytes)
+### Shared helpers (from `lib/api.ts`)
+- `fmtUSD(n)` — formats numbers as `$2.7k`, `$1.2M`, etc.
+- `daysUntil(iso)` — days remaining from ISO date string
+- `shortAddr(addr)` — `0x1234…abcd` format
+- `iconColor(name)` — deterministic `{ bg, fg }` palette from a string (used for campaign icons)
 
 ---
 
 ## Referral System
 
-**`ref_code` is always:** `"mw_" + address.slice(2, 8).toLowerCase()` — computed client-side, no DB needed.
+Supabase tables (already exist, no migrations needed):
+- `wallet_profiles` — one row per wallet: `address`, `ref_code`, `last_seen_at`
+- `referral_records` — `referrer`, `referred`, `ref_code`, `status` (`pending` | `active`)
+- `referral_stats` — VIEW: `address`, `ref_code`, `ref_link`, `tree_size`, `tree_quality`, `sharing_score`
 
-**`useReferral(address)` hook:**
-1. Captures `?ref=` param → `sessionStorage["mw_pending_ref"]`
+**Key convention:** `ref_code` is **deterministic** — `"mw_" + address.slice(2, 8).toLowerCase()`. Never depends on Supabase to compute it.
+
+**`useReferral(address)` hook flow:**
+1. Captures `?ref=` URL param → `sessionStorage["mw_pending_ref"]`
 2. Upserts `wallet_profiles` on connect
 3. If new wallet + pending ref → inserts `referral_records`
 4. Fetches `referral_stats` view
-5. Subscribes to Supabase Realtime for live updates
+5. Subscribes to Supabase Realtime on `referral_records` for live updates
 
-**`InviteTab`** renders immediately from wallet address. Supabase stats load as enhancement.
-**`ReferralSheet`** slides up 1.5s after first connect. Dismissed in `localStorage["mw_ref_sheet_dismissed"]`.
+**`InviteTab`** renders immediately from wallet address — ref code/link are computed locally. Supabase stats (sharing score, network size) load in as enhancement — tab never shows an error state.
+
+**`ReferralSheet`** slides up 1.5s after first wallet connect. Dismissed state in `localStorage["mw_ref_sheet_dismissed"]`.
+
+**API routes** (`app/api/referral/route.ts`):
+- `GET /api/referral?address=` — reads `referral_stats` (anon key)
+- `POST /api/referral/generate` — upserts `wallet_profiles`, returns stats (service role key)
 
 ---
 
-## Cron Jobs
+## Wallet / Auth
 
-| Route | Schedule | Purpose |
-|-------|---------|---------|
-| `/api/cron/pool-settle` | `0 2 * * *` ⚠️ | Settle claimable `pending_rewards` → Merkle distributions |
-| `/api/cron/epoch-end` | `0 1 * * *` | Close active points epoch + publish distribution |
-| `/api/cron/bridge-verify` | `0 0 * * *` | Verify Core DAO bridge txs (**BLOCKED** — `CORE_DAO_BRIDGE_CONTRACT` not set) |
+**Config** (`lib/wagmi.ts`):
+- Chains: Mainnet, Base, Arbitrum
+- Reown (WalletConnect) project ID: `580f461c981a43d53fc25fe59b64306b`
+- SSR: true
 
-All cron routes require `Authorization: Bearer {CRON_SECRET}`.
+**Providers** (`components/providers.tsx`):
+```
+WagmiProvider → QueryClientProvider → RainbowKitProvider (lightTheme, accentColor #0052FF)
+```
 
-**⚠️ pool-settle is temporarily daily (2am UTC).** Intended schedule is `*/15 * * * *` (every 15 min). Vercel Hobby plan caps crons to daily. To restore: upgrade to Vercel Pro and change `pool-settle` cron in `vercel.json` back to `"*/15 * * * *"`.
+**Auth guard** (`components/MwAuthGuard.tsx`):
+- Wrap any auth-required page: `<MwAuthGuard><PageContent /></MwAuthGuard>`
+- Redirects to `/` if not connected, shows lavender blank during check
 
 ---
 
 ## Navigation (`components/MwNav.tsx`)
 
 - **Logged-out:** "Connect Wallet" button only
-- **Logged-in:** "Earn" (→ /dashboard), "Swap" (→ /swap), "Leaderboard" (→ /leaderboard), "Profile" (→ /profile), wallet pill
+- **Logged-in:** boxy tab-style nav — "Earn" (→ /dashboard), "Swap" (→ /swap), "Leaderboard" (→ /leaderboard), "Profile" (→ /profile), wallet pill
 - **Wallet pill:** hover reveals red "✕ disconnect" → calls `disconnect()` + `router.push('/')`
+- CSS is inline `<style>` inside the component
 
 ---
 
 ## CSS Conventions
 
-**Landing page (`app/page.tsx`)** — Tailwind CSS v4 only.
-**All other app pages** — inline `<style>` blocks only. Do not refactor to CSS modules or Tailwind unless asked.
+**Landing page (`app/page.tsx`)** — uses **Tailwind CSS v4** utility classes directly in JSX. No separate CSS file.
 
-**Design tokens:**
-```
-#F7F6FF   surface / background
-#1A1A2E   ink (primary text)
-#3A3C52   ink-2 (secondary text)
-#8A8C9E   ink-3 (muted text)
-#3A5CE8   primary blue
-#C2537A   sharing/referral pink
-#2A9E8A   green (success/active)
-Plus Jakarta Sans — UI labels, body
-DM Mono   — addresses, codes, numbers
-```
+**All other app pages** — use inline `<style>` blocks. Do not refactor to CSS modules or Tailwind unless asked.
+
+**Design tokens are CSS custom properties defined in `app/globals.css` `@theme` block.** Always use `var(--token)` references — never hardcode hex values. The token system works for both Tailwind v4 utility classes and inline `<style>` blocks.
+
+### Color tokens
+
+| Token | Value | Usage |
+|---|---|---|
+| `--color-mw-brand` | `#4f7ef7` | Nav, buttons, landing page |
+| `--color-mw-brand-dim` | `rgba(79,126,247,0.07)` | Subtle brand tint |
+| `--color-mw-brand-mid` | `rgba(79,126,247,0.14)` | Mid brand tint |
+| `--color-mw-brand-deep` | `#3A5CE8` | Referral/campaign UI (distinct blue — do NOT merge with brand) |
+| `--color-mw-brand-deep-glow` | `rgba(58,92,232,0.12)` | Referral glow effects |
+| `--color-mw-ink` | `#1a1a1a` | Primary text |
+| `--color-mw-ink-2` | `#3d3d3d` | Secondary text |
+| `--color-mw-ink-3` | `#6b7280` | Muted text |
+| `--color-mw-ink-4` | `#8A8C9E` | Lightest muted — referral UI |
+| `--color-mw-ink-5` | `#9ca3af` | Extra light — dashboard/leaderboard |
+| `--color-mw-surface` | `#f5f5f7` | Default surface |
+| `--color-mw-surface-purple` | `#F7F6FF` | Referral/campaign light bg |
+| `--color-mw-surface-card` | `#f9f9fb` | Dashboard/leaderboard cards |
+| `--color-mw-green` | `#16a34a` | Earnings/success text |
+| `--color-mw-live` | `#22c55e` | Live indicator dot (distinct green — do NOT merge with green) |
+| `--color-mw-pink` | `#C2537A` | Sharing/referral |
+| `--color-mw-teal` | `#2A9E8A` | Holding/success teal |
+| `--color-mw-amber` | `#C27A00` | Pending/liquidity |
+| `--color-mw-red` | `#ef4444` | Error/disconnect |
+| `--color-mw-border` | `rgba(0,0,0,0.07)` | Default border |
+| `--color-mw-border-strong` | `rgba(0,0,0,0.13)` | Stronger border |
+| `--color-mw-border-mid` | `rgba(0,0,0,0.1)` | Mid border |
+| `--color-mw-dark` | `#0A0D14` | Dark sections |
+| `--color-mw-dark-text` | `rgba(255,255,255,0.88)` | Dark section text |
+| `--color-mw-dark-sub` | `rgba(255,255,255,0.38)` | Dark section subtext |
+| `--color-mw-dark-border` | `rgba(255,255,255,0.06)` | Dark section border |
+
+> **Two intentional blues:** `--color-mw-brand` (`#4f7ef7`) is used in the nav/dashboard/leaderboard/swap. `--color-mw-brand-deep` (`#3A5CE8`) is used in referral/campaign components. They are visually distinct — do NOT merge them.
+
+> **Two intentional greens:** `--color-mw-green` (`#16a34a`) is earnings/success text. `--color-mw-live` (`#22c55e`) is the live indicator dot. Do NOT merge.
+
+### Spacing / shape tokens
+
+| Token | Value |
+|---|---|
+| `--radius-sm` | `8px` |
+| `--radius-md` | `12px` |
+| `--radius-lg` | `16px` |
+| `--radius-xl` | `20px` |
+| `--transition-fast` | `0.15s` |
+| `--transition-base` | `0.3s` |
+| `--easing-spring` | `cubic-bezier(0.22, 1, 0.36, 1)` |
+| `--shadow-sm` | `0 1px 3px rgba(0,0,0,0.06)` |
+| `--shadow-md` | `0 4px 12px rgba(0,0,0,0.07)` |
+| `--shadow-sheet` | `0 -4px 40px rgba(58,92,232,0.12)` |
+
+### Shared layout classes (`@layer components` in `globals.css`)
+
+These classes extract the most-repeated layout patterns — use them in inline `<style>` blocks to reduce duplication:
+
+| Class | Purpose |
+|---|---|
+| `.mw-card` | White card with `surface-card` bg, `radius-md`, border, 16px padding |
+| `.mw-card-purple` | `surface-purple` bg, `radius-md`, border (no padding — set per-use) |
+| `.mw-pill` | Base inline-flex pill — `radius-xl`, 3×10px padding, 11px 600-weight text |
+| `.mw-pill-live` | Green live badge |
+| `.mw-pill-ended` | Grey ended badge |
+| `.mw-pill-soon` | Blue coming-soon badge |
+| `.mw-label` | All-caps section label (11px, 600-weight, 1.5px letter-spacing) |
+| `.mw-divider` | 1px horizontal rule using `--color-mw-border` |
+
+### Fonts
+- `Plus Jakarta Sans` (`--font-jakarta`) — UI labels, body text
+- `DM Mono` (`--font-mono`) — wallet addresses, codes, large numbers
 
 ---
 
 ## Dev Server
 
+**Start command (in Terminal):**
 ```bash
 cd "/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build"
 pnpm dev
 ```
 
-**Preview tool (`.claude/launch.json`)** — must include nvm node in PATH:
+**Preview tool (Claude Code internal):** uses `.claude/launch.json` with bash wrapper to set PATH:
 ```json
 {
   "runtimeExecutable": "/bin/bash",
   "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && node node_modules/next/dist/bin/next dev"]
 }
 ```
+This PATH setup is required — without it, Turbopack can't spawn child processes and compilation hangs silently.
 
 **Common issues:**
-- `Unable to acquire lock at .next/dev/lock` → `pkill -f "next dev"` then delete `.next/dev/lock`
-
----
-
-## Contract Commands
-
-```bash
-pnpm hardhat:test                  # 32 tests, all passing
-pnpm hardhat:compile               # Compile + typechain
-pnpm hardhat:deploy:base           # Deploy to Base mainnet
-pnpm hardhat:deploy:base-sepolia   # Deploy to Base Sepolia testnet
-```
-`TS_NODE_PROJECT=tsconfig.hardhat.json` is baked into all `hardhat:*` scripts.
+- `Unable to acquire lock at .next/dev/lock` → another `next dev` is running. Kill with `pkill -f "next dev"` then delete `.next/dev/lock`
+- First compile is slow (~10–15s) due to RainbowKit + wagmi dependency graph
 
 ---
 
@@ -379,65 +286,262 @@ pnpm hardhat:deploy:base-sepolia   # Deploy to Base Sepolia testnet
 | Route | File | Auth | Notes |
 |---|---|---|---|
 | `/` | `app/page.tsx` | No | Landing — Tailwind CSS v4 |
-| `/explorer` | `app/explorer/page.tsx` | No | Redirects to `/explorer.html` (D3, not converted) |
-| `/dashboard` | `app/dashboard/page.tsx` | Yes | Campaign list |
-| `/leaderboard` | `app/leaderboard/page.tsx` | Yes | Campaign selector + leaderboard |
-| `/swap` | `app/swap/page.tsx` | Yes | LI.FI swap, campaign rewards |
-| `/campaign/[id]` | `app/campaign/[id]/page.tsx` | Yes | Detail + join + referral card |
-| `/profile` | `app/profile/page.tsx` | Yes | Score, tier, Portfolio/Score/Badge/Invite tabs |
-| `/create-campaign` | `app/create-campaign/page.tsx` | Yes | 5-step campaign creator wizard |
-| `/manage/[campaign_id]` | `app/manage/[campaign_id]/page.tsx` | Yes | Creator campaign management |
+| `/explorer` | `app/explorer/page.tsx` | No | Redirects to `/explorer.html` |
+| `/dashboard` | `app/dashboard/page.tsx` | Yes | Campaign list, filter by status/chain |
+| `/leaderboard` | `app/leaderboard/page.tsx` | Yes | Campaign selector, podium, table |
+| `/swap` | `app/swap/page.tsx` | Yes | 0x/Molten routing, campaign rewards |
+| `/campaign/[id]` | `app/campaign/[id]/page.tsx` | Yes | `useParams()` for id, join flow via POST |
+| `/profile` | `app/profile/page.tsx` | Yes | Score, tier, tabs: Portfolio / Score / Badge / Invite |
+
+---
+
+## Campaign Engine (branch: feature/campaign-engine)
+
+Source of truth: `mintware_campaign_logic_model.docx` (in Downloads).
+
+### Two campaign types
+
+| | Token Reward Pool | Points Campaign |
+|---|---|---|
+| Created by | Anyone (self-serve) | Whitelisted teams only |
+| Reward trigger | Per swap transaction | Per epoch distribution |
+| Score multipliers | No | Yes — Attribution + Sharing |
+| Platform fee | 2% per tx | Flat sponsorship fee (B2B) |
+| Pool | Depletes until empty | Fixed, epoch-split |
+| Access | Open | `min_score` gated |
+
+### Score multipliers (Points Campaign)
+
+| Percentile | Attribution | Sharing |
+|---|---|---|
+| 0–33% | 1.0× | 1.0× |
+| 34–66% | 1.25× | 1.15× |
+| 67–100% | 1.5× | 1.3× |
+
+Combined multiplier is multiplicative: `attribution_multiplier × sharing_multiplier` (max 1.95×).
+
+### Actions (dynamic per campaign)
+- `bridge` — 15 pts, one-time per wallet
+- `trade` — 8 pts, once per calendar day
+- `referral_bridge` — 60 pts per referred wallet that bridges
+- `referral_trade` — 8 pts per referred wallet per trading day
+
+### Epoch reward formula
+```
+wallet_payout = (epoch_pool / epoch_count) × (wallet_points / total_points) × combined_multiplier
+```
+
+### Supabase migration: `supabase/migrations/20260317000001_campaign_engine_schema.sql`
+Three new tables added in Ticket 1:
+
+**`pending_rewards`** — Token Reward Pool per-tx reward locks
+- One row per reward type (`buyer`, `referrer`, `platform_fee`) per `tx_hash`
+- Unique index on `(tx_hash, reward_type)` prevents double-crediting
+- `claimable_at = now() + claim_duration_mins`; status: `locked → claimable → claimed`
+
+**`distributions`** — Points Campaign Merkle epoch distribution records
+- One row per `(campaign_id, epoch_number)`
+- `merkle_root` + `ipfs_cid` set at publish time; `tx_hash` confirms on-chain settlement
+- status: `pending → published → finalized`
+
+**`epoch_state`** — Current epoch window + running point accumulator
+- Unique partial index on `campaign_id where status = 'active'` enforces one active epoch per campaign
+- `total_points` incremented in real-time as actions are credited
+- status: `active → settling → complete`; `updated_at` auto-maintained by trigger
+
+**Tables NOT yet added (future tickets):**
+- `participants` — joined wallets per campaign
+- `activity` — per-action point credit ledger (with `tx_hash` uniqueness)
+- `daily_payouts` — per-wallet epoch payout history
+
+---
+
+## Contract Infrastructure (Ticket 5 — complete, contract upgraded to v2)
+
+### Files
+| File | Purpose |
+|---|---|
+| `contracts/MintwareDistributor.sol` | On-chain Merkle drop settlement contract (**v2.0.0**) |
+| `contracts/MockERC20.sol` | Test-only ERC-20 (mintable, dev only) |
+| `contracts/test/MintwareDistributor.test.cjs` | Hardhat test suite (**needs update for v2 changes**) |
+| `hardhat.config.cts` | Hardhat config (`.cts` = TypeScript CJS, required with `"type":"module"`) |
+| `tsconfig.hardhat.json` | Separate TS config for Hardhat (module: commonjs, not bundler) |
+| `scripts/deploy.cjs` | Deploy + auto-verify on Base/CoreDAO/BNB |
+
+### v2 Breaking Changes (from smart contract audit)
+All changes are in `MintwareDistributor.sol`. Off-chain code that calls the contract must be updated.
+
+| # | Change | Impact |
+|---|---|---|
+| 1 | `ORACLE_SIGNER` (immutable) → `oracleSigner` (mutable, timelocked rotation) | Read `oracleSigner` not `ORACLE_SIGNER`. New functions: `proposeOracleSigner`, `confirmOracleSigner`, `cancelOracleRotation` |
+| 2 | `ROOT_TYPEHASH` now includes `uint256 deadline` | Oracle must add `deadline` to signTypedData message. `claim()` and `batchClaim()` take a `deadline` param. `getRootDigest()` takes `deadline`. `/api/claim` must return and pass through `deadline`. |
+| 3 | `campaignToken[id]` → `campaigns[id].token` | Use `campaigns[campaignId].token` to read campaign's ERC-20. New: `campaigns[id].creator`, `.closed`, `.closedAt`. New view: `getCampaign(campaignId)`. |
+| 4 | Events restructured — `bytes32 indexed campaignIdHash` added | Indexers must filter on `keccak256(bytes(campaignId))`. Event params reordered. |
+| 5 | `depositCampaign` uses balance-diff accounting | `campaignBalances` now reflects tokens *received*, not `amount` param. Safe for fee-on-transfer tokens. |
+| 6 | New functions | `batchClaim()`, `closeCampaign()`, `withdrawCampaign()`, `emergencyWithdraw()`, `getCampaign()` |
+| 7 | `ReentrancyGuard` added | `nonReentrant` on all state-changing functions |
+
+### Oracle rotation flow
+```
+proposeOracleSigner(newAddr)   ← onlyOwner
+  ↓  (wait 48 hours)
+confirmOracleSigner()          ← onlyOwner — activates new signer
+  OR
+cancelOracleRotation()         ← onlyOwner — cancels if compromise detected
+```
+
+### Campaign lifecycle (new in v2)
+```
+depositCampaign()   ← anyone; first depositor becomes creator
+  ↓  (campaign runs, epochs distributed, users claim)
+closeCampaign()     ← onlyOwner (Mintware controls when campaigns end)
+  ↓  (7-day WITHDRAWAL_COOLDOWN — users submit final claims)
+withdrawCampaign()  ← campaign creator only — recovers remaining balance
+```
+Emergency path: `pause()` → `emergencyWithdraw()` → (new contract if needed)
+
+### Off-chain changes required for v2
+
+**`/api/claim/route.ts`** — oracle signing must include `deadline`:
+```typescript
+// Add deadline to the message (e.g. 30 days from now)
+const deadline = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
+const signature = await walletClient.signTypedData({
+  domain, primaryType: 'RootPublication',
+  types: { RootPublication: [
+    { name: 'campaignId',  type: 'string'  },
+    { name: 'epochNumber', type: 'uint256' },
+    { name: 'merkleRoot',  type: 'bytes32' },
+    { name: 'deadline',    type: 'uint256' },  // ← NEW
+  ]},
+  message: { campaignId, epochNumber, merkleRoot, deadline },  // ← add deadline
+})
+// Return deadline in API response so frontend can pass it to claim()
+```
+
+**Frontend `claim()` call** — add `deadline` param:
+```typescript
+// claim(campaignId, epochNumber, merkleRoot, oracleSignature, deadline, amount, merkleProof)
+//                                                              ↑ new param between sig and amount
+```
+
+### Running tests
+```bash
+pnpm hardhat:test          # test suite (needs updating for v2 — see above)
+pnpm hardhat:compile       # Compile + typechain
+```
+`TS_NODE_PROJECT=tsconfig.hardhat.json` prefix is baked into all `hardhat:*` scripts in package.json — required because the root tsconfig uses `moduleResolution: bundler` which is incompatible with Hardhat.
+
+### Deploy targets
+```bash
+pnpm hardhat:deploy:base-sepolia   # Base Sepolia (84532) — testnet
+pnpm hardhat:deploy:base           # Base mainnet (8453)
+pnpm hardhat:deploy:core-dao       # Core DAO (1116)
+pnpm hardhat:deploy:bnb            # BNB Chain (56)
+```
+After deploy: set `NEXT_PUBLIC_MW_TREASURY_ADDRESS` in `.env.local` and update `campaigns.contract_address` in Supabase.
+
+### Leaf encoding — verified (unchanged in v2)
+Both sides produce identical leaf hashes:
+- **Solidity**: `keccak256(bytes.concat(keccak256(abi.encode(address, uint256))))`
+- **TypeScript**: `StandardMerkleTree.of([[wallet, amount]], ['address', 'uint256'])` — `standardLeafHash = keccak256(keccak256(abi.encode(...)))`
+
+Uses `abi.encode` (64-byte padded), NOT `abi.encodePacked` (52 bytes). Critical — mismatch causes all claims to revert.
+
+### ESM/CJS notes (for future debugging)
+The project has `"type": "module"` in `package.json`, which creates Hardhat compatibility issues:
+- Config must be `.cts` (not `.ts`) — `.cts` forces CJS loading, Hardhat's `isRunningWithTypescript()` recognises it
+- Test files must be `.cjs` — Mocha 10.x with `"type":"module"` calls `import()` first; `.cjs` imports work via Node's CJS-in-ESM bridge; `.ts`/`.cts` test files don't
+- `TS_NODE_PROJECT=tsconfig.hardhat.json` must be set — prevents ts-node from picking up root tsconfig (`moduleResolution: bundler` breaks Hardhat)
+
+---
+
+## Security Hardening (MintGuard — completed)
+
+All items implemented in one sprint. See git history for full diff.
+
+### What was done
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | Source maps off in production | ✅ `productionBrowserSourceMaps: false` in `next.config.mjs` |
+| 2 | CSP headers | ✅ Strict CSP + `frame-ancestors: none` in `next.config.mjs` |
+| 3 | LI.FI quote proxy | ✅ `POST /api/swap/quote` — API key server-only, fee injected server-side |
+| 4 | On-chain tx verification | ✅ `verifySwapTx()` in `swap-event/route.ts` — checks receipt + calldata |
+| 5 | Fee enforcement (calldata) | ✅ Treasury address must appear in `tx.input` or reward credit denied |
+| 6 | Rate limiting | ✅ `middleware.ts` — sliding window per IP on sensitive POST endpoints |
+| 7 | Referral time-gate | ✅ `POST /api/referral/apply` — referrer must be ≥ 24h old |
+| 8 | sessionStorage for ref sheet | ✅ `ReferralSheet.tsx` — `localStorage` → `sessionStorage` |
+| 9 | Server component migration | ⏸ Deferred — Phase 2 hardening |
+| 10 | Bot farming / Sybil resistance | ⏸ Deferred — campaign hardening sprint |
+
+### Rate limits (`middleware.ts`)
+| Route | Method | Limit |
+|---|---|---|
+| `POST /api/campaigns/swap-event` | POST | 10 req/min per IP |
+| `POST /api/campaigns/join` | POST | 5 req/min per IP |
+| `POST /api/swap/quote` | POST | 20 req/min per IP |
+
+> **Note:** Rate limiter uses in-memory Map (per serverless instance). Limits burst within one instance — sufficient against simple bots. For full cross-instance limiting, replace with Upstash Redis `@upstash/ratelimit`.
+
+### LI.FI Quote Proxy (`app/api/swap/quote/route.ts`)
+- Client calls `POST /api/swap/quote` instead of `li.quest` directly
+- Server injects `fee: 0.005` + `referrer: MINTWARE_TREASURY_ADDRESS` (always, when integrator is verified)
+- `LIFI_API_KEY` is server-only (renamed from `NEXT_PUBLIC_LIFI_API_KEY`)
+- If a user strips fee params before `executeRoute()`, the calldata check in `swap-event` will catch it and deny the reward with `skip_reason: 'fee_not_paid'`
+
+### On-chain Verification (`verifySwapTx` in `swap-event/route.ts`)
+Checks before any reward credit:
+1. `eth_getTransactionReceipt` — tx must exist and `status === 0x1`
+2. `receipt.from === wallet` — prevents wallet spoofing
+3. `tx.to` must be a known LI.FI router (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`)
+4. Treasury address must appear in `tx.input` calldata (fee enforcement)
+- **Fail-open on RPC error** — logs warning, allows through so legit users aren't blocked by RPC flakiness
+
+### Referral Time-gate (`app/api/referral/apply/route.ts`)
+- `useReferral.ts` calls `POST /api/referral/apply` instead of inserting `referral_records` directly via browser Supabase client
+- Server checks referrer's `last_seen_at ≥ 24h` before `now()` — rejects with `referrer_too_new` if too fresh
+- Prevents bots pre-seeding ref codes from wallets that never actually used the platform
+
+### Env Vars
+
+| Variable | Visibility | Notes |
+|---|---|---|
+| `LIFI_API_KEY` | Server-only | Renamed from `NEXT_PUBLIC_LIFI_API_KEY`. Set in Vercel and `.env.local`. |
+| `NEXT_PUBLIC_LIFI_INTEGRATOR_VERIFIED` | Public | Gates fee injection in proxy and calldata check |
+| `MINTWARE_TREASURY_ADDRESS` | Server-only | Used in proxy fee injection + calldata verification |
+| `NEXT_PUBLIC_MINTWARE_TREASURY` | Public | Fallback for treasury (client display only) |
+
+**Vercel action complete:** `LIFI_API_KEY` set as server-only. `NEXT_PUBLIC_LIFI_API_KEY` deleted.
 
 ---
 
 ## Pending Work
 
-### Blocking (users can't claim rewards without these)
-- [x] **Claim API — Ticket 6** — `GET /api/claim`, `GET /api/claim/status`, and `POST /api/claim` all implemented. Claim flow is complete end-to-end.
+- [ ] **Waitlist form** — `WaitlistButton` in `app/page.tsx` only fakes submission (changes button text, no API call). Needs `POST /api/waitlist` route + Supabase `waitlist` table insert.
+- [ ] **`CORE_DAO_BRIDGE_CONTRACT`** — still `0x__PENDING_MOLTEN_CONFIRMATION__` in `.env.local`. Update when Molten confirms the bridge contract address.
+- [ ] **Explorer page** — `explorer.html` uses D3.js, deferred full React conversion.
 
-### Infrastructure
-- [ ] **Oracle = Treasury alignment** — Oracle signer (`0xc75D4...`) ≠ Treasury (`0x3F95...`). Treasury platform fees from token pool campaigns require manual claiming from the `distributions` table using the stored `oracle_signature`. Long-term fix: rotate `DISTRIBUTOR_PRIVATE_KEY` to a key whose address equals the treasury wallet.
-- [ ] **Vercel Pro plan** — restores pool-settle cron to `*/15 * * * *`. Currently daily at 2am UTC on Hobby plan.
-- [ ] **`CORE_DAO_BRIDGE_CONTRACT`** — still `0x__PENDING_MOLTEN_CONFIRMATION__`. Blocks bridge actions + bridge-verify cron.
-- [ ] **Molten webhook** — register `https://mintware-beta.vercel.app/api/campaigns/swap-event` in Molten dashboard + set matching `SWAP_WEBHOOK_SECRET`. See SWAP_WEBHOOK_SECRET note above before enabling.
-
-### Configuration
-- [ ] **Reown Cloud whitelist** — add `mintware-beta.vercel.app` + `localhost:3000` at cloud.reown.com (project `580f461c981a43d53fc25fe59b64306b`)
-- [ ] **locallyJoined gap** — build `GET /api/campaigns/[id]` reading from Supabase `participants` so page refresh shows correct join state
-
-### Minor
-- [ ] **Waitlist form** — wire email capture on landing page (UI exists, not wired)
-- [ ] **Explorer page** — `explorer.html` uses D3.js, deferred React conversion
-- [ ] **MintwareDistributor — Core DAO** — deploy when bridge contract confirmed
+### Confirmed complete (verified this session)
+- [x] **Ticket 6 — Claim API** — `app/api/claim/route.ts` + `app/api/claim/status/route.ts` fully implemented (Merkle proof, oracle signature, rate limiting, claimed-at guard).
+- [x] **Deploy to Vercel** — Live at `mintware-beta.vercel.app`.
+- [x] **Reown Cloud domain whitelist** — `localhost:3000` and `mintware-beta.vercel.app` both allowlisted. Project `580f461c981a43d53fc25fe59b64306b`.
+- [x] **GitHub remote** — `origin` → `https://github.com/MintwareDevelopers/Mintware-Beta` configured.
+- [x] **LIFI_API_KEY** — Renamed from `NEXT_PUBLIC_LIFI_API_KEY`. Server-only in Vercel. Old public key deleted.
+- [x] **Design token unification** — All hardcoded hex values replaced with `var(--token)` references across all 10 files. Source of truth: `app/globals.css` `@theme` block + `@layer components`.
+- [x] **MintGuard security hardening** — All 8 items complete (see Security Hardening section above).
 
 ---
 
-## Key Design Decisions (Locked — do not re-debate)
+## Key Design Decisions
 
-1. **Our API for writes, Attribution Worker for reads.** Joins, rewards, claims → our Supabase. Scores, campaign list → Worker. Never write to the Worker.
-
-2. **`locallyJoined` client-side flag** — the Worker's `GET /campaign` returns `participant: null` always. We set a boolean after join succeeds. Refresh = loses state (acceptable for now; proper fix tracked above).
-
-3. **Cumulative Merkle model** — `daily_payouts` stores wallet's TOTAL earned to date (not per-epoch delta). Contract pays `cumulative - alreadyClaimed`. Users who miss epochs claim everything owed in one tx. Matches Curve/Convex/Aura pattern.
-
-4. **Price locked at swap time** — `pending_rewards` stores `amount_usd` computed at tx time. Settlement never re-fetches price. Prevents oracle manipulation.
-
-5. **ref_code is deterministic** — `"mw_" + address.slice(2, 8).toLowerCase()`. Never needs a DB round-trip. `InviteTab` renders immediately.
-
-6. **`'use client'` on all pages** — RainbowKit/wagmi hooks require it. No server components in the app directory except the explorer redirect.
-
-7. **Inline styles on app pages** — preserves design fidelity from HTML mockups. Landing page uses Tailwind v4 only. Do not mix.
-
-8. **`NEXT_PUBLIC_MINTWARE_TREASURY`** is the LI.FI fee recipient wallet. **`NEXT_PUBLIC_DISTRIBUTOR_ADDRESS`** is the contract address. These are different things on different addresses. Do not conflate.
-
-9. **`campaign_payouts` is legacy** — the canonical payout table is `daily_payouts`. Do not write new data to `campaign_payouts`.
-
-10. **shadcn/ui is unused** — `components/ui/` was scaffolded at init. App pages use custom inline CSS. Do not add new shadcn components to app pages.
-
-11. **LI.FI swap fee ≠ campaign fees** — The 0.5% LI.FI fee is Mintware platform revenue, collected on every swap regardless of campaigns. Campaign reward pool fees (`platform_fee_pct`, `buyer_reward_pct`, `referral_reward_pct`) come entirely from sponsor-funded pools via `pending_rewards`. These are two completely separate revenue streams.
-
-12. **`use_score_multiplier` must be explicitly true** — Points campaigns do NOT apply Attribution/Sharing score multipliers unless `campaigns.use_score_multiplier = true`. Default is false. When false, all wallets get 1.0× combined.
-
-13. **`SHARING_SCORE_MAX = 400`** — The Attribution API's `sharing` signal has a max of 400 (not 125). Percentile thresholds for multiplier tiers are computed relative to 400. This is in `epochProcessor.ts`. Do not change this constant without verifying the Attribution API spec.
-
-14. **SWAP_WEBHOOK_SECRET must not be set for client-side events** — The swap page calls `/api/campaigns/swap-event` directly with no auth. Setting `SWAP_WEBHOOK_SECRET` in Vercel blocks all client-side reward credits with 401. Only set it when explicitly supporting the Molten server-side webhook path (and update the route to accept both authenticated and unauthenticated callers).
+1. **`'use client'` on all pages** — RainbowKit/wagmi hooks require it. No server components in the app directory (except the explorer redirect).
+2. **Inline styles on app pages** — preserves original HTML design fidelity. Landing page is the exception (Tailwind v4).
+3. **shadcn/ui components exist but are unused** — scaffolded at project init; app uses custom CSS instead.
+4. **Explorer stays static** — D3.js charts are complex; `/explorer` route redirects to the static HTML file in `/public`. Nav removed from explorer.html; logo-only back link to `/` added.
+5. **ref_code is deterministic** — computed from wallet address, never depends on a database round-trip. InviteTab always renders immediately.
+6. **LI.FI fee is double-enforced** — proxy injects fee server-side; on-chain calldata check in `swap-event` verifies treasury address is present. A user who strips fee params before `executeRoute()` still can't earn rewards.
+7. **Referral inserts are server-gated** — `useReferral.ts` never writes to `referral_records` directly. All inserts go through `POST /api/referral/apply`, which enforces the 24h referrer time-gate.
+8. **Rate limiter is per-instance, not global** — `middleware.ts` uses an in-memory `Map`. Good enough to stop simple bots; upgrade to Upstash Redis for full cross-instance limiting if needed.
+9. **`'use client'` pages intentional** — All app pages use `'use client'` because RainbowKit/wagmi hooks require it. Server component migration is deferred to Phase 2.
+10. **Design tokens live in `globals.css`, not a JS file** — Tailwind v4 uses `@theme` in CSS (not `tailwind.config.ts`). CSS custom properties work universally for both Tailwind utilities and inline `<style>` blocks. Never use a `lib/design-tokens.ts` pattern — it can't feed inline styles without a runtime dependency.

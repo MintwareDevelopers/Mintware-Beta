@@ -43,12 +43,12 @@ function DetailSkeleton() {
             <div style={{ height: 14, background: '#F0EFFF', borderRadius: 4, width: '30%' }} />
           </div>
         </div>
-        <div style={{ height: 60, background: '#F0EFFF', borderRadius: 12 }} />
+        <div style={{ height: 60, background: '#F0EFFF', borderRadius: 'var(--radius-md)' }} />
       </div>
       {/* Join skeleton */}
       <div style={{ height: 52, background: '#F0EFFF', borderRadius: 10 }} />
       {/* Tabs skeleton */}
-      <div style={{ height: 40, background: '#F0EFFF', borderRadius: 8 }} />
+      <div style={{ height: 40, background: '#F0EFFF', borderRadius: 'var(--radius-sm)' }} />
     </div>
   )
 }
@@ -69,7 +69,7 @@ function ReferralCard({ refLink, earnDesc }: { refLink: string; earnDesc: string
     <div style={{
       background: 'rgba(42,158,138,0.04)',
       border: '1px solid rgba(42,158,138,0.2)',
-      borderRadius: 12,
+      borderRadius: 'var(--radius-md)',
       padding: '14px 16px',
       marginBottom: 24,
     }}>
@@ -80,13 +80,13 @@ function ReferralCard({ refLink, earnDesc }: { refLink: string; earnDesc: string
         <span style={{
           fontFamily: 'Plus Jakarta Sans, sans-serif',
           fontSize: 12, fontWeight: 700, letterSpacing: '0.5px',
-          textTransform: 'uppercase', color: '#2A9E8A',
+          textTransform: 'uppercase', color: 'var(--color-mw-teal)',
         }}>
           ◉ Your referral link
         </span>
         <span style={{
           fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 11, color: '#2A9E8A',
+          fontSize: 11, color: 'var(--color-mw-teal)',
         }}>
           {earnDesc}
         </span>
@@ -95,9 +95,9 @@ function ReferralCard({ refLink, earnDesc }: { refLink: string; earnDesc: string
         <div style={{
           flex: 1,
           fontFamily: 'DM Mono, monospace', fontSize: 11,
-          color: '#3A3C52', background: '#fff',
+          color: 'var(--color-mw-ink-2)', background: '#fff',
           border: '1px solid rgba(42,158,138,0.2)',
-          borderRadius: 8, padding: '9px 12px',
+          borderRadius: 'var(--radius-sm)', padding: '9px 12px',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {refLink}
@@ -106,13 +106,13 @@ function ReferralCard({ refLink, earnDesc }: { refLink: string; earnDesc: string
           onClick={handleCopy}
           style={{
             flexShrink: 0, padding: '9px 16px',
-            background: copied ? '#2A9E8A' : '#fff',
-            color: copied ? '#fff' : '#2A9E8A',
+            background: copied ? 'var(--color-mw-teal)' : '#fff',
+            color: copied ? '#fff' : 'var(--color-mw-teal)',
             border: '1px solid rgba(42,158,138,0.4)',
-            borderRadius: 8, cursor: 'pointer',
+            borderRadius: 'var(--radius-sm)', cursor: 'pointer',
             fontFamily: 'Plus Jakarta Sans, sans-serif',
             fontSize: 12, fontWeight: 600,
-            transition: 'background 0.15s, color 0.15s',
+            transition: 'background var(--transition-fast), color var(--transition-fast)',
             whiteSpace: 'nowrap',
           }}
         >
@@ -135,10 +135,21 @@ function CampaignDetailContent() {
   const [loading,      setLoading]     = useState(true)
   const [error,        setError]       = useState<string | null>(null)
   const [activeTab,    setActiveTab]   = useState<Tab>('overview')
-  // Tracks join success locally — the Worker's /campaign endpoint doesn't know
-  // about our Supabase participants table, so participant stays null after join.
-  // This flag lets isJoined stay true even when participant is null.
+  // Tracks join success — the Worker's /campaign endpoint doesn't know about
+  // our Supabase participants table, so we check it directly on mount.
+  // Initialised from /api/campaigns/participant so join state survives refresh.
   const [locallyJoined, setLocallyJoined] = useState(false)
+
+  // ── Hydrate join state from Supabase on mount (survives page refresh) ───────
+  useEffect(() => {
+    if (!campaignId || !address) return
+    fetch(`/api/campaigns/participant?campaign_id=${encodeURIComponent(campaignId)}&address=${encodeURIComponent(address)}`)
+      .then(r => r.json())
+      .then((data: { joined?: boolean }) => {
+        if (data.joined) setLocallyJoined(true)
+      })
+      .catch(() => { /* non-critical — UI degrades gracefully */ })
+  }, [campaignId, address])
 
   // ── Fetch campaign + participant ────────────────────────────────────────────
   const fetchCampaign = useCallback(async () => {
@@ -199,19 +210,19 @@ function CampaignDetailContent() {
           font-family: 'Plus Jakarta Sans', sans-serif;
           font-size: 14px; font-weight: 600;
           padding: 10px 18px;
-          color: #8A8C9E;
+          color: var(--color-mw-ink-4);
           border-bottom: 2px solid transparent;
-          transition: color 0.15s, border-color 0.15s;
+          transition: color var(--transition-fast), border-color var(--transition-fast);
         }
-        .cd-tab-btn:hover:not(:disabled) { color: #3A5CE8; }
+        .cd-tab-btn:hover:not(:disabled) { color: var(--color-mw-brand-deep); }
         .cd-tab-btn.active {
-          color: #3A5CE8;
-          border-bottom-color: #3A5CE8;
+          color: var(--color-mw-brand-deep);
+          border-bottom-color: var(--color-mw-brand-deep);
         }
         .cd-tab-btn:disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>
 
-      <div style={{ minHeight: '100vh', background: '#F7F6FF', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--color-mw-surface-purple)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
         <MwNav />
 
         <main style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px' }}>
@@ -220,11 +231,11 @@ function CampaignDetailContent() {
           <Link href="/dashboard" style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, fontWeight: 600,
-            color: '#8A8C9E', textDecoration: 'none', marginBottom: 20,
-            transition: 'color 0.15s',
+            color: 'var(--color-mw-ink-4)', textDecoration: 'none', marginBottom: 20,
+            transition: 'color var(--transition-fast)',
           }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#3A5CE8' }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#8A8C9E' }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--color-mw-brand-deep)' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--color-mw-ink-4)' }}
           >
             ← Campaigns
           </Link>
@@ -233,8 +244,8 @@ function CampaignDetailContent() {
           {error && !loading && (
             <div style={{
               padding: '16px 20px', background: 'rgba(194,83,122,0.06)',
-              border: '1px solid rgba(194,83,122,0.15)', borderRadius: 12,
-              fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#C2537A',
+              border: '1px solid rgba(194,83,122,0.15)', borderRadius: 'var(--radius-md)',
+              fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: 'var(--color-mw-pink)',
               marginBottom: 20,
             }}>
               ⚠ {error}
@@ -259,15 +270,15 @@ function CampaignDetailContent() {
                     href={`/manage/${campaignId}`}
                     style={{
                       display: 'inline-block',
-                      border: '1px solid #3A5CE8',
-                      color: '#3A5CE8',
-                      borderRadius: 8,
+                      border: '1px solid var(--color-mw-brand-deep)',
+                      color: 'var(--color-mw-brand-deep)',
+                      borderRadius: 'var(--radius-sm)',
                       padding: '8px 16px',
                       fontSize: 13,
                       fontFamily: 'Plus Jakarta Sans, sans-serif',
                       fontWeight: 600,
                       textDecoration: 'none',
-                      transition: 'background 0.15s',
+                      transition: 'background var(--transition-fast)',
                     }}
                     onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = '#EEF1FF' }}
                     onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent' }}
@@ -362,13 +373,13 @@ function CampaignDetailContent() {
               {activeTab === 'stats' && !isJoined && (
                 <div style={{
                   textAlign: 'center', padding: '48px 24px',
-                  background: '#fff', border: '1px solid #E0DFFF', borderRadius: 16,
+                  background: '#fff', border: '1px solid #E0DFFF', borderRadius: 'var(--radius-lg)',
                 }}>
                   <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 15, fontWeight: 700, color: '#1A1A2E', marginBottom: 6 }}>
+                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--color-mw-ink)', marginBottom: 6 }}>
                     Join to see your stats
                   </div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#8A8C9E' }}>
+                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: 'var(--color-mw-ink-4)' }}>
                     Your points breakdown and earnings will appear here after joining.
                   </div>
                 </div>

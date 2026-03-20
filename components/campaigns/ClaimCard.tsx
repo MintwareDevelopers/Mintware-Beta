@@ -31,15 +31,9 @@ import {
 } from 'wagmi'
 
 // ---------------------------------------------------------------------------
-// MintwareDistributor ABI — only the functions we call
-//
-// claim(campaignId, epochNumber, merkleRoot, oracleSignature, cumulativeAmount, merkleProof)
-//   - campaignId      string    — Supabase campaign UUID
-//   - epochNumber     uint256   — epoch for oracle sig domain separation
-//   - merkleRoot      bytes32   — root the oracle signed
-//   - oracleSignature bytes     — EIP-712 sig from oracle over (campaignId, epoch, root)
-//   - cumulativeAmount uint256  — wallet's TOTAL earned to date (not per-epoch)
-//   - merkleProof     bytes32[] — inclusion proof for (wallet, cumulativeAmount)
+// MintwareDistributor ABI — only the functions we call (v2)
+// 7-param zero-oracle-gas signature: user submits oracle's EIP-712 sig +
+// deadline alongside their Merkle proof in a single transaction.
 // ---------------------------------------------------------------------------
 const DISTRIBUTOR_ABI = [
   {
@@ -47,12 +41,13 @@ const DISTRIBUTOR_ABI = [
     type: 'function',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'campaignId',        type: 'string'   },
-      { name: 'epochNumber',       type: 'uint256'  },
-      { name: 'merkleRoot',        type: 'bytes32'  },
-      { name: 'oracleSignature',   type: 'bytes'    },
-      { name: 'cumulativeAmount',  type: 'uint256'  },
-      { name: 'merkleProof',       type: 'bytes32[]' },
+      { name: 'campaignId',       type: 'string'    },
+      { name: 'epochNumber',      type: 'uint256'   },
+      { name: 'merkleRoot',       type: 'bytes32'   },
+      { name: 'oracleSignature',  type: 'bytes'     },
+      { name: 'deadline',         type: 'uint256'   },  // v2: sig expiry timestamp
+      { name: 'amount',           type: 'uint256'   },
+      { name: 'merkleProof',      type: 'bytes32[]' },
     ],
     outputs: [],
   },
@@ -102,9 +97,9 @@ interface ClaimableReward {
   claimed_at: string | null
   published_at: string | null
   created_at: string
-  // on-chain uint256 from MintwareDistributor.createDistribution() return value
-  // Returned as a string to avoid JS BigInt serialisation issues.
-  onchain_id: string | null
+  // New zero-oracle-gas fields — returned by /api/claim
+  merkle_root: string | null
+  oracle_signature: string | null
 }
 
 interface StatusResponse {
@@ -170,23 +165,12 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
     isSuccess: isTxSuccess,
   } = useWaitForTransactionReceipt({ hash: txHash })
 
-  // On tx confirmed: mark claimed in DB, then notify parent to refetch
+  // Notify parent on success so it can refetch
   useEffect(() => {
-    if (!isTxSuccess) return
-    // Fire-and-forget POST — non-fatal if it fails (contract is source of truth)
-    fetch('/api/claim', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        address: wallet,
-        distribution_id: reward.distribution_id,
-        tx_hash: txHash,
-      }),
-    }).catch(() => {
-      // Swallow — the on-chain tx succeeded, DB sync is best-effort
-    })
-    onClaimed()
-  }, [isTxSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (isTxSuccess) {
+      onClaimed()
+    }
+  }, [isTxSuccess, onClaimed])
 
   // Propagate wagmi write errors
   useEffect(() => {
@@ -212,7 +196,8 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
     setIsFetchingProof(true)
 
     try {
-      // Fetch Merkle proof server-side — tree_json never leaves the server
+      // Fetch Merkle proof + oracle signature server-side.
+      // tree_json and oracle key never leave the server.
       const res = await fetch(
         `/api/claim?address=${encodeURIComponent(wallet)}&distribution_id=${encodeURIComponent(reward.distribution_id)}`
       )
@@ -223,35 +208,36 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
         return
       }
 
-      const data = json as {
-        campaign_id:           string
-        epoch_number:          number
-        merkle_root:           string
-        oracle_signature:      string | null
-        cumulative_amount_wei: string
-        merkle_proof:          string[]
+      const { amount_wei, merkle_proof, oracle_signature, merkle_root, campaign_id, epoch_number, deadline } = json as {
+        amount_wei: string
+        merkle_proof: string[]
+        oracle_signature: string
+        merkle_root: string
+        campaign_id: string
+        epoch_number: number
+        deadline: number     // v2: unix timestamp — sig expiry set by oracle
       }
 
-      if (!data.oracle_signature) {
-        setClaimError('Rewards not yet signed — check back in a few minutes.')
+      if (!oracle_signature) {
+        setClaimError('Distribution is not yet signed. Check back soon.')
         return
       }
 
-      // Submit on-chain claim
-      // MintwareDistributor.claim(campaignId, epochNumber, merkleRoot,
-      //                           oracleSignature, cumulativeAmount, merkleProof)
+      // Submit on-chain claim — 7-param zero-oracle-gas signature (v2):
+      //   claim(campaignId, epochNumber, merkleRoot, oracleSignature, deadline, amount, proof)
       writeContract(
         {
           address: reward.contract_address as `0x${string}`,
           abi: DISTRIBUTOR_ABI,
           functionName: 'claim',
           args: [
-            data.campaign_id,                                  // string
-            BigInt(data.epoch_number),                         // uint256
-            data.merkle_root as `0x${string}`,                 // bytes32
-            data.oracle_signature as `0x${string}`,            // bytes
-            BigInt(data.cumulative_amount_wei),                 // uint256 cumulative
-            data.merkle_proof as `0x${string}`[],              // bytes32[]
+            campaign_id,                         // string  campaignId
+            BigInt(epoch_number),                 // uint256 epochNumber
+            merkle_root as `0x${string}`,         // bytes32 merkleRoot
+            oracle_signature as `0x${string}`,    // bytes   oracleSignature (EIP-712)
+            BigInt(deadline),                     // uint256 deadline (unix timestamp)
+            BigInt(amount_wei),                   // uint256 amount
+            merkle_proof as `0x${string}`[],      // bytes32[] merkleProof
           ],
           chainId: targetChainId ?? undefined,
         },

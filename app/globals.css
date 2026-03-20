@@ -29,9 +29,43 @@
   --color-mw-dark-sub:    rgba(255, 255, 255, 0.38);
   --color-mw-dark-border: rgba(255, 255, 255, 0.06);
 
+  /* ── Brand deep (referral / campaign UI — distinct from nav blue) ── */
+  --color-mw-brand-deep:      #3A5CE8;
+  --color-mw-brand-deep-glow: rgba(58, 92, 232, 0.12);
+
+  /* ── Text variants ── */
+  --color-mw-ink-4: #8A8C9E;   /* lightest muted — referral UI */
+  --color-mw-ink-5: #9ca3af;   /* extra light — dashboard/leaderboard */
+
+  /* ── Surfaces ── */
+  --color-mw-surface-purple: #F7F6FF;   /* referral/campaign light bg */
+  --color-mw-surface-card:   #f9f9fb;   /* dashboard/leaderboard cards */
+
+  /* ── Semantic colors ── */
+  --color-mw-live:  #22c55e;   /* live indicator dot (≠ --color-mw-green which is for earnings text) */
+  --color-mw-pink:  #C2537A;   /* sharing / referral */
+  --color-mw-teal:  #2A9E8A;   /* holding / success teal */
+  --color-mw-amber: #C27A00;   /* pending / liquidity */
+  --color-mw-red:   #ef4444;   /* error / disconnect */
+
+  /* ── Borders ── */
+  --color-mw-border-mid: rgba(0, 0, 0, 0.1);
+
+  /* ── Radius ── */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* ── Transitions ── */
+  --transition-fast:  0.15s;
+  --transition-base:  0.3s;
+  --easing-spring:    cubic-bezier(0.22, 1, 0.36, 1);
+
   /* ── Shadows ── */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.07);
+  --shadow-sm:    0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md:    0 4px 12px rgba(0, 0, 0, 0.07);
+  --shadow-sheet: 0 -4px 40px rgba(58, 92, 232, 0.12);
 
   /* ── Animations ── */
   --animate-fade-up:    fadeUp 0.5s ease both;
@@ -121,4 +155,42 @@
   .mw-wallet-pill .mw-disconnect { display: none; }
   .mw-wallet-pill:hover .mw-label { display: none; }
   .mw-wallet-pill:hover .mw-disconnect { display: flex; }
+
+  /* ── Card ────────────────────────────────────────────────────── */
+  .mw-card {
+    background:    var(--color-mw-surface-card);
+    border-radius: var(--radius-md);
+    border:        1px solid var(--color-mw-border);
+    padding:       16px;
+  }
+  .mw-card-purple {
+    background:    var(--color-mw-surface-purple);
+    border-radius: var(--radius-md);
+    border:        1px solid var(--color-mw-border);
+  }
+
+  /* ── Status pills ────────────────────────────────────────────── */
+  .mw-pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: var(--radius-xl);
+    padding: 3px 10px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .mw-pill-live  { background: rgba(34, 197, 94, 0.10); color: var(--color-mw-live); }
+  .mw-pill-ended { background: rgba(0, 0, 0, 0.06);     color: var(--color-mw-ink-3); }
+  .mw-pill-soon  { background: rgba(79, 126, 247, 0.08); color: var(--color-mw-brand); }
+
+  /* ── Section label (all-caps small) ─────────────────────────── */
+  .mw-label {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--color-mw-ink-3);
+  }
+
+  /* ── Divider ─────────────────────────────────────────────────── */
+  .mw-divider {
+    height:     1px;
+    background: var(--color-mw-border);
+  }
 }

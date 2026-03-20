@@ -111,43 +111,43 @@ function DashboardContent() {
     <>
       <style>{`
         .db-page { padding: 28px 28px 48px; max-width: 1100px; margin: 0 auto; }
-        .db-tag  { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: #22c55e; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .db-tag-dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
-        .db-title { font-size: 30px; font-weight: 600; letter-spacing: -0.5px; color: #1a1a1a; line-height: 1.1; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .db-sub   { font-size: 14px; color: #6b7280; margin-top: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-tag  { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--color-mw-live); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-tag-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-mw-live); }
+        .db-title { font-size: 30px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); line-height: 1.1; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-sub   { font-size: 14px; color: var(--color-mw-ink-3); margin-top: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0 28px; }
-        .db-stat  { background: #f9f9fb; border: 0.5px solid rgba(0,0,0,0.08); border-radius: 12px; padding: 16px 18px; }
-        .db-stat-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .db-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: #1a1a1a; font-family: 'DM Mono', monospace; }
+        .db-stat  { background: var(--color-mw-surface-card); border: 0.5px solid var(--color-mw-border); border-radius: var(--radius-md); padding: 16px 18px; }
+        .db-stat-label { font-size: 11px; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; }
         .db-stat-sub   { font-size: 11px; margin-top: 3px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-tabs   { display: flex; gap: 4px; margin-bottom: 20px; }
-        .db-tab    { padding: 7px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; border: none; background: none; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; transition: background 0.15s, color 0.15s; }
-        .db-tab.active { background: #4f7ef7; color: #fff; font-weight: 500; }
+        .db-tab    { padding: 7px 16px; border-radius: var(--radius-xl); font-size: 13px; cursor: pointer; border: none; background: none; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; transition: background var(--transition-fast), color var(--transition-fast); }
+        .db-tab.active { background: var(--color-mw-brand); color: #fff; font-weight: 500; }
         .db-filters { display: flex; gap: 8px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
-        .db-filter  { padding: 5px 14px; border-radius: 20px; font-size: 12px; cursor: pointer; border: 0.5px solid rgba(0,0,0,0.1); background: #fff; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; display: inline-flex; align-items: center; gap: 4px; }
-        .db-filter.active { border-color: #4f7ef7; color: #4f7ef7; background: rgba(79,126,247,0.07); font-weight: 500; }
-        .db-filter-count { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: #4f7ef7; color: #fff; font-size: 10px; font-weight: 600; }
-        .db-section-title { font-size: 13px; font-weight: 500; color: #6b7280; margin-bottom: 12px; letter-spacing: 0.2px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-filter  { padding: 5px 14px; border-radius: var(--radius-xl); font-size: 12px; cursor: pointer; border: 0.5px solid rgba(0,0,0,0.1); background: #fff; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; display: inline-flex; align-items: center; gap: 4px; }
+        .db-filter.active { border-color: var(--color-mw-brand); color: var(--color-mw-brand); background: var(--color-mw-brand-dim); font-weight: 500; }
+        .db-filter-count { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--color-mw-brand); color: #fff; font-size: 10px; font-weight: 600; }
+        .db-section-title { font-size: 13px; font-weight: 500; color: var(--color-mw-ink-3); margin-bottom: 12px; letter-spacing: 0.2px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-grid  { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
         .db-upcoming { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
-        .db-upc-row  { display: flex; align-items: center; gap: 16px; padding: 24px; background: #f9f9fb; border: 0.5px dashed rgba(0,0,0,0.15); border-radius: 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+        .db-upc-row  { display: flex; align-items: center; gap: 16px; padding: 24px; background: var(--color-mw-surface-card); border: 0.5px dashed rgba(0,0,0,0.15); border-radius: var(--radius-md); cursor: pointer; transition: border-color var(--transition-fast), background var(--transition-fast); }
         .db-upc-row:hover { border-color: rgba(79,126,247,0.3); border-style: dashed; background: #f5f5f8; }
-        .db-upc-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; border: 0.5px solid rgba(0,0,0,0.08); background: #fff; color: #6b7280; font-family: 'DM Mono', monospace; }
-        .db-upc-name { font-size: 14px; font-weight: 600; color: #1a1a1a; font-family: 'Plus Jakarta Sans', sans-serif; margin-bottom: 3px; }
-        .db-upc-meta { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-upc-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; border: 0.5px solid var(--color-mw-border); background: #fff; color: var(--color-mw-ink-3); font-family: 'DM Mono', monospace; }
+        .db-upc-name { font-size: 14px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; margin-bottom: 3px; }
+        .db-upc-meta { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-upc-right { margin-left: auto; text-align: right; flex-shrink: 0; }
-        .db-upc-pool  { font-size: 12px; color: #6b7280; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-upc-pool  { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-upc-badge { font-size: 12px; font-weight: 500; color: #f59e0b; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-activity { margin-top: 28px; }
         .db-act-list { display: flex; flex-direction: column; gap: 8px; }
-        .db-act-row  { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border: 0.5px solid rgba(0,0,0,0.08); border-radius: 10px; }
+        .db-act-row  { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border: 0.5px solid var(--color-mw-border); border-radius: 10px; }
         .db-act-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .db-act-text { flex: 1; font-size: 13px; color: #1a1a1a; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .db-act-time { font-size: 11px; color: #9ca3af; font-family: 'Plus Jakarta Sans', sans-serif; white-space: nowrap; }
-        .db-act-pts  { font-size: 13px; font-weight: 600; color: #22c55e; font-family: 'DM Mono', monospace; white-space: nowrap; }
-        .db-act-empty { padding: 24px; text-align: center; color: #9ca3af; font-size: 13px; font-family: 'Plus Jakarta Sans', sans-serif; border: 0.5px solid rgba(0,0,0,0.07); border-radius: 10px; background: #f9f9fb; }
-        .db-skeleton  { background: #f9f9fb; border-radius: 12px; border: 0.5px solid rgba(0,0,0,0.07); padding: 20px; min-height: 160px; }
-        .db-coming-soon { padding: 28px; display: flex; flex-direction: column; justify-content: center; gap: 8px; border: 0.5px dashed rgba(0,0,0,0.12); border-radius: 12px; opacity: 0.65; }
+        .db-act-text { flex: 1; font-size: 13px; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-act-time { font-size: 11px; color: var(--color-mw-ink-5); font-family: 'Plus Jakarta Sans', sans-serif; white-space: nowrap; }
+        .db-act-pts  { font-size: 13px; font-weight: 600; color: var(--color-mw-live); font-family: 'DM Mono', monospace; white-space: nowrap; }
+        .db-act-empty { padding: 24px; text-align: center; color: var(--color-mw-ink-5); font-size: 13px; font-family: 'Plus Jakarta Sans', sans-serif; border: 0.5px solid var(--color-mw-border); border-radius: 10px; background: var(--color-mw-surface-card); }
+        .db-skeleton  { background: var(--color-mw-surface-card); border-radius: var(--radius-md); border: 0.5px solid var(--color-mw-border); padding: 20px; min-height: 160px; }
+        .db-coming-soon { padding: 28px; display: flex; flex-direction: column; justify-content: center; gap: 8px; border: 0.5px dashed rgba(0,0,0,0.12); border-radius: var(--radius-md); opacity: 0.65; }
         @media (max-width: 800px) {
           .db-stats { grid-template-columns: repeat(2, 1fr); }
           .db-grid  { grid-template-columns: 1fr; }
@@ -172,7 +172,7 @@ function DashboardContent() {
             <div key={s.label} className="db-stat">
               <div className="db-stat-label">{s.label}</div>
               <div className="db-stat-value">{s.value}</div>
-              <div className="db-stat-sub" style={{ color: s.subGray ? '#9ca3af' : '#22c55e' }}>{s.sub}</div>
+              <div className="db-stat-sub" style={{ color: s.subGray ? 'var(--color-mw-ink-5)' : 'var(--color-mw-live)' }}>{s.sub}</div>
             </div>
           ))}
         </div>
@@ -212,7 +212,7 @@ function DashboardContent() {
             <span style={{ color: '#4f7ef7', cursor: 'pointer' }} onClick={() => setActiveTab('explore')}>Browse campaigns →</span>
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280', fontSize: 14, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+          <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--color-mw-ink-3)', fontSize: 14, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             No campaigns match this filter.
           </div>
         ) : (
@@ -225,9 +225,9 @@ function DashboardContent() {
                   {filteredLive.map(c => <CampaignCard key={c.id} campaign={c} />)}
                   {filteredLive.length % 2 !== 0 && (
                     <div className="db-coming-soon">
-                      <div style={{ fontSize: 13, fontWeight: 500, color: '#6b7280', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>More campaigns coming soon</div>
-                      <div style={{ fontSize: 12, color: '#9ca3af', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>New protocol partnerships are being finalized. Check back weekly.</div>
-                      <div style={{ fontSize: 12, color: '#4f7ef7', marginTop: 4, cursor: 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Get notified →</div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-mw-ink-3)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>More campaigns coming soon</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-mw-ink-5)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>New protocol partnerships are being finalized. Check back weekly.</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-mw-brand)', marginTop: 4, cursor: 'pointer', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Get notified →</div>
                     </div>
                   )}
                 </div>
