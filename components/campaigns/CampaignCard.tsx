@@ -95,10 +95,26 @@ interface CampaignCardProps {
   campaign: Campaign
 }
 
+// ─── Chain name → ID mapping (API returns "base" not 8453) ──────────────────
+const CHAIN_NAME_TO_ID: Record<string, number> = {
+  base:      8453,
+  arbitrum:  42161,
+  ethereum:  1,
+  eth:       1,
+  bsc:       56,
+  polygon:   137,
+  optimism:  10,
+  coredao:   1116,
+  core:      1116,
+}
+
 export function CampaignCard({ campaign: c }: CampaignCardProps) {
   const router  = useRouter()
   const col     = iconColor(c.name)
   const initial = (c.protocol ?? c.name).charAt(0).toUpperCase()
+
+  // Resolve chain_id from numeric field or chain name string
+  const chainId = c.chain_id ?? CHAIN_NAME_TO_ID[c.chain?.toLowerCase() ?? ''] ?? 0
 
   const isLive     = c.status === 'live'
   const isUpcoming = c.status === 'upcoming'
@@ -120,23 +136,23 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   }>({ dexUrl: null, website: null, twitter: null, telegram: null })
 
   useEffect(() => {
-    if (!c.token_contract || !c.chain_id) return
+    if (!c.token_contract || !chainId) return
 
     // Fetch logo
-    fetchTokenMeta(c.chain_id, c.token_contract).then(meta => {
+    fetchTokenMeta(chainId, c.token_contract).then(meta => {
       if (meta?.logoURI) setLogoURI(meta.logoURI)
     })
 
     // Fetch socials — merge with manual links from Supabase
-    fetchDexMeta(c.chain_id, c.token_contract).then(meta => {
+    fetchDexMeta(chainId, c.token_contract).then(meta => {
       setDexLinks({
-        dexUrl:   c.links?.dex      ?? meta?.dexUrl   ?? dexUrl(c.chain_id!, c.token_contract!),
+        dexUrl:   c.links?.dex      ?? meta?.dexUrl   ?? dexUrl(chainId, c.token_contract!),
         website:  c.links?.website  ?? meta?.website  ?? null,
         twitter:  c.links?.twitter  ?? meta?.twitter  ?? null,
         telegram: c.links?.telegram ?? meta?.telegram ?? null,
       })
     })
-  }, [c.token_contract, c.chain_id, c.links])
+  }, [c.token_contract, chainId, c.links])
 
   // For campaigns with no token_contract (Core DAO manual links)
   useEffect(() => {
@@ -152,7 +168,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
 
   // DexScreener link always available if we have token_contract
   const effectiveDexUrl = dexLinks.dexUrl
-    ?? (c.token_contract && c.chain_id ? dexUrl(c.chain_id, c.token_contract) : null)
+    ?? (c.token_contract && chainId ? dexUrl(chainId, c.token_contract) : null)
 
   const hasSocials = effectiveDexUrl || dexLinks.twitter || dexLinks.website || dexLinks.telegram
 
