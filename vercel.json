@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/pool-settle",
-      "schedule": "0 * * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/treasury/sweep",
