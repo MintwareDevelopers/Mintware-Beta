@@ -19,16 +19,8 @@ export interface DexMeta {
   telegram: string | null
 }
 
-// LI.FI chain names (uppercase)
-const LIFI_CHAIN: Record<number, string> = {
-  8453:  'BASE',
-  42161: 'ARB',
-  1:     'ETH',
-  56:    'BSC',
-  137:   'POL',
-  10:    'OPT',
-  1116:  'CORE',
-}
+// LI.FI supported chain IDs (numeric — the API rejects string names)
+const LIFI_SUPPORTED = new Set([1, 10, 56, 137, 8453, 42161, 1116])
 
 // DexScreener chain slugs
 const DEX_CHAIN: Record<number, string> = {
@@ -50,11 +42,10 @@ export async function fetchTokenMeta(chainId: number, address: string): Promise<
   const key = `${chainId}:${address.toLowerCase()}`
   if (_tokenCache.has(key)) return _tokenCache.get(key)!
 
-  const chain = LIFI_CHAIN[chainId]
-  if (!chain) { _tokenCache.set(key, null); return null }
+  if (!LIFI_SUPPORTED.has(chainId)) { _tokenCache.set(key, null); return null }
 
   try {
-    const res = await fetch(`https://li.quest/v1/token?chain=${chain}&token=${address}`, {
+    const res = await fetch(`https://li.quest/v1/token?chain=${chainId}&token=${address}`, {
       headers: { Accept: 'application/json' },
     })
     if (!res.ok) { _tokenCache.set(key, null); return null }
