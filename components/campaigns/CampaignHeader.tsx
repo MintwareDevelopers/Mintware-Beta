@@ -7,17 +7,72 @@
 //        pool size, daily payout, days remaining, progress bar.
 // =============================================================================
 
+import { useEffect, useState } from 'react'
 import { fmtUSD, daysUntil, iconColor } from '@/lib/api'
+import { fetchTokenMeta, fetchDexMeta, dexUrl } from '@/lib/tokenMeta'
 import type { Campaign } from './CampaignCard'
+
+const CHAIN_NAME_TO_ID: Record<string, number> = {
+  base: 8453, arbitrum: 42161, ethereum: 1, eth: 1,
+  bsc: 56, polygon: 137, optimism: 10, coredao: 1116, core: 1116,
+}
 
 interface CampaignHeaderProps {
   campaign: Campaign
-  poolUsed?: number   // optional: for progress bar
+  poolUsed?: number
 }
+
+const IconDex = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+  </svg>
+)
+const IconX = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+  </svg>
+)
+const IconGlobe = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+  </svg>
+)
+const IconTelegram = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.941z"/>
+  </svg>
+)
 
 export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
   const col     = iconColor(c.name)
   const initial = (c.protocol ?? c.name).charAt(0).toUpperCase()
+  const chainId = c.chain_id ?? CHAIN_NAME_TO_ID[c.chain?.toLowerCase() ?? ''] ?? 0
+
+  const [logoURI,   setLogoURI]   = useState<string | null>(null)
+  const [logoError, setLogoError] = useState(false)
+  const [links, setLinks] = useState<{ dexUrl: string | null; twitter: string | null; website: string | null; telegram: string | null }>({ dexUrl: null, twitter: null, website: null, telegram: null })
+
+  useEffect(() => {
+    if (!c.token_contract || !chainId) {
+      // Manual links (e.g. Core DAO)
+      if (c.links) setLinks({ dexUrl: c.links.dex ?? null, twitter: c.links.twitter ?? null, website: c.links.website ?? null, telegram: c.links.telegram ?? null })
+      return
+    }
+    fetchTokenMeta(chainId, c.token_contract).then(m => { if (m?.logoURI) setLogoURI(m.logoURI) })
+    fetchDexMeta(chainId, c.token_contract).then(m => {
+      setLinks({
+        dexUrl:   c.links?.dex     ?? m?.dexUrl   ?? dexUrl(chainId, c.token_contract!),
+        twitter:  c.links?.twitter ?? m?.twitter  ?? null,
+        website:  c.links?.website ?? m?.website  ?? null,
+        telegram: c.links?.telegram ?? m?.telegram ?? null,
+      })
+    })
+  }, [c.token_contract, chainId, c.links])
+
+  const showLogo   = logoURI && !logoError
+  const effectiveDexUrl = links.dexUrl ?? (c.token_contract && chainId ? dexUrl(chainId, c.token_contract) : null)
+  const hasSocials = effectiveDexUrl || links.twitter || links.website || links.telegram
   const isLive     = c.status === 'live'
   const isUpcoming = c.status === 'upcoming'
   const daysLeft   = c.end_date ? daysUntil(c.end_date) : null
@@ -43,11 +98,15 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
           {/* Protocol icon */}
           <div style={{
             width: 56, height: 56, borderRadius: 14, flexShrink: 0,
-            background: col.bg, color: col.fg,
+            background: showLogo ? '#fff' : col.bg, color: col.fg,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontFamily: 'DM Mono, monospace', fontSize: 22, fontWeight: 700,
+            border: '0.5px solid rgba(0,0,0,0.08)', overflow: 'hidden',
           }}>
-            {initial}
+            {showLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoURI!} alt={c.name} width={56} height={56} style={{ objectFit: 'cover', width: '100%', height: '100%' }} onError={() => setLogoError(true)} />
+            ) : initial}
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -111,6 +170,43 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
                 }}>
                   Ended
                 </span>
+              )}
+              {/* Social links */}
+              {hasSocials && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 8 }}>
+                  {effectiveDexUrl && (
+                    <a href={effectiveDexUrl} target="_blank" rel="noopener noreferrer" title="DexScreener"
+                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, color: '#9ca3af', textDecoration: 'none' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)'; (e.currentTarget as HTMLElement).style.color = '#3d3d3d' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9ca3af' }}>
+                      <IconDex />
+                    </a>
+                  )}
+                  {links.twitter && (
+                    <a href={links.twitter} target="_blank" rel="noopener noreferrer" title="X / Twitter"
+                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, color: '#9ca3af', textDecoration: 'none' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)'; (e.currentTarget as HTMLElement).style.color = '#3d3d3d' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9ca3af' }}>
+                      <IconX />
+                    </a>
+                  )}
+                  {links.website && (
+                    <a href={links.website} target="_blank" rel="noopener noreferrer" title="Website"
+                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, color: '#9ca3af', textDecoration: 'none' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)'; (e.currentTarget as HTMLElement).style.color = '#3d3d3d' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9ca3af' }}>
+                      <IconGlobe />
+                    </a>
+                  )}
+                  {links.telegram && (
+                    <a href={links.telegram} target="_blank" rel="noopener noreferrer" title="Telegram"
+                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, color: '#9ca3af', textDecoration: 'none' }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)'; (e.currentTarget as HTMLElement).style.color = '#3d3d3d' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9ca3af' }}>
+                      <IconTelegram />
+                    </a>
+                  )}
+                </div>
               )}
             </div>
           </div>
