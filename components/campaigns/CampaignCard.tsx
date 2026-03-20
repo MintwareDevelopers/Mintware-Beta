@@ -6,9 +6,13 @@
 // Structure: header → 3-col stats → reward pills → progress bar
 // =============================================================================
 
+'use client'
+
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { fmtUSD, daysUntil } from '@/lib/api'
 import { TokenIcon } from '@/components/TokenIcon'
+import { fetchDexMeta, chainNameToId, type DexMeta } from '@/lib/tokenMeta'
 
 export interface Campaign {
   id: string
@@ -27,6 +31,12 @@ export interface Campaign {
   token_contract?: string   // API field name — same as token_address
   logo_uri?: string
   chain_id?: number
+  links?: {
+    dex?:      string
+    website?:  string
+    twitter?:  string
+    telegram?: string
+  }
   min_score?: number
   buyer_reward_pct?: number
   referral_reward_pct?: number
@@ -62,8 +72,30 @@ interface CampaignCardProps {
 }
 
 export function CampaignCard({ campaign: c }: CampaignCardProps) {
-  const router = useRouter()
+  const router   = useRouter()
   const iconName = c.protocol ?? c.name
+
+  // ── Social links — from Supabase override or DexScreener auto-fetch ──────────
+  const [dex, setDex] = useState<DexMeta | null>(null)
+
+  useEffect(() => {
+    // Use manually stored links if present
+    if (c.links?.dex || c.links?.twitter || c.links?.website) {
+      setDex({
+        dexUrl:   c.links.dex      ?? '',
+        website:  c.links.website  ?? null,
+        twitter:  c.links.twitter  ?? null,
+        telegram: c.links.telegram ?? null,
+      })
+      return
+    }
+    // Auto-fetch from DexScreener using token_contract
+    const addr = c.token_address ?? c.token_contract
+    if (!addr) return
+    const chainId = c.chain_id ?? (typeof c.chain === 'string' ? chainNameToId(c.chain) : c.chain)
+    if (!chainId) return
+    fetchDexMeta(chainId, addr).then(meta => { if (meta) setDex(meta) })
+  }, [c])
 
   const isLive     = c.status === 'live'
   const isUpcoming = c.status === 'upcoming'
@@ -197,6 +229,22 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
           height: 100%; background: #4f7ef7; border-radius: 4px;
           transition: width 0.6s ease;
         }
+        .cc-socials {
+          padding: 10px 18px;
+          border-top: 0.5px solid rgba(0,0,0,0.06);
+          display: flex; align-items: center; gap: 8px;
+        }
+        .cc-social-link {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 4px 9px; border-radius: 6px;
+          font-size: 11px; font-weight: 500;
+          color: #6b7280; background: #f5f5f7;
+          border: 0.5px solid rgba(0,0,0,0.07);
+          text-decoration: none; font-family: 'Plus Jakarta Sans', sans-serif;
+          transition: color 0.15s, background 0.15s, border-color 0.15s;
+          white-space: nowrap;
+        }
+        .cc-social-link:hover { color: #1a1a1a; background: #ececf0; border-color: rgba(0,0,0,0.13); }
       `}</style>
 
       <div
@@ -332,6 +380,30 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
                 style={{ width: `${totalDays !== null ? progressPct : Math.max(5, 100 - (daysLeft! / 30) * 100)}%` }}
               />
             </div>
+          </div>
+        )}
+
+        {/* ── Social links ── */}
+        {dex && (dex.dexUrl || dex.twitter || dex.website) && (
+          <div className="cc-socials" onClick={e => e.stopPropagation()}>
+            {dex.dexUrl && (
+              <a href={dex.dexUrl} target="_blank" rel="noopener noreferrer" className="cc-social-link">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h7v2H5v14h14v-5h2v7H3V3zm11 0h7v7h-2V6.414l-9.293 9.293-1.414-1.414L17.586 5H14V3z"/></svg>
+                Chart
+              </a>
+            )}
+            {dex.twitter && (
+              <a href={dex.twitter} target="_blank" rel="noopener noreferrer" className="cc-social-link">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                𝕏
+              </a>
+            )}
+            {dex.website && (
+              <a href={dex.website} target="_blank" rel="noopener noreferrer" className="cc-social-link">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                Website
+              </a>
+            )}
           </div>
         )}
       </div>
