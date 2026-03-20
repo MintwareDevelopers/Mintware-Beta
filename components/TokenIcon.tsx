@@ -6,7 +6,12 @@
 
 import { useState, useEffect } from 'react'
 import { iconColor } from '@/lib/api'
-import { fetchTokenMeta, chainNameToId } from '@/lib/tokenMeta'
+import { fetchTokenMeta } from '@/lib/tokenMeta'
+
+const CHAIN_NAME_TO_ID: Record<string, number> = {
+  base: 8453, arbitrum: 42161, ethereum: 1, eth: 1,
+  bsc: 56, polygon: 137, optimism: 10, coredao: 1116, core: 1116,
+}
 
 interface TokenIconProps {
   /** Pre-resolved logo URL — skips the API fetch if provided */
@@ -40,7 +45,7 @@ export function TokenIcon({
     const chainId =
       typeof chain === 'number'
         ? chain
-        : chainNameToId(chain)
+        : CHAIN_NAME_TO_ID[chain.toLowerCase()] ?? 0
 
     if (!chainId) return
 

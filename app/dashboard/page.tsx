@@ -245,8 +245,7 @@ function DashboardContent() {
                     return (
                       <div key={c.id} className="db-upc-row">
                         <TokenIcon
-                          logoUri={c.logo_uri}
-                          tokenAddress={c.token_address ?? c.token_contract}
+                          tokenAddress={c.token_contract}
                           chain={c.chain_id ?? c.chain}
                           name={c.protocol ?? c.name}
                           size={44}
