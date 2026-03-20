@@ -298,7 +298,7 @@ function WaitlistButton() {
   function handleJoin(e: React.MouseEvent<HTMLButtonElement>) {
     const btn = e.currentTarget
     btn.textContent = 'Joined ✓'
-    btn.style.background = '#16a34a'
+    btn.style.background = 'var(--color-mw-green)'
   }
   return (
     <button

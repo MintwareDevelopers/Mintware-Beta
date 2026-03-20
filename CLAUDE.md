@@ -31,7 +31,7 @@ This is the **Phase 1 web app** — a Next.js 16 App Router application.
 ```
 app/
   layout.tsx              # Root layout — fonts, metadata, <Providers>, <Analytics>
-  globals.css             # Minimal reset only — Tailwind base imported here
+  globals.css             # Tailwind base + full @theme token system + @layer components classes
   page.tsx                # Landing page ('use client') — uses Tailwind CSS v4
   explorer/page.tsx       # Redirects to /explorer.html (D3-based, not yet converted)
   dashboard/page.tsx      # Earn/campaigns dashboard ('use client', auth-guarded)
@@ -40,7 +40,10 @@ app/
   campaign/[id]/page.tsx  # Campaign detail — dynamic route ('use client', auth-guarded)
   profile/page.tsx        # User profile + score ('use client', auth-guarded)
   api/
-    referral/route.ts     # GET /api/referral?address=, POST /api/referral/generate
+    referral/route.ts         # GET /api/referral?address=, POST /api/referral
+    referral/apply/route.ts   # POST /api/referral/apply — time-gated referral insert
+    swap/quote/route.ts       # POST /api/swap/quote — LI.FI proxy (hides API key, enforces fee)
+    campaigns/swap-event/route.ts  # POST — on-chain tx verification before reward credit
 
 components/
   providers.tsx           # WagmiProvider + QueryClientProvider + RainbowKitProvider
@@ -182,18 +185,76 @@ WagmiProvider → QueryClientProvider → RainbowKitProvider (lightTheme, accent
 
 **All other app pages** — use inline `<style>` blocks. Do not refactor to CSS modules or Tailwind unless asked.
 
-**Design tokens:**
-```
-#F7F6FF   surface / background
-#1A1A2E   ink (primary text)
-#3A3C52   ink-2 (secondary text)
-#8A8C9E   ink-3 (muted text)
-#3A5CE8   primary blue
-#C2537A   sharing/referral pink
-#2A9E8A   green (success/active)
-Plus Jakarta Sans — UI labels, body
-DM Mono   — addresses, codes, numbers
-```
+**Design tokens are CSS custom properties defined in `app/globals.css` `@theme` block.** Always use `var(--token)` references — never hardcode hex values. The token system works for both Tailwind v4 utility classes and inline `<style>` blocks.
+
+### Color tokens
+
+| Token | Value | Usage |
+|---|---|---|
+| `--color-mw-brand` | `#4f7ef7` | Nav, buttons, landing page |
+| `--color-mw-brand-dim` | `rgba(79,126,247,0.07)` | Subtle brand tint |
+| `--color-mw-brand-mid` | `rgba(79,126,247,0.14)` | Mid brand tint |
+| `--color-mw-brand-deep` | `#3A5CE8` | Referral/campaign UI (distinct blue — do NOT merge with brand) |
+| `--color-mw-brand-deep-glow` | `rgba(58,92,232,0.12)` | Referral glow effects |
+| `--color-mw-ink` | `#1a1a1a` | Primary text |
+| `--color-mw-ink-2` | `#3d3d3d` | Secondary text |
+| `--color-mw-ink-3` | `#6b7280` | Muted text |
+| `--color-mw-ink-4` | `#8A8C9E` | Lightest muted — referral UI |
+| `--color-mw-ink-5` | `#9ca3af` | Extra light — dashboard/leaderboard |
+| `--color-mw-surface` | `#f5f5f7` | Default surface |
+| `--color-mw-surface-purple` | `#F7F6FF` | Referral/campaign light bg |
+| `--color-mw-surface-card` | `#f9f9fb` | Dashboard/leaderboard cards |
+| `--color-mw-green` | `#16a34a` | Earnings/success text |
+| `--color-mw-live` | `#22c55e` | Live indicator dot (distinct green — do NOT merge with green) |
+| `--color-mw-pink` | `#C2537A` | Sharing/referral |
+| `--color-mw-teal` | `#2A9E8A` | Holding/success teal |
+| `--color-mw-amber` | `#C27A00` | Pending/liquidity |
+| `--color-mw-red` | `#ef4444` | Error/disconnect |
+| `--color-mw-border` | `rgba(0,0,0,0.07)` | Default border |
+| `--color-mw-border-strong` | `rgba(0,0,0,0.13)` | Stronger border |
+| `--color-mw-border-mid` | `rgba(0,0,0,0.1)` | Mid border |
+| `--color-mw-dark` | `#0A0D14` | Dark sections |
+| `--color-mw-dark-text` | `rgba(255,255,255,0.88)` | Dark section text |
+| `--color-mw-dark-sub` | `rgba(255,255,255,0.38)` | Dark section subtext |
+| `--color-mw-dark-border` | `rgba(255,255,255,0.06)` | Dark section border |
+
+> **Two intentional blues:** `--color-mw-brand` (`#4f7ef7`) is used in the nav/dashboard/leaderboard/swap. `--color-mw-brand-deep` (`#3A5CE8`) is used in referral/campaign components. They are visually distinct — do NOT merge them.
+
+> **Two intentional greens:** `--color-mw-green` (`#16a34a`) is earnings/success text. `--color-mw-live` (`#22c55e`) is the live indicator dot. Do NOT merge.
+
+### Spacing / shape tokens
+
+| Token | Value |
+|---|---|
+| `--radius-sm` | `8px` |
+| `--radius-md` | `12px` |
+| `--radius-lg` | `16px` |
+| `--radius-xl` | `20px` |
+| `--transition-fast` | `0.15s` |
+| `--transition-base` | `0.3s` |
+| `--easing-spring` | `cubic-bezier(0.22, 1, 0.36, 1)` |
+| `--shadow-sm` | `0 1px 3px rgba(0,0,0,0.06)` |
+| `--shadow-md` | `0 4px 12px rgba(0,0,0,0.07)` |
+| `--shadow-sheet` | `0 -4px 40px rgba(58,92,232,0.12)` |
+
+### Shared layout classes (`@layer components` in `globals.css`)
+
+These classes extract the most-repeated layout patterns — use them in inline `<style>` blocks to reduce duplication:
+
+| Class | Purpose |
+|---|---|
+| `.mw-card` | White card with `surface-card` bg, `radius-md`, border, 16px padding |
+| `.mw-card-purple` | `surface-purple` bg, `radius-md`, border (no padding — set per-use) |
+| `.mw-pill` | Base inline-flex pill — `radius-xl`, 3×10px padding, 11px 600-weight text |
+| `.mw-pill-live` | Green live badge |
+| `.mw-pill-ended` | Grey ended badge |
+| `.mw-pill-soon` | Blue coming-soon badge |
+| `.mw-label` | All-caps section label (11px, 600-weight, 1.5px letter-spacing) |
+| `.mw-divider` | 1px horizontal rule using `--color-mw-border` |
+
+### Fonts
+- `Plus Jakarta Sans` (`--font-jakarta`) — UI labels, body text
+- `DM Mono` (`--font-mono`) — wallet addresses, codes, large numbers
 
 ---
 
@@ -295,21 +356,78 @@ Three new tables added in Ticket 1:
 
 ---
 
-## Contract Infrastructure (Ticket 5 — complete)
+## Contract Infrastructure (Ticket 5 — complete, contract upgraded to v2)
 
 ### Files
 | File | Purpose |
 |---|---|
-| `contracts/MintwareDistributor.sol` | On-chain Merkle drop settlement contract |
+| `contracts/MintwareDistributor.sol` | On-chain Merkle drop settlement contract (**v2.0.0**) |
 | `contracts/MockERC20.sol` | Test-only ERC-20 (mintable, dev only) |
-| `contracts/test/MintwareDistributor.test.cjs` | 32-test Hardhat suite |
+| `contracts/test/MintwareDistributor.test.cjs` | Hardhat test suite (**needs update for v2 changes**) |
 | `hardhat.config.cts` | Hardhat config (`.cts` = TypeScript CJS, required with `"type":"module"`) |
 | `tsconfig.hardhat.json` | Separate TS config for Hardhat (module: commonjs, not bundler) |
 | `scripts/deploy.cjs` | Deploy + auto-verify on Base/CoreDAO/BNB |
 
+### v2 Breaking Changes (from smart contract audit)
+All changes are in `MintwareDistributor.sol`. Off-chain code that calls the contract must be updated.
+
+| # | Change | Impact |
+|---|---|---|
+| 1 | `ORACLE_SIGNER` (immutable) → `oracleSigner` (mutable, timelocked rotation) | Read `oracleSigner` not `ORACLE_SIGNER`. New functions: `proposeOracleSigner`, `confirmOracleSigner`, `cancelOracleRotation` |
+| 2 | `ROOT_TYPEHASH` now includes `uint256 deadline` | Oracle must add `deadline` to signTypedData message. `claim()` and `batchClaim()` take a `deadline` param. `getRootDigest()` takes `deadline`. `/api/claim` must return and pass through `deadline`. |
+| 3 | `campaignToken[id]` → `campaigns[id].token` | Use `campaigns[campaignId].token` to read campaign's ERC-20. New: `campaigns[id].creator`, `.closed`, `.closedAt`. New view: `getCampaign(campaignId)`. |
+| 4 | Events restructured — `bytes32 indexed campaignIdHash` added | Indexers must filter on `keccak256(bytes(campaignId))`. Event params reordered. |
+| 5 | `depositCampaign` uses balance-diff accounting | `campaignBalances` now reflects tokens *received*, not `amount` param. Safe for fee-on-transfer tokens. |
+| 6 | New functions | `batchClaim()`, `closeCampaign()`, `withdrawCampaign()`, `emergencyWithdraw()`, `getCampaign()` |
+| 7 | `ReentrancyGuard` added | `nonReentrant` on all state-changing functions |
+
+### Oracle rotation flow
+```
+proposeOracleSigner(newAddr)   ← onlyOwner
+  ↓  (wait 48 hours)
+confirmOracleSigner()          ← onlyOwner — activates new signer
+  OR
+cancelOracleRotation()         ← onlyOwner — cancels if compromise detected
+```
+
+### Campaign lifecycle (new in v2)
+```
+depositCampaign()   ← anyone; first depositor becomes creator
+  ↓  (campaign runs, epochs distributed, users claim)
+closeCampaign()     ← onlyOwner (Mintware controls when campaigns end)
+  ↓  (7-day WITHDRAWAL_COOLDOWN — users submit final claims)
+withdrawCampaign()  ← campaign creator only — recovers remaining balance
+```
+Emergency path: `pause()` → `emergencyWithdraw()` → (new contract if needed)
+
+### Off-chain changes required for v2
+
+**`/api/claim/route.ts`** — oracle signing must include `deadline`:
+```typescript
+// Add deadline to the message (e.g. 30 days from now)
+const deadline = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
+const signature = await walletClient.signTypedData({
+  domain, primaryType: 'RootPublication',
+  types: { RootPublication: [
+    { name: 'campaignId',  type: 'string'  },
+    { name: 'epochNumber', type: 'uint256' },
+    { name: 'merkleRoot',  type: 'bytes32' },
+    { name: 'deadline',    type: 'uint256' },  // ← NEW
+  ]},
+  message: { campaignId, epochNumber, merkleRoot, deadline },  // ← add deadline
+})
+// Return deadline in API response so frontend can pass it to claim()
+```
+
+**Frontend `claim()` call** — add `deadline` param:
+```typescript
+// claim(campaignId, epochNumber, merkleRoot, oracleSignature, deadline, amount, merkleProof)
+//                                                              ↑ new param between sig and amount
+```
+
 ### Running tests
 ```bash
-pnpm hardhat:test          # 32 tests, all passing
+pnpm hardhat:test          # test suite (needs updating for v2 — see above)
 pnpm hardhat:compile       # Compile + typechain
 ```
 `TS_NODE_PROJECT=tsconfig.hardhat.json` prefix is baked into all `hardhat:*` scripts in package.json — required because the root tsconfig uses `moduleResolution: bundler` which is incompatible with Hardhat.
@@ -323,7 +441,7 @@ pnpm hardhat:deploy:bnb            # BNB Chain (56)
 ```
 After deploy: set `NEXT_PUBLIC_MW_TREASURY_ADDRESS` in `.env.local` and update `campaigns.contract_address` in Supabase.
 
-### Leaf encoding — verified
+### Leaf encoding — verified (unchanged in v2)
 Both sides produce identical leaf hashes:
 - **Solidity**: `keccak256(bytes.concat(keccak256(abi.encode(address, uint256))))`
 - **TypeScript**: `StandardMerkleTree.of([[wallet, amount]], ['address', 'uint256'])` — `standardLeafHash = keccak256(keccak256(abi.encode(...)))`
@@ -338,15 +456,80 @@ The project has `"type": "module"` in `package.json`, which creates Hardhat comp
 
 ---
 
+## Security Hardening (MintGuard — completed)
+
+All items implemented in one sprint. See git history for full diff.
+
+### What was done
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | Source maps off in production | ✅ `productionBrowserSourceMaps: false` in `next.config.mjs` |
+| 2 | CSP headers | ✅ Strict CSP + `frame-ancestors: none` in `next.config.mjs` |
+| 3 | LI.FI quote proxy | ✅ `POST /api/swap/quote` — API key server-only, fee injected server-side |
+| 4 | On-chain tx verification | ✅ `verifySwapTx()` in `swap-event/route.ts` — checks receipt + calldata |
+| 5 | Fee enforcement (calldata) | ✅ Treasury address must appear in `tx.input` or reward credit denied |
+| 6 | Rate limiting | ✅ `middleware.ts` — sliding window per IP on sensitive POST endpoints |
+| 7 | Referral time-gate | ✅ `POST /api/referral/apply` — referrer must be ≥ 24h old |
+| 8 | sessionStorage for ref sheet | ✅ `ReferralSheet.tsx` — `localStorage` → `sessionStorage` |
+| 9 | Server component migration | ⏸ Deferred — Phase 2 hardening |
+| 10 | Bot farming / Sybil resistance | ⏸ Deferred — campaign hardening sprint |
+
+### Rate limits (`middleware.ts`)
+| Route | Method | Limit |
+|---|---|---|
+| `POST /api/campaigns/swap-event` | POST | 10 req/min per IP |
+| `POST /api/campaigns/join` | POST | 5 req/min per IP |
+| `POST /api/swap/quote` | POST | 20 req/min per IP |
+
+> **Note:** Rate limiter uses in-memory Map (per serverless instance). Limits burst within one instance — sufficient against simple bots. For full cross-instance limiting, replace with Upstash Redis `@upstash/ratelimit`.
+
+### LI.FI Quote Proxy (`app/api/swap/quote/route.ts`)
+- Client calls `POST /api/swap/quote` instead of `li.quest` directly
+- Server injects `fee: 0.005` + `referrer: MINTWARE_TREASURY_ADDRESS` (always, when integrator is verified)
+- `LIFI_API_KEY` is server-only (renamed from `NEXT_PUBLIC_LIFI_API_KEY`)
+- If a user strips fee params before `executeRoute()`, the calldata check in `swap-event` will catch it and deny the reward with `skip_reason: 'fee_not_paid'`
+
+### On-chain Verification (`verifySwapTx` in `swap-event/route.ts`)
+Checks before any reward credit:
+1. `eth_getTransactionReceipt` — tx must exist and `status === 0x1`
+2. `receipt.from === wallet` — prevents wallet spoofing
+3. `tx.to` must be a known LI.FI router (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`)
+4. Treasury address must appear in `tx.input` calldata (fee enforcement)
+- **Fail-open on RPC error** — logs warning, allows through so legit users aren't blocked by RPC flakiness
+
+### Referral Time-gate (`app/api/referral/apply/route.ts`)
+- `useReferral.ts` calls `POST /api/referral/apply` instead of inserting `referral_records` directly via browser Supabase client
+- Server checks referrer's `last_seen_at ≥ 24h` before `now()` — rejects with `referrer_too_new` if too fresh
+- Prevents bots pre-seeding ref codes from wallets that never actually used the platform
+
+### Env Vars
+
+| Variable | Visibility | Notes |
+|---|---|---|
+| `LIFI_API_KEY` | Server-only | Renamed from `NEXT_PUBLIC_LIFI_API_KEY`. Set in Vercel and `.env.local`. |
+| `NEXT_PUBLIC_LIFI_INTEGRATOR_VERIFIED` | Public | Gates fee injection in proxy and calldata check |
+| `MINTWARE_TREASURY_ADDRESS` | Server-only | Used in proxy fee injection + calldata verification |
+| `NEXT_PUBLIC_MINTWARE_TREASURY` | Public | Fallback for treasury (client display only) |
+
+**Vercel action complete:** `LIFI_API_KEY` set as server-only. `NEXT_PUBLIC_LIFI_API_KEY` deleted.
+
+---
+
 ## Pending Work
 
-- [ ] **Ticket 6** — Claim API endpoint: `GET /api/claim?address=&distribution_id=` (returns proof + amount), `POST /api/claim` (executes on-chain). `computeLeaf()` view function is already exposed for proof verification.
+- [ ] **Waitlist form** — `WaitlistButton` in `app/page.tsx` only fakes submission (changes button text, no API call). Needs `POST /api/waitlist` route + Supabase `waitlist` table insert.
 - [ ] **`CORE_DAO_BRIDGE_CONTRACT`** — still `0x__PENDING_MOLTEN_CONFIRMATION__` in `.env.local`. Update when Molten confirms the bridge contract address.
-- [ ] **Waitlist form** — wire up email capture on landing page (UI exists, not wired)
-- [ ] **Deploy to Vercel** — not yet deployed
-- [ ] **Reown Cloud domain whitelist** — add `localhost:3000` and production domain at cloud.reown.com → project `580f461c981a43d53fc25fe59b64306b`
-- [ ] **Explorer page** — `explorer.html` uses D3.js, deferred full React conversion
-- [ ] **GitHub repo** — `https://github.com/MintwareDevelopers/Mintware-Beta`
+- [ ] **Explorer page** — `explorer.html` uses D3.js, deferred full React conversion.
+
+### Confirmed complete (verified this session)
+- [x] **Ticket 6 — Claim API** — `app/api/claim/route.ts` + `app/api/claim/status/route.ts` fully implemented (Merkle proof, oracle signature, rate limiting, claimed-at guard).
+- [x] **Deploy to Vercel** — Live at `mintware-beta.vercel.app`.
+- [x] **Reown Cloud domain whitelist** — `localhost:3000` and `mintware-beta.vercel.app` both allowlisted. Project `580f461c981a43d53fc25fe59b64306b`.
+- [x] **GitHub remote** — `origin` → `https://github.com/MintwareDevelopers/Mintware-Beta` configured.
+- [x] **LIFI_API_KEY** — Renamed from `NEXT_PUBLIC_LIFI_API_KEY`. Server-only in Vercel. Old public key deleted.
+- [x] **Design token unification** — All hardcoded hex values replaced with `var(--token)` references across all 10 files. Source of truth: `app/globals.css` `@theme` block + `@layer components`.
+- [x] **MintGuard security hardening** — All 8 items complete (see Security Hardening section above).
 
 ---
 
@@ -357,3 +540,8 @@ The project has `"type": "module"` in `package.json`, which creates Hardhat comp
 3. **shadcn/ui components exist but are unused** — scaffolded at project init; app uses custom CSS instead.
 4. **Explorer stays static** — D3.js charts are complex; `/explorer` route redirects to the static HTML file in `/public`. Nav removed from explorer.html; logo-only back link to `/` added.
 5. **ref_code is deterministic** — computed from wallet address, never depends on a database round-trip. InviteTab always renders immediately.
+6. **LI.FI fee is double-enforced** — proxy injects fee server-side; on-chain calldata check in `swap-event` verifies treasury address is present. A user who strips fee params before `executeRoute()` still can't earn rewards.
+7. **Referral inserts are server-gated** — `useReferral.ts` never writes to `referral_records` directly. All inserts go through `POST /api/referral/apply`, which enforces the 24h referrer time-gate.
+8. **Rate limiter is per-instance, not global** — `middleware.ts` uses an in-memory `Map`. Good enough to stop simple bots; upgrade to Upstash Redis for full cross-instance limiting if needed.
+9. **`'use client'` pages intentional** — All app pages use `'use client'` because RainbowKit/wagmi hooks require it. Server component migration is deferred to Phase 2.
+10. **Design tokens live in `globals.css`, not a JS file** — Tailwind v4 uses `@theme` in CSS (not `tailwind.config.ts`). CSS custom properties work universally for both Tailwind utilities and inline `<style>` blocks. Never use a `lib/design-tokens.ts` pattern — it can't feed inline styles without a runtime dependency.

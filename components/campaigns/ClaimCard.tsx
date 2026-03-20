@@ -31,9 +31,9 @@ import {
 } from 'wagmi'
 
 // ---------------------------------------------------------------------------
-// MintwareDistributor ABI — only the functions we call
-// 6-param zero-oracle-gas signature: the user submits the oracle's EIP-712
-// signature alongside their Merkle proof in a single transaction.
+// MintwareDistributor ABI — only the functions we call (v2)
+// 7-param zero-oracle-gas signature: user submits oracle's EIP-712 sig +
+// deadline alongside their Merkle proof in a single transaction.
 // ---------------------------------------------------------------------------
 const DISTRIBUTOR_ABI = [
   {
@@ -41,11 +41,12 @@ const DISTRIBUTOR_ABI = [
     type: 'function',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'campaignId',       type: 'string'   },
-      { name: 'epochNumber',      type: 'uint256'  },
-      { name: 'merkleRoot',       type: 'bytes32'  },
-      { name: 'oracleSignature',  type: 'bytes'    },
-      { name: 'amount',           type: 'uint256'  },
+      { name: 'campaignId',       type: 'string'    },
+      { name: 'epochNumber',      type: 'uint256'   },
+      { name: 'merkleRoot',       type: 'bytes32'   },
+      { name: 'oracleSignature',  type: 'bytes'     },
+      { name: 'deadline',         type: 'uint256'   },  // v2: sig expiry timestamp
+      { name: 'amount',           type: 'uint256'   },
       { name: 'merkleProof',      type: 'bytes32[]' },
     ],
     outputs: [],
@@ -207,13 +208,14 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
         return
       }
 
-      const { amount_wei, merkle_proof, oracle_signature, merkle_root, campaign_id, epoch_number } = json as {
+      const { amount_wei, merkle_proof, oracle_signature, merkle_root, campaign_id, epoch_number, deadline } = json as {
         amount_wei: string
         merkle_proof: string[]
         oracle_signature: string
         merkle_root: string
         campaign_id: string
         epoch_number: number
+        deadline: number     // v2: unix timestamp — sig expiry set by oracle
       }
 
       if (!oracle_signature) {
@@ -221,18 +223,19 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
         return
       }
 
-      // Submit on-chain claim — 6-param zero-oracle-gas signature:
-      //   claim(campaignId, epochNumber, merkleRoot, oracleSignature, amount, proof)
+      // Submit on-chain claim — 7-param zero-oracle-gas signature (v2):
+      //   claim(campaignId, epochNumber, merkleRoot, oracleSignature, deadline, amount, proof)
       writeContract(
         {
           address: reward.contract_address as `0x${string}`,
           abi: DISTRIBUTOR_ABI,
           functionName: 'claim',
           args: [
-            campaign_id,                         // string campaignId
+            campaign_id,                         // string  campaignId
             BigInt(epoch_number),                 // uint256 epochNumber
             merkle_root as `0x${string}`,         // bytes32 merkleRoot
-            oracle_signature as `0x${string}`,    // bytes oracleSignature (EIP-712)
+            oracle_signature as `0x${string}`,    // bytes   oracleSignature (EIP-712)
+            BigInt(deadline),                     // uint256 deadline (unix timestamp)
             BigInt(amount_wei),                   // uint256 amount
             merkle_proof as `0x${string}`[],      // bytes32[] merkleProof
           ],

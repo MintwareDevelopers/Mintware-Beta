@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
-import { generateRefCode } from '@/lib/referral/utils'
 import type { ReferralStats, ReferralRecord } from '@/lib/referral/types'
 
 export interface UseReferralReturn {
   stats:                ReferralStats | null
   referralRecords:      ReferralRecord[]
+  refCode:              string | null     // null while loading on first connect
   isFirstConnect:       boolean
   isLoading:            boolean
   refetch:              () => void
@@ -16,6 +16,7 @@ export interface UseReferralReturn {
 }
 
 // Capture ?ref= param immediately on module load (before wallet connects)
+// This still handles legacy links like /?ref=mw_3f9a12
 if (typeof window !== 'undefined') {
   const params = new URLSearchParams(window.location.search)
   const ref = params.get('ref')
@@ -27,6 +28,7 @@ if (typeof window !== 'undefined') {
 export function useReferral(address: string | undefined): UseReferralReturn {
   const [stats, setStats]                         = useState<ReferralStats | null>(null)
   const [referralRecords, setReferralRecords]     = useState<ReferralRecord[]>([])
+  const [refCode, setRefCode]                     = useState<string | null>(null)
   const [isFirstConnect, setIsFirstConnect]       = useState(false)
   const [isLoading, setIsLoading]                 = useState(false)
   const [showRefCodePrompt, setShowRefCodePrompt] = useState(false)
@@ -59,58 +61,56 @@ export function useReferral(address: string | undefined): UseReferralReturn {
   const init = useCallback(async (addr: string) => {
     setIsLoading(true)
     try {
-      const refCode = generateRefCode(addr)
+      // ── Call /api/auth/connect — generates or retrieves permanent ref code ──
+      const connectRes = await fetch('/api/auth/connect', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ address: addr }),
+      })
 
-      // 1. Upsert wallet_profiles — detect first connect via count before
-      const { count, error: countErr } = await supabase
-        .from('wallet_profiles')
-        .select('address', { count: 'exact', head: true })
-        .eq('address', addr)
-      if (countErr) console.error('[useReferral] count error:', countErr)
+      let storedRefCode: string | null = null
+      let isNew = false
 
-      const isNew = count === 0
-      setIsFirstConnect(isNew)
+      if (connectRes.ok) {
+        const connectData = await connectRes.json() as { ref_code: string; is_new: boolean }
+        storedRefCode = connectData.ref_code
+        isNew         = connectData.is_new
+        setRefCode(storedRefCode)
+        setIsFirstConnect(isNew)
+      } else {
+        console.error('[useReferral] connect API error:', connectRes.status)
+      }
 
-      const { error: upsertErr } = await supabase.from('wallet_profiles').upsert(
-        { address: addr, ref_code: refCode, last_seen_at: new Date().toISOString() },
-        { onConflict: 'address' }
-      )
-      if (upsertErr) console.error('[useReferral] upsert error:', upsertErr)
-
-      // 2. Handle pending referral attribution from ?ref= URL param
+      // ── Handle pending referral attribution from ?ref= URL param ────────────
+      // Covers both new-style (/ref/jake via sessionStorage) and
+      // legacy (?ref=mw_3f9a12 captured above on module load)
       const pendingRef    = sessionStorage.getItem('mw_pending_ref')
       let   refWasApplied = false
 
       if (pendingRef && isNew) {
-        // Look up referrer by ref_code
-        const { data: referrerProfile } = await supabase
-          .from('wallet_profiles')
-          .select('address')
-          .eq('ref_code', pendingRef)
-          .single()
-
-        if (referrerProfile && referrerProfile.address !== addr) {
-          await supabase.from('referral_records').upsert(
-            {
-              referrer: referrerProfile.address,
-              referred: addr,
-              ref_code: pendingRef,
-              status:   'pending',
-            },
-            { onConflict: 'referred', ignoreDuplicates: true }
-          )
-          refWasApplied = true
+        try {
+          const res = await fetch('/api/referral/apply', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ referred: addr, ref_code: pendingRef }),
+          })
+          const data = await res.json() as { applied?: boolean; skip_reason?: string }
+          if (data.applied) refWasApplied = true
+          if (data.skip_reason) {
+            console.info('[useReferral] referral not applied:', data.skip_reason)
+          }
+        } catch (err) {
+          console.error('[useReferral] referral/apply error:', err)
         }
         sessionStorage.removeItem('mw_pending_ref')
       }
 
-      // 3. If first connect, no URL ref was applied, check if prompt should show
+      // ── If first connect, no URL ref was applied, check if prompt should show ─
       if (isNew && !refWasApplied) {
         const dismissedKey = `mw_ref_dismissed_${addr}`
         const dismissed    = typeof window !== 'undefined' && localStorage.getItem(dismissedKey)
 
         if (!dismissed) {
-          // Check if a referral record already exists for this wallet as the referred party
           const { data: existingRef } = await supabase
             .from('referral_records')
             .select('referred')
@@ -123,7 +123,7 @@ export function useReferral(address: string | undefined): UseReferralReturn {
         }
       }
 
-      // 4. Fetch stats for display
+      // ── Fetch stats for display ──────────────────────────────────────────────
       await fetchStats(addr)
     } finally {
       setIsLoading(false)
@@ -160,7 +160,7 @@ export function useReferral(address: string | undefined): UseReferralReturn {
   }, [address, fetchStats])
 
   return {
-    stats, referralRecords, isFirstConnect, isLoading, refetch,
+    stats, referralRecords, refCode, isFirstConnect, isLoading, refetch,
     showRefCodePrompt, setShowRefCodePrompt,
   }
 }

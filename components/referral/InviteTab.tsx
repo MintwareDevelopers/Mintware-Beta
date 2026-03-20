@@ -1,22 +1,20 @@
 'use client'
 
 import { RefCodeInput } from './RefCodeInput'
-import { generateRefCode, truncateAddress } from '@/lib/referral/utils'
+import { truncateAddress } from '@/lib/referral/utils'
 import type { ReferralStats, ReferralRecord } from '@/lib/referral/types'
 
 interface InviteTabProps {
   wallet:          string
+  refCode:         string | null
   stats:           ReferralStats | null
   referralRecords: ReferralRecord[]
   isLoading:       boolean
 }
 
-export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteTabProps) {
-  // Deterministic — no Supabase needed
-  const refCode = generateRefCode(wallet)
-  const refLink = typeof window !== 'undefined'
-    ? `${window.location.origin}/?ref=${refCode}`
-    : `https://app.mintware.io/?ref=${refCode}`
+export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }: InviteTabProps) {
+  const origin  = typeof window !== 'undefined' ? window.location.origin : 'https://mintware.xyz'
+  const refLink = refCode ? `${origin}/ref/${refCode}` : null
 
   const sharingScore = stats?.sharing_score ?? 0
   const treeSize     = stats?.tree_size     ?? 0
@@ -28,6 +26,7 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
   )
 
   function shareOnTwitter() {
+    if (!refLink) return
     const text = encodeURIComponent(
       `I just got my on-chain reputation score on @MintwareDev — it's live now.\n\nCheck yours and join my network: ${refLink}`
     )
@@ -38,8 +37,8 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
     <>
       <style>{`
         .invite-hero {
-          background: linear-gradient(135deg, #1A1A2E 0%, #2A1A46 100%);
-          border-radius: 20px;
+          background: linear-gradient(135deg, var(--color-mw-ink) 0%, #2A1A46 100%);
+          border-radius: var(--radius-xl);
           padding: 28px 28px 24px;
           margin-bottom: 12px;
           position: relative;
@@ -59,7 +58,7 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
           font-weight: 700;
           letter-spacing: 1.4px;
           text-transform: uppercase;
-          color: #C2537A;
+          color: var(--color-mw-pink);
           margin-bottom: 10px;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
         }
@@ -86,13 +85,13 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
           gap: 14px;
           background: rgba(255,255,255,0.06);
           border: 1px solid rgba(194,83,122,0.25);
-          border-radius: 12px;
+          border-radius: var(--radius-md);
           padding: 14px 18px;
         }
         .invite-score-big {
           font-size: 36px;
           font-weight: 700;
-          color: #C2537A;
+          color: var(--color-mw-pink);
           font-family: var(--font-mono, 'DM Mono', monospace);
           line-height: 1;
           letter-spacing: -1px;
@@ -123,9 +122,9 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
         }
         .invite-score-bar-fill {
           height: 100%;
-          background: #C2537A;
+          background: var(--color-mw-pink);
           border-radius: 2px;
-          transition: width 0.8s cubic-bezier(0.22,1,0.36,1);
+          transition: width 0.8s var(--easing-spring);
         }
 
         .invite-value-row {
@@ -135,9 +134,9 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
         }
         .invite-value-pill {
           flex: 1;
-          background: #F7F6FF;
+          background: var(--color-mw-surface-purple);
           border: 1.5px solid rgba(58,92,232,0.1);
-          border-radius: 12px;
+          border-radius: var(--radius-md);
           padding: 12px 14px;
           display: flex;
           align-items: flex-start;
@@ -151,31 +150,31 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
         .invite-value-title {
           font-size: 12px;
           font-weight: 700;
-          color: #1A1A2E;
+          color: var(--color-mw-ink);
           margin-bottom: 2px;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
         }
         .invite-value-desc {
           font-size: 11px;
-          color: #8A8C9E;
+          color: var(--color-mw-ink-4);
           line-height: 1.4;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
         }
 
         .invite-card {
           background: #fff;
-          border: 1.5px solid rgba(26,26,46,0.08);
+          border: 1.5px solid var(--color-mw-border);
           border-radius: 18px;
           padding: 20px 22px;
           margin-bottom: 12px;
-          box-shadow: 0 1px 4px rgba(26,26,46,0.04);
+          box-shadow: var(--shadow-sm);
         }
         .invite-section-label {
           font-size: 10px;
           font-weight: 700;
           letter-spacing: 1.2px;
           text-transform: uppercase;
-          color: #3A5CE8;
+          color: var(--color-mw-brand-deep);
           margin-bottom: 14px;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
         }
@@ -187,16 +186,16 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
         }
         .invite-stat-box {
           flex: 1;
-          background: #F7F6FF;
-          border: 1.5px solid rgba(26,26,46,0.08);
-          border-radius: 12px;
+          background: var(--color-mw-surface-purple);
+          border: 1.5px solid var(--color-mw-border);
+          border-radius: var(--radius-md);
           padding: 14px 16px;
           text-align: center;
         }
         .invite-stat-num {
           font-size: 24px;
           font-weight: 700;
-          color: #1A1A2E;
+          color: var(--color-mw-ink);
           font-family: var(--font-mono, 'DM Mono', monospace);
           letter-spacing: -0.5px;
           line-height: 1;
@@ -207,7 +206,7 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
           font-weight: 600;
           letter-spacing: 0.5px;
           text-transform: uppercase;
-          color: #8A8C9E;
+          color: var(--color-mw-ink-4);
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
         }
         .invite-stat-loading {
@@ -230,7 +229,7 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
         }
         .invite-code-label {
           font-size: 11px;
-          color: #8A8C9E;
+          color: var(--color-mw-ink-4);
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
           margin-bottom: 4px;
         }
@@ -241,12 +240,12 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
           background: #1DA1F2;
           color: #fff;
           border: none;
-          border-radius: 12px;
+          border-radius: var(--radius-md);
           font-size: 13px;
           font-weight: 600;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
           cursor: pointer;
-          transition: opacity 0.15s;
+          transition: opacity var(--transition-fast);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -265,14 +264,14 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
           align-items: center;
           justify-content: space-between;
           padding: 10px 14px;
-          background: #F7F6FF;
-          border: 1.5px solid rgba(26,26,46,0.07);
-          border-radius: 10px;
+          background: var(--color-mw-surface-purple);
+          border: 1.5px solid var(--color-mw-border);
+          border-radius: var(--radius-sm);
         }
         .invite-wallet-addr {
           font-size: 12px;
           font-family: var(--font-mono, 'DM Mono', monospace);
-          color: #3A3C52;
+          color: var(--color-mw-ink-2);
         }
         .invite-status-badge {
           font-size: 10px;
@@ -284,11 +283,11 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
         }
         .invite-status-active {
           background: rgba(42,158,138,0.12);
-          color: #2A9E8A;
+          color: var(--color-mw-teal);
         }
         .invite-status-pending {
           background: rgba(194,122,0,0.1);
-          color: #C27A00;
+          color: var(--color-mw-amber);
         }
         .invite-empty {
           display: flex;
@@ -296,7 +295,7 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
           align-items: center;
           gap: 8px;
           padding: 24px 0 12px;
-          color: #8A8C9E;
+          color: var(--color-mw-ink-4);
         }
         .invite-empty-icon {
           font-size: 26px;
@@ -371,15 +370,24 @@ export function InviteTab({ wallet, stats, referralRecords, isLoading }: InviteT
       <div className="invite-card">
         <div className="invite-section-label">Share Your Link</div>
         <div className="invite-share-section">
-          <div>
-            <div className="invite-code-label">Referral link</div>
-            <RefCodeInput value={refLink} buttonLabel="Copy Link" />
-          </div>
-          <div>
-            <div className="invite-code-label">Referral code</div>
-            <RefCodeInput value={refCode} buttonLabel="Copy Code" ghost />
-          </div>
-          <button className="invite-share-btn" onClick={shareOnTwitter}>
+          {refCode === null ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="invite-stat-loading" style={{ width: '100%', height: 40, borderRadius: 8 }} />
+              <div className="invite-stat-loading" style={{ width: '60%', height: 40, borderRadius: 8 }} />
+            </div>
+          ) : (
+            <>
+              <div>
+                <div className="invite-code-label">Referral link</div>
+                <RefCodeInput value={refLink!} buttonLabel="Copy Link" />
+              </div>
+              <div>
+                <div className="invite-code-label">Referral code</div>
+                <RefCodeInput value={refCode} buttonLabel="Copy Code" ghost />
+              </div>
+            </>
+          )}
+          <button className="invite-share-btn" onClick={shareOnTwitter} disabled={!refCode} style={{ opacity: refCode ? 1 : 0.4 }}>
             <svg width="15" height="13" viewBox="0 0 15 13" fill="none">
               <path d="M14.25 1.5C13.72 1.86 13.14 2.13 12.5 2.3C12.14 1.88 11.66 1.58 11.13 1.45C10.59 1.31 10.03 1.35 9.52 1.56C9.01 1.77 8.58 2.13 8.3 2.6C8.01 3.07 7.87 3.62 7.88 4.17V4.79C6.82 4.82 5.77 4.57 4.83 4.08C3.9 3.59 3.11 2.87 2.54 2C2.54 2 0.29 7 5.29 9.25C4.12 10.03 2.73 10.42 1.29 10.38C6.29 13.25 12.54 10.38 12.54 4.12C12.54 3.97 12.53 3.83 12.51 3.68C13.1 3.09 13.53 2.34 14.25 1.5Z" fill="white"/>
             </svg>

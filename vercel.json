@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/pool-settle",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/treasury/sweep",
+      "schedule": "0 3 * * *"
     }
   ]
 }

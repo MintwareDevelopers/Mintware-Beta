@@ -17,7 +17,7 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
 
   useEffect(() => {
     if (!trigger || !stats) return
-    if (typeof window !== 'undefined' && localStorage.getItem(DISMISSED_KEY)) return
+    if (typeof window !== 'undefined' && sessionStorage.getItem(DISMISSED_KEY)) return
 
     const t = setTimeout(() => {
       setVisible(true)
@@ -30,7 +30,7 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
   function dismiss() {
     setAnimIn(false)
     setTimeout(() => setVisible(false), 300)
-    localStorage.setItem(DISMISSED_KEY, 'true')
+    sessionStorage.setItem(DISMISSED_KEY, 'true')
   }
 
   if (!visible || !stats) return null
@@ -53,34 +53,34 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
           position: fixed;
           bottom: 0; left: 0; right: 0;
           background: #fff;
-          border-radius: 20px 20px 0 0;
-          box-shadow: 0 -4px 40px rgba(58,92,232,0.12);
+          border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+          box-shadow: var(--shadow-sheet);
           z-index: 1000;
           padding: 28px 24px 40px;
           max-width: 520px;
           margin: 0 auto;
           transform: translateY(100%);
-          transition: transform 0.3s ease-out;
+          transition: transform var(--transition-base) ease-out;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
         }
         .rs-sheet.in { transform: translateY(0); }
 
         .rs-handle {
           width: 36px; height: 4px;
-          background: rgba(26,26,46,0.12);
+          background: var(--color-mw-border);
           border-radius: 2px;
           margin: 0 auto 22px;
         }
         .rs-headline {
           font-size: 18px;
           font-weight: 700;
-          color: #1A1A2E;
+          color: var(--color-mw-ink);
           margin-bottom: 6px;
           text-align: center;
         }
         .rs-sub {
           font-size: 13px;
-          color: #8A8C9E;
+          color: var(--color-mw-ink-4);
           text-align: center;
           margin-bottom: 20px;
         }
@@ -89,7 +89,7 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
           align-items: center;
           justify-content: center;
           gap: 10px;
-          background: #F7F6FF;
+          background: var(--color-mw-surface-purple);
           border: 1.5px solid rgba(194,83,122,0.2);
           border-radius: 14px;
           padding: 14px 20px;
@@ -98,13 +98,13 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
         .rs-score-num {
           font-size: 28px;
           font-weight: 700;
-          color: #C2537A;
+          color: var(--color-mw-pink);
           font-family: var(--font-mono, 'DM Mono', monospace);
           line-height: 1;
         }
         .rs-score-label {
           font-size: 11px;
-          color: #8A8C9E;
+          color: var(--color-mw-ink-4);
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.6px;
@@ -118,9 +118,9 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
         }
         .rs-score-bar-fill {
           height: 100%;
-          background: #C2537A;
+          background: var(--color-mw-pink);
           border-radius: 3px;
-          transition: width 0.6s cubic-bezier(0.22,1,0.36,1);
+          transition: width 0.6s var(--easing-spring);
         }
         .rs-actions {
           display: flex;
@@ -130,36 +130,36 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
         .rs-btn-primary {
           width: 100%;
           padding: 13px;
-          background: #3A5CE8;
+          background: var(--color-mw-brand-deep);
           color: #fff;
           border: none;
-          border-radius: 12px;
+          border-radius: var(--radius-md);
           font-size: 14px;
           font-weight: 600;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
           cursor: pointer;
-          transition: opacity 0.15s;
+          transition: opacity var(--transition-fast);
         }
         .rs-btn-primary:active { opacity: 0.8; }
         .rs-btn-ghost {
           width: 100%;
           padding: 13px;
           background: transparent;
-          color: #3A5CE8;
+          color: var(--color-mw-brand-deep);
           border: 1.5px solid rgba(58,92,232,0.3);
-          border-radius: 12px;
+          border-radius: var(--radius-md);
           font-size: 14px;
           font-weight: 600;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
           cursor: pointer;
-          transition: opacity 0.15s;
+          transition: opacity var(--transition-fast);
         }
         .rs-btn-ghost:active { opacity: 0.7; }
         .rs-btn-later {
           width: 100%;
           padding: 10px;
           background: transparent;
-          color: #8A8C9E;
+          color: var(--color-mw-ink-4);
           border: none;
           font-size: 13px;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);

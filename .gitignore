@@ -30,3 +30,5 @@ next-env.d.ts
 /hardhat-artifacts
 /hardhat-cache
 /deployments
+# Private reference files
+WEB3.md

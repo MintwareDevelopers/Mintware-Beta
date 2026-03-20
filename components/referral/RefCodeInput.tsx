@@ -27,13 +27,13 @@ export function RefCodeInput({ value, buttonLabel = 'Copy', ghost = false }: Ref
         }
         .ref-input {
           flex: 1;
-          background: #F7F6FF;
-          border: 1.5px solid rgba(26,26,46,0.10);
-          border-radius: 10px;
+          background: var(--color-mw-surface-purple);
+          border: 1.5px solid var(--color-mw-border);
+          border-radius: var(--radius-md);
           padding: 9px 13px;
           font-family: var(--font-mono, 'DM Mono', monospace);
           font-size: 12px;
-          color: #3A3C52;
+          color: var(--color-mw-ink-2);
           outline: none;
           white-space: nowrap;
           overflow: hidden;
@@ -43,30 +43,30 @@ export function RefCodeInput({ value, buttonLabel = 'Copy', ghost = false }: Ref
         }
         .ref-copy-btn {
           padding: 9px 16px;
-          border-radius: 10px;
+          border-radius: var(--radius-md);
           font-size: 12px;
           font-weight: 600;
           font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
           cursor: pointer;
           border: 1.5px solid transparent;
-          transition: opacity 0.15s;
+          transition: opacity var(--transition-fast);
           white-space: nowrap;
           flex-shrink: 0;
         }
         .ref-copy-btn:active { opacity: 0.75; }
         .ref-copy-btn.solid {
-          background: #3A5CE8;
+          background: var(--color-mw-brand-deep);
           color: #fff;
-          border-color: #3A5CE8;
+          border-color: var(--color-mw-brand-deep);
         }
         .ref-copy-btn.ghost {
           background: transparent;
-          color: #3A5CE8;
+          color: var(--color-mw-brand-deep);
           border-color: rgba(58,92,232,0.3);
         }
         .ref-copy-btn.copied {
-          background: #2A9E8A;
-          border-color: #2A9E8A;
+          background: var(--color-mw-teal);
+          border-color: var(--color-mw-teal);
           color: #fff;
         }
       `}</style>
