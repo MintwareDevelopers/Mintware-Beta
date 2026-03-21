@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { getCampaignRewards } from '@/lib/rewards'
-import type { CampaignReward } from '@/lib/rewards'
+import { getCampaignRewards } from '@/lib/rewards/calc'
+import type { CampaignReward } from '@/lib/rewards/calc'
 
 interface CampaignState {
   campaignId: string | null

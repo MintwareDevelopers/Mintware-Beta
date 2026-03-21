@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useChainId } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
-import { getQuote as getLifiQuote } from '@/lib/providers/lifi'
-import { getQuote as getMoltenQuote, isMoltenReady } from '@/lib/providers/molten'
+import { getQuote as getLifiQuote } from '@/lib/web2/providers/lifi'
+import { getQuote as getMoltenQuote, isMoltenReady } from '@/lib/web2/providers/molten'
 import type { Token } from '@/config/tokens'
-import type { LifiQuote } from '@/lib/providers/lifi'
-import type { MoltenQuote } from '@/lib/providers/molten'
+import type { LifiQuote } from '@/lib/web2/providers/lifi'
+import type { MoltenQuote } from '@/lib/web2/providers/molten'
 
 export type Quote = LifiQuote | MoltenQuote
 

@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { useChainId, useWalletClient } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
-import { executeSwap as executeLifi } from '@/lib/providers/lifi'
-import { executeSwap as executeMolten, isMoltenReady } from '@/lib/providers/molten'
-import type { LifiQuote } from '@/lib/providers/lifi'
+import { executeSwap as executeLifi } from '@/lib/web2/providers/lifi'
+import { executeSwap as executeMolten, isMoltenReady } from '@/lib/web2/providers/molten'
+import type { LifiQuote } from '@/lib/web2/providers/lifi'
 import type { Quote } from './useQuote'
 import type { Token } from '@/config/tokens'
 

@@ -141,13 +141,11 @@ async function main() {
 
       const receipt = await tx.wait()
       // SchemaRegistered event emits the UID
-      // The UID is keccak256(abi.encodePacked(schema, resolver, revocable)) — also in receipt
-      // Easiest: compute it directly (mirrors the contract's _getUID function)
-      const uid = ethers.keccak256(
-        ethers.AbiCoder.defaultAbiCoder().encode(
-          ['string', 'address', 'bool'],
-          [def.schema, def.resolver, def.revocable]
-        )
+      // The UID is keccak256(abi.encodePacked(schema, resolver, revocable))
+      // NOTE: deployed Base contract uses solidityPacked, NOT abi.encode
+      const uid = ethers.solidityPackedKeccak256(
+        ['string', 'address', 'bool'],
+        [def.schema, def.resolver, def.revocable]
       )
 
       console.log(`✅ ${uid}`)
@@ -155,13 +153,11 @@ async function main() {
       results[def.name] = uid
     } catch (err) {
       const msg = err?.message ?? String(err)
-      if (msg.includes('AlreadyExists') || msg.includes('already registered')) {
+      if (msg.includes('AlreadyExists') || msg.includes('already registered') || msg.includes('23369fa6')) {
         // Schema already on-chain — compute the UID deterministically
-        const uid = ethers.keccak256(
-          ethers.AbiCoder.defaultAbiCoder().encode(
-            ['string', 'address', 'bool'],
-            [def.schema, def.resolver, def.revocable]
-          )
+        const uid = ethers.solidityPackedKeccak256(
+          ['string', 'address', 'bool'],
+          [def.schema, def.resolver, def.revocable]
         )
         console.log(`⏩ already registered — ${uid}`)
         results[def.name] = uid
