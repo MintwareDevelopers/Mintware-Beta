@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useAccount } from 'wagmi'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useRouter } from 'next/navigation'
@@ -197,14 +198,7 @@ export default function HomePage() {
               <div className="bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] rounded-[14px] p-6">
                 <div className="font-[Georgia,serif] text-[18px] font-bold text-mw-dark-text mb-1.5 tracking-[-0.3px]">Join the waitlist</div>
                 <div className="text-[13px] text-[rgba(255,255,255,0.28)] mb-4 leading-[1.5]">Be first when Mintware vaults go live. Attribution score-holders get priority access.</div>
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1 py-[11px] px-3.5 bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.1)] rounded-[10px] text-[13px] text-mw-dark-text outline-none font-[var(--font-jakarta),'Plus_Jakarta_Sans',sans-serif] transition-[border-color] duration-150 focus:border-[rgba(0,82,255,0.5)] placeholder:text-[rgba(255,255,255,0.18)]"
-                    type="email"
-                    placeholder="your@email.com"
-                  />
-                  <WaitlistButton />
-                </div>
+                <WaitlistForm />
               </div>
             </div>
 
@@ -294,18 +288,62 @@ export default function HomePage() {
   )
 }
 
-function WaitlistButton() {
-  function handleJoin(e: React.MouseEvent<HTMLButtonElement>) {
-    const btn = e.currentTarget
-    btn.textContent = 'Joined ✓'
-    btn.style.background = 'var(--color-mw-green)'
+function WaitlistForm() {
+  const [email,  setEmail]  = React.useState('')
+  const [status, setStatus] = React.useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [errMsg, setErrMsg] = React.useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (status === 'loading' || status === 'done') return
+    setStatus('loading')
+    setErrMsg('')
+    try {
+      const res  = await fetch('/api/waitlist', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email }),
+      })
+      const data = await res.json() as { ok?: boolean; error?: string }
+      if (!res.ok || !data.ok) throw new Error(data.error ?? 'Something went wrong')
+      setStatus('done')
+    } catch (err) {
+      setErrMsg((err as Error).message)
+      setStatus('error')
+    }
   }
+
+  if (status === 'done') {
+    return (
+      <div className="flex items-center gap-2 py-[11px] px-4 bg-[rgba(22,163,74,0.12)] border border-[rgba(22,163,74,0.25)] rounded-[10px] text-[13px] font-semibold text-[#4ade80]">
+        ✓ You&apos;re on the list
+      </div>
+    )
+  }
+
   return (
-    <button
-      className="bg-mw-brand text-white py-[11px] px-5 rounded-[10px] text-[13px] font-semibold cursor-pointer font-[var(--font-jakarta),'Plus_Jakarta_Sans',sans-serif] transition-[background] duration-150 whitespace-nowrap hover:bg-[#0040cc]"
-      onClick={handleJoin}
-    >
-      Join waitlist
-    </button>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+      <div className="flex gap-2">
+        <input
+          className="flex-1 py-[11px] px-3.5 bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.1)] rounded-[10px] text-[13px] text-mw-dark-text outline-none font-[var(--font-jakarta),'Plus_Jakarta_Sans',sans-serif] transition-[border-color] duration-150 focus:border-[rgba(0,82,255,0.5)] placeholder:text-[rgba(255,255,255,0.18)]"
+          type="email"
+          placeholder="your@email.com"
+          value={email}
+          onChange={e => { setEmail(e.target.value); if (status === 'error') setStatus('idle') }}
+          required
+          disabled={status === 'loading'}
+        />
+        <button
+          type="submit"
+          disabled={status === 'loading'}
+          className="bg-mw-brand text-white py-[11px] px-5 rounded-[10px] text-[13px] font-semibold cursor-pointer font-[var(--font-jakarta),'Plus_Jakarta_Sans',sans-serif] transition-[background] duration-150 whitespace-nowrap hover:bg-[#0040cc] disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          {status === 'loading' ? 'Joining…' : 'Join waitlist'}
+        </button>
+      </div>
+      {status === 'error' && (
+        <div className="text-[12px] text-[#f87171] px-1">{errMsg}</div>
+      )}
+    </form>
   )
 }
