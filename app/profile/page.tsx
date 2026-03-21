@@ -1,15 +1,15 @@
 'use client'
 
 import { useAccount } from 'wagmi'
-import { MwNav } from '@/components/MwNav'
-import { MwAuthGuard } from '@/components/MwAuthGuard'
+import { MwNav } from '@/components/web2/MwNav'
+import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
 import { API, shortAddr } from '@/lib/web2/api'
-import { WalletDisplay } from '@/components/WalletDisplay'
+import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
-import { ReferralSheet } from '@/components/referral/ReferralSheet'
-import { InviteTab } from '@/components/referral/InviteTab'
-import { ClaimCard } from '@/components/campaigns/ClaimCard'
+import { ReferralSheet } from '@/components/rewards/referral/ReferralSheet'
+import { InviteTab } from '@/components/rewards/referral/InviteTab'
+import { ClaimCard } from '@/components/rewards/campaigns/ClaimCard'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Signal {

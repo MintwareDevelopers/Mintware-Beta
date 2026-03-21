@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Plus_Jakarta_Sans, DM_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
-import { Providers } from '@/components/providers'
+import { Providers } from '@/components/web2/providers'
 import '@rainbow-me/rainbowkit/styles.css'
 import './globals.css'
 

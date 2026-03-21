@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from '@/lib/web3/wagmi'
 import { useState } from 'react'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
-import { RefCodePrompt } from '@/components/referral/RefCodePrompt'
+import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
 
 // ── Global referral gate — mounted inside every page ───────────────────────
 // Checks if the connected wallet needs the ref code prompt and renders it.

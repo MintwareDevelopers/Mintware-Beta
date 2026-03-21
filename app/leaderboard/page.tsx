@@ -1,11 +1,11 @@
 'use client'
 
 import { useAccount } from 'wagmi'
-import { MwNav } from '@/components/MwNav'
-import { MwAuthGuard } from '@/components/MwAuthGuard'
+import { MwNav } from '@/components/web2/MwNav'
+import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
 import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
-import { WalletDisplay } from '@/components/WalletDisplay'
+import { WalletDisplay } from '@/components/web3/WalletDisplay'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {

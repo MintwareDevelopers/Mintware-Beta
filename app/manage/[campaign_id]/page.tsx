@@ -26,8 +26,8 @@ import { useAccount } from 'wagmi'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
-import { MwNav } from '@/components/MwNav'
-import { MwAuthGuard } from '@/components/MwAuthGuard'
+import { MwNav } from '@/components/web2/MwNav'
+import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD } from '@/lib/web2/api'
 
 // ---------------------------------------------------------------------------

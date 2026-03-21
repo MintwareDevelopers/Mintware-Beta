@@ -26,7 +26,7 @@
 
 import type { CreatorFormState, PointsFocus } from '@/lib/rewards/creator'
 import { fmtPct } from '@/lib/rewards/creator'
-import { LivePreview } from '@/components/creator/LivePreview'
+import { LivePreview } from '@/components/rewards/creator/LivePreview'
 
 interface Step3ActionsProps {
   form:     CreatorFormState

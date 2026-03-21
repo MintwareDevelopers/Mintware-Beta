@@ -2,9 +2,9 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
-import { MwAuthGuard } from '@/components/MwAuthGuard'
-import { MwNav } from '@/components/MwNav'
-import { SwapWidget } from '@/components/swap/SwapWidget'
+import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
+import { MwNav } from '@/components/web2/MwNav'
+import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
 import { API } from '@/lib/web2/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────

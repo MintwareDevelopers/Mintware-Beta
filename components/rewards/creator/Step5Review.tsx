@@ -18,7 +18,7 @@ import {
   computeWarnings, fmtUSDShort, fmtPct,
   ERC20_APPROVE_ABI, DISTRIBUTOR_ABI, DISTRIBUTOR_ADDRESS,
 } from '@/lib/rewards/creator'
-import { GuardrailWarning } from '@/components/creator/GuardrailWarning'
+import { GuardrailWarning } from '@/components/rewards/creator/GuardrailWarning'
 
 interface Step5ReviewProps {
   form:        CreatorFormState

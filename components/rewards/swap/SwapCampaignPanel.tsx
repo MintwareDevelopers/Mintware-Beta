@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from 'react'
 import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
-import type { Campaign } from '@/components/campaigns/CampaignCard'
+import type { Campaign } from '@/components/rewards/campaigns/CampaignCard'
 
 type ActionDef = NonNullable<Campaign['actions']>[string]
 

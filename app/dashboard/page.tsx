@@ -1,14 +1,14 @@
 'use client'
 
 import { useAccount } from 'wagmi'
-import { MwNav } from '@/components/MwNav'
-import { MwAuthGuard } from '@/components/MwAuthGuard'
+import { MwNav } from '@/components/web2/MwNav'
+import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
-import { CampaignCard, Campaign } from '@/components/campaigns/CampaignCard'
-import { TokenIcon } from '@/components/TokenIcon'
+import { CampaignCard, Campaign } from '@/components/rewards/campaigns/CampaignCard'
+import { TokenIcon } from '@/components/web2/TokenIcon'
 
 // ─── Dashboard Content ─────────────────────────────────────────────────────────
 function DashboardContent() {

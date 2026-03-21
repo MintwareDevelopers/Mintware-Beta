@@ -15,7 +15,7 @@
 import { useState } from 'react'
 import { useAccount } from 'wagmi'
 import type { CampaignType } from '@/lib/rewards/creator'
-import { ApplicationForm } from '@/components/creator/ApplicationForm'
+import { ApplicationForm } from '@/components/rewards/creator/ApplicationForm'
 
 interface CampaignTypeSelectProps {
   onSelect: (type: CampaignType) => void
