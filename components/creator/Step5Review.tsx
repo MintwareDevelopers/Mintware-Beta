@@ -10,6 +10,7 @@
 // =============================================================================
 
 import { useState, useEffect } from 'react'
+import { useAccount } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import type { CreatorFormState } from '@/lib/campaigns/creator'
@@ -26,6 +27,7 @@ interface Step5ReviewProps {
 
 type FundState =
   | 'idle'
+  | 'creating'
   | 'approving'
   | 'waiting_approve'
   | 'funding'
@@ -75,6 +77,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 
 const FUND_LABELS: Record<FundState, string> = {
   idle:            'Fund Campaign',
+  creating:        'Creating campaign…',
   approving:       'Approving token spend…',
   waiting_approve: 'Waiting for approval…',
   funding:         'Funding campaign…',
@@ -84,8 +87,10 @@ const FUND_LABELS: Record<FundState, string> = {
 }
 
 export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
-  const [fundState, setFundState] = useState<FundState>('idle')
-  const [errorMsg,  setErrorMsg]  = useState<string | null>(null)
+  const { address } = useAccount()
+  const [fundState,   setFundState]   = useState<FundState>('idle')
+  const [errorMsg,    setErrorMsg]    = useState<string | null>(null)
+  const [campaignId,  setCampaignId]  = useState<string | null>(null)
 
   const warnings = computeWarnings(form)
 
@@ -117,25 +122,17 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
     data:      fundReceipt,
   } = useWaitForTransactionReceipt({ hash: fundTxHash })
 
-  // Approval confirmed → send fund tx
+  // Approval confirmed → send depositCampaign tx
   useEffect(() => {
     if (!approveConfirmed || fundState !== 'waiting_approve') return
+    if (!form.token || !campaignId) return
     setFundState('funding')
-    if (!form.token) return
-    const startAtTs = form.startAt ? BigInt(Math.floor(form.startAt.getTime() / 1000)) : BigInt(0)
-    const amount    = parseUnits(String(form.poolUsd), form.token.decimals)
+    const amount = parseUnits(String(form.poolUsd), form.token.decimals)
     writeFund({
       address:      DISTRIBUTOR_ADDRESS,
       abi:          DISTRIBUTOR_ABI,
-      functionName: 'createDistribution',
-      args: [
-        form.token.address as `0x${string}`,
-        amount,
-        BigInt(form.durationDays),
-        BigInt(Math.round(form.buyerRewardPct * 100)),
-        BigInt(Math.round(form.referralRewardPct * 100)),
-        startAtTs,
-      ],
+      functionName: 'depositCampaign',
+      args: [campaignId, form.token.address as `0x${string}`, amount],
     })
     setFundState('waiting_fund')
   }, [approveConfirmed]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -149,9 +146,7 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
   useEffect(() => {
     if (!fundConfirmed) return
     setFundState('confirmed')
-    // Extract campaignId from logs (first bytes32 topic in first log, if available)
-    const id = fundReceipt?.logs?.[0]?.topics?.[1]
-    onConfirmed(id)
+    onConfirmed(campaignId ?? undefined)
   }, [fundConfirmed]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Error handling
@@ -164,9 +159,31 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
     resetFund()
   }, [approveWriteError, fundWriteError, approveReceiptError, fundReceiptError]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleFund() {
-    if (!form.token || fundState !== 'idle' && fundState !== 'error') return
+  async function handleFund() {
+    if (!form.token || (fundState !== 'idle' && fundState !== 'error')) return
     setErrorMsg(null)
+    setFundState('creating')
+
+    // Step 1: create campaign record in Supabase
+    let newCampaignId: string
+    try {
+      const walletAddr = address ?? ''
+      const res  = await fetch('/api/campaigns/create', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ form, wallet: walletAddr }),
+      })
+      const data = await res.json() as { campaignId?: string; error?: string }
+      if (!res.ok || !data.campaignId) throw new Error(data.error ?? 'Failed to create campaign')
+      newCampaignId = data.campaignId
+      setCampaignId(newCampaignId)
+    } catch (err) {
+      setErrorMsg((err as Error).message)
+      setFundState('error')
+      return
+    }
+
+    // Step 2: approve token spend
     setFundState('approving')
     const amount = parseUnits(String(form.poolUsd), form.token.decimals)
     writeApprove({
@@ -183,7 +200,7 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
     if (approveIsPending && fundState === 'approving') setFundState('waiting_approve')
   }, [approveIsPending]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const isWorking  = ['approving', 'waiting_approve', 'funding', 'waiting_fund'].includes(fundState)
+  const isWorking  = ['creating', 'approving', 'waiting_approve', 'funding', 'waiting_fund'].includes(fundState)
   const isConfirmed = fundState === 'confirmed'
 
   // Build config summary for points
@@ -305,10 +322,11 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
       {isWorking && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
-            { key: 'approving',       label: 'Approve token spend',    done: ['waiting_approve','funding','waiting_fund'].includes(fundState) },
-            { key: 'waiting_approve', label: 'Approval confirmed',     done: ['funding','waiting_fund'].includes(fundState) },
-            { key: 'funding',         label: 'Submit campaign',        done: fundState === 'waiting_fund' },
-            { key: 'waiting_fund',    label: 'On-chain confirmation',  done: false },
+            { key: 'creating',        label: 'Create campaign record',  done: ['approving','waiting_approve','funding','waiting_fund'].includes(fundState) },
+            { key: 'approving',       label: 'Approve token spend',     done: ['waiting_approve','funding','waiting_fund'].includes(fundState) },
+            { key: 'waiting_approve', label: 'Approval confirmed',      done: ['funding','waiting_fund'].includes(fundState) },
+            { key: 'funding',         label: 'Deposit to contract',     done: fundState === 'waiting_fund' },
+            { key: 'waiting_fund',    label: 'On-chain confirmation',   done: false },
           ].map(s => (
             <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <div style={{

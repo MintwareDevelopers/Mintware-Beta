@@ -238,20 +238,17 @@ export const ERC20_APPROVE_ABI = [
   },
 ] as const
 
-/** MintwareDistributor createDistribution ABI (placeholder — fill when contract deployed) */
+/** MintwareDistributor v2 depositCampaign ABI */
 export const DISTRIBUTOR_ABI = [
   {
-    name:  'createDistribution',
+    name:  'depositCampaign',
     type:  'function',
     inputs: [
-      { name: 'token',          type: 'address' },
-      { name: 'totalAmount',    type: 'uint256' },
-      { name: 'durationDays',   type: 'uint256' },
-      { name: 'buyerRewardBps', type: 'uint256' },
-      { name: 'refRewardBps',   type: 'uint256' },
-      { name: 'startAt',        type: 'uint256' },
+      { name: 'campaignId', type: 'string'  },
+      { name: 'token',      type: 'address' },
+      { name: 'amount',     type: 'uint256' },
     ],
-    outputs:         [{ name: 'campaignId', type: 'bytes32' }],
+    outputs:         [],
     stateMutability: 'nonpayable',
   },
 ] as const

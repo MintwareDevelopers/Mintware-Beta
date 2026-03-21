@@ -238,9 +238,24 @@ function DashboardContent() {
         </div>
 
         {/* Tabs */}
-        <div className="db-tabs">
-          <button className={`db-tab${activeTab === 'explore' ? ' active' : ''}`} onClick={() => setActiveTab('explore')}>Explore</button>
-          <button className={`db-tab${activeTab === 'mine'    ? ' active' : ''}`} onClick={() => setActiveTab('mine')}>My Campaigns</button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div className="db-tabs" style={{ marginBottom: 0 }}>
+            <button className={`db-tab${activeTab === 'explore' ? ' active' : ''}`} onClick={() => setActiveTab('explore')}>Explore</button>
+            <button className={`db-tab${activeTab === 'mine'    ? ' active' : ''}`} onClick={() => setActiveTab('mine')}>My Campaigns</button>
+          </div>
+          <a href="/create-campaign" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: 'var(--color-mw-brand)', color: '#fff',
+            fontSize: 13, fontWeight: 600, fontFamily: 'Plus Jakarta Sans, sans-serif',
+            padding: '7px 16px', borderRadius: 'var(--radius-xl)',
+            textDecoration: 'none', flexShrink: 0,
+            transition: 'opacity var(--transition-fast)',
+          }}
+            onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.opacity = '0.85'}
+            onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.opacity = '1'}
+          >
+            + Create campaign
+          </a>
         </div>
 
         {/* Filters */}
