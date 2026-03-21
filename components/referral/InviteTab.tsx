@@ -163,11 +163,11 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
 
         .invite-card {
           background: #fff;
-          border: 1.5px solid var(--color-mw-border);
+          border: 0.5px solid var(--color-mw-border);
           border-radius: 18px;
           padding: 20px 22px;
           margin-bottom: 12px;
-          box-shadow: var(--shadow-sm);
+          box-shadow: var(--shadow-card);
         }
         .invite-section-label {
           font-size: 10px;

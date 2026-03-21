@@ -88,10 +88,11 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
 
       <div style={{
         background: '#fff',
-        border: '1px solid #E0DFFF',
+        border: '0.5px solid var(--color-mw-border)',
         borderRadius: 18,
         padding: '24px',
         marginBottom: 24,
+        boxShadow: 'var(--shadow-card)',
       }}>
         {/* ── Top row: icon + name + badges ── */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
