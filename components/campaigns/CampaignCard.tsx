@@ -135,6 +135,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
     telegram: string | null
   }>({ dexUrl: null, website: null, twitter: null, telegram: null })
 
+  // ── Live market data ──
+  const [ticker, setTicker] = useState<{ priceUsd: string | null; priceChange24h: number | null } | null>(null)
+
   useEffect(() => {
     if (!c.token_contract || !chainId) return
 
@@ -143,7 +146,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
       if (meta?.logoURI) setLogoURI(meta.logoURI)
     })
 
-    // Fetch socials — merge with manual links from Supabase
+    // Fetch socials + market data — merge with manual links from Supabase
     fetchDexMeta(chainId, c.token_contract).then(meta => {
       setDexLinks({
         dexUrl:   c.links?.dex      ?? meta?.dexUrl   ?? dexUrl(chainId, c.token_contract!),
@@ -151,6 +154,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
         twitter:  c.links?.twitter  ?? meta?.twitter  ?? null,
         telegram: c.links?.telegram ?? meta?.telegram ?? null,
       })
+      if (meta?.priceUsd || meta?.priceChange24h != null) {
+        setTicker({ priceUsd: meta.priceUsd ?? null, priceChange24h: meta.priceChange24h ?? null })
+      }
     })
   }, [c.token_contract, chainId, c.links])
 
@@ -446,9 +452,29 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
           </div>
         )}
 
-        {/* ── Social links ── */}
-        {hasSocials && (
-          <div className="cc-socials">
+        {/* ── Social links + live ticker ── */}
+        {(hasSocials || ticker) && (
+          <div className="cc-socials" style={{ justifyContent: 'space-between' }}>
+            {/* Price ticker (left side) */}
+            {ticker?.priceUsd && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 4 }} onClick={e => e.stopPropagation()}>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, fontWeight: 700, color: '#3d3d3d' }}>
+                  ${parseFloat(ticker.priceUsd) < 0.01
+                    ? parseFloat(ticker.priceUsd).toExponential(2)
+                    : parseFloat(ticker.priceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
+                </span>
+                {ticker.priceChange24h != null && (
+                  <span style={{
+                    fontFamily: 'DM Mono, monospace', fontSize: 10, fontWeight: 600,
+                    color: ticker.priceChange24h >= 0 ? '#16a34a' : '#ef4444',
+                  }}>
+                    {ticker.priceChange24h >= 0 ? '+' : ''}{ticker.priceChange24h.toFixed(2)}%
+                  </span>
+                )}
+              </div>
+            )}
+            {/* Social icons (right side) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             {effectiveDexUrl && (
               <a
                 href={effectiveDexUrl}
@@ -497,6 +523,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
                 <IconTelegram />
               </a>
             )}
+            </div>{/* end social icons */}
           </div>
         )}
       </div>

@@ -52,6 +52,7 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
   const [logoURI,   setLogoURI]   = useState<string | null>(null)
   const [logoError, setLogoError] = useState(false)
   const [links, setLinks] = useState<{ dexUrl: string | null; twitter: string | null; website: string | null; telegram: string | null }>({ dexUrl: null, twitter: null, website: null, telegram: null })
+  const [ticker, setTicker] = useState<{ priceUsd: string | null; priceChange24h: number | null; volume24h: number | null; liquidity: number | null } | null>(null)
 
   useEffect(() => {
     if (!c.token_contract || !chainId) {
@@ -67,6 +68,14 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
         website:  c.links?.website ?? m?.website  ?? null,
         telegram: c.links?.telegram ?? m?.telegram ?? null,
       })
+      if (m) {
+        setTicker({
+          priceUsd:       m.priceUsd       ?? null,
+          priceChange24h: m.priceChange24h ?? null,
+          volume24h:      m.volume24h      ?? null,
+          liquidity:      m.liquidity      ?? null,
+        })
+      }
     })
   }, [c.token_contract, chainId, c.links])
 
@@ -288,6 +297,54 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
             )
           })}
         </div>
+
+        {/* ── Live market ticker ── */}
+        {ticker && (ticker.priceUsd || ticker.priceChange24h != null || ticker.volume24h || ticker.liquidity) && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 0,
+            marginTop: 10, background: '#F7F6FF',
+            borderRadius: 10, border: '1px solid #E0DFFF',
+            overflow: 'hidden',
+          }}>
+            {ticker.priceUsd && (
+              <div style={{ padding: '9px 14px', borderRight: '1px solid #E0DFFF', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>
+                  ${parseFloat(ticker.priceUsd) < 0.01
+                      ? parseFloat(ticker.priceUsd).toExponential(2)
+                      : parseFloat(ticker.priceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
+                </span>
+                <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 9, color: '#8A8C9E', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Price</span>
+              </div>
+            )}
+            {ticker.priceChange24h != null && (
+              <div style={{ padding: '9px 14px', borderRight: (ticker.volume24h || ticker.liquidity) ? '1px solid #E0DFFF' : 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <span style={{
+                  fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700,
+                  color: ticker.priceChange24h >= 0 ? '#16a34a' : '#ef4444',
+                }}>
+                  {ticker.priceChange24h >= 0 ? '+' : ''}{ticker.priceChange24h.toFixed(2)}%
+                </span>
+                <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 9, color: '#8A8C9E', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>24h</span>
+              </div>
+            )}
+            {ticker.volume24h && (
+              <div style={{ padding: '9px 14px', borderRight: ticker.liquidity ? '1px solid #E0DFFF' : 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>
+                  {fmtUSD(ticker.volume24h)}
+                </span>
+                <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 9, color: '#8A8C9E', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Vol 24h</span>
+              </div>
+            )}
+            {ticker.liquidity && (
+              <div style={{ padding: '9px 14px', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>
+                  {fmtUSD(ticker.liquidity)}
+                </span>
+                <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 9, color: '#8A8C9E', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Liquidity</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Progress bar ── */}
         {progress !== null && (

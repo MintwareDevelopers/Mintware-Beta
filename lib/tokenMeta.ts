@@ -1,6 +1,6 @@
 // =============================================================================
-// lib/tokenMeta.ts — Token logo + DexScreener social links enrichment
-// Sources: LI.FI (logos, price) → DexScreener (socials, website)
+// lib/tokenMeta.ts — Token logo + DexScreener social links + live market data
+// Sources: LI.FI (logos, price) → DexScreener (socials, website, market data)
 // Both sources are free, no API key required.
 // Results are cached in-memory — one fetch per token per session.
 // =============================================================================
@@ -13,10 +13,14 @@ export interface TokenMeta {
 }
 
 export interface DexMeta {
-  dexUrl: string
-  website: string | null
-  twitter: string | null
-  telegram: string | null
+  dexUrl:         string
+  website:        string | null
+  twitter:        string | null
+  telegram:       string | null
+  priceUsd:       string | null   // e.g. "0.0421"
+  priceChange24h: number | null   // e.g. -5.1 (percent)
+  volume24h:      number | null   // e.g. 1240000 (USD)
+  liquidity:      number | null   // e.g. 890000 (USD)
 }
 
 // LI.FI supported chain IDs (numeric — the API rejects string names)
@@ -65,7 +69,7 @@ export async function fetchTokenMeta(chainId: number, address: string): Promise<
   }
 }
 
-// ─── DexScreener metadata (socials, website, dex link) ────────────────────
+// ─── DexScreener metadata (socials, website, dex link, live market data) ──
 
 export async function fetchDexMeta(chainId: number, address: string): Promise<DexMeta | null> {
   const key = `${chainId}:${address.toLowerCase()}`
@@ -91,10 +95,14 @@ export async function fetchDexMeta(chainId: number, address: string): Promise<De
     const socials: any[] = pair.info?.socials ?? []
 
     const meta: DexMeta = {
-      dexUrl:   pair.url,
-      website:  pair.info?.websites?.[0]?.url ?? null,
-      twitter:  socials.find((s: any) => s.type === 'twitter')?.url  ?? null,
-      telegram: socials.find((s: any) => s.type === 'telegram')?.url ?? null,
+      dexUrl:         pair.url,
+      website:        pair.info?.websites?.[0]?.url ?? null,
+      twitter:        socials.find((s: any) => s.type === 'twitter')?.url  ?? null,
+      telegram:       socials.find((s: any) => s.type === 'telegram')?.url ?? null,
+      priceUsd:       pair.priceUsd       ?? null,
+      priceChange24h: pair.priceChange?.h24 ?? null,
+      volume24h:      pair.volume?.h24     ?? null,
+      liquidity:      pair.liquidity?.usd  ?? null,
     }
     _dexCache.set(key, meta)
     return meta
