@@ -5,7 +5,7 @@ import { useAccount } from 'wagmi'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { MwNav } from '@/components/MwNav'
 import { SwapWidget } from '@/components/swap/SwapWidget'
-import { API } from '@/lib/api'
+import { API } from '@/lib/web2/api'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {

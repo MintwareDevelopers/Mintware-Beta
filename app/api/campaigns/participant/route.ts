@@ -17,7 +17,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
 const ETH_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/i
 

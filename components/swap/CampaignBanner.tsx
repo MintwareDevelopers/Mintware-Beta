@@ -1,7 +1,7 @@
 'use client'
 
-import { shortAddr } from '@/lib/api'
-import type { CampaignReward } from '@/lib/rewards'
+import { shortAddr } from '@/lib/web2/api'
+import type { CampaignReward } from '@/lib/rewards/calc'
 
 interface CampaignBannerProps {
   campaignId: string | null

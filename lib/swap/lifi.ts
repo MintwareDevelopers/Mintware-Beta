@@ -1,6 +1,9 @@
 // =============================================================================
 // lib/swap/lifi.ts — LI.FI SDK configuration for Mintware custom swap UI
 //
+// ARCHITECTURE NOTE: Shared between Web2 (quote proxy) and Web3 (execute).
+// Do NOT move this file into a grouping subfolder.
+//
 // Exports:
 //   lifiEvmProvider  — EVM wallet provider (call setOptions() with wagmi client)
 //   createLifiConfig — Initialises the SDK (browser-only, called once on mount)

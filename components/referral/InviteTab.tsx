@@ -1,8 +1,8 @@
 'use client'
 
 import { RefCodeInput } from './RefCodeInput'
-import { truncateAddress } from '@/lib/referral/utils'
-import type { ReferralStats, ReferralRecord } from '@/lib/referral/types'
+import { truncateAddress } from '@/lib/rewards/referral/utils'
+import type { ReferralStats, ReferralRecord } from '@/lib/rewards/referral/types'
 
 interface InviteTabProps {
   wallet:          string

@@ -13,11 +13,11 @@ import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
-import type { CreatorFormState } from '@/lib/campaigns/creator'
+import type { CreatorFormState } from '@/lib/rewards/creator'
 import {
   computeWarnings, fmtUSDShort, fmtPct,
   ERC20_APPROVE_ABI, DISTRIBUTOR_ABI, DISTRIBUTOR_ADDRESS,
-} from '@/lib/campaigns/creator'
+} from '@/lib/rewards/creator'
 import { GuardrailWarning } from '@/components/creator/GuardrailWarning'
 
 interface Step5ReviewProps {

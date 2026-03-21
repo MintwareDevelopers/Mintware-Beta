@@ -24,8 +24,8 @@
 //   + min_daily_volume_usd, max_points_per_wallet_pct
 // =============================================================================
 
-import type { CreatorFormState, PointsFocus } from '@/lib/campaigns/creator'
-import { fmtPct } from '@/lib/campaigns/creator'
+import type { CreatorFormState, PointsFocus } from '@/lib/rewards/creator'
+import { fmtPct } from '@/lib/rewards/creator'
 import { LivePreview } from '@/components/creator/LivePreview'
 
 interface Step3ActionsProps {

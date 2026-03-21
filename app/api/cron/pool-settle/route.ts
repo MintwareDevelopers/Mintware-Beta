@@ -23,7 +23,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { settleTokenPoolBatch } from '@/lib/campaigns/poolSettler'
+import { settleTokenPoolBatch } from '@/lib/rewards/poolSettler'
 
 export const maxDuration = 300   // 5 min — Vercel Pro cron max
 

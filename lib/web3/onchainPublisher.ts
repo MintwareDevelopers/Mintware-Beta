@@ -42,7 +42,7 @@ import {
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base, baseSepolia, bsc } from 'viem/chains'
-import { createSupabaseServiceClient } from '@/lib/supabase'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
 // ---------------------------------------------------------------------------
 // ABIs — only what we need from the new contract

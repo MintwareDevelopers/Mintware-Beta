@@ -20,8 +20,8 @@
 // =============================================================================
 
 import { useEffect, useState } from 'react'
-import { resolveBasename } from '@/lib/identity'
-import { shortAddr } from '@/lib/api'
+import { resolveBasename } from '@/lib/web2/identity'
+import { shortAddr } from '@/lib/web2/api'
 
 interface WalletDisplayProps {
   address:    string

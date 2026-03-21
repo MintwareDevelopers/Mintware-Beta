@@ -12,7 +12,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
 function isValidAddress(raw: string): boolean {
   return /^0x[0-9a-f]{40}$/i.test(raw)

@@ -13,7 +13,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
 // Simple JSON-RPC helper for tx verification
 async function jsonRpcCall<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T | null> {

@@ -9,11 +9,11 @@
 // =============================================================================
 
 import { useState } from 'react'
-import type { CreatorFormState } from '@/lib/campaigns/creator'
+import type { CreatorFormState } from '@/lib/rewards/creator'
 import {
   POOL_PRESETS, POINTS_DURATION_PRESETS, PAYOUT_PRESETS,
   dailyBudget, depletionVolumeUsd, fmtUSDShort,
-} from '@/lib/campaigns/creator'
+} from '@/lib/rewards/creator'
 
 interface Step2PoolProps {
   form:     CreatorFormState

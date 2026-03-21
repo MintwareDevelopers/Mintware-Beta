@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { createSupabaseBrowserClient } from '@/lib/supabase'
-import type { ReferralStats, ReferralRecord } from '@/lib/referral/types'
+import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
+import type { ReferralStats, ReferralRecord } from '@/lib/rewards/referral/types'
 
 export interface UseReferralReturn {
   stats:                ReferralStats | null

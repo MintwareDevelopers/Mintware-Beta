@@ -8,7 +8,7 @@
 // Only rendered when wallet has joined the campaign (participant !== null).
 // =============================================================================
 
-import { fmtUSD } from '@/lib/api'
+import { fmtUSD } from '@/lib/web2/api'
 
 export interface Participant {
   attribution_score: number

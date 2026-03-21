@@ -21,10 +21,10 @@
 //        Epoch end / Merkle tree logic is Ticket 4.
 // =============================================================================
 
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { fetchBridgeTransfers } from '@/lib/campaigns/chainRpc'
-import type { Campaign, Participant } from '@/lib/campaigns/types'
-import { getActionPoints } from '@/lib/campaigns/types'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { fetchBridgeTransfers } from '@/lib/web3/chainRpc'
+import type { Campaign, Participant } from '@/lib/rewards/types'
+import { getActionPoints } from '@/lib/rewards/types'
 
 // Bridge verification is Core DAO only in this ticket.
 // Extend SUPPORTED_CHAINS as Mintware adds more chains.

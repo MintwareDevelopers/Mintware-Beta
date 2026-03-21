@@ -18,8 +18,8 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { attestReferral }             from '@/lib/eas'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { attestReferral }             from '@/lib/rewards/eas'
 
 const TIME_GATE_MS = 24 * 60 * 60 * 1000 // 24 hours
 

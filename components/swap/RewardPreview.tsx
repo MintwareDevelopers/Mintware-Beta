@@ -1,7 +1,7 @@
 'use client'
 
-import { calcBuyerReward, calcReferrerReward } from '@/lib/rewards'
-import type { CampaignReward } from '@/lib/rewards'
+import { calcBuyerReward, calcReferrerReward } from '@/lib/rewards/calc'
+import type { CampaignReward } from '@/lib/rewards/calc'
 
 interface RewardPreviewProps {
   campaign: CampaignReward | null

@@ -1,7 +1,7 @@
 // Campaign reward data is sourced from the Attribution Worker's /campaign endpoint.
 // The legacy second Worker (mintware-campaigns.ceo-1f9.workers.dev) is dead and unused.
 
-import { API } from '@/lib/api'
+import { API } from '@/lib/web2/api'
 
 export interface CampaignReward {
   isActive: boolean

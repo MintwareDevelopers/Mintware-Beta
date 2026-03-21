@@ -19,10 +19,10 @@
 // =============================================================================
 
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree'
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { getTokenPrice, usdToWei } from '@/lib/campaigns/priceFeed'
-import { publishDistribution } from '@/lib/campaigns/onchainPublisher'
-import type { Campaign } from '@/lib/campaigns/types'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { getTokenPrice, usdToWei } from '@/lib/rewards/priceFeed'
+import { publishDistribution } from '@/lib/web3/onchainPublisher'
+import type { Campaign } from '@/lib/rewards/types'
 
 // ---------------------------------------------------------------------------
 // Types

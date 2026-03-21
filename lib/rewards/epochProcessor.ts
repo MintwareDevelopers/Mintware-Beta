@@ -17,8 +17,8 @@
 // Writing is handled by the epoch-end cron after merkleBuilder completes.
 // =============================================================================
 
-import { API } from '@/lib/api'
-import type { Campaign, Participant, ScoreMultipliers } from '@/lib/campaigns/types'
+import { API } from '@/lib/web2/api'
+import type { Campaign, Participant, ScoreMultipliers } from '@/lib/rewards/types'
 
 // ---------------------------------------------------------------------------
 // Types

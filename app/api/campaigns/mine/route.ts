@@ -16,7 +16,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
 // Validate Ethereum address: 0x + 40 hex chars
 function isValidAddress(raw: string): boolean {

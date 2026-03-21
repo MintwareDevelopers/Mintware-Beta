@@ -9,8 +9,8 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { fmtUSD, daysUntil, iconColor } from '@/lib/api'
-import { fetchTokenMeta, fetchDexMeta, dexUrl } from '@/lib/tokenMeta'
+import { fmtUSD, daysUntil, iconColor } from '@/lib/web2/api'
+import { fetchTokenMeta, fetchDexMeta, dexUrl } from '@/lib/web2/tokenMeta'
 
 export interface CampaignLinks {
   dex?:      string

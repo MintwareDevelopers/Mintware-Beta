@@ -18,7 +18,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runBridgeVerifier } from '@/lib/campaigns/bridgeVerifier'
+import { runBridgeVerifier } from '@/lib/rewards/bridgeVerifier'
 
 export const maxDuration = 300  // 5 min — Vercel Pro max for cron functions
 

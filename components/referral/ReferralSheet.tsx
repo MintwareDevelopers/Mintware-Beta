@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { RefCodeInput } from './RefCodeInput'
-import type { ReferralStats } from '@/lib/referral/types'
+import type { ReferralStats } from '@/lib/rewards/referral/types'
 
 interface ReferralSheetProps {
   stats:    ReferralStats | null

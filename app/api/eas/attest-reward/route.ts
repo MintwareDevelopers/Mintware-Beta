@@ -21,8 +21,8 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { attestReward }                from '@/lib/eas'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { attestReward }                from '@/lib/rewards/eas'
 
 function isValidAddress(raw: string): boolean {
   return /^0x[0-9a-f]{40}$/i.test(raw)

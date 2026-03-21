@@ -10,8 +10,8 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import type { CreatorFormState } from '@/lib/campaigns/creator'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import type { CreatorFormState } from '@/lib/rewards/creator'
 
 const CHAIN_LABELS: Record<number, string> = {
   8453:  'Base',

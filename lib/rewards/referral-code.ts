@@ -14,7 +14,7 @@
 // =============================================================================
 
 import type { createBrowserClient } from '@supabase/ssr'
-import { resolveBasename, extractBasenameHandle } from '@/lib/identity'
+import { resolveBasename, extractBasenameHandle } from '@/lib/web2/identity'
 
 // ---------------------------------------------------------------------------
 // Base58 encoder — no dependency needed, implemented inline (~20 lines)

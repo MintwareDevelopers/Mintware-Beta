@@ -17,7 +17,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { runSweep } from '@/lib/treasury/sweep'
+import { runSweep } from '@/lib/rewards/treasury/sweep'
 
 export const maxDuration = 300   // 5 min — Vercel Pro allows up to 300s for cron functions
 

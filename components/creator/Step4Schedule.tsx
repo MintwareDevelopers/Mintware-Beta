@@ -9,7 +9,7 @@
 // =============================================================================
 
 import { useState } from 'react'
-import type { CreatorFormState } from '@/lib/campaigns/creator'
+import type { CreatorFormState } from '@/lib/rewards/creator'
 
 interface Step4ScheduleProps {
   form:     CreatorFormState

@@ -4,7 +4,7 @@ import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
-import { API, fmtUSD, daysUntil } from '@/lib/api'
+import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
 import { WalletDisplay } from '@/components/WalletDisplay'
 
 // ─── Types ────────────────────────────────────────────────────────────────────

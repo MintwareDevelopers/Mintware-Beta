@@ -3,8 +3,8 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { API } from '@/lib/api'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { API } from '@/lib/web2/api'
 
 const ETH_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
 

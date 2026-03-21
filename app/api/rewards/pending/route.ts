@@ -54,7 +54,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
 export async function GET(req: NextRequest) {
   const rawAddress = req.nextUrl.searchParams.get('address')

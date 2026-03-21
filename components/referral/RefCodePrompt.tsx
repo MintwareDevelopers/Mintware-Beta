@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { useState, useCallback, useEffect } from 'react'
-import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 
 interface RefCodePromptProps {
   wallet: string

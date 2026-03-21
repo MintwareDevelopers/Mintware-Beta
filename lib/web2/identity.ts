@@ -7,7 +7,7 @@
 // .base TLD, resolved through Base's L2 universal resolver.
 //
 // Usage:
-//   import { resolveBasename } from '@/lib/identity'
+//   import { resolveBasename } from '@/lib/web2/identity'
 //   const name = await resolveBasename('0x3F9A...')  // "jake.base" or null
 //
 // Notes:

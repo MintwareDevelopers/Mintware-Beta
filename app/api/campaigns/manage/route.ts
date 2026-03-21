@@ -26,8 +26,8 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { daysUntil } from '@/lib/api'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { daysUntil } from '@/lib/web2/api'
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -19,9 +19,9 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { attestScore }                 from '@/lib/eas'
-import { API }                         from '@/lib/api'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { attestScore }                 from '@/lib/rewards/eas'
+import { API }                         from '@/lib/web2/api'
 
 // ── Rate limiter ──────────────────────────────────────────────────────────────
 const RATE_LIMIT_MS = 60 * 60 * 1000  // 1 hour

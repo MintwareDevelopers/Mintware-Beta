@@ -28,7 +28,7 @@ import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
-import { fmtUSD } from '@/lib/api'
+import { fmtUSD } from '@/lib/web2/api'
 
 // ---------------------------------------------------------------------------
 // Types

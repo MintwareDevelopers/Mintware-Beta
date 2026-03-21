@@ -3,9 +3,9 @@
 import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit'
 import { WagmiProvider, useAccount, type State } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { wagmiConfig } from '@/lib/wagmi'
+import { wagmiConfig } from '@/lib/web3/wagmi'
 import { useState } from 'react'
-import { useReferral } from '@/lib/referral/useReferral'
+import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/referral/RefCodePrompt'
 
 // ── Global referral gate — mounted inside every page ───────────────────────

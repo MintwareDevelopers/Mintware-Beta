@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAccount } from 'wagmi'
-import { API } from '@/lib/api'
+import { API } from '@/lib/web2/api'
 
 interface ScoreData {
   score: number

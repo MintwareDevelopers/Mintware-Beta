@@ -20,9 +20,9 @@
 // Wire to Molten's actual callback once the mechanism is confirmed.
 // =============================================================================
 
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { calcBuyerReward, calcReferrerReward } from '@/lib/rewards'
-import { getTokenPrice, usdToWei } from '@/lib/campaigns/priceFeed'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { calcBuyerReward, calcReferrerReward } from '@/lib/rewards/calc'
+import { getTokenPrice, usdToWei } from '@/lib/rewards/priceFeed'
 import type {
   SwapEvent,
   AttributionResult,
@@ -31,8 +31,8 @@ import type {
   RewardType,
   PendingRewardStatus,
   SkipReason,
-} from '@/lib/campaigns/types'
-import { getActionPoints } from '@/lib/campaigns/types'
+} from '@/lib/rewards/types'
+import { getActionPoints } from '@/lib/rewards/types'
 
 // ---------------------------------------------------------------------------
 // Helpers

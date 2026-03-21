@@ -14,7 +14,7 @@
 
 import { useState } from 'react'
 import { useAccount } from 'wagmi'
-import type { CampaignType } from '@/lib/campaigns/creator'
+import type { CampaignType } from '@/lib/rewards/creator'
 import { ApplicationForm } from '@/components/creator/ApplicationForm'
 
 interface CampaignTypeSelectProps {

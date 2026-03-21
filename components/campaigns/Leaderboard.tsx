@@ -10,7 +10,7 @@
 // =============================================================================
 
 import { useEffect, useState } from 'react'
-import { API, shortAddr, fmtUSD } from '@/lib/api'
+import { API, shortAddr, fmtUSD } from '@/lib/web2/api'
 
 interface LbEntry {
   wallet: string

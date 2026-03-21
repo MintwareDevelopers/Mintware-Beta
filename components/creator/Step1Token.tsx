@@ -11,8 +11,8 @@
 import { useState, useEffect } from 'react'
 import { useReadContracts } from 'wagmi'
 import { isAddress } from 'viem'
-import type { CreatorFormState, TokenInfo } from '@/lib/campaigns/creator'
-import { CHAIN_OPTIONS, ERC20_READ_ABI } from '@/lib/campaigns/creator'
+import type { CreatorFormState, TokenInfo } from '@/lib/rewards/creator'
+import { CHAIN_OPTIONS, ERC20_READ_ABI } from '@/lib/rewards/creator'
 
 interface Step1TokenProps {
   form:     CreatorFormState

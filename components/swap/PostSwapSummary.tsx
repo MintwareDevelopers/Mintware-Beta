@@ -1,9 +1,9 @@
 'use client'
 
 import { useAccount } from 'wagmi'
-import { shortAddr } from '@/lib/api'
-import { calcBuyerReward, calcReferrerReward } from '@/lib/rewards'
-import type { CampaignReward } from '@/lib/rewards'
+import { shortAddr } from '@/lib/web2/api'
+import { calcBuyerReward, calcReferrerReward } from '@/lib/rewards/calc'
+import type { CampaignReward } from '@/lib/rewards/calc'
 import type { Token } from '@/config/tokens'
 
 interface PostSwapSummaryProps {

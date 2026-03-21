@@ -21,10 +21,10 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { processSwapEvent } from '@/lib/campaigns/swapHook'
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { attestSwap } from '@/lib/eas'
-import type { SwapEvent } from '@/lib/campaigns/types'
+import { processSwapEvent } from '@/lib/rewards/swapHook'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { attestSwap } from '@/lib/rewards/eas'
+import type { SwapEvent } from '@/lib/rewards/types'
 
 // ---------------------------------------------------------------------------
 // Request shape

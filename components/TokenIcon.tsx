@@ -5,8 +5,8 @@
 // to trigger a live LI.FI / CoinGecko lookup.
 
 import { useState, useEffect } from 'react'
-import { iconColor } from '@/lib/api'
-import { fetchTokenMeta } from '@/lib/tokenMeta'
+import { iconColor } from '@/lib/web2/api'
+import { fetchTokenMeta } from '@/lib/web2/tokenMeta'
 
 const CHAIN_NAME_TO_ID: Record<string, number> = {
   base: 8453, arbitrum: 42161, ethereum: 1, eth: 1,

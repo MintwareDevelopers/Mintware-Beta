@@ -22,8 +22,8 @@ import { Step2Pool }          from '@/components/creator/Step2Pool'
 import { Step3Actions }       from '@/components/creator/Step3Actions'
 import { Step4Schedule }      from '@/components/creator/Step4Schedule'
 import { Step5Review }        from '@/components/creator/Step5Review'
-import type { CampaignType, CreatorFormState } from '@/lib/campaigns/creator'
-import { DEFAULT_FORM, validateStep } from '@/lib/campaigns/creator'
+import type { CampaignType, CreatorFormState } from '@/lib/rewards/creator'
+import { DEFAULT_FORM, validateStep } from '@/lib/rewards/creator'
 
 const STEP_LABELS = ['Token', 'Pool', 'Actions', 'Schedule', 'Review']
 

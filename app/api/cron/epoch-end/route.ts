@@ -22,11 +22,11 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/supabase'
-import { processEpoch } from '@/lib/campaigns/epochProcessor'
-import { runMerkleBuilder } from '@/lib/campaigns/merkleBuilder'
-import { publishDistribution } from '@/lib/campaigns/onchainPublisher'
-import type { Campaign, Participant } from '@/lib/campaigns/types'
+import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { processEpoch } from '@/lib/rewards/epochProcessor'
+import { runMerkleBuilder } from '@/lib/rewards/merkleBuilder'
+import { publishDistribution } from '@/lib/web3/onchainPublisher'
+import type { Campaign, Participant } from '@/lib/rewards/types'
 
 export const maxDuration = 300   // 5 min — Vercel Pro cron max
 
