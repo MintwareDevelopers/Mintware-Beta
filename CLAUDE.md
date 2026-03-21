@@ -1,5 +1,19 @@
 # Mintware Phase 1 — Project Context for Claude
 
+## ARCHITECTURE RULE — THREE GROUPINGS (Rewards-Driven App)
+
+Every feature, file, and refactor must map to one of three top-level groupings:
+
+| Grouping | Scope |
+|---|---|
+| **Web2** | Everything off-chain: UI, fast APIs, indexing, non-on-chain auth |
+| **Web3** | Wallets, contracts, on-chain reads/writes, on-chain verification |
+| **Rewards** | Referrals, points accumulation, distribution, project creation flows, quests, claims, tokenomics, anti-abuse logic |
+
+**Rewards is the core pillar.** It may call into Web2 (DB reads, API responses) and Web3 (claim tx, contract calls) but must live in its own grouping so it can evolve independently. Every refactor must enforce these three top-level groupings. When in doubt about where something belongs, ask: "does this exist to get value to the user for their on-chain behaviour?" — if yes, it's Rewards.
+
+---
+
 ## What This Project Is
 Mintware is a DeFi reputation + rewards platform with two products:
 - **Attribution** (live) — on-chain reputation scoring for wallets across 100+ chains
