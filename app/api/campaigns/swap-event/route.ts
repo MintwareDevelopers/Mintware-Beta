@@ -111,10 +111,16 @@ export async function POST(req: NextRequest) {
       // Fire-and-forget: SwapActivity EAS attestation — never blocks the response
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const feeVerifiedA = (result as any).fee_verified ?? false
+      // Derive chain IDs from body.chain if provided, default to Base
+      const _CHAIN_TO_ID: Record<string, number> = {
+        base: 8453, base_sepolia: 84532, ethereum: 1, eth: 1,
+        bsc: 56, bnb: 56, arbitrum: 42161, optimism: 10, coredao: 1116, core_dao: 1116,
+      }
+      const _chainId = body.chain ? (_CHAIN_TO_ID[body.chain.toLowerCase()] ?? 8453) : 8453
       void attestSwap(event.wallet, {
         txHash:      event.tx_hash,
-        fromChain:   1,
-        toChain:     8453,
+        fromChain:   _chainId,
+        toChain:     _chainId,
         fromToken:   event.token_in  as `0x${string}`,
         toToken:     event.token_out as `0x${string}`,
         amountIn:    BigInt(Math.round(event.amount_usd * 1e6)),
@@ -216,10 +222,15 @@ export async function POST(req: NextRequest) {
       if (result.credited) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const feeVerifiedB = (result as any).fee_verified ?? false
+        const _CHAIN_TO_ID_B: Record<string, number> = {
+          base: 8453, base_sepolia: 84532, ethereum: 1, eth: 1,
+          bsc: 56, bnb: 56, arbitrum: 42161, optimism: 10, coredao: 1116, core_dao: 1116,
+        }
+        const _chainIdB = body.chain ? (_CHAIN_TO_ID_B[body.chain.toLowerCase()] ?? 8453) : 8453
         void attestSwap(event.wallet, {
           txHash:      event.tx_hash,
-          fromChain:   1,
-          toChain:     8453,
+          fromChain:   _chainIdB,
+          toChain:     _chainIdB,
           fromToken:   event.token_in  as `0x${string}`,
           toToken:     event.token_out as `0x${string}`,
           amountIn:    BigInt(Math.round(event.amount_usd * 1e6)),

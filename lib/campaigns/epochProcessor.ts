@@ -255,13 +255,26 @@ export async function processEpoch(
 
   const total_payout_usd = entries.reduce((sum, e) => sum + e.payout_usd, 0)
 
+  const finalTotalPayout = Math.round(total_payout_usd * 1e6) / 1e6
+
+  // Warn when multipliers cause over-distribution (total > pool × 1.1)
+  // This is per-spec (sponsorship fee covers the buffer) but flag it clearly.
+  if (finalTotalPayout > epoch.epoch_pool_usd * 1.1) {
+    console.warn(
+      `[epochProcessor] ⚠ OVER-DISTRIBUTION: campaign=${campaign.id} epoch=${epoch.epoch_number} ` +
+      `pool=${epoch.epoch_pool_usd.toFixed(2)} payout=${finalTotalPayout.toFixed(2)} ` +
+      `(${((finalTotalPayout / epoch.epoch_pool_usd - 1) * 100).toFixed(1)}% over). ` +
+      `Score multipliers are active. Ensure sponsorship fee covers the buffer.`
+    )
+  }
+
   return {
     campaign_id: campaign.id,
     epoch_number: epoch.epoch_number,
     epoch_pool_usd: epoch.epoch_pool_usd,
     total_points,
     entries,
-    total_payout_usd: Math.round(total_payout_usd * 1e6) / 1e6,
+    total_payout_usd: finalTotalPayout,
     wallets_excluded_zero_points: excluded,
   }
 }

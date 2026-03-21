@@ -131,6 +131,9 @@ export type SkipReason =
   | 'daily_wallet_cap_reached'
   | 'daily_pool_cap_reached'
   | 'db_error'
+  | 'tx_failed'
+  | 'wallet_mismatch'
+  | 'fee_not_paid'
 
 export interface AttributionResult {
   credited: boolean

@@ -169,9 +169,8 @@ async function verifyCampaign(
     participantMap.set(p.wallet.toLowerCase(), p)
   }
 
-  // Build activity rows and participant updates
+  // Build activity rows
   const activityRows: object[] = []
-  const participantUpdates: Array<{ id: string; total_points: number }> = []
   const now = new Date().toISOString()
 
   // Track wallets already processed in this batch (one bridge credit per wallet per campaign)
@@ -213,12 +212,6 @@ async function verifyCampaign(
       credited_at: now,
     })
 
-    // Participant point update
-    participantUpdates.push({
-      id: participant.id,
-      total_points: participant.total_points + bridge_points,
-    })
-
     // Referral bridge credit — only if referrer is also a participant in this campaign
     if (referrer) {
       const referrerParticipant = participantMap.get(referrer)
@@ -238,17 +231,6 @@ async function verifyCampaign(
             referrer,
             credited_at: now,
           })
-
-          // Find existing update for referrer or add new one
-          const existingUpdate = participantUpdates.find((u) => u.id === referrerParticipant.id)
-          if (existingUpdate) {
-            existingUpdate.total_points += referral_bridge_points
-          } else {
-            participantUpdates.push({
-              id: referrerParticipant.id,
-              total_points: referrerParticipant.total_points + referral_bridge_points,
-            })
-          }
 
           credits.push({
             campaign_id: campaign.id,
@@ -296,18 +278,21 @@ async function verifyCampaign(
     }
   }
 
-  // 8. Update participant total_points (one update per participant)
-  for (const update of participantUpdates) {
-    const { error: ptErr } = await supabase
-      .from('participants')
-      .update({
-        total_points: update.total_points,
-        last_active_at: now,
-      })
-      .eq('id', update.id)
-
+  // 8. Atomically increment participant total_points (no race condition)
+  const walletsToIncrement = new Map<string, number>() // wallet → total delta
+  for (const row of activityRows as Array<{ wallet: string; points: number | null }>) {
+    if (row.points && row.points > 0) {
+      walletsToIncrement.set(row.wallet, (walletsToIncrement.get(row.wallet) ?? 0) + row.points)
+    }
+  }
+  for (const [w, delta] of walletsToIncrement) {
+    const { error: ptErr } = await supabase.rpc('increment_participant_points', {
+      p_campaign_id: campaign.id,
+      p_wallet:      w,
+      p_delta:       delta,
+    })
     if (ptErr) {
-      summary.errors.push(`[${campaign.id}] participant update ${update.id}: ${ptErr.message}`)
+      summary.errors.push(`[${campaign.id}] increment_participant_points ${w}: ${ptErr.message}`)
     }
   }
 

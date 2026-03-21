@@ -30,6 +30,7 @@ import type {
   Participant,
   RewardType,
   PendingRewardStatus,
+  SkipReason,
 } from '@/lib/campaigns/types'
 import { getActionPoints } from '@/lib/campaigns/types'
 
@@ -49,6 +50,102 @@ function utcDayEnd(iso: string): string {
   const d = new Date(iso)
   d.setUTCHours(23, 59, 59, 999)
   return d.toISOString()
+}
+
+// ---------------------------------------------------------------------------
+// verifySwapTx — on-chain tx verification (re-implementation of MintGuard item 4)
+//
+// Verifies:
+//   1. Tx exists on-chain and status === success (0x1)
+//   2. Tx was FROM the claimed wallet (wallet spoofing protection)
+//   3. Treasury address appears in calldata (fee enforcement)
+//
+// Fail-open on RPC errors — RPC flakiness should never block a legitimate user.
+// Called after campaign + participant validation, before pool deduction.
+// ---------------------------------------------------------------------------
+
+async function jsonRpcCall<T>(rpcUrl: string, method: string, params: unknown[]): Promise<T | null> {
+  try {
+    const res = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', method, params, id: 1 }),
+      signal: AbortSignal.timeout(5000),  // 5s hard timeout
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (data.error) return null
+    return data.result ?? null
+  } catch {
+    return null  // network errors → fail-open
+  }
+}
+
+function getSwapRpcUrl(chain: string | null): string | null {
+  if (!chain) return null
+  switch (chain.toLowerCase()) {
+    case 'base':         return process.env.BASE_RPC_URL         ?? 'https://mainnet.base.org'
+    case 'base_sepolia': return process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org'
+    case 'core_dao':     return process.env.CORE_DAO_RPC_URL     ?? 'https://rpc.coredao.org'
+    case 'bnb':          return process.env.BNB_RPC_URL          ?? 'https://bsc-dataseed.binance.org'
+    default:             return null
+  }
+}
+
+async function verifySwapTx(
+  txHash: string,
+  wallet: string,
+  chain: string | null,
+): Promise<{ ok: boolean; skip_reason?: SkipReason }> {
+  const rpcUrl = getSwapRpcUrl(chain)
+  if (!rpcUrl) return { ok: true }  // unknown chain — fail-open
+
+  const treasuryAddress = (process.env.MINTWARE_TREASURY_ADDRESS ?? '').toLowerCase().replace('0x', '')
+
+  try {
+    const [receipt, tx] = await Promise.all([
+      jsonRpcCall<{ status: string; from: string }>(rpcUrl, 'eth_getTransactionReceipt', [txHash]),
+      jsonRpcCall<{ to: string | null; input: string }>(rpcUrl, 'eth_getTransactionByHash', [txHash]),
+    ])
+
+    // Not found yet (pending tx) — fail-open
+    if (!receipt || !tx) {
+      console.warn(`[swapHook] verifySwapTx: tx ${txHash} not found on chain ${chain} — fail-open`)
+      return { ok: true }
+    }
+
+    // 1. Tx must have succeeded
+    if (receipt.status !== '0x1') {
+      return { ok: false, skip_reason: 'tx_failed' }
+    }
+
+    // 2. Tx must be FROM the claimed wallet
+    if (receipt.from?.toLowerCase() !== wallet.toLowerCase()) {
+      return { ok: false, skip_reason: 'wallet_mismatch' }
+    }
+
+    // 3. Treasury address must appear in calldata (fee enforcement)
+    //    Only enforced when MINTWARE_TREASURY_ADDRESS is configured.
+    if (treasuryAddress) {
+      const input = (tx.input ?? '').toLowerCase()
+      if (!input.includes(treasuryAddress)) {
+        console.warn(
+          `[swapHook] verifySwapTx: treasury not in calldata for tx ${txHash} ` +
+          `(chain=${chain}) — reward denied (fee_not_paid)`
+        )
+        return { ok: false, skip_reason: 'fee_not_paid' }
+      }
+    }
+
+    return { ok: true }
+  } catch (err) {
+    // RPC error — fail-open, log warning
+    console.warn(
+      `[swapHook] verifySwapTx RPC error for tx ${txHash} (chain=${chain}) — fail-open:`,
+      err instanceof Error ? err.message : err
+    )
+    return { ok: true }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -278,14 +375,12 @@ async function processPoints(
   const trade_points = getActionPoints(actions['trade'], 8)           // default from spec
   const referral_trade_points = getActionPoints(actions['referral_trade'], 8)
 
-  // Credit trade points to the swapping wallet
-  const { error: ptsErr } = await supabase
-    .from('participants')
-    .update({
-      total_points: participant.total_points + trade_points,
-      last_active_at: event.timestamp,
-    })
-    .eq('id', participant.id)
+  // Credit trade points to the swapping wallet — atomic increment (no race condition)
+  const { error: ptsErr } = await supabase.rpc('increment_participant_points', {
+    p_campaign_id: campaign.id,
+    p_wallet:      event.wallet,
+    p_delta:       trade_points,
+  })
 
   if (ptsErr) {
     console.error('[swapHook] participant points update error:', ptsErr)
@@ -308,16 +403,18 @@ async function processPoints(
   if (referrer) {
     const { data: referrerParticipant } = await supabase
       .from('participants')
-      .select('id, total_points')
+      .select('id')
       .eq('campaign_id', campaign.id)
       .eq('wallet', referrer)
       .single()
 
     if (referrerParticipant) {
-      await supabase
-        .from('participants')
-        .update({ total_points: referrerParticipant.total_points + referral_trade_points })
-        .eq('id', referrerParticipant.id)
+      // Atomic increment — no read-modify-write race condition
+      await supabase.rpc('increment_participant_points', {
+        p_campaign_id: campaign.id,
+        p_wallet:      referrer,
+        p_delta:       referral_trade_points,
+      })
 
       // Activity row — referrer trade credit
       await supabase.from('activity').insert({
@@ -389,6 +486,14 @@ export async function processSwapEvent(event: SwapEvent): Promise<AttributionRes
   }
   if (campaign.end_date && new Date(campaign.end_date) < new Date(normalised.timestamp)) {
     return { credited: false, skip_reason: 'campaign_ended' }
+  }
+
+  // 3b. On-chain tx verification (MintGuard item 4)
+  // Verifies: tx succeeded, from correct wallet, treasury in calldata.
+  // Fail-open on RPC errors — never punish users for infra issues.
+  const txVerify = await verifySwapTx(normalised.tx_hash, normalised.wallet, campaign.chain)
+  if (!txVerify.ok) {
+    return { credited: false, skip_reason: txVerify.skip_reason }
   }
 
   // 4. Load participant

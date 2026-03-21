@@ -165,12 +165,18 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
     isSuccess: isTxSuccess,
   } = useWaitForTransactionReceipt({ hash: txHash })
 
-  // Notify parent on success so it can refetch
+  // Notify parent on success so it can refetch; also mark claimed in DB
   useEffect(() => {
-    if (isTxSuccess) {
+    if (isTxSuccess && txHash && reward.distribution_id) {
+      // Fire-and-forget: update daily_payouts.claimed_at — never blocks the UI
+      fetch('/api/claim/mark-claimed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wallet, distribution_id: reward.distribution_id, tx_hash: txHash }),
+      }).catch(() => {})
       onClaimed()
     }
-  }, [isTxSuccess, onClaimed])
+  }, [isTxSuccess, txHash, wallet, reward.distribution_id, onClaimed])
 
   // Propagate wagmi write errors
   useEffect(() => {
