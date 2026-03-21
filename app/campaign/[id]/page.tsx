@@ -19,6 +19,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { API } from '@/lib/api'
+import { useReferral } from '@/lib/referral/useReferral'
 
 import { CampaignHeader }   from '@/components/campaigns/CampaignHeader'
 import { JoinButton }        from '@/components/campaigns/JoinButton'
@@ -128,6 +129,8 @@ function CampaignDetailContent() {
   const { address }   = useAccount()
   const params        = useParams()
   const campaignId    = params?.id as string
+  const wallet        = address?.toLowerCase() ?? ''
+  const { refCode }   = useReferral(wallet || undefined)
 
   const [campaign,     setCampaign]    = useState<Campaign | null>(null)
   const [participant,  setParticipant] = useState<Participant | null>(null)
@@ -330,8 +333,8 @@ function CampaignDetailContent() {
 
               {/* ── Referral link — shown immediately after joining ── */}
               {isJoined && address && (() => {
-                const refCode = `mw_${address.slice(2, 8).toLowerCase()}`
-                const refLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://mintware-beta.vercel.app'}/campaign/${campaignId}?ref=${refCode}`
+                const code    = refCode ?? `mw_${address.slice(2, 8).toLowerCase()}`
+                const refLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://mintware-beta.vercel.app'}/campaign/${campaignId}?ref=${code}`
                 const isTokenPool = campaign.campaign_type === 'token_pool'
                 const earnDesc = isTokenPool
                   ? `Earn ${(campaign as Campaign & { referral_reward_pct?: number }).referral_reward_pct ?? 0}% of every swap your referrals make`

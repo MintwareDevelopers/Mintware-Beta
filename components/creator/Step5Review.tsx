@@ -4,8 +4,8 @@
 // Step5Review.tsx — Campaign summary + Fund Campaign button
 //
 // Shows full config, guardrail warnings, funding breakdown.
-// Fund flow: approve() → wait → createDistribution() → wait → redirect
-// States: idle → approving → waiting_approve → funding → waiting_fund → confirmed
+// Fund flow: create Supabase record → approve() → wait → depositCampaign() → wait → redirect
+// States: idle → creating → approving → waiting_approve → funding → waiting_fund → confirmed
 // Uses wagmi writeContract + useWaitForTransactionReceipt
 // =============================================================================
 
