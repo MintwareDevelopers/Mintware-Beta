@@ -5,6 +5,7 @@ import { MwNav } from '@/components/MwNav'
 import { MwAuthGuard } from '@/components/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import { API, fmtUSD, daysUntil } from '@/lib/api'
 import { CampaignCard, Campaign } from '@/components/campaigns/CampaignCard'
 import { TokenIcon } from '@/components/TokenIcon'
@@ -243,7 +244,7 @@ function DashboardContent() {
             <button className={`db-tab${activeTab === 'explore' ? ' active' : ''}`} onClick={() => setActiveTab('explore')}>Explore</button>
             <button className={`db-tab${activeTab === 'mine'    ? ' active' : ''}`} onClick={() => setActiveTab('mine')}>My Campaigns</button>
           </div>
-          <a href="/create-campaign" style={{
+          <Link href="/create-campaign" style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             background: 'var(--color-mw-brand)', color: '#fff',
             fontSize: 13, fontWeight: 600, fontFamily: 'Plus Jakarta Sans, sans-serif',
@@ -255,7 +256,7 @@ function DashboardContent() {
             onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.opacity = '1'}
           >
             + Create campaign
-          </a>
+          </Link>
         </div>
 
         {/* Filters */}
