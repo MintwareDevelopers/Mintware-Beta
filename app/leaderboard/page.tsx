@@ -244,9 +244,85 @@ function LeaderboardContent() {
       <div className="lb-wrap"><div className="lb-layout">
         {/* ── Main column ── */}
         <div className="lb-main">
-          <div className="lb-page-tag">🏆 LEADERBOARD</div>
-          <div className="lb-title">Rankings</div>
-          <div className="lb-sub">Top participants ranked by points, attribution score, and referral activity.</div>
+          {/* ── User-first hero ── */}
+          <div style={{ background: '#0A0D14', borderRadius: 16, marginBottom: 24, overflow: 'hidden', position: 'relative' }}>
+            {/* Amber radial glow */}
+            <div style={{ position: 'absolute', top: -40, right: -40, width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle, rgba(251,191,36,0.1) 0%, transparent 65%)', pointerEvents: 'none' }} />
+
+            <div style={{ display: 'flex', alignItems: 'stretch', padding: '28px 32px', position: 'relative' }}>
+
+              {/* Left: Rank number */}
+              <div style={{ flexShrink: 0, width: 120, display: 'flex', flexDirection: 'column', justifyContent: 'center', paddingRight: 32 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)', marginBottom: 10, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Your rank</div>
+                {loading ? (
+                  <div style={{ width: 80, height: 56, borderRadius: 8, background: 'rgba(255,255,255,0.07)' }} />
+                ) : me ? (
+                  <>
+                    <div style={{ fontSize: 56, fontWeight: 700, color: myIdx === 0 ? '#fbbf24' : '#ffffff', letterSpacing: -3, lineHeight: 1, fontFamily: 'DM Mono, monospace' }}>
+                      #{myIdx + 1}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', marginTop: 6, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>of {total}</div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 56, fontWeight: 700, color: 'rgba(255,255,255,0.1)', letterSpacing: -3, lineHeight: 1, fontFamily: 'DM Mono, monospace' }}>—</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', marginTop: 6, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{total > 0 ? `${total} ranked` : ''}</div>
+                  </>
+                )}
+              </div>
+
+              {/* Vertical divider */}
+              <div style={{ width: '0.5px', background: 'rgba(255,255,255,0.06)', flexShrink: 0, alignSelf: 'stretch', marginRight: 32 }} />
+
+              {/* Right: Context */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                  <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#fbbf24', flexShrink: 0 }} />
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#fbbf24', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                    {activeCampaign?.name ?? (campaigns.length > 0 ? campaigns[0].name : 'Campaign')} · live rankings
+                  </span>
+                </div>
+
+                {loading ? (
+                  <>
+                    <div style={{ width: '55%', height: 22, borderRadius: 6, background: 'rgba(255,255,255,0.07)', marginBottom: 10 }} />
+                    <div style={{ width: '75%', height: 14, borderRadius: 6, background: 'rgba(255,255,255,0.04)' }} />
+                  </>
+                ) : me ? (
+                  <>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#ffffff', letterSpacing: -0.5, marginBottom: 6, fontFamily: 'Plus Jakarta Sans, sans-serif', lineHeight: 1.2 }}>
+                      {myIdx === 0 ? "You're leading the campaign." : `${(me.total_points || 0).toLocaleString()} pts earned`}
+                    </div>
+                    {myIdx === 0 ? (
+                      <div style={{ fontSize: 13, color: '#4ade80', fontWeight: 600, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>🏆 First place — hold your ground.</div>
+                    ) : (() => {
+                      const above = sorted[myIdx - 1]
+                      const gap = (above?.total_points || 0) - (me.total_points || 0)
+                      return gap > 0 ? (
+                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                          <span style={{ color: '#fbbf24', fontWeight: 600 }}>{gap.toLocaleString()} pts</span> behind rank #{myIdx}
+                          {daysLeft !== null && <span> · {daysLeft} day{daysLeft !== 1 ? 's' : ''} left</span>}
+                        </div>
+                      ) : null
+                    })()}
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: '#ffffff', letterSpacing: -0.5, marginBottom: 6, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                      {wallet ? "You're not on the board yet." : 'Connect to see your rank.'}
+                    </div>
+                    <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.38)', lineHeight: 1.6, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                      {wallet
+                        ? 'One swap enters you into the rankings. Your Attribution score gives you a head start.'
+                        : `${total > 0 ? `${total} wallets competing.` : 'Rankings are live.'} Connect yours to join.`
+                      }
+                    </div>
+                  </>
+                )}
+              </div>
+
+            </div>
+          </div>
 
           {/* Campaign selector */}
           <div className="lb-campaign-selector">
@@ -354,52 +430,6 @@ function LeaderboardContent() {
 
         {/* ── Sidebar ── */}
         <div className="lb-sidebar">
-          {/* Your standing card */}
-          <div className="lb-your-rank">
-            <div className="lb-yr-label">Your standing</div>
-            {me ? (
-              <>
-                <div className="lb-yr-rank">#{myIdx + 1}</div>
-                <div className="lb-yr-sub">Top {topPct}% · {total} total participants</div>
-                <div className="lb-yr-stats">
-                  <div className="lb-yr-stat">
-                    <div className="lb-yr-stat-val" style={{ color: 'var(--color-mw-brand)' }}>{(me.total_points || 0).toLocaleString()}</div>
-                    <div className="lb-yr-stat-label">Points</div>
-                  </div>
-                  <div className="lb-yr-stat">
-                    <div className="lb-yr-stat-val">{me.attribution_score || 0}</div>
-                    <div className="lb-yr-stat-label">Score</div>
-                  </div>
-                  <div className="lb-yr-stat">
-                    <div className="lb-yr-stat-val" style={{ color: 'var(--color-mw-live)' }}>{fmtUSD(me.total_earned_usd || 0)}</div>
-                    <div className="lb-yr-stat-label">Earned</div>
-                  </div>
-                  <div className="lb-yr-stat">
-                    <div className="lb-yr-stat-val" style={{ color: '#7B6FCC' }}>{myRefPts}</div>
-                    <div className="lb-yr-stat-label">Ref pts</div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="lb-yr-rank" style={{ color: 'var(--color-mw-ink-5)' }}>—</div>
-                <div className="lb-yr-sub">{wallet ? 'No rank yet · start trading to qualify' : 'Connect wallet to see your rank'}</div>
-                <div className="lb-yr-stats">
-                  {[
-                    { label: 'Points',    color: 'var(--color-mw-brand)' },
-                    { label: 'Score',     color: 'var(--color-mw-ink-5)' },
-                    { label: 'Earned',    color: 'var(--color-mw-ink-5)' },
-                    { label: 'Referrals', color: 'var(--color-mw-ink-5)' },
-                  ].map(({ label }) => (
-                    <div key={label} className="lb-yr-stat">
-                      <div className="lb-yr-stat-val" style={{ color: 'var(--color-mw-ink-5)' }}>0</div>
-                      <div className="lb-yr-stat-label">{label}</div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
 
           {/* How to earn */}
           {activeCampaign?.actions && Object.keys(activeCampaign.actions).length > 0 && (

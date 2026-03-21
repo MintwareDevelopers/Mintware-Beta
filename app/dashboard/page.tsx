@@ -20,9 +20,11 @@ function DashboardContent() {
   const [currentFilter, setCurrentFilter] = useState('All')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [userScore, setUserScore] = useState<number | null>(null)
-  const [myCampaignIds, setMyCampaignIds] = useState<Set<string>>(new Set())
-  const [mineLoading, setMineLoading] = useState(false)
+  const [userScore, setUserScore]           = useState<number | null>(null)
+  const [userTier, setUserTier]             = useState<string | null>(null)
+  const [userPercentile, setUserPercentile] = useState<number | null>(null)
+  const [myCampaignIds, setMyCampaignIds]   = useState<Set<string>>(new Set())
+  const [mineLoading, setMineLoading]       = useState(false)
 
   // Track referrer from URL
   useEffect(() => {
@@ -30,12 +32,16 @@ function DashboardContent() {
     if (ref) sessionStorage.setItem('mw_pending_ref', ref)
   }, [searchParams])
 
-  // Load Attribution score for "your points" stat
+  // Load Attribution score, tier, percentile
   useEffect(() => {
     if (!wallet) return
     fetch(`${API}/score?address=${wallet}`)
       .then(r => r.json())
-      .then(d => setUserScore(d.score ?? 0))
+      .then(d => {
+        setUserScore(d.score ?? 0)
+        setUserTier(d.tier ? d.tier.charAt(0).toUpperCase() + d.tier.slice(1) : null)
+        setUserPercentile(d.percentile ?? null)
+      })
       .catch(() => {})
   }, [wallet])
 
@@ -163,20 +169,72 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* Page header */}
-        <div className="db-tag"><div className="db-tag-dot" />EARN</div>
-        <div className="db-title">Campaigns</div>
-        <div className="db-sub">Browse active campaigns and join to earn points and token rewards.</div>
+        {/* ── Attribution hero ── */}
+        <div style={{ background: '#0A0D14', borderRadius: 16, marginBottom: 28, overflow: 'hidden', position: 'relative' }}>
+          {/* Blue radial glow */}
+          <div style={{ position: 'absolute', top: -40, right: -40, width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(circle, rgba(79,126,247,0.14) 0%, transparent 65%)', pointerEvents: 'none' }} />
 
-        {/* Stats bar */}
-        <div className="db-stats">
-          {stats.map(s => (
-            <div key={s.label} className="db-stat">
-              <div className="db-stat-label">{s.label}</div>
-              <div className="db-stat-value" style={s.valueColor ? { color: s.valueColor } : undefined}>{s.value}</div>
-              <div className="db-stat-sub" style={{ color: s.subGray ? 'var(--color-mw-ink-5)' : 'var(--color-mw-live)' }}>{s.sub}</div>
+          <div style={{ display: 'flex', alignItems: 'stretch', position: 'relative' }}>
+
+            {/* Left: Your Attribution score */}
+            <div style={{ flex: 1, padding: '32px 32px 28px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20 }}>
+                <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-mw-live)', flexShrink: 0 }} />
+                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--color-mw-live)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Your Attribution</span>
+              </div>
+
+              {wallet ? (
+                <>
+                  <div style={{ fontSize: 64, fontWeight: 700, color: 'var(--color-mw-brand)', letterSpacing: -3, lineHeight: 1, fontFamily: 'DM Mono, monospace', marginBottom: 12 }}>
+                    {userScore !== null ? userScore : <span style={{ color: 'rgba(255,255,255,0.15)' }}>—</span>}
+                    <span style={{ fontSize: 20, fontWeight: 500, color: 'rgba(255,255,255,0.22)', marginLeft: 10, letterSpacing: 0 }}>pts</span>
+                  </div>
+                  {userTier && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(79,126,247,0.14)', border: '0.5px solid rgba(79,126,247,0.28)', borderRadius: 20, padding: '4px 12px', marginBottom: 14 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#6b9fff', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{userTier} tier</span>
+                      {userPercentile !== null && (
+                        <span style={{ fontSize: 11, color: 'rgba(107,159,255,0.55)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>· top {100 - userPercentile}%</span>
+                      )}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.32)', lineHeight: 1.6, maxWidth: 260, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                    Your score determines your share of every active campaign pool.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: 64, fontWeight: 700, color: 'rgba(255,255,255,0.08)', letterSpacing: -3, lineHeight: 1, fontFamily: 'DM Mono, monospace', marginBottom: 12 }}>—</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.32)', lineHeight: 1.6, maxWidth: 260, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                    Connect your wallet to see your Attribution score and campaign eligibility.
+                  </div>
+                </>
+              )}
             </div>
-          ))}
+
+            {/* Vertical divider */}
+            <div style={{ width: '0.5px', background: 'rgba(255,255,255,0.06)', flexShrink: 0, alignSelf: 'stretch' }} />
+
+            {/* Right: Active campaign stats */}
+            <div style={{ flex: 1, padding: '32px 32px 28px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)', marginBottom: 20, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                Active campaigns
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 28px' }}>
+                {([
+                  { val: totalPool > 0   ? fmtUSD(totalPool)   : '—', lbl: 'Total pool',   color: '#4ade80' },
+                  { val: totalDaily > 0  ? fmtUSD(totalDaily)  : '—', lbl: 'Daily payout', color: '#4ade80' },
+                  { val: liveCount > 0   ? String(liveCount)   : '—', lbl: 'Live now',      color: '#ffffff' },
+                  { val: minScore !== null ? `${minScore}+`    : '—', lbl: 'Min score',     color: '#60a5fa' },
+                ] as const).map((s, i) => (
+                  <div key={i}>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: s.color, letterSpacing: -1, lineHeight: 1, fontFamily: 'DM Mono, monospace' }}>{s.val}</div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 6, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{s.lbl}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
         </div>
 
         {/* Tabs */}
