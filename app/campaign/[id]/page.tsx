@@ -131,7 +131,8 @@ function CampaignDetailContent() {
 
   const [campaign,     setCampaign]    = useState<Campaign | null>(null)
   const [participant,  setParticipant] = useState<Participant | null>(null)
-  const [userScore,    setUserScore]   = useState<number | null>(null)
+  const [userScore,      setUserScore]      = useState<number | null>(null)
+  const [userPercentile, setUserPercentile] = useState<number | null>(null)
   const [loading,      setLoading]     = useState(true)
   const [error,        setError]       = useState<string | null>(null)
   const [activeTab,    setActiveTab]   = useState<Tab>('overview')
@@ -184,7 +185,10 @@ function CampaignDetailContent() {
     if (!address || participant !== null) return
     fetch(`${API}/score?address=${encodeURIComponent(address)}`)
       .then(r => r.json())
-      .then(data => setUserScore(data.score ?? 0))
+      .then(data => {
+        setUserScore(data.score ?? 0)
+        setUserPercentile(data.percentile ?? null)
+      })
       .catch(() => setUserScore(0))
   }, [address, participant])
 
@@ -287,6 +291,30 @@ function CampaignDetailContent() {
                   </Link>
                 </div>
               )}
+
+              {/* Multiplier projection card — shown when not yet joined and score is known */}
+              {!isJoined && displayScore != null && displayScore > 0 && (() => {
+                const pct = userPercentile
+                const attributionMultiplier = pct !== null ? (pct >= 67 ? 1.5 : pct >= 34 ? 1.25 : 1.0) : null
+                if (attributionMultiplier === null) return null
+                return (
+                  <div style={{ background: '#0A0D14', borderRadius: 12, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 20 }}>
+                    <div style={{ flexShrink: 0 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)', marginBottom: 5, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Your multiplier</div>
+                      <div style={{ fontSize: 36, fontWeight: 700, color: attributionMultiplier >= 1.5 ? '#4ade80' : attributionMultiplier >= 1.25 ? 'var(--color-mw-brand)' : 'rgba(255,255,255,0.6)', letterSpacing: -1.5, lineHeight: 1, fontFamily: 'DM Mono, monospace' }}>{attributionMultiplier}×</div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 3, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{pct}th percentile</div>
+                    </div>
+                    <div style={{ width: '0.5px', background: 'rgba(255,255,255,0.07)', alignSelf: 'stretch', flexShrink: 0 }} />
+                    <div style={{ flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.38)', lineHeight: 1.6, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                      {attributionMultiplier >= 1.5
+                        ? 'Top-tier wallet. You earn up to 50% more than the base reward rate from this campaign.'
+                        : attributionMultiplier >= 1.25
+                        ? 'Above-average wallet. You earn 25% more than the base reward rate.'
+                        : 'Keep trading to raise your Attribution score and unlock higher multipliers.'}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {/* Join / locked / joined state */}
               <div style={{ marginBottom: isJoined ? 16 : 24 }}>

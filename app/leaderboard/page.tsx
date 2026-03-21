@@ -202,6 +202,7 @@ function LeaderboardContent() {
         .lb-row:hover .lb-td { background: var(--color-mw-bg); }
         .lb-row-me .lb-td { background: rgba(79,126,247,0.05); }
         .lb-row-me:hover .lb-td { background: rgba(79,126,247,0.08); }
+        .lb-row-me .lb-td:first-child { border-left: 3px solid var(--color-mw-brand); padding-left: 13px; }
         .lb-table tr:last-child .lb-td { border-bottom: none; }
         .lb-separator .lb-td { text-align: center; color: var(--color-mw-ink-5); font-size: 11px; letter-spacing: 3px; padding: 8px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
 

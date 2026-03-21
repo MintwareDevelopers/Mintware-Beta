@@ -161,8 +161,8 @@ export function MwNav() {
                   onClick={openConnectModal}
                   style={{
                     padding: '8px 16px', borderRadius: 20,
-                    background: 'var(--color-mw-brand)', color: '#fff',
-                    border: 'none', fontSize: 13, fontWeight: 500,
+                    background: '#2563EB', color: '#fff',
+                    border: 'none', fontSize: 13, fontWeight: 600,
                     cursor: 'pointer',
                     fontFamily: 'Plus Jakarta Sans, sans-serif',
                   }}

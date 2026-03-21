@@ -64,6 +64,8 @@ export default function SwapPage() {
 
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null)
   const [participant, setParticipant]       = useState<Participant | null>(null)
+  const [swapScore,  setSwapScore]          = useState<number | null>(null)
+  const [swapTier,   setSwapTier]           = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`${API}/campaigns`)
@@ -75,6 +77,18 @@ export default function SwapPage() {
       })
       .catch(() => {})
   }, [])
+
+  // Fetch attribution score for context panel
+  useEffect(() => {
+    if (!wallet) return
+    fetch(`${API}/score?address=${wallet}`)
+      .then(r => r.json())
+      .then(d => {
+        setSwapScore(d.score ?? 0)
+        setSwapTier(d.tier ? d.tier.charAt(0).toUpperCase() + d.tier.slice(1) : null)
+      })
+      .catch(() => {})
+  }, [wallet])
 
   // Fetch participant data when campaign + wallet are known
   useEffect(() => {
@@ -175,6 +189,21 @@ export default function SwapPage() {
             <div className="sw-tag"><div className="sw-tag-dot" />Multi-chain · Attribution rewards</div>
             <div className="sw-title">Swap &amp; <span>earn.</span></div>
             <div className="sw-sub">Trade tokens across chains. Every swap builds your Attribution score and unlocks campaign rewards.</div>
+
+            {/* Attribution context panel */}
+            {wallet && (
+              <div style={{ background: '#0A0D14', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20 }}>
+                <div style={{ flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)', marginBottom: 5, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Your score</div>
+                  <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--color-mw-brand)', letterSpacing: -1.5, lineHeight: 1, fontFamily: 'DM Mono, monospace' }}>{swapScore !== null ? swapScore : '—'}</div>
+                  {swapTier && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 3, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{swapTier} tier</div>}
+                </div>
+                <div style={{ width: '0.5px', background: 'rgba(255,255,255,0.07)', alignSelf: 'stretch', flexShrink: 0 }} />
+                <div style={{ flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.38)', lineHeight: 1.6, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                  Every swap raises this score permanently. A higher score means a larger share of every future campaign pool.
+                </div>
+              </div>
+            )}
 
             {/* Active campaign banner */}
             {activeCampaign && (

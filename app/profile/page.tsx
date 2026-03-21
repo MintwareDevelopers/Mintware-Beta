@@ -160,16 +160,18 @@ function ProfileContent() {
               </div>
             </div>
 
-            <div className="text-right min-w-[160px] pt-1 shrink-0 max-sm:min-w-0 max-sm:w-full max-sm:text-left">
+            <div className="text-right min-w-[180px] pt-1 shrink-0 max-sm:min-w-0 max-sm:w-full max-sm:text-left">
               {data ? (
                 <>
-                  <div className="text-[22px] font-bold text-[#4ade80] tracking-[-0.5px] font-[var(--font-mono),'DM_Mono',monospace]">
+                  <div style={{ fontSize: 56, fontWeight: 700, color: 'var(--color-mw-brand)', letterSpacing: -2, lineHeight: 1, fontFamily: 'var(--font-mono), DM Mono, monospace' }}>{score}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>of {maxScore} pts · {tier} tier</div>
+                  <div style={{ marginTop: 16, fontSize: 18, fontWeight: 700, color: '#4ade80', letterSpacing: -0.5, fontFamily: 'var(--font-mono), DM Mono, monospace', lineHeight: 1 }}>
                     ${data.totalLo.toLocaleString()}–${data.totalHi.toLocaleString()}
                   </div>
-                  <div className="text-[11px] text-[rgba(255,255,255,0.28)] mt-1">Estimated annual earnings</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 3 }}>Est. annual earnings</div>
                 </>
               ) : loading ? (
-                <div className="text-[13px] text-[rgba(255,255,255,0.25)]">Loading…</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.25)' }}>Loading…</div>
               ) : null}
             </div>
           </div>
