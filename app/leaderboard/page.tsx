@@ -161,63 +161,64 @@ function LeaderboardContent() {
   return (
     <>
       <style>{`
-        .lb-layout { display: flex; align-items: flex-start; }
-        .lb-main { flex: 1; padding: 28px 28px 40px; min-width: 0; }
+        .lb-wrap    { background: var(--color-mw-bg); min-height: 100vh; }
+        .lb-layout  { display: flex; align-items: flex-start; }
+        .lb-main    { flex: 1; padding: 28px 28px 40px; min-width: 0; }
         .lb-sidebar { width: 300px; flex-shrink: 0; padding: 28px 20px; border-left: 0.5px solid var(--color-mw-border); }
 
-        .lb-page-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--color-mw-brand); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-title    { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-page-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--color-mw-brand); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-title    { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; color: var(--color-mw-ink); margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-sub      { font-size: 14px; color: var(--color-mw-ink-3); margin-bottom: 24px; font-family: 'Plus Jakarta Sans', sans-serif; }
 
         .lb-campaign-selector { display: flex; gap: 8px; margin-bottom: 24px; align-items: center; flex-wrap: wrap; }
         .lb-cs-label { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-cs-btn { padding: 7px 16px; border-radius: var(--radius-xl); font-size: 13px; font-weight: 600; background: var(--color-mw-ink); color: #fff; border: none; cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-cs-btn.inactive { background: #fff; color: var(--color-mw-ink-3); border: 0.5px solid rgba(0,0,0,0.12); font-weight: 500; }
+        .lb-cs-btn.inactive { background: #fff; color: var(--color-mw-ink-3); border: 0.5px solid rgba(0,0,0,0.12); font-weight: 500; box-shadow: var(--shadow-card); }
         .lb-cs-btn.inactive:hover { border-color: var(--color-mw-brand); color: var(--color-mw-brand); background: var(--color-mw-brand-dim); }
 
         .lb-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
-        .lb-stat  { background: var(--color-mw-surface-card); border-radius: var(--radius-md); padding: 16px 18px; border: 0.5px solid var(--color-mw-border); }
-        .lb-stat-label { font-size: 11px; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; }
-        .lb-stat-sub   { font-size: 11px; color: var(--color-mw-ink-3); margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-stat  { background: #fff; border-radius: var(--radius-md); padding: 18px 20px; box-shadow: var(--shadow-card); }
+        .lb-stat-label { font-size: 10px; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; }
+        .lb-stat-value { font-size: 30px; font-weight: 700; letter-spacing: -0.8px; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; line-height: 1; }
+        .lb-stat-sub   { font-size: 11px; color: var(--color-mw-ink-3); margin-top: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
 
-        .lb-card { background: #fff; border: 0.5px solid rgba(0,0,0,0.09); border-radius: var(--radius-md); overflow: hidden; }
+        .lb-card { background: #fff; border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-card); }
         .lb-card-header { padding: 16px 20px; border-bottom: 0.5px solid var(--color-mw-border); display: flex; align-items: center; justify-content: space-between; }
         .lb-card-title  { font-size: 15px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-card-meta   { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
 
         .lb-tabs { display: flex; border-bottom: 0.5px solid var(--color-mw-border); }
         .lb-tab  { padding: 10px 16px; font-size: 13px; cursor: pointer; color: var(--color-mw-ink-3); border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: 'Plus Jakarta Sans', sans-serif; transition: color var(--transition-fast); }
-        .lb-tab.active { color: var(--color-mw-brand); border-bottom-color: var(--color-mw-brand); font-weight: 500; }
+        .lb-tab.active { color: var(--color-mw-brand); border-bottom-color: var(--color-mw-brand); font-weight: 600; }
         .lb-tab:hover:not(.active) { color: var(--color-mw-ink); }
 
         .lb-table { width: 100%; border-collapse: collapse; }
-        .lb-table th { padding: 12px 16px; font-size: 11px; font-weight: 500; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.4px; text-align: left; border-bottom: 0.5px solid var(--color-mw-border); background: var(--color-mw-surface-card); font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-table th { padding: 12px 16px; font-size: 10px; font-weight: 700; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.8px; text-align: left; border-bottom: 0.5px solid var(--color-mw-border); background: var(--color-mw-bg); font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-table th:not(:first-child) { text-align: right; }
         .lb-td { padding: 14px 16px; font-size: 13px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
-        .lb-rank { font-weight: 600; font-size: 14px; width: 48px; text-align: center !important; }
+        .lb-rank { font-weight: 700; font-size: 14px; width: 48px; text-align: center !important; }
         .lb-right { text-align: right; }
         .lb-pts-col { }
-        .lb-row:hover .lb-td { background: var(--color-mw-surface-card); }
+        .lb-row:hover .lb-td { background: var(--color-mw-bg); }
         .lb-row-me .lb-td { background: rgba(79,126,247,0.05); }
         .lb-row-me:hover .lb-td { background: rgba(79,126,247,0.08); }
         .lb-table tr:last-child .lb-td { border-bottom: none; }
         .lb-separator .lb-td { text-align: center; color: var(--color-mw-ink-5); font-size: 11px; letter-spacing: 3px; padding: 8px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
 
-        .lb-skeleton { height: 44px; border-radius: var(--radius-sm); background: #f0f0f2; margin-bottom: 8px; }
+        .lb-skeleton { height: 44px; border-radius: var(--radius-sm); background: var(--color-mw-bg); margin-bottom: 8px; }
 
         /* Sidebar */
-        .lb-your-rank { background: var(--color-mw-brand-dim); border: 0.5px solid rgba(79,126,247,0.2); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px; }
-        .lb-yr-label  { font-size: 11px; font-weight: 500; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-yr-rank   { font-size: 32px; font-weight: 700; letter-spacing: -1px; color: var(--color-mw-ink); margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+        .lb-your-rank { background: #fff; border: 0.5px solid rgba(79,126,247,0.18); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px; box-shadow: var(--shadow-card); }
+        .lb-yr-label  { font-size: 10px; font-weight: 700; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-yr-rank   { font-size: 36px; font-weight: 700; letter-spacing: -1px; color: var(--color-mw-brand); margin-bottom: 4px; font-family: 'DM Mono', monospace; }
         .lb-yr-sub    { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-yr-stats  { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
-        .lb-yr-stat   { background: #fff; border-radius: var(--radius-sm); padding: 10px; border: 0.5px solid var(--color-mw-border); }
-        .lb-yr-stat-val   { font-size: 16px; font-weight: 600; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; }
-        .lb-yr-stat-label { font-size: 11px; color: var(--color-mw-ink-3); margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-yr-stats  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+        .lb-yr-stat   { background: var(--color-mw-bg); border-radius: var(--radius-sm); padding: 10px; }
+        .lb-yr-stat-val   { font-size: 18px; font-weight: 700; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; letter-spacing: -0.5px; }
+        .lb-yr-stat-label { font-size: 10px; color: var(--color-mw-ink-3); margin-top: 2px; font-family: 'Plus Jakarta Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; }
 
         .lb-hte { margin-top: 20px; }
-        .lb-hte-title { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-hte-title { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--color-mw-ink-3); margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-hte-item  { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid rgba(0,0,0,0.06); }
         .lb-hte-item:last-child { border-bottom: none; }
         .lb-hte-dot   { width: 8px; height: 8px; border-radius: 50%; background: var(--color-mw-brand); flex-shrink: 0; }
@@ -225,11 +226,11 @@ function LeaderboardContent() {
         .lb-hte-pts   { font-size: 12px; font-weight: 700; color: var(--color-mw-brand); font-family: 'DM Mono', monospace; }
 
         .lb-invite { margin-top: 20px; }
-        .lb-invite-card { background: var(--color-mw-surface-card); border-radius: 10px; padding: 14px; border: 0.5px solid var(--color-mw-border); }
-        .lb-invite-title { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); margin-bottom: 4px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .lb-invite-card { background: #fff; border-radius: 10px; padding: 14px; box-shadow: var(--shadow-card); }
+        .lb-invite-title { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--color-mw-ink-3); margin-bottom: 8px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .lb-invite-sub   { font-size: 12px; color: var(--color-mw-ink-3); margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .lb-invite-link  { background: #fff; border: 0.5px solid rgba(0,0,0,0.12); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--color-mw-ink-3); display: flex; align-items: center; justify-content: space-between; }
-        .lb-copy-btn { font-size: 11px; color: var(--color-mw-brand); cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; background: none; border: none; }
+        .lb-invite-link  { background: var(--color-mw-bg); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--color-mw-ink-3); display: flex; align-items: center; justify-content: space-between; }
+        .lb-copy-btn { font-size: 11px; color: var(--color-mw-brand); cursor: pointer; font-family: 'Plus Jakarta Sans', sans-serif; background: none; border: none; font-weight: 600; }
 
         @media (max-width: 820px) {
           .lb-layout { flex-direction: column; }
@@ -240,7 +241,7 @@ function LeaderboardContent() {
         }
       `}</style>
 
-      <div className="lb-layout">
+      <div className="lb-wrap"><div className="lb-layout">
         {/* ── Main column ── */}
         <div className="lb-main">
           <div className="lb-page-tag">🏆 LEADERBOARD</div>
@@ -272,12 +273,12 @@ function LeaderboardContent() {
             </div>
             <div className="lb-stat">
               <div className="lb-stat-label">Pool remaining</div>
-              <div className="lb-stat-value">{activeCampaign?.pool_usd != null ? fmtUSD(activeCampaign.pool_usd) : '—'}</div>
+              <div className="lb-stat-value" style={{ color: 'var(--color-mw-green)' }}>{activeCampaign?.pool_usd != null ? fmtUSD(activeCampaign.pool_usd) : '—'}</div>
               <div className="lb-stat-sub">{daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left` : ''}</div>
             </div>
             <div className="lb-stat">
               <div className="lb-stat-label">Daily payout</div>
-              <div className="lb-stat-value">{activeCampaign?.daily_payout_usd != null ? fmtUSD(activeCampaign.daily_payout_usd) : '—'}</div>
+              <div className="lb-stat-value" style={{ color: 'var(--color-mw-green)' }}>{activeCampaign?.daily_payout_usd != null ? fmtUSD(activeCampaign.daily_payout_usd) : '—'}</div>
               <div className="lb-stat-sub">distributed to earners</div>
             </div>
           </div>
@@ -362,7 +363,7 @@ function LeaderboardContent() {
                 <div className="lb-yr-sub">Top {topPct}% · {total} total participants</div>
                 <div className="lb-yr-stats">
                   <div className="lb-yr-stat">
-                    <div className="lb-yr-stat-val">{(me.total_points || 0).toLocaleString()}</div>
+                    <div className="lb-yr-stat-val" style={{ color: 'var(--color-mw-brand)' }}>{(me.total_points || 0).toLocaleString()}</div>
                     <div className="lb-yr-stat-label">Points</div>
                   </div>
                   <div className="lb-yr-stat">
@@ -374,7 +375,7 @@ function LeaderboardContent() {
                     <div className="lb-yr-stat-label">Earned</div>
                   </div>
                   <div className="lb-yr-stat">
-                    <div className="lb-yr-stat-val">{myRefPts}</div>
+                    <div className="lb-yr-stat-val" style={{ color: '#7B6FCC' }}>{myRefPts}</div>
                     <div className="lb-yr-stat-label">Ref pts</div>
                   </div>
                 </div>
@@ -384,10 +385,15 @@ function LeaderboardContent() {
                 <div className="lb-yr-rank" style={{ color: 'var(--color-mw-ink-5)' }}>—</div>
                 <div className="lb-yr-sub">{wallet ? 'No rank yet · start trading to qualify' : 'Connect wallet to see your rank'}</div>
                 <div className="lb-yr-stats">
-                  {['Points', 'Score', 'Earned', 'Referrals'].map(l => (
-                    <div key={l} className="lb-yr-stat">
+                  {[
+                    { label: 'Points',    color: 'var(--color-mw-brand)' },
+                    { label: 'Score',     color: 'var(--color-mw-ink-5)' },
+                    { label: 'Earned',    color: 'var(--color-mw-ink-5)' },
+                    { label: 'Referrals', color: 'var(--color-mw-ink-5)' },
+                  ].map(({ label }) => (
+                    <div key={label} className="lb-yr-stat">
                       <div className="lb-yr-stat-val" style={{ color: 'var(--color-mw-ink-5)' }}>0</div>
-                      <div className="lb-yr-stat-label">{l}</div>
+                      <div className="lb-yr-stat-label">{label}</div>
                     </div>
                   ))}
                 </div>
@@ -434,7 +440,7 @@ function LeaderboardContent() {
             </div>
           )}
         </div>
-      </div>
+      </div></div>
     </>
   )
 }

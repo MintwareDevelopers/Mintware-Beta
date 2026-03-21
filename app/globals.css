@@ -13,6 +13,7 @@
 
   /* ── Surfaces ── */
   --color-mw-surface: #f5f5f7;
+  --color-mw-bg:      #F0F2F8;   /* app page background — cool blue-grey tint */
 
   /* ── Green (live / success) ── */
   --color-mw-green:        #16a34a;
@@ -63,9 +64,11 @@
   --easing-spring:    cubic-bezier(0.22, 1, 0.36, 1);
 
   /* ── Shadows ── */
-  --shadow-sm:    0 1px 3px rgba(0, 0, 0, 0.06);
-  --shadow-md:    0 4px 12px rgba(0, 0, 0, 0.07);
-  --shadow-sheet: 0 -4px 40px rgba(58, 92, 232, 0.12);
+  --shadow-sm:         0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-md:         0 4px 12px rgba(0, 0, 0, 0.07);
+  --shadow-sheet:      0 -4px 40px rgba(58, 92, 232, 0.12);
+  --shadow-card:       0 1px 3px rgba(0, 0, 0, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.10), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
 
   /* ── Animations ── */
   --animate-fade-up:    fadeUp 0.5s ease both;
@@ -158,9 +161,9 @@
 
   /* ── Card ────────────────────────────────────────────────────── */
   .mw-card {
-    background:    var(--color-mw-surface-card);
+    background:    #ffffff;
     border-radius: var(--radius-md);
-    border:        1px solid var(--color-mw-border);
+    box-shadow:    var(--shadow-card);
     padding:       16px;
   }
   .mw-card-purple {

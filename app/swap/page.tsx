@@ -107,6 +107,7 @@ export default function SwapPage() {
       <MwNav />
       <>
         <style>{`
+          .sw-wrap { background: var(--color-mw-bg); min-height: 100vh; }
           .sw-layout {
             display: grid;
             grid-template-columns: 1fr 380px;
@@ -116,27 +117,27 @@ export default function SwapPage() {
           /* ── Left panel ── */
           .sw-left { padding: 32px; border-right: 0.5px solid var(--color-mw-border); }
 
-          .sw-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--color-mw-brand); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
+          .sw-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--color-mw-brand); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-tag-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-mw-live); }
-          .sw-title { font-size: 28px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
+          .sw-title { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; color: var(--color-mw-ink); margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-title span { color: var(--color-mw-brand); }
           .sw-sub { font-size: 14px; color: var(--color-mw-ink-3); margin-bottom: 28px; line-height: 1.55; font-family: 'Plus Jakarta Sans', sans-serif; }
 
-          .sw-banner { background: var(--color-mw-brand-dim); border: 0.5px solid rgba(79,126,247,0.2); border-radius: var(--radius-md); padding: 16px 18px; margin-bottom: 24px; display: flex; align-items: center; gap: 14px; }
+          .sw-banner { background: #fff; border: 0.5px solid rgba(79,126,247,0.2); border-radius: var(--radius-md); padding: 16px 18px; margin-bottom: 24px; display: flex; align-items: center; gap: 14px; box-shadow: var(--shadow-card); border-left: 3px solid var(--color-mw-brand); }
           .sw-banner-icon { font-size: 22px; flex-shrink: 0; }
           .sw-banner-body { flex: 1; min-width: 0; }
           .sw-banner-title { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); margin-bottom: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-banner-sub   { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-banner-badge { background: var(--color-mw-brand); color: #fff; font-size: 12px; font-weight: 600; padding: 4px 12px; border-radius: var(--radius-xl); white-space: nowrap; font-family: 'Plus Jakarta Sans', sans-serif; flex-shrink: 0; }
+          .sw-banner-badge { background: var(--color-mw-brand); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: var(--radius-xl); white-space: nowrap; font-family: 'Plus Jakarta Sans', sans-serif; flex-shrink: 0; }
 
-          .sw-section { font-size: 11px; font-weight: 500; color: var(--color-mw-ink-3); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 12px; font-family: 'Plus Jakarta Sans', sans-serif; }
+          .sw-section { font-size: 10px; font-weight: 700; color: var(--color-mw-ink-3); letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 14px; font-family: 'Plus Jakarta Sans', sans-serif; }
 
           .sw-actions-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 28px; }
-          .sw-action-card { background: var(--color-mw-surface-card); border: 0.5px solid var(--color-mw-border); border-radius: 10px; padding: 14px 16px; transition: border-color var(--transition-fast); }
-          .sw-action-card:hover { border-color: rgba(0,0,0,0.15); }
+          .sw-action-card { background: #fff; border-radius: 10px; padding: 14px 16px; transition: box-shadow var(--transition-fast); box-shadow: var(--shadow-card); }
+          .sw-action-card:hover { box-shadow: var(--shadow-card-hover); }
           .sw-action-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
           .sw-action-name { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-action-pts  { font-size: 13px; font-weight: 700; color: var(--color-mw-brand); white-space: nowrap; font-family: 'DM Mono', monospace; }
+          .sw-action-pts  { font-size: 14px; font-weight: 700; color: var(--color-mw-brand); white-space: nowrap; font-family: 'DM Mono', monospace; }
           .sw-action-desc { font-size: 12px; color: var(--color-mw-ink-3); line-height: 1.4; font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-action-prog-wrap { margin-top: 10px; }
           .sw-action-prog-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-mw-ink-5); margin-bottom: 5px; font-family: 'Plus Jakarta Sans', sans-serif; }
@@ -144,20 +145,20 @@ export default function SwapPage() {
           .sw-action-prog-fill { height: 100%; background: var(--color-mw-brand); border-radius: 4px; }
 
           .sw-routes { display: flex; flex-direction: column; gap: 8px; }
-          .sw-route-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 0.5px solid rgba(0,0,0,0.09); border-radius: 10px; background: #fff; transition: border-color var(--transition-fast); }
-          .sw-route-row:hover { border-color: rgba(0,0,0,0.15); }
+          .sw-route-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #fff; transition: box-shadow var(--transition-fast); box-shadow: var(--shadow-card); }
+          .sw-route-row:hover { box-shadow: var(--shadow-card-hover); }
           .sw-route-dot   { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
           .sw-route-info  { flex: 1; min-width: 0; }
-          .sw-route-chain  { font-size: 12px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
+          .sw-route-chain  { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-route-tokens { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-route-badge  { font-size: 11px; padding: 3px 8px; border-radius: var(--radius-xl); font-weight: 500; white-space: nowrap; font-family: 'Plus Jakarta Sans', sans-serif; }
+          .sw-route-badge  { font-size: 11px; padding: 3px 8px; border-radius: var(--radius-xl); font-weight: 600; white-space: nowrap; font-family: 'Plus Jakarta Sans', sans-serif; }
           .sw-route-badge.live { background: rgba(34,197,94,0.1); color: var(--color-mw-green); border: 0.5px solid rgba(34,197,94,0.25); }
-          .sw-route-badge.soon { background: var(--color-mw-surface-card); color: var(--color-mw-ink-3); border: 0.5px solid var(--color-mw-border); }
+          .sw-route-badge.soon { background: var(--color-mw-bg); color: var(--color-mw-ink-3); border: 0.5px solid var(--color-mw-border); }
 
           /* ── Right panel ── */
-          .sw-right { padding: 28px 24px; }
+          .sw-right { padding: 28px 24px; background: var(--color-mw-bg); }
           .sw-right-inner { position: sticky; top: 28px; }
-          .sw-right-label { font-size: 11px; font-weight: 500; color: var(--color-mw-ink-3); letter-spacing: 0.4px; text-transform: uppercase; margin-bottom: 16px; font-family: 'Plus Jakarta Sans', sans-serif; }
+          .sw-right-label { font-size: 10px; font-weight: 700; color: var(--color-mw-ink-3); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 16px; font-family: 'Plus Jakarta Sans', sans-serif; }
 
           @media (max-width: 900px) {
             .sw-layout { grid-template-columns: 1fr; }
@@ -168,7 +169,7 @@ export default function SwapPage() {
           }
         `}</style>
 
-        <div className="sw-layout">
+        <div className="sw-wrap"><div className="sw-layout">
           {/* ── Left: context panel ── */}
           <div className="sw-left">
             <div className="sw-tag"><div className="sw-tag-dot" />Multi-chain · Attribution rewards</div>
@@ -258,7 +259,7 @@ export default function SwapPage() {
               </Suspense>
             </div>
           </div>
-        </div>
+        </div></div>
       </>
     </MwAuthGuard>
   )

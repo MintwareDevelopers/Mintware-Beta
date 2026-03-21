@@ -100,7 +100,7 @@ function ProfileContent() {
   const maxScore = data?.signals?.reduce((s, sig) => s + sig.max, 0) ?? 925
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" style={{ background: 'var(--color-mw-bg)' }}>
       <ReferralSheet
         stats={refStats}
         trigger={isFirstConnect && !loading && !!data}
@@ -108,7 +108,7 @@ function ProfileContent() {
       {/* Dark hero header */}
       <div className="mw-grid-overlay bg-mw-ink relative overflow-hidden pt-9 animate-fade-up max-sm:pt-6">
         <div className="absolute top-[-60px] right-[10%] w-[320px] h-[320px] rounded-full bg-[radial-gradient(circle,rgba(0,82,255,0.2)_0%,transparent_65%)] pointer-events-none" />
-        <div className="max-w-[960px] mx-auto px-12 max-sm:px-5">
+        <div className="max-w-[960px] mx-auto px-8 max-sm:px-5">
           <div className="flex items-start gap-[22px] pb-7 relative max-sm:flex-wrap">
             <div className="w-[82px] h-[82px] rounded-[20px] bg-[rgba(255,255,255,0.07)] border-[1.5px] border-[rgba(255,255,255,0.12)] flex items-center justify-center text-[36px] font-bold text-[rgba(255,255,255,0.9)] shrink-0 relative font-[var(--font-mono),'DM_Mono',monospace]">
               {avatarLetter}
@@ -176,7 +176,7 @@ function ProfileContent() {
         </div>
 
         <div className="border-t border-[rgba(255,255,255,0.06)]">
-          <div className="max-w-[960px] mx-auto px-12 max-sm:px-5 flex items-stretch overflow-x-auto">
+          <div className="max-w-[960px] mx-auto px-8 max-sm:px-5 flex items-stretch overflow-x-auto">
             <div className="flex flex-col gap-[3px] px-5 py-3.5 border-r border-[rgba(255,255,255,0.06)] shrink-0 bg-[rgba(0,82,255,0.1)] border-t-2 border-t-mw-brand -mt-px">
               <span className="text-[10px] font-bold tracking-[0.8px] uppercase text-[rgba(255,255,255,0.25)] whitespace-nowrap">Attribution score</span>
               <span className="text-[#6b9fff] font-[var(--font-mono),'DM_Mono',monospace] text-sm font-semibold whitespace-nowrap">
@@ -214,7 +214,7 @@ function ProfileContent() {
 
       {/* Tabs */}
       <div className="pt-5 bg-transparent">
-        <div className="max-w-[960px] mx-auto px-12 max-sm:px-5">
+        <div className="max-w-[960px] mx-auto px-8 max-sm:px-5">
           <div className="flex gap-2 max-sm:flex-wrap max-sm:gap-1.5">
             {(['portfolio', 'score', 'badge', 'invite', 'rewards'] as Tab[]).map(t => (
               <div
@@ -237,7 +237,7 @@ function ProfileContent() {
 
       {/* Body */}
       <div className="bg-transparent pb-20">
-        <div className="max-w-[960px] mx-auto px-12 max-sm:px-5 pt-5 [animation:fadeUp_0.4s_0.08s_ease_both]">
+        <div className="max-w-[960px] mx-auto px-8 max-sm:px-5 pt-5 [animation:fadeUp_0.4s_0.08s_ease_both]">
 
           {activeTab === 'portfolio' && (
             <>
@@ -250,11 +250,11 @@ function ProfileContent() {
                   <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-mw-brand mb-3.5 block">
                     Earning opportunities for your wallet
                   </span>
-                  <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-col gap-3">
                     {data.uvOpportunities.map((op, i) => (
                       <div
                         key={i}
-                        className="flex items-start gap-3.5 px-[18px] py-4 border border-mw-border rounded-[14px] transition-all duration-150 bg-white shadow-[0_1px_4px_rgba(26,26,46,0.04)] hover:border-[rgba(0,82,255,0.25)] hover:shadow-md hover:-translate-y-px"
+                        className="flex items-start gap-3.5 px-[18px] py-4 border border-mw-border rounded-[14px] transition-all duration-150 bg-white shadow-[var(--shadow-card)] hover:border-[rgba(0,82,255,0.25)] hover:shadow-md hover:-translate-y-px"
                       >
                         <div
                           className="w-10 h-10 rounded-[10px] flex items-center justify-center text-lg shrink-0"
@@ -300,7 +300,7 @@ function ProfileContent() {
           )}
 
           {activeTab === 'score' && (
-            <div className="bg-white border border-mw-border rounded-[20px] p-6 shadow-[0_1px_4px_rgba(26,26,46,0.04)]">
+            <div className="bg-white border border-mw-border rounded-[20px] p-6 shadow-[var(--shadow-card)]">
               <div className="flex items-center justify-between mb-[22px]">
                 <span className="text-[10px] font-bold text-mw-brand tracking-[1.5px] uppercase">Attribution score</span>
                 <span className="text-[11px] text-white bg-mw-brand px-3 py-1 rounded-full font-semibold">{tier} tier</span>
@@ -455,7 +455,7 @@ function ProfileContent() {
           )}
 
           {activeTab === 'badge' && (
-            <div className="text-center px-6 py-12 bg-white border border-mw-border rounded-[20px] shadow-[0_1px_4px_rgba(26,26,46,0.04)]">
+            <div className="text-center px-6 py-12 bg-white border border-mw-border rounded-[20px] shadow-[var(--shadow-card)]">
               {data ? (
                 <>
                   <div className="text-[56px] mb-3.5 leading-none">{data.character?.icon ?? '🏅'}</div>

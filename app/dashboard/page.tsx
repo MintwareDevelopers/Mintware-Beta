@@ -82,9 +82,9 @@ function DashboardContent() {
   const upcomingCount = upcomingCampaigns.length
 
   const stats = [
-    { label: 'Total pool value', value: totalPool > 0 ? fmtUSD(totalPool) : '—', sub: `↑ ${liveCount} active campaign${liveCount !== 1 ? 's' : ''}` },
-    { label: 'Daily payout',     value: totalDaily > 0 ? fmtUSD(totalDaily) : '—', sub: 'distributed per day' },
-    { label: 'Your points',      value: userScore !== null ? userScore.toLocaleString() : '0', sub: wallet ? 'Attribution score' : 'Start trading to earn', subGray: !wallet },
+    { label: 'Total pool value', value: totalPool > 0 ? fmtUSD(totalPool) : '—', sub: `↑ ${liveCount} active campaign${liveCount !== 1 ? 's' : ''}`, valueColor: 'var(--color-mw-brand)' },
+    { label: 'Daily payout',     value: totalDaily > 0 ? fmtUSD(totalDaily) : '—', sub: 'distributed per day', valueColor: 'var(--color-mw-green)' },
+    { label: 'Your points',      value: userScore !== null ? userScore.toLocaleString() : '0', sub: wallet ? 'Attribution score' : 'Start trading to earn', subGray: !wallet, valueColor: 'var(--color-mw-brand)' },
     { label: 'Min score',        value: minScore !== null ? `${minScore}+` : '—', sub: 'to qualify', subGray: true },
   ]
 
@@ -111,43 +111,44 @@ function DashboardContent() {
   return (
     <>
       <style>{`
-        .db-page { padding: 28px 28px 48px; max-width: 1100px; margin: 0 auto; }
-        .db-tag  { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 500; color: var(--color-mw-live); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 8px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-wrap  { background: var(--color-mw-bg); min-height: 100vh; }
+        .db-page { padding: 24px 28px 48px; max-width: 1100px; margin: 0 auto; }
+        .db-tag  { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--color-mw-live); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 8px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-tag-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-mw-live); }
-        .db-title { font-size: 30px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); line-height: 1.1; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-title { font-size: 30px; font-weight: 700; letter-spacing: -0.5px; color: var(--color-mw-ink); line-height: 1.1; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-sub   { font-size: 14px; color: var(--color-mw-ink-3); margin-top: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 24px 0 28px; }
-        .db-stat  { background: var(--color-mw-surface-card); border: 0.5px solid var(--color-mw-border); border-radius: var(--radius-md); padding: 16px 18px; }
-        .db-stat-label { font-size: 11px; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .db-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; }
-        .db-stat-sub   { font-size: 11px; margin-top: 3px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-stat  { background: #fff; border-radius: var(--radius-md); padding: 18px 20px; box-shadow: var(--shadow-card); }
+        .db-stat-label { font-size: 10px; color: var(--color-mw-ink-3); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; }
+        .db-stat-value { font-size: 30px; font-weight: 700; letter-spacing: -0.8px; color: var(--color-mw-ink); font-family: 'DM Mono', monospace; line-height: 1; }
+        .db-stat-sub   { font-size: 11px; margin-top: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-tabs   { display: flex; gap: 4px; margin-bottom: 20px; }
         .db-tab    { padding: 7px 16px; border-radius: var(--radius-xl); font-size: 13px; cursor: pointer; border: none; background: none; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; transition: background var(--transition-fast), color var(--transition-fast); }
-        .db-tab.active { background: var(--color-mw-brand); color: #fff; font-weight: 500; }
+        .db-tab.active { background: var(--color-mw-brand); color: #fff; font-weight: 600; }
         .db-filters { display: flex; gap: 8px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
         .db-filter  { padding: 5px 14px; border-radius: var(--radius-xl); font-size: 12px; cursor: pointer; border: 0.5px solid rgba(0,0,0,0.1); background: #fff; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; display: inline-flex; align-items: center; gap: 4px; }
         .db-filter.active { border-color: var(--color-mw-brand); color: var(--color-mw-brand); background: var(--color-mw-brand-dim); font-weight: 500; }
         .db-filter-count { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; background: var(--color-mw-brand); color: #fff; font-size: 10px; font-weight: 600; }
-        .db-section-title { font-size: 13px; font-weight: 500; color: var(--color-mw-ink-3); margin-bottom: 12px; letter-spacing: 0.2px; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-section-title { font-size: 10px; font-weight: 700; color: var(--color-mw-ink-3); margin-bottom: 14px; letter-spacing: 1.2px; text-transform: uppercase; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-grid  { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 24px; }
         .db-upcoming { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
-        .db-upc-row  { display: flex; align-items: center; gap: 16px; padding: 24px; background: var(--color-mw-surface-card); border: 0.5px dashed rgba(0,0,0,0.15); border-radius: var(--radius-md); cursor: pointer; transition: border-color var(--transition-fast), background var(--transition-fast); }
-        .db-upc-row:hover { border-color: rgba(79,126,247,0.3); border-style: dashed; background: #f5f5f8; }
-        .db-upc-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; border: 0.5px solid var(--color-mw-border); background: #fff; color: var(--color-mw-ink-3); font-family: 'DM Mono', monospace; }
+        .db-upc-row  { display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: #fff; border: 0.5px dashed rgba(79,126,247,0.25); border-radius: var(--radius-md); cursor: pointer; transition: box-shadow var(--transition-fast), border-color var(--transition-fast); box-shadow: var(--shadow-card); }
+        .db-upc-row:hover { border-color: rgba(79,126,247,0.4); box-shadow: var(--shadow-card-hover); }
+        .db-upc-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; border: 0.5px solid var(--color-mw-border); background: var(--color-mw-bg); color: var(--color-mw-ink-3); font-family: 'DM Mono', monospace; }
         .db-upc-name { font-size: 14px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; margin-bottom: 3px; }
         .db-upc-meta { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-upc-right { margin-left: auto; text-align: right; flex-shrink: 0; }
-        .db-upc-pool  { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
+        .db-upc-pool  { font-size: 12px; color: var(--color-mw-green); font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 600; }
         .db-upc-badge { font-size: 12px; font-weight: 500; color: #f59e0b; font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-activity { margin-top: 28px; }
-        .db-act-list { display: flex; flex-direction: column; gap: 8px; }
-        .db-act-row  { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; border: 0.5px solid var(--color-mw-border); border-radius: 10px; }
+        .db-act-list { display: flex; flex-direction: column; gap: 6px; }
+        .db-act-row  { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #fff; box-shadow: var(--shadow-card); border-radius: 10px; }
         .db-act-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
         .db-act-text { flex: 1; font-size: 13px; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
         .db-act-time { font-size: 11px; color: var(--color-mw-ink-5); font-family: 'Plus Jakarta Sans', sans-serif; white-space: nowrap; }
         .db-act-pts  { font-size: 13px; font-weight: 600; color: var(--color-mw-live); font-family: 'DM Mono', monospace; white-space: nowrap; }
-        .db-act-empty { padding: 24px; text-align: center; color: var(--color-mw-ink-5); font-size: 13px; font-family: 'Plus Jakarta Sans', sans-serif; border: 0.5px solid var(--color-mw-border); border-radius: 10px; background: var(--color-mw-surface-card); }
-        .db-skeleton  { background: var(--color-mw-surface-card); border-radius: var(--radius-md); border: 0.5px solid var(--color-mw-border); padding: 20px; min-height: 160px; }
+        .db-act-empty { padding: 32px 24px; text-align: center; color: var(--color-mw-ink-3); font-size: 13px; font-family: 'Plus Jakarta Sans', sans-serif; border-radius: 10px; background: #fff; box-shadow: var(--shadow-card); }
+        .db-skeleton  { background: #fff; border-radius: var(--radius-md); box-shadow: var(--shadow-card); padding: 20px; min-height: 160px; }
         .db-coming-soon { padding: 28px; display: flex; flex-direction: column; justify-content: center; gap: 8px; border: 0.5px dashed rgba(0,0,0,0.12); border-radius: var(--radius-md); opacity: 0.65; }
         @media (max-width: 800px) {
           .db-stats { grid-template-columns: repeat(2, 1fr); }
@@ -155,7 +156,7 @@ function DashboardContent() {
           .db-page  { padding: 20px 16px 40px; }
         }
       `}</style>
-      <div className="db-page">
+      <div className="db-wrap"><div className="db-page">
         {error && (
           <div style={{ background: 'rgba(239,68,68,0.08)', border: '0.5px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 13, color: '#dc2626', marginBottom: 16, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
             {error}
@@ -172,7 +173,7 @@ function DashboardContent() {
           {stats.map(s => (
             <div key={s.label} className="db-stat">
               <div className="db-stat-label">{s.label}</div>
-              <div className="db-stat-value">{s.value}</div>
+              <div className="db-stat-value" style={s.valueColor ? { color: s.valueColor } : undefined}>{s.value}</div>
               <div className="db-stat-sub" style={{ color: s.subGray ? 'var(--color-mw-ink-5)' : 'var(--color-mw-live)' }}>{s.sub}</div>
             </div>
           ))}
@@ -289,7 +290,7 @@ function DashboardContent() {
             </div>
           </>
         )}
-      </div>
+      </div></div>
     </>
   )
 }
