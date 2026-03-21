@@ -398,6 +398,7 @@ function CampaignDetailContent() {
                   participant={participant}
                   campaignId={campaignId}
                   walletAddress={address}
+                  refCode={refCode}
                 />
               )}
 

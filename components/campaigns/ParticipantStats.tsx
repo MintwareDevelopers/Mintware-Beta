@@ -12,7 +12,7 @@ import { fmtUSD } from '@/lib/api'
 
 export interface Participant {
   attribution_score: number
-  score_multiplier: string | number
+  score_multiplier?: string | number  // optional — legacy field, may be absent for new participants
   total_points: number
   total_earned_usd: string | number
   bridge_points?: number
@@ -29,6 +29,7 @@ interface ParticipantStatsProps {
   participant: Participant
   campaignId: string
   walletAddress?: string
+  refCode?: string | null  // from useReferral hook — basename-first format
 }
 
 function StatRow({ label, value, mono = true }: { label: string; value: string | number; mono?: boolean }) {
@@ -53,19 +54,19 @@ function StatRow({ label, value, mono = true }: { label: string; value: string |
   )
 }
 
-export function ParticipantStats({ participant: p, campaignId, walletAddress }: ParticipantStatsProps) {
-  const mult = typeof p.score_multiplier === 'string'
-    ? parseFloat(p.score_multiplier)
-    : p.score_multiplier ?? 1
-
-  // ref_code is deterministic: "mw_" + first 6 chars of address (after 0x), lowercase
-  const refCode = walletAddress
-    ? `mw_${walletAddress.slice(2, 8).toLowerCase()}`
+export function ParticipantStats({ participant: p, campaignId, walletAddress, refCode }: ParticipantStatsProps) {
+  // score_multiplier is a legacy DB field — only show if present and meaningfully > 1
+  const mult = p.score_multiplier != null
+    ? (typeof p.score_multiplier === 'string' ? parseFloat(p.score_multiplier) : p.score_multiplier)
     : null
 
+  // Use DB ref code (basename-first) if available, fall back to address-derived code
+  const effectiveRefCode = refCode
+    ?? (walletAddress ? `mw_${walletAddress.slice(2, 8).toLowerCase()}` : null)
+
   const refLink = p.ref_link
-    ?? (typeof window !== 'undefined' && refCode
-      ? `${window.location.origin}/campaign/${campaignId}?ref=${refCode}`
+    ?? (typeof window !== 'undefined' && effectiveRefCode
+      ? `${window.location.origin}/ref/${effectiveRefCode}`
       : '')
 
   async function copyRefLink() {
@@ -126,8 +127,10 @@ export function ParticipantStats({ participant: p, campaignId, walletAddress }: 
 
         <StatRow label="Total earned"        value={fmtUSD(Number(p.total_earned_usd))} />
         <StatRow label="Attribution score"   value={p.attribution_score} />
-        <StatRow label="Score multiplier"    value={`${mult.toFixed(2)}×`} />
-        {p.active_trading_days != null && (
+        {mult != null && mult > 1 && (
+          <StatRow label="Score multiplier"  value={`${mult.toFixed(2)}×`} />
+        )}
+        {p.active_trading_days != null && p.active_trading_days > 0 && (
           <StatRow label="Active trading days" value={p.active_trading_days} />
         )}
       </div>

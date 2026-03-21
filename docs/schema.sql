@@ -1,21 +1,35 @@
 -- =============================================================================
 -- Mintware Phase 1 — Canonical Production Schema
 --
--- Single source of truth. Last audited: 2026-03-19.
--- Reconstructed from all applied migrations (000003–000319).
+-- Single source of truth. Last audited: 2026-03-21.
+-- Reflects the ACTUAL live Supabase DB as confirmed by information_schema query.
 --
--- USAGE: This file documents the FINAL target schema.
--- To apply to a fresh Supabase project, run each section in order.
--- For an existing project with migrations already applied, use only for reference.
+-- USAGE: Reference only. Do NOT run this against an existing DB —
+-- use the migration files in supabase/migrations/ instead.
 --
--- MIGRATION ORDER (if applying from scratch):
---   1. This file (schema.sql) — creates all tables in dependency order
---   2. supabase/migrations/ — apply any new migrations on top
+-- Live DB confirmed tables (2026-03-21):
+--   activity, auth_nonces*, campaign_payouts, campaigns, daily_payouts,
+--   distributions, eas_attestations, epoch_state, participants,
+--   pending_rewards, referral_records, swap_events, team_applications,
+--   waitlist, wallet_activity*, wallet_profiles, whitelisted_teams
 --
--- TABLE DEPENDENCY ORDER:
---   campaigns → participants, activity, epoch_state, distributions,
---               pending_rewards, daily_payouts, campaign_payouts, swap_events
---   wallet_profiles → referral_records, (participants.referred_by)
+-- * auth_nonces and wallet_activity exist in the live DB but have no
+--   migration files and are not referenced by any app code. Treat as
+--   legacy/unknown — do not touch.
+--
+-- Live DB confirmed functions (2026-03-21):
+--   check_activation_threshold*  — no migration file, not in app code
+--   deduct_token_pool_reward     — migration 000003
+--   increment_earned_usd         — migration 000003
+--   increment_epoch_points       — migration 000003
+--   increment_participant_points — migration 20260321000001
+--   sync_referral_counts*        — no migration file; probably maintains
+--                                   wallet_profiles.total_referred / active_referred
+--   touch_wallet_last_seen*      — no migration file; probably updates last_seen_at
+--   update_epoch_state_updated_at — migration 000003 (trigger function)
+--
+-- * These functions exist in live DB but have no migration files.
+--   Do not recreate or modify them without investigation.
 -- =============================================================================
 
 
@@ -24,46 +38,38 @@
 -- =============================================================================
 
 -- wallet_profiles
--- One row per connected wallet. Created on first connect.
--- ref_code is deterministic: "mw_" + address.slice(2,8).toLowerCase()
--- Never depends on this table to compute ref_code (computed client-side).
+-- One row per connected wallet. Created on first connect via POST /api/auth/connect.
+-- ref_code is basename-first (e.g. "jake") or base58-encoded address fragment fallback.
+-- Legacy mw_xxxxxx codes still valid for wallets that connected before 2026-03-19.
+-- Extra columns in live DB (legacy, maintained by sync_referral_counts trigger):
+--   total_referred integer DEFAULT 0
+--   active_referred integer DEFAULT 0
 
 CREATE TABLE IF NOT EXISTS wallet_profiles (
-  address       text        PRIMARY KEY,
-  ref_code      text        UNIQUE NOT NULL,
-  last_seen_at  timestamptz NOT NULL DEFAULT now(),
-  created_at    timestamptz NOT NULL DEFAULT now()
+  address         text          PRIMARY KEY,
+  ref_code        varchar(32)   NOT NULL UNIQUE,
+  last_seen_at    timestamptz   NOT NULL DEFAULT now(),
+  created_at      timestamptz   DEFAULT now()
 );
 
 ALTER TABLE wallet_profiles ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Profiles are publicly readable" ON wallet_profiles;
 CREATE POLICY "Profiles are publicly readable"
   ON wallet_profiles FOR SELECT USING (true);
-
-DROP POLICY IF EXISTS "Wallet can insert own profile" ON wallet_profiles;
-CREATE POLICY "Wallet can insert own profile"
-  ON wallet_profiles FOR INSERT
-  WITH CHECK (true);  -- enforced at API layer via service role
-
-DROP POLICY IF EXISTS "Wallet can update own profile" ON wallet_profiles;
-CREATE POLICY "Wallet can update own profile"
-  ON wallet_profiles FOR UPDATE
-  USING (true);
 
 
 -- referral_records
 -- One row per referred wallet. Status: pending → active.
+-- Extra column in live DB: activated_at timestamptz
 
 CREATE TABLE IF NOT EXISTS referral_records (
-  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  referrer    text        NOT NULL REFERENCES wallet_profiles (address) ON DELETE CASCADE,
-  referred    text        NOT NULL REFERENCES wallet_profiles (address) ON DELETE CASCADE,
-  ref_code    text        NOT NULL,
-  status      text        NOT NULL DEFAULT 'pending'
-                CHECK (status IN ('pending', 'active')),
-  created_at  timestamptz NOT NULL DEFAULT now(),
-
+  id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer      text        NOT NULL REFERENCES wallet_profiles (address) ON DELETE CASCADE,
+  referred      text        NOT NULL REFERENCES wallet_profiles (address) ON DELETE CASCADE,
+  ref_code      text        NOT NULL,
+  status        text        NOT NULL DEFAULT 'pending'
+                  CHECK (status IN ('pending', 'active')),
+  created_at    timestamptz DEFAULT now(),
   UNIQUE (referrer, referred)
 );
 
@@ -72,15 +78,12 @@ CREATE INDEX IF NOT EXISTS referral_records_referred_idx ON referral_records (re
 
 ALTER TABLE referral_records ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Records readable by participant" ON referral_records;
 CREATE POLICY "Records readable by participant"
   ON referral_records FOR SELECT USING (true);
 
 
--- referral_stats (VIEW)
--- Aggregated per-wallet referral stats. Read-only. Joins wallet_profiles + referral_records.
--- NOTE: Actual view definition is in Supabase. Columns:
---   address, ref_code, ref_link, tree_size, tree_quality, sharing_score
+-- referral_stats (VIEW — defined in Supabase dashboard, not here)
+-- Columns: address, ref_code, ref_link, tree_size, tree_quality, sharing_score
 
 
 -- =============================================================================
@@ -88,70 +91,67 @@ CREATE POLICY "Records readable by participant"
 -- =============================================================================
 
 -- campaigns
--- Campaign metadata and configuration. Created via /create-campaign wizard.
--- Status transitions: draft → active → paused → ended → settled
+-- NOTE: Live DB has 3 extra legacy columns not in any migration:
+--   protocol text NOT NULL     — original field from Attribution Worker era
+--   pool_usd integer NOT NULL  — original pool amount field
+--   daily_payout_usd integer   — original daily payout field
+-- These are read by the Attribution Worker and should not be dropped.
 
 CREATE TABLE IF NOT EXISTS campaigns (
-  id                      text        PRIMARY KEY,  -- UUID string from Attribution Worker or our API
-
-  -- Identity
+  id                      text        PRIMARY KEY,
   name                    text        NOT NULL,
-  description             text,
-  status                  text        NOT NULL DEFAULT 'active',
-  creator                 text,       -- wallet address that created this campaign
+  status                  text        DEFAULT 'live',
+  creator                 text,
 
   -- Type + token
   campaign_type           text        DEFAULT 'points'
                             CHECK (campaign_type IN ('token_pool', 'points')),
-  token_contract          text,       -- ERC-20 contract for the reward token
+  token_contract          text,
+  token_symbol            text,
   token_decimals          int         NOT NULL DEFAULT 18,
 
   -- Pool economics (token_pool campaigns)
-  token_allocation_usd    numeric,    -- total pool value at campaign start
+  token_allocation_usd    numeric,
   pool_remaining_usd      numeric     CHECK (pool_remaining_usd >= 0),
   claim_duration_mins     int         CHECK (claim_duration_mins BETWEEN 1 AND 10080),
-  buyer_reward_pct        numeric     DEFAULT 0
-                            CHECK (buyer_reward_pct >= 0 AND buyer_reward_pct <= 1),
-  referral_reward_pct     numeric     DEFAULT 0
-                            CHECK (referral_reward_pct >= 0 AND referral_reward_pct <= 5),
-  platform_fee_pct        numeric     DEFAULT 2
-                            CHECK (platform_fee_pct >= 0 AND platform_fee_pct <= 100),
-  daily_wallet_cap_usd    numeric     DEFAULT 0 CHECK (daily_wallet_cap_usd >= 0),
-  daily_pool_cap_usd      numeric     DEFAULT 0 CHECK (daily_pool_cap_usd >= 0),
+  buyer_reward_pct        numeric     DEFAULT 0,
+  referral_reward_pct     numeric     DEFAULT 0,
+  platform_fee_pct        numeric     DEFAULT 2,
+  daily_wallet_cap_usd    numeric     DEFAULT 0,
+  daily_pool_cap_usd      numeric     DEFAULT 0,
 
-  -- Points campaign configuration
+  -- Points campaign config
   use_score_multiplier    boolean     DEFAULT false,
-  min_score               int         DEFAULT 0,   -- min Attribution score to join
+  min_score               int         DEFAULT 0,
   payout_preset           text        DEFAULT 'top10'
                             CHECK (payout_preset IN ('top3','top5','top10','top20')),
-  referral_share_pct      numeric     NOT NULL DEFAULT 0
-                            CHECK (referral_share_pct >= 0 AND referral_share_pct <= 100),
-  min_daily_volume_usd    numeric     NOT NULL DEFAULT 25
-                            CHECK (min_daily_volume_usd >= 0),
-  max_points_per_wallet_pct numeric   NOT NULL DEFAULT 20
-                            CHECK (max_points_per_wallet_pct > 0 AND max_points_per_wallet_pct <= 100),
+  referral_share_pct      numeric     NOT NULL DEFAULT 0,
+  min_daily_volume_usd    numeric     NOT NULL DEFAULT 25,
+  max_points_per_wallet_pct numeric   NOT NULL DEFAULT 20,
 
   -- Chain + contract
-  chain                   text,       -- 'base', 'core', 'bnb', etc.
-  contract_address        text,       -- MintwareDistributor deployed for this campaign's chain
+  chain                   text,
+  contract_address        text,
 
-  -- Actions config (JSONB — array of action objects with points, type, limits)
+  -- Actions config
   actions                 jsonb,
+
+  -- Social links (manual override; DexScreener auto-fetched by UI when token_contract set)
+  links                   jsonb,
 
   -- Timestamps
   start_date              timestamptz,
   end_date                timestamptz,
-  created_at              timestamptz NOT NULL DEFAULT now(),
+  created_at              timestamptz DEFAULT now(),
   updated_at              timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS campaigns_status_idx ON campaigns (status);
+CREATE INDEX IF NOT EXISTS campaigns_status_idx  ON campaigns (status);
 CREATE INDEX IF NOT EXISTS campaigns_creator_idx ON campaigns (creator);
-CREATE INDEX IF NOT EXISTS campaigns_chain_idx ON campaigns (chain);
+CREATE INDEX IF NOT EXISTS campaigns_chain_idx   ON campaigns (chain);
 
 ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Campaigns are publicly readable" ON campaigns;
 CREATE POLICY "Campaigns are publicly readable"
   ON campaigns FOR SELECT USING (true);
 
@@ -162,123 +162,89 @@ CREATE POLICY "Campaigns are publicly readable"
 
 -- participants
 -- One row per wallet per campaign. Created by POST /api/campaigns/join.
--- attribution_score + sharing_score snapshotted at join time; refreshed by epoch processor.
+--
+-- NOTE: Live DB has additional legacy columns (NOT written by any current code):
+--   score_multiplier numeric DEFAULT 1.0   — old pre-computed multiplier, stale for new rows
+--   bridge_points integer DEFAULT 0        — old per-type breakdown, use activity table instead
+--   trading_points integer DEFAULT 0
+--   referral_bridge_points integer DEFAULT 0
+--   referral_trade_points integer DEFAULT 0
+--   active_trading_days integer DEFAULT 0
+--   last_active timestamptz                — replaced by last_active_at
+-- These columns are 0/null for all participants joined after 2026-03-18.
+-- Do not write to them. Do not drop them yet.
+--
+-- NOTE: total_points is integer in live DB (migration declared numeric).
+-- increment_participant_points() uses numeric arithmetic — implicit cast works
+-- since points are always whole numbers.
 
 CREATE TABLE IF NOT EXISTS participants (
   id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  campaign_id       text        NOT NULL REFERENCES campaigns (id) ON DELETE CASCADE,
+  campaign_id       text        REFERENCES campaigns (id) ON DELETE CASCADE,
   wallet            text        NOT NULL,
 
-  -- Score snapshots (at join time, refreshed periodically)
   attribution_score int         NOT NULL DEFAULT 0,
   sharing_score     int         NOT NULL DEFAULT 0,
-
-  -- Observer mode (watches without counting toward rewards)
   observer          boolean     NOT NULL DEFAULT false,
 
-  -- Running tallies
-  total_points      numeric     NOT NULL DEFAULT 0 CHECK (total_points >= 0),
-  total_earned_usd  numeric     NOT NULL DEFAULT 0 CHECK (total_earned_usd >= 0),
+  total_points      int         NOT NULL DEFAULT 0,
+  total_earned_usd  numeric     NOT NULL DEFAULT 0,
   daily_volume_usd  numeric     NOT NULL DEFAULT 0,
 
-  -- Referral attribution
   referred_by       text        REFERENCES wallet_profiles (address) ON DELETE SET NULL,
 
-  -- Timestamps
   joined_at         timestamptz NOT NULL DEFAULT now(),
   last_active_at    timestamptz,
-  created_at        timestamptz NOT NULL DEFAULT now(),
   updated_at        timestamptz NOT NULL DEFAULT now()
 );
 
--- One participant per wallet per campaign
 CREATE UNIQUE INDEX IF NOT EXISTS participants_campaign_wallet_uidx
   ON participants (campaign_id, wallet);
-
-CREATE INDEX IF NOT EXISTS participants_wallet_idx ON participants (wallet);
+CREATE INDEX IF NOT EXISTS participants_wallet_idx   ON participants (wallet);
 CREATE INDEX IF NOT EXISTS participants_campaign_idx ON participants (campaign_id);
-
--- Epoch processor: rank active non-observers by points, tiebreak by joined_at
-CREATE INDEX IF NOT EXISTS idx_participants_joined_at
-  ON participants (campaign_id, joined_at ASC);
-
--- Daily active non-observers (for observer cron)
-CREATE INDEX IF NOT EXISTS idx_participants_daily_active
-  ON participants (campaign_id, daily_volume_usd)
-  WHERE observer = false AND daily_volume_usd > 0;
-
--- Auto-maintain updated_at
-CREATE OR REPLACE FUNCTION update_participants_updated_at()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS participants_updated_at_trigger ON participants;
-CREATE TRIGGER participants_updated_at_trigger
-  BEFORE UPDATE ON participants
-  FOR EACH ROW EXECUTE FUNCTION update_participants_updated_at();
 
 ALTER TABLE participants ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Participants are publicly readable" ON participants;
 CREATE POLICY "Participants are publicly readable"
   ON participants FOR SELECT USING (true);
--- Writes via service role only
 
 
 -- activity
 -- Per-action event log. Dedup by (wallet, tx_hash, action_type).
--- For token_pool: points_earned = 0 (rewards tracked in pending_rewards).
--- For points: points_earned = the credited amount.
+-- NOTE: Live DB has extra columns not in migration: metadata jsonb, amount_usd numeric
+-- NOTE: points_earned is integer in live DB (migration declared numeric) — fine in practice
+-- NOTE: campaign_id and tx_hash are nullable in live DB (migration declared NOT NULL)
 
 CREATE TABLE IF NOT EXISTS activity (
   id            uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  campaign_id   text        NOT NULL REFERENCES campaigns (id) ON DELETE CASCADE,
+  campaign_id   text        REFERENCES campaigns (id) ON DELETE CASCADE,
   wallet        text        NOT NULL,
   action_type   text        NOT NULL
                   CHECK (action_type IN ('bridge', 'trade', 'referral_bridge', 'referral_trade')),
-  points_earned numeric     NOT NULL DEFAULT 0,
-  tx_hash       text        NOT NULL,
+  points_earned int         NOT NULL DEFAULT 0,
+  tx_hash       text,
   referred_by   text,
-  recorded_at   timestamptz NOT NULL DEFAULT now(),
-  created_at    timestamptz NOT NULL DEFAULT now()
+  recorded_at   timestamptz DEFAULT now()
 );
 
--- Primary dedup: one credit per (wallet, tx_hash, action_type)
 CREATE UNIQUE INDEX IF NOT EXISTS activity_wallet_tx_action_uidx
   ON activity (wallet, tx_hash, action_type);
-
--- Idempotency lookup
 CREATE INDEX IF NOT EXISTS activity_tx_hash_wallet_idx
   ON activity (tx_hash, wallet, action_type);
-
--- Daily dedup: one trade action per wallet per day per campaign
 CREATE INDEX IF NOT EXISTS activity_campaign_wallet_action_time_idx
   ON activity (campaign_id, wallet, action_type, recorded_at);
-
--- Referral credit lookups
 CREATE INDEX IF NOT EXISTS activity_referred_by_idx
-  ON activity (referred_by)
-  WHERE referred_by IS NOT NULL;
+  ON activity (referred_by) WHERE referred_by IS NOT NULL;
 
 ALTER TABLE activity ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Activity is publicly readable" ON activity;
 CREATE POLICY "Activity is publicly readable"
   ON activity FOR SELECT USING (true);
--- Writes via service role only
 
 
 -- =============================================================================
 -- REWARD PIPELINE — TOKEN POOL
 -- =============================================================================
-
--- pending_rewards
--- Token pool reward locks. One row per tx_hash per reward_type.
--- Status flow: locked → claimable → claimed (or → expired)
 
 CREATE TABLE IF NOT EXISTS pending_rewards (
   id                  uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -289,8 +255,8 @@ CREATE TABLE IF NOT EXISTS pending_rewards (
                         CHECK (reward_type IN ('buyer', 'referrer', 'platform_fee')),
   token_contract      text        NOT NULL,
   amount_wei          numeric     NOT NULL CHECK (amount_wei >= 0),
-  reward_usd          numeric     NOT NULL DEFAULT 0 CHECK (reward_usd >= 0),
-  purchase_amount_usd numeric     NOT NULL CHECK (purchase_amount_usd >= 0),
+  reward_usd          numeric     NOT NULL DEFAULT 0,
+  purchase_amount_usd numeric     NOT NULL,
   tx_hash             text        NOT NULL,
   claimable_at        timestamptz NOT NULL,
   claimed_at          timestamptz,
@@ -299,32 +265,23 @@ CREATE TABLE IF NOT EXISTS pending_rewards (
   created_at          timestamptz NOT NULL DEFAULT now()
 );
 
--- Dedup: one reward entry per tx per type
 CREATE UNIQUE INDEX IF NOT EXISTS pending_rewards_tx_type_uidx
   ON pending_rewards (tx_hash, reward_type);
-
 CREATE INDEX IF NOT EXISTS pending_rewards_wallet_idx
   ON pending_rewards (wallet, status);
-
 CREATE INDEX IF NOT EXISTS pending_rewards_campaign_idx
   ON pending_rewards (campaign_id, status);
 
 ALTER TABLE pending_rewards ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Wallets read own pending rewards" ON pending_rewards;
 CREATE POLICY "Wallets read own pending rewards"
   ON pending_rewards FOR SELECT
   USING (wallet = current_setting('request.jwt.claims', true)::json->>'address');
 
 
 -- =============================================================================
--- REWARD PIPELINE — EPOCH / MERKLE (BOTH CAMPAIGN TYPES)
+-- REWARD PIPELINE — EPOCH / MERKLE
 -- =============================================================================
-
--- epoch_state
--- Active epoch window and running point accumulator per campaign.
--- One active epoch per campaign at a time (enforced by partial unique index).
--- Status: active → settling → complete (or → error)
 
 CREATE TABLE IF NOT EXISTS epoch_state (
   id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -333,87 +290,61 @@ CREATE TABLE IF NOT EXISTS epoch_state (
   epoch_start     timestamptz NOT NULL,
   epoch_end       timestamptz NOT NULL,
   epoch_pool_usd  numeric     NOT NULL CHECK (epoch_pool_usd >= 0),
-  total_points    numeric     NOT NULL DEFAULT 0 CHECK (total_points >= 0),
+  total_points    numeric     NOT NULL DEFAULT 0,
   status          text        NOT NULL DEFAULT 'active'
                     CHECK (status IN ('active', 'settling', 'complete', 'error')),
   created_at      timestamptz NOT NULL DEFAULT now(),
   updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
--- One active epoch per campaign
 CREATE UNIQUE INDEX IF NOT EXISTS epoch_state_campaign_active_uidx
-  ON epoch_state (campaign_id)
-  WHERE status = 'active';
-
--- History lookup
+  ON epoch_state (campaign_id) WHERE status = 'active';
 CREATE UNIQUE INDEX IF NOT EXISTS epoch_state_campaign_epoch_uidx
   ON epoch_state (campaign_id, epoch_number);
 
-CREATE OR REPLACE FUNCTION update_epoch_state_updated_at()
-RETURNS trigger LANGUAGE plpgsql AS $$
-BEGIN
-  NEW.updated_at = now();
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS epoch_state_updated_at_trigger ON epoch_state;
-CREATE TRIGGER epoch_state_updated_at_trigger
-  BEFORE UPDATE ON epoch_state
-  FOR EACH ROW EXECUTE FUNCTION update_epoch_state_updated_at();
-
 ALTER TABLE epoch_state ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Epoch state is publicly readable" ON epoch_state;
 CREATE POLICY "Epoch state is publicly readable"
   ON epoch_state FOR SELECT USING (true);
 
 
 -- distributions
--- Merkle tree publication records. One per campaign per epoch.
--- tree_json: StandardMerkleTree.dump() output (JSONB).
--- Status: pending → published → finalized
+-- oracle_signature: EIP-712 over (campaignId, epochNumber, merkleRoot, deadline)
+-- deadline: unix timestamp (bigint) — included in oracle signature, passed to claim()
 
 CREATE TABLE IF NOT EXISTS distributions (
   id                uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   campaign_id       text        NOT NULL,
   epoch_number      int         NOT NULL CHECK (epoch_number >= 1),
-  merkle_root       text,                              -- NULL until published
-  total_amount_usd  numeric     NOT NULL DEFAULT 0 CHECK (total_amount_usd >= 0),
-  total_amount_wei  numeric     CHECK (total_amount_wei >= 0),
+  merkle_root       text,
+  total_amount_usd  numeric     NOT NULL DEFAULT 0,
+  total_amount_wei  numeric,
   participant_count int         NOT NULL DEFAULT 0,
-  tree_json         jsonb,                             -- StandardMerkleTree.dump()
-  ipfs_cid          text,                              -- IPFS CID of full tree
-  oracle_signature  text,                              -- EIP-712 oracle signature
-  onchain_id        numeric,                           -- uint256 from createDistribution()
-  tx_hash           text,                              -- on-chain publish tx
+  tree_json         jsonb,
+  ipfs_cid          text,
+  oracle_signature  text,
+  deadline          bigint,     -- unix timestamp passed to claim(); NULL until oracle signs
+  onchain_id        numeric,    -- DEPRECATED: old createDistribution() ID, no longer written
+  tx_hash           text,
   status            text        NOT NULL DEFAULT 'pending'
                       CHECK (status IN ('pending', 'published', 'finalized')),
   created_at        timestamptz NOT NULL DEFAULT now(),
   published_at      timestamptz
 );
 
--- One distribution per campaign per epoch
 CREATE UNIQUE INDEX IF NOT EXISTS distributions_campaign_epoch_uidx
   ON distributions (campaign_id, epoch_number);
-
--- Claim UI lookup by onchain_id
-CREATE UNIQUE INDEX IF NOT EXISTS distributions_onchain_id_uidx
-  ON distributions (onchain_id)
-  WHERE onchain_id IS NOT NULL;
-
 CREATE INDEX IF NOT EXISTS distributions_status_idx ON distributions (status);
 
 ALTER TABLE distributions ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Distributions are publicly readable" ON distributions;
 CREATE POLICY "Distributions are publicly readable"
   ON distributions FOR SELECT USING (true);
 
 
 -- daily_payouts
--- Per-wallet payout record per epoch. Stores Merkle proof for claim verification.
--- canonical payout table — use this, not campaign_payouts.
+-- Per-wallet Merkle payout per epoch. Merkle proof stored for claim verification.
+-- eas_uid: linked after CampaignReward EAS attestation fires (nullable)
 
 CREATE TABLE IF NOT EXISTS daily_payouts (
   id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -427,124 +358,81 @@ CREATE TABLE IF NOT EXISTS daily_payouts (
   token_price_usd numeric     NOT NULL CHECK (token_price_usd > 0),
   merkle_proof    jsonb       NOT NULL DEFAULT '[]'::jsonb,
   claimed_at      timestamptz,
+  eas_uid         text,
   created_at      timestamptz NOT NULL DEFAULT now()
 );
 
--- One payout record per wallet per epoch per campaign
 CREATE UNIQUE INDEX IF NOT EXISTS daily_payouts_campaign_epoch_wallet_uidx
   ON daily_payouts (campaign_id, epoch_number, wallet);
-
--- Claim status: unclaimed payouts for a wallet
 CREATE INDEX IF NOT EXISTS daily_payouts_wallet_unclaimed_idx
-  ON daily_payouts (wallet, claimed_at)
-  WHERE claimed_at IS NULL;
-
+  ON daily_payouts (wallet, claimed_at) WHERE claimed_at IS NULL;
 CREATE INDEX IF NOT EXISTS daily_payouts_campaign_epoch_idx
   ON daily_payouts (campaign_id, epoch_number);
 
 ALTER TABLE daily_payouts ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Daily payouts are publicly readable" ON daily_payouts;
 CREATE POLICY "Daily payouts are publicly readable"
   ON daily_payouts FOR SELECT USING (true);
 
 
 -- =============================================================================
--- OBSERVER / LEGACY (DEPRECIATING — see ISSUES.md ISSUE-008)
+-- EAS ATTESTATIONS
 -- =============================================================================
 
--- campaign_payouts
--- Daily rank + referral payout records. Created by observer cron.
--- Status: Superseded by daily_payouts for the primary claim flow.
--- Retained for historical leaderboard data only. Do not write new data here.
-
-CREATE TABLE IF NOT EXISTS campaign_payouts (
-  id           bigserial    PRIMARY KEY,
-  campaign_id  text         NOT NULL REFERENCES campaigns (id) ON DELETE CASCADE,
-  wallet       text         NOT NULL,
-  epoch_date   date         NOT NULL,
-  rank         int          NOT NULL DEFAULT 0,
-  points       int          NOT NULL DEFAULT 0,
-  amount_usd   numeric      NOT NULL DEFAULT 0,
-  type         text         NOT NULL DEFAULT 'rank'
-                 CHECK (type IN ('rank', 'referral')),
-  created_at   timestamptz  NOT NULL DEFAULT now(),
-
-  UNIQUE (campaign_id, wallet, epoch_date, type)
+CREATE TABLE IF NOT EXISTS eas_attestations (
+  id           uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  wallet       text        NOT NULL,
+  schema_name  text        NOT NULL,  -- 'AttributionScore'|'SwapActivity'|'ReferralLink'|'CampaignReward'
+  eas_uid      text        NOT NULL UNIQUE,
+  attested_at  timestamptz NOT NULL DEFAULT now(),
+  metadata     jsonb       DEFAULT '{}'
 );
 
-CREATE INDEX IF NOT EXISTS idx_payouts_campaign_epoch
-  ON campaign_payouts (campaign_id, epoch_date DESC);
+CREATE INDEX IF NOT EXISTS eas_attestations_wallet_schema
+  ON eas_attestations (wallet, schema_name);
+CREATE INDEX IF NOT EXISTS eas_attestations_score_recency
+  ON eas_attestations (wallet, attested_at desc) WHERE schema_name = 'AttributionScore';
 
-CREATE INDEX IF NOT EXISTS idx_payouts_wallet
-  ON campaign_payouts (wallet, epoch_date DESC);
+ALTER TABLE eas_attestations ENABLE ROW LEVEL SECURITY;
 
-ALTER TABLE campaign_payouts ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "payouts_select_public" ON campaign_payouts;
-CREATE POLICY "payouts_select_public"
-  ON campaign_payouts FOR SELECT USING (true);
+CREATE POLICY "eas_attestations_select_public"
+  ON eas_attestations FOR SELECT USING (true);
 
 
 -- =============================================================================
--- SWAP EVENTS (AUDIT LOG)
+-- WAITLIST
 -- =============================================================================
 
--- swap_events
--- Append-only webhook log from Molten router.
--- Not used for reward logic — rewards are computed in processSwapEvent().
--- Used for audit, debugging, and replay.
-
-CREATE TABLE IF NOT EXISTS swap_events (
-  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
-  tx_hash     text        NOT NULL UNIQUE,
-  wallet      text        NOT NULL,
-  campaign_id text,
-  token_in    text,
-  token_out   text,
-  amount_usd  numeric,
-  chain_id    int,
-  raw_payload jsonb,
-  created_at  timestamptz NOT NULL DEFAULT now()
+CREATE TABLE IF NOT EXISTS waitlist (
+  id        uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  email     text        NOT NULL UNIQUE,
+  joined_at timestamptz NOT NULL DEFAULT now(),
+  source    text        DEFAULT 'landing'
 );
-
-CREATE INDEX IF NOT EXISTS swap_events_wallet_idx ON swap_events (wallet);
-CREATE INDEX IF NOT EXISTS swap_events_campaign_idx ON swap_events (campaign_id);
-
-ALTER TABLE swap_events ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Swap events are publicly readable" ON swap_events;
-CREATE POLICY "Swap events are publicly readable"
-  ON swap_events FOR SELECT USING (true);
 
 
 -- =============================================================================
 -- TEAM WHITELIST
 -- =============================================================================
 
--- whitelisted_teams
--- Approved teams allowed to create points campaigns.
--- Inserted manually by admin or via approval of team_applications.
-
 CREATE TABLE IF NOT EXISTS whitelisted_teams (
   wallet          text        PRIMARY KEY,
   protocol_name   text        NOT NULL,
   website         text,
-  contact_email   text,
-  approved_at     timestamptz NOT NULL DEFAULT now(),
-  status          text        NOT NULL DEFAULT 'active'
-                    CHECK (status IN ('active', 'suspended'))
+  contact_email   text        NOT NULL,
+  approved_at     timestamptz,
+  approved_by     text,
+  created_at      timestamptz DEFAULT now(),
+  status          text        NOT NULL DEFAULT 'pending'
+                    CHECK (status IN ('pending', 'approved', 'rejected'))
 );
 
 ALTER TABLE whitelisted_teams ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Whitelist is publicly readable" ON whitelisted_teams;
-CREATE POLICY "Whitelist is publicly readable"
-  ON whitelisted_teams FOR SELECT USING (true);
+CREATE POLICY "wallet sees own whitelist status"
+  ON whitelisted_teams FOR SELECT
+  USING (wallet = current_setting('app.current_wallet', true));
 
-
--- team_applications
--- Inbound applications for whitelist access.
 
 CREATE TABLE IF NOT EXISTS team_applications (
   id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -552,88 +440,118 @@ CREATE TABLE IF NOT EXISTS team_applications (
   protocol_name   text        NOT NULL,
   website         text,
   contact_email   text        NOT NULL,
-  pool_size_usd   numeric,
+  pool_size_usd   text,
+  description     text,
+  submitted_at    timestamptz DEFAULT now(),
   status          text        NOT NULL DEFAULT 'pending'
-                    CHECK (status IN ('pending', 'approved', 'rejected')),
-  submitted_at    timestamptz NOT NULL DEFAULT now()
+                    CHECK (status IN ('pending', 'reviewed', 'approved', 'rejected'))
 );
 
 ALTER TABLE team_applications ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Applications are publicly readable" ON team_applications;
-CREATE POLICY "Applications are publicly readable"
-  ON team_applications FOR SELECT USING (true);
+CREATE POLICY "wallet sees own application"
+  ON team_applications FOR SELECT
+  USING (wallet = current_setting('app.current_wallet', true));
+
+
+-- =============================================================================
+-- SWAP EVENTS (AUDIT LOG)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS swap_events (
+  id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  tx_hash     text        NOT NULL UNIQUE,
+  wallet      text        NOT NULL,
+  chain       text,
+  token_in    text,
+  token_out   text,
+  amount_usd  numeric,
+  is_bridge   boolean     NOT NULL DEFAULT false,
+  occurred_at timestamptz,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE swap_events ENABLE ROW LEVEL SECURITY;
+
+
+-- =============================================================================
+-- LEGACY / DEPRECATED TABLES (still in live DB, not written by current code)
+-- =============================================================================
+
+-- campaign_payouts: superseded by daily_payouts. Retained for historical data.
+-- Do not write new data here.
+
+CREATE TABLE IF NOT EXISTS campaign_payouts (
+  id          bigserial   PRIMARY KEY,
+  campaign_id text        NOT NULL REFERENCES campaigns (id) ON DELETE CASCADE,
+  wallet      text        NOT NULL,
+  epoch_date  date        NOT NULL,
+  rank        int         NOT NULL DEFAULT 0,
+  points      int         NOT NULL DEFAULT 0,
+  amount_usd  numeric     NOT NULL DEFAULT 0,
+  type        text        NOT NULL DEFAULT 'rank' CHECK (type IN ('rank', 'referral')),
+  status      text        NOT NULL DEFAULT 'pending',
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (campaign_id, wallet, epoch_date, type)
+);
+
+ALTER TABLE campaign_payouts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "payouts_select_public"
+  ON campaign_payouts FOR SELECT USING (true);
 
 
 -- =============================================================================
 -- DATABASE FUNCTIONS
 -- =============================================================================
 
--- increment_epoch_points
--- Called by swapHook after crediting trade/referral points.
--- Atomically adds delta to total_points on the active epoch.
-
-CREATE OR REPLACE FUNCTION increment_epoch_points(
-  p_campaign_id text,
-  p_delta       numeric
-) RETURNS void LANGUAGE plpgsql AS $$
+-- increment_epoch_points: atomic total_points increment on active epoch
+CREATE OR REPLACE FUNCTION increment_epoch_points(p_campaign_id text, p_delta numeric)
+RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   UPDATE epoch_state
-     SET total_points = total_points + p_delta,
-         updated_at   = now()
-   WHERE campaign_id  = p_campaign_id
-     AND status       = 'active';
+     SET total_points = total_points + p_delta, updated_at = now()
+   WHERE campaign_id = p_campaign_id AND status = 'active';
 END;
 $$;
 
-
--- deduct_token_pool_reward
--- Atomically checks pool_remaining_usd >= required and decrements.
--- Returns TRUE on success, FALSE if pool insufficient or campaign not found.
--- Uses FOR UPDATE to prevent race conditions.
-
-CREATE OR REPLACE FUNCTION deduct_token_pool_reward(
-  p_campaign_id  text,
-  p_required_usd numeric
-) RETURNS boolean LANGUAGE plpgsql AS $$
-DECLARE
-  v_remaining numeric;
+-- deduct_token_pool_reward: atomic pool_remaining_usd check + decrement
+CREATE OR REPLACE FUNCTION deduct_token_pool_reward(p_campaign_id text, p_required_usd numeric)
+RETURNS boolean LANGUAGE plpgsql AS $$
+DECLARE v_remaining numeric;
 BEGIN
-  SELECT pool_remaining_usd
-    INTO v_remaining
-    FROM campaigns
-   WHERE id = p_campaign_id
-     AND campaign_type = 'token_pool'
-   FOR UPDATE;
-
+  SELECT pool_remaining_usd INTO v_remaining
+    FROM campaigns WHERE id = p_campaign_id AND campaign_type = 'token_pool' FOR UPDATE;
   IF NOT FOUND THEN RETURN false; END IF;
   IF v_remaining < p_required_usd THEN RETURN false; END IF;
-
-  UPDATE campaigns
-     SET pool_remaining_usd = pool_remaining_usd - p_required_usd
-   WHERE id = p_campaign_id;
-
+  UPDATE campaigns SET pool_remaining_usd = pool_remaining_usd - p_required_usd WHERE id = p_campaign_id;
   RETURN true;
 END;
 $$;
 
+-- increment_earned_usd: atomic lifetime total_earned_usd increment per participant
+CREATE OR REPLACE FUNCTION increment_earned_usd(p_campaign_id text, p_wallet text, p_amount numeric)
+RETURNS void LANGUAGE plpgsql AS $$
+BEGIN
+  UPDATE participants SET total_earned_usd = total_earned_usd + p_amount, updated_at = now()
+   WHERE campaign_id = p_campaign_id AND wallet = p_wallet;
+END;
+$$;
 
--- increment_earned_usd
--- Called by epoch-end cron after writing each payout record.
--- Increments lifetime total_earned_usd on the participant row.
-
-CREATE OR REPLACE FUNCTION increment_earned_usd(
-  p_campaign_id text,
-  p_wallet      text,
-  p_amount      numeric
-) RETURNS void LANGUAGE plpgsql AS $$
+-- increment_participant_points: atomic total_points increment per wallet per campaign
+CREATE OR REPLACE FUNCTION increment_participant_points(p_campaign_id text, p_wallet text, p_delta numeric)
+RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   UPDATE participants
-     SET total_earned_usd = total_earned_usd + p_amount,
-         updated_at       = now()
-   WHERE campaign_id = p_campaign_id
-     AND wallet      = p_wallet;
+     SET total_points = total_points + p_delta, last_active_at = now(), updated_at = now()
+   WHERE campaign_id = p_campaign_id AND wallet = p_wallet;
 END;
+$$;
+
+-- update_epoch_state_updated_at: trigger function for epoch_state.updated_at
+CREATE OR REPLACE FUNCTION update_epoch_state_updated_at()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN NEW.updated_at = now(); RETURN NEW; END;
 $$;
 
 
@@ -641,18 +559,16 @@ $$;
 -- NOTES
 -- =============================================================================
 --
--- DEPRECATED TABLES: campaign_payouts is retained for historical data only.
--- New code should write to daily_payouts. campaign_payouts will be removed
--- once historical data is migrated. See ISSUES.md ISSUE-008.
---
--- REFERRAL_STATS VIEW: Defined in Supabase dashboard, not in this file.
--- It aggregates wallet_profiles + referral_records and computes:
---   address, ref_code, ref_link, tree_size, tree_quality, sharing_score
---
--- RLS NOTE: All tables have RLS enabled. Reads are public (anon key).
--- All writes go through service role (bypasses RLS). No direct client writes.
+-- UNKNOWN OBJECTS (live DB, no migration file, not in app code):
+--   auth_nonces table          — unknown origin, do not touch
+--   wallet_activity table      — unknown origin, do not touch
+--   check_activation_threshold() — unknown origin, do not touch
+--   sync_referral_counts()     — probably maintains wallet_profiles.total_referred
+--   touch_wallet_last_seen()   — probably updates wallet_profiles.last_seen_at
 --
 -- CHAIN CONSTRAINT: campaigns.chain has no CHECK constraint.
--- Validation happens at application layer (config/chains.ts).
--- Historic data includes non-standard chain names.
+-- Chain validation is at application layer. Historic data has non-standard names.
+--
+-- RLS: All tables have RLS enabled. Reads are public (anon key).
+-- All writes go through service role (bypasses RLS). No direct client writes.
 -- =============================================================================
