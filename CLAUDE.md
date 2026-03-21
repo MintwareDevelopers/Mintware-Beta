@@ -530,6 +530,8 @@ Checks before any reward credit:
 - [x] **LIFI_API_KEY** — Renamed from `NEXT_PUBLIC_LIFI_API_KEY`. Server-only in Vercel. Old public key deleted.
 - [x] **Design token unification** — All hardcoded hex values replaced with `var(--token)` references across all 10 files. Source of truth: `app/globals.css` `@theme` block + `@layer components`.
 - [x] **MintGuard security hardening** — All 8 items complete (see Security Hardening section above).
+- [x] **Surface hierarchy overhaul (commit 92566e8, merged to main)** — Blue-grey `#F8F9FC` app bg; white stat cards with shadow tokens; 30px stat values on dashboard; table header bg on leaderboard; swap banner + route row shadows; profile body bg tint; nav logo 19px/800; `CampaignCard` 3px blue left accent + 20px stat values; shadow tokens on `CampaignHeader` and `InviteTab`. Files: `app/globals.css`, `app/dashboard/page.tsx`, `app/leaderboard/page.tsx`, `app/swap/page.tsx`, `app/profile/page.tsx`, `components/MwNav.tsx`, `components/campaigns/CampaignCard.tsx`, `components/campaigns/CampaignHeader.tsx`, `components/referral/InviteTab.tsx`.
+- [x] **Full redesign v1 (branch: full-redesign-v1)** — Attribution-as-hero principle applied across all pages. Dark `#0A0D14` hero on dashboard (score + tier + campaign stats), leaderboard (user rank at 56px), swap (attribution context panel), profile (score at 56px as primary number), campaign detail (multiplier projection card before JoinButton). Leaderboard me-row left border accent. `--radius-2xl`, `--shadow-feature` tokens added. Connect Wallet button upgraded to `#2563EB`/weight 600.
 
 ---
 
