@@ -5,20 +5,21 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
 export function MwAuthGuard({ children }: { children: React.ReactNode }) {
-  const { isConnected, isConnecting, isReconnecting } = useAccount()
+  const { status } = useAccount()
   const router = useRouter()
 
   useEffect(() => {
-    // Wait for both connecting AND reconnecting to finish before redirecting.
-    // isReconnecting = wagmi restoring wallet from localStorage on page load.
-    // Without this check, the guard fires during reconnect and kicks users home.
-    if (!isConnecting && !isReconnecting && !isConnected) {
+    // Only redirect when wagmi has definitively resolved to disconnected.
+    // 'reconnecting' = restoring connection from cookie storage — never redirect here.
+    // 'connecting'   = fresh connect in progress — never redirect here.
+    // 'disconnected' = no wallet, no stored session — redirect to home.
+    if (status === 'disconnected') {
       router.replace('/')
     }
-  }, [isConnected, isConnecting, isReconnecting, router])
+  }, [status, router])
 
-  // Show blank while wallet state is being resolved
-  if (!isConnected) {
+  // Show blank while connecting / reconnecting from cookie storage
+  if (status !== 'connected') {
     return <div className="min-h-screen bg-mw-surface" />
   }
 
