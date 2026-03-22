@@ -8,6 +8,11 @@ export function MwAuthGuard({ children }: { children: React.ReactNode }) {
   const { status } = useAccount()
   const router = useRouter()
 
+  // In local dev, skip auth entirely so pages can be tweaked without a wallet
+  if (process.env.NODE_ENV === 'development') {
+    return <>{children}</>
+  }
+
   useEffect(() => {
     // Only redirect when wagmi has definitively resolved to disconnected.
     // 'reconnecting' = restoring connection from cookie storage — never redirect here.
