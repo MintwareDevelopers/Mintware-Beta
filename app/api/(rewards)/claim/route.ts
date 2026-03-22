@@ -20,9 +20,7 @@
 //   1. Choose a deadline (e.g. Date.now()/1000 + 30 days) when signing the root.
 //   2. Include deadline in the RootPublication typedData message.
 //   3. Store deadline in distributions.deadline alongside oracle_signature.
-//   Without deadline in the DB, this route returns a console warning and
-//   falls back to a 90-day window from now — remove this fallback after
-//   the oracle backend is updated.
+//   Without deadline in the DB, this route returns 503.
 //
 // Response:
 //   200 { distribution_id, campaign_id, epoch_number, merkle_root,
@@ -49,17 +47,19 @@ import { StandardMerkleTree } from '@openzeppelin/merkle-tree'
 interface RateLimitEntry { count: number; resetAt: number }
 const rateLimitMap = new Map<string, RateLimitEntry>()
 const RATE_LIMIT_MAX = 10
+const RATE_LIMIT_IP_MAX = 30   // per-IP ceiling across all addresses
 const RATE_LIMIT_WINDOW_MS = 60_000
 
 function checkRateLimit(key: string): boolean {
-  const now = Date.now()
+  const now   = Date.now()
+  const limit = key.startsWith('ip:') ? RATE_LIMIT_IP_MAX : RATE_LIMIT_MAX
   const entry = rateLimitMap.get(key)
 
   if (!entry || now > entry.resetAt) {
     rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
     return true
   }
-  if (entry.count >= RATE_LIMIT_MAX) {
+  if (entry.count >= limit) {
     return false
   }
   entry.count++
@@ -85,8 +85,11 @@ export async function GET(req: NextRequest) {
   // lowercases addresses when building leaves.
   const address = rawAddress.toLowerCase()
 
-  // Rate limit: 10 requests per address per 60s
-  if (!checkRateLimit(address)) {
+  // Rate limit: 10 requests per address per 60s, and 30 per IP per 60s
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim()
+    ?? req.headers.get('x-real-ip')
+    ?? 'unknown'
+  if (!checkRateLimit(address) || !checkRateLimit(`ip:${ip}`)) {
     return NextResponse.json(
       { error: 'Too many requests — max 10 per minute per address' },
       { status: 429 }
@@ -222,17 +225,18 @@ export async function GET(req: NextRequest) {
   }
 
   // ---------------------------------------------------------------------------
-  // Resolve deadline — oracle backend must store this in distributions.deadline.
-  // If null (oracle not yet updated), fall back to 90 days from now.
-  // REMOVE this fallback once the oracle backend is writing deadlines.
+  // Resolve deadline — oracle backend must store this in distributions.deadline
+  // when it signs the Merkle root. Without the original deadline the on-chain
+  // claim() will revert (the EIP-712 digest includes the deadline).
   // ---------------------------------------------------------------------------
-  let deadline: number
-  if (dist.deadline != null) {
-    deadline = dist.deadline
-  } else {
-    console.warn('[claim] distributions.deadline is null — oracle backend not yet updated. Using 90-day fallback.')
-    deadline = Math.floor(Date.now() / 1000) + 90 * 24 * 60 * 60
+  if (dist.deadline == null) {
+    console.error('[claim] distributions.deadline is null — oracle must store deadline when signing')
+    return NextResponse.json(
+      { error: 'Distribution deadline not set — oracle backend not yet updated' },
+      { status: 500 }
+    )
   }
+  const deadline = dist.deadline
 
   // ---------------------------------------------------------------------------
   // Return everything needed to call claim() on MintwareDistributor v2:

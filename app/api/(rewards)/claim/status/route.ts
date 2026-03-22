@@ -21,6 +21,7 @@
 //     epoch_number: number
 //     merkle_root: string | null
 //     oracle_signature: string | null   // EIP-712 sig; null while status='pending'
+//     deadline: number | null           // unix timestamp; null until oracle publishes
 //     amount_wei: string
 //     payout_usd: number | null
 //     token_symbol: string | null
@@ -104,10 +105,15 @@ export async function GET(req: NextRequest) {
   // ---------------------------------------------------------------------------
   const campaignIds = [...new Set(rows.map((r) => r.campaign_id))]
 
+  // Scope to only the (campaign_id, epoch_number) pairs present in this wallet's payouts.
+  // This prevents the query from ballooning as campaigns accumulate epochs over time.
+  const epochNumbers = [...new Set(rows.map((r) => r.epoch_number))]
+
   const { data: dists, error: distErr } = await supabase
     .from('distributions')
-    .select('id, campaign_id, epoch_number, status, merkle_root, oracle_signature, published_at')
+    .select('id, campaign_id, epoch_number, status, merkle_root, oracle_signature, deadline, published_at')
     .in('campaign_id', campaignIds)
+    .in('epoch_number', epochNumbers)
 
   if (distErr) {
     console.error('[claim/status] distributions query failed:', distErr.message)
@@ -142,6 +148,7 @@ export async function GET(req: NextRequest) {
       distribution_id:  dist?.id ?? null,
       merkle_root:      dist?.merkle_root ?? null,
       oracle_signature: dist?.oracle_signature ?? null,
+      deadline:         dist?.deadline ?? null,
       campaign_id:      row.campaign_id,
       campaign_name:    campaign?.name ?? 'Unknown Campaign',
       epoch_number:     row.epoch_number,

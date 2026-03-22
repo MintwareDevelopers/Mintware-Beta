@@ -127,6 +127,11 @@ export async function getTokenPrice(symbol: string): Promise<number> {
 // amount_wei = floor((payout_usd / token_price_usd) * 10^decimals)
 // Returns as bigint for precision — stored as string in DB (numeric type).
 // ---------------------------------------------------------------------------
+// WARNING: Uses floating-point arithmetic — precision loss is possible for tokens with
+// 18 decimals and small USD payouts (< $0.01). The intermediate float division
+// `payout_usd / token_price_usd` can lose ~15 significant digits.
+// TODO: Replace with BigInt integer arithmetic or a library like decimal.js before
+// production high-value campaigns are running.
 export function usdToWei(
   payout_usd: number,
   token_price_usd: number,

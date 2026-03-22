@@ -148,6 +148,7 @@ async function processExpiredEpoch(
         campaign_id,
         epoch_number,
         epoch_pool_usd: epoch.epoch_pool_usd,
+        epoch_end: epoch.epoch_end,
       },
       processorResult
     )
@@ -263,6 +264,25 @@ export async function GET(req: NextRequest) {
   console.log('[epoch-end] cron started at', now)
 
   const supabase = createSupabaseServiceClient()
+
+  // ── Detect stuck-settling epochs ──────────────────────────────────────────
+  // An epoch stuck in 'settling' for more than 2 hours indicates a failed run
+  // that needs manual investigation. Log a warning for each one found.
+  const stuckThreshold = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+  const { data: stuckEpochs } = await supabase
+    .from('epoch_state')
+    .select('id, campaign_id, epoch_number, updated_at')
+    .eq('status', 'settling')
+    .lt('updated_at', stuckThreshold)
+
+  if (stuckEpochs && stuckEpochs.length > 0) {
+    for (const e of stuckEpochs) {
+      console.warn(
+        `[epoch-end] ⚠ STUCK EPOCH: campaign=${e.campaign_id} epoch=${e.epoch_number} ` +
+        `has been in 'settling' since ${e.updated_at} — manual investigation required`
+      )
+    }
+  }
 
   // Find all epochs that have ended and are still 'active'
   // 'settling' epochs may be retries from a previous failed run — skip them here

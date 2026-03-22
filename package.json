@@ -9,12 +9,20 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "test": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run",
+    "test:watch": "node --experimental-vm-modules node_modules/vitest/vitest.mjs",
+    "test:coverage": "node --experimental-vm-modules node_modules/vitest/vitest.mjs run --coverage",
+    "test:contracts": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat test --config hardhat.config.cts",
+    "test:all": "pnpm test && pnpm test:contracts",
     "hardhat:compile": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat compile --config hardhat.config.cts",
     "hardhat:test": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat test --config hardhat.config.cts",
     "hardhat:deploy:base-sepolia": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network base_sepolia --config hardhat.config.cts",
     "hardhat:deploy:base": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network base --config hardhat.config.cts",
     "hardhat:deploy:core-dao": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network core_dao --config hardhat.config.cts",
-    "hardhat:deploy:bnb": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network bnb --config hardhat.config.cts"
+    "hardhat:deploy:bnb": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network bnb --config hardhat.config.cts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@coinbase/wallet-sdk": "^4.3.7",
