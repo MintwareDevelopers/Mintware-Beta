@@ -40,6 +40,8 @@ export interface Campaign {
   campaign_type: CampaignType
   name: string
   status: CampaignStatus
+  closed: boolean           // true when operator calls closeCampaign() on-chain; blocks new credits
+  closed_at: string | null  // ISO timestamp set when closed; starts the 7-day withdrawal cooldown
   start_date: string | null
   end_date: string | null
 
@@ -94,12 +96,12 @@ export interface ActivityRow {
   id: string
   campaign_id: string
   wallet: string
-  action: ActionType
-  points: number | null       // null for token_pool campaigns
+  action_type: ActionType     // DB column: action_type
+  points_earned: number | null  // DB column: points_earned; null for token_pool campaigns
   reward_usd: number | null   // null for points campaigns
   tx_hash: string
-  referrer: string | null
-  credited_at: string
+  referred_by: string | null  // DB column: referred_by
+  recorded_at: string         // DB column: recorded_at (was credited_at)
 }
 
 // ---------------------------------------------------------------------------
@@ -134,6 +136,7 @@ export type SkipReason =
   | 'tx_failed'
   | 'wallet_mismatch'
   | 'fee_not_paid'
+  | 'router_mismatch'
 
 export interface AttributionResult {
   credited: boolean

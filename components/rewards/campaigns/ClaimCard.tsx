@@ -53,6 +53,32 @@ const DISTRIBUTOR_ABI = [
   },
 ] as const
 
+// batchClaim ABI — submits multiple claims in one transaction.
+// Each element of claimsData maps to a ClaimParams struct on the contract.
+const BATCH_DISTRIBUTOR_ABI = [
+  {
+    name: 'batchClaim',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'claimsData',
+        type: 'tuple[]',
+        components: [
+          { name: 'campaignId',      type: 'string'    },
+          { name: 'epochNumber',     type: 'uint256'   },
+          { name: 'merkleRoot',      type: 'bytes32'   },
+          { name: 'oracleSignature', type: 'bytes'     },
+          { name: 'deadline',        type: 'uint256'   },
+          { name: 'amount',          type: 'uint256'   },
+          { name: 'merkleProof',     type: 'bytes32[]' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
 // ---------------------------------------------------------------------------
 // Chain ID mapping
 // ---------------------------------------------------------------------------
@@ -97,9 +123,10 @@ interface ClaimableReward {
   claimed_at: string | null
   published_at: string | null
   created_at: string
-  // New zero-oracle-gas fields — returned by /api/claim
+  // Zero-oracle-gas fields — populated from /api/claim/status (deadline) or /api/claim (proof)
   merkle_root: string | null
   oracle_signature: string | null
+  deadline: number | null
 }
 
 interface StatusResponse {
@@ -491,6 +518,17 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [isBatching, setIsBatching]       = useState(false)
+  const [batchError, setBatchError]       = useState<string | null>(null)
+  const [batchTxHash, setBatchTxHash]     = useState<`0x${string}` | undefined>(undefined)
+
+  const { writeContract: writeBatch, isPending: isBatchPending } = useWriteContract()
+  const { isLoading: isBatchConfirming, isSuccess: isBatchSuccess } =
+    useWaitForTransactionReceipt({ hash: batchTxHash })
+
+  const currentChainId = useChainId()
+  const { switchChain } = useSwitchChain()
+
   const fetchStatus = useCallback(async () => {
     if (!wallet) return
     setIsLoading(true)
@@ -506,6 +544,68 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
       setIsLoading(false)
     }
   }, [wallet])
+
+  // Refetch after successful batch claim
+  useEffect(() => {
+    if (isBatchSuccess) fetchStatus()
+  }, [isBatchSuccess, fetchStatus])
+
+  const handleBatchClaim = useCallback(async (rewards: ClaimableReward[]) => {
+    if (rewards.length === 0 || isBatching) return
+    setIsBatching(true)
+    setBatchError(null)
+
+    try {
+      // Fetch proofs for all claimable rewards in parallel
+      const proofResults = await Promise.all(
+        rewards.map(async (r) => {
+          if (!r.distribution_id) return null
+          const res = await fetch(
+            `/api/claim?address=${encodeURIComponent(r.token_address ?? '')}&distribution_id=${encodeURIComponent(r.distribution_id)}`
+          )
+          if (!res.ok) return null
+          return await res.json() as {
+            amount_wei: string; merkle_proof: string[]; oracle_signature: string
+            merkle_root: string; campaign_id: string; epoch_number: number; deadline: number
+          }
+        })
+      )
+
+      // Filter out any proofs that failed
+      const validProofs = proofResults.filter((p): p is NonNullable<typeof p> => p !== null)
+      if (validProofs.length === 0) {
+        setBatchError('Failed to fetch claim proofs. Try claiming individually.')
+        return
+      }
+
+      // All rewards in a batch must share the same contract + chain
+      const contractAddress = rewards[0].contract_address as `0x${string}`
+
+      writeBatch(
+        {
+          address: contractAddress,
+          abi: BATCH_DISTRIBUTOR_ABI,
+          functionName: 'batchClaim',
+          args: [
+            validProofs.map((p, i) => ({
+              campaignId:      p.campaign_id,
+              epochNumber:     BigInt(p.epoch_number),
+              merkleRoot:      p.merkle_root as `0x${string}`,
+              oracleSignature: p.oracle_signature as `0x${string}`,
+              deadline:        BigInt(p.deadline),
+              amount:          BigInt(p.amount_wei),
+              merkleProof:     p.merkle_proof as `0x${string}`[],
+            })),
+          ],
+        },
+        { onSuccess: (hash) => setBatchTxHash(hash) }
+      )
+    } catch (err) {
+      setBatchError((err as Error).message ?? 'Batch claim failed')
+    } finally {
+      setIsBatching(false)
+    }
+  }, [isBatching, writeBatch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchStatus()
@@ -630,26 +730,91 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
           {/* Header */}
           <div className="cc-header">
             <span className="cc-title">Campaign Rewards</span>
-            {data.rewards.length > 0 && (
-              <div className="cc-totals">
-                {data.totals.claimable_count > 0 && (
-                  <span className="cc-chip claimable">
-                    {data.totals.claimable_count} claimable
-                  </span>
-                )}
-                {data.totals.claimed_count > 0 && (
-                  <span className="cc-chip claimed">
-                    {data.totals.claimed_count} claimed
-                  </span>
-                )}
-                {data.totals.pending_count > 0 && (
-                  <span className="cc-chip pending">
-                    {data.totals.pending_count} pending
-                  </span>
-                )}
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* Claim All — only shown when 2+ claimable rewards share a contract */}
+              {(() => {
+                // Group claimable by contract_address
+                const batchable = claimable.filter(
+                  r => r.contract_address && r.distribution_id
+                )
+                const contractGroups = new Map<string, ClaimableReward[]>()
+                for (const r of batchable) {
+                  const key = r.contract_address!
+                  if (!contractGroups.has(key)) contractGroups.set(key, [])
+                  contractGroups.get(key)!.push(r)
+                }
+                // Show "Claim All" for the first group with 2+ rewards
+                const batchGroup = [...contractGroups.values()].find(g => g.length >= 2)
+                if (!batchGroup) return null
+                const isBusy = isBatching || isBatchPending || isBatchConfirming
+                return (
+                  <button
+                    style={{
+                      padding: '6px 14px', borderRadius: 20,
+                      background: '#3A5CE8', color: '#fff',
+                      border: 'none', fontSize: 12, fontWeight: 600,
+                      cursor: isBusy ? 'not-allowed' : 'pointer',
+                      opacity: isBusy ? 0.6 : 1,
+                      transition: 'opacity 0.15s',
+                      fontFamily: 'var(--font-jakarta,"Plus Jakarta Sans",sans-serif)',
+                    }}
+                    disabled={isBusy}
+                    onClick={() => handleBatchClaim(batchGroup)}
+                    title={`Claim ${batchGroup.length} rewards in one transaction`}
+                  >
+                    {isBatchPending
+                      ? 'Confirm in wallet…'
+                      : isBatchConfirming
+                      ? 'Confirming…'
+                      : isBatching
+                      ? 'Preparing…'
+                      : `Claim All (${batchGroup.length})`}
+                  </button>
+                )
+              })()}
+              {data.rewards.length > 0 && (
+                <div className="cc-totals">
+                  {data.totals.claimable_count > 0 && (
+                    <span className="cc-chip claimable">
+                      {data.totals.claimable_count} claimable
+                    </span>
+                  )}
+                  {data.totals.claimed_count > 0 && (
+                    <span className="cc-chip claimed">
+                      {data.totals.claimed_count} claimed
+                    </span>
+                  )}
+                  {data.totals.pending_count > 0 && (
+                    <span className="cc-chip pending">
+                      {data.totals.pending_count} pending
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Batch claim feedback */}
+          {batchError && (
+            <div style={{
+              marginBottom: 12, padding: '10px 14px',
+              background: 'rgba(194,83,122,0.06)', border: '1px solid rgba(194,83,122,0.2)',
+              borderRadius: 10, fontSize: 12, color: '#C2537A',
+              fontFamily: 'var(--font-jakarta,"Plus Jakarta Sans",sans-serif)',
+            }}>
+              {batchError}
+            </div>
+          )}
+          {isBatchSuccess && (
+            <div style={{
+              marginBottom: 12, padding: '10px 14px',
+              background: 'rgba(42,158,138,0.06)', border: '1px solid rgba(42,158,138,0.2)',
+              borderRadius: 10, fontSize: 12, color: '#2A9E8A',
+              fontFamily: 'var(--font-jakarta,"Plus Jakarta Sans",sans-serif)',
+            }}>
+              ✓ All rewards claimed successfully!
+            </div>
+          )}
 
           {/* Empty state */}
           {data.rewards.length === 0 && (

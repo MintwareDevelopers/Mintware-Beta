@@ -33,6 +33,7 @@ import type {
   SkipReason,
 } from '@/lib/rewards/types'
 import { getActionPoints } from '@/lib/rewards/types'
+import { computeMultipliers } from '@/lib/rewards/epochProcessor'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -92,6 +93,12 @@ function getSwapRpcUrl(chain: string | null): string | null {
   }
 }
 
+// Known LI.FI router addresses — any tx that isn't routed through one of these
+// should not earn rewards. Lowercased for case-insensitive comparison.
+const LIFI_ROUTERS: ReadonlySet<string> = new Set([
+  '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae', // LI.FI Diamond (EVM)
+])
+
 async function verifySwapTx(
   txHash: string,
   wallet: string,
@@ -100,7 +107,11 @@ async function verifySwapTx(
   const rpcUrl = getSwapRpcUrl(chain)
   if (!rpcUrl) return { ok: true }  // unknown chain — fail-open
 
-  const treasuryAddress = (process.env.MINTWARE_TREASURY_ADDRESS ?? '').toLowerCase().replace('0x', '')
+  const treasuryRaw     = (process.env.MINTWARE_TREASURY_ADDRESS ?? '').toLowerCase().replace('0x', '')
+  // ABI-encoded address params are zero-padded to 32 bytes (64 hex chars).
+  // Match both the raw 40-char form and the padded 64-char ABI form.
+  const treasuryAddress    = treasuryRaw
+  const treasuryAddressPad = treasuryRaw.padStart(64, '0')
 
   try {
     const [receipt, tx] = await Promise.all([
@@ -124,11 +135,20 @@ async function verifySwapTx(
       return { ok: false, skip_reason: 'wallet_mismatch' }
     }
 
+    // 2b. tx.to must be a known LI.FI router
+    if (tx.to && !LIFI_ROUTERS.has(tx.to.toLowerCase())) {
+      console.warn(
+        `[swapHook] verifySwapTx: tx.to=${tx.to} is not a known LI.FI router for tx ${txHash} ` +
+        `(chain=${chain}) — reward denied (router_mismatch)`
+      )
+      return { ok: false, skip_reason: 'router_mismatch' }
+    }
+
     // 3. Treasury address must appear in calldata (fee enforcement)
     //    Only enforced when MINTWARE_TREASURY_ADDRESS is configured.
     if (treasuryAddress) {
       const input = (tx.input ?? '').toLowerCase()
-      if (!input.includes(treasuryAddress)) {
+      if (!input.includes(treasuryAddress) && !input.includes(treasuryAddressPad)) {
         console.warn(
           `[swapHook] verifySwapTx: treasury not in calldata for tx ${txHash} ` +
           `(chain=${chain}) — reward denied (fee_not_paid)`
@@ -178,7 +198,7 @@ async function processTokenPool(
   // Platform fee is ONLY taken on successful referrals — no referrer, no Mintware cut.
   // Fee comes out of the pool at the percentage set at campaign creation, not added on top.
   const platform_fee_usd = referrer
-    ? (event.amount_usd * campaign.platform_fee_pct) / 100
+    ? (event.amount_usd * (campaign.platform_fee_pct ?? 0)) / 100
     : 0
 
   const total_deduction = buyer_reward_usd + referral_reward_usd + platform_fee_usd
@@ -328,7 +348,7 @@ async function processTokenPool(
 
   const { error: rewardErr } = await supabase
     .from('pending_rewards')
-    .upsert(rewardRows, { onConflict: 'tx_hash,reward_type', ignoreDuplicates: true })
+    .upsert(rewardRows, { onConflict: 'campaign_id,tx_hash,reward_type', ignoreDuplicates: true })
 
   if (rewardErr) {
     console.error('[swapHook] pending_rewards insert error:', rewardErr)
@@ -372,8 +392,22 @@ async function processPoints(
   referrer: string | null
 ): Promise<AttributionResult> {
   const actions = campaign.actions ?? {}
-  const trade_points = getActionPoints(actions['trade'], 8)           // default from spec
-  const referral_trade_points = getActionPoints(actions['referral_trade'], 8)
+  const base_trade_points = getActionPoints(actions['trade'], 8)
+  const base_referral_trade_points = getActionPoints(actions['referral_trade'], 8)
+
+  // Apply score multipliers at point-credit time (design decision: multipliers live here,
+  // not at epoch payout time). Only applied when campaign.use_score_multiplier === true.
+  // Uses attribution_score as a proxy percentile (score/925 * 100) to avoid a live API call
+  // on every swap event. Fails open at 1.0× if scoring data is unavailable.
+  let multiplierCombined = 1.0
+  if (campaign.use_score_multiplier) {
+    const att_pct = Math.min(100, (participant.attribution_score / 925) * 100)
+    const multipliers = computeMultipliers(att_pct, participant.sharing_score ?? 0)
+    multiplierCombined = multipliers.combined
+  }
+
+  const trade_points          = Math.round(base_trade_points * multiplierCombined)
+  const referral_trade_points = Math.round(base_referral_trade_points * multiplierCombined)
 
   // Credit trade points to the swapping wallet — atomic increment (no race condition)
   const { error: ptsErr } = await supabase.rpc('increment_participant_points', {
@@ -410,11 +444,16 @@ async function processPoints(
 
     if (referrerParticipant) {
       // Atomic increment — no read-modify-write race condition
-      await supabase.rpc('increment_participant_points', {
+      const { error: refPtsErr } = await supabase.rpc('increment_participant_points', {
         p_campaign_id: campaign.id,
         p_wallet:      referrer,
         p_delta:       referral_trade_points,
       })
+      if (refPtsErr) {
+        console.error('[swapHook] referrer points increment error:', refPtsErr)
+        // Non-fatal: activity row is still written below; referrer points will be out of sync.
+        // This is logged for manual reconciliation — do not abort the swapper's credit.
+      }
 
       // Activity row — referrer trade credit
       await supabase.from('activity').insert({
@@ -484,6 +523,12 @@ export async function processSwapEvent(event: SwapEvent): Promise<AttributionRes
   if (campaign.status !== 'live') {
     return { credited: false, skip_reason: 'campaign_not_live' }
   }
+  // Belt-and-suspenders: also check the closed flag.
+  // closeCampaign() sets this directly; it may arrive before the status sync
+  // from the on-chain event listener updates campaign.status → 'ended'.
+  if ((campaign as Campaign & { closed?: boolean }).closed) {
+    return { credited: false, skip_reason: 'campaign_not_live' }
+  }
   if (campaign.end_date && new Date(campaign.end_date) < new Date(normalised.timestamp)) {
     return { credited: false, skip_reason: 'campaign_ended' }
   }
@@ -546,6 +591,7 @@ export async function processSwapEvent(event: SwapEvent): Promise<AttributionRes
     .from('referral_records')
     .select('referrer')
     .eq('referred', normalised.wallet)
+    .eq('status', 'active')   // only confirmed referrals earn rewards
     .maybeSingle()
 
   const referrer = referralRecord?.referrer ?? null
@@ -553,7 +599,12 @@ export async function processSwapEvent(event: SwapEvent): Promise<AttributionRes
   // 7. Branch on campaign type
   if (campaign.campaign_type === 'token_pool') {
     return processTokenPool(supabase, normalised, campaign as Campaign, referrer)
-  } else {
+  } else if (campaign.campaign_type === 'points') {
     return processPoints(supabase, normalised, campaign as Campaign, participant, referrer)
+  } else {
+    console.error(
+      `[swapHook] unknown campaign_type="${campaign.campaign_type}" for campaign ${campaign.id} — skipping`
+    )
+    return { credited: false, skip_reason: 'campaign_not_found' }
   }
 }

@@ -215,6 +215,13 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
     );
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Custom errors
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Emitted when a batch claim fails — surfaces which element caused the revert.
+    error BatchClaimFailed(uint256 index);
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Constructor
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -375,9 +382,16 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
 
     /**
      * @notice Claim from multiple campaigns / epochs in a single transaction.
-     * @dev    Each ClaimParams element is processed independently. If any individual
-     *         claim reverts (already claimed, bad proof, etc.) the entire batch reverts.
-     *         Users who need partial-success behaviour should call claim() per epoch.
+     * @dev    Each ClaimParams element is processed independently via the internal _claim().
+     *         If any individual claim reverts the entire batch reverts — the original
+     *         revert reason from _claim() (e.g. "invalid oracle signature") propagates
+     *         directly to the caller. Users who need partial-success behaviour should
+     *         call claim() per epoch instead.
+     *
+     *         NOTE: try/catch to surface the failing index (BatchClaimFailed) is not used
+     *         here because Solidity try/catch requires external calls, and calling
+     *         this.claim() from batchClaim() would re-enter the nonReentrant mutex.
+     *         BatchClaimFailed is reserved for a future version that splits the mutex.
      *
      * @param claimsData  Array of ClaimParams structs, one per (campaign, epoch) pair.
      */
@@ -414,6 +428,9 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
      *         Closing does NOT immediately block claims — the WITHDRAWAL_COOLDOWN
      *         (7 days) gives users ample time to submit their final claims after
      *         receiving off-chain notification.
+     * @dev    Closing a campaign with a zero balance is permitted (it emits CampaignClosed).
+     *         Off-chain indexers should check campaignBalances[campaignId] > 0 before
+     *         treating the event as meaningful for withdrawal eligibility.
      *
      * @param campaignId  Campaign to close.
      */

@@ -252,15 +252,18 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
     // CRITICAL: signature is valid but DB update failed.
     // The distribution IS ready to claim — users just need the signature.
     // Operator must run the recovery query below manually.
-    const recovery =
+    // Truncate signature in logs — full sig must not appear in aggregated log systems.
+    // The full oracle_signature is retained only in the Supabase update that just failed;
+    // operators must retrieve it from the signing step's secure storage for manual recovery.
+    const recoverySafe =
       `UPDATE distributions ` +
-      `SET oracle_signature='${oracleSignature}', deadline=${deadline}, status='published', ` +
+      `SET oracle_signature='${oracleSignature.slice(0, 12)}...{REDACTED}', deadline=${deadline}, status='published', ` +
       `published_at=NOW() WHERE id='${distribution_db_id}';`
 
     console.error(
       `[onchainPublisher] CRITICAL: root signed (sig=${oracleSignature.slice(0, 12)}...) ` +
       `but Supabase UPDATE failed for distribution ${distribution_db_id}: ${updateErr.message}. ` +
-      `Recovery query: ${recovery}`
+      `Safe recovery template (replace sig with full value from secure storage): ${recoverySafe}`
     )
 
     throw new Error(`[onchainPublisher] Supabase update failed after signing: ${updateErr.message}`)

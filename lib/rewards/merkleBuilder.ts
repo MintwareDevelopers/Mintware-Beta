@@ -121,7 +121,7 @@ export function buildMerkleTree(
 
 export async function commitDistribution(
   campaign: Campaign,
-  epochState: { id: string; campaign_id: string; epoch_number: number; epoch_pool_usd: number },
+  epochState: { id: string; campaign_id: string; epoch_number: number; epoch_pool_usd: number; epoch_end?: string },
   processorResult: EpochProcessorResult,
   merkleResult: MerkleResult
 ): Promise<BuilderSummary> {
@@ -156,7 +156,12 @@ export async function commitDistribution(
   )
 
   const payoutRows = merkleResult.leaves.map((leaf) => {
-    const entry = entryMap.get(leaf.wallet.toLowerCase())!
+    const entry = entryMap.get(leaf.wallet.toLowerCase())
+    if (!entry) {
+      throw new Error(
+        `[merkleBuilder] wallet ${leaf.wallet} found in Merkle tree but missing from distribution entries — possible address casing mismatch`
+      )
+    }
     return {
       campaign_id: campaign.id,
       epoch_number: epochState.epoch_number,
@@ -219,9 +224,11 @@ export async function commitDistribution(
   } else {
     // Create next epoch_state row
     const epoch_duration_days = campaign.epoch_duration_days ?? 7
-    const nextEpochStart = now
+    // Use the current epoch's end time as the next epoch's start — not `now` (cron run
+    // time) — to keep epoch windows contiguous and avoid gaps caused by cron jitter.
+    const nextEpochStart = epochState.epoch_end ?? now
     const nextEpochEnd = new Date(
-      Date.now() + epoch_duration_days * 86_400_000
+      new Date(nextEpochStart).getTime() + epoch_duration_days * 86_400_000
     ).toISOString()
 
     const { error: nextEpochErr } = await supabase
@@ -266,7 +273,7 @@ export async function commitDistribution(
 
 export async function runMerkleBuilder(
   campaign: Campaign,
-  epochState: { id: string; campaign_id: string; epoch_number: number; epoch_pool_usd: number },
+  epochState: { id: string; campaign_id: string; epoch_number: number; epoch_pool_usd: number; epoch_end?: string },
   processorResult: EpochProcessorResult
 ): Promise<BuilderSummary> {
   if (processorResult.entries.length === 0) {

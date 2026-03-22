@@ -34,7 +34,11 @@ export function useReferral(address: string | undefined): UseReferralReturn {
   const [showRefCodePrompt, setShowRefCodePrompt] = useState(false)
   const initialized                               = useRef(false)
 
-  const supabase = createSupabaseBrowserClient()
+  // useRef ensures the same client instance is used across renders.
+  // createSupabaseBrowserClient() creates a new object on every call — a ref
+  // prevents stale-closure issues in fetchStats/init useCallbacks.
+  const supabaseRef = useRef(createSupabaseBrowserClient())
+  const supabase    = supabaseRef.current
 
   const fetchStats = useCallback(async (addr: string) => {
     const { data, error } = await supabase
@@ -87,7 +91,7 @@ export function useReferral(address: string | undefined): UseReferralReturn {
       const pendingRef    = sessionStorage.getItem('mw_pending_ref')
       let   refWasApplied = false
 
-      if (pendingRef && isNew) {
+      if (pendingRef) {
         try {
           const res = await fetch('/api/referral/apply', {
             method:  'POST',
@@ -131,10 +135,8 @@ export function useReferral(address: string | undefined): UseReferralReturn {
   }, [fetchStats]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    console.log('[useReferral] effect fired, address:', address, 'initialized:', initialized.current)
     if (!address || initialized.current) return
     initialized.current = true
-    console.log('[useReferral] calling init for', address)
     init(address)
 
     // Realtime subscription — refetch when referral_records changes for this referrer

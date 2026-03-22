@@ -14,7 +14,6 @@
 // =============================================================================
 
 import { useState, useCallback, useEffect } from 'react'
-import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 
 interface RefCodePromptProps {
   wallet: string
@@ -30,8 +29,6 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
   const [code,        setCode]        = useState('')
   const [promptState, setPromptState] = useState<PromptState>('idle')
   const [errorMsg,    setErrorMsg]    = useState<string | null>(null)
-
-  const supabase = createSupabaseBrowserClient()
 
   // Slide in on mount
   useEffect(() => {
@@ -55,41 +52,36 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
     setErrorMsg(null)
 
     try {
-      // Look up referrer by ref_code
-      const { data: referrerProfile, error: lookupErr } = await supabase
-        .from('wallet_profiles')
-        .select('address')
-        .eq('ref_code', code)
-        .maybeSingle()
+      // Server-side referral apply — enforces time-gate and performs the insert.
+      // Never insert directly from the browser client (bypasses time-gate protection).
+      const res = await fetch('/api/referral/apply', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ referred: wallet.toLowerCase(), ref_code: code }),
+      })
 
-      if (lookupErr) throw lookupErr
+      const data = await res.json() as { applied?: boolean; skip_reason?: string }
 
-      if (!referrerProfile) {
-        setErrorMsg('Code not found — check and try again')
+      if (!res.ok) {
+        setErrorMsg('Something went wrong. Please try again.')
         setPromptState('error')
         return
       }
 
-      if (referrerProfile.address === wallet.toLowerCase()) {
-        setErrorMsg('You cannot use your own referral code')
+      if (!data.applied) {
+        const skipReason = data.skip_reason
+        if (skipReason === 'ref_code_not_found') {
+          setErrorMsg('Code not found — check and try again')
+        } else if (skipReason === 'self_referral') {
+          setErrorMsg('You cannot use your own referral code')
+        } else if (skipReason === 'referrer_too_new') {
+          setErrorMsg('This code isn\'t eligible yet — try again later')
+        } else {
+          setErrorMsg('Code could not be applied — try again')
+        }
         setPromptState('error')
         return
       }
-
-      // Insert referral record
-      const { error: insertErr } = await supabase
-        .from('referral_records')
-        .upsert(
-          {
-            referrer: referrerProfile.address,
-            referred: wallet.toLowerCase(),
-            ref_code: code,
-            status:   'pending',
-          },
-          { onConflict: 'referred', ignoreDuplicates: true }
-        )
-
-      if (insertErr) throw insertErr
 
       setPromptState('success')
       localStorage.setItem(`mw_ref_dismissed_${wallet}`, 'true')
@@ -101,7 +93,7 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
       setErrorMsg('Something went wrong. Please try again.')
       setPromptState('error')
     }
-  }, [isValid, promptState, code, wallet, supabase]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isValid, promptState, code, wallet]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>

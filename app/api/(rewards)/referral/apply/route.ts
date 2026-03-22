@@ -73,10 +73,16 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Time-gate: referrer must have been seen at least 24h ago ──────────────
-  const lastSeen   = referrerProfile.last_seen_at
-    ? new Date(referrerProfile.last_seen_at).getTime()
-    : 0
-  const ageMs = Date.now() - lastSeen
+  // Treat null last_seen_at as failing — profile exists but has never been actively used.
+  if (!referrerProfile.last_seen_at) {
+    console.warn(
+      `[referral/apply] referrer_too_new: ${referrer} has null last_seen_at — treating as not yet eligible`
+    )
+    return NextResponse.json({ applied: false, skip_reason: 'referrer_too_new' }, { status: 200 })
+  }
+
+  const lastSeen = new Date(referrerProfile.last_seen_at).getTime()
+  const ageMs    = Date.now() - lastSeen
 
   if (ageMs < TIME_GATE_MS) {
     console.warn(

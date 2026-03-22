@@ -8,10 +8,11 @@
 //
 // Formula (from mintware_campaign_logic_model.docx §3):
 //   wallet_share     = wallet_points / total_points
-//   wallet_payout    = epoch_pool_usd × wallet_share × combined_multiplier
+//   wallet_payout    = epoch_pool_usd × wallet_share
 //
-// Note: combined_multiplier > 1.0 means total distributed > epoch_pool_usd.
-// This is intentional — sponsorship fee covers the buffer (per spec §3).
+// Score multipliers (attribution × sharing) are applied at point-CREDIT time in swapHook.ts,
+// not here. Higher-score wallets earn more points during the epoch; those points naturally
+// compound into a larger wallet_share. Payout is always flat-proportional to share.
 //
 // Does NOT write to the database — returns the distribution list.
 // Writing is handled by the epoch-end cron after merkleBuilder completes.
@@ -202,9 +203,15 @@ export async function processEpoch(
 
   // Use epoch.total_points as the denominator — this is the authoritative sum
   // maintained atomically by increment_epoch_points() RPC throughout the epoch.
-  const total_points = epoch.total_points > 0
-    ? epoch.total_points
-    : eligible.reduce((sum, p) => sum + p.total_points, 0)
+  const reducedPoints = eligible.reduce((sum, p) => sum + p.total_points, 0)
+  if (epoch.total_points === 0 && reducedPoints > 0) {
+    console.warn(
+      `[epochProcessor] epoch.total_points=0 for campaign=${campaign.id} epoch=${epoch.epoch_number} ` +
+      `but participant reduce sum=${reducedPoints}. ` +
+      `Possible increment_epoch_points failure — using reduce sum as fallback denominator.`
+    )
+  }
+  const total_points = epoch.total_points > 0 ? epoch.total_points : reducedPoints
 
   if (total_points === 0) {
     return {
@@ -238,13 +245,15 @@ export async function processEpoch(
       : { attribution: 1.0, sharing: 1.0, combined: 1.0 }
 
     const wallet_share = participant.total_points / total_points
-    const payout_usd = epoch.epoch_pool_usd * wallet_share * multipliers.combined
+    const payout_usd = epoch.epoch_pool_usd * wallet_share
 
     entries.push({
       wallet,
       points: participant.total_points,
       attribution_percentile,
       sharing_score,
+      // multipliers is stored for analytics/display only — it was already applied to
+      // points at credit time in swapHook.ts::processPoints. It is NOT applied to payout_usd here.
       multipliers,
       payout_usd: Math.round(payout_usd * 1e6) / 1e6,  // 6dp precision
     })
@@ -257,14 +266,12 @@ export async function processEpoch(
 
   const finalTotalPayout = Math.round(total_payout_usd * 1e6) / 1e6
 
-  // Warn when multipliers cause over-distribution (total > pool × 1.1)
-  // This is per-spec (sponsorship fee covers the buffer) but flag it clearly.
-  if (finalTotalPayout > epoch.epoch_pool_usd * 1.1) {
+  // Sanity check: total_payout should never exceed epoch_pool_usd with flat-proportional formula.
+  // A rounding error > 0.1% is unexpected — log it.
+  if (finalTotalPayout > epoch.epoch_pool_usd * 1.001) {
     console.warn(
-      `[epochProcessor] ⚠ OVER-DISTRIBUTION: campaign=${campaign.id} epoch=${epoch.epoch_number} ` +
-      `pool=${epoch.epoch_pool_usd.toFixed(2)} payout=${finalTotalPayout.toFixed(2)} ` +
-      `(${((finalTotalPayout / epoch.epoch_pool_usd - 1) * 100).toFixed(1)}% over). ` +
-      `Score multipliers are active. Ensure sponsorship fee covers the buffer.`
+      `[epochProcessor] unexpected over-distribution: campaign=${campaign.id} epoch=${epoch.epoch_number} ` +
+      `pool=${epoch.epoch_pool_usd.toFixed(2)} payout=${finalTotalPayout.toFixed(2)}`
     )
   }
 
