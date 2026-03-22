@@ -350,7 +350,7 @@ Three new tables added in Ticket 1:
 
 **`pending_rewards`** — Token Reward Pool per-tx reward locks
 - One row per reward type (`buyer`, `referrer`, `platform_fee`) per `tx_hash`
-- Unique index on `(tx_hash, reward_type)` prevents double-crediting
+- Unique index on `(campaign_id, tx_hash, reward_type)` prevents double-crediting (campaign-scoped — H2 fix applied 2026-03-22)
 - `claimable_at = now() + claim_duration_mins`; status: `locked → claimable → claimed`
 
 **`distributions`** — Points Campaign Merkle epoch distribution records
@@ -377,7 +377,7 @@ Three new tables added in Ticket 1:
 |---|---|
 | `contracts/MintwareDistributor.sol` | On-chain Merkle drop settlement contract (**v2.0.0**) |
 | `contracts/MockERC20.sol` | Test-only ERC-20 (mintable, dev only) |
-| `contracts/test/MintwareDistributor.test.cjs` | Hardhat test suite (**needs update for v2 changes**) |
+| `contracts/test/MintwareDistributor.test.cjs` | Hardhat test suite — **72/72 passing, fully updated for v2** |
 | `hardhat.config.cts` | Hardhat config (`.cts` = TypeScript CJS, required with `"type":"module"`) |
 | `tsconfig.hardhat.json` | Separate TS config for Hardhat (module: commonjs, not bundler) |
 | `scripts/deploy.cjs` | Deploy + auto-verify on Base/CoreDAO/BNB |
@@ -414,35 +414,19 @@ withdrawCampaign()  ← campaign creator only — recovers remaining balance
 ```
 Emergency path: `pause()` → `emergencyWithdraw()` → (new contract if needed)
 
-### Off-chain changes required for v2
+### Off-chain v2 wiring — COMPLETE
 
-**`/api/claim/route.ts`** — oracle signing must include `deadline`:
-```typescript
-// Add deadline to the message (e.g. 30 days from now)
-const deadline = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
-const signature = await walletClient.signTypedData({
-  domain, primaryType: 'RootPublication',
-  types: { RootPublication: [
-    { name: 'campaignId',  type: 'string'  },
-    { name: 'epochNumber', type: 'uint256' },
-    { name: 'merkleRoot',  type: 'bytes32' },
-    { name: 'deadline',    type: 'uint256' },  // ← NEW
-  ]},
-  message: { campaignId, epochNumber, merkleRoot, deadline },  // ← add deadline
-})
-// Return deadline in API response so frontend can pass it to claim()
-```
-
-**Frontend `claim()` call** — add `deadline` param:
-```typescript
-// claim(campaignId, epochNumber, merkleRoot, oracleSignature, deadline, amount, merkleProof)
-//                                                              ↑ new param between sig and amount
-```
+All three layers implemented and wired end-to-end:
+- **`lib/web3/onchainPublisher.ts`** — signs `{ campaignId, epochNumber, merkleRoot, deadline }` EIP-712; stores `oracle_signature + deadline` in DB; oracle signature truncated to `slice(0,12)...{REDACTED}` in recovery SQL logs
+- **`/api/claim/route.ts`** — fetches `deadline` from `distributions.deadline`; returns 500 if `deadline` is null (no fallback — M1 fix); secondary IP-based rate limit (30 req/min) added alongside per-address limit (10 req/min)
+- **`/api/claim/status/route.ts`** — returns `deadline` in distribution shape; distributions query bounded by `.in('epoch_number', epochNumbers)` (M2 fix)
+- **`components/rewards/campaigns/ClaimCard.tsx`** — passes `BigInt(deadline)` as 5th of 7 params to `claim()`; "Claim All (N)" batch button when 2+ claimable rewards share a contract (batchClaim)
 
 ### Running tests
 ```bash
-pnpm hardhat:test          # test suite (needs updating for v2 — see above)
+pnpm hardhat:test          # Hardhat/Mocha contract tests — 72/72 passing (fully updated for v2)
 pnpm hardhat:compile       # Compile + typechain
+pnpm test                  # Vitest unit tests — 98 tests across 5 suites (calc, epochProcessor, utils, swapHook, merkleBuilder)
 ```
 `TS_NODE_PROJECT=tsconfig.hardhat.json` prefix is baked into all `hardhat:*` scripts in package.json — required because the root tsconfig uses `moduleResolution: bundler` which is incompatible with Hardhat.
 
@@ -508,9 +492,10 @@ All items implemented in one sprint. See git history for full diff.
 Checks before any reward credit:
 1. `eth_getTransactionReceipt` — tx must exist and `status === 0x1`
 2. `receipt.from === wallet` — prevents wallet spoofing
-3. `tx.to` must be a known LI.FI router (`0x1231DEB6f5749EF6cE6943a275A1D3E7486F4EaE`)
-4. Treasury address must appear in `tx.input` calldata (fee enforcement)
+3. `tx.to` must be in `LIFI_ROUTERS` set (H1 fix — multiple known LI.FI routers, not single address)
+4. Treasury address must appear in `tx.input` calldata — matches both 40-char raw and 64-char ABI-padded forms (L1 fix)
 - **Fail-open on RPC error** — logs warning, allows through so legit users aren't blocked by RPC flakiness
+- `skip_reason: 'router_mismatch'` returned when `tx.to` not in router set
 
 ### Referral Time-gate (`app/api/referral/apply/route.ts`)
 - `useReferral.ts` calls `POST /api/referral/apply` instead of inserting `referral_records` directly via browser Supabase client
@@ -532,20 +517,56 @@ Checks before any reward credit:
 
 ## Pending Work
 
-- [ ] **Waitlist form** — `WaitlistButton` in `app/page.tsx` only fakes submission (changes button text, no API call). Needs `POST /api/waitlist` route + Supabase `waitlist` table insert.
-- [ ] **`CORE_DAO_BRIDGE_CONTRACT`** — still `0x__PENDING_MOLTEN_CONFIRMATION__` in `.env.local`. Update when Molten confirms the bridge contract address.
+- [ ] **`CORE_DAO_BRIDGE_CONTRACT`** — blocked on Molten confirmation (`0x__PENDING_MOLTEN_CONFIRMATION__` in `.env.local`).
 - [ ] **Explorer page** — `explorer.html` uses D3.js, deferred full React conversion.
+- [ ] **Attribution API** — update `attribution-scorer` Cloudflare Worker to return `token_address` + `chain_id` per campaign (activates real token logos).
+- [ ] **Oracle private key** — import `dec4d807960fdd609d64da1c71f4a94b2bcefacd50e5a4acd77120184f88b615` to MetaMask.
 
-### Confirmed complete (verified this session)
+### Confirmed complete (all merged to main)
 - [x] **Ticket 6 — Claim API** — `app/api/claim/route.ts` + `app/api/claim/status/route.ts` fully implemented (Merkle proof, oracle signature, rate limiting, claimed-at guard).
-- [x] **Deploy to Vercel** — Live at `mintware-beta.vercel.app`.
-- [x] **Reown Cloud domain whitelist** — `localhost:3000` and `mintware-beta.vercel.app` both allowlisted. Project `580f461c981a43d53fc25fe59b64306b`.
-- [x] **GitHub remote** — `origin` → `https://github.com/MintwareDevelopers/Mintware-Beta` configured.
-- [x] **LIFI_API_KEY** — Renamed from `NEXT_PUBLIC_LIFI_API_KEY`. Server-only in Vercel. Old public key deleted.
-- [x] **Design token unification** — All hardcoded hex values replaced with `var(--token)` references across all 10 files. Source of truth: `app/globals.css` `@theme` block + `@layer components`.
-- [x] **MintGuard security hardening** — All 8 items complete (see Security Hardening section above).
-- [x] **Surface hierarchy overhaul (commit 92566e8, merged to main)** — Blue-grey `#F8F9FC` app bg; white stat cards with shadow tokens; 30px stat values on dashboard; table header bg on leaderboard; swap banner + route row shadows; profile body bg tint; nav logo 19px/800; `CampaignCard` 3px blue left accent + 20px stat values; shadow tokens on `CampaignHeader` and `InviteTab`. Files: `app/globals.css`, `app/dashboard/page.tsx`, `app/leaderboard/page.tsx`, `app/swap/page.tsx`, `app/profile/page.tsx`, `components/MwNav.tsx`, `components/campaigns/CampaignCard.tsx`, `components/campaigns/CampaignHeader.tsx`, `components/referral/InviteTab.tsx`.
-- [x] **Full redesign v1 (branch: full-redesign-v1)** — Attribution-as-hero principle applied across all pages. Dark `#0A0D14` hero on dashboard (score + tier + campaign stats), leaderboard (user rank at 56px), swap (attribution context panel), profile (score at 56px as primary number), campaign detail (multiplier projection card before JoinButton). Leaderboard me-row left border accent. `--radius-2xl`, `--shadow-feature` tokens added. Connect Wallet button upgraded to `#2563EB`/weight 600.
+- [x] **Oracle + claim v2 wiring** — `/api/claim/route.ts` fetches `deadline` from `distributions.deadline` (90-day fallback); `lib/web3/onchainPublisher.ts` signs EIP-712 with `deadline`; `ClaimCard.tsx` passes `BigInt(deadline)` as 5th param to `claim()`. All three layers complete.
+- [x] **Deploy to Vercel** — Live at `mintware-beta.vercel.app`. GitHub: `https://github.com/MintwareDevelopers/Mintware-Beta`.
+- [x] **Reown Cloud domain whitelist** — `localhost:3000` and `mintware-beta.vercel.app` allowlisted. Project `580f461c981a43d53fc25fe59b64306b`.
+- [x] **LIFI_API_KEY** — Renamed from `NEXT_PUBLIC_LIFI_API_KEY`. Server-only in Vercel.
+- [x] **Design token unification** — All hardcoded hex values replaced with `var(--token)` references.
+- [x] **MintGuard security hardening** — All 8 items complete.
+- [x] **Surface hierarchy overhaul** — Blue-grey bg, white stat cards, shadow tokens, 30px stat values.
+- [x] **Full redesign v1** — Attribution-as-hero dark cards across all pages. `--radius-2xl`, `--shadow-feature` tokens. Connect Wallet → `#2563EB`/600.
+- [x] **Waitlist form** — `WaitlistForm` in `app/page.tsx` + `POST /api/waitlist` + `waitlist` Supabase table (migration applied).
+- [x] **Basename-first ref codes** — `lib/referral-code.ts`, `app/api/auth/connect`, `app/ref/[code]`.
+- [x] **EAS offchain attestations** — `lib/eas.ts`, `/api/eas/attest-score`, `/api/eas/attest-reward`. Schema UIDs corrected (Base uses `encodePacked` not `encode`).
+- [x] **EAS schema UIDs** (corrected, live in Vercel Production):
+  - `AttributionScore: 0xb7f78793ee9f0547c30b77778e66fd2402a40467dabfbc6df472a1587387648d`
+  - `SwapActivity:     0x4ae2ad860f4f96d9eb09180fdddc8e7d06de4336756bd9b65bd2fc986df4b26a`
+  - `ReferralLink:     0x19723450b54493a3c408c7c787c65c2d5c7cee0daf3f3923343e320ef0cf7e22`
+  - `CampaignReward:   0x1b4d67d4932b1da46bc81ca8ffe3745173dfe04b66b39205f726e512809b6209`
+- [x] **WalletDisplay component** — silent basename resolution in nav, leaderboard, profile.
+- [x] **MwAuthGuard race condition fix** — uses `status === 'disconnected'` not boolean flags.
+- [x] **Token metadata + DexScreener price feed** — `lib/tokenMeta.ts`, `TokenIcon.tsx`, live price/24h%/vol/liquidity in `CampaignHeader` ticker strip and `CampaignCard`.
+- [x] **GitBook docs** — 19 pages, `/docs` folder, GitHub sync.
+- [x] **Schema audit + ParticipantStats fix** — `docs/schema.sql` matches live DB; `score_multiplier` only shows if > 1; ref link uses DB ref code.
+- [x] **Reward flow audit (6 fixes)** — `verifySwapTx()` re-added to `swapHook.ts`; `increment_participant_points()` Postgres RPC; `POST /api/claim/mark-claimed`; `ClaimCard` wired; epoch over-distribution warning; EAS chain IDs dynamic; treasury sweep cron.
+- [x] **Three-groupings refactor** — `lib/rewards/`, `lib/web3/`, `lib/web2/`, `components/rewards/`, `components/web3/`, `components/web2/`, `app/(rewards)/`, `app/(web3)/`, `app/api/(rewards)/`, `app/api/(web2)/`. All public URLs preserved.
+- [x] **Dev auth bypass** — `MwAuthGuard` skips redirect when `NODE_ENV === 'development'`.
+- [x] **distributions deadline migration** — `deadline bigint` column added, nullable, backward compat.
+- [x] **Contract test suite** — 72/72 tests passing for MintwareDistributor v2.
+- [x] **Full audit sprint (2026-03-22)** — 33 findings (3 Critical, 5 High, 5 Medium, 20 Low), all fixed. Key items:
+  - C1: `RefCodePrompt.tsx` direct browser Supabase insert removed — all referral inserts now server-gated via `POST /api/referral/apply`
+  - C2: `epochProcessor.ts` payout formula corrected — multiplier removed from payout; multipliers apply at point-credit time in `swapHook.ts` only
+  - C3: `buyer_reward_pct` confirmed whole-number (false positive — math is `(tradeUSD * pct) / 100`, consistent end-to-end)
+  - H1: `LIFI_ROUTERS` set added to `verifySwapTx` (was single hardcoded address)
+  - H2: `pending_rewards` unique index now campaign-scoped `(campaign_id, tx_hash, reward_type)`
+  - H3: Score multipliers applied at point-credit time (`processPoints` in `swapHook.ts`) when `use_score_multiplier = true`
+  - H4: `useReferral.ts` referral applied whenever `pendingRef` exists (not just for new wallets)
+  - H5: Campaign type dispatch uses explicit `else if ('points')` + error fallback
+  - M1: Claim API returns 500 on null `deadline` — 90-day fallback removed
+  - M3: `ClaimCard.tsx` batch claim via `batchClaim()` for 2+ rewards on same contract
+  - M4: `swapHook.ts` checks `campaign.closed` flag in addition to `status !== 'live'`
+  - M5: `GET /api/admin/oracle/rotation` — reads rotation state from contract via raw `eth_call`
+  - DB migrations applied to production Supabase: composite `pending_rewards` index; `campaigns.closed` + `campaigns.closed_at` columns
+  - Vitest test suite: 98 tests across `calc.test.ts`, `epochProcessor.test.ts`, `utils.test.ts`, `swapHook.test.ts`, `merkleBuilder.test.ts`
+- [x] **Vercel env vars** — all confirmed set (see memory/project_state.md for full list). `SUPABASE_SERVICE_ROLE_KEY` fixed to All Environments.
+- [x] **Vercel cron** — `pool-settle` at `0 2 * * *` (Hobby plan: max once/day).
 
 ---
 
