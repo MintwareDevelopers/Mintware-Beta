@@ -1,6 +1,6 @@
 # Welcome to Mintware
 
-Mintware is a DeFi reputation and rewards platform built on Base.
+Mintware is a DeFi reputation and rewards platform built for EVM chains.
 
 We turn your on-chain history into a verifiable score — then use that score to weight how much you earn from campaigns, liquidity pools, and protocol incentives.
 
@@ -34,4 +34,5 @@ A campaign and rewards engine where protocols sponsor incentives and Attribution
 | Campaign dashboard | ✅ Live |
 | Mintware Swap | ✅ Live |
 | Referral system | ✅ Live |
+| Arbitrum campaigns | 🔜 Coming soon |
 | Self-serve campaign creation | 🔜 Coming soon |

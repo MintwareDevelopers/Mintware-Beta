@@ -16,20 +16,26 @@ Mintware supports any EVM wallet via WalletConnect and browser extensions.
 
 ## How to Connect
 
-1. Go to [mintware-beta.vercel.app](https://mintware-beta.vercel.app)
+1. Go to [mintware.finance](https://mintware.finance)
 2. Click **Connect Wallet** in the top navigation
 3. Select your wallet and approve the connection
 4. Your Attribution score will load automatically
 
-No signature is required to view your score. Signatures are only requested when joining a campaign or claiming rewards.
+> **No signature required** to view your score. Signatures are only requested when joining a campaign or claiming rewards.
 
 ---
 
 ## Supported Networks
 
-Mintware runs on **Base** mainnet. Make sure your wallet is connected to Base when interacting with campaigns or claiming rewards.
+Mintware campaigns run across multiple EVM chains. Each campaign specifies which chain it operates on — check the campaign detail page to see which network you need to be connected to.
 
-Your Attribution score is calculated from your history across all chains — you don't need to move assets to Base to have a score. But campaign interactions happen on Base.
+Your Attribution score is calculated from your history across 100+ chains — you don't need to move assets to any specific chain to have a score. Attribution reads your existing history wherever it is.
+
+| Chain | Campaigns | Swap |
+|---|---|---|
+| Base | ✅ Live | ✅ Live |
+| Arbitrum | 🔜 Coming soon | ✅ Live |
+| Core | ✅ Live | 🔜 Coming soon |
 
 ---
 

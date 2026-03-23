@@ -1,6 +1,6 @@
 # Your Attribution Score
 
-Your Attribution score is calculated automatically from your on-chain history. No action is required — just connect your wallet and your score loads.
+Your Attribution score is calculated automatically from your on-chain history across 100+ chains. No action is required — just connect your wallet and your score loads.
 
 ---
 
@@ -12,17 +12,29 @@ Your score is displayed on the **Profile** page (`/profile`), accessible from th
 
 ## What You'll See
 
-**Score and tier** — your total score and whether you're Bronze, Silver, or Gold.
+| Element | Description |
+|---|---|
+| **Score & tier** | Your total score and tier — Bronze, Silver, or Gold |
+| **Percentile** | Where you rank against all scored wallets globally |
+| **Signal breakdown** | Your score across each of the six signal categories, with insights |
+| **Wallet character** | A character assigned based on your behavioural patterns |
+| **Opportunities** | Protocols and actions that could improve your specific signal gaps |
+| **Timeline** | Your score history over time |
 
-**Percentile** — where you rank against all scored wallets globally.
+---
 
-**Signal breakdown** — your score across each of the six signal categories (Volume, Trading, Holding, Liquidity, Governance, Sharing), with insights explaining what's driving each signal.
+## The Six Signals
 
-**Wallet character** — a character assigned to your wallet based on behavioural patterns.
+| Signal | Max | What It Measures |
+|---|---|---|
+| Volume | 100 | Scale and consistency of transaction activity |
+| Trading | 75 | Frequency, diversity, and timing of trades |
+| Holding | 100 | Long-term asset conviction vs short-term flipping |
+| Liquidity | 150 | Participation in liquidity provision |
+| Governance | 100 | On-chain governance across protocols |
+| Sharing | 400 | Your referral network size and quality |
 
-**Score opportunities** — protocols and actions that could improve your specific signal gaps.
-
-**Timeline** — your score history over time, showing how your reputation has grown.
+**Max total score: 925**
 
 ---
 
@@ -40,8 +52,8 @@ Each wallet address has its own independent Attribution score. Scores are not co
 
 ## EAS Attestation
 
-Your score can be published as a verifiable offchain EAS attestation on Base. This creates a cryptographically signed, portable record of your Attribution score that any protocol can verify independently.
+Your score can be published as a verifiable offchain EAS (Ethereum Attestation Service) attestation. This creates a cryptographically signed, portable record of your Attribution score that any protocol can verify independently — without trusting Mintware.
 
-To publish your score attestation, visit the **Score tab** on your profile page and click **Attest Score**.
+To publish your attestation, visit the **Score tab** on your profile page and click **Attest Score**.
 
 See [EAS Attestations](../developers/eas-attestations.md) for technical details.
