@@ -111,7 +111,8 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
     IERC20         public immutable usdc;
     IPoolManager   public immutable poolManager;
     address        public immutable feeVault;
-    address        public immutable hook;
+    // NOTE: hook address not stored here — it lives in the PoolKey passed to seedTeamTokens.
+    // MWSocialHook.beforeAddLiquidity enforces that only SocialVault can call modifyLiquidity.
 
     // ─────────────────────────────────────────────────────────────────────────
     // State
@@ -178,13 +179,11 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
     constructor(
         address _usdc,
         address _poolManager,
-        address _feeVault,
-        address _hook
+        address _feeVault
     ) Ownable(msg.sender) {
         usdc        = IERC20(_usdc);
         poolManager = IPoolManager(_poolManager);
         feeVault    = _feeVault;
-        hook        = _hook;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

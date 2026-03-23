@@ -11,6 +11,7 @@ import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/Pool
 import {BeforeSwapDelta, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {StateLibrary}       from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {LPFeeLibrary}       from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
+import {Hooks}              from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {Ownable}            from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard}    from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IPyth}              from "./lib/IPyth.sol";
@@ -67,6 +68,10 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────────
     // Constants
     // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Required V4 permission bits — must match the hook address after CREATE2 mining.
+    ///         0x0AC4 = beforeAddLiquidity(11) + beforeRemoveLiquidity(9) + beforeSwap(7) + afterSwap(6) + afterSwapReturnDelta(2)
+    uint160 public constant HOOK_FLAGS          = 0x0AC4;
 
     uint256 public constant BPS                 = 10_000;
     uint256 public constant MAX_ORACLE_AGE      = 60;       // 60 seconds — Pyth staleness
@@ -144,6 +149,28 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
         feeVault      = _feeVault;
         socialVault   = _socialVault;
         pythOracle    = _pythOracle;
+
+        // Validate that this contract is deployed at an address with the correct permission bits.
+        // V4 pools will revert on initialize() if the hook address doesn't match these flags.
+        Hooks.validateHookPermissions(
+            IHooks(address(this)),
+            Hooks.Permissions({
+                beforeInitialize:              false,
+                afterInitialize:               false,
+                beforeAddLiquidity:            true,  // vault-only LP gate
+                afterAddLiquidity:             false,
+                beforeRemoveLiquidity:         true,  // vault-only LP gate
+                afterRemoveLiquidity:          false,
+                beforeSwap:                    true,  // dynamic fee override
+                afterSwap:                     true,  // MEV capture
+                beforeDonate:                  false,
+                afterDonate:                   false,
+                beforeSwapReturnDelta:         false, // always returns (0,0) delta
+                afterSwapReturnDelta:          true,  // returns non-zero int128 hookDelta
+                afterAddLiquidityReturnDelta:  false,
+                afterRemoveLiquidityReturnDelta: false
+            })
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────────

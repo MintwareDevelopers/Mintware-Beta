@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {MWSocialHook} from "../src/MWSocialHook.sol";
+import {HookMiner}     from "../src/lib/HookMiner.sol";
 import {IPoolManager}  from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolId}        from "@uniswap/v4-core/src/types/PoolId.sol";
 
@@ -26,12 +27,25 @@ contract MWSocialHookTest is Test {
     PoolId internal testPoolId = PoolId.wrap(keccak256("test-pool"));
 
     function setUp() public {
-        vm.prank(owner);
-        hook = new MWSocialHook(
+        // MWSocialHook.validateHookPermissions() fires in the constructor.
+        // We must deploy at an address whose lowest 14 bits match HOOK_FLAGS (0x0AC4).
+        // HookMiner mines a CREATE2 salt that produces the correct address.
+        bytes memory creationCode = type(MWSocialHook).creationCode;
+        bytes memory args = abi.encode(
             IPoolManager(mockPM),
             feeVault,
             socialVault,
-            address(0)    // no pyth oracle for unit tests
+            address(0) // no pyth oracle for unit tests
+        );
+        // vm.prank(owner) makes owner the CREATE2 deployer, so mine using owner's address
+        (, bytes32 salt) = HookMiner.find(owner, uint160(0x0AC4), creationCode, args);
+
+        vm.prank(owner);
+        hook = new MWSocialHook{salt: salt}(
+            IPoolManager(mockPM),
+            feeVault,
+            socialVault,
+            address(0)
         );
     }
 

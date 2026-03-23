@@ -23,11 +23,10 @@ contract SocialVaultTest is Test {
     address internal mockUsdc      = makeAddr("mockUsdc");
     address internal mockPM        = makeAddr("poolManager");
     address internal mockFeeVault  = makeAddr("feeVault");
-    address internal mockHook      = makeAddr("hook");
 
     function setUp() public {
         vm.prank(owner);
-        vault = new SocialVault(mockUsdc, mockPM, mockFeeVault, mockHook);
+        vault = new SocialVault(mockUsdc, mockPM, mockFeeVault);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -38,7 +37,6 @@ contract SocialVaultTest is Test {
         assertEq(address(vault.usdc()),        mockUsdc);
         assertEq(address(vault.poolManager()), mockPM);
         assertEq(vault.feeVault(),             mockFeeVault);
-        assertEq(vault.hook(),                 mockHook);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
