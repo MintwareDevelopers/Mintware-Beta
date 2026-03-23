@@ -11,7 +11,7 @@ Rewards from Token Reward Pools become claimable after a short lock period follo
 3. Click **Claim** and confirm the on-chain transaction
 4. Tokens transfer directly to your connected wallet
 
-Claiming requires a transaction on Base. Make sure you have a small amount of ETH for gas.
+> **Gas reminder:** Claiming requires an on-chain transaction. Make sure your wallet has a small amount of the campaign chain's native token for gas (e.g. ETH on Base or Arbitrum).
 
 ---
 
@@ -29,6 +29,8 @@ At the end of each epoch, Mintware calculates your allocation and publishes a Me
 ## Claim Deadline
 
 Oracle-signed distributions have an expiry. Claims must be submitted before the deadline embedded in the signature. Deadlines are set generously (30 days by default) but don't leave it indefinitely.
+
+> **Don't delay.** If the deadline passes, that epoch's reward cannot be claimed. The contract enforces this — there is no override.
 
 ---
 
@@ -48,6 +50,6 @@ If you have claimable rewards across multiple epochs on the same campaign contra
 
 **Claim button not appearing** — the epoch may not have settled yet, or the distribution hasn't been published. Check back shortly after epoch end.
 
-**Transaction reverts** — ensure your wallet is connected to Base and you have sufficient ETH for gas. If the issue persists, the claim window may have expired.
+**Transaction reverts** — ensure your wallet is connected to the correct network for this campaign and has sufficient gas. If the issue persists, the claim window may have expired.
 
 **Wrong wallet connected** — rewards are claimable only by the wallet that earned them. Make sure you're connected with the correct wallet.
