@@ -15,7 +15,7 @@
 //   TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs \
 //     --network base --config hardhat.config.cts
 //
-//   Supported networks: base_sepolia, base, core_dao, bnb
+//   Supported networks: base_sepolia, base, core_dao, bnb, arbitrum_sepolia, arbitrum
 //
 // Required env vars (.env.local):
 //   DEPLOYER_PRIVATE_KEY    — 64 hex chars (no 0x prefix); funds the deployment gas
@@ -26,9 +26,7 @@
 //   OWNER_ADDRESS           — contract owner; defaults to deployer if unset
 //
 // Block explorer API keys (.env.local):
-//   BASESCAN_API_KEY        — base / base_sepolia
-//   CORESCAN_API_KEY        — core_dao
-//   BSCSCAN_API_KEY         — bnb
+//   ARBISCAN_API_KEY        — Etherscan v2 unified key (works for all chains)
 //
 // After deployment:
 //   1. Set DISTRIBUTOR_PRIVATE_KEY in .env.local (matches ORACLE_SIGNER_ADDRESS)
@@ -149,10 +147,12 @@ async function main() {
 
 function getExplorerUrl(networkName, address) {
   const map = {
-    base_sepolia: `https://sepolia.basescan.org/address/${address}`,
-    base:         `https://basescan.org/address/${address}`,
-    core_dao:     `https://scan.coredao.org/address/${address}`,
-    bnb:          `https://bscscan.com/address/${address}`,
+    base_sepolia:     `https://sepolia.basescan.org/address/${address}`,
+    base:             `https://basescan.org/address/${address}`,
+    core_dao:         `https://scan.coredao.org/address/${address}`,
+    bnb:              `https://bscscan.com/address/${address}`,
+    arbitrum_sepolia: `https://sepolia.arbiscan.io/address/${address}`,
+    arbitrum:         `https://arbiscan.io/address/${address}`,
   }
   return map[networkName] || `(explorer unknown for ${networkName})`
 }

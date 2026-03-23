@@ -14,26 +14,29 @@
 // moduleResolution: node) to avoid conflicts with the Next.js root tsconfig.
 //
 // Networks:
-//   - hardhat     : Local in-process network (testing only)
-//   - base_sepolia: Base Sepolia testnet (chain 84532) — primary test target
-//   - base        : Base mainnet (chain 8453)
-//   - core_dao    : Core DAO mainnet (chain 1116)
-//   - bnb         : BNB Chain mainnet (chain 56)
+//   - hardhat          : Local in-process network (testing only)
+//   - base_sepolia     : Base Sepolia testnet (chain 84532) — primary test target
+//   - base             : Base mainnet (chain 8453)
+//   - core_dao         : Core DAO mainnet (chain 1116)
+//   - bnb              : BNB Chain mainnet (chain 56)
+//   - arbitrum_sepolia : Arbitrum Sepolia testnet (chain 421614) — Arbitrum test target
+//   - arbitrum         : Arbitrum One mainnet (chain 42161)
 //
 // Block explorer verification:
-//   - Base / Base Sepolia → Basescan (BASESCAN_API_KEY)
-//   - Core DAO           → CoreScan (CORESCAN_API_KEY)
-//   - BNB Chain          → BscScan  (BSCSCAN_API_KEY)
+//   - Base / Base Sepolia          → Basescan  (ARBISCAN_API_KEY — Etherscan v2 unified key)
+//   - Core DAO                     → CoreScan  (ARBISCAN_API_KEY)
+//   - BNB Chain                    → BscScan   (ARBISCAN_API_KEY)
+//   - Arbitrum One / Arb Sepolia   → Arbiscan  (ARBISCAN_API_KEY)
 //
 // Required env vars (add to .env.local, never commit):
-//   DEPLOYER_PRIVATE_KEY  — 64 hex chars, no 0x prefix
-//   BASE_SEPOLIA_RPC_URL  — default: https://sepolia.base.org
-//   BASE_RPC_URL          — default: https://mainnet.base.org
-//   CORE_DAO_RPC_URL      — already in .env.local (https://rpc.coredao.org)
-//   BNB_RPC_URL           — default: https://bsc-dataseed.binance.org
-//   BASESCAN_API_KEY
-//   CORESCAN_API_KEY
-//   BSCSCAN_API_KEY
+//   DEPLOYER_PRIVATE_KEY      — 64 hex chars, no 0x prefix
+//   BASE_SEPOLIA_RPC_URL      — default: https://sepolia.base.org
+//   BASE_RPC_URL              — default: https://mainnet.base.org
+//   CORE_DAO_RPC_URL          — default: https://rpc.coredao.org
+//   BNB_RPC_URL               — default: https://bsc-dataseed.binance.org
+//   ARBITRUM_SEPOLIA_RPC_URL  — default: https://sepolia-rollup.arbitrum.io/rpc
+//   ARBITRUM_RPC_URL          — default: https://arb1.arbitrum.io/rpc
+//   ARBISCAN_API_KEY          — Etherscan v2 unified key (works across all chains)
 //
 // Usage:
 //   npx hardhat compile --config hardhat.config.cts
@@ -78,7 +81,6 @@ const config: HardhatUserConfig = {
       },
       viaIR: true,        // required — _claim() has many locals; viaIR lifts the stack limit
       evmVersion: 'cancun',
-      viaIR: true,
     },
   },
 
@@ -139,19 +141,33 @@ const config: HardhatUserConfig = {
       chainId: 56,
       accounts: [deployerKey()],
     },
+
+    // -----------------------------------------------------------------------
+    // Arbitrum Sepolia — Arbitrum testnet (chain 421614)
+    // -----------------------------------------------------------------------
+    arbitrum_sepolia: {
+      url: process.env.ARBITRUM_SEPOLIA_RPC_URL ?? 'https://sepolia-rollup.arbitrum.io/rpc',
+      chainId: 421614,
+      accounts: [deployerKey()],
+    },
+
+    // -----------------------------------------------------------------------
+    // Arbitrum One mainnet (chain 42161)
+    // -----------------------------------------------------------------------
+    arbitrum: {
+      url: process.env.ARBITRUM_RPC_URL ?? 'https://arb1.arbitrum.io/rpc',
+      chainId: 42161,
+      accounts: [deployerKey()],
+    },
   },
 
   // ---------------------------------------------------------------------------
   // Block explorer verification
   // ---------------------------------------------------------------------------
   etherscan: {
-    apiKey: {
-      base_sepolia: process.env.BASESCAN_API_KEY ?? '',
-      base: process.env.BASESCAN_API_KEY ?? '',
-      core_dao: process.env.CORESCAN_API_KEY ?? '',
-      bnb: process.env.BSCSCAN_API_KEY ?? '',
-      bsc: process.env.BSCSCAN_API_KEY ?? '',
-    },
+    // Etherscan v2 unified key — works across Basescan, Arbiscan, BscScan, etc.
+    // Per-network keys are deprecated as of May 2025.
+    apiKey: process.env.ARBISCAN_API_KEY ?? '',
     customChains: [
       {
         network: 'base_sepolia',
@@ -175,6 +191,22 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: 'https://openapi.coredao.org/api',
           browserURL: 'https://scan.coredao.org',
+        },
+      },
+      {
+        network: 'arbitrum_sepolia',
+        chainId: 421614,
+        urls: {
+          apiURL: 'https://api-sepolia.arbiscan.io/api',
+          browserURL: 'https://sepolia.arbiscan.io',
+        },
+      },
+      {
+        network: 'arbitrum',
+        chainId: 42161,
+        urls: {
+          apiURL: 'https://api.arbiscan.io/api',
+          browserURL: 'https://arbiscan.io',
         },
       },
     ],
