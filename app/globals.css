@@ -46,10 +46,10 @@
   --color-mw-border-strong: rgba(0, 0, 0, 0.13);
 
   /* ── Dark sections ── */
-  --color-mw-dark:        #EEF2FF;
-  --color-mw-dark-text:   rgba(15, 23, 42, 0.92);
-  --color-mw-dark-sub:    rgba(15, 23, 42, 0.50);
-  --color-mw-dark-border: rgba(15, 23, 42, 0.08);
+  --color-mw-dark:        #0A0D14;
+  --color-mw-dark-text:   rgba(255, 255, 255, 0.88);
+  --color-mw-dark-sub:    rgba(255, 255, 255, 0.38);
+  --color-mw-dark-border: rgba(255, 255, 255, 0.06);
 
   /* ── Brand deep (referral / campaign UI — distinct from nav blue) ── */
   --color-mw-brand-deep:      #3A5CE8;
