@@ -412,9 +412,11 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
 
     /// @notice Deviation between pool price and oracle reference in bps
     function currentDeviation(PoolId poolId) external view returns (uint256 deviationBps) {
-        (uint160 currentSqrt,,,) = POOL_MANAGER.getSlot0(poolId);
+        // Guard ref price first — avoids PoolManager call when no reference is set
         uint160 refSqrt = referencePrices[poolId].sqrtPriceX96;
-        if (refSqrt == 0 || currentSqrt == 0) return 0;
+        if (refSqrt == 0) return 0;
+        (uint160 currentSqrt,,,) = POOL_MANAGER.getSlot0(poolId);
+        if (currentSqrt == 0) return 0;
         return _deviationBps(currentSqrt, refSqrt);
     }
 

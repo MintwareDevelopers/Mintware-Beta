@@ -5,8 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {SocialVault} from "../src/SocialVault.sol";
 
 /// @notice SocialVault unit tests.
-///         V4 pool interaction stubs are filled in T1.3 once poolManager wiring is complete.
 ///         All pure logic (lock tiers, penalties, withdrawal queue, role guards) tested here.
+///         V4 pool interaction integration tests live in T1.5 (fork tests with real PoolManager).
 contract SocialVaultTest is Test {
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -17,10 +17,9 @@ contract SocialVaultTest is Test {
 
     address internal alice  = makeAddr("alice");
     address internal bob    = makeAddr("bob");
-    address internal team   = makeAddr("team");
     address internal owner  = makeAddr("owner");
 
-    // Stub addresses — real contracts wired in T1.3
+    // Stub addresses — real contracts wired in T1.5
     address internal mockUsdc      = makeAddr("mockUsdc");
     address internal mockPM        = makeAddr("poolManager");
     address internal mockFeeVault  = makeAddr("feeVault");
@@ -32,29 +31,38 @@ contract SocialVaultTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Lock tier duration
+    // Constructor
     // ─────────────────────────────────────────────────────────────────────────
 
-    function test_lockDuration_flex() public view {
-        // Flex = 0 days lock
+    function test_constructor_sets_addresses() public view {
+        assertEq(address(vault.usdc()),        mockUsdc);
+        assertEq(address(vault.poolManager()), mockPM);
+        assertEq(vault.feeVault(),             mockFeeVault);
+        assertEq(vault.hook(),                 mockHook);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lock tier durations
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_lockDuration_constants() public view {
         assertEq(vault.LOCK_COMMITTED(), 30 days);
         assertEq(vault.LOCK_ALIGNED(),   90 days);
         assertEq(vault.LOCK_CORE(),     180 days);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Penalty math
+    // Default tick range (full range)
     // ─────────────────────────────────────────────────────────────────────────
 
-    function test_penalty_flex_is_zero() public {
-        // Flex tier — no penalty regardless of timing
-        vm.startPrank(alice);
-        // Simulate a Flex position
-        // penalty = 0 because tier == Flex
-        // We test by calling _calculatePenalty logic indirectly via withdrawal
-        // Full test in T1.3 when real USDC mock is wired
-        vm.stopPrank();
+    function test_default_tick_range() public view {
+        assertEq(vault.tickLower(), -887220);
+        assertEq(vault.tickUpper(),  887220);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Penalty math (pure arithmetic verified here; contract enforces in T1.5)
+    // ─────────────────────────────────────────────────────────────────────────
 
     function test_penalty_constants() public view {
         assertEq(vault.PENALTY_TIER_1_BPS(), 200); // 2.0%
@@ -63,50 +71,52 @@ contract SocialVaultTest is Test {
         assertEq(vault.BPS(),             10_000);
     }
 
-    /// @notice Verify penalty tiers: < 20% elapsed → 2%, 20-50% → 1%, 50-80% → 0.5%, > 80% → 0%
+    /// @notice < 20% elapsed → 2% penalty
     function test_penalty_math_tier1() public pure {
-        // < 20% elapsed of 90-day lock
         uint256 lockDuration = 90 days;
         uint256 elapsed      = 10 days; // 11% elapsed
         uint256 pct          = (elapsed * 100) / lockDuration;
         assertLt(pct, 20);
 
-        uint256 amount       = 1000e6; // 1000 USDC
-        uint256 penaltyBps   = 200;    // 2%
-        uint256 penalty      = (amount * penaltyBps) / 10_000;
+        uint256 amount     = 1000e6;
+        uint256 penaltyBps = 200; // 2%
+        uint256 penalty    = (amount * penaltyBps) / 10_000;
         assertEq(penalty, 20e6); // 20 USDC penalty
     }
 
+    /// @notice 20–50% elapsed → 1% penalty
     function test_penalty_math_tier2() public pure {
         uint256 lockDuration = 90 days;
-        uint256 elapsed      = 40 days; // 44% elapsed → tier 2 (20-50%)
+        uint256 elapsed      = 40 days; // 44% elapsed
         uint256 pct          = (elapsed * 100) / lockDuration;
         assertTrue(pct >= 20 && pct < 50);
 
         uint256 amount     = 1000e6;
         uint256 penaltyBps = 100; // 1%
         uint256 penalty    = (amount * penaltyBps) / 10_000;
-        assertEq(penalty, 10e6); // 10 USDC
+        assertEq(penalty, 10e6);
     }
 
+    /// @notice 50–80% elapsed → 0.5% penalty
     function test_penalty_math_tier3() public pure {
         uint256 lockDuration = 90 days;
-        uint256 elapsed      = 65 days; // 72% elapsed → tier 3 (50-80%)
+        uint256 elapsed      = 65 days; // 72% elapsed
         uint256 pct          = (elapsed * 100) / lockDuration;
         assertTrue(pct >= 50 && pct < 80);
 
         uint256 amount     = 1000e6;
         uint256 penaltyBps = 50; // 0.5%
         uint256 penalty    = (amount * penaltyBps) / 10_000;
-        assertEq(penalty, 5e6); // 5 USDC
+        assertEq(penalty, 5e6);
     }
 
+    /// @notice > 80% elapsed → no penalty
     function test_penalty_math_tier4_no_penalty() public pure {
         uint256 lockDuration = 90 days;
-        uint256 elapsed      = 80 days; // 88% elapsed → no penalty
+        uint256 elapsed      = 80 days; // 88% elapsed
         uint256 pct          = (elapsed * 100) / lockDuration;
         assertTrue(pct >= 80);
-        // penalty = 0
+        // penaltyBps = 0 → no penalty
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -119,7 +129,7 @@ contract SocialVaultTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Role guards (no USDC mock needed — check revert reasons)
+    // Role guards
     // ─────────────────────────────────────────────────────────────────────────
 
     function test_compound_reverts_if_not_fee_vault() public {
@@ -140,8 +150,14 @@ contract SocialVaultTest is Test {
         vault.rebalance(-887220, 887220);
     }
 
+    function test_unlockCallback_reverts_if_not_pool_manager() public {
+        vm.prank(alice);
+        vm.expectRevert(SocialVault.OnlyPoolManager.selector);
+        vault.unlockCallback("");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
-    // Withdrawal request reverts (no deposit needed for request-path checks)
+    // Withdrawal request reverts
     // ─────────────────────────────────────────────────────────────────────────
 
     function test_executeWithdrawal_reverts_no_request() public {
@@ -151,7 +167,28 @@ contract SocialVaultTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Fuzz: penalty math never exceeds withdrawal amount
+    // Proportional liquidity math
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Verify proportional removal: (liquidity * amount) / totalDeposits
+    function test_proportional_liquidity_removal_math() public pure {
+        uint128 totalLiq  = 1_000_000;
+        uint256 totalDeps = 10_000e6;
+        uint256 amount    = 1_000e6; // 10% withdrawal
+        uint128 toRemove  = uint128(uint256(totalLiq) * amount / totalDeps);
+        assertEq(toRemove, 100_000); // 10% of liquidity
+    }
+
+    function test_proportional_liquidity_50pct_withdrawal() public pure {
+        uint128 totalLiq  = 800_000;
+        uint256 totalDeps = 4_000e6;
+        uint256 amount    = 2_000e6; // 50% withdrawal
+        uint128 toRemove  = uint128(uint256(totalLiq) * amount / totalDeps);
+        assertEq(toRemove, 400_000); // 50% of liquidity
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Fuzz: penalty never exceeds withdrawal amount
     // ─────────────────────────────────────────────────────────────────────────
 
     function testFuzz_penalty_never_exceeds_amount(
@@ -172,5 +209,20 @@ contract SocialVaultTest is Test {
 
         uint256 penalty = (amount * penaltyBps) / 10_000;
         assertLe(penalty, amount);
+    }
+
+    /// @notice Fuzz: proportional liquidity removal never exceeds total
+    function testFuzz_proportional_removal_never_exceeds_total(
+        uint128 totalLiq,
+        uint256 totalDeps,
+        uint256 amount
+    ) public pure {
+        vm.assume(totalDeps > 0);
+        vm.assume(amount > 0 && amount <= totalDeps);
+        // Guard against uint256 overflow in the multiply: totalLiq * amount
+        vm.assume(totalLiq == 0 || amount <= type(uint256).max / uint256(totalLiq));
+
+        uint128 toRemove = uint128(uint256(totalLiq) * amount / totalDeps);
+        assertLe(toRemove, totalLiq);
     }
 }

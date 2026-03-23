@@ -103,9 +103,10 @@ contract FeeVaultTest is Test {
     function testFuzz_setShares_rejects_invalid_sum(
         uint256 lp, uint256 ref, uint256 proto, uint256 bonus
     ) public {
+        // Bound first to prevent overflow on the addition below
+        vm.assume(lp < 1e18 && ref < 1e18 && proto < 1e18 && bonus < 1e18);
         uint256 total = lp + ref + proto + bonus;
         vm.assume(total != fv.BPS());
-        vm.assume(lp < 1e18 && ref < 1e18 && proto < 1e18 && bonus < 1e18); // no overflow
 
         vm.prank(owner);
         vm.expectRevert(FeeVault.InvalidShares.selector);

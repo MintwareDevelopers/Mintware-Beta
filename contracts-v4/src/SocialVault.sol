@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {IPoolManager}       from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {PoolKey}            from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {TickMath}           from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import {IERC20}             from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20}          from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable}            from "@openzeppelin/contracts/access/Ownable.sol";
-import {ReentrancyGuard}    from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {IPoolManager}        from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IUnlockCallback}     from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {PoolKey}             from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolIdLibrary}       from "@uniswap/v4-core/src/types/PoolId.sol";
+import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta}        from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {StateLibrary}        from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {TickMath}            from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {LiquidityAmounts}    from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
+import {IERC20}              from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20}           from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable}             from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard}     from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title  SocialVault
 /// @notice Manages community USDC deposits + team PROJECT token seeds.
@@ -19,12 +26,12 @@ import {ReentrancyGuard}    from "@openzeppelin/contracts/utils/ReentrancyGuard.
 ///           - Referrers → tracked off-chain, earn via FeeVault epoch distribution
 ///
 ///         Lock tiers:
-///           Flex     (0d)   1.0× fee multiplier
-///           Committed (30d) 1.15×
-///           Aligned  (90d)  1.30×
-///           Core    (180d)  1.50×
+///           Flex      (0d)   1.0× fee multiplier
+///           Committed (30d)  1.15×
+///           Aligned   (90d)  1.30×
+///           Core     (180d)  1.50×
 ///
-///         Early exit penalties:
+///         Early exit penalties (applied when lock not expired):
 ///           < 20% of lock elapsed → 2.0%
 ///           20–50%               → 1.0%
 ///           50–80%               → 0.5%
@@ -34,8 +41,16 @@ import {ReentrancyGuard}    from "@openzeppelin/contracts/utils/ReentrancyGuard.
 ///         Withdrawal flow:
 ///           1. requestWithdrawal() — 7-day notice period
 ///           2. executeWithdrawal() — callable after noticeExpiry
-contract SocialVault is Ownable, ReentrancyGuard {
-    using SafeERC20 for IERC20;
+///
+///         V4 integration:
+///           SocialVault implements IUnlockCallback. All pool interactions
+///           (addLiquidity, removeLiquidity, rebalance) go through the
+///           poolManager.unlock() → unlockCallback() → modifyLiquidity pattern.
+///           Only SocialVault can LP (enforced by MWSocialHook.beforeAddLiquidity).
+contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
+    using SafeERC20    for IERC20;
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary  for IPoolManager;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Types
@@ -69,6 +84,9 @@ contract SocialVault is Ownable, ReentrancyGuard {
         uint256 seededAt;
     }
 
+    /// @dev Action enum used to dispatch inside unlockCallback
+    enum Action { AddLiquidity, RemoveLiquidity, Rebalance }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Constants
     // ─────────────────────────────────────────────────────────────────────────
@@ -87,13 +105,17 @@ contract SocialVault is Ownable, ReentrancyGuard {
     uint256 public constant BPS                   = 10_000;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // State
+    // Immutables
     // ─────────────────────────────────────────────────────────────────────────
 
-    IERC20 public immutable usdc;
-    IPoolManager public immutable poolManager;
-    address public immutable feeVault;
-    address public immutable hook;
+    IERC20         public immutable usdc;
+    IPoolManager   public immutable poolManager;
+    address        public immutable feeVault;
+    address        public immutable hook;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // State
+    // ─────────────────────────────────────────────────────────────────────────
 
     /// @notice LP positions per wallet
     mapping(address => LPPosition) public positions;
@@ -104,7 +126,7 @@ contract SocialVault is Ownable, ReentrancyGuard {
     /// @notice Team seeds per vaultId (one seed per team)
     mapping(bytes32 => TeamSeed) public teamSeeds;
 
-    /// @notice Total USDC currently deposited in vault
+    /// @notice Total USDC currently deposited in vault (principal only)
     uint256 public totalDeposits;
 
     /// @notice Pool key for this vault's V4 pool
@@ -112,6 +134,13 @@ contract SocialVault is Ownable, ReentrancyGuard {
 
     /// @notice Whether the V4 pool has been initialized
     bool public poolInitialized;
+
+    /// @notice Current LP position tick range (defaults: full range)
+    int24 public tickLower = -887220;
+    int24 public tickUpper =  887220;
+
+    /// @notice Total liquidity currently held in the V4 position
+    uint128 public totalLiquidity;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Events
@@ -122,8 +151,10 @@ contract SocialVault is Ownable, ReentrancyGuard {
     event WithdrawalExecuted(address indexed lp, uint256 amount, uint256 penalty);
     event Compounded(address indexed lp, uint256 feeAmount);
     event TeamSeeded(bytes32 indexed vaultId, address token, uint256 amount);
-    event PoolInitialized(bytes32 indexed poolId);
-    event Rebalanced(int24 newTickLower, int24 newTickUpper);
+    event PoolInitialized(bytes32 indexed poolId, uint160 sqrtPriceX96);
+    event Rebalanced(int24 newTickLower, int24 newTickUpper, uint128 newLiquidity);
+    event LiquidityAdded(uint128 liquidity, uint256 usdcAmount);
+    event LiquidityRemoved(uint128 liquidity);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Errors
@@ -138,6 +169,7 @@ contract SocialVault is Ownable, ReentrancyGuard {
     error PoolAlreadyInitialized();
     error InsufficientDeposit();
     error OnlyFeeVault();
+    error OnlyPoolManager();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -209,21 +241,32 @@ contract SocialVault is Ownable, ReentrancyGuard {
     /// @notice Step 2: execute withdrawal after notice period
     function executeWithdrawal() external nonReentrant {
         WithdrawalRequest storage req = withdrawalRequests[msg.sender];
-        if (req.amount == 0)       revert NoWithdrawalRequest();
-        if (req.executed)          revert WithdrawalAlreadyExecuted();
-        if (block.timestamp < req.noticeExpiry) revert NoticeNotExpired();
+        if (req.amount == 0)                        revert NoWithdrawalRequest();
+        if (req.executed)                           revert WithdrawalAlreadyExecuted();
+        if (block.timestamp < req.noticeExpiry)     revert NoticeNotExpired();
 
         LPPosition storage pos = positions[msg.sender];
+
+        // Compute penalty and proportional liquidity BEFORE state updates
         uint256 penalty = _calculatePenalty(pos, req.amount);
         uint256 payout  = req.amount - penalty;
 
-        req.executed = true;
+        // Compute proportional liquidity to remove (must use pre-decrement totalDeposits)
+        uint128 liqToRemove = 0;
+        if (poolInitialized && totalLiquidity > 0 && totalDeposits > 0) {
+            liqToRemove = uint128(
+                uint256(totalLiquidity) * req.amount / totalDeposits
+            );
+        }
+
+        // Update state
+        req.executed       = true;
         pos.usdcDeposited -= req.amount;
         totalDeposits     -= req.amount;
 
-        // Remove liquidity from V4 pool
-        if (poolInitialized) {
-            _removeLiquidity(req.amount);
+        // Remove proportional liquidity (returns USDC to this contract)
+        if (liqToRemove > 0) {
+            _removeLiquidity(liqToRemove);
         }
 
         // Route penalty to FeeVault
@@ -261,12 +304,18 @@ contract SocialVault is Ownable, ReentrancyGuard {
     // Team seeding
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// @notice Team seeds PROJECT tokens — initializes the V4 pool on first seed
+    /// @notice Team seeds PROJECT tokens and initialises the V4 pool
+    /// @param vaultId       Off-chain vault identifier (keccak of team address + project token)
+    /// @param projectToken  The PROJECT ERC-20 token address
+    /// @param amount        Amount of PROJECT tokens to seed
+    /// @param key           V4 PoolKey (currency0, currency1, fee, tickSpacing, hooks)
+    /// @param sqrtPriceX96  Initial pool price as Q64.96 sqrt price
     function seedTeamTokens(
         bytes32 vaultId,
         address projectToken,
         uint256 amount,
-        PoolKey calldata key
+        PoolKey calldata key,
+        uint160 sqrtPriceX96
     ) external nonReentrant {
         IERC20(projectToken).safeTransferFrom(msg.sender, address(this), amount);
 
@@ -278,50 +327,249 @@ contract SocialVault is Ownable, ReentrancyGuard {
 
         // Initialize V4 pool on first team seed
         if (!poolInitialized) {
-            _initializePool(key);
+            _initializePool(key, sqrtPriceX96);
         }
 
         emit TeamSeeded(vaultId, projectToken, amount);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Rebalancing — called by oracle (AI optimizer) or at epoch boundary
+    // Rebalancing — called by owner (AI oracle or epoch boundary)
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// @notice Rebalance liquidity to new tick range — atomic via flash accounting
+    /// @notice Rebalance all liquidity to a new tick range atomically
+    /// @dev    Removes all liquidity from the current range, updates tick range,
+    ///         then re-adds all USDC at the new range — all in one unlock callback.
     function rebalance(
         int24 newTickLower,
         int24 newTickUpper
     ) external onlyOwner nonReentrant {
         if (!poolInitialized) revert PoolNotInitialized();
 
-        // TODO (T1.4):
-        //   1. Remove all liquidity from current range (flash accounting)
-        //   2. Add all liquidity to new range
-        //   3. Settle via poolManager.unlock()
-        //   4. Update stored tick range
+        poolManager.unlock(
+            abi.encode(Action.Rebalance, abi.encode(newTickLower, newTickUpper))
+        );
 
-        emit Rebalanced(newTickLower, newTickUpper);
+        emit Rebalanced(newTickLower, newTickUpper, totalLiquidity);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Internal — V4 interactions (stubs, implemented in T1.3)
+    // IUnlockCallback — V4 re-entrancy gate
     // ─────────────────────────────────────────────────────────────────────────
 
-    function _initializePool(PoolKey calldata key) internal {
+    /// @notice Called by PoolManager during poolManager.unlock().
+    ///         Decodes the action and dispatches to the appropriate handler.
+    function unlockCallback(bytes calldata data) external returns (bytes memory) {
+        if (msg.sender != address(poolManager)) revert OnlyPoolManager();
+
+        (Action action, bytes memory params) = abi.decode(data, (Action, bytes));
+
+        if (action == Action.AddLiquidity) {
+            uint256 usdcAmount = abi.decode(params, (uint256));
+            return _handleAddLiquidity(usdcAmount);
+        }
+        if (action == Action.RemoveLiquidity) {
+            uint128 liquidityAmount = abi.decode(params, (uint128));
+            return _handleRemoveLiquidity(liquidityAmount);
+        }
+        // Action.Rebalance
+        (int24 newTickLower, int24 newTickUpper) = abi.decode(params, (int24, int24));
+        return _handleRebalance(newTickLower, newTickUpper);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Internal — V4 unlock handlers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @dev Add USDC as single-sided liquidity at the current tick range.
+    ///      Computes liquidity from usdcAmount using LiquidityAmounts,
+    ///      calls modifyLiquidity, then settles the owed tokens.
+    function _handleAddLiquidity(uint256 usdcAmount) internal returns (bytes memory) {
+        // getLiquidityForAmount0/1 only needs tick-boundary prices (not current sqrtPrice)
+        uint160 sqrtPriceLower = TickMath.getSqrtPriceAtTick(tickLower);
+        uint160 sqrtPriceUpper = TickMath.getSqrtPriceAtTick(tickUpper);
+
+        bool usdcIsToken0 = Currency.unwrap(poolKey.currency0) == address(usdc);
+
+        uint128 liquidity;
+        if (usdcIsToken0) {
+            liquidity = LiquidityAmounts.getLiquidityForAmount0(
+                sqrtPriceLower, sqrtPriceUpper, usdcAmount
+            );
+        } else {
+            liquidity = LiquidityAmounts.getLiquidityForAmount1(
+                sqrtPriceLower, sqrtPriceUpper, usdcAmount
+            );
+        }
+
+        if (liquidity == 0) return "";
+
+        (BalanceDelta callerDelta,) = poolManager.modifyLiquidity(
+            poolKey,
+            ModifyLiquidityParams({
+                tickLower:      tickLower,
+                tickUpper:      tickUpper,
+                liquidityDelta: int256(uint256(liquidity)),
+                salt:           bytes32(0)
+            }),
+            ""
+        );
+
+        // Settle tokens we owe (negative delta = we owe that currency)
+        // Take any excess (positive delta = pool owes us)
+        _settleDelta(callerDelta);
+
+        totalLiquidity += liquidity;
+        emit LiquidityAdded(liquidity, usdcAmount);
+        return abi.encode(liquidity);
+    }
+
+    /// @dev Remove exact liquidity from the current tick range.
+    ///      Takes the returned tokens back to this contract.
+    function _handleRemoveLiquidity(uint128 liquidityAmount) internal returns (bytes memory) {
+        (BalanceDelta callerDelta,) = poolManager.modifyLiquidity(
+            poolKey,
+            ModifyLiquidityParams({
+                tickLower:      tickLower,
+                tickUpper:      tickUpper,
+                liquidityDelta: -int256(uint256(liquidityAmount)),
+                salt:           bytes32(0)
+            }),
+            ""
+        );
+
+        // Take tokens we're owed back to this contract
+        _settleDelta(callerDelta);
+
+        totalLiquidity -= liquidityAmount;
+        emit LiquidityRemoved(liquidityAmount);
+        return "";
+    }
+
+    /// @dev Rebalance: atomically remove all liquidity and re-add at new tick range.
+    function _handleRebalance(
+        int24 newTickLower,
+        int24 newTickUpper
+    ) internal returns (bytes memory) {
+        // Step 1: Remove all existing liquidity
+        if (totalLiquidity > 0) {
+            (BalanceDelta removeDelta,) = poolManager.modifyLiquidity(
+                poolKey,
+                ModifyLiquidityParams({
+                    tickLower:      tickLower,
+                    tickUpper:      tickUpper,
+                    liquidityDelta: -int256(uint256(totalLiquidity)),
+                    salt:           bytes32(0)
+                }),
+                ""
+            );
+            _settleDelta(removeDelta);
+            totalLiquidity = 0;
+        }
+
+        // Step 2: Update tick range
+        tickLower = newTickLower;
+        tickUpper = newTickUpper;
+
+        // Step 3: Re-add all USDC at new range
+        if (totalDeposits > 0) {
+            uint160 sqrtPriceLower = TickMath.getSqrtPriceAtTick(newTickLower);
+            uint160 sqrtPriceUpper = TickMath.getSqrtPriceAtTick(newTickUpper);
+
+            bool usdcIsToken0 = Currency.unwrap(poolKey.currency0) == address(usdc);
+
+            uint128 newLiquidity;
+            if (usdcIsToken0) {
+                newLiquidity = LiquidityAmounts.getLiquidityForAmount0(
+                    sqrtPriceLower, sqrtPriceUpper, totalDeposits
+                );
+            } else {
+                newLiquidity = LiquidityAmounts.getLiquidityForAmount1(
+                    sqrtPriceLower, sqrtPriceUpper, totalDeposits
+                );
+            }
+
+            if (newLiquidity > 0) {
+                (BalanceDelta addDelta,) = poolManager.modifyLiquidity(
+                    poolKey,
+                    ModifyLiquidityParams({
+                        tickLower:      newTickLower,
+                        tickUpper:      newTickUpper,
+                        liquidityDelta: int256(uint256(newLiquidity)),
+                        salt:           bytes32(0)
+                    }),
+                    ""
+                );
+                _settleDelta(addDelta);
+                totalLiquidity = newLiquidity;
+            }
+        }
+
+        return "";
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Internal — V4 token settlement helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @dev Settle a BalanceDelta from modifyLiquidity:
+    ///      negative = we owe that currency → sync + transfer + settle
+    ///      positive = pool owes us → take
+    function _settleDelta(BalanceDelta delta) internal {
+        int128 d0 = delta.amount0();
+        int128 d1 = delta.amount1();
+
+        // currency0
+        if (d0 < 0) {
+            _pay(poolKey.currency0, uint256(uint128(-d0)));
+        } else if (d0 > 0) {
+            poolManager.take(poolKey.currency0, address(this), uint256(uint128(d0)));
+        }
+
+        // currency1
+        if (d1 < 0) {
+            _pay(poolKey.currency1, uint256(uint128(-d1)));
+        } else if (d1 > 0) {
+            poolManager.take(poolKey.currency1, address(this), uint256(uint128(d1)));
+        }
+    }
+
+    /// @dev Transfer tokens into PoolManager and settle.
+    ///      Pattern: sync → transfer → settle (ERC20 pull-then-settle).
+    function _pay(Currency currency, uint256 amount) internal {
+        poolManager.sync(currency);
+        // Use SafeERC20 to handle non-standard ERC20 return values
+        SafeERC20.safeTransfer(IERC20(Currency.unwrap(currency)), address(poolManager), amount);
+        poolManager.settle();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Internal — pool initialization
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function _initializePool(PoolKey calldata key, uint160 sqrtPriceX96) internal {
         if (poolInitialized) revert PoolAlreadyInitialized();
         poolKey         = key;
         poolInitialized = true;
-        // TODO (T1.3): poolManager.initialize(key, sqrtPriceX96)
-        emit PoolInitialized(keccak256(abi.encode(key)));
+        // initialize() is directly callable (does NOT require unlock)
+        poolManager.initialize(key, sqrtPriceX96);
+        emit PoolInitialized(keccak256(abi.encode(key)), sqrtPriceX96);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Internal — dispatch wrappers (call unlock → trigger callback)
+    // ─────────────────────────────────────────────────────────────────────────
 
     function _addLiquidity(uint256 usdcAmount) internal {
-        // TODO (T1.3): poolManager.unlock() → modifyLiquidity callback
+        poolManager.unlock(
+            abi.encode(Action.AddLiquidity, abi.encode(usdcAmount))
+        );
     }
 
-    function _removeLiquidity(uint256 usdcAmount) internal {
-        // TODO (T1.3): poolManager.unlock() → modifyLiquidity callback
+    function _removeLiquidity(uint128 liquidityAmount) internal {
+        poolManager.unlock(
+            abi.encode(Action.RemoveLiquidity, abi.encode(liquidityAmount))
+        );
     }
 
     // ─────────────────────────────────────────────────────────────────────────
