@@ -38,6 +38,12 @@ If you've already claimed a distribution, the campaign page will show **Claimed*
 
 ---
 
+## Batch Claiming
+
+If you have claimable rewards across multiple epochs on the same campaign contract, the UI will show a **Claim All (N)** button. This submits a single `batchClaim()` transaction covering all eligible distributions — saving gas compared to claiming each epoch individually.
+
+---
+
 ## Troubleshooting
 
 **Claim button not appearing** — the epoch may not have settled yet, or the distribution hasn't been published. Check back shortly after epoch end.

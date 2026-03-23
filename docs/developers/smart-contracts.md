@@ -61,6 +61,42 @@ Claim multiple distributions in a single transaction.
 - **Oracle signature expiry** — all distributions have a deadline; expired claims revert
 - **Chain-specific signatures** — EIP-712 domain includes `chainId` and `verifyingContract`, preventing replay across chains
 
+### Campaign Lifecycle
+
+Campaigns follow a defined lifecycle enforced by the contract:
+
+```
+depositCampaign()   ← anyone; first depositor becomes the campaign creator
+        ↓
+  (campaign runs — epochs distributed, users claim)
+        ↓
+closeCampaign()     ← Mintware only — marks campaign as closed
+        ↓
+  (7-day withdrawal cooldown — users submit any remaining claims)
+        ↓
+withdrawCampaign()  ← campaign creator only — recovers remaining balance
+```
+
+**Emergency path:** If the contract is paused, `emergencyWithdraw()` allows recovery outside the normal lifecycle.
+
+Key properties:
+- `depositCampaign()` uses balance-diff accounting — safe for fee-on-transfer tokens
+- Only Mintware (contract owner) can close campaigns
+- Only the original creator (first depositor) can withdraw remaining funds after the cooldown
+- `campaigns[id].closed` and `campaigns[id].closedAt` are set on close
+
+### Oracle Rotation
+
+The oracle signer key can be rotated with a 48-hour timelock:
+
+```
+proposeOracleSigner(newAddr)   ← onlyOwner
+        ↓  (wait 48 hours)
+confirmOracleSigner()          ← onlyOwner — activates new signer
+```
+
+`cancelOracleRotation()` can abort the rotation at any point before confirmation. This prevents an attacker who compromises the owner key from immediately replacing the oracle — they would need to hold control for 48 hours.
+
 ### Source Code
 
 The contract source is available in the project repository under `contracts/MintwareDistributor.sol`.
