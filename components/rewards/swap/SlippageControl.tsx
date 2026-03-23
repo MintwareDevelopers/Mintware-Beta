@@ -47,133 +47,52 @@ export function SlippageControl({ value, onChange }: SlippageControlProps) {
   }
 
   return (
-    <>
-      <style>{`
-        .slippage-row {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .slippage-label {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 11px;
-          font-weight: 600;
-          color: #8A8C9E;
-          letter-spacing: 0.4px;
-          text-transform: uppercase;
-          margin-right: 4px;
-          white-space: nowrap;
-        }
-        .slippage-pill {
-          font-family: 'DM Mono', monospace;
-          font-size: 12px;
-          font-weight: 500;
-          border: 1.5px solid #E0DFFF;
-          border-radius: 20px;
-          padding: 3px 10px;
-          cursor: pointer;
-          background: #fff;
-          color: #3A3C52;
-          transition: background 0.15s, color 0.15s, border-color 0.15s;
-          white-space: nowrap;
-        }
-        .slippage-pill:hover {
-          border-color: #3A5CE8;
-          color: #3A5CE8;
-        }
-        .slippage-pill.active {
-          background: #3A5CE8;
-          border-color: #3A5CE8;
-          color: #fff;
-        }
-        .slippage-custom-wrap {
-          position: relative;
-        }
-        .slippage-custom-input {
-          font-family: 'DM Mono', monospace;
-          font-size: 12px;
-          font-weight: 500;
-          width: 56px;
-          border: 1.5px solid #E0DFFF;
-          border-radius: 20px;
-          padding: 3px 20px 3px 8px;
-          outline: none;
-          background: #fff;
-          color: #1A1A2E;
-          transition: border-color 0.15s;
-        }
-        .slippage-custom-input:focus {
-          border-color: #3A5CE8;
-        }
-        .slippage-custom-input.err {
-          border-color: #C2537A;
-        }
-        .slippage-custom-input.active-custom {
-          border-color: #3A5CE8;
-          background: #F0F3FF;
-        }
-        .slippage-pct-suffix {
-          position: absolute;
-          right: 8px;
-          top: 50%;
-          transform: translateY(-50%);
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          color: #8A8C9E;
-          pointer-events: none;
-        }
-        .slippage-err-msg {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 10px;
-          color: #C2537A;
-          margin-top: 2px;
-          margin-left: 2px;
-        }
-      `}</style>
-
-      <div>
-        <div className="slippage-row">
-          <span className="slippage-label">Slippage</span>
-          {PRESET_OPTIONS.map((opt, i) => (
-            <button
-              key={opt}
-              className={`slippage-pill${!isCustom && value === opt ? ' active' : ''}`}
-              onClick={() => selectPreset(opt)}
-              type="button"
-            >
-              {PRESET_LABELS[i]}
-            </button>
-          ))}
-          {/* Custom pill/input */}
-          {isCustom ? (
-            <div className="slippage-custom-wrap">
-              <input
-                ref={inputRef}
-                className={`slippage-custom-input active-custom${customErr ? ' err' : ''}`}
-                type="number"
-                min="0.01"
-                max="50"
-                step="0.1"
-                value={customRaw}
-                onChange={(e) => handleCustomInput(e.target.value)}
-                placeholder="0.5"
-              />
-              <span className="slippage-pct-suffix">%</span>
-            </div>
-          ) : (
-            <button
-              className="slippage-pill"
-              onClick={selectCustom}
-              type="button"
-            >
-              Custom
-            </button>
-          )}
-        </div>
-        {customErr && (
-          <div className="slippage-err-msg">Enter a value between 0.01% and 50%</div>
+    <div>
+      <div className="flex items-center gap-[6px]">
+        <span className="font-sans text-[11px] font-semibold text-mw-ink-4 tracking-[0.4px] uppercase mr-[4px] whitespace-nowrap">
+          Slippage
+        </span>
+        {PRESET_OPTIONS.map((opt, i) => (
+          <button
+            key={opt}
+            className={`font-mono text-[12px] font-medium border-[1.5px] border-[#E0DFFF] rounded-xl px-[10px] py-[3px] cursor-pointer whitespace-nowrap transition-all duration-150 hover:border-mw-brand-deep hover:text-mw-brand-deep${!isCustom && value === opt ? ' bg-mw-brand-deep border-mw-brand-deep text-white' : ' bg-white text-[#3A3C52]'}`}
+            onClick={() => selectPreset(opt)}
+            type="button"
+          >
+            {PRESET_LABELS[i]}
+          </button>
+        ))}
+        {/* Custom pill/input */}
+        {isCustom ? (
+          <div className="relative">
+            <input
+              ref={inputRef}
+              className={`font-mono text-[12px] font-medium w-[56px] border-[1.5px] rounded-xl px-[8px] py-[3px] pr-[20px] outline-none bg-[#F0F3FF] text-mw-ink transition-colors duration-150 border-mw-brand-deep${customErr ? ' border-mw-pink' : ''}`}
+              type="number"
+              min="0.01"
+              max="50"
+              step="0.1"
+              value={customRaw}
+              onChange={(e) => handleCustomInput(e.target.value)}
+              placeholder="0.5"
+            />
+            <span className="absolute right-[8px] top-1/2 -translate-y-1/2 font-mono text-[11px] text-mw-ink-4 pointer-events-none">%</span>
+          </div>
+        ) : (
+          <button
+            className="font-mono text-[12px] font-medium border-[1.5px] border-[#E0DFFF] rounded-xl px-[10px] py-[3px] cursor-pointer whitespace-nowrap bg-white text-[#3A3C52] transition-all duration-150 hover:border-mw-brand-deep hover:text-mw-brand-deep"
+            onClick={selectCustom}
+            type="button"
+          >
+            Custom
+          </button>
         )}
       </div>
-    </>
+      {customErr && (
+        <div className="font-sans text-[10px] text-mw-pink mt-[2px] ml-[2px]">
+          Enter a value between 0.01% and 50%
+        </div>
+      )}
+    </div>
   )
 }

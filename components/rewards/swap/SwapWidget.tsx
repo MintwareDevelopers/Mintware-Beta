@@ -151,220 +151,32 @@ export function SwapWidget() {
 
   return (
     <>
-      <style>{`
-        .mw-swap-wrap { max-width: 440px; margin: 0 auto; width: 100%; }
-
-        /* Card */
-        .mw-swap-card {
-          background: #fff;
-          border-radius: 16px;
-          border: 1px solid rgba(26,26,46,0.08);
-          box-shadow: 0 4px 24px rgba(26,26,46,0.07);
-          padding: 20px;
-        }
-
-        /* Header */
-        .mw-swap-header {
-          display: flex; align-items: center; justify-content: space-between;
-          margin-bottom: 16px;
-        }
-        .mw-swap-title { font-family: Georgia, serif; font-size: 18px; font-weight: 700; color: #1A1A2E; }
-        .mw-swap-header-right { display: flex; align-items: center; gap: 8px; }
-
-        /* Slippage */
-        .mw-slippage-bar {
-          display: flex; align-items: center; gap: 6px;
-          margin-bottom: 14px;
-          padding: 8px 12px;
-          background: rgba(26,26,46,0.03);
-          border: 1px solid rgba(26,26,46,0.07);
-          border-radius: 10px;
-        }
-        .mw-slippage-label { font-size: 12px; color: #8A8C9E; font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif; flex-shrink: 0; }
-        .mw-slip-btn {
-          padding: 4px 10px; border-radius: 7px;
-          border: 1px solid transparent;
-          background: transparent;
-          font-family: var(--font-mono), 'DM Mono', monospace;
-          font-size: 12px; font-weight: 600; color: #8A8C9E;
-          cursor: pointer; transition: all 0.12s;
-        }
-        .mw-slip-btn:hover { background: rgba(0,82,255,0.07); color: #0052FF; }
-        .mw-slip-btn.active { background: rgba(0,82,255,0.12); border-color: rgba(0,82,255,0.25); color: #0052FF; }
-        .mw-slip-custom {
-          width: 56px; padding: 4px 6px;
-          border-radius: 7px; border: 1px solid rgba(26,26,46,0.12);
-          background: rgba(26,26,46,0.03);
-          font-family: var(--font-mono), 'DM Mono', monospace;
-          font-size: 12px; color: #1A1A2E; text-align: center;
-          outline: none;
-        }
-        .mw-slip-custom:focus { border-color: rgba(0,82,255,0.4); }
-
-        /* Token cards */
-        .mw-token-card {
-          background: rgba(26,26,46,0.03);
-          border: 1px solid rgba(26,26,46,0.08);
-          border-radius: 12px;
-          padding: 14px;
-          transition: border-color 0.15s;
-        }
-        .mw-token-card:focus-within { border-color: rgba(0,82,255,0.3); }
-        .mw-token-card-header {
-          display: flex; align-items: center; justify-content: space-between;
-          margin-bottom: 8px;
-        }
-        .mw-token-card-label { font-size: 12px; color: #8A8C9E; font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif; }
-        .mw-token-card-balance { font-size: 12px; color: #8A8C9E; font-family: var(--font-mono), 'DM Mono', monospace; }
-        .mw-token-input-row { display: flex; align-items: center; gap: 10px; }
-        .mw-token-amount-input {
-          flex: 1;
-          background: none; border: none; outline: none;
-          font-family: var(--font-mono), 'DM Mono', monospace;
-          font-size: 22px; font-weight: 600; color: #1A1A2E;
-          min-width: 0;
-        }
-        .mw-token-amount-input::placeholder { color: #C4C5D0; }
-        .mw-token-amount-readonly {
-          flex: 1;
-          font-family: var(--font-mono), 'DM Mono', monospace;
-          font-size: 22px; font-weight: 600; color: #1A1A2E;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-        .mw-token-amount-readonly.loading { color: #C4C5D0; animation: mw-blink 1s step-end infinite; }
-        @keyframes mw-blink { 50%{ opacity: 0.4 } }
-
-        /* Token select button */
-        .mw-token-select {
-          display: inline-flex; align-items: center; gap: 6px;
-          padding: 7px 12px;
-          border-radius: 8px;
-          background: #1A1A2E; color: #fff;
-          border: none; cursor: pointer;
-          font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-          font-size: 13px; font-weight: 600;
-          transition: background 0.15s; white-space: nowrap; flex-shrink: 0;
-        }
-        .mw-token-select.has-token { background: rgba(26,26,46,0.07); color: #1A1A2E; }
-        .mw-token-select.has-token:hover { background: rgba(26,26,46,0.12); }
-        .mw-token-select:not(.has-token):hover { background: #2d2d48; }
-        .mw-token-select-icon { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: #e2e8f0; }
-        .mw-token-select-chevron { font-size: 10px; opacity: 0.6; }
-
-        /* Quick amount buttons */
-        .mw-quick-btns { display: flex; gap: 4px; margin-top: 8px; }
-        .mw-quick-btn {
-          padding: 3px 8px;
-          border-radius: 6px;
-          background: rgba(26,26,46,0.05);
-          border: 1px solid rgba(26,26,46,0.09);
-          font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-          font-size: 11px; font-weight: 600; color: #8A8C9E;
-          cursor: pointer; transition: all 0.12s;
-        }
-        .mw-quick-btn:hover { background: rgba(0,82,255,0.08); color: #0052FF; border-color: rgba(0,82,255,0.2); }
-
-        /* Flip button */
-        .mw-flip-row { display: flex; align-items: center; justify-content: center; margin: 8px 0; }
-        .mw-flip-btn {
-          width: 36px; height: 36px; border-radius: 10px;
-          background: #fff;
-          border: 1px solid rgba(26,26,46,0.12);
-          font-size: 18px; cursor: pointer;
-          display: flex; align-items: center; justify-content: center;
-          transition: all 0.15s; color: #3A3C52;
-          box-shadow: 0 1px 4px rgba(26,26,46,0.06);
-        }
-        .mw-flip-btn:hover { background: rgba(0,82,255,0.06); border-color: rgba(0,82,255,0.2); color: #0052FF; transform: rotate(180deg); }
-
-        /* Price impact */
-        .mw-impact {
-          margin: 6px 0;
-          padding: 8px 12px;
-          border-radius: 8px;
-          background: rgba(234,179,8,0.08);
-          border: 1px solid rgba(234,179,8,0.2);
-          font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px; color: #ca8a04;
-        }
-        .mw-impact.error { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); color: #dc2626; }
-
-        /* Error */
-        .mw-swap-error {
-          margin: 8px 0;
-          padding: 10px 14px;
-          border-radius: 10px;
-          background: rgba(239,68,68,0.07);
-          border: 1px solid rgba(239,68,68,0.18);
-          font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-          font-size: 13px; color: #dc2626;
-        }
-        .mw-coming-soon {
-          margin: 8px 0;
-          padding: 10px 14px;
-          border-radius: 10px;
-          background: rgba(0,82,255,0.06);
-          border: 1px solid rgba(0,82,255,0.15);
-          font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-          font-size: 13px; color: #0052FF;
-          text-align: center;
-        }
-
-        /* Action button */
-        .mw-swap-btn {
-          width: 100%; padding: 14px;
-          border-radius: 12px;
-          background: #0052FF; color: #fff;
-          border: none; cursor: pointer;
-          font-family: var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
-          font-size: 15px; font-weight: 700;
-          transition: background 0.15s, transform 0.15s;
-          margin-top: 12px;
-        }
-        .mw-swap-btn:hover:not(:disabled) { background: #0040cc; transform: translateY(-1px); }
-        .mw-swap-btn:disabled { background: rgba(26,26,46,0.12); color: #8A8C9E; cursor: not-allowed; transform: none; }
-        .mw-swap-btn.coming-soon { background: rgba(0,82,255,0.12); color: #0052FF; }
-
-        /* Price info row */
-        .mw-price-info {
-          display: flex; align-items: center; justify-content: space-between;
-          margin: 4px 0 8px;
-          font-family: var(--font-mono), 'DM Mono', monospace;
-          font-size: 12px; color: #8A8C9E;
-        }
-
-        @media (max-width: 480px) {
-          .mw-swap-card { padding: 14px; border-radius: 12px; }
-          .mw-token-amount-input { font-size: 18px; }
-        }
-      `}</style>
-
-      <div className="mw-swap-wrap">
+      <div className="max-w-[440px] mx-auto w-full">
         <CampaignBanner campaignId={campaignId} referrer={referrer} campaign={campaign} />
 
-        <div className="mw-swap-card">
+        <div className="bg-white rounded-lg border border-[rgba(26,26,46,0.08)] shadow-[0_4px_24px_rgba(26,26,46,0.07)] p-[20px]">
           {/* Header */}
-          <div className="mw-swap-header">
-            <span className="mw-swap-title">Swap</span>
-            <div className="mw-swap-header-right">
+          <div className="flex items-center justify-between mb-[16px]">
+            <span className="font-serif text-[18px] font-bold text-mw-ink">Swap</span>
+            <div className="flex items-center gap-[8px]">
               <ChainSelector />
             </div>
           </div>
 
           {/* Slippage bar */}
-          <div className="mw-slippage-bar">
-            <span className="mw-slippage-label">Slippage:</span>
+          <div className="flex items-center gap-[6px] mb-[14px] px-[12px] py-[8px] bg-[rgba(26,26,46,0.03)] border border-[rgba(26,26,46,0.07)] rounded-[10px]">
+            <span className="text-[12px] text-mw-ink-4 font-sans shrink-0">Slippage:</span>
             {SLIPPAGE_PRESETS.map(p => (
               <button
                 key={p}
-                className={`mw-slip-btn${!customSlippage && slippage === p ? ' active' : ''}`}
+                className={`px-[10px] py-[4px] rounded-[7px] border border-transparent font-mono text-[12px] font-semibold cursor-pointer transition-all duration-[120ms] hover:bg-[rgba(0,82,255,0.07)] hover:text-mw-brand${!customSlippage && slippage === p ? ' bg-[rgba(0,82,255,0.12)] border-[rgba(0,82,255,0.25)] text-mw-brand' : ' bg-transparent text-mw-ink-4'}`}
                 onClick={() => { setSlippage(p); setCustomSlippage('') }}
               >
                 {p}%
               </button>
             ))}
             <input
-              className="mw-slip-custom"
+              className="w-[56px] px-[6px] py-[4px] rounded-[7px] border border-[rgba(26,26,46,0.12)] bg-[rgba(26,26,46,0.03)] font-mono text-[12px] text-mw-ink text-center outline-none focus:border-[rgba(0,82,255,0.4)]"
               type="number"
               min="0.01"
               max="50"
@@ -376,18 +188,18 @@ export function SwapWidget() {
           </div>
 
           {/* You pay */}
-          <div className="mw-token-card">
-            <div className="mw-token-card-header">
-              <span className="mw-token-card-label">You pay</span>
+          <div className="bg-[rgba(26,26,46,0.03)] border border-[rgba(26,26,46,0.08)] rounded-md p-[14px] transition-colors duration-150 focus-within:border-[rgba(0,82,255,0.3)]">
+            <div className="flex items-center justify-between mb-[8px]">
+              <span className="text-[12px] text-mw-ink-4 font-sans">You pay</span>
               {balanceFormatted && sellToken && (
-                <span className="mw-token-card-balance">
+                <span className="text-[12px] text-mw-ink-4 font-mono">
                   Balance: {balanceFormatted} {sellToken.symbol}
                 </span>
               )}
             </div>
-            <div className="mw-token-input-row">
+            <div className="flex items-center gap-[10px]">
               <input
-                className="mw-token-amount-input"
+                className="flex-1 bg-transparent border-0 outline-none font-mono text-[22px] font-semibold text-mw-ink min-w-0 placeholder:text-[#C4C5D0]"
                 type="number"
                 min="0"
                 step="any"
@@ -396,25 +208,29 @@ export function SwapWidget() {
                 onChange={e => setSellAmount(e.target.value)}
               />
               <button
-                className={`mw-token-select${sellToken ? ' has-token' : ''}`}
+                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] rounded-sm border-0 cursor-pointer font-sans text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${sellToken ? ' bg-[rgba(26,26,46,0.07)] text-mw-ink hover:bg-[rgba(26,26,46,0.12)]' : ' bg-mw-ink text-white hover:bg-[#2d2d48]'}`}
                 onClick={() => setShowSellSelector(true)}
               >
                 {sellToken?.logoURI && (
                   <img
                     src={sellToken.logoURI}
                     alt={sellToken.symbol}
-                    className="mw-token-select-icon"
+                    className="w-[18px] h-[18px] rounded-full object-cover bg-[#e2e8f0]"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                   />
                 )}
                 {sellToken ? sellToken.symbol : 'Select token'}
-                <span className="mw-token-select-chevron">▾</span>
+                <span className="text-[10px] opacity-60">▾</span>
               </button>
             </div>
             {balanceFormatted && (
-              <div className="mw-quick-btns">
+              <div className="flex gap-[4px] mt-[8px]">
                 {[['25%', 0.25], ['50%', 0.5], ['75%', 0.75], ['MAX', 1]].map(([label, pct]) => (
-                  <button key={label as string} className="mw-quick-btn" onClick={() => setPercent(pct as number)}>
+                  <button
+                    key={label as string}
+                    className="px-[8px] py-[3px] rounded-[6px] bg-[rgba(26,26,46,0.05)] border border-[rgba(26,26,46,0.09)] font-sans text-[11px] font-semibold text-mw-ink-4 cursor-pointer transition-all duration-[120ms] hover:bg-[rgba(0,82,255,0.08)] hover:text-mw-brand hover:border-[rgba(0,82,255,0.2)]"
+                    onClick={() => setPercent(pct as number)}
+                  >
                     {label}
                   </button>
                 ))}
@@ -423,45 +239,49 @@ export function SwapWidget() {
           </div>
 
           {/* Flip */}
-          <div className="mw-flip-row">
-            <button className="mw-flip-btn" onClick={flip} title="Flip tokens">
+          <div className="flex items-center justify-center my-[8px]">
+            <button
+              className="w-[36px] h-[36px] rounded-[10px] bg-white border border-[rgba(26,26,46,0.12)] text-[18px] cursor-pointer flex items-center justify-center transition-all duration-150 text-[#3A3C52] shadow-[0_1px_4px_rgba(26,26,46,0.06)] hover:bg-[rgba(0,82,255,0.06)] hover:border-[rgba(0,82,255,0.2)] hover:text-mw-brand hover:rotate-180"
+              onClick={flip}
+              title="Flip tokens"
+            >
               ↕
             </button>
           </div>
 
           {/* You receive */}
-          <div className="mw-token-card">
-            <div className="mw-token-card-header">
-              <span className="mw-token-card-label">You receive</span>
+          <div className="bg-[rgba(26,26,46,0.03)] border border-[rgba(26,26,46,0.08)] rounded-md p-[14px] transition-colors duration-150 focus-within:border-[rgba(0,82,255,0.3)]">
+            <div className="flex items-center justify-between mb-[8px]">
+              <span className="text-[12px] text-mw-ink-4 font-sans">You receive</span>
             </div>
-            <div className="mw-token-input-row">
-              <span className={`mw-token-amount-readonly${isQuoting ? ' loading' : ''}`}>
-                {isQuoting ? '…' : buyAmount ? fmt(buyAmount) : <span style={{ color: '#C4C5D0' }}>0</span>}
+            <div className="flex items-center gap-[10px]">
+              <span className={`flex-1 font-mono text-[22px] font-semibold text-mw-ink overflow-hidden text-ellipsis whitespace-nowrap${isQuoting ? ' text-[#C4C5D0] animate-[blink_1s_step-end_infinite]' : ''}`}>
+                {isQuoting ? '…' : buyAmount ? fmt(buyAmount) : <span className="text-[#C4C5D0]">0</span>}
               </span>
               <button
-                className={`mw-token-select${buyToken ? ' has-token' : ''}`}
+                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] rounded-sm border-0 cursor-pointer font-sans text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${buyToken ? ' bg-[rgba(26,26,46,0.07)] text-mw-ink hover:bg-[rgba(26,26,46,0.12)]' : ' bg-mw-ink text-white hover:bg-[#2d2d48]'}`}
                 onClick={() => setShowBuySelector(true)}
               >
                 {buyToken?.logoURI && (
                   <img
                     src={buyToken.logoURI}
                     alt={buyToken.symbol}
-                    className="mw-token-select-icon"
+                    className="w-[18px] h-[18px] rounded-full object-cover bg-[#e2e8f0]"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                   />
                 )}
                 {buyToken ? buyToken.symbol : 'Select token'}
-                <span className="mw-token-select-chevron">▾</span>
+                <span className="text-[10px] opacity-60">▾</span>
               </button>
             </div>
           </div>
 
           {/* Price info */}
           {quote && sellToken && buyToken && !isQuoting && (
-            <div className="mw-price-info">
+            <div className="flex items-center justify-between my-[4px] mb-[8px] font-mono text-[12px] text-mw-ink-4">
               <span>1 {sellToken.symbol} ≈ {parseFloat(quote.price).toFixed(6)} {buyToken.symbol}</span>
               {priceImpact !== null && (
-                <span style={{ color: priceImpact > 2 ? '#dc2626' : '#8A8C9E' }}>
+                <span className={priceImpact > 2 ? 'text-[#dc2626]' : 'text-mw-ink-4'}>
                   Impact: {priceImpact.toFixed(2)}%
                 </span>
               )}
@@ -470,20 +290,24 @@ export function SwapWidget() {
 
           {/* Errors */}
           {quoteError === 'CORE_COMING_SOON' && (
-            <div className="mw-coming-soon">
+            <div className="my-[8px] px-[14px] py-[10px] rounded-[10px] bg-[rgba(0,82,255,0.06)] border border-[rgba(0,82,255,0.15)] font-sans text-[13px] text-mw-brand text-center">
               🚧 Core swaps coming soon — Molten router deploying shortly
             </div>
           )}
           {quoteError && quoteError !== 'CORE_COMING_SOON' && (
-            <div className="mw-swap-error">⚠ {quoteError}</div>
+            <div className="my-[8px] px-[14px] py-[10px] rounded-[10px] bg-[rgba(239,68,68,0.07)] border border-[rgba(239,68,68,0.18)] font-sans text-[13px] text-[#dc2626]">
+              ⚠ {quoteError}
+            </div>
           )}
           {swapError && !isSwapping && status === 'error' && (
-            <div className="mw-swap-error">⚠ {swapError}</div>
+            <div className="my-[8px] px-[14px] py-[10px] rounded-[10px] bg-[rgba(239,68,68,0.07)] border border-[rgba(239,68,68,0.18)] font-sans text-[13px] text-[#dc2626]">
+              ⚠ {swapError}
+            </div>
           )}
 
           {/* High price impact warning */}
           {highImpactWarning && (
-            <div className="mw-impact">
+            <div className="my-[6px] px-[12px] py-[8px] rounded-sm bg-[rgba(234,179,8,0.08)] border border-[rgba(234,179,8,0.2)] font-sans text-[12px] text-[#ca8a04]">
               ⚠ High price impact ({priceImpact?.toFixed(1)}%) — consider a smaller trade
             </div>
           )}
@@ -503,7 +327,7 @@ export function SwapWidget() {
 
           {/* Action button */}
           <button
-            className={`mw-swap-btn${quoteError === 'CORE_COMING_SOON' ? ' coming-soon' : ''}`}
+            className={`w-full py-[14px] rounded-md border-0 cursor-pointer font-sans text-[15px] font-bold transition-[background,transform] duration-150 mt-[12px] hover:not-disabled:-translate-y-[1px] disabled:cursor-not-allowed disabled:translate-y-0${quoteError === 'CORE_COMING_SOON' ? ' bg-[rgba(0,82,255,0.12)] text-mw-brand' : ' bg-mw-brand text-white hover:not-disabled:bg-[#0040cc] disabled:bg-[rgba(26,26,46,0.12)] disabled:text-mw-ink-4'}`}
             disabled={isActionDisabled()}
             onClick={handleSwap}
           >

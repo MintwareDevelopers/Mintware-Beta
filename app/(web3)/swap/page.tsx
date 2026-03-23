@@ -109,8 +109,8 @@ export default function SwapPage() {
     if (earned === 0) return 0
     if (action.one_time) return 100
     const cap = action.per_referral || action.per_referred_trade
-      ? action.points * 10   // 10 referrals = 100%
-      : action.points * 30   // 30 days = 100%
+      ? action.points * 10
+      : action.points * 30
     return Math.min(Math.round((earned / cap) * 100), 100)
   }
 
@@ -119,188 +119,147 @@ export default function SwapPage() {
   return (
     <MwAuthGuard>
       <MwNav />
-      <>
-        <style>{`
-          .sw-wrap { background: var(--color-mw-bg); min-height: 100vh; }
-          .sw-layout {
-            display: grid;
-            grid-template-columns: 1fr 380px;
-            min-height: calc(100vh - 49px);
-          }
+      <div className="page-swap bg-mw-bg min-h-screen">
+        <div className="max-w-[1160px] mx-auto px-6 py-8 max-[600px]:px-4 max-[600px]:py-6">
 
-          /* ── Left panel ── */
-          .sw-left { padding: 32px; border-right: 0.5px solid var(--color-mw-border); }
+          {/* ── Top row: title + attribution ── */}
+          <div className="flex items-start justify-between gap-8 mb-8 max-[768px]:flex-col max-[768px]:gap-5">
 
-          .sw-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--color-mw-brand); letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 10px; font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-tag-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--color-mw-live); }
-          .sw-title { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; color: var(--color-mw-ink); margin-bottom: 6px; font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-title span { color: var(--color-mw-brand); }
-          .sw-sub { font-size: 14px; color: var(--color-mw-ink-3); margin-bottom: 28px; line-height: 1.55; font-family: 'Plus Jakarta Sans', sans-serif; }
+            {/* Title block */}
+            <div>
+              <div className="inline-flex items-center gap-[6px] text-[11px] font-semibold text-mw-brand tracking-[0.8px] uppercase mb-[10px] font-sans">
+                <div className="w-[6px] h-[6px] rounded-full bg-mw-live" />
+                Multi-chain · Attribution rewards
+              </div>
+              <div className="text-[32px] font-bold tracking-[-0.5px] text-mw-ink mb-[6px] font-sans leading-[1.15]">
+                Swap &amp; <span className="text-mw-brand">earn.</span>
+              </div>
+              <div className="text-[14px] text-mw-ink-3 max-w-[400px] leading-[1.6] font-sans">
+                Trade tokens across chains. Every swap builds your Attribution score and unlocks campaign rewards.
+              </div>
+            </div>
 
-          .sw-banner { background: #fff; border: 0.5px solid rgba(79,126,247,0.2); border-radius: var(--radius-md); padding: 16px 18px; margin-bottom: 24px; display: flex; align-items: center; gap: 14px; box-shadow: var(--shadow-card); border-left: 3px solid var(--color-mw-brand); }
-          .sw-banner-icon { font-size: 22px; flex-shrink: 0; }
-          .sw-banner-body { flex: 1; min-width: 0; }
-          .sw-banner-title { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); margin-bottom: 2px; font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-banner-sub   { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-banner-badge { background: var(--color-mw-brand); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: var(--radius-xl); white-space: nowrap; font-family: 'Plus Jakarta Sans', sans-serif; flex-shrink: 0; }
-
-          .sw-section { font-size: 10px; font-weight: 700; color: var(--color-mw-ink-3); letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 14px; font-family: 'Plus Jakarta Sans', sans-serif; }
-
-          .sw-actions-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 28px; }
-          .sw-action-card { background: #fff; border-radius: 10px; padding: 14px 16px; transition: box-shadow var(--transition-fast); box-shadow: var(--shadow-card); }
-          .sw-action-card:hover { box-shadow: var(--shadow-card-hover); }
-          .sw-action-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
-          .sw-action-name { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-action-pts  { font-size: 14px; font-weight: 700; color: var(--color-mw-brand); white-space: nowrap; font-family: 'DM Mono', monospace; }
-          .sw-action-desc { font-size: 12px; color: var(--color-mw-ink-3); line-height: 1.4; font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-action-prog-wrap { margin-top: 10px; }
-          .sw-action-prog-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--color-mw-ink-5); margin-bottom: 5px; font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-action-prog-bar  { height: 3px; background: var(--color-mw-border); border-radius: 4px; overflow: hidden; }
-          .sw-action-prog-fill { height: 100%; background: var(--color-mw-brand); border-radius: 4px; }
-
-          .sw-routes { display: flex; flex-direction: column; gap: 8px; }
-          .sw-route-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: #fff; transition: box-shadow var(--transition-fast); box-shadow: var(--shadow-card); }
-          .sw-route-row:hover { box-shadow: var(--shadow-card-hover); }
-          .sw-route-dot   { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
-          .sw-route-info  { flex: 1; min-width: 0; }
-          .sw-route-chain  { font-size: 13px; font-weight: 600; color: var(--color-mw-ink); font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-route-tokens { font-size: 12px; color: var(--color-mw-ink-3); font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-route-badge  { font-size: 11px; padding: 3px 8px; border-radius: var(--radius-xl); font-weight: 600; white-space: nowrap; font-family: 'Plus Jakarta Sans', sans-serif; }
-          .sw-route-badge.live { background: rgba(34,197,94,0.1); color: var(--color-mw-green); border: 0.5px solid rgba(34,197,94,0.25); }
-          .sw-route-badge.soon { background: var(--color-mw-bg); color: var(--color-mw-ink-3); border: 0.5px solid var(--color-mw-border); }
-
-          /* ── Right panel ── */
-          .sw-right { padding: 28px 24px; background: var(--color-mw-bg); }
-          .sw-right-inner { position: sticky; top: 28px; }
-          .sw-right-label { font-size: 10px; font-weight: 700; color: var(--color-mw-ink-3); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 16px; font-family: 'Plus Jakarta Sans', sans-serif; }
-
-          @media (max-width: 900px) {
-            .sw-layout { grid-template-columns: 1fr; }
-            .sw-left  { border-right: none; border-bottom: 0.5px solid var(--color-mw-border); padding: 24px 20px; }
-            .sw-right { padding: 24px 20px; }
-            .sw-right-inner { position: static; }
-            .sw-actions-grid { grid-template-columns: 1fr; }
-          }
-        `}</style>
-
-        <div className="sw-wrap"><div className="sw-layout">
-          {/* ── Left: context panel ── */}
-          <div className="sw-left">
-            <div className="sw-tag"><div className="sw-tag-dot" />Multi-chain · Attribution rewards</div>
-            <div className="sw-title">Swap &amp; <span>earn.</span></div>
-            <div className="sw-sub">Trade tokens across chains. Every swap builds your Attribution score and unlocks campaign rewards.</div>
-
-            {/* Attribution context panel */}
-            {wallet && (
-              <div style={{ background: '#0A0D14', borderRadius: 12, padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div style={{ flexShrink: 0 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)', marginBottom: 5, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Your score</div>
-                  <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--color-mw-brand)', letterSpacing: -1.5, lineHeight: 1, fontFamily: 'DM Mono, monospace' }}>{swapScore !== null ? swapScore : '—'}</div>
-                  {swapTier && <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 3, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{swapTier} tier</div>}
+            {/* Attribution score dark card */}
+            {wallet && swapScore !== null && (
+              <div className="mw-hero-gradient rounded-xl px-6 py-4 flex items-center gap-5 shrink-0 max-[768px]:w-full">
+                <div className="shrink-0">
+                  <div className="text-[10px] font-bold tracking-[0.1em] uppercase text-mw-ink-3 mb-[5px] font-sans">Your score</div>
+                  <div className="text-[42px] font-bold text-mw-brand tracking-[-2px] leading-none font-mono">{swapScore}</div>
+                  {swapTier && <div className="text-[11px] text-mw-ink-3 mt-[4px] font-sans">{swapTier} tier</div>}
                 </div>
-                <div style={{ width: '0.5px', background: 'rgba(255,255,255,0.07)', alignSelf: 'stretch', flexShrink: 0 }} />
-                <div style={{ flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.38)', lineHeight: 1.6, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                  Every swap raises this score permanently. A higher score means a larger share of every future campaign pool.
+                <div className="w-px bg-[rgba(15,23,42,0.08)] self-stretch shrink-0" />
+                <div className="flex-1 text-[13px] text-mw-dark-sub leading-[1.6] font-sans max-w-[200px]">
+                  Every swap raises this score permanently. Higher score = larger share of every future campaign pool.
                 </div>
               </div>
             )}
+          </div>
 
-            {/* Active campaign banner */}
-            {activeCampaign && (
-              <div className="sw-banner">
-                <div className="sw-banner-icon">⚡</div>
-                <div className="sw-banner-body">
-                  <div className="sw-banner-title">{activeCampaign.name} campaign active</div>
-                  <div className="sw-banner-sub">
-                    {actions.slice(0, 2).map(([, a]) => `+${a.points} pts${actionSuffix(a)}`).join(' · ')}
+          {/* ── Main two-column: swap widget (left/primary) + context (right) ── */}
+          <div className="grid grid-cols-[minmax(0,520px)_1fr] gap-6 items-start max-[900px]:grid-cols-[1fr]">
+
+            {/* ── Left: Swap widget (hero) ── */}
+            <div className="flex flex-col gap-4">
+
+              {/* Active campaign banner */}
+              {activeCampaign && (
+                <div className="mw-accent-bg bg-white border border-[rgba(79,126,247,0.2)] border-l-[3px] border-l-mw-brand rounded-xl px-5 py-4 flex items-center gap-[14px] shadow-sm">
+                  <div className="text-[22px] shrink-0">⚡</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-semibold text-mw-ink mb-[2px] font-sans">{activeCampaign.name} campaign active</div>
+                    <div className="text-[13px] text-mw-ink-3 font-sans">
+                      {actions.slice(0, 2).map(([, a]) => `+${a.points} pts${actionSuffix(a)}`).join(' · ')}
+                    </div>
+                  </div>
+                  {actions[0] && (
+                    <div className="bg-mw-brand text-white text-[12px] font-bold px-3 py-[6px] rounded-xl whitespace-nowrap font-sans shrink-0">
+                      +{actions[0][1].points} pts{actionSuffix(actions[0][1])}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Swap widget elevated card */}
+              <div className="mw-accent-bg bg-white rounded-2xl shadow-feature border border-mw-border p-2">
+                <Suspense fallback={<SwapSkeleton />}>
+                  <SwapWidget />
+                </Suspense>
+              </div>
+            </div>
+
+            {/* ── Right: Context (action cards + routes) ── */}
+            <div className="flex flex-col gap-6 max-[900px]:gap-4">
+
+              {/* Action cards */}
+              {actions.length > 0 && (
+                <div>
+                  <div className="text-[11px] font-bold text-mw-ink-3 tracking-[1.2px] uppercase mb-[14px] font-sans">Earn points by action</div>
+                  <div className="flex flex-col gap-[10px]">
+                    {actions.map(([key, action]) => {
+                      const earned  = actionPts(key)
+                      const pct     = actionBarPct(key, action)
+                      const countLabel = action.one_time
+                        ? (earned > 0 ? 'completed' : 'not completed')
+                        : action.per_day
+                        ? `${earned > 0 ? Math.floor(earned / action.points) : 0} day${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
+                        : `${earned > 0 ? Math.floor(earned / action.points) : 0} referral${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
+                      return (
+                        <div key={key} className="mw-accent-card bg-white rounded-xl px-4 py-[14px] transition-shadow duration-150 shadow-card hover:shadow-card-hover">
+                          <div className="flex items-start justify-between gap-2 mb-[6px]">
+                            <div className="text-[14px] font-semibold text-mw-ink font-sans">{action.label}</div>
+                            <div className="text-[15px] font-bold text-mw-brand whitespace-nowrap font-mono">+{action.points}{actionSuffix(action)}</div>
+                          </div>
+                          <div className="text-[13px] text-mw-ink-3 leading-[1.4] font-sans">{actionDesc(key, activeCampaign?.name ?? '')}</div>
+                          <div className="mt-[10px]">
+                            <div className="flex justify-between text-[11px] text-mw-ink-5 mb-[5px] font-sans">
+                              <span>{countLabel}</span>
+                              <span>{earned > 0 ? `${earned} pts earned` : '0 pts earned'}</span>
+                            </div>
+                            <div className="h-[5px] bg-mw-border rounded-full overflow-hidden">
+                              <div className="h-full bg-mw-brand rounded-full" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-                {actions[0] && (
-                  <div className="sw-banner-badge">+{actions[0][1].points} pts{actionSuffix(actions[0][1])}</div>
-                )}
-              </div>
-            )}
+              )}
 
-            {/* Action cards */}
-            {actions.length > 0 && (
-              <>
-                <div className="sw-section">Earn points by action</div>
-                <div className="sw-actions-grid">
-                  {actions.map(([key, action]) => {
-                    const earned  = actionPts(key)
-                    const pct     = actionBarPct(key, action)
-                    const countLabel = action.one_time
-                      ? (earned > 0 ? 'completed' : 'not completed')
-                      : action.per_day
-                      ? `${earned > 0 ? Math.floor(earned / action.points) : 0} day${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
-                      : `${earned > 0 ? Math.floor(earned / action.points) : 0} referral${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
-                    return (
-                      <div key={key} className="sw-action-card">
-                        <div className="sw-action-head">
-                          <div className="sw-action-name">{action.label}</div>
-                          <div className="sw-action-pts">+{action.points}{actionSuffix(action)}</div>
-                        </div>
-                        <div className="sw-action-desc">{actionDesc(key, activeCampaign?.name ?? '')}</div>
-                        <div className="sw-action-prog-wrap">
-                          <div className="sw-action-prog-meta">
-                            <span>{countLabel}</span>
-                            <span>{earned > 0 ? `${earned} pts earned` : '0 pts earned'}</span>
-                          </div>
-                          <div className="sw-action-prog-bar">
-                            <div className="sw-action-prog-fill" style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
+              {/* Supported routes */}
+              <div>
+                <div className="text-[11px] font-bold text-mw-ink-3 tracking-[1.2px] uppercase mb-[14px] font-sans">Supported routes</div>
+                <div className="flex flex-col gap-2">
+                  {([
+                    { dot: '#627eea', char: 'E', from: 'Base',     tokens: 'ETH, USDC, WBTC',         live: true  },
+                    { dot: '#f7931a', char: 'B', from: 'Ethereum', tokens: 'ETH, USDC, stablecoins',  live: true  },
+                    { dot: '#9945ff', char: 'S', from: 'Solana',   tokens: 'SOL, USDC',               live: false },
+                  ] as const).map(r => (
+                    <div key={r.from} className="mw-accent-card flex items-center gap-[10px] px-[14px] py-3 rounded-xl bg-white transition-shadow duration-150 shadow-card hover:shadow-card-hover" style={!r.live ? { opacity: 0.6 } : undefined}>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{ background: r.dot }}>{r.char}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[14px] font-semibold text-mw-ink font-sans">{r.from} → {activeCampaign?.name ?? 'Core DAO'}</div>
+                        <div className="text-[13px] text-mw-ink-3 font-sans">{r.tokens}</div>
                       </div>
-                    )
-                  })}
+                      <div className={`text-[11px] px-2 py-[3px] rounded-xl font-semibold whitespace-nowrap font-sans ${r.live ? 'bg-[rgba(34,197,94,0.1)] text-mw-green border border-[rgba(34,197,94,0.25)]' : 'bg-mw-bg text-mw-ink-3 border border-mw-border'}`}>
+                        {r.live ? 'Live' : 'Coming soon'}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </>
-            )}
+              </div>
 
-            {/* Supported routes */}
-            <div className="sw-section">Supported routes</div>
-            <div className="sw-routes">
-              {([
-                { dot: '#627eea', char: 'E', from: 'Base',     tokens: 'ETH, USDC, WBTC',         live: true  },
-                { dot: '#f7931a', char: 'B', from: 'Ethereum', tokens: 'ETH, USDC, stablecoins',  live: true  },
-                { dot: '#9945ff', char: 'S', from: 'Solana',   tokens: 'SOL, USDC',               live: false },
-              ] as const).map(r => (
-                <div key={r.from} className="sw-route-row" style={!r.live ? { opacity: 0.6 } : undefined}>
-                  <div className="sw-route-dot" style={{ background: r.dot }}>{r.char}</div>
-                  <div className="sw-route-info">
-                    <div className="sw-route-chain">{r.from} → {activeCampaign?.name ?? 'Core DAO'}</div>
-                    <div className="sw-route-tokens">{r.tokens}</div>
-                  </div>
-                  <div className={`sw-route-badge ${r.live ? 'live' : 'soon'}`}>
-                    {r.live ? 'Live' : 'Coming soon'}
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
-
-          {/* ── Right: swap widget ── */}
-          <div className="sw-right">
-            <div className="sw-right-inner">
-              <div className="sw-right-label">Swap tokens</div>
-              <Suspense fallback={<SwapSkeleton />}>
-                <SwapWidget />
-              </Suspense>
-            </div>
-          </div>
-        </div></div>
-      </>
+        </div>
+      </div>
     </MwAuthGuard>
   )
 }
 
 function SwapSkeleton() {
   return (
-    <div style={{
-      background: 'var(--color-mw-surface-card)', borderRadius: 'var(--radius-md)', border: '0.5px solid var(--color-mw-border)',
-      height: 460, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: 'var(--color-mw-ink-3)', fontSize: 13, fontFamily: 'Plus Jakarta Sans, sans-serif',
-    }}>
+    <div className="bg-mw-surface-card rounded-xl border border-mw-border h-[480px] flex items-center justify-center text-mw-ink-3 text-[13px] font-sans">
       Loading swap…
     </div>
   )

@@ -94,26 +94,32 @@ function TokenButton({
 }) {
   const [iconErr, setIconErr] = useState(false)
   return (
-    <button className="mws-token-btn" onClick={onClick} type="button">
+    <button
+      className="inline-flex items-center gap-[6px] bg-[rgba(58,92,232,0.08)] border-[1.5px] border-[rgba(58,92,232,0.18)] rounded-xl px-[10px] py-[5px] pl-[6px] cursor-pointer whitespace-nowrap shrink-0 transition-all duration-150 hover:bg-[rgba(58,92,232,0.14)] hover:border-[rgba(58,92,232,0.35)]"
+      onClick={onClick}
+      type="button"
+    >
       {token ? (
         <>
           {token.logoURI && !iconErr ? (
             <img
               src={token.logoURI}
               alt={token.symbol}
-              className="mws-token-icon"
+              className="w-[22px] h-[22px] rounded-full object-cover shrink-0"
               onError={() => setIconErr(true)}
             />
           ) : (
-            <div className="mws-token-icon-fallback">{token.symbol[0]}</div>
+            <div className="w-[22px] h-[22px] rounded-full bg-mw-brand-deep text-white flex items-center justify-center font-mono text-[11px] font-bold shrink-0">
+              {token.symbol[0]}
+            </div>
           )}
-          <span className="mws-token-symbol">{token.symbol}</span>
-          <span className="mws-chevron">▾</span>
+          <span className="font-mono text-[13px] font-semibold text-[#1A1A2E]">{token.symbol}</span>
+          <span className="text-[10px] text-mw-ink-4">▾</span>
         </>
       ) : (
         <>
-          <span className="mws-token-placeholder">{placeholder}</span>
-          <span className="mws-chevron">▾</span>
+          <span className="font-sans text-[13px] font-semibold text-mw-ink-4">{placeholder}</span>
+          <span className="text-[10px] text-mw-ink-4">▾</span>
         </>
       )}
     </button>
@@ -371,318 +377,15 @@ export function MintwareSwap() {
   // ─── Render ──────────────────────────────────────────────────────────────
   return (
     <>
-      <style>{`
-        /* ── Container ──────────────────────────────────── */
-        .mws-wrap {
-          background: #F7F6FF;
-          border-radius: 20px;
-          padding: 20px;
-          max-width: 440px;
-          margin: 0 auto;
-          box-shadow: 0 4px 40px rgba(58,92,232,0.10);
-          border: 1px solid #E0DFFF;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-
-        /* ── Chain selectors ────────────────────────────── */
-        .mws-chain-row {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          margin-bottom: 10px;
-        }
-        .mws-chain-label {
-          font-size: 11px;
-          font-weight: 600;
-          color: #8A8C9E;
-          letter-spacing: 0.4px;
-          text-transform: uppercase;
-          min-width: 32px;
-        }
-        .mws-chain-pill {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px;
-          font-weight: 600;
-          border: 1.5px solid #E0DFFF;
-          border-radius: 20px;
-          padding: 3px 10px;
-          background: #fff;
-          color: #3A3C52;
-          cursor: pointer;
-          transition: all 0.15s;
-        }
-        .mws-chain-pill:hover {
-          border-color: #3A5CE8;
-          color: #3A5CE8;
-        }
-        .mws-chain-pill.active {
-          background: #3A5CE8;
-          border-color: #3A5CE8;
-          color: #fff;
-        }
-
-        /* ── Token cards ─────────────────────────────────── */
-        .mws-card {
-          background: #fff;
-          border: 1.5px solid #E0DFFF;
-          border-radius: 14px;
-          padding: 14px 16px;
-          transition: border-color 0.15s;
-        }
-        .mws-card:focus-within { border-color: #3A5CE8; }
-        .mws-card-from {
-          background: #1A1A2E;
-          border-color: #2A2C48;
-        }
-        .mws-card-from:focus-within { border-color: #3A5CE8; }
-        .mws-card-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-        }
-        .mws-card-label {
-          font-size: 11px;
-          font-weight: 600;
-          color: #8A8C9E;
-          letter-spacing: 0.4px;
-          text-transform: uppercase;
-          margin-bottom: 8px;
-        }
-        .mws-card-from .mws-card-label { color: rgba(255,255,255,0.4); }
-
-        /* Amount input */
-        .mws-amount-input {
-          flex: 1;
-          background: none;
-          border: none;
-          outline: none;
-          font-family: 'DM Mono', monospace;
-          font-size: 26px;
-          font-weight: 500;
-          color: #1A1A2E;
-          min-width: 0;
-          width: 100%;
-          padding: 0;
-        }
-        .mws-amount-input::placeholder { color: #C4C3F0; }
-        .mws-card-from .mws-amount-input { color: #fff; }
-        .mws-card-from .mws-amount-input::placeholder { color: rgba(255,255,255,0.25); }
-
-        /* Output display */
-        .mws-amount-out {
-          flex: 1;
-          font-family: 'DM Mono', monospace;
-          font-size: 26px;
-          font-weight: 500;
-          color: #1A1A2E;
-          min-width: 0;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .mws-amount-out.loading { color: #C4C3F0; animation: mws-pulse 1.2s ease-in-out infinite; }
-        @keyframes mws-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-
-        /* USD hint */
-        .mws-usd-hint {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 11px;
-          color: #8A8C9E;
-          margin-top: 4px;
-        }
-        .mws-card-from .mws-usd-hint { color: rgba(255,255,255,0.3); }
-
-        /* ── Token button ──────────────────────────────────── */
-        .mws-token-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          background: rgba(58,92,232,0.08);
-          border: 1.5px solid rgba(58,92,232,0.18);
-          border-radius: 20px;
-          padding: 5px 10px 5px 6px;
-          cursor: pointer;
-          white-space: nowrap;
-          flex-shrink: 0;
-          transition: all 0.15s;
-        }
-        .mws-token-btn:hover {
-          background: rgba(58,92,232,0.14);
-          border-color: rgba(58,92,232,0.35);
-        }
-        .mws-card-from .mws-token-btn {
-          background: rgba(255,255,255,0.1);
-          border-color: rgba(255,255,255,0.2);
-        }
-        .mws-card-from .mws-token-btn:hover {
-          background: rgba(255,255,255,0.18);
-        }
-        .mws-token-icon {
-          width: 22px;
-          height: 22px;
-          border-radius: 50%;
-          object-fit: cover;
-          flex-shrink: 0;
-        }
-        .mws-token-icon-fallback {
-          width: 22px;
-          height: 22px;
-          border-radius: 50%;
-          background: #3A5CE8;
-          color: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          font-weight: 700;
-          flex-shrink: 0;
-        }
-        .mws-token-symbol {
-          font-family: 'DM Mono', monospace;
-          font-size: 13px;
-          font-weight: 600;
-          color: #1A1A2E;
-        }
-        .mws-card-from .mws-token-symbol { color: #fff; }
-        .mws-token-placeholder {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 13px;
-          font-weight: 600;
-          color: #8A8C9E;
-        }
-        .mws-chevron {
-          font-size: 10px;
-          color: #8A8C9E;
-        }
-        .mws-card-from .mws-chevron { color: rgba(255,255,255,0.5); }
-
-        /* ── Swap direction button ───────────────────────── */
-        .mws-flip-wrap {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          margin: -8px 0;
-          position: relative;
-          z-index: 1;
-        }
-        .mws-flip-btn {
-          background: #fff;
-          border: 2px solid #E0DFFF;
-          border-radius: 50%;
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          font-size: 16px;
-          color: #3A5CE8;
-          transition: all 0.2s;
-          box-shadow: 0 2px 8px rgba(58,92,232,0.10);
-        }
-        .mws-flip-btn:hover {
-          background: #3A5CE8;
-          border-color: #3A5CE8;
-          color: #fff;
-          transform: rotate(180deg);
-        }
-
-        /* ── Slippage row ─────────────────────────────────── */
-        .mws-section {
-          margin-top: 12px;
-        }
-
-        /* ── Swap button ──────────────────────────────────── */
-        .mws-swap-btn {
-          width: 100%;
-          margin-top: 14px;
-          padding: 14px;
-          border-radius: 12px;
-          border: none;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 15px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s;
-          background: #3A5CE8;
-          color: #fff;
-          box-shadow: 0 2px 12px rgba(58,92,232,0.25);
-        }
-        .mws-swap-btn:hover:not(:disabled) {
-          background: #2a4cd8;
-          box-shadow: 0 4px 20px rgba(58,92,232,0.35);
-          transform: translateY(-1px);
-        }
-        .mws-swap-btn:disabled {
-          background: #C4C3F0;
-          color: #fff;
-          cursor: not-allowed;
-          box-shadow: none;
-          transform: none;
-        }
-        .mws-swap-btn.success {
-          background: #2A9E8A;
-          box-shadow: 0 2px 12px rgba(42,158,138,0.25);
-        }
-        .mws-swap-btn.error {
-          background: #C2537A;
-          box-shadow: 0 2px 12px rgba(194,83,122,0.25);
-        }
-
-        /* ── Error / info messages ───────────────────────── */
-        .mws-error-msg {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px;
-          color: #C2537A;
-          background: rgba(194,83,122,0.06);
-          border: 1px solid rgba(194,83,122,0.15);
-          border-radius: 8px;
-          padding: 8px 10px;
-          margin-top: 10px;
-        }
-        .mws-info-msg {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px;
-          color: #2A9E8A;
-          background: rgba(42,158,138,0.06);
-          border: 1px solid rgba(42,158,138,0.15);
-          border-radius: 8px;
-          padding: 8px 10px;
-          margin-top: 10px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .mws-tx-link {
-          font-family: 'DM Mono', monospace;
-          font-size: 11px;
-          color: #3A5CE8;
-          text-decoration: none;
-          word-break: break-all;
-        }
-        .mws-tx-link:hover { text-decoration: underline; }
-
-        /* ── Not connected ────────────────────────────────── */
-        .mws-connect-notice {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px;
-          color: #8A8C9E;
-          text-align: center;
-          margin-top: 10px;
-        }
-      `}</style>
-
-      <div className="mws-wrap">
+      <div className="bg-mw-surface-purple rounded-xl p-[20px] max-w-[440px] mx-auto shadow-[0_4px_40px_rgba(58,92,232,0.10)] border border-[#E0DFFF] font-sans">
 
         {/* ─── FROM chain selector ─── */}
-        <div className="mws-chain-row">
-          <span className="mws-chain-label">From</span>
+        <div className="flex items-center gap-[6px] mb-[10px]">
+          <span className="text-[11px] font-semibold text-mw-ink-4 tracking-[0.4px] uppercase min-w-[32px]">From</span>
           {MINTWARE_CHAIN_IDS.map((id) => (
             <button
               key={id}
-              className={`mws-chain-pill${fromChainId === id ? ' active' : ''}`}
+              className={`font-sans text-[12px] font-semibold border-[1.5px] border-[#E0DFFF] rounded-xl px-[10px] py-[3px] bg-white text-[#3A3C52] cursor-pointer transition-all duration-150 hover:border-mw-brand-deep hover:text-mw-brand-deep${fromChainId === id ? ' bg-mw-brand-deep border-mw-brand-deep text-white' : ''}`}
               onClick={() => {
                 setFromChainId(id)
                 setFromToken(null)
@@ -697,11 +400,11 @@ export function MintwareSwap() {
         </div>
 
         {/* ─── FROM token card ─── */}
-        <div className="mws-card mws-card-from">
-          <div className="mws-card-label">You pay</div>
-          <div className="mws-card-row">
+        <div className="bg-[#1A1A2E] border-[1.5px] border-[#2A2C48] rounded-[14px] px-[16px] py-[14px] transition-colors duration-150 focus-within:border-mw-brand-deep">
+          <div className="text-[11px] font-semibold text-[rgba(255,255,255,0.4)] tracking-[0.4px] uppercase mb-[8px]">You pay</div>
+          <div className="flex items-center justify-between gap-[10px]">
             <input
-              className="mws-amount-input"
+              className="flex-1 bg-transparent border-0 outline-none font-mono text-[26px] font-medium text-white min-w-0 w-full p-0 placeholder:text-[rgba(255,255,255,0.25)]"
               type="number"
               min="0"
               step="any"
@@ -713,23 +416,25 @@ export function MintwareSwap() {
                 setSwapError(null)
               }}
             />
-            <TokenButton
-              token={fromToken}
-              onClick={() => setShowFromSelector(true)}
-              placeholder="Select"
-            />
+            <div className="[&_.mws-token-btn]:bg-[rgba(255,255,255,0.1)] [&_.mws-token-btn]:border-[rgba(255,255,255,0.2)] [&_.mws-token-btn:hover]:bg-[rgba(255,255,255,0.18)] [&_.mws-token-symbol]:text-white [&_.mws-chevron]:text-[rgba(255,255,255,0.5)]">
+              <TokenButton
+                token={fromToken}
+                onClick={() => setShowFromSelector(true)}
+                placeholder="Select"
+              />
+            </div>
           </div>
           {route && (
-            <div className="mws-usd-hint">
+            <div className="font-sans text-[11px] text-[rgba(255,255,255,0.3)] mt-[4px]">
               ≈ ${parseFloat(route.fromAmountUSD || '0').toFixed(2)}
             </div>
           )}
         </div>
 
         {/* ─── Flip button ─── */}
-        <div className="mws-flip-wrap">
+        <div className="flex justify-center items-center my-[-8px] relative z-[1]">
           <button
-            className="mws-flip-btn"
+            className="bg-white border-2 border-[#E0DFFF] rounded-full w-[36px] h-[36px] flex items-center justify-content-center cursor-pointer text-[16px] text-mw-brand-deep transition-all duration-200 shadow-[0_2px_8px_rgba(58,92,232,0.10)] hover:bg-mw-brand-deep hover:border-mw-brand-deep hover:text-white hover:rotate-180"
             onClick={flipTokens}
             type="button"
             aria-label="Flip tokens"
@@ -739,12 +444,12 @@ export function MintwareSwap() {
         </div>
 
         {/* ─── TO chain selector ─── */}
-        <div className="mws-chain-row" style={{ marginTop: 4 }}>
-          <span className="mws-chain-label">To</span>
+        <div className="flex items-center gap-[6px] mb-[10px] mt-[4px]">
+          <span className="text-[11px] font-semibold text-mw-ink-4 tracking-[0.4px] uppercase min-w-[32px]">To</span>
           {MINTWARE_CHAIN_IDS.map((id) => (
             <button
               key={id}
-              className={`mws-chain-pill${toChainId === id ? ' active' : ''}`}
+              className={`font-sans text-[12px] font-semibold border-[1.5px] border-[#E0DFFF] rounded-xl px-[10px] py-[3px] bg-white text-[#3A3C52] cursor-pointer transition-all duration-150 hover:border-mw-brand-deep hover:text-mw-brand-deep${toChainId === id ? ' bg-mw-brand-deep border-mw-brand-deep text-white' : ''}`}
               onClick={() => {
                 setToChainId(id)
                 setToToken(null)
@@ -758,10 +463,10 @@ export function MintwareSwap() {
         </div>
 
         {/* ─── TO token card ─── */}
-        <div className="mws-card">
-          <div className="mws-card-label">You receive</div>
-          <div className="mws-card-row">
-            <div className={`mws-amount-out${quoteLoading ? ' loading' : ''}`}>
+        <div className="bg-white border-[1.5px] border-[#E0DFFF] rounded-[14px] px-[16px] py-[14px] transition-colors duration-150 focus-within:border-mw-brand-deep">
+          <div className="text-[11px] font-semibold text-mw-ink-4 tracking-[0.4px] uppercase mb-[8px]">You receive</div>
+          <div className="flex items-center justify-between gap-[10px]">
+            <div className={`flex-1 font-mono text-[26px] font-medium text-mw-ink min-w-0 overflow-hidden text-ellipsis whitespace-nowrap${quoteLoading ? ' text-[#C4C3F0] animate-pulse' : ''}`}>
               {quoteLoading ? 'Fetching…' : toAmountDisplay || '0'}
             </div>
             <TokenButton
@@ -771,7 +476,7 @@ export function MintwareSwap() {
             />
           </div>
           {route && (
-            <div className="mws-usd-hint">
+            <div className="font-sans text-[11px] text-mw-ink-4 mt-[4px]">
               ≈ ${parseFloat(route.toAmountUSD || '0').toFixed(2)}
             </div>
           )}
@@ -779,25 +484,27 @@ export function MintwareSwap() {
 
         {/* ─── Route info ─── */}
         {route && !quoteLoading && (
-          <div className="mws-section">
+          <div className="mt-[12px]">
             <RouteInfo route={route} fee={LIFI_FEE} />
           </div>
         )}
 
         {/* ─── Quote error ─── */}
         {quoteError && !quoteLoading && (
-          <div className="mws-error-msg">⚠ {quoteError}</div>
+          <div className="font-sans text-[12px] text-mw-pink bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-sm px-[10px] py-[8px] mt-[10px]">
+            ⚠ {quoteError}
+          </div>
         )}
 
         {/* ─── Slippage ─── */}
-        <div className="mws-section">
+        <div className="mt-[12px]">
           <SlippageControl value={slippage} onChange={setSlippage} />
         </div>
 
         {/* ─── Swap button ─── */}
         {address ? (
           <button
-            className={`mws-swap-btn${swapStatus === 'success' ? ' success' : swapStatus === 'error' ? ' error' : ''}`}
+            className={`w-full mt-[14px] py-[14px] rounded-md border-0 font-sans text-[15px] font-bold cursor-pointer transition-all duration-200 text-white shadow-[0_2px_12px_rgba(58,92,232,0.25)] hover:not-disabled:shadow-[0_4px_20px_rgba(58,92,232,0.35)] hover:not-disabled:-translate-y-[1px] disabled:cursor-not-allowed disabled:shadow-none disabled:translate-y-0${swapStatus === 'success' ? ' bg-mw-teal shadow-[0_2px_12px_rgba(42,158,138,0.25)]' : swapStatus === 'error' ? ' bg-mw-pink shadow-[0_2px_12px_rgba(194,83,122,0.25)]' : ' bg-mw-brand-deep hover:not-disabled:bg-[#2a4cd8] disabled:bg-[#C4C3F0]'}`}
             disabled={swapBtnDisabled}
             onClick={swapStatus === 'success' ? handleSwapAgain : handleSwap}
             type="button"
@@ -805,27 +512,31 @@ export function MintwareSwap() {
             {swapStatus === 'success' ? '✓ Swap again' : swapBtnLabel}
           </button>
         ) : (
-          <div className="mws-connect-notice">Connect your wallet to swap</div>
+          <div className="font-sans text-[12px] text-mw-ink-4 text-center mt-[10px]">
+            Connect your wallet to swap
+          </div>
         )}
 
         {/* ─── Unsupported chain warning ─── */}
         {walletOnUnsupportedChain && (
-          <div className="mws-error-msg">
+          <div className="font-sans text-[12px] text-mw-pink bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-sm px-[10px] py-[8px] mt-[10px]">
             ⚠ Your wallet is on an unsupported network. LI.FI routes on Base and Core DAO mainnet only — testnets (Sepolia etc.) are not supported.
           </div>
         )}
 
         {/* ─── Swap error ─── */}
         {swapStatus === 'error' && swapError && (
-          <div className="mws-error-msg">✗ {swapError}</div>
+          <div className="font-sans text-[12px] text-mw-pink bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-sm px-[10px] py-[8px] mt-[10px]">
+            ✗ {swapError}
+          </div>
         )}
 
         {/* ─── Success / tx hash ─── */}
         {swapStatus === 'success' && txHash && (
-          <div className="mws-info-msg">
+          <div className="font-sans text-[12px] text-mw-teal bg-[rgba(42,158,138,0.06)] border border-[rgba(42,158,138,0.15)] rounded-sm px-[10px] py-[8px] mt-[10px] flex items-center gap-[6px]">
             <span>✓ Swap confirmed</span>
             <a
-              className="mws-tx-link"
+              className="font-mono text-[11px] text-mw-brand-deep no-underline break-all hover:underline"
               href={`${CHAIN_EXPLORER[toChainId] ?? 'https://basescan.org/tx/'}${txHash}`}
               target="_blank"
               rel="noopener noreferrer"

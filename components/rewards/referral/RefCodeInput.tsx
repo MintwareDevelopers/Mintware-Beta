@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 interface RefCodeInputProps {
   value:        string
@@ -15,75 +16,29 @@ export function RefCodeInput({ value, buttonLabel = 'Copy', ghost = false }: Ref
     navigator.clipboard.writeText(value).catch(() => {})
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+    toast.success(buttonLabel === 'Copy Link' ? 'Referral link copied' : 'Referral code copied')
   }
 
   return (
-    <>
-      <style>{`
-        .ref-input-wrap {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .ref-input {
-          flex: 1;
-          background: var(--color-mw-surface-purple);
-          border: 1.5px solid var(--color-mw-border);
-          border-radius: var(--radius-md);
-          padding: 9px 13px;
-          font-family: var(--font-mono, 'DM Mono', monospace);
-          font-size: 12px;
-          color: var(--color-mw-ink-2);
-          outline: none;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          cursor: default;
-          user-select: all;
-        }
-        .ref-copy-btn {
-          padding: 9px 16px;
-          border-radius: var(--radius-md);
-          font-size: 12px;
-          font-weight: 600;
-          font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
-          cursor: pointer;
-          border: 1.5px solid transparent;
-          transition: opacity var(--transition-fast);
-          white-space: nowrap;
-          flex-shrink: 0;
-        }
-        .ref-copy-btn:active { opacity: 0.75; }
-        .ref-copy-btn.solid {
-          background: var(--color-mw-brand-deep);
-          color: #fff;
-          border-color: var(--color-mw-brand-deep);
-        }
-        .ref-copy-btn.ghost {
-          background: transparent;
-          color: var(--color-mw-brand-deep);
-          border-color: rgba(58,92,232,0.3);
-        }
-        .ref-copy-btn.copied {
-          background: var(--color-mw-teal);
-          border-color: var(--color-mw-teal);
-          color: #fff;
-        }
-      `}</style>
-      <div className="ref-input-wrap">
-        <input
-          className="ref-input"
-          readOnly
-          value={value}
-          onClick={copy}
-        />
-        <button
-          className={`ref-copy-btn ${copied ? 'copied' : ghost ? 'ghost' : 'solid'}`}
-          onClick={copy}
-        >
-          {copied ? 'Copied!' : buttonLabel}
-        </button>
-      </div>
-    </>
+    <div className="flex items-center gap-2">
+      <input
+        className="flex-1 bg-mw-surface-purple border-[1.5px] border-mw-border rounded-md py-[9px] px-[13px] font-mono text-[12px] text-mw-ink-2 outline-none whitespace-nowrap overflow-hidden text-ellipsis cursor-default select-all"
+        readOnly
+        value={value}
+        onClick={copy}
+      />
+      <button
+        className={`py-[9px] px-[16px] rounded-md text-[12px] font-semibold font-sans cursor-pointer border-[1.5px] border-transparent transition-opacity duration-150 whitespace-nowrap shrink-0 active:opacity-75 ${
+          copied
+            ? 'bg-mw-teal border-mw-teal text-white'
+            : ghost
+            ? 'bg-transparent text-mw-brand-deep border-[rgba(58,92,232,0.3)]'
+            : 'bg-mw-brand-deep text-white border-mw-brand-deep'
+        }`}
+        onClick={copy}
+      >
+        {copied ? 'Copied!' : buttonLabel}
+      </button>
+    </div>
   )
 }

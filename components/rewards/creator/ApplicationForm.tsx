@@ -29,6 +29,9 @@ const POOL_OPTIONS = [
   { value: '$25,000+',       label: '$25,000+' },
 ]
 
+// Shared input class
+const inputCls = 'w-full box-border border-[1.5px] border-[#E0DFFF] rounded-[10px] p-[11px_14px] font-sans text-[14px] text-[#1A1A2E] bg-white outline-none transition-[border-color] duration-150 focus:border-[#3A5CE8] placeholder:text-[#C4C3F0]'
+
 export function ApplicationForm({ wallet, onBack, onTokenReward }: ApplicationFormProps) {
   const [protocolName,  setProtocolName]  = useState('')
   const [website,       setWebsite]       = useState('')
@@ -87,56 +90,28 @@ export function ApplicationForm({ wallet, onBack, onTokenReward }: ApplicationFo
   // ── Pending state (already applied) ────────────────────────────────────────
   if (submitState === 'pending') {
     return (
-      <div style={{ maxWidth: 560, margin: '0 auto' }}>
-        <style>{`
-          .af-back-btn {
-            background: none; border: none; cursor: pointer;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 13px; color: #8A8C9E; padding: 0;
-            display: flex; align-items: center; gap: 4px;
-            margin-bottom: 28px;
-          }
-          .af-back-btn:hover { color: #3A3C52; }
-        `}</style>
+      <div className="max-w-[560px] mx-auto">
+        <button
+          className="bg-transparent border-none cursor-pointer font-sans text-[13px] text-mw-ink-4 p-0 flex items-center gap-1 mb-7 hover:text-[#3A3C52]"
+          onClick={onBack}
+        >
+          ← Back to campaign type
+        </button>
 
-        <button className="af-back-btn" onClick={onBack}>← Back to campaign type</button>
-
-        <div style={{
-          background: '#fff', border: '1px solid #E0DFFF',
-          borderRadius: 20, padding: 36,
-          boxShadow: '0 2px 12px rgba(26,26,46,0.04)',
-        }}>
+        <div className="bg-white border border-[#E0DFFF] rounded-[20px] p-9 shadow-[0_2px_12px_rgba(26,26,46,0.04)]">
           {/* Amber banner */}
-          <div style={{
-            background: 'rgba(194,122,0,0.06)',
-            border: '1px solid rgba(194,122,0,0.2)',
-            borderRadius: 12, padding: '16px 20px',
-            marginBottom: 28,
-          }}>
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 14, fontWeight: 700, color: '#C27A00', marginBottom: 4,
-            }}>
+          <div className="bg-[rgba(194,122,0,0.06)] border border-[rgba(194,122,0,0.2)] rounded-[12px] p-[16px_20px] mb-7">
+            <div className="font-sans text-[14px] font-bold text-mw-amber mb-1">
               Your application is under review
             </div>
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 13, color: '#8A8C9E',
-            }}>
+            <div className="font-sans text-[13px] text-mw-ink-4">
               We&apos;ll reach out to you within 2 business days.
             </div>
           </div>
 
           <button
             onClick={onTokenReward}
-            style={{
-              width: '100%', background: '#F7F6FF',
-              border: '1.5px solid #E0DFFF', borderRadius: 12,
-              padding: '14px 20px', cursor: 'pointer',
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 14, fontWeight: 700, color: '#3A5CE8',
-              textAlign: 'center',
-            }}
+            className="w-full bg-mw-surface-purple border-[1.5px] border-[#E0DFFF] rounded-[12px] p-[14px_20px] cursor-pointer font-sans text-[14px] font-bold text-mw-brand-deep text-center"
           >
             Create Token Reward Pool →
           </button>
@@ -148,68 +123,37 @@ export function ApplicationForm({ wallet, onBack, onTokenReward }: ApplicationFo
   // ── Success state (just submitted) ──────────────────────────────────────────
   if (submitState === 'success') {
     return (
-      <div style={{ maxWidth: 560, margin: '0 auto' }}>
-        <style>{`
-          .af-back-btn {
-            background: none; border: none; cursor: pointer;
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 13px; color: #8A8C9E; padding: 0;
-            display: flex; align-items: center; gap: 4px;
-            margin-bottom: 28px;
-          }
-          .af-back-btn:hover { color: #3A3C52; }
-        `}</style>
+      <div className="max-w-[560px] mx-auto">
+        <button
+          className="bg-transparent border-none cursor-pointer font-sans text-[13px] text-mw-ink-4 p-0 flex items-center gap-1 mb-7 hover:text-[#3A3C52]"
+          onClick={onBack}
+        >
+          ← Back to campaign type
+        </button>
 
-        <button className="af-back-btn" onClick={onBack}>← Back to campaign type</button>
-
-        <div style={{
-          background: '#fff', border: '1px solid #E0DFFF',
-          borderRadius: 20, padding: 36, textAlign: 'center',
-          boxShadow: '0 2px 12px rgba(26,26,46,0.04)',
-        }}>
+        <div className="bg-white border border-[#E0DFFF] rounded-[20px] p-9 text-center shadow-[0_2px_12px_rgba(26,26,46,0.04)]">
           {/* Check icon */}
-          <div style={{
-            width: 56, height: 56, borderRadius: '50%',
-            background: 'rgba(42,158,138,0.1)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            margin: '0 auto 20px',
-          }}>
-            <span style={{ fontSize: 26, color: '#2A9E8A' }}>✓</span>
+          <div className="w-[56px] h-[56px] rounded-full bg-[rgba(42,158,138,0.1)] flex items-center justify-center mx-auto mb-5">
+            <span className="text-[26px] text-mw-teal">✓</span>
           </div>
 
-          <div style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 20, fontWeight: 800, color: '#1A1A2E', marginBottom: 10,
-          }}>
+          <div className="font-sans text-[20px] font-extrabold text-[#1A1A2E] mb-[10px]">
             Application submitted
           </div>
 
-          <div style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 14, color: '#8A8C9E', lineHeight: 1.6,
-            maxWidth: 380, margin: '0 auto 8px',
-          }}>
+          <div className="font-sans text-[14px] text-mw-ink-4 leading-[1.6] max-w-[380px] mx-auto mb-2">
             We&apos;ll review your application and reach out to{' '}
-            <strong style={{ color: '#3A3C52' }}>{submittedEmail}</strong>{' '}
+            <strong className="text-[#3A3C52]">{submittedEmail}</strong>{' '}
             within 2 business days.
           </div>
 
-          <div style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 13, color: '#8A8C9E', marginBottom: 28,
-          }}>
+          <div className="font-sans text-[13px] text-mw-ink-4 mb-7">
             In the meantime, you can create a Token Reward Pool campaign.
           </div>
 
           <button
             onClick={onTokenReward}
-            style={{
-              background: '#3A5CE8', color: '#fff',
-              border: 'none', borderRadius: 12,
-              padding: '14px 28px', cursor: 'pointer',
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 14, fontWeight: 700,
-            }}
+            className="bg-mw-brand-deep text-white border-none rounded-[12px] p-[14px_28px] cursor-pointer font-sans text-[14px] font-bold"
           >
             Create Token Reward Pool →
           </button>
@@ -220,116 +164,40 @@ export function ApplicationForm({ wallet, onBack, onTokenReward }: ApplicationFo
 
   // ── Idle / submitting state — the form ─────────────────────────────────────
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto' }}>
-      <style>{`
-        .af-back-btn {
-          background: none; border: none; cursor: pointer;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 13px; color: #8A8C9E; padding: 0;
-          display: flex; align-items: center; gap: 4px;
-          margin-bottom: 28px;
-        }
-        .af-back-btn:hover { color: #3A3C52; }
-        .af-label {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px; font-weight: 700; color: #3A3C52;
-          letter-spacing: 0.3px; text-transform: uppercase;
-          margin-bottom: 6px; display: block;
-        }
-        .af-input {
-          width: 100%; box-sizing: border-box;
-          border: 1.5px solid #E0DFFF; border-radius: 10px;
-          padding: 11px 14px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 14px; color: #1A1A2E; background: #fff;
-          outline: none; transition: border-color 150ms;
-        }
-        .af-input:focus { border-color: #3A5CE8; }
-        .af-input::placeholder { color: #C4C3F0; }
-        .af-select {
-          width: 100%; box-sizing: border-box;
-          border: 1.5px solid #E0DFFF; border-radius: 10px;
-          padding: 11px 14px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 14px; color: #1A1A2E; background: #fff;
-          outline: none; cursor: pointer; appearance: none;
-          transition: border-color 150ms;
-        }
-        .af-select:focus { border-color: #3A5CE8; }
-        .af-textarea {
-          width: 100%; box-sizing: border-box;
-          border: 1.5px solid #E0DFFF; border-radius: 10px;
-          padding: 11px 14px; resize: vertical; min-height: 100px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 14px; color: #1A1A2E; background: #fff;
-          outline: none; transition: border-color 150ms;
-        }
-        .af-textarea:focus { border-color: #3A5CE8; }
-        .af-textarea::placeholder { color: #C4C3F0; }
-        .af-submit-btn {
-          width: 100%; padding: 14px;
-          background: #3A5CE8; color: #fff;
-          border: none; border-radius: 12px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 15px; font-weight: 700;
-          cursor: pointer; transition: background 150ms;
-        }
-        .af-submit-btn:hover:not(:disabled) { background: #2a4cd8; }
-        .af-submit-btn:disabled { background: #C4C3F0; cursor: not-allowed; }
-      `}</style>
-
-      <button className="af-back-btn" onClick={onBack}>← Back to campaign type</button>
+    <div className="max-w-[560px] mx-auto">
+      <button
+        className="bg-transparent border-none cursor-pointer font-sans text-[13px] text-mw-ink-4 p-0 flex items-center gap-1 mb-7 hover:text-[#3A3C52]"
+        onClick={onBack}
+      >
+        ← Back to campaign type
+      </button>
 
       {/* Header */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10,
-            background: 'rgba(194,83,122,0.08)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 18, color: '#C2537A',
-          }}>
+      <div className="mb-7">
+        <div className="flex items-center gap-[10px] mb-2">
+          <div className="w-9 h-9 rounded-[10px] bg-[rgba(194,83,122,0.08)] flex items-center justify-center text-[18px] text-mw-pink">
             ◈
           </div>
-          <span style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 11, fontWeight: 700, color: '#C2537A',
-            background: 'rgba(194,83,122,0.08)',
-            border: '1px solid rgba(194,83,122,0.2)',
-            borderRadius: 20, padding: '3px 10px',
-            letterSpacing: '0.3px',
-          }}>
+          <span className="font-sans text-[11px] font-bold text-mw-pink bg-[rgba(194,83,122,0.08)] border border-[rgba(194,83,122,0.2)] rounded-[20px] px-[10px] py-[3px] tracking-[0.3px]">
             CURATED · WHITELISTED TEAMS
           </span>
         </div>
-        <h2 style={{
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 22, fontWeight: 800, color: '#1A1A2E',
-          margin: 0, marginBottom: 6,
-        }}>
+        <h2 className="font-sans text-[22px] font-extrabold text-[#1A1A2E] m-0 mb-[6px]">
           Apply for Points Campaign Access
         </h2>
-        <p style={{
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 13, color: '#8A8C9E', margin: 0, lineHeight: 1.55,
-        }}>
+        <p className="font-sans text-[13px] text-mw-ink-4 m-0 leading-[1.55]">
           Points campaigns are curated. Tell us about your protocol and we&apos;ll be in touch.
         </p>
       </div>
 
       {/* Form card */}
-      <div style={{
-        background: '#fff', border: '1px solid #E0DFFF',
-        borderRadius: 20, padding: 28,
-        boxShadow: '0 2px 12px rgba(26,26,46,0.04)',
-        display: 'flex', flexDirection: 'column', gap: 20,
-      }}>
+      <div className="bg-white border border-[#E0DFFF] rounded-[20px] p-7 shadow-[0_2px_12px_rgba(26,26,46,0.04)] flex flex-col gap-5">
 
         {/* Protocol Name */}
         <div>
-          <label className="af-label">Protocol Name *</label>
+          <label className="font-sans text-[12px] font-bold text-[#3A3C52] tracking-[0.3px] uppercase mb-[6px] block">Protocol Name *</label>
           <input
-            className="af-input"
+            className={inputCls}
             type="text"
             placeholder="e.g. Uniswap, Aave, Curve"
             value={protocolName}
@@ -339,9 +207,11 @@ export function ApplicationForm({ wallet, onBack, onTokenReward }: ApplicationFo
 
         {/* Website */}
         <div>
-          <label className="af-label">Website <span style={{ color: '#C4C3F0', fontWeight: 400 }}>(optional)</span></label>
+          <label className="font-sans text-[12px] font-bold text-[#3A3C52] tracking-[0.3px] uppercase mb-[6px] block">
+            Website <span className="text-[#C4C3F0] font-normal">(optional)</span>
+          </label>
           <input
-            className="af-input"
+            className={inputCls}
             type="text"
             placeholder="https://yourprotocol.xyz"
             value={website}
@@ -351,9 +221,9 @@ export function ApplicationForm({ wallet, onBack, onTokenReward }: ApplicationFo
 
         {/* Contact Email */}
         <div>
-          <label className="af-label">Contact Email *</label>
+          <label className="font-sans text-[12px] font-bold text-[#3A3C52] tracking-[0.3px] uppercase mb-[6px] block">Contact Email *</label>
           <input
-            className="af-input"
+            className={inputCls}
             type="email"
             placeholder="you@yourprotocol.xyz"
             value={contactEmail}
@@ -363,13 +233,14 @@ export function ApplicationForm({ wallet, onBack, onTokenReward }: ApplicationFo
 
         {/* Pool Size */}
         <div>
-          <label className="af-label">Expected Pool Size <span style={{ color: '#C4C3F0', fontWeight: 400 }}>(optional)</span></label>
-          <div style={{ position: 'relative' }}>
+          <label className="font-sans text-[12px] font-bold text-[#3A3C52] tracking-[0.3px] uppercase mb-[6px] block">
+            Expected Pool Size <span className="text-[#C4C3F0] font-normal">(optional)</span>
+          </label>
+          <div className="relative">
             <select
-              className="af-select"
+              className={`${inputCls} cursor-pointer appearance-none ${poolSize ? 'text-[#1A1A2E]' : 'text-[#C4C3F0]'}`}
               value={poolSize}
               onChange={e => setPoolSize(e.target.value)}
-              style={{ color: poolSize ? '#1A1A2E' : '#C4C3F0' }}
             >
               {POOL_OPTIONS.map(o => (
                 <option key={o.value} value={o.value} disabled={o.value === ''}>
@@ -377,24 +248,20 @@ export function ApplicationForm({ wallet, onBack, onTokenReward }: ApplicationFo
                 </option>
               ))}
             </select>
-            <span style={{
-              position: 'absolute', right: 14, top: '50%',
-              transform: 'translateY(-50%)', pointerEvents: 'none',
-              color: '#8A8C9E', fontSize: 12,
-            }}>▾</span>
+            <span className="absolute right-[14px] top-1/2 -translate-y-1/2 pointer-events-none text-mw-ink-3 text-[12px]">▾</span>
           </div>
         </div>
 
         {/* Description */}
         <div>
-          <label className="af-label">
+          <label className="font-sans text-[12px] font-bold text-[#3A3C52] tracking-[0.3px] uppercase mb-[6px] block">
             Tell us about your campaign *
-            <span style={{ float: 'right', color: '#C4C3F0', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
+            <span className="float-right text-[#C4C3F0] font-normal normal-case tracking-normal">
               {description.length}/500
             </span>
           </label>
           <textarea
-            className="af-textarea"
+            className={`${inputCls} resize-y min-h-[100px]`}
             placeholder="What are your goals? Who is your community? What token will you use?"
             value={description}
             onChange={e => setDescription(e.target.value.slice(0, 500))}
@@ -403,21 +270,14 @@ export function ApplicationForm({ wallet, onBack, onTokenReward }: ApplicationFo
 
         {/* Error */}
         {errorMsg && (
-          <div style={{
-            padding: '12px 16px',
-            background: 'rgba(194,83,122,0.06)',
-            border: '1px solid rgba(194,83,122,0.15)',
-            borderRadius: 10,
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 13, color: '#C2537A',
-          }}>
+          <div className="p-[12px_16px] bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-[10px] font-sans text-[13px] text-mw-pink">
             {errorMsg}
           </div>
         )}
 
         {/* Submit */}
         <button
-          className="af-submit-btn"
+          className="w-full p-[14px] bg-mw-brand-deep text-white border-none rounded-[12px] font-sans text-[15px] font-bold cursor-pointer transition-[background] duration-150 hover:bg-[#2a4cd8] disabled:bg-[#C4C3F0] disabled:cursor-not-allowed"
           onClick={handleSubmit}
           disabled={!canSubmit || submitState === 'submitting'}
         >

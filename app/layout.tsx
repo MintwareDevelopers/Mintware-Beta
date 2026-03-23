@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Plus_Jakarta_Sans, DM_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Providers } from '@/components/web2/providers'
+import { Toaster } from 'sonner'
+import { CommandPalette } from '@/components/web2/CommandPalette'
 import '@rainbow-me/rainbowkit/styles.css'
 import './globals.css'
 
@@ -36,7 +38,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${jakarta.variable} ${dmMono.variable} antialiased`}>
         <Providers>
           {children}
+          <CommandPalette />
         </Providers>
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+              fontSize: 13,
+              borderRadius: 12,
+            },
+          }}
+        />
         <Analytics />
       </body>
     </html>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Drawer } from 'vaul'
 import { RefCodeInput } from './RefCodeInput'
 import type { ReferralStats } from '@/lib/rewards/referral/types'
 
@@ -12,189 +13,119 @@ interface ReferralSheetProps {
 const DISMISSED_KEY = 'mw_ref_sheet_dismissed'
 
 export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
-  const [visible, setVisible]   = useState(false)
-  const [animIn, setAnimIn]     = useState(false)
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
     if (!trigger || !stats) return
     if (typeof window !== 'undefined' && sessionStorage.getItem(DISMISSED_KEY)) return
 
-    const t = setTimeout(() => {
-      setVisible(true)
-      requestAnimationFrame(() => setAnimIn(true))
-    }, 1500)
-
+    const t = setTimeout(() => setOpen(true), 1500)
     return () => clearTimeout(t)
   }, [trigger, stats])
 
   function dismiss() {
-    setAnimIn(false)
-    setTimeout(() => setVisible(false), 300)
+    setOpen(false)
     sessionStorage.setItem(DISMISSED_KEY, 'true')
   }
 
-  if (!visible || !stats) return null
+  if (!stats) return null
 
   const pct = Math.round((stats.sharing_score / 125) * 100)
 
   return (
-    <>
-      <style>{`
-        .rs-backdrop {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.3);
-          z-index: 999;
-          opacity: 0;
-          transition: opacity 0.3s ease-out;
-        }
-        .rs-backdrop.in { opacity: 1; }
+    <Drawer.Root open={open} onOpenChange={(v) => { if (!v) dismiss() }} shouldScaleBackground>
+      <Drawer.Portal>
+        <Drawer.Overlay
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.32)',
+            zIndex: 999,
+          }}
+        />
+        <Drawer.Content
+          style={{
+            position: 'fixed',
+            bottom: 0, left: 0, right: 0,
+            background: '#fff',
+            borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
+            boxShadow: 'var(--shadow-sheet)',
+            zIndex: 1000,
+            padding: '28px 24px 40px',
+            maxWidth: 520,
+            margin: '0 auto',
+            fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+            outline: 'none',
+          }}
+        >
+          {/* Drag handle */}
+          <div style={{
+            width: 36, height: 4,
+            background: 'var(--color-mw-border)',
+            borderRadius: 2,
+            margin: '0 auto 22px',
+          }} />
 
-        .rs-sheet {
-          position: fixed;
-          bottom: 0; left: 0; right: 0;
-          background: #fff;
-          border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-          box-shadow: var(--shadow-sheet);
-          z-index: 1000;
-          padding: 28px 24px 40px;
-          max-width: 520px;
-          margin: 0 auto;
-          transform: translateY(100%);
-          transition: transform var(--transition-base) ease-out;
-          font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
-        }
-        .rs-sheet.in { transform: translateY(0); }
+          <Drawer.Title style={{
+            fontSize: 18, fontWeight: 700,
+            color: 'var(--color-mw-ink)',
+            marginBottom: 6,
+            textAlign: 'center',
+            fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+          }}>
+            Your Mintware profile is live.
+          </Drawer.Title>
 
-        .rs-handle {
-          width: 36px; height: 4px;
-          background: var(--color-mw-border);
-          border-radius: 2px;
-          margin: 0 auto 22px;
-        }
-        .rs-headline {
-          font-size: 18px;
-          font-weight: 700;
-          color: var(--color-mw-ink);
-          margin-bottom: 6px;
-          text-align: center;
-        }
-        .rs-sub {
-          font-size: 13px;
-          color: var(--color-mw-ink-4);
-          text-align: center;
-          margin-bottom: 20px;
-        }
-        .rs-score-badge {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          background: var(--color-mw-surface-purple);
-          border: 1.5px solid rgba(194,83,122,0.2);
-          border-radius: 14px;
-          padding: 14px 20px;
-          margin-bottom: 20px;
-        }
-        .rs-score-num {
-          font-size: 28px;
-          font-weight: 700;
-          color: var(--color-mw-pink);
-          font-family: var(--font-mono, 'DM Mono', monospace);
-          line-height: 1;
-        }
-        .rs-score-label {
-          font-size: 11px;
-          color: var(--color-mw-ink-4);
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.6px;
-        }
-        .rs-score-bar-wrap {
-          flex: 1;
-          height: 6px;
-          background: rgba(194,83,122,0.12);
-          border-radius: 3px;
-          overflow: hidden;
-        }
-        .rs-score-bar-fill {
-          height: 100%;
-          background: var(--color-mw-pink);
-          border-radius: 3px;
-          transition: width 0.6s var(--easing-spring);
-        }
-        .rs-actions {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-        .rs-btn-primary {
-          width: 100%;
-          padding: 13px;
-          background: var(--color-mw-brand-deep);
-          color: #fff;
-          border: none;
-          border-radius: var(--radius-md);
-          font-size: 14px;
-          font-weight: 600;
-          font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
-          cursor: pointer;
-          transition: opacity var(--transition-fast);
-        }
-        .rs-btn-primary:active { opacity: 0.8; }
-        .rs-btn-ghost {
-          width: 100%;
-          padding: 13px;
-          background: transparent;
-          color: var(--color-mw-brand-deep);
-          border: 1.5px solid rgba(58,92,232,0.3);
-          border-radius: var(--radius-md);
-          font-size: 14px;
-          font-weight: 600;
-          font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
-          cursor: pointer;
-          transition: opacity var(--transition-fast);
-        }
-        .rs-btn-ghost:active { opacity: 0.7; }
-        .rs-btn-later {
-          width: 100%;
-          padding: 10px;
-          background: transparent;
-          color: var(--color-mw-ink-4);
-          border: none;
-          font-size: 13px;
-          font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
-          cursor: pointer;
-        }
-      `}</style>
+          <Drawer.Description style={{
+            fontSize: 13,
+            color: 'var(--color-mw-ink-4)',
+            textAlign: 'center',
+            marginBottom: 20,
+            fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+          }}>
+            Share your link to grow your Sharing score.
+          </Drawer.Description>
 
-      <div className={`rs-backdrop${animIn ? ' in' : ''}`} onClick={dismiss} />
-
-      <div className={`rs-sheet${animIn ? ' in' : ''}`}>
-        <div className="rs-handle" />
-        <div className="rs-headline">Your Mintware profile is live.</div>
-        <div className="rs-sub">Share your link to grow your Sharing score.</div>
-
-        <div className="rs-score-badge">
-          <div>
-            <div className="rs-score-label">Sharing score</div>
-            <div className="rs-score-num">{stats.sharing_score}<span style={{ fontSize: 14, color: '#C2537A', opacity: 0.5 }}>/125</span></div>
+          {/* Score badge */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            background: 'var(--color-mw-surface-purple)',
+            border: '1.5px solid rgba(194,83,122,0.2)',
+            borderRadius: 14, padding: '14px 20px', marginBottom: 20,
+          }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Sharing score</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-mw-pink)', fontFamily: 'var(--font-mono, "DM Mono", monospace)', lineHeight: 1 }}>
+                {stats.sharing_score}<span style={{ fontSize: 14, opacity: 0.5 }}>/125</span>
+              </div>
+            </div>
+            <div style={{ flex: 1, height: 6, background: 'rgba(194,83,122,0.12)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{
+                height: '100%', background: 'var(--color-mw-pink)', borderRadius: 3,
+                width: pct + '%', transition: 'width 0.6s var(--easing-spring)',
+              }} />
+            </div>
           </div>
-          <div className="rs-score-bar-wrap">
-            <div className="rs-score-bar-fill" style={{ width: pct + '%' }} />
+
+          <div style={{ marginBottom: 16 }}>
+            <RefCodeInput value={stats.ref_link} buttonLabel="Copy Link" />
           </div>
-        </div>
+          <div style={{ marginBottom: 20 }}>
+            <RefCodeInput value={stats.ref_code} buttonLabel="Copy Code" ghost />
+          </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <RefCodeInput value={stats.ref_link} buttonLabel="Copy Link" />
-        </div>
-        <div style={{ marginBottom: 20 }}>
-          <RefCodeInput value={stats.ref_code} buttonLabel="Copy Code" ghost />
-        </div>
-
-        <div className="rs-actions">
-          <button className="rs-btn-later" onClick={dismiss}>Maybe Later</button>
-        </div>
-      </div>
-    </>
+          <button
+            onClick={dismiss}
+            style={{
+              width: '100%', padding: 10, background: 'transparent',
+              color: 'var(--color-mw-ink-4)', border: 'none',
+              fontSize: 13, cursor: 'pointer',
+              fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+            }}
+          >
+            Maybe Later
+          </button>
+        </Drawer.Content>
+      </Drawer.Portal>
+    </Drawer.Root>
   )
 }

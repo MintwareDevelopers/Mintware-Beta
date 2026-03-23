@@ -8,7 +8,6 @@
 //
 // Layout: centered card, max-width 660px
 // Auth: MwAuthGuard (wallet required)
-// Inline styles only — no Tailwind.
 // =============================================================================
 
 import { useState, useCallback } from 'react'
@@ -68,206 +67,127 @@ function CreatorContent() {
   }
 
   return (
-    <>
-      <style>{`
-        .creator-page {
-          min-height: 100vh;
-          background: #F7F6FF;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-        .creator-main {
-          max-width: 660px;
-          margin: 0 auto;
-          padding: 32px 16px 80px;
-        }
-        .creator-card {
-          background: #fff;
-          border: 1px solid #E0DFFF;
-          border-radius: 20px;
-          padding: 32px;
-          box-shadow: 0 2px 12px rgba(26,26,46,0.04);
-        }
-        .creator-mode-toggle {
-          display: inline-flex;
-          border: 1.5px solid #E0DFFF;
-          border-radius: 20px;
-          overflow: hidden;
-          background: #fff;
-        }
-        .creator-mode-btn {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px; font-weight: 600;
-          padding: 6px 14px;
-          border: none; cursor: pointer;
-          transition: all 150ms; background: transparent; color: #8A8C9E;
-        }
-        .creator-mode-btn.active { background: #3A5CE8; color: #fff; }
-        .nav-btn {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 14px; font-weight: 600;
-          padding: 11px 24px; border-radius: 10px;
-          cursor: pointer; border: none;
-          transition: all 150ms;
-        }
-        .nav-btn-back {
-          background: #fff; color: #8A8C9E;
-          border: 1.5px solid #E0DFFF;
-        }
-        .nav-btn-back:hover { border-color: #C4C3F0; color: #3A3C52; }
-        .nav-btn-next {
-          background: #3A5CE8; color: #fff; flex: 1;
-        }
-        .nav-btn-next:hover { background: #2a4cd8; }
-        .nav-btn-next:disabled { background: #C4C3F0; cursor: not-allowed; }
-        @media (max-width: 640px) {
-          .creator-card { padding: 20px 16px; }
-        }
-      `}</style>
+    <div className="min-h-screen bg-[#F7F6FF] font-sans">
+      <MwNav />
 
-      <div className="creator-page">
-        <MwNav />
+      <main className="max-w-[660px] mx-auto px-4 pt-8 pb-20">
 
-        <main className="creator-main">
+        {/* ── Type select (step 0) ── */}
+        {step === 0 && (
+          <>
+            <CampaignTypeSelect onSelect={handleTypeSelect} />
+          </>
+        )}
 
-          {/* ── Type select (step 0) ── */}
-          {step === 0 && (
-            <>
-              <CampaignTypeSelect onSelect={handleTypeSelect} />
-            </>
-          )}
-
-          {/* ── 5-step flow (steps 1–5) ── */}
-          {step >= 1 && step <= 5 && (
-            <>
-              {/* Page header */}
-              <div style={{ marginBottom: 28 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-                  <button
-                    onClick={() => { setStep(0); setStepErr(null) }}
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      fontFamily: 'Plus Jakarta Sans, sans-serif',
-                      fontSize: 13, color: '#8A8C9E', padding: 0,
-                      display: 'flex', alignItems: 'center', gap: 4,
-                    }}
-                  >
-                    ← Campaign type
-                  </button>
-                  <span style={{ color: '#E0DFFF' }}>·</span>
-                  <span style={{
-                    fontFamily: 'Plus Jakarta Sans, sans-serif',
-                    fontSize: 13, fontWeight: 600,
-                    color: form.type === 'token_reward' ? '#3A5CE8' : '#C2537A',
-                  }}>
-                    {form.type === 'token_reward' ? 'Token Reward Pool' : 'Points Campaign'}
-                  </span>
-                </div>
-                <h1 style={{
-                  fontFamily: 'Plus Jakarta Sans, sans-serif',
-                  fontSize: 24, fontWeight: 800, color: '#1A1A2E',
-                  margin: 0,
-                }}>
-                  Create Campaign
-                </h1>
+        {/* ── 5-step flow (steps 1–5) ── */}
+        {step >= 1 && step <= 5 && (
+          <>
+            {/* Page header */}
+            <div className="mb-7">
+              <div className="flex items-center gap-3 mb-1">
+                <button
+                  onClick={() => { setStep(0); setStepErr(null) }}
+                  className="bg-transparent border-none cursor-pointer font-sans text-[13px] text-mw-ink-4 p-0 flex items-center gap-1"
+                >
+                  ← Campaign type
+                </button>
+                <span className="text-[#E0DFFF]">·</span>
+                <span className={`font-sans text-[13px] font-semibold ${form.type === 'token_reward' ? 'text-mw-brand-deep' : 'text-mw-pink'}`}>
+                  {form.type === 'token_reward' ? 'Token Reward Pool' : 'Points Campaign'}
+                </span>
               </div>
+              <h1 className="font-sans text-[24px] font-extrabold text-[#1A1A2E] m-0">
+                Create Campaign
+              </h1>
+            </div>
 
-              {/* Step indicator */}
-              <div style={{ marginBottom: 28 }}>
-                <StepIndicator currentStep={step} labels={STEP_LABELS} />
-              </div>
+            {/* Step indicator */}
+            <div className="mb-7">
+              <StepIndicator currentStep={step} labels={STEP_LABELS} />
+            </div>
 
-              {/* Step card */}
-              <div className="creator-card">
-                {/* Card header: step name + mode toggle */}
-                <div style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  marginBottom: 24,
-                }}>
-                  <div>
-                    <div style={{
-                      fontFamily: 'Plus Jakarta Sans, sans-serif',
-                      fontSize: 11, fontWeight: 700, color: '#8A8C9E',
-                      letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 3,
-                    }}>
-                      Step {step} of 5
-                    </div>
-                    <div style={{
-                      fontFamily: 'Plus Jakarta Sans, sans-serif',
-                      fontSize: 18, fontWeight: 800, color: '#1A1A2E',
-                    }}>
-                      {STEP_LABELS[step - 1]}
-                    </div>
+            {/* Step card */}
+            <div className="bg-white border border-[#E0DFFF] rounded-xl p-8 shadow-[0_2px_12px_rgba(26,26,46,0.04)]">
+              {/* Card header: step name + mode toggle */}
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <div className="font-sans text-[11px] font-bold text-mw-ink-4 tracking-[1px] uppercase mb-[3px]">
+                    Step {step} of 5
                   </div>
-
-                  {/* Simple / Advanced toggle (not shown on Review step) */}
-                  {step < 5 && (
-                    <div className="creator-mode-toggle">
-                      <button
-                        className={`creator-mode-btn${!form.advancedMode ? ' active' : ''}`}
-                        onClick={() => onChange({ advancedMode: false })}
-                      >
-                        Simple
-                      </button>
-                      <button
-                        className={`creator-mode-btn${form.advancedMode ? ' active' : ''}`}
-                        onClick={() => onChange({ advancedMode: true })}
-                      >
-                        Advanced
-                      </button>
-                    </div>
-                  )}
+                  <div className="font-sans text-[18px] font-extrabold text-[#1A1A2E]">
+                    {STEP_LABELS[step - 1]}
+                  </div>
                 </div>
 
-                {/* Step content */}
-                {step === 1 && <Step1Token    form={form} onChange={onChange} />}
-                {step === 2 && <Step2Pool     form={form} onChange={onChange} />}
-                {step === 3 && <Step3Actions  form={form} onChange={onChange} />}
-                {step === 4 && <Step4Schedule form={form} onChange={onChange} />}
-                {step === 5 && <Step5Review   form={form} onConfirmed={handleConfirmed} />}
-
-                {/* Step validation error */}
-                {stepErr && (
-                  <div style={{
-                    marginTop: 16,
-                    fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#C2537A',
-                    background: 'rgba(194,83,122,0.06)', border: '1px solid rgba(194,83,122,0.15)',
-                    borderRadius: 8, padding: '10px 14px',
-                  }}>
-                    {stepErr}
+                {/* Simple / Advanced toggle (not shown on Review step) */}
+                {step < 5 && (
+                  <div className="inline-flex border-[1.5px] border-[#E0DFFF] rounded-xl overflow-hidden bg-white">
+                    <button
+                      className={`font-sans text-[12px] font-semibold px-[14px] py-[6px] border-none cursor-pointer transition-all duration-150 ${!form.advancedMode ? 'bg-mw-brand-deep text-white' : 'bg-transparent text-mw-ink-4'}`}
+                      onClick={() => onChange({ advancedMode: false })}
+                    >
+                      Simple
+                    </button>
+                    <button
+                      className={`font-sans text-[12px] font-semibold px-[14px] py-[6px] border-none cursor-pointer transition-all duration-150 ${form.advancedMode ? 'bg-mw-brand-deep text-white' : 'bg-transparent text-mw-ink-4'}`}
+                      onClick={() => onChange({ advancedMode: true })}
+                    >
+                      Advanced
+                    </button>
                   </div>
                 )}
               </div>
 
-              {/* Nav buttons (not shown on step 5 — Step5Review has its own Fund button) */}
-              {step < 5 && (
-                <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-                  <button className="nav-btn nav-btn-back" onClick={handleBack}>
-                    ← Back
-                  </button>
-                  <button
-                    className="nav-btn nav-btn-next"
-                    onClick={handleNext}
-                    disabled={step === 1 && !form.token}
-                  >
-                    {step === 4 ? 'Review →' : 'Next →'}
-                  </button>
+              {/* Step content */}
+              {step === 1 && <Step1Token    form={form} onChange={onChange} />}
+              {step === 2 && <Step2Pool     form={form} onChange={onChange} />}
+              {step === 3 && <Step3Actions  form={form} onChange={onChange} />}
+              {step === 4 && <Step4Schedule form={form} onChange={onChange} />}
+              {step === 5 && <Step5Review   form={form} onConfirmed={handleConfirmed} />}
+
+              {/* Step validation error */}
+              {stepErr && (
+                <div className="mt-4 font-sans text-[13px] text-mw-pink bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-sm px-[14px] py-[10px]">
+                  {stepErr}
                 </div>
               )}
+            </div>
 
-              {/* Back button on step 5 */}
-              {step === 5 && (
-                <div style={{ marginTop: 16 }}>
-                  <button className="nav-btn nav-btn-back" onClick={handleBack}>
-                    ← Edit
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+            {/* Nav buttons (not shown on step 5 — Step5Review has its own Fund button) */}
+            {step < 5 && (
+              <div className="flex gap-[10px] mt-4">
+                <button
+                  onClick={handleBack}
+                  className="font-sans text-[14px] font-semibold px-6 py-[11px] rounded-[10px] cursor-pointer border-[1.5px] border-[#E0DFFF] bg-white text-mw-ink-4 transition-all duration-150 hover:border-[#C4C3F0] hover:text-[#3A3C52]"
+                >
+                  ← Back
+                </button>
+                <button
+                  className="font-sans text-[14px] font-semibold px-6 py-[11px] rounded-[10px] cursor-pointer border-none bg-mw-brand-deep text-white flex-1 transition-all duration-150 hover:bg-[#2a4cd8] disabled:bg-[#C4C3F0] disabled:cursor-not-allowed"
+                  onClick={handleNext}
+                  disabled={step === 1 && !form.token}
+                >
+                  {step === 4 ? 'Review →' : 'Next →'}
+                </button>
+              </div>
+            )}
 
-        </main>
-      </div>
-    </>
+            {/* Back button on step 5 */}
+            {step === 5 && (
+              <div className="mt-4">
+                <button
+                  onClick={handleBack}
+                  className="font-sans text-[14px] font-semibold px-6 py-[11px] rounded-[10px] cursor-pointer border-[1.5px] border-[#E0DFFF] bg-white text-mw-ink-4 transition-all duration-150 hover:border-[#C4C3F0] hover:text-[#3A3C52]"
+                >
+                  ← Edit
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+      </main>
+    </div>
   )
 }
 

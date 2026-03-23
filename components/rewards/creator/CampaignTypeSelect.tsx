@@ -39,112 +39,66 @@ function TypeCard({
   icon, iconBg, iconColor, onSelect, disabled,
 }: TypeCardProps) {
   return (
-    <>
-      <style>{`
-        .tc-card {
-          background: #fff;
-          border: 1.5px solid #E0DFFF;
-          border-radius: 18px;
-          padding: 28px;
-          cursor: pointer;
-          transition: box-shadow 200ms ease, transform 200ms ease, border-color 200ms ease;
-          flex: 1;
-          min-width: 240px;
-          display: flex;
-          flex-direction: column;
-          gap: 18px;
-        }
-        .tc-card:hover {
-          box-shadow: 0 6px 32px rgba(58,92,232,0.12);
-          transform: translateY(-3px);
-          border-color: #3A5CE8;
-        }
-        .tc-card.tc-disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .tc-card.tc-disabled:hover {
-          box-shadow: none;
-          transform: none;
-          border-color: #E0DFFF;
-        }
-      `}</style>
-      <div
-        className={`tc-card${disabled ? ' tc-disabled' : ''}`}
-        onClick={disabled ? undefined : onSelect}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => !disabled && e.key === 'Enter' && onSelect()}
-      >
-        {/* Icon + badge row */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 14,
-            background: iconBg, color: iconColor,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 24,
-          }}>
-            {icon}
-          </div>
-          <span style={{
-            fontFamily:  'Plus Jakarta Sans, sans-serif',
-            fontSize:    10, fontWeight: 700,
-            padding:     '4px 10px',
-            borderRadius: 20,
+    <div
+      className={`bg-white border-[1.5px] border-[#E0DFFF] rounded-[18px] p-7 cursor-pointer transition-[box-shadow,transform,border-color] duration-200 ease-[ease] flex-1 min-w-[240px] flex flex-col gap-[18px]${disabled ? ' opacity-50 cursor-not-allowed' : ' hover:shadow-[0_6px_32px_rgba(58,92,232,0.12)] hover:-translate-y-[3px] hover:border-[#3A5CE8]'}`}
+      onClick={disabled ? undefined : onSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => !disabled && e.key === 'Enter' && onSelect()}
+    >
+      {/* Icon + badge row */}
+      <div className="flex items-start justify-between">
+        <div
+          className="w-[52px] h-[52px] rounded-[14px] flex items-center justify-center text-[24px]"
+          style={{ background: iconBg, color: iconColor }}
+        >
+          {icon}
+        </div>
+        <span
+          className="font-sans text-[10px] font-bold px-[10px] py-[4px] rounded-[20px] tracking-[0.3px]"
+          style={{
             background:  badgeColor + '18',
             color:       badgeColor,
             border:      `1px solid ${badgeColor}30`,
-            letterSpacing: '0.3px',
-          }}>
-            {badge}
-          </span>
-        </div>
+          }}
+        >
+          {badge}
+        </span>
+      </div>
 
-        {/* Title + subtitle */}
-        <div>
-          <div style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 18, fontWeight: 800, color: '#1A1A2E', marginBottom: 6,
-          }}>
-            {title}
-          </div>
-          <div style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 13, color: '#8A8C9E', lineHeight: 1.55,
-          }}>
-            {subtitle}
-          </div>
+      {/* Title + subtitle */}
+      <div>
+        <div className="font-sans text-[18px] font-extrabold text-[#1A1A2E] mb-[6px]">
+          {title}
         </div>
-
-        {/* Highlights */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 'auto' }}>
-          {highlights.map((h, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: iconColor, flexShrink: 0,
-              }} />
-              <span style={{
-                fontFamily: 'Plus Jakarta Sans, sans-serif',
-                fontSize: 12, color: '#3A3C52',
-              }}>
-                {h}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* CTA */}
-        <div style={{
-          marginTop: 4,
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 13, fontWeight: 700, color: iconColor,
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          {disabled ? 'Checking…' : 'Select →'}
+        <div className="font-sans text-[13px] text-mw-ink-4 leading-[1.55]">
+          {subtitle}
         </div>
       </div>
-    </>
+
+      {/* Highlights */}
+      <div className="flex flex-col gap-[7px] mt-auto">
+        {highlights.map((h, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <div
+              className="w-[6px] h-[6px] rounded-full shrink-0"
+              style={{ background: iconColor }}
+            />
+            <span className="font-sans text-[12px] text-[#3A3C52]">
+              {h}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* CTA */}
+      <div
+        className="mt-1 font-sans text-[13px] font-bold flex items-center gap-[6px]"
+        style={{ color: iconColor }}
+      >
+        {disabled ? 'Checking…' : 'Select →'}
+      </div>
+    </div>
   )
 }
 
@@ -187,24 +141,17 @@ export function CampaignTypeSelect({ onSelect }: CampaignTypeSelectProps) {
 
   // ── Type select cards ───────────────────────────────────────────────────────
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto' }}>
-      <div style={{ marginBottom: 36, textAlign: 'center' }}>
-        <h2 style={{
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 26, fontWeight: 800, color: '#1A1A2E',
-          margin: 0, marginBottom: 8,
-        }}>
+    <div className="max-w-[720px] mx-auto">
+      <div className="mb-9 text-center">
+        <h2 className="font-sans text-[26px] font-extrabold text-[#1A1A2E] m-0 mb-2">
           Choose a campaign type
         </h2>
-        <p style={{
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 14, color: '#8A8C9E', margin: 0,
-        }}>
+        <p className="font-sans text-[14px] text-mw-ink-4 m-0">
           Select how you want to incentivize your community
         </p>
       </div>
 
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+      <div className="flex gap-5 flex-wrap">
         <TypeCard
           icon="◎"
           iconBg="rgba(58,92,232,0.08)"

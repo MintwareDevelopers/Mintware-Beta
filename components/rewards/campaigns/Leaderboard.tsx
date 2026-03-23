@@ -52,10 +52,7 @@ export function Leaderboard({ campaignId, walletAddress }: LeaderboardProps) {
 
   if (loading) {
     return (
-      <div style={{
-        textAlign: 'center', padding: '48px 20px',
-        fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#8A8C9E',
-      }}>
+      <div className="text-center py-12 px-5 font-sans text-[13px] text-mw-ink-4">
         Loading leaderboard…
       </div>
     )
@@ -63,11 +60,7 @@ export function Leaderboard({ campaignId, walletAddress }: LeaderboardProps) {
 
   if (error) {
     return (
-      <div style={{
-        padding: '20px', background: 'rgba(194,83,122,0.05)',
-        border: '1px solid rgba(194,83,122,0.15)', borderRadius: 12,
-        fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#C2537A',
-      }}>
+      <div className="p-5 bg-[rgba(194,83,122,0.05)] border border-[rgba(194,83,122,0.15)] rounded-md font-sans text-[13px] text-mw-pink">
         {error}
       </div>
     )
@@ -75,15 +68,12 @@ export function Leaderboard({ campaignId, walletAddress }: LeaderboardProps) {
 
   if (entries.length === 0) {
     return (
-      <div style={{
-        textAlign: 'center', padding: '56px 20px',
-        background: '#fff', border: '1px solid #E0DFFF', borderRadius: 16,
-      }}>
-        <div style={{ fontSize: 32, marginBottom: 12 }}>🏆</div>
-        <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 15, fontWeight: 600, color: '#1A1A2E', marginBottom: 6 }}>
+      <div className="text-center py-14 px-5 bg-white border border-[#E0DFFF] rounded-lg">
+        <div className="text-[32px] mb-3">🏆</div>
+        <div className="font-sans text-[15px] font-semibold text-[#1A1A2E] mb-[6px]">
           No participants yet
         </div>
-        <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#8A8C9E' }}>
+        <div className="font-sans text-[13px] text-mw-ink-4">
           Be the first to join and top the board.
         </div>
       </div>
@@ -92,25 +82,15 @@ export function Leaderboard({ campaignId, walletAddress }: LeaderboardProps) {
 
   return (
     <>
-      <style>{`
-        @keyframes lb-pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-      `}</style>
-
       {/* Header row */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: '44px 1fr 1fr 1fr',
-        padding: '6px 16px 10px',
-        fontFamily: 'Plus Jakarta Sans, sans-serif',
-        fontSize: 10, fontWeight: 700, letterSpacing: '1px',
-        textTransform: 'uppercase', color: '#8A8C9E',
-      }}>
+      <div className="grid grid-cols-[44px_1fr_1fr_1fr] px-4 pb-[10px] pt-[6px] font-sans text-[10px] font-bold tracking-[1px] uppercase text-mw-ink-4">
         <span>#</span>
         <span>Wallet</span>
-        <span style={{ textAlign: 'right' }}>Points</span>
-        <span style={{ textAlign: 'right' }}>Earned</span>
+        <span className="text-right">Points</span>
+        <span className="text-right">Earned</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="flex flex-col gap-1">
         {entries.map((entry, idx) => {
           const rank    = idx + 1
           const rankMeta = RANK_COLORS[rank]
@@ -119,65 +99,42 @@ export function Leaderboard({ campaignId, walletAddress }: LeaderboardProps) {
           const earned  = entry.total_earned_usd ?? entry.earned_usd
 
           return (
-            <div key={entry.wallet ?? idx} style={{
-              display: 'grid',
-              gridTemplateColumns: '44px 1fr 1fr 1fr',
-              alignItems: 'center',
-              padding: '12px 16px',
-              borderRadius: 10,
-              background: isSelf
-                ? 'rgba(58,92,232,0.06)'
-                : rankMeta ? rankMeta.bg : '#fff',
-              border: isSelf
-                ? '1px solid rgba(58,92,232,0.15)'
-                : '1px solid #F0EFFF',
-              borderLeft: isSelf ? '3px solid #3A5CE8' : undefined,
-              transition: 'background 0.1s',
-            }}>
+            <div
+              key={entry.wallet ?? idx}
+              className="grid grid-cols-[44px_1fr_1fr_1fr] items-center px-4 py-3 rounded-[10px] transition-colors duration-100"
+              style={{
+                background: isSelf
+                  ? 'rgba(58,92,232,0.06)'
+                  : rankMeta ? rankMeta.bg : '#fff',
+                border: isSelf
+                  ? '1px solid rgba(58,92,232,0.15)'
+                  : '1px solid #F0EFFF',
+                borderLeft: isSelf ? '3px solid #3A5CE8' : undefined,
+              }}
+            >
               {/* Rank */}
-              <div style={{
-                fontFamily: 'DM Mono, monospace',
-                fontSize: rank <= 3 ? 16 : 13,
-                fontWeight: 700,
-                color: rankMeta?.color ?? '#8A8C9E',
-              }}>
+              <div
+                className={`font-mono font-bold ${rank <= 3 ? 'text-[16px]' : 'text-[13px]'}`}
+                style={{ color: rankMeta?.color ?? '#8A8C9E' }}
+              >
                 {rankMeta ? rankMeta.label : rank}
               </div>
 
               {/* Wallet */}
-              <div style={{
-                fontFamily: 'DM Mono, monospace',
-                fontSize: 12, fontWeight: 500,
-                color: isSelf ? '#3A5CE8' : '#1A1A2E',
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>
+              <div className={`font-mono text-[12px] font-medium overflow-hidden text-ellipsis whitespace-nowrap ${isSelf ? 'text-mw-brand-deep' : 'text-[#1A1A2E]'}`}>
                 {shortAddr(entry.wallet)}
                 {isSelf && (
-                  <span style={{
-                    marginLeft: 6, fontSize: 10, fontWeight: 700,
-                    fontFamily: 'Plus Jakarta Sans, sans-serif',
-                    background: 'rgba(58,92,232,0.1)', color: '#3A5CE8',
-                    borderRadius: 4, padding: '1px 5px',
-                  }}>you</span>
+                  <span className="ml-[6px] text-[10px] font-bold font-sans bg-[rgba(58,92,232,0.1)] text-mw-brand-deep rounded-[4px] px-[5px] py-[1px]">you</span>
                 )}
               </div>
 
               {/* Points */}
-              <div style={{
-                textAlign: 'right',
-                fontFamily: 'DM Mono, monospace',
-                fontSize: 13, fontWeight: 600,
-                color: isSelf ? '#3A5CE8' : '#1A1A2E',
-              }}>
+              <div className={`text-right font-mono text-[13px] font-semibold ${isSelf ? 'text-mw-brand-deep' : 'text-[#1A1A2E]'}`}>
                 {pts.toLocaleString()}
               </div>
 
               {/* Earned */}
-              <div style={{
-                textAlign: 'right',
-                fontFamily: 'DM Mono, monospace',
-                fontSize: 12, color: '#2A9E8A', fontWeight: 500,
-              }}>
+              <div className="text-right font-mono text-[12px] text-mw-teal font-medium">
                 {earned != null ? fmtUSD(Number(earned)) : '—'}
               </div>
             </div>
