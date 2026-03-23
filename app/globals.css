@@ -134,20 +134,30 @@
   .page-leaderboard { --page-accent-rgb: 79, 126, 247; }
   .page-profile     { --page-accent-rgb: 79, 126, 247; }
 
-  /* ── Hero gradient card ─────────────────────────────────────── */
+  /* ── Hero gradient card — dark navy ─────────────────────────── */
   .mw-hero-gradient {
     background:
-      radial-gradient(ellipse at 10% 70%, rgba(var(--page-accent-rgb), 0.38) 0%, transparent 55%),
-      radial-gradient(ellipse at 90% 5%, rgba(var(--page-accent-rgb), 0.24) 0%, transparent 48%),
-      radial-gradient(ellipse at 55% 110%, rgba(var(--page-accent-rgb), 0.12) 0%, transparent 50%),
-      radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(var(--page-accent-rgb), 0.16) 100%),
-      linear-gradient(145deg,
-        rgba(var(--page-accent-rgb), 0.20) 0%,
-        rgba(var(--page-accent-rgb), 0.10) 35%,
-        rgba(var(--page-accent-rgb), 0.04) 65%,
-        transparent 100%),
-      #f5f7ff;
-    border: 1px solid rgba(var(--page-accent-rgb), 0.14);
+      radial-gradient(ellipse at 8% 75%, rgba(var(--page-accent-rgb), 0.28) 0%, transparent 50%),
+      radial-gradient(ellipse at 88% 8%, rgba(var(--page-accent-rgb), 0.20) 0%, transparent 45%),
+      radial-gradient(ellipse at 50% 120%, rgba(var(--page-accent-rgb), 0.14) 0%, transparent 50%),
+      linear-gradient(145deg, #0d1530 0%, #0A0D18 100%);
+    border: 1px solid rgba(var(--page-accent-rgb), 0.22);
+    /* Cascade-override ink tokens so all descendant text flips to white */
+    --color-mw-ink:           rgba(255, 255, 255, 0.92);
+    --color-mw-ink-2:         rgba(255, 255, 255, 0.75);
+    --color-mw-ink-3:         rgba(255, 255, 255, 0.50);
+    --color-mw-ink-4:         rgba(255, 255, 255, 0.32);
+    --color-mw-ink-5:         rgba(255, 255, 255, 0.24);
+    --color-mw-border:        rgba(255, 255, 255, 0.08);
+    --color-mw-border-mid:    rgba(255, 255, 255, 0.10);
+    --color-mw-border-strong: rgba(255, 255, 255, 0.14);
+    --color-mw-surface-card:  rgba(255, 255, 255, 0.06);
+  }
+
+  /* Inside dark hero, accent cards need more presence */
+  .mw-hero-gradient .mw-accent-card {
+    background-color: rgba(var(--page-accent-rgb), 0.14) !important;
+    border-color: rgba(var(--page-accent-rgb), 0.24) !important;
   }
 
   /* Accent-tinted stat card (white card gets faint accent wash) */
