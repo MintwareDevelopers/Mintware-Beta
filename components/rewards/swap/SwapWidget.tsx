@@ -355,9 +355,9 @@ export function SwapWidget() {
           </button>
 
           {/* Score gain live preview */}
-          {sellAmount && parseFloat(sellAmount) > 0 && campaign?.actions?.trade && (
+          {sellAmount && parseFloat(sellAmount) > 0 && campaign?.isActive && (
             <div className="flex items-center justify-center gap-[5px] text-[12px] font-sans -mt-[2px]">
-              <span className="font-bold text-mw-brand">+{campaign.actions.trade.points} pts</span>
+              <span className="font-bold text-mw-brand">+8 pts</span>
               <span className="text-mw-ink-3">per trading day · builds your Attribution score</span>
             </div>
           )}
