@@ -1,6 +1,26 @@
 @import "tailwindcss";
 
 @theme {
+  /* ── Per-page accent theming ── */
+  --page-accent-rgb: 79, 126, 247;  /* default: brand blue */
+
+  /* ── Fonts ── */
+  --font-sans:    var(--font-jakarta), 'Plus Jakarta Sans', sans-serif;
+  --font-mono:    var(--font-mono), 'DM Mono', monospace;
+
+  /* ── Type scale (mw-prefixed to avoid Tailwind conflicts) ── */
+  --text-mw-2xs:  11px;
+  --text-mw-xs:   12px;
+  --text-mw-sm:   13px;
+  --text-mw-base: 14px;
+  --text-mw-lg:   15px;
+  --text-mw-xl:   18px;
+  --text-mw-2xl:  22px;
+  --text-mw-3xl:  28px;
+  --text-mw-4xl:  36px;
+  --text-mw-5xl:  48px;
+  --text-mw-6xl:  56px;
+
   /* ── Brand (new flat blue) ── */
   --color-mw-brand:      #4f7ef7;
   --color-mw-brand-dim:  rgba(79, 126, 247, 0.07);
@@ -26,10 +46,10 @@
   --color-mw-border-strong: rgba(0, 0, 0, 0.13);
 
   /* ── Dark sections ── */
-  --color-mw-dark:        #0A0D14;
-  --color-mw-dark-text:   rgba(255, 255, 255, 0.88);
-  --color-mw-dark-sub:    rgba(255, 255, 255, 0.38);
-  --color-mw-dark-border: rgba(255, 255, 255, 0.06);
+  --color-mw-dark:        #EEF2FF;
+  --color-mw-dark-text:   rgba(15, 23, 42, 0.92);
+  --color-mw-dark-sub:    rgba(15, 23, 42, 0.50);
+  --color-mw-dark-border: rgba(15, 23, 42, 0.08);
 
   /* ── Brand deep (referral / campaign UI — distinct from nav blue) ── */
   --color-mw-brand-deep:      #3A5CE8;
@@ -108,6 +128,51 @@
 }
 
 @layer components {
+  /* ── Page accent themes ───────────────────────────────────────────── */
+  .page-earn        { --page-accent-rgb: 79, 126, 247; }
+  .page-swap        { --page-accent-rgb: 79, 126, 247; }
+  .page-leaderboard { --page-accent-rgb: 79, 126, 247; }
+  .page-profile     { --page-accent-rgb: 79, 126, 247; }
+
+  /* ── Hero gradient card ─────────────────────────────────────── */
+  .mw-hero-gradient {
+    background:
+      radial-gradient(ellipse at 10% 70%, rgba(var(--page-accent-rgb), 0.38) 0%, transparent 55%),
+      radial-gradient(ellipse at 90% 5%, rgba(var(--page-accent-rgb), 0.24) 0%, transparent 48%),
+      radial-gradient(ellipse at 55% 110%, rgba(var(--page-accent-rgb), 0.12) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(var(--page-accent-rgb), 0.16) 100%),
+      linear-gradient(145deg,
+        rgba(var(--page-accent-rgb), 0.20) 0%,
+        rgba(var(--page-accent-rgb), 0.10) 35%,
+        rgba(var(--page-accent-rgb), 0.04) 65%,
+        transparent 100%),
+      #f5f7ff;
+    border: 1px solid rgba(var(--page-accent-rgb), 0.14);
+  }
+
+  /* Accent-tinted stat card (white card gets faint accent wash) */
+  .mw-accent-card {
+    background-color: rgba(var(--page-accent-rgb), 0.05) !important;
+    border-color: rgba(var(--page-accent-rgb), 0.14) !important;
+  }
+
+  /* Accent-tinted inactive pill */
+  .mw-accent-pill {
+    background: rgba(var(--page-accent-rgb), 0.07);
+    border: 1px solid rgba(var(--page-accent-rgb), 0.20);
+    color: rgba(var(--page-accent-rgb), 0.90);
+  }
+
+  /* Background-only tint — use on cards with intentional border colors (e.g. left stripe) */
+  .mw-accent-bg {
+    background-color: rgba(var(--page-accent-rgb), 0.04) !important;
+  }
+
+  /* Accent section background */
+  .mw-accent-section {
+    background-color: rgba(var(--page-accent-rgb), 0.04);
+  }
+
   /* ── Dark section decorations ──────────────────────────────── */
 
   /* Grid overlay (::before) */
@@ -120,8 +185,8 @@
     position: absolute;
     inset: 0;
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      linear-gradient(rgba(var(--page-accent-rgb), 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(var(--page-accent-rgb), 0.08) 1px, transparent 1px);
     background-size: 56px 56px;
     pointer-events: none;
     z-index: 0;
@@ -198,5 +263,196 @@
   .mw-divider {
     height:     1px;
     background: var(--color-mw-border);
+  }
+
+  /* ── Leaderboard table ──────────────────────────────────────── */
+  .lb-td { padding: 13px 16px; border-bottom: 0.5px solid rgba(0,0,0,0.06); font-size: 13px; }
+  .lb-right { text-align: right; }
+  .lb-row:hover .lb-td { background: var(--color-mw-bg); }
+  .lb-row-me .lb-td { background: rgba(79,126,247,0.05); }
+  .lb-row-me:hover .lb-td { background: rgba(79,126,247,0.08); }
+  .lb-row-me .lb-td:first-child { border-left: 3px solid var(--color-mw-brand); padding-left: 13px; }
+  .lb-table tr:last-child .lb-td { border-bottom: none; }
+  .lb-separator .lb-td { text-align: center; color: var(--color-mw-ink-5); font-size: 11px; letter-spacing: 3px; padding: 8px; border-bottom: 0.5px solid rgba(0,0,0,0.05); }
+  .lb-cs-btn.inactive:hover { border-color: var(--color-mw-brand); color: var(--color-mw-brand); background: var(--color-mw-brand-dim); }
+  @media (max-width: 820px) { .lb-pts-col { display: none; } }
+
+  /* ── CampaignHeader animations ──────────────────────────────── */
+  @keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── StepIndicator connector lines ─────────────────────────── */
+  .si-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: calc(50% + 14px);
+    right: calc(-50% + 14px);
+    height: 2px;
+    background: #E0DFFF;
+    z-index: 0;
+  }
+  .si-item:not(:last-child).complete::after { background: #2A9E8A; }
+  @media (max-width: 500px) { .si-label { display: none; } }
+
+  /* ── Step5Review spinner ────────────────────────────────────── */
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── RewardSlider (range input) ─────────────────────────────── */
+  .reward-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+  }
+  .reward-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #3A5CE8;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  }
+  .reward-slider::-moz-range-thumb {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #3A5CE8;
+    cursor: pointer;
+  }
+
+  /* ── CommandPalette (cmdk) ───────────────────────────────────── */
+  .cmdk-overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,13,20,0.55);
+    backdrop-filter: blur(4px);
+    z-index: 1100;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 18vh;
+    animation: cmdk-fade-in 0.15s ease;
+  }
+  @keyframes cmdk-fade-in {
+    from { opacity: 0 }
+    to   { opacity: 1 }
+  }
+  .cmdk-dialog {
+    width: 100%;
+    max-width: 560px;
+    margin: 0 16px;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06);
+    overflow: hidden;
+    animation: cmdk-slide-in 0.18s cubic-bezier(0.22,1,0.36,1);
+  }
+  @keyframes cmdk-slide-in {
+    from { opacity: 0; transform: scale(0.96) translateY(-8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .cmdk-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(0,0,0,0.07);
+  }
+  [cmdk-input] {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-size: 15px;
+    font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
+    color: var(--color-mw-ink);
+    background: transparent;
+  }
+  [cmdk-input]::placeholder { color: var(--color-mw-ink-3); }
+  [cmdk-list] {
+    padding: 8px;
+    max-height: 340px;
+    overflow-y: auto;
+  }
+  [cmdk-group-heading] {
+    padding: 6px 8px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--color-mw-ink-3);
+    font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
+  }
+  [cmdk-item] {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
+    color: var(--color-mw-ink);
+    transition: background 0.1s;
+    outline: none;
+  }
+  [cmdk-item][aria-selected=true],
+  [cmdk-item]:hover {
+    background: var(--color-mw-brand-dim);
+    color: var(--color-mw-brand);
+  }
+  [cmdk-item] .cmdk-icon {
+    width: 28px; height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 7px;
+    background: var(--color-mw-surface);
+    flex-shrink: 0;
+    color: var(--color-mw-ink-3);
+  }
+  [cmdk-item][aria-selected=true] .cmdk-icon,
+  [cmdk-item]:hover .cmdk-icon {
+    background: rgba(79,126,247,0.12);
+    color: var(--color-mw-brand);
+  }
+  [cmdk-empty] {
+    padding: 24px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--color-mw-ink-3);
+    font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
+  }
+  .cmdk-shortcut {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--color-mw-ink-3);
+    background: var(--color-mw-surface);
+    border: 1px solid var(--color-mw-border);
+    border-radius: 5px;
+    padding: 2px 6px;
+    font-family: var(--font-mono, 'DM Mono', monospace);
+  }
+  .cmdk-footer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    font-size: 11px;
+    color: var(--color-mw-ink-3);
+    font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
+  }
+  .cmdk-kbd {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: var(--color-mw-surface);
+    border: 1px solid var(--color-mw-border);
+    border-radius: 5px;
+    padding: 1px 5px;
+    font-size: 10px;
+    font-family: var(--font-mono, 'DM Mono', monospace);
+    color: var(--color-mw-ink-2);
   }
 }

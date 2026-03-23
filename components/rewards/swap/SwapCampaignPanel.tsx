@@ -52,95 +52,45 @@ export function SwapCampaignPanel() {
 
   return (
     <>
-      <style>{`
-        .scp-banner {
-          background: #1A1A2E;
-          border-radius: 20px;
-          padding: 22px 24px;
-          margin-bottom: 16px;
-          position: relative;
-          overflow: hidden;
-        }
-        .scp-banner::before {
-          content: '';
-          position: absolute;
-          top: -40px; right: -40px;
-          width: 180px; height: 180px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(58,92,232,0.22) 0%, transparent 70%);
-          pointer-events: none;
-        }
-        .scp-label {
-          font-size: 10px; font-weight: 700;
-          letter-spacing: 1.2px; text-transform: uppercase;
-          color: #8A8C9E; margin-bottom: 10px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-        .scp-action-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px;
-          margin-bottom: 18px;
-        }
-        .scp-action-card {
-          border-radius: 14px;
-          padding: 14px 16px;
-          border: 1.5px solid;
-        }
-        .scp-route-list { display: flex; flex-direction: column; gap: 6px; }
-        .scp-route-row {
-          display: flex; align-items: center; justify-content: space-between;
-          background: #fff; border: 1px solid rgba(26,26,46,0.08);
-          border-radius: 10px; padding: 10px 14px;
-        }
-      `}</style>
-
       {/* ── Active campaign banner ─────────────────────────────────────────── */}
-      <div className="scp-banner">
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5,
-            background: 'rgba(42,158,138,0.15)', border: '1px solid rgba(42,158,138,0.25)',
-            borderRadius: 20, padding: '3px 10px', marginBottom: 12,
-          }}>
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#2A9E8A', display: 'inline-block' }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#2A9E8A', fontFamily: 'Plus Jakarta Sans, sans-serif', letterSpacing: '0.4px' }}>
+      <div className="bg-mw-dark rounded-xl px-[24px] py-[22px] mb-[16px] relative overflow-hidden before:content-[''] before:absolute before:top-[-40px] before:right-[-40px] before:w-[180px] before:h-[180px] before:rounded-full before:bg-[radial-gradient(circle,rgba(58,92,232,0.22)_0%,transparent_70%)] before:pointer-events-none">
+        <div className="relative z-[1]">
+          <div className="inline-flex items-center gap-[5px] bg-[rgba(42,158,138,0.15)] border border-[rgba(42,158,138,0.25)] rounded-xl px-[10px] py-[3px] mb-[12px]">
+            <span className="w-[5px] h-[5px] rounded-full bg-mw-teal inline-block" />
+            <span className="text-[10px] font-bold text-mw-teal font-sans tracking-[0.4px]">
               {loading ? 'Loading…' : live ? 'Campaign live' : 'No active campaign'}
             </span>
           </div>
 
           {live ? (
             <>
-              <div style={{
-                fontSize: 20, fontWeight: 700, color: 'rgba(255,255,255,0.92)',
-                fontFamily: 'Plus Jakarta Sans, sans-serif', letterSpacing: '-0.3px', marginBottom: 4,
-              }}>
+              <div className="text-[20px] font-bold text-[rgba(255,255,255,0.92)] font-sans tracking-[-0.3px] mb-[4px]">
                 {live.name}
               </div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginBottom: 16 }}>
+              <div className="text-[12px] text-[rgba(255,255,255,0.35)] font-sans mb-[16px]">
                 {live.chain}{daysLeft !== null ? ` · ${daysLeft}d remaining` : ''}
               </div>
-              <div style={{ display: 'flex', gap: 24 }}>
+              <div className="flex gap-[24px]">
                 {live.pool_usd != null && (
                   <div>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 17, fontWeight: 600, color: '#fff' }}>
+                    <div className="font-mono text-[17px] font-semibold text-white">
                       {fmtUSD(live.pool_usd)}
                     </div>
-                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: 2 }}>pool size</div>
+                    <div className="text-[10px] text-[rgba(255,255,255,0.28)] font-sans mt-[2px]">pool size</div>
                   </div>
                 )}
                 {live.daily_payout_usd != null && (
                   <div>
-                    <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 17, fontWeight: 600, color: '#4ade80' }}>
-                      {fmtUSD(live.daily_payout_usd)}<span style={{ fontSize: 11, color: 'rgba(74,222,128,0.45)', fontWeight: 400 }}>/day</span>
+                    <div className="font-mono text-[17px] font-semibold text-[#4ade80]">
+                      {fmtUSD(live.daily_payout_usd)}<span className="text-[11px] text-[rgba(74,222,128,0.45)] font-normal">/day</span>
                     </div>
-                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.28)', fontFamily: 'Plus Jakarta Sans, sans-serif', marginTop: 2 }}>daily payout</div>
+                    <div className="text-[10px] text-[rgba(255,255,255,0.28)] font-sans mt-[2px]">daily payout</div>
                   </div>
                 )}
               </div>
             </>
           ) : !loading ? (
-            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            <div className="text-[14px] text-[rgba(255,255,255,0.4)] font-sans">
               No campaigns are currently live. Check back soon.
             </div>
           ) : null}
@@ -150,20 +100,23 @@ export function SwapCampaignPanel() {
       {/* ── Earn points by action ──────────────────────────────────────────── */}
       {actions.length > 0 && (
         <>
-          <div className="scp-label">Earn points by action</div>
-          <div className="scp-action-grid">
+          <div className="text-[10px] font-bold tracking-[1.2px] uppercase text-mw-ink-4 mb-[10px] font-sans">
+            Earn points by action
+          </div>
+          <div className="grid grid-cols-2 gap-[8px] mb-[18px]">
             {actions.map(([key, action]) => {
               const { icon, color, bg, border } = actionMeta(key)
               return (
-                <div key={key} className="scp-action-card" style={{ background: bg, borderColor: border }}>
-                  <div style={{ fontSize: 20, marginBottom: 8, lineHeight: 1 }}>{icon}</div>
-                  <div style={{
-                    fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, fontWeight: 700,
-                    color: '#1A1A2E', marginBottom: 3,
-                  }}>
+                <div
+                  key={key}
+                  className="rounded-[14px] px-[16px] py-[14px] border-[1.5px]"
+                  style={{ background: bg, borderColor: border }}
+                >
+                  <div className="text-[20px] mb-[8px] leading-none">{icon}</div>
+                  <div className="font-sans text-[13px] font-bold text-mw-ink mb-[3px]">
                     {action.label}
                   </div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color }}>
+                  <div className="font-mono text-[13px] font-bold" style={{ color }}>
                     +{action.points} pts{actionSuffix(action)}
                   </div>
                 </div>
@@ -174,20 +127,23 @@ export function SwapCampaignPanel() {
       )}
 
       {/* ── Supported routes ──────────────────────────────────────────────── */}
-      <div className="scp-label">Supported routes</div>
-      <div className="scp-route-list">
+      <div className="text-[10px] font-bold tracking-[1.2px] uppercase text-mw-ink-4 mb-[10px] font-sans">
+        Supported routes
+      </div>
+      <div className="flex flex-col gap-[6px]">
         {ROUTES.map((r, i) => (
-          <div key={i} className="scp-route-row">
-            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, fontWeight: 600, color: '#1A1A2E' }}>
-              {r.from} <span style={{ color: '#8A8C9E' }}>→</span> {r.to}
+          <div key={i} className="flex items-center justify-between bg-white border border-[rgba(26,26,46,0.08)] rounded-[10px] px-[14px] py-[10px]">
+            <div className="font-sans text-[13px] font-semibold text-mw-ink">
+              {r.from} <span className="text-mw-ink-4">→</span> {r.to}
             </div>
-            <span style={{
-              fontSize: 10, fontWeight: 700, borderRadius: 20, padding: '2px 9px',
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              background: r.live ? 'rgba(42,158,138,0.10)' : 'rgba(138,140,158,0.10)',
-              color:      r.live ? '#2A9E8A'               : '#8A8C9E',
-              border:     `1px solid ${r.live ? 'rgba(42,158,138,0.2)' : 'rgba(138,140,158,0.2)'}`,
-            }}>
+            <span
+              className="text-[10px] font-bold rounded-xl px-[9px] py-[2px] font-sans border"
+              style={{
+                background: r.live ? 'rgba(42,158,138,0.10)' : 'rgba(138,140,158,0.10)',
+                color:      r.live ? '#2A9E8A'               : '#8A8C9E',
+                borderColor: r.live ? 'rgba(42,158,138,0.2)' : 'rgba(138,140,158,0.2)',
+              }}
+            >
               {r.live ? 'Live' : 'Coming soon'}
             </span>
           </div>

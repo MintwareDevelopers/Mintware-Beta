@@ -37,103 +37,54 @@ export function RouteInfo({ route, fee }: RouteInfoProps) {
   const bridgeName = route.steps[0]?.toolDetails?.name ?? route.steps[0]?.tool ?? null
 
   return (
-    <>
-      <style>{`
-        .ri-wrap {
-          background: #F7F6FF;
-          border: 1px solid #E0DFFF;
-          border-radius: 10px;
-          padding: 10px 12px;
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-        .ri-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .ri-label {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px;
-          color: #8A8C9E;
-          font-weight: 500;
-        }
-        .ri-value {
-          font-family: 'DM Mono', monospace;
-          font-size: 12px;
-          color: #1A1A2E;
-          font-weight: 500;
-        }
-        .ri-impact {
-          font-family: 'DM Mono', monospace;
-          font-size: 12px;
-          font-weight: 600;
-        }
-        .ri-divider {
-          height: 1px;
-          background: #E0DFFF;
-          margin: 2px 0;
-        }
-        .ri-route-badge {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 10px;
-          font-weight: 700;
-          background: #EEF1FF;
-          color: #3A5CE8;
-          border-radius: 4px;
-          padding: 1px 6px;
-          letter-spacing: 0.3px;
-        }
-      `}</style>
-
-      <div className="ri-wrap">
-        {/* Route via */}
-        {bridgeName && (
-          <div className="ri-row">
-            <span className="ri-label">Route</span>
-            <span className="ri-route-badge">via {bridgeName}</span>
-          </div>
-        )}
-
-        {/* Price impact */}
-        <div className="ri-row">
-          <span className="ri-label">Price impact</span>
-          <span className="ri-impact" style={{ color: impactColor }}>
-            {impact < 0.01 ? '< 0.01%' : `${impact.toFixed(2)}%`}
+    <div className="bg-mw-surface-purple border border-[#E0DFFF] rounded-[10px] px-[12px] py-[10px] flex flex-col gap-[6px]">
+      {/* Route via */}
+      {bridgeName && (
+        <div className="flex items-center justify-between">
+          <span className="font-sans text-[12px] text-mw-ink-4 font-medium">Route</span>
+          <span className="font-sans text-[10px] font-bold bg-[#EEF1FF] text-mw-brand-deep rounded-[4px] px-[6px] py-[1px] tracking-[0.3px]">
+            via {bridgeName}
           </span>
         </div>
+      )}
 
-        <div className="ri-divider" />
-
-        {/* Integrator fee */}
-        <div className="ri-row">
-          <span className="ri-label">Fee ({(fee * 100).toFixed(1)}%)</span>
-          <span className="ri-value">
-            {feeUSD > 0 ? `~$${feeUSD.toFixed(2)}` : '—'}
-          </span>
-        </div>
-
-        {/* Gas */}
-        {gasCost !== null && (
-          <div className="ri-row">
-            <span className="ri-label">Gas</span>
-            <span className="ri-value">
-              {gasCost > 0 ? `~$${gasCost.toFixed(4)}` : '< $0.0001'}
-            </span>
-          </div>
-        )}
-
-        {/* Minimum received */}
-        <div className="ri-row">
-          <span className="ri-label">Min received</span>
-          <span className="ri-value">
-            {route.toAmountMin
-              ? `${(Number(route.toAmountMin) / 10 ** route.toToken.decimals).toPrecision(6)} ${route.toToken.symbol}`
-              : '—'}
-          </span>
-        </div>
+      {/* Price impact */}
+      <div className="flex items-center justify-between">
+        <span className="font-sans text-[12px] text-mw-ink-4 font-medium">Price impact</span>
+        <span className="font-mono text-[12px] font-semibold" style={{ color: impactColor }}>
+          {impact < 0.01 ? '< 0.01%' : `${impact.toFixed(2)}%`}
+        </span>
       </div>
-    </>
+
+      <div className="h-[1px] bg-[#E0DFFF] my-[2px]" />
+
+      {/* Integrator fee */}
+      <div className="flex items-center justify-between">
+        <span className="font-sans text-[12px] text-mw-ink-4 font-medium">Fee ({(fee * 100).toFixed(1)}%)</span>
+        <span className="font-mono text-[12px] text-mw-ink font-medium">
+          {feeUSD > 0 ? `~$${feeUSD.toFixed(2)}` : '—'}
+        </span>
+      </div>
+
+      {/* Gas */}
+      {gasCost !== null && (
+        <div className="flex items-center justify-between">
+          <span className="font-sans text-[12px] text-mw-ink-4 font-medium">Gas</span>
+          <span className="font-mono text-[12px] text-mw-ink font-medium">
+            {gasCost > 0 ? `~$${gasCost.toFixed(4)}` : '< $0.0001'}
+          </span>
+        </div>
+      )}
+
+      {/* Minimum received */}
+      <div className="flex items-center justify-between">
+        <span className="font-sans text-[12px] text-mw-ink-4 font-medium">Min received</span>
+        <span className="font-mono text-[12px] text-mw-ink font-medium">
+          {route.toAmountMin
+            ? `${(Number(route.toAmountMin) / 10 ** route.toToken.decimals).toPrecision(6)} ${route.toToken.symbol}`
+            : '—'}
+        </span>
+      </div>
+    </div>
   )
 }

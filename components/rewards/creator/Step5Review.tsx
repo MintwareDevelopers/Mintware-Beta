@@ -43,17 +43,13 @@ interface ReviewRowProps {
 
 function ReviewRow({ label, value, mono = true }: ReviewRowProps) {
   return (
-    <div style={{
-      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      padding: '9px 0', borderBottom: '1px solid #F0EFFF',
-    }}>
-      <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#8A8C9E' }}>
+    <div className="flex justify-between items-center py-[9px] border-b border-[#F0EFFF]">
+      <span className="font-sans text-[13px] text-mw-ink-4">
         {label}
       </span>
-      <span style={{
-        fontFamily: mono ? 'DM Mono, monospace' : 'Plus Jakarta Sans, sans-serif',
-        fontSize: 13, fontWeight: 600, color: '#1A1A2E',
-      }}>
+      <span
+        className={`text-[13px] font-semibold text-[#1A1A2E] ${mono ? 'font-mono' : 'font-sans'}`}
+      >
         {value}
       </span>
     </div>
@@ -62,12 +58,8 @@ function ReviewRow({ label, value, mono = true }: ReviewRowProps) {
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: '#fff', border: '1px solid #E0DFFF', borderRadius: 14, padding: '16px 18px' }}>
-      <div style={{
-        fontFamily: 'Plus Jakarta Sans, sans-serif',
-        fontSize: 10, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase',
-        color: '#8A8C9E', marginBottom: 4,
-      }}>
+    <div className="bg-white border border-[#E0DFFF] rounded-[14px] p-[16px_18px]">
+      <div className="font-sans text-[10px] font-bold tracking-[1px] uppercase text-mw-ink-4 mb-1">
         {title}
       </div>
       {children}
@@ -208,149 +200,124 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
   const isToken  = form.type === 'token_reward'
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <>
+      <div className="flex flex-col gap-5">
 
-      {/* Guardrail warnings */}
-      {warnings.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {warnings.map(w => <GuardrailWarning key={w.key} message={w.message} />)}
-        </div>
-      )}
-
-      {/* Campaign summary */}
-      <SectionCard title="Campaign">
-        <ReviewRow label="Type"     value={isToken ? 'Token Reward Pool' : 'Points Campaign'} mono={false} />
-        <ReviewRow label="Token"    value={form.token ? `${form.token.symbol} (${form.token.name})` : '—'} />
-        <ReviewRow label="Chain"    value={form.chainId === 8453 ? 'Base' : form.chainId === 1 ? 'Ethereum' : 'Arbitrum'} mono={false} />
-        <ReviewRow label="Duration" value={`${form.durationDays} days`} />
-        <ReviewRow
-          label="Start"
-          value={
-            form.schedule === 'now'
-              ? 'Immediately on funding'
-              : form.startAt
-                ? form.startAt.toLocaleString()
-                : '—'
-          }
-          mono={false}
-        />
-      </SectionCard>
-
-      {/* Actions summary */}
-      <SectionCard title="Rewards">
-        {isToken && (
-          <>
-            <ReviewRow label="Buyer reward"    value={fmtPct(form.buyerRewardPct)} />
-            <ReviewRow label="Referral reward" value={fmtPct(form.referralRewardPct)} />
-            <ReviewRow label="Hold period"     value={form.advancedMode ? `${form.referralHoldHours}h` : '—'} />
-            <ReviewRow label="Score multiplier" value={form.useScoreMultiplier ? 'Enabled' : 'Disabled'} mono={false} />
-          </>
+        {/* Guardrail warnings */}
+        {warnings.length > 0 && (
+          <div className="flex flex-col gap-[6px]">
+            {warnings.map(w => <GuardrailWarning key={w.key} message={w.message} />)}
+          </div>
         )}
-        {isPoints && (
-          <>
-            <ReviewRow label="Focus" value={form.pointsFocus === 'both' ? 'Trade + Bridge' : form.pointsFocus.charAt(0).toUpperCase() + form.pointsFocus.slice(1)} mono={false} />
-            {(form.pointsFocus === 'trade' || form.pointsFocus === 'both') && (
-              <ReviewRow label="Points per $1 traded" value={`${form.pointsPerUsdTrade} pts`} />
-            )}
-            {(form.pointsFocus === 'bridge' || form.pointsFocus === 'both') && (
-              <ReviewRow label="Bridge points" value={`${form.fixedBridgePoints} pts`} />
-            )}
-            <ReviewRow label="Payout preset"  value={`Top ${form.payoutPreset}`} />
-          </>
-        )}
-      </SectionCard>
 
-      {/* Funding */}
-      <SectionCard title="Funding">
-        <ReviewRow label="Pool size" value={fmtUSDShort(form.poolUsd)} />
-        <ReviewRow label="Token"     value={form.token ? form.token.symbol : '—'} />
-        <div style={{
-          marginTop: 10,
-          fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 12, color: '#8A8C9E',
-        }}>
-          {form.token
-            ? `Deposits ${fmtUSDShort(form.poolUsd)} worth of ${form.token.symbol} to MintwareDistributor contract`
-            : 'Select a token to see deposit amount'
-          }
-        </div>
-      </SectionCard>
+        {/* Campaign summary */}
+        <SectionCard title="Campaign">
+          <ReviewRow label="Type"     value={isToken ? 'Token Reward Pool' : 'Points Campaign'} mono={false} />
+          <ReviewRow label="Token"    value={form.token ? `${form.token.symbol} (${form.token.name})` : '—'} />
+          <ReviewRow label="Chain"    value={form.chainId === 8453 ? 'Base' : form.chainId === 1 ? 'Ethereum' : 'Arbitrum'} mono={false} />
+          <ReviewRow label="Duration" value={`${form.durationDays} days`} />
+          <ReviewRow
+            label="Start"
+            value={
+              form.schedule === 'now'
+                ? 'Immediately on funding'
+                : form.startAt
+                  ? form.startAt.toLocaleString()
+                  : '—'
+            }
+            mono={false}
+          />
+        </SectionCard>
 
-      {/* Error */}
-      {errorMsg && (
-        <div style={{
-          background: 'rgba(194,83,122,0.06)', border: '1px solid rgba(194,83,122,0.2)',
-          borderRadius: 10, padding: '12px 16px',
-          fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#C2537A',
-        }}>
-          ⚠ {errorMsg}
-        </div>
-      )}
-
-      {/* Fund button */}
-      {!isConfirmed && (
-        <button
-          disabled={isWorking || !form.token}
-          onClick={handleFund}
-          style={{
-            width: '100%',
-            padding: '14px 24px',
-            borderRadius: 12,
-            border: 'none',
-            cursor: isWorking || !form.token ? 'not-allowed' : 'pointer',
-            background: isWorking ? '#C4C3F0' : fundState === 'error' ? '#C2537A' : '#3A5CE8',
-            color: '#fff',
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 15, fontWeight: 700,
-            transition: 'background 200ms',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          }}
-        >
-          {isWorking && (
-            <span style={{
-              width: 16, height: 16, borderRadius: '50%',
-              border: '2px solid rgba(255,255,255,0.3)',
-              borderTopColor: '#fff',
-              animation: 'spin 0.7s linear infinite',
-              display: 'inline-block',
-            }} />
+        {/* Actions summary */}
+        <SectionCard title="Rewards">
+          {isToken && (
+            <>
+              <ReviewRow label="Buyer reward"    value={fmtPct(form.buyerRewardPct)} />
+              <ReviewRow label="Referral reward" value={fmtPct(form.referralRewardPct)} />
+              <ReviewRow label="Hold period"     value={form.advancedMode ? `${form.referralHoldHours}h` : '—'} />
+              <ReviewRow label="Score multiplier" value={form.useScoreMultiplier ? 'Enabled' : 'Disabled'} mono={false} />
+            </>
           )}
-          {FUND_LABELS[fundState]}
-        </button>
-      )}
+          {isPoints && (
+            <>
+              <ReviewRow label="Focus" value={form.pointsFocus === 'both' ? 'Trade + Bridge' : form.pointsFocus.charAt(0).toUpperCase() + form.pointsFocus.slice(1)} mono={false} />
+              {(form.pointsFocus === 'trade' || form.pointsFocus === 'both') && (
+                <ReviewRow label="Points per $1 traded" value={`${form.pointsPerUsdTrade} pts`} />
+              )}
+              {(form.pointsFocus === 'bridge' || form.pointsFocus === 'both') && (
+                <ReviewRow label="Bridge points" value={`${form.fixedBridgePoints} pts`} />
+              )}
+              <ReviewRow label="Payout preset"  value={`Top ${form.payoutPreset}`} />
+            </>
+          )}
+        </SectionCard>
 
-      {/* Step states */}
-      {isWorking && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[
-            { key: 'creating',        label: 'Create campaign record',  done: ['approving','waiting_approve','funding','waiting_fund'].includes(fundState) },
-            { key: 'approving',       label: 'Approve token spend',     done: ['waiting_approve','funding','waiting_fund'].includes(fundState) },
-            { key: 'waiting_approve', label: 'Approval confirmed',      done: ['funding','waiting_fund'].includes(fundState) },
-            { key: 'funding',         label: 'Deposit to contract',     done: fundState === 'waiting_fund' },
-            { key: 'waiting_fund',    label: 'On-chain confirmation',   done: false },
-          ].map(s => (
-            <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                background: s.done ? '#2A9E8A' : 'rgba(58,92,232,0.15)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10,
-              }}>
-                {s.done ? '✓' : '·'}
+        {/* Funding */}
+        <SectionCard title="Funding">
+          <ReviewRow label="Pool size" value={fmtUSDShort(form.poolUsd)} />
+          <ReviewRow label="Token"     value={form.token ? form.token.symbol : '—'} />
+          <div className="mt-[10px] font-sans text-[12px] text-mw-ink-4">
+            {form.token
+              ? `Deposits ${fmtUSDShort(form.poolUsd)} worth of ${form.token.symbol} to MintwareDistributor contract`
+              : 'Select a token to see deposit amount'
+            }
+          </div>
+        </SectionCard>
+
+        {/* Error */}
+        {errorMsg && (
+          <div className="bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.2)] rounded-[10px] p-[12px_16px] font-sans text-[13px] text-mw-pink">
+            ⚠ {errorMsg}
+          </div>
+        )}
+
+        {/* Fund button */}
+        {!isConfirmed && (
+          <button
+            disabled={isWorking || !form.token}
+            onClick={handleFund}
+            className="w-full py-[14px] px-6 rounded-[12px] border-none text-white font-sans text-[15px] font-bold transition-[background] duration-200 flex items-center justify-center gap-[10px] disabled:cursor-not-allowed"
+            style={{
+              background: isWorking ? '#C4C3F0' : fundState === 'error' ? '#C2537A' : '#3A5CE8',
+            }}
+          >
+            {isWorking && (
+              <span
+                className="w-4 h-4 rounded-full border-2 border-[rgba(255,255,255,0.3)] border-t-white inline-block"
+                style={{ animation: 'spin 0.7s linear infinite' }}
+              />
+            )}
+            {FUND_LABELS[fundState]}
+          </button>
+        )}
+
+        {/* Step states */}
+        {isWorking && (
+          <div className="flex flex-col gap-2">
+            {[
+              { key: 'creating',        label: 'Create campaign record',  done: ['approving','waiting_approve','funding','waiting_fund'].includes(fundState) },
+              { key: 'approving',       label: 'Approve token spend',     done: ['waiting_approve','funding','waiting_fund'].includes(fundState) },
+              { key: 'waiting_approve', label: 'Approval confirmed',      done: ['funding','waiting_fund'].includes(fundState) },
+              { key: 'funding',         label: 'Deposit to contract',     done: fundState === 'waiting_fund' },
+              { key: 'waiting_fund',    label: 'On-chain confirmation',   done: false },
+            ].map(s => (
+              <div key={s.key} className="flex items-center gap-[10px]">
+                <div
+                  className={`w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[10px] ${s.done ? 'bg-mw-teal' : 'bg-[rgba(58,92,232,0.15)]'}`}
+                >
+                  {s.done ? '✓' : '·'}
+                </div>
+                <span
+                  className={`font-sans text-[12px] ${s.done ? 'text-mw-teal' : 'text-mw-ink-4'}`}
+                >
+                  {s.label}
+                </span>
               </div>
-              <span style={{
-                fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 12,
-                color: s.done ? '#2A9E8A' : '#8A8C9E',
-              }}>
-                {s.label}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
-      `}</style>
-    </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   )
 }

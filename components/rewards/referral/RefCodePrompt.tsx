@@ -96,141 +96,38 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
   }, [isValid, promptState, code, wallet]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <>
-      <style>{`
-        .rcp-backdrop {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.4);
-          z-index: 1099;
-          opacity: 0;
-          transition: opacity 0.25s ease-out;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 24px;
-        }
-        .rcp-backdrop.in { opacity: 1; }
-
-        .rcp-sheet {
-          background: #fff;
-          border-radius: 20px;
-          box-shadow: 0 8px 48px rgba(58,92,232,0.18);
-          z-index: 1100;
-          padding: 36px 28px 28px;
-          width: 100%;
-          max-width: 400px;
-          transform: scale(0.94) translateY(8px);
-          transition: transform 0.25s ease-out, opacity 0.25s ease-out;
-          opacity: 0;
-          font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
-          position: relative;
-        }
-        .rcp-backdrop.in .rcp-sheet {
-          transform: scale(1) translateY(0);
-          opacity: 1;
-        }
-
-        .rcp-handle {
-          width: 36px; height: 4px;
-          background: rgba(26,26,46,0.12);
-          border-radius: 2px;
-          margin: 0 auto 24px;
-        }
-
-        .rcp-input {
-          width: 100%; box-sizing: border-box;
-          background: #F7F6FF;
-          border: 1.5px solid #E0DFFF;
-          border-radius: 10px;
-          padding: 14px 16px;
-          font-family: var(--font-mono, 'DM Mono', monospace);
-          font-size: 18px;
-          color: #1A1A2E;
-          outline: none;
-          transition: border-color 150ms;
-          letter-spacing: 0.5px;
-        }
-        .rcp-input:focus { border-color: #3A5CE8; }
-        .rcp-input::placeholder {
-          color: #C4C3F0;
-          font-family: var(--font-mono, 'DM Mono', monospace);
-        }
-
-        .rcp-apply-btn {
-          width: 100%;
-          padding: 14px;
-          background: #3A5CE8;
-          color: #fff;
-          border: none;
-          border-radius: 10px;
-          font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
-          font-size: 15px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: opacity 150ms;
-          margin-top: 12px;
-        }
-        .rcp-apply-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-        .rcp-apply-btn:not(:disabled):hover { opacity: 0.9; }
-
-        .rcp-skip-btn {
-          width: 100%;
-          padding: 12px;
-          background: transparent;
-          border: none;
-          color: #8A8C9E;
-          font-family: var(--font-jakarta, 'Plus Jakarta Sans', sans-serif);
-          font-size: 13px;
-          cursor: pointer;
-          margin-top: 6px;
-        }
-        .rcp-skip-btn:hover { color: #3A3C52; }
-      `}</style>
-
-      <div className={`rcp-backdrop${animIn ? ' in' : ''}`} onClick={() => dismiss(true)}>
-      <div className={`rcp-sheet${animIn ? ' in' : ''}`} onClick={e => e.stopPropagation()}>
+    <div
+      className={`fixed inset-0 bg-[rgba(0,0,0,0.4)] z-[1099] flex items-center justify-center p-6 transition-opacity duration-[250ms] ease-out ${animIn ? 'opacity-100' : 'opacity-0'}`}
+      onClick={() => dismiss(true)}
+    >
+      <div
+        className={`bg-white rounded-[20px] shadow-[0_8px_48px_rgba(58,92,232,0.18)] z-[1100] p-[36px_28px_28px] w-full max-w-[400px] transition-[transform,opacity] duration-[250ms] ease-out font-sans relative ${animIn ? 'scale-100 translate-y-0 opacity-100' : 'scale-[0.94] translate-y-2 opacity-0'}`}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="w-[36px] h-[4px] bg-[rgba(26,26,46,0.12)] rounded-[2px] mx-auto mb-6" />
 
         {promptState === 'success' ? (
-          /* ── Success state ── */
-          <div style={{ textAlign: 'center', padding: '12px 0' }}>
-            <div style={{
-              width: 52, height: 52, borderRadius: '50%',
-              background: 'rgba(42,158,138,0.1)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              margin: '0 auto 16px', fontSize: 24, color: '#2A9E8A',
-            }}>
+          /* Success state */
+          <div className="text-center py-3">
+            <div className="w-[52px] h-[52px] rounded-full bg-[rgba(42,158,138,0.1)] flex items-center justify-center mx-auto mb-4 text-[24px] text-mw-teal">
               ✓
             </div>
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 18, fontWeight: 700, color: '#2A9E8A',
-            }}>
+            <div className="font-sans text-[18px] font-bold text-mw-teal">
               Referral applied
             </div>
           </div>
         ) : (
-          /* ── Input state ── */
+          /* Input state */
           <>
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 20, fontWeight: 700, color: '#1A1A2E',
-              marginBottom: 6, textAlign: 'center',
-            }}>
+            <div className="font-sans text-[20px] font-bold text-[#1A1A2E] mb-[6px] text-center">
               Do you have a referral code?
             </div>
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 13, color: '#8A8C9E',
-              textAlign: 'center', marginBottom: 24,
-            }}>
+            <div className="font-sans text-[13px] text-mw-ink-4 text-center mb-6">
               Enter a code to credit your referrer
             </div>
 
             <input
-              className="rcp-input"
+              className="w-full box-border bg-mw-surface-purple border-[1.5px] border-[#E0DFFF] rounded-[10px] p-[14px_16px] font-mono text-[18px] text-[#1A1A2E] outline-none transition-[border-color] duration-150 tracking-[0.5px] placeholder:text-[#C4C3F0] focus:border-[#3A5CE8]"
               type="text"
               placeholder="mw_xxxxxx"
               value={code}
@@ -247,17 +144,13 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
 
             {/* Error message */}
             {errorMsg && (
-              <div style={{
-                fontFamily: 'Plus Jakarta Sans, sans-serif',
-                fontSize: 12, color: '#C2537A',
-                marginTop: 8, paddingLeft: 2,
-              }}>
+              <div className="font-sans text-[12px] text-mw-pink mt-2 pl-[2px]">
                 {errorMsg}
               </div>
             )}
 
             <button
-              className="rcp-apply-btn"
+              className="w-full p-[14px] bg-mw-brand-deep text-white border-none rounded-[10px] font-sans text-[15px] font-semibold cursor-pointer transition-opacity duration-150 mt-3 disabled:opacity-50 disabled:cursor-not-allowed hover:not-disabled:opacity-90"
               disabled={!isValid || promptState === 'submitting'}
               onClick={handleApply}
             >
@@ -265,7 +158,7 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
             </button>
 
             <button
-              className="rcp-skip-btn"
+              className="w-full p-3 bg-transparent border-none text-mw-ink-4 font-sans text-[13px] cursor-pointer mt-[6px] hover:text-[#3A3C52]"
               onClick={() => dismiss(true)}
             >
               Skip
@@ -273,7 +166,6 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
           </>
         )}
       </div>
-      </div>
-    </>
+    </div>
   )
 }

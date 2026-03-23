@@ -57,12 +57,12 @@ function actionSuffix(action: ActionItem): string {
   return ''
 }
 
-function actionPillStyle(key: string): React.CSSProperties {
-  if (key.startsWith('referral')) return { background: 'rgba(123,111,204,0.08)', color: '#7B6FCC', border: '0.5px solid rgba(123,111,204,0.2)' }
-  if (key === 'bridge')           return { background: 'rgba(79,126,247,0.08)',   color: '#4f7ef7', border: '0.5px solid rgba(79,126,247,0.2)' }
-  if (key === 'trade')            return { background: 'rgba(42,158,138,0.08)',   color: '#2A9E8A', border: '0.5px solid rgba(42,158,138,0.2)' }
-  if (key === 'hold')             return { background: 'rgba(194,122,0,0.08)',    color: '#C27A00', border: '0.5px solid rgba(194,122,0,0.2)' }
-  return                                 { background: 'rgba(79,126,247,0.08)',   color: '#4f7ef7', border: '0.5px solid rgba(79,126,247,0.2)' }
+function actionPillClass(key: string): string {
+  if (key.startsWith('referral')) return 'bg-[rgba(123,111,204,0.08)] text-[#7B6FCC] border border-[rgba(123,111,204,0.2)]'
+  if (key === 'bridge')           return 'bg-[rgba(79,126,247,0.08)] text-mw-brand border border-[rgba(79,126,247,0.2)]'
+  if (key === 'trade')            return 'bg-[rgba(42,158,138,0.08)] text-mw-teal border border-[rgba(42,158,138,0.2)]'
+  if (key === 'hold')             return 'bg-[rgba(194,122,0,0.08)] text-mw-amber border border-[rgba(194,122,0,0.2)]'
+  return                                 'bg-[rgba(79,126,247,0.08)] text-mw-brand border border-[rgba(79,126,247,0.2)]'
 }
 
 // ─── SVG Icons ──────────────────────────────────────────────────────────────
@@ -200,333 +200,217 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   const showLogo   = logoURI && !logoError
 
   return (
-    <>
-      <style>{`
-        .cc-card {
-          background: #fff;
-          border-radius: 12px;
-          overflow: hidden;
-          cursor: pointer;
-          transition: box-shadow 0.2s;
-          display: flex;
-          flex-direction: column;
-          box-shadow: var(--shadow-card);
-          border-left: 3px solid var(--color-mw-brand);
-        }
-        .cc-card:hover { box-shadow: var(--shadow-card-hover); }
-        .cc-card.ended { opacity: 0.6; }
-        .cc-header {
-          padding: 16px 18px 14px;
-          border-bottom: 0.5px solid rgba(0,0,0,0.06);
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 10px;
-        }
-        .cc-identity { display: flex; align-items: center; gap: 12px; }
-        .cc-icon {
-          width: 36px; height: 36px; border-radius: 9px;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 14px; font-weight: 700; flex-shrink: 0;
-          border: 0.5px solid rgba(0,0,0,0.07);
-          font-family: 'DM Mono', monospace;
-          overflow: hidden;
-        }
-        .cc-icon img {
-          width: 36px; height: 36px; object-fit: cover; border-radius: 8px;
-        }
-        .cc-name {
-          font-size: 14px; font-weight: 600; color: #1a1a1a;
-          font-family: 'Plus Jakarta Sans', sans-serif; margin-bottom: 4px;
-        }
-        .cc-meta {
-          display: flex; align-items: center; gap: 6px;
-          font-size: 12px; color: #6b7280; flex-wrap: wrap;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-        .cc-live-badge {
-          display: inline-flex; align-items: center; gap: 4px;
-          background: rgba(34,197,94,0.1); color: #16a34a;
-          border: 0.5px solid rgba(34,197,94,0.3);
-          border-radius: 20px; padding: 2px 7px;
-          font-size: 11px; font-weight: 500;
-        }
-        .cc-upcoming-badge {
-          background: rgba(245,158,11,0.1); color: #d97706;
-          border: 0.5px solid rgba(245,158,11,0.3);
-          border-radius: 20px; padding: 2px 7px;
-          font-size: 11px; font-weight: 500;
-        }
-        .cc-ended-badge {
-          background: rgba(107,114,128,0.08); color: #9ca3af;
-          border: 0.5px solid rgba(107,114,128,0.2);
-          border-radius: 20px; padding: 2px 7px;
-          font-size: 11px;
-        }
-        .cc-chain-tag {
-          flex-shrink: 0; padding: 3px 8px; border-radius: 6px;
-          font-size: 11px; font-weight: 600;
-          background: var(--color-mw-bg); color: #6b7280;
-          border: 0.5px solid rgba(0,0,0,0.07);
-          font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-        .cc-stats {
-          display: grid; grid-template-columns: repeat(3, 1fr);
-          padding: 14px 18px; gap: 12px;
-          border-bottom: 0.5px solid rgba(0,0,0,0.06);
-        }
-        .cc-stat-val {
-          font-size: 20px; font-weight: 700; color: #1a1a1a;
-          font-family: 'DM Mono', monospace; letter-spacing: -0.5px;
-        }
-        .cc-stat-val span {
-          font-size: 11px; font-weight: 400; color: #9ca3af; margin-left: 2px;
-        }
-        .cc-stat-label {
-          font-size: 10px; color: #9ca3af; margin-top: 3px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
-        }
-        .cc-rewards {
-          padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 6px;
-          border-bottom: 0.5px solid rgba(0,0,0,0.06);
-        }
-        .cc-reward-pill {
-          padding: 4px 10px; border-radius: 20px;
-          font-size: 11px; font-weight: 500;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-        .cc-progress { padding: 12px 18px; }
-        .cc-prog-header {
-          display: flex; justify-content: space-between;
-          font-size: 11px; color: #9ca3af; margin-bottom: 6px;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-        }
-        .cc-prog-bar {
-          height: 4px; background: rgba(0,0,0,0.07);
-          border-radius: 4px; overflow: hidden;
-        }
-        .cc-prog-fill {
-          height: 100%; background: #4f7ef7; border-radius: 4px;
-          transition: width 0.6s ease;
-        }
-        .cc-socials {
-          display: flex; align-items: center; gap: 2px;
-          padding: 9px 14px;
-          border-top: 0.5px solid rgba(0,0,0,0.06);
-          margin-top: auto;
-        }
-        .cc-social-btn {
-          display: inline-flex; align-items: center; justify-content: center;
-          width: 28px; height: 28px; border-radius: 7px;
-          color: #9ca3af;
-          transition: background 0.15s, color 0.15s;
-          text-decoration: none;
-        }
-        .cc-social-btn:hover { background: rgba(0,0,0,0.05); color: #3d3d3d; }
-      `}</style>
-
-      <div
-        className={`cc-card${isEnded ? ' ended' : ''}`}
-        onClick={() => router.push(`/campaign/${c.id}`)}
-        role="link"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === 'Enter' && router.push(`/campaign/${c.id}`)}
-      >
-        {/* ── Header ── */}
-        <div className="cc-header">
-          <div className="cc-identity">
-            <div className="cc-icon" style={showLogo ? {} : { background: col.bg, color: col.fg }}>
-              {showLogo ? (
-                <img
-                  src={logoURI!}
-                  alt={c.name}
-                  onError={() => setLogoError(true)}
-                />
-              ) : initial}
-            </div>
-            <div>
-              <div className="cc-name">{c.name}</div>
-              <div className="cc-meta">
-                {isLive && (
-                  <span className="cc-live-badge">
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
-                    Live
-                  </span>
-                )}
-                {isUpcoming && (
-                  <span className="cc-upcoming-badge">
-                    ◷ {daysToStart !== null ? `In ${daysToStart}d` : 'Soon'}
-                  </span>
-                )}
-                {isEnded && <span className="cc-ended-badge">Ended</span>}
-                <span>{c.chain}</span>
-                {isLive && daysLeft !== null && <span>· {daysLeft}d left</span>}
-              </div>
-            </div>
-          </div>
-          <span className="cc-chain-tag">{c.chain}</span>
-        </div>
-
-        {/* ── Stats ── */}
-        {hasStats && (
-          <div className="cc-stats">
-            {(c.pool_remaining_usd != null || c.pool_usd != null) && (
-              <div>
-                <div className="cc-stat-val" style={{ color: 'var(--color-mw-brand)' }}>
-                  {fmtUSD(c.pool_remaining_usd ?? c.pool_usd ?? 0)}
-                  {c.token_symbol && <span>{c.token_symbol}</span>}
-                </div>
-                <div className="cc-stat-label">{isTokenPool ? 'pool remaining' : 'pool size'}</div>
-              </div>
-            )}
-            {isTokenPool && c.referral_reward_pct != null && (
-              <div>
-                <div className="cc-stat-val" style={{ color: '#2A9E8A' }}>
-                  {c.referral_reward_pct}%
-                </div>
-                <div className="cc-stat-label">referral earn</div>
-              </div>
-            )}
-            {isTokenPool && c.buyer_reward_pct != null && (
-              <div>
-                <div className="cc-stat-val" style={{ color: 'var(--color-mw-brand-deep)' }}>{c.buyer_reward_pct}%</div>
-                <div className="cc-stat-label">buyer rebate</div>
-              </div>
-            )}
-            {!isTokenPool && c.daily_payout_usd != null && (
-              <div>
-                <div className="cc-stat-val">{fmtUSD(c.daily_payout_usd)}</div>
-                <div className="cc-stat-label">daily payout</div>
-              </div>
-            )}
-            {!isTokenPool && c.min_score != null && (
-              <div>
-                <div className="cc-stat-val">{c.min_score}+</div>
-                <div className="cc-stat-label">min score</div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Reward pills ── */}
-        {isTokenPool ? (
-          <div className="cc-rewards">
-            <span className="cc-reward-pill" style={{ background: 'rgba(42,158,138,0.08)', color: '#2A9E8A', border: '0.5px solid rgba(42,158,138,0.2)' }}>
-              ◉ {c.referral_reward_pct ?? 0}% per swap you refer
-            </span>
-            {(c.buyer_reward_pct ?? 0) > 0 && (
-              <span className="cc-reward-pill" style={{ background: 'rgba(58,92,232,0.08)', color: '#3A5CE8', border: '0.5px solid rgba(58,92,232,0.2)' }}>
-                + {c.buyer_reward_pct}% buyer rebate
-              </span>
-            )}
-          </div>
-        ) : hasActions ? (
-          <div className="cc-rewards">
-            {Object.entries(c.actions!).map(([key, action]) => (
-              <span key={key} className="cc-reward-pill" style={actionPillStyle(key)}>
-                +{action.points} {action.label.split(' ')[0].toLowerCase()}{actionSuffix(action)}
-              </span>
-            ))}
-          </div>
-        ) : null}
-
-        {/* ── Progress bar ── */}
-        {showBar && (
-          <div className="cc-progress">
-            <div className="cc-prog-header">
-              <span>Campaign progress</span>
-              {totalDays !== null && elapsedDays !== null
-                ? <span>{elapsedDays} of {totalDays} days</span>
-                : daysLeft !== null
-                  ? <span>{daysLeft} day{daysLeft !== 1 ? 's' : ''} left</span>
-                  : null
-              }
-            </div>
-            <div className="cc-prog-bar">
-              <div
-                className="cc-prog-fill"
-                style={{ width: `${totalDays !== null ? progressPct : Math.max(5, 100 - (daysLeft! / 30) * 100)}%` }}
+    <div
+      className={`mw-accent-bg bg-white rounded-md overflow-hidden cursor-pointer transition-shadow duration-200 flex flex-col shadow-card border-l-[3px] border-mw-brand hover:shadow-card-hover${isEnded ? ' opacity-60' : ''}`}
+      onClick={() => router.push(`/campaign/${c.id}`)}
+      role="link"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && router.push(`/campaign/${c.id}`)}
+    >
+      {/* ── Header ── */}
+      <div className="px-5 pt-[18px] pb-4 border-b border-[rgba(0,0,0,0.06)] flex items-start justify-between gap-[10px]">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-10 h-10 rounded-[10px] flex items-center justify-center text-[14px] font-bold shrink-0 border border-mw-border font-mono overflow-hidden"
+            style={showLogo ? {} : { background: col.bg, color: col.fg }}
+          >
+            {showLogo ? (
+              <img
+                src={logoURI!}
+                alt={c.name}
+                className="w-10 h-10 object-cover rounded-[9px]"
+                onError={() => setLogoError(true)}
               />
+            ) : initial}
+          </div>
+          <div>
+            <div className="text-[15px] font-semibold text-mw-ink font-sans mb-1">{c.name}</div>
+            <div className="flex items-center gap-[6px] text-[12px] text-mw-ink-3 flex-wrap font-sans">
+              {isLive && (
+                <span className="inline-flex items-center gap-1 bg-[rgba(34,197,94,0.1)] text-mw-green border border-[rgba(34,197,94,0.3)] rounded-full px-[7px] py-[2px] text-[11px] font-medium">
+                  <span className="w-[5px] h-[5px] rounded-full bg-mw-live inline-block" />
+                  Live
+                </span>
+              )}
+              {isUpcoming && (
+                <span className="bg-[rgba(245,158,11,0.1)] text-[#d97706] border border-[rgba(245,158,11,0.3)] rounded-full px-[7px] py-[2px] text-[11px] font-medium">
+                  ◷ {daysToStart !== null ? `In ${daysToStart}d` : 'Soon'}
+                </span>
+              )}
+              {isEnded && (
+                <span className="bg-[rgba(107,114,128,0.08)] text-mw-ink-5 border border-[rgba(107,114,128,0.2)] rounded-full px-[7px] py-[2px] text-[11px]">
+                  Ended
+                </span>
+              )}
+              <span>{c.chain}</span>
+              {isLive && daysLeft !== null && <span>· {daysLeft}d left</span>}
             </div>
           </div>
-        )}
-
-        {/* ── Social links + live ticker ── */}
-        {(hasSocials || ticker) && (
-          <div className="cc-socials" style={{ justifyContent: 'space-between' }}>
-            {/* Price ticker (left side) */}
-            {ticker?.priceUsd && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 4 }} onClick={e => e.stopPropagation()}>
-                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, fontWeight: 700, color: '#3d3d3d' }}>
-                  ${parseFloat(ticker.priceUsd) < 0.01
-                    ? parseFloat(ticker.priceUsd).toExponential(2)
-                    : parseFloat(ticker.priceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 5 })}
-                </span>
-                {ticker.priceChange24h != null && (
-                  <span style={{
-                    fontFamily: 'DM Mono, monospace', fontSize: 10, fontWeight: 600,
-                    color: ticker.priceChange24h >= 0 ? '#16a34a' : '#ef4444',
-                  }}>
-                    {ticker.priceChange24h >= 0 ? '+' : ''}{ticker.priceChange24h.toFixed(2)}%
-                  </span>
-                )}
-              </div>
-            )}
-            {/* Social icons (right side) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            {effectiveDexUrl && (
-              <a
-                href={effectiveDexUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="cc-social-btn"
-                title="DexScreener"
-                onClick={e => e.stopPropagation()}
-              >
-                <IconDex />
-              </a>
-            )}
-            {dexLinks.twitter && (
-              <a
-                href={dexLinks.twitter}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="cc-social-btn"
-                title="X / Twitter"
-                onClick={e => e.stopPropagation()}
-              >
-                <IconX />
-              </a>
-            )}
-            {dexLinks.website && (
-              <a
-                href={dexLinks.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="cc-social-btn"
-                title="Website"
-                onClick={e => e.stopPropagation()}
-              >
-                <IconGlobe />
-              </a>
-            )}
-            {dexLinks.telegram && (
-              <a
-                href={dexLinks.telegram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="cc-social-btn"
-                title="Telegram"
-                onClick={e => e.stopPropagation()}
-              >
-                <IconTelegram />
-              </a>
-            )}
-            </div>{/* end social icons */}
-          </div>
-        )}
+        </div>
+        <span className="shrink-0 px-2 py-[3px] rounded-[6px] text-[11px] font-semibold bg-mw-bg text-mw-ink-3 border border-mw-border font-sans">
+          {c.chain}
+        </span>
       </div>
-    </>
+
+      {/* ── Stats ── */}
+      {hasStats && (
+        <div className="grid grid-cols-3 px-5 py-4 gap-3 border-b border-[rgba(0,0,0,0.06)]">
+          {(c.pool_remaining_usd != null || c.pool_usd != null) && (
+            <div>
+              <div className="text-[22px] font-bold text-mw-brand font-mono tracking-[-0.5px]">
+                {fmtUSD(c.pool_remaining_usd ?? c.pool_usd ?? 0)}
+                {c.token_symbol && <span className="text-[11px] font-normal text-mw-ink-5 ml-[2px]">{c.token_symbol}</span>}
+              </div>
+              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">{isTokenPool ? 'pool remaining' : 'pool size'}</div>
+            </div>
+          )}
+          {isTokenPool && c.referral_reward_pct != null && (
+            <div>
+              <div className="text-[22px] font-bold text-mw-teal font-mono tracking-[-0.5px]">
+                {c.referral_reward_pct}%
+              </div>
+              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">referral earn</div>
+            </div>
+          )}
+          {isTokenPool && c.buyer_reward_pct != null && (
+            <div>
+              <div className="text-[22px] font-bold text-mw-brand-deep font-mono tracking-[-0.5px]">{c.buyer_reward_pct}%</div>
+              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">buyer rebate</div>
+            </div>
+          )}
+          {!isTokenPool && c.daily_payout_usd != null && (
+            <div>
+              <div className="text-[22px] font-bold text-mw-ink font-mono tracking-[-0.5px]">{fmtUSD(c.daily_payout_usd)}</div>
+              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">daily payout</div>
+            </div>
+          )}
+          {!isTokenPool && c.min_score != null && (
+            <div>
+              <div className="text-[22px] font-bold text-mw-ink font-mono tracking-[-0.5px]">{c.min_score}+</div>
+              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">min score</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Reward pills ── */}
+      {isTokenPool ? (
+        <div className="px-5 py-3 flex flex-wrap gap-[6px] border-b border-[rgba(0,0,0,0.06)]">
+          <span className="px-[10px] py-1 rounded-full text-[11px] font-medium font-sans bg-[rgba(42,158,138,0.08)] text-mw-teal border border-[rgba(42,158,138,0.2)]">
+            ◉ {c.referral_reward_pct ?? 0}% per swap you refer
+          </span>
+          {(c.buyer_reward_pct ?? 0) > 0 && (
+            <span className="px-[10px] py-1 rounded-full text-[11px] font-medium font-sans bg-[rgba(58,92,232,0.08)] text-mw-brand-deep border border-[rgba(58,92,232,0.2)]">
+              + {c.buyer_reward_pct}% buyer rebate
+            </span>
+          )}
+        </div>
+      ) : hasActions ? (
+        <div className="px-5 py-3 flex flex-wrap gap-[6px] border-b border-[rgba(0,0,0,0.06)]">
+          {Object.entries(c.actions!).map(([key, action]) => (
+            <span key={key} className={`px-[10px] py-1 rounded-full text-[11px] font-medium font-sans ${actionPillClass(key)}`}>
+              +{action.points} {action.label.split(' ')[0].toLowerCase()}{actionSuffix(action)}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {/* ── Progress bar ── */}
+      {showBar && (
+        <div className="px-5 py-3">
+          <div className="flex justify-between text-[11px] text-mw-ink-5 mb-[6px] font-sans">
+            <span>Campaign progress</span>
+            {totalDays !== null && elapsedDays !== null
+              ? <span>{elapsedDays} of {totalDays} days</span>
+              : daysLeft !== null
+                ? <span>{daysLeft} day{daysLeft !== 1 ? 's' : ''} left</span>
+                : null
+            }
+          </div>
+          <div className="h-[6px] bg-mw-border rounded-[4px] overflow-hidden">
+            <div
+              className="h-full bg-mw-brand rounded-[4px] transition-[width] duration-[600ms] ease-[ease]"
+              style={{ width: `${totalDays !== null ? progressPct : Math.max(5, 100 - (daysLeft! / 30) * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ── Live price ticker ── */}
+      {ticker?.priceUsd && (
+        <div className="px-5 py-[9px] border-t border-[rgba(0,0,0,0.06)] flex items-center gap-4" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-[6px]">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.6px] text-mw-ink-5 font-sans">Price</span>
+            <span className="font-mono text-[13px] font-bold text-mw-ink-2">
+              ${parseFloat(ticker.priceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
+            </span>
+          </div>
+          {ticker.priceChange24h != null && (
+            <div className="flex items-center gap-[6px]">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.6px] text-mw-ink-5 font-sans">24h</span>
+              <span className={`font-mono text-[13px] font-semibold ${ticker.priceChange24h >= 0 ? 'text-mw-green' : 'text-mw-red'}`}>
+                {ticker.priceChange24h >= 0 ? '+' : ''}{ticker.priceChange24h.toFixed(2)}%
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Social links ── */}
+      {hasSocials && (
+        <div className="flex items-center gap-[2px] px-5 py-[8px] border-t border-[rgba(0,0,0,0.06)] mt-auto justify-end">
+          <div className="flex items-center gap-[2px]">
+          {effectiveDexUrl && (
+            <a
+              href={effectiveDexUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline transition-colors duration-150 hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2"
+              title="DexScreener"
+              onClick={e => e.stopPropagation()}
+            >
+              <IconDex />
+            </a>
+          )}
+          {dexLinks.twitter && (
+            <a
+              href={dexLinks.twitter}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline transition-colors duration-150 hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2"
+              title="X / Twitter"
+              onClick={e => e.stopPropagation()}
+            >
+              <IconX />
+            </a>
+          )}
+          {dexLinks.website && (
+            <a
+              href={dexLinks.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline transition-colors duration-150 hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2"
+              title="Website"
+              onClick={e => e.stopPropagation()}
+            >
+              <IconGlobe />
+            </a>
+          )}
+          {dexLinks.telegram && (
+            <a
+              href={dexLinks.telegram}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline transition-colors duration-150 hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2"
+              title="Telegram"
+              onClick={e => e.stopPropagation()}
+            >
+              <IconTelegram />
+            </a>
+          )}
+          </div>{/* end social icons */}
+        </div>
+      )}
+    </div>
   )
 }

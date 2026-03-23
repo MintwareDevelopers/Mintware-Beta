@@ -48,167 +48,117 @@ export function Step4Schedule({ form, onChange }: Step4ScheduleProps) {
   const tooFar  = startAt && startAt > maxDate
 
   return (
-    <>
-      <style>{`
-        .sched-option {
-          flex: 1;
-          border: 1.5px solid #E0DFFF;
-          border-radius: 14px;
-          padding: 20px;
-          cursor: pointer;
-          transition: all 200ms;
-          background: #fff;
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-        .sched-option.active {
-          border-color: #3A5CE8;
-          background: rgba(58,92,232,0.03);
-          box-shadow: 0 0 0 3px rgba(58,92,232,0.08);
-        }
-        .sched-option:hover:not(.active) {
-          border-color: #C4C3F0;
-          background: #F7F6FF;
-        }
-      `}</style>
+    <div className="flex flex-col gap-7">
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-
-        {/* Option cards */}
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-          <div
-            className={`sched-option${isNow ? ' active' : ''}`}
-            onClick={() => onChange({ schedule: 'now', startAt: null })}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                border: `2px solid ${isNow ? '#3A5CE8' : '#E0DFFF'}`,
-                background: isNow ? '#3A5CE8' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {isNow && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />}
-              </div>
-              <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 15, fontWeight: 700, color: isNow ? '#3A5CE8' : '#1A1A2E' }}>
-                Start Now
-              </span>
+      {/* Option cards */}
+      <div className="flex gap-4 flex-wrap">
+        <div
+          className={`flex-1 border-[1.5px] rounded-[14px] p-5 cursor-pointer transition-all duration-200 bg-white flex flex-col gap-2${isNow ? ' border-[#3A5CE8] bg-[rgba(58,92,232,0.03)] shadow-[0_0_0_3px_rgba(58,92,232,0.08)]' : ' border-[#E0DFFF] hover:border-[#C4C3F0] hover:bg-mw-surface-purple'}`}
+          onClick={() => onChange({ schedule: 'now', startAt: null })}
+        >
+          <div className="flex items-center gap-[10px]">
+            <div
+              className={`w-5 h-5 rounded-full shrink-0 border-2 flex items-center justify-center ${isNow ? 'border-[#3A5CE8] bg-[#3A5CE8]' : 'border-[#E0DFFF] bg-transparent'}`}
+            >
+              {isNow && <div className="w-[7px] h-[7px] rounded-full bg-white" />}
             </div>
-            <p style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#8A8C9E', margin: 0, paddingLeft: 30 }}>
-              Campaign goes live immediately after funding is confirmed.
-            </p>
+            <span
+              className={`font-sans text-[15px] font-bold ${isNow ? 'text-mw-brand-deep' : 'text-[#1A1A2E]'}`}
+            >
+              Start Now
+            </span>
           </div>
-
-          <div
-            className={`sched-option${isScheduled ? ' active' : ''}`}
-            onClick={() => onChange({ schedule: 'scheduled' })}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
-                border: `2px solid ${isScheduled ? '#3A5CE8' : '#E0DFFF'}`,
-                background: isScheduled ? '#3A5CE8' : 'transparent',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {isScheduled && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#fff' }} />}
-              </div>
-              <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 15, fontWeight: 700, color: isScheduled ? '#3A5CE8' : '#1A1A2E' }}>
-                Schedule
-              </span>
-            </div>
-            <p style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#8A8C9E', margin: 0, paddingLeft: 30 }}>
-              Pick a future date. Campaign appears as "Coming Soon" and starts automatically.
-            </p>
-          </div>
+          <p className="font-sans text-[13px] text-mw-ink-4 m-0 pl-[30px]">
+            Campaign goes live immediately after funding is confirmed.
+          </p>
         </div>
 
-        {/* Date/time picker */}
-        {isScheduled && (
-          <div>
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 12, fontWeight: 700, color: '#8A8C9E',
-              letterSpacing: '0.5px', textTransform: 'uppercase',
-              marginBottom: 10,
-            }}>
-              Start date & time (your local time)
+        <div
+          className={`flex-1 border-[1.5px] rounded-[14px] p-5 cursor-pointer transition-all duration-200 bg-white flex flex-col gap-2${isScheduled ? ' border-[#3A5CE8] bg-[rgba(58,92,232,0.03)] shadow-[0_0_0_3px_rgba(58,92,232,0.08)]' : ' border-[#E0DFFF] hover:border-[#C4C3F0] hover:bg-mw-surface-purple'}`}
+          onClick={() => onChange({ schedule: 'scheduled' })}
+        >
+          <div className="flex items-center gap-[10px]">
+            <div
+              className={`w-5 h-5 rounded-full shrink-0 border-2 flex items-center justify-center ${isScheduled ? 'border-[#3A5CE8] bg-[#3A5CE8]' : 'border-[#E0DFFF] bg-transparent'}`}
+            >
+              {isScheduled && <div className="w-[7px] h-[7px] rounded-full bg-white" />}
             </div>
-            <input
-              type="datetime-local"
-              min={toDatetimeLocal(minDate)}
-              max={toDatetimeLocal(maxDate)}
-              value={startAt ? toDatetimeLocal(startAt) : ''}
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                fontFamily: 'DM Mono, monospace', fontSize: 13,
-                padding: '11px 14px', borderRadius: 10,
-                border: `1.5px solid ${focused ? '#3A5CE8' : tooSoon || tooFar ? '#C2537A' : '#E0DFFF'}`,
-                background: '#fff', color: '#1A1A2E', outline: 'none',
-                transition: 'border-color 150ms',
-              }}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onChange={handleDateChange}
-            />
-
-            {tooSoon && (
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 12, color: '#C2537A', marginTop: 6 }}>
-                Start time must be at least 1 hour from now.
-              </div>
-            )}
-            {tooFar && (
-              <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 12, color: '#C2537A', marginTop: 6 }}>
-                Start time cannot be more than 30 days from now.
-              </div>
-            )}
-
-            {startAt && !tooSoon && !tooFar && (
-              <div style={{
-                marginTop: 10,
-                background: '#F7F6FF', border: '1px solid #E0DFFF',
-                borderRadius: 10, padding: '10px 14px',
-                display: 'flex', gap: 16, flexWrap: 'wrap',
-              }}>
-                <div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>
-                    {toUTCString(startAt)}
-                  </div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 2 }}>
-                    UTC
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>
-                    {startAt.toLocaleString()}
-                  </div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 2 }}>
-                    Your local time
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div style={{
-              marginTop: 14,
-              fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 12, color: '#8A8C9E',
-              display: 'flex', flexDirection: 'column', gap: 4,
-            }}>
-              <div>◷ Appears on dashboard as "Coming Soon" until launch</div>
-              <div>🔗 You can share the campaign link before it goes live</div>
-            </div>
+            <span
+              className={`font-sans text-[15px] font-bold ${isScheduled ? 'text-mw-brand-deep' : 'text-[#1A1A2E]'}`}
+            >
+              Schedule
+            </span>
           </div>
-        )}
-
-        {isNow && (
-          <div style={{
-            background: 'rgba(42,158,138,0.06)', border: '1px solid rgba(42,158,138,0.15)',
-            borderRadius: 10, padding: '12px 16px',
-            fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: '#2A9E8A',
-          }}>
-            ✓ Campaign will go live as soon as your funding transaction is confirmed on-chain.
-          </div>
-        )}
+          <p className="font-sans text-[13px] text-mw-ink-4 m-0 pl-[30px]">
+            Pick a future date. Campaign appears as &quot;Coming Soon&quot; and starts automatically.
+          </p>
+        </div>
       </div>
-    </>
+
+      {/* Date/time picker */}
+      {isScheduled && (
+        <div>
+          <div className="font-sans text-[12px] font-bold text-mw-ink-4 tracking-[0.5px] uppercase mb-[10px]">
+            Start date & time (your local time)
+          </div>
+          <input
+            type="datetime-local"
+            min={toDatetimeLocal(minDate)}
+            max={toDatetimeLocal(maxDate)}
+            value={startAt ? toDatetimeLocal(startAt) : ''}
+            className="w-full box-border font-mono text-[13px] p-[11px_14px] rounded-[10px] bg-white text-[#1A1A2E] outline-none transition-[border-color] duration-150 border-[1.5px]"
+            style={{
+              borderColor: focused ? '#3A5CE8' : (tooSoon || tooFar) ? '#C2537A' : '#E0DFFF',
+            }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            onChange={handleDateChange}
+          />
+
+          {tooSoon && (
+            <div className="font-sans text-[12px] text-mw-pink mt-[6px]">
+              Start time must be at least 1 hour from now.
+            </div>
+          )}
+          {tooFar && (
+            <div className="font-sans text-[12px] text-mw-pink mt-[6px]">
+              Start time cannot be more than 30 days from now.
+            </div>
+          )}
+
+          {startAt && !tooSoon && !tooFar && (
+            <div className="mt-[10px] bg-mw-surface-purple border border-[#E0DFFF] rounded-[10px] p-[10px_14px] flex gap-4 flex-wrap">
+              <div>
+                <div className="font-mono text-[13px] font-bold text-[#1A1A2E]">
+                  {toUTCString(startAt)}
+                </div>
+                <div className="font-sans text-[10px] text-mw-ink-4 mt-[2px]">
+                  UTC
+                </div>
+              </div>
+              <div>
+                <div className="font-mono text-[13px] font-bold text-[#1A1A2E]">
+                  {startAt.toLocaleString()}
+                </div>
+                <div className="font-sans text-[10px] text-mw-ink-4 mt-[2px]">
+                  Your local time
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-[14px] font-sans text-[12px] text-mw-ink-4 flex flex-col gap-1">
+            <div>◷ Appears on dashboard as &quot;Coming Soon&quot; until launch</div>
+            <div>🔗 You can share the campaign link before it goes live</div>
+          </div>
+        </div>
+      )}
+
+      {isNow && (
+        <div className="bg-[rgba(42,158,138,0.06)] border border-[rgba(42,158,138,0.15)] rounded-[10px] p-[12px_16px] font-sans text-[13px] text-mw-teal">
+          ✓ Campaign will go live as soon as your funding transaction is confirmed on-chain.
+        </div>
+      )}
+    </div>
   )
 }

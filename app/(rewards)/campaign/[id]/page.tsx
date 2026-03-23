@@ -8,7 +8,6 @@
 //   GET /campaign?id=&address=   → campaign + participant
 //   GET /score?address=           → user's attribution score (if not joined)
 // Auth: MwAuthGuard
-// Inline styles only — no Tailwind.
 // =============================================================================
 
 import { useAccount } from 'wagmi'
@@ -34,22 +33,22 @@ type Tab = 'overview' | 'leaderboard' | 'stats'
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 function DetailSkeleton() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="flex flex-col gap-3">
       {/* Header skeleton */}
-      <div style={{ background: '#fff', border: '1px solid #E0DFFF', borderRadius: 18, padding: 24 }}>
-        <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 14, background: '#F0EFFF', flexShrink: 0 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ height: 24, background: '#F0EFFF', borderRadius: 6, marginBottom: 8, width: '45%' }} />
-            <div style={{ height: 14, background: '#F0EFFF', borderRadius: 4, width: '30%' }} />
+      <div className="bg-white border border-[#E0DFFF] rounded-[18px] p-6">
+        <div className="flex gap-4 mb-4">
+          <div className="w-14 h-14 rounded-[14px] bg-[#F0EFFF] shrink-0" />
+          <div className="flex-1">
+            <div className="h-6 bg-[#F0EFFF] rounded-[6px] mb-2 w-[45%]" />
+            <div className="h-[14px] bg-[#F0EFFF] rounded-[4px] w-[30%]" />
           </div>
         </div>
-        <div style={{ height: 60, background: '#F0EFFF', borderRadius: 'var(--radius-md)' }} />
+        <div className="h-[60px] bg-[#F0EFFF] rounded-md" />
       </div>
       {/* Join skeleton */}
-      <div style={{ height: 52, background: '#F0EFFF', borderRadius: 10 }} />
+      <div className="h-[52px] bg-[#F0EFFF] rounded-[10px]" />
       {/* Tabs skeleton */}
-      <div style={{ height: 40, background: '#F0EFFF', borderRadius: 'var(--radius-sm)' }} />
+      <div className="h-10 bg-[#F0EFFF] rounded-sm" />
     </div>
   )
 }
@@ -67,55 +66,22 @@ function ReferralCard({ refLink, earnDesc }: { refLink: string; earnDesc: string
   }
 
   return (
-    <div style={{
-      background: 'rgba(42,158,138,0.04)',
-      border: '1px solid rgba(42,158,138,0.2)',
-      borderRadius: 'var(--radius-md)',
-      padding: '14px 16px',
-      marginBottom: 24,
-    }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 10,
-      }}>
-        <span style={{
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 12, fontWeight: 700, letterSpacing: '0.5px',
-          textTransform: 'uppercase', color: 'var(--color-mw-teal)',
-        }}>
+    <div className="bg-[rgba(42,158,138,0.04)] border border-[rgba(42,158,138,0.2)] rounded-md px-4 py-[14px] mb-6">
+      <div className="flex items-center justify-between mb-[10px]">
+        <span className="font-sans text-[12px] font-bold tracking-[0.5px] uppercase text-mw-teal">
           ◉ Your referral link
         </span>
-        <span style={{
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 11, color: 'var(--color-mw-teal)',
-        }}>
+        <span className="font-sans text-[11px] text-mw-teal">
           {earnDesc}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <div style={{
-          flex: 1,
-          fontFamily: 'DM Mono, monospace', fontSize: 11,
-          color: 'var(--color-mw-ink-2)', background: '#fff',
-          border: '1px solid rgba(42,158,138,0.2)',
-          borderRadius: 'var(--radius-sm)', padding: '9px 12px',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
+      <div className="flex gap-2 items-center">
+        <div className="flex-1 font-mono text-[11px] text-mw-ink-2 bg-white border border-[rgba(42,158,138,0.2)] rounded-sm px-3 py-[9px] overflow-hidden text-ellipsis whitespace-nowrap">
           {refLink}
         </div>
         <button
           onClick={handleCopy}
-          style={{
-            flexShrink: 0, padding: '9px 16px',
-            background: copied ? 'var(--color-mw-teal)' : '#fff',
-            color: copied ? '#fff' : 'var(--color-mw-teal)',
-            border: '1px solid rgba(42,158,138,0.4)',
-            borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 12, fontWeight: 600,
-            transition: 'background var(--transition-fast), color var(--transition-fast)',
-            whiteSpace: 'nowrap',
-          }}
+          className={`shrink-0 px-4 py-[9px] border border-[rgba(42,158,138,0.4)] rounded-sm cursor-pointer font-sans text-[12px] font-semibold transition-[background,color] duration-150 whitespace-nowrap ${copied ? 'bg-mw-teal text-white' : 'bg-white text-mw-teal'}`}
         >
           {copied ? '✓ Copied!' : 'Copy link'}
         </button>
@@ -211,50 +177,22 @@ function CampaignDetailContent() {
 
   return (
     <>
-      <style>{`
-        .cd-tab-btn {
-          background: none; border: none; cursor: pointer;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 14px; font-weight: 600;
-          padding: 10px 18px;
-          color: var(--color-mw-ink-4);
-          border-bottom: 2px solid transparent;
-          transition: color var(--transition-fast), border-color var(--transition-fast);
-        }
-        .cd-tab-btn:hover:not(:disabled) { color: var(--color-mw-brand-deep); }
-        .cd-tab-btn.active {
-          color: var(--color-mw-brand-deep);
-          border-bottom-color: var(--color-mw-brand-deep);
-        }
-        .cd-tab-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-      `}</style>
-
-      <div style={{ minHeight: '100vh', background: 'var(--color-mw-surface-purple)', fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+      <div className="min-h-screen bg-mw-surface-purple font-sans">
         <MwNav />
 
-        <main style={{ maxWidth: 720, margin: '0 auto', padding: '32px 16px' }}>
+        <main className="max-w-[720px] mx-auto px-4 py-8">
 
           {/* ── Back link ── */}
-          <Link href="/dashboard" style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, fontWeight: 600,
-            color: 'var(--color-mw-ink-4)', textDecoration: 'none', marginBottom: 20,
-            transition: 'color var(--transition-fast)',
-          }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--color-mw-brand-deep)' }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = 'var(--color-mw-ink-4)' }}
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center gap-[6px] font-sans text-[13px] font-semibold text-mw-ink-4 no-underline mb-5 transition-colors duration-150 hover:text-mw-brand-deep"
           >
             ← Campaigns
           </Link>
 
           {/* ── Error ── */}
           {error && !loading && (
-            <div style={{
-              padding: '16px 20px', background: 'rgba(194,83,122,0.06)',
-              border: '1px solid rgba(194,83,122,0.15)', borderRadius: 'var(--radius-md)',
-              fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: 'var(--color-mw-pink)',
-              marginBottom: 20,
-            }}>
+            <div className="px-5 py-4 bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-md font-sans text-[13px] text-mw-pink mb-5">
               ⚠ {error}
             </div>
           )}
@@ -272,23 +210,10 @@ function CampaignDetailContent() {
               {address &&
                 (campaign as Campaign & { creator?: string }).creator?.toLowerCase() ===
                   address.toLowerCase() && (
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -8, marginBottom: 16 }}>
+                <div className="flex justify-end -mt-2 mb-4">
                   <Link
                     href={`/manage/${campaignId}`}
-                    style={{
-                      display: 'inline-block',
-                      border: '1px solid var(--color-mw-brand-deep)',
-                      color: 'var(--color-mw-brand-deep)',
-                      borderRadius: 'var(--radius-sm)',
-                      padding: '8px 16px',
-                      fontSize: 13,
-                      fontFamily: 'Plus Jakarta Sans, sans-serif',
-                      fontWeight: 600,
-                      textDecoration: 'none',
-                      transition: 'background var(--transition-fast)',
-                    }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = '#EEF1FF' }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent' }}
+                    className="inline-block border border-mw-brand-deep text-mw-brand-deep rounded-sm px-4 py-2 text-[13px] font-sans font-semibold no-underline transition-colors duration-150 hover:bg-[#EEF1FF]"
                   >
                     Manage Campaign →
                   </Link>
@@ -301,14 +226,19 @@ function CampaignDetailContent() {
                 const attributionMultiplier = pct !== null ? (pct >= 67 ? 1.5 : pct >= 34 ? 1.25 : 1.0) : null
                 if (attributionMultiplier === null) return null
                 return (
-                  <div style={{ background: '#0A0D14', borderRadius: 12, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 20 }}>
-                    <div style={{ flexShrink: 0 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.28)', marginBottom: 5, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>Your multiplier</div>
-                      <div style={{ fontSize: 36, fontWeight: 700, color: attributionMultiplier >= 1.5 ? '#4ade80' : attributionMultiplier >= 1.25 ? 'var(--color-mw-brand)' : 'rgba(255,255,255,0.6)', letterSpacing: -1.5, lineHeight: 1, fontFamily: 'DM Mono, monospace' }}>{attributionMultiplier}×</div>
-                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.28)', marginTop: 3, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>{pct}th percentile</div>
+                  <div className="bg-mw-dark rounded-[12px] px-5 py-4 mb-4 flex items-center gap-5">
+                    <div className="shrink-0">
+                      <div className="text-[10px] font-bold tracking-[0.1em] uppercase text-[rgba(255,255,255,0.28)] mb-[5px] font-sans">Your multiplier</div>
+                      <div
+                        className="text-[36px] font-bold tracking-[-1.5px] leading-none font-mono"
+                        style={{ color: attributionMultiplier >= 1.5 ? '#4ade80' : attributionMultiplier >= 1.25 ? 'var(--color-mw-brand)' : 'rgba(255,255,255,0.6)' }}
+                      >
+                        {attributionMultiplier}×
+                      </div>
+                      <div className="text-[11px] text-[rgba(255,255,255,0.28)] mt-[3px] font-sans">{pct}th percentile</div>
                     </div>
-                    <div style={{ width: '0.5px', background: 'rgba(255,255,255,0.07)', alignSelf: 'stretch', flexShrink: 0 }} />
-                    <div style={{ flex: 1, fontSize: 13, color: 'rgba(255,255,255,0.38)', lineHeight: 1.6, fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                    <div className="w-px bg-[rgba(255,255,255,0.07)] self-stretch shrink-0" />
+                    <div className="flex-1 text-[13px] text-mw-dark-sub leading-[1.6] font-sans">
                       {attributionMultiplier >= 1.5
                         ? 'Top-tier wallet. You earn up to 50% more than the base reward rate from this campaign.'
                         : attributionMultiplier >= 1.25
@@ -320,7 +250,7 @@ function CampaignDetailContent() {
               })()}
 
               {/* Join / locked / joined state */}
-              <div style={{ marginBottom: isJoined ? 16 : 24 }}>
+              <div className={isJoined ? 'mb-4' : 'mb-6'}>
                 <JoinButton
                   campaignId={campaignId}
                   minScore={minScore}
@@ -345,24 +275,23 @@ function CampaignDetailContent() {
               })()}
 
               {/* ── Tab navigation ── */}
-              <div style={{
-                display: 'flex', borderBottom: '1px solid #E0DFFF',
-                marginBottom: 24,
-              }}>
+              <div className="flex border-b border-[#E0DFFF] mb-6">
                 {tabs.map(tab => (
                   <button
                     key={tab.key}
-                    className={`cd-tab-btn${activeTab === tab.key ? ' active' : ''}`}
                     disabled={tab.disabled}
                     onClick={() => !tab.disabled && setActiveTab(tab.key)}
+                    className={[
+                      'bg-transparent border-0 cursor-pointer font-sans text-[14px] font-semibold px-[18px] py-[10px] border-b-2 transition-[color,border-color] duration-150',
+                      tab.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:text-mw-brand-deep',
+                      activeTab === tab.key
+                        ? 'text-mw-brand-deep border-mw-brand-deep'
+                        : 'text-mw-ink-4 border-transparent',
+                    ].join(' ')}
                   >
                     {tab.label}
                     {tab.key === 'stats' && !isJoined && (
-                      <span style={{
-                        marginLeft: 4, fontSize: 10,
-                        background: '#F0EFFF', color: '#C4C3F0',
-                        borderRadius: 4, padding: '1px 4px',
-                      }}>
+                      <span className="ml-1 text-[10px] bg-[#F0EFFF] text-[#C4C3F0] rounded-[4px] px-1 py-px">
                         join first
                       </span>
                     )}
@@ -403,15 +332,12 @@ function CampaignDetailContent() {
               )}
 
               {activeTab === 'stats' && !isJoined && (
-                <div style={{
-                  textAlign: 'center', padding: '48px 24px',
-                  background: '#fff', border: '1px solid #E0DFFF', borderRadius: 'var(--radius-lg)',
-                }}>
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>📊</div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--color-mw-ink)', marginBottom: 6 }}>
+                <div className="text-center px-6 py-12 bg-white border border-[#E0DFFF] rounded-lg">
+                  <div className="text-[32px] mb-3">📊</div>
+                  <div className="font-sans text-[15px] font-bold text-mw-ink mb-[6px]">
                     Join to see your stats
                   </div>
-                  <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 13, color: 'var(--color-mw-ink-4)' }}>
+                  <div className="font-sans text-[13px] text-mw-ink-4">
                     Your points breakdown and earnings will appear here after joining.
                   </div>
                 </div>

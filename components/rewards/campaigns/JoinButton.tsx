@@ -15,6 +15,8 @@
 // =============================================================================
 
 import { useState } from 'react'
+import { toast } from 'sonner'
+import { Lock, CheckCircle2 } from 'lucide-react'
 
 interface JoinButtonProps {
   campaignId: string
@@ -41,9 +43,12 @@ export function JoinButton({ campaignId, minScore, userScore, isJoined, wallet, 
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Join failed')
+      toast.success('Joined campaign!', { description: 'You\'re now participating. Start earning points.' })
       onJoined()
     } catch (err) {
-      setError((err as Error).message ?? 'Something went wrong')
+      const msg = (err as Error).message ?? 'Something went wrong'
+      setError(msg)
+      toast.error('Could not join', { description: msg })
     } finally {
       setLoading(false)
     }
@@ -59,7 +64,7 @@ export function JoinButton({ campaignId, minScore, userScore, isJoined, wallet, 
         fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 14, fontWeight: 600,
         color: '#2A9E8A',
       }}>
-        ✓ Joined
+        <CheckCircle2 size={15} /> Joined
       </div>
     )
   }
@@ -101,7 +106,7 @@ export function JoinButton({ campaignId, minScore, userScore, isJoined, wallet, 
         fontFamily: 'Plus Jakarta Sans, sans-serif',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <span style={{ fontSize: 16 }}>🔒</span>
+          <Lock size={14} style={{ color: '#8A8C9E', flexShrink: 0 }} />
           <span style={{ fontSize: 14, fontWeight: 700, color: '#8A8C9E' }}>
             Score {minScore}+ required
           </span>

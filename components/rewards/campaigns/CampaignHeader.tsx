@@ -91,128 +91,79 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
 
   return (
     <>
-      <style>{`
-        @keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-      `}</style>
-
-      <div style={{
-        background: '#fff',
-        border: '0.5px solid var(--color-mw-border)',
-        borderRadius: 18,
-        padding: '24px',
-        marginBottom: 24,
-        boxShadow: 'var(--shadow-card)',
-      }}>
+      <div className="bg-white border border-mw-border rounded-[18px] p-6 mb-6 shadow-card">
         {/* ── Top row: icon + name + badges ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div className="flex items-start gap-4 flex-wrap">
           {/* Protocol icon */}
-          <div style={{
-            width: 56, height: 56, borderRadius: 14, flexShrink: 0,
-            background: showLogo ? '#fff' : col.bg, color: col.fg,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: 'DM Mono, monospace', fontSize: 22, fontWeight: 700,
-            border: '0.5px solid rgba(0,0,0,0.08)', overflow: 'hidden',
-          }}>
+          <div
+            className="w-14 h-14 rounded-[14px] shrink-0 flex items-center justify-center font-mono text-[22px] font-bold border border-[rgba(0,0,0,0.08)] overflow-hidden"
+            style={{ background: showLogo ? '#fff' : col.bg, color: col.fg }}
+          >
             {showLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logoURI!} alt={c.name} width={56} height={56} style={{ objectFit: 'cover', width: '100%', height: '100%' }} onError={() => setLogoError(true)} />
+              <img src={logoURI!} alt={c.name} width={56} height={56} className="object-cover w-full h-full" onError={() => setLogoError(true)} />
             ) : initial}
           </div>
 
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="flex-1 min-w-0">
             {/* Name */}
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 22, fontWeight: 800, color: '#1A1A2E', marginBottom: 6,
-            }}>
+            <div className="font-sans text-[22px] font-extrabold text-[#1A1A2E] mb-[6px]">
               {c.name}
               {c.protocol && c.protocol !== c.name && (
-                <span style={{ fontSize: 14, fontWeight: 500, color: '#8A8C9E', marginLeft: 8 }}>
+                <span className="text-[14px] font-medium text-mw-ink-4 ml-2">
                   by {c.protocol}
                 </span>
               )}
             </div>
 
             {/* Badges row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div className="flex items-center gap-2 flex-wrap">
               {/* Chain badge */}
-              <span style={{
-                fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 11, fontWeight: 700,
-                background: '#EEF1FF', color: '#3A5CE8',
-                borderRadius: 6, padding: '3px 8px',
-              }}>
+              <span className="font-sans text-[11px] font-bold bg-[#EEF1FF] text-mw-brand-deep rounded-[6px] px-2 py-[3px]">
                 {c.chain}
               </span>
 
               {/* Status badge */}
               {isLive && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  fontSize: 11, fontWeight: 700,
-                  background: 'rgba(42,158,138,0.10)', color: '#2A9E8A',
-                  border: '1px solid rgba(42,158,138,0.2)',
-                  borderRadius: 20, padding: '3px 10px',
-                }}>
-                  <span style={{
-                    width: 6, height: 6, borderRadius: '50%', background: '#2A9E8A',
-                    display: 'inline-block', animation: 'dot-pulse 2s ease-in-out infinite',
-                  }} />
+                <span className="inline-flex items-center gap-[5px] text-[11px] font-bold bg-[rgba(42,158,138,0.10)] text-mw-teal border border-[rgba(42,158,138,0.2)] rounded-full px-[10px] py-[3px]">
+                  <span className="w-[6px] h-[6px] rounded-full bg-mw-teal inline-block" style={{ animation: 'dot-pulse 2s ease-in-out infinite' }} />
                   Live
                 </span>
               )}
               {isUpcoming && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  fontSize: 11, fontWeight: 700,
-                  background: 'rgba(194,122,0,0.10)', color: '#C27A00',
-                  border: '1px solid rgba(194,122,0,0.2)',
-                  borderRadius: 20, padding: '3px 10px',
-                }}>
+                <span className="inline-flex items-center gap-[5px] text-[11px] font-bold bg-[rgba(194,122,0,0.10)] text-mw-amber border border-[rgba(194,122,0,0.2)] rounded-full px-[10px] py-[3px]">
                   ◷ Coming soon
                 </span>
               )}
               {c.status === 'ended' && (
-                <span style={{
-                  fontSize: 11, fontWeight: 700, color: '#8A8C9E',
-                  background: 'rgba(138,140,158,0.1)',
-                  border: '1px solid rgba(138,140,158,0.2)',
-                  borderRadius: 20, padding: '3px 10px',
-                }}>
+                <span className="text-[11px] font-bold text-mw-ink-4 bg-[rgba(138,140,158,0.1)] border border-[rgba(138,140,158,0.2)] rounded-full px-[10px] py-[3px]">
                   Ended
                 </span>
               )}
               {/* Social links */}
               {hasSocials && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 2, marginTop: 8 }}>
+                <div className="flex items-center gap-[2px] mt-2">
                   {effectiveDexUrl && (
                     <a href={effectiveDexUrl} target="_blank" rel="noopener noreferrer" title="DexScreener"
-                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, color: '#9ca3af', textDecoration: 'none' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)'; (e.currentTarget as HTMLElement).style.color = '#3d3d3d' }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9ca3af' }}>
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2 transition-colors duration-150">
                       <IconDex />
                     </a>
                   )}
                   {links.twitter && (
                     <a href={links.twitter} target="_blank" rel="noopener noreferrer" title="X / Twitter"
-                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, color: '#9ca3af', textDecoration: 'none' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)'; (e.currentTarget as HTMLElement).style.color = '#3d3d3d' }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9ca3af' }}>
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2 transition-colors duration-150">
                       <IconX />
                     </a>
                   )}
                   {links.website && (
                     <a href={links.website} target="_blank" rel="noopener noreferrer" title="Website"
-                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, color: '#9ca3af', textDecoration: 'none' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)'; (e.currentTarget as HTMLElement).style.color = '#3d3d3d' }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9ca3af' }}>
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2 transition-colors duration-150">
                       <IconGlobe />
                     </a>
                   )}
                   {links.telegram && (
                     <a href={links.telegram} target="_blank" rel="noopener noreferrer" title="Telegram"
-                      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: 7, color: '#9ca3af', textDecoration: 'none' }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(0,0,0,0.05)'; (e.currentTarget as HTMLElement).style.color = '#3d3d3d' }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = '#9ca3af' }}>
+                      className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2 transition-colors duration-150">
                       <IconTelegram />
                     </a>
                   )}
@@ -223,74 +174,59 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
         </div>
 
         {/* ── Stats row ── */}
-        <div style={{
-          display: 'flex', gap: 0, marginTop: 22,
-          background: '#F7F6FF', borderRadius: 12,
-          border: '1px solid #E0DFFF', overflow: 'hidden',
-        }}>
+        <div className="flex gap-0 mt-[22px] bg-mw-surface-purple rounded-md border border-[#E0DFFF] overflow-hidden">
           {(c.campaign_type === 'token_pool' ? [
             // Token Reward Pool: referral earn is the headline
             (c.pool_remaining_usd != null || c.pool_usd != null) && {
               label: 'Pool remaining',
               value: `${fmtUSD(c.pool_remaining_usd ?? c.pool_usd ?? 0)}${c.token_symbol ? ` ${c.token_symbol}` : ''}`,
-              color: 'var(--color-mw-brand)',
+              color: 'text-mw-brand',
             },
             c.referral_reward_pct != null && {
               label: 'Referral earn',
               value: `${c.referral_reward_pct}% per swap`,
-              color: '#2A9E8A',
+              color: 'text-mw-teal',
             },
             c.buyer_reward_pct != null && {
               label: 'Buyer rebate',
               value: `${c.buyer_reward_pct}% per swap`,
-              color: 'var(--color-mw-brand-deep)',
+              color: 'text-mw-brand-deep',
             },
             daysLeft !== null && isLive && {
               label: 'Days remaining',
               value: `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
-              color: 'var(--color-mw-amber)',
+              color: 'text-mw-amber',
             },
           ] : [
             // Points Campaign: pool size, daily payout, days, min score
             c.pool_usd != null && {
               label: 'Pool size',
               value: `${fmtUSD(c.pool_usd)}${c.token_symbol ? ` ${c.token_symbol}` : ''}`,
-              color: 'var(--color-mw-brand)',
+              color: 'text-mw-brand',
             },
             c.daily_payout_usd != null && {
               label: 'Daily payout',
               value: `${fmtUSD(c.daily_payout_usd)}/day`,
-              color: 'var(--color-mw-green)',
+              color: 'text-mw-green',
             },
             daysLeft !== null && isLive && {
               label: 'Days remaining',
               value: `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
-              color: 'var(--color-mw-amber)',
+              color: 'text-mw-amber',
             },
             c.min_score != null && {
               label: 'Min score',
               value: `${c.min_score}+`,
-              color: '#1A1A2E',
+              color: 'text-[#1A1A2E]',
             },
           ]).filter(Boolean).map((stat, i, arr) => {
             if (!stat) return null
             return (
-              <div key={i} style={{
-                flex: 1, padding: '14px 16px',
-                borderRight: i < arr.length - 1 ? '1px solid #E0DFFF' : 'none',
-              }}>
-                <div style={{
-                  fontFamily: 'DM Mono, monospace',
-                  fontSize: 15, fontWeight: 700,
-                  color: (stat as { color: string }).color ?? '#1A1A2E',
-                  marginBottom: 2,
-                }}>
+              <div key={i} className={`flex-1 px-4 py-[14px]${i < arr.length - 1 ? ' border-r border-[#E0DFFF]' : ''}`}>
+                <div className={`font-mono text-[15px] font-bold mb-[2px] ${(stat as { color: string }).color}`}>
                   {(stat as { value: string }).value}
                 </div>
-                <div style={{
-                  fontFamily: 'Plus Jakarta Sans, sans-serif',
-                  fontSize: 10, color: '#8A8C9E',
-                }}>
+                <div className="font-sans text-[10px] text-mw-ink-4">
                   {(stat as { label: string }).label}
                 </div>
               </div>
@@ -300,47 +236,39 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
 
         {/* ── Live market ticker ── */}
         {ticker && (ticker.priceUsd || ticker.priceChange24h != null || ticker.volume24h || ticker.liquidity) && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 0,
-            marginTop: 10, background: '#F7F6FF',
-            borderRadius: 10, border: '1px solid #E0DFFF',
-            overflow: 'hidden',
-          }}>
+          <div className="flex items-center gap-0 mt-[10px] bg-mw-surface-purple rounded-[10px] border border-[#E0DFFF] overflow-hidden">
             {ticker.priceUsd && (
-              <div style={{ padding: '9px 14px', borderRight: '1px solid #E0DFFF', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>
+              <div className="px-[14px] py-[9px] border-r border-[#E0DFFF] flex flex-col gap-[1px]">
+                <span className="font-mono text-[13px] font-bold text-[#1A1A2E]">
                   ${parseFloat(ticker.priceUsd) < 0.01
                       ? parseFloat(ticker.priceUsd).toExponential(2)
                       : parseFloat(ticker.priceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
                 </span>
-                <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 9, color: '#8A8C9E', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Price</span>
+                <span className="font-sans text-[9px] text-mw-ink-4 uppercase tracking-[0.5px] font-semibold">Price</span>
               </div>
             )}
             {ticker.priceChange24h != null && (
-              <div style={{ padding: '9px 14px', borderRight: (ticker.volume24h || ticker.liquidity) ? '1px solid #E0DFFF' : 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <span style={{
-                  fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700,
-                  color: ticker.priceChange24h >= 0 ? '#16a34a' : '#ef4444',
-                }}>
+              <div className={`px-[14px] py-[9px] flex flex-col gap-[1px]${(ticker.volume24h || ticker.liquidity) ? ' border-r border-[#E0DFFF]' : ''}`}>
+                <span className={`font-mono text-[13px] font-bold ${ticker.priceChange24h >= 0 ? 'text-mw-green' : 'text-mw-red'}`}>
                   {ticker.priceChange24h >= 0 ? '+' : ''}{ticker.priceChange24h.toFixed(2)}%
                 </span>
-                <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 9, color: '#8A8C9E', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>24h</span>
+                <span className="font-sans text-[9px] text-mw-ink-4 uppercase tracking-[0.5px] font-semibold">24h</span>
               </div>
             )}
             {ticker.volume24h && (
-              <div style={{ padding: '9px 14px', borderRight: ticker.liquidity ? '1px solid #E0DFFF' : 'none', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>
+              <div className={`px-[14px] py-[9px] flex flex-col gap-[1px]${ticker.liquidity ? ' border-r border-[#E0DFFF]' : ''}`}>
+                <span className="font-mono text-[13px] font-bold text-[#1A1A2E]">
                   {fmtUSD(ticker.volume24h)}
                 </span>
-                <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 9, color: '#8A8C9E', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Vol 24h</span>
+                <span className="font-sans text-[9px] text-mw-ink-4 uppercase tracking-[0.5px] font-semibold">Vol 24h</span>
               </div>
             )}
             {ticker.liquidity && (
-              <div style={{ padding: '9px 14px', display: 'flex', flexDirection: 'column', gap: 1 }}>
-                <span style={{ fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: '#1A1A2E' }}>
+              <div className="px-[14px] py-[9px] flex flex-col gap-[1px]">
+                <span className="font-mono text-[13px] font-bold text-[#1A1A2E]">
                   {fmtUSD(ticker.liquidity)}
                 </span>
-                <span style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 9, color: '#8A8C9E', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Liquidity</span>
+                <span className="font-sans text-[9px] text-mw-ink-4 uppercase tracking-[0.5px] font-semibold">Liquidity</span>
               </div>
             )}
           </div>
@@ -348,24 +276,18 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
 
         {/* ── Progress bar ── */}
         {progress !== null && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{
-              display: 'flex', justifyContent: 'space-between', marginBottom: 6,
-              fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 11, color: '#8A8C9E',
-            }}>
+          <div className="mt-4">
+            <div className="flex justify-between mb-[6px] font-sans text-[11px] text-mw-ink-4">
               <span>Pool utilization</span>
-              <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600, color: '#3A5CE8' }}>
+              <span className="font-mono font-semibold text-mw-brand-deep">
                 {progress.toFixed(1)}%
               </span>
             </div>
-            <div style={{
-              height: 6, background: '#E0DFFF', borderRadius: 3, overflow: 'hidden',
-            }}>
-              <div style={{
-                height: '100%', width: `${progress}%`,
-                background: progress > 80 ? '#C2537A' : '#3A5CE8',
-                borderRadius: 3, transition: 'width 0.5s ease',
-              }} />
+            <div className="h-[6px] bg-[#E0DFFF] rounded-[3px] overflow-hidden">
+              <div
+                className={`h-full rounded-[3px] transition-[width] duration-[500ms] ease-[ease]${progress > 80 ? ' bg-mw-pink' : ' bg-mw-brand-deep'}`}
+                style={{ width: `${progress}%` }}
+              />
             </div>
           </div>
         )}

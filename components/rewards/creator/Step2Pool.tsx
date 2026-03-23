@@ -22,12 +22,7 @@ interface Step2PoolProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
-      fontFamily:    'Plus Jakarta Sans, sans-serif',
-      fontSize:      12, fontWeight: 700, color: '#8A8C9E',
-      letterSpacing: '0.5px', textTransform: 'uppercase',
-      marginBottom:  10,
-    }}>
+    <div className="font-sans text-[12px] font-bold text-mw-ink-4 tracking-[0.5px] uppercase mb-[10px]">
       {children}
     </div>
   )
@@ -35,18 +30,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function StatChip({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{
-      background:   '#F7F6FF',
-      border:       '1px solid #E0DFFF',
-      borderRadius: 8,
-      padding:      '8px 14px',
-      flex:         1,
-      minWidth:     120,
-    }}>
-      <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 14, fontWeight: 700, color: '#1A1A2E' }}>
+    <div className="bg-mw-surface-purple border border-[#E0DFFF] rounded-[8px] p-[8px_14px] flex-1 min-w-[120px]">
+      <div className="font-mono text-[14px] font-bold text-[#1A1A2E]">
         {value}
       </div>
-      <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 10, color: '#8A8C9E', marginTop: 2 }}>
+      <div className="font-sans text-[10px] text-mw-ink-4 mt-[2px]">
         {label}
       </div>
     </div>
@@ -67,21 +55,9 @@ function NumberInput({
 }) {
   const [focused, setFocused] = useState(false)
   return (
-    <div style={{
-      display:      'flex',
-      alignItems:   'center',
-      border:       `1.5px solid ${focused ? '#3A5CE8' : '#E0DFFF'}`,
-      borderRadius: 10,
-      background:   '#fff',
-      overflow:     'hidden',
-      transition:   'border-color 150ms',
-    }}>
+    <div className={`flex items-center border-[1.5px] rounded-[10px] bg-white overflow-hidden transition-[border-color] duration-150${focused ? ' border-[#3A5CE8]' : ' border-[#E0DFFF]'}`}>
       {prefix && (
-        <span style={{
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 13, color: '#8A8C9E',
-          padding: '0 10px 0 12px', userSelect: 'none',
-        }}>
+        <span className="font-sans text-[13px] text-mw-ink-4 select-none pl-3 pr-[10px]">
           {prefix}
         </span>
       )}
@@ -92,13 +68,7 @@ function NumberInput({
         step={step ?? 1}
         value={value ?? ''}
         placeholder={placeholder}
-        style={{
-          flex: 1, border: 'none', outline: 'none',
-          fontFamily: 'DM Mono, monospace', fontSize: 14,
-          padding: prefix ? '10px 0' : '10px 14px',
-          color: '#1A1A2E', background: 'transparent',
-          minWidth: 0,
-        }}
+        className={`flex-1 border-none outline-none font-mono text-[14px] text-[#1A1A2E] bg-transparent min-w-0 ${prefix ? 'py-[10px] pr-0' : 'p-[10px_14px]'}`}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onChange={(e) => {
@@ -107,11 +77,7 @@ function NumberInput({
         }}
       />
       {suffix && (
-        <span style={{
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 13, color: '#8A8C9E',
-          padding: '0 12px', userSelect: 'none',
-        }}>
+        <span className="font-sans text-[13px] text-mw-ink-4 select-none px-3">
           {suffix}
         </span>
       )}
@@ -126,175 +92,142 @@ export function Step2Pool({ form, onChange }: Step2PoolProps) {
   const daily         = dailyBudget(form)
 
   return (
-    <>
-      <style>{`
-        .pool-preset-btn {
-          font-family: 'DM Mono', monospace;
-          font-size: 13px; font-weight: 700;
-          padding: 9px 18px; border-radius: 10px;
-          cursor: pointer; border: 1.5px solid #E0DFFF;
-          background: #fff; color: #3A3C52;
-          transition: all 150ms; white-space: nowrap;
-        }
-        .pool-preset-btn.active { background: #EEF1FF; border-color: #3A5CE8; color: #3A5CE8; }
-        .pool-preset-btn:hover:not(.active) { background: #F7F6FF; border-color: #C4C3F0; }
-        .dur-preset-btn {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px; font-weight: 600;
-          padding: 8px 20px; border-radius: 10px;
-          cursor: pointer; border: 1.5px solid #E0DFFF;
-          background: #fff; color: #8A8C9E;
-          transition: all 150ms;
-        }
-        .dur-preset-btn.active { background: #EEF1FF; border-color: #3A5CE8; color: #3A5CE8; }
-        .dur-preset-btn:hover:not(.active) { background: #F7F6FF; color: #3A3C52; }
-      `}</style>
+    <div className="flex flex-col gap-7">
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-
-        {/* Pool size */}
-        <div>
-          <SectionLabel>Pool size</SectionLabel>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-            {POOL_PRESETS.map(p => (
-              <button
-                key={p}
-                className={`pool-preset-btn${form.poolUsd === p && !customPool ? ' active' : ''}`}
-                onClick={() => { onChange({ poolUsd: p }); setCustomPool(false) }}
-              >
-                {fmtUSDShort(p)}
-              </button>
-            ))}
+      {/* Pool size */}
+      <div>
+        <SectionLabel>Pool size</SectionLabel>
+        <div className="flex gap-2 flex-wrap mb-[10px]">
+          {POOL_PRESETS.map(p => (
             <button
-              className={`pool-preset-btn${customPool ? ' active' : ''}`}
-              onClick={() => setCustomPool(true)}
+              key={p}
+              className={`font-mono text-[13px] font-bold py-[9px] px-[18px] rounded-[10px] cursor-pointer border-[1.5px] whitespace-nowrap transition-all duration-150${form.poolUsd === p && !customPool ? ' bg-[#EEF1FF] border-[#3A5CE8] text-[#3A5CE8]' : ' bg-white border-[#E0DFFF] text-[#3A3C52] hover:bg-mw-surface-purple hover:border-[#C4C3F0]'}`}
+              onClick={() => { onChange({ poolUsd: p }); setCustomPool(false) }}
             >
-              Custom
+              {fmtUSDShort(p)}
             </button>
-          </div>
-          {customPool && (
-            <NumberInput
-              value={form.poolUsd}
-              onChange={(v) => onChange({ poolUsd: v })}
-              prefix="$"
-              min={0}
-              step={1000}
-              placeholder="10000"
-            />
-          )}
+          ))}
+          <button
+            className={`font-mono text-[13px] font-bold py-[9px] px-[18px] rounded-[10px] cursor-pointer border-[1.5px] whitespace-nowrap transition-all duration-150${customPool ? ' bg-[#EEF1FF] border-[#3A5CE8] text-[#3A5CE8]' : ' bg-white border-[#E0DFFF] text-[#3A3C52] hover:bg-mw-surface-purple hover:border-[#C4C3F0]'}`}
+            onClick={() => setCustomPool(true)}
+          >
+            Custom
+          </button>
         </div>
-
-        {/* Duration */}
-        <div>
-          <SectionLabel>Duration</SectionLabel>
-          {isPoints ? (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {POINTS_DURATION_PRESETS.map(d => (
-                <button
-                  key={d}
-                  className={`dur-preset-btn${form.durationDays === d ? ' active' : ''}`}
-                  onClick={() => onChange({ durationDays: d })}
-                >
-                  {d} days
-                </button>
-              ))}
-            </div>
-          ) : (
-            <NumberInput
-              value={form.durationDays}
-              onChange={(v) => onChange({ durationDays: Math.max(1, Math.round(v)) })}
-              suffix="days"
-              min={1}
-              max={365}
-              placeholder="30"
-            />
-          )}
-        </div>
-
-        {/* Auto-calc stats */}
-        {form.poolUsd > 0 && form.durationDays > 0 && (
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {isPoints && (
-              <StatChip label="Daily pool cap" value={fmtUSDShort(daily)} />
-            )}
-            {isTokenReward && (
-              <StatChip
-                label="Rewards up to"
-                value={`~${fmtUSDShort(depletionVolumeUsd(form))} in swap volume`}
-              />
-            )}
-            {isPoints && (
-              <StatChip
-                label="Daily payout"
-                value={fmtUSDShort(daily)}
-              />
-            )}
-            {isPoints && (
-              <StatChip
-                label="Payout preset"
-                value={`Top ${form.payoutPreset}`}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Advanced mode extras */}
-        {form.advancedMode && (
-          <div style={{
-            borderTop: '1px solid #E0DFFF',
-            paddingTop: 24,
-            display: 'flex', flexDirection: 'column', gap: 16,
-          }}>
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 11, fontWeight: 700, color: '#8A8C9E',
-              letterSpacing: '1px', textTransform: 'uppercase',
-            }}>
-              Advanced settings
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              <div>
-                <SectionLabel>Daily wallet cap</SectionLabel>
-                <NumberInput
-                  value={form.dailyWalletCapUsd}
-                  onChange={(v) => onChange({ dailyWalletCapUsd: v })}
-                  prefix="$"
-                  min={0}
-                  placeholder="No cap"
-                />
-              </div>
-              <div>
-                <SectionLabel>Daily pool cap</SectionLabel>
-                <NumberInput
-                  value={form.dailyPoolCapUsd}
-                  onChange={(v) => onChange({ dailyPoolCapUsd: v })}
-                  prefix="$"
-                  min={0}
-                  placeholder={fmtUSDShort(daily)}
-                />
-              </div>
-            </div>
-
-            {isPoints && (
-              <div>
-                <SectionLabel>Payout preset</SectionLabel>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {PAYOUT_PRESETS.map(p => (
-                    <button
-                      key={p.value}
-                      className={`dur-preset-btn${form.payoutPreset === p.value ? ' active' : ''}`}
-                      onClick={() => onChange({ payoutPreset: p.value })}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+        {customPool && (
+          <NumberInput
+            value={form.poolUsd}
+            onChange={(v) => onChange({ poolUsd: v })}
+            prefix="$"
+            min={0}
+            step={1000}
+            placeholder="10000"
+          />
         )}
       </div>
-    </>
+
+      {/* Duration */}
+      <div>
+        <SectionLabel>Duration</SectionLabel>
+        {isPoints ? (
+          <div className="flex gap-2 flex-wrap">
+            {POINTS_DURATION_PRESETS.map(d => (
+              <button
+                key={d}
+                className={`font-sans text-[12px] font-semibold py-2 px-5 rounded-[10px] cursor-pointer border-[1.5px] transition-all duration-150${form.durationDays === d ? ' bg-[#EEF1FF] border-[#3A5CE8] text-[#3A5CE8]' : ' bg-white border-[#E0DFFF] text-mw-ink-4 hover:bg-mw-surface-purple hover:text-[#3A3C52]'}`}
+                onClick={() => onChange({ durationDays: d })}
+              >
+                {d} days
+              </button>
+            ))}
+          </div>
+        ) : (
+          <NumberInput
+            value={form.durationDays}
+            onChange={(v) => onChange({ durationDays: Math.max(1, Math.round(v)) })}
+            suffix="days"
+            min={1}
+            max={365}
+            placeholder="30"
+          />
+        )}
+      </div>
+
+      {/* Auto-calc stats */}
+      {form.poolUsd > 0 && form.durationDays > 0 && (
+        <div className="flex gap-[10px] flex-wrap">
+          {isPoints && (
+            <StatChip label="Daily pool cap" value={fmtUSDShort(daily)} />
+          )}
+          {isTokenReward && (
+            <StatChip
+              label="Rewards up to"
+              value={`~${fmtUSDShort(depletionVolumeUsd(form))} in swap volume`}
+            />
+          )}
+          {isPoints && (
+            <StatChip
+              label="Daily payout"
+              value={fmtUSDShort(daily)}
+            />
+          )}
+          {isPoints && (
+            <StatChip
+              label="Payout preset"
+              value={`Top ${form.payoutPreset}`}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Advanced mode extras */}
+      {form.advancedMode && (
+        <div className="border-t border-[#E0DFFF] pt-6 flex flex-col gap-4">
+          <div className="font-sans text-[11px] font-bold text-mw-ink-4 tracking-[1px] uppercase">
+            Advanced settings
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <SectionLabel>Daily wallet cap</SectionLabel>
+              <NumberInput
+                value={form.dailyWalletCapUsd}
+                onChange={(v) => onChange({ dailyWalletCapUsd: v })}
+                prefix="$"
+                min={0}
+                placeholder="No cap"
+              />
+            </div>
+            <div>
+              <SectionLabel>Daily pool cap</SectionLabel>
+              <NumberInput
+                value={form.dailyPoolCapUsd}
+                onChange={(v) => onChange({ dailyPoolCapUsd: v })}
+                prefix="$"
+                min={0}
+                placeholder={fmtUSDShort(daily)}
+              />
+            </div>
+          </div>
+
+          {isPoints && (
+            <div>
+              <SectionLabel>Payout preset</SectionLabel>
+              <div className="flex gap-2 flex-wrap">
+                {PAYOUT_PRESETS.map(p => (
+                  <button
+                    key={p.value}
+                    className={`font-sans text-[12px] font-semibold py-2 px-5 rounded-[10px] cursor-pointer border-[1.5px] transition-all duration-150${form.payoutPreset === p.value ? ' bg-[#EEF1FF] border-[#3A5CE8] text-[#3A5CE8]' : ' bg-white border-[#E0DFFF] text-mw-ink-4 hover:bg-mw-surface-purple hover:text-[#3A3C52]'}`}
+                    onClick={() => onChange({ payoutPreset: p.value })}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   )
 }

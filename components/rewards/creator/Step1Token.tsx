@@ -36,22 +36,6 @@ const COMMON_TOKENS: Record<number, { address: `0x${string}`; symbol: string; na
   ],
 }
 
-function fieldStyle(focused: boolean, error: boolean): React.CSSProperties {
-  return {
-    width:        '100%',
-    boxSizing:    'border-box',
-    fontFamily:   'DM Mono, monospace',
-    fontSize:     13,
-    padding:      '11px 14px',
-    borderRadius: 10,
-    border:       `1.5px solid ${error ? '#C2537A' : focused ? '#3A5CE8' : '#E0DFFF'}`,
-    background:   '#fff',
-    color:        '#1A1A2E',
-    outline:      'none',
-    transition:   'border-color 150ms',
-  }
-}
-
 export function Step1Token({ form, onChange }: Step1TokenProps) {
   const [rawInput, setRawInput]   = useState(form.token?.address ?? '')
   const [focused, setFocused]     = useState(false)
@@ -112,160 +96,98 @@ export function Step1Token({ form, onChange }: Step1TokenProps) {
   const commonList = COMMON_TOKENS[form.chainId] ?? []
 
   return (
-    <>
-      <style>{`
-        .chain-pill {
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 12px; font-weight: 600;
-          padding: 7px 16px; border-radius: 20px;
-          cursor: pointer; border: 1.5px solid #E0DFFF;
-          background: #fff; color: #8A8C9E;
-          transition: all 150ms; white-space: nowrap;
-        }
-        .chain-pill.active {
-          background: #EEF1FF; color: #3A5CE8;
-          border-color: rgba(58,92,232,0.3);
-        }
-        .chain-pill:hover:not(.active) { background: #F7F6FF; color: #3A3C52; }
-        .common-token-btn {
-          font-family: 'DM Mono', monospace;
-          font-size: 11px; font-weight: 700;
-          padding: 6px 14px; border-radius: 8px;
-          cursor: pointer; border: 1.5px solid #E0DFFF;
-          background: #F7F6FF; color: #3A3C52;
-          transition: all 150ms;
-        }
-        .common-token-btn:hover { border-color: #3A5CE8; color: #3A5CE8; background: #EEF1FF; }
-        .common-token-btn.selected { background: #EEF1FF; border-color: #3A5CE8; color: #3A5CE8; }
-      `}</style>
+    <div className="flex flex-col gap-6">
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Chain selector */}
+      <div>
+        <label className="font-sans text-[12px] font-bold text-mw-ink-3 tracking-[0.5px] uppercase block mb-[10px]">
+          Chain
+        </label>
+        <div className="flex gap-2 flex-wrap">
+          {CHAIN_OPTIONS.map(c => (
+            <button
+              key={c.id}
+              className={`font-sans text-[12px] font-semibold py-[7px] px-4 rounded-[20px] cursor-pointer border-[1.5px] whitespace-nowrap transition-all duration-150${form.chainId === c.id ? ' bg-[#EEF1FF] text-mw-brand-deep border-[rgba(58,92,232,0.3)]' : ' bg-white text-mw-ink-4 border-[#E0DFFF] hover:bg-mw-surface-purple hover:text-[#3A3C52]'}`}
+              onClick={() => { onChange({ chainId: c.id, token: null }); setRawInput('') }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* Chain selector */}
+      {/* Token address */}
+      <div>
+        <label className="font-sans text-[12px] font-bold text-mw-ink-3 tracking-[0.5px] uppercase block mb-[10px]">
+          Token contract address
+        </label>
+        <input
+          type="text"
+          placeholder="0x..."
+          value={rawInput}
+          className={`w-full box-border font-mono text-[13px] p-[11px_14px] rounded-[10px] bg-white text-[#1A1A2E] outline-none transition-[border-color] duration-150 border-[1.5px]${isInvalidAddress || isNotFound ? ' border-mw-pink' : focused ? ' border-mw-brand-deep' : ' border-[#E0DFFF]'}`}
+          onFocus={() => setFocused(true)}
+          onBlur={() => { setFocused(false); setTouched(true) }}
+          onChange={(e) => setRawInput(e.target.value.trim())}
+        />
+
+        {/* Validation states */}
+        {isInvalidAddress && (
+          <div className="font-sans text-[12px] text-mw-pink mt-[6px]">
+            Not a valid ERC-20 address
+          </div>
+        )}
+        {isNotFound && (
+          <div className="font-sans text-[12px] text-mw-pink mt-[6px]">
+            Contract not found or unverified on this chain
+          </div>
+        )}
+        {reading && validAddress && (
+          <div className="font-sans text-[12px] text-mw-ink-3 mt-[6px]">
+            Validating contract…
+          </div>
+        )}
+
+        {/* Token confirmed */}
+        {showToken && form.token && (
+          <div className="flex items-center gap-3 mt-3 bg-[rgba(42,158,138,0.06)] border border-[rgba(42,158,138,0.2)] rounded-[10px] p-[10px_14px]">
+            <div className="w-9 h-9 rounded-[10px] bg-[rgba(42,158,138,0.12)] flex items-center justify-center font-mono text-[13px] font-bold text-mw-teal shrink-0">
+              {form.token.symbol.charAt(0)}
+            </div>
+            <div>
+              <div className="font-sans text-[14px] font-bold text-[#1A1A2E]">
+                {form.token.name}
+              </div>
+              <div className="font-mono text-[11px] text-mw-ink-3 mt-[1px]">
+                {form.token.symbol} · {form.token.decimals} decimals
+              </div>
+            </div>
+            <span className="ml-auto font-sans text-[10px] font-bold bg-[rgba(42,158,138,0.1)] text-mw-teal border border-[rgba(42,158,138,0.2)] rounded-[20px] px-2 py-[3px]">
+              ✓ Verified
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Common tokens */}
+      {commonList.length > 0 && (
         <div>
-          <label style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 12, fontWeight: 700, color: '#8A8C9E',
-            letterSpacing: '0.5px', textTransform: 'uppercase',
-            display: 'block', marginBottom: 10,
-          }}>
-            Chain
-          </label>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {CHAIN_OPTIONS.map(c => (
+          <div className="font-sans text-[12px] font-bold text-mw-ink-3 tracking-[0.5px] uppercase mb-[10px]">
+            Common tokens
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {commonList.map(t => (
               <button
-                key={c.id}
-                className={`chain-pill${form.chainId === c.id ? ' active' : ''}`}
-                onClick={() => { onChange({ chainId: c.id, token: null }); setRawInput('') }}
+                key={t.address}
+                className={`font-mono text-[11px] font-bold py-[6px] px-[14px] rounded-[8px] cursor-pointer border-[1.5px] transition-all duration-150${form.token?.address === t.address ? ' bg-[#EEF1FF] border-mw-brand-deep text-mw-brand-deep' : ' bg-mw-surface-purple border-[#E0DFFF] text-[#3A3C52] hover:border-mw-brand-deep hover:text-mw-brand-deep hover:bg-[#EEF1FF]'}`}
+                onClick={() => selectCommon(t)}
               >
-                {c.label}
+                {t.symbol}
               </button>
             ))}
           </div>
         </div>
-
-        {/* Token address */}
-        <div>
-          <label style={{
-            fontFamily: 'Plus Jakarta Sans, sans-serif',
-            fontSize: 12, fontWeight: 700, color: '#8A8C9E',
-            letterSpacing: '0.5px', textTransform: 'uppercase',
-            display: 'block', marginBottom: 10,
-          }}>
-            Token contract address
-          </label>
-          <input
-            type="text"
-            placeholder="0x..."
-            value={rawInput}
-            style={fieldStyle(focused, isInvalidAddress || isNotFound)}
-            onFocus={() => setFocused(true)}
-            onBlur={() => { setFocused(false); setTouched(true) }}
-            onChange={(e) => setRawInput(e.target.value.trim())}
-          />
-
-          {/* Validation states */}
-          {isInvalidAddress && (
-            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 12, color: '#C2537A', marginTop: 6 }}>
-              Not a valid ERC-20 address
-            </div>
-          )}
-          {isNotFound && (
-            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 12, color: '#C2537A', marginTop: 6 }}>
-              Contract not found or unverified on this chain
-            </div>
-          )}
-          {reading && validAddress && (
-            <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 12, color: '#8A8C9E', marginTop: 6 }}>
-              Validating contract…
-            </div>
-          )}
-
-          {/* Token confirmed */}
-          {showToken && form.token && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              marginTop: 12,
-              background: 'rgba(42,158,138,0.06)',
-              border: '1px solid rgba(42,158,138,0.2)',
-              borderRadius: 10, padding: '10px 14px',
-            }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: 10,
-                background: 'rgba(42,158,138,0.12)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'DM Mono, monospace', fontSize: 13, fontWeight: 700, color: '#2A9E8A',
-                flexShrink: 0,
-              }}>
-                {form.token.symbol.charAt(0)}
-              </div>
-              <div>
-                <div style={{ fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 14, fontWeight: 700, color: '#1A1A2E' }}>
-                  {form.token.name}
-                </div>
-                <div style={{ fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#8A8C9E', marginTop: 1 }}>
-                  {form.token.symbol} · {form.token.decimals} decimals
-                </div>
-              </div>
-              <span style={{
-                marginLeft: 'auto',
-                fontFamily: 'Plus Jakarta Sans, sans-serif',
-                fontSize: 10, fontWeight: 700,
-                background: 'rgba(42,158,138,0.1)', color: '#2A9E8A',
-                border: '1px solid rgba(42,158,138,0.2)',
-                borderRadius: 20, padding: '3px 8px',
-              }}>
-                ✓ Verified
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Common tokens */}
-        {commonList.length > 0 && (
-          <div>
-            <div style={{
-              fontFamily: 'Plus Jakarta Sans, sans-serif',
-              fontSize: 12, fontWeight: 700, color: '#8A8C9E',
-              letterSpacing: '0.5px', textTransform: 'uppercase',
-              marginBottom: 10,
-            }}>
-              Common tokens
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {commonList.map(t => (
-                <button
-                  key={t.address}
-                  className={`common-token-btn${form.token?.address === t.address ? ' selected' : ''}`}
-                  onClick={() => selectCommon(t)}
-                >
-                  {t.symbol}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+      )}
+    </div>
   )
 }
