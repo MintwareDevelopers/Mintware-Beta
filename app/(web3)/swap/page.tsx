@@ -180,7 +180,7 @@ export default function SwapPage() {
               )}
 
               {/* Swap widget elevated card */}
-              <div className="mw-accent-bg bg-white rounded-2xl shadow-feature border border-mw-border p-2">
+              <div className="mw-accent-bg bg-white rounded-2xl shadow-feature border border-mw-border overflow-hidden">
                 <Suspense fallback={<SwapSkeleton />}>
                   <SwapWidget />
                 </Suspense>
