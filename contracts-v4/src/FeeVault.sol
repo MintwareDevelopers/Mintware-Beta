@@ -69,8 +69,13 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
 
     IERC20  public immutable usdc;
     address public immutable distributor;      // MintwareDistributor
-    address public immutable socialVault;
-    address public immutable hook;
+
+    /// @notice SocialVault address — owner-settable to break the deploy circular dep.
+    ///         Deploy order: FeeVault → SocialVault → FeeVault.setSocialVault(addr).
+    address public socialVault;
+
+    /// @notice Hook address — owner-settable (same pattern as socialVault).
+    address public hook;
 
     /// @notice Oracle signer — same key used in onchainPublisher.ts
     address public oracleSigner;
@@ -114,18 +119,18 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     // Constructor
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// @dev    socialVault and hook are NOT set in constructor — set post-deploy via
+    ///         setSocialVault() and setHook() to break the circular dep.
+    ///         Deploy order: FeeVault → SocialVault → FeeVault.setSocialVault(addr)
+    ///                       → MWSocialHook → FeeVault.setHook(addr)
     constructor(
         address _usdc,
         address _distributor,
-        address _socialVault,
-        address _hook,
         address _oracleSigner,
         address _treasury
     ) Ownable(msg.sender) EIP712("FeeVault", "1") {
         usdc         = IERC20(_usdc);
         distributor  = _distributor;
-        socialVault  = _socialVault;
-        hook         = _hook;
         oracleSigner = _oracleSigner;
         treasury     = _treasury;
 
@@ -169,9 +174,6 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
         if (protAlloc > 0) {
             usdc.safeTransfer(treasury, protAlloc);
         }
-
-        // Bonus pool carried to next epoch
-        uint256 nextEpoch = currentEpoch + 1;
 
         emit EpochClosed(currentEpoch, epoch.totalAllocated, merkleRoot);
 
@@ -235,6 +237,18 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     // ─────────────────────────────────────────────────────────────────────────
     // Admin
     // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Wire SocialVault after deploy — breaks circular constructor dep
+    function setSocialVault(address _socialVault) external onlyOwner {
+        require(_socialVault != address(0), "zero address");
+        socialVault = _socialVault;
+    }
+
+    /// @notice Wire MWSocialHook after deploy
+    function setHook(address _hook) external onlyOwner {
+        require(_hook != address(0), "zero address");
+        hook = _hook;
+    }
 
     function setShares(
         uint256 _lp,
