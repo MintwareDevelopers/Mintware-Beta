@@ -19,6 +19,11 @@ const CHAIN_LABELS: Record<number, string> = {
   42161: 'Arbitrum',
 }
 
+const DISTRIBUTOR_ADDRESS: Record<number, string> = {
+  8453:  process.env.DISTRIBUTOR_ADDRESS_BASE      ?? process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS ?? '',
+  42161: process.env.DISTRIBUTOR_ADDRESS_ARBITRUM  ?? '',
+}
+
 export async function POST(req: NextRequest) {
   let body: { form: CreatorFormState; wallet: string }
   try {
@@ -72,7 +77,7 @@ export async function POST(req: NextRequest) {
       use_score_multiplier: form.useScoreMultiplier,
       daily_wallet_cap_usd: form.dailyWalletCapUsd ?? 0,
       daily_pool_cap_usd:   form.dailyPoolCapUsd   ?? 0,
-      contract_address:     process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS ?? null,
+      contract_address:     DISTRIBUTOR_ADDRESS[form.chainId] ?? null,
       creator:              wallet.toLowerCase(),
       end_date:             endDate.toISOString(),
     })
