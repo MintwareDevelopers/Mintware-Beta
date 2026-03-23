@@ -21,7 +21,14 @@
     "hardhat:deploy:core-dao": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network core_dao --config hardhat.config.cts",
     "hardhat:deploy:bnb": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network bnb --config hardhat.config.cts",
     "hardhat:deploy:arbitrum-sepolia": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network arbitrum_sepolia --config hardhat.config.cts",
-    "hardhat:deploy:arbitrum": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network arbitrum --config hardhat.config.cts"
+    "hardhat:deploy:arbitrum": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network arbitrum --config hardhat.config.cts",
+    "forge:build": "forge build",
+    "forge:test": "forge test -vv",
+    "forge:test:gas": "forge test -vv --gas-report",
+    "forge:coverage": "forge coverage",
+    "forge:deploy:base-sepolia": "forge script contracts-v4/script/Deploy.s.sol --rpc-url base_sepolia --broadcast --verify",
+    "forge:deploy:base": "forge script contracts-v4/script/Deploy.s.sol --rpc-url base --broadcast --verify",
+    "test:all": "pnpm test && pnpm hardhat:test && pnpm forge:test"
   },
   "dependencies": {
     "@coinbase/wallet-sdk": "^4.3.7",
