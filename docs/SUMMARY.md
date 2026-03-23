@@ -13,13 +13,18 @@
 * [Connect Your Wallet](getting-started/connect-wallet.md)
 * [Your Attribution Score](getting-started/your-score.md)
 * [Your Profile](getting-started/your-profile.md)
+* [Your Identity](getting-started/your-identity.md)
 
 ## Campaigns
 * [Campaign Overview](campaigns/overview.md)
 * [Token Reward Pools](campaigns/token-reward-pools.md)
 * [Points Campaigns](campaigns/points-campaigns.md)
+* [Score Multipliers](campaigns/score-multipliers.md)
 * [Joining a Campaign](campaigns/joining.md)
 * [Claiming Rewards](campaigns/claiming-rewards.md)
+
+## Leaderboard
+* [Leaderboard](leaderboard/overview.md)
 
 ## Swap
 * [Mintware Swap](swap/overview.md)
