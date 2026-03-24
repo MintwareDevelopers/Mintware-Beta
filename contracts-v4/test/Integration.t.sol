@@ -98,11 +98,13 @@ contract IntegrationTest is Test {
 
         // ── 4. Mine CREATE2 salt for MWSocialHook ────────────────────────────
         //    deployer = address(this) (no prank, so CREATE2 deployer = test contract)
+        //    initialOwner = deployer so test contract owns the hook
         bytes memory hookArgs = abi.encode(
             IPoolManager(address(pm)),
             address(feeVault),
             address(0),  // socialVault — wired below
-            address(0)   // pyth oracle — not needed for tests
+            address(0),  // pyth oracle — not needed for tests
+            deployer     // initialOwner
         );
         (, bytes32 salt) = HookMiner.find(
             deployer,
@@ -116,7 +118,8 @@ contract IntegrationTest is Test {
             IPoolManager(address(pm)),
             address(feeVault),
             address(0),
-            address(0)
+            address(0),
+            deployer     // initialOwner
         );
 
         // ── 6. Deploy SocialVault ────────────────────────────────────────────

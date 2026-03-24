@@ -142,8 +142,10 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
         IPoolManager _poolManager,
         address _feeVault,
         address _socialVault,
-        address _pythOracle   // pass address(0) to disable on-chain Pyth reads
-    ) Ownable(msg.sender) {
+        address _pythOracle,    // pass address(0) to disable on-chain Pyth reads
+        address _initialOwner   // explicit owner — required because CREATE2 via a
+                                // factory makes the factory msg.sender, not the EOA
+    ) Ownable(_initialOwner) {
         if (_feeVault == address(0)) revert InvalidAddress();
         POOL_MANAGER  = _poolManager;
         feeVault      = _feeVault;

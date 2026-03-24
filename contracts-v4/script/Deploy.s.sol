@@ -85,19 +85,27 @@ contract Deploy is Script {
         vm.stopBroadcast();
 
         // ─── Step 2: Mine CREATE2 salt for MWSocialHook ──────────────────────
-        // Constructor args: (poolMgr, feeVault, socialVault=address(0), pyth)
+        // Constructor args: (poolMgr, feeVault, socialVault=address(0), pyth, initialOwner)
         // socialVault is address(0) at deploy — set via setSocialVault() after deploy.
+        // initialOwner = deployer so the EOA owns the hook (not the Create2Deployer).
         bytes memory hookCreationCode = type(MWSocialHook).creationCode;
         bytes memory hookArgs = abi.encode(
             IPoolManager(poolMgr),
             address(feeVault),
             address(0),     // socialVault — wired in step 5
-            pyth
+            pyth,
+            deployer        // initialOwner — must be in hookArgs so initcode hash is correct
         );
+
+        // IMPORTANT: Foundry's vm.startBroadcast() intercepts all CREATE2 calls
+        // (including inline assembly) and routes them through the deterministic
+        // deployment proxy at 0x4e59b44847b379578588920cA78FbF26c0B4956C.
+        // We must mine using THAT address as the CREATE2 factory — NOT the EOA.
+        address CREATE2_FACTORY = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
         console.log("Mining CREATE2 salt for hook (flags=0x0AC4)...");
         (address expectedHookAddr, bytes32 hookSalt) = HookMiner.find(
-            deployer,
+            CREATE2_FACTORY,
             uint160(0x0AC4), // beforeAddLiq(11)+beforeRemoveLiq(9)+beforeSwap(7)+afterSwap(6)+afterSwapDelta(2)
             hookCreationCode,
             hookArgs
@@ -111,11 +119,14 @@ contract Deploy is Script {
         console.log("SocialVault:", address(socialVault));
 
         // ─── Step 4: Deploy MWSocialHook at mined address ────────────────────
+        // new Contract{salt:}() is routed through Foundry's Create2Deployer —
+        // address matches the one mined with CREATE2_FACTORY above.
         MWSocialHook hook = new MWSocialHook{salt: hookSalt}(
             IPoolManager(poolMgr),
             address(feeVault),
             address(0),     // socialVault — wired below
-            pyth
+            pyth,
+            deployer        // initialOwner — EOA takes ownership, not Create2Deployer
         );
         require(address(hook) == expectedHookAddr, "Deploy: hook address mismatch");
         console.log("MWSocialHook:", address(hook));

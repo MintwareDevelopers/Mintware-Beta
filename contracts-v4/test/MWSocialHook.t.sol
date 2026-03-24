@@ -35,7 +35,8 @@ contract MWSocialHookTest is Test {
             IPoolManager(mockPM),
             feeVault,
             socialVault,
-            address(0) // no pyth oracle for unit tests
+            address(0), // no pyth oracle for unit tests
+            owner       // initialOwner
         );
         // vm.prank(owner) makes owner the CREATE2 deployer, so mine using owner's address
         (, bytes32 salt) = HookMiner.find(owner, uint160(0x0AC4), creationCode, args);
@@ -45,7 +46,8 @@ contract MWSocialHookTest is Test {
             IPoolManager(mockPM),
             feeVault,
             socialVault,
-            address(0)
+            address(0),
+            owner       // initialOwner
         );
     }
 
@@ -62,7 +64,7 @@ contract MWSocialHookTest is Test {
     function test_constructor_rejects_zero_fee_vault() public {
         vm.prank(owner);
         vm.expectRevert(MWSocialHook.InvalidAddress.selector);
-        new MWSocialHook(IPoolManager(mockPM), address(0), socialVault, address(0));
+        new MWSocialHook(IPoolManager(mockPM), address(0), socialVault, address(0), owner);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
