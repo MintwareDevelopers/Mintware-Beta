@@ -1,0 +1,40 @@
+specVersion: 1.0.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: AIAttribution
+    network: base-sepolia
+    source:
+      address: "0xDB9DB7008cfFb09bD1D943C237f57327383DFc03"
+      abi: AIAttribution
+      startBlock: 39311163
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Agent
+        - Campaign
+        - ActionRecord
+        - MwpSubmission
+        - RiskEvent
+      abis:
+        - name: AIAttribution
+          file: ./abis/AIAttribution.json
+      eventHandlers:
+        - event: AgentRegistered(indexed address,indexed uint256)
+          handler: handleAgentRegistered
+        - event: Erc8004Linked(indexed address,indexed uint256)
+          handler: handleErc8004Linked
+        - event: ActionRecorded(indexed address,indexed uint256,uint256,bytes32,uint256)
+          handler: handleActionRecorded
+        - event: MwpHashSubmitted(indexed address,indexed bytes32,uint256)
+          handler: handleMwpHashSubmitted
+        - event: RiskPenaltyApplied(indexed address,uint64,string)
+          handler: handleRiskPenaltyApplied
+        - event: CampaignCreated(indexed uint256,indexed address,string)
+          handler: handleCampaignCreated
+      file: ./src/mappings.ts

@@ -1,0 +1,15 @@
+{
+  "name": "@mintware/ai-attribution-subgraph",
+  "version": "0.1.0",
+  "description": "The Graph subgraph for Mintware AIAttribution contract",
+  "scripts": {
+    "codegen":  "graph codegen",
+    "build":    "graph build",
+    "deploy:studio": "graph deploy --studio mintware-ai-attribution",
+    "deploy:hosted": "graph deploy --product hosted-service mintware/ai-attribution"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli":  "0.79.2",
+    "@graphprotocol/graph-ts":   "0.35.1"
+  }
+}

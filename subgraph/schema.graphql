@@ -1,0 +1,94 @@
+"""
+A registered AI agent with their full attribution score breakdown.
+Updated in real-time as ActionRecorded and MwpHashSubmitted events arrive.
+"""
+type Agent @entity {
+  id:               ID!           # agent wallet address (lowercase)
+  address:          Bytes!
+  erc8004TokenId:   BigInt        # null if not linked
+  isTransparent:    Boolean!      # true once any MWP hash submitted
+  registeredAt:     BigInt!       # block timestamp
+  lastUpdatedAt:    BigInt!
+
+  # Score dimensions (mirrors AIAttribution.AgentScore)
+  behavior:         BigInt!       # verified swap volume ÷ 1e18
+  contribution:     BigInt!       # referral / campaign quality
+  risk:             BigInt!       # penalty accumulator
+  interpretability: BigInt!       # MWP transparency bonus (cap 500)
+  totalScore:       BigInt!       # behavior + contribution + interpretability - risk (floor 0)
+
+  mwpSubmissions:   Int!
+  lastMwpHash:      Bytes
+
+  # Relations
+  actions:          [ActionRecord!]! @derivedFrom(field: "agent")
+  mwpHashes:        [MwpSubmission!]! @derivedFrom(field: "agent")
+  riskEvents:       [RiskEvent!]!     @derivedFrom(field: "agent")
+  campaignVolumes:  [CampaignVolume!]! @derivedFrom(field: "agent")
+}
+
+"""
+A single verified on-chain action recorded by the oracle.
+"""
+type ActionRecord @entity {
+  id:                ID!         # txHash-logIndex
+  agent:             Agent!
+  campaignId:        BigInt!     # 0 if not part of a campaign
+  volumeContributed: BigInt!
+  mwpHash:           Bytes!      # bytes32(0) if not submitted
+  newScore:          BigInt!
+  blockNumber:       BigInt!
+  timestamp:         BigInt!
+}
+
+"""
+A single MWP folder snapshot hash submission (Transparent Agent signal).
+"""
+type MwpSubmission @entity {
+  id:              ID!           # agent-submissionCount
+  agent:           Agent!
+  mwpHash:         Bytes!
+  submissionCount: BigInt!
+  blockNumber:     BigInt!
+  timestamp:       BigInt!
+}
+
+"""
+A risk penalty applied to an agent by the oracle.
+"""
+type RiskEvent @entity {
+  id:          ID!               # txHash-logIndex
+  agent:       Agent!
+  penalty:     BigInt!
+  reason:      String!
+  blockNumber: BigInt!
+  timestamp:   BigInt!
+}
+
+"""
+An agent volume campaign created by a protocol.
+"""
+type Campaign @entity {
+  id:           ID!              # campaignId as string
+  campaignId:   BigInt!
+  protocol:     Bytes!
+  name:         String!
+  targetVolume: BigInt!
+  startTime:    BigInt!
+  endTime:      BigInt!
+  active:       Boolean!
+  createdAt:    BigInt!
+
+  volumes: [CampaignVolume!]! @derivedFrom(field: "campaign")
+}
+
+"""
+Volume contributed by a specific agent to a specific campaign.
+"""
+type CampaignVolume @entity {
+  id:                ID!         # campaignId-agentAddress
+  campaign:          Campaign!
+  agent:             Agent!
+  totalVolume:       BigInt!
+  lastContributedAt: BigInt!
+}
