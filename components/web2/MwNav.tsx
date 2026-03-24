@@ -40,6 +40,7 @@ export function MwNav() {
                 <div className="flex items-center gap-0.5">
                   {[
                     { href: '/dashboard',   label: 'Earn' },
+                    { href: '/vaults',      label: 'Vaults' },
                     { href: '/swap',        label: 'Swap' },
                     { href: '/leaderboard', label: 'Leaderboard' },
                     { href: '/profile',     label: 'Profile' },
