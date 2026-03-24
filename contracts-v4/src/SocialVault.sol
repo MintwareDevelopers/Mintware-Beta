@@ -273,6 +273,11 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
             usdc.safeTransfer(feeVault, penalty);
         }
 
+        // V4 fixed-point rounding may return 1 wei less than deposited when removing
+        // liquidity. Cap payout at available balance to prevent a 1-wei revert.
+        uint256 available = usdc.balanceOf(address(this));
+        if (payout > available) payout = available;
+
         usdc.safeTransfer(msg.sender, payout);
 
         emit WithdrawalExecuted(msg.sender, payout, penalty);
