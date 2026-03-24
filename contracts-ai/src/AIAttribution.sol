@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "./interfaces/IERC8004Registry.sol";
 
 /// @title  AIAttribution
 /// @notice Mintware trust + attribution layer for AI agents.
@@ -15,19 +16,6 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 ///           slot 0: behavior(128) + contribution(128)
 ///           slot 1: risk(64) + interpretability(64) + mwpSubmissions(32) + lastUpdated(32) + isTransparent(8) [+padding]
 ///           slot 2: lastMwpHash(256)
-
-// ── ERC-8004: AI Agent Identity & Reputation Registry ────────────────────────
-// https://eips.ethereum.org/EIPS/eip-8004
-interface IERC8004Registry {
-    function ownerOf(uint256 tokenId)     external view returns (address);
-    function isRegistered(uint256 tokenId) external view returns (bool);
-    function getAgentMetadata(uint256 tokenId) external view returns (
-        string memory name,
-        string memory model,
-        address       controller,
-        bool          active
-    );
-}
 
 contract AIAttribution is Ownable2Step, ReentrancyGuard {
 

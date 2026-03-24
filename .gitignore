@@ -37,3 +37,8 @@ WEB3.md
 # Foundry compiled artifacts
 contracts-v4/out/
 contracts-v4/cache/
+
+# contracts-ai — compiled artifacts and installed libs
+contracts-ai/out/
+contracts-ai/cache/
+contracts-ai/lib/

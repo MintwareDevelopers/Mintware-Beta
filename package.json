@@ -28,9 +28,10 @@
     "forge:coverage": "forge coverage",
     "forge:deploy:base-sepolia": "forge script contracts-v4/script/Deploy.s.sol --rpc-url base_sepolia --broadcast --verify",
     "forge:deploy:base": "forge script contracts-v4/script/Deploy.s.sol --rpc-url base --broadcast --verify",
-    "ai:deploy:base-sepolia": "forge script contracts-v4/script/DeployAIAttribution.s.sol --rpc-url base_sepolia --broadcast --verify -vvvv",
-    "ai:deploy:base": "forge script contracts-v4/script/DeployAIAttribution.s.sol --rpc-url base --broadcast --verify -vvvv",
-    "ai:test": "forge test --match-path contracts-v4/test/AIAttribution.t.sol -vv",
+    "ai:build": "forge build --root contracts-ai",
+    "ai:test": "forge test --root contracts-ai -vv",
+    "ai:deploy:base-sepolia": "forge script contracts-ai/script/Deploy.s.sol --root contracts-ai --rpc-url base_sepolia --broadcast --verify -vvvv",
+    "ai:deploy:base": "forge script contracts-ai/script/Deploy.s.sol --root contracts-ai --rpc-url base --broadcast --verify -vvvv",
     "test:all": "pnpm test && pnpm hardhat:test && pnpm forge:test"
   },
   "dependencies": {

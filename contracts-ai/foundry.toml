@@ -1,0 +1,36 @@
+# contracts-ai/foundry.toml — standalone Foundry project for AIAttribution
+# Completely separate from the root foundry.toml (which points at contracts-v4/).
+# Own src, test, script, out, and lib — zero interference with Phase 2 contracts.
+
+[profile.default]
+src            = "src"
+test           = "test"
+script         = "script"
+out            = "out"
+libs           = ["lib"]
+solc           = "0.8.26"
+optimizer      = true
+optimizer_runs = 1_000_000
+via_ir         = true
+
+remappings = [
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "forge-std/=lib/forge-std/src/",
+]
+
+[profile.default.rpc_endpoints]
+base         = "${BASE_RPC_URL}"
+base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+
+[profile.default.etherscan]
+base         = { key = "${BASESCAN_API_KEY}", chain = 8453,  url = "https://api.basescan.org/api" }
+base_sepolia = { key = "${BASESCAN_API_KEY}", chain = 84532, url = "https://api-sepolia.basescan.org/api" }
+
+[profile.test]
+optimizer = false
+via_ir    = false
+
+[fmt]
+line_length     = 100
+tab_width       = 4
+bracket_spacing = true
