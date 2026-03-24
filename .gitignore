@@ -33,3 +33,7 @@ next-env.d.ts
 # Private reference files
 WEB3.md
 .claude/settings.local.json
+
+# Foundry compiled artifacts
+contracts-v4/out/
+contracts-v4/cache/

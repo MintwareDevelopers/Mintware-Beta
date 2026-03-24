@@ -515,12 +515,62 @@ Checks before any reward credit:
 
 ---
 
+## Phase 2 — Social Liquidity Vaults
+
+> Full developer bible: `memory/phase2/` — read `PHASE2.md` first.
+
+### Status: T1.1 complete (2026-03-23)
+
+Branch strategy:
+- `main` — Phase 1, always deployable
+- `feature/phase-2` — integration branch (nothing goes to main until Phase 2 ships)
+- `feature/p2-contracts` — V4 contracts (current, commit `7034f40`)
+- `feature/p2-schema`, `feature/p2-frontend` — created, not yet started
+
+### Contract files (Foundry — `contracts-v4/`)
+
+| File | Purpose |
+|---|---|
+| `contracts-v4/src/MWSocialHook.sol` | Uniswap V4 hook — vault-only LP, dynamic fee, MEV capture |
+| `contracts-v4/src/SocialVault.sol` | LP position manager — deposits, lock tiers, withdrawal queue |
+| `contracts-v4/src/FeeVault.sol` | Fee accumulation + epoch distribution + 90-day soft expiry |
+| `contracts-v4/src/lib/LockLib.sol` | Lock tier math + early exit penalty calculation |
+| `contracts-v4/src/lib/FeeLib.sol` | Attribution-weighted fee share math |
+| `contracts-v4/test/SocialVault.t.sol` | Forge test suite — structure set, tests stubbed |
+| `contracts-v4/test/FeeVault.t.sol` | Forge test suite — structure set, tests stubbed |
+| `contracts-v4/script/Deploy.s.sol` | Deploy script — implement at T1.6 |
+| `foundry.toml` | Foundry config at project root |
+
+### Key V4 facts (avoid re-learning)
+- **BaseHook.sol does not exist** in current v4-core/v4-periphery. Implement `IHooks` directly.
+- Hook address must have correct permission bits set at deploy. Use `HookMiner.find()` (CREATE2 salt mining). Required for T1.4.
+- `contracts-v4/out/` is gitignored (compiled artifacts).
+- Forge installed at `~/.foundry/bin/forge`. Add to PATH: `export PATH="$HOME/.foundry/bin:$PATH"`.
+
+### Phase 2 CSS/feature flag rules
+- All vault pages (`/vaults`, `/vault/[id]`, `/vault/create`) are gated on `NEXT_PUBLIC_PHASE2_ENABLED`.
+- If not set, pages redirect to `/`. Set to `true` in Vercel only at launch.
+- All Phase 2 contract reads are gated on `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS` being set.
+- Vault pages use same inline `<style>` convention as all other app pages.
+- New vault components slot into existing three groupings — no fourth grouping.
+
+### Phase 2 scripts
+```bash
+pnpm forge:build          # compile all V4 contracts
+pnpm forge:test           # run Forge test suite
+pnpm forge:test:gas       # run with gas report
+pnpm test:all             # vitest + hardhat + forge in sequence
+```
+
+---
+
 ## Pending Work
 
 - [ ] **`CORE_DAO_BRIDGE_CONTRACT`** — blocked on Molten confirmation (`0x__PENDING_MOLTEN_CONFIRMATION__` in `.env.local`).
 - [ ] **Explorer page** — `explorer.html` uses D3.js, deferred full React conversion.
 - [ ] **Attribution API** — update `attribution-scorer` Cloudflare Worker to return `token_address` + `chain_id` per campaign (activates real token logos).
 - [ ] **Oracle private key** — import `dec4d807960fdd609d64da1c71f4a94b2bcefacd50e5a4acd77120184f88b615` to MetaMask.
+- [ ] **Phase 2 T1.2** — fix `FeeVault.socialVault` circular dep (immutable → owner-settable); implement Pyth MEV capture in `afterSwap`.
 
 ### Confirmed complete (all merged to main)
 - [x] **Ticket 6 — Claim API** — `app/api/claim/route.ts` + `app/api/claim/status/route.ts` fully implemented (Merkle proof, oracle signature, rate limiting, claimed-at guard).
