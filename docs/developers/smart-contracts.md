@@ -100,3 +100,48 @@ confirmOracleSigner()          ← onlyOwner — activates new signer
 ### Source Code
 
 The contract source is available in the project repository under `contracts/MintwareDistributor.sol`.
+
+---
+
+## Phase 2 — Social Vault Contracts
+
+> **Network: Base Sepolia (testnet).** Mainnet deployment is a separate step ahead of public launch.
+
+Three contracts power the Social Vault system:
+
+| Contract | Address (Base Sepolia) | Role |
+|---|---|---|
+| `SocialVault` | `0xb9FB965Caa7197932b52631e0121Ea54586e2B88` | Holds LP deposits, manages V4 liquidity position |
+| `FeeVault` | `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE` | Accumulates swap fees + MEV capture; distributes to LPs at epoch close |
+| `MWSocialHook` | `0x8e7e05f5b6ed07acAa7Ac41D74a0d86a50AA8aC4` | Uniswap V4 hook — dynamic fees + MEV capture on price deviation |
+
+### Fee Flow
+
+```
+Swap occurs in V4 pool
+        ↓
+MWSocialHook captures % of deviation → FeeVault
+        ↓
+Early exit penalties → FeeVault
+        ↓
+Epoch close (weekly) → FeeVault distributes to LPs
+        weighted by: deposit × lock tier × Attribution score × referral multiplier
+```
+
+### Protocol Fee
+
+> ⚠️ **No Mintware protocol fee is currently implemented.**
+>
+> All fees collected by FeeVault are distributed entirely to LPs and referrers. There is no treasury cut or platform percentage taken from vault activity at this time.
+>
+> A protocol fee (e.g. a % of FeeVault at epoch close routed to the Mintware treasury) is planned for a future contract upgrade before mainnet launch.
+
+### Rebalancing
+
+The AI Range Optimizer (T4.x) proposes new tick ranges based on Pyth price volatility data. Rebalancing is **permissionless** — anyone can submit a valid oracle-signed `RangeProposal` to `SocialVault.rebalanceWithProposal()`. The contract verifies the EIP-712 signature and nonce before executing.
+
+The owner-only `rebalance()` function also exists for manual overrides.
+
+### Source Code
+
+Phase 2 contract sources are in `contracts-v4/src/` in the project repository.
