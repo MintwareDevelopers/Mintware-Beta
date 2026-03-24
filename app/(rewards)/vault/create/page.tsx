@@ -10,11 +10,12 @@
 // =============================================================================
 
 import { useAccount } from 'wagmi'
-import { useState }   from 'react'
+import { useState, useEffect } from 'react'
 import Link           from 'next/link'
 import { MwNav }       from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
+import { useVaultSeed } from '@/lib/web3/vault/useSocialVault'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 interface VaultDraft {
@@ -313,7 +314,9 @@ function Step4({
           opacity: submitting ? 0.6 : 1, transition: 'opacity 0.15s',
         }}
       >
-        {submitting ? 'Deploying…' : 'Deploy vault →'}
+        {submitting
+          ? 'Check wallet for approval…'
+          : 'Deploy vault →'}
       </button>
     </div>
   )
@@ -323,10 +326,10 @@ function Step4({
 function CreateVaultContent() {
   const { address } = useAccount()
 
-  const [step, setStep]       = useState(0)
-  const [submitting, setSub]  = useState(false)
-  const [error, setError]     = useState('')
+  const [step, setStep]         = useState(0)
+  const [error, setError]       = useState('')
   const [deployed, setDeployed] = useState<string | null>(null)
+  const vaultSeed = useVaultSeed()
 
   const [draft, setDraft] = useState<VaultDraft>({
     name:         '',
@@ -346,12 +349,13 @@ function CreateVaultContent() {
     return true
   }
 
+  // Step 1: create DB record → get vault ID → seed on-chain
   async function handleDeploy() {
     if (!address) return
-    setSub(true); setError('')
+    setError('')
     try {
-      // TODO T3.5: call SocialVault.seedTeamTokens() on-chain, then record vault in DB
-      const res = await fetch('/api/vaults', {
+      // 1a. Create vault record in DB to get the UUID
+      const res = await fetch('/api/vaults/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -361,8 +365,8 @@ function CreateVaultContent() {
           seed_amount:   draft.seedAmount,
           chain_id:      draft.chainId,
           pool_key: {
-            token0:      draft.tokenAddress,
-            token1:      '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // USDC on Base Sepolia
+            currency0:   draft.tokenAddress.toLowerCase(),
+            currency1:   '0x036cbd53842c5426634e7929541ec2318f3dcf7e', // USDC Base Sepolia
             fee:         draft.feeTier,
             tickSpacing: draft.tickSpacing,
             hooks:       process.env.NEXT_PUBLIC_MW_SOCIAL_HOOK_ADDRESS ?? '',
@@ -375,14 +379,38 @@ function CreateVaultContent() {
         const d = await res.json().catch(() => ({}))
         throw new Error(d.error ?? `HTTP ${res.status}`)
       }
-      const data = await res.json()
-      setDeployed(data.id ?? 'new')
+      const { id: vaultId } = await res.json()
+
+      // 1b. Seed on-chain — approve token + seedTeamTokens()
+      // sqrtPriceX96 = 1:1 price (token ≈ USDC) = 2^96 ≈ 79228162514264337593543950336
+      const sqrtPriceX96 = BigInt('79228162514264337593543950336')
+      // Seed amount: convert USDC dollar value → 6-decimal token units (approx 1:1)
+      const amountTokens = BigInt(Math.round(draft.seedAmount * 1e6))
+
+      await vaultSeed.seed({
+        vaultDbId:    vaultId,
+        projectToken: draft.tokenAddress as `0x${string}`,
+        amountTokens,
+        poolKey: {
+          currency0:   draft.tokenAddress.toLowerCase() as `0x${string}`,
+          currency1:   '0x036cbd53842c5426634e7929541ec2318f3dcf7e' as `0x${string}`,
+          fee:         draft.feeTier,
+          tickSpacing: draft.tickSpacing,
+          hooks:       (process.env.NEXT_PUBLIC_MW_SOCIAL_HOOK_ADDRESS ?? '') as `0x${string}`,
+        },
+        sqrtPriceX96,
+      })
+      // Success picked up by useEffect below
+      setDeployed(vaultId)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Deploy failed')
-    } finally {
-      setSub(false)
     }
   }
+
+  // Propagate vault seed hook errors
+  useEffect(() => {
+    if (vaultSeed.error) setError(vaultSeed.error)
+  }, [vaultSeed.error])
 
   const STEPS = ['Project', 'Pool', 'Defaults', 'Review']
 
@@ -463,7 +491,7 @@ function CreateVaultContent() {
             {step === 0 && <Step1 draft={draft} onChange={patch} />}
             {step === 1 && <Step2 draft={draft} onChange={patch} />}
             {step === 2 && <Step3 draft={draft} onChange={patch} />}
-            {step === 3 && <Step4 draft={draft} submitting={submitting} error={error} onDeploy={handleDeploy} />}
+            {step === 3 && <Step4 draft={draft} submitting={vaultSeed.isPending} error={error} onDeploy={handleDeploy} />}
 
             {/* Nav buttons (hidden on step 3 which has its own deploy button) */}
             {step < 3 && (

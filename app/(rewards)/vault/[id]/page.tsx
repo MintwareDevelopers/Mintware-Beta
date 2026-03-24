@@ -9,6 +9,7 @@ import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
 import type { SocialVault, LpDeposit, WithdrawalQueueEntry, LockTier } from '@/lib/web2/vault/types'
 import { LOCK_TIERS } from '@/lib/web2/vault/types'
+import { useVaultDeposit, useVaultWithdraw } from '@/lib/web3/vault/useSocialVault'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function shortAddr(a: string) { return `${a.slice(0, 6)}…${a.slice(-4)}` }
@@ -73,40 +74,50 @@ function LockTierSelector({ value, onChange }: { value: LockTier; onChange: (t: 
 // ─── Deposit panel ────────────────────────────────────────────────────────────
 function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited: () => void }) {
   const { address } = useAccount()
-  const [amount, setAmount]     = useState('')
-  const [tier, setTier]         = useState<LockTier>('flex')
-  const [submitting, setSub]    = useState(false)
-  const [error, setError]       = useState('')
-  const [success, setSuccess]   = useState(false)
+  const [amount, setAmount]   = useState('')
+  const [tier, setTier]       = useState<LockTier>('flex')
+  const [success, setSuccess] = useState(false)
 
-  async function handleDeposit() {
-    if (!address || !amount || parseFloat(amount) <= 0) return
-    setSub(true); setError('')
-    try {
-      // TODO T3.5: call SocialVault.deposit() on-chain first, then record here
-      const res = await fetch('/api/vault/deposit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vault_id:    vault.id,
-          wallet:      address,
-          usdc_amount: parseFloat(amount),
-          lock_tier:   tier,
-          tx_hash:     '0x_pending_wire', // placeholder until T3.5 on-chain wiring
-        }),
-      })
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error ?? 'Deposit failed')
-      }
+  const { deposit, stage, isPending, isSuccess, txHash, error, reset } = useVaultDeposit()
+
+  // After on-chain confirm → record in DB
+  useEffect(() => {
+    if (!isSuccess || !address || !txHash) return
+    const amountNum = parseFloat(amount)
+    if (amountNum <= 0) return
+    fetch('/api/vault/deposit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vault_id:    vault.id,
+        wallet:      address,
+        usdc_amount: amountNum,
+        lock_tier:   tier,
+        tx_hash:     txHash,
+      }),
+    }).then(() => {
       setSuccess(true)
       setAmount('')
       onDeposited()
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Deposit failed')
-    } finally {
-      setSub(false)
-    }
+    }).catch(() => {
+      setSuccess(true)
+      onDeposited()
+    })
+  }, [isSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleDeposit() {
+    if (!address || !amount || parseFloat(amount) <= 0) return
+    reset()
+    await deposit(parseFloat(amount), tier, address)
+  }
+
+  const stageLabel: Record<typeof stage, string> = {
+    idle:       'Deposit USDC',
+    approving:  'Approving USDC…',
+    approved:   'Approval confirmed',
+    depositing: 'Depositing…',
+    success:    'Deposited!',
+    error:      'Retry deposit',
   }
 
   if (success) return (
@@ -174,19 +185,27 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
         </div>
       )}
 
+      {/* Stage progress */}
+      {isPending && (
+        <div style={{ fontSize: 12, color: 'var(--color-mw-brand)', fontFamily: 'var(--font-jakarta)', background: 'var(--color-mw-brand-dim)', borderRadius: 6, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--color-mw-brand)', animation: 'pulse 1s infinite' }} />
+          {stageLabel[stage]}
+        </div>
+      )}
+
       <button
         onClick={handleDeposit}
-        disabled={submitting || !amount || parseFloat(amount) <= 0 || vault.status === 'closed'}
+        disabled={isPending || !amount || parseFloat(amount) <= 0 || vault.status === 'closed'}
         style={{
           padding: '12px', borderRadius: 'var(--radius-sm)',
           background: 'var(--color-mw-brand)', color: 'white',
           fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-jakarta)',
           border: 'none', cursor: 'pointer',
-          opacity: (submitting || !amount || vault.status === 'closed') ? 0.5 : 1,
+          opacity: (isPending || !amount || vault.status === 'closed') ? 0.5 : 1,
           transition: 'opacity 0.15s',
         }}
       >
-        {submitting ? 'Depositing…' : 'Deposit USDC'}
+        {stageLabel[stage]}
       </button>
       <p style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', textAlign: 'center', margin: 0 }}>
         7-day notice period required for all withdrawals
@@ -249,6 +268,7 @@ function VaultDetailContent() {
   const [tab, setTab]             = useState<'deposit' | 'position' | 'epoch'>('deposit')
   const [withdrawing, setWith]    = useState<string | null>(null)
   const [withErr, setWithErr]     = useState('')
+  const vaultWithdraw = useVaultWithdraw()
 
   const loadVault = useCallback(async () => {
     if (!id) return
@@ -271,23 +291,29 @@ function VaultDetailContent() {
     if (!dep || !address) return
     setWith(depositId); setWithErr('')
     try {
-      const res = await fetch('/api/vault/withdraw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deposit_id: depositId, wallet: address, requested_amount: dep.usdc_amount }),
-      })
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error ?? 'Failed')
-      }
-      await loadVault()
-      setTab('position')
+      // Step 1: on-chain requestWithdrawal
+      vaultWithdraw.withdraw(dep.usdc_amount)
+      // Wait for tx — useEffect below picks up isSuccess
     } catch (e: unknown) {
       setWithErr(e instanceof Error ? e.message : 'Withdrawal failed')
-    } finally {
       setWith(null)
     }
   }
+
+  // After on-chain withdraw success → mirror in DB
+  useEffect(() => {
+    if (!vaultWithdraw.isSuccess || !withdrawing || !address) return
+    const dep = deposits.find(d => d.id === withdrawing)
+    if (!dep) { setWith(null); return }
+    fetch('/api/vault/withdraw', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deposit_id: withdrawing, wallet: address, requested_amount: dep.usdc_amount }),
+    })
+      .then(() => { loadVault(); setTab('position') })
+      .catch(() => { loadVault() })
+      .finally(() => setWith(null))
+  }, [vaultWithdraw.isSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return (
     <div style={{ padding: '40px 28px', maxWidth: 900, margin: '0 auto' }}>
