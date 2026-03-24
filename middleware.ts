@@ -57,9 +57,12 @@ function isRateLimited(key: string, limit: number, windowMs: number): boolean {
 
 // Route → { limit, windowMs }
 const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
-  '/api/campaigns/swap-event': { limit: 10, windowMs: 60_000 },
-  '/api/campaigns/join':       { limit:  5, windowMs: 60_000 },
-  '/api/swap/quote':           { limit: 20, windowMs: 60_000 },
+  '/api/campaigns/swap-event':          { limit: 10, windowMs: 60_000 },
+  '/api/campaigns/join':                { limit:  5, windowMs: 60_000 },
+  '/api/swap/quote':                    { limit: 20, windowMs: 60_000 },
+  '/api/agents/campaigns/record':       { limit: 10, windowMs: 60_000 },
+  '/api/agents/register':               { limit:  5, windowMs: 60_000 },
+  '/api/agents/mwp':                    { limit: 10, windowMs: 60_000 },
 }
 
 function getClientIP(req: NextRequest): string {
@@ -98,5 +101,8 @@ export const config = {
     '/api/campaigns/swap-event',
     '/api/campaigns/join',
     '/api/swap/quote',
+    '/api/agents/campaigns/record',
+    '/api/agents/register',
+    '/api/agents/mwp',
   ],
 }

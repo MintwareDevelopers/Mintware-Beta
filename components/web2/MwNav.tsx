@@ -43,6 +43,7 @@ export function MwNav() {
                     { href: '/vaults',      label: 'Vaults' },
                     { href: '/swap',        label: 'Swap' },
                     { href: '/leaderboard', label: 'Leaderboard' },
+                    { href: '/agents',      label: 'Agents' },
                     { href: '/profile',     label: 'Profile' },
                   ].map(({ href, label }) => (
                     <Link
