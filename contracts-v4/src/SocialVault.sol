@@ -15,6 +15,8 @@ import {IERC20}              from "@openzeppelin/contracts/token/ERC20/IERC20.so
 import {SafeERC20}           from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable}             from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard}     from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {EIP712}              from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA}               from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 /// @title  SocialVault
 /// @notice Manages community USDC deposits + team PROJECT token seeds.
@@ -47,7 +49,7 @@ import {ReentrancyGuard}     from "@openzeppelin/contracts/utils/ReentrancyGuard
 ///           (addLiquidity, removeLiquidity, rebalance) go through the
 ///           poolManager.unlock() → unlockCallback() → modifyLiquidity pattern.
 ///           Only SocialVault can LP (enforced by MWSocialHook.beforeAddLiquidity).
-contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
+contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
     using SafeERC20    for IERC20;
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
@@ -104,6 +106,11 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
 
     uint256 public constant BPS                   = 10_000;
 
+    /// @dev EIP-712 type hash for RangeProposal — must match T4.2 rangeProposer.ts
+    bytes32 public constant RANGE_TYPEHASH = keccak256(
+        "RangeProposal(bytes32 vaultId,int24 tickLower,int24 tickUpper,uint256 validUntil,uint256 nonce)"
+    );
+
     // ─────────────────────────────────────────────────────────────────────────
     // Immutables
     // ─────────────────────────────────────────────────────────────────────────
@@ -126,6 +133,12 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
 
     /// @notice Team seeds per vaultId (one seed per team)
     mapping(bytes32 => TeamSeed) public teamSeeds;
+
+    /// @notice Oracle address that signs RangeProposal EIP-712 messages
+    address public oracleSigner;
+
+    /// @notice Tracks used nonces per vaultId to prevent replay attacks
+    mapping(bytes32 => mapping(uint256 => bool)) public usedNonces;
 
     /// @notice Total USDC currently deposited in vault (principal only)
     uint256 public totalDeposits;
@@ -153,7 +166,9 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
     event Compounded(address indexed lp, uint256 feeAmount);
     event TeamSeeded(bytes32 indexed vaultId, address token, uint256 amount);
     event PoolInitialized(bytes32 indexed poolId, uint160 sqrtPriceX96);
+    event OracleSignerSet(address indexed newSigner);
     event Rebalanced(int24 newTickLower, int24 newTickUpper, uint128 newLiquidity);
+    event RebalancedWithProposal(bytes32 indexed vaultId, int24 newTickLower, int24 newTickUpper, uint256 nonce, address submitter);
     event LiquidityAdded(uint128 liquidity, uint256 usdcAmount);
     event LiquidityRemoved(uint128 liquidity);
 
@@ -171,6 +186,10 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
     error InsufficientDeposit();
     error OnlyFeeVault();
     error OnlyPoolManager();
+    error OracleSignerNotSet();
+    error ProposalExpired();
+    error NonceAlreadyUsed();
+    error InvalidOracleSignature();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -180,7 +199,7 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
         address _usdc,
         address _poolManager,
         address _feeVault
-    ) Ownable(msg.sender) {
+    ) Ownable(msg.sender) EIP712("MWSocialVault", "1") {
         usdc        = IERC20(_usdc);
         poolManager = IPoolManager(_poolManager);
         feeVault    = _feeVault;
@@ -354,6 +373,61 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback {
             abi.encode(Action.Rebalance, abi.encode(newTickLower, newTickUpper))
         );
 
+        emit Rebalanced(newTickLower, newTickUpper, totalLiquidity);
+    }
+
+    /// @notice Update the oracle signer address (onlyOwner)
+    function setOracleSigner(address signer) external onlyOwner {
+        oracleSigner = signer;
+        emit OracleSignerSet(signer);
+    }
+
+    /// @notice Permissionless rebalance using a signed RangeProposal from the oracle.
+    ///         Anyone can submit a valid signed proposal — no owner required.
+    ///         Validates EIP-712 signature, expiry, and per-vault nonce uniqueness.
+    /// @param vaultId         keccak256(toBytes(dbUUID)) — must match the signed message
+    /// @param newTickLower    Proposed tick lower bound
+    /// @param newTickUpper    Proposed tick upper bound
+    /// @param validUntil      Unix timestamp after which the proposal is expired
+    /// @param nonce           Monotonically increasing per-vault nonce (anti-replay)
+    /// @param oracleSignature EIP-712 signature from the oracle signer
+    function rebalanceWithProposal(
+        bytes32 vaultId,
+        int24   newTickLower,
+        int24   newTickUpper,
+        uint256 validUntil,
+        uint256 nonce,
+        bytes calldata oracleSignature
+    ) external nonReentrant {
+        if (!poolInitialized)               revert PoolNotInitialized();
+        if (oracleSigner == address(0))     revert OracleSignerNotSet();
+        if (block.timestamp > validUntil)   revert ProposalExpired();
+        if (usedNonces[vaultId][nonce])     revert NonceAlreadyUsed();
+
+        // Reconstruct EIP-712 struct hash
+        bytes32 structHash = keccak256(abi.encode(
+            RANGE_TYPEHASH,
+            vaultId,
+            newTickLower,
+            newTickUpper,
+            validUntil,
+            nonce
+        ));
+
+        // Verify oracle signature
+        bytes32 digest  = _hashTypedDataV4(structHash);
+        address signer  = ECDSA.recover(digest, oracleSignature);
+        if (signer != oracleSigner) revert InvalidOracleSignature();
+
+        // Mark nonce used before external calls (CEI)
+        usedNonces[vaultId][nonce] = true;
+
+        // Execute the rebalance
+        poolManager.unlock(
+            abi.encode(Action.Rebalance, abi.encode(newTickLower, newTickUpper))
+        );
+
+        emit RebalancedWithProposal(vaultId, newTickLower, newTickUpper, nonce, msg.sender);
         emit Rebalanced(newTickLower, newTickUpper, totalLiquidity);
     }
 
