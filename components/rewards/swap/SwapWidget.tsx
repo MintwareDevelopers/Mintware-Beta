@@ -154,8 +154,8 @@ export function SwapWidget() {
       <div className="w-full">
         <CampaignBanner campaignId={campaignId} referrer={referrer} campaign={campaign} />
 
-        {/* ── Gradient header strip ── */}
-        <div className="mw-hero-gradient px-[22px] py-[18px] flex items-center justify-between border-x border-t border-[rgba(79,126,247,0.14)] rounded-t-xl">
+        {/* ── Header strip ── */}
+        <div className="px-[22px] py-[18px] flex items-center justify-between bg-white border-x border-t border-[rgba(79,126,247,0.14)] rounded-t-xl">
           <div>
             <div className="text-[18px] font-bold text-mw-ink font-sans leading-none mb-[3px]">Swap</div>
             <div className="text-[12px] text-mw-ink-3 font-sans">Best price across chains</div>
