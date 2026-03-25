@@ -8,8 +8,8 @@ import type { Abi } from 'viem'
 // ── Deployed addresses ────────────────────────────────────────────────────────
 
 export const CONTRACT_ADDRESSES = {
-  baseSepolia: '0x1a4f942b437e438176296792a1852B05eb1E7Ad1' as `0x${string}`, // v2 gasless oracle
-  base:        '0xb9FB965Caa7197932b52631e0121Ea54586e2B88' as `0x${string}`, // v2 gasless oracle — Base mainnet
+  baseSepolia: '0x1a4f942b437e438176296792a1852B05eb1E7Ad1' as `0x${string}`, // v2 — testnet only
+  base:        '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421' as `0x${string}`, // v3 — timelocked oracle rotation
 } as const
 
 export const DEFAULT_RPC = {
@@ -17,8 +17,8 @@ export const DEFAULT_RPC = {
   base:        'https://mainnet.base.org',
 } as const
 
-export const DEFAULT_CONTRACT = CONTRACT_ADDRESSES.baseSepolia
-export const DEFAULT_RPC_URL  = DEFAULT_RPC.baseSepolia
+export const DEFAULT_CONTRACT = CONTRACT_ADDRESSES.base
+export const DEFAULT_RPC_URL  = DEFAULT_RPC.base
 
 // ── AIAttribution ABI (functions used by SDK) ────────────────────────────────
 
