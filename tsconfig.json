@@ -45,6 +45,7 @@
     "contracts-ai",
     "sdk",
     "subgraph",
-    "oracle-watcher"
+    "oracle-watcher",
+    "plugins"
   ]
 }
