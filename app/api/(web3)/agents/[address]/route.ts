@@ -18,11 +18,10 @@ export async function GET(
 
   const supabase = createSupabaseServiceClient()
 
-  const { data, error } = await supabase
-    .from('ai_agent_leaderboard')
-    .select('*')
-    .eq('address', address)
-    .maybeSingle()
+  const [{ data, error }, { data: pnl }] = await Promise.all([
+    supabase.from('ai_agent_leaderboard').select('*').eq('address', address).maybeSingle(),
+    supabase.from('ai_agent_pnl').select('*').eq('address', address).maybeSingle(),
+  ])
 
   if (error) {
     console.error('[GET /api/agents/[address]]', error.message)
@@ -30,7 +29,7 @@ export async function GET(
   }
   if (!data) return NextResponse.json({ error: 'agent not found' }, { status: 404 })
 
-  return NextResponse.json(data, {
+  return NextResponse.json({ ...data, pnl: pnl ?? null }, {
     headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
   })
 }

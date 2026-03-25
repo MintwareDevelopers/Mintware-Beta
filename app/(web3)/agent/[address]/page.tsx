@@ -19,6 +19,15 @@ interface AgentScore {
   last_mwp_hash:    string | null
   rank:             number
   updated_at:       string
+  pnl: {
+    realized_pnl_eth: string
+    realized_pnl_usd: string
+    total_eth_in:     string
+    total_eth_out:    string
+    total_trades:     number
+    eth_price_usd:    string
+    updated_at:       string
+  } | null
 }
 
 function AgentProfileContent() {
@@ -32,13 +41,9 @@ function AgentProfileContent() {
 
   useEffect(() => {
     if (!address) return
-    fetch(`/api/agents/leaderboard`)
-      .then(r => r.json())
-      .then(d => {
-        const found = (d.leaderboard ?? []).find((a: AgentScore) => a.address === address)
-        setAgent(found ?? null)
-        setLoading(false)
-      })
+    fetch(`/api/agents/${address}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => { setAgent(d); setLoading(false) })
       .catch(() => { setError('Failed to load agent'); setLoading(false) })
   }, [address])
 
@@ -202,6 +207,74 @@ function AgentProfileContent() {
           border-radius: 6px;
           padding: 8px 10px;
         }
+        .pnl-card {
+          background: white;
+          border-radius: var(--radius-lg);
+          border: 1px solid var(--color-mw-border);
+          box-shadow: var(--shadow-md);
+          padding: 24px 28px;
+          margin-bottom: 20px;
+        }
+        .pnl-title {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--color-mw-ink-3);
+          letter-spacing: 1px;
+          text-transform: uppercase;
+          margin-bottom: 16px;
+        }
+        .pnl-hero {
+          display: flex;
+          align-items: flex-end;
+          gap: 8px;
+          margin-bottom: 20px;
+        }
+        .pnl-number {
+          font-family: var(--font-mono), monospace;
+          font-size: 36px;
+          font-weight: 800;
+          line-height: 1;
+          letter-spacing: -1px;
+        }
+        .pnl-number.positive { color: var(--color-mw-green); }
+        .pnl-number.negative { color: var(--color-mw-red); }
+        .pnl-number.zero     { color: var(--color-mw-ink-3); }
+        .pnl-usd {
+          font-size: 14px;
+          color: var(--color-mw-ink-3);
+          margin-bottom: 6px;
+          font-family: var(--font-mono), monospace;
+        }
+        .pnl-stats {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 12px;
+        }
+        .pnl-stat {
+          background: var(--color-mw-surface-card);
+          border-radius: var(--radius-md);
+          border: 1px solid var(--color-mw-border);
+          padding: 12px;
+        }
+        .pnl-stat-label {
+          font-size: 10px;
+          font-weight: 600;
+          color: var(--color-mw-ink-4);
+          letter-spacing: 0.8px;
+          text-transform: uppercase;
+          margin-bottom: 4px;
+        }
+        .pnl-stat-value {
+          font-family: var(--font-mono), monospace;
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--color-mw-ink);
+        }
+        .pnl-note {
+          font-size: 11px;
+          color: var(--color-mw-ink-4);
+          margin-top: 14px;
+        }
         .loading-state, .error-state, .not-found {
           text-align: center;
           padding: 60px 24px;
@@ -274,6 +347,48 @@ function AgentProfileContent() {
                   ))}
                 </div>
               </div>
+
+              {/* PnL card */}
+              {(() => {
+                const pnl = agent.pnl
+                if (!pnl) return null
+                const pnlEth    = parseFloat(pnl.realized_pnl_eth) / 1e18
+                const pnlUsd    = parseFloat(pnl.realized_pnl_usd)
+                const ethIn     = parseFloat(pnl.total_eth_in)  / 1e18
+                const ethOut    = parseFloat(pnl.total_eth_out) / 1e18
+                const sign      = pnlEth > 0 ? 'positive' : pnlEth < 0 ? 'negative' : 'zero'
+                const prefix    = pnlEth > 0 ? '+' : ''
+                return (
+                  <div className="pnl-card">
+                    <div className="pnl-title">WETH P&amp;L</div>
+                    <div className="pnl-hero">
+                      <div className={`pnl-number ${sign}`}>
+                        {prefix}{pnlEth.toFixed(4)} ETH
+                      </div>
+                      <div className="pnl-usd">
+                        {pnlUsd >= 0 ? '+' : ''}${Math.abs(pnlUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                    <div className="pnl-stats">
+                      <div className="pnl-stat">
+                        <div className="pnl-stat-label">Trades</div>
+                        <div className="pnl-stat-value">{pnl.total_trades.toLocaleString()}</div>
+                      </div>
+                      <div className="pnl-stat">
+                        <div className="pnl-stat-label">ETH In</div>
+                        <div className="pnl-stat-value">{ethIn.toFixed(4)}</div>
+                      </div>
+                      <div className="pnl-stat">
+                        <div className="pnl-stat-label">ETH Out</div>
+                        <div className="pnl-stat-value">{ethOut.toFixed(4)}</div>
+                      </div>
+                    </div>
+                    <div className="pnl-note">
+                      WETH net flow — ETH at ${parseFloat(pnl.eth_price_usd).toLocaleString()} · updated {new Date(pnl.updated_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {agent.last_mwp_hash && (
                 <div className="mwp-card">
