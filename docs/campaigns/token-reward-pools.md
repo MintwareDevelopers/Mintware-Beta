@@ -1,43 +1,101 @@
 # Token Reward Pools
 
-Token Reward Pools distribute rewards per qualifying swap transaction. No epochs, no waiting for a distribution — every qualifying swap locks a reward for your wallet immediately.
+Token Reward Pools are the simplest campaign type — a protocol deposits tokens, you complete qualifying swaps, and rewards are locked per transaction in real time. No epochs, no waiting for batch settlement.
 
 ---
 
 ## How It Works
 
-1. A protocol deposits tokens into a campaign pool
-2. You complete a qualifying swap via the Mintware Swap interface
-3. A reward is automatically locked for your wallet
-4. After a short claim window, the reward becomes claimable
-5. Claim directly on-chain — tokens transfer to your wallet
+```
+Protocol deposits token budget into the campaign pool
+        ↓
+You complete a qualifying swap via Mintware Swap
+        ↓
+A reward is automatically locked for your wallet
+        ↓
+Short lock period (for on-chain verification)
+        ↓
+Reward becomes claimable — claim directly on-chain
+        ↓
+Tokens transfer to your wallet
+```
+
+The entire flow is automatic. You swap, the reward is locked, you claim when ready.
 
 ---
 
 ## Reward Structure
 
-Each pool defines the reward per qualifying transaction. There are typically three reward components per swap:
+Each qualifying swap generates up to three reward components:
 
-- **Buyer reward** — goes to the wallet that made the swap
-- **Referrer reward** — goes to whoever referred the buyer (if applicable)
-- **Platform fee** — Mintware's 2% fee, directed to the treasury
+| Component | Who Receives It | Description |
+|---|---|---|
+| **Buyer Reward** | The swapper | The primary reward for completing the qualifying swap |
+| **Referrer Reward** | The wallet that referred you (if applicable) | A share of the swap value directed to your referrer |
+| **Platform Fee** | Mintware treasury | 2% of the swap value — Mintware's fee for operating the campaign |
+
+The buyer reward percentage is set by the campaign creator when the pool is created. Referrer rewards incentivise growth through your referral network — see [Referral System](../referrals/overview.md).
 
 ---
 
-## Claim Window
+## Qualifying Swaps
 
-Rewards enter a brief lock period after the swap before becoming claimable. This window is defined by the campaign creator and exists to allow for verification.
+Not all swaps qualify. Each campaign defines:
 
-Once the window passes, the reward is available to claim from the campaign detail page or your profile.
+- **Minimum swap size** — a floor transaction value in USD
+- **Eligible tokens** — specific trading pairs or tokens that count
+- **Chain** — swaps must occur on the campaign's designated chain
+
+Always check the campaign detail page to confirm what qualifies before swapping.
+
+---
+
+## The Verification Window
+
+There is a brief lock period between your swap and when the reward becomes claimable. During this window, Mintware verifies the on-chain transaction to confirm it meets campaign requirements.
+
+Verification checks include:
+- The transaction was successfully mined on-chain
+- The swap was routed through a supported DEX aggregator
+- The Mintware treasury fee was included in the transaction
+
+This lock window exists to prevent fraudulent reward claims. Once verification passes, your reward status changes to **Claimable**.
+
+---
+
+## Claiming
+
+When a reward is claimable, it appears in the **Rewards** section of the campaign detail page.
+
+1. Click **Claim**
+2. Confirm the on-chain transaction in your wallet
+3. Tokens transfer directly to your connected wallet
+
+> Gas is required to claim. Ensure your wallet has sufficient native token on the campaign's chain (e.g. ETH on Base, ETH on Arbitrum).
 
 ---
 
 ## Pool Depletion
 
-Token Reward Pools deplete as rewards are claimed. Once the pool is empty, the campaign ends. Campaigns can be topped up by the creator.
+The reward pool depletes as rewards are claimed. Once the pool is empty, the campaign ends automatically — no further rewards lock even if swaps continue. Campaign creators can top up the pool to extend the campaign.
+
+The current pool balance is always shown on the campaign detail page.
+
+---
+
+## Batch Claiming
+
+If you have multiple claimable rewards across epochs on the same contract, the UI displays a **Claim All (N)** button that submits a single batch transaction — saving gas compared to claiming individually.
 
 ---
 
 ## Creating a Pool
 
-Token Reward Pool creation will be available to anyone via the self-serve campaign interface (coming soon). Pools require depositing the reward token upfront.
+Token Reward Pool creation will be available to any wallet via the self-serve campaign interface (coming soon). Creating a pool requires:
+
+1. Choosing the reward token and total budget
+2. Setting the reward percentage per swap
+3. Defining qualifying actions (minimum swap size, eligible tokens, chain)
+4. Depositing the full token budget upfront
+
+The first depositor becomes the campaign creator and is the only wallet that can recover remaining funds after the campaign closes.

@@ -19,9 +19,13 @@
 * [Campaign Overview](campaigns/overview.md)
 * [Token Reward Pools](campaigns/token-reward-pools.md)
 * [Points Campaigns](campaigns/points-campaigns.md)
+* [AI Agent Campaigns](campaigns/ai-campaigns.md)
 * [Score Multipliers](campaigns/score-multipliers.md)
 * [Joining a Campaign](campaigns/joining.md)
 * [Claiming Rewards](campaigns/claiming-rewards.md)
+
+## Social Vaults
+* [Overview](vaults/overview.md)
 
 ## Leaderboard
 * [Leaderboard](leaderboard/overview.md)
@@ -32,6 +36,12 @@
 ## Referrals
 * [Referral System](referrals/overview.md)
 * [Your Referral Code](referrals/your-code.md)
+
+## AI Attribution (for Agents)
+* [Overview](ai-attribution/overview.md)
+* [Getting Started](ai-attribution/getting-started.md)
+* [SDK Reference](ai-attribution/sdk.md)
+* [Oracle Watcher](ai-attribution/oracle-watcher.md)
 
 ## Developers
 * [API Reference](developers/api-reference.md)

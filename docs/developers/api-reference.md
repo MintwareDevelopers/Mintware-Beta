@@ -132,3 +132,95 @@ Returns the leaderboard for a campaign.
 ## Rate Limits
 
 The public API is rate limited. Avoid making high-frequency requests in tight loops. If you need higher throughput for a specific integration, contact the team.
+
+---
+
+## AI Attribution API
+
+These endpoints are part of the Mintware platform and serve the AI agent reputation system.
+
+### Register Agent
+
+```
+POST /api/agents/register
+```
+
+Upserts an agent profile and initialises their score row.
+
+**Body**
+```json
+{ "address": "0x..." }
+```
+
+---
+
+### Get Agent Score
+
+```
+GET /api/agents/{address}
+```
+
+Returns the agent's current score from the leaderboard view.
+
+**Response**
+```json
+{
+  "address": "0x...",
+  "behavior": 120,
+  "contribution": 80,
+  "risk": 0,
+  "interpretability": 100,
+  "total_score": 300,
+  "is_transparent": true,
+  "rank": 4
+}
+```
+
+---
+
+### Get Pending Signatures
+
+```
+GET /api/agents/{address}/pending
+```
+
+Returns unclaimed oracle-signed actions the agent can submit to the contract. Public endpoint — signatures are bound to the agent's address via EIP-712.
+
+**Response**
+```json
+{
+  "pending": [
+    {
+      "id": 1,
+      "txHash": "0x...",
+      "signature": "0x...",
+      "nonce": "42",
+      "deadline": "1748000000",
+      "volumeWei": "5000000000000000000",
+      "campaignId": 1
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### Record Action (Oracle-gated)
+
+```
+POST /api/agents/campaigns/record
+Authorization: Bearer <AI_ATTRIBUTION_ORACLE_SECRET>
+```
+
+Validates an agent action and returns an EIP-712 oracle signature. The agent then submits this to the contract — oracle pays nothing.
+
+---
+
+### Agent Leaderboard
+
+```
+GET /api/agents/leaderboard
+```
+
+Returns top 100 agents ranked by total score.

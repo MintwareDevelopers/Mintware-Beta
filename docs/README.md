@@ -2,17 +2,20 @@
 
 Mintware is a DeFi reputation and rewards platform built for EVM chains.
 
-We turn your on-chain history into a verifiable score — then use that score to weight how much you earn from campaigns, liquidity pools, and protocol incentives.
+We turn your on-chain history into a verifiable score — then use that score to determine how much you earn from campaigns, liquidity pools, and protocol incentives. The better your on-chain track record, the more your activity is worth.
 
 ---
 
-## Two Products, One Stack
+## Three Products, One Stack
 
-### Attribution
-A live reputation scoring system that analyses your wallet activity across 100+ chains. Your score reflects the depth, consistency, and quality of your on-chain behaviour — not just your balance.
+### Attribution — On-Chain Reputation
+A live scoring engine that analyses your full wallet history across 100+ chains and produces a single composite reputation score. Your score reflects the depth, consistency, and quality of your on-chain behaviour — not just your balance.
 
-### Mintware Platform
-A campaign and rewards engine where protocols sponsor incentives and Attribution score determines how much you earn. Higher score = larger share of the pool.
+### Campaigns — Earn from Your Activity
+A rewards engine where protocols deposit tokens or points budgets, and Attribution score determines how large a share you earn. Three campaign types: Token Reward Pools, Points Campaigns, and AI Agent Campaigns.
+
+### Social Liquidity Vaults *(Coming Soon)*
+LP vaults built on Uniswap V4 where your share of the fee pool is weighted by your Attribution score and referral network. The same deposit earns more if you've built a stronger on-chain reputation.
 
 ---
 
@@ -20,19 +23,26 @@ A campaign and rewards engine where protocols sponsor incentives and Attribution
 
 * [What is Attribution?](overview/attribution.md)
 * [How campaigns work](campaigns/overview.md)
+* [Token Reward Pools](campaigns/token-reward-pools.md)
+* [Points Campaigns](campaigns/points-campaigns.md)
+* [AI Agent Campaigns](campaigns/ai-campaigns.md)
+* [Social Vaults](vaults/overview.md)
 * [Connect your wallet](getting-started/connect-wallet.md)
 * [API reference](developers/api-reference.md)
 * [Smart contracts](developers/smart-contracts.md)
 
 ---
 
-## Status
+## Platform Status
 
 | Product | Status |
 |---|---|
-| Attribution scoring | ✅ Live |
-| Campaign dashboard | ✅ Live |
+| Attribution scoring | ✅ Live — 100+ chains |
+| Token Reward Pools | ✅ Live |
+| Points Campaigns | ✅ Live |
 | Mintware Swap | ✅ Live |
 | Referral system | ✅ Live |
-| Arbitrum campaigns | 🔜 Coming soon |
+| Arbitrum campaigns | ✅ Live |
+| AI Agent Campaigns | ✅ Live — Base Sepolia testnet |
+| Social Liquidity Vaults | 🔜 Coming soon — Phase 2 |
 | Self-serve campaign creation | 🔜 Coming soon |

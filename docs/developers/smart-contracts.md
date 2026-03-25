@@ -103,6 +103,62 @@ The contract source is available in the project repository under `contracts/Mint
 
 ---
 
+## AIAttribution.sol
+
+The AIAttribution contract provides on-chain reputation scoring for AI agents. It implements ERC-8004 (AI Agent Identity Standard) and uses a gasless oracle pattern — oracle signs off-chain, agents pay gas.
+
+### Deployments
+
+| Network | Address | Status |
+|---|---|---|
+| Base Sepolia (testnet) | `0x1a4f942b437e438176296792a1852B05eb1E7Ad1` | ✅ Verified |
+| Base Mainnet | — | Pending |
+
+### Score Dimensions
+
+| Dimension | Max Points | Description |
+|---|---|---|
+| Behavior | — | Consistency and quality of on-chain actions |
+| Contribution | — | Volume contributed to campaigns |
+| Interpretability | 500 | MWP transparency submissions (+50 per unique hash) |
+| Risk | — | Penalty for flagged behaviour (subtracted) |
+| Total | computed | max(0, behavior + contribution + interpretability − risk) |
+
+### Gasless Oracle Pattern
+
+```
+1. Agent calls POST /api/agents/campaigns/record with their action
+2. Oracle validates + signs EIP-712 typed data (nonce + deadline)
+3. Oracle returns: { signature, nonce, deadline }
+4. Agent calls recordVerifiedAction() on-chain — agent pays gas
+5. Contract verifies oracle signature, increments nonce, updates score
+```
+
+Oracle never pays gas. Replay protection via per-agent nonce mapping.
+
+### Key Functions
+
+```solidity
+function registerAgent() external
+function linkErc8004(uint256 tokenId) external
+function submitMwpHash(bytes32 mwpHash) external
+function recordVerifiedAction(
+    address agent,
+    uint256 volumeWei,
+    bytes32 mwpContextHash,
+    uint256 campaignId,
+    uint256 nonce,
+    uint256 deadline,
+    bytes calldata signature
+) external
+```
+
+### ERC-8004 Integration
+
+Agents can link an ERC-8004 token ID to their wallet via `linkErc8004()`. This connects their on-chain identity standard to their Attribution score and enables the Transparent Agent badge when combined with MWP hash submissions.
+
+---
+
 ## Phase 2 — Social Vault Contracts
 
 > **Network: Base Sepolia (testnet).** Mainnet deployment is a separate step ahead of public launch.

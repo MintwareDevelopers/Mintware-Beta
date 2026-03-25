@@ -1,61 +1,111 @@
 # Points Campaigns
 
-Points Campaigns run over fixed time windows called epochs. Rewards are distributed at the end of each epoch based on the points you've earned and your Attribution score multiplier.
+Points Campaigns run over fixed time windows called epochs. Participants earn points by completing qualifying actions, and at epoch end, the reward pool is distributed based on each wallet's point share — amplified by their Attribution score multiplier.
+
+The result: two participants who complete the exact same actions can earn different rewards depending on how strong their on-chain reputation is.
 
 ---
 
 ## How It Works
 
-1. Join the campaign (subject to any minimum score requirement)
-2. Complete qualifying actions during the epoch to earn points
-3. At epoch end, your points are tallied and your multiplier is applied
-4. Mintware publishes a Merkle distribution for the epoch
-5. Claim your allocation on-chain
+```
+Join the campaign (subject to minimum score requirement, if set)
+        ↓
+Complete qualifying actions during the epoch to earn points
+        ↓
+Points are credited in real time as actions are verified
+        ↓
+Epoch ends — total points across all participants are tallied
+        ↓
+Your Attribution score multiplier is applied to your point total
+        ↓
+Your share of the epoch pool = your weighted points / all weighted points
+        ↓
+Mintware publishes a Merkle distribution, signed by the oracle
+        ↓
+Claim your allocation on-chain
+```
+
+---
+
+## Epochs
+
+An epoch is a fixed time window — typically one week. Points reset at the start of each epoch. Past performance doesn't carry over.
+
+Each epoch is a fresh competition. If a campaign runs for multiple epochs, each one is settled and distributed independently.
 
 ---
 
 ## Qualifying Actions
 
-Each campaign defines its own set of actions. Common examples:
+Each campaign defines its own set of qualifying actions and point values. Common examples:
 
-| Action | Points | Frequency |
+| Action | Base Points | Frequency |
 |---|---|---|
-| Bridge | 15 pts | Once per wallet |
-| Trade | 8 pts | Once per day |
-| Referral bridge | 60 pts per referred wallet | Per referred bridge |
-| Referral trade | 8 pts per referred wallet | Per referred trading day |
+| Bridge | 15 pts | Once per wallet per campaign |
+| Trade | 8 pts | Once per calendar day |
+| Referral bridge | 60 pts | Per referred wallet that bridges |
+| Referral trade | 8 pts | Per referred wallet per trading day |
 
-Actions and point values vary by campaign — always check the campaign detail page for the specific rules.
+Always check the campaign detail page for the exact actions and values — they vary by campaign.
 
 ---
 
-## Score Multiplier
+## Score Multipliers
 
-Your Attribution score applies a multiplier to your raw point total at epoch end. This means two participants who complete the same actions can earn different rewards based on their Attribution standing.
+Your Attribution score applies a multiplier to your raw point total at the moment each action is credited. There are two independent multipliers:
 
-Higher-tier wallets earn a larger share of the epoch pool for the same actions.
+**Attribution multiplier** — based on your Attribution score percentile relative to all scored wallets:
+
+| Attribution Percentile | Multiplier |
+|---|---|
+| 0–33% (lower third) | 1.0× |
+| 34–66% (middle third) | 1.25× |
+| 67–100% (top third) | 1.5× |
+
+**Sharing multiplier** — based on your Sharing score percentile (the strength of your referral network):
+
+| Sharing Percentile | Multiplier |
+|---|---|
+| 0–33% | 1.0× |
+| 34–66% | 1.15× |
+| 67–100% | 1.3× |
+
+Both multipliers combine **multiplicatively**. Maximum combined multiplier: **1.95×**.
+
+> **Example:** A wallet in the top third for both Attribution and Sharing earns 1.5 × 1.3 = **1.95×** on every action. A trade worth 8 base points becomes 15.6 weighted points.
+
+Multipliers are locked at the time each action is credited — they do not retroactively change if your score shifts during the campaign.
+
+---
+
+## The Epoch Distribution
+
+When an epoch closes, the distribution is calculated off-chain:
+
+1. All participant point totals are read (with multipliers already applied)
+2. Each wallet's share is calculated as their weighted points divided by the sum of all weighted points
+3. Each wallet's share is multiplied by the epoch pool size
+4. A Merkle tree is built from the final allocations
+5. Mintware's oracle cryptographically signs the Merkle root
+6. The signed distribution is published on-chain and becomes claimable
+
+No gas is spent by Mintware to publish the distribution — the oracle signature is enough. Claimers pay their own gas when they submit their Merkle proof.
 
 ---
 
 ## Minimum Score Access
 
-Some Points Campaigns require a minimum Attribution score to join. If you don't meet the requirement, work on improving your score first — see [Your Score](../getting-started/your-score.md) for guidance.
+Some Points Campaigns have a `min_score` threshold. Wallets below the threshold cannot join. If you're blocked, your Attribution score needs to improve first — see [Your Score](../getting-started/your-score.md).
 
 ---
 
-## Epoch Distribution
+## Who Creates Points Campaigns
 
-At the end of each epoch:
-1. Total points across all participants are tallied
-2. Score multipliers are applied per wallet
-3. Each wallet's share of the epoch pool is calculated
-4. A Merkle tree is built from the distribution
-5. Mintware's oracle signs the root — making it claimable on-chain
-
-Your allocation is then available to claim via the campaign detail page.
+Points Campaigns are created by whitelisted teams only. This is intentional — the score-multiplier system has real economic impact, and campaigns must be structured responsibly. Self-serve creation for Token Reward Pools is separate and open to anyone.
 
 ---
 
-## Multiple Epochs
+## Claim Deadline
 
-Points Campaigns can run for multiple epochs. Your points reset each epoch — past performance doesn't carry over. Each epoch is an independent competition.
+Every epoch distribution includes a deadline. Claims must be submitted on-chain before this deadline. Deadlines are set generously, but don't leave them indefinitely — once expired, the allocation cannot be recovered.
