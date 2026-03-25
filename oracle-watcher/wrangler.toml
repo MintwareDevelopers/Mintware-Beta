@@ -1,0 +1,25 @@
+name              = "oracle-watcher"
+main              = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["* * * * *"]
+
+# KV namespace for state (last_block + processed_txs dedup set)
+# After running `wrangler kv namespace create OW_STATE`, paste the id below
+[[kv_namespaces]]
+binding = "OW_STATE"
+id      = "4c1e0a40af39459898df4e18f8797bac"
+
+# Non-secret config vars
+[vars]
+WETH_ADDRESS        = "0x4200000000000000000000000000000000000006"
+BASE_SEPOLIA_RPC_URL = "https://mainnet.base.org"
+ORACLE_API_BASE_URL  = "https://mintware.finance"
+
+# Secrets — set via: wrangler secret put <NAME>
+# Required:
+#   wrangler secret put SUPABASE_URL
+#   wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#   wrangler secret put ORACLE_SECRET             (= AI_ATTRIBUTION_ORACLE_SECRET in Vercel)

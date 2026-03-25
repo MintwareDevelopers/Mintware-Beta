@@ -16,7 +16,7 @@
     "build": "tsc --project tsconfig.json",
     "test": "echo 'no tests yet'"
   },
-  "keywords": ["mintware", "ai-attribution", "erc-8004", "defi", "reputation", "agent"],
+  "keywords": ["mintware", "ai-attribution", "erc-8004", "defi", "reputation", "agent", "ai-agent", "on-chain", "scoring", "oracle", "base", "blockchain", "attribution", "web3", "autonomous-agent"],
   "author": "Mintware",
   "license": "MIT",
   "peerDependencies": {

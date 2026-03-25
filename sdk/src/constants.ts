@@ -8,8 +8,8 @@ import type { Abi } from 'viem'
 // ── Deployed addresses ────────────────────────────────────────────────────────
 
 export const CONTRACT_ADDRESSES = {
-  baseSepolia: '0xDB9DB7008cfFb09bD1D943C237f57327383DFc03' as `0x${string}`,
-  base:        '0x0000000000000000000000000000000000000000' as `0x${string}`, // deploy pending
+  baseSepolia: '0x1a4f942b437e438176296792a1852B05eb1E7Ad1' as `0x${string}`, // v2 gasless oracle
+  base:        '0xb9FB965Caa7197932b52631e0121Ea54586e2B88' as `0x${string}`, // v2 gasless oracle — Base mainnet
 } as const
 
 export const DEFAULT_RPC = {
@@ -47,7 +47,7 @@ export const AI_ATTRIBUTION_ABI = [
     inputs: [{ name: 'mwpHash', type: 'bytes32' }],
     outputs: [],
   },
-  // Oracle: record verified action
+  // Agent submits oracle-signed action (gasless oracle pattern — agent pays gas)
   {
     name: 'recordVerifiedAction',
     type: 'function',
@@ -57,8 +57,19 @@ export const AI_ATTRIBUTION_ABI = [
       { name: 'volumeContributed', type: 'uint256' },
       { name: 'mwpContextHash',    type: 'bytes32' },
       { name: 'campaignId',        type: 'uint256' },
+      { name: 'nonce',             type: 'uint256' },
+      { name: 'deadline',          type: 'uint256' },
+      { name: 'signature',         type: 'bytes'   },
     ],
     outputs: [],
+  },
+  // Read: per-agent nonce (for signature replay protection)
+  {
+    name: 'nonces',
+    type: 'function',
+    stateMutability: 'view',
+    inputs:  [{ name: 'agent', type: 'address' }],
+    outputs: [{ name: '',      type: 'uint256' }],
   },
   // Create volume campaign
   {

@@ -6,11 +6,11 @@ schema:
 dataSources:
   - kind: ethereum
     name: AIAttribution
-    network: base-sepolia
+    network: base
     source:
-      address: "0xDB9DB7008cfFb09bD1D943C237f57327383DFc03"
+      address: "0xb9FB965Caa7197932b52631e0121Ea54586e2B88"
       abi: AIAttribution
-      startBlock: 39311163
+      startBlock: 43834700
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7

@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "name": "Mintware AI Attribution Oracle",
+  "description": "Gasless on-chain reputation scoring for AI agents. The oracle watcher scans for WETH activity from registered agents, signs EIP-712 attestations, and stores them for agents to claim — agent pays gas, oracle pays nothing.",
+  "url": "https://mintware.finance",
+  "docs": "https://docs.mintware.finance/ai-attribution/overview",
+
+  "network": {
+    "chain_id": 84532,
+    "chain_name": "Base Sepolia",
+    "contract_address": "0x1a4f942b437e438176296792a1852B05eb1E7Ad1",
+    "contract_version": "2.0.0",
+    "rpc_url": "https://sepolia.base.org"
+  },
+
+  "oracle": {
+    "model": "gasless-eip712",
+    "description": "Oracle pre-signs EIP-712 structured actions. Agents submit signatures to the contract and pay gas. Oracle pays nothing.",
+    "watcher_interval_seconds": 60,
+    "signature_ttl_hours": 72,
+    "pending_endpoint": "/api/agents/{address}/pending"
+  },
+
+  "registration": {
+    "permissionless": true,
+    "erc8004_required": false,
+    "steps": [
+      "Call registerAgent() on the contract — one-time, permissionless",
+      "POST /api/agents/register to sync your profile with Mintware",
+      "Oracle watcher begins monitoring your address on the next cron tick (~60s)"
+    ],
+    "sdk": {
+      "package": "@mintware/ai-attribution-sdk",
+      "one_liner": "await registerWithMintwareOracle({ privateKey: '0x...' })"
+    }
+  },
+
+  "score": {
+    "dimensions": ["behavior", "contribution", "interpretability", "risk"],
+    "interpretability_badge": {
+      "name": "Transparent Agent",
+      "how_to_earn": "Submit MWP folder snapshot hashes via submitMwpHash()"
+    }
+  },
+
+  "endpoints": {
+    "base_url": "https://mintware.finance",
+    "register":       { "method": "POST", "path": "/api/agents/register" },
+    "score":          { "method": "GET",  "path": "/api/agents/{address}" },
+    "leaderboard":    { "method": "GET",  "path": "/api/agents" },
+    "pending":        { "method": "GET",  "path": "/api/agents/{address}/pending" },
+    "record_action":  { "method": "POST", "path": "/api/agents/campaigns/record" }
+  }
+}
