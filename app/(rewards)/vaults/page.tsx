@@ -36,6 +36,8 @@ const MOCK_VAULTS: SocialVault[] = [
 ]
 
 // ─── VaultsContent ──────────────────────────────────────────────────────────
+const VAULTS_LOCKED = process.env.NEXT_PUBLIC_PHASE2_ENABLED !== 'true'
+
 function VaultsContent() {
   const { address } = useAccount()
 
@@ -364,10 +366,37 @@ function VaultsContent() {
   )
 }
 
+// ─── Coming-soon overlay (shown when NEXT_PUBLIC_PHASE2_ENABLED !== 'true') ──
+function VaultsComingSoon() {
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', background: 'rgba(245,245,247,0.72)', pointerEvents: 'all' }}>
+      <style>{`
+        @keyframes vaults-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50%       { opacity: 0.7; transform: scale(0.97); }
+        }
+      `}</style>
+      <div style={{ textAlign: 'center', maxWidth: 380, padding: '0 24px', animation: 'vaults-pulse 3s ease-in-out infinite' }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>⬡</div>
+        <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)', marginBottom: 8 }}>
+          Vaults — Coming Soon
+        </div>
+        <div style={{ fontSize: 14, color: 'var(--color-mw-ink-3)', lineHeight: 1.6, fontFamily: 'var(--font-jakarta)', marginBottom: 24 }}>
+          Social LP vaults with Attribution-weighted rewards. Earn more based on your on-chain reputation.
+        </div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--color-mw-brand-dim)', color: 'var(--color-mw-brand)', borderRadius: 'var(--radius-xl)', padding: '6px 16px', fontSize: 12, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'var(--font-jakarta)' }}>
+          Phase 2
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Page ───────────────────────────────────────────────────────────────────
 export default function VaultsPage() {
   return (
     <MwAuthGuard>
+      {VAULTS_LOCKED && <VaultsComingSoon />}
       <VaultsContent />
     </MwAuthGuard>
   )

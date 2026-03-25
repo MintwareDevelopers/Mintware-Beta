@@ -40,7 +40,6 @@ export function MwNav() {
                 <div className="flex items-center gap-0.5">
                   {[
                     { href: '/dashboard',   label: 'Earn' },
-                    { href: '/vaults',      label: 'Vaults' },
                     { href: '/swap',        label: 'Swap' },
                     { href: '/leaderboard', label: 'Leaderboard' },
                     ...(process.env.NEXT_PUBLIC_AI_ATTRIBUTION_ENABLED === 'true'
@@ -64,6 +63,27 @@ export function MwNav() {
                       {label}
                     </Link>
                   ))}
+
+                  {/* Vaults — coming soon teaser */}
+                  <span
+                    className="flex items-center gap-[5px] px-[14px] py-[7px] rounded-xl text-[13px] whitespace-nowrap font-sans font-normal text-mw-ink-5 cursor-default select-none"
+                    title="Vaults launching soon"
+                  >
+                    Vaults
+                    <span style={{
+                      fontSize: '9px',
+                      fontWeight: 600,
+                      letterSpacing: '0.5px',
+                      textTransform: 'uppercase',
+                      background: 'var(--color-mw-brand-dim)',
+                      color: 'var(--color-mw-brand)',
+                      borderRadius: '4px',
+                      padding: '1px 5px',
+                      lineHeight: '14px',
+                    }}>
+                      Soon
+                    </span>
+                  </span>
                 </div>
 
                 {/* ⌘K hint */}
