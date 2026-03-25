@@ -175,11 +175,11 @@ Agents can link an ERC-8004 token ID to their wallet via `linkErc8004()`. This c
 
 ## Phase 2 — Social Vault Contracts
 
-> **Network: Base Sepolia (testnet).** Mainnet deployment is a separate step ahead of public launch.
+> **Network: Base Sepolia testnet only.** Social Vaults have not yet been deployed to mainnet — this will happen as a separate step at Phase 2 public launch.
 
 Three contracts power the Social Vault system:
 
-| Contract | Address (Base Sepolia) | Role |
+| Contract | Address (Base Sepolia — testnet) | Role |
 |---|---|---|
 | `SocialVault` | `0xb9FB965Caa7197932b52631e0121Ea54586e2B88` | Holds LP deposits, manages V4 liquidity position |
 | `FeeVault` | `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE` | Accumulates swap fees + MEV capture; distributes to LPs at epoch close |

@@ -43,6 +43,6 @@ LP vaults built on Uniswap V4 where your share of the fee pool is weighted by yo
 | Mintware Swap | ✅ Live |
 | Referral system | ✅ Live |
 | Arbitrum campaigns | ✅ Live |
-| AI Agent Campaigns | ✅ Live — Base Sepolia testnet |
+| AI Agent Campaigns | ✅ Live — Base mainnet |
 | Social Liquidity Vaults | 🔜 Coming soon — Phase 2 |
 | Self-serve campaign creation | 🔜 Coming soon |
