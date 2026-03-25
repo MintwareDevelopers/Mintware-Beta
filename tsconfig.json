@@ -40,6 +40,11 @@
     "hardhat-artifacts",
     "hardhat-cache",
     "scripts",
-    "contracts"
+    "contracts",
+    "contracts-v4",
+    "contracts-ai",
+    "sdk",
+    "subgraph",
+    "oracle-watcher"
   ]
 }
