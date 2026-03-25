@@ -1,0 +1,20 @@
+{
+  "name": "@mintware/eliza-plugin",
+  "version": "0.1.0",
+  "description": "Eliza plugin — Mintware AI Attribution for autonomous agents",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": { "build": "tsc" },
+  "keywords": ["eliza", "elizaos", "mintware", "ai-attribution", "defi", "reputation", "agent", "base"],
+  "license": "MIT",
+  "peerDependencies": {
+    "@elizaos/core": ">=0.1.0"
+  },
+  "dependencies": {
+    "@mintware/ai-attribution-sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@elizaos/core": "^0.1.9"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@mintware/mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server — Mintware AI Attribution tools for Claude and Cursor",
+  "main": "dist/index.js",
+  "bin": { "mintware-mcp": "dist/index.js" },
+  "scripts": { "build": "tsc", "start": "node dist/index.js" },
+  "keywords": ["mcp", "model-context-protocol", "mintware", "ai-attribution", "claude", "cursor", "base", "defi", "reputation"],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@mintware/ai-attribution-sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
