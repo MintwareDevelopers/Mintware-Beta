@@ -61,7 +61,8 @@ function ProfileContent() {
   const [activeTab, setActiveTab] = useState<Tab>('portfolio')
   const [data, setData] = useState<ScoreResponse | null>(null)
   const [loading, setLoading] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied]           = useState(false)
+  const [inviteCopied, setInviteCopied] = useState(false)
   const [easAttestation, setEasAttestation] = useState<{ uid: string; eas_explorer_url: string; attested_at?: string } | null>(null)
   const [easLoading, setEasLoading]         = useState(false)
   const [lpDeposits, setLpDeposits]         = useState<Array<{ id: string; vault_id: string; usdc_amount: number; lock_tier: string; deposited_at: string; status: string; locked_until: string | null; compounded_amount: number; vault?: { id: string; name: string; project_token: string; status: string; tvl_usdc: number } }>>([])
@@ -120,6 +121,24 @@ function ProfileContent() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
     toast.success('Address copied')
+  }
+
+  const inviteOrigin  = typeof window !== 'undefined' ? window.location.origin : 'https://mintware.finance'
+  const inviteLink    = refCode ? `${inviteOrigin}/ref/${refCode}` : null
+
+  function copyInviteLink() {
+    if (!inviteLink) return
+    navigator.clipboard.writeText(inviteLink).catch(() => {})
+    setInviteCopied(true)
+    setTimeout(() => setInviteCopied(false), 2000)
+  }
+
+  function shareInviteOnX() {
+    if (!inviteLink) return
+    const text = encodeURIComponent(
+      `I just got my on-chain reputation score on @MintwareDev — check yours and join my network: ${inviteLink}`
+    )
+    window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'noopener')
   }
 
   const score = data?.score ?? 0
@@ -496,6 +515,87 @@ function ProfileContent() {
                         View on EAS ↗
                       </a>
                     )}
+                  </div>
+
+                  {/* Invite Friends card */}
+                  <div className="mw-accent-card mt-4 rounded-xl overflow-hidden">
+                    {/* Dark banner */}
+                    <div
+                      className="relative px-5 py-4 overflow-hidden"
+                      style={{ background: 'linear-gradient(135deg, var(--color-mw-ink) 0%, #2A1A46 100%)' }}
+                    >
+                      <div
+                        className="absolute top-[-30px] right-[-30px] w-[140px] h-[140px] rounded-full pointer-events-none"
+                        style={{ background: 'radial-gradient(circle, rgba(194,83,122,0.22) 0%, transparent 70%)' }}
+                      />
+                      <div className="text-[10px] font-bold tracking-[1.4px] uppercase text-mw-pink mb-[5px] font-sans">Invite &amp; Earn</div>
+                      <div className="text-[16px] font-bold text-white leading-[1.3] mb-[4px] font-sans tracking-[-0.3px]">
+                        Invite friends, boost your score.
+                      </div>
+                      <div className="text-[12px] leading-[1.5] font-sans" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                        Active referrals raise your Sharing score and multiply your reward allocation.
+                      </div>
+                    </div>
+                    {/* Actions */}
+                    <div className="px-5 py-4 flex flex-col gap-3">
+                      <div>
+                        <div className="text-[10px] font-semibold text-mw-ink-3 uppercase tracking-[0.8px] mb-[7px] font-sans">Your referral link</div>
+                        {inviteLink ? (
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 font-mono text-[12px] text-mw-ink-2 bg-mw-surface border border-mw-border rounded-md px-3 py-[9px] overflow-hidden text-ellipsis whitespace-nowrap">
+                              {inviteLink}
+                            </div>
+                            <button
+                              onClick={copyInviteLink}
+                              className="shrink-0 h-[38px] px-3 rounded-md border text-[12px] font-semibold font-sans transition-all duration-150 flex items-center gap-[5px] bg-white cursor-pointer"
+                              style={{
+                                borderColor: inviteCopied ? 'var(--color-mw-teal)' : 'var(--color-mw-border-strong)',
+                                color: inviteCopied ? 'var(--color-mw-teal)' : 'var(--color-mw-ink)',
+                              }}
+                            >
+                              {inviteCopied ? <Check size={13} /> : <Copy size={13} />}
+                              {inviteCopied ? 'Copied!' : 'Copy'}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="h-[38px] w-full rounded-md bg-[rgba(26,26,46,0.06)] animate-pulse" />
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={shareInviteOnX}
+                          disabled={!inviteLink}
+                          className="flex-1 h-[38px] rounded-md bg-[#1DA1F2] text-white text-[12px] font-semibold font-sans flex items-center justify-center gap-[6px] transition-opacity duration-150 disabled:opacity-40 cursor-pointer border-none"
+                        >
+                          <svg width="13" height="12" viewBox="0 0 15 13" fill="none">
+                            <path d="M14.25 1.5C13.72 1.86 13.14 2.13 12.5 2.3C12.14 1.88 11.66 1.58 11.13 1.45C10.59 1.31 10.03 1.35 9.52 1.56C9.01 1.77 8.58 2.13 8.3 2.6C8.01 3.07 7.87 3.62 7.88 4.17V4.79C6.82 4.82 5.77 4.57 4.83 4.08C3.9 3.59 3.11 2.87 2.54 2C2.54 2 0.29 7 5.29 9.25C4.12 10.03 2.73 10.42 1.29 10.38C6.29 13.25 12.54 10.38 12.54 4.12C12.54 3.97 12.53 3.83 12.51 3.68C13.1 3.09 13.53 2.34 14.25 1.5Z" fill="white"/>
+                          </svg>
+                          Share on X
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('invite')}
+                          className="h-[38px] px-4 rounded-md border border-mw-border text-[12px] font-semibold text-mw-ink-2 font-sans flex items-center gap-[5px] transition-all duration-150 hover:border-mw-border-strong hover:text-mw-ink bg-white cursor-pointer"
+                        >
+                          <Share2 size={12} />
+                          Full stats
+                        </button>
+                      </div>
+                      {/* Sharing score progress */}
+                      {refStats && (
+                        <div className="flex items-center gap-3 pt-[10px] border-t border-mw-border">
+                          <div className="text-[11px] text-mw-ink-3 font-sans shrink-0">Sharing score</div>
+                          <div className="flex-1 h-[3px] bg-[rgba(194,83,122,0.12)] rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-mw-pink rounded-full transition-[width] duration-700"
+                              style={{ width: `${Math.round((refStats.sharing_score / 125) * 100)}%` }}
+                            />
+                          </div>
+                          <div className="text-[12px] font-bold font-mono text-mw-pink shrink-0">
+                            {refStats.sharing_score}<span className="text-[10px] font-normal text-mw-ink-4">/125</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </>
               )}
