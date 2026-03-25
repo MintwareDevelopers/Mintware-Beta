@@ -3,21 +3,34 @@ pragma solidity ^0.8.26;
 
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/IERC8004Registry.sol";
 
-/// @title  AIAttribution
+/// @title  AIAttribution v2
 /// @notice Mintware trust + attribution layer for AI agents.
 ///         ERC-8004 native — permissionless at launch, registry-enforced when ecosystem matures.
 ///         Primary key: agent wallet address. ERC-8004 tokenId is an optional linked field.
 ///
-/// Three-groupings placement: Web3 (on-chain scoring) + Rewards (campaign participation)
+///         v2 change: recordVerifiedAction() is now gasless for the oracle.
+///         The oracle signs an EIP-712 message off-chain; the AGENT calls the contract
+///         and pays gas. The contract verifies the oracle signature. Oracle pays nothing.
 ///
 /// @dev    AgentScore packs into 3 storage slots:
 ///           slot 0: behavior(128) + contribution(128)
 ///           slot 1: risk(64) + interpretability(64) + mwpSubmissions(32) + lastUpdated(32) + isTransparent(8) [+padding]
 ///           slot 2: lastMwpHash(256)
 
-contract AIAttribution is Ownable2Step, ReentrancyGuard {
+contract AIAttribution is Ownable2Step, ReentrancyGuard, EIP712 {
+
+    // ── EIP-712 ───────────────────────────────────────────────────────────────
+
+    bytes32 public constant ACTION_TYPEHASH = keccak256(
+        "RecordAction(address agent,uint256 volumeContributed,bytes32 mwpContextHash,uint256 campaignId,uint256 nonce,uint256 deadline)"
+    );
+
+    /// @notice Per-agent nonce — prevents oracle signature replay.
+    mapping(address => uint256) public nonces;
 
     // ── ERC-8004 integration ──────────────────────────────────────────────────
 
@@ -44,8 +57,22 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
     mapping(address => bool)       public registered;
 
     // ── Oracle ────────────────────────────────────────────────────────────────
+    //
+    // H1: Oracle rotation is timelocked (48 hours) — identical pattern to
+    // MintwareDistributor. This gives the team time to detect and cancel a
+    // rogue rotation (e.g. owner key compromise) before it takes effect.
+    // The current oracle remains fully active during the pending window.
 
     address public oracle;
+
+    /// @notice Proposed new oracle; zero when no rotation is pending.
+    address public pendingOracle;
+
+    /// @notice Earliest timestamp at which confirmOracle() may be called.
+    uint256 public oracleRotationAvailableAt;
+
+    /// @notice Delay between proposeOracle() and confirmOracle().
+    uint256 public constant ORACLE_ROTATION_DELAY = 48 hours;
 
     modifier onlyOracle() {
         require(msg.sender == oracle, "AIAttribution: not oracle");
@@ -81,11 +108,17 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
     event MwpHashSubmitted (address indexed agent, bytes32 indexed mwpHash, uint256 submissionCount);
     event RiskPenaltyApplied(address indexed agent, uint64 penalty, string reason);
     event CampaignCreated  (uint256 indexed campaignId, address indexed protocol, string name);
-    event OracleUpdated    (address indexed previous, address indexed next);
+    event OracleUpdated          (address indexed previous, address indexed next);
+    event OracleRotationProposed (address indexed proposed, uint256 availableAt);
+    event OracleRotationConfirmed(address indexed previous, address indexed next);
+    event OracleRotationCancelled(address indexed cancelled);
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
-    constructor(address _oracle) Ownable(msg.sender) {
+    constructor(address _oracle)
+        Ownable(msg.sender)
+        EIP712("AIAttribution", "2")
+    {
         require(_oracle != address(0), "AIAttribution: zero oracle");
         oracle = _oracle;
         emit OracleUpdated(address(0), _oracle);
@@ -100,7 +133,6 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
     }
 
     /// @notice Agent links their wallet address to their ERC-8004 tokenId.
-    ///         Registry ownership check ensures only the token owner can link.
     function linkErc8004(uint256 tokenId) external {
         require(address(erc8004Registry) != address(0), "AIAttribution: no registry");
         require(erc8004Registry.ownerOf(tokenId) == msg.sender, "AIAttribution: not token owner");
@@ -125,17 +157,47 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
         emit AgentRegistered(msg.sender, agentTokenId[msg.sender]);
     }
 
-    // ── Oracle-gated action recording ─────────────────────────────────────────
+    // ── Gasless oracle-verified action recording ──────────────────────────────
 
-    /// @notice Oracle records a verified on-chain action for an agent.
-    ///         Only oracle can call — prevents self-awarding.
+    /// @notice Agent submits a verified action using an oracle-signed EIP-712 message.
+    ///         The oracle signs off-chain (free). The agent calls this function and pays gas.
+    ///         Prevents self-awarding: oracle signature is required — agent cannot forge it.
+    ///
+    /// @param agent             The agent address the action is attributed to.
+    /// @param volumeContributed Raw volume in wei (÷ 1e18 stored as behavior points).
+    /// @param mwpContextHash    Optional MWP folder snapshot hash. bytes32(0) = no submission.
+    /// @param campaignId        Campaign ID, or 0 if not part of a campaign.
+    /// @param nonce             Must match nonces[agent] — prevents replay.
+    /// @param deadline          Unix timestamp — signature expires after this.
+    /// @param signature         65-byte EIP-712 oracle signature (r, s, v).
     function recordVerifiedAction(
         address agent,
         uint256 volumeContributed,
         bytes32 mwpContextHash,
-        uint256 campaignId
-    ) external onlyOracle nonReentrant {
-        require(registered[agent], "AIAttribution: agent not registered");
+        uint256 campaignId,
+        uint256 nonce,
+        uint256 deadline,
+        bytes calldata signature
+    ) external nonReentrant {
+        require(block.timestamp <= deadline, "AIAttribution: signature expired");
+        require(registered[agent],           "AIAttribution: agent not registered");
+        require(nonces[agent] == nonce,      "AIAttribution: invalid nonce");
+
+        // Verify oracle signature
+        bytes32 structHash = keccak256(abi.encode(
+            ACTION_TYPEHASH,
+            agent,
+            volumeContributed,
+            mwpContextHash,
+            campaignId,
+            nonce,
+            deadline
+        ));
+        address signer = ECDSA.recover(_hashTypedDataV4(structHash), signature);
+        require(signer == oracle, "AIAttribution: invalid oracle signature");
+
+        // Consume nonce
+        nonces[agent]++;
 
         AgentScore storage s = agentScores[agent];
         s.behavior    += uint128(volumeContributed / 1e18);
@@ -161,7 +223,8 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
         emit ActionRecorded(agent, campaignId, volumeContributed, mwpContextHash, total);
     }
 
-    /// @notice Oracle applies a risk penalty to an agent's score.
+    /// @notice Oracle applies a risk penalty. Oracle pays gas here — penalties are
+    ///         rare admin actions, not agent-initiated.
     function applyRiskPenalty(
         address agent,
         uint64  penalty,
@@ -172,10 +235,9 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
         emit RiskPenaltyApplied(agent, penalty, reason);
     }
 
-    // ── Permissionless MWP hash submission ───────────────────────────────────
+    // ── Permissionless MWP hash submission ────────────────────────────────────
 
     /// @notice Any registered agent can submit a MWP folder snapshot hash.
-    ///         Earns the Transparent Agent badge. Bonus capped at 500 total.
     function submitMwpHash(bytes32 mwpHash) external nonReentrant {
         require(registered[msg.sender], "AIAttribution: not registered");
         require(mwpHash != bytes32(0),  "AIAttribution: empty hash");
@@ -193,7 +255,7 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
         emit MwpHashSubmitted(msg.sender, mwpHash, s.mwpSubmissions);
     }
 
-    // ── Volume campaigns ──────────────────────────────────────────────────────
+    // ── Volume campaigns ───────────────────────────────────────────────────────
 
     /// @notice Any address can create an Agent Volume Campaign.
     function createVolumeCampaign(
@@ -217,9 +279,8 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
         emit CampaignCreated(campaignId, msg.sender, name);
     }
 
-    // ── View functions ────────────────────────────────────────────────────────
+    // ── View functions ─────────────────────────────────────────────────────────
 
-    /// @notice Full score breakdown for the leaderboard and profile UI.
     function getScore(address agent) external view returns (
         uint256 total,
         uint128 behavior,
@@ -249,7 +310,6 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
         return campaignVolume[campaignId][agent];
     }
 
-    /// @notice Fetch ERC-8004 metadata for a linked agent (requires registry set).
     function getErc8004Metadata(address agent) external view returns (
         string memory name,
         string memory model,
@@ -266,15 +326,51 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard {
         return agentScores[agent].isTransparent;
     }
 
-    // ── Admin ─────────────────────────────────────────────────────────────────
+    // ── Admin — timelocked oracle rotation ────────────────────────────────────
+    //
+    // H1: Three-step rotation mirrors MintwareDistributor.
+    // proposeOracle → (wait 48h) → confirmOracle
+    //                            OR cancelOracleRotation (if compromise detected)
+    //
+    // Current oracle remains active during the pending window — no downtime.
 
-    function setOracle(address _oracle) external onlyOwner {
-        require(_oracle != address(0), "AIAttribution: zero oracle");
-        emit OracleUpdated(oracle, _oracle);
-        oracle = _oracle;
+    /// @notice Propose a new oracle. Takes effect after ORACLE_ROTATION_DELAY.
+    function proposeOracle(address proposed) external onlyOwner {
+        require(proposed != address(0), "AIAttribution: zero oracle");
+        require(proposed != oracle,     "AIAttribution: already active oracle");
+
+        pendingOracle               = proposed;
+        oracleRotationAvailableAt   = block.timestamp + ORACLE_ROTATION_DELAY;
+
+        emit OracleRotationProposed(proposed, oracleRotationAvailableAt);
     }
 
-    // ── Internal ──────────────────────────────────────────────────────────────
+    /// @notice Confirm a pending oracle rotation after the delay has elapsed.
+    function confirmOracle() external onlyOwner {
+        require(pendingOracle != address(0),                        "AIAttribution: no rotation pending");
+        require(block.timestamp >= oracleRotationAvailableAt,       "AIAttribution: rotation delay not elapsed");
+
+        address previous          = oracle;
+        oracle                    = pendingOracle;
+        pendingOracle             = address(0);
+        oracleRotationAvailableAt = 0;
+
+        emit OracleRotationConfirmed(previous, oracle);
+        emit OracleUpdated(previous, oracle);
+    }
+
+    /// @notice Cancel a pending oracle rotation before it takes effect.
+    function cancelOracleRotation() external onlyOwner {
+        require(pendingOracle != address(0), "AIAttribution: no rotation pending");
+
+        address cancelled         = pendingOracle;
+        pendingOracle             = address(0);
+        oracleRotationAvailableAt = 0;
+
+        emit OracleRotationCancelled(cancelled);
+    }
+
+    // ── Internal ───────────────────────────────────────────────────────────────
 
     function _calculateTotal(AgentScore storage s) internal view returns (uint256) {
         uint256 positive = uint256(s.behavior) + uint256(s.contribution) + uint256(s.interpretability);

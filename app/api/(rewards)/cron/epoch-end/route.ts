@@ -245,16 +245,20 @@ async function processExpiredEpoch(
 // ---------------------------------------------------------------------------
 
 export async function GET(req: NextRequest) {
-  // Auth
+  // Auth — L3: require CRON_SECRET in all non-local environments.
+  // Previously only enforced in NODE_ENV='production', which left staging/preview
+  // deployments open to unauthenticated epoch settlement.
   const cronSecret = process.env.CRON_SECRET
   if (cronSecret) {
     const auth = req.headers.get('authorization')
     if (auth !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
-  } else if (process.env.NODE_ENV === 'production') {
+  } else if (process.env.NODE_ENV !== 'development') {
+    // Refuse in production AND staging (any non-local environment).
+    // Set CRON_SECRET in Vercel for all environments except local dev.
     return NextResponse.json(
-      { error: 'CRON_SECRET not set — refusing to run in production without auth' },
+      { error: 'CRON_SECRET not set — refusing to run outside local development' },
       { status: 500 }
     )
   }
@@ -280,6 +284,34 @@ export async function GET(req: NextRequest) {
       console.warn(
         `[epoch-end] ⚠ STUCK EPOCH: campaign=${e.campaign_id} epoch=${e.epoch_number} ` +
         `has been in 'settling' since ${e.updated_at} — manual investigation required`
+      )
+    }
+  }
+
+  // ── M4: Detect distributions stuck in 'pending' (oracle signing failed) ───
+  // A distribution stays 'pending' when publishDistribution() threw after
+  // the Merkle tree was written. The epoch is marked 'complete' so the main
+  // loop never retries it. This query catches those orphaned distributions
+  // and logs a structured warning so operators know to retry manually via
+  // POST /api/admin/retry-unsigned (or by re-running publishDistribution).
+  //
+  // A distribution older than 30 minutes that is still 'pending' indicates
+  // the oracle signing step failed — it should have been 'published' within seconds.
+  const pendingSignThreshold = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+  const { data: unsignedDists } = await supabase
+    .from('distributions')
+    .select('id, campaign_id, epoch_number, created_at')
+    .eq('status', 'pending')
+    .lt('created_at', pendingSignThreshold)
+
+  if (unsignedDists && unsignedDists.length > 0) {
+    for (const d of unsignedDists) {
+      console.error(
+        `[epoch-end] ⚠ UNSIGNED DISTRIBUTION: id=${d.id} campaign=${d.campaign_id} ` +
+        `epoch=${d.epoch_number} created_at=${d.created_at} — oracle signing failed. ` +
+        `Wallets CANNOT CLAIM until this is resolved. ` +
+        `Retry: call publishDistribution({ distribution_db_id: '${d.id}', ... }) ` +
+        `with the campaign contract_address and chain from Supabase.`
       )
     }
   }
@@ -328,10 +360,11 @@ export async function GET(req: NextRequest) {
   console.log(`[epoch-end] complete: ${succeeded.length} ok, ${failed.length} failed, ${durationMs}ms`)
 
   return NextResponse.json({
-    ok: failed.length === 0,
+    ok: failed.length === 0 && (unsignedDists?.length ?? 0) === 0,
     epochs_found: epochs.length,
     epochs_succeeded: succeeded.length,
     epochs_failed: failed.length,
+    unsigned_distributions: unsignedDists?.length ?? 0,  // M4: non-zero = oracle signing backlog
     results,
     duration_ms: durationMs,
   })

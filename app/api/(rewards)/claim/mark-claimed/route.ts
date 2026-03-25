@@ -5,9 +5,21 @@
 // Verifies the tx succeeded and was from the correct wallet, then sets
 // daily_payouts.claimed_at so the UI correctly reflects claimed status.
 //
+// H2 FIX: This endpoint is now auth-gated with CLAIM_MARK_SECRET (Bearer token).
+// Without auth, any caller could POST a fake tx_hash and mark another wallet's
+// reward as claimed in the off-chain DB — poisoning their UI experience.
+//
+// ClaimCard must pass the token in the Authorization header:
+//   Authorization: Bearer <NEXT_PUBLIC_CLAIM_MARK_SECRET>
+//
+// Set CLAIM_MARK_SECRET and NEXT_PUBLIC_CLAIM_MARK_SECRET to the same value in
+// Vercel. The public variant is safe to expose — it only authorises marking
+// claims, not reading private data. Keep it separate from CRON_SECRET.
+//
 // Body: { wallet, distribution_id, tx_hash }
 // Response 200: { ok: true }
 // Response 400: missing fields
+// Response 401: missing or invalid auth token
 // Response 404: distribution or payout row not found
 // Response 409: already marked claimed
 // =============================================================================
@@ -45,6 +57,21 @@ function getRpcUrl(chain: string | null): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  // H2: Auth gate — prevents anonymous callers from poisoning off-chain claim records.
+  // CLAIM_MARK_SECRET must be set in Vercel env vars.
+  // ClaimCard passes it as: Authorization: Bearer <NEXT_PUBLIC_CLAIM_MARK_SECRET>
+  const claimMarkSecret = process.env.CLAIM_MARK_SECRET
+  if (claimMarkSecret) {
+    const auth = req.headers.get('authorization')
+    if (auth !== `Bearer ${claimMarkSecret}`) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+  } else if (process.env.NODE_ENV === 'production') {
+    // In production, refuse to run without the secret — prevents silent misconfiguration
+    console.error('[mark-claimed] CLAIM_MARK_SECRET not set in production — refusing request')
+    return NextResponse.json({ error: 'endpoint not configured' }, { status: 503 })
+  }
+
   let body: unknown
   try { body = await req.json() } catch { return NextResponse.json({ error: 'invalid json' }, { status: 400 }) }
 

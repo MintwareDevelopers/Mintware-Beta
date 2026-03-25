@@ -63,6 +63,9 @@ const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
   '/api/agents/campaigns/record':       { limit: 10, windowMs: 60_000 },
   '/api/agents/register':               { limit:  5, windowMs: 60_000 },
   '/api/agents/mwp':                    { limit: 10, windowMs: 60_000 },
+  // H2/L3: previously unprotected endpoints
+  '/api/claim/mark-claimed':            { limit: 20, windowMs: 60_000 },
+  '/api/referral/apply':                { limit: 10, windowMs: 60_000 },
 }
 
 function getClientIP(req: NextRequest): string {
@@ -104,5 +107,7 @@ export const config = {
     '/api/agents/campaigns/record',
     '/api/agents/register',
     '/api/agents/mwp',
+    '/api/claim/mark-claimed',
+    '/api/referral/apply',
   ],
 }

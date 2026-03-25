@@ -460,9 +460,14 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
      *         are returned. If balance is zero (fully claimed), the call succeeds
      *         silently — no tokens transferred, event still emitted for indexing.
      *
+     *         M5: Also gated by whenNotPaused. A pause event (oracle compromise,
+     *         discovered vulnerability) must freeze withdrawals as well as claims,
+     *         giving the team time to investigate before any funds leave the contract.
+     *         Emergency recovery path: owner calls pause() → emergencyWithdraw().
+     *
      * @param campaignId  Campaign to withdraw from.
      */
-    function withdrawCampaign(string calldata campaignId) external nonReentrant {
+    function withdrawCampaign(string calldata campaignId) external whenNotPaused nonReentrant {
         CampaignInfo storage info = campaigns[campaignId];
 
         require(info.creator == msg.sender,                              "MintwareDistributor: not campaign creator");
