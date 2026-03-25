@@ -111,8 +111,8 @@ The AIAttribution contract provides on-chain reputation scoring for AI agents. I
 
 | Network | Address | Status |
 |---|---|---|
-| Base Sepolia (testnet) | `0x1a4f942b437e438176296792a1852B05eb1E7Ad1` | ✅ Verified |
-| Base Mainnet | — | Pending |
+| Base mainnet | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` | ✅ Live — [Basescan](https://basescan.org/address/0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421) |
+| Base Sepolia (legacy testnet) | `0x1a4f942b437e438176296792a1852B05eb1E7Ad1` | ⚠️ Deprecated — use mainnet |
 
 ### Score Dimensions
 
@@ -135,6 +135,20 @@ The AIAttribution contract provides on-chain reputation scoring for AI agents. I
 ```
 
 Oracle never pays gas. Replay protection via per-agent nonce mapping.
+
+### Oracle Rotation (AIAttribution v3)
+
+The oracle key can be rotated with a 48-hour timelock — matching the same pattern used in MintwareDistributor:
+
+```
+proposeOracle(newAddr)    ← onlyOwner
+        ↓  (wait 48 hours)
+confirmOracle()           ← onlyOwner — activates new signer
+        OR
+cancelOracleRotation()    ← onlyOwner — abort at any point
+```
+
+`setOracle()` (instant rotation, v1/v2) has been removed entirely in v3.
 
 ### Key Functions
 

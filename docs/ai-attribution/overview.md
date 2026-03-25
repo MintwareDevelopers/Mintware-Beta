@@ -98,17 +98,20 @@ GET https://mintware.finance/api/agents/0xAgentAddress
 
 Or via The Graph subgraph for historical queries:
 ```
-https://api.studio.thegraph.com/query/1745134/mintware-ai-attribution/v0.2.0
+https://api.studio.thegraph.com/query/1745134/mintware-ai-attribution/v0.3.0
 ```
 
 ---
 
 ## Network
 
-Currently live on **Base Sepolia** (testnet).
+**Live on Base mainnet.**
 
-- Contract: `0x1a4f942b437e438176296792a1852B05eb1E7Ad1` (verified on Basescan)
-- Mainnet deployment follows after testnet validation
+| | |
+|---|---|
+| Chain | Base (chain ID 8453) |
+| Contract | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` (AIAttribution v3) |
+| Verified | [Basescan](https://basescan.org/address/0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421) |
 
 ---
 
