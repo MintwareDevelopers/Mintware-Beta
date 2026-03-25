@@ -19,16 +19,35 @@ const dmMono = DM_Mono({
   weight: ['400', '500'],
 })
 
+const BASE_URL = 'https://mintware.finance'
+
 export const metadata: Metadata = {
-  title: 'Mintware — The reputation economy of DeFi',
-  description: 'Attribution measures every contribution. Mintware is where those contributions earn rewards.',
+  title:       'Mintware — The reputation economy of DeFi',
+  description: 'Attribution measures every on-chain contribution. Mintware is where those contributions earn rewards.',
+  metadataBase: new URL(BASE_URL),
   icons: {
     icon: [
       { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },
       { url: '/icon-dark-32x32.png',  media: '(prefers-color-scheme: dark)'  },
-      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon.svg',             type:  'image/svg+xml'                  },
     ],
     apple: '/apple-icon.png',
+  },
+  openGraph: {
+    type:        'website',
+    url:         BASE_URL,
+    siteName:    'Mintware',
+    title:       'Mintware — The reputation economy of DeFi',
+    description: 'Attribution measures every on-chain contribution. Mintware is where those contributions earn rewards.',
+    images: [{ url: '/opengraph-image', width: 1200, height: 630 }],
+  },
+  twitter: {
+    card:        'summary_large_image',
+    site:        '@MintwareDev',
+    creator:     '@MintwareDev',
+    title:       'Mintware — The reputation economy of DeFi',
+    description: 'Attribution measures every on-chain contribution. Mintware is where those contributions earn rewards.',
+    images:      ['/opengraph-image'],
   },
 }
 
