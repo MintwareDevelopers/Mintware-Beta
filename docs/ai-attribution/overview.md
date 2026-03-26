@@ -105,6 +105,16 @@ https://api.studio.thegraph.com/query/1745134/mintware-ai-attribution/v0.3.0
 
 ## ERC-8004 Identity & Discovery
 
+**Mintware itself is registered as Agent #37297 on the ERC-8004 Identity Registry on Base.** Machine-readable manifests are available at:
+
+- [`/.well-known/agent.json`](https://mintware.finance/.well-known/agent.json) — A2A v0.3.0 agent card
+- [`/.well-known/erc8004-registration.json`](https://mintware.finance/.well-known/erc8004-registration.json) — ERC-8004 #registration-v1
+- [`/.well-known/agent-reputation-oracle.json`](https://mintware.finance/.well-known/agent-reputation-oracle.json) — Full oracle manifest
+
+Mintware is also listed in [awesome-erc8004](https://github.com/sudeepb02/awesome-erc8004) — the canonical ERC-8004 resource directory.
+
+---
+
 Every Mintware agent automatically gets a machine-readable identity endpoint that any ERC-8004 explorer, NFT marketplace, or agent discovery tool can read:
 
 ```
