@@ -7,18 +7,25 @@ import { MwAuthGuard }  from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
 
 interface AgentScore {
-  address:          string
-  erc8004_token_id: number | null
-  total_score:      number
-  behavior:         number
-  contribution:     number
-  interpretability: number
-  risk:             number
-  is_transparent:   boolean
-  mwp_submissions:  number
-  last_mwp_hash:    string | null
-  rank:             number
-  updated_at:       string
+  address:            string
+  erc8004_token_id:   number | null
+  total_score:        number
+  behavior:           number
+  contribution:       number
+  interpretability:   number
+  risk:               number
+  is_transparent:     boolean
+  mwp_submissions:    number
+  last_mwp_hash:      string | null
+  rank:               number
+  updated_at:         string
+  // ERC-8004 metadata fields
+  agent_name:         string | null
+  agent_description:  string | null
+  x402_support:       boolean
+  operational_status: 'active' | 'paused' | 'offline'
+  services:           { name: string; endpoint: string; version?: string }[]
+  metadata_url:       string | null
   pnl: {
     realized_pnl_eth: string
     realized_pnl_usd: string
@@ -125,6 +132,80 @@ function AgentProfileContent() {
           background: rgba(79,126,247,0.12);
           color: var(--color-mw-brand);
         }
+        .pill-active  { background: rgba(34,197,94,0.1);   color: var(--color-mw-live); }
+        .pill-paused  { background: rgba(194,122,0,0.1);   color: var(--color-mw-amber); }
+        .pill-offline { background: rgba(107,114,128,0.1); color: var(--color-mw-ink-3); }
+        .pill-x402    { background: rgba(58,92,232,0.1);   color: var(--color-mw-brand-deep); }
+        .erc8004-card {
+          background: white;
+          border-radius: var(--radius-lg);
+          border: 1px solid var(--color-mw-border);
+          box-shadow: var(--shadow-md);
+          padding: 20px 28px;
+          margin-bottom: 20px;
+        }
+        .erc8004-title {
+          font-size: 11px;
+          font-weight: 700;
+          color: var(--color-mw-ink-3);
+          letter-spacing: 1px;
+          text-transform: uppercase;
+          margin-bottom: 14px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .erc8004-desc {
+          font-size: 13px;
+          color: var(--color-mw-ink-2);
+          line-height: 1.55;
+          margin-bottom: 14px;
+        }
+        .services-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 12px;
+        }
+        .service-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: var(--color-mw-surface-card);
+          border: 1px solid var(--color-mw-border);
+          border-radius: var(--radius-sm);
+          padding: 9px 14px;
+          gap: 8px;
+        }
+        .service-name {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--color-mw-ink);
+        }
+        .service-endpoint {
+          font-family: var(--font-mono), monospace;
+          font-size: 11px;
+          color: var(--color-mw-ink-3);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          max-width: 200px;
+        }
+        .metadata-link {
+          font-size: 11px;
+          color: var(--color-mw-brand-deep);
+          text-decoration: none;
+          font-weight: 600;
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          padding: 4px 10px;
+          background: rgba(58,92,232,0.06);
+          border: 1px solid rgba(58,92,232,0.15);
+          border-radius: 6px;
+          transition: background 0.15s;
+        }
+        .metadata-link:hover { background: rgba(58,92,232,0.12); }
         .score-hero {
           text-align: center;
           padding: 16px 0;
@@ -310,6 +391,12 @@ function AgentProfileContent() {
                       {agent.erc8004_token_id && (
                         <span className="meta-pill pill-erc8004">ERC-8004 #{agent.erc8004_token_id}</span>
                       )}
+                      <span className={`meta-pill pill-${agent.operational_status ?? 'active'}`}>
+                        {agent.operational_status === 'paused' ? '⏸ Paused' : agent.operational_status === 'offline' ? '○ Offline' : '● Active'}
+                      </span>
+                      {agent.x402_support && (
+                        <span className="meta-pill pill-x402">⚡ x402</span>
+                      )}
                       {isMe && (
                         <span className="meta-pill pill-me">You</span>
                       )}
@@ -346,6 +433,54 @@ function AgentProfileContent() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* ERC-8004 metadata card */}
+              <div className="erc8004-card">
+                <div className="erc8004-title">
+                  ERC-8004 Identity
+                  {agent.metadata_url && (
+                    <a href={agent.metadata_url} target="_blank" rel="noopener noreferrer" className="metadata-link" style={{ marginLeft: 'auto' }}>
+                      View metadata ↗
+                    </a>
+                  )}
+                </div>
+                {agent.agent_description && (
+                  <div className="erc8004-desc">{agent.agent_description}</div>
+                )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                  <div style={{ flex: 1, minWidth: 120, background: 'var(--color-mw-surface-card)', border: '1px solid var(--color-mw-border)', borderRadius: 'var(--radius-sm)', padding: '10px 14px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-mw-ink-4)', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 }}>Status</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: agent.operational_status === 'active' ? 'var(--color-mw-live)' : agent.operational_status === 'paused' ? 'var(--color-mw-amber)' : 'var(--color-mw-ink-3)' }}>
+                      {agent.operational_status === 'active' ? '● Active' : agent.operational_status === 'paused' ? '⏸ Paused' : '○ Offline'}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120, background: 'var(--color-mw-surface-card)', border: '1px solid var(--color-mw-border)', borderRadius: 'var(--radius-sm)', padding: '10px 14px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-mw-ink-4)', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 }}>x402 Payments</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: agent.x402_support ? 'var(--color-mw-brand-deep)' : 'var(--color-mw-ink-3)' }}>
+                      {agent.x402_support ? '⚡ Supported' : '— Not set'}
+                    </div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 120, background: 'var(--color-mw-surface-card)', border: '1px solid var(--color-mw-border)', borderRadius: 'var(--radius-sm)', padding: '10px 14px' }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--color-mw-ink-4)', textTransform: 'uppercase' as const, letterSpacing: '0.8px', marginBottom: 5 }}>Services</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-mw-ink)' }}>
+                      {agent.services?.length > 0 ? `${agent.services.length} endpoint${agent.services.length !== 1 ? 's' : ''}` : '— None set'}
+                    </div>
+                  </div>
+                </div>
+                {agent.services?.length > 0 && (
+                  <div className="services-grid">
+                    {agent.services.map((svc, i) => (
+                      <div key={i} className="service-row">
+                        <div>
+                          <div className="service-name">{svc.name}{svc.version ? ` v${svc.version}` : ''}</div>
+                          <div className="service-endpoint">{svc.endpoint}</div>
+                        </div>
+                        <a href={svc.endpoint} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'var(--color-mw-brand)', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' as const }}>↗</a>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* PnL card */}

@@ -18,9 +18,12 @@ export async function GET(
 
   const supabase = createSupabaseServiceClient()
 
-  const [{ data, error }, { data: pnl }] = await Promise.all([
+  const [{ data, error }, { data: pnl }, { data: profile }] = await Promise.all([
     supabase.from('ai_agent_leaderboard').select('*').eq('address', address).maybeSingle(),
     supabase.from('ai_agent_pnl').select('*').eq('address', address).maybeSingle(),
+    supabase.from('ai_agent_profiles')
+      .select('agent_name, agent_description, x402_support, operational_status, services, metadata_url')
+      .eq('address', address).maybeSingle(),
   ])
 
   if (error) {
@@ -29,7 +32,19 @@ export async function GET(
   }
   if (!data) return NextResponse.json({ error: 'agent not found' }, { status: 404 })
 
-  return NextResponse.json({ ...data, pnl: pnl ?? null }, {
+  const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mintware.finance'
+
+  return NextResponse.json({
+    ...data,
+    pnl:               pnl ?? null,
+    // ERC-8004 metadata fields
+    agent_name:        profile?.agent_name        ?? null,
+    agent_description: profile?.agent_description ?? null,
+    x402_support:      profile?.x402_support      ?? false,
+    operational_status: profile?.operational_status ?? 'active',
+    services:          profile?.services           ?? [],
+    metadata_url:      profile?.metadata_url       ?? `${base}/api/agents/${address}/erc8004-metadata`,
+  }, {
     headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' },
   })
 }
