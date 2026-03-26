@@ -27,11 +27,13 @@ export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
   icons: {
     icon: [
-      { url: '/icon-light-32x32.png', media: '(prefers-color-scheme: light)' },
-      { url: '/icon-dark-32x32.png',  media: '(prefers-color-scheme: dark)'  },
-      { url: '/icon.svg',             type:  'image/svg+xml'                  },
+      { url: '/icon.svg',         type: 'image/svg+xml'  },
+      { url: '/icon-192.png',     sizes: '192x192'       },
+      { url: '/icon-512.png',     sizes: '512x512'       },
+      { url: '/icon-dark-32x32.png', sizes: '32x32'      },
     ],
-    apple: '/apple-icon.png',
+    apple: [{ url: '/apple-icon.png', sizes: '180x180' }],
+    shortcut: '/icon-dark-32x32.png',
   },
   openGraph: {
     type:        'website',
