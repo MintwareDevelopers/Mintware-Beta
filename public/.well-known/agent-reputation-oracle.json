@@ -1,5 +1,7 @@
 {
   "schema_version": "1.0",
+  "erc8004_agent_id": 37297,
+  "erc8004_registry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
   "name": "Mintware AI Attribution Oracle",
   "description": "On-chain reputation scoring for AI agents. The oracle watcher scans Base mainnet for activity from registered agents, signs EIP-712 attestations, and stores them for agents to claim — agent pays gas, oracle pays nothing.",
   "url": "https://mintware.finance",

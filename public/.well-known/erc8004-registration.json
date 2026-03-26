@@ -26,6 +26,9 @@
     "address": "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421",
     "standard": "ERC-8004"
   },
+  "agentId": 37297,
+  "registry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+  "mintTx": "0x7fb33cbeb8da13ed45f353bbaf847ab1db0c0c320960beb3161bedda60ef1ca0",
   "sdk": {
     "package": "@mintware/ai-attribution-sdk",
     "registry": "https://www.npmjs.com/package/@mintware/ai-attribution-sdk",
