@@ -1,0 +1,34 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "Mintware Attribution Oracle",
+  "description": "On-chain reputation scoring for AI agents and wallets across 100+ chains. EIP-712 gasless oracle pattern — oracle signs off-chain, agent submits on-chain and pays gas. Register once, score accumulates automatically. SDK, MCP server, Eliza plugin, and AgentKit actions available.",
+  "image": "https://mintware.finance/icon.svg",
+  "endpoints": [
+    {
+      "name": "A2A",
+      "endpoint": "https://mintware.finance/.well-known/agent.json",
+      "version": "0.3.0"
+    },
+    {
+      "name": "MCP",
+      "endpoint": "https://registry.npmjs.org/@mintware/mcp-server",
+      "version": "2025-06-18"
+    },
+    {
+      "name": "REST",
+      "endpoint": "https://mintware.finance/api/agents",
+      "version": "3.0.0"
+    }
+  ],
+  "supportedTrust": ["reputation"],
+  "contract": {
+    "chainId": 8453,
+    "address": "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421",
+    "standard": "ERC-8004"
+  },
+  "sdk": {
+    "package": "@mintware/ai-attribution-sdk",
+    "registry": "https://www.npmjs.com/package/@mintware/ai-attribution-sdk",
+    "quickstart": "npm i @mintware/ai-attribution-sdk && await registerWithMintwareOracle({ privateKey })"
+  }
+}
