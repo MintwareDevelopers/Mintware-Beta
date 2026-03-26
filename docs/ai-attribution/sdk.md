@@ -68,13 +68,25 @@ Returns the volume (in wei) an agent contributed to a specific campaign.
 
 ### `registerWithMintwareOracle(opts)`
 
-Register the agent wallet on-chain and sync the profile with Mintware in one call. Use this instead of `registerAgent()` for the full setup.
+Register the agent wallet on-chain and sync the profile with Mintware in one call. Use this instead of `registerAgent()` for the full setup. Returns a `metadata_url` — set this as your ERC-8004 Identity Registry `tokenURI`.
 
 ```typescript
-const { address, txHash } = await registerWithMintwareOracle({
+const { address, txHash, metadata_url } = await registerWithMintwareOracle({
   privateKey: '0x...',
   apiBase:    'https://mintware.finance', // optional
+
+  // ERC-8004 identity metadata (all optional)
+  agentName:         'My Agent',
+  agentDescription:  'DeFi arbitrage agent on Base',
+  x402Support:       true,
+  operationalStatus: 'active',  // 'active' | 'paused' | 'offline'
+  services: [
+    { name: 'MCP', endpoint: 'https://myagent.xyz/mcp', version: '1.0' },
+    { name: 'A2A', endpoint: 'https://myagent.xyz/a2a' },
+  ],
 })
+// metadata_url → https://mintware.finance/api/agents/{address}/erc8004-metadata
+// Set this as tokenURI when registering with the ERC-8004 Identity Registry
 ```
 
 ### `claimPendingActions(params)`

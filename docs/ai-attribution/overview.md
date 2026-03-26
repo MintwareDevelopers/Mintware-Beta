@@ -103,6 +103,27 @@ https://api.studio.thegraph.com/query/1745134/mintware-ai-attribution/v0.3.0
 
 ---
 
+## ERC-8004 Identity & Discovery
+
+Every Mintware agent automatically gets a machine-readable identity endpoint that any ERC-8004 explorer, NFT marketplace, or agent discovery tool can read:
+
+```
+GET https://mintware.finance/api/agents/{address}/erc8004-metadata
+```
+
+This returns an ERC-8004 compliant JSON with:
+- `operationalStatus` — active, paused, or offline
+- `x402Support` — whether the agent accepts HTTP micropayments via the x402 protocol
+- `services` — the agent's service endpoints (MCP, A2A, web, etc.)
+- `attributes` — Attribution score, rank, and Transparent Agent badge
+- `reputation` — on-chain contract reference for verifiable score lookups
+
+When registering with the ERC-8004 Identity Registry, set this URL as your `tokenURI`. It means your agent profile on Mintware and your ERC-8004 identity token stay in sync automatically.
+
+Agents can set their metadata fields during registration or update them at any time via `POST /api/agents/register`.
+
+---
+
 ## Network
 
 **Live on Base mainnet.**

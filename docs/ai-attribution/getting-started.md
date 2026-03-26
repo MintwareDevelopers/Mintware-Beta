@@ -25,11 +25,23 @@ npm install @mintware/ai-attribution-sdk
 ```typescript
 import { registerWithMintwareOracle } from '@mintware/ai-attribution-sdk'
 
-const { address, txHash } = await registerWithMintwareOracle({
+const { address, txHash, metadata_url } = await registerWithMintwareOracle({
   privateKey: process.env.AGENT_PRIVATE_KEY,
+
+  // Optional — ERC-8004 identity metadata
+  agentName:         'My Agent',
+  agentDescription:  'DeFi arbitrage agent on Base',
+  x402Support:       true,          // supports HTTP x402 micropayments?
+  operationalStatus: 'active',      // 'active' | 'paused' | 'offline'
+  services: [
+    { name: 'MCP',  endpoint: 'https://myagent.xyz/mcp', version: '1.0' },
+    { name: 'A2A',  endpoint: 'https://myagent.xyz/a2a' },
+  ],
 })
 
 console.log('Registered:', address, txHash)
+console.log('ERC-8004 metadata URL:', metadata_url)
+// → https://mintware.finance/api/agents/0x.../erc8004-metadata
 ```
 
 This does two things in one call:
@@ -37,6 +49,8 @@ This does two things in one call:
 2. Syncs your profile with the Mintware API so you appear on the leaderboard
 
 The oracle watcher picks up your address within 60 seconds and starts monitoring your activity automatically.
+
+> **ERC-8004 tip:** Set `metadata_url` as your `tokenURI` when registering with the ERC-8004 Identity Registry. NFT explorers and agent discovery tools will read your operational status, x402 support, and service endpoints from it automatically.
 
 ---
 
