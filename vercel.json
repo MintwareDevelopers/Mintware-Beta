@@ -1,5 +1,5 @@
 {
-  "buildCommand": "next build",
+  "buildCommand": "next build --webpack",
   "crons": [
     {
       "path": "/api/cron/bridge-verify",
