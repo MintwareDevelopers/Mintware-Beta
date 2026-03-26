@@ -1,5 +1,5 @@
 {
-  "buildCommand": "next build --no-turbopack",
+  "buildCommand": "next build",
   "crons": [
     {
       "path": "/api/cron/bridge-verify",
