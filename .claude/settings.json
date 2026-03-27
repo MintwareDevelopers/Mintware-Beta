@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "claude --print \"Review the conversation that just ended. Identify any new decisions, bug fixes, patterns, or learnings that should be persisted. For each one, append a concise note (1-3 lines) to the most relevant file in .claude/rules/. Format: '\\n## [date] [topic]\\n[what changed and why]'. Only write if there is something genuinely new. Do not restate existing content. Files: architecture.md, code-style.md, api.md, web3.md, rewards.md, referrals.md, smart-contracts.md, vaults.md, schema.md, deployments.md, security.md, agents.md, testing.md\" --output-format text 2>/dev/null || true"
+          }
+        ]
+      }
+    ]
+  }
+}
