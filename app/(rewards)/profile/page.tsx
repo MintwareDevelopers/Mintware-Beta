@@ -255,9 +255,9 @@ function ProfileContent() {
                 </div>
               )}
 
-              {/* Public profile + invite CTA row */}
-              <div className="mt-3 flex items-center gap-3 flex-wrap">
-                {wallet && (
+              {/* Public profile link */}
+              {wallet && (
+                <div className="mt-3">
                   <a
                     href={`/${wallet}`}
                     className="inline-flex items-center gap-[5px] text-[11px] font-semibold text-mw-brand no-underline"
@@ -266,25 +266,8 @@ function ProfileContent() {
                     <ChevronRight size={12} />
                     View public profile
                   </a>
-                )}
-                <button
-                  onClick={() => {
-                    setActiveTab('invite')
-                    setTimeout(() => {
-                      document.getElementById('profile-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }, 50)
-                  }}
-                  className="inline-flex items-center gap-[5px] text-[11px] font-semibold rounded-full px-3 py-[4px] border transition-all duration-150"
-                  style={{
-                    color: 'var(--color-mw-pink)',
-                    background: 'rgba(194,83,122,0.10)',
-                    borderColor: 'rgba(194,83,122,0.30)',
-                    fontFamily: 'var(--font-jakarta)',
-                  }}
-                >
-                  ◉ Invite friends
-                </button>
-              </div>
+                </div>
+              )}
             </div>
 
             <div className="text-right min-w-[180px] pt-1 shrink-0 max-sm:min-w-0 max-sm:w-full max-sm:text-left">
@@ -366,6 +349,44 @@ function ProfileContent() {
       </div>
       </div>
 
+      {/* Invite banner */}
+      <div className="max-w-[960px] mx-auto px-8 max-sm:px-5 mt-4 mb-1">
+        <div
+          className="rounded-xl px-5 py-[14px] flex items-center justify-between gap-4 cursor-pointer"
+          style={{
+            background: 'linear-gradient(135deg, #150d22 0%, #1e1038 100%)',
+            border: '1.5px solid rgba(194,83,122,0.22)',
+          }}
+          onClick={() => {
+            setActiveTab('invite')
+            setTimeout(() => document.getElementById('profile-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-9 h-9 rounded-[10px] flex items-center justify-center text-[17px] shrink-0"
+              style={{ background: 'rgba(194,83,122,0.18)' }}
+            >
+              ◉
+            </div>
+            <div>
+              <div className="text-[13px] font-semibold" style={{ color: 'rgba(255,255,255,0.92)', fontFamily: 'var(--font-jakarta)' }}>
+                Invite friends to Mintware
+              </div>
+              <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.38)', fontFamily: 'var(--font-jakarta)' }}>
+                Share your link — every active referral boosts your Sharing score
+              </div>
+            </div>
+          </div>
+          <div
+            className="shrink-0 px-4 py-[7px] rounded-full text-[12px] font-semibold whitespace-nowrap"
+            style={{ background: 'var(--color-mw-pink)', color: '#fff', fontFamily: 'var(--font-jakarta)' }}
+          >
+            Share link →
+          </div>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div id="profile-tabs" className="pt-5 bg-transparent">
         <div className="max-w-[960px] mx-auto px-8 max-sm:px-5">
@@ -414,86 +435,101 @@ function ProfileContent() {
           {activeTab === 'portfolio' && (
             <>
               {loading && (
-                <div className="text-center py-12 text-mw-ink-3 text-[13px]">Loading score data…</div>
-              )}
-
-              {/* Wallet snapshot — projects / holdings */}
-              {!loading && data && (data.projects?.length ?? 0) > 0 && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[11px] font-bold tracking-[1px] uppercase text-mw-brand">
-                      Wallet snapshot
-                    </span>
-                    <span className="text-[11px] text-mw-ink-3">
-                      {data.projects!.length} position{data.projects!.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="mw-accent-card rounded-xl overflow-hidden shadow-[var(--shadow-card)]">
-                    {data.projects!
-                      .slice()
-                      .sort((a, b) => b.deployed - a.deployed)
-                      .map((p, i, arr) => {
-                        const ic = iconColor(p.symbol || p.name)
-                        const maxDeployed = arr[0].deployed || 1
-                        const pct = Math.round((p.deployed / maxDeployed) * 100)
-                        return (
-                          <div
-                            key={i}
-                            className="flex items-center gap-3.5 px-4 py-3 transition-colors duration-150 hover:bg-[rgba(0,0,0,0.02)]"
-                            style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--color-mw-border)' : undefined }}
-                          >
-                            {/* Icon */}
-                            <div
-                              className="w-9 h-9 rounded-[10px] flex items-center justify-center text-[13px] font-bold shrink-0"
-                              style={{ background: ic.bg, color: ic.fg }}
-                            >
-                              {p.symbol?.slice(0, 3) ?? p.name?.slice(0, 2)}
-                            </div>
-                            {/* Name + category */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 mb-[3px]">
-                                <span className="text-[13px] font-semibold text-mw-ink truncate">{p.name}</span>
-                                <span className="text-[10px] text-mw-ink-4 shrink-0">{p.cat}</span>
-                                {p.stillActive && (
-                                  <span className="w-[5px] h-[5px] rounded-full bg-mw-live shrink-0" title="Active position" />
-                                )}
-                              </div>
-                              {/* Bar */}
-                              <div className="h-[3px] rounded-full overflow-hidden" style={{ background: 'var(--color-mw-border)', width: '100%' }}>
-                                <div
-                                  className="h-full rounded-full transition-[width] duration-700"
-                                  style={{ width: `${pct}%`, background: ic.fg }}
-                                />
-                              </div>
-                            </div>
-                            {/* Value + P&L */}
-                            <div className="text-right shrink-0">
-                              <div className="text-[13px] font-bold font-mono text-mw-ink">
-                                {fmtUSD(p.deployed)}
-                              </div>
-                              {p.pnlPct !== 0 ? (
-                                <div
-                                  className="text-[10px] font-semibold font-mono mt-[1px]"
-                                  style={{ color: p.pnlPct >= 0 ? 'var(--color-mw-live)' : 'var(--color-mw-red)' }}
-                                >
-                                  {p.pnlPct >= 0 ? '+' : ''}{p.pnlPct.toFixed(1)}%
-                                </div>
-                              ) : (
-                                <div className="text-[10px] text-mw-ink-4 mt-[1px]">deployed</div>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                  </div>
+                <div className="flex flex-col gap-3">
+                  {[1,2,3].map(n => (
+                    <div key={n} className="mw-accent-card rounded-xl h-[64px] animate-pulse" />
+                  ))}
                 </div>
               )}
 
+              {/* ── Holdings ─────────────────────────────────────────────────── */}
+              {!loading && data && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-3">
+                      On-chain assets
+                    </span>
+                    {(data.projects?.length ?? 0) > 0 && (
+                      <span className="text-[11px] font-bold font-mono text-mw-ink">
+                        {fmtUSD(data.projects!.reduce((s, p) => s + p.deployed, 0))} total
+                      </span>
+                    )}
+                  </div>
+
+                  {(data.projects?.length ?? 0) === 0 ? (
+                    <div className="mw-accent-card rounded-xl px-5 py-10 flex flex-col items-center text-center gap-2">
+                      <div className="text-[28px] opacity-20">◆</div>
+                      <div className="text-[13px] font-semibold text-mw-ink-3">No on-chain assets detected</div>
+                      <div className="text-[11px] text-mw-ink-4 max-w-[220px] leading-[1.55]">
+                        Assets appear here once your wallet has on-chain activity we can index.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mw-accent-card rounded-xl overflow-hidden shadow-[var(--shadow-card)]">
+                      {data.projects!
+                        .slice()
+                        .sort((a, b) => b.deployed - a.deployed)
+                        .map((p, i, arr) => {
+                          const ic = iconColor(p.symbol || p.name)
+                          const maxDeployed = arr[0].deployed || 1
+                          const barPct = Math.round((p.deployed / maxDeployed) * 100)
+                          return (
+                            <div
+                              key={i}
+                              className="flex items-center gap-3.5 px-4 py-3 transition-colors duration-150 hover:bg-[rgba(0,0,0,0.02)]"
+                              style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--color-mw-border)' : undefined }}
+                            >
+                              <div
+                                className="w-9 h-9 rounded-[10px] flex items-center justify-center text-[13px] font-bold shrink-0"
+                                style={{ background: ic.bg, color: ic.fg }}
+                              >
+                                {p.symbol?.slice(0, 3) ?? p.name?.slice(0, 2)}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-[3px]">
+                                  <span className="text-[13px] font-semibold text-mw-ink truncate">{p.name}</span>
+                                  <span className="text-[10px] text-mw-ink-4 shrink-0">{p.cat}</span>
+                                  {p.stillActive && (
+                                    <span className="w-[5px] h-[5px] rounded-full bg-mw-live shrink-0" title="Active position" />
+                                  )}
+                                </div>
+                                <div className="h-[3px] rounded-full overflow-hidden" style={{ background: 'var(--color-mw-border)' }}>
+                                  <div
+                                    className="h-full rounded-full transition-[width] duration-700"
+                                    style={{ width: `${barPct}%`, background: ic.fg }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <div className="text-[13px] font-bold font-mono text-mw-ink">{fmtUSD(p.deployed)}</div>
+                                {p.pnlPct !== 0 ? (
+                                  <div className="text-[10px] font-semibold font-mono mt-[1px]"
+                                    style={{ color: p.pnlPct >= 0 ? 'var(--color-mw-live)' : 'var(--color-mw-red)' }}>
+                                    {p.pnlPct >= 0 ? '+' : ''}{p.pnlPct.toFixed(1)}%
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-mw-ink-4 mt-[1px]">deployed</div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Protocol opportunities ───────────────────────────────────── */}
               {!loading && data && data.uvOpportunities?.length > 0 && (
                 <div>
-                  <span className="text-[11px] font-bold tracking-[1px] uppercase text-mw-brand mb-3.5 block">
-                    Earning opportunities for your wallet
-                  </span>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-3">
+                      Matched protocols
+                    </span>
+                    <span className="text-[11px] text-mw-green font-mono font-bold">
+                      {fmtUSD(data.totalLo)}–{fmtUSD(data.totalHi)} / yr
+                    </span>
+                  </div>
                   <div className="flex flex-col gap-3">
                     {data.uvOpportunities.map((op, i) => (
                       <div
@@ -518,15 +554,10 @@ function ProfileContent() {
                             </span>
                           </div>
                           <div className="text-[11px] text-mw-ink-3 mb-1">{op.mechanic}</div>
-                          <div
-                            className="text-[11px] text-mw-ink-2 leading-[1.55]"
-                            dangerouslySetInnerHTML={{ __html: op.reason }}
-                          />
+                          <div className="text-[11px] text-mw-ink-2 leading-[1.55]" dangerouslySetInnerHTML={{ __html: op.reason }} />
                         </div>
                         <div className="text-right shrink-0 pl-2">
-                          <div className="text-[13px] font-bold text-mw-green font-mono">
-                            ${op.lo}–${op.hi}
-                          </div>
+                          <div className="text-[13px] font-bold text-mw-green font-mono">${op.lo}–${op.hi}</div>
                           <div className="text-[10px] text-mw-ink-3 mt-0.5">est. / yr</div>
                         </div>
                       </div>
@@ -537,7 +568,7 @@ function ProfileContent() {
 
               {!loading && !data && (
                 <div className="text-center py-12 text-mw-ink-3 text-[13px]">
-                  Could not load score data. The API may be indexing your wallet.
+                  Could not load data. The API may be indexing your wallet.
                 </div>
               )}
             </>
