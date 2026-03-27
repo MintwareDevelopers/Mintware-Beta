@@ -255,9 +255,9 @@ function ProfileContent() {
                 </div>
               )}
 
-              {/* Public profile link */}
-              {wallet && (
-                <div className="mt-3">
+              {/* Public profile + invite CTA row */}
+              <div className="mt-3 flex items-center gap-3 flex-wrap">
+                {wallet && (
                   <a
                     href={`/${wallet}`}
                     className="inline-flex items-center gap-[5px] text-[11px] font-semibold text-mw-brand no-underline"
@@ -266,8 +266,25 @@ function ProfileContent() {
                     <ChevronRight size={12} />
                     View public profile
                   </a>
-                </div>
-              )}
+                )}
+                <button
+                  onClick={() => {
+                    setActiveTab('invite')
+                    setTimeout(() => {
+                      document.getElementById('profile-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }, 50)
+                  }}
+                  className="inline-flex items-center gap-[5px] text-[11px] font-semibold rounded-full px-3 py-[4px] border transition-all duration-150"
+                  style={{
+                    color: 'var(--color-mw-pink)',
+                    background: 'rgba(194,83,122,0.10)',
+                    borderColor: 'rgba(194,83,122,0.30)',
+                    fontFamily: 'var(--font-jakarta)',
+                  }}
+                >
+                  ◉ Invite friends
+                </button>
+              </div>
             </div>
 
             <div className="text-right min-w-[180px] pt-1 shrink-0 max-sm:min-w-0 max-sm:w-full max-sm:text-left">
@@ -350,7 +367,7 @@ function ProfileContent() {
       </div>
 
       {/* Tabs */}
-      <div className="pt-5 bg-transparent">
+      <div id="profile-tabs" className="pt-5 bg-transparent">
         <div className="max-w-[960px] mx-auto px-8 max-sm:px-5">
           <div className="flex gap-2 max-sm:flex-wrap max-sm:gap-1.5">
             {(['portfolio', 'score', 'badge', 'invite', 'rewards', 'liquidity'] as Tab[]).map(t => (
