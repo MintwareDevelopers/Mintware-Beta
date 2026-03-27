@@ -4,7 +4,8 @@ import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
-import { API, shortAddr } from '@/lib/web2/api'
+import { API, shortAddr, fmtUSD, iconColor } from '@/lib/web2/api'
+import { computeBadges } from '@/lib/rewards/badges'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { ReferralSheet } from '@/components/rewards/referral/ReferralSheet'
@@ -42,6 +43,16 @@ interface ScoreResponse {
   treeSize: number
   treeQuality: string
   character: { label: string; color: string; desc: string; icon: string }
+  projects?: {
+    name: string
+    symbol: string
+    cat: string
+    deployed: number
+    pnl: number
+    pnlPct: number
+    stillActive: boolean
+    holdDays: number
+  }[]
   uvOpportunities: {
     name: string; cat: string; icon: string
     type: string; typeColor: string; accentColor: string
@@ -135,8 +146,9 @@ function ProfileContent() {
 
   function shareInviteOnX() {
     if (!inviteLink) return
+    const scoreText = score > 0 ? ` I scored ${score}/${maxScore}.` : ''
     const text = encodeURIComponent(
-      `I just got my on-chain reputation score on @MintwareDev — check yours and join my network: ${inviteLink}`
+      `I got my on-chain reputation score on @MintwareDev.${scoreText} Score your wallet and join my network: ${inviteLink}`
     )
     window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'noopener')
   }
@@ -145,6 +157,21 @@ function ProfileContent() {
   const tier = data?.tier ? data.tier.charAt(0).toUpperCase() + data.tier.slice(1) : '—'
   const avatarLetter = wallet ? wallet.charAt(2).toUpperCase() : '?'
   const maxScore = data?.signals?.reduce((s, sig) => s + sig.max, 0) ?? 925
+
+  // Derived badges from score data
+  const badges = data
+    ? computeBadges(
+        {
+          walletAge:    data.walletAge    ?? '',
+          percentile:   data.percentile   ?? 0,
+          totalTxCount: data.totalTxCount ?? 0,
+          signals:      data.signals      ?? [],
+          treeSize:     data.treeSize     ?? 0,
+        },
+        data.treeSize ?? 0,
+      )
+    : []
+  const earnedBadges = badges.filter(b => b.earned)
 
   return (
     <div className="page-profile min-h-screen bg-mw-surface">
@@ -207,6 +234,40 @@ function ProfileContent() {
                   </span>
                 )}
               </div>
+
+              {/* Badge row — earned badges at a glance */}
+              {earnedBadges.length > 0 && (
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  {earnedBadges.map(b => (
+                    <span
+                      key={b.id}
+                      className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-semibold border"
+                      style={{
+                        color:            b.color,
+                        background:       b.color + '18',
+                        borderColor:      b.color + '40',
+                      }}
+                      title={b.desc}
+                    >
+                      {b.icon} {b.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Public profile link */}
+              {wallet && (
+                <div className="mt-3">
+                  <a
+                    href={`/${wallet}`}
+                    className="inline-flex items-center gap-[5px] text-[11px] font-semibold text-mw-brand no-underline"
+                    style={{ fontFamily: 'var(--font-jakarta)' }}
+                  >
+                    <ChevronRight size={12} />
+                    View public profile
+                  </a>
+                </div>
+              )}
             </div>
 
             <div className="text-right min-w-[180px] pt-1 shrink-0 max-sm:min-w-0 max-sm:w-full max-sm:text-left">
@@ -337,6 +398,78 @@ function ProfileContent() {
             <>
               {loading && (
                 <div className="text-center py-12 text-mw-ink-3 text-[13px]">Loading score data…</div>
+              )}
+
+              {/* Wallet snapshot — projects / holdings */}
+              {!loading && data && (data.projects?.length ?? 0) > 0 && (
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[11px] font-bold tracking-[1px] uppercase text-mw-brand">
+                      Wallet snapshot
+                    </span>
+                    <span className="text-[11px] text-mw-ink-3">
+                      {data.projects!.length} position{data.projects!.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  <div className="mw-accent-card rounded-xl overflow-hidden shadow-[var(--shadow-card)]">
+                    {data.projects!
+                      .slice()
+                      .sort((a, b) => b.deployed - a.deployed)
+                      .map((p, i, arr) => {
+                        const ic = iconColor(p.symbol || p.name)
+                        const maxDeployed = arr[0].deployed || 1
+                        const pct = Math.round((p.deployed / maxDeployed) * 100)
+                        return (
+                          <div
+                            key={i}
+                            className="flex items-center gap-3.5 px-4 py-3 transition-colors duration-150 hover:bg-[rgba(0,0,0,0.02)]"
+                            style={{ borderBottom: i < arr.length - 1 ? '1px solid var(--color-mw-border)' : undefined }}
+                          >
+                            {/* Icon */}
+                            <div
+                              className="w-9 h-9 rounded-[10px] flex items-center justify-center text-[13px] font-bold shrink-0"
+                              style={{ background: ic.bg, color: ic.fg }}
+                            >
+                              {p.symbol?.slice(0, 3) ?? p.name?.slice(0, 2)}
+                            </div>
+                            {/* Name + category */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 mb-[3px]">
+                                <span className="text-[13px] font-semibold text-mw-ink truncate">{p.name}</span>
+                                <span className="text-[10px] text-mw-ink-4 shrink-0">{p.cat}</span>
+                                {p.stillActive && (
+                                  <span className="w-[5px] h-[5px] rounded-full bg-mw-live shrink-0" title="Active position" />
+                                )}
+                              </div>
+                              {/* Bar */}
+                              <div className="h-[3px] rounded-full overflow-hidden" style={{ background: 'var(--color-mw-border)', width: '100%' }}>
+                                <div
+                                  className="h-full rounded-full transition-[width] duration-700"
+                                  style={{ width: `${pct}%`, background: ic.fg }}
+                                />
+                              </div>
+                            </div>
+                            {/* Value + P&L */}
+                            <div className="text-right shrink-0">
+                              <div className="text-[13px] font-bold font-mono text-mw-ink">
+                                {fmtUSD(p.deployed)}
+                              </div>
+                              {p.pnlPct !== 0 ? (
+                                <div
+                                  className="text-[10px] font-semibold font-mono mt-[1px]"
+                                  style={{ color: p.pnlPct >= 0 ? 'var(--color-mw-live)' : 'var(--color-mw-red)' }}
+                                >
+                                  {p.pnlPct >= 0 ? '+' : ''}{p.pnlPct.toFixed(1)}%
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-mw-ink-4 mt-[1px]">deployed</div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                  </div>
+                </div>
               )}
 
               {!loading && data && data.uvOpportunities?.length > 0 && (
@@ -702,47 +835,99 @@ function ProfileContent() {
           )}
 
           {activeTab === 'badge' && (
-            <div className="mw-accent-card text-center px-6 py-12 rounded-xl shadow-[var(--shadow-card)]">
-              {data ? (
+            <div>
+              {loading && <div className="text-center py-12 text-mw-ink-3 text-[13px]">Loading…</div>}
+
+              {!loading && !data && (
+                <div className="text-center py-12 text-mw-ink-3 text-[13px]">Could not load badge data.</div>
+              )}
+
+              {data && (
                 <>
-                  <div className="text-[56px] mb-3.5 leading-none">{data.character?.icon ?? '🏅'}</div>
-                  <div
-                    className="text-xl font-bold tracking-[-0.3px] mb-1.5"
-                    style={{ color: data.character?.color ?? '#0052FF' }}
-                  >
-                    {data.character?.label ?? tier}
-                  </div>
-                  <div className="text-[13px] text-mw-ink-3 mb-4">
-                    {tier} tier · {data.percentile}th percentile
-                  </div>
-                  <div className="text-[13px] leading-[1.7] max-w-[380px] mx-auto mb-7 text-mw-ink-2">
-                    {data.character?.desc}
-                  </div>
-                  <div className="mw-accent-card inline-flex rounded-[14px] overflow-hidden max-sm:flex-col">
-                    <div className="px-7 py-4 border-r border-mw-border text-center max-sm:border-r-0 max-sm:border-b max-sm:border-b-mw-border">
-                      <div className="text-[22px] font-bold font-mono tracking-[-0.5px] text-[#0052FF]">
-                        {score}
-                      </div>
-                      <div className="text-[10px] text-mw-ink-3 mt-[3px] font-semibold tracking-[0.5px] uppercase">Score</div>
+                  {/* Character card */}
+                  <div className="mw-accent-card rounded-xl px-6 py-5 mb-4 flex items-start gap-4 shadow-[var(--shadow-card)]">
+                    <div
+                      className="w-14 h-14 rounded-[14px] flex items-center justify-center text-[28px] shrink-0"
+                      style={{ background: (data.character?.color ?? '#0052FF') + '18' }}
+                    >
+                      {data.character?.icon ?? '○'}
                     </div>
-                    <div className="px-7 py-4 border-r border-mw-border text-center max-sm:border-r-0 max-sm:border-b max-sm:border-b-mw-border">
-                      <div className="text-[22px] font-bold text-mw-ink font-mono tracking-[-0.5px]">
-                        {data.chains}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-[3px] flex-wrap">
+                        <span
+                          className="text-[18px] font-bold tracking-[-0.3px]"
+                          style={{ color: data.character?.color ?? '#0052FF' }}
+                        >
+                          {data.character?.label ?? tier}
+                        </span>
+                        <span className="text-[11px] text-mw-ink-3">{tier} tier · top {100 - data.percentile}%</span>
                       </div>
-                      <div className="text-[10px] text-mw-ink-3 mt-[3px] font-semibold tracking-[0.5px] uppercase">Chains</div>
-                    </div>
-                    <div className="px-7 py-4 text-center">
-                      <div className="text-[22px] font-bold text-mw-ink font-mono tracking-[-0.5px]">
-                        {data.treeSize}
+                      <div className="text-[13px] leading-[1.6] text-mw-ink-2 max-w-[480px]">
+                        {data.character?.desc}
                       </div>
-                      <div className="text-[10px] text-mw-ink-3 mt-[3px] font-semibold tracking-[0.5px] uppercase">Network</div>
                     </div>
+                  </div>
+
+                  {/* Badge grid */}
+                  <div className="mb-3">
+                    <span className="text-[10px] font-bold tracking-[1.2px] uppercase text-mw-ink-3 mb-3 block">
+                      {earnedBadges.length} of {badges.length} badges earned
+                    </span>
+                    <div className="grid grid-cols-3 gap-3 max-sm:grid-cols-2">
+                      {badges.map(b => (
+                        <div
+                          key={b.id}
+                          className="mw-accent-card rounded-[14px] px-4 py-4 flex flex-col gap-2 transition-all duration-150"
+                          style={{
+                            opacity:     b.earned ? 1 : 0.45,
+                            borderColor: b.earned ? b.color + '40' : undefined,
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span
+                              className="text-[22px]"
+                              style={{ color: b.earned ? b.color : 'var(--color-mw-ink-3)' }}
+                            >
+                              {b.icon}
+                            </span>
+                            {b.earned && (
+                              <CheckCircle2 size={14} style={{ color: b.color }} />
+                            )}
+                          </div>
+                          <div>
+                            <div
+                              className="text-[13px] font-bold mb-[3px]"
+                              style={{ color: b.earned ? b.color : 'var(--color-mw-ink)' }}
+                            >
+                              {b.label}
+                            </div>
+                            <div className="text-[11px] text-mw-ink-3 leading-[1.4]">{b.desc}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Stats strip */}
+                  <div className="mw-accent-card rounded-[14px] overflow-hidden flex max-sm:flex-col">
+                    {[
+                      { label: 'Attribution score', value: `${score}/${maxScore}`, color: 'var(--color-mw-brand)' },
+                      { label: 'Chains active', value: String(data.chains), color: 'var(--color-mw-ink)' },
+                      { label: 'Network size', value: `${data.treeSize} wallets`, color: 'var(--color-mw-ink)' },
+                    ].map(({ label, value, color }, i, arr) => (
+                      <div
+                        key={label}
+                        className="flex-1 px-6 py-4 text-center"
+                        style={{
+                          borderRight: i < arr.length - 1 ? '1px solid var(--color-mw-border)' : undefined,
+                        }}
+                      >
+                        <div className="text-[20px] font-bold font-mono tracking-[-0.5px]" style={{ color }}>{value}</div>
+                        <div className="text-[10px] text-mw-ink-3 mt-[3px] font-semibold tracking-[0.5px] uppercase">{label}</div>
+                      </div>
+                    ))}
                   </div>
                 </>
-              ) : loading ? (
-                <div className="text-center py-12 text-mw-ink-3 text-[13px]">Loading…</div>
-              ) : (
-                <div className="text-center py-12 text-mw-ink-3 text-[13px]">Could not load badge data.</div>
               )}
             </div>
           )}
