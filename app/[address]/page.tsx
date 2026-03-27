@@ -115,8 +115,9 @@ export default function PublicProfile() {
 
   function shareOnX() {
     if (!score) return
-    const badge = topBadgeLabel(badges)
-    const text  = `Checked my onchain reputation on @MintwareFi\n\nScore: ${score.score} · ${fmtTier(score.tier)} tier${badge ? ` · ${badge}` : ''}\n\n${profileUrl}`
+    const text = isOwner
+      ? `I just got my DeFi reputation score on @MintwareFi\n\nTop ${100 - score.percentile}% · ${score.score} pts across ${score.chains} chain${score.chains !== 1 ? 's' : ''}\n\nSee where you rank — it's free:\n${profileUrl}`
+      : `Check out this wallet's onchain reputation on @MintwareFi\n\n${fmtTier(score.tier)} tier · ${score.score} pts · Top ${100 - score.percentile}%\n\n${profileUrl}`
     window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'noopener')
   }
 
@@ -156,7 +157,7 @@ export default function PublicProfile() {
 
         /* ── hero card ───────────────────────────────── */
         .pp-hero {
-          background: linear-gradient(135deg, #0e1117 0%, #131929 100%);
+          background: linear-gradient(135deg, #1a2035 0%, #1e2d4a 100%);
           border-radius: var(--radius-xl);
           padding: 32px;
           margin-bottom: 16px;
@@ -597,6 +598,39 @@ export default function PublicProfile() {
             )}
           </div>
 
+          {/* ── Share strip ──────────────────────────────────────────────── */}
+          <div className="pp-share" style={{ marginBottom: 16, flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', width: '100%', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                {isOwner ? (
+                  <>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-mw-ink)', marginBottom: 3 }}>
+                      Invite friends &amp; grow your network
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--color-mw-ink-3)', lineHeight: 1.5 }}>
+                      Friends who connect via your link count toward your sharing score
+                    </div>
+                  </>
+                ) : (
+                  <div className="pp-claim-cta">
+                    This your wallet?
+                    <a href="/" className="pp-claim-link">Connect to claim your profile →</a>
+                  </div>
+                )}
+              </div>
+              <div className="pp-share-btns">
+                <button className="pp-btn outline" onClick={copyUrl}>
+                  {copied ? '✓ Copied!' : isOwner ? '🔗 Copy invite link' : '🔗 Copy profile URL'}
+                </button>
+                {score && (
+                  <button className="pp-btn primary" onClick={shareOnX}>
+                    𝕏 Share on X
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* ── Badges ───────────────────────────────────────────────────── */}
           {!loading && badges.length > 0 && (
             <div className="pp-badges-card">
@@ -699,28 +733,6 @@ export default function PublicProfile() {
             </div>
           )}
 
-          {/* ── Share strip ──────────────────────────────────────────────── */}
-          <div className="pp-share">
-            <div className="pp-share-btns">
-              <button className="pp-btn outline" onClick={copyUrl}>
-                {copied ? '✓ Copied!' : '🔗 Copy profile URL'}
-              </button>
-              {score && (
-                <button className="pp-btn primary" onClick={shareOnX}>
-                  𝕏 Share on X
-                </button>
-              )}
-            </div>
-
-            {!isOwner && (
-              <div className="pp-claim-cta">
-                This your wallet?
-                <a href="/" className="pp-claim-link">
-                  Connect to claim your profile →
-                </a>
-              </div>
-            )}
-          </div>
 
         </div>
       </div>
