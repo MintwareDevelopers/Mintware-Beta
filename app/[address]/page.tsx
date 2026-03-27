@@ -12,7 +12,7 @@ import { WalletDisplay }         from '@/components/web3/WalletDisplay'
 import { Sparkline }             from '@/components/web2/Sparkline'
 import { computeBadges, topBadgeLabel } from '@/lib/rewards/badges'
 import { API, shortAddr }        from '@/lib/web2/api'
-import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import { useEffect, useState }   from 'react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -95,12 +95,14 @@ export default function PublicProfile() {
   const badges     = score ? computeBadges(score, refStats?.tree_size ?? score?.treeSize ?? 0) : []
   const earnedBadges = badges.filter(b => b.earned)
   const topSignals = score?.signals?.filter(s => s.score > 0).sort((a, b) => b.score - a.score).slice(0, 2) ?? []
+  // Only compute trend if timeline entries actually have a numeric `score` field
   const trendDelta = (() => {
-    const tl = score?.timeline
+    const tl = score?.timeline?.filter((p: { score?: number }) => typeof p.score === 'number' && !isNaN(p.score))
     if (!tl || tl.length < 2) return null
-    const last  = tl[tl.length - 1].score
-    const first = tl[Math.max(0, tl.length - 4)].score
-    return last - first
+    const last  = tl[tl.length - 1].score as number
+    const first = (tl[Math.max(0, tl.length - 4)] as { score: number }).score
+    const delta = last - first
+    return isNaN(delta) ? null : delta
   })()
 
   const profileUrl = typeof window !== 'undefined' ? window.location.href : `https://mintware.finance/${address}`
@@ -582,9 +584,9 @@ export default function PublicProfile() {
                     </div>
                   )}
                 </div>
-                {score.timeline && score.timeline.length >= 2 && (
+                {score.timeline && score.timeline.filter((p: { score?: number }) => typeof p.score === 'number').length >= 2 && (
                   <div className="pp-sparkline-wrap">
-                    <Sparkline data={score.timeline} width={140} height={44} />
+                    <Sparkline data={score.timeline as { date: string; score: number }[]} width={140} height={44} />
                   </div>
                 )}
               </div>
