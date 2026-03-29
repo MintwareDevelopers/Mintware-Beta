@@ -461,9 +461,15 @@ function ProfileContent() {
                     <div className="mw-accent-card rounded-xl px-5 py-10 flex flex-col items-center text-center gap-2">
                       <div className="text-[28px] opacity-20">◆</div>
                       <div className="text-[13px] font-semibold text-mw-ink-3">No on-chain assets detected</div>
-                      <div className="text-[11px] text-mw-ink-4 max-w-[220px] leading-[1.55]">
-                        Assets appear here once your wallet has on-chain activity we can index.
+                      <div className="text-[11px] text-mw-ink-4 max-w-[240px] leading-[1.55]">
+                        Hold tokens, provide liquidity, or bridge to Base — assets appear here once indexed.
                       </div>
+                      <a
+                        href="/swap"
+                        className="mt-2 text-[11px] font-semibold text-mw-brand no-underline hover:underline"
+                      >
+                        Start with a swap →
+                      </a>
                     </div>
                   ) : (
                     <div className="mw-accent-card rounded-xl overflow-hidden shadow-[var(--shadow-card)]">

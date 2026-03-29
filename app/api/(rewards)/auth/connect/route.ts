@@ -62,11 +62,18 @@ export async function POST(req: NextRequest) {
   }
 
   if (existing?.ref_code) {
-    // Existing wallet — just update last_seen_at, return stored code
+    // Existing wallet — update last_seen_at and flip any pending referrals to active
     await supabase
       .from('wallet_profiles')
       .update({ last_seen_at: new Date().toISOString() })
       .eq('address', address)
+
+    // Flip pending → active for this wallet (they've returned = genuinely active)
+    await supabase
+      .from('referral_records')
+      .update({ status: 'active', activated_at: new Date().toISOString() })
+      .eq('referred', address)
+      .eq('status', 'pending')
 
     return NextResponse.json({
       ref_code: existing.ref_code,
