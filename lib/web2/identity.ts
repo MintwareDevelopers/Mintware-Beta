@@ -50,6 +50,9 @@ const basenameCache = new Map<string, string | null>()
 // @returns        Basename string (e.g. "jake.base") or null
 // ---------------------------------------------------------------------------
 export async function resolveBasename(address: string): Promise<string | null> {
+  // Basenames only exist for EVM (0x) addresses — skip Solana base58 addresses early
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return null
+
   const normalized = address.toLowerCase()
 
   if (basenameCache.has(normalized)) {

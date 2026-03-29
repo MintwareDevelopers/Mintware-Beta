@@ -29,6 +29,7 @@ const RATE_LIMITS: Record<string, RuleConfig> = {
   '/api/agents/mwp':              { limit: 10, windowMs: 60_000 },
   '/api/claim/mark-claimed':      { limit: 20, windowMs: 60_000 },
   '/api/referral/apply':          { limit: 10, windowMs: 60_000 },
+  '/api/wallet-link':             { limit:  5, windowMs: 60_000 },
 }
 
 function getClientIP(req: NextRequest): string {
@@ -141,5 +142,6 @@ export const config = {
     '/api/agents/mwp',
     '/api/claim/mark-claimed',
     '/api/referral/apply',
+    '/api/wallet-link',
   ],
 }

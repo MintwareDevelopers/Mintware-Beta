@@ -7,6 +7,7 @@
 
 import { useParams, useRouter }  from 'next/navigation'
 import { useAccount }            from 'wagmi'
+import { useWallet }             from '@solana/wallet-adapter-react'
 import { MwNav }                 from '@/components/web2/MwNav'
 import { WalletDisplay }         from '@/components/web3/WalletDisplay'
 import { Sparkline }             from '@/components/web2/Sparkline'
@@ -48,15 +49,24 @@ function fmtTier(tier: string): string {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
+const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
+const EVM_RE    = /^0x[0-9a-f]{40}$/i
+
 export default function PublicProfile() {
   const params    = useParams()
   const router    = useRouter()
   const rawAddr   = Array.isArray(params.address) ? params.address[0] : params.address ?? ''
-  const address   = rawAddr.toLowerCase()
+
+  // Solana addresses are case-sensitive base58 — preserve case; lowercase EVM only
+  const isSolanaAddr = SOLANA_RE.test(rawAddr) && !rawAddr.startsWith('0x')
+  const address      = isSolanaAddr ? rawAddr : rawAddr.toLowerCase()
 
   const { address: connectedAddr, status: walletStatus } = useAccount()
-  const walletSettled = walletStatus === 'connected' || walletStatus === 'disconnected'
-  const isOwner = !!connectedAddr && connectedAddr.toLowerCase() === address
+  const { publicKey: solPublicKey, connected: solConnected } = useWallet()
+  const walletSettled = (walletStatus === 'connected' || walletStatus === 'disconnected') || solConnected
+  const isOwner =
+    (!!connectedAddr && connectedAddr.toLowerCase() === address) ||
+    (!!solPublicKey  && solPublicKey.toBase58() === address)
 
   const [score,      setScore]      = useState<ScoreData | null>(null)
   const [refStats,   setRefStats]   = useState<RefStats | null>(null)
@@ -64,8 +74,8 @@ export default function PublicProfile() {
   const [loading,    setLoading]    = useState(true)
   const [copied,     setCopied]     = useState(false)
 
-  // Validate address format
-  const isValid = /^0x[0-9a-f]{40}$/i.test(address)
+  // Accept both EVM and Solana addresses
+  const isValid = EVM_RE.test(address) || isSolanaAddr
 
   useEffect(() => {
     if (!isValid) { setLoading(false); return }
@@ -73,8 +83,10 @@ export default function PublicProfile() {
     const supabase = createSupabaseBrowserClient()
 
     // Fetch score + referral stats + referred-by in parallel
+    // For EVM: checksum the address; for Solana: pass as-is (already base58)
+    const scoreAddr = !isSolanaAddr && isAddress(address) ? getAddress(address) : address
     Promise.all([
-      fetch(`${API}/score?address=${isAddress(address) ? getAddress(address) : address}`).then(r => r.json()).catch(() => null),
+      fetch(`${API}/score?address=${scoreAddr}`).then(r => r.json()).catch(() => null),
       supabase
         .from('referral_stats')
         .select('tree_size, sharing_score, tree_quality')
@@ -522,7 +534,7 @@ export default function PublicProfile() {
             <div className="pp-hero-top">
               {/* Left: avatar + identity */}
               <div className="pp-avatar">
-                {address.charAt(2).toUpperCase()}
+                {isSolanaAddr ? address.charAt(0) : address.charAt(2).toUpperCase()}
                 {score && <div className="pp-avatar-score">{score.score}</div>}
               </div>
               <div className="pp-hero-info">

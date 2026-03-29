@@ -24,8 +24,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { generateRefCodeForWallet } from '@/lib/rewards/referral-code'
 
+const EVM_RE     = /^0x[0-9a-f]{40}$/i
+const SOLANA_RE  = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
+
 function isValidAddress(raw: string): boolean {
-  return /^0x[0-9a-f]{40}$/i.test(raw)
+  return EVM_RE.test(raw) || SOLANA_RE.test(raw)
+}
+
+function normalizeAddress(raw: string): string {
+  // EVM addresses are stored lowercase; Solana base58 is case-sensitive — preserve case
+  return EVM_RE.test(raw) ? raw.toLowerCase() : raw
 }
 
 export async function POST(req: NextRequest) {
@@ -46,7 +54,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid address' }, { status: 400 })
   }
 
-  const address  = rawAddr.toLowerCase()
+  const address  = normalizeAddress(rawAddr)
+  const isSolana = SOLANA_RE.test(rawAddr)
   const supabase = createSupabaseServiceClient()
 
   // ── Check if wallet already exists with a ref_code ────────────────────────
@@ -87,8 +96,8 @@ export async function POST(req: NextRequest) {
     refCode = await generateRefCodeForWallet(address, supabase)
   } catch (err) {
     console.error('[auth/connect] generateRefCodeForWallet error:', err)
-    // Fallback: use the legacy deterministic code so we never block
-    refCode = 'mw_' + address.slice(2, 8)
+    // Fallback: deterministic from address — EVM uses hex bytes, Solana uses first 6 chars
+    refCode = isSolana ? address.slice(0, 6) : 'mw_' + address.slice(2, 8)
   }
 
   // Upsert: set ref_code only if null (prevents overwriting existing codes if
