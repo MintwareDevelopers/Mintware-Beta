@@ -11,6 +11,7 @@ import { MwNav }                 from '@/components/web2/MwNav'
 import { WalletDisplay }         from '@/components/web3/WalletDisplay'
 import { Sparkline }             from '@/components/web2/Sparkline'
 import { computeBadges, topBadgeLabel } from '@/lib/rewards/badges'
+import { getAddress, isAddress }  from 'viem'
 import { API, shortAddr }        from '@/lib/web2/api'
 import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import { useEffect, useState }   from 'react'
@@ -53,7 +54,8 @@ export default function PublicProfile() {
   const rawAddr   = Array.isArray(params.address) ? params.address[0] : params.address ?? ''
   const address   = rawAddr.toLowerCase()
 
-  const { address: connectedAddr } = useAccount()
+  const { address: connectedAddr, status: walletStatus } = useAccount()
+  const walletSettled = walletStatus === 'connected' || walletStatus === 'disconnected'
   const isOwner = !!connectedAddr && connectedAddr.toLowerCase() === address
 
   const [score,      setScore]      = useState<ScoreData | null>(null)
@@ -72,7 +74,7 @@ export default function PublicProfile() {
 
     // Fetch score + referral stats + referred-by in parallel
     Promise.all([
-      fetch(`${API}/score?address=${address}`).then(r => r.json()).catch(() => null),
+      fetch(`${API}/score?address=${isAddress(address) ? getAddress(address) : address}`).then(r => r.json()).catch(() => null),
       supabase
         .from('referral_stats')
         .select('tree_size, sharing_score, tree_quality')
@@ -505,8 +507,8 @@ export default function PublicProfile() {
         <MwNav />
         <div className="pp-inner">
 
-          {/* Owner banner */}
-          {isOwner && (
+          {/* Owner banner — only show once wallet has settled to avoid flash */}
+          {walletSettled && isOwner && (
             <div className="pp-owner-banner">
               <span>👋 This is your public profile — shareable without login.</span>
               <a href="/profile" style={{ color: 'var(--color-mw-brand)', fontWeight: 700, textDecoration: 'none', fontSize: 13 }}>
@@ -611,12 +613,12 @@ export default function PublicProfile() {
                       Friends who connect via your link count toward your sharing score
                     </div>
                   </>
-                ) : (
+                ) : walletSettled ? (
                   <div className="pp-claim-cta">
                     This your wallet?
                     <a href="/" className="pp-claim-link">Connect to claim your profile →</a>
                   </div>
-                )}
+                ) : null}
               </div>
               <div className="pp-share-btns">
                 <button className="pp-btn outline" onClick={copyUrl}>

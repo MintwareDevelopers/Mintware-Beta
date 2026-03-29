@@ -116,7 +116,7 @@ export default function HomePage() {
             {SAMPLE_ADDRS.map(s => (
               <button
                 key={s.label}
-                onClick={() => handleAnalyze(s.addr)}
+                onClick={() => { setWalletInput(s.label); handleAnalyze(s.addr) }}
                 className="text-[11px] font-mono text-mw-ink-3 bg-white border border-mw-border-strong rounded-full px-2.5 py-[3px] cursor-pointer transition-all duration-150 hover:border-mw-brand hover:text-mw-brand"
               >
                 {s.label}

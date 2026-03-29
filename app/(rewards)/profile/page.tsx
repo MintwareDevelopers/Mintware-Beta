@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
@@ -258,14 +259,14 @@ function ProfileContent() {
               {/* Public profile link */}
               {wallet && (
                 <div className="mt-3">
-                  <a
+                  <Link
                     href={`/${wallet}`}
                     className="inline-flex items-center gap-[5px] text-[11px] font-semibold text-mw-brand no-underline"
                     style={{ fontFamily: 'var(--font-jakarta)' }}
                   >
                     <ChevronRight size={12} />
                     View public profile
-                  </a>
+                  </Link>
                 </div>
               )}
             </div>
