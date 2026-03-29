@@ -2,9 +2,11 @@
 // middleware.ts — Edge rate limiting for sensitive API endpoints
 //
 // Protects:
-//   POST /api/campaigns/swap-event  — 10 req/min per IP
-//   POST /api/campaigns/join        — 5  req/min per IP
-//   POST /api/swap/quote            — 20 req/min per IP
+//   POST /api/campaigns/swap-event      — 10 req/min per IP
+//   POST /api/campaigns/sol-swap-event  — 10 req/min per IP
+//   POST /api/campaigns/join            — 5  req/min per IP
+//   POST /api/swap/quote                — 20 req/min per IP
+//   POST /api/wallet-link               — 5  req/min per IP
 //
 // Implementation note: In-memory sliding window. Serverless instances don't
 // share memory so this limits burst within a single instance (still effective
@@ -58,8 +60,10 @@ function isRateLimited(key: string, limit: number, windowMs: number): boolean {
 // Route → { limit, windowMs }
 const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
   '/api/campaigns/swap-event':          { limit: 10, windowMs: 60_000 },
+  '/api/campaigns/sol-swap-event':      { limit: 10, windowMs: 60_000 },
   '/api/campaigns/join':                { limit:  5, windowMs: 60_000 },
   '/api/swap/quote':                    { limit: 20, windowMs: 60_000 },
+  '/api/wallet-link':                   { limit:  5, windowMs: 60_000 },
   '/api/agents/campaigns/record':       { limit: 10, windowMs: 60_000 },
   '/api/agents/register':               { limit:  5, windowMs: 60_000 },
   '/api/agents/mwp':                    { limit: 10, windowMs: 60_000 },
@@ -99,8 +103,10 @@ export function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     '/api/campaigns/swap-event',
+    '/api/campaigns/sol-swap-event',
     '/api/campaigns/join',
     '/api/swap/quote',
+    '/api/wallet-link',
     '/api/agents/campaigns/record',
     '/api/agents/register',
     '/api/agents/mwp',
