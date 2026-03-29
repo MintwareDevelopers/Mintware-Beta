@@ -1,32 +1,34 @@
 'use client'
 
-import { useAccount } from 'wagmi'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useAccount }             from 'wagmi'
+import { useWallet }              from '@solana/wallet-adapter-react'
+import { useRouter }              from 'next/navigation'
+import { useEffect }              from 'react'
 
 export function MwAuthGuard({ children }: { children: React.ReactNode }) {
-  const { status } = useAccount()
+  const { status: evmStatus }            = useAccount()
+  const { connected: solConnected, connecting: solConnecting } = useWallet()
   const router = useRouter()
 
-  // In local dev, skip auth entirely so pages can be tweaked without a wallet
+  // In local dev, skip auth so pages can be tweaked without a wallet
   if (process.env.NODE_ENV === 'development') {
     return <>{children}</>
   }
 
-  useEffect(() => {
-    // Only redirect when wagmi has definitively resolved to disconnected.
-    // 'reconnecting' = restoring connection from cookie storage — never redirect here.
-    // 'connecting'   = fresh connect in progress — never redirect here.
-    // 'disconnected' = no wallet, no stored session — redirect to home.
-    if (status === 'disconnected') {
-      router.replace('/')
-    }
-  }, [status, router])
+  const isLoading     = evmStatus === 'reconnecting' || evmStatus === 'connecting' || solConnecting
+  const isConnected   = evmStatus === 'connected' || solConnected
+  const isDisconnected = !isLoading && !isConnected
 
-  // Show blank while connecting / reconnecting from cookie storage
-  if (status !== 'connected') {
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    if (isDisconnected) router.replace('/')
+  }, [isDisconnected, router])
+
+  if (isLoading || (!isConnected && !isDisconnected)) {
     return <div className="min-h-screen bg-mw-surface" />
   }
+
+  if (!isConnected) return null
 
   return <>{children}</>
 }

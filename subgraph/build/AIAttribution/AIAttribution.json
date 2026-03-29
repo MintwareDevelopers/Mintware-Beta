@@ -1,0 +1,151 @@
+[
+  {
+    "name": "AgentRegistered",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "erc8004TokenId",
+        "type": "uint256",
+        "indexed": true
+      }
+    ]
+  },
+  {
+    "name": "Erc8004Linked",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "tokenId",
+        "type": "uint256",
+        "indexed": true
+      }
+    ]
+  },
+  {
+    "name": "ActionRecorded",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "campaignId",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "volumeContributed",
+        "type": "uint256",
+        "indexed": false
+      },
+      {
+        "name": "mwpHash",
+        "type": "bytes32",
+        "indexed": false
+      },
+      {
+        "name": "newScore",
+        "type": "uint256",
+        "indexed": false
+      }
+    ]
+  },
+  {
+    "name": "MwpHashSubmitted",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "mwpHash",
+        "type": "bytes32",
+        "indexed": true
+      },
+      {
+        "name": "submissionCount",
+        "type": "uint256",
+        "indexed": false
+      }
+    ]
+  },
+  {
+    "name": "RiskPenaltyApplied",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "agent",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "penalty",
+        "type": "uint64",
+        "indexed": false
+      },
+      {
+        "name": "reason",
+        "type": "string",
+        "indexed": false
+      }
+    ]
+  },
+  {
+    "name": "CampaignCreated",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "campaignId",
+        "type": "uint256",
+        "indexed": true
+      },
+      {
+        "name": "protocol",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "name",
+        "type": "string",
+        "indexed": false
+      }
+    ]
+  },
+  {
+    "name": "OracleUpdated",
+    "type": "event",
+    "anonymous": false,
+    "inputs": [
+      {
+        "name": "previous",
+        "type": "address",
+        "indexed": true
+      },
+      {
+        "name": "next",
+        "type": "address",
+        "indexed": true
+      }
+    ]
+  }
+]

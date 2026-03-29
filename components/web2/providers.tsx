@@ -7,6 +7,7 @@ import { wagmiConfig } from '@/lib/web3/wagmi'
 import { useState } from 'react'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
+import { SolanaProvider } from '@/components/web3/SolanaProvider'
 
 // ── Global referral gate — mounted inside every page ───────────────────────
 // Checks if the connected wallet needs the ref code prompt and renders it.
@@ -45,8 +46,10 @@ export function Providers({
           })}
           modalSize="compact"
         >
-          {children}
-          <GlobalReferralGate />
+          <SolanaProvider>
+            {children}
+            <GlobalReferralGate />
+          </SolanaProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
