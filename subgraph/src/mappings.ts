@@ -126,7 +126,7 @@ export function handleMwpHashSubmitted(event: MwpHashSubmitted): void {
 
 export function handleRiskPenaltyApplied(event: RiskPenaltyApplied): void {
   const agent = loadOrCreateAgent(event.params.agent, event.block.timestamp)
-  agent.risk        = agent.risk.plus(BigInt.fromI32(event.params.penalty as i32))
+  agent.risk        = agent.risk.plus(event.params.penalty)
   agent.totalScore  = recalcTotal(agent)
   agent.lastUpdatedAt = event.block.timestamp
   agent.save()
@@ -134,7 +134,7 @@ export function handleRiskPenaltyApplied(event: RiskPenaltyApplied): void {
   const riskId = event.transaction.hash.toHexString() + '-' + event.logIndex.toString()
   const risk   = new RiskEvent(riskId)
   risk.agent       = agent.id
-  risk.penalty     = BigInt.fromI32(event.params.penalty as i32)
+  risk.penalty     = event.params.penalty
   risk.reason      = event.params.reason
   risk.blockNumber = event.block.number
   risk.timestamp   = event.block.timestamp
