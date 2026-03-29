@@ -1,91 +1,151 @@
 # @mintware/ai-attribution-sdk
 
-Mintware's AI Attribution SDK gives every ERC-8004 agent a persistent, cross-chain reputation score. Register in one transaction, submit MWP folder hashes to earn the Transparent Agent badge, and let protocols gate access or weight rewards by your on-chain behavior — all with three lines of code.
+**On-chain reputation scores for AI agents — powered by Mintware Attribution.**
+
+Every AI agent that trades, bridges, or contributes on-chain now has a permanent score. Protocols can gate access, weight rewards, and rank agents by their verified on-chain behavior — not just self-reported claims.
+
+Built on [Base mainnet](https://base.org). Contract audited. Oracle live.
+
+---
 
 ## Install
 
-Not yet published to npm. Install from source:
-
 ```bash
-# From the project root
-pnpm install
-cd sdk && pnpm build
-```
-
-Once published:
-```bash
-pnpm add @mintware/ai-attribution-sdk
-# or
 npm install @mintware/ai-attribution-sdk
+# or
+pnpm add @mintware/ai-attribution-sdk
 ```
 
 **Peer dependency:** `viem >= 2.0.0`
 
-## Quick Start
+---
+
+## Quick Start — 2 steps
+
+### Step 1: Register (one-time, ~30 seconds)
 
 ```typescript
-import { registerAgent, submitMwpHash, getScore } from '@mintware/ai-attribution-sdk'
-import { keccak256, toHex } from 'viem'
+import { registerWithMintwareOracle } from '@mintware/ai-attribution-sdk'
 
-const AGENT_KEY = '0xYOUR_PRIVATE_KEY'
+const { address, txHash } = await registerWithMintwareOracle({
+  privateKey: process.env.AGENT_PRIVATE_KEY,
+})
 
-// 1. Register your agent wallet (one-time, permissionless)
-const regTx = await registerAgent({ privateKey: AGENT_KEY })
-console.log('Registered:', regTx)
-
-// 2. Submit a MWP folder hash to earn Transparent Agent badge (+50 interpretability pts)
-const hash = keccak256(toHex('ipfs://QmYourMwpFolderCid'))
-await submitMwpHash(hash, { privateKey: AGENT_KEY })
-
-// 3. Read your score
-const score = await getScore('0xYOUR_AGENT_ADDRESS')
-console.log(`Total: ${score.total} | Transparent: ${score.isTransparent}`)
-// Total: 50n | Transparent: true
+console.log('Registered:', address, txHash)
+// Oracle watcher picks you up within 60 seconds.
+// Every WETH transfer you make on Base is now tracked automatically.
 ```
 
-All functions default to **Base Sepolia**. Override with `rpcUrl` and `contractAddress` options for mainnet.
+### Step 2: Add to your agent loop (runs every N minutes)
 
-## API Reference
+```typescript
+import { claimPendingActions } from '@mintware/ai-attribution-sdk'
 
-| Function | Signature | Description |
-|---|---|---|
-| `getScore` | `(agent, opts?) => Promise<AgentScore>` | Read full score breakdown for any agent address |
-| `isRegistered` | `(agent, opts?) => Promise<boolean>` | Check if an address is registered |
-| `getCampaignVolume` | `(campaignId, agent, opts?) => Promise<bigint>` | Volume an agent contributed to a campaign (in wei) |
-| `registerAgent` | `(opts: WriteOptions) => Promise<0x${string}>` | Register the calling wallet — permissionless, one-time |
-| `linkErc8004` | `(tokenId, opts: WriteOptions) => Promise<0x${string}>` | Link an ERC-8004 tokenId to the agent wallet |
-| `submitMwpHash` | `(mwpHash, opts: WriteOptions) => Promise<0x${string}>` | Submit a MWP folder snapshot hash (+50 interpretability pts) |
-| `recordAction` | `(params & OracleOptions) => Promise<0x${string}>` | Oracle-only: record a verified on-chain action for an agent |
-| `createCampaign` | `(params & WriteOptions) => Promise<0x${string}>` | Create a new Agent Volume Campaign on-chain |
+await claimPendingActions({
+  agent:      process.env.AGENT_ADDRESS,
+  privateKey: process.env.AGENT_PRIVATE_KEY,
+  apiBase:    'https://mintware.finance',
+})
 
-## Score Breakdown
+// Oracle pre-signs. You submit + pay gas. Score updates on-chain.
+```
 
-| Dimension | Type | How it grows | Notes |
-|---|---|---|---|
-| `behavior` | `uint128` | Oracle credits per verified on-chain action | Proportional to volume contributed |
-| `contribution` | `uint128` | Oracle credits for referrals and ecosystem actions | Set by oracle at record time |
-| `interpretability` | `uint64` | +50 per unique `submitMwpHash` call | Hard cap: 500. Unlocks `isTransparent = true` at first submission |
-| `risk` | `uint64` | Penalty score — subtracted from total | Set by oracle; higher = worse |
-| `total` | `uint256` | `behavior + contribution + interpretability - risk` | What protocols read for gating/weighting |
+Your score appears on [mintware.finance/agents](https://mintware.finance/agents) immediately after registration.
 
-## Contract Addresses
+---
 
-| Network | Address |
+## How It Works
+
+```
+Agent trades on Base mainnet
+        ↓
+Oracle watcher detects activity (every 60s)
+        ↓
+Oracle signs EIP-712 attestation → stored in Mintware DB
+        ↓
+Agent calls claimPendingActions() → submits sigs to contract
+        ↓
+Score updates on-chain (AIAttribution v3, Base mainnet)
+```
+
+**Gasless oracle model** — oracle pays nothing. Agent pays gas only when claiming. No subscription, no fees.
+
+---
+
+## Score Dimensions
+
+| Dimension | How It Grows |
 |---|---|
-| Base Sepolia (testnet) | `0xDB9DB7008cfFb09bD1D943C237f57327383DFc03` |
-| Base mainnet | Coming soon |
+| `behavior` | Oracle credits per verified on-chain action (volume-weighted) |
+| `contribution` | Referrals and ecosystem actions |
+| `interpretability` | +50 per unique MWP folder hash submitted (Transparent Agent badge) |
+| `risk` | Penalty score subtracted from total |
+| `total` | `behavior + contribution + interpretability - risk` |
 
-Contract owner: `0x9c646C48a302f4725450669f1218d3FDb3e933AD`
-Oracle: `0xc75D4b4bdB4D7ac103671f45E99D2FA6107B2e93`
+---
 
-## ERC-8004
+## Full API Reference
 
-ERC-8004 is a proposed standard for on-chain AI agent identity tokens. The AIAttribution contract supports it as an **optional enhancement**:
+### Read
 
-- At launch, `requireErc8004 = false` — registration is permissionless, no token needed.
-- Call `linkErc8004(tokenId)` at any time to bind your ERC-8004 identity token to the agent wallet. This ties your off-chain agent identity to on-chain reputation.
-- The contract owner can flip `requireErc8004 = true` when the ERC-8004 ecosystem matures — at that point, new registrations will require a valid tokenId.
+```typescript
+import { getScore, isRegistered, getCampaignVolume } from '@mintware/ai-attribution-sdk'
 
-## License
+// Full score breakdown for any address
+const score = await getScore('0xYOUR_AGENT_ADDRESS')
+console.log(score.total, score.behavior, score.interpretability, score.isTransparent)
 
-MIT
+// Check if registered
+const registered = await isRegistered('0xYOUR_AGENT_ADDRESS')
+
+// Volume an agent contributed to a campaign (in wei)
+const vol = await getCampaignVolume('my-campaign', '0xYOUR_AGENT_ADDRESS')
+```
+
+### Write
+
+```typescript
+import { registerWithMintwareOracle, claimPendingActions, submitMwpHash } from '@mintware/ai-attribution-sdk'
+
+// Register once
+await registerWithMintwareOracle({ privateKey: '0x...' })
+
+// Claim oracle-signed actions (add to agent loop)
+await claimPendingActions({ agent: '0x...', privateKey: '0x...', apiBase: 'https://mintware.finance' })
+
+// Earn Transparent Agent badge — submit MWP folder hash
+import { keccak256, toHex } from 'viem'
+const hash = keccak256(toHex('ipfs://QmYourMwpFolderCid'))
+await submitMwpHash(hash, { privateKey: '0x...' })
+```
+
+---
+
+## Framework Plugins
+
+| Framework | Path | Status |
+|---|---|---|
+| ElizaOS | `plugins/eliza/` | ✅ Ready |
+| Coinbase AgentKit | `plugins/agentkit/` | ✅ Ready |
+| MCP (Claude/Cursor) | `plugins/mcp/` | ✅ Ready |
+
+---
+
+## Contract
+
+| | |
+|---|---|
+| Network | Base mainnet (chain ID 8453) |
+| Contract | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` |
+| Version | AIAttribution v3 |
+| Oracle model | Gasless EIP-712 (agent pays gas, oracle pays nothing) |
+| Verified | [Basescan](https://basescan.org/address/0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421) |
+
+---
+
+## Links
+
+- **Platform:** [mintware.finance/agents](https://mintware.finance/agents)
+- **Docs:** [docs.mintware.finance/ai-attribution](https://docs.mintware.finance/ai-attribution/overview)
+- **Agent manifest:** [mintware.finance/.well-known/agent-reputation-oracle.json](https://mintware.finance/.well-known/agent-reputation-oracle.json)
+- **npm:** [npmjs.com/package/@mintware/ai-attribution-sdk](https://www.npmjs.com/package/@mintware/ai-attribution-sdk)

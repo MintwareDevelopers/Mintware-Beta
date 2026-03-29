@@ -7,15 +7,77 @@ import {AIAttribution}  from "../src/AIAttribution.sol";
 contract AIAttributionTest is Test {
     AIAttribution internal ai;
 
+    // Oracle: use a known private key so we can sign EIP-712 messages in tests
+    uint256 internal constant ORACLE_PRIV_KEY =
+        0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
+
     address internal owner  = makeAddr("owner");
-    address internal oracle = makeAddr("oracle");
+    address internal oracle;   // derived from ORACLE_PRIV_KEY
     address internal agent1 = makeAddr("agent1");
     address internal agent2 = makeAddr("agent2");
     address internal rando  = makeAddr("rando");
 
+    // Mirrors ACTION_TYPEHASH in the contract
+    bytes32 internal constant ACTION_TYPEHASH = keccak256(
+        "RecordAction(address agent,uint256 volumeContributed,bytes32 mwpContextHash,uint256 campaignId,uint256 nonce,uint256 deadline)"
+    );
+
     function setUp() public {
+        oracle = vm.addr(ORACLE_PRIV_KEY);
         vm.prank(owner);
         ai = new AIAttribution(oracle);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// Build and sign an EIP-712 RecordAction digest using the oracle private key.
+    function _signAction(
+        address agent,
+        uint256 volume,
+        bytes32 mwpHash,
+        uint256 campaignId,
+        uint256 nonce,
+        uint256 deadline
+    ) internal view returns (bytes memory sig) {
+        // Reconstruct domain separator from contract's eip712Domain()
+        (
+            ,
+            string memory name,
+            string memory version,
+            uint256 chainId,
+            address verifyingContract,
+            ,
+        ) = ai.eip712Domain();
+
+        bytes32 domainSep = keccak256(abi.encode(
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+            keccak256(bytes(name)),
+            keccak256(bytes(version)),
+            chainId,
+            verifyingContract
+        ));
+
+        bytes32 structHash = keccak256(abi.encode(
+            ACTION_TYPEHASH,
+            agent, volume, mwpHash, campaignId, nonce, deadline
+        ));
+
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ORACLE_PRIV_KEY, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
+    /// Helper: register agent1, sign an action, and call recordVerifiedAction.
+    function _recordAction(
+        address agent,
+        uint256 volume,
+        bytes32 mwpHash,
+        uint256 campaignId
+    ) internal {
+        uint256 nonce    = ai.nonces(agent);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _signAction(agent, volume, mwpHash, campaignId, nonce, deadline);
+        ai.recordVerifiedAction(agent, volume, mwpHash, campaignId, nonce, deadline, sig);
     }
 
     // ── Construction ──────────────────────────────────────────────────────────
@@ -42,39 +104,113 @@ contract AIAttributionTest is Test {
     }
 
     function test_registerAgent_permissionless_noErc8004() public {
-        // requireErc8004 is false by default — anyone can register
         vm.prank(rando);
         ai.registerAgent();
         assertTrue(ai.registered(rando));
     }
 
-    // ── recordVerifiedAction ──────────────────────────────────────────────────
+    // ── recordVerifiedAction — gasless oracle pattern ─────────────────────────
 
     function test_recordVerifiedAction_incrementsBehavior() public {
         vm.prank(agent1);
         ai.registerAgent();
 
         uint256 volume = 5 ether; // 5e18 → behavior += 5
-        vm.prank(oracle);
-        ai.recordVerifiedAction(agent1, volume, bytes32(0), 0);
+        _recordAction(agent1, volume, bytes32(0), 0);
 
         (, uint128 behavior,,,,,, ) = ai.getScore(agent1);
         assertEq(behavior, 5);
     }
 
-    function test_recordVerifiedAction_revertsNotOracle() public {
+    function test_recordVerifiedAction_calledByAnyone_agentPaysGas() public {
+        // Anyone (not just oracle) can submit a valid oracle-signed action
         vm.prank(agent1);
         ai.registerAgent();
 
+        uint256 nonce    = ai.nonces(agent1);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _signAction(agent1, 1 ether, bytes32(0), 0, nonce, deadline);
+
+        // rando submits on behalf of agent1 — agent1 could pay their own gas,
+        // but any address can relay the signed payload
         vm.prank(rando);
-        vm.expectRevert("AIAttribution: not oracle");
-        ai.recordVerifiedAction(agent1, 1 ether, bytes32(0), 0);
+        ai.recordVerifiedAction(agent1, 1 ether, bytes32(0), 0, nonce, deadline, sig);
+
+        (, uint128 behavior,,,,,, ) = ai.getScore(agent1);
+        assertEq(behavior, 1);
+    }
+
+    function test_recordVerifiedAction_revertsInvalidSignature() public {
+        vm.prank(agent1);
+        ai.registerAgent();
+
+        uint256 nonce    = ai.nonces(agent1);
+        uint256 deadline = block.timestamp + 1 hours;
+
+        // Sign with wrong key (rando's key)
+        uint256 wrongKey = 0x59c6995e998f97a5a0044966f094538f6f7b90a2f9a75b9aab4e9876543210a;
+        bytes32 structHash = keccak256(abi.encode(
+            ACTION_TYPEHASH, agent1, 1 ether, bytes32(0), uint256(0), nonce, deadline
+        ));
+        (, string memory name, string memory version, uint256 chainId, address vc, , ) = ai.eip712Domain();
+        bytes32 domainSep = keccak256(abi.encode(
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+            keccak256(bytes(name)), keccak256(bytes(version)), chainId, vc
+        ));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSep, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongKey, digest);
+        bytes memory badSig = abi.encodePacked(r, s, v);
+
+        vm.expectRevert("AIAttribution: invalid oracle signature");
+        ai.recordVerifiedAction(agent1, 1 ether, bytes32(0), 0, nonce, deadline, badSig);
+    }
+
+    function test_recordVerifiedAction_revertsExpiredDeadline() public {
+        vm.prank(agent1);
+        ai.registerAgent();
+
+        uint256 nonce    = ai.nonces(agent1);
+        uint256 deadline = block.timestamp - 1; // already expired
+        bytes memory sig = _signAction(agent1, 1 ether, bytes32(0), 0, nonce, deadline);
+
+        vm.expectRevert("AIAttribution: signature expired");
+        ai.recordVerifiedAction(agent1, 1 ether, bytes32(0), 0, nonce, deadline, sig);
+    }
+
+    function test_recordVerifiedAction_revertsReplayNonce() public {
+        vm.prank(agent1);
+        ai.registerAgent();
+
+        // First call succeeds
+        _recordAction(agent1, 1 ether, bytes32(0), 0);
+
+        // Replay: nonce is now stale (still 0)
+        uint256 staleNonce = 0;
+        uint256 deadline   = block.timestamp + 1 hours;
+        bytes memory sig   = _signAction(agent1, 1 ether, bytes32(0), 0, staleNonce, deadline);
+
+        vm.expectRevert("AIAttribution: invalid nonce");
+        ai.recordVerifiedAction(agent1, 1 ether, bytes32(0), 0, staleNonce, deadline, sig);
     }
 
     function test_recordVerifiedAction_revertsNotRegistered() public {
-        vm.prank(oracle);
+        uint256 nonce    = ai.nonces(agent1);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory sig = _signAction(agent1, 1 ether, bytes32(0), 0, nonce, deadline);
+
         vm.expectRevert("AIAttribution: agent not registered");
-        ai.recordVerifiedAction(agent1, 1 ether, bytes32(0), 0);
+        ai.recordVerifiedAction(agent1, 1 ether, bytes32(0), 0, nonce, deadline, sig);
+    }
+
+    function test_recordVerifiedAction_nonceIncrementsAfterSuccess() public {
+        vm.prank(agent1);
+        ai.registerAgent();
+
+        assertEq(ai.nonces(agent1), 0);
+        _recordAction(agent1, 1 ether, bytes32(0), 0);
+        assertEq(ai.nonces(agent1), 1);
+        _recordAction(agent1, 1 ether, bytes32(0), 0);
+        assertEq(ai.nonces(agent1), 2);
     }
 
     function test_recordVerifiedAction_withMwpHash_setsTransparent() public {
@@ -82,8 +218,7 @@ contract AIAttributionTest is Test {
         ai.registerAgent();
 
         bytes32 mwpHash = keccak256("mwp-snapshot-1");
-        vm.prank(oracle);
-        ai.recordVerifiedAction(agent1, 1 ether, mwpHash, 0);
+        _recordAction(agent1, 1 ether, mwpHash, 0);
 
         (,,,, uint64 interp, bool isTransparent, bytes32 lastHash,) = ai.getScore(agent1);
         assertEq(interp, 50);
@@ -96,10 +231,8 @@ contract AIAttributionTest is Test {
         ai.registerAgent();
 
         bytes32 mwpHash = keccak256("mwp-snapshot-1");
-        vm.prank(oracle);
-        ai.recordVerifiedAction(agent1, 1 ether, mwpHash, 0);
-        vm.prank(oracle);
-        ai.recordVerifiedAction(agent1, 1 ether, mwpHash, 0); // same hash — no bonus
+        _recordAction(agent1, 1 ether, mwpHash, 0);
+        _recordAction(agent1, 1 ether, mwpHash, 0); // same hash — no bonus
 
         (,,,, uint64 interp,,,) = ai.getScore(agent1);
         assertEq(interp, 50); // still 50, not 100
@@ -195,8 +328,7 @@ contract AIAttributionTest is Test {
         vm.prank(rando);
         uint256 campaignId = ai.createVolumeCampaign("Vol Campaign", 1000 ether, 7 days);
 
-        vm.prank(oracle);
-        ai.recordVerifiedAction(agent1, 100 ether, bytes32(0), campaignId);
+        _recordAction(agent1, 100 ether, bytes32(0), campaignId);
 
         assertEq(ai.getAgentCampaignVolume(campaignId, agent1), 100 ether);
     }
@@ -207,8 +339,7 @@ contract AIAttributionTest is Test {
         vm.prank(agent1);
         ai.registerAgent();
 
-        vm.prank(oracle);
-        ai.recordVerifiedAction(agent1, 100 ether, bytes32(0), 0);
+        _recordAction(agent1, 100 ether, bytes32(0), 0);
 
         (uint256 before,,,,,,, ) = ai.getScore(agent1);
         assertEq(before, 100);
@@ -233,7 +364,6 @@ contract AIAttributionTest is Test {
         vm.prank(agent1);
         ai.registerAgent();
 
-        // Apply penalty larger than score — should floor at 0, not underflow
         vm.prank(oracle);
         ai.applyRiskPenalty(agent1, 999, "test");
 
@@ -241,25 +371,68 @@ contract AIAttributionTest is Test {
         assertEq(total, 0);
     }
 
-    // ── Oracle admin ──────────────────────────────────────────────────────────
+    // ── Oracle admin — timelocked rotation (H1 fix) ───────────────────────────
 
-    function test_setOracle_onlyOwner() public {
+    function test_proposeOracle_onlyOwner() public {
         address newOracle = makeAddr("newOracle");
         vm.prank(owner);
-        ai.setOracle(newOracle);
-        assertEq(ai.oracle(), newOracle);
+        ai.proposeOracle(newOracle);
+        assertEq(ai.pendingOracle(), newOracle);
+        assertGt(ai.oracleRotationAvailableAt(), block.timestamp);
     }
 
-    function test_setOracle_revertsNotOwner() public {
+    function test_proposeOracle_revertsNotOwner() public {
         vm.prank(rando);
         vm.expectRevert();
-        ai.setOracle(makeAddr("newOracle"));
+        ai.proposeOracle(makeAddr("newOracle"));
     }
 
-    function test_setOracle_revertsZero() public {
+    function test_proposeOracle_revertsZero() public {
         vm.prank(owner);
         vm.expectRevert("AIAttribution: zero oracle");
-        ai.setOracle(address(0));
+        ai.proposeOracle(address(0));
+    }
+
+    function test_proposeOracle_revertsAlreadyActive() public {
+        address currentOracle = ai.oracle(); // read before prank — prank is consumed by next call
+        vm.prank(owner);
+        vm.expectRevert("AIAttribution: already active oracle");
+        ai.proposeOracle(currentOracle);
+    }
+
+    function test_confirmOracle_afterDelay() public {
+        address newOracle = makeAddr("newOracle");
+        vm.prank(owner);
+        ai.proposeOracle(newOracle);
+
+        // Before delay elapses — should revert
+        vm.prank(owner);
+        vm.expectRevert("AIAttribution: rotation delay not elapsed");
+        ai.confirmOracle();
+
+        // After 48 hours — should succeed
+        vm.warp(block.timestamp + 48 hours + 1);
+        vm.prank(owner);
+        ai.confirmOracle();
+        assertEq(ai.oracle(), newOracle);
+        assertEq(ai.pendingOracle(), address(0));
+    }
+
+    function test_cancelOracleRotation() public {
+        address newOracle = makeAddr("newOracle");
+        vm.prank(owner);
+        ai.proposeOracle(newOracle);
+
+        vm.prank(owner);
+        ai.cancelOracleRotation();
+        assertEq(ai.pendingOracle(), address(0));
+        assertEq(ai.oracle(), oracle); // original oracle unchanged
+    }
+
+    function test_cancelOracleRotation_revertsNoPending() public {
+        vm.prank(owner);
+        vm.expectRevert("AIAttribution: no rotation pending");
+        ai.cancelOracleRotation();
     }
 
     // ── getScore view ─────────────────────────────────────────────────────────
@@ -269,8 +442,7 @@ contract AIAttributionTest is Test {
         ai.registerAgent();
 
         bytes32 mwpHash = keccak256("mwp");
-        vm.prank(oracle);
-        ai.recordVerifiedAction(agent1, 10 ether, mwpHash, 0);
+        _recordAction(agent1, 10 ether, mwpHash, 0);
 
         (
             uint256 total,
@@ -290,23 +462,39 @@ contract AIAttributionTest is Test {
         assertEq(interp,        50);
         assertTrue(isTransparent);
         assertEq(lastHash,   mwpHash);
-        assertEq(tokenId,        0);  // not ERC-8004 linked
+        assertEq(tokenId,        0);
+    }
+
+    // ── Nonce view ────────────────────────────────────────────────────────────
+
+    function test_nonce_startsAtZero() public view {
+        assertEq(ai.nonces(agent1), 0);
+    }
+
+    function test_nonce_incrementsPerAgent() public {
+        vm.prank(agent1);
+        ai.registerAgent();
+        vm.prank(agent2);
+        ai.registerAgent();
+
+        _recordAction(agent1, 1 ether, bytes32(0), 0);
+        _recordAction(agent1, 1 ether, bytes32(0), 0);
+        _recordAction(agent2, 1 ether, bytes32(0), 0);
+
+        assertEq(ai.nonces(agent1), 2);
+        assertEq(ai.nonces(agent2), 1);
     }
 
     // ── Multi-agent leaderboard scenario ─────────────────────────────────────
 
     function test_multiAgentScores() public {
-        // agent1: high volume, transparent
         vm.prank(agent1);
         ai.registerAgent();
-        vm.prank(oracle);
-        ai.recordVerifiedAction(agent1, 500 ether, keccak256("mwp-a1"), 0);
+        _recordAction(agent1, 500 ether, keccak256("mwp-a1"), 0);
 
-        // agent2: lower volume, not transparent
         vm.prank(agent2);
         ai.registerAgent();
-        vm.prank(oracle);
-        ai.recordVerifiedAction(agent2, 200 ether, bytes32(0), 0);
+        _recordAction(agent2, 200 ether, bytes32(0), 0);
 
         (uint256 score1,,,,,,,) = ai.getScore(agent1);
         (uint256 score2,,,,,,,) = ai.getScore(agent2);

@@ -98,17 +98,51 @@ GET https://mintware.finance/api/agents/0xAgentAddress
 
 Or via The Graph subgraph for historical queries:
 ```
-https://api.studio.thegraph.com/query/1745134/mintware-ai-attribution/v0.2.0
+https://api.studio.thegraph.com/query/1745134/mintware-ai-attribution/v0.3.0
 ```
+
+---
+
+## ERC-8004 Identity & Discovery
+
+**Mintware itself is registered as Agent #37297 on the ERC-8004 Identity Registry on Base.** Machine-readable manifests are available at:
+
+- [`/.well-known/agent.json`](https://mintware.finance/.well-known/agent.json) — A2A v0.3.0 agent card
+- [`/.well-known/erc8004-registration.json`](https://mintware.finance/.well-known/erc8004-registration.json) — ERC-8004 #registration-v1
+- [`/.well-known/agent-reputation-oracle.json`](https://mintware.finance/.well-known/agent-reputation-oracle.json) — Full oracle manifest
+
+Mintware is also listed in [awesome-erc8004](https://github.com/sudeepb02/awesome-erc8004) — the canonical ERC-8004 resource directory.
+
+---
+
+Every Mintware agent automatically gets a machine-readable identity endpoint that any ERC-8004 explorer, NFT marketplace, or agent discovery tool can read:
+
+```
+GET https://mintware.finance/api/agents/{address}/erc8004-metadata
+```
+
+This returns an ERC-8004 compliant JSON with:
+- `operationalStatus` — active, paused, or offline
+- `x402Support` — whether the agent accepts HTTP micropayments via the x402 protocol
+- `services` — the agent's service endpoints (MCP, A2A, web, etc.)
+- `attributes` — Attribution score, rank, and Transparent Agent badge
+- `reputation` — on-chain contract reference for verifiable score lookups
+
+When registering with the ERC-8004 Identity Registry, set this URL as your `tokenURI`. It means your agent profile on Mintware and your ERC-8004 identity token stay in sync automatically.
+
+Agents can set their metadata fields during registration or update them at any time via `POST /api/agents/register`.
 
 ---
 
 ## Network
 
-Currently live on **Base Sepolia** (testnet).
+**Live on Base mainnet.**
 
-- Contract: `0x1a4f942b437e438176296792a1852B05eb1E7Ad1` (verified on Basescan)
-- Mainnet deployment follows after testnet validation
+| | |
+|---|---|
+| Chain | Base (chain ID 8453) |
+| Contract | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` (AIAttribution v3) |
+| Verified | [Basescan](https://basescan.org/address/0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421) |
 
 ---
 

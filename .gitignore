@@ -42,3 +42,20 @@ contracts-v4/cache/
 contracts-ai/out/
 contracts-ai/cache/
 contracts-ai/lib/
+
+# Claude worktrees — local-only, never commit
+.claude/worktrees/
+.claude-octopus/
+.claire/
+GEMINI.md
+
+# Foundry broadcast + cache artifacts
+broadcast/
+cache/
+out/
+
+# Oracle watcher — has its own node_modules
+oracle-watcher/node_modules/
+
+# Subgraph node_modules
+subgraph/node_modules/

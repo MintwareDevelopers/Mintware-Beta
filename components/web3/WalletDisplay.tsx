@@ -31,17 +31,23 @@ interface WalletDisplayProps {
   style?:     React.CSSProperties
 }
 
+function isSolanaAddress(address: string): boolean {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)
+}
+
 export function WalletDisplay({ address, className, mono, style }: WalletDisplayProps) {
   const [basename, setBasename] = useState<string | null>(null)
+  const isSolana = isSolanaAddress(address)
 
   useEffect(() => {
-    if (!address) return
+    // Solana addresses have no Basename — skip resolution entirely
+    if (!address || isSolana) return
     resolveBasename(address).then(name => {
       if (name) setBasename(name)
     })
-  }, [address])
+  }, [address, isSolana])
 
-  const display   = basename ?? shortAddr(address)
+  const display    = basename ?? shortAddr(address)
   const isFallback = !basename
 
   return (

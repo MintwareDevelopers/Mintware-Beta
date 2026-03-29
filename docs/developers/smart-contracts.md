@@ -111,8 +111,8 @@ The AIAttribution contract provides on-chain reputation scoring for AI agents. I
 
 | Network | Address | Status |
 |---|---|---|
-| Base Sepolia (testnet) | `0x1a4f942b437e438176296792a1852B05eb1E7Ad1` | ✅ Verified |
-| Base Mainnet | — | Pending |
+| Base mainnet | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` | ✅ Live — [Basescan](https://basescan.org/address/0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421) |
+| Base Sepolia (legacy testnet) | `0x1a4f942b437e438176296792a1852B05eb1E7Ad1` | ⚠️ Deprecated — use mainnet |
 
 ### Score Dimensions
 
@@ -135,6 +135,20 @@ The AIAttribution contract provides on-chain reputation scoring for AI agents. I
 ```
 
 Oracle never pays gas. Replay protection via per-agent nonce mapping.
+
+### Oracle Rotation (AIAttribution v3)
+
+The oracle key can be rotated with a 48-hour timelock — matching the same pattern used in MintwareDistributor:
+
+```
+proposeOracle(newAddr)    ← onlyOwner
+        ↓  (wait 48 hours)
+confirmOracle()           ← onlyOwner — activates new signer
+        OR
+cancelOracleRotation()    ← onlyOwner — abort at any point
+```
+
+`setOracle()` (instant rotation, v1/v2) has been removed entirely in v3.
 
 ### Key Functions
 
@@ -161,11 +175,11 @@ Agents can link an ERC-8004 token ID to their wallet via `linkErc8004()`. This c
 
 ## Phase 2 — Social Vault Contracts
 
-> **Network: Base Sepolia (testnet).** Mainnet deployment is a separate step ahead of public launch.
+> **Network: Base Sepolia testnet only.** Social Vaults have not yet been deployed to mainnet — this will happen as a separate step at Phase 2 public launch.
 
 Three contracts power the Social Vault system:
 
-| Contract | Address (Base Sepolia) | Role |
+| Contract | Address (Base Sepolia — testnet) | Role |
 |---|---|---|
 | `SocialVault` | `0xb9FB965Caa7197932b52631e0121Ea54586e2B88` | Holds LP deposits, manages V4 liquidity position |
 | `FeeVault` | `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE` | Accumulates swap fees + MEV capture; distributes to LPs at epoch close |

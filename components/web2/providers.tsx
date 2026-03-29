@@ -4,15 +4,10 @@ import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit'
 import { WagmiProvider, useAccount, type State } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from '@/lib/web3/wagmi'
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
-import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react'
-import { WalletModalProvider } from '@solana/wallet-adapter-react-ui'
-import { PhantomWalletAdapter, SolflareWalletAdapter } from '@solana/wallet-adapter-wallets'
-import '@solana/wallet-adapter-react-ui/styles.css'
-
-const SOLANA_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC ?? 'https://api.mainnet-beta.solana.com'
+import { SolanaProvider } from '@/components/web3/SolanaProvider'
 
 // ── Global referral gate — mounted inside every page ───────────────────────
 // Checks if the connected wallet needs the ref code prompt and renders it.
@@ -38,33 +33,25 @@ export function Providers({
   initialState?: State
 }) {
   const [queryClient] = useState(() => new QueryClient())
-  const wallets = useMemo(
-    () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
-    []
-  )
 
   return (
-    <ConnectionProvider endpoint={SOLANA_RPC}>
-      <WalletProvider wallets={wallets} autoConnect={false}>
-        <WalletModalProvider>
-          <WagmiProvider config={wagmiConfig} initialState={initialState}>
-            <QueryClientProvider client={queryClient}>
-              <RainbowKitProvider
-                theme={lightTheme({
-                  accentColor: '#0052FF',
-                  accentColorForeground: 'white',
-                  borderRadius: 'medium',
-                  fontStack: 'system',
-                })}
-                modalSize="compact"
-              >
-                {children}
-                <GlobalReferralGate />
-              </RainbowKitProvider>
-            </QueryClientProvider>
-          </WagmiProvider>
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <WagmiProvider config={wagmiConfig} initialState={initialState}>
+      <QueryClientProvider client={queryClient}>
+        <RainbowKitProvider
+          theme={lightTheme({
+            accentColor: '#0052FF',
+            accentColorForeground: 'white',
+            borderRadius: 'medium',
+            fontStack: 'system',
+          })}
+          modalSize="compact"
+        >
+          <SolanaProvider>
+            {children}
+            <GlobalReferralGate />
+          </SolanaProvider>
+        </RainbowKitProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   )
 }

@@ -11,6 +11,7 @@
 // =============================================================================
 
 import { useAccount } from 'wagmi'
+import { useWallet } from '@solana/wallet-adapter-react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import type { ActionDef } from '@/components/rewards/campaigns/ActionsPanel'
@@ -93,9 +94,11 @@ function ReferralCard({ refLink, earnDesc }: { refLink: string; earnDesc: string
 // ── Page content ──────────────────────────────────────────────────────────────
 function CampaignDetailContent() {
   const { address }   = useAccount()
+  const { publicKey: solPublicKey, connected: solConnected } = useWallet()
+  const isEvmWallet   = !!address
   const params        = useParams()
   const campaignId    = params?.id as string
-  const wallet        = address?.toLowerCase() ?? ''
+  const wallet        = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
   const { refCode }   = useReferral(wallet || undefined)
 
   const [campaign,     setCampaign]    = useState<Campaign | null>(null)
@@ -251,14 +254,21 @@ function CampaignDetailContent() {
 
               {/* Join / locked / joined state */}
               <div className={isJoined ? 'mb-4' : 'mb-6'}>
-                <JoinButton
-                  campaignId={campaignId}
-                  minScore={minScore}
-                  userScore={displayScore}
-                  isJoined={isJoined}
-                  wallet={address}
-                  onJoined={() => { setLocallyJoined(true); fetchCampaign() }}
-                />
+                {!isEvmWallet ? (
+                  <div className="w-full px-4 py-3 rounded-xl text-[13px] text-center font-sans"
+                    style={{ background: 'rgba(153,69,255,0.06)', border: '1px solid rgba(153,69,255,0.18)', color: '#9945FF' }}>
+                    Campaign rewards are EVM tokens — connect an EVM wallet to join.
+                  </div>
+                ) : (
+                  <JoinButton
+                    campaignId={campaignId}
+                    minScore={minScore}
+                    userScore={displayScore}
+                    isJoined={isJoined}
+                    wallet={address}
+                    onJoined={() => { setLocallyJoined(true); fetchCampaign() }}
+                  />
+                )}
               </div>
 
               {/* ── Referral link — shown immediately after joining ── */}

@@ -55,7 +55,7 @@ Oracle signatures are:
 
 ## What Activity Is Detected
 
-The watcher currently monitors **WETH Transfer events** on Base Sepolia as a primary activity signal. Any registered agent wallet that sends or receives WETH is detected and eligible for a scoring action.
+The watcher currently monitors **WETH Transfer events** on Base mainnet as a primary activity signal. Any registered agent wallet that sends or receives WETH is detected and eligible for a scoring action.
 
 Additional signal types — campaign-specific swaps, governance interactions, LP events — are planned for future versions.
 

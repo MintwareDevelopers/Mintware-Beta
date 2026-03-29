@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { useWallet } from '@solana/wallet-adapter-react'
+import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { MwNav } from '@/components/web2/MwNav'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
@@ -63,6 +64,7 @@ function actionDesc(key: string, campaignName: string): string {
 export default function SwapPage() {
   const { address } = useAccount()
   const { publicKey: solPublicKey, connected: solConnected } = useWallet()
+  const { setVisible: openSolanaModal } = useWalletModal()
 
   const isEvmWallet = !!address
   const isSolWallet = !isEvmWallet && solConnected && !!solPublicKey

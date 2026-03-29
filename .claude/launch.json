@@ -13,6 +13,27 @@
       "runtimeExecutable": "/bin/bash",
       "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && cd '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/adoring-hodgkin' && node node_modules/next/dist/bin/next dev --port 3001"],
       "port": 3001
+    },
+    {
+      "name": "objective-faraday",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && cd '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/objective-faraday' && node node_modules/next/dist/bin/next dev"],
+      "port": 3002,
+      "autoPort": true
+    },
+    {
+      "name": "gifted-hodgkin",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && cd '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/gifted-hodgkin' && node node_modules/next/dist/bin/next dev --port 3003"],
+      "port": 3003,
+      "autoPort": true
+    },
+    {
+      "name": "cranky-curie",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && cd '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/cranky-curie' && node node_modules/next/dist/bin/next dev --port 3004"],
+      "port": 3004,
+      "autoPort": true
     }
   ]
 }

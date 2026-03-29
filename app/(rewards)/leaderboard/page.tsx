@@ -1,10 +1,12 @@
 'use client'
 
 import { useAccount } from 'wagmi'
+import { useWallet } from '@solana/wallet-adapter-react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
 import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
+import { generateRefCode } from '@/lib/rewards/referral/utils'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { Users, Coins, TrendingUp } from 'lucide-react'
 
@@ -31,7 +33,8 @@ interface LeaderboardEntry {
 // ─── Leaderboard Content ──────────────────────────────────────────────────────
 function LeaderboardContent() {
   const { address } = useAccount()
-  const wallet = address?.toLowerCase() ?? ''
+  const { publicKey: solPublicKey, connected: solConnected } = useWallet()
+  const wallet = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
 
   const [campaigns, setCampaigns]             = useState<Campaign[]>([])
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null)
@@ -41,7 +44,8 @@ function LeaderboardContent() {
   const [lbSubText, setLbSubText]             = useState('Loading…')
   const [linkCopied, setLinkCopied]           = useState(false)
 
-  const refLink = wallet ? `mintware.app/r/${wallet.slice(0, 10)}` : ''
+  const refCode = wallet ? generateRefCode(wallet) : ''
+  const refLink = refCode ? `${typeof window !== 'undefined' ? window.location.origin : 'https://mintware.finance'}/ref/${refCode}` : ''
 
   function copyLink() {
     if (!refLink) return

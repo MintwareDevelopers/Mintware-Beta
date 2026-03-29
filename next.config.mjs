@@ -3,6 +3,9 @@ const nextConfig = {
   // Never expose source maps in production — prevents reverse-engineering
   productionBrowserSourceMaps: false,
 
+  // Disable Turbopack for production builds (use webpack) — Turbopack panics on 16.1.6 prod build
+  bundlePagesRouterDependencies: true,
+
   images: {
     unoptimized: true,
   },

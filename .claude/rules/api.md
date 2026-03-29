@@ -1,0 +1,79 @@
+# API
+
+## Base URL
+
+```ts
+export const API = 'https://attribution-scorer.ceo-1f9.workers.dev'
+```
+
+Import from `lib/web2/api.ts` — **never hardcode**.
+
+## Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `GET /campaigns` | GET | All campaigns |
+| `GET /campaign?id=&address=` | GET | Single campaign + participant data |
+| `POST /join` | POST | Join a campaign `{ campaign_id, address }` |
+| `GET /leaderboard?campaign_id=` | GET | Leaderboard for a campaign |
+| `GET /score?address=` | GET | Full Attribution score profile |
+
+## `/score` Response Shape
+
+```json
+{
+  "score": 149,
+  "tier": "bronze",
+  "percentile": 12,
+  "walletAge": "117 months",
+  "firstSeen": "Jun 2016",
+  "chains": 2,
+  "totalTxCount": 168,
+  "treeSize": 0,
+  "treeQuality": "0.00",
+  "totalLo": 710,
+  "totalHi": 3250,
+  "signals": [
+    { "key": "volume",     "name": "Volume",     "icon": "⇄", "max": 100, "color": "#3A52CC", "score": 41, "insights": [] },
+    { "key": "trading",    "name": "Trading",    "icon": "◈", "max": 75,  "color": "#6B8FFF", "score": 24, "insights": [] },
+    { "key": "holding",    "name": "Holding",    "icon": "◆", "max": 100, "color": "#2A9E8A", "score": 39, "insights": [] },
+    { "key": "liquidity",  "name": "Liquidity",  "icon": "⬡", "max": 150, "color": "#C27A00", "score": 0,  "insights": [] },
+    { "key": "governance", "name": "Governance", "icon": "⊕", "max": 100, "color": "#7B6FCC", "score": 0,  "insights": [] },
+    { "key": "sharing",    "name": "Sharing",    "icon": "◉", "max": 400, "color": "#C2537A", "score": 0,  "insights": [] }
+  ],
+  "character": { "label": "Ghost", "color": "#9898C0", "desc": "...", "icon": "○" },
+  "uvOpportunities": [{ "name": "Jupiter", "cat": "Aggr · Solana", "lo": 110, "hi": 500 }],
+  "timeline": [{ "date": "2025-04", "score": 40, "events": [] }],
+  "projects": [{ "name": "Ether", "symbol": "ETH", "cat": "Token", "deployed": 40 }]
+}
+```
+
+**Max score** = 100+75+100+150+100+400 = **925**
+**Tier strings**: `"bronze"`, `"silver"`, `"gold"` — capitalize for display.
+
+## Shared Helpers (`lib/web2/api.ts`)
+
+| Helper | Usage |
+|---|---|
+| `fmtUSD(n)` | `$2.7k`, `$1.2M` |
+| `daysUntil(iso)` | Days remaining from ISO date |
+| `shortAddr(addr)` | `0x1234…abcd` |
+| `iconColor(name)` | Deterministic `{ bg, fg }` palette from string |
+
+## Internal API Routes
+
+| Route | Method | Notes |
+|---|---|---|
+| `/api/referral` | GET | `?address=` reads `referral_stats` |
+| `/api/referral/apply` | POST | Server-gated referral insert — 24h time-gate |
+| `/api/swap/quote` | POST | LI.FI proxy (hides API key, injects fee) |
+| `/api/campaigns/swap-event` | POST | On-chain tx verification before reward credit |
+| `/api/claim` | POST | Merkle proof + oracle sig — fetches `deadline` from DB |
+| `/api/claim/status` | GET | Returns `deadline` in distribution shape |
+| `/api/claim/mark-claimed` | POST | Bearer-auth — marks pending_rewards as claimed |
+| `/api/agents/leaderboard` | GET | AI agent leaderboard |
+| `/api/agents/[address]/pending` | GET | Pending actions for agent address |
+| `/api/eas/attest-score` | POST | EAS offchain score attestation |
+| `/api/eas/attest-reward` | POST | EAS offchain reward attestation |
+| `/api/auth/connect` | POST | Wallet connect + basename ref code resolution |
+| `/api/waitlist` | POST | Waitlist signup → `waitlist` Supabase table |

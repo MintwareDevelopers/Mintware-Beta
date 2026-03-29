@@ -1,6 +1,6 @@
 {
   "name": "@mintware/ai-attribution-sdk",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Mintware AI Attribution SDK — ERC-8004 agent trust layer for DeFi",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -16,7 +16,23 @@
     "build": "tsc --project tsconfig.json",
     "test": "echo 'no tests yet'"
   },
-  "keywords": ["mintware", "ai-attribution", "erc-8004", "defi", "reputation", "agent", "ai-agent", "on-chain", "scoring", "oracle", "base", "blockchain", "attribution", "web3", "autonomous-agent"],
+  "keywords": [
+    "mintware",
+    "ai-attribution",
+    "erc-8004",
+    "defi",
+    "reputation",
+    "agent",
+    "ai-agent",
+    "on-chain",
+    "scoring",
+    "oracle",
+    "base",
+    "blockchain",
+    "attribution",
+    "web3",
+    "autonomous-agent"
+  ],
   "author": "Mintware",
   "license": "MIT",
   "peerDependencies": {

@@ -1,0 +1,68 @@
+{
+  "name": "Mintware Attribution Oracle",
+  "description": "On-chain reputation scoring for AI agents and wallets. The oracle watcher scans Base mainnet every 60 seconds for activity from registered agents, signs EIP-712 attestations off-chain, and stores them for agents to claim on-chain. Agent pays gas, oracle pays nothing. Scores 100+ behavioral signals across 100+ chains.",
+  "url": "https://mintware.finance",
+  "version": "3.0.0",
+  "documentationUrl": "https://docs.mintware.finance/ai-attribution/overview",
+  "provider": {
+    "organization": "Mintware",
+    "url": "https://mintware.finance"
+  },
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "defaultInputModes": ["application/json"],
+  "defaultOutputModes": ["application/json"],
+  "skills": [
+    {
+      "id": "register_agent",
+      "name": "Register Agent",
+      "description": "Register an AI agent wallet with the Mintware Attribution Oracle. One-time, permissionless. The oracle watcher will begin scoring the agent's on-chain activity within 60 seconds.",
+      "tags": ["registration", "identity", "erc-8004"],
+      "examples": [
+        "Register my agent wallet 0xABC... with Mintware",
+        "Add my agent to the Mintware reputation oracle"
+      ],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "get_score",
+      "name": "Get Attribution Score",
+      "description": "Fetch the current on-chain Attribution score for any wallet or AI agent. Returns score, tier, percentile, and per-signal breakdown.",
+      "tags": ["reputation", "score", "attribution"],
+      "examples": [
+        "What is the Mintware score for 0xABC...?",
+        "Look up agent reputation on Mintware"
+      ],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "claim_pending_actions",
+      "name": "Claim Pending Actions",
+      "description": "Fetch pre-signed EIP-712 attestations from the oracle and submit them to the on-chain AIAttribution contract. Updates the agent's on-chain score. Agent pays gas.",
+      "tags": ["claim", "attestation", "eip-712"],
+      "examples": [
+        "Claim my pending Mintware attestations",
+        "Submit my pending actions to update my Attribution score"
+      ],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    },
+    {
+      "id": "get_leaderboard",
+      "name": "Get Agent Leaderboard",
+      "description": "Fetch the live leaderboard of registered AI agents ranked by Attribution score on Base mainnet.",
+      "tags": ["leaderboard", "ranking", "discovery"],
+      "examples": [
+        "Show me the top Mintware agents",
+        "Who are the highest scored agents on Mintware?"
+      ],
+      "inputModes": ["application/json"],
+      "outputModes": ["application/json"]
+    }
+  ]
+}

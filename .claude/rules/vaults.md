@@ -1,0 +1,55 @@
+# Vaults — Phase 2 (Social Liquidity Vaults)
+
+## Status: T1.1 complete (2026-03-23)
+
+Branch strategy:
+- `main` — Phase 1, always deployable
+- `feature/phase-2` — integration branch (nothing to main until Phase 2 ships)
+- `feature/p2-contracts` — V4 contracts (commit `7034f40`)
+- `feature/p2-schema`, `feature/p2-frontend` — created, not started
+
+## Contracts (Foundry — `contracts-v4/`)
+
+| File | Purpose |
+|---|---|
+| `contracts-v4/src/MWSocialHook.sol` | Uniswap V4 hook — vault-only LP, dynamic fee, MEV capture |
+| `contracts-v4/src/SocialVault.sol` | LP position manager — deposits, lock tiers, withdrawal queue |
+| `contracts-v4/src/FeeVault.sol` | Fee accumulation + epoch distribution + 90-day soft expiry |
+| `contracts-v4/src/lib/LockLib.sol` | Lock tier math + early exit penalty |
+| `contracts-v4/src/lib/FeeLib.sol` | Attribution-weighted fee share math |
+| `contracts-v4/test/SocialVault.t.sol` | Forge tests — stubbed |
+| `contracts-v4/test/FeeVault.t.sol` | Forge tests — stubbed |
+| `contracts-v4/script/Deploy.s.sol` | Deploy script — implement at T1.6 |
+| `foundry.toml` | Foundry config at project root |
+
+## Key V4 Facts (avoid re-learning)
+
+- **`BaseHook.sol` does not exist** in current v4-core/v4-periphery. Implement `IHooks` directly.
+- Hook address must have correct permission bits at deploy. Use `HookMiner.find()` (CREATE2 salt mining). Required for T1.4.
+- `contracts-v4/out/` is gitignored.
+- Forge: `~/.foundry/bin/forge` — add to PATH: `export PATH="$HOME/.foundry/bin:$PATH"`
+
+## Pending T1.2 Work
+
+- Fix `FeeVault.socialVault` circular dep (immutable → owner-settable)
+- Implement Pyth MEV capture in `afterSwap`
+
+## Feature Flags
+
+All vault pages gated on `NEXT_PUBLIC_PHASE2_ENABLED`:
+- `/vaults`, `/vault/[id]`, `/vault/create` → redirect to `/` if not set
+- All Phase 2 contract reads gated on `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS` being set
+
+## Scripts
+
+```bash
+pnpm forge:build        # compile V4 contracts
+pnpm forge:test         # Forge test suite
+pnpm forge:test:gas     # with gas report
+pnpm test:all           # vitest + hardhat + forge
+```
+
+## Products
+
+- **Attribution** (live) — on-chain reputation scoring, 100+ chains
+- **Mintware** (coming soon) — social LP vaults + reward pools weighted by Attribution score

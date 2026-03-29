@@ -90,13 +90,41 @@ async function isCodeTaken(
 // @param supabase Supabase service client for collision checks
 // @returns        Unique ref code string (max 32 chars)
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// isSolanaAddress — base58, no 0x prefix, 32-44 chars
+// ---------------------------------------------------------------------------
+function isSolanaAddress(address: string): boolean {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)
+}
+
+// ---------------------------------------------------------------------------
+// solanaAddressFragment — first 6 chars of the base58 address (already base58)
+// e.g. "8xKp3m...mN3q" → "8xKp3m"
+// ---------------------------------------------------------------------------
+function solanaAddressFragment(address: string): string {
+  return address.slice(0, 6)
+}
+
 export async function generateRefCodeForWallet(
   address:  string,
   supabase: ReturnType<typeof createBrowserClient>
 ): Promise<string> {
   const addr = address.toLowerCase()
 
-  // 1. Try Basename
+  // Solana addresses are already base58 — skip Basename lookup, use fragment directly
+  if (isSolanaAddress(address)) {
+    const base = solanaAddressFragment(address)
+    let candidate = base
+    let suffix = 2
+    while (await isCodeTaken(supabase, candidate, addr)) {
+      candidate = `${base}${suffix}`
+      suffix++
+      if (suffix > 99) { candidate = `${base}${address.slice(0, 4)}`; break }
+    }
+    return candidate
+  }
+
+  // 1. Try Basename (EVM only)
   const basename = await resolveBasename(addr)
   const base     = basename
     ? extractBasenameHandle(basename)

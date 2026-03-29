@@ -24,7 +24,9 @@ User (browser)
   │
   └── MintwareDistributor.sol       — on-chain Merkle claim contract
         Base mainnet: 0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE
-        Base Sepolia: 0xcf2EA99639C038a475B710b2Be82b974D777C306
+        Base Sepolia: 0xcf2EA99639C038a475B710b2Be82b974D777C306 (legacy testnet — not in use)
+  └── AIAttribution.sol             — AI agent reputation scoring (ERC-8004)
+        Base mainnet: 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421 (v3 — live)
 ```
 
 ---
@@ -191,8 +193,8 @@ Scheduled: GET /api/cron/epoch-end (auth: Bearer CRON_SECRET)
 |-----------|---------|-------|
 | Web app | Vercel | Next.js 16, Turbopack |
 | Database | Supabase (bqwcwrnqpayfndgmceal) | PostgreSQL + Realtime + RLS |
-| Contracts | Base mainnet (primary) | MintwareDistributor.sol |
-| Contracts | Base Sepolia | Testnet |
+| Contracts | Base mainnet | MintwareDistributor.sol + AIAttribution v3 |
+| Contracts | Base Sepolia | Phase 2 vaults only (testnet — not yet mainnet) |
 | Scoring | Cloudflare Workers (external) | attribution-scorer.ceo-1f9.workers.dev |
 | CDN/Edge | Vercel Edge Network | No separate Cloudflare layer needed |
 

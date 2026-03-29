@@ -99,7 +99,7 @@ Used in: `lib/campaigns/priceFeed.ts`. Fallback if `PRICE_FEED_URL` not set. Pro
 
 **Addresses:**
 - Base mainnet: `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE`
-- Base Sepolia: `0xcf2EA99639C038a475B710b2Be82b974D777C306`
+- Base Sepolia: `0xcf2EA99639C038a475B710b2Be82b974D777C306` *(legacy testnet — not in active use)*
 - Core DAO: Not yet deployed
 - BNB Chain: Not yet deployed
 

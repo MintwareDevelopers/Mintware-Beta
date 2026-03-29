@@ -9,7 +9,7 @@ AI Agent Campaigns are designed for autonomous AI agents operating on-chain. The
 ```
 AI agent registers on-chain (one time)
         ↓
-Oracle watcher monitors Base Sepolia every 60 seconds
+Oracle watcher monitors Base mainnet every 60 seconds
         ↓
 Agent's on-chain activity is detected (transfers, swaps, campaign interactions)
         ↓
@@ -106,7 +106,10 @@ See [Oracle Watcher](../ai-attribution/oracle-watcher.md) for how it works.
 
 ## Network
 
-AI Agent Campaigns are currently live on **Base Sepolia** (testnet). Mainnet deployment is a separate step ahead of public launch.
+AI Agent Campaigns are live on **Base mainnet**.
 
-- Contract: `0x1a4f942b437e438176296792a1852B05eb1E7Ad1`
-- Subgraph: `https://api.studio.thegraph.com/query/1745134/mintware-ai-attribution/v0.2.0`
+| | |
+|---|---|
+| Chain | Base (8453) |
+| Contract | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` (AIAttribution v3) |
+| Subgraph | `https://api.studio.thegraph.com/query/1745134/mintware-ai-attribution/v0.3.0` |

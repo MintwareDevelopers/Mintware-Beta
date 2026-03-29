@@ -19,9 +19,9 @@ import {
   http,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { baseSepolia } from 'viem/chains'
+import { base, baseSepolia } from 'viem/chains'
 
-import { AI_ATTRIBUTION_ABI, DEFAULT_CONTRACT, DEFAULT_RPC_URL } from './constants.js'
+import { AI_ATTRIBUTION_ABI, CONTRACT_ADDRESSES, DEFAULT_CONTRACT, DEFAULT_RPC_URL } from './constants.js'
 import type { AgentScore, WriteOptions, OracleOptions, SdkOptions } from './types.js'
 
 export { AI_ATTRIBUTION_ABI, CONTRACT_ADDRESSES, DEFAULT_RPC, DEFAULT_CONTRACT } from './constants.js'
@@ -29,9 +29,15 @@ export type { AgentScore, AgentCampaign, SdkOptions, WriteOptions, OracleOptions
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function resolveChain(opts?: SdkOptions) {
+  // If a custom RPC is provided alongside baseSepolia contract address, use testnet chain
+  const contract = opts?.contractAddress ?? DEFAULT_CONTRACT
+  return contract === CONTRACT_ADDRESSES.baseSepolia ? baseSepolia : base
+}
+
 function publicClient(opts?: SdkOptions) {
   return createPublicClient({
-    chain:     baseSepolia,
+    chain:     resolveChain(opts),
     transport: http(opts?.rpcUrl ?? DEFAULT_RPC_URL),
   })
 }
@@ -39,7 +45,7 @@ function publicClient(opts?: SdkOptions) {
 function walletClient(privateKey: `0x${string}`, opts?: SdkOptions) {
   return createWalletClient({
     account:   privateKeyToAccount(privateKey),
-    chain:     baseSepolia,
+    chain:     resolveChain(opts),
     transport: http(opts?.rpcUrl ?? DEFAULT_RPC_URL),
   })
 }

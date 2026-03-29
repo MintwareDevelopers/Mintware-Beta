@@ -95,8 +95,17 @@ function getSwapRpcUrl(chain: string | null): string | null {
 
 // Known LI.FI router addresses — any tx that isn't routed through one of these
 // should not earn rewards. Lowercased for case-insensitive comparison.
+//
+// M3: Expanded to cover bridge-specific and chain-specific routers that LI.FI
+// uses when routing through Stargate, Across, or Hop.
+// Source: https://github.com/lifinance/contracts/blob/main/deployments/
+// Add new addresses here when LI.FI deploys new router versions.
 const LIFI_ROUTERS: ReadonlySet<string> = new Set([
-  '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae', // LI.FI Diamond (EVM)
+  '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae', // LI.FI Diamond (EVM) — primary
+  '0x341e94069f53234fe6dabef707ad424830525715', // LI.FI Diamond v2 (Base, BNB)
+  '0xde1e598b81620773454588b85d6b5d4eec32573e', // LI.FI relayer (cross-chain)
+  '0x1111111254eeb25477b68fb85ed929f73a960582', // 1inch v5 (used by LI.FI DEX aggregation)
+  '0xe592427a0aece92de3edee1f18e0157c05861564', // Uniswap V3 SwapRouter (LI.FI DEX step)
 ])
 
 async function verifySwapTx(
@@ -169,6 +178,13 @@ async function verifySwapTx(
 }
 
 // ---------------------------------------------------------------------------
+// C1: Maximum single-trade USD value accepted for reward calculation.
+// This mirrors the cap in the swap-event route payload validator.
+// Belt-and-suspenders: also enforced here so processTokenPool() is safe
+// even when called from paths other than the public API route.
+const MAX_SINGLE_TRADE_USD = 10_000
+
+// ---------------------------------------------------------------------------
 // Token pool branch
 //
 // Computes buyer, referrer, and platform fee rewards in USD.
@@ -185,20 +201,32 @@ async function processTokenPool(
   campaign: Campaign,
   referrer: string | null
 ): Promise<AttributionResult> {
+  // C1: Clamp amount_usd at the global ceiling before any reward math.
+  const safeAmountUsd = Math.min(event.amount_usd, MAX_SINGLE_TRADE_USD)
+  const clampedEvent  = safeAmountUsd !== event.amount_usd
+    ? { ...event, amount_usd: safeAmountUsd }
+    : event
+  if (clampedEvent !== event) {
+    console.warn(
+      `[swapHook] amount_usd clamped: wallet=${event.wallet} ` +
+      `original=${event.amount_usd} capped=${safeAmountUsd} tx=${event.tx_hash}`
+    )
+  }
+
   // Treasury wallet for platform fee — set at campaign creation, taken from pool
   const treasuryWallet = (process.env.MINTWARE_TREASURY_ADDRESS ?? '').toLowerCase()
   if (!treasuryWallet) {
     console.warn('[swapHook] MINTWARE_TREASURY_ADDRESS not set — platform fee row will have empty wallet')
   }
 
-  const buyer_reward_usd = calcBuyerReward(event.amount_usd, campaign.buyer_reward_pct ?? 0)
+  const buyer_reward_usd = calcBuyerReward(clampedEvent.amount_usd, campaign.buyer_reward_pct ?? 0)
   const referral_reward_usd = referrer
-    ? calcReferrerReward(event.amount_usd, campaign.referral_reward_pct ?? 0)
+    ? calcReferrerReward(clampedEvent.amount_usd, campaign.referral_reward_pct ?? 0)
     : 0
   // Platform fee is ONLY taken on successful referrals — no referrer, no Mintware cut.
   // Fee comes out of the pool at the percentage set at campaign creation, not added on top.
   const platform_fee_usd = referrer
-    ? (event.amount_usd * (campaign.platform_fee_pct ?? 0)) / 100
+    ? (clampedEvent.amount_usd * (campaign.platform_fee_pct ?? 0)) / 100
     : 0
 
   const total_deduction = buyer_reward_usd + referral_reward_usd + platform_fee_usd
@@ -307,7 +335,7 @@ async function processTokenPool(
       token_contract: campaign.token_contract ?? '',
       amount_wei: resolveWei(buyer_reward_usd),  // price-locked at swap time
       reward_usd: buyer_reward_usd,
-      purchase_amount_usd: event.amount_usd,
+      purchase_amount_usd: clampedEvent.amount_usd,
       tx_hash: event.tx_hash,
       claimable_at,
       status: 'locked' as const,
@@ -323,7 +351,7 @@ async function processTokenPool(
       token_contract: campaign.token_contract ?? '',
       amount_wei: resolveWei(referral_reward_usd),  // price-locked at swap time
       reward_usd: referral_reward_usd,
-      purchase_amount_usd: event.amount_usd,
+      purchase_amount_usd: clampedEvent.amount_usd,
       tx_hash: event.tx_hash,
       claimable_at,
       status: 'locked' as const,
@@ -338,7 +366,7 @@ async function processTokenPool(
         token_contract: campaign.token_contract ?? '',
         amount_wei: resolveWei(platform_fee_usd),  // price-locked at swap time
         reward_usd: platform_fee_usd,
-        purchase_amount_usd: event.amount_usd,
+        purchase_amount_usd: clampedEvent.amount_usd,
         tx_hash: event.tx_hash,
         claimable_at,
         status: 'locked' as const,
@@ -496,6 +524,19 @@ export async function processSwapEvent(event: SwapEvent): Promise<AttributionRes
   const supabase = createSupabaseServiceClient()
 
   // 1. Idempotency — has this wallet already been credited a 'trade' for this tx?
+  //
+  // M1: This is a read-then-write check. Two concurrent calls with the same
+  // tx_hash + wallet can both pass this check before either writes.
+  // The application-level check is a performance guard (avoid downstream work).
+  // The correctness guarantee MUST come from a DB unique constraint:
+  //
+  //   ALTER TABLE activity
+  //     ADD CONSTRAINT activity_tx_wallet_action_unique
+  //     UNIQUE (campaign_id, tx_hash, wallet, action_type);
+  //
+  // Apply this migration in Supabase to close the race window.
+  // With the constraint, the second concurrent insert will fail and the error
+  // is surfaced as 'db_error' — the first credit is already committed and correct.
   const { data: existing } = await supabase
     .from('activity')
     .select('id')

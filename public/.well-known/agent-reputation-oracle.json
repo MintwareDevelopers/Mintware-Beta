@@ -1,16 +1,18 @@
 {
   "schema_version": "1.0",
+  "erc8004_agent_id": 37297,
+  "erc8004_registry": "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
   "name": "Mintware AI Attribution Oracle",
-  "description": "Gasless on-chain reputation scoring for AI agents. The oracle watcher scans for WETH activity from registered agents, signs EIP-712 attestations, and stores them for agents to claim — agent pays gas, oracle pays nothing.",
+  "description": "On-chain reputation scoring for AI agents. The oracle watcher scans Base mainnet for activity from registered agents, signs EIP-712 attestations, and stores them for agents to claim — agent pays gas, oracle pays nothing.",
   "url": "https://mintware.finance",
   "docs": "https://docs.mintware.finance/ai-attribution/overview",
 
   "network": {
-    "chain_id": 84532,
-    "chain_name": "Base Sepolia",
-    "contract_address": "0x1a4f942b437e438176296792a1852B05eb1E7Ad1",
-    "contract_version": "2.0.0",
-    "rpc_url": "https://sepolia.base.org"
+    "chain_id": 8453,
+    "chain_name": "Base mainnet",
+    "contract_address": "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421",
+    "contract_version": "3.0.0",
+    "rpc_url": "https://mainnet.base.org"
   },
 
   "oracle": {
@@ -25,18 +27,20 @@
     "permissionless": true,
     "erc8004_required": false,
     "steps": [
-      "Call registerAgent() on the contract — one-time, permissionless",
-      "POST /api/agents/register to sync your profile with Mintware",
-      "Oracle watcher begins monitoring your address on the next cron tick (~60s)"
+      "npm install @mintware/ai-attribution-sdk",
+      "Call registerWithMintwareOracle({ privateKey }) — one-time, permissionless",
+      "Add claimPendingActions() to your agent loop — oracle auto-detects activity every 60s"
     ],
     "sdk": {
       "package": "@mintware/ai-attribution-sdk",
+      "version": "0.2.0",
       "one_liner": "await registerWithMintwareOracle({ privateKey: '0x...' })"
     }
   },
 
   "score": {
     "dimensions": ["behavior", "contribution", "interpretability", "risk"],
+    "total_formula": "behavior + contribution + interpretability - risk",
     "interpretability_badge": {
       "name": "Transparent Agent",
       "how_to_earn": "Submit MWP folder snapshot hashes via submitMwpHash()"
@@ -50,5 +54,11 @@
     "leaderboard":    { "method": "GET",  "path": "/api/agents" },
     "pending":        { "method": "GET",  "path": "/api/agents/{address}/pending" },
     "record_action":  { "method": "POST", "path": "/api/agents/campaigns/record" }
+  },
+
+  "plugins": {
+    "eliza": "https://github.com/MintwareDevelopers/Mintware-Beta/tree/main/plugins/eliza",
+    "agentkit": "https://github.com/MintwareDevelopers/Mintware-Beta/tree/main/plugins/agentkit",
+    "mcp": "https://github.com/MintwareDevelopers/Mintware-Beta/tree/main/plugins/mcp"
   }
 }

@@ -41,17 +41,25 @@ interface SwapEventPayload {
   timestamp?: string     // ISO 8601 — defaults to now() if not provided
 }
 
+// C1: Hard cap on reported trade size. amount_usd is client-supplied and cannot
+// be on-chain verified (we verify tx success + fee, not swap value). Capping
+// prevents a malicious caller from inflating rewards to drain a token pool.
+// Campaigns with legitimate large trades can raise this via max_single_trade_usd
+// on the campaign row; this constant is the global safety ceiling.
+const MAX_SINGLE_TRADE_USD = 10_000
+
 function validatePayload(body: unknown): body is SwapEventPayload {
   if (!body || typeof body !== 'object') return false
   const b = body as Record<string, unknown>
   return (
     typeof b.tx_hash === 'string' && b.tx_hash.length > 0 &&
-    typeof b.wallet === 'string' && b.wallet.startsWith('0x') &&
+    // L1: full EIP-55 address regex — rejects '0x', '0xinvalid', truncated addrs
+    typeof b.wallet === 'string' && /^0x[0-9a-fA-F]{40}$/.test(b.wallet) &&
     // campaign_id optional — validated if present
     (b.campaign_id === undefined || (typeof b.campaign_id === 'string' && b.campaign_id.length > 0)) &&
     typeof b.token_in === 'string' &&
     typeof b.token_out === 'string' &&
-    typeof b.amount_usd === 'number' && b.amount_usd > 0
+    typeof b.amount_usd === 'number' && b.amount_usd > 0 && b.amount_usd <= MAX_SINGLE_TRADE_USD
   )
 }
 
