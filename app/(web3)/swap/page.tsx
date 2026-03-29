@@ -2,6 +2,8 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
+import { useWallet } from '@solana/wallet-adapter-react'
+import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { MwNav } from '@/components/web2/MwNav'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
@@ -60,7 +62,10 @@ function actionDesc(key: string, campaignName: string): string {
 // ─── Swap Page ─────────────────────────────────────────────────────────────────
 export default function SwapPage() {
   const { address } = useAccount()
-  const wallet = address?.toLowerCase() ?? ''
+  const { publicKey: solPublicKey, connected: solConnected } = useWallet()
+  const { setVisible: openSolanaModal } = useWalletModal()
+  const isEvmWallet = !!address
+  const wallet = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
 
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null)
   const [participant, setParticipant]       = useState<Participant | null>(null)
@@ -179,12 +184,30 @@ export default function SwapPage() {
                 </div>
               )}
 
-              {/* Swap widget elevated card */}
-              <div className="mw-accent-bg bg-white rounded-2xl shadow-feature border border-mw-border overflow-hidden">
-                <Suspense fallback={<SwapSkeleton />}>
-                  <SwapWidget />
-                </Suspense>
-              </div>
+              {/* Solana-only: swap requires EVM wallet */}
+              {!isEvmWallet && solConnected ? (
+                <div className="bg-white rounded-2xl border border-mw-border p-8 text-center flex flex-col items-center gap-4">
+                  <div className="text-[32px]">◎</div>
+                  <div className="text-[16px] font-bold text-mw-ink font-sans">Swap requires an EVM wallet</div>
+                  <div className="text-[13px] text-mw-ink-3 font-sans max-w-[280px] leading-relaxed">
+                    Mintware Swap routes through EVM chains. Connect MetaMask, Coinbase Wallet, or any EVM wallet to start swapping and earning campaign rewards.
+                  </div>
+                  <button
+                    onClick={() => openSolanaModal(false)}
+                    className="mt-1 px-5 py-2.5 rounded-xl bg-mw-brand text-white text-[13px] font-semibold font-sans border-0 cursor-pointer"
+                    style={{ background: 'var(--color-mw-brand)' }}
+                  >
+                    Connect EVM wallet
+                  </button>
+                </div>
+              ) : (
+                /* Swap widget elevated card */
+                <div className="mw-accent-bg bg-white rounded-2xl shadow-feature border border-mw-border overflow-hidden">
+                  <Suspense fallback={<SwapSkeleton />}>
+                    <SwapWidget />
+                  </Suspense>
+                </div>
+              )}
             </div>
 
             {/* ── Right: Context (action cards + routes) ── */}

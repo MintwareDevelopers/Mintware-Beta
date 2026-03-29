@@ -1,6 +1,7 @@
 'use client'
 
 import { useAccount } from 'wagmi'
+import { useWallet } from '@solana/wallet-adapter-react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
@@ -32,7 +33,8 @@ interface LeaderboardEntry {
 // ─── Leaderboard Content ──────────────────────────────────────────────────────
 function LeaderboardContent() {
   const { address } = useAccount()
-  const wallet = address?.toLowerCase() ?? ''
+  const { publicKey: solPublicKey, connected: solConnected } = useWallet()
+  const wallet = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
 
   const [campaigns, setCampaigns]             = useState<Campaign[]>([])
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null)
