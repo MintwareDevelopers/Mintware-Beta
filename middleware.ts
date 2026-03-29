@@ -5,67 +5,30 @@
 //   POST /api/campaigns/swap-event  — 10 req/min per IP
 //   POST /api/campaigns/join        — 5  req/min per IP
 //   POST /api/swap/quote            — 20 req/min per IP
+//   (+ agent and claim endpoints — see RATE_LIMITS below)
 //
-// Implementation note: In-memory sliding window. Serverless instances don't
-// share memory so this limits burst within a single instance (still effective
-// against simple bots). For full cross-instance rate limiting, replace the
-// store with Upstash Redis (@upstash/ratelimit).
+// Implementation:
+//   Primary:  Upstash Redis sliding window — cross-instance, global limits
+//   Fallback: In-memory sliding window — used if UPSTASH_REDIS_REST_URL not set
+//             (effective against simple bots within a single serverless instance)
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 
-interface WindowEntry {
-  count:     number
-  resetTime: number
-}
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-// In-memory store — shared across requests on the same serverless instance
-const store = new Map<string, WindowEntry>()
-
-// Clean up expired entries every 500 requests to prevent unbounded growth
-let cleanupCounter = 0
-function maybeCleanup() {
-  cleanupCounter++
-  if (cleanupCounter % 500 !== 0) return
-  const now = Date.now()
-  for (const [key, entry] of store.entries()) {
-    if (entry.resetTime < now) store.delete(key)
-  }
-}
-
-/**
- * Returns true if the request should be rate-limited (limit exceeded).
- * @param key      Unique key (IP + route)
- * @param limit    Max requests allowed per window
- * @param windowMs Window size in milliseconds
- */
-function isRateLimited(key: string, limit: number, windowMs: number): boolean {
-  maybeCleanup()
-  const now     = Date.now()
-  const entry   = store.get(key)
-
-  if (!entry || entry.resetTime < now) {
-    store.set(key, { count: 1, resetTime: now + windowMs })
-    return false
-  }
-
-  entry.count++
-  if (entry.count > limit) return true
-
-  return false
-}
+interface RuleConfig { limit: number; windowMs: number }
 
 // Route → { limit, windowMs }
-const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
-  '/api/campaigns/swap-event':          { limit: 10, windowMs: 60_000 },
-  '/api/campaigns/join':                { limit:  5, windowMs: 60_000 },
-  '/api/swap/quote':                    { limit: 20, windowMs: 60_000 },
-  '/api/agents/campaigns/record':       { limit: 10, windowMs: 60_000 },
-  '/api/agents/register':               { limit:  5, windowMs: 60_000 },
-  '/api/agents/mwp':                    { limit: 10, windowMs: 60_000 },
-  // H2/L3: previously unprotected endpoints
-  '/api/claim/mark-claimed':            { limit: 20, windowMs: 60_000 },
-  '/api/referral/apply':                { limit: 10, windowMs: 60_000 },
+const RATE_LIMITS: Record<string, RuleConfig> = {
+  '/api/campaigns/swap-event':    { limit: 10, windowMs: 60_000 },
+  '/api/campaigns/join':          { limit:  5, windowMs: 60_000 },
+  '/api/swap/quote':              { limit: 20, windowMs: 60_000 },
+  '/api/agents/campaigns/record': { limit: 10, windowMs: 60_000 },
+  '/api/agents/register':         { limit:  5, windowMs: 60_000 },
+  '/api/agents/mwp':              { limit: 10, windowMs: 60_000 },
+  '/api/claim/mark-claimed':      { limit: 20, windowMs: 60_000 },
+  '/api/referral/apply':          { limit: 10, windowMs: 60_000 },
 }
 
 function getClientIP(req: NextRequest): string {
@@ -76,17 +39,86 @@ function getClientIP(req: NextRequest): string {
   )
 }
 
-export function middleware(req: NextRequest) {
+// ── Upstash Redis rate limiter ─────────────────────────────────────────────────
+
+async function checkUpstash(
+  key: string,
+  rule: RuleConfig
+): Promise<boolean> {
+  const { Ratelimit } = await import('@upstash/ratelimit')
+  const { Redis }     = await import('@upstash/redis')
+
+  const redis = new Redis({
+    url:   process.env.UPSTASH_REDIS_REST_URL!,
+    token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+  })
+
+  const windowSec = Math.ceil(rule.windowMs / 1000)
+  const limiter   = new Ratelimit({
+    redis,
+    limiter:        Ratelimit.slidingWindow(rule.limit, `${windowSec} s`),
+    prefix:         'mw_rl',
+    ephemeralCache: new Map(), // local cache reduces Redis round-trips ~70%
+  })
+
+  const { success } = await limiter.limit(key)
+  return !success // true = rate-limited
+}
+
+// ── In-memory fallback ─────────────────────────────────────────────────────────
+
+interface WindowEntry { count: number; resetTime: number }
+const store = new Map<string, WindowEntry>()
+let cleanupCounter = 0
+
+function maybeCleanup() {
+  if (++cleanupCounter % 500 !== 0) return
+  const now = Date.now()
+  for (const [k, e] of store.entries()) {
+    if (e.resetTime < now) store.delete(k)
+  }
+}
+
+function checkMemory(key: string, rule: RuleConfig): boolean {
+  maybeCleanup()
+  const now   = Date.now()
+  const entry = store.get(key)
+
+  if (!entry || entry.resetTime < now) {
+    store.set(key, { count: 1, resetTime: now + rule.windowMs })
+    return false
+  }
+
+  entry.count++
+  return entry.count > rule.limit
+}
+
+// ── Middleware ─────────────────────────────────────────────────────────────────
+
+export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
   const rule     = RATE_LIMITS[pathname]
 
-  if (!rule) return NextResponse.next()
-  if (req.method !== 'POST') return NextResponse.next()
+  if (!rule || req.method !== 'POST') return NextResponse.next()
 
   const ip  = getClientIP(req)
   const key = `${ip}:${pathname}`
 
-  if (isRateLimited(key, rule.limit, rule.windowMs)) {
+  let limited = false
+
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    try {
+      limited = await checkUpstash(key, rule)
+    } catch (err) {
+      // Fail open — Redis unavailable should never block legitimate users
+      console.warn('[middleware] Upstash error, falling back to memory:', err)
+      limited = checkMemory(key, rule)
+    }
+  } else {
+    limited = checkMemory(key, rule)
+  }
+
+  if (limited) {
     return NextResponse.json(
       { error: 'too many requests', retry_after: Math.ceil(rule.windowMs / 1000) },
       {
