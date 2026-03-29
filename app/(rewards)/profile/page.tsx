@@ -368,7 +368,7 @@ function ProfileContent() {
               className="w-9 h-9 rounded-[10px] flex items-center justify-center text-[17px] shrink-0"
               style={{ background: 'rgba(79,126,247,0.14)', color: 'var(--color-mw-brand)' }}
             >
-              ◉
+              <Share2 size={16} />
             </div>
             <div>
               <div className="text-[13px] font-semibold" style={{ color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)' }}>
