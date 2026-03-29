@@ -7,6 +7,8 @@
 //   POST /api/campaigns/join            — 5  req/min per IP
 //   POST /api/swap/quote                — 20 req/min per IP
 //   POST /api/wallet-link               — 5  req/min per IP
+//   GET  /api/claim                     — 10 req/min per IP
+//   GET  /api/claim/sol                 — 10 req/min per IP
 //
 // Implementation note: In-memory sliding window. Serverless instances don't
 // share memory so this limits burst within a single instance (still effective
@@ -57,8 +59,9 @@ function isRateLimited(key: string, limit: number, windowMs: number): boolean {
   return false
 }
 
-// Route → { limit, windowMs }
-const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
+// Route → { limit, windowMs, method? }
+// method: undefined = POST only (default), 'GET' = GET only, 'ANY' = all methods
+const RATE_LIMITS: Record<string, { limit: number; windowMs: number; method?: string }> = {
   '/api/campaigns/swap-event':          { limit: 10, windowMs: 60_000 },
   '/api/campaigns/sol-swap-event':      { limit: 10, windowMs: 60_000 },
   '/api/campaigns/join':                { limit:  5, windowMs: 60_000 },
@@ -68,6 +71,8 @@ const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
   '/api/agents/campaigns/record':       { limit: 10, windowMs: 60_000 },
   '/api/agents/register':               { limit:  5, windowMs: 60_000 },
   '/api/agents/mwp':                    { limit: 10, windowMs: 60_000 },
+  '/api/claim/sol':                     { limit: 10, windowMs: 60_000, method: 'GET' },
+  '/api/claim':                         { limit: 10, windowMs: 60_000, method: 'GET' },
 }
 
 function getClientIP(req: NextRequest): string {
@@ -83,7 +88,9 @@ export function middleware(req: NextRequest) {
   const rule     = RATE_LIMITS[pathname]
 
   if (!rule) return NextResponse.next()
-  if (req.method !== 'POST') return NextResponse.next()
+  // Default: POST only. Routes with method='GET' apply to GET. method='ANY' applies to all.
+  const targetMethod = rule.method ?? 'POST'
+  if (targetMethod !== 'ANY' && req.method !== targetMethod) return NextResponse.next()
 
   const ip  = getClientIP(req)
   const key = `${ip}:${pathname}`
@@ -112,5 +119,7 @@ export const config = {
     '/api/agents/campaigns/record',
     '/api/agents/register',
     '/api/agents/mwp',
+    '/api/claim/sol',
+    '/api/claim',
   ],
 }

@@ -32,6 +32,10 @@
     "ai:test": "forge test --root contracts-ai -vv",
     "ai:deploy:base-sepolia": "forge script contracts-ai/script/Deploy.s.sol --root contracts-ai --rpc-url base_sepolia --broadcast --verify -vvvv",
     "ai:deploy:base": "forge script contracts-ai/script/Deploy.s.sol --root contracts-ai --rpc-url base --broadcast --verify -vvvv",
+    "anchor:build": "anchor build",
+    "anchor:test": "anchor test",
+    "anchor:deploy:devnet": "anchor deploy --provider.cluster devnet",
+    "anchor:deploy:mainnet": "anchor deploy --provider.cluster mainnet",
     "test:all": "pnpm test && pnpm hardhat:test && pnpm forge:test"
   },
   "dependencies": {

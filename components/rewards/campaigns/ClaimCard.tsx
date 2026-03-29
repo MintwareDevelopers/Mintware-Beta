@@ -6,7 +6,7 @@
 // Displays all claimable, pending, and claimed rewards for a wallet.
 // Called from the /profile page "Rewards" tab.
 //
-// Flow per reward:
+// Flow per reward (EVM):
 //   1. Fetch GET /api/claim/status?address= on mount
 //   2. For 'claimable' rewards, show [Claim Rewards] button
 //   3. On click:
@@ -16,6 +16,14 @@
 //      d. useWaitForTransactionReceipt → pending → success states
 //   4. 'claimed' rewards show tx link to block explorer
 //   5. 'pending' rewards show "Awaiting on-chain publication" state
+//
+// Flow per reward (Solana — Phase 7):
+//   1. isSolanaReward() checks reward.chain === 'solana'
+//   2. Fetch GET /api/claim/sol?campaign_id=&epoch_number=&wallet=
+//   3. Build Transaction with:
+//      a. Ed25519Program.createInstructionWithPublicKey — oracle sig verification
+//      b. Anchor program `claim` instruction (manual discriminator + borsh args)
+//   4. Sign + send via @solana/wallet-adapter-react sendTransaction
 // =============================================================================
 
 import { useState, useEffect, useCallback } from 'react'
@@ -27,6 +35,17 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
 } from 'wagmi'
+import {
+  useWallet,
+  useConnection,
+} from '@solana/wallet-adapter-react'
+import {
+  Transaction,
+  Ed25519Program,
+  TransactionInstruction,
+  PublicKey,
+  Connection,
+} from '@solana/web3.js'
 
 // ---------------------------------------------------------------------------
 // MintwareDistributor ABI — only the functions we call (v2)
@@ -104,6 +123,95 @@ const EXPLORER_TX: Record<string, string> = {
 }
 
 // ---------------------------------------------------------------------------
+// Solana constants (Phase 7)
+// ---------------------------------------------------------------------------
+
+// Mintware Solana distributor program ID
+const SOL_PROGRAM_ID = new PublicKey('MW7D1sTribUTorS0LaNaPr0gram111111111111111')
+
+// Anchor instruction discriminator = sha256("global:claim")[0..8]
+// Precomputed: [62, 198, 214, 193, 213, 159, 108, 210]
+const SOL_CLAIM_DISCRIMINATOR = Buffer.from([62, 198, 214, 193, 213, 159, 108, 210])
+
+// Solana explorer tx link base
+const SOL_EXPLORER_TX = 'https://explorer.solana.com/tx/'
+
+// ---------------------------------------------------------------------------
+// isSolanaReward — true when the reward should be claimed via the Solana path
+// ---------------------------------------------------------------------------
+function isSolanaReward(reward: ClaimableReward): boolean {
+  return reward.chain === 'solana'
+}
+
+// ---------------------------------------------------------------------------
+// encodeSolClaimArgs — manually encodes `claim` instruction args using
+// little-endian borsh layout (no anchor dependency required).
+//
+// Anchor claim instruction layout (after 8-byte discriminator):
+//   epoch_number: u64 LE
+//   merkle_root:  [u8; 32]
+//   oracle_sig:   [u8; 64]
+//   deadline:     i64 LE
+//   amount:       u64 LE
+//   proof_len:    u32 LE
+//   proof:        [[u8; 32]; proof_len]
+// ---------------------------------------------------------------------------
+function encodeSolClaimArgs(args: {
+  epochNumber: number
+  merkleRoot:  string   // hex, 64 chars
+  oracleSig:   string   // hex, 128 chars
+  deadline:    number
+  amount:      string   // as string (u64)
+  proof:       string[] // hex-encoded 32-byte nodes
+}): Buffer {
+  const { epochNumber, merkleRoot, oracleSig, deadline, amount, proof } = args
+
+  const rootBytes = Buffer.from(merkleRoot.replace('0x', ''), 'hex')
+  const sigBytes  = Buffer.from(oracleSig.replace('0x', ''), 'hex')
+
+  if (rootBytes.length !== 32) throw new Error('[ClaimCard/sol] merkleRoot must be 32 bytes')
+  if (sigBytes.length  !== 64) throw new Error('[ClaimCard/sol] oracleSig must be 64 bytes')
+
+  const proofNodes = proof.map(p => {
+    const b = Buffer.from(p.replace('0x', ''), 'hex')
+    if (b.length !== 32) throw new Error('[ClaimCard/sol] proof node must be 32 bytes')
+    return b
+  })
+
+  // Total size: 8(disc) + 8(epoch) + 32(root) + 64(sig) + 8(deadline) + 8(amount) + 4(proof_len) + 32*N(proof)
+  const size = 8 + 8 + 32 + 64 + 8 + 8 + 4 + 32 * proofNodes.length
+  const buf  = Buffer.alloc(size)
+  const view = new DataView(buf.buffer)
+  let offset = 0
+
+  // Discriminator
+  SOL_CLAIM_DISCRIMINATOR.copy(buf, offset); offset += 8
+
+  // epoch_number u64 LE
+  view.setBigUint64(offset, BigInt(epochNumber), true); offset += 8
+
+  // merkle_root [u8; 32]
+  rootBytes.copy(buf, offset); offset += 32
+
+  // oracle_sig [u8; 64]
+  sigBytes.copy(buf, offset); offset += 64
+
+  // deadline i64 LE
+  view.setBigInt64(offset, BigInt.asIntN(64, BigInt(deadline)), true); offset += 8
+
+  // amount u64 LE
+  view.setBigUint64(offset, BigInt(amount), true); offset += 8
+
+  // proof vec: u32 length prefix + nodes
+  view.setUint32(offset, proofNodes.length, true); offset += 4
+  for (const node of proofNodes) {
+    node.copy(buf, offset); offset += 32
+  }
+
+  return buf
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 interface ClaimableReward {
@@ -160,6 +268,253 @@ function fmtDate(iso: string): string {
   } catch {
     return iso
   }
+}
+
+// ---------------------------------------------------------------------------
+// SolanaRewardRow — Phase 7: claim path for rewards on chain === 'solana'
+// ---------------------------------------------------------------------------
+interface SolanaRewardRowProps {
+  reward: ClaimableReward
+  wallet: string   // Solana base58 public key
+  onClaimed: () => void
+}
+
+function SolanaRewardRow({ reward, wallet, onClaimed }: SolanaRewardRowProps) {
+  const { sendTransaction } = useWallet()
+  const { connection } = useConnection()
+
+  const [claimError, setClaimError]     = useState<string | null>(null)
+  const [isLoading, setIsLoading]       = useState(false)
+  const [solTxSig, setSolTxSig]         = useState<string | null>(null)
+  const [isSuccess, setIsSuccess]       = useState(false)
+
+  const iconBgClass = reward.status === 'claimed'
+    ? 'bg-[rgba(42,158,138,0.1)]'
+    : reward.status === 'claimable'
+    ? 'bg-[rgba(58,92,232,0.1)]'
+    : 'bg-[rgba(194,83,122,0.1)]'
+
+  const amountColorClass = reward.status === 'claimable'
+    ? 'text-mw-brand-deep'
+    : reward.status === 'claimed'
+    ? 'text-mw-teal'
+    : 'text-[#1A1A2E]'
+
+  async function handleSolanaClaim() {
+    setClaimError(null)
+
+    // Guard: check deadline before hitting the API
+    if (reward.deadline && reward.deadline < Math.floor(Date.now() / 1000)) {
+      setClaimError('Claim window has expired for this distribution.')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // 1. Fetch oracle sig + proof from server
+      const url = `/api/claim/sol?campaign_id=${encodeURIComponent(reward.campaign_id)}&epoch_number=${reward.epoch_number}&wallet=${encodeURIComponent(wallet)}`
+      const res  = await fetch(url)
+      const json = await res.json()
+
+      if (!res.ok) {
+        setClaimError(json.error ?? 'Failed to fetch Solana claim proof.')
+        return
+      }
+
+      const {
+        merkle_root,
+        oracle_sig,
+        deadline,
+        epoch_number,
+        amount,
+        proof,
+        oracle_pubkey,
+      } = json as {
+        merkle_root:   string
+        oracle_sig:    string
+        deadline:      number
+        epoch_number:  number
+        amount:        string
+        proof:         string[]
+        oracle_pubkey: string
+      }
+
+      // Check deadline again with fresh value from server
+      if (deadline < Math.floor(Date.now() / 1000)) {
+        setClaimError('Claim window has expired. Contact support.')
+        return
+      }
+
+      // 2. Build the oracle message that was signed
+      //    merkle_root[32] || deadline_i64_le[8] || epoch_number_u64_le[8] || campaign_id_utf8[N]
+      const rootBytes    = Buffer.from(merkle_root.replace('0x', ''), 'hex')
+      const campaignIdBytes = new TextEncoder().encode(reward.campaign_id)
+      const oracleMsg    = new Uint8Array(32 + 8 + 8 + campaignIdBytes.length)
+      const oracleMsgView = new DataView(oracleMsg.buffer)
+      oracleMsg.set(rootBytes, 0)
+      oracleMsgView.setBigInt64(32, BigInt.asIntN(64, BigInt(deadline)), true)
+      oracleMsgView.setBigUint64(40, BigInt.asUintN(64, BigInt(epoch_number)), true)
+      oracleMsg.set(campaignIdBytes, 48)
+
+      const oraclePubkeyBytes = Buffer.from(oracle_pubkey.replace('0x', ''), 'hex')
+      const oracleSigBytes    = Buffer.from(oracle_sig.replace('0x', ''), 'hex')
+
+      // 3. Build Ed25519SigVerify instruction (instruction index 0)
+      const ed25519Ix = Ed25519Program.createInstructionWithPublicKey({
+        publicKey:  oraclePubkeyBytes,
+        message:    oracleMsg,
+        signature:  oracleSigBytes,
+        // instructionIndex is not required in newer @solana/web3.js — omit to let it default
+      })
+
+      // 4. Build Anchor program `claim` instruction (instruction index 1)
+      //    Accounts: [globalState, campaign, userClaim, signer, systemProgram, tokenProgram, ...]
+      //    The minimum required accounts depend on the Anchor program's context.
+      //    We encode the instruction data and let the program validate accounts.
+      const claimData = encodeSolClaimArgs({
+        epochNumber: epoch_number,
+        merkleRoot:  merkle_root,
+        oracleSig:   oracle_sig,
+        deadline,
+        amount,
+        proof,
+      })
+
+      // Derive PDAs — the client derives the same addresses as the program
+      const [globalStatePda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('global_state')],
+        SOL_PROGRAM_ID
+      )
+      const [campaignPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('campaign'), Buffer.from(reward.campaign_id)],
+        SOL_PROGRAM_ID
+      )
+      const claimerPubkey = new PublicKey(wallet)
+      const [userClaimPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from('user_claim'), Buffer.from(reward.campaign_id), new Uint8Array([epoch_number & 0xff, (epoch_number >> 8) & 0xff, (epoch_number >> 16) & 0xff, (epoch_number >> 24) & 0xff, 0, 0, 0, 0]), claimerPubkey.toBytes()],
+        SOL_PROGRAM_ID
+      )
+
+      const claimIx = new TransactionInstruction({
+        programId: SOL_PROGRAM_ID,
+        keys: [
+          { pubkey: globalStatePda,  isSigner: false, isWritable: false },
+          { pubkey: campaignPda,     isSigner: false, isWritable: true  },
+          { pubkey: userClaimPda,    isSigner: false, isWritable: true  },
+          { pubkey: claimerPubkey,   isSigner: true,  isWritable: true  },
+        ],
+        data: claimData,
+      })
+
+      // 5. Assemble and send transaction
+      const { blockhash, lastValidBlockHeight } = await (connection as Connection).getLatestBlockhash()
+      const tx = new Transaction()
+      tx.recentBlockhash = blockhash
+      tx.feePayer = claimerPubkey
+      tx.add(ed25519Ix)
+      tx.add(claimIx)
+
+      const signature = await sendTransaction(tx, connection as Connection)
+
+      // 6. Confirm
+      await (connection as Connection).confirmTransaction({ signature, blockhash, lastValidBlockHeight }, 'confirmed')
+
+      setSolTxSig(signature)
+      setIsSuccess(true)
+      toast.success('Solana reward claimed!', {
+        description: `${amount} tokens from ${reward.campaign_name}`,
+      })
+      onClaimed()
+    } catch (err) {
+      const msg = (err as Error & { message?: string })?.message ?? 'Solana claim failed'
+      setClaimError(msg)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-[14px] px-5 py-4 bg-white border border-[#E8E7F4] rounded-[14px] transition-[box-shadow,border-color] duration-150 hover:border-[rgba(58,92,232,0.2)] hover:shadow-[0_2px_8px_rgba(26,26,46,0.06)]">
+      {/* Icon */}
+      <div className={`w-10 h-10 rounded-[10px] flex items-center justify-center text-[18px] shrink-0 ${iconBgClass}`}>
+        {reward.status === 'claimed'
+          ? <CheckCircle2 size={18} />
+          : reward.status === 'claimable'
+          ? <Circle size={18} />
+          : <Clock size={18} />}
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-semibold text-[#1A1A2E] mb-[2px] whitespace-nowrap overflow-hidden text-ellipsis">
+          {reward.campaign_name} — Epoch {reward.epoch_number}
+        </div>
+        <div className="text-[11px] text-mw-ink-4 font-mono">
+          Solana · {fmtDate(reward.created_at)}
+        </div>
+        {isSuccess && solTxSig && (
+          <div className="mt-1 flex items-center gap-1 text-[11px] text-mw-teal font-mono">
+            <CheckCircle2 size={11} /> Claimed!{' '}
+            <a
+              href={`${SOL_EXPLORER_TX}${solTxSig}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-mw-teal underline underline-offset-2"
+            >
+              View tx ↗
+            </a>
+          </div>
+        )}
+        {reward.status === 'claimed' && reward.claimed_at && !isSuccess && (
+          <div className="mt-[3px]">
+            <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[10px] text-[10px] font-semibold tracking-[0.3px] whitespace-nowrap bg-[rgba(42,158,138,0.1)] text-mw-teal">✓ Claimed {fmtDate(reward.claimed_at)}</span>
+          </div>
+        )}
+        {claimError && (
+          <div className="text-[11px] text-mw-pink mt-1 max-w-[220px] break-words">
+            {claimError}
+          </div>
+        )}
+      </div>
+
+      {/* Amount */}
+      <div className={`font-mono text-[15px] font-semibold whitespace-nowrap shrink-0 ${amountColorClass}`}>
+        {reward.amount_wei}
+        {reward.token_symbol ? ` ${reward.token_symbol}` : ''}
+      </div>
+
+      {/* Action */}
+      <div className="shrink-0 ml-2">
+        {reward.status === 'pending' && (
+          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[10px] text-[10px] font-semibold tracking-[0.3px] whitespace-nowrap bg-[rgba(194,83,122,0.1)] text-mw-pink">
+            <Clock size={10} /> Pending
+          </span>
+        )}
+
+        {reward.status === 'claimed' && !isSuccess && (
+          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[10px] text-[10px] font-semibold tracking-[0.3px] whitespace-nowrap bg-[rgba(42,158,138,0.1)] text-mw-teal">
+            <CheckCircle2 size={10} /> Done
+          </span>
+        )}
+
+        {reward.status === 'claimable' && !isSuccess && (
+          <button
+            className="px-4 py-2 rounded-full text-[12px] font-semibold cursor-pointer border-none transition-all duration-150 whitespace-nowrap bg-mw-brand-deep text-white hover:bg-[#2a4cd8] hover:shadow-[0_2px_8px_rgba(58,92,232,0.35)] disabled:opacity-55 disabled:cursor-not-allowed"
+            disabled={isLoading}
+            onClick={handleSolanaClaim}
+          >
+            {isLoading ? 'Claiming…' : 'Claim (Solana)'}
+          </button>
+        )}
+
+        {isSuccess && (
+          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[10px] text-[10px] font-semibold tracking-[0.3px] whitespace-nowrap bg-[rgba(42,158,138,0.1)] text-mw-teal">
+            <CheckCircle2 size={10} /> Claimed
+          </span>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -408,6 +763,18 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
 }
 
 // ---------------------------------------------------------------------------
+// RewardRowDispatch — routes each reward to the correct chain-specific row.
+// Keeps hook call order stable by never conditionally calling hooks inside
+// a single component. Each row component handles its own hooks independently.
+// ---------------------------------------------------------------------------
+function RewardRowDispatch(props: RewardRowProps) {
+  if (isSolanaReward(props.reward)) {
+    return <SolanaRewardRow {...props} />
+  }
+  return <RewardRow {...props} />
+}
+
+// ---------------------------------------------------------------------------
 // ClaimCard — main export
 // ---------------------------------------------------------------------------
 interface ClaimCardProps {
@@ -629,7 +996,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
               <div className="text-[10px] font-bold tracking-[1px] uppercase text-mw-ink-4 mt-5 mb-2">Ready to claim</div>
               <div className="flex flex-col gap-2">
                 {claimable.map(r => (
-                  <RewardRow
+                  <RewardRowDispatch
                     key={`${r.distribution_id}-${r.epoch_number}`}
                     reward={r}
                     wallet={wallet}
@@ -646,7 +1013,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
               <div className="text-[10px] font-bold tracking-[1px] uppercase text-mw-ink-4 mt-5 mb-2">Awaiting publication</div>
               <div className="flex flex-col gap-2">
                 {pending.map(r => (
-                  <RewardRow
+                  <RewardRowDispatch
                     key={`${r.campaign_id}-${r.epoch_number}`}
                     reward={r}
                     wallet={wallet}
@@ -663,7 +1030,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
               <div className="text-[10px] font-bold tracking-[1px] uppercase text-mw-ink-4 mt-5 mb-2">Claimed history</div>
               <div className="flex flex-col gap-2">
                 {claimed.map(r => (
-                  <RewardRow
+                  <RewardRowDispatch
                     key={`${r.distribution_id}-${r.epoch_number}-claimed`}
                     reward={r}
                     wallet={wallet}
