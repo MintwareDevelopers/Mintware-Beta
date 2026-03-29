@@ -7,7 +7,7 @@ pub mod instructions;
 
 use instructions::*;
 
-declare_id!("MW7D1sTribUTorS0LaNaPr0gram111111111111111");
+declare_id!("3mVrMAG3r7ntHHoxwFDdwHZKrLmZBjWpN9kUoKTYcsVa");
 
 // Program-wide constants
 pub const ORACLE_ROTATION_DELAY: i64 = 172_800; // 48 hours in seconds

@@ -1,0 +1,74 @@
+name: Anchor Build & Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Network to deploy to'
+        required: true
+        default: 'devnet'
+        type: choice
+        options:
+          - devnet
+          - mainnet
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache Rust deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Anchor CLI
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          avm install 0.30.1
+          avm use 0.30.1
+          echo "$HOME/.avm/bin" >> $GITHUB_PATH
+
+      - name: Set up deployer wallet
+        run: |
+          mkdir -p ~/.config/solana
+          echo '${{ secrets.SOLANA_DEPLOYER_KEYPAIR }}' > ~/mintware-deployer.json
+          solana config set --keypair ~/mintware-deployer.json
+          solana config set --url ${{ inputs.network == 'mainnet' && 'mainnet-beta' || 'devnet' }}
+          echo "Deployer address: $(solana address)"
+
+      - name: Build
+        working-directory: .
+        run: anchor build
+
+      - name: Deploy
+        working-directory: .
+        run: |
+          anchor deploy --provider.cluster ${{ inputs.network == 'mainnet' && 'mainnet-beta' || 'devnet' }}
+          echo "Program ID: $(solana address -k target/deploy/mintware_distributor_sol-keypair.json)"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: anchor-build-${{ inputs.network }}
+          path: |
+            target/deploy/mintware_distributor_sol.so
+            target/idl/mintware_distributor_sol.json
+          retention-days: 30
