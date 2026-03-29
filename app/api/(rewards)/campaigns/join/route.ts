@@ -1,22 +1,25 @@
 // =============================================================================
 // POST /api/campaigns/join
+//
+// Phase 6 update: accepts Solana (base58) wallets in addition to EVM (0x).
+// Uses getCombinedAttributionScore() so a linked wallet pair gets credit for
+// the stronger score at join time.
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
-import { API } from '@/lib/web2/api'
+import { createSupabaseServiceClient }   from '@/lib/web2/supabase'
+import { getCombinedAttributionScore }   from '@/lib/rewards/combinedScore'
 
-const ETH_ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
+const EVM_RE    = /^0x[0-9a-fA-F]{40}$/
+const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
-/** Fetch with a manual timeout — AbortSignal.timeout not reliable on all runtimes */
-async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), ms)
-  try {
-    return await fetch(url, { signal: controller.signal })
-  } finally {
-    clearTimeout(timer)
-  }
+function isValidAddress(addr: string): boolean {
+  return EVM_RE.test(addr) || SOLANA_RE.test(addr)
+}
+
+/** Preserve case for Solana; lowercase EVM */
+function normalizeWallet(addr: string): string {
+  return EVM_RE.test(addr) ? addr.toLowerCase() : addr
 }
 
 export async function POST(req: NextRequest) {
@@ -30,11 +33,14 @@ export async function POST(req: NextRequest) {
   if (typeof campaign_id !== 'string' || !campaign_id) {
     return NextResponse.json({ error: 'campaign_id required' }, { status: 422 })
   }
-  if (typeof address !== 'string' || !ETH_ADDRESS_RE.test(address)) {
-    return NextResponse.json({ error: 'invalid wallet address' }, { status: 422 })
+  if (typeof address !== 'string' || !isValidAddress(address)) {
+    return NextResponse.json(
+      { error: 'invalid wallet address — must be EVM (0x...) or Solana (base58)' },
+      { status: 422 }
+    )
   }
 
-  const wallet = address.toLowerCase()
+  const wallet = normalizeWallet(address)
 
   let supabase: ReturnType<typeof createSupabaseServiceClient>
   try {
@@ -62,23 +68,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'campaign is not accepting participants' }, { status: 409 })
   }
 
-  // 2. Fetch Attribution score — 4s timeout, default 0 on failure
+  // 2. Fetch combined Attribution score (EVM + linked Solana, or Solana + linked EVM)
+  //    Falls back gracefully to 0 on any error — never blocks a join.
   let attribution_score = 0
   try {
-    const scoreRes = await fetchWithTimeout(
-      `${API}/score?address=${encodeURIComponent(address)}`,
-      4000
-    )
-    if (scoreRes.ok) {
-      const scoreData = await scoreRes.json()
-      attribution_score = typeof scoreData.score === 'number' ? scoreData.score : 0
-    }
+    attribution_score = await getCombinedAttributionScore(wallet, supabase)
   } catch (e) {
-    // Timeout or network error — allow join with score 0
     console.warn('[join] score fetch failed, defaulting to 0:', e instanceof Error ? e.message : e)
   }
 
-  // 3. min_score gate (points campaigns only — token_pool is open)
+  // 3. min_score gate (points campaigns only — token_pool is open access)
   const minScore = Number(campaign.min_score ?? 0)
   if (campaign.campaign_type === 'points' && minScore > 0 && attribution_score < minScore) {
     return NextResponse.json(

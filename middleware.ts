@@ -2,9 +2,13 @@
 // middleware.ts — Edge rate limiting for sensitive API endpoints
 //
 // Protects:
-//   POST /api/campaigns/swap-event  — 10 req/min per IP
-//   POST /api/campaigns/join        — 5  req/min per IP
-//   POST /api/swap/quote            — 20 req/min per IP
+//   POST /api/campaigns/swap-event      — 10 req/min per IP
+//   POST /api/campaigns/sol-swap-event  — 10 req/min per IP
+//   POST /api/campaigns/join            — 5  req/min per IP
+//   POST /api/swap/quote                — 20 req/min per IP
+//   POST /api/wallet-link               — 5  req/min per IP
+//   GET  /api/claim                     — 10 req/min per IP
+//   GET  /api/claim/sol                 — 10 req/min per IP
 //   (+ agent and claim endpoints — see RATE_LIMITS below)
 //
 // Implementation:
@@ -17,19 +21,24 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface RuleConfig { limit: number; windowMs: number }
+interface RuleConfig { limit: number; windowMs: number; method?: string }
 
-// Route → { limit, windowMs }
+// Route → { limit, windowMs, method? }
+// method: undefined = POST only (default), 'GET' = GET only, 'ANY' = all methods
 const RATE_LIMITS: Record<string, RuleConfig> = {
-  '/api/campaigns/swap-event':    { limit: 10, windowMs: 60_000 },
-  '/api/campaigns/join':          { limit:  5, windowMs: 60_000 },
-  '/api/swap/quote':              { limit: 20, windowMs: 60_000 },
-  '/api/agents/campaigns/record': { limit: 10, windowMs: 60_000 },
-  '/api/agents/register':         { limit:  5, windowMs: 60_000 },
-  '/api/agents/mwp':              { limit: 10, windowMs: 60_000 },
-  '/api/claim/mark-claimed':      { limit: 20, windowMs: 60_000 },
-  '/api/referral/apply':          { limit: 10, windowMs: 60_000 },
-  '/api/wallet-link':             { limit:  5, windowMs: 60_000 },
+  '/api/campaigns/swap-event':          { limit: 10, windowMs: 60_000 },
+  '/api/campaigns/sol-swap-event':      { limit: 10, windowMs: 60_000 },
+  '/api/campaigns/join':                { limit:  5, windowMs: 60_000 },
+  '/api/campaigns/refresh-score':       { limit:  5, windowMs: 60_000 },
+  '/api/swap/quote':                    { limit: 20, windowMs: 60_000 },
+  '/api/wallet-link':                   { limit:  5, windowMs: 60_000 },
+  '/api/agents/campaigns/record':       { limit: 10, windowMs: 60_000 },
+  '/api/agents/register':               { limit:  5, windowMs: 60_000 },
+  '/api/agents/mwp':                    { limit: 10, windowMs: 60_000 },
+  '/api/claim/mark-claimed':            { limit: 20, windowMs: 60_000 },
+  '/api/claim/sol':                     { limit: 10, windowMs: 60_000, method: 'GET' },
+  '/api/claim':                         { limit: 10, windowMs: 60_000, method: 'GET' },
+  '/api/referral/apply':                { limit: 10, windowMs: 60_000 },
 }
 
 function getClientIP(req: NextRequest): string {
@@ -100,7 +109,10 @@ export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname
   const rule     = RATE_LIMITS[pathname]
 
-  if (!rule || req.method !== 'POST') return NextResponse.next()
+  if (!rule) return NextResponse.next()
+  // Default: POST only. Routes with method='GET' apply to GET. method='ANY' applies to all.
+  const targetMethod = rule.method ?? 'POST'
+  if (targetMethod !== 'ANY' && req.method !== targetMethod) return NextResponse.next()
 
   const ip  = getClientIP(req)
   const key = `${ip}:${pathname}`
@@ -135,13 +147,17 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     '/api/campaigns/swap-event',
+    '/api/campaigns/sol-swap-event',
     '/api/campaigns/join',
+    '/api/campaigns/refresh-score',
     '/api/swap/quote',
+    '/api/wallet-link',
     '/api/agents/campaigns/record',
     '/api/agents/register',
     '/api/agents/mwp',
     '/api/claim/mark-claimed',
+    '/api/claim/sol',
+    '/api/claim',
     '/api/referral/apply',
-    '/api/wallet-link',
   ],
 }

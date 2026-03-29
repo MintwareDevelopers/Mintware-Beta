@@ -197,6 +197,13 @@ function ProfileContent() {
         .then(d => setSolScore(d.score ?? 0))
         .catch(() => {})
         .finally(() => setSolScoreLoading(false))
+
+      // Phase 6 — refresh combined score in all active campaign participant rows
+      void fetch('/api/campaigns/refresh-score', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ wallet }),
+      }).catch(() => {})
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to link wallet'
       setSolLinkError(msg)
