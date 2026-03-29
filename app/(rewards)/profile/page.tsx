@@ -355,8 +355,8 @@ function ProfileContent() {
         <div
           className="rounded-xl px-5 py-[14px] flex items-center justify-between gap-4 cursor-pointer"
           style={{
-            background: 'linear-gradient(135deg, #150d22 0%, #1e1038 100%)',
-            border: '1.5px solid rgba(194,83,122,0.22)',
+            background: 'var(--color-mw-brand-dim)',
+            border: '1.5px solid rgba(79,126,247,0.18)',
           }}
           onClick={() => {
             setActiveTab('invite')
@@ -366,22 +366,22 @@ function ProfileContent() {
           <div className="flex items-center gap-3">
             <div
               className="w-9 h-9 rounded-[10px] flex items-center justify-center text-[17px] shrink-0"
-              style={{ background: 'rgba(194,83,122,0.18)' }}
+              style={{ background: 'rgba(79,126,247,0.14)', color: 'var(--color-mw-brand)' }}
             >
               ◉
             </div>
             <div>
-              <div className="text-[13px] font-semibold" style={{ color: 'rgba(255,255,255,0.92)', fontFamily: 'var(--font-jakarta)' }}>
+              <div className="text-[13px] font-semibold" style={{ color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)' }}>
                 Invite friends to Mintware
               </div>
-              <div className="text-[11px]" style={{ color: 'rgba(255,255,255,0.38)', fontFamily: 'var(--font-jakarta)' }}>
+              <div className="text-[11px]" style={{ color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>
                 Share your link — every active referral boosts your Sharing score
               </div>
             </div>
           </div>
           <div
             className="shrink-0 px-4 py-[7px] rounded-full text-[12px] font-semibold whitespace-nowrap"
-            style={{ background: 'var(--color-mw-pink)', color: '#fff', fontFamily: 'var(--font-jakarta)' }}
+            style={{ background: 'var(--color-mw-brand)', color: '#fff', fontFamily: 'var(--font-jakarta)' }}
           >
             Share link →
           </div>
@@ -708,9 +708,9 @@ function ProfileContent() {
                     >
                       <div
                         className="absolute top-[-30px] right-[-30px] w-[140px] h-[140px] rounded-full pointer-events-none"
-                        style={{ background: 'radial-gradient(circle, rgba(194,83,122,0.22) 0%, transparent 70%)' }}
+                        style={{ background: 'radial-gradient(circle, rgba(79,126,247,0.22) 0%, transparent 70%)' }}
                       />
-                      <div className="text-[10px] font-bold tracking-[1.4px] uppercase text-mw-pink mb-[5px] font-sans">Invite &amp; Earn</div>
+                      <div className="text-[10px] font-bold tracking-[1.4px] uppercase text-mw-brand mb-[5px] font-sans">Invite &amp; Earn</div>
                       <div className="text-[16px] font-bold text-white leading-[1.3] mb-[4px] font-sans tracking-[-0.3px]">
                         Invite friends, boost your score.
                       </div>
@@ -766,13 +766,13 @@ function ProfileContent() {
                       {refStats && (
                         <div className="flex items-center gap-3 pt-[10px] border-t border-mw-border">
                           <div className="text-[11px] text-mw-ink-3 font-sans shrink-0">Sharing score</div>
-                          <div className="flex-1 h-[3px] bg-[rgba(194,83,122,0.12)] rounded-full overflow-hidden">
+                          <div className="flex-1 h-[3px] bg-[rgba(79,126,247,0.12)] rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-mw-pink rounded-full transition-[width] duration-700"
+                              className="h-full bg-mw-brand rounded-full transition-[width] duration-700"
                               style={{ width: `${Math.round((refStats.sharing_score / 125) * 100)}%` }}
                             />
                           </div>
-                          <div className="text-[12px] font-bold font-mono text-mw-pink shrink-0">
+                          <div className="text-[12px] font-bold font-mono text-mw-brand shrink-0">
                             {refStats.sharing_score}<span className="text-[10px] font-normal text-mw-ink-4">/125</span>
                           </div>
                         </div>
