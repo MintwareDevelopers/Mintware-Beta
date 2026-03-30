@@ -59,3 +59,7 @@ oracle-watcher/node_modules/
 
 # Subgraph node_modules
 subgraph/node_modules/
+
+# Rust / Anchor
+target/
+Cargo.lock
