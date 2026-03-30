@@ -1,0 +1,10 @@
+/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/gifted-hodgkin/target/release/deps/autocfg-7ee286a21c8d588d.d: /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/lib.rs /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/error.rs /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/rustc.rs /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/version.rs
+
+/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/gifted-hodgkin/target/release/deps/libautocfg-7ee286a21c8d588d.rlib: /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/lib.rs /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/error.rs /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/rustc.rs /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/version.rs
+
+/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/gifted-hodgkin/target/release/deps/libautocfg-7ee286a21c8d588d.rmeta: /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/lib.rs /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/error.rs /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/rustc.rs /Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/version.rs
+
+/Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/lib.rs:
+/Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/error.rs:
+/Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/rustc.rs:
+/Users/nicolasrobinson/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/autocfg-1.5.0/src/version.rs:
