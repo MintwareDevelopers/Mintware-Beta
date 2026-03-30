@@ -163,7 +163,7 @@ pub fn handler(
     //  16    64     signature bytes
     //  80    32     public key bytes
     // 112     N     message bytes
-    let data = ix_0.data.as_ref();
+    let data: &[u8] = ix_0.data.as_ref();
     require!(data.len() >= 16, ErrorCode::OracleSignatureInvalid);
 
     let num_sigs = data[0];
