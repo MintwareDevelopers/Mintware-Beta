@@ -9,6 +9,7 @@ import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
 import { generateRefCode } from '@/lib/rewards/referral/utils'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { Users, Coins, TrendingUp } from 'lucide-react'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
@@ -34,7 +35,7 @@ interface LeaderboardEntry {
 function LeaderboardContent() {
   const { address } = useAccount()
   const { publicKey: solPublicKey, connected: solConnected } = useWallet()
-  const wallet = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
 
   const [campaigns, setCampaigns]             = useState<Campaign[]>([])
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null)

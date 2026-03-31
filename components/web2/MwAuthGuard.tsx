@@ -4,6 +4,7 @@ import { useAccount }             from 'wagmi'
 import { useWallet }              from '@solana/wallet-adapter-react'
 import { useRouter }              from 'next/navigation'
 import { useEffect }              from 'react'
+import { solanaEnabled }          from '@/lib/web3/featureFlags'
 
 export function MwAuthGuard({ children }: { children: React.ReactNode }) {
   const { status: evmStatus }            = useAccount()
@@ -15,8 +16,8 @@ export function MwAuthGuard({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
-  const isLoading     = evmStatus === 'reconnecting' || evmStatus === 'connecting' || solConnecting
-  const isConnected   = evmStatus === 'connected' || solConnected
+  const isLoading     = evmStatus === 'reconnecting' || evmStatus === 'connecting' || (solanaEnabled && solConnecting)
+  const isConnected   = evmStatus === 'connected' || (solanaEnabled && solConnected)
   const isDisconnected = !isLoading && !isConnected
 
   // eslint-disable-next-line react-hooks/rules-of-hooks

@@ -15,20 +15,24 @@ import {
   PhantomWalletAdapter,
   SolflareWalletAdapter,
 } from '@solana/wallet-adapter-wallets'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 // Free public RPC — no API key, no cost
 const SOLANA_RPC = 'https://api.mainnet-beta.solana.com'
 
 export function SolanaProvider({ children }: { children: React.ReactNode }) {
-  const wallets = useMemo(() => [
-    new PhantomWalletAdapter(),
-    new SolflareWalletAdapter(),
-    // Backpack auto-detects via wallet standard — no adapter needed
-  ], [])
+  const wallets = useMemo(() => {
+    if (!solanaEnabled) return []
+    return [
+      new PhantomWalletAdapter(),
+      new SolflareWalletAdapter(),
+      // Backpack auto-detects via wallet standard — no adapter needed
+    ]
+  }, [])
 
   return (
     <ConnectionProvider endpoint={SOLANA_RPC}>
-      <WalletProvider wallets={wallets} autoConnect>
+      <WalletProvider wallets={wallets} autoConnect={solanaEnabled}>
         <WalletModalProvider>
           {children}
         </WalletModalProvider>

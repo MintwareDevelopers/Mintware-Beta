@@ -9,6 +9,7 @@ import { MwNav } from '@/components/web2/MwNav'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
 import { JupiterTerminal } from '@/components/rewards/swap/JupiterTerminal'
 import { API } from '@/lib/web2/api'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
@@ -67,8 +68,8 @@ export default function SwapPage() {
   const { setVisible: openSolanaModal } = useWalletModal()
 
   const isEvmWallet = !!address
-  const isSolWallet = !isEvmWallet && solConnected && !!solPublicKey
-  const wallet      = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const isSolWallet = solanaEnabled && !isEvmWallet && solConnected && !!solPublicKey
+  const wallet = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
 
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null)
   const [participant, setParticipant]       = useState<Participant | null>(null)
