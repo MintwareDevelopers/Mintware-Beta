@@ -8,6 +8,7 @@ import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { MwNav } from '@/components/web2/MwNav'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
 import { API } from '@/lib/web2/api'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
@@ -65,7 +66,7 @@ export default function SwapPage() {
   const { publicKey: solPublicKey, connected: solConnected } = useWallet()
   const { setVisible: openSolanaModal } = useWalletModal()
   const isEvmWallet = !!address
-  const wallet = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
 
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null)
   const [participant, setParticipant]       = useState<Participant | null>(null)
@@ -185,7 +186,7 @@ export default function SwapPage() {
               )}
 
               {/* Solana-only: swap requires EVM wallet */}
-              {!isEvmWallet && solConnected ? (
+              {solanaEnabled && !isEvmWallet && solConnected ? (
                 <div className="bg-white rounded-2xl border border-mw-border p-8 text-center flex flex-col items-center gap-4">
                   <div className="text-[32px]">◎</div>
                   <div className="text-[16px] font-bold text-mw-ink font-sans">Swap requires an EVM wallet</div>

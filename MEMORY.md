@@ -137,3 +137,6 @@ All fixed in v2 — contract rewritten from scratch with full NatSpec.
 - `lib/api.ts` also exports `fmtUSD()`, `daysUntil()`, `shortAddr()`, `iconColor()`
 - Rate limiter in `middleware.ts` is in-memory per serverless instance — sufficient for simple bots, not cross-instance
 - Two intentional blues, two intentional greens — documented in CLAUDE.md CSS Conventions
+
+### 2026-03-31 — Main can soft-disable Solana from one flag
+- Affects `.claude/rules/architecture.md` and `.claude/rules/web3.md`. Added `NEXT_PUBLIC_ENABLE_SOLANA` via `lib/web3/featureFlags.ts` so the live app can stay EVM-first without deleting Solana work. When the flag is false, Solana adapters do not auto-connect, Solana connect/link UI is hidden in nav, profile, dashboard, and swap, and auth falls back to EVM-only while the dormant Solana code remains available for later re-enable.

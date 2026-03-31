@@ -22,6 +22,7 @@ import { BarChart2, Zap, Award, Share2, Coins, Calendar, Link2, Activity, CheckC
 import { ResponsiveContainer, AreaChart, Area, Tooltip as RechartsTooltip } from 'recharts'
 import { AnimatedScore } from '@/components/web2/AnimatedScore'
 import { motion, AnimatePresence } from 'framer-motion'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Signal {
@@ -75,7 +76,7 @@ function ProfileContent() {
   const { publicKey: solPublicKey, connected: solConnected, signMessage: solSignMessage } = useWallet()
   const { setVisible: openSolanaModal } = useWalletModal()
   // EVM takes priority; Solana-only users fall back to their public key (base58, case-sensitive)
-  const wallet = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
   const [activeTab, setActiveTab] = useState<Tab>('portfolio')
   const [data, setData] = useState<ScoreResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -143,7 +144,7 @@ function ProfileContent() {
 
   // Check if a Solana wallet is already linked to this EVM address
   useEffect(() => {
-    if (!wallet) return
+    if (!solanaEnabled || !wallet) return
     const sb = createSupabaseBrowserClient()
     void sb.from('wallet_links')
       .select('linked_address')
@@ -164,6 +165,7 @@ function ProfileContent() {
   }, [wallet]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function linkSolanaWallet() {
+    if (!solanaEnabled) return
     if (!wallet || !solPublicKey || !solSignMessage) return
     setSolLinkLoading(true)
     setSolLinkError(null)
@@ -238,7 +240,7 @@ function ProfileContent() {
   const maxScore = data?.signals?.reduce((s, sig) => s + sig.max, 0) ?? 925
 
   // Combined score: max(evm, sol) + min(evm, sol) * 0.4
-  const combinedScore = (score > 0 && solScore !== null && solScore > 0)
+  const combinedScore = (solanaEnabled && score > 0 && solScore !== null && solScore > 0)
     ? Math.round(Math.max(score, solScore) + Math.min(score, solScore) * 0.4)
     : null
 
@@ -349,7 +351,7 @@ function ProfileContent() {
                   </span>
                 )}
                 {/* Linked Solana chip */}
-                {solLinked && (
+                {solanaEnabled && solLinked && (
                   <span
                     className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-medium border"
                     style={{ background: 'rgba(153,69,255,0.06)', borderColor: 'rgba(153,69,255,0.22)', color: '#9945FF' }}
@@ -363,7 +365,7 @@ function ProfileContent() {
                   </span>
                 )}
                 {/* Link button — EVM connected, Solana adapter connected, not yet linked */}
-                {address && !solLinked && solConnected && solPublicKey && (
+                {solanaEnabled && address && !solLinked && solConnected && solPublicKey && (
                   <button
                     onClick={linkSolanaWallet}
                     disabled={solLinkLoading}
@@ -375,7 +377,7 @@ function ProfileContent() {
                   </button>
                 )}
                 {/* Prompt to open Solana modal if not yet connected */}
-                {address && !solLinked && !solConnected && (
+                {solanaEnabled && address && !solLinked && !solConnected && (
                   <button
                     onClick={() => openSolanaModal(true)}
                     className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-medium border cursor-pointer transition-all duration-150"
@@ -384,7 +386,7 @@ function ProfileContent() {
                     + Link Solana wallet
                   </button>
                 )}
-                {solLinkError && (
+                {solanaEnabled && solLinkError && (
                   <span className="text-[11px] text-mw-red">{solLinkError}</span>
                 )}
               </div>

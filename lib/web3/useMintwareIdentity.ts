@@ -16,6 +16,7 @@
 import { useAccount, useDisconnect } from 'wagmi'
 import { useWallet }                 from '@solana/wallet-adapter-react'
 import { useCallback }               from 'react'
+import { solanaEnabled }             from '@/lib/web3/featureFlags'
 
 export type WalletChain = 'evm' | 'solana'
 
@@ -34,7 +35,7 @@ export function useMintwareIdentity(): MintwareIdentity {
   const { disconnect: evmDisconnect } = useDisconnect()
 
   const evmAddress    = evmConnected && evmAddr ? evmAddr : null
-  const solanaAddress = solConnected && publicKey ? publicKey.toBase58() : null
+  const solanaAddress = solanaEnabled && solConnected && publicKey ? publicKey.toBase58() : null
 
   // EVM takes priority if both are connected (rare edge case)
   const address = evmAddress ?? solanaAddress ?? null

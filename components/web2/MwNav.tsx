@@ -6,6 +6,7 @@ import { useWalletModal }     from '@solana/wallet-adapter-react-ui'
 import { useDisconnect }      from 'wagmi'
 import Link                   from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { solanaEnabled }      from '@/lib/web3/featureFlags'
 
 // Import Solana wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css'
@@ -112,7 +113,7 @@ export function MwNav() {
                 )}
 
                 {/* Solana wallet pill */}
-                {solConnected && publicKey && (
+                {solanaEnabled && solConnected && publicKey && (
                   <div
                     className="mw-wallet-pill ml-1 flex items-center gap-[6px] px-[14px] py-[7px] rounded-xl text-[12px] border-[0.5px] border-mw-border-strong bg-white cursor-pointer text-mw-ink font-mono select-none transition-all duration-150 hover:border-[rgba(239,68,68,0.3)] hover:text-mw-red hover:bg-[rgba(239,68,68,0.04)]"
                     onClick={() => { solDisconnect(); if (!evmConnected) router.push('/') }}
@@ -125,7 +126,7 @@ export function MwNav() {
                 )}
 
                 {/* Link Solana button — shown when only EVM connected */}
-                {evmConnected && !solConnected && (
+                {solanaEnabled && evmConnected && !solConnected && (
                   <button
                     onClick={() => openSolanaModal(true)}
                     className="ml-1 px-3 py-[6px] rounded-xl text-[11px] font-semibold border-[0.5px] cursor-pointer font-sans transition-all duration-150"
@@ -152,17 +153,19 @@ export function MwNav() {
               >
                 Explorer
               </Link>
-              <button
-                onClick={() => openSolanaModal(true)}
-                className="px-4 py-2 rounded-xl border-0 text-[13px] font-semibold cursor-pointer font-sans transition-all duration-150"
-                style={{
-                  background: 'rgba(153,69,255,0.08)',
-                  border: '1px solid rgba(153,69,255,0.2)',
-                  color: '#9945FF',
-                }}
-              >
-                Solana
-              </button>
+              {solanaEnabled && (
+                <button
+                  onClick={() => openSolanaModal(true)}
+                  className="px-4 py-2 rounded-xl border-0 text-[13px] font-semibold cursor-pointer font-sans transition-all duration-150"
+                  style={{
+                    background: 'rgba(153,69,255,0.08)',
+                    border: '1px solid rgba(153,69,255,0.2)',
+                    color: '#9945FF',
+                  }}
+                >
+                  Solana
+                </button>
+              )}
               <button
                 onClick={openConnectModal}
                 className="px-4 py-2 rounded-xl bg-[#2563EB] text-white border-0 text-[13px] font-semibold cursor-pointer font-sans"
