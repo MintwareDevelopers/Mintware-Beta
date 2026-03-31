@@ -20,6 +20,7 @@ import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { API } from '@/lib/web2/api'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 import { CampaignHeader }   from '@/components/rewards/campaigns/CampaignHeader'
 import { JoinButton }        from '@/components/rewards/campaigns/JoinButton'
@@ -98,7 +99,7 @@ function CampaignDetailContent() {
   const isEvmWallet   = !!address
   const params        = useParams()
   const campaignId    = params?.id as string
-  const wallet        = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet        = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
   const { refCode }   = useReferral(wallet || undefined)
 
   const [campaign,     setCampaign]    = useState<Campaign | null>(null)
@@ -256,8 +257,12 @@ function CampaignDetailContent() {
               <div className={isJoined ? 'mb-4' : 'mb-6'}>
                 {!isEvmWallet ? (
                   <div className="w-full px-4 py-3 rounded-xl text-[13px] text-center font-sans"
-                    style={{ background: 'rgba(153,69,255,0.06)', border: '1px solid rgba(153,69,255,0.18)', color: '#9945FF' }}>
-                    Campaign rewards are EVM tokens — connect an EVM wallet to join.
+                    style={{
+                      background: solanaEnabled ? 'rgba(153,69,255,0.06)' : 'rgba(79,126,247,0.06)',
+                      border: solanaEnabled ? '1px solid rgba(153,69,255,0.18)' : '1px solid rgba(79,126,247,0.18)',
+                      color: solanaEnabled ? '#9945FF' : 'var(--color-mw-brand)',
+                    }}>
+                    Campaign rewards are EVM tokens{solanaEnabled ? ' — connect an EVM wallet to join.' : '.'}
                   </div>
                 ) : (
                   <JoinButton

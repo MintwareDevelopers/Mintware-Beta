@@ -12,13 +12,14 @@ import { AnimatedScore } from '@/components/web2/AnimatedScore'
 import { CampaignCard, Campaign } from '@/components/rewards/campaigns/CampaignCard'
 import { TokenIcon } from '@/components/web2/TokenIcon'
 import { motion } from 'framer-motion'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 // ─── Dashboard Content ─────────────────────────────────────────────────────────
 function DashboardContent() {
   const { address } = useAccount()
   const { publicKey: solPublicKey, connected: solConnected } = useWallet()
   const isEvmWallet = !!address
-  const wallet = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
   const searchParams = useSearchParams()
 
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([])
@@ -201,7 +202,7 @@ function DashboardContent() {
         </div>
 
         {/* Solana-only notice — campaigns require EVM */}
-        {!isEvmWallet && wallet && (
+        {solanaEnabled && !isEvmWallet && wallet && (
           <div className="mb-5 px-4 py-3 rounded-xl flex items-center gap-3 text-[13px]"
             style={{ background: 'rgba(153,69,255,0.06)', border: '1px solid rgba(153,69,255,0.18)' }}>
             <span style={{ color: '#9945FF' }}>◎</span>

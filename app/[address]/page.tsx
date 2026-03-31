@@ -16,6 +16,7 @@ import { getAddress, isAddress }  from 'viem'
 import { API, shortAddr }        from '@/lib/web2/api'
 import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import { useEffect, useState }   from 'react'
+import { solanaEnabled }         from '@/lib/web3/featureFlags'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Signal {
@@ -58,15 +59,15 @@ export default function PublicProfile() {
   const rawAddr   = Array.isArray(params.address) ? params.address[0] : params.address ?? ''
 
   // Solana addresses are case-sensitive base58 — preserve case; lowercase EVM only
-  const isSolanaAddr = SOLANA_RE.test(rawAddr) && !rawAddr.startsWith('0x')
+  const isSolanaAddr = solanaEnabled && SOLANA_RE.test(rawAddr) && !rawAddr.startsWith('0x')
   const address      = isSolanaAddr ? rawAddr : rawAddr.toLowerCase()
 
   const { address: connectedAddr, status: walletStatus } = useAccount()
   const { publicKey: solPublicKey, connected: solConnected } = useWallet()
-  const walletSettled = (walletStatus === 'connected' || walletStatus === 'disconnected') || solConnected
+  const walletSettled = (walletStatus === 'connected' || walletStatus === 'disconnected') || (solanaEnabled && solConnected)
   const isOwner =
     (!!connectedAddr && connectedAddr.toLowerCase() === address) ||
-    (!!solPublicKey  && solPublicKey.toBase58() === address)
+    (!!solanaEnabled && !!solPublicKey  && solPublicKey.toBase58() === address)
 
   const [score,      setScore]      = useState<ScoreData | null>(null)
   const [refStats,   setRefStats]   = useState<RefStats | null>(null)
@@ -75,7 +76,7 @@ export default function PublicProfile() {
   const [copied,     setCopied]     = useState(false)
 
   // Accept both EVM and Solana addresses
-  const isValid = EVM_RE.test(address) || isSolanaAddr
+  const isValid = EVM_RE.test(address) || (solanaEnabled && isSolanaAddr)
 
   useEffect(() => {
     if (!isValid) { setLoading(false); return }
