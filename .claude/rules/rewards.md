@@ -76,3 +76,5 @@ wallet_payout = (epoch_pool / epoch_count) × (wallet_points / total_points) × 
 | `/api/cron/pool-settle` | `0 2 * * *` |
 | `/api/treasury/sweep` | `0 3 * * *` |
 | `/api/cron/vault-epoch-close` | `0 0 * * 1` (Monday) |
+
+Universal reward settlement now has its own pipeline: `trade_signals` ingestion, epoch close, and distribution bridge. Keep the hot path thin, do the allocation math off-chain, and make cron route responses JSON-safe because `BigInt` values from sync ranges will otherwise 500 under `NextResponse.json`.
