@@ -2,6 +2,10 @@
   "buildCommand": "next build --webpack",
   "crons": [
     {
+      "path": "/api/cron/universal-pipeline",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/bridge-verify",
       "schedule": "0 0 * * *"
     },

@@ -57,6 +57,8 @@ Allowlisted: `localhost:3000`, `mintware-beta.vercel.app`
 - `CORE_DAO_BRIDGE_CONTRACT` — blocked on Molten confirmation (`0x__PENDING_MOLTEN_CONFIRMATION__`)
 - Oracle private key to import: `dec4d807960fdd609d64da1c71f4a94b2bcefacd50e5a4acd77120184f88b615`
 
+If a cron route 404s in production, verify the route file and matching `vercel.json` cron entry are actually merged to `main` before debugging envs. The universal pipeline also depends on the first two schema tables (`trade_signals`, `trade_signal_sync_state`) existing in Supabase; without them the cron cannot create its sync cursor or ingest anything.
+
 ## Build Notes
 
 - Vercel webpack builds will fail fast on duplicate App Router paths, so keep the public agents landing page at `/agents` and move leaderboard-style surfaces under a distinct child route like `/agents/leaderboard`.
