@@ -126,8 +126,16 @@ const EXPLORER_TX: Record<string, string> = {
 // Solana constants (Phase 7)
 // ---------------------------------------------------------------------------
 
-// Mintware Solana distributor program ID
-const SOL_PROGRAM_ID = new PublicKey('MW7D1sTribUTorS0LaNaPr0gram111111111111111')
+function getSolProgramId(): PublicKey | null {
+  const raw = process.env.NEXT_PUBLIC_SOL_PROGRAM_ID
+  if (!raw) return null
+
+  try {
+    return new PublicKey(raw)
+  } catch {
+    return null
+  }
+}
 
 // Anchor instruction discriminator = sha256("global:claim")[0..8]
 // Precomputed: [62, 198, 214, 193, 213, 159, 108, 210]
@@ -303,6 +311,12 @@ function SolanaRewardRow({ reward, wallet, onClaimed }: SolanaRewardRowProps) {
   async function handleSolanaClaim() {
     setClaimError(null)
 
+    const programId = getSolProgramId()
+    if (!programId) {
+      setClaimError('Solana claiming is not configured yet.')
+      return
+    }
+
     // Guard: check deadline before hitting the API
     if (reward.deadline && reward.deadline < Math.floor(Date.now() / 1000)) {
       setClaimError('Claim window has expired for this distribution.')
@@ -383,20 +397,20 @@ function SolanaRewardRow({ reward, wallet, onClaimed }: SolanaRewardRowProps) {
       // Derive PDAs — the client derives the same addresses as the program
       const [globalStatePda] = PublicKey.findProgramAddressSync(
         [Buffer.from('global_state')],
-        SOL_PROGRAM_ID
+        programId
       )
       const [campaignPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('campaign'), Buffer.from(reward.campaign_id)],
-        SOL_PROGRAM_ID
+        programId
       )
       const claimerPubkey = new PublicKey(wallet)
       const [userClaimPda] = PublicKey.findProgramAddressSync(
         [Buffer.from('user_claim'), Buffer.from(reward.campaign_id), new Uint8Array([epoch_number & 0xff, (epoch_number >> 8) & 0xff, (epoch_number >> 16) & 0xff, (epoch_number >> 24) & 0xff, 0, 0, 0, 0]), claimerPubkey.toBytes()],
-        SOL_PROGRAM_ID
+        programId
       )
 
       const claimIx = new TransactionInstruction({
-        programId: SOL_PROGRAM_ID,
+        programId,
         keys: [
           { pubkey: globalStatePda,  isSigner: false, isWritable: false },
           { pubkey: campaignPda,     isSigner: false, isWritable: true  },

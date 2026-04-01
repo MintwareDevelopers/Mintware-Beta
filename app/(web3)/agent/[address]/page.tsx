@@ -367,7 +367,7 @@ function AgentProfileContent() {
       <div className="agent-page">
         <MwNav />
         <div className="agent-inner">
-          <a href="/agents" className="back-link">← Back to leaderboard</a>
+          <a href="/agents/leaderboard" className="back-link">← Back to leaderboard</a>
 
           {loading && <div className="loading-state">Loading agent…</div>}
           {error   && <div className="error-state">{error}</div>}
