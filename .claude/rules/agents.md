@@ -54,10 +54,9 @@ Submitted PR adding Mintware to `### 🪪 Identity & Trust` section of the curat
 | `risk` | Risk deductions |
 | `total_score` | `behavior + contribution + interpretability - risk` |
 
-## `/agents` Page
+## `/agents` Routes
 
-- Route: `app/(web3)/agents/page.tsx`
-- Auth-guarded via `MwAuthGuard`
-- Fetches from `/api/agents/leaderboard`
-- Clicking a row navigates to `/agent/{address}`
-- Register CTA shows SDK snippet
+- Public integrations/docs page lives at `app/agents/page.tsx`
+- Agent leaderboard lives at `app/(web3)/agents/leaderboard/page.tsx`
+- Agent detail lives at `/agent/{address}` and should link back to `/agents/leaderboard`
+- Do not create another route-group page at `app/(web3)/agents/page.tsx` or Next.js will fail the build due to duplicate `/agents` resolution
