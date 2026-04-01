@@ -56,3 +56,8 @@ Allowlisted: `localhost:3000`, `mintware-beta.vercel.app`
 
 - `CORE_DAO_BRIDGE_CONTRACT` — blocked on Molten confirmation (`0x__PENDING_MOLTEN_CONFIRMATION__`)
 - Oracle private key to import: `dec4d807960fdd609d64da1c71f4a94b2bcefacd50e5a4acd77120184f88b615`
+
+## Build Notes
+
+- Vercel webpack builds will fail fast on duplicate App Router paths, so keep the public agents landing page at `/agents` and move leaderboard-style surfaces under a distinct child route like `/agents/leaderboard`.
+- Solana wallet-adapter code should not be imported eagerly into the global provider tree during SSR-sensitive builds; lazy-load the Solana provider on the client and never construct `PublicKey` values from placeholder strings at module scope.
