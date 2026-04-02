@@ -3,6 +3,23 @@
 // app/agents/page.tsx — AI Agent integrations page (public, no auth required)
 
 import { MwNav } from '@/components/web2/MwNav'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+
+interface AgentRow {
+  address: string
+  agent_name?: string | null
+  erc8004_token_id: number | null
+  total_score: number
+  behavior: number
+  contribution: number
+  interpretability: number
+  risk: number
+  is_transparent: boolean
+  mwp_submissions: number
+  rank: number
+  updated_at: string
+}
 
 const PLUGINS = [
   {
@@ -83,7 +100,29 @@ for (const action of mintwareActions) agentkit.use(action)
 
 // Your agent can now answer: "What is my Attribution score?"`
 
+function shortAddr(addr: string) {
+  return addr.slice(0, 6) + '…' + addr.slice(-4)
+}
+
 export default function AgentsPage() {
+  const router = useRouter()
+  const [rows, setRows] = useState<AgentRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetch('/api/agents/leaderboard?limit=8')
+      .then(r => r.json())
+      .then(d => {
+        setRows(d.leaderboard ?? [])
+        setLoading(false)
+      })
+      .catch(() => {
+        setError('Failed to load leaderboard')
+        setLoading(false)
+      })
+  }, [])
+
   return (
     <>
       <style>{`
@@ -385,6 +424,133 @@ export default function AgentsPage() {
           color: var(--color-mw-brand);
           flex-shrink: 0;
         }
+
+        /* leaderboard */
+        .ag-leaderboard-card {
+          background: #fff;
+          border: 1px solid var(--color-mw-border);
+          border-radius: var(--radius-lg);
+          overflow: hidden;
+          margin-bottom: 32px;
+        }
+        .ag-leaderboard-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 16px 20px;
+          background: linear-gradient(180deg, rgba(79,126,247,0.05) 0%, rgba(79,126,247,0.02) 100%);
+          border-bottom: 1px solid var(--color-mw-border);
+        }
+        .ag-leaderboard-title {
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--color-mw-ink);
+        }
+        .ag-leaderboard-sub {
+          font-size: 12px;
+          color: var(--color-mw-ink-3);
+          margin-top: 3px;
+        }
+        .ag-leaderboard-link {
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--color-mw-brand);
+          text-decoration: none;
+          white-space: nowrap;
+        }
+        .ag-leaderboard-link:hover { text-decoration: underline; }
+        .ag-lb-row {
+          display: grid;
+          grid-template-columns: 52px minmax(0, 1fr) auto auto;
+          gap: 14px;
+          align-items: center;
+          padding: 14px 20px;
+          border-bottom: 1px solid var(--color-mw-border);
+          cursor: pointer;
+          transition: background 120ms ease;
+        }
+        .ag-lb-row:hover {
+          background: rgba(79,126,247,0.03);
+        }
+        .ag-lb-row:last-child { border-bottom: none; }
+        .ag-lb-rank {
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--color-mw-ink-4);
+          font-family: var(--font-mono), monospace;
+        }
+        .ag-lb-main {
+          min-width: 0;
+        }
+        .ag-lb-name {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+          margin-bottom: 3px;
+        }
+        .ag-lb-addr {
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--color-mw-ink);
+          font-family: var(--font-mono), monospace;
+        }
+        .ag-lb-meta {
+          font-size: 11px;
+          color: var(--color-mw-ink-4);
+        }
+        .ag-lb-score {
+          text-align: right;
+        }
+        .ag-lb-score-num {
+          font-size: 16px;
+          font-weight: 800;
+          color: var(--color-mw-brand);
+          font-family: var(--font-mono), monospace;
+        }
+        .ag-lb-score-label {
+          font-size: 10px;
+          color: var(--color-mw-ink-5);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          margin-top: 2px;
+        }
+        .ag-lb-badges {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          justify-content: flex-end;
+          flex-wrap: wrap;
+        }
+        .ag-lb-badge {
+          font-size: 10px;
+          font-weight: 700;
+          padding: 3px 7px;
+          border-radius: 999px;
+          white-space: nowrap;
+        }
+        .ag-lb-empty {
+          padding: 32px 20px;
+          text-align: center;
+          color: var(--color-mw-ink-3);
+          font-size: 13px;
+        }
+        @media (max-width: 700px) {
+          .ag-leaderboard-head {
+            align-items: flex-start;
+            flex-direction: column;
+          }
+          .ag-lb-row {
+            grid-template-columns: 44px 1fr;
+          }
+          .ag-lb-score,
+          .ag-lb-badges {
+            grid-column: 2;
+            justify-content: flex-start;
+            text-align: left;
+          }
+        }
       `}</style>
 
       <div className="ag-page">
@@ -424,6 +590,73 @@ export default function AgentsPage() {
                   <a href={p.docs} target="_blank" rel="noopener noreferrer" className="ag-docs-link">
                     View docs →
                   </a>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Leaderboard */}
+          <div className="ag-section-label">Live leaderboard</div>
+          <div className="ag-leaderboard-card">
+            <div className="ag-leaderboard-head">
+              <div>
+                <div className="ag-leaderboard-title">Top Mintware agents on Base</div>
+                <div className="ag-leaderboard-sub">
+                  Live reputation rankings for registered agents, powered by the Attribution oracle.
+                </div>
+              </div>
+              <a href="/agents/leaderboard" className="ag-leaderboard-link">
+                Open full leaderboard →
+              </a>
+            </div>
+
+            {loading && <div className="ag-lb-empty">Loading leaderboard…</div>}
+            {error && <div className="ag-lb-empty">{error}</div>}
+            {!loading && !error && rows.length === 0 && (
+              <div className="ag-lb-empty">No agents are ranked yet.</div>
+            )}
+
+            {!loading && !error && rows.map((row) => (
+              <div
+                key={row.address}
+                className="ag-lb-row"
+                onClick={() => router.push(`/agent/${row.address}`)}
+              >
+                <div className="ag-lb-rank">
+                  {row.rank === 1 ? '🥇' : row.rank === 2 ? '🥈' : row.rank === 3 ? '🥉' : `#${row.rank}`}
+                </div>
+
+                <div className="ag-lb-main">
+                  <div className="ag-lb-name">
+                    <span className="ag-lb-addr">{shortAddr(row.address)}</span>
+                    {row.is_transparent && (
+                      <span className="ag-lb-badge" style={{ background: 'rgba(34,197,94,0.08)', color: '#16a34a' }}>
+                        Transparent
+                      </span>
+                    )}
+                    {row.erc8004_token_id && (
+                      <span className="ag-lb-badge" style={{ background: 'rgba(79,126,247,0.1)', color: 'var(--color-mw-brand)' }}>
+                        ERC-8004
+                      </span>
+                    )}
+                  </div>
+                  <div className="ag-lb-meta">
+                    {row.behavior} behavior · {row.contribution} contribution · {row.interpretability} interpretability
+                    {row.risk > 0 ? ` · -${row.risk} risk` : ''}
+                  </div>
+                </div>
+
+                <div className="ag-lb-score">
+                  <div className="ag-lb-score-num">{row.total_score}</div>
+                  <div className="ag-lb-score-label">score</div>
+                </div>
+
+                <div className="ag-lb-badges">
+                  {row.mwp_submissions > 0 && (
+                    <span className="ag-lb-badge" style={{ background: 'rgba(42,158,138,0.1)', color: 'var(--color-mw-teal)' }}>
+                      {row.mwp_submissions} MWP
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
