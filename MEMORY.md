@@ -233,3 +233,15 @@ All fixed in v2 — contract rewritten from scratch with full NatSpec.
 
 ### 2026-04-02 — `/agents` should show both integrations and live rankings
 - Affects agent UX and routing clarity. The public `/agents` page now embeds a live leaderboard preview from `/api/agents/leaderboard` so users can see actual agent rankings on the main agents surface, while `/agents/leaderboard` remains the dedicated full ranking page.
+
+### 2026-04-03 — Privy is merged but production still needs a post-upgrade redeploy
+- Affects web3 onboarding and deployment workflow. Privy auth + embedded wallet support is already merged on `main` at commit `ec56a62d`, Privy dashboard settings and `NEXT_PUBLIC_PRIVY_APP_ID` were configured, but the live site stayed on an older production deploy because Vercel Hobby blocked new deployments due to unsupported frequent cron schedules. Once Vercel is upgraded, redeploy `main` (or commit `ec56a62d`) to make the Privy UI live.
+
+### 2026-04-03 — Ethereum UX upgrade is implemented and pushed on `origin/claude/elastic-booth`
+- Affects swap/trading, claims, campaign funding, vault flows, onboarding copy, and the Ethereum adoption roadmap. The first major Ethereum Foundation-inspired UX pass is now implemented and pushed on `origin/claude/elastic-booth`, even though it has not yet been manually merged back onto a fresh `codex/*` branch because `origin/main` has newer conflicting work in a few overlapping files.
+- Swap/trading now has a pre-wallet confirmation sheet, fiat-first fee display, gas insufficiency warning, route and chain clarity, a readiness checklist, delayed wallet-help guidance, and a preflight call before sending LI.FI transactions.
+- Claims now have clearer plain-language copy, safer batch-claim behavior, wrong-chain handling, and preflight simulation before EVM claim writes.
+- Campaign funding now checks allowance before asking for approval, explains spender permissions more clearly, distinguishes permission vs deposit steps, and preflights `depositCampaign()` before submission.
+- Vault deposit and seed flows now do allowance checks, include zero-first fallback behavior for problematic approvals, run preflight simulation before final writes, and expose clearer step/recovery messaging. Vault create success copy was also corrected so it no longer implies the user must manually call `seedTeamTokens()` after a successful seeded flow.
+- Landing/nav copy was shifted toward lower-anxiety adoption language such as exploring first and connecting when ready to trade.
+- This upgrade intentionally does **not** yet include ERC-20 gas payment, approval management/revoke UI, persistent resumable flow state across refresh, or deeper intent-based chain abstraction. Company-paid gas sponsorship is still not the target product policy.
