@@ -136,3 +136,5 @@ Mainnet deployment is a separate step ahead of public launch.
 ## Stay Updated
 
 Social Vaults are coming in Phase 2. Follow the Mintware dashboard — the Vaults tab will unlock when the product launches publicly.
+
+When vaults open publicly, Mintware plans to keep higher-trust actions like approvals, deposits, and seeded launches clearer by separating permission steps from final actions and by surfacing stronger pre-submission guidance.

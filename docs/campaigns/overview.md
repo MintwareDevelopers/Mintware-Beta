@@ -68,3 +68,15 @@ Each campaign card shows the sponsor, reward pool size and token, qualifying act
 ## Leaderboard
 
 The **Leaderboard** (`/leaderboard`) shows rankings across all campaigns. Select a campaign to see where you stand relative to other participants.
+
+---
+
+## Clearer Funding and Claiming
+
+Mintware is improving campaign transactions so they are easier to understand before your wallet opens.
+
+That includes:
+- clearer explanations of when you are giving token permission versus making the final deposit
+- fewer unnecessary approval prompts when an allowance already exists
+- better chain and wallet-state guidance during claims
+- stronger checks before submitting important on-chain actions

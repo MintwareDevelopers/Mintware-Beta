@@ -50,8 +50,25 @@ Mintware charges a small platform fee on qualifying swaps. This fee is injected 
 
 The fee is verified on-chain after your swap completes. If the fee is not present in the transaction calldata, the swap is still executed but no campaign reward is credited.
 
+Where available, Mintware also surfaces the network fee in a clearer format before the wallet opens so it is easier to judge the full cost of the trade.
+
 ---
 
 ## Best Execution
 
 The swap interface always shows the best available route from the aggregator. The Mintware fee is layered on top of the underlying execution — it does not degrade your received amount below what you'd get going directly to the aggregator.
+
+---
+
+## Review Before You Confirm
+
+Mintware Swap is designed to explain the trade before your wallet popup appears.
+
+Depending on the route, you may see:
+- the token and amount you are sending
+- the estimated amount you should receive
+- route and chain context
+- the estimated network fee
+- warnings for low gas balance or unusual price impact
+
+This makes swaps easier to understand and helps reduce abandoned or failed transactions.

@@ -13,6 +13,8 @@ Rewards from Token Reward Pools become claimable after a short lock period follo
 
 > **Gas reminder:** Claiming requires an on-chain transaction. Make sure your wallet has a small amount of the campaign chain's native token for gas (e.g. ETH on Base or Arbitrum).
 
+Mintware now provides clearer wallet-state guidance around claims so it is easier to understand what is happening before and during submission.
+
 ---
 
 ## Points Campaign Claims
@@ -43,6 +45,8 @@ If you've already claimed a distribution, the campaign page will show **Claimed*
 ## Batch Claiming
 
 If you have claimable rewards across multiple epochs on the same campaign contract, the UI will show a **Claim All (N)** button. This submits a single `batchClaim()` transaction covering all eligible distributions — saving gas compared to claiming each epoch individually.
+
+Batch claims also check network context more carefully so the app can help you switch to the correct chain before you walk into a failing transaction.
 
 ---
 

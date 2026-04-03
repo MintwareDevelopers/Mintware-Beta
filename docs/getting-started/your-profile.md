@@ -28,6 +28,8 @@ Your referral code and link. Share it to grow your Sharing signal score and earn
 
 Where possible, Mintware resolves your wallet address to a **Basename** (Base Name Service handle). If you have a Basename registered on Base, it will display throughout the app instead of your raw address.
 
+Mintware also surfaces chain context more explicitly around actions that depend on a specific network, so it is easier to tell when you are connected to the wrong chain before confirming.
+
 ---
 
 ## Score Attestation

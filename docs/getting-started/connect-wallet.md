@@ -25,6 +25,21 @@ Mintware supports any EVM wallet via WalletConnect and browser extensions.
 
 ---
 
+## Before You Confirm in Your Wallet
+
+Mintware is designed to explain important on-chain actions before your wallet opens.
+
+Depending on the action, you may see:
+- what you are sending
+- what you are expected to receive
+- which network the action will happen on
+- the estimated network fee
+- whether you are giving token permission or completing the final action
+
+This helps reduce failed transactions, approval confusion, and wrong-network mistakes.
+
+---
+
 ## Supported Networks
 
 Mintware campaigns run across multiple EVM chains. Each campaign specifies which chain it operates on — check the campaign detail page to see which network you need to be connected to.

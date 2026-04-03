@@ -11,6 +11,7 @@
 
 ## Getting Started
 * [Connect Your Wallet](getting-started/connect-wallet.md)
+* [Reviewing Transactions](getting-started/reviewing-transactions.md)
 * [Your Attribution Score](getting-started/your-score.md)
 * [Your Profile](getting-started/your-profile.md)
 * [Your Identity](getting-started/your-identity.md)
