@@ -113,6 +113,7 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
 
   const stageLabel: Record<typeof stage, string> = {
     idle:       'Deposit USDC',
+    resetting_approval: 'Resetting token permission…',
     approving:  'Approving USDC…',
     approved:   'Approval confirmed',
     depositing: 'Depositing…',
@@ -179,6 +180,17 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
         </span>
       </div>
 
+      <div style={{ background: 'rgba(79,126,247,0.04)', border: '1px solid rgba(79,126,247,0.12)', borderRadius: 10, padding: '10px 14px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-mw-ink-4)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-jakarta)', marginBottom: 6 }}>
+          What will happen
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', lineHeight: 1.55 }}>
+          <div>1. Your wallet may ask for permission to let SocialVault use your USDC. That step does not move funds.</div>
+          <div>2. Mintware checks the deposit call before your wallet signs the final transaction.</div>
+          <div>3. Your wallet then confirms the deposit and your LP position appears after the chain confirms it.</div>
+        </div>
+      </div>
+
       {error && (
         <div style={{ fontSize: 12, color: 'var(--color-mw-red)', fontFamily: 'var(--font-jakarta)', background: 'rgba(239,68,68,0.06)', borderRadius: 6, padding: '8px 12px' }}>
           {error}
@@ -190,6 +202,12 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
         <div style={{ fontSize: 12, color: 'var(--color-mw-brand)', fontFamily: 'var(--font-jakarta)', background: 'var(--color-mw-brand-dim)', borderRadius: 6, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--color-mw-brand)', animation: 'pulse 1s infinite' }} />
           {stageLabel[stage]}
+        </div>
+      )}
+
+      {isPending && (
+        <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', background: 'rgba(26,26,46,0.03)', borderRadius: 6, padding: '8px 12px', lineHeight: 1.5 }}>
+          If your wallet prompt is slow, open your wallet app or extension and look for a pending request.
         </div>
       )}
 
