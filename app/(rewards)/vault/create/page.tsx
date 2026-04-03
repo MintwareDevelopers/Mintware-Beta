@@ -255,10 +255,11 @@ function Step3({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
 
 // ─── step 4: review + deploy ──────────────────────────────────────────────────
 function Step4({
-  draft, submitting, error, onDeploy,
+  draft, submitting, submitLabel, error, onDeploy,
 }: {
   draft:      VaultDraft
   submitting: boolean
+  submitLabel: string
   error:      string
   onDeploy:   () => void
 }) {
@@ -297,6 +298,17 @@ function Step4({
         ⚠ This will call <code style={{ fontFamily: 'var(--font-mono)' }}>SocialVault.seedTeamTokens()</code> on-chain. Make sure your wallet has sufficient project tokens approved for transfer.
       </div>
 
+      <div style={{ background: 'rgba(79,126,247,0.04)', border: '1px solid rgba(79,126,247,0.12)', borderRadius: 'var(--radius-sm)', padding: '10px 14px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-mw-ink-4)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-jakarta)', marginBottom: 6 }}>
+          What will happen
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', lineHeight: 1.55 }}>
+          <div>1. Mintware creates the vault record so the on-chain seed can point at the right vault ID.</div>
+          <div>2. Your wallet may ask for token permission first. That step is not a transfer.</div>
+          <div>3. Mintware simulates the seed call, then your wallet confirms the final on-chain seed transaction.</div>
+        </div>
+      </div>
+
       {error && (
         <div style={{ fontSize: 12, color: 'var(--color-mw-red)', background: 'rgba(239,68,68,0.06)', borderRadius: 6, padding: '10px 14px', fontFamily: 'var(--font-jakarta)' }}>
           {error}
@@ -314,10 +326,14 @@ function Step4({
           opacity: submitting ? 0.6 : 1, transition: 'opacity 0.15s',
         }}
       >
-        {submitting
-          ? 'Check wallet for approval…'
-          : 'Deploy vault →'}
+        {submitting ? submitLabel : 'Deploy vault →'}
       </button>
+
+      {submitting && (
+        <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', background: 'rgba(26,26,46,0.03)', borderRadius: 6, padding: '8px 12px', lineHeight: 1.5 }}>
+          If your wallet does not appear right away, open your wallet app or extension and look for a pending request.
+        </div>
+      )}
     </div>
   )
 }
@@ -413,6 +429,15 @@ function CreateVaultContent() {
   }, [vaultSeed.error])
 
   const STEPS = ['Project', 'Pool', 'Defaults', 'Review']
+  const seedStageLabel: Record<typeof vaultSeed.stage, string> = {
+    idle: 'Deploy vault →',
+    resetting_approval: 'Resetting token permission…',
+    approving: 'Check wallet for token permission…',
+    approved: 'Permission confirmed',
+    seeding: 'Seeding vault on-chain…',
+    success: 'Vault ready',
+    error: 'Retry deploy',
+  }
 
   if (deployed) return (
     <>
@@ -425,7 +450,7 @@ function CreateVaultContent() {
             Vault created
           </div>
           <div style={{ fontSize: 14, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)', marginBottom: 28, lineHeight: 1.6 }}>
-            <strong>{draft.name}</strong> is now in seeding state. Call <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>seedTeamTokens()</code> on-chain to activate LP deposits.
+            <strong>{draft.name}</strong> is now seeded on-chain and ready for LP deposits as soon as the network confirms the transaction.
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
             <Link href="/vaults" style={{ padding: '10px 20px', background: 'var(--color-mw-brand)', color: 'white', borderRadius: 'var(--radius-sm)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-jakarta)', textDecoration: 'none' }}>
@@ -491,7 +516,7 @@ function CreateVaultContent() {
             {step === 0 && <Step1 draft={draft} onChange={patch} />}
             {step === 1 && <Step2 draft={draft} onChange={patch} />}
             {step === 2 && <Step3 draft={draft} onChange={patch} />}
-            {step === 3 && <Step4 draft={draft} submitting={vaultSeed.isPending} error={error} onDeploy={handleDeploy} />}
+            {step === 3 && <Step4 draft={draft} submitting={vaultSeed.isPending} submitLabel={seedStageLabel[vaultSeed.stage]} error={error} onDeploy={handleDeploy} />}
 
             {/* Nav buttons (hidden on step 3 which has its own deploy button) */}
             {step < 3 && (

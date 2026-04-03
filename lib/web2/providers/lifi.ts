@@ -41,10 +41,12 @@ interface LifiTxRequest {
 }
 
 export interface LifiQuote {
-  buyAmount:      string   // wei (estimate.toAmount from LI.FI)
-  price:          string   // always '0' — price impact not available from aggregator
-  estimatedGas:   string   // decimal string
-  fromAmountUSD?: string   // USD value of sell side (estimate.fromAmountUSD from LI.FI)
+  buyAmount:            string   // wei (estimate.toAmount from LI.FI)
+  price:                string   // always '0' — price impact not available from aggregator
+  estimatedGas:         string   // decimal string
+  fromAmountUSD?:       string   // USD value of sell side (estimate.fromAmountUSD from LI.FI)
+  gasCostUSD?:          string   // USD cost of network fee (estimate.gasCosts[0].amountUSD)
+  nativeTokenPriceUSD?: string   // native token spot price (estimate.gasCosts[0].price)
   transaction: {
     to:       string
     data:     string
@@ -118,8 +120,10 @@ export async function getQuote(params: LifiQuoteParams): Promise<LifiQuote> {
   const valueDec    = safeBigInt(txReq.value).toString()
 
   return {
-    buyAmount:      estimate.toAmount      as string,
-    fromAmountUSD:  estimate.fromAmountUSD as string | undefined,
+    buyAmount:           estimate.toAmount                        as string,
+    fromAmountUSD:       estimate.fromAmountUSD                   as string | undefined,
+    gasCostUSD:          estimate.gasCosts?.[0]?.amountUSD        as string | undefined,
+    nativeTokenPriceUSD: estimate.gasCosts?.[0]?.token?.priceUSD  as string | undefined,
     // Price impact calc not meaningful for aggregator quotes — hook handles null
     price:          '0',
     estimatedGas:   gasLimitDec || '200000',

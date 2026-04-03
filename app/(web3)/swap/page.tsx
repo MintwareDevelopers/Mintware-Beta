@@ -1,15 +1,13 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
+import { useAccount } from 'wagmi'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { MwNav } from '@/components/web2/MwNav'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
-import { JupiterTerminal } from '@/components/rewards/swap/JupiterTerminal'
 import { API } from '@/lib/web2/api'
-import { solanaEnabled } from '@/lib/web3/featureFlags'
-import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
@@ -17,8 +15,6 @@ interface Campaign {
   name: string
   chain: string
   status: string
-  reward_chain?: 'evm' | 'solana' | string
-  campaign_type?: 'token_pool' | 'points'
   actions?: Record<string, {
     label: string
     points: number
@@ -65,12 +61,11 @@ function actionDesc(key: string, campaignName: string): string {
 
 // ─── Swap Page ─────────────────────────────────────────────────────────────────
 export default function SwapPage() {
-  const { evmAddress } = useMintwareIdentity()
+  const { address } = useAccount()
   const { publicKey: solPublicKey, connected: solConnected } = useWallet()
   const { setVisible: openSolanaModal } = useWalletModal()
-  const isEvmWallet = !!evmAddress
-  const isSolWallet = solanaEnabled && !isEvmWallet && solConnected && !!solPublicKey
-  const wallet = evmAddress?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const isEvmWallet = !!address
+  const wallet = address?.toLowerCase() ?? (solConnected && solPublicKey ? solPublicKey.toBase58() : '')
 
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null)
   const [participant, setParticipant]       = useState<Participant | null>(null)
@@ -82,12 +77,7 @@ export default function SwapPage() {
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setActiveCampaign(
-            data.find((c: Campaign) =>
-              c.status === 'live' &&
-              (c.reward_chain ?? 'evm') === 'evm'
-            ) ?? null
-          )
+          setActiveCampaign(data.find((c: Campaign) => c.status === 'live') ?? null)
         }
       })
       .catch(() => {})
@@ -130,13 +120,6 @@ export default function SwapPage() {
   }
 
   const actions = activeCampaign?.actions ? Object.entries(activeCampaign.actions) : []
-
-  // Supported routes — Solana is live when a Solana wallet is connected
-  const supportedRoutes = [
-    { dot: '#627eea', char: 'E', from: 'Base',     tokens: 'ETH, USDC, WBTC',        live: true         },
-    { dot: '#f7931a', char: 'B', from: 'Ethereum', tokens: 'ETH, USDC, stablecoins', live: true         },
-    { dot: '#9945ff', char: 'S', from: 'Solana',   tokens: 'SOL, USDC',              live: isSolWallet  },
-  ] as const
 
   return (
     <MwAuthGuard>
@@ -183,6 +166,17 @@ export default function SwapPage() {
             {/* ── Left: Swap widget (hero) ── */}
             <div className="flex flex-col gap-4">
 
+              <div className="bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.14)] rounded-xl px-5 py-4">
+                <div className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-4 mb-[8px] font-sans">
+                  Before you swap
+                </div>
+                <div className="flex flex-col gap-[6px] text-[13px] text-mw-ink-3 leading-[1.55] font-sans">
+                  <div>Review the route and estimated fee on Mintware before your wallet opens.</div>
+                  <div>Swaps route on the network you choose in the widget, so check you are on the chain you expect.</div>
+                  <div>Keep a small amount of the native token on that chain for the network fee.</div>
+                </div>
+              </div>
+
               {/* Active campaign banner */}
               {activeCampaign && (
                 <div className="mw-accent-bg bg-white border border-[rgba(79,126,247,0.2)] border-l-[3px] border-l-mw-brand rounded-xl px-5 py-4 flex items-center gap-[14px] shadow-sm">
@@ -201,27 +195,24 @@ export default function SwapPage() {
                 </div>
               )}
 
-              {/* ── Solana wallet: Jupiter Terminal ── */}
-              {isSolWallet ? (
-                <div className="mw-accent-bg bg-white rounded-2xl shadow-feature border border-mw-border overflow-hidden">
-                  {/* Solana header strip */}
-                  <div className="flex items-center gap-[10px] px-5 py-[14px] border-b border-mw-border">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{ background: '#9945ff' }}>◎</div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-semibold text-mw-ink font-sans">Swap on Solana</div>
-                      <div className="text-[11px] text-mw-ink-3 font-sans">Powered by Jupiter · Points credited automatically</div>
-                    </div>
-                    <div className="text-[11px] px-2 py-[3px] rounded-xl font-semibold bg-[rgba(34,197,94,0.1)] text-mw-green border border-[rgba(34,197,94,0.25)] whitespace-nowrap font-sans">
-                      Live
-                    </div>
+              {/* Solana-only: swap requires EVM wallet */}
+              {!isEvmWallet && solConnected ? (
+                <div className="bg-white rounded-2xl border border-mw-border p-8 text-center flex flex-col items-center gap-4">
+                  <div className="text-[32px]">◎</div>
+                  <div className="text-[16px] font-bold text-mw-ink font-sans">Swap requires an EVM wallet</div>
+                  <div className="text-[13px] text-mw-ink-3 font-sans max-w-[280px] leading-relaxed">
+                    Mintware Swap routes through EVM chains. Connect MetaMask, Coinbase Wallet, or any EVM wallet to start swapping and earning campaign rewards.
                   </div>
-                  <JupiterTerminal
-                    wallet={solPublicKey!.toBase58()}
-                    campaignId={activeCampaign?.id}
-                  />
+                  <button
+                    onClick={() => openSolanaModal(false)}
+                    className="mt-1 px-5 py-2.5 rounded-xl bg-mw-brand text-white text-[13px] font-semibold font-sans border-0 cursor-pointer"
+                    style={{ background: 'var(--color-mw-brand)' }}
+                  >
+                    Connect EVM wallet
+                  </button>
                 </div>
               ) : (
-                /* EVM: LI.FI SwapWidget */
+                /* Swap widget elevated card */
                 <div className="mw-accent-bg bg-white rounded-2xl shadow-feature border border-mw-border overflow-hidden">
                   <Suspense fallback={<SwapSkeleton />}>
                     <SwapWidget />
@@ -273,12 +264,12 @@ export default function SwapPage() {
               <div>
                 <div className="text-[11px] font-bold text-mw-ink-3 tracking-[1.2px] uppercase mb-[14px] font-sans">Supported routes</div>
                 <div className="flex flex-col gap-2">
-                  {supportedRoutes.map(r => (
-                    <div
-                      key={r.from}
-                      className="mw-accent-card flex items-center gap-[10px] px-[14px] py-3 rounded-xl bg-white transition-shadow duration-150 shadow-card hover:shadow-card-hover"
-                      style={!r.live ? { opacity: 0.6 } : undefined}
-                    >
+                  {([
+                    { dot: '#627eea', char: 'E', from: 'Base',     tokens: 'ETH, USDC, WBTC',         live: true  },
+                    { dot: '#f7931a', char: 'B', from: 'Ethereum', tokens: 'ETH, USDC, stablecoins',  live: true  },
+                    { dot: '#9945ff', char: 'S', from: 'Solana',   tokens: 'SOL, USDC',               live: false },
+                  ] as const).map(r => (
+                    <div key={r.from} className="mw-accent-card flex items-center gap-[10px] px-[14px] py-3 rounded-xl bg-white transition-shadow duration-150 shadow-card hover:shadow-card-hover" style={!r.live ? { opacity: 0.6 } : undefined}>
                       <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{ background: r.dot }}>{r.char}</div>
                       <div className="flex-1 min-w-0">
                         <div className="text-[14px] font-semibold text-mw-ink font-sans">{r.from} → {activeCampaign?.name ?? 'Core DAO'}</div>

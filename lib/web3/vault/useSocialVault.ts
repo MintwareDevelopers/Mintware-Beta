@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { useState, useEffect }  from 'react'
-import { useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useReadContract } from 'wagmi'
 import { parseUnits, keccak256, toBytes }  from 'viem'
 import type { LockTier }        from '@/lib/web2/vault/types'
 import { SOCIAL_VAULT_ABI, ERC20_ABI, LOCK_TIER_INDEX } from './socialVaultAbi'
@@ -31,7 +31,7 @@ const USDC_DECIMALS = 6
 // After success → caller should POST /api/vault/deposit to record in DB
 
 export interface UseVaultDepositResult {
-  stage:       'idle' | 'approving' | 'approved' | 'depositing' | 'success' | 'error'
+  stage:       'idle' | 'resetting_approval' | 'approving' | 'approved' | 'depositing' | 'success' | 'error'
   isPending:   boolean
   isSuccess:   boolean
   txHash:      `0x${string}` | undefined
@@ -41,6 +41,8 @@ export interface UseVaultDepositResult {
 }
 
 export function useVaultDeposit(): UseVaultDepositResult {
+  const { address } = useAccount()
+  const publicClient = usePublicClient()
   const [stage, setStage]     = useState<UseVaultDepositResult['stage']>('idle')
   const [error, setError]     = useState('')
   const [depositHash, setDepositHash] = useState<`0x${string}` | undefined>()
@@ -56,19 +58,60 @@ export function useVaultDeposit(): UseVaultDepositResult {
 
   async function deposit(amountUsdc: number, tier: LockTier, _wallet: string) {
     if (!SOCIAL_VAULT_ADDRESS) { setError('Vault address not configured'); return }
+    if (!publicClient) { setError('Network client unavailable'); return }
     setError(''); setStage('approving')
     try {
       const amountWei = parseUnits(amountUsdc.toString(), USDC_DECIMALS)
       const tierIndex = LOCK_TIER_INDEX[tier]
+      const currentAllowance = address
+        ? await publicClient.readContract({
+            address:      USDC_ADDRESS,
+            abi:          ERC20_ABI,
+            functionName: 'allowance',
+            args:         [address, SOCIAL_VAULT_ADDRESS],
+          })
+        : 0n
 
-      // Step 1: approve
-      await writeApprove({
-        address:      USDC_ADDRESS,
-        abi:          ERC20_ABI,
-        functionName: 'approve',
-        args:         [SOCIAL_VAULT_ADDRESS, amountWei],
+      if (currentAllowance < amountWei) {
+        try {
+          await writeApprove({
+            address:      USDC_ADDRESS,
+            abi:          ERC20_ABI,
+            functionName: 'approve',
+            args:         [SOCIAL_VAULT_ADDRESS, amountWei],
+          })
+        } catch (approvalError) {
+          if (currentAllowance > 0n) {
+            setStage('resetting_approval')
+            await writeApprove({
+              address:      USDC_ADDRESS,
+              abi:          ERC20_ABI,
+              functionName: 'approve',
+              args:         [SOCIAL_VAULT_ADDRESS, 0n],
+            })
+            setStage('approving')
+            await writeApprove({
+              address:      USDC_ADDRESS,
+              abi:          ERC20_ABI,
+              functionName: 'approve',
+              args:         [SOCIAL_VAULT_ADDRESS, amountWei],
+            })
+          } else {
+            throw approvalError
+          }
+        }
+        setStage('approved')
+      } else {
+        setStage('approved')
+      }
+
+      await publicClient.simulateContract({
+        address:      SOCIAL_VAULT_ADDRESS,
+        abi:          SOCIAL_VAULT_ABI,
+        functionName: 'deposit',
+        args:         [amountWei, tierIndex],
+        account:      _wallet as `0x${string}`,
       })
-      setStage('approved')
 
       // Step 2: deposit
       setStage('depositing')
@@ -89,7 +132,7 @@ export function useVaultDeposit(): UseVaultDepositResult {
 
   return {
     stage,
-    isPending: stage === 'approving' || stage === 'approved' || stage === 'depositing',
+    isPending: stage === 'resetting_approval' || stage === 'approving' || stage === 'approved' || stage === 'depositing',
     isSuccess: stage === 'success',
     txHash:    depositHash,
     error,
@@ -160,7 +203,7 @@ export interface SeedParams {
 }
 
 export interface UseVaultSeedResult {
-  stage:     'idle' | 'approving' | 'approved' | 'seeding' | 'success' | 'error'
+  stage:     'idle' | 'resetting_approval' | 'approving' | 'approved' | 'seeding' | 'success' | 'error'
   isPending: boolean
   isSuccess: boolean
   txHash:    `0x${string}` | undefined
@@ -170,6 +213,8 @@ export interface UseVaultSeedResult {
 }
 
 export function useVaultSeed(): UseVaultSeedResult {
+  const { address } = useAccount()
+  const publicClient = usePublicClient()
   const [stage, setStage] = useState<UseVaultSeedResult['stage']>('idle')
   const [error, setError] = useState('')
   const [seedHash, setSeedHash] = useState<`0x${string}` | undefined>()
@@ -184,19 +229,70 @@ export function useVaultSeed(): UseVaultSeedResult {
 
   async function seed(params: SeedParams) {
     if (!SOCIAL_VAULT_ADDRESS) { setError('Vault address not configured'); return }
+    if (!publicClient) { setError('Network client unavailable'); return }
     setError(''); setStage('approving')
     try {
       // Convert UUID string → bytes32 via keccak256 hash (deterministic)
       const vaultIdBytes32 = keccak256(toBytes(params.vaultDbId)) as `0x${string}`
+      const currentAllowance = address
+        ? await publicClient.readContract({
+            address:      params.projectToken,
+            abi:          ERC20_ABI,
+            functionName: 'allowance',
+            args:         [address, SOCIAL_VAULT_ADDRESS],
+          })
+        : 0n
 
-      // Approve project token to vault
-      await writeApprove({
-        address:      params.projectToken,
-        abi:          ERC20_ABI,
-        functionName: 'approve',
-        args:         [SOCIAL_VAULT_ADDRESS, params.amountTokens],
-      })
+      if (currentAllowance < params.amountTokens) {
+        try {
+          await writeApprove({
+            address:      params.projectToken,
+            abi:          ERC20_ABI,
+            functionName: 'approve',
+            args:         [SOCIAL_VAULT_ADDRESS, params.amountTokens],
+          })
+        } catch (approvalError) {
+          if (currentAllowance > 0n) {
+            setStage('resetting_approval')
+            await writeApprove({
+              address:      params.projectToken,
+              abi:          ERC20_ABI,
+              functionName: 'approve',
+              args:         [SOCIAL_VAULT_ADDRESS, 0n],
+            })
+            setStage('approving')
+            await writeApprove({
+              address:      params.projectToken,
+              abi:          ERC20_ABI,
+              functionName: 'approve',
+              args:         [SOCIAL_VAULT_ADDRESS, params.amountTokens],
+            })
+          } else {
+            throw approvalError
+          }
+        }
+      }
       setStage('approved')
+
+      await publicClient.simulateContract({
+        address:      SOCIAL_VAULT_ADDRESS,
+        abi:          SOCIAL_VAULT_ABI,
+        functionName: 'seedTeamTokens',
+        args: [
+          vaultIdBytes32,
+          params.projectToken,
+          params.amountTokens,
+          {
+            currency0:   params.poolKey.currency0,
+            currency1:   params.poolKey.currency1,
+            fee:         params.poolKey.fee,
+            tickSpacing: params.poolKey.tickSpacing,
+            hooks:       params.poolKey.hooks,
+          },
+          params.sqrtPriceX96,
+        ],
+        account:      address as `0x${string}`,
+      })
 
       setStage('seeding')
       const hash = await writeSeed({
@@ -228,7 +324,7 @@ export function useVaultSeed(): UseVaultSeedResult {
 
   return {
     stage,
-    isPending: stage === 'approving' || stage === 'approved' || stage === 'seeding',
+    isPending: stage === 'resetting_approval' || stage === 'approving' || stage === 'approved' || stage === 'seeding',
     isSuccess: stage === 'success',
     txHash:    seedHash,
     error,

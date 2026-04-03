@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useChainId, useWalletClient } from 'wagmi'
+import { useChainId, useWalletClient, usePublicClient } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { executeSwap as executeLifi } from '@/lib/web2/providers/lifi'
 import { executeSwap as executeMolten, isMoltenReady } from '@/lib/web2/providers/molten'
@@ -32,6 +32,7 @@ interface ExecuteArgs {
 export function useSwap(): SwapState {
   const chainId                = useChainId()
   const { data: walletClient } = useWalletClient()
+  const publicClient           = usePublicClient()
 
   const [status,  setStatus]  = useState<SwapStatus>('idle')
   const [txHash,  setTxHash]  = useState<`0x${string}` | null>(null)
@@ -46,6 +47,10 @@ export function useSwap(): SwapState {
   const executeSwap = async (args: ExecuteArgs) => {
     if (!walletClient) {
       setError('Wallet not connected')
+      return
+    }
+    if (!publicClient) {
+      setError('Network client unavailable')
       return
     }
 
@@ -63,7 +68,14 @@ export function useSwap(): SwapState {
 
       if (chainConfig.swapProvider === 'lifi') {
         // LI.FI — quote contains the signed transaction envelope from the aggregator
-        hash = await executeLifi(args.quote as LifiQuote, walletClient)
+        const lifiQuote = args.quote as LifiQuote
+        await publicClient.call({
+          account: walletClient.account.address,
+          to:      lifiQuote._txReq.to as `0x${string}`,
+          data:    lifiQuote._txReq.data as `0x${string}`,
+          value:   BigInt(lifiQuote._txReq.value ?? '0x0'),
+        })
+        hash = await executeLifi(lifiQuote, walletClient)
       } else {
         // Molten (Core DAO)
         if (!isMoltenReady()) {
@@ -109,7 +121,7 @@ export function useSwap(): SwapState {
 
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Swap failed'
-      setError(msg)
+      setError(msg.includes('execution reverted') ? 'This route is no longer valid. Refresh the quote and try again.' : msg)
       setStatus('error')
     }
   }
