@@ -30,6 +30,7 @@ interface SwapConfirmSheetProps {
   feeBps:        number        // e.g. 50 = 0.5%
   highImpact:    boolean
   isSwapping:    boolean
+  showWalletHint: boolean
   onConfirm:     () => void
   onCancel:      () => void
 }
@@ -46,7 +47,7 @@ function Row({ label, value, valueClass = '' }: { label: string; value: React.Re
 export function SwapConfirmSheet({
   sellToken, buyToken, sellAmount, buyAmount, sellAmountUSD,
   gasCostEth, gasCostUSD, nativeSymbol, priceImpact, chainName, feeBps, highImpact,
-  isSwapping, onConfirm, onCancel,
+  isSwapping, showWalletHint, onConfirm, onCancel,
 }: SwapConfirmSheetProps) {
   const feeUSD = sellAmountUSD
     ? ((parseFloat(sellAmountUSD) * feeBps) / 10000).toFixed(2)
@@ -167,6 +168,15 @@ export function SwapConfirmSheet({
           </p>
         </div>
 
+        {showWalletHint && (
+          <div className="mx-[24px] mt-[12px] px-[12px] py-[10px] rounded-[10px] bg-[rgba(234,179,8,0.08)] border border-[rgba(234,179,8,0.25)]">
+            <p className="font-sans text-[11px] text-[#a16207] leading-[1.55] m-0">
+              Still waiting? Check your wallet app or browser extension. If you do not see a prompt,
+              open your wallet manually and look for a pending confirmation request.
+            </p>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="px-[24px] pt-[16px] pb-[24px] flex flex-col gap-[8px]">
           <button
@@ -182,14 +192,12 @@ export function SwapConfirmSheet({
           >
             {isSwapping ? 'Waiting for wallet…' : 'Open wallet to confirm →'}
           </button>
-          {!isSwapping && (
-            <button
-              onClick={onCancel}
-              className="w-full py-[10px] rounded-[12px] border border-[rgba(79,126,247,0.18)] bg-transparent font-sans text-[13px] text-mw-ink-3 cursor-pointer hover:bg-[rgba(79,126,247,0.04)] transition-all duration-150"
-            >
-              Cancel
-            </button>
-          )}
+          <button
+            onClick={onCancel}
+            className="w-full py-[10px] rounded-[12px] border border-[rgba(79,126,247,0.18)] bg-transparent font-sans text-[13px] text-mw-ink-3 cursor-pointer hover:bg-[rgba(79,126,247,0.04)] transition-all duration-150"
+          >
+            {isSwapping ? 'Close this panel' : 'Cancel'}
+          </button>
         </div>
       </div>
     </div>

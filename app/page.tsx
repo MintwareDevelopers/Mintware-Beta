@@ -68,7 +68,7 @@ export default function HomePage() {
             onClick={handleHeroConnect}
             className="bg-mw-brand text-white py-2 px-5 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-all duration-150 hover:bg-[#0040cc]"
           >
-            {isConnected ? 'Dashboard →' : 'Connect Wallet'}
+            {isConnected ? 'Dashboard →' : 'Connect to trade'}
           </button>
         </div>
       </nav>
@@ -85,7 +85,7 @@ export default function HomePage() {
 
         <p className="text-[clamp(16px,1.8vw,20px)] font-medium text-mw-ink-3 max-w-[480px] mx-auto leading-[1.55] [animation:fadeUp_0.5s_0.14s_ease_both] relative mt-5">
           Every interaction. Every position. Every referral.<br />
-          Paste any wallet to see what it&apos;s built.
+          Paste any wallet to explore it first. Connect only when you&apos;re ready to trade.
         </p>
 
         {/* Search bar */}
@@ -131,9 +131,14 @@ export default function HomePage() {
             onClick={handleHeroConnect}
             className="bg-mw-brand text-white py-3 px-7 rounded-[12px] text-[14px] font-semibold cursor-pointer transition-all duration-150 no-underline inline-block hover:bg-[#0040cc] hover:-translate-y-px"
           >
-            {isConnected ? 'Go to my profile →' : 'Connect your wallet →'}
+            {isConnected ? 'Go to my profile →' : 'Connect to trade →'}
           </button>
         </div>
+
+        <p className="text-[12px] text-mw-ink-4 mt-4 max-w-[360px] mx-auto leading-[1.6] [animation:fadeUp_0.5s_0.34s_ease_both] relative">
+          You can explore scores, wallets, and rankings without connecting first.
+          Connect a wallet only when you want to trade or claim.
+        </p>
 
         {/* Stats strip */}
         <div className="flex items-stretch mt-12 border border-mw-border-strong rounded-[14px] overflow-hidden bg-white shadow-[0_2px_12px_rgba(26,26,46,0.06)] [animation:fadeUp_0.5s_0.38s_ease_both] relative max-md:flex-col">

@@ -12,7 +12,7 @@
 //   - Plain language throughout: "network fee" not "gas", etc.
 // =============================================================================
 
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useAccount, useBalance, useReadContract, useChainId } from 'wagmi'
 import { useQuote } from '@/hooks/useQuote'
 import { useSwap } from '@/hooks/useSwap'
@@ -57,6 +57,7 @@ export function SwapWidget() {
 
   // Confirmation sheet — shown before the wallet popup
   const [showConfirm, setShowConfirm] = useState(false)
+  const [showWalletHint, setShowWalletHint] = useState(false)
 
   const isNative =
     !sellToken ||
@@ -203,6 +204,7 @@ export function SwapWidget() {
   // Called by the confirm sheet — this triggers the actual wallet popup
   async function handleConfirmSwap() {
     if (!quote || !sellToken || !buyToken) return
+    setShowWalletHint(false)
     await executeSwap({
       quote,
       sellToken,
@@ -222,6 +224,57 @@ export function SwapWidget() {
   }
 
   const activeSlippage = customSlippage ? parseFloat(customSlippage) : slippage
+
+  useEffect(() => {
+    if (!showConfirm || !isSwapping) {
+      setShowWalletHint(false)
+      return
+    }
+
+    const timer = window.setTimeout(() => setShowWalletHint(true), 8000)
+    return () => window.clearTimeout(timer)
+  }, [showConfirm, isSwapping])
+
+  const quoteSummary = useMemo(() => {
+    if (!sellToken || !buyToken || !sellAmount || !quote) return null
+
+    const receiveText = buyAmount ? `about ${fmt(buyAmount)} ${buyToken.symbol}` : `an estimated amount of ${buyToken.symbol}`
+    const networkText = chainConfig?.name ? `on ${chainConfig.name}` : 'on the selected network'
+
+    if (isGasInsufficient) {
+      return `This swap will ask your wallet to trade ${sellAmount} ${sellToken.symbol} for ${receiveText} ${networkText}. You may need a little more ${nativeSymbol} to cover the network fee.`
+    }
+
+    return `This swap will ask your wallet to trade ${sellAmount} ${sellToken.symbol} for ${receiveText} ${networkText}. Review the amount, fee, and route before you continue.`
+  }, [sellToken, buyToken, sellAmount, quote, buyAmount, chainConfig?.name, isGasInsufficient, nativeSymbol])
+
+  const readinessItems = useMemo(() => {
+    const items: string[] = []
+
+    if (!isConnected) {
+      items.push('Connect an EVM wallet to unlock live quotes and wallet confirmation.')
+      return items
+    }
+
+    if (!sellToken || !buyToken) {
+      items.push('Choose the token you want to swap from and the token you want to receive.')
+    }
+
+    if (!sellAmount || parseFloat(sellAmount) <= 0) {
+      items.push('Enter an amount to preview the route, platform fee, and network fee.')
+    }
+
+    if (quote && chainConfig?.name) {
+      items.push(`You are trading on ${chainConfig.name}. Mintware will keep this swap on the selected network.`)
+      items.push('You will review the route and fees here before your wallet opens.')
+    }
+
+    if (isGasInsufficient) {
+      items.push(`You may need a little more ${nativeSymbol} to cover the network fee before this trade can complete.`)
+    }
+
+    return items.slice(0, 3)
+  }, [isConnected, sellToken, buyToken, sellAmount, quote, chainConfig?.name, isGasInsufficient, nativeSymbol])
 
   return (
     <>
@@ -439,6 +492,28 @@ export function SwapWidget() {
           {/* Attribution score preview */}
           <AttributionScorePreview estimatedScoreGain={estimatedScoreGain} />
 
+          {quoteSummary && (
+            <div className="px-[12px] py-[10px] rounded-[10px] bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.12)] font-sans text-[12px] text-mw-ink-4 leading-[1.55]">
+              {quoteSummary}
+            </div>
+          )}
+
+          {readinessItems.length > 0 && (
+            <div className="px-[12px] py-[12px] rounded-[10px] bg-[rgba(26,26,46,0.03)] border border-[rgba(26,26,46,0.08)]">
+              <div className="text-[11px] font-bold uppercase tracking-[0.8px] text-mw-ink-4 font-sans mb-[8px]">
+                Before you trade
+              </div>
+              <div className="flex flex-col gap-[6px]">
+                {readinessItems.map((item) => (
+                  <div key={item} className="flex items-start gap-[8px] text-[12px] text-mw-ink-4 font-sans leading-[1.5]">
+                    <span className="text-mw-brand font-bold">•</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Action button — "Review Swap" opens the confirmation sheet */}
           <button
             className={`w-full py-[14px] rounded-md border-0 cursor-pointer font-sans text-[15px] font-bold transition-all duration-150 mt-[2px] disabled:cursor-not-allowed${
@@ -503,6 +578,7 @@ export function SwapWidget() {
           feeBps={chainConfig?.feeBps ?? 50}
           highImpact={highImpactWarning}
           isSwapping={isSwapping}
+          showWalletHint={showWalletHint}
           onConfirm={handleConfirmSwap}
           onCancel={() => setShowConfirm(false)}
         />

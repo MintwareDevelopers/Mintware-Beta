@@ -166,6 +166,17 @@ export default function SwapPage() {
             {/* ── Left: Swap widget (hero) ── */}
             <div className="flex flex-col gap-4">
 
+              <div className="bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.14)] rounded-xl px-5 py-4">
+                <div className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-4 mb-[8px] font-sans">
+                  Before you swap
+                </div>
+                <div className="flex flex-col gap-[6px] text-[13px] text-mw-ink-3 leading-[1.55] font-sans">
+                  <div>Review the route and estimated fee on Mintware before your wallet opens.</div>
+                  <div>Swaps route on the network you choose in the widget, so check you are on the chain you expect.</div>
+                  <div>Keep a small amount of the native token on that chain for the network fee.</div>
+                </div>
+              </div>
+
               {/* Active campaign banner */}
               {activeCampaign && (
                 <div className="mw-accent-bg bg-white border border-[rgba(79,126,247,0.2)] border-l-[3px] border-l-mw-brand rounded-xl px-5 py-4 flex items-center gap-[14px] shadow-sm">

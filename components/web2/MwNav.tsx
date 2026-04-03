@@ -167,7 +167,7 @@ export function MwNav() {
                 onClick={openConnectModal}
                 className="px-4 py-2 rounded-xl bg-[#2563EB] text-white border-0 text-[13px] font-semibold cursor-pointer font-sans"
               >
-                Connect Wallet
+                Connect to trade
               </button>
             </div>
           )
