@@ -13,9 +13,9 @@
 // =============================================================================
 
 import { useState } from 'react'
-import { useAccount } from 'wagmi'
 import type { CampaignType } from '@/lib/rewards/creator'
 import { ApplicationForm } from '@/components/rewards/creator/ApplicationForm'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 interface CampaignTypeSelectProps {
   onSelect: (type: CampaignType) => void
@@ -103,7 +103,7 @@ function TypeCard({
 }
 
 export function CampaignTypeSelect({ onSelect }: CampaignTypeSelectProps) {
-  const { address } = useAccount()
+  const { evmAddress: address } = useMintwareIdentity()
   const [checking,  setChecking]  = useState(false)
   const [showForm,  setShowForm]  = useState(false)
 

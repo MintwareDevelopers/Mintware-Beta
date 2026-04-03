@@ -1,10 +1,10 @@
 'use client'
 
-import { useAccount } from 'wagmi'
 import { shortAddr } from '@/lib/web2/api'
 import { calcBuyerReward, calcReferrerReward } from '@/lib/rewards/calc'
 import type { CampaignReward } from '@/lib/rewards/calc'
 import type { Token } from '@/config/tokens'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 interface PostSwapSummaryProps {
   txHash: string
@@ -29,7 +29,7 @@ export function PostSwapSummary({
   currentScore,
   onDismiss,
 }: PostSwapSummaryProps) {
-  const { address } = useAccount()
+  const { address } = useMintwareIdentity()
 
   const buyerReward = campaign && sellAmountUSD
     ? calcBuyerReward(sellAmountUSD, campaign.buyerRewardPct)

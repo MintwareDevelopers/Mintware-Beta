@@ -1,31 +1,32 @@
 'use client'
 
-import { useAccount }             from 'wagmi'
 import { useWallet }              from '@solana/wallet-adapter-react'
 import { useRouter }              from 'next/navigation'
 import { useEffect }              from 'react'
 import { solanaEnabled }          from '@/lib/web3/featureFlags'
+import { useMintwareIdentity }    from '@/lib/web3/useMintwareIdentity'
 
 export function MwAuthGuard({ children }: { children: React.ReactNode }) {
-  const { status: evmStatus }            = useAccount()
-  const { connected: solConnected, connecting: solConnecting } = useWallet()
+  const { isConnected, isReady, walletSettled, evmStatus } = useMintwareIdentity()
+  const { connecting: solConnecting } = useWallet()
   const router = useRouter()
 
-  // In local dev, skip auth so pages can be tweaked without a wallet
   if (process.env.NODE_ENV === 'development') {
     return <>{children}</>
   }
 
-  const isLoading     = evmStatus === 'reconnecting' || evmStatus === 'connecting' || (solanaEnabled && solConnecting)
-  const isConnected   = evmStatus === 'connected' || (solanaEnabled && solConnected)
+  const isLoading =
+    !isReady ||
+    evmStatus === 'reconnecting' ||
+    evmStatus === 'connecting' ||
+    (solanaEnabled && solConnecting)
   const isDisconnected = !isLoading && !isConnected
 
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (isDisconnected) router.replace('/')
   }, [isDisconnected, router])
 
-  if (isLoading || (!isConnected && !isDisconnected)) {
+  if (isLoading || (!walletSettled && !isDisconnected)) {
     return <div className="min-h-screen bg-mw-surface" />
   }
 

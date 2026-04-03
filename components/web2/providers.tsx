@@ -1,15 +1,72 @@
 'use client'
 
+import { PrivyProvider, type PrivyInterface, type PrivyProviderProps, usePrivy, useWallets } from '@privy-io/react-auth'
+import { WagmiProvider as PrivyWagmiProvider } from '@privy-io/wagmi'
 import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit'
 import { WagmiProvider, useAccount, type State } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from '@/lib/web3/wagmi'
-import { useEffect, useState, type ComponentType } from 'react'
+import { createContext, useContext, useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
 
-// ── Global referral gate — mounted inside every page ───────────────────────
-// Checks if the connected wallet needs the ref code prompt and renders it.
+const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim() ?? ''
+const PRIVY_ENABLED = PRIVY_APP_ID.length > 0
+
+const PRIVY_CONFIG: PrivyProviderProps['config'] = {
+  appearance: {
+    theme: 'light',
+    accentColor: '#0052FF',
+    landingHeader: 'Bring a wallet or start with email',
+    loginMessage: 'Privy helps onboarding, but Mintware still keys reputation to your wallet address.',
+    showWalletLoginFirst: false,
+    walletChainType: 'ethereum-only',
+    walletList: ['detected_wallets', 'metamask', 'coinbase_wallet', 'rainbow', 'wallet_connect'],
+  },
+  loginMethods: ['wallet', 'email'],
+  embeddedWallets: {
+    ethereum: { createOnLogin: 'users-without-wallets' },
+    showWalletUIs: true,
+  },
+}
+
+type MintwarePrivyContextValue = {
+  enabled: boolean
+  ready: boolean
+  authenticated: boolean
+  hasEmbeddedWallet: boolean
+  embeddedWalletAddress: string | null
+  evmWalletAddresses: string[]
+  login: PrivyInterface['login']
+  connectWallet: PrivyInterface['connectWallet']
+  connectOrCreateWallet: PrivyInterface['connectOrCreateWallet']
+  linkWallet: PrivyInterface['linkWallet']
+  logout: PrivyInterface['logout']
+}
+
+const noop = () => {}
+const noopAsync = async () => {}
+
+const defaultPrivyContextValue: MintwarePrivyContextValue = {
+  enabled: false,
+  ready: true,
+  authenticated: false,
+  hasEmbeddedWallet: false,
+  embeddedWalletAddress: null,
+  evmWalletAddresses: [],
+  login: noop,
+  connectWallet: noop,
+  connectOrCreateWallet: noop,
+  linkWallet: noop,
+  logout: noopAsync,
+}
+
+const MintwarePrivyContext = createContext<MintwarePrivyContextValue>(defaultPrivyContextValue)
+
+export function useMintwarePrivy() {
+  return useContext(MintwarePrivyContext)
+}
+
 function GlobalReferralGate() {
   const { address } = useAccount()
   const { showRefCodePrompt, setShowRefCodePrompt } = useReferral(address)
@@ -35,7 +92,6 @@ function MaybeSolanaProvider({ children }: { children: React.ReactNode }) {
         if (active) setProvider(() => mod.SolanaProvider)
       })
       .catch(() => {
-        // Fail open: keep the rest of the app rendering even if Solana deps are unavailable.
         if (active) setProvider(null)
       })
 
@@ -49,6 +105,67 @@ function MaybeSolanaProvider({ children }: { children: React.ReactNode }) {
   return <Provider>{children}</Provider>
 }
 
+function AppWalletProviders({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(() => new QueryClient())
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <RainbowKitProvider
+        theme={lightTheme({
+          accentColor: '#0052FF',
+          accentColorForeground: 'white',
+          borderRadius: 'medium',
+          fontStack: 'system',
+        })}
+        modalSize="compact"
+      >
+        <MaybeSolanaProvider>
+          {children}
+          <GlobalReferralGate />
+        </MaybeSolanaProvider>
+      </RainbowKitProvider>
+    </QueryClientProvider>
+  )
+}
+
+function PrivySessionBridge({ children }: { children: ReactNode }) {
+  const {
+    ready,
+    authenticated,
+    login,
+    connectWallet,
+    connectOrCreateWallet,
+    linkWallet,
+    logout,
+  } = usePrivy()
+  const { wallets, ready: walletsReady } = useWallets()
+
+  const embeddedWallet = wallets.find((wallet) => wallet.walletClientType?.startsWith('privy'))
+  const evmWalletAddresses = wallets
+    .map((wallet) => wallet.address)
+    .filter((address): address is string => /^0x[0-9a-fA-F]{40}$/.test(address))
+
+  return (
+    <MintwarePrivyContext.Provider
+      value={{
+        enabled: true,
+        ready: ready && walletsReady,
+        authenticated,
+        hasEmbeddedWallet: !!embeddedWallet,
+        embeddedWalletAddress: embeddedWallet?.address ?? null,
+        evmWalletAddresses,
+        login,
+        connectWallet,
+        connectOrCreateWallet,
+        linkWallet,
+        logout,
+      }}
+    >
+      {children}
+    </MintwarePrivyContext.Provider>
+  )
+}
+
 export function Providers({
   children,
   initialState,
@@ -56,26 +173,33 @@ export function Providers({
   children: React.ReactNode
   initialState?: State
 }) {
-  const [queryClient] = useState(() => new QueryClient())
+  if (!PRIVY_ENABLED) {
+    return (
+      <MintwarePrivyContext.Provider value={defaultPrivyContextValue}>
+        <WagmiProvider config={wagmiConfig} initialState={initialState}>
+          <AppWalletProviders>
+            {children}
+          </AppWalletProviders>
+        </WagmiProvider>
+      </MintwarePrivyContext.Provider>
+    )
+  }
 
   return (
-    <WagmiProvider config={wagmiConfig} initialState={initialState}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider
-          theme={lightTheme({
-            accentColor: '#0052FF',
-            accentColorForeground: 'white',
-            borderRadius: 'medium',
-            fontStack: 'system',
-          })}
-          modalSize="compact"
+    <PrivyProvider appId={PRIVY_APP_ID} config={PRIVY_CONFIG}>
+      <PrivySessionBridge>
+        <PrivyWagmiProvider
+          config={wagmiConfig}
+          initialState={initialState}
+          setActiveWalletForWagmi={({ wallets }) =>
+            wallets.find((wallet) => wallet.walletClientType?.startsWith('privy')) ?? wallets[0]
+          }
         >
-          <MaybeSolanaProvider>
+          <AppWalletProviders>
             {children}
-            <GlobalReferralGate />
-          </MaybeSolanaProvider>
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
+          </AppWalletProviders>
+        </PrivyWagmiProvider>
+      </PrivySessionBridge>
+    </PrivyProvider>
   )
 }

@@ -6,7 +6,6 @@
 // Wallet connect only needed to claim/customize your own profile.
 
 import { useParams, useRouter }  from 'next/navigation'
-import { useAccount }            from 'wagmi'
 import { useWallet }             from '@solana/wallet-adapter-react'
 import { MwNav }                 from '@/components/web2/MwNav'
 import { WalletDisplay }         from '@/components/web3/WalletDisplay'
@@ -17,6 +16,7 @@ import { API, shortAddr }        from '@/lib/web2/api'
 import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import { useEffect, useState }   from 'react'
 import { solanaEnabled }         from '@/lib/web3/featureFlags'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Signal {
@@ -62,9 +62,8 @@ export default function PublicProfile() {
   const isSolanaAddr = solanaEnabled && SOLANA_RE.test(rawAddr) && !rawAddr.startsWith('0x')
   const address      = isSolanaAddr ? rawAddr : rawAddr.toLowerCase()
 
-  const { address: connectedAddr, status: walletStatus } = useAccount()
+  const { evmAddress: connectedAddr, walletSettled } = useMintwareIdentity()
   const { publicKey: solPublicKey, connected: solConnected } = useWallet()
-  const walletSettled = (walletStatus === 'connected' || walletStatus === 'disconnected') || (solanaEnabled && solConnected)
   const isOwner =
     (!!connectedAddr && connectedAddr.toLowerCase() === address) ||
     (!!solanaEnabled && !!solPublicKey  && solPublicKey.toBase58() === address)

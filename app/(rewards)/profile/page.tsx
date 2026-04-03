@@ -1,20 +1,19 @@
 'use client'
 
 import Link from 'next/link'
-import { useAccount } from 'wagmi'
 import { useWallet }  from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
 import { API, shortAddr, fmtUSD, iconColor } from '@/lib/web2/api'
-import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import { computeBadges } from '@/lib/rewards/badges'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { ReferralSheet } from '@/components/rewards/referral/ReferralSheet'
 import { InviteTab } from '@/components/rewards/referral/InviteTab'
 import { ClaimCard } from '@/components/rewards/campaigns/ClaimCard'
+import { buildSolanaWalletLinkMessage } from '@/config/solana'
 import { toast } from 'sonner'
 import * as Progress from '@radix-ui/react-progress'
 import * as Tooltip from '@radix-ui/react-tooltip'
@@ -23,6 +22,7 @@ import { ResponsiveContainer, AreaChart, Area, Tooltip as RechartsTooltip } from
 import { AnimatedScore } from '@/components/web2/AnimatedScore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { solanaEnabled } from '@/lib/web3/featureFlags'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Signal {
@@ -72,11 +72,11 @@ type Tab = 'portfolio' | 'score' | 'badge' | 'invite' | 'rewards' | 'liquidity'
 
 // ─── Profile content ──────────────────────────────────────────────────────────
 function ProfileContent() {
-  const { address } = useAccount()
+  const { address: evmAddress } = useMintwareIdentity()
   const { publicKey: solPublicKey, connected: solConnected, signMessage: solSignMessage } = useWallet()
   const { setVisible: openSolanaModal } = useWalletModal()
   // EVM takes priority; Solana-only users fall back to their public key (base58, case-sensitive)
-  const wallet = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = evmAddress?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
   const [activeTab, setActiveTab] = useState<Tab>('portfolio')
   const [data, setData] = useState<ScoreResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -144,25 +144,23 @@ function ProfileContent() {
 
   // Check if a Solana wallet is already linked to this EVM address
   useEffect(() => {
-    if (!solanaEnabled || !wallet) return
-    const sb = createSupabaseBrowserClient()
-    void sb.from('wallet_links')
-      .select('linked_address')
-      .eq('primary_address', wallet)
-      .eq('status', 'verified')
-      .maybeSingle()
-      .then(({ data: link }) => {
-        if (link?.linked_address) {
-          setSolLinked(link.linked_address)
-          setSolScoreLoading(true)
-          fetch(`${API}/score?address=${link.linked_address}`)
-            .then(r => r.json())
-            .then(d => setSolScore(d.score ?? 0))
-            .catch(() => {})
-            .finally(() => setSolScoreLoading(false))
-        }
+    if (!evmAddress) return
+    const walletAddress = evmAddress.toLowerCase()
+
+    void fetch(`/api/wallet-link?evm_address=${encodeURIComponent(walletAddress)}`)
+      .then((response) => response.json())
+      .then((link) => {
+        if (!link?.linked_address) return
+        setSolLinked(link.linked_address)
+        setSolScoreLoading(true)
+        fetch(`${API}/score?address=${link.linked_address}`)
+          .then((response) => response.json())
+          .then((scoreData) => setSolScore(scoreData.score ?? 0))
+          .catch(() => {})
+          .finally(() => setSolScoreLoading(false))
       })
-  }, [wallet]) // eslint-disable-line react-hooks/exhaustive-deps
+      .catch(() => {})
+  }, [evmAddress]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function linkSolanaWallet() {
     if (!solanaEnabled) return
@@ -171,7 +169,7 @@ function ProfileContent() {
     setSolLinkError(null)
     try {
       const ts = Math.floor(Date.now() / 1000)
-      const message = `Link wallet to Mintware: evm=${wallet} ts=${ts}`
+      const message = buildSolanaWalletLinkMessage(wallet, ts)
       const msgBytes  = new TextEncoder().encode(message)
       const sigBytes  = await solSignMessage(msgBytes)
       const signature = Buffer.from(sigBytes).toString('base64')
@@ -351,7 +349,7 @@ function ProfileContent() {
               {/* Linked wallets row */}
               <div className="flex items-center gap-2 mt-3 flex-wrap">
                 {/* EVM chip */}
-                {address && (
+                {evmAddress && (
                   <span className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-medium border bg-[rgba(15,23,42,0.05)] border-[rgba(15,23,42,0.10)] text-mw-ink-3">
                     <span className="w-[5px] h-[5px] rounded-full bg-mw-live shrink-0" />
                     EVM · {shortAddr(wallet)}
@@ -372,7 +370,7 @@ function ProfileContent() {
                   </span>
                 )}
                 {/* Link button — EVM connected, Solana adapter connected, not yet linked */}
-                {solanaEnabled && address && !solLinked && solConnected && solPublicKey && (
+                {solanaEnabled && evmAddress && !solLinked && solConnected && solPublicKey && (
                   <button
                     onClick={linkSolanaWallet}
                     disabled={solLinkLoading}
@@ -384,7 +382,7 @@ function ProfileContent() {
                   </button>
                 )}
                 {/* Prompt to open Solana modal if not yet connected */}
-                {solanaEnabled && address && !solLinked && !solConnected && (
+                {solanaEnabled && evmAddress && !solLinked && !solConnected && (
                   <button
                     onClick={() => openSolanaModal(true)}
                     className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-medium border cursor-pointer transition-all duration-150"
@@ -966,7 +964,11 @@ function ProfileContent() {
               ) : lpDeposits.length === 0 && lpQueue.length === 0 ? (
                 <div className="text-center py-12 text-mw-ink-3 text-[13px]">
                   No active LP positions.{' '}
-                  <a href="/vaults" className="text-mw-brand font-semibold no-underline">Browse vaults →</a>
+                  {process.env.NEXT_PUBLIC_PHASE2_ENABLED === 'true' ? (
+                    <a href="/vaults" className="text-mw-brand font-semibold no-underline">Browse vaults →</a>
+                  ) : (
+                    <span className="text-mw-ink-4 font-semibold">Vaults coming soon</span>
+                  )}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1036,9 +1038,15 @@ function ProfileContent() {
                     </div>
                   )}
 
-                  <a href="/vaults" className="text-[13px] text-mw-brand font-semibold no-underline text-center block mt-2" style={{ fontFamily: 'var(--font-jakarta)' }}>
-                    Browse more vaults →
-                  </a>
+                  {process.env.NEXT_PUBLIC_PHASE2_ENABLED === 'true' ? (
+                    <a href="/vaults" className="text-[13px] text-mw-brand font-semibold no-underline text-center block mt-2" style={{ fontFamily: 'var(--font-jakarta)' }}>
+                      Browse more vaults →
+                    </a>
+                  ) : (
+                    <div className="text-[13px] text-mw-ink-4 font-semibold text-center block mt-2" style={{ fontFamily: 'var(--font-jakarta)' }}>
+                      Vaults coming soon
+                    </div>
+                  )}
                 </div>
               )}
             </div>

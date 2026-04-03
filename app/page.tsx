@@ -1,10 +1,11 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useAccount } from 'wagmi'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useMintwarePrivy } from '@/components/web2/providers'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 const SAMPLE_ADDRS = [
   { label: 'vitalik.eth',    addr: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
@@ -13,14 +14,32 @@ const SAMPLE_ADDRS = [
 ]
 
 export default function HomePage() {
-  const { isConnected } = useAccount()
+  const { isConnected } = useMintwareIdentity()
   const { openConnectModal } = useConnectModal()
+  const privy = useMintwarePrivy()
   const router = useRouter()
   const [walletInput, setWalletInput] = useState('')
 
   function handleHeroConnect() {
     if (isConnected) router.push('/profile')
     else openConnectModal?.()
+  }
+
+  function handlePrivyOnboarding() {
+    if (isConnected) {
+      router.push('/profile')
+      return
+    }
+
+    if (privy.authenticated) {
+      privy.connectOrCreateWallet()
+      return
+    }
+
+    privy.login({
+      loginMethods: ['email'],
+      walletChainType: 'ethereum-only',
+    })
   }
 
   function handleAnalyze(addr?: string) {
@@ -64,6 +83,14 @@ export default function HomePage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {privy.enabled && (
+            <button
+              onClick={handlePrivyOnboarding}
+              className="bg-white text-[#2563EB] py-2 px-5 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-all duration-150 border border-[rgba(37,99,235,0.16)] hover:bg-[rgba(37,99,235,0.04)]"
+            >
+              Continue with Email
+            </button>
+          )}
           <button
             onClick={handleHeroConnect}
             className="bg-mw-brand text-white py-2 px-5 rounded-[10px] text-[13px] font-semibold cursor-pointer transition-all duration-150 hover:bg-[#0040cc]"
@@ -133,7 +160,21 @@ export default function HomePage() {
           >
             {isConnected ? 'Go to my profile →' : 'Connect your wallet →'}
           </button>
+          {privy.enabled && !isConnected && (
+            <button
+              onClick={handlePrivyOnboarding}
+              className="bg-white text-[#2563EB] py-3 px-7 rounded-[12px] text-[14px] font-semibold cursor-pointer transition-all duration-150 no-underline inline-block border border-[rgba(37,99,235,0.16)] hover:bg-[rgba(37,99,235,0.04)] hover:-translate-y-px"
+            >
+              Continue with email
+            </button>
+          )}
         </div>
+
+        {privy.enabled && !isConnected && (
+          <p className="text-[12px] text-mw-ink-4 mt-4 [animation:fadeUp_0.5s_0.34s_ease_both] relative">
+            Email onboarding creates a Privy embedded wallet when needed. Mintware still scores the wallet itself.
+          </p>
+        )}
 
         {/* Stats strip */}
         <div className="flex items-stretch mt-12 border border-mw-border-strong rounded-[14px] overflow-hidden bg-white shadow-[0_2px_12px_rgba(26,26,46,0.06)] [animation:fadeUp_0.5s_0.38s_ease_both] relative max-md:flex-col">

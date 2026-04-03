@@ -15,7 +15,7 @@
 // =============================================================================
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useAccount, useWalletClient, useSwitchChain } from 'wagmi'
+import { useWalletClient, useSwitchChain, useChainId } from 'wagmi'
 import { getTokens, getRoutes, executeRoute } from '@lifi/sdk'
 import type { Token, Route, RouteExtended, ExecutionOptions } from '@lifi/sdk'
 import {
@@ -33,6 +33,7 @@ import {
 import { TokenSelector } from './TokenSelector'
 import { RouteInfo }     from './RouteInfo'
 import { SlippageControl } from './SlippageControl'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -133,9 +134,10 @@ function TokenButton({
 type SwapStatus = 'idle' | 'swapping' | 'success' | 'error'
 
 export function MintwareSwap() {
-  const { address, chainId: walletChainId } = useAccount()
+  const { evmAddress: address } = useMintwareIdentity()
   const { data: walletClient }              = useWalletClient()
   const { switchChainAsync }                = useSwitchChain()
+  const walletChainId                       = useChainId()
 
   // Warn when the wallet is on a chain LI.FI doesn't route (e.g. Sepolia)
   const walletOnUnsupportedChain =

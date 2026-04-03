@@ -1,7 +1,6 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
-import { useAccount } from 'wagmi'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
@@ -10,6 +9,7 @@ import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
 import { JupiterTerminal } from '@/components/rewards/swap/JupiterTerminal'
 import { API } from '@/lib/web2/api'
 import { solanaEnabled } from '@/lib/web3/featureFlags'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
@@ -17,6 +17,8 @@ interface Campaign {
   name: string
   chain: string
   status: string
+  reward_chain?: 'evm' | 'solana' | string
+  campaign_type?: 'token_pool' | 'points'
   actions?: Record<string, {
     label: string
     points: number
@@ -63,13 +65,12 @@ function actionDesc(key: string, campaignName: string): string {
 
 // ─── Swap Page ─────────────────────────────────────────────────────────────────
 export default function SwapPage() {
-  const { address } = useAccount()
+  const { evmAddress } = useMintwareIdentity()
   const { publicKey: solPublicKey, connected: solConnected } = useWallet()
   const { setVisible: openSolanaModal } = useWalletModal()
-
-  const isEvmWallet = !!address
+  const isEvmWallet = !!evmAddress
   const isSolWallet = solanaEnabled && !isEvmWallet && solConnected && !!solPublicKey
-  const wallet = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = evmAddress?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
 
   const [activeCampaign, setActiveCampaign] = useState<Campaign | null>(null)
   const [participant, setParticipant]       = useState<Participant | null>(null)
@@ -81,7 +82,12 @@ export default function SwapPage() {
       .then(r => r.json())
       .then(data => {
         if (Array.isArray(data)) {
-          setActiveCampaign(data.find((c: Campaign) => c.status === 'live') ?? null)
+          setActiveCampaign(
+            data.find((c: Campaign) =>
+              c.status === 'live' &&
+              (c.reward_chain ?? 'evm') === 'evm'
+            ) ?? null
+          )
         }
       })
       .catch(() => {})

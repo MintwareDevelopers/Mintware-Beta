@@ -7,8 +7,8 @@ import { useDisconnect }      from 'wagmi'
 import Link                   from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { solanaEnabled }      from '@/lib/web3/featureFlags'
+import { useMintwarePrivy }   from '@/components/web2/providers'
 
-// Import Solana wallet adapter styles
 import '@solana/wallet-adapter-react-ui/styles.css'
 
 function shortSol(addr: string) {
@@ -17,21 +17,42 @@ function shortSol(addr: string) {
 
 export function MwNav() {
   const pathname = usePathname()
-  const router   = useRouter()
+  const router = useRouter()
 
-  const { disconnect: evmDisconnect }                           = useDisconnect()
+  const { disconnect: evmDisconnect } = useDisconnect()
   const { connected: solConnected, publicKey, disconnect: solDisconnect } = useWallet()
-  const { setVisible: openSolanaModal }                         = useWalletModal()
+  const { setVisible: openSolanaModal } = useWalletModal()
+  const privy = useMintwarePrivy()
+
+  async function disconnectEvmSession() {
+    evmDisconnect()
+    if (privy.authenticated) {
+      await privy.logout()
+    }
+    router.push('/')
+  }
+
+  function openPrivyOnboarding() {
+    if (privy.authenticated) {
+      privy.connectOrCreateWallet()
+      return
+    }
+
+    privy.login({
+      loginMethods: ['email'],
+      walletChainType: 'ethereum-only',
+    })
+  }
 
   const isActive = (path: string) =>
     pathname === path || (path === '/dashboard' && pathname.startsWith('/campaign'))
 
   const NAV_LINKS = [
-    { href: '/dashboard',   label: 'Earn' },
-    { href: '/swap',        label: 'Swap' },
+    { href: '/dashboard', label: 'Earn' },
+    { href: '/swap', label: 'Swap' },
     { href: '/leaderboard', label: 'Leaderboard' },
-    { href: '/agents',      label: 'Agents' },
-    { href: '/profile',     label: 'Profile' },
+    { href: '/agents', label: 'Agents' },
+    { href: '/profile', label: 'Profile' },
   ]
 
   return (
@@ -46,14 +67,13 @@ export function MwNav() {
       <ConnectButton.Custom>
         {({ account, chain, openConnectModal, mounted }) => {
           const evmConnected = mounted && !!account && !!chain
-          const isConnected  = evmConnected || solConnected
+          const isConnected = evmConnected || solConnected
 
           if (!mounted) return <div className="h-9 w-[200px]" />
 
           if (isConnected) {
             return (
               <div className="flex items-center gap-1">
-                {/* Nav links */}
                 <div className="flex items-center gap-0.5">
                   {NAV_LINKS.map(({ href, label }) => (
                     <Link
@@ -73,7 +93,6 @@ export function MwNav() {
                     </Link>
                   ))}
 
-                  {/* Vaults — coming soon */}
                   <span
                     className="flex items-center gap-[5px] px-[14px] py-[7px] rounded-xl text-[13px] whitespace-nowrap font-sans font-normal text-mw-ink-5 cursor-default select-none"
                     title="Vaults launching soon"
@@ -90,7 +109,6 @@ export function MwNav() {
                   </span>
                 </div>
 
-                {/* ⌘K */}
                 <button
                   onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
                   title="Command palette (⌘K)"
@@ -99,11 +117,10 @@ export function MwNav() {
                   ⌘K
                 </button>
 
-                {/* EVM wallet pill */}
                 {evmConnected && (
                   <div
                     className="mw-wallet-pill ml-2 flex items-center gap-[6px] px-[14px] py-[7px] rounded-xl text-[12px] border-[0.5px] border-mw-border-strong bg-white cursor-pointer text-mw-ink font-mono select-none transition-all duration-150 hover:border-[rgba(239,68,68,0.3)] hover:text-mw-red hover:bg-[rgba(239,68,68,0.04)]"
-                    onClick={() => { evmDisconnect(); router.push('/') }}
+                    onClick={() => { void disconnectEvmSession() }}
                     title="Click to disconnect EVM wallet"
                   >
                     <span className="w-[6px] h-[6px] rounded-full bg-mw-live shrink-0" />
@@ -112,7 +129,6 @@ export function MwNav() {
                   </div>
                 )}
 
-                {/* Solana wallet pill */}
                 {solanaEnabled && solConnected && publicKey && (
                   <div
                     className="mw-wallet-pill ml-1 flex items-center gap-[6px] px-[14px] py-[7px] rounded-xl text-[12px] border-[0.5px] border-mw-border-strong bg-white cursor-pointer text-mw-ink font-mono select-none transition-all duration-150 hover:border-[rgba(239,68,68,0.3)] hover:text-mw-red hover:bg-[rgba(239,68,68,0.04)]"
@@ -125,7 +141,6 @@ export function MwNav() {
                   </div>
                 )}
 
-                {/* Link Solana button — shown when only EVM connected */}
                 {solanaEnabled && evmConnected && !solConnected && (
                   <button
                     onClick={() => openSolanaModal(true)}
@@ -140,11 +155,25 @@ export function MwNav() {
                     + Solana
                   </button>
                 )}
+
+                {evmConnected && privy.authenticated && privy.hasEmbeddedWallet && (
+                  <button
+                    onClick={() => privy.linkWallet({ walletChainType: 'ethereum-only' })}
+                    className="ml-1 px-3 py-[6px] rounded-xl text-[11px] font-semibold border-[0.5px] cursor-pointer font-sans transition-all duration-150"
+                    style={{
+                      background: 'rgba(37,99,235,0.06)',
+                      border: '0.5px solid rgba(37,99,235,0.2)',
+                      color: '#2563EB',
+                    }}
+                    title="Link an external EVM wallet to this Privy session"
+                  >
+                    + EVM
+                  </button>
+                )}
               </div>
             )
           }
 
-          // ── Not connected ──────────────────────────────────────────────────
           return (
             <div className="flex items-center gap-2">
               <Link
@@ -153,6 +182,14 @@ export function MwNav() {
               >
                 Explorer
               </Link>
+              {privy.enabled && (
+                <button
+                  onClick={openPrivyOnboarding}
+                  className="px-4 py-2 rounded-xl border text-[13px] font-semibold cursor-pointer font-sans transition-all duration-150 bg-white text-[#2563EB] border-[rgba(37,99,235,0.18)] hover:border-[rgba(37,99,235,0.3)] hover:bg-[rgba(37,99,235,0.04)]"
+                >
+                  Continue with Email
+                </button>
+              )}
               {solanaEnabled && (
                 <button
                   onClick={() => openSolanaModal(true)}

@@ -1,6 +1,5 @@
 'use client'
 
-import { useAccount } from 'wagmi'
 import { useWallet } from '@solana/wallet-adapter-react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
@@ -10,6 +9,7 @@ import { generateRefCode } from '@/lib/rewards/referral/utils'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { Users, Coins, TrendingUp } from 'lucide-react'
 import { solanaEnabled } from '@/lib/web3/featureFlags'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
@@ -33,9 +33,9 @@ interface LeaderboardEntry {
 
 // ─── Leaderboard Content ──────────────────────────────────────────────────────
 function LeaderboardContent() {
-  const { address } = useAccount()
+  const { evmAddress } = useMintwareIdentity()
   const { publicKey: solPublicKey, connected: solConnected } = useWallet()
-  const wallet = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = evmAddress?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
 
   const [campaigns, setCampaigns]             = useState<Campaign[]>([])
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null)

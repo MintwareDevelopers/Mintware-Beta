@@ -13,39 +13,88 @@
 
 'use client'
 
+import { useMintwarePrivy } from '@/components/web2/providers'
 import { useAccount, useDisconnect } from 'wagmi'
 import { useWallet }                 from '@solana/wallet-adapter-react'
 import { useCallback }               from 'react'
 import { solanaEnabled }             from '@/lib/web3/featureFlags'
 
 export type WalletChain = 'evm' | 'solana'
+export type MintwareWalletType = 'external-evm' | 'privy-embedded' | 'solana' | null
 
 export interface MintwareIdentity {
-  address:       string | null
-  chain:         WalletChain | null
-  isConnected:   boolean
-  evmAddress:    string | null
+  address: string | null
+  chain: WalletChain | null
+  walletType: MintwareWalletType
+  isConnected: boolean
+  isAuthenticated: boolean
+  canTransact: boolean
+  isEmbeddedWallet: boolean
+  isReady: boolean
+  walletSettled: boolean
+  evmStatus: ReturnType<typeof useAccount>['status']
+  evmAddress: string | null
   solanaAddress: string | null
-  disconnect:    () => void
+  embeddedWalletAddress: string | null
+  linkedWallets: string[]
+  disconnect: () => void
 }
 
 export function useMintwareIdentity(): MintwareIdentity {
-  const { address: evmAddr, isConnected: evmConnected } = useAccount()
+  const { address: evmAddr, isConnected: evmConnected, status: evmStatus } = useAccount()
   const { publicKey, connected: solConnected, disconnect: solDisconnect } = useWallet()
   const { disconnect: evmDisconnect } = useDisconnect()
+  const privy = useMintwarePrivy()
 
-  const evmAddress    = evmConnected && evmAddr ? evmAddr : null
+  const evmAddress = evmConnected && evmAddr ? evmAddr : null
   const solanaAddress = solanaEnabled && solConnected && publicKey ? publicKey.toBase58() : null
+  const embeddedWalletAddress = privy.embeddedWalletAddress
 
-  // EVM takes priority if both are connected (rare edge case)
-  const address = evmAddress ?? solanaAddress ?? null
-  const chain: WalletChain | null = evmAddress ? 'evm' : solanaAddress ? 'solana' : null
+  const address = evmAddress ?? embeddedWalletAddress ?? solanaAddress ?? null
+  const chain: WalletChain | null = (evmAddress || embeddedWalletAddress) ? 'evm' : solanaAddress ? 'solana' : null
+  const walletType: MintwareWalletType =
+    evmAddress
+      ? (embeddedWalletAddress && embeddedWalletAddress.toLowerCase() === evmAddress.toLowerCase() ? 'privy-embedded' : 'external-evm')
+      : embeddedWalletAddress
+        ? 'privy-embedded'
+        : solanaAddress
+          ? 'solana'
+          : null
   const isConnected = !!address
+  const isEmbeddedWallet = walletType === 'privy-embedded'
+  const isAuthenticated = privy.authenticated || isConnected
+  const canTransact = isConnected
+  const isReady = !privy.enabled || privy.ready
+  const walletSettled = isReady && (evmStatus === 'connected' || evmStatus === 'disconnected' || !!solanaAddress || !!embeddedWalletAddress)
+
+  const linkedWallets = Array.from(new Set([
+    ...privy.evmWalletAddresses.map((wallet) => wallet.toLowerCase()),
+    ...(evmAddress ? [evmAddress.toLowerCase()] : []),
+    ...(embeddedWalletAddress ? [embeddedWalletAddress.toLowerCase()] : []),
+    ...(solanaAddress ? [solanaAddress] : []),
+  ]))
 
   const disconnect = useCallback(() => {
     if (evmAddress) evmDisconnect()
     if (solanaAddress) solDisconnect()
-  }, [evmAddress, solanaAddress, evmDisconnect, solDisconnect])
+    if (privy.authenticated) void privy.logout()
+  }, [evmAddress, solanaAddress, evmDisconnect, solDisconnect, privy])
 
-  return { address, chain, isConnected, evmAddress, solanaAddress, disconnect }
+  return {
+    address,
+    chain,
+    walletType,
+    isConnected,
+    isAuthenticated,
+    canTransact,
+    isEmbeddedWallet,
+    isReady,
+    walletSettled,
+    evmStatus,
+    evmAddress,
+    solanaAddress,
+    embeddedWalletAddress,
+    linkedWallets,
+    disconnect,
+  }
 }

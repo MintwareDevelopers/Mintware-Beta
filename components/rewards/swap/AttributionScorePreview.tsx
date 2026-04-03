@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAccount } from 'wagmi'
 import { API } from '@/lib/web2/api'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 interface ScoreData {
   score: number
@@ -14,7 +14,7 @@ interface AttributionScorePreviewProps {
 }
 
 export function AttributionScorePreview({ estimatedScoreGain }: AttributionScorePreviewProps) {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected } = useMintwareIdentity()
   const [data, setData] = useState<ScoreData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 

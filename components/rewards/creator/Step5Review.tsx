@@ -10,7 +10,6 @@
 // =============================================================================
 
 import { useState, useEffect } from 'react'
-import { useAccount } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import type { CreatorFormState } from '@/lib/rewards/creator'
@@ -19,6 +18,7 @@ import {
   ERC20_APPROVE_ABI, DISTRIBUTOR_ABI, DISTRIBUTOR_ADDRESS,
 } from '@/lib/rewards/creator'
 import { GuardrailWarning } from '@/components/rewards/creator/GuardrailWarning'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 interface Step5ReviewProps {
   form:        CreatorFormState
@@ -79,7 +79,7 @@ const FUND_LABELS: Record<FundState, string> = {
 }
 
 export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
-  const { address } = useAccount()
+  const { evmAddress: address } = useMintwareIdentity()
   const [fundState,   setFundState]   = useState<FundState>('idle')
   const [errorMsg,    setErrorMsg]    = useState<string | null>(null)
   const [campaignId,  setCampaignId]  = useState<string | null>(null)

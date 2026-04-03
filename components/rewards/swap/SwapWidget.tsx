@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useAccount, useBalance, useReadContract, useChainId } from 'wagmi'
+import { useBalance, useReadContract, useChainId } from 'wagmi'
 import { useQuote } from '@/hooks/useQuote'
 import { useSwap } from '@/hooks/useSwap'
 import { useCampaign } from '@/hooks/useCampaign'
@@ -14,6 +14,7 @@ import { AttributionScorePreview } from './AttributionScorePreview'
 import { PostSwapSummary } from './PostSwapSummary'
 import { ChainSelector } from './ChainSelector'
 import type { Token } from '@/config/tokens'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 const SLIPPAGE_PRESETS = [0.1, 0.5, 1.0]
 
@@ -24,7 +25,8 @@ function fmt(val: string, decimals = 6): string {
 }
 
 export function SwapWidget() {
-  const { address, isConnected } = useAccount()
+  const { evmAddress, isConnected } = useMintwareIdentity()
+  const address = evmAddress as `0x${string}` | undefined
   const chainId = useChainId()
   const chainConfig = getChainConfig(chainId)
 
