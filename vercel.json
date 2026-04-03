@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/universal-pipeline",
-      "schedule": "*/15 * * * *"
+      "schedule": "30 4 * * *"
     },
     {
       "path": "/api/cron/bridge-verify",
