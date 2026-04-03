@@ -483,7 +483,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
         rewards.map(async (r) => {
           if (!r.distribution_id) return null
           const res = await fetch(
-            `/api/claim?address=${encodeURIComponent(r.token_address ?? '')}&distribution_id=${encodeURIComponent(r.distribution_id)}`
+            `/api/claim?address=${encodeURIComponent(wallet)}&distribution_id=${encodeURIComponent(r.distribution_id)}`
           )
           if (!res.ok) return null
           return await res.json() as {

@@ -123,6 +123,14 @@ export function SwapWidget() {
     ? (Number(gasCostWei) / 1e18).toFixed(6)
     : null
 
+  // Fiat-denominated gas cost from LI.FI estimate (preferred display)
+  const gasCostUSD: string | null = useMemo(() => {
+    if (!quote) return null
+    const lq = quote as LifiQuote
+    const v = parseFloat(lq.gasCostUSD ?? '')
+    return isNaN(v) || v === 0 ? null : v.toFixed(2)
+  }, [quote])
+
   // ── Gas sufficiency check ─────────────────────────────────────────────────
   // Warn when native balance may not cover the estimated network fee.
   // For native-token swaps we also need to cover the send value.
@@ -374,10 +382,12 @@ export function SwapWidget() {
                     {priceImpact > 0 ? '-' : ''}{Math.abs(priceImpact).toFixed(2)}%
                   </span>
                 )}
-                {/* Network fee preview */}
-                {gasCostEth && (
+                {/* Network fee preview — fiat-first when available */}
+                {(gasCostUSD || gasCostEth) && (
                   <span className="font-mono text-[11px] text-mw-ink-4" title="Estimated network fee">
-                    ~{parseFloat(gasCostEth).toFixed(5)} {nativeSymbol} fee
+                    {gasCostUSD
+                      ? `~$${gasCostUSD} fee`
+                      : `~${parseFloat(gasCostEth!).toFixed(5)} ${nativeSymbol} fee`}
                   </span>
                 )}
               </div>
@@ -486,6 +496,7 @@ export function SwapWidget() {
           buyAmount={buyAmount ?? '0'}
           sellAmountUSD={sellAmountUSD !== null ? String(sellAmountUSD.toFixed(2)) : null}
           gasCostEth={gasCostEth}
+          gasCostUSD={gasCostUSD}
           nativeSymbol={nativeSymbol}
           priceImpact={priceImpact}
           chainName={chainConfig?.name ?? ''}

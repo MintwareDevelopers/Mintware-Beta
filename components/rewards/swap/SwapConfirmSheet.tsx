@@ -23,6 +23,7 @@ interface SwapConfirmSheetProps {
   buyAmount:     string        // display decimal estimate
   sellAmountUSD: string | null // from quote.fromAmountUSD
   gasCostEth:    string | null // computed: estimatedGas * gasPrice / 1e18
+  gasCostUSD:    string | null // from LI.FI estimate.gasCosts[0].amountUSD (preferred display)
   nativeSymbol:  string        // "ETH", "CORE", etc.
   priceImpact:   number | null
   chainName:     string
@@ -44,7 +45,7 @@ function Row({ label, value, valueClass = '' }: { label: string; value: React.Re
 
 export function SwapConfirmSheet({
   sellToken, buyToken, sellAmount, buyAmount, sellAmountUSD,
-  gasCostEth, nativeSymbol, priceImpact, chainName, feeBps, highImpact,
+  gasCostEth, gasCostUSD, nativeSymbol, priceImpact, chainName, feeBps, highImpact,
   isSwapping, onConfirm, onCancel,
 }: SwapConfirmSheetProps) {
   const feeUSD = sellAmountUSD
@@ -126,9 +127,12 @@ export function SwapConfirmSheet({
             {chainName && <Row label="Network" value={chainName} valueClass="font-sans" />}
             <Row
               label="Network fee (estimate)"
-              value={gasCostEth
-                ? `~${parseFloat(gasCostEth).toFixed(5)} ${nativeSymbol}`
-                : 'Shown in wallet'
+              value={
+                gasCostUSD
+                  ? `~$${gasCostUSD}${gasCostEth ? ` (~${parseFloat(gasCostEth).toFixed(5)} ${nativeSymbol})` : ''}`
+                  : gasCostEth
+                    ? `~${parseFloat(gasCostEth).toFixed(5)} ${nativeSymbol}`
+                    : 'Shown in wallet'
               }
             />
             <Row
