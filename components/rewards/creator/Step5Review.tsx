@@ -5,12 +5,19 @@
 //
 // Shows full config, guardrail warnings, funding breakdown.
 // Fund flow: create Supabase record → approve() → wait → depositCampaign() → wait → redirect
+//
+// UX improvements (ethereum-ux-adoption-report.md):
+//   - Allowance pre-check: skip the approval step if allowance is already sufficient.
+//   - Plain-language explanation of what will happen before the user clicks Fund.
+//   - Distinct framing: "Give permission" (approve) vs "Transfer funds" (deposit).
+//   - Better step labels and button copy.
+//
 // States: idle → creating → approving → waiting_approve → funding → waiting_fund → confirmed
 // Uses wagmi writeContract + useWaitForTransactionReceipt
 // =============================================================================
 
 import { useState, useEffect } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, useReadContract } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import type { CreatorFormState } from '@/lib/rewards/creator'
@@ -67,12 +74,13 @@ function SectionCard({ title, children }: { title: string; children: React.React
   )
 }
 
+// Button labels keyed to state. Uses plain language where possible.
 const FUND_LABELS: Record<FundState, string> = {
   idle:            'Fund Campaign',
-  creating:        'Creating campaign…',
-  approving:       'Approving token spend…',
-  waiting_approve: 'Waiting for approval…',
-  funding:         'Funding campaign…',
+  creating:        'Setting up campaign…',
+  approving:       'Give permission to use tokens…',
+  waiting_approve: 'Waiting for permission…',
+  funding:         'Transferring funds…',
   waiting_fund:    'Confirming on-chain…',
   confirmed:       '✓ Campaign funded!',
   error:           'Transaction failed — retry',
@@ -86,7 +94,35 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
 
   const warnings = computeWarnings(form)
 
-  // wagmi write hooks
+  // ── Allowance pre-check ─────────────────────────────────────────────────
+  // Read the current ERC-20 allowance granted to the distributor contract.
+  // If it already covers the full deposit amount, we skip the approve step.
+  const { data: allowanceRaw } = useReadContract({
+    address: form.token?.address as `0x${string}` | undefined,
+    abi: [{
+      name: 'allowance',
+      type: 'function',
+      inputs: [
+        { name: 'owner',   type: 'address' },
+        { name: 'spender', type: 'address' },
+      ],
+      outputs: [{ type: 'uint256' }],
+      stateMutability: 'view',
+    }] as const,
+    functionName: 'allowance',
+    args: address && form.token ? [address, DISTRIBUTOR_ADDRESS] : undefined,
+    query: { enabled: !!address && !!form.token },
+  })
+
+  const requiredAmount = form.token && form.poolUsd
+    ? parseUnits(String(form.poolUsd), form.token.decimals)
+    : 0n
+
+  // True when the contract already has enough allowance to skip the approve tx
+  const hasEnoughAllowance =
+    allowanceRaw !== undefined && allowanceRaw >= requiredAmount
+
+  // ── wagmi write hooks ───────────────────────────────────────────────────
   const {
     writeContract:      writeApprove,
     data:               approveTxHash,
@@ -111,7 +147,6 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
   const {
     isSuccess: fundConfirmed,
     isError:   fundReceiptError,
-    data:      fundReceipt,
   } = useWaitForTransactionReceipt({ hash: fundTxHash })
 
   // Approval confirmed → send depositCampaign tx
@@ -175,16 +210,29 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
       return
     }
 
-    // Step 2: approve token spend
-    setFundState('approving')
     const amount = parseUnits(String(form.poolUsd), form.token.decimals)
-    writeApprove({
-      address:      form.token.address as `0x${string}`,
-      abi:          ERC20_APPROVE_ABI,
-      functionName: 'approve',
-      args:         [DISTRIBUTOR_ADDRESS, amount],
-    })
-    if (approveIsPending) setFundState('waiting_approve')
+
+    if (hasEnoughAllowance) {
+      // ── Allowance already sufficient — skip the approve step ──────────
+      setFundState('funding')
+      writeFund({
+        address:      DISTRIBUTOR_ADDRESS,
+        abi:          DISTRIBUTOR_ABI,
+        functionName: 'depositCampaign',
+        args: [newCampaignId, form.token.address as `0x${string}`, amount],
+      })
+      setFundState('waiting_fund')
+    } else {
+      // ── Need permission first — request approval ───────────────────────
+      setFundState('approving')
+      writeApprove({
+        address:      form.token.address as `0x${string}`,
+        abi:          ERC20_APPROVE_ABI,
+        functionName: 'approve',
+        args:         [DISTRIBUTOR_ADDRESS, amount],
+      })
+      if (approveIsPending) setFundState('waiting_approve')
+    }
   }
 
   // Transition approving → waiting after tx is submitted
@@ -198,6 +246,21 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
   // Build config summary for points
   const isPoints = form.type === 'points'
   const isToken  = form.type === 'token_reward'
+
+  // Step definitions — adjust to skip approve step when allowance already exists
+  const steps = hasEnoughAllowance
+    ? [
+        { key: 'creating',     label: 'Set up campaign record',         done: ['funding','waiting_fund'].includes(fundState) },
+        { key: 'funding',      label: 'Transfer tokens to campaign',    done: fundState === 'waiting_fund' },
+        { key: 'waiting_fund', label: 'Waiting for on-chain confirmation', done: false },
+      ]
+    : [
+        { key: 'creating',        label: 'Set up campaign record',         done: ['approving','waiting_approve','funding','waiting_fund'].includes(fundState) },
+        { key: 'approving',       label: 'Give permission to use tokens',  done: ['waiting_approve','funding','waiting_fund'].includes(fundState) },
+        { key: 'waiting_approve', label: 'Permission confirmed',           done: ['funding','waiting_fund'].includes(fundState) },
+        { key: 'funding',         label: 'Transfer tokens to campaign',    done: fundState === 'waiting_fund' },
+        { key: 'waiting_fund',    label: 'Waiting for on-chain confirmation', done: false },
+      ]
 
   return (
     <>
@@ -265,6 +328,27 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
           </div>
         </SectionCard>
 
+        {/* Plain-language "what will happen" — shown before the user clicks Fund */}
+        {(fundState === 'idle' || fundState === 'error') && form.token && (
+          <div className="bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.14)] rounded-[12px] px-[16px] py-[14px]">
+            <div className="font-sans text-[11px] font-bold uppercase tracking-[0.8px] text-mw-ink-4 mb-[8px]">
+              What will happen
+            </div>
+            {hasEnoughAllowance ? (
+              <ol className="font-sans text-[12px] text-mw-ink-3 leading-[1.6] m-0 pl-[18px] flex flex-col gap-[4px]">
+                <li>Your wallet will ask you to <strong>transfer {fmtUSDShort(form.poolUsd)} of {form.token.symbol}</strong> to the campaign contract.</li>
+                <li>Once confirmed on-chain, your campaign goes live.</li>
+              </ol>
+            ) : (
+              <ol className="font-sans text-[12px] text-mw-ink-3 leading-[1.6] m-0 pl-[18px] flex flex-col gap-[4px]">
+                <li>Your wallet will ask you to <strong>give permission</strong> for the campaign contract to use your {form.token.symbol}. This is not a transfer.</li>
+                <li>Then your wallet will ask you to <strong>transfer {fmtUSDShort(form.poolUsd)} of {form.token.symbol}</strong> to fund the campaign.</li>
+                <li>Once confirmed on-chain, your campaign goes live.</li>
+              </ol>
+            )}
+          </div>
+        )}
+
         {/* Error */}
         {errorMsg && (
           <div className="bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.2)] rounded-[10px] p-[12px_16px] font-sans text-[13px] text-mw-pink">
@@ -292,29 +376,37 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
           </button>
         )}
 
-        {/* Step states */}
+        {/* Step progress — shown while working */}
         {isWorking && (
           <div className="flex flex-col gap-2">
-            {[
-              { key: 'creating',        label: 'Create campaign record',  done: ['approving','waiting_approve','funding','waiting_fund'].includes(fundState) },
-              { key: 'approving',       label: 'Approve token spend',     done: ['waiting_approve','funding','waiting_fund'].includes(fundState) },
-              { key: 'waiting_approve', label: 'Approval confirmed',      done: ['funding','waiting_fund'].includes(fundState) },
-              { key: 'funding',         label: 'Deposit to contract',     done: fundState === 'waiting_fund' },
-              { key: 'waiting_fund',    label: 'On-chain confirmation',   done: false },
-            ].map(s => (
+            {steps.map(s => (
               <div key={s.key} className="flex items-center gap-[10px]">
                 <div
-                  className={`w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[10px] ${s.done ? 'bg-mw-teal' : 'bg-[rgba(58,92,232,0.15)]'}`}
+                  className={`w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold ${s.done ? 'bg-mw-teal text-white' : 'bg-[rgba(58,92,232,0.15)] text-mw-ink-4'}`}
                 >
                   {s.done ? '✓' : '·'}
                 </div>
-                <span
-                  className={`font-sans text-[12px] ${s.done ? 'text-mw-teal' : 'text-mw-ink-4'}`}
-                >
+                <span className={`font-sans text-[12px] ${s.done ? 'text-mw-teal' : 'text-mw-ink-4'}`}>
                   {s.label}
                 </span>
               </div>
             ))}
+            {/* Context for the current active step */}
+            {(fundState === 'approving' || fundState === 'waiting_approve') && (
+              <div className="mt-[4px] px-[12px] py-[10px] bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.12)] rounded-[10px]">
+                <p className="font-sans text-[11px] text-mw-ink-4 leading-[1.5] m-0">
+                  Your wallet will ask for <strong>permission</strong> to use {form.token?.symbol}.
+                  This is a standard token approval — no funds are transferred at this step.
+                </p>
+              </div>
+            )}
+            {(fundState === 'funding' || fundState === 'waiting_fund') && (
+              <div className="mt-[4px] px-[12px] py-[10px] bg-[rgba(42,158,138,0.05)] border border-[rgba(42,158,138,0.15)] rounded-[10px]">
+                <p className="font-sans text-[11px] text-mw-ink-4 leading-[1.5] m-0">
+                  Your wallet will ask you to transfer <strong>{fmtUSDShort(form.poolUsd)} of {form.token?.symbol}</strong> to the campaign. Confirm to launch.
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

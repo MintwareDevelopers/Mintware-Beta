@@ -16,6 +16,11 @@
 //      d. useWaitForTransactionReceipt → pending → success states
 //   4. 'claimed' rewards show tx link to block explorer
 //   5. 'pending' rewards show "Awaiting on-chain publication" state
+//
+// UX improvements (ethereum-ux-adoption-report.md):
+//   - Plain language: "Check your wallet to confirm" instead of "Confirm in wallet…"
+//   - Pre-claim context line: shows amount + chain before wallet opens
+//   - Clearer loading states throughout
 // =============================================================================
 
 import { useState, useEffect, useCallback } from 'react'
@@ -382,22 +387,30 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
                   if (targetChainId) switchChain({ chainId: targetChainId })
                 }}
               >
-                {isSwitching ? 'Switching…' : `Switch to ${chainName}`}
+                {isSwitching ? 'Switching network…' : `Switch to ${chainName}`}
               </button>
             ) : (
-              <button
-                className="px-4 py-2 rounded-full text-[12px] font-semibold cursor-pointer border-none transition-all duration-150 whitespace-nowrap bg-mw-brand-deep text-white hover:bg-[#2a4cd8] hover:shadow-[0_2px_8px_rgba(58,92,232,0.35)] disabled:opacity-55 disabled:cursor-not-allowed"
-                disabled={isLoading}
-                onClick={handleClaim}
-              >
-                {isFetchingProof
-                  ? 'Preparing…'
-                  : isWritePending
-                  ? 'Confirm in wallet…'
-                  : isConfirming
-                  ? 'Confirming…'
-                  : 'Claim Rewards'}
-              </button>
+              <div className="flex flex-col items-end gap-[4px]">
+                {/* Pre-claim context — shows what will arrive before wallet opens */}
+                {!isFetchingProof && !isWritePending && !isConfirming && (
+                  <div className="text-[10px] text-mw-ink-4 font-sans text-right">
+                    {fmtWei(reward.amount_wei, reward.token_symbol)} on {chainName ?? 'chain'} → your wallet
+                  </div>
+                )}
+                <button
+                  className="px-4 py-2 rounded-full text-[12px] font-semibold cursor-pointer border-none transition-all duration-150 whitespace-nowrap bg-mw-brand-deep text-white hover:bg-[#2a4cd8] hover:shadow-[0_2px_8px_rgba(58,92,232,0.35)] disabled:opacity-55 disabled:cursor-not-allowed"
+                  disabled={isLoading}
+                  onClick={handleClaim}
+                >
+                  {isFetchingProof
+                    ? 'Getting proof…'
+                    : isWritePending
+                    ? 'Check your wallet →'
+                    : isConfirming
+                    ? 'Waiting for confirmation…'
+                    : 'Claim Rewards'}
+                </button>
+              </div>
             )}
           </>
         )}
@@ -574,11 +587,11 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
                     title={`Claim ${batchGroup.length} rewards in one transaction`}
                   >
                     {isBatchPending
-                      ? 'Confirm in wallet…'
+                      ? 'Check your wallet →'
                       : isBatchConfirming
-                      ? 'Confirming…'
+                      ? 'Waiting for confirmation…'
                       : isBatching
-                      ? 'Preparing…'
+                      ? 'Getting proofs…'
                       : `Claim All (${batchGroup.length})`}
                   </button>
                 )

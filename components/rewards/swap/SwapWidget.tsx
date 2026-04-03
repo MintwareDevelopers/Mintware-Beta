@@ -1,6 +1,18 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+// =============================================================================
+// SwapWidget.tsx
+//
+// Main swap UI. Key UX improvements (ethereum-ux-adoption-report.md):
+//   - Pre-wallet confirmation sheet (SwapConfirmSheet) — shows full summary
+//     before the wallet popup, so users know exactly what they are signing.
+//   - Real USD value wired from quote.fromAmountUSD (was hardcoded null).
+//   - Estimated network fee derived from quote gas data, shown in native token.
+//   - Gas sufficiency warning when native balance may not cover fees.
+//   - Plain language throughout: "network fee" not "gas", etc.
+// =============================================================================
+
+import { useState, useCallback, useMemo } from 'react'
 import { useAccount, useBalance, useReadContract, useChainId } from 'wagmi'
 import { useQuote } from '@/hooks/useQuote'
 import { useSwap } from '@/hooks/useSwap'
@@ -13,7 +25,9 @@ import { RewardPreview } from './RewardPreview'
 import { AttributionScorePreview } from './AttributionScorePreview'
 import { PostSwapSummary } from './PostSwapSummary'
 import { ChainSelector } from './ChainSelector'
+import { SwapConfirmSheet } from './SwapConfirmSheet'
 import type { Token } from '@/config/tokens'
+import type { LifiQuote } from '@/lib/web2/providers/lifi'
 
 const SLIPPAGE_PRESETS = [0.1, 0.5, 1.0]
 
@@ -41,12 +55,15 @@ export function SwapWidget() {
   const [showSellSelector, setShowSellSelector] = useState(false)
   const [showBuySelector, setShowBuySelector] = useState(false)
 
+  // Confirmation sheet — shown before the wallet popup
+  const [showConfirm, setShowConfirm] = useState(false)
+
   const isNative =
     !sellToken ||
     sellToken.address === '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' ||
     sellToken.address === '0x0000000000000000000000000000000000000000'
 
-  // Native balance (ETH/CORE)
+  // Native balance (ETH/CORE/etc.)
   const { data: nativeBalance } = useBalance({ address })
 
   // ERC20 balance via balanceOf
@@ -73,14 +90,55 @@ export function SwapWidget() {
     sellAmount,
     taker: address ?? '',
     feeRecipient: chainConfig?.feeRecipient || undefined,
-    feeBps: chainConfig?.feeBps ?? 10,
+    feeBps: chainConfig?.feeBps ?? 50,
     campaignId,
     referrer,
     enabled: isConnected && !!sellToken && !!buyToken && !!sellAmount,
   })
 
-  // Estimated trade USD value (rough)
-  const sellAmountUSD: number | null = null // wire to price feed if available
+  // ── USD value from quote (LI.FI provides fromAmountUSD) ───────────────────
+  const sellAmountUSD: number | null = useMemo(() => {
+    if (!quote) return null
+    const lq = quote as LifiQuote
+    const v = parseFloat(lq.fromAmountUSD ?? '')
+    return isNaN(v) || v === 0 ? null : v
+  }, [quote])
+
+  // ── Gas cost estimate from quote transaction data ─────────────────────────
+  // Compute: gasCostWei = estimatedGas (units) × transaction.gasPrice (wei/gas)
+  const gasCostWei: bigint | null = useMemo(() => {
+    if (!quote) return null
+    try {
+      const lq = quote as LifiQuote
+      const gasUnits = BigInt(lq.estimatedGas || '0')
+      const gasPrice = BigInt(lq.transaction?.gasPrice || '0')
+      if (!gasUnits || !gasPrice) return null
+      return gasUnits * gasPrice
+    } catch {
+      return null
+    }
+  }, [quote])
+
+  const gasCostEth: string | null = gasCostWei !== null
+    ? (Number(gasCostWei) / 1e18).toFixed(6)
+    : null
+
+  // ── Gas sufficiency check ─────────────────────────────────────────────────
+  // Warn when native balance may not cover the estimated network fee.
+  // For native-token swaps we also need to cover the send value.
+  const isGasInsufficient: boolean = useMemo(() => {
+    if (!gasCostWei || !nativeBalance) return false
+    try {
+      const lq = quote as LifiQuote
+      const txValue = lq?.transaction?.value ? BigInt(lq.transaction.value) : 0n
+      const needed = gasCostWei + txValue
+      return nativeBalance.value < needed
+    } catch {
+      return false
+    }
+  }, [gasCostWei, nativeBalance, quote])
+
+  const nativeSymbol = chainConfig?.chain.nativeCurrency.symbol ?? 'ETH'
 
   const feeAmountUSD = sellAmountUSD !== null && chainConfig
     ? (sellAmountUSD * chainConfig.feeBps) / 10000
@@ -115,7 +173,7 @@ export function SwapWidget() {
     if (quoteError) return 'Retry Quote'
     if (!quote) return 'Enter an Amount'
     if (isSwapping) return 'Swapping…'
-    return 'Swap'
+    return 'Review Swap'
   }
 
   function isActionDisabled(): boolean {
@@ -128,7 +186,14 @@ export function SwapWidget() {
     return false
   }
 
-  async function handleSwap() {
+  // Opens the confirmation sheet instead of going straight to the wallet
+  function handleReviewSwap() {
+    if (!quote || !sellToken || !buyToken) return
+    setShowConfirm(true)
+  }
+
+  // Called by the confirm sheet — this triggers the actual wallet popup
+  async function handleConfirmSwap() {
     if (!quote || !sellToken || !buyToken) return
     await executeSwap({
       quote,
@@ -138,6 +203,7 @@ export function SwapWidget() {
       campaignId,
       referrer,
     })
+    // Sheet stays visible (showing "Waiting for wallet…") until success or error
   }
 
   function toWei(amount: string, decimals: number): string {
@@ -201,15 +267,23 @@ export function SwapWidget() {
               )}
             </div>
             <div className="flex items-center gap-[10px]">
-              <input
-                className="flex-1 bg-transparent border-0 outline-none font-mono text-[22px] font-semibold text-mw-ink min-w-0 placeholder:text-[#C4C5D0]"
-                type="number"
-                min="0"
-                step="any"
-                placeholder="0"
-                value={sellAmount}
-                onChange={e => setSellAmount(e.target.value)}
-              />
+              <div className="flex-1 min-w-0">
+                <input
+                  className="w-full bg-transparent border-0 outline-none font-mono text-[22px] font-semibold text-mw-ink placeholder:text-[#C4C5D0]"
+                  type="number"
+                  min="0"
+                  step="any"
+                  placeholder="0"
+                  value={sellAmount}
+                  onChange={e => setSellAmount(e.target.value)}
+                />
+                {/* USD value sub-label */}
+                {sellAmountUSD !== null && (
+                  <div className="text-[11px] text-mw-ink-4 font-sans mt-[2px]">
+                    ≈ ${sellAmountUSD.toFixed(2)}
+                  </div>
+                )}
+              </div>
               <button
                 className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] rounded-sm border-0 cursor-pointer font-sans text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${sellToken ? ' bg-[rgba(79,126,247,0.07)] text-mw-ink hover:bg-[rgba(79,126,247,0.13)]' : ' bg-mw-brand text-white hover:bg-[#3A52CC]'}`}
                 onClick={() => setShowSellSelector(true)}
@@ -255,7 +329,7 @@ export function SwapWidget() {
           {/* You receive — glass style */}
           <div className="bg-white border border-[rgba(79,126,247,0.2)] rounded-md p-[14px] shadow-[0_2px_8px_rgba(79,126,247,0.06)] transition-all duration-150">
             <div className="flex items-center justify-between mb-[8px]">
-              <span className="text-[12px] text-mw-ink-4 font-sans">You receive</span>
+              <span className="text-[12px] text-mw-ink-4 font-sans">You receive (estimate)</span>
             </div>
             <div className="flex items-center gap-[10px]">
               <span className={`flex-1 font-mono text-[22px] font-semibold text-mw-ink overflow-hidden text-ellipsis whitespace-nowrap${isQuoting ? ' text-[#C4C5D0] animate-[blink_1s_step-end_infinite]' : ''}`}>
@@ -279,7 +353,7 @@ export function SwapWidget() {
             </div>
           </div>
 
-          {/* Route info strip */}
+          {/* Route info strip — includes estimated network fee */}
           {quote && sellToken && buyToken && !isQuoting && (
             <div className="flex items-center justify-between px-[12px] py-[8px] bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.13)] rounded-[10px]">
               <div className="flex items-center gap-[6px]">
@@ -287,13 +361,34 @@ export function SwapWidget() {
                 <span className="text-[11px] text-mw-ink-4 font-sans">via LI.FI</span>
               </div>
               <div className="flex items-center gap-[8px]">
-                <span className="font-mono text-[12px] text-mw-ink-3">1 {sellToken.symbol} ≈ {parseFloat(quote.price).toFixed(4)} {buyToken.symbol}</span>
+                <span className="font-mono text-[12px] text-mw-ink-3">
+                  1 {sellToken.symbol} ≈ {parseFloat(quote.price || '0') > 0
+                    ? parseFloat(quote.price).toFixed(4)
+                    : buyAmount && sellAmount
+                      ? (parseFloat(buyAmount) / parseFloat(sellAmount)).toFixed(4)
+                      : '—'
+                  } {buyToken.symbol}
+                </span>
                 {priceImpact !== null && (
                   <span className={`font-mono text-[12px] px-[6px] py-[2px] rounded-[5px] ${priceImpact > 2 ? 'bg-[rgba(239,68,68,0.08)] text-[#dc2626]' : 'bg-[rgba(22,163,74,0.08)] text-mw-green'}`}>
                     {priceImpact > 0 ? '-' : ''}{Math.abs(priceImpact).toFixed(2)}%
                   </span>
                 )}
+                {/* Network fee preview */}
+                {gasCostEth && (
+                  <span className="font-mono text-[11px] text-mw-ink-4" title="Estimated network fee">
+                    ~{parseFloat(gasCostEth).toFixed(5)} {nativeSymbol} fee
+                  </span>
+                )}
               </div>
+            </div>
+          )}
+
+          {/* Gas insufficiency warning */}
+          {isGasInsufficient && quote && (
+            <div className="px-[12px] py-[10px] rounded-[10px] bg-[rgba(234,179,8,0.08)] border border-[rgba(234,179,8,0.25)] font-sans text-[12px] text-[#ca8a04]">
+              ⚠ Your {nativeSymbol} balance may be too low to cover the network fee for this swap.
+              Add some {nativeSymbol} before proceeding.
             </div>
           )}
 
@@ -325,7 +420,7 @@ export function SwapWidget() {
           <RewardPreview
             campaign={campaign}
             sellAmountUSD={sellAmountUSD}
-            feeBps={chainConfig?.feeBps ?? 10}
+            feeBps={chainConfig?.feeBps ?? 50}
             feeTokenSymbol={buyToken?.symbol ?? ''}
             feeAmountUSD={feeAmountUSD}
             isLoading={isQuoting}
@@ -334,7 +429,7 @@ export function SwapWidget() {
           {/* Attribution score preview */}
           <AttributionScorePreview estimatedScoreGain={estimatedScoreGain} />
 
-          {/* Action button — gradient + glow */}
+          {/* Action button — "Review Swap" opens the confirmation sheet */}
           <button
             className={`w-full py-[14px] rounded-md border-0 cursor-pointer font-sans text-[15px] font-bold transition-all duration-150 mt-[2px] disabled:cursor-not-allowed${
               isActionDisabled()
@@ -349,7 +444,7 @@ export function SwapWidget() {
                 : undefined
             }
             disabled={isActionDisabled()}
-            onClick={handleSwap}
+            onClick={handleReviewSwap}
           >
             {getActionLabel()}
           </button>
@@ -382,7 +477,27 @@ export function SwapWidget() {
         />
       )}
 
-      {/* Post-swap summary */}
+      {/* Pre-wallet confirmation sheet */}
+      {showConfirm && sellToken && buyToken && (
+        <SwapConfirmSheet
+          sellToken={sellToken}
+          buyToken={buyToken}
+          sellAmount={sellAmount}
+          buyAmount={buyAmount ?? '0'}
+          sellAmountUSD={sellAmountUSD !== null ? String(sellAmountUSD.toFixed(2)) : null}
+          gasCostEth={gasCostEth}
+          nativeSymbol={nativeSymbol}
+          priceImpact={priceImpact}
+          chainName={chainConfig?.name ?? ''}
+          feeBps={chainConfig?.feeBps ?? 50}
+          highImpact={highImpactWarning}
+          isSwapping={isSwapping}
+          onConfirm={handleConfirmSwap}
+          onCancel={() => setShowConfirm(false)}
+        />
+      )}
+
+      {/* Post-swap summary — also closes the confirm sheet */}
       {status === 'success' && txHash && (
         <PostSwapSummary
           txHash={txHash}
@@ -394,6 +509,7 @@ export function SwapWidget() {
           estimatedScoreGain={estimatedScoreGain}
           currentScore={0}
           onDismiss={() => {
+            setShowConfirm(false)
             reset()
             setSellAmount('')
           }}
