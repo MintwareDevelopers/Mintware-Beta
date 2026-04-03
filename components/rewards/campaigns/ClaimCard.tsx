@@ -28,6 +28,7 @@ import { toast } from 'sonner'
 import { CheckCircle2, Circle, Clock } from 'lucide-react'
 import {
   useChainId,
+  usePublicClient,
   useSwitchChain,
   useWriteContract,
   useWaitForTransactionReceipt,
@@ -178,6 +179,7 @@ interface RewardRowProps {
 
 function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
   const currentChainId = useChainId()
+  const publicClient = usePublicClient()
   const { switchChain, isPending: isSwitching } = useSwitchChain()
 
   const [claimError, setClaimError] = useState<string | null>(null)
@@ -266,6 +268,27 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
         setClaimError('Distribution is not yet signed. Check back soon.')
         return
       }
+
+      if (!publicClient) {
+        setClaimError('Network client unavailable.')
+        return
+      }
+
+      await publicClient.simulateContract({
+        address: reward.contract_address as `0x${string}`,
+        abi: DISTRIBUTOR_ABI,
+        functionName: 'claim',
+        args: [
+          campaign_id,
+          BigInt(epoch_number),
+          merkle_root as `0x${string}`,
+          oracle_signature as `0x${string}`,
+          BigInt(deadline),
+          BigInt(amount_wei),
+          merkle_proof as `0x${string}`[],
+        ],
+        account: wallet as `0x${string}`,
+      })
 
       // Submit on-chain claim — 7-param zero-oracle-gas signature (v2):
       //   claim(campaignId, epochNumber, merkleRoot, oracleSignature, deadline, amount, proof)
@@ -446,6 +469,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
     useWaitForTransactionReceipt({ hash: batchTxHash })
 
   const currentChainId = useChainId()
+  const publicClient = usePublicClient()
   const { switchChain } = useSwitchChain()
 
   const fetchStatus = useCallback(async () => {
@@ -502,6 +526,28 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
 
       // All rewards in a batch must share the same contract + chain
       const contractAddress = rewards[0].contract_address as `0x${string}`
+      if (!publicClient) {
+        setBatchError('Network client unavailable.')
+        return
+      }
+
+      await publicClient.simulateContract({
+        address: contractAddress,
+        abi: BATCH_DISTRIBUTOR_ABI,
+        functionName: 'batchClaim',
+        args: [
+          validProofs.map((p) => ({
+            campaignId:      p.campaign_id,
+            epochNumber:     BigInt(p.epoch_number),
+            merkleRoot:      p.merkle_root as `0x${string}`,
+            oracleSignature: p.oracle_signature as `0x${string}`,
+            deadline:        BigInt(p.deadline),
+            amount:          BigInt(p.amount_wei),
+            merkleProof:     p.merkle_proof as `0x${string}`[],
+          })),
+        ],
+        account: wallet as `0x${string}`,
+      })
 
       writeBatch(
         {
@@ -509,7 +555,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
           abi: BATCH_DISTRIBUTOR_ABI,
           functionName: 'batchClaim',
           args: [
-            validProofs.map((p, i) => ({
+            validProofs.map((p) => ({
               campaignId:      p.campaign_id,
               epochNumber:     BigInt(p.epoch_number),
               merkleRoot:      p.merkle_root as `0x${string}`,
@@ -527,7 +573,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
     } finally {
       setIsBatching(false)
     }
-  }, [isBatching, writeBatch]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isBatching, wallet, writeBatch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchStatus()
@@ -536,6 +582,20 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
   const claimable = data?.rewards.filter(r => r.status === 'claimable') ?? []
   const claimed   = data?.rewards.filter(r => r.status === 'claimed') ?? []
   const pending   = data?.rewards.filter(r => r.status === 'pending') ?? []
+  const batchable = claimable.filter(r => r.contract_address && r.distribution_id)
+  const contractGroups = new Map<string, ClaimableReward[]>()
+  for (const r of batchable) {
+    const key = r.contract_address!
+    if (!contractGroups.has(key)) contractGroups.set(key, [])
+    contractGroups.get(key)!.push(r)
+  }
+  const batchGroup = [...contractGroups.values()].find(g => g.length >= 2) ?? null
+  const batchGroupChain = batchGroup?.[0]?.chain ?? null
+  const batchGroupChainName = batchGroupChain ? (CHAIN_NAMES[batchGroupChain] ?? batchGroupChain) : null
+  const batchGroupTargetChainId = batchGroupChain ? (CHAIN_IDS[batchGroupChain] ?? null) : null
+  const isBatchWrongChain =
+    batchGroupTargetChainId !== null &&
+    currentChainId !== batchGroupTargetChainId
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -563,39 +623,36 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
           <div className="flex items-center justify-between mb-[18px] flex-wrap gap-[10px]">
             <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-mw-brand-deep">Campaign Rewards</span>
             <div className="flex items-center gap-2">
-              {/* Claim All — only shown when 2+ claimable rewards share a contract */}
-              {(() => {
-                // Group claimable by contract_address
-                const batchable = claimable.filter(
-                  r => r.contract_address && r.distribution_id
-                )
-                const contractGroups = new Map<string, ClaimableReward[]>()
-                for (const r of batchable) {
-                  const key = r.contract_address!
-                  if (!contractGroups.has(key)) contractGroups.set(key, [])
-                  contractGroups.get(key)!.push(r)
-                }
-                // Show "Claim All" for the first group with 2+ rewards
-                const batchGroup = [...contractGroups.values()].find(g => g.length >= 2)
-                if (!batchGroup) return null
-                const isBusy = isBatching || isBatchPending || isBatchConfirming
-                return (
-                  <button
-                    className={`px-[14px] py-[6px] rounded-full bg-mw-brand-deep text-white border-none text-[12px] font-semibold font-sans transition-opacity duration-150 ${isBusy ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-                    disabled={isBusy}
-                    onClick={() => handleBatchClaim(batchGroup)}
-                    title={`Claim ${batchGroup.length} rewards in one transaction`}
-                  >
-                    {isBatchPending
-                      ? 'Check your wallet →'
-                      : isBatchConfirming
-                      ? 'Waiting for confirmation…'
-                      : isBatching
-                      ? 'Getting proofs…'
-                      : `Claim All (${batchGroup.length})`}
-                  </button>
-                )
-              })()}
+              {batchGroup && (
+                <>
+                  {isBatchWrongChain ? (
+                    <button
+                      className="px-[14px] py-[6px] rounded-full bg-mw-surface-purple text-mw-brand-deep border border-[rgba(58,92,232,0.28)] text-[12px] font-semibold font-sans cursor-pointer"
+                      onClick={() => {
+                        if (batchGroupTargetChainId) switchChain({ chainId: batchGroupTargetChainId })
+                      }}
+                      title={`Switch to ${batchGroupChainName} to batch claim`}
+                    >
+                      Switch to {batchGroupChainName}
+                    </button>
+                  ) : (
+                    <button
+                      className={`px-[14px] py-[6px] rounded-full bg-mw-brand-deep text-white border-none text-[12px] font-semibold font-sans transition-opacity duration-150 ${(isBatching || isBatchPending || isBatchConfirming) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                      disabled={isBatching || isBatchPending || isBatchConfirming}
+                      onClick={() => handleBatchClaim(batchGroup)}
+                      title={`Claim ${batchGroup.length} rewards in one transaction`}
+                    >
+                      {isBatchPending
+                        ? 'Check your wallet →'
+                        : isBatchConfirming
+                        ? 'Waiting for confirmation…'
+                        : isBatching
+                        ? 'Getting proofs…'
+                        : `Claim All (${batchGroup.length})`}
+                    </button>
+                  )}
+                </>
+              )}
               {data.rewards.length > 0 && (
                 <div className="flex gap-2 items-center">
                   {data.totals.claimable_count > 0 && (
@@ -617,6 +674,12 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
               )}
             </div>
           </div>
+
+          {batchGroup && (
+            <div className="mb-3 px-[14px] py-[10px] bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.12)] rounded-[10px] text-[12px] text-mw-ink-4 font-sans leading-[1.55]">
+              Mintware will fetch each proof for you, then open your wallet once to claim {batchGroup.length} rewards on {batchGroupChainName ?? 'the correct chain'}.
+            </div>
+          )}
 
           {/* Batch claim feedback */}
           {batchError && (

@@ -17,7 +17,7 @@
 // =============================================================================
 
 import { useState, useEffect } from 'react'
-import { useAccount, useReadContract } from 'wagmi'
+import { useAccount, useReadContract, usePublicClient } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import type { CreatorFormState } from '@/lib/rewards/creator'
@@ -88,6 +88,7 @@ const FUND_LABELS: Record<FundState, string> = {
 
 export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
   const { address } = useAccount()
+  const publicClient = usePublicClient()
   const [fundState,   setFundState]   = useState<FundState>('idle')
   const [errorMsg,    setErrorMsg]    = useState<string | null>(null)
   const [campaignId,  setCampaignId]  = useState<string | null>(null)
@@ -152,16 +153,28 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
   // Approval confirmed → send depositCampaign tx
   useEffect(() => {
     if (!approveConfirmed || fundState !== 'waiting_approve') return
-    if (!form.token || !campaignId) return
+    if (!form.token || !campaignId || !address || !publicClient) return
+    const tokenAddress = form.token.address as `0x${string}`
     setFundState('funding')
     const amount = parseUnits(String(form.poolUsd), form.token.decimals)
-    writeFund({
+    publicClient.simulateContract({
       address:      DISTRIBUTOR_ADDRESS,
       abi:          DISTRIBUTOR_ABI,
       functionName: 'depositCampaign',
-      args: [campaignId, form.token.address as `0x${string}`, amount],
+      args:         [campaignId, tokenAddress, amount],
+      account:      address,
+    }).then(() => {
+      writeFund({
+        address:      DISTRIBUTOR_ADDRESS,
+        abi:          DISTRIBUTOR_ABI,
+        functionName: 'depositCampaign',
+        args: [campaignId, tokenAddress, amount],
+      })
+      setFundState('waiting_fund')
+    }).catch((err: unknown) => {
+      setErrorMsg((err as Error).message.split('\n')[0] ?? 'Unable to preflight campaign funding.')
+      setFundState('error')
     })
-    setFundState('waiting_fund')
   }, [approveConfirmed]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fund tx submitted
@@ -214,14 +227,31 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
 
     if (hasEnoughAllowance) {
       // ── Allowance already sufficient — skip the approve step ──────────
+      if (!address || !publicClient) {
+        setErrorMsg('Network client unavailable')
+        setFundState('error')
+        return
+      }
       setFundState('funding')
-      writeFund({
-        address:      DISTRIBUTOR_ADDRESS,
-        abi:          DISTRIBUTOR_ABI,
-        functionName: 'depositCampaign',
-        args: [newCampaignId, form.token.address as `0x${string}`, amount],
-      })
-      setFundState('waiting_fund')
+      try {
+        await publicClient.simulateContract({
+          address:      DISTRIBUTOR_ADDRESS,
+          abi:          DISTRIBUTOR_ABI,
+          functionName: 'depositCampaign',
+          args:         [newCampaignId, form.token.address as `0x${string}`, amount],
+          account:      address,
+        })
+        writeFund({
+          address:      DISTRIBUTOR_ADDRESS,
+          abi:          DISTRIBUTOR_ABI,
+          functionName: 'depositCampaign',
+          args: [newCampaignId, form.token.address as `0x${string}`, amount],
+        })
+        setFundState('waiting_fund')
+      } catch (err) {
+        setErrorMsg((err as Error).message.split('\n')[0] ?? 'Unable to preflight campaign funding.')
+        setFundState('error')
+      }
     } else {
       // ── Need permission first — request approval ───────────────────────
       setFundState('approving')
@@ -242,6 +272,13 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
 
   const isWorking  = ['creating', 'approving', 'waiting_approve', 'funding', 'waiting_fund'].includes(fundState)
   const isConfirmed = fundState === 'confirmed'
+  const spenderLabel = DISTRIBUTOR_ADDRESS === '0x0000000000000000000000000000000000000000'
+    ? 'MintwareDistributor'
+    : `${DISTRIBUTOR_ADDRESS.slice(0, 6)}…${DISTRIBUTOR_ADDRESS.slice(-4)}`
+  const looksLikeZeroFirstToken =
+    form.token
+      ? form.token.symbol.toUpperCase() === 'USDT' || form.token.name.toLowerCase().includes('tether')
+      : false
 
   // Build config summary for points
   const isPoints = form.type === 'points'
@@ -320,6 +357,7 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
         <SectionCard title="Funding">
           <ReviewRow label="Pool size" value={fmtUSDShort(form.poolUsd)} />
           <ReviewRow label="Token"     value={form.token ? form.token.symbol : '—'} />
+          <ReviewRow label="Spender"   value={spenderLabel} mono={false} />
           <div className="mt-[10px] font-sans text-[12px] text-mw-ink-4">
             {form.token
               ? `Deposits ${fmtUSDShort(form.poolUsd)} worth of ${form.token.symbol} to MintwareDistributor contract`
@@ -346,6 +384,17 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
                 <li>Once confirmed on-chain, your campaign goes live.</li>
               </ol>
             )}
+          </div>
+        )}
+
+        {looksLikeZeroFirstToken && !hasEnoughAllowance && allowanceRaw !== undefined && allowanceRaw > 0n && (
+          <div className="bg-[rgba(234,179,8,0.08)] border border-[rgba(234,179,8,0.22)] rounded-[12px] px-[16px] py-[14px]">
+            <div className="font-sans text-[11px] font-bold uppercase tracking-[0.8px] text-[#a16207] mb-[6px]">
+              Token approval note
+            </div>
+            <p className="font-sans text-[12px] text-[#92400e] leading-[1.55] m-0">
+              {form.token?.symbol ?? 'This token'} may ask for an extra wallet confirmation before the final funding step if it requires resetting an older approval first.
+            </p>
           </div>
         )}
 
@@ -407,6 +456,11 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
                 </p>
               </div>
             )}
+            <div className="mt-[4px] px-[12px] py-[10px] bg-[rgba(26,26,46,0.03)] border border-[rgba(26,26,46,0.08)] rounded-[10px]">
+              <p className="font-sans text-[11px] text-mw-ink-4 leading-[1.5] m-0">
+                If your wallet does not appear right away, open your wallet app or extension and look for a pending request.
+              </p>
+            </div>
           </div>
         )}
       </div>
