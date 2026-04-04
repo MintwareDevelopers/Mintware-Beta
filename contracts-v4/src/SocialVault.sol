@@ -4,7 +4,7 @@ pragma solidity ^0.8.26;
 import {IPoolManager}        from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IUnlockCallback}     from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {PoolKey}             from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {PoolIdLibrary}       from "@uniswap/v4-core/src/types/PoolId.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta}        from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
@@ -192,6 +192,7 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
     error InvalidOracleSignature();
     error SeedAlreadyInitialized();
     error LockTierChangeNotAllowed();
+    error InvalidPoolKey();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -361,6 +362,17 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
     ) external onlyOwner nonReentrant {
         if (projectToken == address(0) || amount == 0) revert InsufficientDeposit();
         if (teamSeeds[vaultId].projectToken != address(0)) revert SeedAlreadyInitialized();
+
+        address currency0 = Currency.unwrap(key.currency0);
+        address currency1 = Currency.unwrap(key.currency1);
+        bool validPair =
+            (currency0 == projectToken && currency1 == address(usdc)) ||
+            (currency1 == projectToken && currency0 == address(usdc));
+        if (!validPair) revert InvalidPoolKey();
+
+        if (poolInitialized && PoolId.unwrap(key.toId()) != PoolId.unwrap(poolKey.toId())) {
+            revert InvalidPoolKey();
+        }
 
         IERC20(projectToken).safeTransferFrom(msg.sender, address(this), amount);
 

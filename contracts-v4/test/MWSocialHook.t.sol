@@ -90,6 +90,12 @@ contract MWSocialHookTest is Test {
         hook.setFeeVault(address(0));
     }
 
+    function test_setSocialVault_rejects_zero() public {
+        vm.prank(owner);
+        vm.expectRevert(MWSocialHook.InvalidAddress.selector);
+        hook.setSocialVault(address(0));
+    }
+
     function test_setSocialVault_updates() public {
         address newVault = makeAddr("newSocialVault");
         vm.prank(owner);
