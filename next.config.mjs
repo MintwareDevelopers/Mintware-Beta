@@ -1,3 +1,9 @@
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Never expose source maps in production — prevents reverse-engineering
@@ -24,6 +30,27 @@ const nextConfig = {
         ],
       },
     ]
+  },
+
+  webpack(config, { isServer }) {
+    config.resolve ??= {}
+    config.resolve.alias ??= {}
+
+    // Privy treats this as optional, but webpack still warns when it is absent.
+    config.resolve.alias['@farcaster/mini-app-solana'] = path.join(
+      __dirname,
+      'lib/shims/farcaster-mini-app-solana.ts',
+    )
+
+    if (isServer) {
+      // Torus broadcast channels are browser-only and trigger indexedDB noise during static generation.
+      config.resolve.alias['@toruslabs/broadcast-channel'] = path.join(
+        __dirname,
+        'lib/shims/torus-broadcast-channel.ts',
+      )
+    }
+
+    return config
   },
 }
 
