@@ -1,13 +1,13 @@
 // =============================================================================
 // POST /api/wallet-link
 //
-// Links a Solana wallet to an authenticated EVM session.
+// Links a Solana wallet to a proven EVM wallet owner.
 //
 // Flow:
-//   1. User is authenticated via EVM wallet (evm_address from body)
+//   1. User signs a fresh EVM authorization message for the target evm_address
 //   2. User connects Solana wallet in the browser
 //   3. Solana wallet signs: "Link wallet to Mintware: evm=0x... ts=<unix>"
-//   4. This route verifies the Ed25519 signature and inserts wallet_links row
+//   4. This route verifies both signatures and inserts wallet_links row
 //
 // Body: { evm_address: string, sol_address: string, signature: string, message: string }
 // Returns: { ok: true } | { error: string }

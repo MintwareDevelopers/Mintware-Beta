@@ -8,11 +8,11 @@
 //
 // Flow per reward (EVM):
 //   1. Fetch GET /api/claim/status?address= on mount
-//   2. For 'claimable' rewards, show [Claim Rewards] button
+//   2. For 'claimable' rewards, show a wallet-confirmation CTA
 //   3. On click:
 //      a. If wrong chain → show Switch Network button (useSwitchChain)
 //      b. Fetch GET /api/claim?address=&distribution_id= for proof
-//      c. Call writeContract({ claim(distributionId, amountWei, proof) })
+//      c. Call writeContract({ claim(campaignId, epochNumber, merkleRoot, oracleSignature, deadline, amountWei, proof) })
 //      d. useWaitForTransactionReceipt → pending → success states
 //   4. 'claimed' rewards show tx link to block explorer
 //   5. 'pending' rewards show "Awaiting on-chain publication" state
@@ -422,7 +422,7 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
                     ? 'Check your wallet →'
                     : isConfirming
                     ? 'Waiting for confirmation…'
-                    : 'Claim Rewards'}
+                    : 'Check your wallet →'}
                 </button>
               </div>
             )}
