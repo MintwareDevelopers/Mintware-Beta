@@ -22,13 +22,14 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { generateRefCodeForWallet } from '@/lib/rewards/referral-code'
 
 const EVM_RE     = /^0x[0-9a-f]{40}$/i
 const SOLANA_RE  = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
 function isValidAddress(raw: string): boolean {
-  return EVM_RE.test(raw) || SOLANA_RE.test(raw)
+  return EVM_RE.test(raw) || (solanaEnabled && SOLANA_RE.test(raw))
 }
 
 function normalizeAddress(raw: string): string {
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
   }
 
   const address  = normalizeAddress(rawAddr)
-  const isSolana = SOLANA_RE.test(rawAddr)
+  const isSolana = solanaEnabled && SOLANA_RE.test(rawAddr)
   const supabase = createSupabaseServiceClient()
 
   // ── Check if wallet already exists with a ref_code ────────────────────────

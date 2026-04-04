@@ -1,23 +1,21 @@
 // =============================================================================
 // lib/web3/useMintwareIdentity.ts
 //
-// Unified identity hook — abstracts EVM (wagmi) and Solana (wallet-adapter)
-// into a single interface. Either wallet can be the primary session.
+// Unified identity hook for the live product surface.
+// Today this resolves EVM and Privy-embedded wallets only; Solana is paused.
 //
 // Usage:
 //   const { address, chain, isConnected, disconnect } = useMintwareIdentity()
 //
-// address — the active wallet address (0x... for EVM, base58 for Solana)
-// chain   — 'evm' | 'solana' | null
+// address — the active wallet address (0x... for EVM)
+// chain   — 'evm' | null
 // =============================================================================
 
 'use client'
 
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useAccount, useDisconnect } from 'wagmi'
-import { useWallet }                 from '@solana/wallet-adapter-react'
 import { useCallback }               from 'react'
-import { solanaEnabled }             from '@/lib/web3/featureFlags'
 
 export type WalletChain = 'evm' | 'solana'
 export type MintwareWalletType = 'external-evm' | 'privy-embedded' | 'solana' | null
@@ -42,12 +40,11 @@ export interface MintwareIdentity {
 
 export function useMintwareIdentity(): MintwareIdentity {
   const { address: evmAddr, isConnected: evmConnected, status: evmStatus } = useAccount()
-  const { publicKey, connected: solConnected, disconnect: solDisconnect } = useWallet()
   const { disconnect: evmDisconnect } = useDisconnect()
   const privy = useMintwarePrivy()
 
   const evmAddress = evmConnected && evmAddr ? evmAddr : null
-  const solanaAddress = solanaEnabled && solConnected && publicKey ? publicKey.toBase58() : null
+  const solanaAddress = null
   const embeddedWalletAddress = privy.embeddedWalletAddress
 
   const address = evmAddress ?? embeddedWalletAddress ?? solanaAddress ?? null
@@ -71,14 +68,12 @@ export function useMintwareIdentity(): MintwareIdentity {
     ...privy.evmWalletAddresses.map((wallet) => wallet.toLowerCase()),
     ...(evmAddress ? [evmAddress.toLowerCase()] : []),
     ...(embeddedWalletAddress ? [embeddedWalletAddress.toLowerCase()] : []),
-    ...(solanaAddress ? [solanaAddress] : []),
   ]))
 
   const disconnect = useCallback(() => {
     if (evmAddress) evmDisconnect()
-    if (solanaAddress) solDisconnect()
     if (privy.authenticated) void privy.logout()
-  }, [evmAddress, solanaAddress, evmDisconnect, solDisconnect, privy])
+  }, [evmAddress, evmDisconnect, privy])
 
   return {
     address,

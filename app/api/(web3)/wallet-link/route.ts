@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { PublicKey }                   from '@solana/web3.js'
 import nacl                            from 'tweetnacl'
 
@@ -24,6 +25,10 @@ function isValidEVM(addr: string)     { return /^0x[0-9a-f]{40}$/i.test(addr) }
 function isValidBase58(addr: string)  { return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr) }
 
 export async function POST(req: NextRequest) {
+  if (!solanaEnabled) {
+    return NextResponse.json({ error: 'solana_wallet_linking_paused' }, { status: 410 })
+  }
+
   let body: Record<string, unknown>
   try { body = await req.json() }
   catch { return NextResponse.json({ error: 'invalid json' }, { status: 400 }) }
@@ -91,5 +96,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
+  if (!solanaEnabled) {
+    return NextResponse.json({ error: 'solana_wallet_linking_paused' }, { status: 410 })
+  }
+
   return NextResponse.json({ error: 'method not allowed' }, { status: 405 })
 }

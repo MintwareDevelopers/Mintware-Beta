@@ -1,8 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { useWallet }  from '@solana/wallet-adapter-react'
-import { useWalletModal } from '@solana/wallet-adapter-react-ui'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
@@ -13,7 +11,6 @@ import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { ReferralSheet } from '@/components/rewards/referral/ReferralSheet'
 import { InviteTab } from '@/components/rewards/referral/InviteTab'
 import { ClaimCard } from '@/components/rewards/campaigns/ClaimCard'
-import { buildSolanaWalletLinkMessage } from '@/config/solana'
 import { toast } from 'sonner'
 import * as Progress from '@radix-ui/react-progress'
 import * as Tooltip from '@radix-ui/react-tooltip'
@@ -21,7 +18,6 @@ import { BarChart2, Zap, Award, Share2, Coins, Calendar, Link2, Activity, CheckC
 import { ResponsiveContainer, AreaChart, Area, Tooltip as RechartsTooltip } from 'recharts'
 import { AnimatedScore } from '@/components/web2/AnimatedScore'
 import { motion, AnimatePresence } from 'framer-motion'
-import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -73,10 +69,7 @@ type Tab = 'portfolio' | 'score' | 'badge' | 'invite' | 'rewards' | 'liquidity'
 // ─── Profile content ──────────────────────────────────────────────────────────
 function ProfileContent() {
   const { address: evmAddress } = useMintwareIdentity()
-  const { publicKey: solPublicKey, connected: solConnected, signMessage: solSignMessage } = useWallet()
-  const { setVisible: openSolanaModal } = useWalletModal()
-  // EVM takes priority; Solana-only users fall back to their public key (base58, case-sensitive)
-  const wallet = evmAddress?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = evmAddress?.toLowerCase() ?? ''
   const [activeTab, setActiveTab] = useState<Tab>('portfolio')
   const [data, setData] = useState<ScoreResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -87,13 +80,6 @@ function ProfileContent() {
   const [lpDeposits, setLpDeposits]         = useState<Array<{ id: string; vault_id: string; usdc_amount: number; lock_tier: string; deposited_at: string; status: string; locked_until: string | null; compounded_amount: number; vault?: { id: string; name: string; project_token: string; status: string; tvl_usdc: number } }>>([])
   const [lpQueue, setLpQueue]               = useState<Array<{ id: string; vault_id: string; requested_amount: number; executable_at: string; penalty_pct: number; status: string }>>([])
   const [lpLoading, setLpLoading]           = useState(false)
-
-  // Solana linking state
-  const [solLinked, setSolLinked]           = useState<string | null>(null)
-  const [solLinkLoading, setSolLinkLoading] = useState(false)
-  const [solLinkError, setSolLinkError]     = useState<string | null>(null)
-  const [solScore, setSolScore]             = useState<number | null>(null)
-  const [solScoreLoading, setSolScoreLoading] = useState(false)
 
   const {
     stats: refStats,
@@ -142,77 +128,6 @@ function ProfileContent() {
       .finally(() => setLpLoading(false))
   }, [activeTab, wallet]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Check if a Solana wallet is already linked to this EVM address
-  useEffect(() => {
-    if (!evmAddress) return
-    const walletAddress = evmAddress.toLowerCase()
-
-    void fetch(`/api/wallet-link?evm_address=${encodeURIComponent(walletAddress)}`)
-      .then((response) => response.json())
-      .then((link) => {
-        if (!link?.linked_address) return
-        setSolLinked(link.linked_address)
-        setSolScoreLoading(true)
-        fetch(`${API}/score?address=${link.linked_address}`)
-          .then((response) => response.json())
-          .then((scoreData) => setSolScore(scoreData.score ?? 0))
-          .catch(() => {})
-          .finally(() => setSolScoreLoading(false))
-      })
-      .catch(() => {})
-  }, [evmAddress]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function linkSolanaWallet() {
-    if (!solanaEnabled) return
-    if (!wallet || !solPublicKey || !solSignMessage) return
-    setSolLinkLoading(true)
-    setSolLinkError(null)
-    try {
-      const ts = Math.floor(Date.now() / 1000)
-      const message = buildSolanaWalletLinkMessage(wallet, ts)
-      const msgBytes  = new TextEncoder().encode(message)
-      const sigBytes  = await solSignMessage(msgBytes)
-      const signature = Buffer.from(sigBytes).toString('base64')
-
-      const res = await fetch('/api/wallet-link', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          evm_address: wallet,
-          sol_address: solPublicKey.toBase58(),
-          signature,
-          message,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Link failed')
-
-      setSolLinked(solPublicKey.toBase58())
-      toast.success('Solana wallet linked!')
-
-      // Fetch Solana Attribution score
-      setSolScoreLoading(true)
-      fetch(`${API}/score?address=${solPublicKey.toBase58()}`)
-        .then(r => r.json())
-        .then(d => setSolScore(d.score ?? 0))
-        .catch(() => {})
-        .finally(() => setSolScoreLoading(false))
-
-      // Phase 6 — refresh combined score in all active campaign participant rows
-      void fetch('/api/campaigns/refresh-score', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ wallet }),
-      }).catch(() => {})
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to link wallet'
-      setSolLinkError(msg)
-      toast.error(msg)
-    } finally {
-      setSolLinkLoading(false)
-    }
-  }
-
   function copyAddress() {
     navigator.clipboard.writeText(wallet).catch(() => {})
     setCopied(true)
@@ -243,11 +158,6 @@ function ProfileContent() {
   const tier = data?.tier ? data.tier.charAt(0).toUpperCase() + data.tier.slice(1) : '—'
   const avatarLetter = wallet ? wallet.charAt(2).toUpperCase() : '?'
   const maxScore = data?.signals?.reduce((s, sig) => s + sig.max, 0) ?? 925
-
-  // Combined score: max(evm, sol) + min(evm, sol) * 0.4
-  const combinedScore = (solanaEnabled && score > 0 && solScore !== null && solScore > 0)
-    ? Math.round(Math.max(score, solScore) + Math.min(score, solScore) * 0.4)
-    : null
 
   // Derived badges from score data
   const badges = data
@@ -355,45 +265,6 @@ function ProfileContent() {
                     EVM · {shortAddr(wallet)}
                   </span>
                 )}
-                {/* Linked Solana chip */}
-                {solanaEnabled && solLinked && (
-                  <span
-                    className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-medium border"
-                    style={{ background: 'rgba(153,69,255,0.06)', borderColor: 'rgba(153,69,255,0.22)', color: '#9945FF' }}
-                  >
-                    <span className="w-[5px] h-[5px] rounded-full shrink-0" style={{ background: '#9945FF' }} />
-                    SOL · {solLinked.slice(0, 4)}…{solLinked.slice(-4)}
-                    {solScoreLoading && <span className="opacity-50">…</span>}
-                    {!solScoreLoading && solScore !== null && solScore > 0 && (
-                      <span className="font-mono font-semibold ml-[2px]">{solScore} pts</span>
-                    )}
-                  </span>
-                )}
-                {/* Link button — EVM connected, Solana adapter connected, not yet linked */}
-                {solanaEnabled && evmAddress && !solLinked && solConnected && solPublicKey && (
-                  <button
-                    onClick={linkSolanaWallet}
-                    disabled={solLinkLoading}
-                    className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-semibold border cursor-pointer transition-all duration-150 disabled:opacity-60"
-                    style={{ background: 'rgba(153,69,255,0.07)', borderColor: 'rgba(153,69,255,0.28)', color: '#9945FF' }}
-                    title="Sign a message to prove ownership and link your Solana wallet"
-                  >
-                    {solLinkLoading ? '…linking' : '+ Link Solana'}
-                  </button>
-                )}
-                {/* Prompt to open Solana modal if not yet connected */}
-                {solanaEnabled && evmAddress && !solLinked && !solConnected && (
-                  <button
-                    onClick={() => openSolanaModal(true)}
-                    className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-medium border cursor-pointer transition-all duration-150"
-                    style={{ background: 'rgba(153,69,255,0.04)', borderColor: 'rgba(153,69,255,0.16)', color: '#9945FF' }}
-                  >
-                    + Link Solana wallet
-                  </button>
-                )}
-                {solanaEnabled && solLinkError && (
-                  <span className="text-[11px] text-mw-red">{solLinkError}</span>
-                )}
               </div>
 
               {/* Public profile link */}
@@ -415,16 +286,10 @@ function ProfileContent() {
               {data ? (
                 <>
                   <AnimatedScore
-                    value={combinedScore ?? score}
+                    value={score}
                     className="text-[56px] font-bold text-mw-brand font-mono tracking-[-2px] leading-none block"
                   />
-                  {combinedScore !== null ? (
-                    <div className="text-[11px] text-mw-ink-3 mt-1">
-                      Combined · EVM <span className="font-mono">{score}</span> + SOL <span className="font-mono">{solScore}</span>
-                    </div>
-                  ) : (
-                    <div className="text-[11px] text-mw-ink-3 mt-1">of {maxScore} pts · {tier} tier</div>
-                  )}
+                  <div className="text-[11px] text-mw-ink-3 mt-1">of {maxScore} pts · {tier} tier</div>
                   {data.timeline && data.timeline.length > 1 && (
                     <div className="mt-3 h-9 w-full">
                       <ResponsiveContainer width="100%" height="100%">
@@ -465,12 +330,10 @@ function ProfileContent() {
           <div className="flex items-stretch overflow-x-auto">
             <div className="flex flex-col gap-[3px] px-5 py-3.5 border-r border-[rgba(15,23,42,0.08)] shrink-0 bg-[rgba(0,82,255,0.08)] border-t-2 border-t-mw-brand -mt-px">
               <span className="text-[10px] font-bold tracking-[0.8px] uppercase text-mw-ink-3 whitespace-nowrap">
-                {combinedScore !== null ? 'Combined score' : 'Attribution score'}
+                Attribution score
               </span>
               <span className="text-mw-brand font-mono text-sm font-semibold whitespace-nowrap">
-                {combinedScore !== null
-                  ? combinedScore
-                  : score > 0 ? `${score} / ${maxScore}` : '—'}
+                {score > 0 ? `${score} / ${maxScore}` : '—'}
               </span>
             </div>
             <div className="flex flex-col gap-[3px] px-5 py-3.5 border-r border-[rgba(15,23,42,0.08)] shrink-0">

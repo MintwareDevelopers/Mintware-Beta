@@ -1,7 +1,6 @@
 'use client'
 
 import { useAccount } from 'wagmi'
-import { useWallet } from '@solana/wallet-adapter-react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
@@ -12,14 +11,11 @@ import { AnimatedScore } from '@/components/web2/AnimatedScore'
 import { CampaignCard, Campaign } from '@/components/rewards/campaigns/CampaignCard'
 import { TokenIcon } from '@/components/web2/TokenIcon'
 import { motion } from 'framer-motion'
-import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 // ─── Dashboard Content ─────────────────────────────────────────────────────────
 function DashboardContent() {
   const { address } = useAccount()
-  const { publicKey: solPublicKey, connected: solConnected } = useWallet()
-  const isEvmWallet = !!address
-  const wallet = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = address?.toLowerCase() ?? ''
   const searchParams = useSearchParams()
 
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([])
@@ -200,18 +196,6 @@ function DashboardContent() {
 
           </div>
         </div>
-
-        {/* Solana-only notice — campaigns require EVM */}
-        {solanaEnabled && !isEvmWallet && wallet && (
-          <div className="mb-5 px-4 py-3 rounded-xl flex items-center gap-3 text-[13px]"
-            style={{ background: 'rgba(153,69,255,0.06)', border: '1px solid rgba(153,69,255,0.18)' }}>
-            <span style={{ color: '#9945FF' }}>◎</span>
-            <span className="text-mw-ink-2 font-sans">
-              Campaigns pay out EVM tokens. Your Attribution score is shown, but joining requires an EVM wallet.{' '}
-              <span className="font-semibold" style={{ color: '#9945FF' }}>Connect an EVM wallet to participate.</span>
-            </span>
-          </div>
-        )}
 
         {/* Tabs */}
         <div className="flex items-center justify-between mb-5">

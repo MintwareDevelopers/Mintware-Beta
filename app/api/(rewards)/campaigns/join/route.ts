@@ -8,13 +8,14 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient }   from '@/lib/web2/supabase'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { getCombinedAttributionScore }   from '@/lib/rewards/combinedScore'
 
 const EVM_RE    = /^0x[0-9a-fA-F]{40}$/
 const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
 function isValidAddress(addr: string): boolean {
-  return EVM_RE.test(addr) || SOLANA_RE.test(addr)
+  return EVM_RE.test(addr) || (solanaEnabled && SOLANA_RE.test(addr))
 }
 
 /** Preserve case for Solana; lowercase EVM */
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
   }
   if (typeof address !== 'string' || !isValidAddress(address)) {
     return NextResponse.json(
-      { error: 'invalid wallet address — must be EVM (0x...) or Solana (base58)' },
+      { error: 'invalid wallet address — must be EVM (0x...)' },
       { status: 422 }
     )
   }
