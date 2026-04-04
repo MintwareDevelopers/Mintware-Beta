@@ -60,17 +60,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           {children}
           <CommandPalette />
+          <Toaster
+            position="bottom-right"
+            toastOptions={{
+              style: {
+                fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+                fontSize: 13,
+                borderRadius: 12,
+              },
+            }}
+          />
         </Providers>
-        <Toaster
-          position="bottom-right"
-          toastOptions={{
-            style: {
-              fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
-              fontSize: 13,
-              borderRadius: 12,
-            },
-          }}
-        />
         <Analytics />
       </body>
     </html>
