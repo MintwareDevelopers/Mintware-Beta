@@ -119,6 +119,7 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     error InvalidOracleSignature();
     error DeadlinePassed();
     error SocialVaultNotSet();
+    error ClaimExceedsAllocation();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -217,7 +218,11 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     /// @notice Called by MintwareDistributor after a successful claim
     function recordClaim(uint256 epochId, address lp, uint256 amount) external {
         require(msg.sender == distributor, "only distributor");
-        epochs[epochId].totalClaimed += amount;
+        Epoch storage epoch = epochs[epochId];
+        if (!epoch.closed || epoch.totalClaimed + amount > epoch.totalAllocated) {
+            revert ClaimExceedsAllocation();
+        }
+        epoch.totalClaimed += amount;
         emit ClaimRecorded(epochId, lp, amount);
     }
 
@@ -232,6 +237,7 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
         require(epoch.closed, "epoch not closed");
 
         if (socialVault == address(0)) revert SocialVaultNotSet();
+        if (epoch.totalClaimed + amount > epoch.totalAllocated) revert ClaimExceedsAllocation();
 
         epoch.totalClaimed += amount;
 
@@ -272,10 +278,12 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     }
 
     function setOracleSigner(address _signer) external onlyOwner {
+        require(_signer != address(0), "zero address");
         oracleSigner = _signer;
     }
 
     function setTreasury(address _treasury) external onlyOwner {
+        require(_treasury != address(0), "zero address");
         treasury = _treasury;
     }
 
