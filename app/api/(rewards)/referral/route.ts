@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
-import { generateRefCode } from '@/lib/rewards/referral/utils'
 
 // ---------------------------------------------------------------------------
 // Address validation
@@ -41,51 +40,12 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/referral
-// Body: { address: string }
-// Upserts a wallet_profiles row and returns the wallet's referral stats.
+// Legacy mutation route removed in favor of POST /api/auth/connect, which
+// requires a fresh wallet-signed authorization message.
 export async function POST(req: NextRequest) {
-  let body: unknown
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: 'invalid json' }, { status: 400 })
-  }
-
-  const raw = (body as Record<string, unknown>)?.address
-  if (!raw || typeof raw !== 'string') {
-    return NextResponse.json({ error: 'address required' }, { status: 400 })
-  }
-  if (!isValidAddress(raw)) {
-    return NextResponse.json(
-      { error: 'invalid address — must be 0x followed by 40 hex characters' },
-      { status: 400 }
-    )
-  }
-
-  const address = raw.toLowerCase()
-  const supabase = createSupabaseServiceClient()
-  const refCode  = generateRefCode(address)
-
-  const { error: upsertErr } = await supabase
-    .from('wallet_profiles')
-    .upsert(
-      { address, ref_code: refCode, last_seen_at: new Date().toISOString() },
-      { onConflict: 'address' }
-    )
-
-  if (upsertErr) {
-    return NextResponse.json({ error: upsertErr.message }, { status: 500 })
-  }
-
-  const { data, error } = await supabase
-    .from('referral_stats')
-    .select('*')
-    .eq('address', address)
-    .single()
-
-  if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? 'not found' }, { status: 500 })
-  }
-
-  return NextResponse.json(data)
+  void req
+  return NextResponse.json(
+    { error: 'deprecated — use POST /api/auth/connect with wallet authorization' },
+    { status: 410 }
+  )
 }
