@@ -204,3 +204,37 @@ export function buildCampaignManageMessage(input: {
     2,
   )
 }
+
+export function buildWalletConnectMessage(input: {
+  address: string
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-wallet-connect',
+      address: normalizeAddress(input.address),
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
+
+export function buildWalletLinkMessage(input: {
+  evmAddress: string
+  solAddress: string
+  solMessage: string
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-wallet-link',
+      evmAddress: normalizeAddress(input.evmAddress),
+      solAddress: input.solAddress,
+      solMessage: input.solMessage,
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
