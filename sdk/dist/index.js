@@ -39,6 +39,19 @@ function walletClient(privateKey, opts) {
 function contractAddress(opts) {
     return opts?.contractAddress ?? DEFAULT_CONTRACT;
 }
+function buildAgentRegisterMessage(input) {
+    return JSON.stringify({
+        action: 'mintware-agent-register',
+        address: input.address.toLowerCase(),
+        issuedAt: input.issuedAt,
+        erc8004TokenId: null,
+        agentName: input.agentName ?? null,
+        agentDescription: null,
+        x402Support: null,
+        operationalStatus: null,
+        services: [],
+    }, null, 2);
+}
 // ── Read functions ────────────────────────────────────────────────────────────
 /**
  * Read the full Attribution score for any agent address.
@@ -289,10 +302,23 @@ export async function registerWithMintwareOracle(params) {
     // Step 3 — sync profile with Mintware oracle watcher
     const base = params.apiBase ?? 'https://mintware.finance';
     try {
+        const issuedAt = Date.now();
+        const authMessage = buildAgentRegisterMessage({
+            address,
+            issuedAt,
+            agentName: params.name ?? null,
+        });
+        const authSignature = await account.signMessage({ message: authMessage });
         await fetch(`${base}/api/agents/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ address, name: params.name ?? null }),
+            body: JSON.stringify({
+                address,
+                name: params.name ?? null,
+                issuedAt,
+                authMessage,
+                authSignature,
+            }),
         });
     }
     catch (err) {

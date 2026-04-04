@@ -202,14 +202,13 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
       toast.success('Reward claimed!', {
         description: `${fmtWei(reward.amount_wei, reward.token_symbol)} from ${reward.campaign_name}`,
       })
-      // Fire-and-forget: update daily_payouts.claimed_at — never blocks the UI
-      // H2: include Bearer token so the server can authenticate this request
-      const claimMarkToken = process.env.NEXT_PUBLIC_CLAIM_MARK_SECRET ?? ''
+      // Fire-and-forget: update daily_payouts.claimed_at — never blocks the UI.
+      // The server verifies the actual distributor claim transaction before
+      // updating off-chain claim state.
       fetch('/api/claim/mark-claimed', {
         method: 'POST',
         headers: {
           'Content-Type':  'application/json',
-          'Authorization': `Bearer ${claimMarkToken}`,
         },
         body: JSON.stringify({ wallet, distribution_id: reward.distribution_id, tx_hash: txHash }),
       }).catch(() => {})

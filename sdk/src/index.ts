@@ -17,6 +17,7 @@ import {
   createPublicClient,
   createWalletClient,
   http,
+  type Hex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base, baseSepolia } from 'viem/chains'
@@ -52,6 +53,28 @@ function walletClient(privateKey: `0x${string}`, opts?: SdkOptions) {
 
 function contractAddress(opts?: SdkOptions): `0x${string}` {
   return opts?.contractAddress ?? DEFAULT_CONTRACT
+}
+
+function buildAgentRegisterMessage(input: {
+  address: `0x${string}`
+  issuedAt: number
+  agentName?: string | null
+}) {
+  return JSON.stringify(
+    {
+      action: 'mintware-agent-register',
+      address: input.address.toLowerCase(),
+      issuedAt: input.issuedAt,
+      erc8004TokenId: null,
+      agentName: input.agentName ?? null,
+      agentDescription: null,
+      x402Support: null,
+      operationalStatus: null,
+      services: [],
+    },
+    null,
+    2,
+  )
 }
 
 // ── Read functions ────────────────────────────────────────────────────────────
@@ -368,10 +391,24 @@ export async function registerWithMintwareOracle(params: WriteOptions & {
   // Step 3 — sync profile with Mintware oracle watcher
   const base = params.apiBase ?? 'https://mintware.finance'
   try {
+    const issuedAt = Date.now()
+    const authMessage = buildAgentRegisterMessage({
+      address,
+      issuedAt,
+      agentName: params.name ?? null,
+    })
+    const authSignature = await account.signMessage({ message: authMessage })
+
     await fetch(`${base}/api/agents/register`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ address, name: params.name ?? null }),
+      body:    JSON.stringify({
+        address,
+        name: params.name ?? null,
+        issuedAt,
+        authMessage,
+        authSignature: authSignature as Hex,
+      }),
     })
   } catch (err) {
     // Non-fatal — oracle watcher will pick up the on-chain event on its next cron tick
