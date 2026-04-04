@@ -20,6 +20,10 @@ vi.mock('@/lib/web2/supabase', () => ({
 
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
+function asServiceClient<T>(mock: T): ReturnType<typeof createSupabaseServiceClient> {
+  return mock as unknown as ReturnType<typeof createSupabaseServiceClient>
+}
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
@@ -271,7 +275,7 @@ describe('commitDistribution', () => {
 
   it('should return a BuilderSummary with correct campaign_id and epoch_number', async () => {
     const mock = makeMockSupabase()
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const merkleResult = buildTestMerkleResult()
     const summary = await commitDistribution(fakeCampaign, fakeEpochState, processorResult, merkleResult)
@@ -282,7 +286,7 @@ describe('commitDistribution', () => {
 
   it('should return distribution_id from the inserted distributions row', async () => {
     const mock = makeMockSupabase()
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const merkleResult = buildTestMerkleResult()
     const summary = await commitDistribution(fakeCampaign, fakeEpochState, processorResult, merkleResult)
@@ -292,7 +296,7 @@ describe('commitDistribution', () => {
 
   it('should return merkle_root matching the tree root', async () => {
     const mock = makeMockSupabase()
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const merkleResult = buildTestMerkleResult()
     const summary = await commitDistribution(fakeCampaign, fakeEpochState, processorResult, merkleResult)
@@ -302,7 +306,7 @@ describe('commitDistribution', () => {
 
   it('should report wallets_included equal to the number of leaves', async () => {
     const mock = makeMockSupabase()
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const merkleResult = buildTestMerkleResult()
     const summary = await commitDistribution(fakeCampaign, fakeEpochState, processorResult, merkleResult)
@@ -313,7 +317,7 @@ describe('commitDistribution', () => {
   it('should set next_epoch_created=true and campaign_ended=false for a non-final epoch', async () => {
     // epoch_number=1, epoch_count=4 → not the final epoch
     const mock = makeMockSupabase()
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const merkleResult = buildTestMerkleResult()
     const summary = await commitDistribution(
@@ -330,7 +334,7 @@ describe('commitDistribution', () => {
   it('should set campaign_ended=true and next_epoch_created=false for the final epoch', async () => {
     // epoch_number=4 and epoch_count=4 → isLastEpoch is true
     const mock = makeMockSupabase()
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const merkleResult = buildTestMerkleResult()
     const summary = await commitDistribution(
@@ -367,7 +371,7 @@ describe('commitDistribution', () => {
       }),
       rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     }
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const merkleResult = buildTestMerkleResult()
 
@@ -399,7 +403,7 @@ describe('commitDistribution', () => {
       }),
       rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
     }
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     // Build a Merkle tree with two wallets...
     const merkleResult = buildTestMerkleResult()

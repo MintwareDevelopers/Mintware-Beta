@@ -33,6 +33,10 @@ vi.mock('@/lib/rewards/calc', () => ({
 
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
+function asServiceClient<T>(mock: T): ReturnType<typeof createSupabaseServiceClient> {
+  return mock as unknown as ReturnType<typeof createSupabaseServiceClient>
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -165,7 +169,7 @@ describe('processSwapEvent', () => {
     const mock = makeMockSupabase({
       activity: { data: { id: 'act-1' }, error: null },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -181,7 +185,7 @@ describe('processSwapEvent', () => {
       activity:  { data: null, error: null },         // idempotency: no duplicate
       campaigns: { data: null, error: null },          // campaign not found
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -197,7 +201,7 @@ describe('processSwapEvent', () => {
       activity:  { data: null, error: null },
       campaigns: { data: null, error: { message: 'relation does not exist' } },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -213,7 +217,7 @@ describe('processSwapEvent', () => {
       activity:  { data: null, error: null },
       campaigns: { data: { ...baseCampaign, status: 'ended' }, error: null },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -226,7 +230,7 @@ describe('processSwapEvent', () => {
       activity:  { data: null, error: null },
       campaigns: { data: { ...baseCampaign, status: 'upcoming' }, error: null },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -242,7 +246,7 @@ describe('processSwapEvent', () => {
       activity:  { data: null, error: null },
       campaigns: { data: { ...baseCampaign, closed: true }, error: null },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -261,7 +265,7 @@ describe('processSwapEvent', () => {
         error: null,
       },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -278,7 +282,7 @@ describe('processSwapEvent', () => {
       campaigns:    { data: baseCampaign, error: null },
       participants: { data: null, error: null },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -296,7 +300,7 @@ describe('processSwapEvent', () => {
       campaigns:    { data: baseCampaign, error: null },
       participants: { data: lateParticipant, error: null },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -320,7 +324,7 @@ describe('processSwapEvent', () => {
       campaigns:    { data: pointsCampaign, error: null },
       participants: { data: lowScoreParticipant, error: null },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -395,7 +399,7 @@ describe('processSwapEvent', () => {
       }),
       rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
     }
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -452,7 +456,7 @@ describe('processSwapEvent', () => {
       }),
       rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
     }
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -533,7 +537,7 @@ describe('processSwapEvent', () => {
       }),
       rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
     }
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -609,7 +613,7 @@ describe('processSwapEvent', () => {
       }),
       rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
     }
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(baseEvent)
 
@@ -629,7 +633,7 @@ describe('processSwapEvent', () => {
     const mock = makeMockSupabase({
       activity:  { data: { id: 'act-1' }, error: null },
     })
-    vi.mocked(createSupabaseServiceClient).mockReturnValue(mock as ReturnType<typeof createSupabaseServiceClient>)
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
     const result = await processSwapEvent(mixedCaseEvent)
 
