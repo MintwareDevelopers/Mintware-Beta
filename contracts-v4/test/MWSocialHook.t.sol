@@ -192,6 +192,18 @@ contract MWSocialHookTest is Test {
         assertTrue(active);
     }
 
+    function test_configurePool_rejects_capture_rate_above_bps() public {
+        vm.prank(owner);
+        vm.expectRevert(MWSocialHook.InvalidPoolConfig.selector);
+        hook.configurePool(testPoolId, bytes32(0), 18, 6, 20, 10_001, 0);
+    }
+
+    function test_configurePool_rejects_dynamic_fee_above_max() public {
+        vm.prank(owner);
+        vm.expectRevert(MWSocialHook.InvalidPoolConfig.selector);
+        hook.configurePool(testPoolId, bytes32(0), 18, 6, 20, 30, 1_000_001);
+    }
+
     function test_setPoolActive_disables_pool() public {
         vm.prank(owner);
         hook.configurePool(testPoolId, bytes32(0), 18, 6, 20, 30, 0);

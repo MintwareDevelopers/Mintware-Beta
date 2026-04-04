@@ -120,6 +120,7 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
     error OnlyVaultCanAddLiquidity();
     error OnlyVaultCanRemoveLiquidity();
     error InvalidAddress();
+    error InvalidPoolConfig();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Modifiers
@@ -391,6 +392,10 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
         uint16  captureRateBps,
         uint24  dynamicFee
     ) external onlyOwner {
+        if (captureThresholdBps > BPS || captureRateBps > BPS || dynamicFee > LPFeeLibrary.MAX_LP_FEE) {
+            revert InvalidPoolConfig();
+        }
+
         poolConfigs[poolId] = PoolConfig({
             pythPriceId:         pythPriceId,
             token0Decimals:      token0Decimals,
@@ -408,6 +413,7 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
     }
 
     function setDynamicFee(PoolId poolId, uint24 fee) external onlyOwner {
+        if (fee > LPFeeLibrary.MAX_LP_FEE) revert InvalidPoolConfig();
         poolConfigs[poolId].dynamicFee = fee;
     }
 

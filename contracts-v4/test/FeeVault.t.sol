@@ -172,6 +172,24 @@ contract FeeVaultTest is Test {
         fv.recordClaim(1, makeAddr("lp"), 100e6);
     }
 
+    function test_recordClaim_reverts_for_open_epoch() public {
+        vm.prank(distributor);
+        vm.expectRevert(FeeVault.ClaimExceedsAllocation.selector);
+        fv.recordClaim(1, makeAddr("lp"), 100e6);
+    }
+
+    function test_setTreasury_rejects_zero() public {
+        vm.prank(owner);
+        vm.expectRevert("zero address");
+        fv.setTreasury(address(0));
+    }
+
+    function test_setOracleSigner_rejects_zero() public {
+        vm.prank(owner);
+        vm.expectRevert("zero address");
+        fv.setOracleSigner(address(0));
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Sweep math (full test in T1.5 with real ERC20)
     // ─────────────────────────────────────────────────────────────────────────
