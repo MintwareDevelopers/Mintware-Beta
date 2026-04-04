@@ -1,6 +1,7 @@
 // =============================================================================
-// POST /api/agents/mwp — submit MWP folder snapshot hash (permissionless)
-// Mirrors submitMwpHash() in AIAttribution.sol. Interpretability capped at 500.
+// POST /api/agents/mwp — submit MWP folder snapshot hash
+// Mirrors submitMwpHash() in AIAttribution.sol, but requires a fresh
+// wallet-signed authorization message before mutating off-chain scores.
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
