@@ -11,7 +11,6 @@
 // =============================================================================
 
 import { useAccount } from 'wagmi'
-import { useWallet } from '@solana/wallet-adapter-react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import type { ActionDef } from '@/components/rewards/campaigns/ActionsPanel'
@@ -20,7 +19,6 @@ import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { API } from '@/lib/web2/api'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
-import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 import { CampaignHeader }   from '@/components/rewards/campaigns/CampaignHeader'
 import { JoinButton }        from '@/components/rewards/campaigns/JoinButton'
@@ -95,11 +93,9 @@ function ReferralCard({ refLink, earnDesc }: { refLink: string; earnDesc: string
 // ── Page content ──────────────────────────────────────────────────────────────
 function CampaignDetailContent() {
   const { address }   = useAccount()
-  const { publicKey: solPublicKey, connected: solConnected } = useWallet()
-  const isEvmWallet   = !!address
   const params        = useParams()
   const campaignId    = params?.id as string
-  const wallet        = address?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet        = address?.toLowerCase() ?? ''
   const { refCode }   = useReferral(wallet || undefined)
 
   const [campaign,     setCampaign]    = useState<Campaign | null>(null)
@@ -255,14 +251,14 @@ function CampaignDetailContent() {
 
               {/* Join / locked / joined state */}
               <div className={isJoined ? 'mb-4' : 'mb-6'}>
-                {!isEvmWallet ? (
+                {!address ? (
                   <div className="w-full px-4 py-3 rounded-xl text-[13px] text-center font-sans"
                     style={{
-                      background: solanaEnabled ? 'rgba(153,69,255,0.06)' : 'rgba(79,126,247,0.06)',
-                      border: solanaEnabled ? '1px solid rgba(153,69,255,0.18)' : '1px solid rgba(79,126,247,0.18)',
-                      color: solanaEnabled ? '#9945FF' : 'var(--color-mw-brand)',
+                      background: 'rgba(79,126,247,0.06)',
+                      border: '1px solid rgba(79,126,247,0.18)',
+                      color: 'var(--color-mw-brand)',
                     }}>
-                    Campaign rewards are EVM tokens{solanaEnabled ? ' — connect an EVM wallet to join.' : '.'}
+                    Campaign rewards are EVM tokens.
                   </div>
                 ) : (
                   <JoinButton

@@ -31,8 +31,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { processSwapEvent }       from '@/lib/rewards/swapHook'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { verifySolanaTx }         from '@/lib/web3/verifySolanaTx'
 import type { SwapEvent }         from '@/lib/rewards/types'
+import { SOLANA_SERVER_RPC_URL } from '@/config/solana'
 
 // ---------------------------------------------------------------------------
 // Solana address regex — base58, 32–44 chars, case-sensitive
@@ -69,6 +71,10 @@ function validatePayload(body: unknown): body is SolSwapEventPayload {
 // POST handler
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
+  if (!solanaEnabled) {
+    return NextResponse.json({ credited: false, skip_reason: 'solana_swaps_paused' }, { status: 410 })
+  }
+
   let body: unknown
   try {
     body = await req.json()
@@ -100,11 +106,10 @@ export async function POST(req: NextRequest) {
   //
   // Fail-open on RPC error (rpcError: true) — never block legitimate users.
   // ---------------------------------------------------------------------------
-  const rpcUrl = process.env.SOLANA_RPC_URL  // Optional override (e.g. Helius, QuickNode)
   const verification = await verifySolanaTx(
     body.tx_signature,
     body.wallet,
-    rpcUrl  // falls back to mainnet-beta public endpoint if undefined
+    SOLANA_SERVER_RPC_URL
   )
 
   if (!verification.valid) {
@@ -215,5 +220,9 @@ export async function POST(req: NextRequest) {
 
 // Reject non-POST methods
 export async function GET() {
+  if (!solanaEnabled) {
+    return NextResponse.json({ error: 'solana_swaps_paused' }, { status: 410 })
+  }
+
   return NextResponse.json({ error: 'method not allowed' }, { status: 405 })
 }

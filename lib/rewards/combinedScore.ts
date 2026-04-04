@@ -19,6 +19,7 @@
 
 import { API } from '@/lib/web2/api'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 
 type SupabaseServiceClient = ReturnType<typeof createSupabaseServiceClient>
 
@@ -80,6 +81,7 @@ export async function getCombinedAttributionScore(
   const isSolana = !isEvm && SOLANA_RE.test(wallet)
 
   if (!isEvm && !isSolana) return 0
+  if (!solanaEnabled) return fetchScore(wallet)
 
   // Fetch primary score and linked wallet lookup in parallel
   const [primaryScore, linkedAddress] = await Promise.all([

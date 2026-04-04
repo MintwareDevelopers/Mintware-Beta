@@ -21,6 +21,7 @@
 // =============================================================================
 
 import { Connection, PublicKey } from '@solana/web3.js'
+import { SOLANA_SERVER_RPC_URL } from '@/config/solana'
 
 // ---------------------------------------------------------------------------
 // Known Solana DEX program IDs
@@ -37,8 +38,6 @@ const SOLANA_DEX_PROGRAMS = new Set([
   'SSwpkEEcbUqx4vtoEByFjSkhKdCT862DNVb52nZg1UZ',  // Saber
   'DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1', // Orca V1
 ])
-
-const DEFAULT_RPC = 'https://api.mainnet-beta.solana.com'
 
 export interface SolanaTxVerification {
   valid:    boolean
@@ -61,7 +60,7 @@ function isValidBase58Signature(sig: string): boolean {
 export async function verifySolanaTx(
   signature: string,
   wallet:    string,
-  rpcUrl:    string = DEFAULT_RPC
+  rpcUrl:    string = SOLANA_SERVER_RPC_URL
 ): Promise<SolanaTxVerification> {
 
   // Basic format validation before hitting the RPC

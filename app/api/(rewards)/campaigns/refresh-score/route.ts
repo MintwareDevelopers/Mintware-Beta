@@ -21,6 +21,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { getCombinedAttributionScore } from '@/lib/rewards/combinedScore'
 
 const EVM_RE    = /^0x[0-9a-fA-F]{40}$/
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   }
 
   const isEvm    = EVM_RE.test(rawWallet)
-  const isSolana = !isEvm && SOLANA_RE.test(rawWallet)
+  const isSolana = solanaEnabled && !isEvm && SOLANA_RE.test(rawWallet)
 
   if (!isEvm && !isSolana) {
     return NextResponse.json({ error: 'invalid wallet address' }, { status: 422 })

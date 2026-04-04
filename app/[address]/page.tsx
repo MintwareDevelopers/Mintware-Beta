@@ -6,7 +6,6 @@
 // Wallet connect only needed to claim/customize your own profile.
 
 import { useParams, useRouter }  from 'next/navigation'
-import { useWallet }             from '@solana/wallet-adapter-react'
 import { MwNav }                 from '@/components/web2/MwNav'
 import { WalletDisplay }         from '@/components/web3/WalletDisplay'
 import { Sparkline }             from '@/components/web2/Sparkline'
@@ -15,7 +14,6 @@ import { getAddress, isAddress }  from 'viem'
 import { API, shortAddr }        from '@/lib/web2/api'
 import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import { useEffect, useState }   from 'react'
-import { solanaEnabled }         from '@/lib/web3/featureFlags'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,7 +48,6 @@ function fmtTier(tier: string): string {
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
-const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 const EVM_RE    = /^0x[0-9a-f]{40}$/i
 
 export default function PublicProfile() {
@@ -58,15 +55,10 @@ export default function PublicProfile() {
   const router    = useRouter()
   const rawAddr   = Array.isArray(params.address) ? params.address[0] : params.address ?? ''
 
-  // Solana addresses are case-sensitive base58 — preserve case; lowercase EVM only
-  const isSolanaAddr = solanaEnabled && SOLANA_RE.test(rawAddr) && !rawAddr.startsWith('0x')
-  const address      = isSolanaAddr ? rawAddr : rawAddr.toLowerCase()
+  const address      = rawAddr.toLowerCase()
 
   const { evmAddress: connectedAddr, walletSettled } = useMintwareIdentity()
-  const { publicKey: solPublicKey, connected: solConnected } = useWallet()
-  const isOwner =
-    (!!connectedAddr && connectedAddr.toLowerCase() === address) ||
-    (!!solanaEnabled && !!solPublicKey  && solPublicKey.toBase58() === address)
+  const isOwner = !!connectedAddr && connectedAddr.toLowerCase() === address
 
   const [score,      setScore]      = useState<ScoreData | null>(null)
   const [refStats,   setRefStats]   = useState<RefStats | null>(null)
@@ -74,8 +66,7 @@ export default function PublicProfile() {
   const [loading,    setLoading]    = useState(true)
   const [copied,     setCopied]     = useState(false)
 
-  // Accept both EVM and Solana addresses
-  const isValid = EVM_RE.test(address) || (solanaEnabled && isSolanaAddr)
+  const isValid = EVM_RE.test(address)
 
   useEffect(() => {
     if (!isValid) { setLoading(false); return }
@@ -83,8 +74,7 @@ export default function PublicProfile() {
     const supabase = createSupabaseBrowserClient()
 
     // Fetch score + referral stats + referred-by in parallel
-    // For EVM: checksum the address; for Solana: pass as-is (already base58)
-    const scoreAddr = !isSolanaAddr && isAddress(address) ? getAddress(address) : address
+    const scoreAddr = isAddress(address) ? getAddress(address) : address
     Promise.all([
       fetch(`${API}/score?address=${scoreAddr}`).then(r => r.json()).catch(() => null),
       supabase
@@ -534,7 +524,7 @@ export default function PublicProfile() {
             <div className="pp-hero-top">
               {/* Left: avatar + identity */}
               <div className="pp-avatar">
-                {isSolanaAddr ? address.charAt(0) : address.charAt(2).toUpperCase()}
+                {address.charAt(2).toUpperCase()}
                 {score && <div className="pp-avatar-score">{score.score}</div>}
               </div>
               <div className="pp-hero-info">

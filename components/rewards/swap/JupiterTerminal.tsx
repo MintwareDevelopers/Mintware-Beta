@@ -17,6 +17,7 @@
 // =============================================================================
 
 import { useEffect, useRef } from 'react'
+import { SOLANA_CLIENT_RPC_URL } from '@/config/solana'
 
 interface JupiterTerminalProps {
   wallet:      string
@@ -26,9 +27,6 @@ interface JupiterTerminalProps {
 // Jupiter Terminal CDN script (pinned to v2 — stable, actively maintained)
 const JUPITER_TERMINAL_SCRIPT = 'https://terminal.jup.ag/main-v2.js'
 const CONTAINER_ID             = 'jupiter-terminal-container'
-
-// Solana public RPC endpoint — swaps don't need a premium endpoint on the client
-const SOLANA_RPC = 'https://api.mainnet-beta.solana.com'
 
 // ---------------------------------------------------------------------------
 // Jupiter Terminal globals (injected via script tag)
@@ -139,7 +137,7 @@ export function JupiterTerminal({ wallet, campaignId }: JupiterTerminalProps) {
         window.Jupiter.init({
           displayMode:        'integrated',
           integratedTargetId: CONTAINER_ID,
-          endpoint:           SOLANA_RPC,
+          endpoint:           SOLANA_CLIENT_RPC_URL,
           defaultExplorer:    'Solscan',
 
           onSuccess: ({ txid, inputMint, outputMint, inAmount, quoteResponse }) => {

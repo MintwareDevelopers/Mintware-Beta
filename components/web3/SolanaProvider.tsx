@@ -16,9 +16,7 @@ import {
   SolflareWalletAdapter,
 } from '@solana/wallet-adapter-wallets'
 import { solanaEnabled } from '@/lib/web3/featureFlags'
-
-// Free public RPC — no API key, no cost
-const SOLANA_RPC = 'https://api.mainnet-beta.solana.com'
+import { SOLANA_CLIENT_RPC_URL } from '@/config/solana'
 
 export function SolanaProvider({ children }: { children: React.ReactNode }) {
   const wallets = useMemo(() => {
@@ -31,7 +29,7 @@ export function SolanaProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   return (
-    <ConnectionProvider endpoint={SOLANA_RPC}>
+    <ConnectionProvider endpoint={SOLANA_CLIENT_RPC_URL}>
       <WalletProvider wallets={wallets} autoConnect={solanaEnabled}>
         <WalletModalProvider>
           {children}

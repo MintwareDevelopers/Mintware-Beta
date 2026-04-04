@@ -1,14 +1,11 @@
 'use client'
 
-import { useWallet }              from '@solana/wallet-adapter-react'
 import { useRouter }              from 'next/navigation'
 import { useEffect }              from 'react'
-import { solanaEnabled }          from '@/lib/web3/featureFlags'
 import { useMintwareIdentity }    from '@/lib/web3/useMintwareIdentity'
 
 export function MwAuthGuard({ children }: { children: React.ReactNode }) {
   const { isConnected, isReady, walletSettled, evmStatus } = useMintwareIdentity()
-  const { connecting: solConnecting } = useWallet()
   const router = useRouter()
 
   if (process.env.NODE_ENV === 'development') {
@@ -18,8 +15,7 @@ export function MwAuthGuard({ children }: { children: React.ReactNode }) {
   const isLoading =
     !isReady ||
     evmStatus === 'reconnecting' ||
-    evmStatus === 'connecting' ||
-    (solanaEnabled && solConnecting)
+    evmStatus === 'connecting'
   const isDisconnected = !isLoading && !isConnected
 
   useEffect(() => {

@@ -6,7 +6,7 @@ import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit'
 import { WagmiProvider, useAccount, type State } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from '@/lib/web3/wagmi'
-import { createContext, useContext, useEffect, useState, type ComponentType, type ReactNode } from 'react'
+import { createContext, useContext, useState, type ReactNode } from 'react'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
 
@@ -81,30 +81,6 @@ function GlobalReferralGate() {
   )
 }
 
-function MaybeSolanaProvider({ children }: { children: React.ReactNode }) {
-  const [Provider, setProvider] = useState<ComponentType<{ children: React.ReactNode }> | null>(null)
-
-  useEffect(() => {
-    let active = true
-
-    import('@/components/web3/SolanaProvider')
-      .then((mod) => {
-        if (active) setProvider(() => mod.SolanaProvider)
-      })
-      .catch(() => {
-        if (active) setProvider(null)
-      })
-
-    return () => {
-      active = false
-    }
-  }, [])
-
-  if (!Provider) return <>{children}</>
-
-  return <Provider>{children}</Provider>
-}
-
 function AppWalletProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(() => new QueryClient())
 
@@ -119,10 +95,8 @@ function AppWalletProviders({ children }: { children: ReactNode }) {
         })}
         modalSize="compact"
       >
-        <MaybeSolanaProvider>
-          {children}
-          <GlobalReferralGate />
-        </MaybeSolanaProvider>
+        {children}
+        <GlobalReferralGate />
       </RainbowKitProvider>
     </QueryClientProvider>
   )

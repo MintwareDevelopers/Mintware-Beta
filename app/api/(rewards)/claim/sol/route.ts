@@ -22,11 +22,16 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { getOraclePublicKey } from '@/lib/web3/solanaPublisher'
 
 const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
 export async function GET(req: NextRequest) {
+  if (!solanaEnabled) {
+    return NextResponse.json({ error: 'solana_claims_paused' }, { status: 410 })
+  }
+
   const { searchParams } = req.nextUrl
   const campaignId   = searchParams.get('campaign_id')
   const epochStr     = searchParams.get('epoch_number')
@@ -116,5 +121,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST() {
+  if (!solanaEnabled) {
+    return NextResponse.json({ error: 'solana_claims_paused' }, { status: 410 })
+  }
+
   return NextResponse.json({ error: 'method not allowed' }, { status: 405 })
 }

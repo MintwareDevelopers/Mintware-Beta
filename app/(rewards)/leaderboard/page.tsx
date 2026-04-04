@@ -1,6 +1,5 @@
 'use client'
 
-import { useWallet } from '@solana/wallet-adapter-react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback } from 'react'
@@ -8,7 +7,6 @@ import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
 import { generateRefCode } from '@/lib/rewards/referral/utils'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { Users, Coins, TrendingUp } from 'lucide-react'
-import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -34,8 +32,7 @@ interface LeaderboardEntry {
 // ─── Leaderboard Content ──────────────────────────────────────────────────────
 function LeaderboardContent() {
   const { evmAddress } = useMintwareIdentity()
-  const { publicKey: solPublicKey, connected: solConnected } = useWallet()
-  const wallet = evmAddress?.toLowerCase() ?? (solanaEnabled && solConnected && solPublicKey ? solPublicKey.toBase58() : '')
+  const wallet = evmAddress?.toLowerCase() ?? ''
 
   const [campaigns, setCampaigns]             = useState<Campaign[]>([])
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(null)
