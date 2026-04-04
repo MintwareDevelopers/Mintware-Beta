@@ -1,23 +1,21 @@
 // =============================================================================
 // GET /api/vault/attribution-snapshot?vault_id=&wallet=
 //
-// Returns an oracle-signed AttributionSnapshot for a vault LP.
+// Returns vault weighting metadata plus an oracle-signed AttributionSnapshot
+// payload compatible with FeeVault.sol.
+//
 // Called during epoch close to weight LP distributions by Attribution score.
 //
-// The oracle signs: { vaultId, wallet, percentile, multiplierBps, timestamp }
+// The oracle signs the exact payload FeeVault expects:
+//   { wallet, liquidityPercentile, sharingPercentile, epochNumber, deadline }
 //
-// multiplierBps encodes the combined multiplier (attribution × lock duration)
-// as basis points (e.g. 1.5× = 15000 bps, 1.0× = 10000 bps).
-//
-// FeeVault reads the signature on-chain to verify the oracle-attested percentile
-// before computing the LP's share of the epoch reward pool.
-//
-// EIP-712 domain: name = "MintwareFeeVault", version = "1"
-// Must match the FeeVault.sol domain definition exactly.
+// We still return multiplier fields for the current off-chain epoch processor,
+// but the signature metadata now matches the on-chain contract instead of a
+// route-local shape.
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createWalletClient, http, keccak256, toBytes } from 'viem'
+import { createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base, baseSepolia } from 'viem/chains'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
@@ -45,19 +43,21 @@ function combinedMultiplierBps(attrBps: number, durBps: number): number {
   return Math.min(combined, 19500)  // 1.95× cap
 }
 
+const CLAIM_EXPIRY_SECS = 90 * 24 * 60 * 60
+
 // EIP-712 typed data — must match FeeVault.sol ATTRIBUTION_SNAPSHOT_TYPEHASH
 const ATTESTATION_DOMAIN = {
-  name:    'MintwareFeeVault',
+  name:    'FeeVault',
   version: '1',
 } as const
 
 const ATTESTATION_TYPES = {
   AttributionSnapshot: [
-    { name: 'vaultId',       type: 'bytes32' },
-    { name: 'wallet',        type: 'address' },
-    { name: 'percentile',    type: 'uint16'  },
-    { name: 'multiplierBps', type: 'uint16'  },
-    { name: 'timestamp',     type: 'uint256' },
+    { name: 'wallet',              type: 'address' },
+    { name: 'liquidityPercentile', type: 'uint16'  },
+    { name: 'sharingPercentile',   type: 'uint16'  },
+    { name: 'epochNumber',         type: 'uint256' },
+    { name: 'deadline',            type: 'uint256' },
   ],
 } as const
 
@@ -112,10 +112,26 @@ export async function GET(req: NextRequest) {
     if (deposit) durationBps = durationMultiplierBps(deposit.deposited_at)
   } catch { /* non-fatal */ }
 
+  // ── Resolve the current epoch context used by FeeVault signatures ───────
+  const { data: epoch } = await supabase
+    .from('vault_epochs')
+    .select('epoch_number, deadline, status')
+    .eq('vault_id', vault_id)
+    .in('status', ['active', 'settling', 'published'])
+    .order('epoch_number', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const epochNumber = epoch?.epoch_number ?? 1
+  const deadline = epoch?.deadline
+    ? Math.floor(new Date(epoch.deadline).getTime() / 1000)
+    : Math.floor(Date.now() / 1000) + CLAIM_EXPIRY_SECS
+
   // ── Compute combined multiplier ─────────────────────────────────────────
   const attrBps    = attributionMultiplierBps(percentile)
   const multBps    = combinedMultiplierBps(attrBps, durationBps)
-  const timestamp  = Math.floor(Date.now() / 1000)
+  const liquidityPercentile = percentile
+  const sharingPercentile = percentile
 
   // ── Sign EIP-712 ────────────────────────────────────────────────────────
   const oracleKey = process.env.DISTRIBUTOR_PRIVATE_KEY
@@ -129,7 +145,6 @@ export async function GET(req: NextRequest) {
 
   // Use correct chain for domain chainId
   const chain     = vault.chain_id === 8453 ? base : baseSepolia
-  const vaultBytes32 = keccak256(toBytes(vault_id)) as `0x${string}`
 
   let signature: `0x${string}`
   try {
@@ -139,11 +154,11 @@ export async function GET(req: NextRequest) {
       types:       ATTESTATION_TYPES,
       primaryType: 'AttributionSnapshot',
       message: {
-        vaultId:       vaultBytes32,
-        wallet:        walletAddr,
-        percentile:    percentile,
-        multiplierBps: multBps,
-        timestamp:     BigInt(timestamp),
+        wallet: walletAddr,
+        liquidityPercentile,
+        sharingPercentile,
+        epochNumber: BigInt(epochNumber),
+        deadline: BigInt(deadline),
       },
     })
   } catch (e: unknown) {
@@ -156,11 +171,14 @@ export async function GET(req: NextRequest) {
     vault_id,
     wallet:         walletAddr,
     percentile,
+    liquidity_percentile:       liquidityPercentile,
+    sharing_percentile:         sharingPercentile,
     attribution_multiplier_bps: attrBps,
     duration_multiplier_bps:    durationBps,
     combined_multiplier_bps:    multBps,
     combined_multiplier:        (multBps / 10000).toFixed(4),
-    timestamp,
+    epoch_number:    epochNumber,
+    deadline,
     oracle_signer: account.address,
     signature,
   })
