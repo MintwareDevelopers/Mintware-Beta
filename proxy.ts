@@ -1,5 +1,5 @@
 // =============================================================================
-// middleware.ts — Edge rate limiting for sensitive API endpoints
+// proxy.ts — Edge rate limiting for sensitive API endpoints
 //
 // Protects:
 //   POST /api/campaigns/swap-event      — 10 req/min per IP
@@ -19,11 +19,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 interface RuleConfig { limit: number; windowMs: number; method?: string }
 
-// Route → { limit, windowMs, method? }
 // method: undefined = POST only (default), 'GET' = GET only, 'ANY' = all methods
 const RATE_LIMITS: Record<string, RuleConfig> = {
   '/api/campaigns/swap-event':          { limit: 10, windowMs: 60_000 },
@@ -49,14 +46,12 @@ function getClientIP(req: NextRequest): string {
   )
 }
 
-// ── Upstash Redis rate limiter ─────────────────────────────────────────────────
-
 async function checkUpstash(
   key: string,
   rule: RuleConfig
 ): Promise<boolean> {
   const { Ratelimit } = await import('@upstash/ratelimit')
-  const { Redis }     = await import('@upstash/redis')
+  const { Redis } = await import('@upstash/redis/cloudflare')
 
   const redis = new Redis({
     url:   process.env.UPSTASH_REDIS_REST_URL!,
@@ -64,18 +59,16 @@ async function checkUpstash(
   })
 
   const windowSec = Math.ceil(rule.windowMs / 1000)
-  const limiter   = new Ratelimit({
+  const limiter = new Ratelimit({
     redis,
     limiter:        Ratelimit.slidingWindow(rule.limit, `${windowSec} s`),
     prefix:         'mw_rl',
-    ephemeralCache: new Map(), // local cache reduces Redis round-trips ~70%
+    ephemeralCache: new Map(),
   })
 
   const { success } = await limiter.limit(key)
-  return !success // true = rate-limited
+  return !success
 }
-
-// ── In-memory fallback ─────────────────────────────────────────────────────────
 
 interface WindowEntry { count: number; resetTime: number }
 const store = new Map<string, WindowEntry>()
@@ -91,7 +84,7 @@ function maybeCleanup() {
 
 function checkMemory(key: string, rule: RuleConfig): boolean {
   maybeCleanup()
-  const now   = Date.now()
+  const now = Date.now()
   const entry = store.get(key)
 
   if (!entry || entry.resetTime < now) {
@@ -103,18 +96,16 @@ function checkMemory(key: string, rule: RuleConfig): boolean {
   return entry.count > rule.limit
 }
 
-// ── Middleware ─────────────────────────────────────────────────────────────────
-
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname
-  const rule     = RATE_LIMITS[pathname]
+  const rule = RATE_LIMITS[pathname]
 
   if (!rule) return NextResponse.next()
-  // Default: POST only. Routes with method='GET' apply to GET. method='ANY' applies to all.
+
   const targetMethod = rule.method ?? 'POST'
   if (targetMethod !== 'ANY' && req.method !== targetMethod) return NextResponse.next()
 
-  const ip  = getClientIP(req)
+  const ip = getClientIP(req)
   const key = `${ip}:${pathname}`
 
   let limited = false
@@ -123,8 +114,7 @@ export async function middleware(req: NextRequest) {
     try {
       limited = await checkUpstash(key, rule)
     } catch (err) {
-      // Fail open — Redis unavailable should never block legitimate users
-      console.warn('[middleware] Upstash error, falling back to memory:', err)
+      console.warn('[proxy] Upstash error, falling back to memory:', err)
       limited = checkMemory(key, rule)
     }
   } else {
@@ -135,7 +125,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.json(
       { error: 'too many requests', retry_after: Math.ceil(rule.windowMs / 1000) },
       {
-        status:  429,
+        status: 429,
         headers: { 'Retry-After': String(Math.ceil(rule.windowMs / 1000)) },
       }
     )
