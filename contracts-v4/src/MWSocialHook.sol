@@ -422,6 +422,7 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
     }
 
     function setSocialVault(address _socialVault) external onlyOwner {
+        if (_socialVault == address(0)) revert InvalidAddress();
         socialVault = _socialVault;
         emit SocialVaultUpdated(_socialVault);
     }
