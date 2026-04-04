@@ -238,3 +238,20 @@ export function buildWalletLinkMessage(input: {
     2,
   )
 }
+
+export function buildAgentMwpMessage(input: {
+  address: string
+  mwpHash: string
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-agent-mwp-submit',
+      address: normalizeAddress(input.address),
+      mwpHash: input.mwpHash.toLowerCase(),
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
