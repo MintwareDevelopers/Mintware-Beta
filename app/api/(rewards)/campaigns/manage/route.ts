@@ -28,6 +28,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { daysUntil } from '@/lib/web2/api'
+import { recoverMessageAddress } from 'viem'
+import { buildCampaignManageMessage } from '@/lib/web3/signedActionMessages'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -256,7 +258,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 })
   }
 
-  const { campaign_id, action, wallet } = body as Record<string, string>
+  const {
+    campaign_id,
+    action,
+    wallet,
+    issuedAt,
+    authMessage,
+    authSignature,
+  } = body as Record<string, string | number | `0x${string}` | undefined>
 
   if (!campaign_id || !action || !wallet) {
     return NextResponse.json(
@@ -264,7 +273,7 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     )
   }
-  if (!isValidAddress(wallet)) {
+  if (!isValidAddress(String(wallet))) {
     return NextResponse.json({ error: 'invalid wallet address' }, { status: 400 })
   }
   if (!STATUS_MAP[action]) {
@@ -273,16 +282,48 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     )
   }
+  if (!authMessage || !authSignature || typeof issuedAt !== 'number') {
+    return NextResponse.json({ error: 'Signed authorization required' }, { status: 401 })
+  }
+  if (Math.abs(Date.now() - issuedAt) > 15 * 60 * 1000) {
+    return NextResponse.json({ error: 'Authorization expired' }, { status: 401 })
+  }
 
-  const normalWallet = wallet.toLowerCase()
-  const newStatus    = STATUS_MAP[action]
+  const campaignIdValue = String(campaign_id)
+  const actionValue = String(action) as 'pause' | 'resume' | 'end'
+  const walletValue = String(wallet)
+  const authMessageValue = String(authMessage)
+  const authSignatureValue = authSignature as `0x${string}`
+
+  const normalWallet = walletValue.toLowerCase()
+  const newStatus    = STATUS_MAP[actionValue]
   const supabase     = createSupabaseServiceClient()
+
+  const expectedMessage = buildCampaignManageMessage({
+    campaignId: campaignIdValue,
+    wallet: walletValue,
+    action: actionValue,
+    issuedAt,
+  })
+
+  if (authMessageValue !== expectedMessage) {
+    return NextResponse.json({ error: 'Authorization payload mismatch' }, { status: 401 })
+  }
+
+  const signer = await recoverMessageAddress({
+    message: authMessageValue,
+    signature: authSignatureValue,
+  }).catch(() => null)
+
+  if (!signer || signer.toLowerCase() !== normalWallet) {
+    return NextResponse.json({ error: 'Invalid authorization signature' }, { status: 401 })
+  }
 
   // -- Verify creator --------------------------------------------------------
   const { data: campaign, error: campErr } = await supabase
     .from('campaigns')
     .select('id, creator, status')
-    .eq('id', campaign_id)
+    .eq('id', campaignIdValue)
     .single()
 
   if (campErr || !campaign) {
@@ -307,7 +348,7 @@ export async function POST(req: NextRequest) {
   const { error: updateErr } = await supabase
     .from('campaigns')
     .update({ status: newStatus, updated_at: new Date().toISOString() })
-    .eq('id', campaign_id)
+    .eq('id', campaignIdValue)
 
   if (updateErr) {
     console.error('[campaigns/manage] update error:', updateErr)

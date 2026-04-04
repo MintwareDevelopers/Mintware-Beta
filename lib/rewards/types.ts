@@ -137,6 +137,7 @@ export type SkipReason =
   | 'wallet_mismatch'
   | 'fee_not_paid'
   | 'router_mismatch'
+  | 'tx_unverifiable'
 
 export interface AttributionResult {
   credited: boolean

@@ -3,6 +3,16 @@ export interface SignedActionEnvelope {
   message: string
 }
 
+function normalizeAddress(value?: string | null) {
+  return (value ?? '').toLowerCase()
+}
+
+function normalizeNumericString(value: number | string | bigint) {
+  if (typeof value === 'bigint') return value.toString()
+  if (typeof value === 'number') return String(value)
+  return value
+}
+
 function normalizeServices(
   services?: { name: string; endpoint: string; version?: string }[],
 ) {
@@ -26,7 +36,7 @@ export function buildAgentRegisterMessage(input: {
   return JSON.stringify(
     {
       action: 'mintware-agent-register',
-      address: input.address.toLowerCase(),
+      address: normalizeAddress(input.address),
       issuedAt: input.issuedAt,
       erc8004TokenId: input.erc8004TokenId ?? null,
       agentName: input.agentName ?? null,
@@ -58,19 +68,137 @@ export function buildVaultCreateMessage(input: {
   return JSON.stringify(
     {
       action: 'mintware-vault-create',
-      teamWallet: input.teamWallet.toLowerCase(),
+      teamWallet: normalizeAddress(input.teamWallet),
       issuedAt: input.issuedAt,
       name: input.name,
-      projectToken: input.projectToken.toLowerCase(),
+      projectToken: normalizeAddress(input.projectToken),
       seedAmount: input.seedAmount,
       chainId: input.chainId,
       poolKey: {
-        currency0: input.poolKey.currency0.toLowerCase(),
-        currency1: input.poolKey.currency1.toLowerCase(),
+        currency0: normalizeAddress(input.poolKey.currency0),
+        currency1: normalizeAddress(input.poolKey.currency1),
         fee: input.poolKey.fee,
         tickSpacing: input.poolKey.tickSpacing,
-        hooks: input.poolKey.hooks.toLowerCase(),
+        hooks: normalizeAddress(input.poolKey.hooks),
       },
+    },
+    null,
+    2,
+  )
+}
+
+export function buildVaultDepositMessage(input: {
+  vaultId: string
+  wallet: string
+  usdcAmount: number | string
+  lockTier: string
+  txHash: string
+  referrer?: string | null
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-vault-deposit',
+      vaultId: input.vaultId,
+      wallet: normalizeAddress(input.wallet),
+      usdcAmount: normalizeNumericString(input.usdcAmount),
+      lockTier: input.lockTier,
+      txHash: input.txHash.toLowerCase(),
+      referrer: input.referrer ? normalizeAddress(input.referrer) : null,
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
+
+export function buildVaultWithdrawMessage(input: {
+  depositId: string
+  wallet: string
+  requestedAmount: number | string
+  txHash: string
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-vault-withdraw',
+      depositId: input.depositId,
+      wallet: normalizeAddress(input.wallet),
+      requestedAmount: normalizeNumericString(input.requestedAmount),
+      txHash: input.txHash.toLowerCase(),
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
+
+export function buildCampaignCreateMessage(input: {
+  wallet: string
+  issuedAt: number
+  form: {
+    type: string
+    chainId: number
+    durationDays: number
+    schedule: string
+    startAt?: string | null
+    poolUsd: number
+    buyerRewardPct?: number
+    referralRewardPct?: number
+    useScoreMultiplier?: boolean
+    dailyWalletCapUsd?: number
+    dailyPoolCapUsd?: number
+    token: {
+      address: string
+      symbol: string
+      name: string
+      decimals: number
+    }
+  }
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-campaign-create',
+      wallet: normalizeAddress(input.wallet),
+      issuedAt: input.issuedAt,
+      form: {
+        type: input.form.type,
+        chainId: input.form.chainId,
+        durationDays: input.form.durationDays,
+        schedule: input.form.schedule,
+        startAt: input.form.startAt ?? null,
+        poolUsd: input.form.poolUsd,
+        buyerRewardPct: input.form.buyerRewardPct ?? 0,
+        referralRewardPct: input.form.referralRewardPct ?? 0,
+        useScoreMultiplier: input.form.useScoreMultiplier ?? false,
+        dailyWalletCapUsd: input.form.dailyWalletCapUsd ?? 0,
+        dailyPoolCapUsd: input.form.dailyPoolCapUsd ?? 0,
+        token: {
+          address: normalizeAddress(input.form.token.address),
+          symbol: input.form.token.symbol,
+          name: input.form.token.name,
+          decimals: input.form.token.decimals,
+        },
+      },
+    },
+    null,
+    2,
+  )
+}
+
+export function buildCampaignManageMessage(input: {
+  campaignId: string
+  wallet: string
+  action: 'pause' | 'resume' | 'end'
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-campaign-manage',
+      campaignId: input.campaignId,
+      wallet: normalizeAddress(input.wallet),
+      intent: input.action,
+      issuedAt: input.issuedAt,
     },
     null,
     2,

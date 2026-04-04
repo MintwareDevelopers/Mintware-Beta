@@ -114,7 +114,7 @@ async function verifySwapTx(
   chain: string | null,
 ): Promise<{ ok: boolean; skip_reason?: SkipReason }> {
   const rpcUrl = getSwapRpcUrl(chain)
-  if (!rpcUrl) return { ok: true }  // unknown chain — fail-open
+  if (!rpcUrl) return { ok: false, skip_reason: 'tx_unverifiable' }
 
   const treasuryRaw     = (process.env.MINTWARE_TREASURY_ADDRESS ?? '').toLowerCase().replace('0x', '')
   // ABI-encoded address params are zero-padded to 32 bytes (64 hex chars).
@@ -128,10 +128,10 @@ async function verifySwapTx(
       jsonRpcCall<{ to: string | null; input: string }>(rpcUrl, 'eth_getTransactionByHash', [txHash]),
     ])
 
-    // Not found yet (pending tx) — fail-open
+    // Not found yet or RPC could not resolve it — ask the caller to retry later.
     if (!receipt || !tx) {
-      console.warn(`[swapHook] verifySwapTx: tx ${txHash} not found on chain ${chain} — fail-open`)
-      return { ok: true }
+      console.warn(`[swapHook] verifySwapTx: tx ${txHash} not yet verifiable on chain ${chain}`)
+      return { ok: false, skip_reason: 'tx_unverifiable' }
     }
 
     // 1. Tx must have succeeded
@@ -168,12 +168,12 @@ async function verifySwapTx(
 
     return { ok: true }
   } catch (err) {
-    // RPC error — fail-open, log warning
+    // RPC error — fail closed so reward crediting only happens on positively verified txs.
     console.warn(
-      `[swapHook] verifySwapTx RPC error for tx ${txHash} (chain=${chain}) — fail-open:`,
+      `[swapHook] verifySwapTx RPC error for tx ${txHash} (chain=${chain}) — deny credit until retry:`,
       err instanceof Error ? err.message : err
     )
-    return { ok: true }
+    return { ok: false, skip_reason: 'tx_unverifiable' }
   }
 }
 
@@ -576,7 +576,7 @@ export async function processSwapEvent(event: SwapEvent): Promise<AttributionRes
 
   // 3b. On-chain tx verification (MintGuard item 4)
   // Verifies: tx succeeded, from correct wallet, treasury in calldata.
-  // Fail-open on RPC errors — never punish users for infra issues.
+  // Fail closed: unverifiable txs can be retried later, but should never be credited.
   const txVerify = await verifySwapTx(normalised.tx_hash, normalised.wallet, campaign.chain)
   if (!txVerify.ok) {
     return { credited: false, skip_reason: txVerify.skip_reason }

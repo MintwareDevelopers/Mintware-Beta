@@ -47,9 +47,6 @@ import {
 const LIFI_API    = 'https://li.quest/v1'
 /** Native ETH / zero address — LI.FI uses this for native gas tokens */
 const NATIVE_ETH  = '0x0000000000000000000000000000000000000000'
-/** Max uint256 — standard unlimited ERC-20 approval */
-const MAX_UINT256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
-
 // ---------------------------------------------------------------------------
 // Minimal ABIs
 // ---------------------------------------------------------------------------
@@ -243,12 +240,33 @@ export async function runSweep(): Promise<SweepReport> {
         })
 
         if (allowed < balance) {
-          const approveTx = await walletClient.writeContract({
-            address:      token.address as Address,
-            abi:          ERC20_ABI,
-            functionName: 'approve',
-            args:         [spender, MAX_UINT256],
-          })
+          let approveTx: Hex
+          try {
+            approveTx = await walletClient.writeContract({
+              address:      token.address as Address,
+              abi:          ERC20_ABI,
+              functionName: 'approve',
+              args:         [spender, balance],
+            })
+          } catch (approveErr) {
+            if (allowed > 0n) {
+              const resetTx = await walletClient.writeContract({
+                address:      token.address as Address,
+                abi:          ERC20_ABI,
+                functionName: 'approve',
+                args:         [spender, 0n],
+              })
+              await publicClient.waitForTransactionReceipt({ hash: resetTx })
+              approveTx = await walletClient.writeContract({
+                address:      token.address as Address,
+                abi:          ERC20_ABI,
+                functionName: 'approve',
+                args:         [spender, balance],
+              })
+            } else {
+              throw approveErr
+            }
+          }
           await publicClient.waitForTransactionReceipt({ hash: approveTx })
           result.status = 'approved'
           console.log(`[sweep] ✓ Approved LI.FI router for ${token.symbol} — tx ${approveTx}`)
