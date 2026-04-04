@@ -339,7 +339,7 @@ function Step4({
 }
 
 // ─── main component ───────────────────────────────────────────────────────────
-function CreateVaultContent() {
+function CreateVaultContentInner() {
   const { address } = useAccount()
 
   const [step, setStep]         = useState(0)
@@ -552,6 +552,31 @@ function CreateVaultContent() {
       </div>
     </>
   )
+}
+
+function CreateVaultContent() {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <div className="vc-page" style={{ background: 'var(--color-mw-surface)', minHeight: '100vh' }}>
+        <MwNav />
+        <div style={{ maxWidth: 560, margin: '0 auto', padding: '28px 28px 60px' }}>
+          <div style={{ background: 'white', border: '1px solid var(--color-mw-border)', borderRadius: 'var(--radius-md)', padding: 28 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>
+              Loading vault creator…
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return <CreateVaultContentInner />
 }
 
 // ─── page ─────────────────────────────────────────────────────────────────────
