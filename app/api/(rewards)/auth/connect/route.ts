@@ -24,6 +24,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { generateRefCodeForWallet } from '@/lib/rewards/referral-code'
+import { recoverMessageAddress } from 'viem'
+import { buildWalletConnectMessage } from '@/lib/web3/signedActionMessages'
 
 const EVM_RE     = /^0x[0-9a-f]{40}$/i
 const SOLANA_RE  = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
@@ -47,6 +49,9 @@ export async function POST(req: NextRequest) {
 
   const b       = body as Record<string, unknown>
   const rawAddr = b?.address
+  const authMessage = b?.authMessage
+  const authSignature = b?.authSignature
+  const issuedAt = b?.issuedAt
 
   if (!rawAddr || typeof rawAddr !== 'string') {
     return NextResponse.json({ error: 'address required' }, { status: 400 })
@@ -54,9 +59,32 @@ export async function POST(req: NextRequest) {
   if (!isValidAddress(rawAddr)) {
     return NextResponse.json({ error: 'invalid address' }, { status: 400 })
   }
+  if (typeof authMessage !== 'string' || typeof authSignature !== 'string' || typeof issuedAt !== 'number') {
+    return NextResponse.json({ error: 'signed authorization required' }, { status: 401 })
+  }
+  if (Math.abs(Date.now() - issuedAt) > 15 * 60 * 1000) {
+    return NextResponse.json({ error: 'authorization expired' }, { status: 401 })
+  }
 
   const address  = normalizeAddress(rawAddr)
   const isSolana = solanaEnabled && SOLANA_RE.test(rawAddr)
+  const expectedMessage = buildWalletConnectMessage({ address, issuedAt })
+  if (authMessage !== expectedMessage) {
+    return NextResponse.json({ error: 'authorization payload mismatch' }, { status: 401 })
+  }
+
+  if (EVM_RE.test(rawAddr)) {
+    const signer = await recoverMessageAddress({
+      message: authMessage,
+      signature: authSignature as `0x${string}`,
+    }).catch(() => null)
+
+    if (!signer || signer.toLowerCase() !== address) {
+      return NextResponse.json({ error: 'invalid authorization signature' }, { status: 401 })
+    }
+  } else {
+    return NextResponse.json({ error: 'solana connect authorization unavailable while paused' }, { status: 410 })
+  }
   const supabase = createSupabaseServiceClient()
 
   // ── Check if wallet already exists with a ref_code ────────────────────────

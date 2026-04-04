@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import type { ReferralStats, ReferralRecord } from '@/lib/rewards/referral/types'
+import { useSignMessage } from 'wagmi'
+import { buildWalletConnectMessage } from '@/lib/web3/signedActionMessages'
 
 export interface UseReferralReturn {
   stats:                ReferralStats | null
@@ -26,6 +28,7 @@ if (typeof window !== 'undefined') {
 }
 
 export function useReferral(address: string | undefined): UseReferralReturn {
+  const { signMessageAsync } = useSignMessage()
   const [stats, setStats]                         = useState<ReferralStats | null>(null)
   const [referralRecords, setReferralRecords]     = useState<ReferralRecord[]>([])
   const [refCode, setRefCode]                     = useState<string | null>(null)
@@ -66,10 +69,13 @@ export function useReferral(address: string | undefined): UseReferralReturn {
     setIsLoading(true)
     try {
       // ── Call /api/auth/connect — generates or retrieves permanent ref code ──
+      const issuedAt = Date.now()
+      const authMessage = buildWalletConnectMessage({ address: addr, issuedAt })
+      const authSignature = await signMessageAsync({ message: authMessage })
       const connectRes = await fetch('/api/auth/connect', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ address: addr }),
+        body:    JSON.stringify({ address: addr, issuedAt, authMessage, authSignature }),
       })
 
       let storedRefCode: string | null = null
