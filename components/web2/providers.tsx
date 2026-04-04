@@ -82,23 +82,19 @@ function GlobalReferralGate() {
 }
 
 function AppWalletProviders({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(() => new QueryClient())
-
   return (
-    <QueryClientProvider client={queryClient}>
-      <RainbowKitProvider
-        theme={lightTheme({
-          accentColor: '#0052FF',
-          accentColorForeground: 'white',
-          borderRadius: 'medium',
-          fontStack: 'system',
-        })}
-        modalSize="compact"
-      >
-        {children}
-        <GlobalReferralGate />
-      </RainbowKitProvider>
-    </QueryClientProvider>
+    <RainbowKitProvider
+      theme={lightTheme({
+        accentColor: '#0052FF',
+        accentColorForeground: 'white',
+        borderRadius: 'medium',
+        fontStack: 'system',
+      })}
+      modalSize="compact"
+    >
+      {children}
+      <GlobalReferralGate />
+    </RainbowKitProvider>
   )
 }
 
@@ -147,33 +143,39 @@ export function Providers({
   children: React.ReactNode
   initialState?: State
 }) {
+  const [queryClient] = useState(() => new QueryClient())
+
   if (!PRIVY_ENABLED) {
     return (
-      <MintwarePrivyContext.Provider value={defaultPrivyContextValue}>
-        <WagmiProvider config={wagmiConfig} initialState={initialState}>
-          <AppWalletProviders>
-            {children}
-          </AppWalletProviders>
-        </WagmiProvider>
-      </MintwarePrivyContext.Provider>
+      <QueryClientProvider client={queryClient}>
+        <MintwarePrivyContext.Provider value={defaultPrivyContextValue}>
+          <WagmiProvider config={wagmiConfig} initialState={initialState}>
+            <AppWalletProviders>
+              {children}
+            </AppWalletProviders>
+          </WagmiProvider>
+        </MintwarePrivyContext.Provider>
+      </QueryClientProvider>
     )
   }
 
   return (
-    <PrivyProvider appId={PRIVY_APP_ID} config={PRIVY_CONFIG}>
-      <PrivySessionBridge>
-        <PrivyWagmiProvider
-          config={wagmiConfig}
-          initialState={initialState}
-          setActiveWalletForWagmi={({ wallets }) =>
-            wallets.find((wallet) => wallet.walletClientType?.startsWith('privy')) ?? wallets[0]
-          }
-        >
-          <AppWalletProviders>
-            {children}
-          </AppWalletProviders>
-        </PrivyWagmiProvider>
-      </PrivySessionBridge>
-    </PrivyProvider>
+    <QueryClientProvider client={queryClient}>
+      <PrivyProvider appId={PRIVY_APP_ID} config={PRIVY_CONFIG}>
+        <PrivySessionBridge>
+          <PrivyWagmiProvider
+            config={wagmiConfig}
+            initialState={initialState}
+            setActiveWalletForWagmi={({ wallets }) =>
+              wallets.find((wallet) => wallet.walletClientType?.startsWith('privy')) ?? wallets[0]
+            }
+          >
+            <AppWalletProviders>
+              {children}
+            </AppWalletProviders>
+          </PrivyWagmiProvider>
+        </PrivySessionBridge>
+      </PrivyProvider>
+    </QueryClientProvider>
   )
 }
