@@ -8,12 +8,13 @@ Rewards from Token Reward Pools become claimable after a short lock period follo
 
 1. Go to the campaign detail page
 2. Any claimable rewards will appear in the **Claim** section
-3. Click **Claim** and confirm the on-chain transaction
-4. Tokens transfer directly to your connected wallet
+3. A context line shows exactly what will arrive and where — e.g. `0.25 USDC on Base → your wallet`
+4. Click **Check your wallet →** and confirm the on-chain transaction
+5. Tokens transfer directly to your connected wallet
 
 > **Gas reminder:** Claiming requires an on-chain transaction. Make sure your wallet has a small amount of the campaign chain's native token for gas (e.g. ETH on Base or Arbitrum).
 
-Mintware now provides clearer wallet-state guidance around claims so it is easier to understand what is happening before and during submission.
+The button reflects the actual state as the claim progresses: `Getting proof…` → `Check your wallet →` → `Waiting for confirmation…`. If you are on the wrong network, the app will prompt you to switch before the wallet opens.
 
 ---
 
@@ -44,9 +45,9 @@ If you've already claimed a distribution, the campaign page will show **Claimed*
 
 ## Batch Claiming
 
-If you have claimable rewards across multiple epochs on the same campaign contract, the UI will show a **Claim All (N)** button. This submits a single `batchClaim()` transaction covering all eligible distributions — saving gas compared to claiming each epoch individually.
+If you have claimable rewards across multiple epochs on the same campaign contract, the UI will show a **Claim All (N) — check your wallet →** button. This submits a single `batchClaim()` transaction covering all eligible distributions — saving gas compared to claiming each epoch individually.
 
-Batch claims also check network context more carefully so the app can help you switch to the correct chain before you walk into a failing transaction.
+Batch claims fetch a Merkle proof for your wallet address for each eligible distribution before opening the wallet. The network context is checked first so the app can prompt you to switch to the correct chain before any transaction is submitted.
 
 ---
 

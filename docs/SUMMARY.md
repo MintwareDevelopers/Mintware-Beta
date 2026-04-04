@@ -48,3 +48,4 @@
 * [API Reference](developers/api-reference.md)
 * [Smart Contracts](developers/smart-contracts.md)
 * [EAS Attestations](developers/eas-attestations.md)
+* [Ethereum UX Upgrades](developers/ethereum-ux-upgrades.md)
