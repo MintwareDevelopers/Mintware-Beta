@@ -50,7 +50,7 @@ Mintware charges a small platform fee on qualifying swaps. This fee is injected 
 
 The fee is verified on-chain after your swap completes. If the fee is not present in the transaction calldata, the swap is still executed but no campaign reward is credited.
 
-Where available, Mintware also surfaces the network fee in a clearer format before the wallet opens so it is easier to judge the full cost of the trade.
+**Network fees are shown fiat-first.** The swap interface shows the estimated network cost as `~$0.05` with the native token amount as secondary context (`~0.00003 ETH`). This makes the cost immediately legible regardless of which chain you are on.
 
 ---
 
@@ -62,13 +62,17 @@ The swap interface always shows the best available route from the aggregator. Th
 
 ## Review Before You Confirm
 
-Mintware Swap is designed to explain the trade before your wallet popup appears.
+Clicking **Review Swap** opens a confirmation panel before your wallet popup appears. It shows:
 
-Depending on the route, you may see:
-- the token and amount you are sending
-- the estimated amount you should receive
-- route and chain context
-- the estimated network fee
-- warnings for low gas balance or unusual price impact
+- the token and amount you are sending, with USD value
+- the estimated token and amount you should receive
+- the network the swap will happen on
+- the estimated network fee (fiat-first: `~$0.05 (~0.00003 ETH)`)
+- the Mintware platform fee as a percentage and estimated USD amount
+- price impact with a warning if it exceeds 2%
+- the aggregator route being used
+- a plain-language explanation of what will happen
 
-This makes swaps easier to understand and helps reduce abandoned or failed transactions.
+If your wallet does not have enough native token to cover the estimated fee, a warning appears before you reach the confirmation panel.
+
+After reviewing, clicking **Open wallet to confirm** opens your wallet. You can cancel at any time before that point.

@@ -48,6 +48,7 @@
 * [API Reference](developers/api-reference.md)
 * [Smart Contracts](developers/smart-contracts.md)
 * [EAS Attestations](developers/eas-attestations.md)
+* [Ethereum UX Upgrades](developers/ethereum-ux-upgrades.md)
 * [Platform System Map](developers/platform-system-map.md)
 * [Production Readiness Inspection](developers/production-readiness-inspection.md)
 * [Supabase Migration Reconciliation](developers/supabase-migration-reconciliation.md)
