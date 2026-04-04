@@ -138,6 +138,11 @@ contract AIAttribution is Ownable2Step, ReentrancyGuard, EIP712 {
         require(erc8004Registry.ownerOf(tokenId) == msg.sender, "AIAttribution: not token owner");
         require(tokenIdToAgent[tokenId] == address(0), "AIAttribution: tokenId already linked");
 
+        uint256 previousTokenId = agentTokenId[msg.sender];
+        if (previousTokenId != 0) {
+            tokenIdToAgent[previousTokenId] = address(0);
+        }
+
         agentTokenId[msg.sender]  = tokenId;
         tokenIdToAgent[tokenId]   = msg.sender;
         emit Erc8004Linked(msg.sender, tokenId);

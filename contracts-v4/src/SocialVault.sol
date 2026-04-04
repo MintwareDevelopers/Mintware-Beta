@@ -190,6 +190,8 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
     error ProposalExpired();
     error NonceAlreadyUsed();
     error InvalidOracleSignature();
+    error SeedAlreadyInitialized();
+    error LockTierChangeNotAllowed();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -215,15 +217,32 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
 
         usdc.safeTransferFrom(msg.sender, address(this), amount);
 
+        LPPosition storage existing = positions[msg.sender];
         uint256 lockDuration = _lockDuration(tier);
+        uint256 lockedUntil = block.timestamp + lockDuration;
 
-        positions[msg.sender] = LPPosition({
-            usdcDeposited:   positions[msg.sender].usdcDeposited + amount,
-            depositedAt:     block.timestamp,
-            lockedUntil:     block.timestamp + lockDuration,
-            tier:            tier,
-            compoundEnabled: false
-        });
+        if (existing.usdcDeposited > 0) {
+            if (existing.tier != tier) revert LockTierChangeNotAllowed();
+            if (existing.lockedUntil > lockedUntil) {
+                lockedUntil = existing.lockedUntil;
+            }
+
+            positions[msg.sender] = LPPosition({
+                usdcDeposited:   existing.usdcDeposited + amount,
+                depositedAt:     existing.depositedAt,
+                lockedUntil:     lockedUntil,
+                tier:            existing.tier,
+                compoundEnabled: existing.compoundEnabled
+            });
+        } else {
+            positions[msg.sender] = LPPosition({
+                usdcDeposited:   amount,
+                depositedAt:     block.timestamp,
+                lockedUntil:     lockedUntil,
+                tier:            tier,
+                compoundEnabled: false
+            });
+        }
 
         totalDeposits += amount;
 
@@ -339,7 +358,10 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
         uint256 amount,
         PoolKey calldata key,
         uint160 sqrtPriceX96
-    ) external nonReentrant {
+    ) external onlyOwner nonReentrant {
+        if (projectToken == address(0) || amount == 0) revert InsufficientDeposit();
+        if (teamSeeds[vaultId].projectToken != address(0)) revert SeedAlreadyInitialized();
+
         IERC20(projectToken).safeTransferFrom(msg.sender, address(this), amount);
 
         teamSeeds[vaultId] = TeamSeed({

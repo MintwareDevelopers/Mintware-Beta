@@ -8,6 +8,10 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {ECDSA}           from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712}          from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
+interface ISocialVault {
+    function compound(address lp, uint256 feeAmount) external;
+}
+
 /// @title  FeeVault
 /// @notice Accumulates all captured value from MWSocialHook and distributes
 ///         it to LPs, referrers, and protocol at epoch close via Merkle claims.
@@ -114,6 +118,7 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     error InvalidShares();
     error InvalidOracleSignature();
     error DeadlinePassed();
+    error SocialVaultNotSet();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -225,11 +230,13 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     function compound(address lp, uint256 amount, uint256 epochId) external onlyOwner nonReentrant {
         Epoch storage epoch = epochs[epochId];
         require(epoch.closed, "epoch not closed");
+
+        if (socialVault == address(0)) revert SocialVaultNotSet();
+
         epoch.totalClaimed += amount;
 
-        usdc.approve(socialVault, amount);
-        // ISocialVault(socialVault).compound(lp, amount);
-        // TODO (T1.5): uncomment once SocialVault interface is finalised
+        usdc.forceApprove(socialVault, amount);
+        ISocialVault(socialVault).compound(lp, amount);
 
         emit ClaimRecorded(epochId, lp, amount);
     }

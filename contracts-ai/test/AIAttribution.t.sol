@@ -3,9 +3,36 @@ pragma solidity ^0.8.26;
 
 import {Test, console} from "forge-std/Test.sol";
 import {AIAttribution}  from "../src/AIAttribution.sol";
+import {IERC8004Registry} from "../src/interfaces/IERC8004Registry.sol";
+
+contract MockERC8004Registry is IERC8004Registry {
+    mapping(uint256 => address) public owners;
+    mapping(uint256 => bool) public registryStatus;
+
+    function ownerOf(uint256 tokenId) external view returns (address) {
+        return owners[tokenId];
+    }
+
+    function isRegistered(uint256 tokenId) external view returns (bool) {
+        return registryStatus[tokenId];
+    }
+
+    function getAgentMetadata(uint256) external pure returns (string memory, string memory, address, bool) {
+        return ("", "", address(0), true);
+    }
+
+    function setOwner(uint256 tokenId, address owner) external {
+        owners[tokenId] = owner;
+    }
+
+    function setRegistered(uint256 tokenId, bool value) external {
+        registryStatus[tokenId] = value;
+    }
+}
 
 contract AIAttributionTest is Test {
     AIAttribution internal ai;
+    MockERC8004Registry internal registry;
 
     // Oracle: use a known private key so we can sign EIP-712 messages in tests
     uint256 internal constant ORACLE_PRIV_KEY =
@@ -24,6 +51,7 @@ contract AIAttributionTest is Test {
 
     function setUp() public {
         oracle = vm.addr(ORACLE_PRIV_KEY);
+        registry = new MockERC8004Registry();
         vm.prank(owner);
         ai = new AIAttribution(oracle);
     }
@@ -107,6 +135,23 @@ contract AIAttributionTest is Test {
         vm.prank(rando);
         ai.registerAgent();
         assertTrue(ai.registered(rando));
+    }
+
+    function test_linkErc8004_clears_previous_reverse_mapping_on_relink() public {
+        registry.setOwner(1, agent1);
+        registry.setOwner(2, agent1);
+
+        vm.prank(owner);
+        ai.setErc8004Registry(address(registry), false);
+
+        vm.startPrank(agent1);
+        ai.linkErc8004(1);
+        ai.linkErc8004(2);
+        vm.stopPrank();
+
+        assertEq(ai.agentTokenId(agent1), 2);
+        assertEq(ai.tokenIdToAgent(1), address(0));
+        assertEq(ai.tokenIdToAgent(2), agent1);
     }
 
     // ── recordVerifiedAction — gasless oracle pattern ─────────────────────────

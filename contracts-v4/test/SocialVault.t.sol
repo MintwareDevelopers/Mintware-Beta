@@ -3,6 +3,8 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {SocialVault} from "../src/SocialVault.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 
 /// @notice SocialVault unit tests.
 ///         All pure logic (lock tiers, penalties, withdrawal queue, role guards) tested here.
@@ -19,14 +21,14 @@ contract SocialVaultTest is Test {
     address internal bob    = makeAddr("bob");
     address internal owner  = makeAddr("owner");
 
-    // Stub addresses — real contracts wired in T1.5
-    address internal mockUsdc      = makeAddr("mockUsdc");
+    MockERC20 internal mockUsdc;
     address internal mockPM        = makeAddr("poolManager");
     address internal mockFeeVault  = makeAddr("feeVault");
 
     function setUp() public {
+        mockUsdc = new MockERC20("Mock USDC", "USDC", 6);
         vm.prank(owner);
-        vault = new SocialVault(mockUsdc, mockPM, mockFeeVault);
+        vault = new SocialVault(address(mockUsdc), mockPM, mockFeeVault);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -34,7 +36,7 @@ contract SocialVaultTest is Test {
     // ─────────────────────────────────────────────────────────────────────────
 
     function test_constructor_sets_addresses() public view {
-        assertEq(address(vault.usdc()),        mockUsdc);
+        assertEq(address(vault.usdc()),        address(mockUsdc));
         assertEq(address(vault.poolManager()), mockPM);
         assertEq(vault.feeVault(),             mockFeeVault);
     }
@@ -154,6 +156,49 @@ contract SocialVaultTest is Test {
         vault.unlockCallback("");
     }
 
+    function test_seedTeamTokens_reverts_if_not_owner() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.seedTeamTokens(bytes32("vault"), makeAddr("project"), 1e18, _emptyPoolKey(), 1);
+    }
+
+    function test_second_deposit_cannot_change_lock_tier() public {
+        mockUsdc.mint(alice, 1_000e6);
+        vm.startPrank(alice);
+        mockUsdc.approve(address(vault), type(uint256).max);
+        vault.deposit(500e6, SocialVault.LockTier.Core);
+
+        vm.expectRevert(SocialVault.LockTierChangeNotAllowed.selector);
+        vault.deposit(1e6, SocialVault.LockTier.Flex);
+        vm.stopPrank();
+    }
+
+    function test_second_deposit_same_tier_preserves_original_lock_anchor() public {
+        mockUsdc.mint(alice, 1_000e6);
+        vm.startPrank(alice);
+        mockUsdc.approve(address(vault), type(uint256).max);
+        vault.deposit(500e6, SocialVault.LockTier.Core);
+        (
+            uint256 initialDepositedAt,
+            uint256 initialLockedUntil,
+            SocialVault.LockTier initialTier
+        ) = _positionMeta(alice);
+
+        vm.warp(block.timestamp + 7 days);
+        vault.deposit(100e6, SocialVault.LockTier.Core);
+        vm.stopPrank();
+
+        (
+            uint256 finalDepositedAt,
+            uint256 finalLockedUntil,
+            SocialVault.LockTier finalTier
+        ) = _positionMeta(alice);
+
+        assertEq(finalDepositedAt, initialDepositedAt);
+        assertEq(uint256(finalTier), uint256(initialTier));
+        assertGe(finalLockedUntil, initialLockedUntil);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Withdrawal request reverts
     // ─────────────────────────────────────────────────────────────────────────
@@ -222,5 +267,21 @@ contract SocialVaultTest is Test {
 
         uint128 toRemove = uint128(uint256(totalLiq) * amount / totalDeps);
         assertLe(toRemove, totalLiq);
+    }
+
+    function _emptyPoolKey() internal pure returns (PoolKey memory key) {}
+
+    function _positionMeta(address lp)
+        internal
+        view
+        returns (uint256 depositedAt, uint256 lockedUntil, SocialVault.LockTier tier)
+    {
+        (
+            ,
+            depositedAt,
+            lockedUntil,
+            tier,
+            /* compoundEnabled */
+        ) = vault.positions(lp);
     }
 }
