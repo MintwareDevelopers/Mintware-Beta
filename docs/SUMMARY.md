@@ -50,3 +50,4 @@
 * [EAS Attestations](developers/eas-attestations.md)
 * [Platform System Map](developers/platform-system-map.md)
 * [Production Readiness Inspection](developers/production-readiness-inspection.md)
+* [Supabase Migration Reconciliation](developers/supabase-migration-reconciliation.md)

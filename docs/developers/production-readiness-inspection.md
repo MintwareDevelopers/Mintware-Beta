@@ -88,6 +88,17 @@ Recommended next step:
 - reconstruct the missing April 1 migrations in repo or explicitly document them as production-only history
 - normalize duplicate migration numbering before adding more schema work
 
+Additional confirmed live-schema findings:
+
+- `trade_signals`, `trade_signal_sync_state`, `universal_reward_epochs`, and `universal_reward_allocations` already exist in production
+- `universal_reward_epochs.distribution_id` and `published_at` also exist in production
+- `sol_distributions` does not exist in production
+- `trade_signals.settled_epoch_id` does not exist in production
+
+Reference:
+
+- [`docs/developers/supabase-migration-reconciliation.md`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/docs/developers/supabase-migration-reconciliation.md)
+
 ### 2. Documentation drift
 
 [`docs/ARCHITECTURE.md`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/docs/ARCHITECTURE.md) still reflects a simpler March system. It does not adequately represent:

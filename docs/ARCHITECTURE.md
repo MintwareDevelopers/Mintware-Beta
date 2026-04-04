@@ -1,227 +1,241 @@
-# Mintware Phase 1 — System Architecture
+# Mintware Platform Architecture
 
-> Single source of truth. Last audited: 2026-03-19.
+Last audited: 2026-04-03
+Status: canonical high-level system view
 
----
+## Overview
 
-## System Overview
+Mintware is now a multi-surface EVM platform, not just a campaigns app.
 
-```
-User (browser)
-  │
-  ├── Next.js App (Vercel)          — all UI + serverless API routes
-  │     ├── /app/...                — pages (React, 'use client')
-  │     └── /app/api/...           — serverless functions (Node.js)
-  │
-  ├── Supabase                      — our database (campaigns, participants, rewards)
-  │
-  ├── Attribution Worker            — EXTERNAL, READ-ONLY (not our code)
-  │   attribution-scorer.ceo-1f9.workers.dev
-  │   Used for: /score, /campaigns list, /leaderboard
-  │   NOT used for: joins, writes, reward tracking
-  │
-  ├── LI.FI SDK                     — swap routing (client-side)
-  │
-  └── MintwareDistributor.sol       — on-chain Merkle claim contract
-        Base mainnet: 0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE
-        Base Sepolia: 0xcf2EA99639C038a475B710b2Be82b974D777C306 (legacy testnet — not in use)
-  └── AIAttribution.sol             — AI agent reputation scoring (ERC-8004)
-        Base mainnet: 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421 (v3 — live)
-```
+The live product currently combines:
 
----
+- Privy-assisted onboarding and wallet identity
+- EVM trading and swap attribution
+- campaign participation and reward claims
+- gated social vault infrastructure
+- AI agent registration and leaderboard surfaces
+- universal reward ingestion, settlement, and bridge automation
 
-## Responsibility Boundary (Critical)
+Solana work still exists historically and in some dormant code paths, but it is paused from the live product surface.
 
-| System | Owns | Does NOT own |
-|--------|------|--------------|
-| **Attribution Worker** (external) | Wallet scores, chain analytics, campaign list display data | Joins, participant state, reward tracking |
-| **Our Next.js API** | Joins, reward credits, claims, cron jobs, referrals | Wallet scoring (reads from Worker) |
-| **Supabase** | Campaign state, participants, rewards, distributions | Nothing client-side |
-| **MintwareDistributor contract** | On-chain Merkle claim settlement | Any off-chain logic |
+## Top-Level System
 
-This boundary is the #1 source of past confusion. If you're writing to data about a user — it goes through our API → Supabase. Never through the Attribution Worker.
-
----
-
-## Data Flow by User Action
-
-### 1. Connect Wallet
-```
-User connects → wagmi/RainbowKit
-  → useReferral hook fires
-  → POST /api/referral (upsert wallet_profiles)
-  → capture ?ref= param → insert referral_records if new referral
-  → ReferralSheet slides up after 1.5s (first time only)
+```text
+User
+  ->
+Next.js app on Vercel
+  ->
+  |-- React pages and wallet UX
+  |-- server routes in app/api
+  |-- cron routes in app/api/(rewards)/cron
+  ->
+Supabase
+  |-- rewards and campaign state
+  |-- referral and identity state
+  |-- vault state
+  |-- AI agent state
+  |-- universal reward ledgers
+  ->
+External dependencies
+  |-- Privy
+  |-- LI.FI
+  |-- Cloudflare attribution worker
+  |-- Pyth
+  |-- Base / EVM contracts
 ```
 
-### 2. View Campaign List
+## Core Boundaries
+
+### Mintware owns
+
+- user-facing app shell and UI
+- all `app/api` routes
+- all Supabase writes and service-role workflows
+- campaign participation and reward accounting
+- vault bookkeeping and vault cron behavior
+- AI agent APIs and metadata surfaces
+- universal reward orchestration
+
+### External systems provide
+
+- wallet/onboarding support through Privy
+- swap routing and route generation through LI.FI
+- score/read-side analytics through the attribution worker
+- price/volatility inputs through Pyth
+- on-chain execution and claim settlement through Base/EVM contracts
+
+### Paused from the live surface
+
+- Solana wallet UX
+- Solana claim flow
+- Solana swap ingestion as an active product rail
+
+## Main Product Domains
+
+### 1. Identity and onboarding
+
+Key files:
+
+- [`components/web2/providers.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/components/web2/providers.tsx)
+- [`lib/web3/useMintwareIdentity.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/lib/web3/useMintwareIdentity.ts)
+
+Current model:
+
+- Privy is the preferred onboarding shell when configured
+- wagmi remains the EVM wallet/transaction transport
+- `useMintwareIdentity()` normalizes embedded and external EVM wallets
+- Solana is not part of the active identity model on the live product
+
+### 2. Attribution and campaigns
+
+Key files:
+
+- [`app/(rewards)/dashboard/page.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/(rewards)/dashboard/page.tsx)
+- [`app/api/(rewards)/campaigns/join/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/campaigns/join/route.ts)
+- [`app/api/(rewards)/campaigns/swap-event/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/campaigns/swap-event/route.ts)
+- [`lib/rewards/swapHook.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/lib/rewards/swapHook.ts)
+
+Current model:
+
+- users join campaigns through Mintware-owned API routes
+- activity and reward writes happen in Supabase, not in the external scoring worker
+- token-pool campaigns and points campaigns share a domain but not identical settlement logic
+
+### 3. Trading and swap UX
+
+Key files:
+
+- [`app/(web3)/swap/page.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/(web3)/swap/page.tsx)
+- [`components/rewards/swap/SwapWidget.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/components/rewards/swap/SwapWidget.tsx)
+- [`components/rewards/swap/SwapConfirmSheet.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/components/rewards/swap/SwapConfirmSheet.tsx)
+- [`app/api/(web2)/swap/quote/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(web2)/swap/quote/route.ts)
+
+Current model:
+
+- LI.FI quotes are proxied server-side
+- fee and referrer injection is enforced server-side
+- the app now adds pre-wallet review and clearer transaction context before execution
+- swap completion can feed campaign attribution and reward crediting
+
+### 4. Claims and distributor settlement
+
+Key files:
+
+- [`components/rewards/campaigns/ClaimCard.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/components/rewards/campaigns/ClaimCard.tsx)
+- [`app/api/(rewards)/claim/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/claim/route.ts)
+- [`app/api/(rewards)/claim/status/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/claim/status/route.ts)
+
+Current model:
+
+- Merkle proof generation is server-side
+- claim calldata includes oracle deadline
+- claim status and claimed markers are mirrored in Supabase
+
+### 5. Social vaults
+
+Key files:
+
+- [`app/(rewards)/vaults/page.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/(rewards)/vaults/page.tsx)
+- [`app/(rewards)/vault/create/page.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/(rewards)/vault/create/page.tsx)
+- [`app/(rewards)/vault/[id]/page.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/(rewards)/vault/%5Bid%5D/page.tsx)
+- [`app/api/(rewards)/vault/deposit/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/vault/deposit/route.ts)
+- [`app/api/(rewards)/vault/rebalance/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/vault/rebalance/route.ts)
+
+Current model:
+
+- vaults are a separate product subsystem with their own APIs, off-chain state, and cron touchpoints
+- they depend on both on-chain execution and Supabase reconciliation
+- they should be thought of as a gated backend-heavy domain, not simple UI
+
+### 6. Universal rewards
+
+Key files:
+
+- [`app/api/(rewards)/cron/universal-pipeline/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/cron/universal-pipeline/route.ts)
+- [`app/api/(rewards)/cron/universal-trade-signals/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/cron/universal-trade-signals/route.ts)
+- [`app/api/(rewards)/cron/universal-epoch-close/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/cron/universal-epoch-close/route.ts)
+- [`app/api/(rewards)/cron/universal-distribution-bridge/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(rewards)/cron/universal-distribution-bridge/route.ts)
+
+Current model:
+
+- universal rewards are an active backend pipeline
+- trade signals are ingested into Supabase-backed ledgers
+- epochs are settled and bridged into distributor-compatible outputs
+- this is one of the strongest reasons the older March architecture doc was no longer sufficient
+
+### 7. AI agents
+
+Key files:
+
+- [`app/agents/page.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/agents/page.tsx)
+- [`app/api/(web3)/agents/register/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(web3)/agents/register/route.ts)
+- [`app/api/(web3)/agents/leaderboard/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(web3)/agents/leaderboard/route.ts)
+
+Current model:
+
+- agents are now their own product and data surface
+- registration, metadata, and leaderboard state are Mintware-owned
+- this domain shares the same Supabase and deploy surface as the rest of the app
+
+## Data Ownership Model
+
+### Supabase stores
+
+- campaign state
+- participants and activity
+- pending rewards and distributions
+- referral and wallet-link state
+- vault state and rebalance proposal state
+- AI agent state
+- universal reward ledgers and sync cursors
+
+### Cloudflare attribution worker provides
+
+- score and analytics reads
+- some campaign/read-side display data
+
+It is not the write authority for Mintware participation or reward state.
+
+### Contracts provide
+
+- distributor-based claim settlement
+- vault-adjacent EVM execution surfaces
+
+## Deployment and Automation
+
+### Deployment path
+
+```text
+GitHub main -> Vercel -> mintware.finance
+GitHub docs/main -> GitBook sync -> public docs
 ```
-GET attribution-scorer.ceo-1f9.workers.dev/campaigns
-  → returns campaign metadata + pool sizes
-  → displayed in /dashboard page
-```
 
-### 3. Join a Campaign
-```
-User clicks "Join Campaign"
-  → JoinButton → POST /api/campaigns/join (our route, not the Worker)
-  → Validates ETH address
-  → Fetches Attribution score (4s timeout, defaults to 0)
-  → Checks min_score gate (points campaigns only; token_pool is open)
-  → Upserts participants row (campaign_id, wallet, attribution_score)
-  → Returns { ok: true }
-  → locallyJoined flag set client-side (Worker's GET /campaign still returns null — known gap)
-  → ReferralCard shown immediately
-```
+### Current cron schedule
 
-### 4. Execute a Swap (Token Pool Campaign)
-```
-User swaps via LI.FI widget
-  → LI.FI routes through DEX aggregators
-  → On completion: tx confirmed on Base
-  → Molten router (when live) sends webhook → POST /api/campaigns/swap-event
-  → swapHook.processSwapEvent():
-      1. Parse event (wallet, amount_usd, tx_hash, campaign_id)
-      2. Load campaign + verify active + token_pool type
-      3. Verify participant in our Supabase participants table
-      4. Calculate rewards: buyer_rebate + referrer_reward + platform_fee
-         (using calcBuyerReward() / calcReferrerReward() from lib/rewards.ts)
-      5. Lock price via priceFeed.getTokenPrice()
-      6. Insert pending_rewards rows (buyer, referrer, platform_fee)
-         with claimable_at = now() + campaign.claim_duration_mins
-      7. Insert activity row (dedup by tx_hash + action_type)
-  → User sees pending reward in /profile
-```
+From [`vercel.json`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/vercel.json):
 
-### 5. Swap Reward Settlement (Cron)
-```
-Every 15 minutes: GET /api/cron/pool-settle (auth: Bearer CRON_SECRET)
-  → poolSettler.settleTokenPoolBatch()
-  → Loads all pending_rewards WHERE claimable_at <= now() AND status='locked'
-  → Groups by campaign_id
-  → Builds Merkle tree (StandardMerkleTree from @openzeppelin/merkle-tree)
-  → Signs oracle signature (EIP-712)
-  → Calls MintwareDistributor.createDistribution() on-chain
-  → Saves distribution row (merkle_root, tree_json, oracle_signature, tx_hash)
-  → Updates pending_rewards.status = 'claimable'
-  → Saves daily_payouts rows for each wallet
-```
+- `universal-pipeline` daily
+- `bridge-verify` daily
+- `epoch-end` daily
+- `pool-settle` daily
+- `treasury/sweep` daily
+- `vault-epoch-close` weekly
 
-### 6. Claim Rewards
-```
-User opens ClaimCard → GET /api/claim?address=&distribution_id=
-  → Loads distribution (merkle_root + tree_json)
-  → Reconstructs tree, computes proof for wallet
-  → Returns { amount_wei, proof[], leaf_index }
-  → Client calls MintwareDistributor.claim(distributionId, amount, proof)
-  → Contract verifies Merkle proof + oracle signature
-  → Transfers tokens to wallet
-  → POST /api/claim (marks daily_payouts.claimed_at)
-```
+The current schedule is intentionally slower than some older inline comments still suggest.
 
-### 7. Points Campaign — Trade Action
-```
-User swaps → swap-event fires
-  → swapHook detects campaign_type = 'points'
-  → Credits 8 points to participants.total_points
-  → Inserts activity row (action_type='trade', dedup: one per wallet per day)
-  → If referred_by is set: credits referral_trade points to referrer
-```
+## Architecture Guidance
 
-### 8. Epoch Close (Points Campaign Cron)
-```
-Scheduled: GET /api/cron/epoch-end (auth: Bearer CRON_SECRET)
-  → epochProcessor.processEpochClose(campaignId)
-  → Fetches epoch_state WHERE status='active' AND ends_at <= now()
-  → Atomically sets status = 'settling' (CAS to prevent double-run)
-  → Calculates wallet_payout per wallet using epoch formula:
-      wallet_payout = (epoch_pool / epoch_count) × (wallet_points / total_points) × multiplier
-      multiplier = attribution_multiplier × sharing_multiplier (max 1.95×)
-  → merkleBuilder.buildMerkleTree() → distribution
-  → onchainPublisher.publishDistribution()
-  → Creates distributions row + daily_payouts rows
-  → Sets epoch_state.status = 'complete'
-  → Creates next epoch_state row (status='active')
-```
+- treat Mintware as one Vercel app with several backend-heavy domains
+- do not assume old campaign-only mental models still cover the product
+- when changing schema, deployment, or cron behavior, consider effects on:
+  - campaigns
+  - swap attribution
+  - vaults
+  - agents
+  - universal rewards
 
----
+## See Also
 
-## Database Tables (Canonical)
-
-| Table | Purpose | Written by |
-|-------|---------|-----------|
-| `campaigns` | Campaign config + state | Admin / create-campaign UI |
-| `participants` | One row per wallet per campaign | POST /api/campaigns/join |
-| `activity` | Per-action event log (dedup by tx_hash) | swap-event webhook |
-| `pending_rewards` | Locked rewards awaiting claim window | swapHook (token_pool) |
-| `distributions` | Merkle tree publication records | pool-settle cron / epoch-end cron |
-| `epoch_state` | Active epoch window + point accumulator | epoch-end cron |
-| `daily_payouts` | Per-wallet payout per distribution | pool-settle / epoch-end cron |
-| `campaign_payouts` | Daily rank payout log (legacy — see ISSUES) | observer cron (deprecated path) |
-| `swap_events` | Webhook audit log | swap-event webhook |
-| `wallet_profiles` | One row per connected wallet | POST /api/referral |
-| `referral_records` | Referral link conversions | useReferral hook |
-| `referral_stats` | VIEW: aggregated referral stats | Auto-computed |
-| `whitelisted_teams` | Approved teams for points campaigns | Manual admin |
-| `team_applications` | Inbound whitelist applications | POST /api/teams/apply |
-
----
-
-## Campaign Types
-
-### Token Reward Pool
-- Anyone can create (self-serve via /create-campaign)
-- Rewards: buyer_rebate_pct + referral_reward_pct per swap transaction
-- Pool depletes over time; no epochs
-- Settlement: pool-settle cron (every 15 min)
-- Claim: MintwareDistributor.claim() with Merkle proof
-- Platform fee: 2% per tx deducted from pool
-
-### Points Campaign
-- Whitelisted teams only (requires entry in `whitelisted_teams`)
-- Actions: trade (8 pts/day), referral_trade (8 pts per referral/day)
-- Bridge/referral_bridge: defined in schema, blocked pending Core DAO contract
-- Multipliers: attribution (1.0–1.5×) × sharing (1.0–1.3×) = max 1.95×
-- Settlement: epoch-end cron; on-chain Merkle claim via MintwareDistributor
-
----
-
-## Deployment
-
-| Component | Platform | Notes |
-|-----------|---------|-------|
-| Web app | Vercel | Next.js 16, Turbopack |
-| Database | Supabase (bqwcwrnqpayfndgmceal) | PostgreSQL + Realtime + RLS |
-| Contracts | Base mainnet | MintwareDistributor.sol + AIAttribution v3 |
-| Contracts | Base Sepolia | Phase 2 vaults only (testnet — not yet mainnet) |
-| Scoring | Cloudflare Workers (external) | attribution-scorer.ceo-1f9.workers.dev |
-| CDN/Edge | Vercel Edge Network | No separate Cloudflare layer needed |
-
----
-
-## Cron Jobs (vercel.json)
-
-| Route | Schedule | Purpose |
-|-------|---------|---------|
-| `/api/cron/pool-settle` | `*/15 * * * *` | Settle token pool rewards → Merkle distributions |
-| `/api/cron/epoch-end` | TBD | Close points epoch + publish distribution |
-| `/api/cron/bridge-verify` | TBD | Verify Core DAO bridge txs (blocked: awaiting contract) |
-
-All cron routes require `Authorization: Bearer {CRON_SECRET}` header.
-
----
-
-## Key Design Decisions
-
-1. **Joins write to Supabase, not the Attribution Worker.** The Worker's `GET /campaign` returns `participant: null` for our wallets — it doesn't read our DB. This is by design; the Worker is read-only external infrastructure.
-
-2. **locallyJoined client-side flag.** Because the Worker always returns `participant: null`, after joining we set a client-side boolean so the UI doesn't revert. Long-term fix: build our own campaign detail endpoint that reads from Supabase.
-
-3. **Reward price locked at swap time.** `pending_rewards` stores `amount_usd` (computed at tx time) + `amount_wei` (converted at lock time). Settlement doesn't re-fetch price — avoids oracle manipulation.
-
-4. **Merkle double-hash.** Both Solidity (`keccak256(bytes.concat(keccak256(abi.encode(...))))`) and TypeScript (`StandardMerkleTree`) use the same standard leaf encoding. Uses `abi.encode` (64-byte padded), NOT `abi.encodePacked`.
-
-5. **Referral code is deterministic.** `"mw_" + address.slice(2, 8).toLowerCase()` — never depends on a DB round-trip. InviteTab renders immediately.
-
-6. **Inline styles on app pages.** Preserves design fidelity from original HTML mockups. Landing page uses Tailwind v4. Not to be mixed.
+- [`docs/developers/platform-system-map.md`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/docs/developers/platform-system-map.md)
+- [`docs/developers/production-readiness-inspection.md`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/docs/developers/production-readiness-inspection.md)
+- [`docs/developers/supabase-migration-reconciliation.md`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/docs/developers/supabase-migration-reconciliation.md)
