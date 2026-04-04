@@ -17,7 +17,7 @@
 // =============================================================================
 
 import { useState, useEffect } from 'react'
-import { useAccount, useReadContract, usePublicClient } from 'wagmi'
+import { useAccount, useReadContract, usePublicClient, useSignMessage } from 'wagmi'
 import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
 import { parseUnits } from 'viem'
 import type { CreatorFormState } from '@/lib/rewards/creator'
@@ -26,6 +26,7 @@ import {
   ERC20_APPROVE_ABI, DISTRIBUTOR_ABI, DISTRIBUTOR_ADDRESS,
 } from '@/lib/rewards/creator'
 import { GuardrailWarning } from '@/components/rewards/creator/GuardrailWarning'
+import { buildCampaignCreateMessage } from '@/lib/web3/signedActionMessages'
 
 interface Step5ReviewProps {
   form:        CreatorFormState
@@ -89,6 +90,7 @@ const FUND_LABELS: Record<FundState, string> = {
 export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
   const { address } = useAccount()
   const publicClient = usePublicClient()
+  const { signMessageAsync } = useSignMessage()
   const [fundState,   setFundState]   = useState<FundState>('idle')
   const [errorMsg,    setErrorMsg]    = useState<string | null>(null)
   const [campaignId,  setCampaignId]  = useState<string | null>(null)
@@ -208,10 +210,36 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
     let newCampaignId: string
     try {
       const walletAddr = address ?? ''
+      const campaignType = form.type ?? 'token_reward'
+      const issuedAt = Date.now()
+      const authMessage = buildCampaignCreateMessage({
+        wallet: walletAddr,
+        issuedAt,
+        form: {
+          type: campaignType,
+          chainId: form.chainId,
+          durationDays: form.durationDays,
+          schedule: form.schedule,
+          startAt: form.startAt ? new Date(form.startAt).toISOString() : null,
+          poolUsd: form.poolUsd,
+          buyerRewardPct: form.buyerRewardPct,
+          referralRewardPct: form.referralRewardPct,
+          useScoreMultiplier: form.useScoreMultiplier,
+          dailyWalletCapUsd: form.dailyWalletCapUsd,
+          dailyPoolCapUsd: form.dailyPoolCapUsd,
+          token: {
+            address: form.token.address,
+            symbol: form.token.symbol,
+            name: form.token.name,
+            decimals: form.token.decimals,
+          },
+        },
+      })
+      const authSignature = await signMessageAsync({ message: authMessage })
       const res  = await fetch('/api/campaigns/create', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ form, wallet: walletAddr }),
+        body:    JSON.stringify({ form, wallet: walletAddr, issuedAt, authMessage, authSignature }),
       })
       const data = await res.json() as { campaignId?: string; error?: string }
       if (!res.ok || !data.campaignId) throw new Error(data.error ?? 'Failed to create campaign')

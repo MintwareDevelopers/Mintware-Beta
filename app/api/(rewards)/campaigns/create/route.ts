@@ -12,6 +12,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import type { CreatorFormState } from '@/lib/rewards/creator'
+import { recoverMessageAddress } from 'viem'
+import { buildCampaignCreateMessage } from '@/lib/web3/signedActionMessages'
 
 const CHAIN_LABELS: Record<number, string> = {
   8453:  'Base',
@@ -25,7 +27,13 @@ const DISTRIBUTOR_ADDRESS: Record<number, string> = {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { form: CreatorFormState; wallet: string }
+  let body: {
+    form: CreatorFormState
+    wallet: string
+    issuedAt?: number
+    authMessage?: string
+    authSignature?: `0x${string}`
+  }
   try {
     body = await req.json()
   } catch {
@@ -42,6 +50,49 @@ export async function POST(req: NextRequest) {
   }
   if (!form.type) {
     return NextResponse.json({ error: 'Campaign type required' }, { status: 400 })
+  }
+  if (!body.authMessage || !body.authSignature || typeof body.issuedAt !== 'number') {
+    return NextResponse.json({ error: 'Signed authorization required' }, { status: 401 })
+  }
+  if (Math.abs(Date.now() - body.issuedAt) > 15 * 60 * 1000) {
+    return NextResponse.json({ error: 'Authorization expired' }, { status: 401 })
+  }
+
+  const expectedMessage = buildCampaignCreateMessage({
+    wallet,
+    issuedAt: body.issuedAt,
+    form: {
+      type: form.type,
+      chainId: form.chainId,
+      durationDays: form.durationDays,
+      schedule: form.schedule,
+      startAt: form.startAt ? new Date(form.startAt).toISOString() : null,
+      poolUsd: form.poolUsd,
+      buyerRewardPct: form.buyerRewardPct,
+      referralRewardPct: form.referralRewardPct,
+      useScoreMultiplier: form.useScoreMultiplier,
+      dailyWalletCapUsd: form.dailyWalletCapUsd,
+      dailyPoolCapUsd: form.dailyPoolCapUsd,
+      token: {
+        address: form.token.address,
+        symbol: form.token.symbol,
+        name: form.token.name,
+        decimals: form.token.decimals,
+      },
+    },
+  })
+
+  if (body.authMessage !== expectedMessage) {
+    return NextResponse.json({ error: 'Authorization payload mismatch' }, { status: 401 })
+  }
+
+  const signer = await recoverMessageAddress({
+    message: body.authMessage,
+    signature: body.authSignature,
+  }).catch(() => null)
+
+  if (!signer || signer.toLowerCase() !== wallet.toLowerCase()) {
+    return NextResponse.json({ error: 'Invalid authorization signature' }, { status: 401 })
   }
 
   const supabase      = createSupabaseServiceClient()

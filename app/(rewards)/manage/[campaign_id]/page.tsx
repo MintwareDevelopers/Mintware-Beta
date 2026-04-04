@@ -20,13 +20,14 @@
 //       POST /api/campaigns/manage  { campaign_id, action, wallet }
 // =============================================================================
 
-import { useAccount } from 'wagmi'
+import { useAccount, useSignMessage } from 'wagmi'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useEffect, useState, useCallback } from 'react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD } from '@/lib/web2/api'
+import { buildCampaignManageMessage } from '@/lib/web3/signedActionMessages'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,6 +147,7 @@ function ManageSkeleton() {
 // ---------------------------------------------------------------------------
 function ManageContent() {
   const { address }    = useAccount()
+  const { signMessageAsync } = useSignMessage()
   const params         = useParams()
   const router         = useRouter()
   const campaignId     = params?.campaign_id as string
@@ -185,10 +187,18 @@ function ManageContent() {
     if (!address || !campaignId) return
     setActionLoading(true)
     try {
+      const issuedAt = Date.now()
+      const authMessage = buildCampaignManageMessage({
+        campaignId,
+        wallet: address,
+        action,
+        issuedAt,
+      })
+      const authSignature = await signMessageAsync({ message: authMessage })
       const res = await fetch('/api/campaigns/manage', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ campaign_id: campaignId, action, wallet: address }),
+        body:    JSON.stringify({ campaign_id: campaignId, action, wallet: address, issuedAt, authMessage, authSignature }),
       })
       const json = await res.json()
       if (!res.ok) {

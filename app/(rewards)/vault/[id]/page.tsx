@@ -1,6 +1,6 @@
 'use client'
 
-import { useAccount } from 'wagmi'
+import { useAccount, useSignMessage } from 'wagmi'
 import { useParams }  from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
@@ -10,6 +10,7 @@ import { fmtUSD }      from '@/lib/web2/api'
 import type { SocialVault, LpDeposit, WithdrawalQueueEntry, LockTier } from '@/lib/web2/vault/types'
 import { LOCK_TIERS } from '@/lib/web2/vault/types'
 import { useVaultDeposit, useVaultWithdraw } from '@/lib/web3/vault/useSocialVault'
+import { buildVaultDepositMessage, buildVaultWithdrawMessage } from '@/lib/web3/signedActionMessages'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function shortAddr(a: string) { return `${a.slice(0, 6)}…${a.slice(-4)}` }
@@ -74,6 +75,7 @@ function LockTierSelector({ value, onChange }: { value: LockTier; onChange: (t: 
 // ─── Deposit panel ────────────────────────────────────────────────────────────
 function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited: () => void }) {
   const { address } = useAccount()
+  const { signMessageAsync } = useSignMessage()
   const [amount, setAmount]   = useState('')
   const [tier, setTier]       = useState<LockTier>('flex')
   const [success, setSuccess] = useState(false)
@@ -85,17 +87,33 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
     if (!isSuccess || !address || !txHash) return
     const amountNum = parseFloat(amount)
     if (amountNum <= 0) return
-    fetch('/api/vault/deposit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        vault_id:    vault.id,
-        wallet:      address,
-        usdc_amount: amountNum,
-        lock_tier:   tier,
-        tx_hash:     txHash,
-      }),
-    }).then(() => {
+    const syncDeposit = async () => {
+      const issuedAt = Date.now()
+      const authMessage = buildVaultDepositMessage({
+        vaultId: vault.id,
+        wallet: address,
+        usdcAmount: amountNum,
+        lockTier: tier,
+        txHash,
+        issuedAt,
+      })
+      const authSignature = await signMessageAsync({ message: authMessage })
+      await fetch('/api/vault/deposit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vault_id: vault.id,
+          wallet: address,
+          usdc_amount: amountNum,
+          lock_tier: tier,
+          tx_hash: txHash,
+          issuedAt,
+          authMessage,
+          authSignature,
+        }),
+      })
+    }
+    syncDeposit().then(() => {
       setSuccess(true)
       setAmount('')
       onDeposited()
@@ -276,6 +294,7 @@ function PositionRow({ deposit, onWithdraw }: { deposit: LpDeposit; onWithdraw: 
 // ─── Main content ─────────────────────────────────────────────────────────────
 function VaultDetailContent() {
   const { address }    = useAccount()
+  const { signMessageAsync } = useSignMessage()
   const { id }         = useParams<{ id: string }>()
   const wallet         = address?.toLowerCase() ?? ''
 
@@ -323,11 +342,31 @@ function VaultDetailContent() {
     if (!vaultWithdraw.isSuccess || !withdrawing || !address) return
     const dep = deposits.find(d => d.id === withdrawing)
     if (!dep) { setWith(null); return }
-    fetch('/api/vault/withdraw', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deposit_id: withdrawing, wallet: address, requested_amount: dep.usdc_amount }),
-    })
+    const syncWithdraw = async () => {
+      const issuedAt = Date.now()
+      const authMessage = buildVaultWithdrawMessage({
+        depositId: withdrawing,
+        wallet: address,
+        requestedAmount: dep.usdc_amount,
+        txHash: vaultWithdraw.txHash ?? '',
+        issuedAt,
+      })
+      const authSignature = await signMessageAsync({ message: authMessage })
+      await fetch('/api/vault/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deposit_id: withdrawing,
+          wallet: address,
+          requested_amount: dep.usdc_amount,
+          tx_hash: vaultWithdraw.txHash,
+          issuedAt,
+          authMessage,
+          authSignature,
+        }),
+      })
+    }
+    syncWithdraw()
       .then(() => { loadVault(); setTab('position') })
       .catch(() => { loadVault() })
       .finally(() => setWith(null))

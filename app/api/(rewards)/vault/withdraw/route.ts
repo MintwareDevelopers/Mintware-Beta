@@ -16,12 +16,28 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { buildVaultWithdrawMessage } from '@/lib/web3/signedActionMessages'
+import { SOCIAL_VAULT_ABI } from '@/lib/web3/vault/socialVaultAbi'
+import {
+  createPublicClient,
+  decodeFunctionData,
+  http,
+  parseUnits,
+  recoverMessageAddress,
+} from 'viem'
+import { base, baseSepolia } from 'viem/chains'
 
 interface WithdrawPayload {
   deposit_id:       string
   wallet:           string
   requested_amount: number
+  tx_hash:          string
+  issuedAt?:        number
+  authMessage?:     string
+  authSignature?:   `0x${string}`
 }
+
+const MAX_AUTH_AGE_MS = 15 * 60 * 1000
 
 function validate(body: unknown): body is WithdrawPayload {
   if (!body || typeof body !== 'object') return false
@@ -29,7 +45,8 @@ function validate(body: unknown): body is WithdrawPayload {
   return (
     typeof b.deposit_id       === 'string' && b.deposit_id.length > 0 &&
     typeof b.wallet           === 'string' && (b.wallet as string).startsWith('0x') &&
-    typeof b.requested_amount === 'number' && b.requested_amount > 0
+    typeof b.requested_amount === 'number' && b.requested_amount > 0 &&
+    typeof b.tx_hash          === 'string' && b.tx_hash.length > 0
   )
 }
 
@@ -69,7 +86,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { deposit_id, wallet, requested_amount } = body
+  const { deposit_id, wallet, requested_amount, tx_hash } = body
   const walletLower = wallet.toLowerCase()
 
   const supabase = createSupabaseServiceClient()
@@ -77,7 +94,7 @@ export async function POST(req: NextRequest) {
   // ── Fetch deposit ───────────────────────────────────────────────────────
   const { data: deposit, error: depErr } = await supabase
     .from('lp_deposits')
-    .select('id, vault_id, wallet, usdc_amount, lock_tier, deposited_at, locked_until, status')
+    .select('id, vault_id, wallet, usdc_amount, lock_tier, deposited_at, locked_until, status, social_vaults!inner(contract_address, chain_id)')
     .eq('id', deposit_id)
     .single()
 
@@ -92,6 +109,80 @@ export async function POST(req: NextRequest) {
   }
   if (requested_amount > deposit.usdc_amount) {
     return NextResponse.json({ error: 'Amount exceeds deposit' }, { status: 400 })
+  }
+
+  if (!body.authMessage || !body.authSignature || typeof body.issuedAt !== 'number') {
+    return NextResponse.json({ error: 'Signed authorization required' }, { status: 401 })
+  }
+
+  if (Math.abs(Date.now() - body.issuedAt) > MAX_AUTH_AGE_MS) {
+    return NextResponse.json({ error: 'Authorization expired' }, { status: 401 })
+  }
+
+  const expectedMessage = buildVaultWithdrawMessage({
+    depositId: deposit_id,
+    wallet,
+    requestedAmount: requested_amount,
+    txHash: tx_hash,
+    issuedAt: body.issuedAt,
+  })
+
+  if (body.authMessage !== expectedMessage) {
+    return NextResponse.json({ error: 'Authorization payload mismatch' }, { status: 401 })
+  }
+
+  const signer = await recoverMessageAddress({
+    message: body.authMessage,
+    signature: body.authSignature,
+  }).catch(() => null)
+
+  if (!signer || signer.toLowerCase() !== walletLower) {
+    return NextResponse.json({ error: 'Invalid authorization signature' }, { status: 401 })
+  }
+
+  const vaultMeta = Array.isArray(deposit.social_vaults) ? deposit.social_vaults[0] : deposit.social_vaults
+  const vaultAddress = (vaultMeta?.contract_address ?? process.env.NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS ?? '').toLowerCase()
+  if (!vaultAddress) {
+    return NextResponse.json({ error: 'Vault contract is not configured' }, { status: 500 })
+  }
+
+  const chain = Number(vaultMeta?.chain_id) === 8453 ? base : baseSepolia
+  const transport = http(
+    Number(vaultMeta?.chain_id) === 8453
+      ? (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org')
+      : (process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org'),
+  )
+  const publicClient = createPublicClient({ chain, transport })
+  const [tx, receipt] = await Promise.all([
+    publicClient.getTransaction({ hash: tx_hash as `0x${string}` }).catch(() => null),
+    publicClient.getTransactionReceipt({ hash: tx_hash as `0x${string}` }).catch(() => null),
+  ])
+
+  if (!tx || !receipt) {
+    return NextResponse.json({ error: 'Withdrawal transaction not yet verifiable' }, { status: 409 })
+  }
+  if (receipt.status !== 'success') {
+    return NextResponse.json({ error: 'Withdrawal transaction failed' }, { status: 409 })
+  }
+  if ((receipt.from ?? '').toLowerCase() !== walletLower) {
+    return NextResponse.json({ error: 'Withdrawal transaction wallet mismatch' }, { status: 403 })
+  }
+  if ((tx.to ?? '').toLowerCase() !== vaultAddress) {
+    return NextResponse.json({ error: 'Withdrawal transaction target mismatch' }, { status: 403 })
+  }
+
+  const decoded = decodeFunctionData({
+    abi: SOCIAL_VAULT_ABI,
+    data: tx.input,
+  })
+
+  if (decoded.functionName !== 'requestWithdrawal') {
+    return NextResponse.json({ error: 'Withdrawal transaction calldata mismatch' }, { status: 403 })
+  }
+
+  const [amountWei] = decoded.args
+  if (amountWei !== parseUnits(String(requested_amount), 6)) {
+    return NextResponse.json({ error: 'Withdrawal amount mismatch' }, { status: 403 })
   }
 
   // ── Compute penalty ─────────────────────────────────────────────────────
