@@ -9,13 +9,14 @@
 // Step 4: Review + deploy (calls SocialVault.seedTeamTokens — T3.5 wire)
 // =============================================================================
 
-import { useAccount } from 'wagmi'
+import { useAccount, useSignMessage } from 'wagmi'
 import { useState, useEffect } from 'react'
 import Link           from 'next/link'
 import { MwNav }       from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
 import { useVaultSeed } from '@/lib/web3/vault/useSocialVault'
+import { buildVaultCreateMessage } from '@/lib/web3/signedActionMessages'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 interface VaultDraft {
@@ -341,6 +342,7 @@ function Step4({
 // ─── main component ───────────────────────────────────────────────────────────
 function CreateVaultContentInner() {
   const { address } = useAccount()
+  const { signMessageAsync } = useSignMessage()
 
   const [step, setStep]         = useState(0)
   const [error, setError]       = useState('')
@@ -370,6 +372,25 @@ function CreateVaultContentInner() {
     if (!address) return
     setError('')
     try {
+      const issuedAt = Date.now()
+      const poolKey = {
+        currency0:   draft.tokenAddress.toLowerCase(),
+        currency1:   '0x036cbd53842c5426634e7929541ec2318f3dcf7e',
+        fee:         draft.feeTier,
+        tickSpacing: draft.tickSpacing,
+        hooks:       process.env.NEXT_PUBLIC_MW_SOCIAL_HOOK_ADDRESS ?? '',
+      }
+      const authMessage = buildVaultCreateMessage({
+        teamWallet: address,
+        issuedAt,
+        name: draft.name,
+        projectToken: draft.tokenAddress,
+        seedAmount: draft.seedAmount,
+        chainId: draft.chainId,
+        poolKey,
+      })
+      const authSignature = await signMessageAsync({ message: authMessage })
+
       // 1a. Create vault record in DB to get the UUID
       const res = await fetch('/api/vaults/create', {
         method: 'POST',
@@ -380,15 +401,12 @@ function CreateVaultContentInner() {
           project_token: draft.tokenAddress,
           seed_amount:   draft.seedAmount,
           chain_id:      draft.chainId,
-          pool_key: {
-            currency0:   draft.tokenAddress.toLowerCase(),
-            currency1:   '0x036cbd53842c5426634e7929541ec2318f3dcf7e', // USDC Base Sepolia
-            fee:         draft.feeTier,
-            tickSpacing: draft.tickSpacing,
-            hooks:       process.env.NEXT_PUBLIC_MW_SOCIAL_HOOK_ADDRESS ?? '',
-          },
+          pool_key: poolKey,
           contract_address: process.env.NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS ?? null,
           status: 'seeding',
+          issuedAt,
+          authMessage,
+          authSignature,
         }),
       })
       if (!res.ok) {

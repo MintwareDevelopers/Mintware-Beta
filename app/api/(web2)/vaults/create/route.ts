@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { recoverMessageAddress } from 'viem'
+import { buildVaultCreateMessage } from '@/lib/web3/signedActionMessages'
 
 interface CreateVaultPayload {
   name:             string
@@ -16,7 +18,12 @@ interface CreateVaultPayload {
   chain_id:         number
   contract_address: string | null
   status:           string
+  issuedAt?:        number
+  authMessage?:     string
+  authSignature?:   `0x${string}`
 }
+
+const MAX_AUTH_AGE_MS = 15 * 60 * 1000
 
 function validate(b: unknown): b is CreateVaultPayload {
   if (!b || typeof b !== 'object') return false
@@ -39,6 +46,43 @@ export async function POST(req: NextRequest) {
 
   if (!validate(body)) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  if (!body.authMessage || !body.authSignature || typeof body.issuedAt !== 'number') {
+    return NextResponse.json({ error: 'Signed authorization required' }, { status: 401 })
+  }
+
+  if (Math.abs(Date.now() - body.issuedAt) > MAX_AUTH_AGE_MS) {
+    return NextResponse.json({ error: 'Authorization expired' }, { status: 401 })
+  }
+
+  const expectedMessage = buildVaultCreateMessage({
+    teamWallet: body.team_wallet,
+    issuedAt: body.issuedAt,
+    name: body.name,
+    projectToken: body.project_token,
+    seedAmount: body.seed_amount,
+    chainId: body.chain_id,
+    poolKey: {
+      currency0: String(body.pool_key.currency0 ?? ''),
+      currency1: String(body.pool_key.currency1 ?? ''),
+      fee: Number(body.pool_key.fee ?? 0),
+      tickSpacing: Number(body.pool_key.tickSpacing ?? 0),
+      hooks: String(body.pool_key.hooks ?? ''),
+    },
+  })
+
+  if (body.authMessage !== expectedMessage) {
+    return NextResponse.json({ error: 'Authorization payload mismatch' }, { status: 401 })
+  }
+
+  const signer = await recoverMessageAddress({
+    message: body.authMessage,
+    signature: body.authSignature,
+  }).catch(() => null)
+
+  if (!signer || signer.toLowerCase() !== body.team_wallet.toLowerCase()) {
+    return NextResponse.json({ error: 'Invalid authorization signature' }, { status: 401 })
   }
 
   const supabase = createSupabaseServiceClient()

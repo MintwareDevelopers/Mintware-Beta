@@ -577,7 +577,7 @@ function ProfileContent() {
                             </span>
                           </div>
                           <div className="text-[11px] text-mw-ink-3 mb-1">{op.mechanic}</div>
-                          <div className="text-[11px] text-mw-ink-2 leading-[1.55]" dangerouslySetInnerHTML={{ __html: op.reason }} />
+                          <div className="text-[11px] text-mw-ink-2 leading-[1.55] whitespace-pre-wrap">{op.reason}</div>
                         </div>
                         <div className="text-right shrink-0 pl-2">
                           <div className="text-[13px] font-bold text-mw-green font-mono">${op.lo}–${op.hi}</div>
