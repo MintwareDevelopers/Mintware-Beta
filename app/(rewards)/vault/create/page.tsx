@@ -1,7 +1,5 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 // =============================================================================
 // /vault/create — Team onboarding 4-step vault creation flow
 //
