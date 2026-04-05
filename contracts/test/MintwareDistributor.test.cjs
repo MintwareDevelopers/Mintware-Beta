@@ -125,6 +125,7 @@ describe('MintwareDistributor v2', function () {
   let owner, oracle, alice, bob, carol, stranger, newOracle
   let distributor
   let token
+  let feeVaultRecorder
   let chainId
   let distributorAddress
 
@@ -153,6 +154,10 @@ describe('MintwareDistributor v2', function () {
     distributor = await Distributor.deploy(oracle.address, owner.address)
     await distributor.waitForDeployment()
     distributorAddress = await distributor.getAddress()
+
+    const FeeVaultRecorder = await ethers.getContractFactory('MockFeeVaultRecorder')
+    feeVaultRecorder = await FeeVaultRecorder.deploy()
+    await feeVaultRecorder.waitForDeployment()
 
     // Fund alice with enough tokens to deposit for tests
     await token.mint(alice.address, TOTAL * 10n)
@@ -308,6 +313,76 @@ describe('MintwareDistributor v2', function () {
 
       expect(await distributor.campaignBalances('campaign-A')).to.equal(ALICE_AMOUNT)
       expect(await distributor.campaignBalances('campaign-B')).to.equal(BOB_AMOUNT)
+    })
+  })
+
+  // ===========================================================================
+  // SECTION 2B — FeeVault-backed claim reconciliation
+  // ===========================================================================
+
+  describe('FeeVault-backed claim reconciliation', () => {
+    it('calls the FeeVault recorder only for mapped campaigns', async () => {
+      const tokenAddr = await token.getAddress()
+      await distributor.connect(owner).setFeeVaultClaimRecorder(await feeVaultRecorder.getAddress())
+      await distributor.connect(owner).setFeeVaultEpochCampaign(CAMPAIGN_ID, 7, true)
+
+      await distributor.connect(alice).depositCampaign(CAMPAIGN_ID, tokenAddr, ALICE_AMOUNT)
+
+      const tree = buildTree([[alice.address, ALICE_AMOUNT]])
+      const sig = await oracleSign(
+        oracle,
+        distributorAddress,
+        chainId,
+        CAMPAIGN_ID,
+        EPOCH_1,
+        tree.root,
+        FAR_FUTURE
+      )
+
+      await distributor.connect(alice).claim(
+        CAMPAIGN_ID,
+        EPOCH_1,
+        tree.root,
+        sig,
+        FAR_FUTURE,
+        ALICE_AMOUNT,
+        getProof(tree, alice.address, ALICE_AMOUNT)
+      )
+
+      expect(await feeVaultRecorder.callCount()).to.equal(1n)
+      expect(await feeVaultRecorder.lastEpochId()).to.equal(7n)
+      expect(await feeVaultRecorder.lastLp()).to.equal(alice.address)
+      expect(await feeVaultRecorder.lastAmount()).to.equal(ALICE_AMOUNT)
+    })
+
+    it('does not call the FeeVault recorder for normal campaigns', async () => {
+      const tokenAddr = await token.getAddress()
+      await distributor.connect(owner).setFeeVaultClaimRecorder(await feeVaultRecorder.getAddress())
+
+      await distributor.connect(alice).depositCampaign(CAMPAIGN_ID, tokenAddr, ALICE_AMOUNT)
+
+      const tree = buildTree([[alice.address, ALICE_AMOUNT]])
+      const sig = await oracleSign(
+        oracle,
+        distributorAddress,
+        chainId,
+        CAMPAIGN_ID,
+        EPOCH_1,
+        tree.root,
+        FAR_FUTURE
+      )
+
+      await distributor.connect(alice).claim(
+        CAMPAIGN_ID,
+        EPOCH_1,
+        tree.root,
+        sig,
+        FAR_FUTURE,
+        ALICE_AMOUNT,
+        getProof(tree, alice.address, ALICE_AMOUNT)
+      )
+
+      expect(await feeVaultRecorder.callCount()).to.equal(0n)
     })
   })
 
