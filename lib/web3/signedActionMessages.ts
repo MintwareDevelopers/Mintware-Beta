@@ -220,6 +220,23 @@ export function buildWalletConnectMessage(input: {
   )
 }
 
+export function buildReferralApplyMessage(input: {
+  referred: string
+  refCode: string
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-referral-apply',
+      referred: normalizeAddress(input.referred),
+      refCode: input.refCode,
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
+
 export function buildWalletLinkMessage(input: {
   evmAddress: string
   solAddress: string

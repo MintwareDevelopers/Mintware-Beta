@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import type { ReferralStats, ReferralRecord } from '@/lib/rewards/referral/types'
 import { useSignMessage } from 'wagmi'
-import { buildWalletConnectMessage } from '@/lib/web3/signedActionMessages'
+import { buildReferralApplyMessage, buildWalletConnectMessage } from '@/lib/web3/signedActionMessages'
 
 export interface UseReferralReturn {
   stats:                ReferralStats | null
@@ -99,10 +99,24 @@ export function useReferral(address: string | undefined): UseReferralReturn {
 
       if (pendingRef) {
         try {
+          const referralIssuedAt = Date.now()
+          const referralAuthMessage = buildReferralApplyMessage({
+            referred: addr,
+            refCode: pendingRef,
+            issuedAt: referralIssuedAt,
+          })
+          const referralAuthSignature = await signMessageAsync({ message: referralAuthMessage })
+
           const res = await fetch('/api/referral/apply', {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ referred: addr, ref_code: pendingRef }),
+            body:    JSON.stringify({
+              referred: addr,
+              ref_code: pendingRef,
+              issuedAt: referralIssuedAt,
+              authMessage: referralAuthMessage,
+              authSignature: referralAuthSignature,
+            }),
           })
           const data = await res.json() as { applied?: boolean; skip_reason?: string }
           if (data.applied) refWasApplied = true

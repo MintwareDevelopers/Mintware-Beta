@@ -20,8 +20,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { attestReferral }             from '@/lib/rewards/eas'
+import { recoverMessageAddress } from 'viem'
+import { buildReferralApplyMessage } from '@/lib/web3/signedActionMessages'
 
 const TIME_GATE_MS = 24 * 60 * 60 * 1000 // 24 hours
+const MAX_AUTH_AGE_MS = 15 * 60 * 1000
 
 function isValidAddress(raw: string): boolean {
   return /^0x[0-9a-f]{40}$/i.test(raw)
@@ -39,6 +42,9 @@ export async function POST(req: NextRequest) {
 
   const rawReferred = b?.referred
   const refCode     = b?.ref_code
+  const authMessage = b?.authMessage
+  const authSignature = b?.authSignature
+  const issuedAt = b?.issuedAt
 
   if (!rawReferred || typeof rawReferred !== 'string') {
     return NextResponse.json({ error: 'referred address required' }, { status: 400 })
@@ -49,8 +55,29 @@ export async function POST(req: NextRequest) {
   if (!refCode || typeof refCode !== 'string') {
     return NextResponse.json({ error: 'ref_code required' }, { status: 400 })
   }
+  if (typeof authMessage !== 'string' || typeof authSignature !== 'string' || typeof issuedAt !== 'number') {
+    return NextResponse.json({ error: 'signed authorization required' }, { status: 401 })
+  }
 
   const referred = rawReferred.toLowerCase()
+  if (Math.abs(Date.now() - issuedAt) > MAX_AUTH_AGE_MS) {
+    return NextResponse.json({ error: 'authorization expired' }, { status: 401 })
+  }
+
+  const expectedMessage = buildReferralApplyMessage({ referred, refCode, issuedAt })
+  if (authMessage !== expectedMessage) {
+    return NextResponse.json({ error: 'authorization payload mismatch' }, { status: 401 })
+  }
+
+  const signer = await recoverMessageAddress({
+    message: authMessage,
+    signature: authSignature as `0x${string}`,
+  }).catch(() => null)
+
+  if (!signer || signer.toLowerCase() !== referred) {
+    return NextResponse.json({ error: 'invalid authorization signature' }, { status: 401 })
+  }
+
   const supabase = createSupabaseServiceClient()
 
   // Look up referrer by ref_code
