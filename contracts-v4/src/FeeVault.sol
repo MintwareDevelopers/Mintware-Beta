@@ -151,6 +151,17 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     function receiveFees(uint256 amount, string calldata source) external nonReentrant {
         require(msg.sender == hook || msg.sender == socialVault, "unauthorized");
         usdc.safeTransferFrom(msg.sender, address(this), amount);
+        _recordFees(amount, source);
+    }
+
+    /// @notice Book fees that have already been transferred to this contract by the hook/vault.
+    /// @dev    Used for flows where PoolManager or SocialVault pushes value directly here.
+    function notifyFeeReceipt(uint256 amount, string calldata source) external nonReentrant {
+        require(msg.sender == hook || msg.sender == socialVault, "unauthorized");
+        _recordFees(amount, source);
+    }
+
+    function _recordFees(uint256 amount, string calldata source) internal {
         epochs[currentEpoch].totalAccumulated += amount;
         emit FeesReceived(currentEpoch, amount, source);
     }

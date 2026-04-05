@@ -18,6 +18,10 @@ import {ReentrancyGuard}     from "@openzeppelin/contracts/utils/ReentrancyGuard
 import {EIP712}              from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA}               from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+interface IFeeVaultNotifier {
+    function notifyFeeReceipt(uint256 amount, string calldata source) external;
+}
+
 /// @title  SocialVault
 /// @notice Manages community USDC deposits + team PROJECT token seeds.
 ///         Pairs them in a Uniswap V4 pool via MWSocialHook.
@@ -232,7 +236,7 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
 
             positions[msg.sender] = LPPosition({
                 usdcDeposited:   existing.usdcDeposited + amount,
-                depositedAt:     existing.depositedAt,
+                depositedAt:     block.timestamp,
                 lockedUntil:     lockedUntil,
                 tier:            existing.tier,
                 compoundEnabled: existing.compoundEnabled
@@ -312,6 +316,7 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
         // Route penalty to FeeVault
         if (penalty > 0) {
             usdc.safeTransfer(feeVault, penalty);
+            IFeeVaultNotifier(feeVault).notifyFeeReceipt(penalty, "penalty");
         }
 
         // V4 fixed-point rounding may return 1 wei less than deposited when removing

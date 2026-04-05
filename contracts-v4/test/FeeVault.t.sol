@@ -162,6 +162,24 @@ contract FeeVaultTest is Test {
         fv.receiveFees(100e6, "mev");
     }
 
+    function test_notifyFeeReceipt_unauthorised_reverts() public {
+        vm.prank(makeAddr("random"));
+        vm.expectRevert("unauthorized");
+        fv.notifyFeeReceipt(100e6, "mev");
+    }
+
+    function test_notifyFeeReceipt_hook_updates_epoch_totals() public {
+        address hook = makeAddr("hook");
+        vm.prank(owner);
+        fv.setHook(hook);
+
+        vm.prank(hook);
+        fv.notifyFeeReceipt(100e6, "mev");
+
+        FeeVault.Epoch memory epoch = fv.getEpoch(1);
+        assertEq(epoch.totalAccumulated, 100e6);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // recordClaim — only distributor
     // ─────────────────────────────────────────────────────────────────────────
