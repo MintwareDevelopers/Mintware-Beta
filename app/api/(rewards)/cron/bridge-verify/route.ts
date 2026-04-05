@@ -33,9 +33,9 @@ export async function GET(req: NextRequest) {
     }
   } else {
     // No secret configured — only allow in development
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV !== 'development') {
       return NextResponse.json(
-        { error: 'CRON_SECRET env var not set — refusing to run in production without auth' },
+        { error: 'CRON_SECRET env var not set — refusing to run outside local development without auth' },
         { status: 500 }
       )
     }

@@ -35,9 +35,9 @@ export async function GET(req: NextRequest) {
     if (auth !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
-  } else if (process.env.NODE_ENV === 'production') {
+  } else if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json(
-      { error: 'CRON_SECRET not set — refusing to run in production without auth' },
+      { error: 'CRON_SECRET not set — refusing to run outside local development without auth' },
       { status: 500 }
     )
   }

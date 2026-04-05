@@ -224,9 +224,9 @@ export async function GET(req: NextRequest) {
     if (auth !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
-  } else if (process.env.NODE_ENV === 'production') {
+  } else if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json(
-      { error: 'CRON_SECRET not set — refusing to run in production without auth' },
+      { error: 'CRON_SECRET not set — refusing to run outside local development without auth' },
       { status: 500 }
     )
   }
@@ -241,7 +241,7 @@ export async function GET(req: NextRequest) {
   // Falls back to localhost for development
   const appBaseUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
   // ── Detect stuck-settling epochs ────────────────────────────────────────
   // Vault epochs stuck in 'settling' for more than 2 hours indicate a failed run.
