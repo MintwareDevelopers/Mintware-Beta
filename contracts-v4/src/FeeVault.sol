@@ -120,6 +120,8 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     error DeadlinePassed();
     error SocialVaultNotSet();
     error ClaimExceedsAllocation();
+    error EpochStillActive();
+    error CompoundingDisabled();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -174,6 +176,7 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     /// @param  merkleRoot  built off-chain by merkleBuilder.ts
     function closeEpoch(bytes32 merkleRoot) external onlyOwner nonReentrant {
         Epoch storage epoch = epochs[currentEpoch];
+        if (block.timestamp < epoch.openedAt + EPOCH_DURATION) revert EpochStillActive();
 
         uint256 total     = epoch.totalAccumulated + epoch.bonusPool;
         uint256 lpAlloc   = (total * lpShareBps)       / BPS;
@@ -244,6 +247,8 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     /// @notice Instead of Merkle claim, compound LP earnings directly into vault
     /// @dev    Called off-chain at epoch close for LPs who opted in
     function compound(address lp, uint256 amount, uint256 epochId) external onlyOwner nonReentrant {
+        revert CompoundingDisabled();
+
         Epoch storage epoch = epochs[epochId];
         require(epoch.closed, "epoch not closed");
 
