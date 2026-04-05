@@ -54,6 +54,11 @@ export interface BuilderSummary {
   campaign_ended: boolean
 }
 
+export interface EpochAdvanceSummary {
+  next_epoch_created: boolean
+  campaign_ended: boolean
+}
+
 // ---------------------------------------------------------------------------
 // buildMerkleTree — constructs tree from distribution entries + token price
 // ---------------------------------------------------------------------------
@@ -208,49 +213,12 @@ export async function commitDistribution(
     .eq('id', epochState.id)
 
   // 5. Advance to next epoch or end campaign
-  const epoch_count = campaign.epoch_count ?? 1
-  const isLastEpoch = epochState.epoch_number >= epoch_count
-
-  let next_epoch_created = false
-  let campaign_ended = false
-
-  if (isLastEpoch) {
-    // Final epoch — mark campaign ended
-    await supabase
-      .from('campaigns')
-      .update({ status: 'ended', updated_at: now })
-      .eq('id', campaign.id)
-    campaign_ended = true
-  } else {
-    // Create next epoch_state row
-    const epoch_duration_days = campaign.epoch_duration_days ?? 7
-    // Use the current epoch's end time as the next epoch's start — not `now` (cron run
-    // time) — to keep epoch windows contiguous and avoid gaps caused by cron jitter.
-    const nextEpochStart = epochState.epoch_end ?? now
-    const nextEpochEnd = new Date(
-      new Date(nextEpochStart).getTime() + epoch_duration_days * 86_400_000
-    ).toISOString()
-
-    const { error: nextEpochErr } = await supabase
-      .from('epoch_state')
-      .insert({
-        campaign_id: campaign.id,
-        epoch_number: epochState.epoch_number + 1,
-        epoch_start: nextEpochStart,
-        epoch_end: nextEpochEnd,
-        epoch_pool_usd: epochState.epoch_pool_usd,   // same pool split per epoch
-        total_points: 0,
-        status: 'active',
-        created_at: now,
-        updated_at: now,
-      })
-
-    if (nextEpochErr) {
-      console.error('[merkleBuilder] next epoch_state insert error:', nextEpochErr.message)
-    } else {
-      next_epoch_created = true
-    }
-  }
+  const { next_epoch_created, campaign_ended } = await advanceEpochState(
+    supabase,
+    campaign,
+    epochState,
+    now
+  )
 
   return {
     campaign_id: campaign.id,
@@ -264,6 +232,55 @@ export async function commitDistribution(
     next_epoch_created,
     campaign_ended,
   }
+}
+
+export async function advanceEpochState(
+  supabase: ReturnType<typeof createSupabaseServiceClient>,
+  campaign: Campaign,
+  epochState: { campaign_id: string; epoch_number: number; epoch_pool_usd: number; epoch_end?: string },
+  now = new Date().toISOString()
+): Promise<EpochAdvanceSummary> {
+  const epoch_count = campaign.epoch_count ?? 1
+  const isLastEpoch = epochState.epoch_number >= epoch_count
+
+  let next_epoch_created = false
+  let campaign_ended = false
+
+  if (isLastEpoch) {
+    await supabase
+      .from('campaigns')
+      .update({ status: 'ended', updated_at: now })
+      .eq('id', campaign.id)
+    campaign_ended = true
+  } else {
+    const epoch_duration_days = campaign.epoch_duration_days ?? 7
+    const nextEpochStart = epochState.epoch_end ?? now
+    const nextEpochEnd = new Date(
+      new Date(nextEpochStart).getTime() + epoch_duration_days * 86_400_000
+    ).toISOString()
+
+    const { error: nextEpochErr } = await supabase
+      .from('epoch_state')
+      .insert({
+        campaign_id: campaign.id,
+        epoch_number: epochState.epoch_number + 1,
+        epoch_start: nextEpochStart,
+        epoch_end: nextEpochEnd,
+        epoch_pool_usd: epochState.epoch_pool_usd,
+        total_points: 0,
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+      })
+
+    if (nextEpochErr) {
+      console.error('[merkleBuilder] next epoch_state insert error:', nextEpochErr.message)
+    } else {
+      next_epoch_created = true
+    }
+  }
+
+  return { next_epoch_created, campaign_ended }
 }
 
 // ---------------------------------------------------------------------------
