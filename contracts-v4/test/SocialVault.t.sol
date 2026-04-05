@@ -199,6 +199,24 @@ contract SocialVaultTest is Test {
         assertGe(finalLockedUntil, initialLockedUntil);
     }
 
+    function test_setCompoundPreference_requires_existing_position() public {
+        vm.prank(alice);
+        vm.expectRevert(SocialVault.InsufficientDeposit.selector);
+        vault.setCompoundPreference(true);
+    }
+
+    function test_setCompoundPreference_updates_flag() public {
+        mockUsdc.mint(alice, 100e6);
+        vm.startPrank(alice);
+        mockUsdc.approve(address(vault), type(uint256).max);
+        vault.deposit(100e6, SocialVault.LockTier.Flex);
+        vault.setCompoundPreference(true);
+        vm.stopPrank();
+
+        (,,,, bool compoundEnabled) = vault.positions(alice);
+        assertTrue(compoundEnabled);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Withdrawal request reverts
     // ─────────────────────────────────────────────────────────────────────────
@@ -207,6 +225,18 @@ contract SocialVaultTest is Test {
         vm.prank(alice);
         vm.expectRevert(SocialVault.NoWithdrawalRequest.selector);
         vault.executeWithdrawal();
+    }
+
+    function test_compound_reverts_when_not_opted_in() public {
+        mockUsdc.mint(alice, 100e6);
+        vm.startPrank(alice);
+        mockUsdc.approve(address(vault), type(uint256).max);
+        vault.deposit(100e6, SocialVault.LockTier.Flex);
+        vm.stopPrank();
+
+        vm.prank(mockFeeVault);
+        vm.expectRevert(SocialVault.CompoundNotEnabled.selector);
+        vault.compound(alice, 10e6);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
