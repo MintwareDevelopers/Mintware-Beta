@@ -149,7 +149,7 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     // ─────────────────────────────────────────────────────────────────────────
 
     function receiveFees(uint256 amount, string calldata source) external nonReentrant {
-        require(msg.sender == hook || msg.sender == socialVault, "unauthorized");
+        require(msg.sender == hook || msg.sender == socialVault || msg.sender == treasury, "unauthorized");
         usdc.safeTransferFrom(msg.sender, address(this), amount);
         _recordFees(amount, source);
     }
