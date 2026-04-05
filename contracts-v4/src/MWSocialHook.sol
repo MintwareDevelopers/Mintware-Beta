@@ -90,6 +90,7 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
     // ─────────────────────────────────────────────────────────────────────────
 
     IPoolManager public immutable POOL_MANAGER;
+    Currency public immutable USDC;
 
     /// @notice FeeVault — receives all captured MEV surplus
     address public feeVault;
@@ -145,14 +146,16 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
 
     constructor(
         IPoolManager _poolManager,
+        address _usdc,
         address _feeVault,
         address _socialVault,
         address _pythOracle,    // pass address(0) to disable on-chain Pyth reads
         address _initialOwner   // explicit owner — required because CREATE2 via a
                                 // factory makes the factory msg.sender, not the EOA
     ) Ownable(_initialOwner) {
-        if (_feeVault == address(0)) revert InvalidAddress();
+        if (_usdc == address(0) || _feeVault == address(0)) revert InvalidAddress();
         POOL_MANAGER  = _poolManager;
+        USDC          = Currency.wrap(_usdc);
         feeVault      = _feeVault;
         socialVault   = _socialVault;
         pythOracle    = _pythOracle;
@@ -345,6 +348,9 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
         // Pull captured tokens from PoolManager accounting to FeeVault
         // This works because we are inside the PoolManager's unlock context
         Currency unspecifiedCurrency = params.zeroForOne ? key.currency1 : key.currency0;
+        if (Currency.unwrap(unspecifiedCurrency) != Currency.unwrap(USDC)) {
+            return (IHooks.afterSwap.selector, 0);
+        }
         POOL_MANAGER.take(unspecifiedCurrency, feeVault, captureAmount);
         IFeeVaultNotifier(feeVault).notifyFeeReceipt(captureAmount, "mev");
 
