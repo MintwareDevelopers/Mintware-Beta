@@ -18,7 +18,7 @@
       "schedule": "0 2 * * *"
     },
     {
-      "path": "/api/treasury/sweep",
+      "path": "/api/treasury/normalize-mev",
       "schedule": "0 3 * * *"
     },
     {

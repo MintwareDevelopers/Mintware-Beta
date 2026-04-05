@@ -162,6 +162,12 @@ contract FeeVaultTest is Test {
         fv.receiveFees(100e6, "mev");
     }
 
+    function test_receiveFees_treasury_allowed() public {
+        vm.prank(treasury);
+        vm.expectRevert(); // fails on transferFrom — not on auth
+        fv.receiveFees(100e6, "mev-normalized");
+    }
+
     function test_notifyFeeReceipt_unauthorised_reverts() public {
         vm.prank(makeAddr("random"));
         vm.expectRevert("unauthorized");
