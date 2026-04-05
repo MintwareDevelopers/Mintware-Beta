@@ -51,4 +51,6 @@
 * [Ethereum UX Upgrades](developers/ethereum-ux-upgrades.md)
 * [Platform System Map](developers/platform-system-map.md)
 * [Production Readiness Inspection](developers/production-readiness-inspection.md)
+* [Final Audit Closeout](developers/final-audit-closeout.md)
+* [Production Operator Checklist](developers/production-operator-checklist.md)
 * [Supabase Migration Reconciliation](developers/supabase-migration-reconciliation.md)

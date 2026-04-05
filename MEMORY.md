@@ -7,6 +7,9 @@ CLAUDE.md is the technical spec. This file is the running log.
 
 ## Current State (as of 2026-03-19)
 
+### 2026-04-05 — Audit hardening and contract/economic fixes are now on main
+- Affects production safety, contract correctness, and operator workflow. The major application/auth hardening, settlement/accounting fixes, contract hardening, MEV normalization flow, and later economic fixes were all replayed onto `origin/main`. Production verification showed Vercel serving a `Ready` production deployment aligned with the hardened `main` window. The current canonical wrap-up docs are now `docs/developers/final-audit-closeout.md` and `docs/developers/production-operator-checklist.md`; use those as the post-audit source of truth before future launches or external reviews.
+
 ### What's live
 - **Deployed:** `mintware-beta.vercel.app`
 - **GitHub:** `https://github.com/MintwareDevelopers/Mintware-Beta` (`origin`)
