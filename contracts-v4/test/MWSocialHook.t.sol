@@ -20,6 +20,7 @@ contract MWSocialHookTest is Test {
 
     address internal owner       = makeAddr("owner");
     address internal feeVault    = makeAddr("feeVault");
+    address internal treasury    = makeAddr("treasury");
     address internal socialVault = makeAddr("socialVault");
     address internal mockPM      = makeAddr("poolManager");
     address internal alice       = makeAddr("alice");
@@ -35,6 +36,7 @@ contract MWSocialHookTest is Test {
             IPoolManager(mockPM),
             makeAddr("usdc"),
             feeVault,
+            treasury,
             socialVault,
             address(0), // no pyth oracle for unit tests
             owner       // initialOwner
@@ -47,6 +49,7 @@ contract MWSocialHookTest is Test {
             IPoolManager(mockPM),
             makeAddr("usdc"),
             feeVault,
+            treasury,
             socialVault,
             address(0),
             owner       // initialOwner
@@ -60,13 +63,20 @@ contract MWSocialHookTest is Test {
     function test_constructor_sets_addresses() public view {
         assertEq(address(hook.POOL_MANAGER()), mockPM);
         assertEq(hook.feeVault(),              feeVault);
+        assertEq(hook.mevTreasury(),           treasury);
         assertEq(hook.socialVault(),           socialVault);
     }
 
     function test_constructor_rejects_zero_fee_vault() public {
         vm.prank(owner);
         vm.expectRevert(MWSocialHook.InvalidAddress.selector);
-        new MWSocialHook(IPoolManager(mockPM), makeAddr("usdc"), address(0), socialVault, address(0), owner);
+        new MWSocialHook(IPoolManager(mockPM), makeAddr("usdc"), address(0), treasury, socialVault, address(0), owner);
+    }
+
+    function test_constructor_rejects_zero_mev_treasury() public {
+        vm.prank(owner);
+        vm.expectRevert(MWSocialHook.InvalidAddress.selector);
+        new MWSocialHook(IPoolManager(mockPM), makeAddr("usdc"), feeVault, address(0), socialVault, address(0), owner);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -90,6 +100,19 @@ contract MWSocialHookTest is Test {
         vm.prank(owner);
         vm.expectRevert(MWSocialHook.InvalidAddress.selector);
         hook.setFeeVault(address(0));
+    }
+
+    function test_setMevTreasury_updates_address() public {
+        address newTreasury = makeAddr("newTreasury");
+        vm.prank(owner);
+        hook.setMevTreasury(newTreasury);
+        assertEq(hook.mevTreasury(), newTreasury);
+    }
+
+    function test_setMevTreasury_rejects_zero() public {
+        vm.prank(owner);
+        vm.expectRevert(MWSocialHook.InvalidAddress.selector);
+        hook.setMevTreasury(address(0));
     }
 
     function test_setSocialVault_rejects_zero() public {

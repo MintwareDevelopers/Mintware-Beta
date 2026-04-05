@@ -14,10 +14,10 @@ import {IPoolManager}    from "@uniswap/v4-core/src/interfaces/IPoolManager.sol"
 ///
 ///   1. Deploy  FeeVault  (usdc, distributor, oracleSigner, treasury)
 ///   2. Mine    CREATE2 salt for MWSocialHook using HookMiner.find()
-///              → constructor uses feeVault addr + poolManager (socialVault = address(0))
+///              → constructor uses feeVault addr + treasury + poolManager (socialVault = address(0))
 ///   3. Deploy  SocialVault  (usdc, poolManager, feeVault)
 ///   4. Deploy  MWSocialHook at the mined CREATE2 address
-///              new MWSocialHook{salt: salt}(poolManager, usdc, feeVault, address(0), pyth)
+///              new MWSocialHook{salt: salt}(poolManager, usdc, feeVault, treasury, address(0), pyth)
 ///   5. Wire:   hook.setSocialVault(socialVault)
 ///   6. Wire:   feeVault.setSocialVault(socialVault)
 ///   7. Wire:   feeVault.setHook(hook)
@@ -85,7 +85,7 @@ contract Deploy is Script {
         vm.stopBroadcast();
 
         // ─── Step 2: Mine CREATE2 salt for MWSocialHook ──────────────────────
-        // Constructor args: (poolMgr, feeVault, socialVault=address(0), pyth, initialOwner)
+        // Constructor args: (poolMgr, usdc, feeVault, treasury, socialVault=address(0), pyth, initialOwner)
         // socialVault is address(0) at deploy — set via setSocialVault() after deploy.
         // initialOwner = deployer so the EOA owns the hook (not the Create2Deployer).
         bytes memory hookCreationCode = type(MWSocialHook).creationCode;
@@ -93,6 +93,7 @@ contract Deploy is Script {
             IPoolManager(poolMgr),
             usdc,
             address(feeVault),
+            treasury,
             address(0),     // socialVault — wired in step 5
             pyth,
             deployer        // initialOwner — must be in hookArgs so initcode hash is correct
@@ -126,6 +127,7 @@ contract Deploy is Script {
             IPoolManager(poolMgr),
             usdc,
             address(feeVault),
+            treasury,
             address(0),     // socialVault — wired below
             pyth,
             deployer        // initialOwner — EOA takes ownership, not Create2Deployer

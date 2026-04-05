@@ -103,6 +103,7 @@ contract IntegrationTest is Test {
             IPoolManager(address(pm)),
             address(usdc),
             address(feeVault),
+            treasury,
             address(0),  // socialVault — wired below
             address(0),  // pyth oracle — not needed for tests
             deployer     // initialOwner
@@ -119,6 +120,7 @@ contract IntegrationTest is Test {
             IPoolManager(address(pm)),
             address(usdc),
             address(feeVault),
+            treasury,
             address(0),
             address(0),
             deployer     // initialOwner
@@ -343,6 +345,44 @@ contract IntegrationTest is Test {
         uint256 capturedToFeeVault = usdc.balanceOf(address(feeVault)) - feeVaultBalBefore;
         assertGt(capturedToFeeVault, 0, "FeeVault should have received captured MEV");
         console2.log("MEV captured (USDC):", capturedToFeeVault);
+    }
+
+    function test_mev_capture_routes_non_usdc_output_to_treasury() public {
+        _seedPool();
+        _deposit(alice, 50_000e6, SocialVault.LockTier.Flex);
+
+        hook.configurePool(
+            poolId,
+            bytes32(0),
+            6,
+            6,
+            20,
+            50,
+            0
+        );
+
+        (uint160 currentSqrt,,,) = IPoolManager(address(pm)).getSlot0(poolId);
+        uint160 refPrice = uint160(currentSqrt + currentSqrt / 50);
+        hook.setReferencePrice(poolId, refPrice);
+
+        uint256 swapAmt = 1_000e6;
+        uint256 treasuryProjBefore = proj.balanceOf(treasury);
+        uint256 feeVaultProjBefore = proj.balanceOf(address(feeVault));
+
+        vm.startPrank(bob);
+        usdc.approve(address(swapRouter), swapAmt);
+        if (usdcIsToken0) {
+            swapRouter.swap(poolKey, true, swapAmt);
+        } else {
+            swapRouter.swap(poolKey, false, swapAmt);
+        }
+        vm.stopPrank();
+
+        uint256 stagedToTreasury = proj.balanceOf(treasury) - treasuryProjBefore;
+        uint256 sentToFeeVault = proj.balanceOf(address(feeVault)) - feeVaultProjBefore;
+
+        assertGt(stagedToTreasury, 0, "treasury should receive staged non-USDC capture");
+        assertEq(sentToFeeVault, 0, "FeeVault should not receive non-USDC capture directly");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
