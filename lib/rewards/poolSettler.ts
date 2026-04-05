@@ -44,6 +44,7 @@ export interface PoolSettleReport {
   campaigns_settled: number
   campaigns_skipped: number
   rewards_settled: number
+  pending_published: number
   results: PoolBatchResult[]
 }
 
@@ -62,6 +63,72 @@ interface PendingRewardRow {
   status: string
 }
 
+interface PendingDistributionRow {
+  id: string
+  campaign_id: string
+  epoch_number: number
+  merkle_root: string | null
+  campaigns: {
+    contract_address: string | null
+    chain: string | null
+    campaign_type: string | null
+  } | Array<{
+    contract_address: string | null
+    chain: string | null
+    campaign_type: string | null
+  }> | null
+}
+
+async function retryPendingTokenPoolDistributions(
+  supabase: ReturnType<typeof createSupabaseServiceClient>
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('distributions')
+    .select(`
+      id,
+      campaign_id,
+      epoch_number,
+      merkle_root,
+      campaigns (
+        contract_address,
+        chain,
+        campaign_type
+      )
+    `)
+    .eq('status', 'pending')
+
+  if (error) {
+    throw new Error(`[poolSettler] Failed to load pending distributions: ${error.message}`)
+  }
+
+  let published = 0
+
+  for (const row of (data ?? []) as PendingDistributionRow[]) {
+    const campaign = Array.isArray(row.campaigns) ? row.campaigns[0] : row.campaigns
+    if (!campaign || campaign.campaign_type !== 'token_pool') continue
+    if (!row.merkle_root || !campaign.contract_address || !campaign.chain) continue
+
+    try {
+      await publishDistribution({
+        distribution_db_id: row.id,
+        campaign_id_str: row.campaign_id,
+        epoch_number: row.epoch_number,
+        merkle_root: row.merkle_root,
+        contract_address: campaign.contract_address,
+        chain: campaign.chain,
+      })
+      published++
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error(
+        `[poolSettler] pending distribution publish retry failed for ${row.id}: ${message}`
+      )
+    }
+  }
+
+  return published
+}
+
 // ---------------------------------------------------------------------------
 // settleTokenPoolBatch — main export
 // ---------------------------------------------------------------------------
@@ -69,6 +136,7 @@ interface PendingRewardRow {
 export async function settleTokenPoolBatch(): Promise<PoolSettleReport> {
   const supabase = createSupabaseServiceClient()
   const now = new Date().toISOString()
+  const pending_published = await retryPendingTokenPoolDistributions(supabase)
 
   // Step 1: Auto-promote locked → claimable where claimable_at has passed
   await supabase
@@ -90,7 +158,7 @@ export async function settleTokenPoolBatch(): Promise<PoolSettleReport> {
   const rows = (claimableRows ?? []) as PendingRewardRow[]
 
   if (rows.length === 0) {
-    return { campaigns_settled: 0, campaigns_skipped: 0, rewards_settled: 0, results: [] }
+    return { campaigns_settled: 0, campaigns_skipped: 0, rewards_settled: 0, pending_published, results: [] }
   }
 
   // Step 3: Group by campaign_id
@@ -134,6 +202,7 @@ export async function settleTokenPoolBatch(): Promise<PoolSettleReport> {
     campaigns_settled: results.filter(r => !r.error).length,
     campaigns_skipped,
     rewards_settled,
+    pending_published,
     results,
   }
 }

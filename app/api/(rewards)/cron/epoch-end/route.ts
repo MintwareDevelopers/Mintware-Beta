@@ -25,6 +25,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { processEpoch } from '@/lib/rewards/epochProcessor'
 import { runMerkleBuilder } from '@/lib/rewards/merkleBuilder'
+import { advanceEpochState } from '@/lib/rewards/merkleBuilder'
 import { publishDistribution } from '@/lib/web3/onchainPublisher'
 import type { Campaign, Participant } from '@/lib/rewards/types'
 
@@ -97,15 +98,28 @@ async function processExpiredEpoch(
     const participantList: Participant[] = participants ?? []
 
     if (participantList.length === 0) {
+      const now = new Date().toISOString()
       // No participants — mark complete without distribution
       await supabase
         .from('epoch_state')
-        .update({ status: 'complete', updated_at: new Date().toISOString() })
+        .update({ status: 'complete', updated_at: now })
         .eq('id', epoch.id)
+
+      const advance = await advanceEpochState(
+        supabase,
+        campaign as Campaign,
+        {
+          campaign_id,
+          epoch_number,
+          epoch_pool_usd: epoch.epoch_pool_usd,
+          epoch_end: epoch.epoch_end,
+        },
+        now
+      )
 
       return {
         epoch_number,
-        result: { skipped: true, reason: 'no_participants' },
+        result: { skipped: true, reason: 'no_participants', ...advance },
       }
     }
 
@@ -124,10 +138,23 @@ async function processExpiredEpoch(
 
     // Edge: all participants had 0 points — nothing to distribute
     if (processorResult.entries.length === 0) {
+      const now = new Date().toISOString()
       await supabase
         .from('epoch_state')
-        .update({ status: 'complete', updated_at: new Date().toISOString() })
+        .update({ status: 'complete', updated_at: now })
         .eq('id', epoch.id)
+
+      const advance = await advanceEpochState(
+        supabase,
+        campaign as Campaign,
+        {
+          campaign_id,
+          epoch_number,
+          epoch_pool_usd: epoch.epoch_pool_usd,
+          epoch_end: epoch.epoch_end,
+        },
+        now
+      )
 
       return {
         epoch_number,
@@ -135,6 +162,7 @@ async function processExpiredEpoch(
           skipped: true,
           reason: 'all_participants_zero_points',
           wallets_excluded: processorResult.wallets_excluded_zero_points,
+          ...advance,
         },
       }
     }
