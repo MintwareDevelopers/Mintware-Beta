@@ -16,6 +16,10 @@ import {Ownable}            from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard}    from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IPyth}              from "./lib/IPyth.sol";
 
+interface IFeeVaultNotifier {
+    function notifyFeeReceipt(uint256 amount, string calldata source) external;
+}
+
 /// @title  MWSocialHook
 /// @notice Uniswap V4 hook for Mintware Social Liquidity vaults.
 ///
@@ -342,6 +346,7 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
         // This works because we are inside the PoolManager's unlock context
         Currency unspecifiedCurrency = params.zeroForOne ? key.currency1 : key.currency0;
         POOL_MANAGER.take(unspecifiedCurrency, feeVault, captureAmount);
+        IFeeVaultNotifier(feeVault).notifyFeeReceipt(captureAmount, "mev");
 
         emit MEVCaptured(poolId, captureAmount, Currency.unwrap(unspecifiedCurrency), deviation);
 

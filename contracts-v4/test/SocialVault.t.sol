@@ -173,7 +173,7 @@ contract SocialVaultTest is Test {
         vm.stopPrank();
     }
 
-    function test_second_deposit_same_tier_preserves_original_lock_anchor() public {
+    function test_second_deposit_same_tier_reanchors_penalty_clock() public {
         mockUsdc.mint(alice, 1_000e6);
         vm.startPrank(alice);
         mockUsdc.approve(address(vault), type(uint256).max);
@@ -194,7 +194,8 @@ contract SocialVaultTest is Test {
             SocialVault.LockTier finalTier
         ) = _positionMeta(alice);
 
-        assertEq(finalDepositedAt, initialDepositedAt);
+        assertEq(finalDepositedAt, block.timestamp);
+        assertGt(finalDepositedAt, initialDepositedAt);
         assertEq(uint256(finalTier), uint256(initialTier));
         assertGe(finalLockedUntil, initialLockedUntil);
     }
