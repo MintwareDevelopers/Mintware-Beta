@@ -45,6 +45,10 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
         uint256 bonusPool;          // swept unclaimed from prior epoch
         uint256 totalAllocated;     // set at epoch close
         uint256 totalClaimed;       // incremented as claims settle
+        uint256 lpShareBps;
+        uint256 referrerShareBps;
+        uint256 protocolShareBps;
+        uint256 bonusPoolBps;
         uint256 openedAt;
         uint256 closedAt;
         uint256 deadline;           // closedAt + 90 days
@@ -179,10 +183,10 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
         if (block.timestamp < epoch.openedAt + EPOCH_DURATION) revert EpochStillActive();
 
         uint256 total     = epoch.totalAccumulated + epoch.bonusPool;
-        uint256 lpAlloc   = (total * lpShareBps)       / BPS;
-        uint256 refAlloc  = (total * referrerShareBps)  / BPS;
-        uint256 protAlloc = (total * protocolShareBps)  / BPS;
-        uint256 bonusAlloc= (total * bonusPoolBps)      / BPS;
+        uint256 lpAlloc   = (total * epoch.lpShareBps)        / BPS;
+        uint256 refAlloc  = (total * epoch.referrerShareBps)  / BPS;
+        uint256 protAlloc = (total * epoch.protocolShareBps)  / BPS;
+        uint256 bonusAlloc= (total * epoch.bonusPoolBps)      / BPS;
 
         epoch.totalAllocated = lpAlloc + refAlloc;
         epoch.closedAt       = block.timestamp;
@@ -321,7 +325,11 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
 
     function _openEpoch() internal {
         currentEpoch++;
-        epochs[currentEpoch].openedAt = block.timestamp;
+        epochs[currentEpoch].openedAt          = block.timestamp;
+        epochs[currentEpoch].lpShareBps        = lpShareBps;
+        epochs[currentEpoch].referrerShareBps  = referrerShareBps;
+        epochs[currentEpoch].protocolShareBps  = protocolShareBps;
+        epochs[currentEpoch].bonusPoolBps      = bonusPoolBps;
         emit EpochOpened(currentEpoch);
     }
 }
