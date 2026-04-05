@@ -135,6 +135,24 @@ contract FeeVaultTest is Test {
         fv.sweep(1);
     }
 
+    function test_closeEpoch_reverts_before_epoch_duration() public {
+        vm.prank(owner);
+        vm.expectRevert(FeeVault.EpochStillActive.selector);
+        fv.closeEpoch(bytes32("root"));
+    }
+
+    function test_closeEpoch_succeeds_after_epoch_duration() public {
+        vm.warp(block.timestamp + fv.EPOCH_DURATION());
+
+        vm.prank(owner);
+        fv.closeEpoch(bytes32("root"));
+
+        FeeVault.Epoch memory epoch = fv.getEpoch(1);
+        assertTrue(epoch.closed);
+        assertEq(epoch.merkleRoot, bytes32("root"));
+        assertEq(fv.currentEpoch(), 2);
+    }
+
     function test_sweep_nonexistent_epoch_reverts() public {
         vm.expectRevert(FeeVault.EpochNotClosed.selector);
         fv.sweep(999);
@@ -212,6 +230,12 @@ contract FeeVaultTest is Test {
         vm.prank(owner);
         vm.expectRevert("zero address");
         fv.setOracleSigner(address(0));
+    }
+
+    function test_compound_reverts_while_disabled() public {
+        vm.prank(owner);
+        vm.expectRevert(FeeVault.CompoundingDisabled.selector);
+        fv.compound(makeAddr("lp"), 1e6, 1);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
