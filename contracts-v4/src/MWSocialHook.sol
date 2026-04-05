@@ -36,7 +36,7 @@ interface IFeeVaultNotifier {
 ///           1. Read post-swap sqrtPriceX96 via StateLibrary.getSlot0
 ///           2. Compare against oracle reference price (off-chain updated from Pyth)
 ///           3. If deviation > captureThresholdBps: capture captureRateBps of output
-///           4. Call poolManager.take() to route captured tokens to FeeVault
+///           4. Route captured USDC to FeeVault; route non-USDC output to treasury staging
 ///           5. Return positive hookDelta so PoolManager reduces swapper output accordingly
 ///           6. Fail-open on all oracle errors — never block swaps
 ///
@@ -95,6 +95,9 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
     /// @notice FeeVault — receives all captured MEV surplus
     address public feeVault;
 
+    /// @notice Treasury staging address for non-USDC captured assets.
+    address public mevTreasury;
+
     /// @notice SocialVault — the ONLY address allowed to add/remove liquidity
     address public socialVault;
 
@@ -115,6 +118,7 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
     event ReferencePriceUpdated(PoolId indexed poolId, uint160 sqrtPriceX96);
     event PoolConfigured(PoolId indexed poolId, bytes32 pythPriceId, uint24 threshold, uint16 rate);
     event FeeVaultUpdated(address indexed newFeeVault);
+    event MevTreasuryUpdated(address indexed newMevTreasury);
     event SocialVaultUpdated(address indexed newSocialVault);
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -148,15 +152,17 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
         IPoolManager _poolManager,
         address _usdc,
         address _feeVault,
+        address _mevTreasury,
         address _socialVault,
         address _pythOracle,    // pass address(0) to disable on-chain Pyth reads
         address _initialOwner   // explicit owner — required because CREATE2 via a
                                 // factory makes the factory msg.sender, not the EOA
     ) Ownable(_initialOwner) {
-        if (_usdc == address(0) || _feeVault == address(0)) revert InvalidAddress();
+        if (_usdc == address(0) || _feeVault == address(0) || _mevTreasury == address(0)) revert InvalidAddress();
         POOL_MANAGER  = _poolManager;
         USDC          = Currency.wrap(_usdc);
         feeVault      = _feeVault;
+        mevTreasury   = _mevTreasury;
         socialVault   = _socialVault;
         pythOracle    = _pythOracle;
 
@@ -346,13 +352,15 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
         }
 
         // Pull captured tokens from PoolManager accounting to FeeVault
-        // This works because we are inside the PoolManager's unlock context
+        // This works because we are inside the PoolManager's unlock context.
+        // USDC captures feed FeeVault accounting directly; other assets stage to treasury.
         Currency unspecifiedCurrency = params.zeroForOne ? key.currency1 : key.currency0;
-        if (Currency.unwrap(unspecifiedCurrency) != Currency.unwrap(USDC)) {
-            return (IHooks.afterSwap.selector, 0);
+        if (Currency.unwrap(unspecifiedCurrency) == Currency.unwrap(USDC)) {
+            POOL_MANAGER.take(unspecifiedCurrency, feeVault, captureAmount);
+            IFeeVaultNotifier(feeVault).notifyFeeReceipt(captureAmount, "mev");
+        } else {
+            POOL_MANAGER.take(unspecifiedCurrency, mevTreasury, captureAmount);
         }
-        POOL_MANAGER.take(unspecifiedCurrency, feeVault, captureAmount);
-        IFeeVaultNotifier(feeVault).notifyFeeReceipt(captureAmount, "mev");
 
         emit MEVCaptured(poolId, captureAmount, Currency.unwrap(unspecifiedCurrency), deviation);
 
@@ -436,6 +444,12 @@ contract MWSocialHook is IHooks, Ownable, ReentrancyGuard {
         if (_feeVault == address(0)) revert InvalidAddress();
         feeVault = _feeVault;
         emit FeeVaultUpdated(_feeVault);
+    }
+
+    function setMevTreasury(address _mevTreasury) external onlyOwner {
+        if (_mevTreasury == address(0)) revert InvalidAddress();
+        mevTreasury = _mevTreasury;
+        emit MevTreasuryUpdated(_mevTreasury);
     }
 
     function setSocialVault(address _socialVault) external onlyOwner {
