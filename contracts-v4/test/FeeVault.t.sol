@@ -35,7 +35,11 @@ contract FeeVaultTest is Test {
     }
 
     function test_epoch_1_openedAt_is_deploy_timestamp() public view {
-        (,,,,uint256 openedAt,,,,,) = fv.epochs(1);
+        (,,,,uint256 lp,uint256 ref,uint256 proto,uint256 bonus,uint256 openedAt,,,,,) = fv.epochs(1);
+        assertEq(lp, 7_000);
+        assertEq(ref, 1_500);
+        assertEq(proto, 1_000);
+        assertEq(bonus, 500);
         assertEq(openedAt, block.timestamp);
     }
 
@@ -151,6 +155,33 @@ contract FeeVaultTest is Test {
         assertTrue(epoch.closed);
         assertEq(epoch.merkleRoot, bytes32("root"));
         assertEq(fv.currentEpoch(), 2);
+    }
+
+    function test_setShares_only_affects_future_epochs() public {
+        address hook = makeAddr("hook");
+        vm.prank(owner);
+        fv.setHook(hook);
+
+        vm.prank(hook);
+        fv.notifyFeeReceipt(10_000, "mev");
+
+        vm.prank(owner);
+        fv.setShares(5_000, 2_500, 2_000, 500);
+
+        vm.warp(block.timestamp + fv.EPOCH_DURATION());
+
+        vm.prank(owner);
+        fv.closeEpoch(bytes32("root"));
+
+        FeeVault.Epoch memory closed = fv.getEpoch(1);
+        assertEq(closed.totalAllocated, 8_500);
+        assertEq(closed.bonusPool, 0);
+
+        FeeVault.Epoch memory next = fv.getEpoch(2);
+        assertEq(next.lpShareBps, 5_000);
+        assertEq(next.referrerShareBps, 2_500);
+        assertEq(next.protocolShareBps, 2_000);
+        assertEq(next.bonusPoolBps, 500);
     }
 
     function test_sweep_nonexistent_epoch_reverts() public {
