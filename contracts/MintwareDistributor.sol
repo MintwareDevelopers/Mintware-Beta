@@ -10,6 +10,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+interface IFeeVaultClaimRecorder {
+    function recordClaim(uint256 epochId, address lp, uint256 amount) external;
+}
+
 /**
  * @title MintwareDistributor
  * @notice Phase 1 settlement contract for Mintware campaign rewards.
@@ -156,6 +160,14 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
     /// @notice campaignId → epochNumber → wallet → has claimed
     mapping(string => mapping(uint256 => mapping(address => bool))) public claimed;
 
+    /// @notice Optional FeeVault claim recorder used for vault/referrer distributions
+    ///         that are settled through the generic distributor.
+    address public feeVaultClaimRecorder;
+
+    /// @notice Maps a distributor campaign id to the FeeVault epoch it represents.
+    ///         Zero means "not a FeeVault-backed campaign".
+    mapping(bytes32 => uint256) public feeVaultEpochByCampaignIdHash;
+
     // ─────────────────────────────────────────────────────────────────────────
     // Events
     // ─────────────────────────────────────────────────────────────────────────
@@ -212,6 +224,14 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
         address indexed token,
         address indexed to,
         uint256 amount
+    );
+
+    event FeeVaultClaimRecorderUpdated(address indexed recorder);
+    event FeeVaultEpochCampaignSet(
+        bytes32 indexed campaignIdHash,
+        string campaignId,
+        uint256 indexed epochId,
+        bool enabled
     );
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -527,6 +547,30 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
         emit EmergencyWithdraw(token, to, amount);
     }
 
+    /**
+     * @notice Sets the optional FeeVault recorder used for vault/referrer claim accounting.
+     * @dev    When unset, normal campaign claims behave exactly as before.
+     */
+    function setFeeVaultClaimRecorder(address recorder) external onlyOwner {
+        feeVaultClaimRecorder = recorder;
+        emit FeeVaultClaimRecorderUpdated(recorder);
+    }
+
+    /**
+     * @notice Marks a campaign id as representing a FeeVault epoch.
+     * @dev    Only mapped campaigns trigger FeeVault.recordClaim() during claims.
+     *         This avoids mixing normal campaign rewards with vault epoch accounting.
+     */
+    function setFeeVaultEpochCampaign(
+        string calldata campaignId,
+        uint256 epochId,
+        bool enabled
+    ) external onlyOwner {
+        bytes32 campaignIdHash = keccak256(bytes(campaignId));
+        feeVaultEpochByCampaignIdHash[campaignIdHash] = enabled ? epochId : 0;
+        emit FeeVaultEpochCampaignSet(campaignIdHash, campaignId, epochId, enabled);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // View helpers
     // ─────────────────────────────────────────────────────────────────────────
@@ -693,6 +737,15 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
 
         // ── 6. Interaction ───────────────────────────────────────────────────
         IERC20(info.token).safeTransfer(msg.sender, amount);
+
+        uint256 feeVaultEpoch = feeVaultEpochByCampaignIdHash[keccak256(bytes(campaignId))];
+        if (feeVaultClaimRecorder != address(0) && feeVaultEpoch != 0) {
+            IFeeVaultClaimRecorder(feeVaultClaimRecorder).recordClaim(
+                feeVaultEpoch,
+                msg.sender,
+                amount
+            );
+        }
 
         emit Claimed(
             keccak256(bytes(campaignId)),

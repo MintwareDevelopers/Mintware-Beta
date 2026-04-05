@@ -26,6 +26,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
+import { createPublicClient, http, parseAbi } from 'viem'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { processVaultEpoch } from '@/lib/rewards/vault/vaultEpochProcessor'
 import { runVaultMerkleBuilder } from '@/lib/rewards/vault/vaultMerkleBuilder'
@@ -49,6 +50,11 @@ interface VaultEpochRow {
   updated_at: string
 }
 
+interface OnchainEpochState {
+  totalAccumulated: bigint
+  bonusPool: bigint
+}
+
 interface LpDepositRow {
   id: string
   wallet: string
@@ -59,6 +65,41 @@ interface LpDepositRow {
   status: string
 }
 
+const FEE_VAULT_ABI = parseAbi([
+  'function getEpoch(uint256 epochId) view returns ((uint256 totalAccumulated,uint256 bonusPool,uint256 totalAllocated,uint256 totalClaimed,uint256 openedAt,uint256 closedAt,uint256 deadline,bool closed,bool swept,bytes32 merkleRoot))',
+])
+
+function getFeeVaultAddress(): `0x${string}` | null {
+  const raw = process.env.FEE_VAULT_ADDRESS ?? process.env.NEXT_PUBLIC_FEE_VAULT_ADDRESS
+  if (!raw?.startsWith('0x')) return null
+  return raw as `0x${string}`
+}
+
+function getBaseRpcUrl(): string {
+  return process.env.BASE_RPC_URL ?? 'https://mainnet.base.org'
+}
+
+async function readOnchainEpochState(epochNumber: number): Promise<OnchainEpochState | null> {
+  const feeVault = getFeeVaultAddress()
+  if (!feeVault) return null
+
+  const publicClient = createPublicClient({
+    transport: http(getBaseRpcUrl()),
+  })
+
+  const epoch = await publicClient.readContract({
+    address: feeVault,
+    abi: FEE_VAULT_ABI,
+    functionName: 'getEpoch',
+    args: [BigInt(epochNumber)],
+  })
+
+  return {
+    totalAccumulated: epoch.totalAccumulated,
+    bonusPool: epoch.bonusPool,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // processExpiredVaultEpoch — processes a single vault epoch end-to-end
 // ---------------------------------------------------------------------------
@@ -66,7 +107,8 @@ interface LpDepositRow {
 async function processExpiredVaultEpoch(
   supabase: ReturnType<typeof createSupabaseServiceClient>,
   epoch: VaultEpochRow,
-  appBaseUrl: string
+  appBaseUrl: string,
+  readyEpochCount: number
 ): Promise<{ epoch_number: number; vault_id: string; result: object } | { epoch_number: number; vault_id: string; error: string }> {
   const { vault_id, epoch_number } = epoch
 
@@ -102,8 +144,43 @@ async function processExpiredVaultEpoch(
     const depositList: LpDepositRow[] = deposits ?? []
 
     // The distribution pool = trading fees + MEV capture + bonus (Attribution).
-    // total_pool is accumulated on-chain in FeeVault.sol; we use the DB mirror.
-    const totalPoolUsdc = (epoch.total_pool ?? 0) + (epoch.bonus_pool ?? 0)
+    // Prefer on-chain FeeVault state when we have a single global vault config.
+    let mirroredTotalPool = epoch.total_pool ?? 0
+    let mirroredBonusPool = epoch.bonus_pool ?? 0
+
+    const feeVaultAddress = getFeeVaultAddress()
+    if (feeVaultAddress) {
+      if (readyEpochCount > 1) {
+        throw new Error(
+          'Multiple vault epochs are ready to close, but only a single global FEE_VAULT_ADDRESS is configured. ' +
+          'Refusing to guess per-vault pool attribution.'
+        )
+      }
+
+      const onchainEpoch = await readOnchainEpochState(epoch_number)
+      if (!onchainEpoch) {
+        throw new Error('Unable to read FeeVault epoch state')
+      }
+
+      mirroredTotalPool = Number(onchainEpoch.totalAccumulated) / 1e6
+      mirroredBonusPool = Number(onchainEpoch.bonusPool) / 1e6
+
+      await supabase
+        .from('vault_epochs')
+        .update({
+          total_pool: mirroredTotalPool,
+          bonus_pool: mirroredBonusPool,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', epoch.id)
+        .eq('status', 'settling')
+    } else if ((mirroredTotalPool + mirroredBonusPool) <= 0) {
+      throw new Error(
+        'vault_epochs pool mirror is empty and no FEE_VAULT_ADDRESS is configured for on-chain reconciliation'
+      )
+    }
+
+    const totalPoolUsdc = mirroredTotalPool + mirroredBonusPool
 
     // If there are no deposits OR no fee pool has accumulated, mark complete with no distribution
     if (depositList.length === 0 || totalPoolUsdc <= 0) {
@@ -302,7 +379,7 @@ export async function GET(req: NextRequest) {
       `[vault-epoch-close] processing vault=${epoch.vault_id} epoch=#${epoch.epoch_number} ` +
       `pool=${((epoch.total_pool ?? 0) + (epoch.bonus_pool ?? 0)).toFixed(6)} USDC`
     )
-    const result = await processExpiredVaultEpoch(supabase, epoch, appBaseUrl)
+    const result = await processExpiredVaultEpoch(supabase, epoch, appBaseUrl, epochs.length)
     results.push(result)
   }
 
