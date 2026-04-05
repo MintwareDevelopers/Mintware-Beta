@@ -171,6 +171,7 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
     event RebalancedWithProposal(bytes32 indexed vaultId, int24 newTickLower, int24 newTickUpper, uint256 nonce, address submitter);
     event LiquidityAdded(uint128 liquidity, uint256 usdcAmount);
     event LiquidityRemoved(uint128 liquidity);
+    event CompoundPreferenceUpdated(address indexed lp, bool enabled);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Errors
@@ -193,6 +194,7 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
     error SeedAlreadyInitialized();
     error LockTierChangeNotAllowed();
     error InvalidPoolKey();
+    error CompoundNotEnabled();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -322,6 +324,14 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
         emit WithdrawalExecuted(msg.sender, payout, penalty);
     }
 
+    /// @notice LP toggles whether epoch rewards should be auto-compounded.
+    function setCompoundPreference(bool enabled) external {
+        LPPosition storage pos = positions[msg.sender];
+        if (pos.usdcDeposited == 0) revert InsufficientDeposit();
+        pos.compoundEnabled = enabled;
+        emit CompoundPreferenceUpdated(msg.sender, enabled);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Auto-compound — called by FeeVault at epoch close
     // ─────────────────────────────────────────────────────────────────────────
@@ -330,9 +340,11 @@ contract SocialVault is Ownable, ReentrancyGuard, IUnlockCallback, EIP712 {
     function compound(address lp, uint256 feeAmount) external nonReentrant {
         if (msg.sender != feeVault) revert OnlyFeeVault();
 
+        LPPosition storage pos = positions[lp];
+        if (pos.usdcDeposited == 0 || !pos.compoundEnabled) revert CompoundNotEnabled();
+
         usdc.safeTransferFrom(feeVault, address(this), feeAmount);
 
-        LPPosition storage pos = positions[lp];
         pos.usdcDeposited += feeAmount;
         totalDeposits     += feeAmount;
 
