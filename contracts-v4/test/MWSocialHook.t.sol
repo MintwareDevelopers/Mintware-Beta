@@ -33,6 +33,7 @@ contract MWSocialHookTest is Test {
         bytes memory creationCode = type(MWSocialHook).creationCode;
         bytes memory args = abi.encode(
             IPoolManager(mockPM),
+            makeAddr("usdc"),
             feeVault,
             socialVault,
             address(0), // no pyth oracle for unit tests
@@ -44,6 +45,7 @@ contract MWSocialHookTest is Test {
         vm.prank(owner);
         hook = new MWSocialHook{salt: salt}(
             IPoolManager(mockPM),
+            makeAddr("usdc"),
             feeVault,
             socialVault,
             address(0),
@@ -64,7 +66,7 @@ contract MWSocialHookTest is Test {
     function test_constructor_rejects_zero_fee_vault() public {
         vm.prank(owner);
         vm.expectRevert(MWSocialHook.InvalidAddress.selector);
-        new MWSocialHook(IPoolManager(mockPM), address(0), socialVault, address(0), owner);
+        new MWSocialHook(IPoolManager(mockPM), makeAddr("usdc"), address(0), socialVault, address(0), owner);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

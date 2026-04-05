@@ -17,7 +17,7 @@ import {IPoolManager}    from "@uniswap/v4-core/src/interfaces/IPoolManager.sol"
 ///              → constructor uses feeVault addr + poolManager (socialVault = address(0))
 ///   3. Deploy  SocialVault  (usdc, poolManager, feeVault)
 ///   4. Deploy  MWSocialHook at the mined CREATE2 address
-///              new MWSocialHook{salt: salt}(poolManager, feeVault, address(0), pyth)
+///              new MWSocialHook{salt: salt}(poolManager, usdc, feeVault, address(0), pyth)
 ///   5. Wire:   hook.setSocialVault(socialVault)
 ///   6. Wire:   feeVault.setSocialVault(socialVault)
 ///   7. Wire:   feeVault.setHook(hook)
@@ -91,6 +91,7 @@ contract Deploy is Script {
         bytes memory hookCreationCode = type(MWSocialHook).creationCode;
         bytes memory hookArgs = abi.encode(
             IPoolManager(poolMgr),
+            usdc,
             address(feeVault),
             address(0),     // socialVault — wired in step 5
             pyth,
@@ -123,6 +124,7 @@ contract Deploy is Script {
         // address matches the one mined with CREATE2_FACTORY above.
         MWSocialHook hook = new MWSocialHook{salt: hookSalt}(
             IPoolManager(poolMgr),
+            usdc,
             address(feeVault),
             address(0),     // socialVault — wired below
             pyth,

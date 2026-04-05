@@ -101,6 +101,7 @@ contract IntegrationTest is Test {
         //    initialOwner = deployer so test contract owns the hook
         bytes memory hookArgs = abi.encode(
             IPoolManager(address(pm)),
+            address(usdc),
             address(feeVault),
             address(0),  // socialVault — wired below
             address(0),  // pyth oracle — not needed for tests
@@ -116,6 +117,7 @@ contract IntegrationTest is Test {
         // ── 5. Deploy hook at mined address ─────────────────────────────────
         hook = new MWSocialHook{salt: salt}(
             IPoolManager(address(pm)),
+            address(usdc),
             address(feeVault),
             address(0),
             address(0),
