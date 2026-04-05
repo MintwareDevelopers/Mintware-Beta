@@ -14,6 +14,8 @@
 // =============================================================================
 
 import { useState, useCallback, useEffect } from 'react'
+import { useSignMessage } from 'wagmi'
+import { buildReferralApplyMessage } from '@/lib/web3/signedActionMessages'
 
 interface RefCodePromptProps {
   wallet: string
@@ -25,6 +27,7 @@ type PromptState = 'idle' | 'submitting' | 'success' | 'error'
 const CODE_PATTERN = /^mw_[0-9a-z]{6}$/
 
 export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
+  const { signMessageAsync } = useSignMessage()
   const [animIn,      setAnimIn]      = useState(false)
   const [code,        setCode]        = useState('')
   const [promptState, setPromptState] = useState<PromptState>('idle')
@@ -52,12 +55,26 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
     setErrorMsg(null)
 
     try {
+      const issuedAt = Date.now()
+      const authMessage = buildReferralApplyMessage({
+        referred: wallet,
+        refCode: code,
+        issuedAt,
+      })
+      const authSignature = await signMessageAsync({ message: authMessage })
+
       // Server-side referral apply — enforces time-gate and performs the insert.
       // Never insert directly from the browser client (bypasses time-gate protection).
       const res = await fetch('/api/referral/apply', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ referred: wallet.toLowerCase(), ref_code: code }),
+        body:    JSON.stringify({
+          referred: wallet.toLowerCase(),
+          ref_code: code,
+          issuedAt,
+          authMessage,
+          authSignature,
+        }),
       })
 
       const data = await res.json() as { applied?: boolean; skip_reason?: string }
