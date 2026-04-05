@@ -434,8 +434,7 @@ async function processPoints(
     multiplierCombined = multipliers.combined
   }
 
-  const trade_points          = Math.round(base_trade_points * multiplierCombined)
-  const referral_trade_points = Math.round(base_referral_trade_points * multiplierCombined)
+  const trade_points = Math.round(base_trade_points * multiplierCombined)
 
   // Credit trade points to the swapping wallet — atomic increment (no race condition)
   const { error: ptsErr } = await supabase.rpc('increment_participant_points', {
@@ -465,12 +464,26 @@ async function processPoints(
   if (referrer) {
     const { data: referrerParticipant } = await supabase
       .from('participants')
-      .select('id')
+      .select('id, attribution_score, sharing_score')
       .eq('campaign_id', campaign.id)
       .eq('wallet', referrer)
       .single()
 
     if (referrerParticipant) {
+      let referrerMultiplierCombined = 1.0
+      if (campaign.use_score_multiplier) {
+        const referrerAttPct = Math.min(100, (referrerParticipant.attribution_score / 925) * 100)
+        const referrerMultipliers = computeMultipliers(
+          referrerAttPct,
+          referrerParticipant.sharing_score ?? 0
+        )
+        referrerMultiplierCombined = referrerMultipliers.combined
+      }
+
+      const referral_trade_points = Math.round(
+        base_referral_trade_points * referrerMultiplierCombined
+      )
+
       // Atomic increment — no read-modify-write race condition
       const { error: refPtsErr } = await supabase.rpc('increment_participant_points', {
         p_campaign_id: campaign.id,

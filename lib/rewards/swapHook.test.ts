@@ -617,6 +617,86 @@ describe('processSwapEvent', () => {
     expect(result.trade_points).toBe(8)  // no multiplier applied → exactly base points
   })
 
+  it('should use the referrer score, not the trader score, for referral trade points', async () => {
+    const trader = {
+      ...baseParticipant,
+      attribution_score: 700,
+      sharing_score: 300,
+    }
+    const referrerParticipant = {
+      ...baseParticipant,
+      wallet: '0xreferrer',
+      attribution_score: 100,
+      sharing_score: 20,
+    }
+    const pointsCampaign = {
+      ...baseCampaign,
+      campaign_type: 'points',
+      min_score: 0,
+      use_score_multiplier: true,
+      actions: { trade: { points: 8 }, referral_trade: { points: 8 } },
+    }
+
+    const rpc = vi.fn().mockResolvedValue({ data: true, error: null })
+    const mock = {
+      from: vi.fn((table: string) => {
+        if (table === 'activity') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            lte: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            insert: vi.fn().mockResolvedValue({ error: null }),
+          }
+        }
+        if (table === 'campaigns') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: pointsCampaign, error: null }),
+          }
+        }
+        if (table === 'participants') {
+          let maybeSingleCalls = 0
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockImplementation(() => {
+              maybeSingleCalls++
+              return Promise.resolve(maybeSingleCalls === 1
+                ? { data: trader, error: null }
+                : { data: null, error: null })
+            }),
+            single: vi.fn().mockResolvedValue({ data: referrerParticipant, error: null }),
+          }
+        }
+        if (table === 'referral_records') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { referrer: '0xreferrer' }, error: null }),
+          }
+        }
+        return makeChainedQuery({ data: null, error: null })
+      }),
+      rpc,
+    }
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
+
+    const result = await processSwapEvent(baseEvent)
+
+    expect(result.credited).toBe(true)
+    expect(result.trade_points).toBe(Math.round(8 * 1.95))
+    expect(result.referral_trade_points).toBe(8)
+    expect(rpc).toHaveBeenCalledWith('increment_participant_points', {
+      p_campaign_id: 'camp-1',
+      p_wallet: '0xreferrer',
+      p_delta: 8,
+    })
+  })
+
   // -------------------------------------------------------------------------
   // 13. Wallet address normalisation — lowercased before all DB queries
   // -------------------------------------------------------------------------
