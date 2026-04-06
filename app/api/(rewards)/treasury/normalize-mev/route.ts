@@ -1,8 +1,8 @@
 // =============================================================================
-// POST /api/treasury/normalize-mev
+// GET /api/treasury/normalize-mev  (also accepts POST for manual runs)
 //
-// Triggered daily by Vercel Cron (03:00 UTC).
-// Also callable manually for testing: POST with Authorization header.
+// Triggered daily by Vercel Cron (03:00 UTC) via GET.
+// Also callable manually: POST with Authorization header.
 //
 // Flow:
 //   1. Read staged MEV balances in the treasury wallet
@@ -17,7 +17,7 @@ import { runNormalizeMev } from '@/lib/rewards/treasury/sweep'
 
 export const maxDuration = 300
 
-export async function POST(req: NextRequest) {
+async function handle(req: NextRequest): Promise<NextResponse> {
   const authHeader = req.headers.get('authorization')
   const cronSecret = process.env.CRON_SECRET
 
@@ -40,3 +40,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+// Vercel crons invoke via GET — manual calls may use POST
+export const GET  = handle
+export const POST = handle

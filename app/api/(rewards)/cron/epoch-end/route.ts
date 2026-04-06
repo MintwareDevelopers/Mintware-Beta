@@ -269,6 +269,34 @@ async function processExpiredEpoch(
 }
 
 // ---------------------------------------------------------------------------
+// activateDueCampaigns — transitions 'upcoming' → 'live' for campaigns whose
+// start_date has passed. Runs at the top of epoch-end so campaigns go live
+// before epoch processing begins.
+// ---------------------------------------------------------------------------
+
+async function activateDueCampaigns(
+  supabase: ReturnType<typeof createSupabaseServiceClient>
+): Promise<number> {
+  const { data, error } = await supabase
+    .from('campaigns')
+    .update({ status: 'live' })
+    .eq('status', 'upcoming')
+    .lte('start_date', new Date().toISOString())
+    .select('id')
+
+  if (error) {
+    console.error('[epoch-end] activateDueCampaigns failed:', error.message)
+    return 0
+  }
+
+  const count = data?.length ?? 0
+  if (count > 0) {
+    console.log(`[epoch-end] activated ${count} campaign(s): ${data!.map((c) => c.id).join(', ')}`)
+  }
+  return count
+}
+
+// ---------------------------------------------------------------------------
 // GET handler
 // ---------------------------------------------------------------------------
 
@@ -296,6 +324,9 @@ export async function GET(req: NextRequest) {
   console.log('[epoch-end] cron started at', now)
 
   const supabase = createSupabaseServiceClient()
+
+  // Activate any 'upcoming' campaigns whose start_date has passed
+  const activated = await activateDueCampaigns(supabase)
 
   // ── Detect stuck-settling epochs ──────────────────────────────────────────
   // An epoch stuck in 'settling' for more than 2 hours indicates a failed run
@@ -389,6 +420,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: failed.length === 0 && (unsignedDists?.length ?? 0) === 0,
+    campaigns_activated: activated,
     epochs_found: epochs.length,
     epochs_succeeded: succeeded.length,
     epochs_failed: failed.length,
