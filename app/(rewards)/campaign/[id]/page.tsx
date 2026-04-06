@@ -226,19 +226,26 @@ function CampaignDetailContent() {
                 const attributionMultiplier = pct !== null ? (pct >= 67 ? 1.5 : pct >= 34 ? 1.25 : 1.0) : null
                 if (attributionMultiplier === null) return null
                 return (
-                  <div className="bg-mw-dark rounded-[12px] px-5 py-4 mb-4 flex items-center gap-5">
+                  <div
+                    className="rounded-[12px] px-5 py-4 mb-4 flex items-center gap-5 border"
+                    style={{
+                      background: 'linear-gradient(180deg, rgba(79,126,247,0.12) 0%, rgba(79,126,247,0.07) 100%)',
+                      borderColor: 'rgba(79,126,247,0.18)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55)',
+                    }}
+                  >
                     <div className="shrink-0">
-                      <div className="text-[10px] font-bold tracking-[0.1em] uppercase text-[rgba(255,255,255,0.28)] mb-[5px] font-sans">Your multiplier</div>
+                      <div className="text-[10px] font-bold tracking-[0.1em] uppercase text-[rgba(58,92,232,0.55)] mb-[5px] font-sans">Your multiplier</div>
                       <div
                         className="text-[36px] font-bold tracking-[-1.5px] leading-none font-mono"
-                        style={{ color: attributionMultiplier >= 1.5 ? '#4ade80' : attributionMultiplier >= 1.25 ? 'var(--color-mw-brand)' : 'rgba(255,255,255,0.6)' }}
+                        style={{ color: attributionMultiplier >= 1.5 ? '#16a34a' : attributionMultiplier >= 1.25 ? 'var(--color-mw-brand)' : 'rgba(26,26,46,0.72)' }}
                       >
                         {attributionMultiplier}×
                       </div>
-                      <div className="text-[11px] text-[rgba(255,255,255,0.28)] mt-[3px] font-sans">{pct}th percentile</div>
+                      <div className="text-[11px] text-[rgba(26,26,46,0.52)] mt-[3px] font-sans">{pct}th percentile</div>
                     </div>
-                    <div className="w-px bg-[rgba(255,255,255,0.07)] self-stretch shrink-0" />
-                    <div className="flex-1 text-[13px] text-mw-dark-sub leading-[1.6] font-sans">
+                    <div className="w-px bg-[rgba(79,126,247,0.14)] self-stretch shrink-0" />
+                    <div className="flex-1 text-[13px] leading-[1.6] font-sans text-[rgba(26,26,46,0.76)]">
                       {attributionMultiplier >= 1.5
                         ? 'Top-tier wallet. You earn up to 50% more than the base reward rate from this campaign.'
                         : attributionMultiplier >= 1.25
