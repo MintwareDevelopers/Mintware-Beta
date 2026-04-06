@@ -6,6 +6,22 @@ import type { ReferralStats, ReferralRecord } from '@/lib/rewards/referral/types
 import { useSignMessage } from 'wagmi'
 import { buildReferralApplyMessage, buildWalletConnectMessage } from '@/lib/web3/signedActionMessages'
 
+type ConnectResult = {
+  refCode: string | null
+  isNew: boolean
+  refWasApplied: boolean
+}
+
+const connectInFlight = new Map<string, Promise<ConnectResult>>()
+
+function connectSessionKey(address: string) {
+  return `mw_connect_verified_${address.toLowerCase()}`
+}
+
+function refCodeSessionKey(address: string) {
+  return `mw_ref_code_${address.toLowerCase()}`
+}
+
 export interface UseReferralReturn {
   stats:                ReferralStats | null
   referralRecords:      ReferralRecord[]
@@ -43,32 +59,33 @@ export function useReferral(address: string | undefined): UseReferralReturn {
   const supabaseRef = useRef(createSupabaseBrowserClient())
   const supabase    = supabaseRef.current
 
-  const fetchStats = useCallback(async (addr: string) => {
-    const { data, error } = await supabase
-      .from('referral_stats')
-      .select('*')
-      .eq('address', addr)
-      .single()
-    // PGRST116 = no rows found (not an error if wallet has no stats yet)
-    if (error && error.code !== 'PGRST116') {
-      console.error('[useReferral] referral_stats error:', error.code, error.message, error.details)
+  const persistConnectSession = useCallback((addr: string, refCodeValue: string | null) => {
+    if (typeof window === 'undefined') return
+    sessionStorage.setItem(connectSessionKey(addr), '1')
+    if (refCodeValue) {
+      sessionStorage.setItem(refCodeSessionKey(addr), refCodeValue)
     }
-    if (data) setStats(data as ReferralStats)
+  }, [])
 
-    const { data: records, error: recErr } = await supabase
-      .from('referral_records')
-      .select('*')
-      .eq('referrer', addr)
-      .order('status', { ascending: true })
-      .limit(10)
-    if (recErr) console.error('[useReferral] referral_records error:', recErr.code, recErr.message, recErr.details)
-    if (records) setReferralRecords(records as ReferralRecord[])
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const loadCachedConnectSession = useCallback((addr: string): ConnectResult | null => {
+    if (typeof window === 'undefined') return null
+    const verified = sessionStorage.getItem(connectSessionKey(addr))
+    if (!verified) return null
+    return {
+      refCode: sessionStorage.getItem(refCodeSessionKey(addr)),
+      isNew: false,
+      refWasApplied: false,
+    }
+  }, [])
 
-  const init = useCallback(async (addr: string) => {
-    setIsLoading(true)
-    try {
-      // ── Call /api/auth/connect — generates or retrieves permanent ref code ──
+  const runConnectFlow = useCallback(async (addr: string): Promise<ConnectResult> => {
+    const cached = loadCachedConnectSession(addr)
+    if (cached) return cached
+
+    const existing = connectInFlight.get(addr)
+    if (existing) return existing
+
+    const task = (async () => {
       const issuedAt = Date.now()
       const authMessage = buildWalletConnectMessage({ address: addr, issuedAt })
       const authSignature = await signMessageAsync({ message: authMessage })
@@ -85,17 +102,14 @@ export function useReferral(address: string | undefined): UseReferralReturn {
         const connectData = await connectRes.json() as { ref_code: string; is_new: boolean }
         storedRefCode = connectData.ref_code
         isNew         = connectData.is_new
-        setRefCode(storedRefCode)
-        setIsFirstConnect(isNew)
       } else {
         console.error('[useReferral] connect API error:', connectRes.status)
       }
 
-      // ── Handle pending referral attribution from ?ref= URL param ────────────
-      // Covers both new-style (/ref/jake via sessionStorage) and
-      // legacy (?ref=mw_3f9a12 captured above on module load)
-      const pendingRef    = sessionStorage.getItem('mw_pending_ref')
-      let   refWasApplied = false
+      let refWasApplied = false
+      const pendingRef = typeof window !== 'undefined'
+        ? sessionStorage.getItem('mw_pending_ref')
+        : null
 
       if (pendingRef) {
         try {
@@ -129,6 +143,48 @@ export function useReferral(address: string | undefined): UseReferralReturn {
         sessionStorage.removeItem('mw_pending_ref')
       }
 
+      persistConnectSession(addr, storedRefCode)
+      return { refCode: storedRefCode, isNew, refWasApplied }
+    })()
+
+    connectInFlight.set(addr, task)
+
+    try {
+      return await task
+    } finally {
+      connectInFlight.delete(addr)
+    }
+  }, [loadCachedConnectSession, persistConnectSession, signMessageAsync])
+
+  const fetchStats = useCallback(async (addr: string) => {
+    const { data, error } = await supabase
+      .from('referral_stats')
+      .select('*')
+      .eq('address', addr)
+      .single()
+    // PGRST116 = no rows found (not an error if wallet has no stats yet)
+    if (error && error.code !== 'PGRST116') {
+      console.error('[useReferral] referral_stats error:', error.code, error.message, error.details)
+    }
+    if (data) setStats(data as ReferralStats)
+
+    const { data: records, error: recErr } = await supabase
+      .from('referral_records')
+      .select('*')
+      .eq('referrer', addr)
+      .order('status', { ascending: true })
+      .limit(10)
+    if (recErr) console.error('[useReferral] referral_records error:', recErr.code, recErr.message, recErr.details)
+    if (records) setReferralRecords(records as ReferralRecord[])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const init = useCallback(async (addr: string) => {
+    setIsLoading(true)
+    try {
+      const { refCode: storedRefCode, isNew, refWasApplied } = await runConnectFlow(addr)
+      setRefCode(storedRefCode)
+      setIsFirstConnect(isNew)
+
       // ── If first connect, no URL ref was applied, check if prompt should show ─
       if (isNew && !refWasApplied) {
         const dismissedKey = `mw_ref_dismissed_${addr}`
@@ -152,7 +208,7 @@ export function useReferral(address: string | undefined): UseReferralReturn {
     } finally {
       setIsLoading(false)
     }
-  }, [fetchStats]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchStats, runConnectFlow]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!address || initialized.current) return
