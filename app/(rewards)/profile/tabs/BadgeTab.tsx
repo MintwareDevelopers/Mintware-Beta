@@ -1,10 +1,8 @@
 'use client'
 
 import { CheckCircle2 } from 'lucide-react'
-import type { computeBadges } from '@/lib/rewards/badges'
+import type { Badge } from '@/lib/rewards/badges'
 import type { ScoreResponse } from '../types'
-
-type Badge = ReturnType<typeof computeBadges>[number]
 
 interface Props {
   data: ScoreResponse | null
