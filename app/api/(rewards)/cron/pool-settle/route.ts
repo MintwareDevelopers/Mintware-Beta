@@ -6,8 +6,7 @@
 // can call MintwareDistributor.claim() once the lock period expires.
 //
 // vercel.json schedule: "*/15 * * * *"
-//
-// Authorization: Bearer <CRON_SECRET> (same secret as bridge-verify)
+// Authorization: Bearer <CRON_SECRET>
 //
 // Per-campaign flow:
 //   1. Auto-promote locked → claimable (claimable_at <= now)
@@ -15,61 +14,31 @@
 //   3. Sum amount_wei per wallet (buyer + referrer; treasury gets platform_fee leaf)
 //   4. Build StandardMerkleTree → write distributions + daily_payouts
 //   5. Sign oracle sig via publishDistribution() (zero gas)
-//   6. Auto-claim treasury fee leaf (platform_fee rows → MINTWARE_TREASURY_ADDRESS)
+//   6. Auto-claim treasury fee leaf
 //   7. Mark pending_rewards rows as 'claimed'
 //
-// Idempotent: rows are only settled once. Deferred rows (unresolvable price,
-// missing treasury address) stay 'claimable' and are retried on the next run.
+// Idempotent: rows only settled once. Deferred rows stay 'claimable' and
+// are retried on the next run.
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
+import { createHandler } from '@/lib/web2/routeHandler'
 import { settleTokenPoolBatch } from '@/lib/rewards/poolSettler'
 
-export const maxDuration = 300   // 5 min — Vercel Pro cron max
+export const maxDuration = 300  // 5 min — Vercel Pro cron max
 
-export async function GET(req: NextRequest) {
-  // Authorization
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    }
-  } else if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json(
-      { error: 'CRON_SECRET not set — refusing to run outside local development without auth' },
-      { status: 500 }
-    )
-  }
-
+export const GET = createHandler(async (_req, ctx) => {
   const startedAt = Date.now()
-  console.log('[pool-settle] cron started at', new Date().toISOString())
+  ctx.log.info('pool-settle', 'Cron started')
 
-  try {
-    const report = await settleTokenPoolBatch()
+  const report = await settleTokenPoolBatch()
+  const duration_ms = Date.now() - startedAt
 
-    const durationMs = Date.now() - startedAt
-    console.log(
-      `[pool-settle] complete: ${report.campaigns_settled} settled, ` +
-      `${report.campaigns_skipped} skipped, ` +
-      `${report.rewards_settled} reward rows settled, ${durationMs}ms`
-    )
+  ctx.log.info('pool-settle', 'Cron complete', {
+    campaigns_settled: report.campaigns_settled,
+    campaigns_skipped: report.campaigns_skipped,
+    rewards_settled:   report.rewards_settled,
+    duration_ms,
+  })
 
-    return NextResponse.json({
-      ok: report.campaigns_skipped === 0,
-      ...report,
-      duration_ms: durationMs,
-    })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error('[pool-settle] fatal error:', message)
-    return NextResponse.json(
-      { ok: false, error: message, duration_ms: Date.now() - startedAt },
-      { status: 500 }
-    )
-  }
-}
-
-export async function POST() {
-  return NextResponse.json({ error: 'method not allowed — use GET' }, { status: 405 })
-}
+  return ctx.json({ ok: report.campaigns_skipped === 0, ...report, duration_ms })
+}, { auth: 'bearer-token' })

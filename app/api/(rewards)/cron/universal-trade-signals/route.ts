@@ -1,38 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
+import { createHandler } from '@/lib/web2/routeHandler'
 import { syncTradeSignals } from '@/lib/rewards/universal/indexer'
 
 export const dynamic = 'force-dynamic'
 
-function authorize(req: NextRequest): NextResponse | null {
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    }
-    return null
-  }
-
-  if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json(
-      { error: 'CRON_SECRET not set — refusing to run outside local development' },
-      { status: 500 }
-    )
-  }
-
-  return null
-}
-
-export async function GET(req: NextRequest) {
-  const authFailure = authorize(req)
-  if (authFailure) return authFailure
-
-  const chainSlug = process.env.UNIVERSAL_TRADE_SIGNAL_CHAIN ?? 'base_sepolia'
+export const GET = createHandler(async (_req, ctx) => {
+  const chainSlug       = process.env.UNIVERSAL_TRADE_SIGNAL_CHAIN ?? 'base_sepolia'
   const contractAddress = process.env.UNIVERSAL_TRADE_SIGNAL_HOOK_ADDRESS as `0x${string}` | undefined
 
   if (!contractAddress) {
+    ctx.log.error('universal-trade-signals', 'UNIVERSAL_TRADE_SIGNAL_HOOK_ADDRESS not set')
     return NextResponse.json(
-      { error: 'UNIVERSAL_TRADE_SIGNAL_HOOK_ADDRESS not set' },
+      { success: false, error: 'UNIVERSAL_TRADE_SIGNAL_HOOK_ADDRESS not set' },
       { status: 500 }
     )
   }
@@ -44,17 +23,9 @@ export async function GET(req: NextRequest) {
     ? BigInt(process.env.UNIVERSAL_TRADE_SIGNAL_CONFIRMATIONS)
     : undefined
 
-  try {
-    const result = await syncTradeSignals({
-      chainSlug,
-      contractAddress,
-      initialWindow,
-      confirmations,
-    })
+  ctx.log.info('universal-trade-signals', 'Sync started', { chainSlug, contractAddress })
+  const result = await syncTradeSignals({ chainSlug, contractAddress, initialWindow, confirmations })
+  ctx.log.info('universal-trade-signals', 'Sync complete', result as Record<string, unknown>)
 
-    return NextResponse.json({ ok: true, ...result })
-  } catch (error) {
-    console.error('[cron/universal-trade-signals] sync failed:', error)
-    return NextResponse.json({ error: 'internal error' }, { status: 500 })
-  }
-}
+  return ctx.json({ ok: true, ...result })
+}, { auth: 'bearer-token' })

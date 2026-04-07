@@ -21,8 +21,9 @@
 //     and alert (future: webhook/Slack notification)
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { createHandler } from '@/lib/web2/routeHandler'
+import type { RouteContext } from '@/lib/web2/routeHandler'
+import { getServiceClient } from '@/lib/web2/supabase'
 import { processEpoch } from '@/lib/rewards/epochProcessor'
 import { runMerkleBuilder } from '@/lib/rewards/merkleBuilder'
 import { advanceEpochState } from '@/lib/rewards/merkleBuilder'
@@ -50,9 +51,10 @@ interface EpochStateRow {
 // ---------------------------------------------------------------------------
 
 async function processExpiredEpoch(
-  supabase: ReturnType<typeof createSupabaseServiceClient>,
+  ctx: RouteContext,
   epoch: EpochStateRow
 ): Promise<{ epoch_number: number; result: object } | { epoch_number: number; error: string }> {
+  const { supabase, log } = ctx
   const { campaign_id, epoch_number } = epoch
 
   // 1. Atomically claim this epoch for processing: active → settling
@@ -217,12 +219,12 @@ async function processExpiredEpoch(
           // Token pool fee settlement (future) passes treasury proof + amount.
         })
 
-        console.log(
-          `[epoch-end] ✓ root signed: campaign=${campaign_id} ` +
-          `epoch=${epoch_number} distribution=${summary.distribution_id} ` +
-          `sig=${publishResult.oracle_signature.slice(0, 12)}...` +
-          (publishResult.treasury_claim_tx ? ` treasury_claim_tx=${publishResult.treasury_claim_tx}` : '')
-        )
+        log.info('epoch-end', 'Root signed', {
+          campaign_id, epoch_number,
+          distribution_id: summary.distribution_id,
+          sig: publishResult.oracle_signature.slice(0, 12) + '...',
+          treasury_claim_tx: publishResult.treasury_claim_tx ?? null,
+        })
 
         return {
           epoch_number,
@@ -232,20 +234,17 @@ async function processExpiredEpoch(
         // Non-fatal to epoch processing — Merkle data is safely in DB.
         // Distribution stays 'pending' until operator retries (cron auto-retries hourly).
         const msg = publishErr instanceof Error ? publishErr.message : String(publishErr)
-        console.error(
-          `[epoch-end] ⚠ oracle signing failed for distribution ${summary.distribution_id}: ${msg}. ` +
-          `Distribution is in DB (status='pending') — oracle will retry next cron run.`
-        )
+        log.error('epoch-end', 'Oracle signing failed — distribution pending, will retry next run', {
+          distribution_id: summary.distribution_id, error: msg,
+        })
         return { epoch_number, result: { ...summary, sign_error: msg } }
       }
     } else {
       // Campaign not wired to a contract yet — common during initial setup.
       // Operator sets contract_address + chain in Supabase after running deploy.ts.
-      console.warn(
-        `[epoch-end] campaign ${campaign_id} has no contract_address/chain — ` +
-        `distribution ${summary.distribution_id} written as status='pending'. ` +
-        `Set campaigns.contract_address and campaigns.chain in Supabase to enable auto-signing.`
-      )
+      log.warn('epoch-end', 'Campaign has no contract_address/chain — distribution pending', {
+        campaign_id, distribution_id: summary.distribution_id,
+      })
       return { epoch_number, result: summary }
     }
     // ── AFTER this point: distribution row has status='published', oracle_signature set.
@@ -255,7 +254,7 @@ async function processExpiredEpoch(
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error(`[epoch-end] epoch ${campaign_id}#${epoch_number} failed:`, message)
+    log.error('epoch-end', 'Epoch processing failed', { campaign_id, epoch_number, error: message })
 
     // Revert to 'active' so the next hourly run retries
     await supabase
@@ -274,9 +273,8 @@ async function processExpiredEpoch(
 // before epoch processing begins.
 // ---------------------------------------------------------------------------
 
-async function activateDueCampaigns(
-  supabase: ReturnType<typeof createSupabaseServiceClient>
-): Promise<number> {
+async function activateDueCampaigns(ctx: RouteContext): Promise<number> {
+  const { supabase, log } = ctx
   const { data, error } = await supabase
     .from('campaigns')
     .update({ status: 'live' })
@@ -285,13 +283,13 @@ async function activateDueCampaigns(
     .select('id')
 
   if (error) {
-    console.error('[epoch-end] activateDueCampaigns failed:', error.message)
+    log.error('epoch-end', 'activateDueCampaigns failed', { error: error.message })
     return 0
   }
 
   const count = data?.length ?? 0
   if (count > 0) {
-    console.log(`[epoch-end] activated ${count} campaign(s): ${data!.map((c) => c.id).join(', ')}`)
+    log.info('epoch-end', 'Campaigns activated', { count, ids: data!.map((c) => c.id) })
   }
   return count
 }
@@ -300,37 +298,16 @@ async function activateDueCampaigns(
 // GET handler
 // ---------------------------------------------------------------------------
 
-export async function GET(req: NextRequest) {
-  // Auth — L3: require CRON_SECRET in all non-local environments.
-  // Previously only enforced in NODE_ENV='production', which left staging/preview
-  // deployments open to unauthenticated epoch settlement.
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    }
-  } else if (process.env.NODE_ENV !== 'development') {
-    // Refuse in production AND staging (any non-local environment).
-    // Set CRON_SECRET in Vercel for all environments except local dev.
-    return NextResponse.json(
-      { error: 'CRON_SECRET not set — refusing to run outside local development' },
-      { status: 500 }
-    )
-  }
-
+export const GET = createHandler(async (_req, ctx) => {
+  const { supabase, log } = ctx
   const startedAt = Date.now()
   const now = new Date().toISOString()
-  console.log('[epoch-end] cron started at', now)
-
-  const supabase = createSupabaseServiceClient()
+  log.info('epoch-end', 'Cron started')
 
   // Activate any 'upcoming' campaigns whose start_date has passed
-  const activated = await activateDueCampaigns(supabase)
+  const activated = await activateDueCampaigns(ctx)
 
-  // ── Detect stuck-settling epochs ──────────────────────────────────────────
-  // An epoch stuck in 'settling' for more than 2 hours indicates a failed run
-  // that needs manual investigation. Log a warning for each one found.
+  // Detect stuck-settling epochs (> 2 hours)
   const stuckThreshold = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
   const { data: stuckEpochs } = await supabase
     .from('epoch_state')
@@ -340,22 +317,13 @@ export async function GET(req: NextRequest) {
 
   if (stuckEpochs && stuckEpochs.length > 0) {
     for (const e of stuckEpochs) {
-      console.warn(
-        `[epoch-end] ⚠ STUCK EPOCH: campaign=${e.campaign_id} epoch=${e.epoch_number} ` +
-        `has been in 'settling' since ${e.updated_at} — manual investigation required`
-      )
+      log.warn('epoch-end', 'Stuck epoch detected — manual investigation required', {
+        campaign_id: e.campaign_id, epoch_number: e.epoch_number, stuck_since: e.updated_at,
+      })
     }
   }
 
-  // ── M4: Detect distributions stuck in 'pending' (oracle signing failed) ───
-  // A distribution stays 'pending' when publishDistribution() threw after
-  // the Merkle tree was written. The epoch is marked 'complete' so the main
-  // loop never retries it. This query catches those orphaned distributions
-  // and logs a structured warning so operators know to retry manually via
-  // POST /api/admin/retry-unsigned (or by re-running publishDistribution).
-  //
-  // A distribution older than 30 minutes that is still 'pending' indicates
-  // the oracle signing step failed — it should have been 'published' within seconds.
+  // Detect distributions stuck in 'pending' (oracle signing failed > 30 min ago)
   const pendingSignThreshold = new Date(Date.now() - 30 * 60 * 1000).toISOString()
   const { data: unsignedDists } = await supabase
     .from('distributions')
@@ -365,71 +333,54 @@ export async function GET(req: NextRequest) {
 
   if (unsignedDists && unsignedDists.length > 0) {
     for (const d of unsignedDists) {
-      console.error(
-        `[epoch-end] ⚠ UNSIGNED DISTRIBUTION: id=${d.id} campaign=${d.campaign_id} ` +
-        `epoch=${d.epoch_number} created_at=${d.created_at} — oracle signing failed. ` +
-        `Wallets CANNOT CLAIM until this is resolved. ` +
-        `Retry: call publishDistribution({ distribution_db_id: '${d.id}', ... }) ` +
-        `with the campaign contract_address and chain from Supabase.`
-      )
+      log.error('epoch-end', 'Unsigned distribution — wallets cannot claim until resolved', {
+        distribution_id: d.id, campaign_id: d.campaign_id,
+        epoch_number: d.epoch_number, created_at: d.created_at,
+      })
     }
   }
 
   // Find all epochs that have ended and are still 'active'
-  // 'settling' epochs may be retries from a previous failed run — skip them here
-  // (they'll be caught next hour if they're stuck — manual intervention for persistent failures)
   const { data: expiredEpochs, error: queryErr } = await supabase
     .from('epoch_state')
     .select('*')
     .eq('status', 'active')
-    .lt('epoch_end', now)   // epoch_end < NOW()
+    .lt('epoch_end', now)
 
   if (queryErr) {
-    console.error('[epoch-end] query failed:', queryErr.message)
-    return NextResponse.json({ ok: false, error: queryErr.message }, { status: 500 })
+    log.error('epoch-end', 'Query failed', { error: queryErr.message })
+    return ctx.json({ success: false, error: queryErr.message }, 500)
   }
 
   const epochs: EpochStateRow[] = expiredEpochs ?? []
 
   if (epochs.length === 0) {
-    return NextResponse.json({
-      ok: true,
-      epochs_processed: 0,
-      message: 'no expired epochs found',
-      duration_ms: Date.now() - startedAt,
-    })
+    return ctx.json({ ok: true, epochs_processed: 0, message: 'no expired epochs found', duration_ms: Date.now() - startedAt })
   }
 
-  console.log(`[epoch-end] found ${epochs.length} expired epoch(s)`)
+  log.info('epoch-end', `Found ${epochs.length} expired epoch(s)`)
 
-  // Process each expired epoch sequentially
-  // Sequential rather than parallel: epoch processing makes multiple DB writes
-  // and hits the Attribution API — parallelism risks rate limits and DB contention
+  // Process sequentially — parallelism risks Attribution API rate limits and DB contention
   const results = []
   for (const epoch of epochs) {
-    console.log(`[epoch-end] processing campaign ${epoch.campaign_id} epoch #${epoch.epoch_number}`)
-    const result = await processExpiredEpoch(supabase, epoch)
-    results.push(result)
+    log.info('epoch-end', 'Processing epoch', { campaign_id: epoch.campaign_id, epoch_number: epoch.epoch_number })
+    results.push(await processExpiredEpoch(ctx, epoch))
   }
 
-  const succeeded = results.filter((r) => !('error' in r))
-  const failed = results.filter((r) => 'error' in r)
+  const succeeded  = results.filter((r) => !('error' in r))
+  const failed     = results.filter((r) => 'error' in r)
+  const duration_ms = Date.now() - startedAt
 
-  const durationMs = Date.now() - startedAt
-  console.log(`[epoch-end] complete: ${succeeded.length} ok, ${failed.length} failed, ${durationMs}ms`)
+  log.info('epoch-end', 'Cron complete', { succeeded: succeeded.length, failed: failed.length, duration_ms })
 
-  return NextResponse.json({
+  return ctx.json({
     ok: failed.length === 0 && (unsignedDists?.length ?? 0) === 0,
-    campaigns_activated: activated,
-    epochs_found: epochs.length,
-    epochs_succeeded: succeeded.length,
-    epochs_failed: failed.length,
-    unsigned_distributions: unsignedDists?.length ?? 0,  // M4: non-zero = oracle signing backlog
+    campaigns_activated:     activated,
+    epochs_found:            epochs.length,
+    epochs_succeeded:        succeeded.length,
+    epochs_failed:           failed.length,
+    unsigned_distributions:  unsignedDists?.length ?? 0,
     results,
-    duration_ms: durationMs,
+    duration_ms,
   })
-}
-
-export async function POST() {
-  return NextResponse.json({ error: 'method not allowed — use GET' }, { status: 405 })
-}
+}, { auth: 'bearer-token' })

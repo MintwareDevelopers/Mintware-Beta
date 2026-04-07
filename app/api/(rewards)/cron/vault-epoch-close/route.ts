@@ -2,9 +2,7 @@
 // GET /api/cron/vault-epoch-close
 //
 // Vault epoch close cron. Runs weekly at Monday 00:00 UTC.
-//
 // vercel.json schedule: "0 0 * * 1"
-//
 // Authorization: Bearer <CRON_SECRET>
 //
 // Per-epoch flow:
@@ -17,20 +15,14 @@
 // On error:
 //   - Revert vault_epochs.status to 'active' for next weekly retry
 //   - Stuck-settling detection: epochs in 'settling' for > 2 hours are flagged in logs
-//
-// Fee pool:
-//   - vault_epochs.total_pool is accumulated by FeeVault.sol (MEV capture fees + early-exit penalties)
-//   - vault_epochs.bonus_pool is the Attribution bonus (5% of total pool, seeded by protocol)
-//   - Combined = total_pool + bonus_pool → distributed to LPs weighted by score
-//   - Referrer pool (15% of fees) and protocol pool (10%) are settled separately
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
 import { createPublicClient, http, parseAbi } from 'viem'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { createHandler } from '@/lib/web2/routeHandler'
 import { processVaultEpoch } from '@/lib/rewards/vault/vaultEpochProcessor'
 import { runVaultMerkleBuilder } from '@/lib/rewards/vault/vaultMerkleBuilder'
 import type { LockTier } from '@/lib/web2/vault/types'
+import type { RouteContext } from '@/lib/web2/routeHandler'
 
 export const maxDuration = 300  // 5 min — Vercel Pro cron max
 
@@ -83,10 +75,7 @@ async function readOnchainEpochState(epochNumber: number): Promise<OnchainEpochS
   const feeVault = getFeeVaultAddress()
   if (!feeVault) return null
 
-  const publicClient = createPublicClient({
-    transport: http(getBaseRpcUrl()),
-  })
-
+  const publicClient = createPublicClient({ transport: http(getBaseRpcUrl()) })
   const epoch = await publicClient.readContract({
     address: feeVault,
     abi: FEE_VAULT_ABI,
@@ -94,10 +83,7 @@ async function readOnchainEpochState(epochNumber: number): Promise<OnchainEpochS
     args: [BigInt(epochNumber)],
   })
 
-  return {
-    totalAccumulated: epoch.totalAccumulated,
-    bonusPool: epoch.bonusPool,
-  }
+  return { totalAccumulated: epoch.totalAccumulated, bonusPool: epoch.bonusPool }
 }
 
 // ---------------------------------------------------------------------------
@@ -105,29 +91,25 @@ async function readOnchainEpochState(epochNumber: number): Promise<OnchainEpochS
 // ---------------------------------------------------------------------------
 
 async function processExpiredVaultEpoch(
-  supabase: ReturnType<typeof createSupabaseServiceClient>,
+  ctx: RouteContext,
   epoch: VaultEpochRow,
   appBaseUrl: string,
   readyEpochCount: number
 ): Promise<{ epoch_number: number; vault_id: string; result: object } | { epoch_number: number; vault_id: string; error: string }> {
   const { vault_id, epoch_number } = epoch
+  const { supabase, log } = ctx
 
   // 1. Atomically claim this epoch for processing: active → settling
-  // If another instance already claimed it, this update matches 0 rows → skip.
   const { data: claimed, error: claimErr } = await supabase
     .from('vault_epochs')
     .update({ status: 'settling', updated_at: new Date().toISOString() })
     .eq('id', epoch.id)
-    .eq('status', 'active')   // ← only update if still 'active'
+    .eq('status', 'active')
     .select('id')
     .maybeSingle()
 
-  if (claimErr) {
-    return { epoch_number, vault_id, error: `claim failed: ${claimErr.message}` }
-  }
-  if (!claimed) {
-    return { epoch_number, vault_id, error: 'already claimed by another instance' }
-  }
+  if (claimErr) return { epoch_number, vault_id, error: `claim failed: ${claimErr.message}` }
+  if (!claimed)  return { epoch_number, vault_id, error: 'already claimed by another instance' }
 
   try {
     // 2. Load all active LP deposits for this vault
@@ -135,16 +117,12 @@ async function processExpiredVaultEpoch(
       .from('lp_deposits')
       .select('id, wallet, usdc_amount, lock_tier, deposited_at, compounded_amount, status')
       .eq('vault_id', vault_id)
-      .in('status', ['active', 'withdrawal_pending'])  // include withdrawal_pending: they still held funds this epoch
+      .in('status', ['active', 'withdrawal_pending'])
 
-    if (depErr) {
-      throw new Error(`lp_deposits load failed: ${depErr.message}`)
-    }
+    if (depErr) throw new Error(`lp_deposits load failed: ${depErr.message}`)
 
     const depositList: LpDepositRow[] = deposits ?? []
 
-    // The distribution pool = trading fees + MEV capture + bonus (Attribution).
-    // Prefer on-chain FeeVault state when we have a single global vault config.
     let mirroredTotalPool = epoch.total_pool ?? 0
     let mirroredBonusPool = epoch.bonus_pool ?? 0
 
@@ -158,20 +136,14 @@ async function processExpiredVaultEpoch(
       }
 
       const onchainEpoch = await readOnchainEpochState(epoch_number)
-      if (!onchainEpoch) {
-        throw new Error('Unable to read FeeVault epoch state')
-      }
+      if (!onchainEpoch) throw new Error('Unable to read FeeVault epoch state')
 
       mirroredTotalPool = Number(onchainEpoch.totalAccumulated) / 1e6
       mirroredBonusPool = Number(onchainEpoch.bonusPool) / 1e6
 
       await supabase
         .from('vault_epochs')
-        .update({
-          total_pool: mirroredTotalPool,
-          bonus_pool: mirroredBonusPool,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ total_pool: mirroredTotalPool, bonus_pool: mirroredBonusPool, updated_at: new Date().toISOString() })
         .eq('id', epoch.id)
         .eq('status', 'settling')
     } else if ((mirroredTotalPool + mirroredBonusPool) <= 0) {
@@ -182,30 +154,25 @@ async function processExpiredVaultEpoch(
 
     const totalPoolUsdc = mirroredTotalPool + mirroredBonusPool
 
-    // If there are no deposits OR no fee pool has accumulated, mark complete with no distribution
+    // No deposits or zero pool — mark complete, open next epoch
     if (depositList.length === 0 || totalPoolUsdc <= 0) {
       await supabase
         .from('vault_epochs')
         .update({ status: 'published', updated_at: new Date().toISOString() })
         .eq('id', epoch.id)
 
-      // Open next epoch regardless
       await supabase
         .from('vault_epochs')
         .insert({
-          vault_id,
-          epoch_number:  epoch_number + 1,
-          total_pool:    0,
-          bonus_pool:    0,
-          total_claimed: 0,
-          status:        'active',
-          created_at:    new Date().toISOString(),
-          updated_at:    new Date().toISOString(),
+          vault_id, epoch_number: epoch_number + 1,
+          total_pool: 0, bonus_pool: 0, total_claimed: 0,
+          status: 'active',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
 
       return {
-        epoch_number,
-        vault_id,
+        epoch_number, vault_id,
         result: {
           skipped: true,
           reason: depositList.length === 0 ? 'no_lp_deposits' : 'zero_fee_pool',
@@ -215,23 +182,17 @@ async function processExpiredVaultEpoch(
       }
     }
 
-    // 3. Compute LP distribution — weighted by usdc × tier × duration × attribution
+    // 3. Compute LP distribution
     const processorResult = await processVaultEpoch(
-      vault_id,
-      epoch_number,
-      totalPoolUsdc,
+      vault_id, epoch_number, totalPoolUsdc,
       depositList.map((d) => ({
-        id:                 d.id,
-        wallet:             d.wallet,
-        usdc_amount:        d.usdc_amount,
-        lock_tier:          d.lock_tier,
-        deposited_at:       d.deposited_at,
-        compounded_amount:  d.compounded_amount ?? 0,
+        id: d.id, wallet: d.wallet, usdc_amount: d.usdc_amount,
+        lock_tier: d.lock_tier, deposited_at: d.deposited_at,
+        compounded_amount: d.compounded_amount ?? 0,
       })),
       appBaseUrl
     )
 
-    // Edge: all deposits had 0 USDC (shouldn't happen — log and skip gracefully)
     if (processorResult.entries.length === 0) {
       await supabase
         .from('vault_epochs')
@@ -239,51 +200,42 @@ async function processExpiredVaultEpoch(
         .eq('id', epoch.id)
 
       return {
-        epoch_number,
-        vault_id,
+        epoch_number, vault_id,
         result: {
           skipped: true,
-          reason:   'all_deposits_zero_balance',
+          reason: 'all_deposits_zero_balance',
           excluded: processorResult.wallets_excluded_zero_deposit,
         },
       }
     }
 
     // 4. Build Merkle tree and commit to vault_epochs
-    const summary = await runVaultMerkleBuilder(
-      epoch.id,
+    const summary = await runVaultMerkleBuilder(epoch.id, vault_id, epoch_number, processorResult)
+
+    log.info('vault-epoch-close', 'Epoch published', {
       vault_id,
       epoch_number,
-      processorResult
-    )
-
-    console.log(
-      `[vault-epoch-close] ✓ published: vault=${vault_id} epoch=${epoch_number} ` +
-      `root=${summary.merkle_root.slice(0, 12)}... ` +
-      `wallets=${summary.wallets_included} ` +
-      `total_usdc=${processorResult.total_payout_usdc.toFixed(6)} ` +
-      `deadline=${summary.deadline}`
-    )
+      merkle_root: summary.merkle_root.slice(0, 12) + '...',
+      wallets: summary.wallets_included,
+      total_usdc: processorResult.total_payout_usdc.toFixed(6),
+      deadline: summary.deadline,
+    })
 
     return {
-      epoch_number,
-      vault_id,
-      result: {
-        ...summary,
-        merkle_root: summary.merkle_root.slice(0, 12) + '...',  // truncate for log safety
-      },
+      epoch_number, vault_id,
+      result: { ...summary, merkle_root: summary.merkle_root.slice(0, 12) + '...' },
     }
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    console.error(`[vault-epoch-close] vault=${vault_id} epoch=${epoch_number} failed:`, message)
+    log.error('vault-epoch-close', 'Epoch processing failed', { vault_id, epoch_number, error: message })
 
     // Revert to 'active' so the next weekly cron run retries
     await supabase
       .from('vault_epochs')
       .update({ status: 'active', updated_at: new Date().toISOString() })
       .eq('id', epoch.id)
-      .eq('status', 'settling')   // only revert if still settling
+      .eq('status', 'settling')
 
     return { epoch_number, vault_id, error: message }
   }
@@ -293,35 +245,17 @@ async function processExpiredVaultEpoch(
 // GET handler
 // ---------------------------------------------------------------------------
 
-export async function GET(req: NextRequest) {
-  // Auth — same pattern as epoch-end and pool-settle crons
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    }
-  } else if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json(
-      { error: 'CRON_SECRET not set — refusing to run outside local development without auth' },
-      { status: 500 }
-    )
-  }
+export const GET = createHandler(async (_req, ctx) => {
+  const startedAt  = Date.now()
+  const { supabase, log } = ctx
 
-  const startedAt = Date.now()
-  const now = new Date().toISOString()
-  console.log('[vault-epoch-close] cron started at', now)
+  log.info('vault-epoch-close', 'Cron started')
 
-  const supabase = createSupabaseServiceClient()
-
-  // App base URL for internal attribution-snapshot calls
-  // Falls back to localhost for development
   const appBaseUrl =
     process.env.NEXT_PUBLIC_APP_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
-  // ── Detect stuck-settling epochs ────────────────────────────────────────
-  // Vault epochs stuck in 'settling' for more than 2 hours indicate a failed run.
+  // Detect stuck-settling epochs (> 2 hours)
   const stuckThreshold = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
   const { data: stuckEpochs } = await supabase
     .from('vault_epochs')
@@ -331,76 +265,59 @@ export async function GET(req: NextRequest) {
 
   if (stuckEpochs && stuckEpochs.length > 0) {
     for (const e of stuckEpochs) {
-      console.warn(
-        `[vault-epoch-close] ⚠ STUCK EPOCH: vault=${e.vault_id} epoch=${e.epoch_number} ` +
-        `has been in 'settling' since ${e.updated_at} — manual investigation required`
-      )
+      log.warn('vault-epoch-close', 'Stuck epoch detected — manual investigation required', {
+        vault_id: e.vault_id, epoch_number: e.epoch_number, stuck_since: e.updated_at,
+      })
     }
   }
 
-  // ── Find active epochs ready to close ────────────────────────────────────
-  // Close epochs that have been active for >= 7 days.
-  // Uses created_at rather than a separate closes_at column to avoid schema changes.
-  // A closes_at column would be more explicit — consider adding in a future migration.
-  const epochCloseThreshold = new Date(
-    Date.now() - 7 * 24 * 60 * 60 * 1000
-  ).toISOString()
+  // Find active epochs ready to close (active for >= 7 days)
+  const epochCloseThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
   const { data: readyEpochs, error: queryErr } = await supabase
     .from('vault_epochs')
     .select('*')
     .eq('status', 'active')
-    .lt('created_at', epochCloseThreshold)  // active for >= 7 days
+    .lt('created_at', epochCloseThreshold)
 
   if (queryErr) {
-    console.error('[vault-epoch-close] query failed:', queryErr.message)
-    return NextResponse.json({ ok: false, error: queryErr.message }, { status: 500 })
+    log.error('vault-epoch-close', 'Query failed', { error: queryErr.message })
+    return ctx.json({ success: false, error: queryErr.message }, 500)
   }
 
   const epochs: VaultEpochRow[] = readyEpochs ?? []
 
   if (epochs.length === 0) {
-    return NextResponse.json({
-      ok: true,
-      epochs_processed: 0,
-      message: 'no vault epochs ready to close',
-      duration_ms: Date.now() - startedAt,
-    })
+    return ctx.json({ ok: true, epochs_processed: 0, message: 'no vault epochs ready to close', duration_ms: Date.now() - startedAt })
   }
 
-  console.log(`[vault-epoch-close] found ${epochs.length} vault epoch(s) ready to close`)
+  log.info('vault-epoch-close', `Found ${epochs.length} epoch(s) ready to close`)
 
-  // Process each expired epoch sequentially
-  // Sequential: each epoch makes multiple DB writes + attribution API calls.
-  // Parallelism risks DB contention and Attribution API rate limits.
+  // Process sequentially — each epoch makes multiple DB writes + attribution API calls
   const results = []
   for (const epoch of epochs) {
-    console.log(
-      `[vault-epoch-close] processing vault=${epoch.vault_id} epoch=#${epoch.epoch_number} ` +
-      `pool=${((epoch.total_pool ?? 0) + (epoch.bonus_pool ?? 0)).toFixed(6)} USDC`
-    )
-    const result = await processExpiredVaultEpoch(supabase, epoch, appBaseUrl, epochs.length)
-    results.push(result)
+    log.info('vault-epoch-close', 'Processing epoch', {
+      vault_id: epoch.vault_id,
+      epoch_number: epoch.epoch_number,
+      total_pool_usdc: ((epoch.total_pool ?? 0) + (epoch.bonus_pool ?? 0)).toFixed(6),
+    })
+    results.push(await processExpiredVaultEpoch(ctx, epoch, appBaseUrl, epochs.length))
   }
 
-  const succeeded = results.filter((r) => !('error' in r))
-  const failed    = results.filter((r) => 'error' in r)
+  const succeeded  = results.filter((r) => !('error' in r))
+  const failed     = results.filter((r) => 'error' in r)
+  const duration_ms = Date.now() - startedAt
 
-  const durationMs = Date.now() - startedAt
-  console.log(
-    `[vault-epoch-close] complete: ${succeeded.length} ok, ${failed.length} failed, ${durationMs}ms`
-  )
+  log.info('vault-epoch-close', 'Cron complete', {
+    succeeded: succeeded.length, failed: failed.length, duration_ms,
+  })
 
-  return NextResponse.json({
-    ok:               failed.length === 0,
+  return ctx.json({
+    ok: failed.length === 0,
     epochs_found:     epochs.length,
     epochs_succeeded: succeeded.length,
     epochs_failed:    failed.length,
     results,
-    duration_ms:      durationMs,
+    duration_ms,
   })
-}
-
-export async function POST() {
-  return NextResponse.json({ error: 'method not allowed — use GET' }, { status: 405 })
-}
+}, { auth: 'bearer-token' })
