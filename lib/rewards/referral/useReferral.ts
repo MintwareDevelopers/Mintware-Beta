@@ -61,20 +61,28 @@ export function useReferral(address: string | undefined): UseReferralReturn {
 
   const persistConnectSession = useCallback((addr: string, refCodeValue: string | null) => {
     if (typeof window === 'undefined') return
-    sessionStorage.setItem(connectSessionKey(addr), '1')
-    if (refCodeValue) {
-      sessionStorage.setItem(refCodeSessionKey(addr), refCodeValue)
-    }
+    // localStorage persists across tabs and browser sessions — prevents
+    // re-prompting when the user opens a new tab or returns after closing the browser.
+    try {
+      localStorage.setItem(connectSessionKey(addr), '1')
+      if (refCodeValue) {
+        localStorage.setItem(refCodeSessionKey(addr), refCodeValue)
+      }
+    } catch { /* localStorage blocked in some private/hardened browsers */ }
   }, [])
 
   const loadCachedConnectSession = useCallback((addr: string): ConnectResult | null => {
     if (typeof window === 'undefined') return null
-    const verified = sessionStorage.getItem(connectSessionKey(addr))
-    if (!verified) return null
-    return {
-      refCode: sessionStorage.getItem(refCodeSessionKey(addr)),
-      isNew: false,
-      refWasApplied: false,
+    try {
+      const verified = localStorage.getItem(connectSessionKey(addr))
+      if (!verified) return null
+      return {
+        refCode: localStorage.getItem(refCodeSessionKey(addr)),
+        isNew: false,
+        refWasApplied: false,
+      }
+    } catch {
+      return null
     }
   }, [])
 
@@ -86,24 +94,34 @@ export function useReferral(address: string | undefined): UseReferralReturn {
     if (existing) return existing
 
     const task = (async () => {
-      const issuedAt = Date.now()
-      const authMessage = buildWalletConnectMessage({ address: addr, issuedAt })
-      const authSignature = await signMessageAsync({ message: authMessage })
-      const connectRes = await fetch('/api/auth/connect', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ address: addr, issuedAt, authMessage, authSignature }),
-      })
-
       let storedRefCode: string | null = null
       let isNew = false
 
-      if (connectRes.ok) {
-        const connectData = await connectRes.json() as { ref_code: string; is_new: boolean }
-        storedRefCode = connectData.ref_code
-        isNew         = connectData.is_new
-      } else {
-        console.error('[useReferral] connect API error:', connectRes.status)
+      try {
+        const issuedAt = Date.now()
+        const authMessage = buildWalletConnectMessage({ address: addr, issuedAt })
+        const authSignature = await signMessageAsync({ message: authMessage })
+        const connectRes = await fetch('/api/auth/connect', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ address: addr, issuedAt, authMessage, authSignature }),
+        })
+
+        if (connectRes.ok) {
+          const connectData = await connectRes.json() as { ref_code: string; is_new: boolean }
+          storedRefCode = connectData.ref_code
+          isNew         = connectData.is_new
+        } else {
+          console.error('[useReferral] connect API error:', connectRes.status)
+          // API failed — fall back to deterministic ref code so profile still works
+          storedRefCode = 'mw_' + addr.slice(2, 8).toLowerCase()
+        }
+      } catch {
+        // User rejected the sign request (WalletConnect dismiss, Privy cancel, etc.)
+        // Fall back to the deterministic ref code and persist the cache so we don't
+        // prompt again. The wallet profile upsert will happen next time they sign.
+        console.warn('[useReferral] connect sign rejected, using deterministic ref code')
+        storedRefCode = 'mw_' + addr.slice(2, 8).toLowerCase()
       }
 
       let refWasApplied = false
