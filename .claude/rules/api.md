@@ -60,6 +60,13 @@ Import from `lib/web2/api.ts` — **never hardcode**.
 | `shortAddr(addr)` | `0x1234…abcd` |
 | `iconColor(name)` | Deterministic `{ bg, fg }` palette from string |
 
+## Route Handler Pattern
+
+All internal API routes use the `createHandler` factory — see `.claude/rules/route-handler.md` for the full reference. Key points:
+- Use `ctx.supabase` (singleton), `ctx.log`, `ctx.json()` (BigInt-safe) inside every handler
+- Declare auth + rate limits as options: `{ auth: 'signed-message', rateLimit: { max: 10, windowMs: 60_000 } }`
+- Never call `createSupabaseServiceClient()` or `NextResponse.json()` directly in routes
+
 ## Internal API Routes
 
 | Route | Method | Notes |
