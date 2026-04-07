@@ -25,11 +25,10 @@
 //       Uses service role for all DB operations.
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { daysUntil } from '@/lib/web2/api'
 import { recoverMessageAddress } from 'viem'
 import { buildCampaignManageMessage } from '@/lib/web3/signedActionMessages'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,54 +40,53 @@ function isValidAddress(raw: string): boolean {
 // ---------------------------------------------------------------------------
 // GET — fetch full manage dashboard
 // ---------------------------------------------------------------------------
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const { searchParams } = req.nextUrl
   const campaignId = searchParams.get('campaign_id')
   const rawWallet  = searchParams.get('wallet')
 
   if (!campaignId || !rawWallet) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'campaign_id and wallet are required' },
-      { status: 400 }
+      400
     )
   }
   if (!isValidAddress(rawWallet)) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'invalid wallet address' },
-      { status: 400 }
+      400
     )
   }
 
-  const wallet   = rawWallet.toLowerCase()
-  const supabase = createSupabaseServiceClient()
+  const wallet = rawWallet.toLowerCase()
 
   // -- Fetch campaign --------------------------------------------------------
-  const { data: campaign, error: campErr } = await supabase
+  const { data: campaign, error: campErr } = await ctx.supabase
     .from('campaigns')
     .select('*')
     .eq('id', campaignId)
     .single()
 
   if (campErr || !campaign) {
-    return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
+    return ctx.json({ error: 'Campaign not found' }, 404)
   }
 
   // -- Creator guard ---------------------------------------------------------
   if (!campaign.creator || campaign.creator.toLowerCase() !== wallet) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Access denied — you are not the creator of this campaign' },
-      { status: 403 }
+      403
     )
   }
 
   // -- Stats: participant count ----------------------------------------------
-  const { count: participantCount } = await supabase
+  const { count: participantCount } = await ctx.supabase
     .from('participants')
     .select('id', { count: 'exact', head: true })
     .eq('campaign_id', campaignId)
 
   // -- Stats: total volume (sum of amount_usd from activity) -----------------
-  const { data: volumeData } = await supabase
+  const { data: volumeData } = await ctx.supabase
     .from('activity')
     .select('amount_usd')
     .eq('campaign_id', campaignId)
@@ -99,7 +97,7 @@ export async function GET(req: NextRequest) {
   )
 
   // -- Stats: total paid out (sum of reward_usd from pending_rewards claimed) -
-  const { data: paidData } = await supabase
+  const { data: paidData } = await ctx.supabase
     .from('pending_rewards')
     .select('reward_usd')
     .eq('campaign_id', campaignId)
@@ -125,7 +123,7 @@ export async function GET(req: NextRequest) {
   let recent_txs: object[] | undefined
 
   if (campaign.campaign_type === 'token_pool') {
-    const { data: refData } = await supabase
+    const { data: refData } = await ctx.supabase
       .from('pending_rewards')
       .select('referrer, reward_usd, wallet')
       .eq('campaign_id', campaignId)
@@ -151,7 +149,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Recent transactions (last 10 buy activity rows)
-    const { data: txData } = await supabase
+    const { data: txData } = await ctx.supabase
       .from('activity')
       .select('recorded_at, wallet, amount_usd, tx_hash')
       .eq('campaign_id', campaignId)
@@ -172,7 +170,7 @@ export async function GET(req: NextRequest) {
   let epoch_history: object[] | undefined
 
   if (campaign.campaign_type === 'points') {
-    const { data: lbData } = await supabase
+    const { data: lbData } = await ctx.supabase
       .from('participants')
       .select('wallet, total_points, total_earned_usd')
       .eq('campaign_id', campaignId)
@@ -196,7 +194,7 @@ export async function GET(req: NextRequest) {
     }))
 
     // Epoch history (last 20 distributions)
-    const { data: distData } = await supabase
+    const { data: distData } = await ctx.supabase
       .from('distributions')
       .select('epoch_number, published_at, status, onchain_id')
       .eq('campaign_id', campaignId)
@@ -206,13 +204,13 @@ export async function GET(req: NextRequest) {
     // For each distribution, get participant count and paid out
     epoch_history = await Promise.all(
       (distData ?? []).map(async (dist) => {
-        const { count } = await supabase
+        const { count } = await ctx.supabase
           .from('daily_payouts')
           .select('id', { count: 'exact', head: true })
           .eq('campaign_id', campaignId)
           .eq('epoch_number', dist.epoch_number)
 
-        const { data: payoutSum } = await supabase
+        const { data: payoutSum } = await ctx.supabase
           .from('daily_payouts')
           .select('payout_usd')
           .eq('campaign_id', campaignId)
@@ -231,7 +229,7 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  return NextResponse.json({
+  return ctx.json({
     campaign,
     stats,
     ...(top_referrers !== undefined && { top_referrers }),
@@ -239,7 +237,7 @@ export async function GET(req: NextRequest) {
     ...(leaderboard   !== undefined && { leaderboard }),
     ...(epoch_history !== undefined && { epoch_history }),
   })
-}
+})
 
 // ---------------------------------------------------------------------------
 // POST — pause / resume / end
@@ -250,12 +248,12 @@ const STATUS_MAP: Record<string, string> = {
   end:    'ended',
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createHandler(async (req, ctx) => {
   let body: unknown
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'invalid JSON body' }, { status: 400 })
+    return ctx.json({ error: 'invalid JSON body' }, 400)
   }
 
   const {
@@ -268,25 +266,25 @@ export async function POST(req: NextRequest) {
   } = body as Record<string, string | number | `0x${string}` | undefined>
 
   if (!campaign_id || !action || !wallet) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'campaign_id, action, and wallet are required' },
-      { status: 400 }
+      400
     )
   }
   if (!isValidAddress(String(wallet))) {
-    return NextResponse.json({ error: 'invalid wallet address' }, { status: 400 })
+    return ctx.json({ error: 'invalid wallet address' }, 400)
   }
   if (!STATUS_MAP[action]) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'action must be one of: pause | resume | end' },
-      { status: 400 }
+      400
     )
   }
   if (!authMessage || !authSignature || typeof issuedAt !== 'number') {
-    return NextResponse.json({ error: 'Signed authorization required' }, { status: 401 })
+    return ctx.json({ error: 'Signed authorization required' }, 401)
   }
   if (Math.abs(Date.now() - issuedAt) > 15 * 60 * 1000) {
-    return NextResponse.json({ error: 'Authorization expired' }, { status: 401 })
+    return ctx.json({ error: 'Authorization expired' }, 401)
   }
 
   const campaignIdValue = String(campaign_id)
@@ -297,7 +295,6 @@ export async function POST(req: NextRequest) {
 
   const normalWallet = walletValue.toLowerCase()
   const newStatus    = STATUS_MAP[actionValue]
-  const supabase     = createSupabaseServiceClient()
 
   const expectedMessage = buildCampaignManageMessage({
     campaignId: campaignIdValue,
@@ -307,7 +304,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (authMessageValue !== expectedMessage) {
-    return NextResponse.json({ error: 'Authorization payload mismatch' }, { status: 401 })
+    return ctx.json({ error: 'Authorization payload mismatch' }, 401)
   }
 
   const signer = await recoverMessageAddress({
@@ -316,44 +313,44 @@ export async function POST(req: NextRequest) {
   }).catch(() => null)
 
   if (!signer || signer.toLowerCase() !== normalWallet) {
-    return NextResponse.json({ error: 'Invalid authorization signature' }, { status: 401 })
+    return ctx.json({ error: 'Invalid authorization signature' }, 401)
   }
 
   // -- Verify creator --------------------------------------------------------
-  const { data: campaign, error: campErr } = await supabase
+  const { data: campaign, error: campErr } = await ctx.supabase
     .from('campaigns')
     .select('id, creator, status')
     .eq('id', campaignIdValue)
     .single()
 
   if (campErr || !campaign) {
-    return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
+    return ctx.json({ error: 'Campaign not found' }, 404)
   }
   if (!campaign.creator || campaign.creator.toLowerCase() !== normalWallet) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Access denied — you are not the creator of this campaign' },
-      { status: 403 }
+      403
     )
   }
 
   // -- Guard: can't resume/pause an ended campaign ---------------------------
   if (campaign.status === 'ended' && action !== 'end') {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Campaign has already ended and cannot be changed' },
-      { status: 409 }
+      409
     )
   }
 
   // -- Apply status change ---------------------------------------------------
-  const { error: updateErr } = await supabase
+  const { error: updateErr } = await ctx.supabase
     .from('campaigns')
     .update({ status: newStatus, updated_at: new Date().toISOString() })
     .eq('id', campaignIdValue)
 
   if (updateErr) {
-    console.error('[campaigns/manage] update error:', updateErr)
-    return NextResponse.json({ error: 'Failed to update campaign status' }, { status: 500 })
+    ctx.log.error('campaigns/manage', 'Update error', { error: updateErr })
+    return ctx.json({ error: 'Failed to update campaign status' }, 500)
   }
 
-  return NextResponse.json({ success: true, status: newStatus })
-}
+  return ctx.json({ success: true, status: newStatus })
+}, { auth: 'none' })

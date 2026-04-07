@@ -53,29 +53,27 @@
 //   }
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { createHandler } from '@/lib/web2/routeHandler'
 
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const rawAddress = req.nextUrl.searchParams.get('address')
 
   if (!rawAddress) {
-    return NextResponse.json({ error: 'address is required' }, { status: 400 })
+    return ctx.json({ error: 'address is required' }, 400)
   }
 
   const address = rawAddress.toLowerCase()
-  const supabase = createSupabaseServiceClient()
 
   // Promote locked → claimable rows whose claimable_at has passed
   // Best-effort: don't fail the request if this errors
-  await supabase
+  await ctx.supabase
     .from('pending_rewards')
     .update({ status: 'claimable' })
     .eq('wallet', address)
     .eq('status', 'locked')
     .lte('claimable_at', new Date().toISOString())
 
-  const { data: rows, error } = await supabase
+  const { data: rows, error } = await ctx.supabase
     .from('pending_rewards')
     .select(`
       id,
@@ -100,12 +98,12 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('[rewards/pending] query failed:', error.message)
-    return NextResponse.json({ error: 'Failed to fetch rewards' }, { status: 500 })
+    ctx.log.error('rewards/pending', 'Query failed', { error: error.message })
+    return ctx.json({ error: 'Failed to fetch rewards' }, 500)
   }
 
   if (!rows || rows.length === 0) {
-    return NextResponse.json({
+    return ctx.json({
       address,
       by_token: [],
       totals: {
@@ -225,5 +223,5 @@ export async function GET(req: NextRequest) {
     claimed_count: rows.filter((r) => r.status === 'claimed').length,
   }
 
-  return NextResponse.json({ address, by_token, totals })
-}
+  return ctx.json({ address, by_token, totals })
+})

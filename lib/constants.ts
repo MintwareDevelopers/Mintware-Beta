@@ -72,9 +72,11 @@ export const CHAIN_LABELS: Record<number, string> = {
 // Auth secrets
 // ---------------------------------------------------------------------------
 
-export const CRON_SECRET        = process.env.CRON_SECRET        ?? ''
-export const CLAIM_MARK_SECRET  = process.env.CLAIM_MARK_SECRET  ?? ''
-export const SWAP_WEBHOOK_SECRET = process.env.SWAP_WEBHOOK_SECRET ?? ''
+export const CRON_SECRET                 = process.env.CRON_SECRET                  ?? ''
+export const CLAIM_MARK_SECRET           = process.env.CLAIM_MARK_SECRET            ?? ''
+export const SWAP_WEBHOOK_SECRET         = process.env.SWAP_WEBHOOK_SECRET          ?? ''
+export const TRADE_SIGNAL_INGEST_SECRET  = process.env.TRADE_SIGNAL_INGEST_SECRET   ?? ''
+export const AI_ATTRIBUTION_ORACLE_SECRET = process.env.AI_ATTRIBUTION_ORACLE_SECRET ?? ''
 
 // ---------------------------------------------------------------------------
 // BigInt-safe JSON serialization

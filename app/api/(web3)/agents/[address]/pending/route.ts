@@ -1,50 +1,37 @@
-// =============================================================================
 // GET /api/agents/[address]/pending
-// Returns unclaimed oracle-signed actions for an agent to submit to the contract.
-// Public — the signature is bound to the agent's address via EIP-712, so it's
-// only usable by that agent. No sensitive data is exposed.
-// =============================================================================
+// Returns unclaimed oracle-signed actions for an agent.
+// Auth: none (signatures are address-bound via EIP-712)
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { NextRequest } from 'next/server'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ address: string }> },
+  req: NextRequest,
+  { params }: { params: Promise<{ address: string }> }
 ) {
   const { address: raw } = await params
-  const address = raw?.toLowerCase()
+  return createHandler(async (_req, ctx) => {
+    const address = raw?.toLowerCase()
+    if (!address || !/^0x[0-9a-f]{40}$/.test(address)) return ctx.json({ error: 'invalid address' }, 400)
 
-  if (!address || !/^0x[0-9a-f]{40}$/.test(address)) {
-    return NextResponse.json({ error: 'invalid address' }, { status: 400 })
-  }
+    const nowSecs = Math.floor(Date.now() / 1000).toString()
 
-  const supabase = createSupabaseServiceClient()
-  const nowSecs  = Math.floor(Date.now() / 1000).toString()
+    const { data, error } = await ctx.supabase
+      .from('ai_pending_signatures')
+      .select('id, tx_hash, signature, nonce, deadline, volume_wei, campaign_id')
+      .eq('address', address).eq('claimed', false).gt('deadline', nowSecs)
+      .order('created_at', { ascending: true }).limit(50)
 
-  const { data, error } = await supabase
-    .from('ai_pending_signatures')
-    .select('id, tx_hash, signature, nonce, deadline, volume_wei, campaign_id')
-    .eq('address', address)
-    .eq('claimed', false)
-    .gt('deadline', nowSecs)   // exclude expired signatures
-    .order('created_at', { ascending: true })
-    .limit(50)
+    if (error) {
+      ctx.log.error('agents/pending', 'failed to load pending actions', { error: error.message })
+      return ctx.json({ error: 'failed to load pending actions' }, 500)
+    }
 
-  if (error) {
-    console.error('[GET /api/agents/[address]/pending]', error.message)
-    return NextResponse.json({ error: 'failed to load pending actions' }, { status: 500 })
-  }
+    const pending = (data ?? []).map(row => ({
+      id: row.id, txHash: row.tx_hash, signature: row.signature,
+      nonce: row.nonce, deadline: row.deadline, volumeWei: row.volume_wei, campaignId: row.campaign_id,
+    }))
 
-  const pending = (data ?? []).map(row => ({
-    id:         row.id,
-    txHash:     row.tx_hash,
-    signature:  row.signature,
-    nonce:      row.nonce,
-    deadline:   row.deadline,
-    volumeWei:  row.volume_wei,
-    campaignId: row.campaign_id,
-  }))
-
-  return NextResponse.json({ pending, total: pending.length })
+    return ctx.json({ pending, total: pending.length })
+  })(req)
 }

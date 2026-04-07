@@ -79,10 +79,17 @@ export type HandlerOptions = {
   /**
    * Auth mode:
    *   'signed-message' — EIP-191 signed message, 15-min window, recovers wallet address
-   *   'bearer-token'   — Authorization: Bearer <CRON_SECRET> (cron jobs)
+   *   'bearer-token'   — Authorization: Bearer <secret> (cron jobs, webhooks)
    *   'none'           — No auth (read-only public endpoints)
    */
   auth?: AuthMode
+
+  /**
+   * Override the bearer secret for 'bearer-token' auth.
+   * Defaults to CRON_SECRET. Use for routes that need a different secret
+   * (e.g. CLAIM_MARK_SECRET for mark-claimed, SWAP_WEBHOOK_SECRET for webhooks).
+   */
+  bearerSecret?: string
 
   /**
    * Upstash rate limiting. Key is derived automatically:
@@ -184,14 +191,15 @@ export function createHandler(
     let user: { address: string } | undefined
 
     if (auth === 'bearer-token') {
+      const secret = opts.bearerSecret ?? CRON_SECRET
       const header = req.headers.get('authorization')
-      if (!CRON_SECRET) {
+      if (!secret) {
         if (process.env.NODE_ENV !== 'development') {
-          log.error('auth', 'CRON_SECRET not set in production')
+          log.error('auth', 'Bearer secret env var not set in production')
           return errorResponse('Server misconfigured', 500, 'MISSING_SECRET')
         }
         // In development with no secret set — allow through
-      } else if (header !== `Bearer ${CRON_SECRET}`) {
+      } else if (header !== `Bearer ${secret}`) {
         log.warn('auth', 'Bearer token mismatch')
         return errorResponse('Unauthorized', 401, 'UNAUTHORIZED')
       }

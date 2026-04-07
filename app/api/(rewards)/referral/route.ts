@@ -1,5 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 // ---------------------------------------------------------------------------
 // Address validation
@@ -10,42 +9,40 @@ function isValidAddress(raw: string): boolean {
 }
 
 // GET /api/referral?address=0x...
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const raw = req.nextUrl.searchParams.get('address')
   if (!raw) {
-    return NextResponse.json({ error: 'address required' }, { status: 400 })
+    return ctx.json({ error: 'address required' }, 400)
   }
   if (!isValidAddress(raw)) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'invalid address — must be 0x followed by 40 hex characters' },
-      { status: 400 }
+      400
     )
   }
 
   const address = raw.toLowerCase()
   // Service client: bypasses RLS for consistent reads from the referral_stats view.
   // referral_stats is a read-only view with no sensitive data — safe to expose publicly.
-  const supabase = createSupabaseServiceClient()
-  const { data, error } = await supabase
+  const { data, error } = await ctx.supabase
     .from('referral_stats')
     .select('*')
     .eq('address', address)
     .single()
 
   if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? 'not found' }, { status: 404 })
+    return ctx.json({ error: error?.message ?? 'not found' }, 404)
   }
 
-  return NextResponse.json(data)
-}
+  return ctx.json(data)
+})
 
 // POST /api/referral
 // Legacy mutation route removed in favor of POST /api/auth/connect, which
 // requires a fresh wallet-signed authorization message.
-export async function POST(req: NextRequest) {
-  void req
-  return NextResponse.json(
+export const POST = createHandler(async (_req, ctx) => {
+  return ctx.json(
     { error: 'deprecated — use POST /api/auth/connect with wallet authorization' },
-    { status: 410 }
+    410
   )
-}
+})

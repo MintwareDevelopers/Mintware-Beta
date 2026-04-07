@@ -20,9 +20,8 @@
 // Returns: { uid: string }
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
-import { attestReward }                from '@/lib/rewards/eas'
+import { attestReward } from '@/lib/rewards/eas'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 function isValidAddress(raw: string): boolean {
   return /^0x[0-9a-f]{40}$/i.test(raw)
@@ -32,20 +31,13 @@ function isValidTxHash(raw: string): boolean {
   return /^0x[0-9a-f]{64}$/i.test(raw)
 }
 
-export async function POST(req: NextRequest) {
-  // ── Auth ──────────────────────────────────────────────────────────────────
-  const secret   = process.env.SWAP_WEBHOOK_SECRET
-  const authHeader = req.headers.get('authorization') ?? ''
-  if (!secret || authHeader !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
-
+export const POST = createHandler(async (req, ctx) => {
   // ── Parse body ────────────────────────────────────────────────────────────
   let body: unknown
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'invalid json' }, { status: 400 })
+    return ctx.json({ error: 'invalid json' }, 400)
   }
 
   const b = body as Record<string, unknown>
@@ -58,22 +50,22 @@ export async function POST(req: NextRequest) {
   const claim_tx_hash  = typeof b.claim_tx_hash  === 'string' ? b.claim_tx_hash  : null
 
   if (!wallet || !isValidAddress(wallet)) {
-    return NextResponse.json({ error: 'invalid wallet' }, { status: 400 })
+    return ctx.json({ error: 'invalid wallet' }, 400)
   }
   if (!campaign_id) {
-    return NextResponse.json({ error: 'campaign_id required' }, { status: 400 })
+    return ctx.json({ error: 'campaign_id required' }, 400)
   }
   if (epoch_number === null || typeof epoch_number !== 'number') {
-    return NextResponse.json({ error: 'epoch_number required' }, { status: 400 })
+    return ctx.json({ error: 'epoch_number required' }, 400)
   }
   if (!amount_wei) {
-    return NextResponse.json({ error: 'amount_wei required' }, { status: 400 })
+    return ctx.json({ error: 'amount_wei required' }, 400)
   }
   if (!token_contract || !isValidAddress(token_contract)) {
-    return NextResponse.json({ error: 'invalid token_contract' }, { status: 400 })
+    return ctx.json({ error: 'invalid token_contract' }, 400)
   }
   if (!claim_tx_hash || !isValidTxHash(claim_tx_hash)) {
-    return NextResponse.json({ error: 'invalid claim_tx_hash' }, { status: 400 })
+    return ctx.json({ error: 'invalid claim_tx_hash' }, 400)
   }
 
   // ── Attest ────────────────────────────────────────────────────────────────
@@ -87,14 +79,12 @@ export async function POST(req: NextRequest) {
       claimTxHash:   claim_tx_hash,
     })
   } catch (err) {
-    console.error('[attest-reward] attestReward error:', err)
-    return NextResponse.json({ error: 'attestation failed' }, { status: 500 })
+    ctx.log.error('attest-reward', 'attestReward error', { err: String(err) })
+    return ctx.json({ error: 'attestation failed' }, 500)
   }
 
-  const supabase = createSupabaseServiceClient()
-
   // ── Upsert eas_attestations ────────────────────────────────────────────────
-  const { error: attErr } = await supabase
+  const { error: attErr } = await ctx.supabase
     .from('eas_attestations')
     .upsert(
       {
@@ -108,12 +98,12 @@ export async function POST(req: NextRequest) {
     )
 
   if (attErr) {
-    console.error('[attest-reward] eas_attestations upsert error:', attErr.message)
+    ctx.log.warn('attest-reward', 'eas_attestations upsert error (non-critical)', { error: attErr.message })
     // Non-critical — UID is still returned
   }
 
   // ── Link to daily_payouts ──────────────────────────────────────────────────
-  const { error: payoutErr } = await supabase
+  const { error: payoutErr } = await ctx.supabase
     .from('daily_payouts')
     .update({ eas_uid: uid })
     .eq('campaign_id',  campaign_id)
@@ -121,13 +111,13 @@ export async function POST(req: NextRequest) {
     .eq('wallet',       wallet.toLowerCase())
 
   if (payoutErr) {
-    console.error('[attest-reward] daily_payouts update error:', payoutErr.message)
+    ctx.log.warn('attest-reward', 'daily_payouts update error (non-critical)', { error: payoutErr.message })
     // Non-critical
   }
 
-  return NextResponse.json({ uid })
-}
+  return ctx.json({ uid })
+}, { auth: 'bearer-token', bearerSecret: process.env.SWAP_WEBHOOK_SECRET ?? '' })
 
-export async function GET() {
-  return NextResponse.json({ error: 'method not allowed' }, { status: 405 })
-}
+export const GET = createHandler(async (_req, ctx) => {
+  return ctx.json({ error: 'method not allowed' }, 405)
+})

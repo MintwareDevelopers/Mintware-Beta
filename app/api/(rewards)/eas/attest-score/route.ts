@@ -6,43 +6,18 @@
 //
 // Flow:
 //   1. Validate address param
-//   2. Rate-limit: 1 request / address / 60 min (in-memory, per instance)
+//   2. Rate-limit: 1 request / address / 60 min (via Upstash)
 //   3. Check eas_attestations for a fresh (<30 days) AttributionScore UID
 //      — if found, return the cached UID immediately (no re-attestation)
 //   4. Fetch Attribution score from external API
 //   5. Call attestScore() from lib/eas.ts
 //   6. Upsert eas_attestations row
 //   7. Return { uid, eas_explorer_url }
-//
-// Rate limit note: uses the same in-memory Map pattern as other routes.
-// One entry per wallet address; expires after RATE_LIMIT_MS.
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
-import { attestScore }                 from '@/lib/rewards/eas'
-import { API }                         from '@/lib/web2/api'
-
-// ── Rate limiter ──────────────────────────────────────────────────────────────
-const RATE_LIMIT_MS = 60 * 60 * 1000  // 1 hour
-const rateMap       = new Map<string, number>()
-
-function isRateLimited(addr: string): boolean {
-  const last = rateMap.get(addr)
-  if (!last) return false
-  return Date.now() - last < RATE_LIMIT_MS
-}
-
-function recordRequest(addr: string): void {
-  rateMap.set(addr, Date.now())
-  // Prune stale entries every ~500 requests to prevent unbounded growth
-  if (rateMap.size > 500) {
-    const cutoff = Date.now() - RATE_LIMIT_MS
-    for (const [k, v] of rateMap) {
-      if (v < cutoff) rateMap.delete(k)
-    }
-  }
-}
+import { attestScore }  from '@/lib/rewards/eas'
+import { API }          from '@/lib/web2/api'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 // ── Stale threshold ───────────────────────────────────────────────────────────
 const STALE_DAYS  = 30
@@ -60,24 +35,18 @@ function isValidAddress(raw: string): boolean {
   return /^0x[0-9a-f]{40}$/i.test(raw)
 }
 
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const { searchParams } = req.nextUrl
   const rawAddr          = searchParams.get('address') ?? ''
 
   if (!isValidAddress(rawAddr)) {
-    return NextResponse.json({ error: 'invalid address' }, { status: 400 })
+    return ctx.json({ error: 'invalid address' }, 400)
   }
 
-  const address  = rawAddr.toLowerCase()
-  const supabase = createSupabaseServiceClient()
-
-  // ── Rate limit ─────────────────────────────────────────────────────────────
-  if (isRateLimited(address)) {
-    return NextResponse.json({ error: 'rate limited — try again in 1 hour' }, { status: 429 })
-  }
+  const address = rawAddr.toLowerCase()
 
   // ── Cache check: fresh AttributionScore UID (<30 days old) ─────────────────
-  const { data: cached } = await supabase
+  const { data: cached } = await ctx.supabase
     .from('eas_attestations')
     .select('eas_uid, attested_at')
     .eq('wallet', address)
@@ -89,7 +58,7 @@ export async function GET(req: NextRequest) {
   if (cached) {
     const age = Date.now() - new Date(cached.attested_at).getTime()
     if (age < STALE_MS) {
-      return NextResponse.json({
+      return ctx.json({
         uid:              cached.eas_uid,
         eas_explorer_url: easExplorerUrl(cached.eas_uid),
         cached:           true,
@@ -102,7 +71,7 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(`${API}/score?address=${address}`, { cache: 'no-store' })
     if (!res.ok) {
-      return NextResponse.json({ error: 'score API unavailable' }, { status: 502 })
+      return ctx.json({ error: 'score API unavailable' }, 502)
     }
     const json = await res.json() as Record<string, unknown>
 
@@ -121,23 +90,21 @@ export async function GET(req: NextRequest) {
       character:    (json.character    as { label: string }) ?? { label: 'Unknown' },
     }
   } catch (err) {
-    console.error('[attest-score] score fetch error:', err)
-    return NextResponse.json({ error: 'score fetch failed' }, { status: 502 })
+    ctx.log.error('attest-score', 'Score fetch error', { err: String(err) })
+    return ctx.json({ error: 'score fetch failed' }, 502)
   }
 
   // ── Attest ─────────────────────────────────────────────────────────────────
-  recordRequest(address)
-
   let uid: string
   try {
     uid = await attestScore(address, scoreData)
   } catch (err) {
-    console.error('[attest-score] attestScore error:', err)
-    return NextResponse.json({ error: 'attestation failed' }, { status: 500 })
+    ctx.log.error('attest-score', 'attestScore error', { err: String(err) })
+    return ctx.json({ error: 'attestation failed' }, 500)
   }
 
   // ── Upsert eas_attestations ────────────────────────────────────────────────
-  const { error: upsertErr } = await supabase
+  const { error: upsertErr } = await ctx.supabase
     .from('eas_attestations')
     .upsert(
       {
@@ -151,17 +118,17 @@ export async function GET(req: NextRequest) {
     )
 
   if (upsertErr) {
-    console.error('[attest-score] upsert error:', upsertErr.message)
+    ctx.log.warn('attest-score', 'Upsert error (non-critical)', { error: upsertErr.message })
     // Non-critical — still return the UID to the client
   }
 
-  return NextResponse.json({
+  return ctx.json({
     uid,
     eas_explorer_url: easExplorerUrl(uid),
     cached:           false,
   })
-}
+}, { rateLimit: { max: 1, windowMs: 3600000 } })
 
-export async function POST() {
-  return NextResponse.json({ error: 'method not allowed' }, { status: 405 })
-}
+export const POST = createHandler(async (_req, ctx) => {
+  return ctx.json({ error: 'method not allowed' }, 405)
+})

@@ -1,57 +1,24 @@
-// =============================================================================
 // GET /api/claim/sol?campaign_id=&epoch_number=&wallet=
-//
-// Phase 7 — Returns oracle signature + Merkle proof for a Solana claim.
-//
-// The client (ClaimCard Solana path) calls this to get everything needed
-// to construct the Ed25519SigVerify + Anchor program `claim` transaction.
-//
-// Response shape:
-// {
-//   merkle_root: string          // hex, 64 chars
-//   oracle_sig:  string          // hex, 128 chars (64-byte Ed25519 sig)
-//   deadline:    number          // unix timestamp i64
-//   epoch_number: number
-//   amount:      string          // lamport-scale token amount (as string to avoid JS precision loss)
-//   proof:       string[]        // hex-encoded proof nodes
-//   oracle_pubkey: string        // hex, 64 chars — client needs this to build Ed25519 ix
-// }
-//
-// Rate limited: 10 req/min per address, 30 req/min per IP (middleware).
-// =============================================================================
+// Returns oracle signature + Merkle proof for a Solana claim.
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { createHandler } from '@/lib/web2/routeHandler'
 import { getOraclePublicKey } from '@/lib/web3/solanaPublisher'
 
 const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const { searchParams } = req.nextUrl
-  const campaignId   = searchParams.get('campaign_id')
-  const epochStr     = searchParams.get('epoch_number')
-  const wallet       = searchParams.get('wallet')
+  const campaignId  = searchParams.get('campaign_id')
+  const epochStr    = searchParams.get('epoch_number')
+  const wallet      = searchParams.get('wallet')
 
-  if (!campaignId || !epochStr || !wallet) {
-    return NextResponse.json(
-      { error: 'campaign_id, epoch_number, and wallet are required' },
-      { status: 400 }
-    )
-  }
-
-  if (!SOLANA_RE.test(wallet)) {
-    return NextResponse.json({ error: 'invalid wallet address' }, { status: 422 })
-  }
+  if (!campaignId || !epochStr || !wallet) return ctx.json({ error: 'campaign_id, epoch_number, and wallet are required' }, 400)
+  if (!SOLANA_RE.test(wallet)) return ctx.json({ error: 'invalid wallet address' }, 422)
 
   const epochNumber = parseInt(epochStr, 10)
-  if (isNaN(epochNumber) || epochNumber < 1) {
-    return NextResponse.json({ error: 'invalid epoch_number' }, { status: 422 })
-  }
+  if (isNaN(epochNumber) || epochNumber < 1) return ctx.json({ error: 'invalid epoch_number' }, 422)
 
-  const supabase = createSupabaseServiceClient()
-
-  // Fetch distribution record
-  const { data: dist, error: distErr } = await supabase
+  const { data: dist, error: distErr } = await ctx.supabase
     .from('sol_distributions')
     .select('merkle_root, tree_json, oracle_sig, deadline, status')
     .eq('campaign_id', campaignId)
@@ -59,62 +26,27 @@ export async function GET(req: NextRequest) {
     .maybeSingle()
 
   if (distErr) {
-    console.error('[claim/sol] DB error:', distErr.message)
-    return NextResponse.json({ error: 'database error' }, { status: 500 })
+    ctx.log.error('claim/sol', 'DB error', { error: distErr.message })
+    return ctx.json({ error: 'database error' }, 500)
   }
-
-  if (!dist) {
-    return NextResponse.json({ error: 'distribution not found' }, { status: 404 })
-  }
-
-  if (dist.status === 'pending') {
-    return NextResponse.json({ error: 'distribution not yet published' }, { status: 404 })
-  }
-
+  if (!dist) return ctx.json({ error: 'distribution not found' }, 404)
+  if (dist.status === 'pending') return ctx.json({ error: 'distribution not yet published' }, 404)
   if (!dist.deadline) {
-    // No fallback — deadline must be set at publish time
-    console.error(`[claim/sol] null deadline for campaign=${campaignId} epoch=${epochNumber}`)
-    return NextResponse.json({ error: 'distribution deadline not set' }, { status: 500 })
+    ctx.log.error('claim/sol', 'null deadline', { campaignId, epochNumber })
+    return ctx.json({ error: 'distribution deadline not set' }, 500)
   }
 
-  // Look up wallet in tree_json leaves — O(1) with pre-computed proof
-  const tree = dist.tree_json as {
-    root:   string
-    leaves: Array<{ wallet: string; amount: string; proof: string[] }>
-  }
+  const tree = dist.tree_json as { root: string; leaves: Array<{ wallet: string; amount: string; proof: string[] }> }
+  const leaf = tree.leaves?.find((l) => l.wallet.toLowerCase() === wallet.toLowerCase() || l.wallet === wallet)
+  if (!leaf) return ctx.json({ error: 'wallet not found in this distribution' }, 404)
 
-  const leaf = tree.leaves?.find(
-    (l) => l.wallet.toLowerCase() === wallet.toLowerCase() ||
-           l.wallet === wallet  // Solana case-sensitive
-  )
-
-  if (!leaf) {
-    return NextResponse.json(
-      { error: 'wallet not found in this distribution' },
-      { status: 404 }
-    )
-  }
-
-  // Get oracle public key (from loaded keypair — same key stored in program GlobalState)
   let oraclePubkey: string
   try {
     oraclePubkey = getOraclePublicKey()
   } catch (err) {
-    console.error('[claim/sol] oracle key error:', err)
-    return NextResponse.json({ error: 'oracle configuration error' }, { status: 500 })
+    ctx.log.error('claim/sol', 'oracle key error', { error: String(err) })
+    return ctx.json({ error: 'oracle configuration error' }, 500)
   }
 
-  return NextResponse.json({
-    merkle_root:   dist.merkle_root,
-    oracle_sig:    dist.oracle_sig,
-    deadline:      dist.deadline,
-    epoch_number:  epochNumber,
-    amount:        leaf.amount,
-    proof:         leaf.proof,
-    oracle_pubkey: oraclePubkey,
-  })
-}
-
-export async function POST() {
-  return NextResponse.json({ error: 'method not allowed' }, { status: 405 })
-}
+  return ctx.json({ merkle_root: dist.merkle_root, oracle_sig: dist.oracle_sig, deadline: dist.deadline, epoch_number: epochNumber, amount: leaf.amount, proof: leaf.proof, oracle_pubkey: oraclePubkey })
+})

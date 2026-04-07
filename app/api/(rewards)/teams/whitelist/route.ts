@@ -11,30 +11,28 @@
 // Auth: none — wallet address is the filter. Uses service role to bypass RLS.
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 function isValidAddress(raw: string): boolean {
   return /^0x[0-9a-f]{40}$/i.test(raw)
 }
 
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const raw = req.nextUrl.searchParams.get('wallet')
 
   if (!raw) {
-    return NextResponse.json({ error: 'wallet param is required' }, { status: 400 })
+    return ctx.json({ error: 'wallet param is required' }, 400)
   }
   if (!isValidAddress(raw)) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'invalid wallet — must be 0x followed by 40 hex characters' },
-      { status: 400 }
+      400
     )
   }
 
-  const wallet   = raw.toLowerCase()
-  const supabase = createSupabaseServiceClient()
+  const wallet = raw.toLowerCase()
 
-  const { data, error } = await supabase
+  const { data, error } = await ctx.supabase
     .from('whitelisted_teams')
     .select('wallet')
     .eq('wallet', wallet)
@@ -42,9 +40,9 @@ export async function GET(req: NextRequest) {
     .maybeSingle()
 
   if (error) {
-    console.error('[teams/whitelist] query error:', error)
-    return NextResponse.json({ error: 'Failed to check whitelist' }, { status: 500 })
+    ctx.log.error('teams/whitelist', 'Query error', { error })
+    return ctx.json({ error: 'Failed to check whitelist' }, 500)
   }
 
-  return NextResponse.json({ whitelisted: data !== null })
-}
+  return ctx.json({ whitelisted: data !== null })
+})

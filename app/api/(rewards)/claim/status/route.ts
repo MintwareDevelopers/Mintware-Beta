@@ -44,24 +44,22 @@
 // join them in JS via (campaign_id, epoch_number).
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { createHandler } from '@/lib/web2/routeHandler'
 
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const rawAddress = req.nextUrl.searchParams.get('address')
 
   if (!rawAddress) {
-    return NextResponse.json({ error: 'address is required' }, { status: 400 })
+    return ctx.json({ error: 'address is required' }, 400)
   }
 
   const address = rawAddress.toLowerCase()
-  const supabase = createSupabaseServiceClient()
 
   // ---------------------------------------------------------------------------
   // Step 1: Get all daily_payouts for this wallet + campaign metadata.
   // tree_json is NOT selected here.
   // ---------------------------------------------------------------------------
-  const { data: rows, error } = await supabase
+  const { data: rows, error } = await ctx.supabase
     .from('daily_payouts')
     .select(`
       id,
@@ -84,12 +82,12 @@ export async function GET(req: NextRequest) {
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('[claim/status] daily_payouts query failed:', error.message)
-    return NextResponse.json({ error: 'Failed to fetch rewards' }, { status: 500 })
+    ctx.log.error('claim/status', 'daily_payouts query failed', { error: error.message })
+    return ctx.json({ error: 'Failed to fetch rewards' }, 500)
   }
 
   if (!rows || rows.length === 0) {
-    return NextResponse.json({
+    return ctx.json({
       address,
       rewards: [],
       totals: { claimable_count: 0, claimed_count: 0, pending_count: 0 },
@@ -109,14 +107,14 @@ export async function GET(req: NextRequest) {
   // This prevents the query from ballooning as campaigns accumulate epochs over time.
   const epochNumbers = [...new Set(rows.map((r) => r.epoch_number))]
 
-  const { data: dists, error: distErr } = await supabase
+  const { data: dists, error: distErr } = await ctx.supabase
     .from('distributions')
     .select('id, campaign_id, epoch_number, status, merkle_root, oracle_signature, deadline, published_at')
     .in('campaign_id', campaignIds)
     .in('epoch_number', epochNumbers)
 
   if (distErr) {
-    console.error('[claim/status] distributions query failed:', distErr.message)
+    ctx.log.error('claim/status', 'distributions query failed', { error: distErr.message })
     // Non-fatal: return rewards with dist=null (all show as 'pending')
   }
 
@@ -171,5 +169,5 @@ export async function GET(req: NextRequest) {
     pending_count:   rewards.filter((r) => r.status === 'pending').length,
   }
 
-  return NextResponse.json({ address, rewards, totals })
-}
+  return ctx.json({ address, rewards, totals })
+})

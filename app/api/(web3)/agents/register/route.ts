@@ -3,10 +3,9 @@
 // Idempotent. Optional erc8004TokenId links the wallet to an ERC-8004 token.
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { recoverMessageAddress } from 'viem'
 import { buildAgentRegisterMessage } from '@/lib/web3/signedActionMessages'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 interface RegisterBody {
   address?:          string
@@ -26,25 +25,25 @@ interface RegisterBody {
 const VALID_STATUSES = new Set(['active', 'paused', 'offline'])
 const MAX_AUTH_AGE_MS = 15 * 60 * 1000
 
-export async function POST(req: NextRequest) {
+export const POST = createHandler(async (req, ctx) => {
   let body: RegisterBody
-  try { body = await req.json() } catch { return NextResponse.json({ error: 'invalid json' }, { status: 400 }) }
+  try { body = await req.json() } catch { return ctx.json({ error: 'invalid json' }, 400) }
 
   const address = body.address?.toLowerCase()
   if (!address || !/^0x[0-9a-f]{40}$/.test(address)) {
-    return NextResponse.json({ error: 'invalid address' }, { status: 400 })
+    return ctx.json({ error: 'invalid address' }, 400)
   }
 
   if (body.operationalStatus && !VALID_STATUSES.has(body.operationalStatus)) {
-    return NextResponse.json({ error: 'invalid operationalStatus' }, { status: 400 })
+    return ctx.json({ error: 'invalid operationalStatus' }, 400)
   }
 
   if (!body.authMessage || !body.authSignature || typeof body.issuedAt !== 'number') {
-    return NextResponse.json({ error: 'signed authorization is required' }, { status: 401 })
+    return ctx.json({ error: 'signed authorization is required' }, 401)
   }
 
   if (Math.abs(Date.now() - body.issuedAt) > MAX_AUTH_AGE_MS) {
-    return NextResponse.json({ error: 'authorization expired' }, { status: 401 })
+    return ctx.json({ error: 'authorization expired' }, 401)
   }
 
   const agentName = body.agentName ?? body.name ?? undefined
@@ -60,7 +59,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (body.authMessage !== expectedMessage) {
-    return NextResponse.json({ error: 'authorization payload mismatch' }, { status: 401 })
+    return ctx.json({ error: 'authorization payload mismatch' }, 401)
   }
 
   const signer = await recoverMessageAddress({
@@ -69,10 +68,9 @@ export async function POST(req: NextRequest) {
   }).catch(() => null)
 
   if (!signer || signer.toLowerCase() !== address) {
-    return NextResponse.json({ error: 'invalid authorization signature' }, { status: 401 })
+    return ctx.json({ error: 'invalid authorization signature' }, 401)
   }
 
-  const supabase = createSupabaseServiceClient()
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mintware.finance'
 
   const profilePayload: Record<string, unknown> = {
@@ -87,25 +85,25 @@ export async function POST(req: NextRequest) {
   if (body.operationalStatus !== undefined) profilePayload.operational_status = body.operationalStatus
   if (body.services         !== undefined) profilePayload.services           = body.services.slice(0, 20)
 
-  const { error: profileErr } = await supabase
+  const { error: profileErr } = await ctx.supabase
     .from('ai_agent_profiles')
     .upsert(profilePayload, { onConflict: 'address' })
   if (profileErr) {
-    console.error('[POST /api/agents/register] profile:', profileErr.message)
-    return NextResponse.json({ error: 'registration failed' }, { status: 500 })
+    ctx.log.error('agents/register', 'Profile upsert failed', { error: profileErr.message })
+    return ctx.json({ error: 'registration failed' }, 500)
   }
 
-  const { error: scoreErr } = await supabase
+  const { error: scoreErr } = await ctx.supabase
     .from('ai_agent_scores')
     .upsert({ address }, { onConflict: 'address', ignoreDuplicates: true })
   if (scoreErr) {
-    console.error('[POST /api/agents/register] score:', scoreErr.message)
-    return NextResponse.json({ error: 'score init failed' }, { status: 500 })
+    ctx.log.error('agents/register', 'Score init failed', { error: scoreErr.message })
+    return ctx.json({ error: 'score init failed' }, 500)
   }
 
-  return NextResponse.json({
+  return ctx.json({
     ok:           true,
     address,
     metadata_url: `${base}/api/agents/${address}/erc8004-metadata`,
   })
-}
+}, { auth: 'none' })
