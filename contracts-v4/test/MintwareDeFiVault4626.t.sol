@@ -34,6 +34,7 @@ contract MintwareDeFiVault4626Test is Test {
     address internal bob      = makeAddr("bob");
     address internal oracle   = makeAddr("oracle");
     address internal treasury = makeAddr("treasury");
+    address internal feeTreasury = makeAddr("feeTreasury");
     address internal dist     = makeAddr("distributor");
 
     PoolManager internal pm;
@@ -74,20 +75,7 @@ contract MintwareDeFiVault4626Test is Test {
         );
 
         // Deploy the ERC-4626 DeFi vault.
-        VaultConfig memory cfg = VaultConfig({
-            surface:             VaultSurface.DeFi,
-            provider:            deployer,
-            underlyingToken:     address(usdc),
-            name:                "MW DeFi Vault Share",
-            symbol:              "mwDEFI",
-            minDeposit:          0,
-            entryFeeBps:         0,
-            exitFeeBps:          0,
-            enableMEVProtection: true,
-            enableIdleCapital:   false,
-            idleTargetRatio:     0
-        });
-        vault = new MintwareDeFiVault4626(cfg, address(pm), address(feeVault));
+        vault = new MintwareDeFiVault4626(_cfg(0, 0), address(pm), address(feeVault));
 
         // Wire cross-references (hook gates LP to the vault).
         hook.setSocialVault(address(vault));
@@ -106,6 +94,23 @@ contract MintwareDeFiVault4626Test is Test {
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
+
+    function _cfg(uint256 entryBps, uint256 exitBps) internal view returns (VaultConfig memory) {
+        return VaultConfig({
+            surface:             VaultSurface.DeFi,
+            provider:            deployer,
+            underlyingToken:     address(usdc),
+            treasury:            feeTreasury,
+            name:                "MW DeFi Vault Share",
+            symbol:              "mwDEFI",
+            minDeposit:          0,
+            entryFeeBps:         entryBps,
+            exitFeeBps:          exitBps,
+            enableMEVProtection: true,
+            enableIdleCapital:   false,
+            idleTargetRatio:     0
+        });
+    }
 
     function _seedPool() internal {
         // Provider == owner seeds the pool (factory hands vault ownership to provider).
@@ -251,5 +256,43 @@ contract MintwareDeFiVault4626Test is Test {
         vm.prank(alice);
         vm.expectRevert();
         vault.rebalanceToProfile(PoolProfile.MEME);
+    }
+
+    // ── Track A: entry/exit fees (spec fee model) ────────────────────────────
+
+    function test_entry_fee_to_treasury_shares_for_net() public {
+        // Fee-enabled vault, no pool wiring — assets held in vault, isolates fee logic.
+        MintwareDeFiVault4626 fv = new MintwareDeFiVault4626(_cfg(50, 100), address(pm), address(feeVault));
+        usdc.mint(alice, 10_000e6);
+
+        vm.startPrank(alice);
+        usdc.approve(address(fv), 10_000e6);
+        uint256 shares = fv.depositWithLock(10_000e6, alice, LockTier.Flex);
+        vm.stopPrank();
+
+        assertEq(usdc.balanceOf(feeTreasury), 50e6, "entry fee 0.5% to treasury");
+        assertEq(fv.totalPrincipal(), 9_950e6, "net principal = gross - entry fee");
+        assertEq(fv.totalAssets(), 9_950e6, "totalAssets = net principal");
+        assertApproxEqAbs(shares, 9_950e6, 1, "shares minted for net");
+    }
+
+    function test_exit_fee_to_treasury() public {
+        MintwareDeFiVault4626 fv = new MintwareDeFiVault4626(_cfg(0, 100), address(pm), address(feeVault));
+        usdc.mint(alice, 10_000e6);
+
+        vm.startPrank(alice);
+        usdc.approve(address(fv), 10_000e6);
+        uint256 shares = fv.depositWithLock(10_000e6, alice, LockTier.Flex);
+        vm.warp(block.timestamp + 25 hours);
+        fv.requestRedeem(shares);
+        vm.warp(block.timestamp + 7 days + 1);
+
+        uint256 tBefore = usdc.balanceOf(feeTreasury);
+        uint256 aBefore = usdc.balanceOf(alice);
+        fv.executeRedeem();
+        vm.stopPrank();
+
+        assertEq(usdc.balanceOf(feeTreasury) - tBefore, 100e6, "exit fee 1% to treasury");
+        assertApproxEqAbs(usdc.balanceOf(alice) - aBefore, 9_900e6, 1, "payout net of exit fee");
     }
 }

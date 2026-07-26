@@ -94,6 +94,7 @@ abstract contract MintwareBaseVault4626 is
 
     IPoolManager public immutable poolManager;
     address      public immutable feeVault;
+    address      public immutable treasury;
     VaultSurface public immutable surface;
     address      public immutable provider;
     uint256      public immutable minDeposit;
@@ -168,6 +169,7 @@ abstract contract MintwareBaseVault4626 is
     {
         poolManager = IPoolManager(_poolManager);
         feeVault    = _feeVault;
+        treasury    = cfg.treasury;
         surface     = cfg.surface;
         provider    = cfg.provider;
         minDeposit  = cfg.minDeposit;
@@ -189,6 +191,8 @@ abstract contract MintwareBaseVault4626 is
     // ─────────────────────────────────────────────────────────────────────────
 
     /// @notice Standard 4626 deposit; defaults to the Flex (no-lock) tier.
+    ///         `assets` is the gross input; a `entryFeeBps` cut goes to treasury and
+    ///         shares are minted for the net principal.
     function deposit(uint256 assets, address receiver)
         public
         override
@@ -196,7 +200,7 @@ abstract contract MintwareBaseVault4626 is
         returns (uint256)
     {
         _pendingTier = LockTier.Flex;
-        return _depositFlow(assets, receiver);
+        return _enterVault(assets, receiver);
     }
 
     /// @notice Deposit with an explicit lock tier (higher tier → higher FeeVault multiplier).
@@ -206,42 +210,55 @@ abstract contract MintwareBaseVault4626 is
         returns (uint256)
     {
         _pendingTier = tier;
-        return _depositFlow(assets, receiver);
+        return _enterVault(assets, receiver);
     }
 
-    /// @notice Standard 4626 mint; defaults to the Flex tier.
+    /// @notice Standard 4626 mint. `shares` are minted for a net principal; the entry
+    ///         fee is charged on top, so the caller pays `net + fee`.
     function mint(uint256 shares, address receiver)
         public
         override
         nonReentrant
-        returns (uint256)
+        returns (uint256 grossAssets)
     {
         _pendingTier = LockTier.Flex;
-        uint256 assets = previewMint(shares);
-        if (assets < minDeposit) revert BelowMinDeposit();
-        _deposit(_msgSender(), receiver, assets, shares);
-        return assets;
+        uint256 net = previewMint(shares);
+        if (net < minDeposit) revert BelowMinDeposit();
+        uint256 fee = entryFeeBps == 0 ? 0 : (net * entryFeeBps) / (BPS - entryFeeBps);
+        grossAssets = net + fee;
+        _pullAndEnter(receiver, grossAssets, fee, net, shares);
     }
 
-    function _depositFlow(uint256 assets, address receiver) internal returns (uint256 shares) {
+    /// @dev Deposit path: `assets` gross → entry fee to treasury → shares for net.
+    function _enterVault(uint256 assets, address receiver) private returns (uint256 shares) {
         if (assets < minDeposit) revert BelowMinDeposit();
-        shares = previewDeposit(assets);
-        _deposit(_msgSender(), receiver, assets, shares);
+        uint256 fee = (assets * entryFeeBps) / BPS;
+        uint256 net = assets - fee;
+        shares = previewDeposit(net);
+        _pullAndEnter(receiver, assets, fee, net, shares);
     }
 
-    /// @dev Pulls assets + mints shares (super), records lock, deploys liquidity.
-    function _deposit(address caller, address receiver, uint256 assets, uint256 shares)
-        internal
-        override
-    {
-        super._deposit(caller, receiver, assets, shares);
-        totalPrincipal += assets;
+    /// @dev Pull gross assets, remit entry fee to treasury, mint shares for net,
+    ///      record lock, and deploy the net principal as liquidity.
+    function _pullAndEnter(
+        address receiver,
+        uint256 grossAssets,
+        uint256 fee,
+        uint256 net,
+        uint256 shares
+    ) private {
+        IERC20(asset()).safeTransferFrom(_msgSender(), address(this), grossAssets);
+        if (fee > 0) IERC20(asset()).safeTransfer(treasury, fee);
+
+        _mint(receiver, shares);
+        totalPrincipal += net;
         _recordLock(receiver, _pendingTier);
         _pendingTier = LockTier.Flex;
 
         if (poolInitialized) {
-            poolManager.unlock(abi.encode(Action.Deploy, abi.encode(assets)));
+            poolManager.unlock(abi.encode(Action.Deploy, abi.encode(net)));
         }
+        emit Deposit(_msgSender(), receiver, net, shares);
     }
 
     function _recordLock(address owner, LockTier tier) internal {
@@ -309,6 +326,7 @@ abstract contract MintwareBaseVault4626 is
         }
 
         uint256 penalty = _calculatePenalty(msg.sender, assets);
+        uint256 exitFee = (assets * exitFeeBps) / BPS;
 
         // Effects
         req.executed    = true;
@@ -326,7 +344,12 @@ abstract contract MintwareBaseVault4626 is
             IFeeVaultNotifier(feeVault).notifyFeeReceipt(penalty, "penalty");
         }
 
-        assetsOut = assets - penalty;
+        // Route exit fee to treasury
+        if (exitFee > 0) {
+            IERC20(asset()).safeTransfer(treasury, exitFee);
+        }
+
+        assetsOut = assets - penalty - exitFee;
 
         // V4 rounding can leave payout 1 wei over balance — cap it.
         uint256 available = IERC20(asset()).balanceOf(address(this));

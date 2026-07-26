@@ -76,11 +76,12 @@ contract DeployPhase3 is Script {
             surface:             VaultSurface.DeFi,
             provider:            deployer,
             underlyingToken:     usdc,
+            treasury:            treasury,
             name:                vaultName,
             symbol:              vaultSymbol,
             minDeposit:          0,
-            entryFeeBps:         0,
-            exitFeeBps:          0,
+            entryFeeBps:         50,   // 0.5% (spec fee model)
+            exitFeeBps:          100,  // 1.0%
             enableMEVProtection: true,
             enableIdleCapital:   false,
             idleTargetRatio:     0

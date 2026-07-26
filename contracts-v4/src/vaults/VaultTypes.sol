@@ -38,11 +38,12 @@ struct VaultConfig {
     VaultSurface surface;
     address provider;         // strategy manager (DeFi) / issuer (RWA)
     address underlyingToken;  // USDC for v1
+    address treasury;         // recipient of entry/exit fees (Mintware treasury)
     string  name;             // ERC-20 share token name
     string  symbol;           // ERC-20 share token symbol
     uint256 minDeposit;
-    uint256 entryFeeBps;      // 0 unless enabled (Track A fee decision)
-    uint256 exitFeeBps;
+    uint256 entryFeeBps;      // e.g. 50 = 0.5% (spec fee model)
+    uint256 exitFeeBps;       // e.g. 100 = 1.0%
     bool    enableMEVProtection;
     bool    enableIdleCapital;
     uint256 idleTargetRatio;  // WAD, e.g. 60e18 = 60%
