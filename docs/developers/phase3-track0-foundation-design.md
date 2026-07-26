@@ -53,11 +53,15 @@ struct VaultConfig {
 The current `SocialVault` on Base Sepolia is replaced by a fresh factory-produced `DeFiVault4626` deploy (clean redeploy, not an upgrade — the storage layout changes fundamentally with ERC-4626). Supabase `social_vaults`/`vault_epochs` get a migration to reference factory `vaultId`s. No mainnet vault funds exist yet, so redeploy is low-risk.
 
 ## Build order within Track 0
-1. `VaultTypes.sol` (config + enums + interface) ✔ scaffolding
-2. `MintwareBaseVault4626.sol` (abstract) ✔ scaffolding — port V4 plumbing + lock/withdrawal, wire 4626
-3. `MintwareDeFiVault4626.sol` (concrete) — override `_deployLiquidity` with current single-sided logic
-4. `MintwareVaultFactory.sol` — deploy+wire triple, registry
-5. Forge tests: base accounting, lock/penalty, async redeem, factory create+wire, DeFi deposit→deploy→redeem
-6. Fresh Base Sepolia deploy script + Supabase migration
-```
-```
+1. ✅ `VaultTypes.sol` (config + enums + record)
+2. ✅ `MintwareBaseVault4626.sol` (abstract) — V4 plumbing + lock/withdrawal + 4626 wiring (compiles)
+3. ✅ `MintwareDeFiVault4626.sol` (concrete) — single-sided `_deployLiquidity`/`_removeLiquidity`/`_rebalanceLiquidity` + team-seed/pool-init
+4. ✅ `MintwareVaultRegistry.sol` — on-chain registry (see D8 revision below)
+5. ✅ Forge tests: 6 DeFiVault integration tests vs real V4 `PoolManager` + 5 registry tests — **11/11 pass**
+6. ⏳ Fresh Base Sepolia deploy script + Supabase migration (next)
+
+### D8 revision (2026-07-26) — factory → registry for v1
+A `new`-based `createVault` factory compiled to **38.9 KB runtime**, over the 24 KB EIP-170 limit (it embeds the 22 KB `MintwareDeFiVault4626` creation code). The clean fix — minimal-proxy **clones + an initializer** — requires refactoring the base off constructor-`immutable`s onto an initializer and vendoring `openzeppelin-contracts-upgradeable` (not currently in `contracts-v4/lib`). For Track 0 the on-chain artifact is therefore **`MintwareVaultRegistry`** (deploy + wire via the deploy script, register on-chain = the multi-tenant source of truth). Full on-chain `createVault` is tracked into Track A alongside the clones/initializer refactor.
+
+### Test note
+Pre-existing `Integration.t.sol` (11) and `FeeVault.t.sol` (1) failures were confirmed present at the pre-Track-0 commit `10ee1148` — not introduced by this work.
