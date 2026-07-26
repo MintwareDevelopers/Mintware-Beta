@@ -11,6 +11,16 @@ enum VaultSurface {
     RWA
 }
 
+/// @dev DeFi-surface pool profiles — drive the LP tick-range half-width.
+///        BLUE_CHIP  600 ticks  (~±6%)
+///        EMERGING  1200 ticks  (~±13%)
+///        MEME      2400 ticks  (~±27%)
+enum PoolProfile {
+    BLUE_CHIP,
+    EMERGING,
+    MEME
+}
+
 /// @dev Lock tiers — shared by both surfaces. Multipliers live in LockLib.
 ///        Flex      (0d)   1.00×
 ///        Committed (30d)  1.15×

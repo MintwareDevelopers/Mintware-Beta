@@ -16,7 +16,7 @@ import {MWSocialHook}            from "../src/MWSocialHook.sol";
 import {HookMiner}               from "../src/lib/HookMiner.sol";
 import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
 import {MintwareBaseVault4626}   from "../src/vaults/MintwareBaseVault4626.sol";
-import {VaultSurface, LockTier, VaultConfig} from "../src/vaults/VaultTypes.sol";
+import {VaultSurface, LockTier, VaultConfig, PoolProfile} from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20} from "./mocks/MockERC20.sol";
 
@@ -212,5 +212,44 @@ contract MintwareDeFiVault4626Test is Test {
         // Even though assets are deployed as V4 liquidity, totalAssets reports principal.
         assertEq(vault.totalAssets(), 10_000e6, "principal accounting (D5)");
         assertEq(vault.convertToAssets(vault.balanceOf(alice)), 10_000e6, "1:1 share:principal");
+    }
+
+    // ── Track A1: pool profiles ──────────────────────────────────────────────
+
+    function test_profileHalfWidth_values() public view {
+        assertEq(vault.profileHalfWidth(PoolProfile.BLUE_CHIP), 600);
+        assertEq(vault.profileHalfWidth(PoolProfile.EMERGING), 1200);
+        assertEq(vault.profileHalfWidth(PoolProfile.MEME), 2400);
+    }
+
+    function test_rebalanceToProfile_blue_chip_sets_range() public {
+        _seedPool();
+        _deposit(alice, 10_000e6, LockTier.Flex);
+
+        vault.rebalanceToProfile(PoolProfile.BLUE_CHIP); // current tick 0, spacing 60
+        assertEq(vault.tickLower(), -600, "BLUE_CHIP lower");
+        assertEq(vault.tickUpper(), 600, "BLUE_CHIP upper");
+        assertEq(uint256(vault.profile()), uint256(PoolProfile.BLUE_CHIP), "profile stored");
+        assertGt(vault.totalLiquidity(), 0, "liquidity redeployed");
+    }
+
+    function test_profile_ranges_scale_with_risk() public {
+        _seedPool();
+        _deposit(alice, 10_000e6, LockTier.Flex);
+
+        vault.rebalanceToProfile(PoolProfile.EMERGING);
+        assertEq(vault.tickLower(), -1200);
+        assertEq(vault.tickUpper(), 1200);
+
+        vault.rebalanceToProfile(PoolProfile.MEME);
+        assertEq(vault.tickLower(), -2400);
+        assertEq(vault.tickUpper(), 2400);
+    }
+
+    function test_rebalanceToProfile_onlyOwner() public {
+        _seedPool();
+        vm.prank(alice);
+        vm.expectRevert();
+        vault.rebalanceToProfile(PoolProfile.MEME);
     }
 }

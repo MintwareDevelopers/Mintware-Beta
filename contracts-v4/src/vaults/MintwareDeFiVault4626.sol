@@ -8,13 +8,14 @@ import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta}          from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {LiquidityAmounts}      from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 
 import {IERC20}    from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {MintwareBaseVault4626} from "./MintwareBaseVault4626.sol";
-import {VaultConfig}           from "./VaultTypes.sol";
+import {MintwareBaseVault4626}    from "./MintwareBaseVault4626.sol";
+import {VaultConfig, PoolProfile} from "./VaultTypes.sol";
 
 /// @title  MintwareDeFiVault4626
 /// @notice Surface-1 (DeFi) vault. Extends the ERC-4626 base with single-sided
@@ -28,6 +29,7 @@ import {VaultConfig}           from "./VaultTypes.sol";
 contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
     using SafeERC20     for IERC20;
     using PoolIdLibrary for PoolKey;
+    using StateLibrary  for IPoolManager;
 
     struct TeamSeed {
         address projectToken;
@@ -37,11 +39,16 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
 
     mapping(bytes32 => TeamSeed) public teamSeeds;
 
+    /// @notice Active pool profile driving the LP tick-range half-width.
+    PoolProfile public profile = PoolProfile.BLUE_CHIP;
+
     event TeamSeeded(bytes32 indexed vaultId, address token, uint256 amount);
+    event ProfileRebalanced(PoolProfile indexed profile, int24 tickLower, int24 tickUpper);
 
     error InvalidSeed();
     error SeedAlreadyInitialized();
     error InvalidPoolKey();
+    error EmptyProfileRange();
 
     constructor(VaultConfig memory cfg, address _poolManager, address _feeVault)
         MintwareBaseVault4626(cfg, _poolManager, _feeVault)
@@ -86,6 +93,43 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
         }
 
         emit TeamSeeded(vaultId, projectToken, amount);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Pool profiles (Track A1) — set the LP tick range from a risk profile
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Tick half-width for a profile (aligned to tickSpacing by the caller).
+    function profileHalfWidth(PoolProfile p) public pure returns (int24) {
+        if (p == PoolProfile.BLUE_CHIP) return 600;
+        if (p == PoolProfile.EMERGING)  return 1200;
+        return 2400; // MEME
+    }
+
+    /// @notice Rebalance liquidity into a symmetric range around the current pool
+    ///         tick, sized by `p`'s half-width and aligned to the pool's tickSpacing.
+    function rebalanceToProfile(PoolProfile p) external onlyOwner nonReentrant {
+        if (!poolInitialized) revert PoolNotInitialized();
+
+        int24 spacing = poolKey.tickSpacing;
+        (, int24 currentTick,,) = poolManager.getSlot0(poolKey.toId());
+        int24 hw = profileHalfWidth(p);
+
+        int24 lower = _alignTick(currentTick - hw, spacing);
+        int24 upper = _alignTick(currentTick + hw, spacing);
+        if (upper <= lower) revert EmptyProfileRange();
+
+        profile = p;
+        poolManager.unlock(abi.encode(Action.Rebalance, abi.encode(lower, upper)));
+        emit ProfileRebalanced(p, lower, upper);
+    }
+
+    /// @dev Align a tick to the nearest lower multiple of `spacing` (V4 requires
+    ///      tickLower/Upper to be multiples of tickSpacing). Rounds toward -infinity.
+    function _alignTick(int24 tick, int24 spacing) internal pure returns (int24) {
+        int24 rounded = (tick / spacing) * spacing;
+        if (tick < 0 && rounded != tick) rounded -= spacing;
+        return rounded;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
