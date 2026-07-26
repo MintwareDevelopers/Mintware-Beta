@@ -3,8 +3,8 @@
 //
 // Strategy: mock createSupabaseServiceClient to return a chainable query builder
 // that resolves to controlled data. Each test drives exactly one skip branch.
-// verifySwapTx (RPC calls) is bypassed by returning an unknown chain so the
-// function is fail-open (returns { ok: true }) without hitting the network.
+// verifySwapTx performs JSON-RPC calls, so tests stub fetch to return a
+// successful receipt/transaction pair without hitting the network.
 // =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -108,7 +108,7 @@ function makeMockSupabase(tableMap: TableMap = {}) {
 // Shared fixture
 // ---------------------------------------------------------------------------
 
-/** A well-formed SwapEvent pointing to an unknown chain so verifySwapTx fails-open */
+/** A well-formed SwapEvent for a supported EVM chain */
 const baseEvent: SwapEvent = {
   tx_hash:     '0xdeadbeef',
   wallet:      '0xWallet',
@@ -119,14 +119,14 @@ const baseEvent: SwapEvent = {
   timestamp:   '2025-06-01T12:00:00.000Z',
 }
 
-/** A minimal live token_pool campaign. chain is 'unknown' → verifySwapTx fail-open */
+/** A minimal live token_pool campaign on Base */
 const baseCampaign = {
   id: 'camp-1',
   campaign_type: 'token_pool',
   status: 'live',
   closed: false,
   end_date: '2099-01-01T00:00:00.000Z',
-  chain: 'unknown_chain',
+  chain: 'base',
   min_score: 0,
   buyer_reward_pct: 1,
   referral_reward_pct: 0.5,
@@ -160,6 +160,25 @@ describe('processSwapEvent', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const payload = init?.body ? JSON.parse(String(init.body)) as { method?: string } : {}
+      if (payload.method === 'eth_getTransactionReceipt') {
+        return {
+          ok: true,
+          json: async () => ({ result: { status: '0x1', from: baseEvent.wallet } }),
+        } as Response
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          result: {
+            to: '0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae',
+            input: '0x',
+          },
+        }),
+      } as Response
+    }))
   })
 
   // -------------------------------------------------------------------------

@@ -85,6 +85,10 @@ async function jsonRpcCall<T>(rpcUrl: string, method: string, params: unknown[])
 function getSwapRpcUrl(chain: string | null): string | null {
   if (!chain) return null
   switch (chain.toLowerCase()) {
+    case 'ethereum':
+    case 'eth':
+    case 'mainnet':      return process.env.ETHEREUM_RPC_URL     ?? process.env.MAINNET_RPC_URL ?? 'https://eth.llamarpc.com'
+    case 'arbitrum':     return process.env.ARBITRUM_RPC_URL     ?? 'https://arb1.arbitrum.io/rpc'
     case 'base':         return process.env.BASE_RPC_URL         ?? 'https://mainnet.base.org'
     case 'base_sepolia': return process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org'
     case 'core_dao':     return process.env.CORE_DAO_RPC_URL     ?? 'https://rpc.coredao.org'

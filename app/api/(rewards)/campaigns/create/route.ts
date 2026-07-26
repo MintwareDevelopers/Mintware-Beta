@@ -23,6 +23,7 @@ const CHAIN_LABELS: Record<number, string> = {
 
 const DISTRIBUTOR_ADDRESS: Record<number, string> = {
   8453:  process.env.DISTRIBUTOR_ADDRESS_BASE      ?? process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS ?? '',
+  1:     process.env.DISTRIBUTOR_ADDRESS_ETHEREUM  ?? process.env.DISTRIBUTOR_ADDRESS_MAINNET ?? '',
   42161: process.env.DISTRIBUTOR_ADDRESS_ARBITRUM  ?? '',
 }
 
@@ -98,7 +99,15 @@ export async function POST(req: NextRequest) {
   const supabase      = createSupabaseServiceClient()
   const campaignType  = form.type === 'token_reward' ? 'token_pool' : 'points'
   const chain         = CHAIN_LABELS[form.chainId] ?? 'Base'
+  const distributorAddress = DISTRIBUTOR_ADDRESS[form.chainId] ?? ''
   const now           = new Date()
+
+  if (!CHAIN_LABELS[form.chainId]) {
+    return NextResponse.json({ error: 'Unsupported campaign chain' }, { status: 400 })
+  }
+  if (!distributorAddress) {
+    return NextResponse.json({ error: 'Campaign funding is not configured for this chain' }, { status: 400 })
+  }
 
   const startAt = (form.schedule === 'scheduled' && form.startAt)
     ? new Date(form.startAt)
@@ -128,7 +137,7 @@ export async function POST(req: NextRequest) {
       use_score_multiplier: form.useScoreMultiplier,
       daily_wallet_cap_usd: form.dailyWalletCapUsd ?? 0,
       daily_pool_cap_usd:   form.dailyPoolCapUsd   ?? 0,
-      contract_address:     DISTRIBUTOR_ADDRESS[form.chainId] ?? null,
+      contract_address:     distributorAddress,
       creator:              wallet.toLowerCase(),
       end_date:             endDate.toISOString(),
     })

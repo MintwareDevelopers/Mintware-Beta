@@ -29,7 +29,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { daysUntil } from '@/lib/web2/api'
 import { recoverMessageAddress } from 'viem'
-import { buildCampaignManageMessage } from '@/lib/web3/signedActionMessages'
+import { buildCampaignManageMessage, buildCampaignManageViewMessage } from '@/lib/web3/signedActionMessages'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,6 +45,9 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
   const campaignId = searchParams.get('campaign_id')
   const rawWallet  = searchParams.get('wallet')
+  const issuedAtRaw = searchParams.get('issuedAt')
+  const authMessage = searchParams.get('authMessage')
+  const authSignature = searchParams.get('authSignature')
 
   if (!campaignId || !rawWallet) {
     return NextResponse.json(
@@ -58,9 +61,38 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     )
   }
+  if (!issuedAtRaw || !authMessage || !authSignature) {
+    return NextResponse.json({ error: 'Signed authorization required' }, { status: 401 })
+  }
+
+  const issuedAt = Number(issuedAtRaw)
+  if (!Number.isFinite(issuedAt)) {
+    return NextResponse.json({ error: 'Invalid authorization timestamp' }, { status: 400 })
+  }
+  if (Math.abs(Date.now() - issuedAt) > 15 * 60 * 1000) {
+    return NextResponse.json({ error: 'Authorization expired' }, { status: 401 })
+  }
 
   const wallet   = rawWallet.toLowerCase()
   const supabase = createSupabaseServiceClient()
+  const expectedMessage = buildCampaignManageViewMessage({
+    campaignId,
+    wallet: rawWallet,
+    issuedAt,
+  })
+
+  if (authMessage !== expectedMessage) {
+    return NextResponse.json({ error: 'Authorization payload mismatch' }, { status: 401 })
+  }
+
+  const signer = await recoverMessageAddress({
+    message: authMessage,
+    signature: authSignature as `0x${string}`,
+  }).catch(() => null)
+
+  if (!signer || signer.toLowerCase() !== wallet) {
+    return NextResponse.json({ error: 'Invalid authorization signature' }, { status: 401 })
+  }
 
   // -- Fetch campaign --------------------------------------------------------
   const { data: campaign, error: campErr } = await supabase

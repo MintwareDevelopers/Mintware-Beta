@@ -34,6 +34,13 @@
       "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && cd '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/cranky-curie' && node node_modules/next/dist/bin/next dev --port 3004"],
       "port": 3004,
       "autoPort": true
+    },
+    {
+      "name": "elastic-booth",
+      "runtimeExecutable": "/bin/bash",
+      "runtimeArgs": ["-c", "export PATH=/Users/nicolasrobinson/.nvm/versions/node/v22.22.1/bin:$PATH && cd '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/.claude/worktrees/elastic-booth' && node node_modules/next/dist/bin/next dev --port 3005"],
+      "port": 3005,
+      "autoPort": true
     }
   ]
 }

@@ -61,18 +61,18 @@ export function useReferral(address: string | undefined): UseReferralReturn {
 
   const persistConnectSession = useCallback((addr: string, refCodeValue: string | null) => {
     if (typeof window === 'undefined') return
-    sessionStorage.setItem(connectSessionKey(addr), '1')
+    localStorage.setItem(connectSessionKey(addr), '1')
     if (refCodeValue) {
-      sessionStorage.setItem(refCodeSessionKey(addr), refCodeValue)
+      localStorage.setItem(refCodeSessionKey(addr), refCodeValue)
     }
   }, [])
 
   const loadCachedConnectSession = useCallback((addr: string): ConnectResult | null => {
     if (typeof window === 'undefined') return null
-    const verified = sessionStorage.getItem(connectSessionKey(addr))
+    const verified = localStorage.getItem(connectSessionKey(addr))
     if (!verified) return null
     return {
-      refCode: sessionStorage.getItem(refCodeSessionKey(addr)),
+      refCode: localStorage.getItem(refCodeSessionKey(addr)),
       isNew: false,
       refWasApplied: false,
     }

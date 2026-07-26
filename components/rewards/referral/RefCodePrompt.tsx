@@ -24,7 +24,7 @@ interface RefCodePromptProps {
 
 type PromptState = 'idle' | 'submitting' | 'success' | 'error'
 
-const CODE_PATTERN = /^mw_[0-9a-z]{6}$/
+const CODE_PATTERN = /^(?:mw_[0-9a-z]{6}|[A-Za-z0-9][A-Za-z0-9-]{1,31})$/
 
 export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
   const { signMessageAsync } = useSignMessage()
@@ -146,15 +146,15 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
             <input
               className="w-full box-border bg-mw-surface-purple border-[1.5px] border-[#E0DFFF] rounded-[10px] p-[14px_16px] font-mono text-[18px] text-[#1A1A2E] outline-none transition-[border-color] duration-150 tracking-[0.5px] placeholder:text-[#C4C3F0] focus:border-[#3A5CE8]"
               type="text"
-              placeholder="mw_xxxxxx"
+              placeholder="mw_xxxxxx or jake"
               value={code}
-              maxLength={9}
+              maxLength={32}
               spellCheck={false}
               autoComplete="off"
               onChange={e => {
                 setErrorMsg(null)
                 if (promptState === 'error') setPromptState('idle')
-                setCode(e.target.value.toLowerCase())
+                setCode(e.target.value.trim())
               }}
               onKeyDown={e => { if (e.key === 'Enter' && isValid) handleApply() }}
             />

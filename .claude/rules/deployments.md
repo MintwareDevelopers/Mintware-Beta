@@ -47,6 +47,8 @@
 
 Hobby plan: max once/day per cron.
 
+Privy rollout note: the Privy integration is already merged on `main` at commit `ec56a62d` and production env/dashboard setup was completed, but it is not live until Vercel can deploy a newer build than the old production commit. On Hobby, frequent cron schedules in `vercel.json` block that deployment; after upgrading Vercel, redeploy `main` (or commit `ec56a62d`) so the `NEXT_PUBLIC_PRIVY_APP_ID` build-time gate can take effect.
+
 ## Reown Cloud (WalletConnect)
 
 Project ID: `580f461c981a43d53fc25fe59b64306b`

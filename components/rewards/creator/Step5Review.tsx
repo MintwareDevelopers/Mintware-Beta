@@ -23,7 +23,7 @@ import { parseUnits } from 'viem'
 import type { CreatorFormState } from '@/lib/rewards/creator'
 import {
   computeWarnings, fmtUSDShort, fmtPct,
-  ERC20_APPROVE_ABI, DISTRIBUTOR_ABI, DISTRIBUTOR_ADDRESS,
+  ERC20_APPROVE_ABI, DISTRIBUTOR_ABI, getDistributorAddressForChain,
 } from '@/lib/rewards/creator'
 import { GuardrailWarning } from '@/components/rewards/creator/GuardrailWarning'
 import { buildCampaignCreateMessage } from '@/lib/web3/signedActionMessages'
@@ -96,6 +96,8 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
   const [campaignId,  setCampaignId]  = useState<string | null>(null)
 
   const warnings = computeWarnings(form)
+  const distributorAddress = getDistributorAddressForChain(form.chainId)
+  const hasDistributorAddress = distributorAddress !== '0x0000000000000000000000000000000000000000'
 
   // ── Allowance pre-check ─────────────────────────────────────────────────
   // Read the current ERC-20 allowance granted to the distributor contract.
@@ -113,8 +115,8 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
       stateMutability: 'view',
     }] as const,
     functionName: 'allowance',
-    args: address && form.token ? [address, DISTRIBUTOR_ADDRESS] : undefined,
-    query: { enabled: !!address && !!form.token },
+    args: address && form.token && hasDistributorAddress ? [address, distributorAddress] : undefined,
+    query: { enabled: !!address && !!form.token && hasDistributorAddress },
   })
 
   const requiredAmount = form.token && form.poolUsd
@@ -160,14 +162,14 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
     setFundState('funding')
     const amount = parseUnits(String(form.poolUsd), form.token.decimals)
     publicClient.simulateContract({
-      address:      DISTRIBUTOR_ADDRESS,
+      address:      distributorAddress,
       abi:          DISTRIBUTOR_ABI,
       functionName: 'depositCampaign',
       args:         [campaignId, tokenAddress, amount],
       account:      address,
     }).then(() => {
       writeFund({
-        address:      DISTRIBUTOR_ADDRESS,
+        address:      distributorAddress,
         abi:          DISTRIBUTOR_ABI,
         functionName: 'depositCampaign',
         args: [campaignId, tokenAddress, amount],
@@ -203,6 +205,11 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
 
   async function handleFund() {
     if (!form.token || (fundState !== 'idle' && fundState !== 'error')) return
+    if (!hasDistributorAddress) {
+      setErrorMsg('Campaign funding is not configured for this chain yet.')
+      setFundState('error')
+      return
+    }
     setErrorMsg(null)
     setFundState('creating')
 
@@ -260,17 +267,17 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
         setFundState('error')
         return
       }
-      setFundState('funding')
+        setFundState('funding')
       try {
         await publicClient.simulateContract({
-          address:      DISTRIBUTOR_ADDRESS,
+          address:      distributorAddress,
           abi:          DISTRIBUTOR_ABI,
           functionName: 'depositCampaign',
           args:         [newCampaignId, form.token.address as `0x${string}`, amount],
           account:      address,
         })
         writeFund({
-          address:      DISTRIBUTOR_ADDRESS,
+          address:      distributorAddress,
           abi:          DISTRIBUTOR_ABI,
           functionName: 'depositCampaign',
           args: [newCampaignId, form.token.address as `0x${string}`, amount],
@@ -287,7 +294,7 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
         address:      form.token.address as `0x${string}`,
         abi:          ERC20_APPROVE_ABI,
         functionName: 'approve',
-        args:         [DISTRIBUTOR_ADDRESS, amount],
+        args:         [distributorAddress, amount],
       })
       if (approveIsPending) setFundState('waiting_approve')
     }
@@ -300,9 +307,9 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
 
   const isWorking  = ['creating', 'approving', 'waiting_approve', 'funding', 'waiting_fund'].includes(fundState)
   const isConfirmed = fundState === 'confirmed'
-  const spenderLabel = DISTRIBUTOR_ADDRESS === '0x0000000000000000000000000000000000000000'
+  const spenderLabel = distributorAddress === '0x0000000000000000000000000000000000000000'
     ? 'MintwareDistributor'
-    : `${DISTRIBUTOR_ADDRESS.slice(0, 6)}…${DISTRIBUTOR_ADDRESS.slice(-4)}`
+    : `${distributorAddress.slice(0, 6)}…${distributorAddress.slice(-4)}`
   const looksLikeZeroFirstToken =
     form.token
       ? form.token.symbol.toUpperCase() === 'USDT' || form.token.name.toLowerCase().includes('tether')
@@ -433,10 +440,16 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
           </div>
         )}
 
+        {!hasDistributorAddress && (
+          <div className="bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.2)] rounded-[10px] p-[12px_16px] font-sans text-[13px] text-mw-pink">
+            ⚠ Funding contract not configured for the selected chain.
+          </div>
+        )}
+
         {/* Fund button */}
         {!isConfirmed && (
           <button
-            disabled={isWorking || !form.token}
+            disabled={isWorking || !form.token || !hasDistributorAddress}
             onClick={handleFund}
             className="w-full py-[14px] px-6 rounded-[12px] border-none text-white font-sans text-[15px] font-bold transition-[background] duration-200 flex items-center justify-center gap-[10px] disabled:cursor-not-allowed"
             style={{

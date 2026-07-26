@@ -205,6 +205,23 @@ export function buildCampaignManageMessage(input: {
   )
 }
 
+export function buildCampaignManageViewMessage(input: {
+  campaignId: string
+  wallet: string
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-campaign-manage-view',
+      campaignId: input.campaignId,
+      wallet: normalizeAddress(input.wallet),
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
+
 export function buildWalletConnectMessage(input: {
   address: string
   issuedAt: number

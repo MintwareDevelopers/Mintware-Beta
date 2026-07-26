@@ -27,7 +27,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD } from '@/lib/web2/api'
-import { buildCampaignManageMessage } from '@/lib/web3/signedActionMessages'
+import { buildCampaignManageMessage, buildCampaignManageViewMessage } from '@/lib/web3/signedActionMessages'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -164,8 +164,15 @@ function ManageContent() {
     setLoading(true)
     setError(null)
     try {
+      const issuedAt = Date.now()
+      const authMessage = buildCampaignManageViewMessage({
+        campaignId,
+        wallet: address,
+        issuedAt,
+      })
+      const authSignature = await signMessageAsync({ message: authMessage })
       const res = await fetch(
-        `/api/campaigns/manage?campaign_id=${encodeURIComponent(campaignId)}&wallet=${encodeURIComponent(address)}`
+        `/api/campaigns/manage?campaign_id=${encodeURIComponent(campaignId)}&wallet=${encodeURIComponent(address)}&issuedAt=${encodeURIComponent(String(issuedAt))}&authMessage=${encodeURIComponent(authMessage)}&authSignature=${encodeURIComponent(authSignature)}`
       )
       const json = await res.json()
       if (!res.ok) {
@@ -178,7 +185,7 @@ function ManageContent() {
     } finally {
       setLoading(false)
     }
-  }, [campaignId, address])
+  }, [campaignId, address, signMessageAsync])
 
   useEffect(() => { fetchData() }, [fetchData])
 

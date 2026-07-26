@@ -129,29 +129,47 @@ export async function POST(req: NextRequest) {
     refCode = isSolana ? address.slice(0, 6) : 'mw_' + address.slice(2, 8)
   }
 
-  // Upsert: set ref_code only if null (prevents overwriting existing codes if
-  // there's a race). Use raw SQL via RPC if needed, or rely on the check above.
-  const { error: upsertErr } = await supabase
+  // Insert only for genuinely new wallets. If a concurrent request wins the race
+  // first, read back the existing code instead of overwriting it.
+  const { error: insertErr } = await supabase
     .from('wallet_profiles')
-    .upsert(
+    .insert(
       {
         address,
         ref_code:     refCode,
         last_seen_at: new Date().toISOString(),
-      },
-      {
-        onConflict:       'address',
-        ignoreDuplicates: false,
       }
     )
 
-  if (upsertErr) {
-    console.error('[auth/connect] upsert error:', upsertErr.message)
-    // Still return a code even if the DB write failed (non-critical)
-    return NextResponse.json({
-      ref_code: refCode,
-      is_new:   true,
-    })
+  if (insertErr) {
+    const isConflict = insertErr.code === '23505'
+    if (isConflict) {
+      const { data: racedExisting, error: racedLookupErr } = await supabase
+        .from('wallet_profiles')
+        .select('ref_code')
+        .eq('address', address)
+        .maybeSingle()
+
+      if (racedLookupErr) {
+        console.error('[auth/connect] race lookup error:', racedLookupErr.message)
+        return NextResponse.json({ error: 'internal error' }, { status: 500 })
+      }
+
+      if (racedExisting?.ref_code) {
+        await supabase
+          .from('wallet_profiles')
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq('address', address)
+
+        return NextResponse.json({
+          ref_code: racedExisting.ref_code,
+          is_new:   false,
+        })
+      }
+    }
+
+    console.error('[auth/connect] insert error:', insertErr.message)
+    return NextResponse.json({ error: 'internal error' }, { status: 500 })
   }
 
   return NextResponse.json({

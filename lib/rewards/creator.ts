@@ -256,3 +256,13 @@ export const DISTRIBUTOR_ABI = [
 export const DISTRIBUTOR_ADDRESS =
   (process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS as `0x${string}` | undefined) ??
   '0x0000000000000000000000000000000000000000'
+
+export function getDistributorAddressForChain(chainId: number): `0x${string}` {
+  const addressMap: Record<number, string | undefined> = {
+    8453: process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_BASE ?? process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS,
+    1: process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_ETHEREUM ?? process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_MAINNET,
+    42161: process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_ARBITRUM,
+  }
+
+  return (addressMap[chainId] as `0x${string}` | undefined) ?? '0x0000000000000000000000000000000000000000'
+}
