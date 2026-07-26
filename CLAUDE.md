@@ -5,6 +5,11 @@ Stack: Next.js 16, TypeScript, RainbowKit + wagmi, Supabase, Tailwind v4, pnpm.
 
 Today's date: 2026-03-27.
 
+> **▶ Current direction — Phase 3 (Two-Surface Vaults):** the platform is evolving into a
+> two-surface (DeFi + RWA) Uniswap V4 vault system on a shared ERC-4626 base + factory.
+> **Read [`docs/developers/phase3-two-surface-architecture.md`](docs/developers/phase3-two-surface-architecture.md) first** for target
+> architecture, locked decisions, and build tracks. Active branch: `feature/phase-3`.
+
 ## Rules (load by topic)
 
 | Topic | File |
@@ -16,7 +21,8 @@ Today's date: 2026-03-27.
 | Campaign engine, epoch formula, multipliers, crons | `.claude/rules/rewards.md` |
 | Referral system, ref codes, Supabase tables | `.claude/rules/referrals.md` |
 | MintwareDistributor v2, AIAttribution v3, deploy | `.claude/rules/smart-contracts.md` |
-| Phase 2 — Social Vaults, V4 hook, FeeVault | `.claude/rules/vaults.md` |
+| Vaults — two-surface (DeFi+RWA), V4 hook, FeeVault, 4626 base | `.claude/rules/vaults.md` |
+| **Phase 3 plan of record** — two-surface architecture, tracks | `docs/developers/phase3-two-surface-architecture.md` |
 | Supabase schema, migrations, constraints | `.claude/rules/schema.md` |
 | Vercel, env vars, build, crons, domains | `.claude/rules/deployments.md` |
 | MintGuard, CSP, rate limits, on-chain verification | `.claude/rules/security.md` |

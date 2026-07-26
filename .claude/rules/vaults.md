@@ -1,4 +1,19 @@
-# Vaults — Phase 2 (Social Liquidity Vaults)
+# Vaults — Two-Surface Architecture (Phase 3)
+
+> **⤴ Direction (2026-07-26): Phase 3 evolves these Phase-2 Social Vaults into a two-surface
+> (DeFi + RWA) system on a shared ERC-4626 base + factory.** Target architecture, tracks, and
+> sequencing live in [`docs/developers/phase3-two-surface-architecture.md`](../../docs/developers/phase3-two-surface-architecture.md).
+> Everything below the line is the **current (Phase 2) state that Phase 3 builds on** — it is
+> still accurate for what's deployed today. As each Phase-3 track merges, its contract/API
+> reference is added here; we do **not** document unbuilt contracts ahead of time.
+>
+> **Phase 3 locked decisions:** both surfaces in parallel · keep off-chain attribution + add a
+> thin on-chain soulbound mirror · commit to ERC-4626 base + multi-tenant factory · evolve, don't
+> greenfield. **Phase-3 branch:** `feature/phase-3`.
+
+---
+
+# Current state — Phase 2 (Social Liquidity Vaults)
 
 ## Status: T1.1 complete (2026-03-23)
 

@@ -1,5 +1,11 @@
 # Smart Contracts
 
+> **⤴ Phase 3 (Two-Surface Vaults)** adds a new contract family — `MintwareBaseVault4626`,
+> `MintwareVaultFactory`, `MintwareDeFiVault4626` / `MintwareRWAVault4626`, `MintwareVRWA`,
+> `MintwareOracleHook`, SPV/KYC registries, and a soulbound `MintwareAttributionToken`.
+> Target design + sequencing: [`docs/developers/phase3-two-surface-architecture.md`](../../docs/developers/phase3-two-surface-architecture.md).
+> The contracts below are the **current** deployed set; Phase-3 contracts are documented here as they merge.
+
 ## MintwareDistributor v2 — Base Mainnet
 
 Contract files:
