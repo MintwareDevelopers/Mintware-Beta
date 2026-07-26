@@ -135,6 +135,90 @@ The public API is rate limited. Avoid making high-frequency requests in tight lo
 
 ---
 
+## Mintware Platform API — Response Conventions
+
+All internal Mintware API routes (`/api/...`) share a consistent response contract. This applies to every endpoint in the sections below.
+
+### Request ID
+
+Every response includes an `X-Request-Id` header containing a UUID unique to that request.
+
+```
+X-Request-Id: 4a7f2c1e-9b3d-4e8a-b1f0-2d5c8e3a7b9f
+```
+
+Include this value when reporting unexpected errors — it ties to server-side logs.
+
+### Error Shape
+
+All errors follow a single shape regardless of status code:
+
+```json
+{
+  "success": false,
+  "error": "Human-readable description of what went wrong",
+  "code": "MACHINE_READABLE_CODE"
+}
+```
+
+**Error codes**
+
+| Code | Status | Meaning |
+|---|---|---|
+| `UNAUTHORIZED` | 401 | Missing or invalid bearer token |
+| `AUTH_REQUIRED` | 401 | Signed-message auth fields absent from request body |
+| `AUTH_EXPIRED` | 401 | Signed message issued more than 15 minutes ago |
+| `INVALID_SIG` | 401 | Recovered address does not match claimed address |
+| `SIG_FAILED` | 401 | Signature verification threw an error |
+| `RATE_LIMITED` | 429 | Too many requests — back off and retry |
+| `INVALID_JSON` | 400 | Request body could not be parsed as JSON |
+| `MISSING_SECRET` | 500 | Server misconfiguration — bearer secret env var not set |
+| `INTERNAL_ERROR` | 500 | Unhandled server error |
+
+### Auth — Signed Message (EIP-191)
+
+Write endpoints that mutate user state require a wallet-signed authorization. Include these fields in the request body alongside your normal payload:
+
+```json
+{
+  "address": "0x...",
+  "authMessage": "Mintware: <action-specific message>\nWallet: 0x...\nIssued: <timestamp>",
+  "authSignature": "0x...",
+  "issuedAt": 1748000000000
+}
+```
+
+| Field | Description |
+|---|---|
+| `address` | The wallet address claiming to make the request |
+| `authMessage` | The plain-text string that was signed |
+| `authSignature` | EIP-191 personal_sign signature over `authMessage` |
+| `issuedAt` | `Date.now()` at signing time — must be within 15 minutes of server time |
+
+Signatures older than 15 minutes are rejected with `AUTH_EXPIRED`. The server recovers the signer address and rejects requests where it doesn't match `address`.
+
+### Auth — Bearer Token
+
+Internal automation endpoints (webhooks, oracle calls) use `Authorization: Bearer <secret>`:
+
+```
+Authorization: Bearer <secret>
+```
+
+The specific secret required is documented per-endpoint. Never expose these values client-side.
+
+### BigInt Values
+
+On-chain amounts (token balances, wei values, block numbers) are serialized as **strings**, not numbers, to avoid JavaScript precision loss:
+
+```json
+{ "volumeWei": "5000000000000000000", "deadline": "1748000000" }
+```
+
+Parse these with `BigInt()` or a decimal library on the client side.
+
+---
+
 ## AI Attribution API
 
 These endpoints are part of the Mintware platform and serve the AI agent reputation system.

@@ -12,8 +12,8 @@
 // Authorization: Bearer <CRON_SECRET>
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { createHandler } from '@/lib/web2/routeHandler'
+import { TREASURY_ADDRESS, CHAIN_RPC } from '@/lib/constants'
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree'
 import {
   createWalletClient,
@@ -52,42 +52,21 @@ function getChain(slug: string): Chain | null {
 }
 
 function getRpcUrl(slug: string): string {
-  switch (slug) {
-    case 'base':         return process.env.BASE_RPC_URL         ?? 'https://mainnet.base.org'
-    case 'base_sepolia': return process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org'
-    case 'core_dao':     return process.env.CORE_DAO_RPC_URL     ?? 'https://rpc.coredao.org'
-    case 'bnb':          return process.env.BNB_RPC_URL          ?? 'https://bsc-dataseed.binance.org'
-    default:             return 'https://mainnet.base.org'
-  }
+  return CHAIN_RPC[slug] ?? 'https://mainnet.base.org'
 }
 
-export async function GET(req: NextRequest) {
-  // Auth
-  const cronSecret = process.env.CRON_SECRET
-  if (cronSecret) {
-    const auth = req.headers.get('authorization')
-    if (auth !== `Bearer ${cronSecret}`) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    }
-  } else if (process.env.NODE_ENV !== 'development') {
-    return NextResponse.json(
-      { error: 'CRON_SECRET not set — refusing to run outside local development without auth' },
-      { status: 500 }
-    )
-  }
-
-  const treasuryWallet = (process.env.MINTWARE_TREASURY_ADDRESS ?? '').toLowerCase()
+export const GET = createHandler(async (_req, ctx) => {
+  const { supabase, log } = ctx
+  const treasuryWallet = TREASURY_ADDRESS
   const treasuryKey    = process.env.TREASURY_PRIVATE_KEY
 
   if (!treasuryWallet || !treasuryKey) {
-    return NextResponse.json({
-      ok: false,
-      error: 'MINTWARE_TREASURY_ADDRESS or TREASURY_PRIVATE_KEY not set',
-    }, { status: 500 })
+    log.error('cron-treasury-sweep', 'Missing env vars', { treasuryWallet: !!treasuryWallet, treasuryKey: !!treasuryKey })
+    return ctx.json({ ok: false, error: 'MINTWARE_TREASURY_ADDRESS or TREASURY_PRIVATE_KEY not set' }, 500)
   }
 
   const startedAt = Date.now()
-  const supabase = createSupabaseServiceClient()
+  log.info('cron-treasury-sweep', 'Sweep started')
 
   // Find all unclaimed treasury payout rows with published distributions
   const { data: payoutRows, error: fetchErr } = await supabase
@@ -103,11 +82,11 @@ export async function GET(req: NextRequest) {
     .is('claimed_at', null)
 
   if (fetchErr) {
-    return NextResponse.json({ ok: false, error: fetchErr.message }, { status: 500 })
+    return ctx.json({ ok: false, error: fetchErr.message }, 500)
   }
 
   if (!payoutRows || payoutRows.length === 0) {
-    return NextResponse.json({ ok: true, swept: 0, duration_ms: Date.now() - startedAt })
+    return ctx.json({ ok: true, swept: 0, duration_ms: Date.now() - startedAt })
   }
 
   // Load matching distributions and campaigns
@@ -120,7 +99,7 @@ export async function GET(req: NextRequest) {
     .eq('status', 'published')
 
   if (!distributions || distributions.length === 0) {
-    return NextResponse.json({ ok: true, swept: 0, message: 'no published distributions found', duration_ms: Date.now() - startedAt })
+    return ctx.json({ ok: true, swept: 0, message: 'no published distributions found', duration_ms: Date.now() - startedAt })
   }
 
   // Build lookup: `${campaign_id}:${epoch_number}` → distribution
@@ -193,24 +172,17 @@ export async function GET(req: NextRequest) {
         .update({ claimed_at: new Date().toISOString() })
         .eq('id', row.id)
 
-      console.log(`[treasury/sweep] ✓ claimed campaign=${row.campaign_id} epoch=${row.epoch_number} amount=${amountWei} tx=${claimTxHash}`)
+      log.info('cron-treasury-sweep', 'Claimed leaf', { campaign_id: row.campaign_id, epoch_number: row.epoch_number, amountWei, tx: claimTxHash })
       swept++
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error(`[treasury/sweep] ✗ campaign=${row.campaign_id} epoch=${row.epoch_number}: ${msg}`)
+      log.error('cron-treasury-sweep', 'Claim failed', { campaign_id: row.campaign_id, epoch_number: row.epoch_number, error: msg })
       errors.push(`${row.campaign_id}#${row.epoch_number}: ${msg}`)
     }
   }
 
-  return NextResponse.json({
-    ok: errors.length === 0,
-    swept,
-    skipped,
-    errors,
-    duration_ms: Date.now() - startedAt,
-  })
-}
+  const duration_ms = Date.now() - startedAt
+  log.info('cron-treasury-sweep', 'Sweep complete', { swept, skipped, errors: errors.length, duration_ms })
 
-export async function POST() {
-  return NextResponse.json({ error: 'method not allowed — use GET' }, { status: 405 })
-}
+  return ctx.json({ ok: errors.length === 0, swept, skipped, errors, duration_ms })
+}, { auth: 'bearer-token' })

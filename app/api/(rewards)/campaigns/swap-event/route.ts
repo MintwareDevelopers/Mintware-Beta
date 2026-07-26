@@ -20,11 +20,12 @@
 //   For Molten's server-side callback, set SWAP_WEBHOOK_SECRET.
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { processSwapEvent } from '@/lib/rewards/swapHook'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { getServiceClient } from '@/lib/web2/supabase'
 import { attestSwap } from '@/lib/rewards/eas'
 import type { SwapEvent } from '@/lib/rewards/types'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 // ---------------------------------------------------------------------------
 // Request shape
@@ -63,14 +64,14 @@ function validatePayload(body: unknown): body is SwapEventPayload {
   )
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createHandler(async (req, ctx) => {
   // Simple shared-secret auth — only enforced when SWAP_WEBHOOK_SECRET is set
   // (Molten server-side webhook). LI.FI client-side calls run without the secret.
   const secret = process.env.SWAP_WEBHOOK_SECRET
   if (secret) {
     const authHeader = req.headers.get('x-webhook-secret')
     if (authHeader !== secret) {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+      return ctx.json({ error: 'unauthorized' }, 401)
     }
   }
 
@@ -78,17 +79,17 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'invalid json' }, { status: 400 })
+    return ctx.json({ error: 'invalid json' }, 400)
   }
 
   if (!validatePayload(body)) {
-    return NextResponse.json(
+    return ctx.json(
       {
         error: 'invalid payload',
         required: ['tx_hash', 'wallet', 'token_in', 'token_out', 'amount_usd'],
         optional: ['campaign_id', 'chain', 'timestamp'],
       },
-      { status: 422 }
+      422
     )
   }
 
@@ -110,9 +111,9 @@ export async function POST(req: NextRequest) {
       const result = await processSwapEvent(event)
 
       if (!result.credited) {
-        return NextResponse.json(
+        return ctx.json(
           { credited: false, skip_reason: result.skip_reason },
-          { status: 200 }
+          200
         )
       }
 
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest) {
         .then(async (uid) => {
           if (!uid) return
           try {
-            await createSupabaseServiceClient()
+            await getServiceClient()
               .from('eas_attestations')
               .upsert(
                 {
@@ -150,14 +151,14 @@ export async function POST(req: NextRequest) {
                 },
                 { onConflict: 'eas_uid' }
               )
-          } catch (e) { console.error('[swap-event] EAS upsert error:', e) }
+          } catch (e) { ctx.log.error('swap-event', 'EAS upsert error', { error: String(e) }) }
         })
-        .catch(err => console.error('[swap-event] EAS attestation error:', err))
+        .catch(err => ctx.log.error('swap-event', 'EAS attestation error', { error: String(err) }))
 
       return NextResponse.json(result, { status: 200 })
     } catch (err) {
-      console.error('[swap-event] unhandled error:', err)
-      return NextResponse.json({ error: 'internal error' }, { status: 500 })
+      ctx.log.error('swap-event', 'Unhandled error', { error: String(err) })
+      return ctx.json({ error: 'internal error' }, 500)
     }
   }
 
@@ -173,18 +174,16 @@ export async function POST(req: NextRequest) {
   let participationRows: Array<{ campaign_id: string }> = []
 
   try {
-    const supabase = createSupabaseServiceClient()
-
     // participants → campaigns join. We fetch all and filter in JS to avoid
     // relying on PostgREST embedded-filter syntax across different Supabase versions.
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from('participants')
       .select('campaign_id, campaigns!inner(status)')
       .eq('wallet', walletLower)
 
     if (error) {
-      console.error('[swap-event] participants lookup failed:', error.message)
-      return NextResponse.json({ error: 'internal error' }, { status: 500 })
+      ctx.log.error('swap-event', 'Participants lookup failed', { error: error.message })
+      return ctx.json({ error: 'internal error' }, 500)
     }
 
     // Filter to live campaigns only
@@ -196,15 +195,15 @@ export async function POST(req: NextRequest) {
       })
       .map((row: { campaign_id: string }) => ({ campaign_id: row.campaign_id }))
   } catch (err) {
-    console.error('[swap-event] DB error during participant lookup:', err)
-    return NextResponse.json({ error: 'internal error' }, { status: 500 })
+    ctx.log.error('swap-event', 'DB error during participant lookup', { error: String(err) })
+    return ctx.json({ error: 'internal error' }, 500)
   }
 
   if (participationRows.length === 0) {
     // Wallet is not participating in any live campaign — not an error
-    return NextResponse.json(
+    return ctx.json(
       { credited: false, skip_reason: 'wallet_not_participant' },
-      { status: 200 }
+      200
     )
   }
 
@@ -248,7 +247,7 @@ export async function POST(req: NextRequest) {
           .then(async (uid) => {
             if (!uid) return
             try {
-              await createSupabaseServiceClient()
+              await getServiceClient()
                 .from('eas_attestations')
                 .upsert(
                   {
@@ -260,25 +259,25 @@ export async function POST(req: NextRequest) {
                   },
                   { onConflict: 'eas_uid' }
                 )
-            } catch (e) { console.error('[swap-event] EAS upsert error:', e) }
+            } catch (e) { ctx.log.error('swap-event', 'EAS upsert error', { error: String(e) }) }
           })
-          .catch(err => console.error('[swap-event] EAS attestation error:', err))
+          .catch(err => ctx.log.error('swap-event', 'EAS attestation error', { error: String(err) }))
       }
     } catch (err) {
-      console.error(`[swap-event] processSwapEvent error for campaign ${campaign_id}:`, err)
+      ctx.log.error('swap-event', `processSwapEvent error for campaign ${campaign_id}`, { error: String(err) })
       results.push({ campaign_id, credited: false, skip_reason: 'db_error' as const })
     }
   }
 
   const anyCredited = results.some((r) => r.credited)
 
-  return NextResponse.json(
+  return ctx.json(
     { credited: anyCredited, results },
-    { status: 200 }
+    200
   )
-}
+}, { auth: 'none' })
 
 // Reject non-POST methods
-export async function GET() {
-  return NextResponse.json({ error: 'method not allowed' }, { status: 405 })
-}
+export const GET = createHandler(async (_req, ctx) => {
+  return ctx.json({ error: 'method not allowed' }, 405)
+})

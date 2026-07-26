@@ -32,41 +32,10 @@
 //   410 Wallet has already claimed this distribution
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree'
+import { createHandler } from '@/lib/web2/routeHandler'
 
-// ---------------------------------------------------------------------------
-// In-memory rate limiter — max 10 requests per address per 60s window.
-//
-// Note: Vercel serverless functions are single-process per instance, so this
-// state is per-instance, not globally shared. It caps abuse per function
-// instance and is sufficient for MVP traffic. For global rate limiting,
-// replace with Upstash Redis or Vercel KV.
-// ---------------------------------------------------------------------------
-interface RateLimitEntry { count: number; resetAt: number }
-const rateLimitMap = new Map<string, RateLimitEntry>()
-const RATE_LIMIT_MAX = 10
-const RATE_LIMIT_IP_MAX = 30   // per-IP ceiling across all addresses
-const RATE_LIMIT_WINDOW_MS = 60_000
-
-function checkRateLimit(key: string): boolean {
-  const now   = Date.now()
-  const limit = key.startsWith('ip:') ? RATE_LIMIT_IP_MAX : RATE_LIMIT_MAX
-  const entry = rateLimitMap.get(key)
-
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
-    return true
-  }
-  if (entry.count >= limit) {
-    return false
-  }
-  entry.count++
-  return true
-}
-
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const { searchParams } = req.nextUrl
   const rawAddress = searchParams.get('address')
   const distributionId = searchParams.get('distribution_id')
@@ -75,9 +44,9 @@ export async function GET(req: NextRequest) {
   // Validate params
   // ---------------------------------------------------------------------------
   if (!rawAddress || !distributionId) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'address and distribution_id are required' },
-      { status: 400 }
+      400
     )
   }
 
@@ -85,26 +54,13 @@ export async function GET(req: NextRequest) {
   // lowercases addresses when building leaves.
   const address = rawAddress.toLowerCase()
 
-  // Rate limit: 10 requests per address per 60s, and 30 per IP per 60s
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim()
-    ?? req.headers.get('x-real-ip')
-    ?? 'unknown'
-  if (!checkRateLimit(address) || !checkRateLimit(`ip:${ip}`)) {
-    return NextResponse.json(
-      { error: 'Too many requests — max 10 per minute per address' },
-      { status: 429 }
-    )
-  }
-
-  const supabase = createSupabaseServiceClient()
-
   // ---------------------------------------------------------------------------
   // Fetch distribution
   // Join campaigns to get chain routing + token metadata.
   // tree_json is fetched here but NEVER forwarded to the client.
   // oracle_signature is returned so the user can submit it in claim().
   // ---------------------------------------------------------------------------
-  const { data: dist, error: distErr } = await supabase
+  const { data: dist, error: distErr } = await ctx.supabase
     .from('distributions')
     .select(`
       id,
@@ -126,9 +82,9 @@ export async function GET(req: NextRequest) {
     .single()
 
   if (distErr || !dist) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Distribution not found' },
-      { status: 404 }
+      404
     )
   }
 
@@ -137,17 +93,17 @@ export async function GET(req: NextRequest) {
   // 'pending' means the oracle has not yet signed — users cannot claim yet.
   // ---------------------------------------------------------------------------
   if (dist.status === 'pending') {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Distribution is pending — oracle has not yet signed this root', status: dist.status },
-      { status: 409 }
+      409
     )
   }
 
   // Guard: oracle_signature must be present (published distributions always have one)
   if (!dist.oracle_signature) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Distribution is missing oracle signature — contact support' },
-      { status: 500 }
+      500
     )
   }
 
@@ -157,7 +113,7 @@ export async function GET(req: NextRequest) {
   // Claimed event is detected. This is a best-effort check — the contract's
   // own claimed mapping is the authoritative source of truth.
   // ---------------------------------------------------------------------------
-  const { data: payoutRow } = await supabase
+  const { data: payoutRow } = await ctx.supabase
     .from('daily_payouts')
     .select('claimed_at, amount_wei')
     .eq('campaign_id', dist.campaign_id)
@@ -166,9 +122,9 @@ export async function GET(req: NextRequest) {
     .maybeSingle()
 
   if (payoutRow?.claimed_at) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Already claimed', claimed_at: payoutRow.claimed_at },
-      { status: 410 }
+      410
     )
   }
 
@@ -176,9 +132,9 @@ export async function GET(req: NextRequest) {
   // Guard: tree_json must exist
   // ---------------------------------------------------------------------------
   if (!dist.tree_json) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Distribution tree data not available' },
-      { status: 404 }
+      404
     )
   }
 
@@ -210,17 +166,17 @@ export async function GET(req: NextRequest) {
       }
     }
   } catch (err) {
-    console.error('[claim] Failed to reconstruct Merkle tree:', err)
-    return NextResponse.json(
+    ctx.log.error('claim', 'Failed to reconstruct Merkle tree', { err: String(err) })
+    return ctx.json(
       { error: 'Failed to generate proof — please retry' },
-      { status: 500 }
+      500
     )
   }
 
   if (!proof || amountWei === null) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Wallet is not included in this distribution' },
-      { status: 404 }
+      404
     )
   }
 
@@ -230,10 +186,10 @@ export async function GET(req: NextRequest) {
   // claim() will revert (the EIP-712 digest includes the deadline).
   // ---------------------------------------------------------------------------
   if (dist.deadline == null) {
-    console.error('[claim] distributions.deadline is null — oracle must store deadline when signing')
-    return NextResponse.json(
+    ctx.log.error('claim', 'distributions.deadline is null — oracle must store deadline when signing')
+    return ctx.json(
       { error: 'Distribution deadline not set — oracle backend not yet updated' },
-      { status: 500 }
+      500
     )
   }
   const deadline = dist.deadline
@@ -247,7 +203,7 @@ export async function GET(req: NextRequest) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const campaign = Array.isArray(dist.campaigns) ? dist.campaigns[0] : (dist.campaigns as any)
 
-  return NextResponse.json({
+  return ctx.json({
     distribution_id:   dist.id,
     campaign_id:       dist.campaign_id,          // string  — campaignId param for claim()
     epoch_number:      dist.epoch_number,          // uint256 — epochNumber param for claim()
@@ -261,4 +217,4 @@ export async function GET(req: NextRequest) {
     token_address:     campaign?.token_contract ?? null,
     token_symbol:      campaign?.token_symbol ?? null,
   })
-}
+}, { rateLimit: { max: 10, windowMs: 60000 } })

@@ -3,27 +3,25 @@
 // GET /api/agents/leaderboard?limit=N — override limit (max 100)
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { NextResponse } from 'next/server'
+import { createHandler } from '@/lib/web2/routeHandler'
 
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const limitParam = req.nextUrl.searchParams.get('limit')
   const limit      = Math.min(parseInt(limitParam ?? '100', 10) || 100, 100)
 
-  const supabase = createSupabaseServiceClient()
-
-  const { data, error } = await supabase
+  const { data, error } = await ctx.supabase
     .from('ai_agent_leaderboard')
     .select('*')
     .limit(limit)
 
   if (error) {
-    console.error('[GET /api/agents/leaderboard]', error.message)
-    return NextResponse.json({ error: 'failed to load leaderboard' }, { status: 500 })
+    ctx.log.error('agents/leaderboard', 'Failed to load leaderboard', { error: error.message })
+    return ctx.json({ error: 'failed to load leaderboard' }, 500)
   }
 
   return NextResponse.json(
     { leaderboard: data ?? [], total: data?.length ?? 0 },
     { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' } }
   )
-}
+})

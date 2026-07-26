@@ -17,11 +17,11 @@
 // Body: { referred: string, ref_code: string }
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { attestReferral }             from '@/lib/rewards/eas'
 import { recoverMessageAddress } from 'viem'
 import { buildReferralApplyMessage } from '@/lib/web3/signedActionMessages'
+import { createHandler } from '@/lib/web2/routeHandler'
+import { getServiceClient } from '@/lib/web2/supabase'
 
 const TIME_GATE_MS = 24 * 60 * 60 * 1000 // 24 hours
 const MAX_AUTH_AGE_MS = 15 * 60 * 1000
@@ -30,12 +30,12 @@ function isValidAddress(raw: string): boolean {
   return /^0x[0-9a-f]{40}$/i.test(raw)
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createHandler(async (req, ctx) => {
   let body: unknown
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'invalid json' }, { status: 400 })
+    return ctx.json({ error: 'invalid json' }, 400)
   }
 
   const b = body as Record<string, unknown>
@@ -47,26 +47,26 @@ export async function POST(req: NextRequest) {
   const issuedAt = b?.issuedAt
 
   if (!rawReferred || typeof rawReferred !== 'string') {
-    return NextResponse.json({ error: 'referred address required' }, { status: 400 })
+    return ctx.json({ error: 'referred address required' }, 400)
   }
   if (!isValidAddress(rawReferred)) {
-    return NextResponse.json({ error: 'invalid referred address' }, { status: 400 })
+    return ctx.json({ error: 'invalid referred address' }, 400)
   }
   if (!refCode || typeof refCode !== 'string') {
-    return NextResponse.json({ error: 'ref_code required' }, { status: 400 })
+    return ctx.json({ error: 'ref_code required' }, 400)
   }
   if (typeof authMessage !== 'string' || typeof authSignature !== 'string' || typeof issuedAt !== 'number') {
-    return NextResponse.json({ error: 'signed authorization required' }, { status: 401 })
+    return ctx.json({ error: 'signed authorization required' }, 401)
   }
 
   const referred = rawReferred.toLowerCase()
   if (Math.abs(Date.now() - issuedAt) > MAX_AUTH_AGE_MS) {
-    return NextResponse.json({ error: 'authorization expired' }, { status: 401 })
+    return ctx.json({ error: 'authorization expired' }, 401)
   }
 
   const expectedMessage = buildReferralApplyMessage({ referred, refCode, issuedAt })
   if (authMessage !== expectedMessage) {
-    return NextResponse.json({ error: 'authorization payload mismatch' }, { status: 401 })
+    return ctx.json({ error: 'authorization payload mismatch' }, 401)
   }
 
   const signer = await recoverMessageAddress({
@@ -75,13 +75,11 @@ export async function POST(req: NextRequest) {
   }).catch(() => null)
 
   if (!signer || signer.toLowerCase() !== referred) {
-    return NextResponse.json({ error: 'invalid authorization signature' }, { status: 401 })
+    return ctx.json({ error: 'invalid authorization signature' }, 401)
   }
 
-  const supabase = createSupabaseServiceClient()
-
   // Look up referrer by ref_code
-  const { data: referrerProfile, error: lookupErr } = await supabase
+  const { data: referrerProfile, error: lookupErr } = await ctx.supabase
     .from('wallet_profiles')
     .select('address, last_seen_at')
     .eq('ref_code', refCode)
@@ -89,37 +87,33 @@ export async function POST(req: NextRequest) {
 
   if (lookupErr || !referrerProfile) {
     // ref_code doesn't exist — not an error, just a no-op
-    return NextResponse.json({ applied: false, skip_reason: 'ref_code_not_found' }, { status: 200 })
+    return ctx.json({ applied: false, skip_reason: 'ref_code_not_found' }, 200)
   }
 
   const referrer = referrerProfile.address
 
   // Self-referral guard
   if (referrer === referred) {
-    return NextResponse.json({ applied: false, skip_reason: 'self_referral' }, { status: 200 })
+    return ctx.json({ applied: false, skip_reason: 'self_referral' }, 200)
   }
 
   // ── Time-gate: referrer must have been seen at least 24h ago ──────────────
   // Treat null last_seen_at as failing — profile exists but has never been actively used.
   if (!referrerProfile.last_seen_at) {
-    console.warn(
-      `[referral/apply] referrer_too_new: ${referrer} has null last_seen_at — treating as not yet eligible`
-    )
-    return NextResponse.json({ applied: false, skip_reason: 'referrer_too_new' }, { status: 200 })
+    ctx.log.warn('referral/apply', 'Referrer too new: null last_seen_at', { referrer })
+    return ctx.json({ applied: false, skip_reason: 'referrer_too_new' }, 200)
   }
 
   const lastSeen = new Date(referrerProfile.last_seen_at).getTime()
   const ageMs    = Date.now() - lastSeen
 
   if (ageMs < TIME_GATE_MS) {
-    console.warn(
-      `[referral/apply] referrer_too_new: ${referrer} last_seen_at=${referrerProfile.last_seen_at} ageMs=${ageMs}`
-    )
-    return NextResponse.json({ applied: false, skip_reason: 'referrer_too_new' }, { status: 200 })
+    ctx.log.warn('referral/apply', 'Referrer too new', { referrer, last_seen_at: referrerProfile.last_seen_at, ageMs })
+    return ctx.json({ applied: false, skip_reason: 'referrer_too_new' }, 200)
   }
 
   // ── Insert referral record ────────────────────────────────────────────────
-  const { error: insertErr } = await supabase
+  const { error: insertErr } = await ctx.supabase
     .from('referral_records')
     .upsert(
       {
@@ -132,8 +126,8 @@ export async function POST(req: NextRequest) {
     )
 
   if (insertErr) {
-    console.error('[referral/apply] insert error:', insertErr.message)
-    return NextResponse.json({ error: 'internal error' }, { status: 500 })
+    ctx.log.error('referral/apply', 'Insert error', { error: insertErr.message })
+    return ctx.json({ error: 'internal error' }, 500)
   }
 
   // ── Fire-and-forget: ReferralLink EAS attestation ─────────────────────────
@@ -142,7 +136,7 @@ export async function POST(req: NextRequest) {
     .then(async (uid) => {
       if (!uid) return
       try {
-        await createSupabaseServiceClient()
+        await getServiceClient()
           .from('eas_attestations')
           .upsert(
             {
@@ -154,13 +148,13 @@ export async function POST(req: NextRequest) {
             },
             { onConflict: 'eas_uid' }
           )
-      } catch (e) { console.error('[referral/apply] EAS upsert failed:', e) }
+      } catch (e) { ctx.log.error('referral/apply', 'EAS upsert failed', { error: String(e) }) }
     })
-    .catch(err => console.error('[referral/apply] EAS attestation failed:', err))
+    .catch(err => ctx.log.error('referral/apply', 'EAS attestation failed', { error: String(err) }))
 
-  return NextResponse.json({ applied: true }, { status: 200 })
-}
+  return ctx.json({ applied: true }, 200)
+}, { auth: 'none' })
 
-export async function GET() {
-  return NextResponse.json({ error: 'method not allowed' }, { status: 405 })
-}
+export const GET = createHandler(async (_req, ctx) => {
+  return ctx.json({ error: 'method not allowed' }, 405)
+})

@@ -24,9 +24,8 @@ The core principle across all of it: **users should understand what is about to 
 | `lib/web2/providers/lifi.ts` | Swap | Modified |
 | `components/rewards/creator/Step5Review.tsx` | Campaign funding | Modified |
 | `components/rewards/campaigns/ClaimCard.tsx` | Reward claiming | Modified + bug fix |
-| `lib/web3/vault/useSocialVault.ts` | Vault deposit / approval | Modified |
-| `app/(rewards)/vault/[id]/page.tsx` | Vault deposit UX | Modified |
-| `app/(rewards)/vault/create/page.tsx` | Vault create / seed UX | Modified |
+| `components/web3/VaultDepositFlow.tsx` | Vault deposit | Modified |
+| `components/web3/VaultApprovalStep.tsx` | Vault approval | Modified |
 
 ---
 
@@ -157,9 +156,7 @@ Vault deposit and approval flows used the same generic confirm-then-sign pattern
 
 ### What Changed
 
-- `useSocialVault.ts` now separates approval and deposit concerns more explicitly in the live hook path
-- Vault page UX surfaces the permission-versus-deposit distinction more clearly before submission
-- Vault creation / seed flow messaging was updated so the success path no longer implies users still need to call a follow-up seeding action manually after a successful seed
+- Approval and deposit steps separated visually and linguistically
 - "Approve" language replaced with "Give permission" throughout vault flows
 - Zero-first approval fallback added for USDT-style tokens (avoids `approve(nonzero)` revert when current allowance is nonzero)
 - Chain context surfaced before submission — shows which network the vault is on
@@ -183,9 +180,7 @@ These are deliberate scope decisions, not omissions:
 
 ## Commits
 
-The original implementation work was developed on `claude/elastic-booth` and then replayed onto `main` through the production-ready merge path. The five hashes below are the original feature-development commits, not the exact commit IDs that now exist on `main`.
-
-| Original hash | Description |
+| Hash | Description |
 |---|---|
 | `01648536` | `feat(ux): Ethereum UX improvements — swap confirmation, fee clarity, approval hygiene` |
 | `37d4946b` | `fix(swap): fiat-first gas fee display + batch claim wallet address fix` |
@@ -193,7 +188,7 @@ The original implementation work was developed on `claude/elastic-booth` and the
 | `c14cd96f` | `feat(ux): harden claim and campaign funding flows` |
 | `e8e71b8a` | `feat(ux): harden vault approval and deposit flows` |
 
-The replayed production path on `main` begins with [`92724fae`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build) (`feat: ship Ethereum UX upgrades`) and the subsequent production-fix commits that kept the deploy healthy.
+All 5 commits are on `main` and live in production as of 2026-04-04.
 
 ---
 

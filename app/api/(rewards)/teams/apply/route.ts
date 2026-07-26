@@ -18,8 +18,7 @@
 // Auth: none. Uses service role for DB writes.
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 function isValidAddress(raw: string): boolean {
   return /^0x[0-9a-f]{40}$/i.test(raw)
@@ -29,12 +28,12 @@ function isValidEmail(raw: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createHandler(async (req, ctx) => {
   let body: unknown
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+    return ctx.json({ error: 'Invalid JSON body' }, 400)
   }
 
   const {
@@ -48,37 +47,36 @@ export async function POST(req: NextRequest) {
 
   // -- Validate required fields -----------------------------------------------
   if (!wallet || !protocol_name || !contact_email) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'wallet, protocol_name, and contact_email are required' },
-      { status: 400 }
+      400
     )
   }
   if (!isValidAddress(wallet)) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'invalid wallet — must be 0x followed by 40 hex characters' },
-      { status: 400 }
+      400
     )
   }
   if (!isValidEmail(contact_email)) {
-    return NextResponse.json({ error: 'invalid contact_email' }, { status: 400 })
+    return ctx.json({ error: 'invalid contact_email' }, 400)
   }
 
   const normalWallet = wallet.toLowerCase()
-  const supabase     = createSupabaseServiceClient()
 
   // -- Check whitelist first (already approved?) --------------------------------
-  const { data: whitelisted } = await supabase
+  const { data: whitelisted } = await ctx.supabase
     .from('whitelisted_teams')
     .select('status')
     .eq('wallet', normalWallet)
     .maybeSingle()
 
   if (whitelisted?.status === 'approved') {
-    return NextResponse.json({ status: 'approved' })
+    return ctx.json({ status: 'approved' })
   }
 
   // -- Check existing application -----------------------------------------------
-  const { data: existing } = await supabase
+  const { data: existing } = await ctx.supabase
     .from('team_applications')
     .select('id, status')
     .eq('wallet', normalWallet)
@@ -88,19 +86,19 @@ export async function POST(req: NextRequest) {
 
   if (existing) {
     if (existing.status === 'pending' || existing.status === 'reviewed') {
-      return NextResponse.json({
+      return ctx.json({
         status: 'pending',
         message: 'Your application is under review',
       })
     }
     if (existing.status === 'approved') {
-      return NextResponse.json({ status: 'approved' })
+      return ctx.json({ status: 'approved' })
     }
     // rejected — allow reapplication (fall through)
   }
 
   // -- Insert new application ---------------------------------------------------
-  const { error: insertErr } = await supabase
+  const { error: insertErr } = await ctx.supabase
     .from('team_applications')
     .insert({
       wallet:        normalWallet,
@@ -112,9 +110,9 @@ export async function POST(req: NextRequest) {
     })
 
   if (insertErr) {
-    console.error('[teams/apply] insert error:', insertErr)
-    return NextResponse.json({ error: 'Failed to submit application' }, { status: 500 })
+    ctx.log.error('teams/apply', 'Insert error', { error: insertErr })
+    return ctx.json({ error: 'Failed to submit application' }, 500)
   }
 
-  return NextResponse.json({ success: true, status: 'pending' })
-}
+  return ctx.json({ success: true, status: 'pending' })
+}, {})

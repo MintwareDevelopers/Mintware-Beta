@@ -152,6 +152,22 @@ Result:
 
 - incentives are more aligned to the actual wallet earning them, and operators have less room to retroactively reshape live economics
 
+## Post-Audit Infrastructure — Route Handler Unification (2026-04-07)
+
+Following the audit hardening pass, all 46 non-cron API routes were migrated to a centralized `createHandler` factory (`lib/web2/routeHandler.ts`). This locks in the auth, logging, and error patterns from the audit as structural constraints rather than per-route conventions.
+
+What the migration enforced across every route:
+
+- **Auth is declarative, not optional** — `auth: 'signed-message'`, `auth: 'bearer-token'`, or explicit `auth: 'none'`. No route can omit the choice.
+- **Supabase is a singleton** — `ctx.supabase` is injected from a module-level client. No route instantiates its own connection.
+- **BigInt serialization is automatic** — `ctx.json()` applies `toJsonSafe()` before every response. No route can accidentally 500 on an on-chain amount.
+- **Every response carries `X-Request-Id`** — tied to structured server logs for every request.
+- **Error shape is uniform** — `{ success: false, error, code }` across all 46 routes.
+
+This is infrastructure-level enforcement of the security properties the audit fixed at the application level. Internal reference: `.claude/rules/route-handler.md`.
+
+---
+
 ## Production Status
 
 ### Current branch truth

@@ -45,6 +45,20 @@ Mintware currently assumes:
 - confirm the live production deploy is on or after the expected `main` commit
 - confirm cron routes in `vercel.json` still match the intended live schedule
 
+### Required Env Vars
+
+Confirm all of these are set in the Vercel production environment before deploying. Routes that depend on a missing secret **fail closed** in production (they do not silently allow through).
+
+| Variable | Used by | Behaviour if missing |
+|---|---|---|
+| `CRON_SECRET` | All cron routes | Cron routes return 401 |
+| `CLAIM_MARK_SECRET` | `/api/claim/mark-claimed` | Returns 401 |
+| `TRADE_SIGNAL_INGEST_SECRET` | `/api/universal/trade-signal` | Returns 500 (misconfigured) |
+| `AI_ATTRIBUTION_ORACLE_SECRET` | `/api/agents/campaigns/record` | Returns 500 (misconfigured) |
+| `SUPABASE_SERVICE_ROLE_KEY` | All server routes via Supabase singleton | Runtime errors on first DB call |
+| `MINTWARE_TREASURY_ADDRESS` | Swap fee injection, calldata verification | Fee injection silently skipped |
+| `DISTRIBUTOR_PRIVATE_KEY` | Claim oracle signing, vault attribution snapshot | Oracle signatures fail |
+
 ## Supabase Checklist
 
 - confirm project ref is the intended live project

@@ -26,7 +26,8 @@
 // admin JWT guard before deploying to a public-facing host.
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
+import { CHAIN_RPC } from '@/lib/constants'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 // Minimal ABI — only the public state getters we need
 const ABI_FRAGMENTS = [
@@ -34,18 +35,9 @@ const ABI_FRAGMENTS = [
   { name: 'pendingOracleSigner',        type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { name: 'oracleRotationAvailableAt', type: 'function', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
 ]
+void ABI_FRAGMENTS
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
-
-function getRpcUrl(chain: string): string | null {
-  switch (chain.toLowerCase()) {
-    case 'base':         return process.env.BASE_RPC_URL         ?? 'https://mainnet.base.org'
-    case 'base_sepolia': return process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org'
-    case 'core_dao':     return process.env.CORE_DAO_RPC_URL     ?? 'https://rpc.coredao.org'
-    case 'bnb':          return process.env.BNB_RPC_URL          ?? 'https://bsc-dataseed.binance.org'
-    default:             return null
-  }
-}
 
 /** eth_call wrapper — calls a no-input view function and returns the raw result */
 async function ethCall(rpcUrl: string, contract: string, selector: string): Promise<string | null> {
@@ -86,23 +78,23 @@ function decodeUint256(raw: string | null): bigint | null {
   return BigInt(raw)
 }
 
-export async function GET(req: NextRequest) {
+export const GET = createHandler(async (req, ctx) => {
   const { searchParams } = req.nextUrl
   const contract = searchParams.get('contract')
   const chain    = searchParams.get('chain')
 
   if (!contract || !chain) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'contract and chain params are required' },
-      { status: 400 }
+      400
     )
   }
 
-  const rpcUrl = getRpcUrl(chain)
+  const rpcUrl = CHAIN_RPC[chain.toLowerCase()] ?? null
   if (!rpcUrl) {
-    return NextResponse.json(
+    return ctx.json(
       { error: `Unknown chain: ${chain}` },
-      { status: 400 }
+      400
     )
   }
 
@@ -114,9 +106,9 @@ export async function GET(req: NextRequest) {
   ])
 
   if (!rawOracle) {
-    return NextResponse.json(
+    return ctx.json(
       { error: 'Failed to read oracle state from chain — RPC error or wrong contract address' },
-      { status: 500 }
+      500
     )
   }
 
@@ -135,11 +127,11 @@ export async function GET(req: NextRequest) {
     ? Math.max(0, availableAtNum - nowSecs)
     : null
 
-  return NextResponse.json({
+  return ctx.json({
     oracle_signer:              oracleSigner,
     pending_oracle_signer:      rotationPending ? pendingOracleSigner : null,
     rotation_available_at:      rotationPending ? availableAtNum : null,
     rotation_pending:           rotationPending,
     rotation_available_in_secs: rotationAvailableInSecs,
   })
-}
+})

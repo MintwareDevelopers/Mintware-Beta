@@ -9,11 +9,10 @@
 // Response: { campaignId: string }
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import type { CreatorFormState } from '@/lib/rewards/creator'
 import { recoverMessageAddress } from 'viem'
 import { buildCampaignCreateMessage } from '@/lib/web3/signedActionMessages'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 const CHAIN_LABELS: Record<number, string> = {
   8453:  'Base',
@@ -27,7 +26,7 @@ const DISTRIBUTOR_ADDRESS: Record<number, string> = {
   42161: process.env.DISTRIBUTOR_ADDRESS_ARBITRUM  ?? '',
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createHandler(async (req, ctx) => {
   let body: {
     form: CreatorFormState
     wallet: string
@@ -38,25 +37,25 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    return ctx.json({ error: 'Invalid JSON' }, 400)
   }
 
   const { form, wallet } = body
 
   if (!form || !wallet) {
-    return NextResponse.json({ error: 'Missing form or wallet' }, { status: 400 })
+    return ctx.json({ error: 'Missing form or wallet' }, 400)
   }
   if (!form.token) {
-    return NextResponse.json({ error: 'Token required' }, { status: 400 })
+    return ctx.json({ error: 'Token required' }, 400)
   }
   if (!form.type) {
-    return NextResponse.json({ error: 'Campaign type required' }, { status: 400 })
+    return ctx.json({ error: 'Campaign type required' }, 400)
   }
   if (!body.authMessage || !body.authSignature || typeof body.issuedAt !== 'number') {
-    return NextResponse.json({ error: 'Signed authorization required' }, { status: 401 })
+    return ctx.json({ error: 'Signed authorization required' }, 401)
   }
   if (Math.abs(Date.now() - body.issuedAt) > 15 * 60 * 1000) {
-    return NextResponse.json({ error: 'Authorization expired' }, { status: 401 })
+    return ctx.json({ error: 'Authorization expired' }, 401)
   }
 
   const expectedMessage = buildCampaignCreateMessage({
@@ -84,7 +83,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (body.authMessage !== expectedMessage) {
-    return NextResponse.json({ error: 'Authorization payload mismatch' }, { status: 401 })
+    return ctx.json({ error: 'Authorization payload mismatch' }, 401)
   }
 
   const signer = await recoverMessageAddress({
@@ -93,21 +92,21 @@ export async function POST(req: NextRequest) {
   }).catch(() => null)
 
   if (!signer || signer.toLowerCase() !== wallet.toLowerCase()) {
-    return NextResponse.json({ error: 'Invalid authorization signature' }, { status: 401 })
+    return ctx.json({ error: 'Invalid authorization signature' }, 401)
   }
 
-  const supabase      = createSupabaseServiceClient()
   const campaignType  = form.type === 'token_reward' ? 'token_pool' : 'points'
-  const chain         = CHAIN_LABELS[form.chainId] ?? 'Base'
   const distributorAddress = DISTRIBUTOR_ADDRESS[form.chainId] ?? ''
   const now           = new Date()
 
   if (!CHAIN_LABELS[form.chainId]) {
-    return NextResponse.json({ error: 'Unsupported campaign chain' }, { status: 400 })
+    return ctx.json({ error: 'Unsupported campaign chain' }, 400)
   }
   if (!distributorAddress) {
-    return NextResponse.json({ error: 'Campaign funding is not configured for this chain' }, { status: 400 })
+    return ctx.json({ error: 'Campaign funding is not configured for this chain' }, 400)
   }
+
+  const chain = CHAIN_LABELS[form.chainId]
 
   const startAt = (form.schedule === 'scheduled' && form.startAt)
     ? new Date(form.startAt)
@@ -119,7 +118,7 @@ export async function POST(req: NextRequest) {
   const typeSuffix = campaignType === 'token_pool' ? 'Token Reward' : 'Points'
   const name = `${form.token.symbol} ${typeSuffix} Campaign`
 
-  const { data, error } = await supabase
+  const { data, error } = await ctx.supabase
     .from('campaigns')
     .insert({
       name,
@@ -145,9 +144,9 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) {
-    console.error('[campaigns/create] Supabase error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    ctx.log.error('campaigns/create', 'Supabase error', { error })
+    return ctx.json({ error: error.message }, 500)
   }
 
-  return NextResponse.json({ campaignId: data.id })
-}
+  return ctx.json({ campaignId: data.id })
+}, { auth: 'none' })

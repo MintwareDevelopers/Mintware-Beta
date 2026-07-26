@@ -1,8 +1,7 @@
 // =============================================================================
-// POST /api/treasury/normalize-mev
+// GET /api/treasury/normalize-mev  (also accepts POST for manual runs)
 //
-// Triggered daily by Vercel Cron (03:00 UTC).
-// Also callable manually for testing: POST with Authorization header.
+// Triggered daily by Vercel Cron (03:00 UTC) via GET.
 //
 // Flow:
 //   1. Read staged MEV balances in the treasury wallet
@@ -12,31 +11,22 @@
 // Auth: Bearer token matching CRON_SECRET env var.
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
+import { createHandler } from '@/lib/web2/routeHandler'
 import { runNormalizeMev } from '@/lib/rewards/treasury/sweep'
 
 export const maxDuration = 300
 
-export async function POST(req: NextRequest) {
-  const authHeader = req.headers.get('authorization')
-  const cronSecret = process.env.CRON_SECRET
+const handler = createHandler(async (_req, ctx) => {
+  ctx.log.info('normalize-mev', 'Starting MEV normalization')
+  const report = await runNormalizeMev()
+  ctx.log.info('normalize-mev', 'Normalization complete', {
+    tokensNormalized:    report.tokensNormalized,
+    tokensChecked:       report.tokensChecked,
+    totalUsdcDeposited:  report.totalUsdcDeposited,
+  })
+  return ctx.json({ ok: true, report })
+}, { auth: 'bearer-token' })
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  console.log('[normalize-mev] Starting MEV normalization...')
-
-  try {
-    const report = await runNormalizeMev()
-    console.log(
-      `[normalize-mev] Done — ${report.tokensNormalized}/${report.tokensChecked} tokens normalized ` +
-      `total_usdc=${report.totalUsdcDeposited}`
-    )
-    return NextResponse.json({ ok: true, report })
-  } catch (err) {
-    const message = (err as Error).message
-    console.error('[normalize-mev] Fatal error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
-  }
-}
+// Vercel crons invoke via GET — manual calls may use POST
+export const GET  = handler
+export const POST = handler

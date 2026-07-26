@@ -20,12 +20,11 @@
 // Returns: { ref_code: string, is_new: boolean }
 // =============================================================================
 
-import { NextRequest, NextResponse } from 'next/server'
-import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { generateRefCodeForWallet } from '@/lib/rewards/referral-code'
 import { recoverMessageAddress } from 'viem'
 import { buildWalletConnectMessage } from '@/lib/web3/signedActionMessages'
+import { createHandler } from '@/lib/web2/routeHandler'
 
 const EVM_RE     = /^0x[0-9a-f]{40}$/i
 const SOLANA_RE  = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
@@ -39,12 +38,12 @@ function normalizeAddress(raw: string): string {
   return EVM_RE.test(raw) ? raw.toLowerCase() : raw
 }
 
-export async function POST(req: NextRequest) {
+export const POST = createHandler(async (req, ctx) => {
   let body: unknown
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: 'invalid json' }, { status: 400 })
+    return ctx.json({ error: 'invalid json' }, 400)
   }
 
   const b       = body as Record<string, unknown>
@@ -54,23 +53,23 @@ export async function POST(req: NextRequest) {
   const issuedAt = b?.issuedAt
 
   if (!rawAddr || typeof rawAddr !== 'string') {
-    return NextResponse.json({ error: 'address required' }, { status: 400 })
+    return ctx.json({ error: 'address required' }, 400)
   }
   if (!isValidAddress(rawAddr)) {
-    return NextResponse.json({ error: 'invalid address' }, { status: 400 })
+    return ctx.json({ error: 'invalid address' }, 400)
   }
   if (typeof authMessage !== 'string' || typeof authSignature !== 'string' || typeof issuedAt !== 'number') {
-    return NextResponse.json({ error: 'signed authorization required' }, { status: 401 })
+    return ctx.json({ error: 'signed authorization required' }, 401)
   }
   if (Math.abs(Date.now() - issuedAt) > 15 * 60 * 1000) {
-    return NextResponse.json({ error: 'authorization expired' }, { status: 401 })
+    return ctx.json({ error: 'authorization expired' }, 401)
   }
 
   const address  = normalizeAddress(rawAddr)
   const isSolana = solanaEnabled && SOLANA_RE.test(rawAddr)
   const expectedMessage = buildWalletConnectMessage({ address, issuedAt })
   if (authMessage !== expectedMessage) {
-    return NextResponse.json({ error: 'authorization payload mismatch' }, { status: 401 })
+    return ctx.json({ error: 'authorization payload mismatch' }, 401)
   }
 
   if (EVM_RE.test(rawAddr)) {
@@ -80,40 +79,39 @@ export async function POST(req: NextRequest) {
     }).catch(() => null)
 
     if (!signer || signer.toLowerCase() !== address) {
-      return NextResponse.json({ error: 'invalid authorization signature' }, { status: 401 })
+      return ctx.json({ error: 'invalid authorization signature' }, 401)
     }
   } else {
-    return NextResponse.json({ error: 'solana connect authorization unavailable while paused' }, { status: 410 })
+    return ctx.json({ error: 'solana connect authorization unavailable while paused' }, 410)
   }
-  const supabase = createSupabaseServiceClient()
 
   // ── Check if wallet already exists with a ref_code ────────────────────────
-  const { data: existing, error: lookupErr } = await supabase
+  const { data: existing, error: lookupErr } = await ctx.supabase
     .from('wallet_profiles')
     .select('ref_code')
     .eq('address', address)
     .maybeSingle()
 
   if (lookupErr) {
-    console.error('[auth/connect] lookup error:', lookupErr.message)
-    return NextResponse.json({ error: 'internal error' }, { status: 500 })
+    ctx.log.error('auth/connect', 'Lookup error', { error: lookupErr.message })
+    return ctx.json({ error: 'internal error' }, 500)
   }
 
   if (existing?.ref_code) {
     // Existing wallet — update last_seen_at and flip any pending referrals to active
-    await supabase
+    await ctx.supabase
       .from('wallet_profiles')
       .update({ last_seen_at: new Date().toISOString() })
       .eq('address', address)
 
     // Flip pending → active for this wallet (they've returned = genuinely active)
-    await supabase
+    await ctx.supabase
       .from('referral_records')
       .update({ status: 'active', activated_at: new Date().toISOString() })
       .eq('referred', address)
       .eq('status', 'pending')
 
-    return NextResponse.json({
+    return ctx.json({
       ref_code: existing.ref_code,
       is_new:   false,
     })
@@ -122,16 +120,16 @@ export async function POST(req: NextRequest) {
   // ── New wallet — generate a ref code ──────────────────────────────────────
   let refCode: string
   try {
-    refCode = await generateRefCodeForWallet(address, supabase)
+    refCode = await generateRefCodeForWallet(address, ctx.supabase)
   } catch (err) {
-    console.error('[auth/connect] generateRefCodeForWallet error:', err)
+    ctx.log.error('auth/connect', 'generateRefCodeForWallet error', { err: String(err) })
     // Fallback: deterministic from address — EVM uses hex bytes, Solana uses first 6 chars
     refCode = isSolana ? address.slice(0, 6) : 'mw_' + address.slice(2, 8)
   }
 
   // Insert only for genuinely new wallets. If a concurrent request wins the race
   // first, read back the existing code instead of overwriting it.
-  const { error: insertErr } = await supabase
+  const { error: insertErr } = await ctx.supabase
     .from('wallet_profiles')
     .insert(
       {
@@ -144,40 +142,40 @@ export async function POST(req: NextRequest) {
   if (insertErr) {
     const isConflict = insertErr.code === '23505'
     if (isConflict) {
-      const { data: racedExisting, error: racedLookupErr } = await supabase
+      const { data: racedExisting, error: racedLookupErr } = await ctx.supabase
         .from('wallet_profiles')
         .select('ref_code')
         .eq('address', address)
         .maybeSingle()
 
       if (racedLookupErr) {
-        console.error('[auth/connect] race lookup error:', racedLookupErr.message)
-        return NextResponse.json({ error: 'internal error' }, { status: 500 })
+        ctx.log.error('auth/connect', 'Race lookup error', { error: racedLookupErr.message })
+        return ctx.json({ error: 'internal error' }, 500)
       }
 
       if (racedExisting?.ref_code) {
-        await supabase
+        await ctx.supabase
           .from('wallet_profiles')
           .update({ last_seen_at: new Date().toISOString() })
           .eq('address', address)
 
-        return NextResponse.json({
+        return ctx.json({
           ref_code: racedExisting.ref_code,
           is_new:   false,
         })
       }
     }
 
-    console.error('[auth/connect] insert error:', insertErr.message)
-    return NextResponse.json({ error: 'internal error' }, { status: 500 })
+    ctx.log.error('auth/connect', 'Insert error', { error: insertErr.message })
+    return ctx.json({ error: 'internal error' }, 500)
   }
 
-  return NextResponse.json({
+  return ctx.json({
     ref_code: refCode,
     is_new:   true,
   })
-}
+}, { auth: 'none' })
 
-export async function GET() {
-  return NextResponse.json({ error: 'method not allowed' }, { status: 405 })
-}
+export const GET = createHandler(async (_req, ctx) => {
+  return ctx.json({ error: 'method not allowed' }, 405)
+})
