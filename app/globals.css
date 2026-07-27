@@ -9,8 +9,8 @@
   --font-mono:    var(--font-mono), 'DM Mono', monospace;
 
   /* ── ATX Settlemint (Phase-3 design language — additive; used on /style, then rolled out) ── */
-  --font-atx-display: var(--font-space-grotesk), 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
-  --font-atx-mono:    var(--font-jetbrains), 'JetBrains Mono', ui-monospace, Menlo, monospace;
+  /* Note: font utilities are defined in @layer utilities below (they must reference the
+     next/font vars directly, since those live on <body>, not :root). */
   --color-atx-bone:     #F1F0E9;
   --color-atx-panel:    #F7F6F0;
   --color-atx-ink:      #111111;
@@ -479,4 +479,13 @@
     font-family: var(--font-mono, 'DM Mono', monospace);
     color: var(--color-mw-ink-2);
   }
+}
+
+/* ── ATX Settlemint font utilities (Phase-3) ──
+   Reference the next/font vars DIRECTLY here: those vars live on <body>, so referencing
+   them through a :root @theme token would compute empty. Applied on /style; rolled out with
+   the design refresh. */
+@layer utilities {
+  .font-atx-display { font-family: var(--font-space-grotesk), 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; }
+  .font-atx-mono    { font-family: var(--font-jetbrains), 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; }
 }
