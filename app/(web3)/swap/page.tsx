@@ -7,6 +7,22 @@ import { MwNav } from '@/components/web2/MwNav'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
 import { API } from '@/lib/web2/api'
 
+// ─── ATX Settlemint tokens ──────────────────────────────────────────────────────
+const GRID_BG =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
+const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
+
+function Star({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
+      />
+    </svg>
+  )
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
   id: string
@@ -119,7 +135,7 @@ export default function SwapPage() {
   return (
     <MwAuthGuard>
       <MwNav />
-      <div className="page-swap bg-mw-bg min-h-screen">
+      <div className="page-swap bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
         <div className="max-w-[1160px] mx-auto px-6 py-8 max-[600px]:px-4 max-[600px]:py-6">
 
           {/* ── Top row: title + attribution ── */}
@@ -127,28 +143,28 @@ export default function SwapPage() {
 
             {/* Title block */}
             <div>
-              <div className="inline-flex items-center gap-[6px] text-[11px] font-semibold text-mw-brand tracking-[0.8px] uppercase mb-[10px] font-sans">
-                <div className="w-[6px] h-[6px] rounded-full bg-mw-live" />
-                Multi-chain · Attribution rewards
+              <div className="inline-flex items-center gap-[7px] mb-[10px]">
+                <span className="w-[9px] h-[9px] bg-atx-acid border border-atx-ink" />
+                <span className={LABEL}>Multi-chain · Attribution rewards</span>
               </div>
-              <div className="text-[32px] font-bold tracking-[-0.5px] text-mw-ink mb-[6px] font-sans leading-[1.15]">
-                Swap &amp; <span className="text-mw-brand">earn.</span>
+              <div className="text-[clamp(32px,5vw,52px)] font-bold tracking-[-0.03em] text-atx-ink mb-[8px] leading-[0.9]">
+                Swap &amp; <span className="text-atx-blue">earn.</span>
               </div>
-              <div className="text-[14px] text-mw-ink-3 max-w-[400px] leading-[1.6] font-sans">
+              <div className="text-[14px] text-atx-ink/55 max-w-[400px] leading-[1.6]">
                 Trade tokens across chains. Every swap builds your Attribution score and unlocks campaign rewards.
               </div>
             </div>
 
-            {/* Attribution score dark card */}
+            {/* Attribution score card */}
             {wallet && swapScore !== null && (
-              <div className="mw-hero-gradient rounded-xl px-6 py-4 flex items-center gap-5 shrink-0 max-[768px]:w-full">
+              <div className="border border-atx-ink px-6 py-4 flex items-center gap-5 shrink-0 max-[768px]:w-full" style={{ backgroundImage: GRID_BG }}>
                 <div className="shrink-0">
-                  <div className="text-[10px] font-bold tracking-[0.1em] uppercase text-mw-ink-3 mb-[5px] font-sans">Your score</div>
-                  <div className="text-[42px] font-bold text-mw-brand tracking-[-2px] leading-none font-mono">{swapScore}</div>
-                  {swapTier && <div className="text-[11px] text-mw-ink-3 mt-[4px] font-sans">{swapTier} tier</div>}
+                  <div className={`${LABEL} mb-[5px]`}>Your score</div>
+                  <div className="text-[42px] font-bold text-atx-blue tracking-[-2px] leading-none font-atx-mono">{swapScore}</div>
+                  {swapTier && <div className="text-[11px] text-atx-ink/55 mt-[4px] font-atx-mono uppercase tracking-[0.06em]">{swapTier} tier</div>}
                 </div>
-                <div className="w-px bg-[rgba(15,23,42,0.08)] self-stretch shrink-0" />
-                <div className="flex-1 text-[13px] text-mw-dark-sub leading-[1.6] font-sans max-w-[200px]">
+                <div className="w-px bg-atx-ink/20 self-stretch shrink-0" />
+                <div className="flex-1 text-[13px] text-atx-ink/55 leading-[1.6] max-w-[200px]">
                   Every swap raises this score permanently. Higher score = larger share of every future campaign pool.
                 </div>
               </div>
@@ -161,11 +177,9 @@ export default function SwapPage() {
             {/* ── Left: Swap widget (hero) ── */}
             <div className="flex flex-col gap-4">
 
-              <div className="bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.14)] rounded-xl px-5 py-4">
-                <div className="text-[11px] font-bold tracking-[1px] uppercase text-mw-ink-4 mb-[8px] font-sans">
-                  Before you swap
-                </div>
-                <div className="flex flex-col gap-[6px] text-[13px] text-mw-ink-3 leading-[1.55] font-sans">
+              <div className="border border-atx-ink/20 bg-atx-panel px-5 py-4">
+                <div className={`${LABEL} mb-[8px]`}>Before you swap</div>
+                <div className="flex flex-col gap-[6px] text-[13px] text-atx-ink/60 leading-[1.55]">
                   <div>Review the route and estimated fee on Mintware before your wallet opens.</div>
                   <div>Swaps route on the network you choose in the widget, so check you are on the chain you expect.</div>
                   <div>Keep a small amount of the native token on that chain for the network fee.</div>
@@ -174,23 +188,23 @@ export default function SwapPage() {
 
               {/* Active campaign banner */}
               {activeCampaign && (
-                <div className="mw-accent-bg bg-white border border-[rgba(79,126,247,0.2)] border-l-[3px] border-l-mw-brand rounded-xl px-5 py-4 flex items-center gap-[14px] shadow-sm">
-                  <div className="text-[22px] shrink-0">⚡</div>
+                <div className="bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-coral px-5 py-4 flex items-center gap-[14px]">
+                  <Star className="w-5 h-5 text-atx-coral shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-semibold text-mw-ink mb-[2px] font-sans">{activeCampaign.name} campaign active</div>
-                    <div className="text-[13px] text-mw-ink-3 font-sans">
+                    <div className="text-[14px] font-semibold text-atx-ink mb-[2px]">{activeCampaign.name} campaign active</div>
+                    <div className="text-[13px] text-atx-ink/55 font-atx-mono">
                       {actions.slice(0, 2).map(([, a]) => `+${a.points} pts${actionSuffix(a)}`).join(' · ')}
                     </div>
                   </div>
                   {actions[0] && (
-                    <div className="bg-mw-brand text-white text-[12px] font-bold px-3 py-[6px] rounded-xl whitespace-nowrap font-sans shrink-0">
+                    <div className="bg-atx-blue text-white text-[12px] font-bold px-3 py-[6px] border border-atx-ink whitespace-nowrap font-atx-mono shrink-0">
                       +{actions[0][1].points} pts{actionSuffix(actions[0][1])}
                     </div>
                   )}
                 </div>
               )}
 
-              <div className="mw-accent-bg bg-white rounded-2xl shadow-feature border border-mw-border overflow-hidden">
+              <div className="bg-atx-panel border border-atx-ink overflow-hidden">
                 <Suspense fallback={<SwapSkeleton />}>
                   <SwapWidget />
                 </Suspense>
@@ -203,7 +217,7 @@ export default function SwapPage() {
               {/* Action cards */}
               {actions.length > 0 && (
                 <div>
-                  <div className="text-[11px] font-bold text-mw-ink-3 tracking-[1.2px] uppercase mb-[14px] font-sans">Earn points by action</div>
+                  <div className={`${LABEL} mb-[14px]`}>Earn points by action</div>
                   <div className="flex flex-col gap-[10px]">
                     {actions.map(([key, action]) => {
                       const earned  = actionPts(key)
@@ -214,19 +228,19 @@ export default function SwapPage() {
                         ? `${earned > 0 ? Math.floor(earned / action.points) : 0} day${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
                         : `${earned > 0 ? Math.floor(earned / action.points) : 0} referral${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
                       return (
-                        <div key={key} className="mw-accent-card bg-white rounded-xl px-4 py-[14px] transition-shadow duration-150 shadow-card hover:shadow-card-hover">
+                        <div key={key} className="border border-atx-ink/25 bg-atx-panel px-4 py-[14px] transition-colors duration-150 hover:border-atx-ink">
                           <div className="flex items-start justify-between gap-2 mb-[6px]">
-                            <div className="text-[14px] font-semibold text-mw-ink font-sans">{action.label}</div>
-                            <div className="text-[15px] font-bold text-mw-brand whitespace-nowrap font-mono">+{action.points}{actionSuffix(action)}</div>
+                            <div className="text-[14px] font-semibold text-atx-ink">{action.label}</div>
+                            <div className="text-[15px] font-bold text-atx-blue whitespace-nowrap font-atx-mono">+{action.points}{actionSuffix(action)}</div>
                           </div>
-                          <div className="text-[13px] text-mw-ink-3 leading-[1.4] font-sans">{actionDesc(key, activeCampaign?.name ?? '')}</div>
+                          <div className="text-[13px] text-atx-ink/55 leading-[1.4]">{actionDesc(key, activeCampaign?.name ?? '')}</div>
                           <div className="mt-[10px]">
-                            <div className="flex justify-between text-[11px] text-mw-ink-5 mb-[5px] font-sans">
+                            <div className="flex justify-between text-[10px] text-atx-ink/45 mb-[5px] font-atx-mono uppercase tracking-[0.06em]">
                               <span>{countLabel}</span>
                               <span>{earned > 0 ? `${earned} pts earned` : '0 pts earned'}</span>
                             </div>
-                            <div className="h-[5px] bg-mw-border rounded-full overflow-hidden">
-                              <div className="h-full bg-mw-brand rounded-full" style={{ width: `${pct}%` }} />
+                            <div className="h-[6px] border border-atx-ink overflow-hidden relative">
+                              <div className="h-full bg-atx-blue absolute inset-y-0 left-0" style={{ width: `${pct}%` }} />
                             </div>
                           </div>
                         </div>
@@ -238,20 +252,21 @@ export default function SwapPage() {
 
               {/* Supported routes */}
               <div>
-                <div className="text-[11px] font-bold text-mw-ink-3 tracking-[1.2px] uppercase mb-[14px] font-sans">Supported routes</div>
+                <div className={`${LABEL} mb-[14px]`}>Supported routes</div>
                 <div className="flex flex-col gap-2">
                   {([
                     { dot: '#627eea', char: 'E', from: 'Base',     tokens: 'ETH, USDC, WBTC',         live: true  },
                     { dot: '#f7931a', char: 'B', from: 'Ethereum', tokens: 'ETH, USDC, stablecoins',  live: true  },
                     { dot: '#9945ff', char: 'S', from: 'Solana',   tokens: 'SOL, USDC',               live: false },
                   ] as const).map(r => (
-                    <div key={r.from} className="mw-accent-card flex items-center gap-[10px] px-[14px] py-3 rounded-xl bg-white transition-shadow duration-150 shadow-card hover:shadow-card-hover" style={!r.live ? { opacity: 0.6 } : undefined}>
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0" style={{ background: r.dot }}>{r.char}</div>
+                    <div key={r.from} className="border border-atx-ink/25 flex items-center gap-[10px] px-[14px] py-3 bg-atx-panel transition-colors duration-150 hover:border-atx-ink" style={!r.live ? { opacity: 0.55 } : undefined}>
+                      <div className="w-6 h-6 border border-atx-ink flex items-center justify-center text-[11px] font-bold text-white shrink-0 font-atx-mono" style={{ background: r.dot }}>{r.char}</div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-[14px] font-semibold text-mw-ink font-sans">{r.from} → {activeCampaign?.name ?? 'Core DAO'}</div>
-                        <div className="text-[13px] text-mw-ink-3 font-sans">{r.tokens}</div>
+                        <div className="text-[14px] font-semibold text-atx-ink">{r.from} → {activeCampaign?.name ?? 'Core DAO'}</div>
+                        <div className="text-[12px] text-atx-ink/55 font-atx-mono">{r.tokens}</div>
                       </div>
-                      <div className={`text-[11px] px-2 py-[3px] rounded-xl font-semibold whitespace-nowrap font-sans ${r.live ? 'bg-[rgba(34,197,94,0.1)] text-mw-green border border-[rgba(34,197,94,0.25)]' : 'bg-mw-bg text-mw-ink-3 border border-mw-border'}`}>
+                      <div className={`text-[10px] px-2 py-[3px] font-semibold whitespace-nowrap font-atx-mono uppercase tracking-[0.06em] border ${r.live ? 'border-atx-ink text-atx-mesquite inline-flex items-center gap-1.5' : 'border-atx-ink/30 text-atx-ink/45'}`}>
+                        {r.live && <span className="w-[7px] h-[7px] bg-atx-acid border border-atx-ink inline-block" />}
                         {r.live ? 'Live' : 'Coming soon'}
                       </div>
                     </div>
@@ -269,7 +284,7 @@ export default function SwapPage() {
 
 function SwapSkeleton() {
   return (
-    <div className="bg-mw-surface-card rounded-xl border border-mw-border h-[480px] flex items-center justify-center text-mw-ink-3 text-[13px] font-sans">
+    <div className="bg-atx-panel border border-atx-ink/20 h-[480px] flex items-center justify-center text-atx-ink/55 text-[13px] font-atx-mono uppercase tracking-[0.08em]">
       Loading swap…
     </div>
   )

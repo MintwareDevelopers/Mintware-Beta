@@ -282,31 +282,31 @@ export function SwapWidget() {
         <CampaignBanner campaignId={campaignId} referrer={referrer} campaign={campaign} />
 
         {/* ── Header strip ── */}
-        <div className="px-[22px] py-[18px] flex items-center justify-between bg-white border-x border-t border-[rgba(79,126,247,0.14)] rounded-t-xl">
+        <div className="px-[22px] py-[18px] flex items-center justify-between bg-atx-panel border-x border-t border-atx-ink">
           <div>
-            <div className="text-[18px] font-bold text-mw-ink font-sans leading-none mb-[3px]">Swap</div>
-            <div className="text-[12px] text-mw-ink-3 font-sans">Best price across chains</div>
+            <div className="text-[18px] font-bold text-atx-ink font-atx-display leading-none mb-[3px]">Swap</div>
+            <div className="text-[11px] text-atx-ink/55 font-atx-mono uppercase tracking-[0.08em]">Best price across chains</div>
           </div>
           <ChainSelector />
         </div>
 
         {/* ── Content area ── */}
-        <div className="bg-white border-x border-b border-[rgba(79,126,247,0.14)] rounded-b-xl p-[20px] flex flex-col gap-[10px]">
+        <div className="bg-atx-panel border-x border-b border-atx-ink p-[20px] flex flex-col gap-[10px]">
 
           {/* Slippage bar */}
-          <div className="flex items-center gap-[6px] px-[12px] py-[8px] bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.14)] rounded-[10px]">
-            <span className="text-[12px] text-mw-ink-4 font-sans shrink-0">Slippage:</span>
+          <div className="flex items-center gap-[6px] px-[12px] py-[8px] bg-atx-bone border border-atx-ink/25">
+            <span className="text-[11px] text-atx-ink/60 font-atx-mono uppercase tracking-[0.06em] shrink-0">Slippage</span>
             {SLIPPAGE_PRESETS.map(p => (
               <button
                 key={p}
-                className={`px-[10px] py-[4px] rounded-[7px] border border-transparent font-mono text-[12px] font-semibold cursor-pointer transition-all duration-[120ms] hover:bg-[rgba(79,126,247,0.1)] hover:text-mw-brand${!customSlippage && slippage === p ? ' bg-[rgba(79,126,247,0.12)] border-[rgba(79,126,247,0.28)] text-mw-brand' : ' bg-transparent text-mw-ink-4'}`}
+                className={`px-[10px] py-[4px] border font-atx-mono text-[12px] font-semibold cursor-pointer transition-colors duration-[120ms] ${!customSlippage && slippage === p ? 'bg-atx-blue border-atx-ink text-white' : 'bg-transparent border-atx-ink/25 text-atx-ink/60 hover:border-atx-ink hover:text-atx-ink'}`}
                 onClick={() => { setSlippage(p); setCustomSlippage('') }}
               >
                 {p}%
               </button>
             ))}
             <input
-              className="w-[56px] px-[6px] py-[4px] rounded-[7px] border border-[rgba(79,126,247,0.18)] bg-white font-mono text-[12px] text-mw-ink text-center outline-none focus:border-[rgba(79,126,247,0.5)]"
+              className="w-[56px] px-[6px] py-[4px] border border-atx-ink/25 bg-atx-panel font-atx-mono text-[12px] text-atx-ink text-center outline-none focus:border-atx-blue"
               type="number"
               min="0.01"
               max="50"
@@ -317,12 +317,12 @@ export function SwapWidget() {
             />
           </div>
 
-          {/* You pay — glass style */}
-          <div className="bg-white border border-[rgba(79,126,247,0.2)] rounded-md p-[14px] shadow-[0_2px_8px_rgba(79,126,247,0.06)] transition-all duration-150 focus-within:border-[rgba(79,126,247,0.45)] focus-within:shadow-[0_2px_14px_rgba(79,126,247,0.13)]">
+          {/* You pay */}
+          <div className="bg-atx-panel border border-atx-ink p-[14px] transition-colors duration-150 focus-within:border-atx-blue">
             <div className="flex items-center justify-between mb-[8px]">
-              <span className="text-[12px] text-mw-ink-4 font-sans">You pay</span>
+              <span className="text-[11px] text-atx-ink/55 font-atx-mono uppercase tracking-[0.08em]">You pay</span>
               {balanceFormatted && sellToken && (
-                <span className="text-[12px] text-mw-ink-4 font-mono">
+                <span className="text-[12px] text-atx-ink/55 font-atx-mono">
                   Balance: {balanceFormatted} {sellToken.symbol}
                 </span>
               )}
@@ -330,7 +330,7 @@ export function SwapWidget() {
             <div className="flex items-center gap-[10px]">
               <div className="flex-1 min-w-0">
                 <input
-                  className="w-full bg-transparent border-0 outline-none font-mono text-[22px] font-semibold text-mw-ink placeholder:text-[#C4C5D0]"
+                  className="w-full bg-transparent border-0 outline-none font-atx-mono text-[22px] font-semibold text-atx-ink placeholder:text-atx-ink/25"
                   type="number"
                   min="0"
                   step="any"
@@ -340,20 +340,20 @@ export function SwapWidget() {
                 />
                 {/* USD value sub-label */}
                 {sellAmountUSD !== null && (
-                  <div className="text-[11px] text-mw-ink-4 font-sans mt-[2px]">
+                  <div className="text-[11px] text-atx-ink/45 font-atx-mono mt-[2px]">
                     ≈ ${sellAmountUSD.toFixed(2)}
                   </div>
                 )}
               </div>
               <button
-                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] rounded-sm border-0 cursor-pointer font-sans text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${sellToken ? ' bg-[rgba(79,126,247,0.07)] text-mw-ink hover:bg-[rgba(79,126,247,0.13)]' : ' bg-mw-brand text-white hover:bg-[#3A52CC]'}`}
+                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] border cursor-pointer font-atx-mono text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${sellToken ? ' bg-atx-bone border-atx-ink/30 text-atx-ink hover:border-atx-ink' : ' bg-atx-blue border-atx-ink text-white hover:opacity-90'}`}
                 onClick={() => setShowSellSelector(true)}
               >
                 {sellToken?.logoURI && (
                   <img
                     src={sellToken.logoURI}
                     alt={sellToken.symbol}
-                    className="w-[18px] h-[18px] rounded-full object-cover bg-[#e2e8f0]"
+                    className="w-[18px] h-[18px] object-cover bg-[#e2e8f0]"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                   />
                 )}
@@ -366,7 +366,7 @@ export function SwapWidget() {
                 {[['25%', 0.25], ['50%', 0.5], ['75%', 0.75], ['MAX', 1]].map(([label, pct]) => (
                   <button
                     key={label as string}
-                    className="px-[8px] py-[3px] rounded-[6px] bg-[rgba(79,126,247,0.06)] border border-[rgba(79,126,247,0.15)] font-sans text-[11px] font-semibold text-mw-ink-4 cursor-pointer transition-all duration-[120ms] hover:bg-[rgba(79,126,247,0.12)] hover:text-mw-brand hover:border-[rgba(79,126,247,0.3)]"
+                    className="px-[8px] py-[3px] bg-transparent border border-atx-ink/25 font-atx-mono text-[11px] font-semibold text-atx-ink/55 cursor-pointer transition-colors duration-[120ms] hover:border-atx-ink hover:text-atx-ink"
                     onClick={() => setPercent(pct as number)}
                   >
                     {label}
@@ -379,7 +379,7 @@ export function SwapWidget() {
           {/* Flip */}
           <div className="flex items-center justify-center">
             <button
-              className="w-[36px] h-[36px] rounded-[10px] bg-white border border-[rgba(79,126,247,0.2)] text-[18px] cursor-pointer flex items-center justify-center transition-all duration-150 text-mw-brand shadow-[0_1px_6px_rgba(79,126,247,0.1)] hover:bg-[rgba(79,126,247,0.08)] hover:border-[rgba(79,126,247,0.4)] hover:shadow-[0_2px_10px_rgba(79,126,247,0.2)] hover:rotate-180"
+              className="w-[36px] h-[36px] bg-atx-panel border border-atx-ink text-[18px] cursor-pointer flex items-center justify-center transition-all duration-150 text-atx-blue hover:bg-atx-blue hover:text-white hover:rotate-180"
               onClick={flip}
               title="Flip tokens"
             >
@@ -387,24 +387,24 @@ export function SwapWidget() {
             </button>
           </div>
 
-          {/* You receive — glass style */}
-          <div className="bg-white border border-[rgba(79,126,247,0.2)] rounded-md p-[14px] shadow-[0_2px_8px_rgba(79,126,247,0.06)] transition-all duration-150">
+          {/* You receive */}
+          <div className="bg-atx-panel border border-atx-ink p-[14px] transition-colors duration-150">
             <div className="flex items-center justify-between mb-[8px]">
-              <span className="text-[12px] text-mw-ink-4 font-sans">You receive (estimate)</span>
+              <span className="text-[11px] text-atx-ink/55 font-atx-mono uppercase tracking-[0.08em]">You receive (estimate)</span>
             </div>
             <div className="flex items-center gap-[10px]">
-              <span className={`flex-1 font-mono text-[22px] font-semibold text-mw-ink overflow-hidden text-ellipsis whitespace-nowrap${isQuoting ? ' text-[#C4C5D0] animate-[blink_1s_step-end_infinite]' : ''}`}>
-                {isQuoting ? '…' : buyAmount ? fmt(buyAmount) : <span className="text-[#C4C5D0]">0</span>}
+              <span className={`flex-1 font-atx-mono text-[22px] font-semibold text-atx-ink overflow-hidden text-ellipsis whitespace-nowrap${isQuoting ? ' text-atx-ink/25 animate-[blink_1s_step-end_infinite]' : ''}`}>
+                {isQuoting ? '…' : buyAmount ? fmt(buyAmount) : <span className="text-atx-ink/25">0</span>}
               </span>
               <button
-                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] rounded-sm border-0 cursor-pointer font-sans text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${buyToken ? ' bg-[rgba(79,126,247,0.07)] text-mw-ink hover:bg-[rgba(79,126,247,0.13)]' : ' bg-mw-brand text-white hover:bg-[#3A52CC]'}`}
+                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] border cursor-pointer font-atx-mono text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${buyToken ? ' bg-atx-bone border-atx-ink/30 text-atx-ink hover:border-atx-ink' : ' bg-atx-blue border-atx-ink text-white hover:opacity-90'}`}
                 onClick={() => setShowBuySelector(true)}
               >
                 {buyToken?.logoURI && (
                   <img
                     src={buyToken.logoURI}
                     alt={buyToken.symbol}
-                    className="w-[18px] h-[18px] rounded-full object-cover bg-[#e2e8f0]"
+                    className="w-[18px] h-[18px] object-cover bg-[#e2e8f0]"
                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                   />
                 )}
@@ -416,13 +416,13 @@ export function SwapWidget() {
 
           {/* Route info strip — includes estimated network fee */}
           {quote && sellToken && buyToken && !isQuoting && (
-            <div className="flex items-center justify-between px-[12px] py-[8px] bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.13)] rounded-[10px]">
+            <div className="flex items-center justify-between px-[12px] py-[8px] bg-atx-bone border border-atx-ink/25">
               <div className="flex items-center gap-[6px]">
-                <span className="text-[11px] font-bold text-mw-brand font-sans">Best route</span>
-                <span className="text-[11px] text-mw-ink-4 font-sans">via LI.FI</span>
+                <span className="text-[10px] font-bold text-atx-blue font-atx-mono uppercase tracking-[0.08em]">Best route</span>
+                <span className="text-[11px] text-atx-ink/45 font-atx-mono">via LI.FI</span>
               </div>
               <div className="flex items-center gap-[8px]">
-                <span className="font-mono text-[12px] text-mw-ink-3">
+                <span className="font-atx-mono text-[12px] text-atx-ink/60">
                   1 {sellToken.symbol} ≈ {parseFloat(quote.price || '0') > 0
                     ? parseFloat(quote.price).toFixed(4)
                     : buyAmount && sellAmount
@@ -431,13 +431,13 @@ export function SwapWidget() {
                   } {buyToken.symbol}
                 </span>
                 {priceImpact !== null && (
-                  <span className={`font-mono text-[12px] px-[6px] py-[2px] rounded-[5px] ${priceImpact > 2 ? 'bg-[rgba(239,68,68,0.08)] text-[#dc2626]' : 'bg-[rgba(22,163,74,0.08)] text-mw-green'}`}>
+                  <span className={`font-atx-mono text-[12px] px-[6px] py-[2px] border ${priceImpact > 2 ? 'border-atx-clay text-atx-clay' : 'border-atx-ink/30 text-atx-mesquite'}`}>
                     {priceImpact > 0 ? '-' : ''}{Math.abs(priceImpact).toFixed(2)}%
                   </span>
                 )}
                 {/* Network fee preview — fiat-first when available */}
                 {(gasCostUSD || gasCostEth) && (
-                  <span className="font-mono text-[11px] text-mw-ink-4" title="Estimated network fee">
+                  <span className="font-atx-mono text-[11px] text-atx-ink/45" title="Estimated network fee">
                     {gasCostUSD
                       ? `~$${gasCostUSD} fee`
                       : `~${parseFloat(gasCostEth!).toFixed(5)} ${nativeSymbol} fee`}
@@ -449,33 +449,33 @@ export function SwapWidget() {
 
           {/* Gas insufficiency warning */}
           {isGasInsufficient && quote && (
-            <div className="px-[12px] py-[10px] rounded-[10px] bg-[rgba(234,179,8,0.08)] border border-[rgba(234,179,8,0.25)] font-sans text-[12px] text-[#ca8a04]">
-              ⚠ Your {nativeSymbol} balance may be too low to cover the network fee for this swap.
+            <div className="px-[12px] py-[10px] border border-atx-clay font-atx-mono text-[12px] text-atx-clay">
+              Your {nativeSymbol} balance may be too low to cover the network fee for this swap.
               Add some {nativeSymbol} before proceeding.
             </div>
           )}
 
           {/* Errors */}
           {quoteError === 'CORE_COMING_SOON' && (
-            <div className="px-[14px] py-[10px] rounded-[10px] bg-[rgba(79,126,247,0.06)] border border-[rgba(79,126,247,0.18)] font-sans text-[13px] text-mw-brand text-center">
-              🚧 Core swaps coming soon — Molten router deploying shortly
+            <div className="px-[14px] py-[10px] border border-atx-blue font-atx-mono text-[13px] text-atx-blue text-center uppercase tracking-[0.04em]">
+              Core swaps coming soon — Molten router deploying shortly
             </div>
           )}
           {quoteError && quoteError !== 'CORE_COMING_SOON' && (
-            <div className="px-[14px] py-[10px] rounded-[10px] bg-[rgba(239,68,68,0.07)] border border-[rgba(239,68,68,0.18)] font-sans text-[13px] text-[#dc2626]">
-              ⚠ {quoteError}
+            <div className="px-[14px] py-[10px] border border-atx-clay font-atx-mono text-[13px] text-atx-clay">
+              {quoteError}
             </div>
           )}
           {swapError && !isSwapping && status === 'error' && (
-            <div className="px-[14px] py-[10px] rounded-[10px] bg-[rgba(239,68,68,0.07)] border border-[rgba(239,68,68,0.18)] font-sans text-[13px] text-[#dc2626]">
-              ⚠ {swapError}
+            <div className="px-[14px] py-[10px] border border-atx-clay font-atx-mono text-[13px] text-atx-clay">
+              {swapError}
             </div>
           )}
 
           {/* High price impact warning */}
           {highImpactWarning && (
-            <div className="px-[12px] py-[8px] rounded-sm bg-[rgba(234,179,8,0.08)] border border-[rgba(234,179,8,0.2)] font-sans text-[12px] text-[#ca8a04]">
-              ⚠ High price impact ({priceImpact?.toFixed(1)}%) — consider a smaller trade
+            <div className="px-[12px] py-[8px] border border-atx-clay font-atx-mono text-[12px] text-atx-clay">
+              High price impact ({priceImpact?.toFixed(1)}%) — consider a smaller trade
             </div>
           )}
 
@@ -493,20 +493,20 @@ export function SwapWidget() {
           <AttributionScorePreview estimatedScoreGain={estimatedScoreGain} />
 
           {quoteSummary && (
-            <div className="px-[12px] py-[10px] rounded-[10px] bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.12)] font-sans text-[12px] text-mw-ink-4 leading-[1.55]">
+            <div className="px-[12px] py-[10px] bg-atx-bone border border-atx-ink/20 font-atx-display text-[12px] text-atx-ink/60 leading-[1.55]">
               {quoteSummary}
             </div>
           )}
 
           {readinessItems.length > 0 && (
-            <div className="px-[12px] py-[12px] rounded-[10px] bg-[rgba(26,26,46,0.03)] border border-[rgba(26,26,46,0.08)]">
-              <div className="text-[11px] font-bold uppercase tracking-[0.8px] text-mw-ink-4 font-sans mb-[8px]">
+            <div className="px-[12px] py-[12px] bg-atx-bone border border-atx-ink/20">
+              <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-atx-ink/55 font-atx-mono mb-[8px]">
                 Before you trade
               </div>
               <div className="flex flex-col gap-[6px]">
                 {readinessItems.map((item) => (
-                  <div key={item} className="flex items-start gap-[8px] text-[12px] text-mw-ink-4 font-sans leading-[1.5]">
-                    <span className="text-mw-brand font-bold">•</span>
+                  <div key={item} className="flex items-start gap-[8px] text-[12px] text-atx-ink/60 font-atx-display leading-[1.5]">
+                    <span className="w-[6px] h-[6px] bg-atx-blue border border-atx-ink inline-block mt-[5px] shrink-0" />
                     <span>{item}</span>
                   </div>
                 ))}
@@ -516,18 +516,13 @@ export function SwapWidget() {
 
           {/* Action button — "Review Swap" opens the confirmation sheet */}
           <button
-            className={`w-full py-[14px] rounded-md border-0 cursor-pointer font-sans text-[15px] font-bold transition-all duration-150 mt-[2px] disabled:cursor-not-allowed${
+            className={`w-full py-[14px] border cursor-pointer font-atx-mono text-[14px] font-bold uppercase tracking-[0.06em] transition-all duration-150 mt-[2px] disabled:cursor-not-allowed${
               isActionDisabled()
-                ? ' bg-[rgba(26,26,46,0.08)] text-mw-ink-4'
+                ? ' bg-atx-bone border-atx-ink/20 text-atx-ink/40'
                 : quoteError === 'CORE_COMING_SOON'
-                ? ' bg-[rgba(79,126,247,0.12)] text-mw-brand'
-                : ' text-white hover:-translate-y-[1px]'
+                ? ' bg-transparent border-atx-blue text-atx-blue'
+                : ' bg-atx-blue border-atx-ink text-white hover:opacity-90'
             }`}
-            style={
-              !isActionDisabled() && quoteError !== 'CORE_COMING_SOON'
-                ? { background: 'linear-gradient(135deg, #4f7ef7, #3A52CC)', boxShadow: '0 4px 24px rgba(79,126,247,0.4)' }
-                : undefined
-            }
             disabled={isActionDisabled()}
             onClick={handleReviewSwap}
           >
@@ -536,9 +531,9 @@ export function SwapWidget() {
 
           {/* Score gain live preview */}
           {sellAmount && parseFloat(sellAmount) > 0 && campaign?.isActive && (
-            <div className="flex items-center justify-center gap-[5px] text-[12px] font-sans -mt-[2px]">
-              <span className="font-bold text-mw-brand">+8 pts</span>
-              <span className="text-mw-ink-3">per trading day · builds your Attribution score</span>
+            <div className="flex items-center justify-center gap-[5px] text-[12px] font-atx-mono -mt-[2px]">
+              <span className="font-bold text-atx-blue">+8 pts</span>
+              <span className="text-atx-ink/55">per trading day · builds your Attribution score</span>
             </div>
           )}
         </div>

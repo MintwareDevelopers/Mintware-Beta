@@ -35,25 +35,25 @@ export function AttributionScorePreview({ estimatedScoreGain }: AttributionScore
   const projected = data ? data.score + estimatedScoreGain : null
 
   return (
-    <div className="flex items-center gap-[10px] px-[14px] py-[9px] rounded-[10px] border border-[rgba(0,82,255,0.13)] bg-[rgba(0,82,255,0.04)] my-[6px] font-sans text-[13px] text-[#3A3C52]">
-      <span className="text-[16px] shrink-0">⚡</span>
+    <div className="flex items-center gap-[10px] px-[14px] py-[9px] border border-atx-ink/25 bg-atx-bone my-[6px] font-atx-display text-[13px] text-atx-ink/60">
+      <span className="w-[10px] h-[10px] bg-atx-acid border border-atx-ink shrink-0" />
       <div>
-        <div className="flex items-center gap-[6px] font-mono text-[13px] font-semibold text-[#1A1A2E]">
+        <div className="flex items-center gap-[6px] font-atx-mono text-[13px] font-semibold text-atx-ink">
           {isLoading ? (
-            <span className="inline-block w-[32px] h-[13px] bg-[#e2e8f0] rounded-[4px]" />
+            <span className="inline-block w-[32px] h-[13px] bg-[#e2e8f0]" />
           ) : (
             <>
               <span>{data?.score ?? 0}</span>
               {estimatedScoreGain > 0 && (
                 <>
-                  <span className="text-mw-brand">→</span>
-                  <span className="text-mw-green">{projected}</span>
+                  <span className="text-atx-blue">→</span>
+                  <span className="text-atx-mesquite">{projected}</span>
                 </>
               )}
             </>
           )}
         </div>
-        <div className="text-mw-ink-4 text-[12px]">
+        <div className="text-atx-ink/55 text-[12px] font-atx-mono">
           Attribution score{estimatedScoreGain > 0 ? ` · +${estimatedScoreGain} pts after this swap` : ''}
           {data?.tier ? ` · ${data.tier}` : ''}
         </div>
