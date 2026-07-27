@@ -22,6 +22,9 @@ dataSources:
       abis:
         - name: MintwareVaultRegistry
           file: ./abis/MintwareVaultRegistry.json
+        # Needed at runtime: handleVaultRegistered calls the vault for name/symbol/asset.
+        - name: MintwareDeFiVault4626
+          file: ./abis/MintwareDeFiVault4626.json
       eventHandlers:
         - event: VaultRegistered(indexed bytes32,uint8,indexed address,address,indexed address)
           handler: handleVaultRegistered
