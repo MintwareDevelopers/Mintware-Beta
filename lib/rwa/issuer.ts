@@ -57,6 +57,13 @@ const MOCK: IssuerProfile = {
   ],
 }
 
-export async function getIssuer(_id?: string): Promise<IssuerProfile> {
+export async function getIssuer(id?: string): Promise<IssuerProfile> {
+  // Real issuer from Supabase when present; mock fallback pre-migration.
+  // Dynamic import keeps the server-only DB source out of any client bundle.
+  try {
+    const { dbGetIssuer } = await import('./db')
+    const real = await dbGetIssuer(id)
+    if (real) return real
+  } catch { /* fall back to mock */ }
   return MOCK
 }

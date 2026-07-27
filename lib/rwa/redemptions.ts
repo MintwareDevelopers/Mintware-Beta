@@ -42,6 +42,12 @@ const MOCK: RedemptionRequest[] = [
 ]
 
 export async function getRedemptions(): Promise<RedemptionRequest[]> {
+  // Real redemptions from Supabase when present; mock fallback pre-migration.
+  try {
+    const { dbGetRedemptions } = await import('./db')
+    const real = await dbGetRedemptions()
+    if (real && real.length > 0) return real
+  } catch { /* fall back to mock */ }
   return MOCK
 }
 

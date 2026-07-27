@@ -137,6 +137,7 @@ export interface VaultDetail extends VaultSummary {
   yieldSources: YieldSource[]
   position?: VaultPosition
   reserveSplit?: [number, number] // [reserve%, yield%] — RWA only
+  deal?: import('@/lib/rwa/deal').DealMeta // RWA only — team-authored deal page content
 }
 
 // Ordered hook stacks per surface (from the two-surface architecture).
@@ -207,12 +208,23 @@ export async function getVault(id: string): Promise<VaultDetail | null> {
         ]
   }
 
+  // RWA vaults carry a team-authored deal (Supabase, server-only read). Attached
+  // when a real deal exists; the deal page falls back to structural data otherwise.
+  let deal: import('@/lib/rwa/deal').DealMeta | undefined
+  if (!isDeFi) {
+    try {
+      const { dbGetDeal } = await import('@/lib/rwa/db')
+      deal = (await dbGetDeal(v.id)) ?? undefined
+    } catch { /* no deal — page renders structural RWA info only */ }
+  }
+
   return {
     ...v,
     hookStack: isDeFi ? DEFI_HOOK_STACK : RWA_HOOK_STACK,
     lockTiers: LOCK_TIERS,
     yieldSources,
     reserveSplit: isDeFi ? undefined : [40, 60],
+    deal,
     // Position is read on-chain client-side (useVaultOnchain) in the real app;
     // the /style preview only shows a sample position for the mock hero vault.
     position:
