@@ -46,41 +46,43 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
           style={{
             position: 'fixed',
             bottom: 0, left: 0, right: 0,
-            background: '#fff',
-            borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0',
-            boxShadow: 'var(--shadow-sheet)',
+            background: 'var(--color-atx-panel)',
+            borderRadius: 0,
+            border: '1px solid var(--color-atx-ink)',
+            borderBottom: 'none',
             zIndex: 1000,
             padding: '28px 24px 40px',
             maxWidth: 520,
             margin: '0 auto',
-            fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+            fontFamily: 'var(--font-space-grotesk), sans-serif',
             outline: 'none',
           }}
         >
           {/* Drag handle */}
           <div style={{
             width: 36, height: 4,
-            background: 'var(--color-mw-border)',
-            borderRadius: 2,
+            background: 'var(--color-atx-ink)',
+            opacity: 0.2,
+            borderRadius: 0,
             margin: '0 auto 22px',
           }} />
 
           <Drawer.Title style={{
             fontSize: 18, fontWeight: 700,
-            color: 'var(--color-mw-ink)',
+            color: 'var(--color-atx-ink)',
             marginBottom: 6,
             textAlign: 'center',
-            fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+            fontFamily: 'var(--font-space-grotesk), sans-serif',
           }}>
             Your Mintware profile is live.
           </Drawer.Title>
 
           <Drawer.Description style={{
             fontSize: 13,
-            color: 'var(--color-mw-ink-4)',
+            color: 'rgba(17,17,17,0.55)',
             textAlign: 'center',
             marginBottom: 20,
-            fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+            fontFamily: 'var(--font-space-grotesk), sans-serif',
           }}>
             Share your link to grow your Sharing score.
           </Drawer.Description>
@@ -88,20 +90,20 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
           {/* Score badge */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            background: 'var(--color-mw-surface-purple)',
-            border: '1.5px solid rgba(194,83,122,0.2)',
-            borderRadius: 14, padding: '14px 20px', marginBottom: 20,
+            background: 'var(--color-atx-bone)',
+            border: '1px solid var(--color-atx-ink)',
+            borderRadius: 0, padding: '14px 20px', marginBottom: 20,
           }}>
             <div>
-              <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px' }}>Sharing score</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-mw-pink)', fontFamily: 'var(--font-mono, "DM Mono", monospace)', lineHeight: 1 }}>
+              <div style={{ fontSize: 10, color: 'rgba(17,17,17,0.55)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-jetbrains), monospace' }}>Sharing score</div>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-atx-coral)', fontFamily: 'var(--font-jetbrains), monospace', lineHeight: 1 }}>
                 {stats.sharing_score}<span style={{ fontSize: 14, opacity: 0.5 }}>/125</span>
               </div>
             </div>
-            <div style={{ flex: 1, height: 6, background: 'rgba(194,83,122,0.12)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ flex: 1, height: 8, background: 'transparent', border: '1px solid var(--color-atx-ink)', borderRadius: 0, overflow: 'hidden', position: 'relative' }}>
               <div style={{
-                height: '100%', background: 'var(--color-mw-pink)', borderRadius: 3,
-                width: pct + '%', transition: 'width 0.6s var(--easing-spring)',
+                height: '100%', background: 'var(--color-atx-coral)', borderRadius: 0,
+                width: pct + '%', transition: 'width 0.6s ease',
               }} />
             </div>
           </div>
@@ -117,9 +119,9 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
             onClick={dismiss}
             style={{
               width: '100%', padding: 10, background: 'transparent',
-              color: 'var(--color-mw-ink-4)', border: 'none',
-              fontSize: 13, cursor: 'pointer',
-              fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+              color: 'rgba(17,17,17,0.55)', border: 'none',
+              fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em',
+              fontFamily: 'var(--font-jetbrains), monospace',
             }}
           >
             Maybe Later

@@ -22,22 +22,22 @@ export function RefCodeInput({ value, buttonLabel = 'Copy', ghost = false }: Ref
   return (
     <div className="flex items-center gap-2">
       <input
-        className="flex-1 bg-mw-surface-purple border-[1.5px] border-mw-border rounded-md py-[9px] px-[13px] font-mono text-[12px] text-mw-ink-2 outline-none whitespace-nowrap overflow-hidden text-ellipsis cursor-default select-all"
+        className="flex-1 bg-atx-bone border border-atx-ink/25 py-[9px] px-[13px] font-atx-mono text-[12px] text-atx-ink/70 outline-none whitespace-nowrap overflow-hidden text-ellipsis cursor-default select-all"
         readOnly
         value={value}
         onClick={copy}
       />
       <button
-        className={`py-[9px] px-[16px] rounded-md text-[12px] font-semibold font-sans cursor-pointer border-[1.5px] border-transparent transition-opacity duration-150 whitespace-nowrap shrink-0 active:opacity-75 ${
+        className={`py-[9px] px-[16px] text-[12px] font-semibold font-atx-mono uppercase tracking-[0.05em] cursor-pointer border transition-opacity duration-150 whitespace-nowrap shrink-0 active:opacity-75 ${
           copied
-            ? 'bg-mw-teal border-mw-teal text-white'
+            ? 'bg-atx-mesquite border-atx-ink text-white'
             : ghost
-            ? 'bg-transparent text-mw-brand-deep border-[rgba(58,92,232,0.3)]'
-            : 'bg-mw-brand-deep text-white border-mw-brand-deep'
+            ? 'bg-transparent text-atx-blue border-atx-blue'
+            : 'bg-atx-blue text-white border-atx-ink'
         }`}
         onClick={copy}
       >
-        {copied ? 'Copied!' : buttonLabel}
+        {copied ? 'Copied' : buttonLabel}
       </button>
     </div>
   )
