@@ -93,7 +93,10 @@ abstract contract MintwareBaseVault4626 is
     // ─────────────────────────────────────────────────────────────────────────
 
     IPoolManager public immutable poolManager;
-    address      public immutable feeVault;
+    /// @dev Not immutable: factory-deployed vaults construct with feeVault == address(0)
+    ///      and wire it once via setFeeVault() (the FeeVault is deployed in the same tx,
+    ///      so its address isn't knowable when the CREATE2 initcode is built).
+    address      public feeVault;
     address      public immutable treasury;
     VaultSurface public immutable surface;
     address      public immutable provider;
@@ -134,6 +137,7 @@ abstract contract MintwareBaseVault4626 is
     event WithdrawalExecuted(address indexed owner, uint256 assetsOut, uint256 penalty);
     event PoolInitialized(bytes32 indexed poolId, uint160 sqrtPriceX96);
     event OracleSignerSet(address indexed signer);
+    event FeeVaultSet(address indexed feeVault);
     event Rebalanced(int24 tickLower, int24 tickUpper, uint128 liquidity);
     event RebalancedWithProposal(bytes32 indexed vaultId, int24 tickLower, int24 tickUpper, uint256 nonce, address submitter);
 
@@ -156,6 +160,8 @@ abstract contract MintwareBaseVault4626 is
     error ProposalExpired();
     error NonceAlreadyUsed();
     error InvalidOracleSignature();
+    error FeeVaultAlreadySet();
+    error ZeroFeeVault();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -371,6 +377,14 @@ abstract contract MintwareBaseVault4626 is
     function setOracleSigner(address signer) external onlyOwner {
         oracleSigner = signer;
         emit OracleSignerSet(signer);
+    }
+
+    /// @notice One-time wiring of the FeeVault for factory-deployed vaults.
+    function setFeeVault(address _feeVault) external onlyOwner {
+        if (feeVault != address(0)) revert FeeVaultAlreadySet();
+        if (_feeVault == address(0)) revert ZeroFeeVault();
+        feeVault = _feeVault;
+        emit FeeVaultSet(_feeVault);
     }
 
     /// @notice Owner-initiated rebalance to a new tick range.
