@@ -19,6 +19,10 @@ export interface SocialVault {
   tvl_usdc:         number
   created_at:       string
   updated_at:       string
+  // Phase-3 two-surface columns (nullable on legacy rows)
+  surface?:         'defi' | 'rwa'
+  vault_standard?:  'legacy' | 'erc4626'
+  provider?:        string | null
   // joined from vault_epochs (latest active)
   current_epoch?:   VaultEpoch | null
 }

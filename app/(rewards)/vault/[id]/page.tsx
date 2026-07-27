@@ -11,6 +11,7 @@ import type { SocialVault, LpDeposit, WithdrawalQueueEntry, LockTier } from '@/l
 import { LOCK_TIERS } from '@/lib/web2/vault/types'
 import { useVaultDeposit, useVaultWithdraw, useVaultOnchain } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultDepositMessage, buildVaultWithdrawMessage } from '@/lib/web3/signedActionMessages'
+import { RwaVaultDetailView } from './RwaVaultDetail'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function shortAddr(a: string) { return `${a.slice(0, 6)}…${a.slice(-4)}` }
@@ -387,6 +388,9 @@ function VaultDetailContent() {
       Vault not found. <Link href="/vaults" className="text-atx-blue">← Back to vaults</Link>
     </div>
   )
+
+  // RWA vaults render the deal page (surface-aware); DeFi keeps the LP detail below.
+  if (vault.surface === 'rwa') return <RwaVaultDetailView vault={vault} />
 
   const epoch       = vault.current_epoch
   const totalDeposited = deposits.reduce((s, d) => s + d.usdc_amount, 0)
