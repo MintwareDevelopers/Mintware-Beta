@@ -8,7 +8,9 @@ import {MintwareBaseVault4626} from "../src/vaults/MintwareBaseVault4626.sol";
 import {MintwareVRWA, TransferMode} from "../src/rwa/MintwareVRWA.sol";
 import {SPVBeneficiaryRegistry, KYCLevel} from "../src/rwa/SPVBeneficiaryRegistry.sol";
 import {VaultSurface, LockTier, VaultConfig} from "../src/vaults/VaultTypes.sol";
+import {FeeVault} from "../src/FeeVault.sol";
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockYieldAdapter} from "./mocks/MockYieldAdapter.sol";
 
 contract MintwareRWAVault4626Test is Test {
     address internal deployer   = address(this);
@@ -17,12 +19,13 @@ contract MintwareRWAVault4626Test is Test {
     address internal issuer     = makeAddr("issuer");
     address internal kycProvider = makeAddr("kycProvider");
     address internal treasury   = makeAddr("treasury");
-    address internal feeVault   = makeAddr("feeVault");
+    address internal dist       = makeAddr("distributor");
     address internal pmAddr     = makeAddr("poolManager"); // never called (reserve-only v1)
 
     MockERC20 internal usdc;
     MintwareVRWA internal vrwa;
     SPVBeneficiaryRegistry internal registry;
+    FeeVault internal feeVault;
     MintwareRWAVault4626 internal vault;
 
     function setUp() public {
@@ -30,6 +33,7 @@ contract MintwareRWAVault4626Test is Test {
         vrwa     = new MintwareVRWA("Mintware vRWA", "vRWA", 6, deployer);
         registry = new SPVBeneficiaryRegistry(deployer);
         registry.setKycProvider(kycProvider);
+        feeVault = new FeeVault(address(usdc), dist, makeAddr("oracle"), treasury);
 
         VaultConfig memory cfg = VaultConfig({
             surface:             VaultSurface.RWA,
@@ -45,8 +49,9 @@ contract MintwareRWAVault4626Test is Test {
             enableIdleCapital:   false,
             idleTargetRatio:     0
         });
-        vault = new MintwareRWAVault4626(cfg, pmAddr, feeVault, address(vrwa), address(registry), issuer);
+        vault = new MintwareRWAVault4626(cfg, pmAddr, address(feeVault), address(vrwa), address(registry), issuer);
         vrwa.setMinter(address(vault));
+        feeVault.setSocialVault(address(vault)); // authorize vault to notify rwa_yield
 
         usdc.mint(alice, 100_000e6);
     }
@@ -144,6 +149,54 @@ contract MintwareRWAVault4626Test is Test {
         assertEq(usdc.balanceOf(alice) - balBefore, 1_000e6, "USDC returned");
         assertEq(vault.balanceOf(alice), 0, "shares burned");
         assertEq(vault.totalPrincipal(), 0);
+    }
+
+    // ── 40/60 reserve + yield deployment ─────────────────────────────────────
+
+    function test_deposit_routes_60pct_to_yield() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        vault.setYieldAdapter(address(adapter)); // default reserveRatio 40%
+
+        _deposit(alice, 10_000e6);
+        assertEq(adapter.totalAssets(), 6_000e6, "60% routed to yield");
+        assertEq(vault.principalInYield(), 6_000e6);
+        assertEq(usdc.balanceOf(address(vault)), 4_000e6, "40% reserve held");
+    }
+
+    function test_settlement_recalls_from_yield() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        vault.setYieldAdapter(address(adapter));
+
+        _deposit(alice, 10_000e6); // 6k to yield, 4k reserve
+        vm.warp(block.timestamp + 25 hours);
+        vm.prank(alice);
+        vault.requestRedeem(10_000e6);
+        vm.warp(block.timestamp + 30 days + 1);
+        _kyc(alice);
+
+        uint256 balBefore = usdc.balanceOf(alice);
+        vm.prank(issuer);
+        vault.confirmSettlement(alice); // reserve (4k) short → recalls 6k from yield
+
+        assertEq(usdc.balanceOf(alice) - balBefore, 10_000e6, "full principal settled");
+        assertEq(vault.principalInYield(), 0, "yield fully recalled");
+    }
+
+    function test_harvest_splits_70_30() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        vault.setYieldAdapter(address(adapter));
+        _deposit(alice, 10_000e6); // 6k in yield
+
+        usdc.mint(address(adapter), 600e6); // simulate yield
+
+        uint256 fBefore = usdc.balanceOf(address(feeVault));
+        uint256 tBefore = usdc.balanceOf(treasury);
+        uint256 yield = vault.harvestYield();
+
+        assertEq(yield, 600e6);
+        assertEq(usdc.balanceOf(address(feeVault)) - fBefore, 420e6, "70% depositors");
+        assertEq(usdc.balanceOf(treasury) - tBefore, 180e6, "30% Mintware");
+        assertEq(vault.principalInYield(), 6_000e6, "principal untouched");
     }
 
     function test_emergency_freeze_blocks_transfers() public {
