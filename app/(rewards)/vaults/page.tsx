@@ -26,6 +26,8 @@ function Star({ className = '' }: { className?: string }) {
 }
 
 const LABEL = 'font-atx-mono uppercase tracking-[0.08em] text-[10px]'
+const GRID_BG =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 
 // ─── mock data for development / before DB is seeded ───────────────────────
 const MOCK_VAULTS: SocialVault[] = [
@@ -101,35 +103,35 @@ function VaultsContent() {
       <div className="max-w-[1100px] mx-auto px-7 pt-7 pb-[60px] max-[800px]:px-4 max-[800px]:pt-5 [&_*]:rounded-none">
 
         {/* ── Hero ── */}
-        <div className="bg-atx-ink text-white border border-atx-ink px-10 py-9 mb-7 flex items-start justify-between gap-6 max-[720px]:flex-col max-[720px]:px-5 max-[720px]:py-6">
+        <div className="bg-atx-panel text-atx-ink border border-atx-ink px-10 py-9 mb-7 flex items-start justify-between gap-6 max-[720px]:flex-col max-[720px]:px-5 max-[720px]:py-6" style={{ backgroundImage: GRID_BG }}>
           <div>
             <div className="flex items-center gap-1.5 mb-2.5">
-              <span className="w-[7px] h-[7px] bg-atx-acid border border-atx-ink inline-block" />
-              <span className={`${LABEL} tracking-[0.12em] text-atx-acid`}>Social LP Vaults</span>
+              <span className="w-[9px] h-[9px] bg-atx-acid border border-atx-ink inline-block" />
+              <span className={`${LABEL} tracking-[0.12em] text-atx-ink/55`}>Social LP Vaults</span>
             </div>
-            <div className="text-[32px] font-extrabold leading-[1.15] mb-2 font-atx-display max-[720px]:text-[24px]">
+            <div className="text-[32px] font-extrabold leading-[1.15] mb-2 font-atx-display tracking-[-0.02em] max-[720px]:text-[24px]">
               Earn while you<br />provide liquidity
             </div>
-            <div className="text-[14px] text-white/60 max-w-[420px] leading-[1.5] font-atx-display">
+            <div className="text-[14px] text-atx-ink/55 max-w-[420px] leading-[1.5] font-atx-display">
               Attribution-weighted rewards. The better your on-chain reputation, the more you earn from the same deposit.
             </div>
           </div>
           <div className="flex gap-8 shrink-0 max-[720px]:gap-5">
             <div className="flex flex-col gap-0.5">
-              <span className="text-[26px] font-bold font-atx-mono text-white">
+              <span className="text-[26px] font-bold font-atx-mono text-atx-blue">
                 {totalTvl > 0 ? fmtUSD(totalTvl) : '—'}
               </span>
-              <span className={`${LABEL} text-white/55`}>Total TVL</span>
+              <span className={`${LABEL} text-atx-ink/45`}>Total TVL</span>
             </div>
             <div className="flex flex-col gap-0.5">
-              <span className="text-[26px] font-bold font-atx-mono text-white">
+              <span className="text-[26px] font-bold font-atx-mono text-atx-mesquite">
                 {totalEpoch > 0 ? fmtUSD(totalEpoch) : '—'}
               </span>
-              <span className={`${LABEL} text-white/55`}>This epoch</span>
+              <span className={`${LABEL} text-atx-ink/45`}>This epoch</span>
             </div>
             <div className="flex flex-col gap-0.5">
-              <span className="text-[26px] font-bold font-atx-mono text-white">{activeVaults.length}</span>
-              <span className={`${LABEL} text-white/55`}>Active vaults</span>
+              <span className="text-[26px] font-bold font-atx-mono text-atx-ink">{activeVaults.length}</span>
+              <span className={`${LABEL} text-atx-ink/45`}>Active vaults</span>
             </div>
           </div>
         </div>
