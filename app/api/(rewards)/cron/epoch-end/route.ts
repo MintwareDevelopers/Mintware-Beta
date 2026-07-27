@@ -289,7 +289,7 @@ async function activateDueCampaigns(ctx: RouteContext): Promise<number> {
 
   const count = data?.length ?? 0
   if (count > 0) {
-    log.info('epoch-end', 'Campaigns activated', { count, ids: data!.map((c) => c.id) })
+    log.info('epoch-end', 'Campaigns activated', { count, ids: data!.map((c: { id: string }) => c.id) })
   }
   return count
 }

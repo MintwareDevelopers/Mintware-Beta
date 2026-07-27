@@ -163,7 +163,7 @@ export async function publishUniversalEpochToDistributor(epochId: string): Promi
     throw new Error(`[universalDistributionBridge] failed to load allocations for epoch ${epoch.id}: ${allocErr.message}`)
   }
 
-  const walletRows = (allocations ?? []).filter((row) => ADDRESS_RE.test(row.recipient))
+  const walletRows = (allocations ?? []).filter((row: { recipient: string; recipient_type: string; amount_usd: number | null; amount_usdc_wei: string | null; merkle_proof: string[] | null; included_in_merkle: boolean }) => ADDRESS_RE.test(row.recipient))
   const now = new Date().toISOString()
 
   const { data: dist, error: distErr } = await supabase
@@ -189,7 +189,7 @@ export async function publishUniversalEpochToDistributor(epochId: string): Promi
 
   if (walletRows.length > 0) {
     const tokenPriceUsd = Number(process.env.UNIVERSAL_SETTLEMENT_TOKEN_PRICE_USD ?? 1)
-    const payoutRows = walletRows.map((row) => ({
+    const payoutRows = walletRows.map((row: { recipient: string; amount_usd: number | null; amount_usdc_wei: string | null; merkle_proof: string[] | null }) => ({
       campaign_id: campaignId,
       wallet: row.recipient.toLowerCase(),
       epoch_number: epochNumber,

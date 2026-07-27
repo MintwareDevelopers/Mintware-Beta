@@ -9,7 +9,7 @@ export const GET = createHandler(async (req, ctx) => {
 
   ctx.log.info('universal-distribution-bridge', 'Bridge started', { limit })
   const result = await bridgeUniversalEpochsToDistributor(limit)
-  ctx.log.info('universal-distribution-bridge', 'Bridge complete', result as Record<string, unknown>)
+  ctx.log.info('universal-distribution-bridge', 'Bridge complete', result as unknown as Record<string, unknown>)
 
   return ctx.json({ ok: true, ...result })
 }, { auth: 'bearer-token' })

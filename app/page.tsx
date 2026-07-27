@@ -19,9 +19,9 @@ const GRID_BG =
 const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
 const btn = 'font-semibold text-[14px] px-6 py-3 border uppercase tracking-[0.04em] cursor-pointer transition-none'
 
-function Star({ className = '' }: { className?: string }) {
+function Star({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
   return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
+    <svg viewBox="0 0 100 100" className={className} style={style} aria-hidden="true">
       <path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z" />
     </svg>
   )

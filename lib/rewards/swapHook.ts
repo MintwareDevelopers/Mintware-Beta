@@ -256,7 +256,7 @@ async function processTokenPool(
       console.error('[swapHook] daily_wallet_cap query error:', walletCapErr)
       return { credited: false, skip_reason: 'db_error' }
     }
-    const walletTodayUsd = (walletRows ?? []).reduce((s, r) => s + Number(r.reward_usd), 0)
+    const walletTodayUsd = (walletRows ?? []).reduce((s: number, r: { reward_usd: number | null }) => s + Number(r.reward_usd), 0)
     if (walletTodayUsd + buyer_reward_usd > walletCapUsd) {
       return { credited: false, skip_reason: 'daily_wallet_cap_reached', campaign_type: 'token_pool' }
     }
@@ -281,7 +281,7 @@ async function processTokenPool(
       console.error('[swapHook] daily_pool_cap query error:', poolCapErr)
       return { credited: false, skip_reason: 'db_error' }
     }
-    const poolTodayUsd = (poolRows ?? []).reduce((s, r) => s + Number(r.reward_usd), 0)
+    const poolTodayUsd = (poolRows ?? []).reduce((s: number, r: { reward_usd: number | null }) => s + Number(r.reward_usd), 0)
     if (poolTodayUsd + total_deduction > poolCapUsd) {
       return { credited: false, skip_reason: 'daily_pool_cap_reached', campaign_type: 'token_pool' }
     }

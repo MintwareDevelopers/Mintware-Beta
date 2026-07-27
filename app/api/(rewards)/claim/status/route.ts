@@ -101,11 +101,11 @@ export const GET = createHandler(async (req, ctx) => {
   // Query distributions for all campaign_ids in this wallet's payouts, then
   // match by epoch_number in JS.
   // ---------------------------------------------------------------------------
-  const campaignIds = [...new Set(rows.map((r) => r.campaign_id))]
+  const campaignIds = [...new Set(rows.map((r: { campaign_id: string }) => r.campaign_id))]
 
   // Scope to only the (campaign_id, epoch_number) pairs present in this wallet's payouts.
   // This prevents the query from ballooning as campaigns accumulate epochs over time.
-  const epochNumbers = [...new Set(rows.map((r) => r.epoch_number))]
+  const epochNumbers = [...new Set(rows.map((r: { epoch_number: number }) => r.epoch_number))]
 
   const { data: dists, error: distErr } = await ctx.supabase
     .from('distributions')
@@ -127,7 +127,7 @@ export const GET = createHandler(async (req, ctx) => {
   // ---------------------------------------------------------------------------
   // Step 3: Shape each payout row into a ClaimableReward
   // ---------------------------------------------------------------------------
-  const rewards = rows.map((row) => {
+  const rewards = rows.map((row: { campaign_id: string; epoch_number: number; campaigns: unknown; claimed_at: string | null; amount_wei: string | number | null; payout_usd: number | null; created_at: string | null }) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const campaign = Array.isArray(row.campaigns) ? row.campaigns[0] : (row.campaigns as any)
     const dist = distMap.get(`${row.campaign_id}:${row.epoch_number}`) ?? null
@@ -164,9 +164,9 @@ export const GET = createHandler(async (req, ctx) => {
   })
 
   const totals = {
-    claimable_count: rewards.filter((r) => r.status === 'claimable').length,
-    claimed_count:   rewards.filter((r) => r.status === 'claimed').length,
-    pending_count:   rewards.filter((r) => r.status === 'pending').length,
+    claimable_count: rewards.filter((r: { status: string }) => r.status === 'claimable').length,
+    claimed_count:   rewards.filter((r: { status: string }) => r.status === 'claimed').length,
+    pending_count:   rewards.filter((r: { status: string }) => r.status === 'pending').length,
   }
 
   return ctx.json({ address, rewards, totals })

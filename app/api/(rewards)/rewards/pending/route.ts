@@ -218,9 +218,9 @@ export const GET = createHandler(async (req, ctx) => {
     total_usd: Math.round(by_token.reduce((s, t) => s + t.total_usd, 0) * 100) / 100,
     locked_usd: Math.round(by_token.reduce((s, t) => s + t.locked_usd, 0) * 100) / 100,
     claimable_usd: Math.round(by_token.reduce((s, t) => s + t.claimable_usd, 0) * 100) / 100,
-    claimable_count: rows.filter((r) => r.status === 'claimable').length,
-    locked_count: rows.filter((r) => r.status === 'locked').length,
-    claimed_count: rows.filter((r) => r.status === 'claimed').length,
+    claimable_count: rows.filter((r: { status: string }) => r.status === 'claimable').length,
+    locked_count: rows.filter((r: { status: string }) => r.status === 'locked').length,
+    claimed_count: rows.filter((r: { status: string }) => r.status === 'claimed').length,
   }
 
   return ctx.json({ address, by_token, totals })

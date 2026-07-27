@@ -125,7 +125,7 @@ export const GET = createHandler(async (req, ctx) => {
     .not('amount_usd', 'is', null)
 
   const totalVolumeUsd = (volumeData ?? []).reduce(
-    (sum, row) => sum + (row.amount_usd ?? 0), 0
+    (sum: number, row: { amount_usd: number | null }) => sum + (row.amount_usd ?? 0), 0
   )
 
   // -- Stats: total paid out (sum of reward_usd from pending_rewards claimed) -
@@ -136,7 +136,7 @@ export const GET = createHandler(async (req, ctx) => {
     .eq('status', 'claimed')
 
   const totalPaidOutUsd = (paidData ?? []).reduce(
-    (sum, row) => sum + (row.reward_usd ?? 0), 0
+    (sum: number, row: { reward_usd: number | null }) => sum + (row.reward_usd ?? 0), 0
   )
 
   // -- Days remaining --------------------------------------------------------
@@ -189,7 +189,7 @@ export const GET = createHandler(async (req, ctx) => {
       .order('recorded_at', { ascending: false })
       .limit(10)
 
-    recent_txs = (txData ?? []).map(row => ({
+    recent_txs = (txData ?? []).map((row: { recorded_at: string | null; wallet: string; amount_usd: number | null; tx_hash: string }) => ({
       time:      row.recorded_at,
       wallet:    row.wallet,
       amount_usd: row.amount_usd ?? 0,
@@ -210,13 +210,13 @@ export const GET = createHandler(async (req, ctx) => {
       .limit(10)
 
     // Compute estimated payout per wallet based on share of total points
-    const totalPts = (lbData ?? []).reduce((s, r) => s + (r.total_points ?? 0), 0)
+    const totalPts = (lbData ?? []).reduce((s: number, r: { total_points: number | null }) => s + (r.total_points ?? 0), 0)
     const epochPool = campaign.pool_usd ?? 0
     // Rough epoch count: days remaining / 1 (daily epochs) — simplification
     const epochCount = Math.max(1, daysRemaining ?? 1)
     const perEpochPool = totalPts > 0 ? epochPool / epochCount : 0
 
-    leaderboard = (lbData ?? []).map((row, i) => ({
+    leaderboard = (lbData ?? []).map((row: { wallet: string; total_points: number | null }, i: number) => ({
       rank: i + 1,
       wallet: row.wallet,
       points: row.total_points ?? 0,
@@ -235,7 +235,7 @@ export const GET = createHandler(async (req, ctx) => {
 
     // For each distribution, get participant count and paid out
     epoch_history = await Promise.all(
-      (distData ?? []).map(async (dist) => {
+      (distData ?? []).map(async (dist: { epoch_number: number; published_at: string | null; status: string; onchain_id: string | null }) => {
         const { count } = await ctx.supabase
           .from('daily_payouts')
           .select('id', { count: 'exact', head: true })
@@ -248,7 +248,7 @@ export const GET = createHandler(async (req, ctx) => {
           .eq('campaign_id', campaignId)
           .eq('epoch_number', dist.epoch_number)
 
-        const paid_out = (payoutSum ?? []).reduce((s, r) => s + (r.payout_usd ?? 0), 0)
+        const paid_out = (payoutSum ?? []).reduce((s: number, r: { payout_usd: number | null }) => s + (r.payout_usd ?? 0), 0)
 
         return {
           epoch_number:  dist.epoch_number,

@@ -27,7 +27,7 @@ export async function GET(
       return ctx.json({ error: 'failed to load pending actions' }, 500)
     }
 
-    const pending = (data ?? []).map(row => ({
+    const pending = (data ?? []).map((row: { id: string; tx_hash: string; signature: string; nonce: number; deadline: number; volume_wei: string; campaign_id: string }) => ({
       id: row.id, txHash: row.tx_hash, signature: row.signature,
       nonce: row.nonce, deadline: row.deadline, volumeWei: row.volume_wei, campaignId: row.campaign_id,
     }))

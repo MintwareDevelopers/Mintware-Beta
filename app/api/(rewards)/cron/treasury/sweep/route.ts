@@ -90,7 +90,7 @@ export const GET = createHandler(async (_req, ctx) => {
   }
 
   // Load matching distributions and campaigns
-  const campaignIds = [...new Set(payoutRows.map(r => r.campaign_id))]
+  const campaignIds = [...new Set(payoutRows.map((r: { campaign_id: string }) => r.campaign_id))]
 
   const { data: distributions } = await supabase
     .from('distributions')

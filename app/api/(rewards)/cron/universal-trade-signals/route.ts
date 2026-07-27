@@ -25,7 +25,7 @@ export const GET = createHandler(async (_req, ctx) => {
 
   ctx.log.info('universal-trade-signals', 'Sync started', { chainSlug, contractAddress })
   const result = await syncTradeSignals({ chainSlug, contractAddress, initialWindow, confirmations })
-  ctx.log.info('universal-trade-signals', 'Sync complete', result as Record<string, unknown>)
+  ctx.log.info('universal-trade-signals', 'Sync complete', result as unknown as Record<string, unknown>)
 
   return ctx.json({ ok: true, ...result })
 }, { auth: 'bearer-token' })
