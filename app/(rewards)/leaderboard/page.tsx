@@ -9,6 +9,12 @@ import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { Users, Coins, TrendingUp } from 'lucide-react'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
+// ─── ATX Settlemint tokens ──────────────────────────────────────────────────────
+const GRID_BG =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
+const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
+const TH = 'px-4 py-3 text-[10px] font-bold text-atx-ink/55 uppercase tracking-[0.1em] border-b border-atx-ink bg-atx-bone font-atx-mono'
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campaign {
   id: string
@@ -115,22 +121,23 @@ function LeaderboardContent() {
   const topPct   = (me && total > 0) ? (100 - Math.round(((total - (myIdx + 1)) / total) * 100)) : null
 
   function buildRow(entry: LeaderboardEntry, rank: number, isMe: boolean) {
-    const RANK_COLORS: Record<number, string> = { 1: '#f59e0b', 2: 'var(--color-mw-ink-5)', 3: '#d97706' }
-    const rankColor = RANK_COLORS[rank] ?? 'var(--color-mw-ink-3)'
+    // Duotone rank accents: leader → coral, others → ink.
+    const RANK_COLORS: Record<number, string> = { 1: 'var(--color-atx-coral)', 2: 'var(--color-atx-grey)', 3: 'var(--color-atx-clay)' }
+    const rankColor = RANK_COLORS[rank] ?? 'var(--color-atx-ink)'
     return (
       <tr
         key={entry.wallet + rank}
         className={`cursor-pointer ${isMe ? 'lb-row-me' : 'lb-row'}`}
       >
         <td
-          className="lb-td lb-rank"
-          style={{ color: rank <= 3 ? rankColor : 'var(--color-mw-ink-5)', fontWeight: rank <= 3 ? 700 : 500 }}
+          className="lb-td font-atx-mono"
+          style={{ color: rank <= 3 ? rankColor : 'var(--color-atx-ink)', opacity: rank <= 3 ? 1 : 0.5, fontWeight: rank <= 3 ? 700 : 500 }}
         >
-          {rank}
+          {String(rank).padStart(2, '0')}
         </td>
         <td className="lb-td">
           <div className="flex items-center gap-[10px]">
-            <div className="w-[30px] h-[30px] rounded-full bg-[var(--color-mw-brand-mid)] text-mw-brand flex items-center justify-center text-[11px] font-bold shrink-0 font-mono">
+            <div className="w-[30px] h-[30px] border border-atx-ink bg-atx-panel text-atx-blue flex items-center justify-center text-[11px] font-bold shrink-0 font-atx-mono">
               {entry.wallet.charAt(2).toUpperCase()}
             </div>
             <WalletDisplay
@@ -138,16 +145,16 @@ function LeaderboardContent() {
               mono
               style={{ fontSize: 13, fontWeight: 500 }}
             />
-            {isMe && <span className="text-[11px] text-mw-live ml-[6px]">(you)</span>}
+            {isMe && <span className="text-[11px] text-atx-mesquite ml-[6px] font-atx-mono">(you)</span>}
           </div>
         </td>
-        <td className="lb-td lb-right font-semibold text-mw-brand font-mono">
+        <td className="lb-td lb-right font-semibold text-atx-blue font-atx-mono">
           {entry.attribution_score || 0}
         </td>
-        <td className="lb-td lb-right font-semibold text-mw-live font-mono">
+        <td className="lb-td lb-right font-semibold text-atx-mesquite font-atx-mono">
           {fmtUSD(entry.total_earned_usd || 0)}
         </td>
-        <td className="lb-td lb-right lb-pts-col font-medium text-mw-ink font-mono">
+        <td className="lb-td lb-right lb-pts-col font-medium text-atx-ink font-atx-mono">
           {(entry.total_points || 0).toLocaleString()}
         </td>
       </tr>
@@ -157,64 +164,64 @@ function LeaderboardContent() {
   return (
     <>
 
-      <div className="page-leaderboard bg-mw-bg min-h-screen">
+      <div className="page-leaderboard bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
         <div className="flex items-start max-[820px]:flex-col">
           {/* ── Main column ── */}
           <div className="flex-1 p-7 pb-10 min-w-0 max-[820px]:p-4 max-[820px]:pb-5">
             {/* ── User-first hero ── */}
-            <div className="mw-hero-gradient rounded-lg mb-6 overflow-hidden relative">
-              <div className="flex items-stretch px-8 py-7 relative">
+            <div className="border border-atx-ink mb-6 overflow-hidden relative" style={{ backgroundImage: GRID_BG }}>
+              <div className="flex items-stretch px-8 py-7 relative max-[560px]:flex-col max-[560px]:gap-5">
 
                 {/* Left: Rank number */}
-                <div className="shrink-0 w-[120px] flex flex-col justify-center pr-8">
-                  <div className="text-[10px] font-bold tracking-[0.12em] uppercase text-mw-ink-3 mb-[10px] font-sans">Your rank</div>
+                <div className="shrink-0 w-[120px] flex flex-col justify-center pr-8 max-[560px]:w-full max-[560px]:pr-0">
+                  <div className={`${LABEL} mb-[10px]`}>Your rank</div>
                   {loading ? (
-                    <div className="w-[80px] h-14 rounded-[8px] bg-[rgba(15,23,42,0.07)]" />
+                    <div className="w-[80px] h-14 bg-atx-panel border border-atx-ink/20" />
                   ) : me ? (
                     <>
-                      <div className={`text-[56px] font-bold leading-none font-mono tracking-[-3px]${myIdx === 0 ? ' text-[#fbbf24]' : ' text-mw-ink'}`}>
+                      <div className={`text-[56px] font-bold leading-none font-atx-mono tracking-[-3px]${myIdx === 0 ? ' text-atx-coral' : ' text-atx-ink'}`}>
                         #{myIdx + 1}
                       </div>
-                      <div className="text-[12px] text-mw-ink-5 mt-[6px] font-sans">of {total}</div>
+                      <div className="text-[12px] text-atx-ink/45 mt-[6px] font-atx-mono">of {total}</div>
                     </>
                   ) : (
                     <>
-                      <div className="text-[56px] font-bold text-[rgba(15,23,42,0.15)] leading-none font-mono tracking-[-3px]">—</div>
-                      <div className="text-[12px] text-mw-ink-3 mt-[6px] font-sans">{total > 0 ? `${total} ranked` : ''}</div>
+                      <div className="text-[56px] font-bold text-atx-ink/15 leading-none font-atx-mono tracking-[-3px]">—</div>
+                      <div className="text-[12px] text-atx-ink/55 mt-[6px] font-atx-mono">{total > 0 ? `${total} ranked` : ''}</div>
                     </>
                   )}
                 </div>
 
                 {/* Vertical divider */}
-                <div className="w-[0.5px] bg-[rgba(15,23,42,0.08)] shrink-0 self-stretch mr-8" />
+                <div className="w-px bg-atx-ink/20 shrink-0 self-stretch mr-8 max-[560px]:hidden" />
 
                 {/* Right: Context */}
                 <div className="flex-1 flex flex-col justify-center">
-                  <div className="flex items-center gap-[6px] mb-[10px]">
-                    <div className="w-[5px] h-[5px] rounded-full bg-[#b45309] shrink-0" />
-                    <span className="text-[10px] font-bold tracking-[0.12em] uppercase text-[#b45309] font-sans">
+                  <div className="flex items-center gap-[7px] mb-[10px]">
+                    <span className="w-[9px] h-[9px] bg-atx-acid border border-atx-ink shrink-0" />
+                    <span className={LABEL}>
                       {activeCampaign?.name ?? (campaigns.length > 0 ? campaigns[0].name : 'Campaign')} · live rankings
                     </span>
                   </div>
 
                   {loading ? (
                     <>
-                      <div className="w-[55%] h-[22px] rounded-[6px] bg-[rgba(15,23,42,0.07)] mb-[10px]" />
-                      <div className="w-[75%] h-[14px] rounded-[6px] bg-[rgba(15,23,42,0.04)]" />
+                      <div className="w-[55%] h-[22px] bg-atx-panel border border-atx-ink/20 mb-[10px]" />
+                      <div className="w-[75%] h-[14px] bg-atx-panel border border-atx-ink/15" />
                     </>
                   ) : me ? (
                     <>
-                      <div className="text-[20px] font-bold text-mw-ink tracking-[-0.5px] mb-[6px] font-sans leading-tight">
+                      <div className="text-[20px] font-bold text-atx-ink tracking-[-0.02em] mb-[6px] leading-tight">
                         {myIdx === 0 ? "You're leading the campaign." : `${(me.total_points || 0).toLocaleString()} pts earned`}
                       </div>
                       {myIdx === 0 ? (
-                        <div className="text-[13px] text-[#4ade80] font-semibold font-sans">🏆 First place — hold your ground.</div>
+                        <div className="text-[13px] text-atx-mesquite font-semibold font-atx-mono">First place — hold your ground.</div>
                       ) : (() => {
                         const above = sorted[myIdx - 1]
                         const gap = (above?.total_points || 0) - (me.total_points || 0)
                         return gap > 0 ? (
-                          <div className="text-[13px] text-mw-ink-3 leading-relaxed font-sans">
-                            <span className="text-[#b45309] font-semibold">{gap.toLocaleString()} pts</span> behind rank #{myIdx}
+                          <div className="text-[13px] text-atx-ink/55 leading-relaxed">
+                            <span className="text-atx-clay font-semibold font-atx-mono">{gap.toLocaleString()} pts</span> behind rank #{myIdx}
                             {daysLeft !== null && <span> · {daysLeft} day{daysLeft !== 1 ? 's' : ''} left</span>}
                           </div>
                         ) : null
@@ -222,10 +229,10 @@ function LeaderboardContent() {
                     </>
                   ) : (
                     <>
-                      <div className="text-[20px] font-bold text-mw-ink tracking-[-0.5px] mb-[6px] font-sans">
+                      <div className="text-[20px] font-bold text-atx-ink tracking-[-0.02em] mb-[6px]">
                         {wallet ? "You're not on the board yet." : 'Connect to see your rank.'}
                       </div>
-                      <div className="text-[13px] text-mw-ink-3 leading-relaxed font-sans">
+                      <div className="text-[13px] text-atx-ink/55 leading-relaxed">
                         {wallet
                           ? 'One swap enters you into the rankings. Your Attribution score gives you a head start.'
                           : `${total > 0 ? `${total} wallets competing.` : 'Rankings are live.'} Connect yours to join.`
@@ -240,16 +247,16 @@ function LeaderboardContent() {
 
             {/* Campaign selector */}
             <div className="flex gap-2 mb-6 items-center flex-wrap">
-              <span className="text-[12px] text-mw-ink-3 font-sans">Campaign</span>
+              <span className={LABEL}>Campaign</span>
               {campaigns.length === 0
-                ? <button className="lb-cs-btn inactive py-[7px] px-4 rounded-xl text-[13px] font-medium bg-white text-mw-ink-3 border border-[rgba(0,0,0,0.12)] shadow-card font-sans cursor-not-allowed" disabled>Loading…</button>
+                ? <button className="py-[8px] px-4 text-[12px] font-medium font-atx-mono uppercase tracking-[0.06em] bg-atx-panel text-atx-ink/45 border border-atx-ink/25 cursor-not-allowed" disabled>Loading…</button>
                 : campaigns.map(c => (
                   <button
                     key={c.id}
-                    className={`py-[7px] px-4 rounded-xl text-[13px] cursor-pointer font-sans transition-colors duration-150 ${
+                    className={`py-[8px] px-4 text-[12px] cursor-pointer font-atx-mono uppercase tracking-[0.06em] border transition-colors duration-150 ${
                       c.id === activeCampaignId
-                        ? 'lb-cs-btn font-semibold bg-mw-ink text-white border-none'
-                        : 'lb-cs-btn inactive font-medium mw-accent-pill'
+                        ? 'font-semibold bg-atx-ink text-white border-atx-ink'
+                        : 'font-medium bg-transparent text-atx-ink/60 border-atx-ink/25 hover:border-atx-ink hover:text-atx-ink'
                     }`}
                     onClick={() => setActiveCampaignId(c.id)}
                   >
@@ -260,54 +267,54 @@ function LeaderboardContent() {
 
             {/* Stats row */}
             <div className="grid grid-cols-3 gap-3 mb-6 max-[820px]:grid-cols-2">
-              <div className="mw-accent-card bg-white rounded-md p-5 shadow-card">
+              <div className="bg-atx-panel border border-atx-ink/25 p-5">
                 <div className="flex items-center gap-[10px] mb-4">
-                  <div className="w-8 h-8 rounded-[8px] bg-[rgba(79,126,247,0.1)] flex items-center justify-center shrink-0">
-                    <Users size={15} className="text-mw-brand" />
+                  <div className="w-8 h-8 border border-atx-ink flex items-center justify-center shrink-0">
+                    <Users size={15} className="text-atx-blue" />
                   </div>
-                  <div className="text-[11px] text-mw-ink-3 uppercase tracking-[0.6px] font-sans font-semibold">Participants</div>
+                  <div className={LABEL + ' text-[10px]'}>Participants</div>
                 </div>
-                <div className="text-[30px] font-bold tracking-[-0.8px] text-mw-ink font-mono leading-none">{loading ? '—' : total}</div>
-                <div className="text-[12px] text-mw-ink-5 mt-[6px] font-sans">{total === 0 ? 'Be the first to join' : 'Ranked wallets'}</div>
+                <div className="text-[30px] font-bold tracking-[-0.8px] text-atx-ink font-atx-mono leading-none">{loading ? '—' : total}</div>
+                <div className="text-[12px] text-atx-ink/45 mt-[6px] font-atx-mono">{total === 0 ? 'Be the first to join' : 'Ranked wallets'}</div>
               </div>
-              <div className="mw-accent-card bg-white rounded-md p-5 shadow-card">
+              <div className="bg-atx-panel border border-atx-ink/25 p-5">
                 <div className="flex items-center gap-[10px] mb-4">
-                  <div className="w-8 h-8 rounded-[8px] bg-[rgba(22,163,74,0.1)] flex items-center justify-center shrink-0">
-                    <Coins size={15} className="text-mw-green" />
+                  <div className="w-8 h-8 border border-atx-ink flex items-center justify-center shrink-0">
+                    <Coins size={15} className="text-atx-mesquite" />
                   </div>
-                  <div className="text-[11px] text-mw-ink-3 uppercase tracking-[0.6px] font-sans font-semibold">Pool remaining</div>
+                  <div className={LABEL + ' text-[10px]'}>Pool remaining</div>
                 </div>
-                <div className="text-[30px] font-bold tracking-[-0.8px] text-mw-green font-mono leading-none">{activeCampaign?.pool_usd != null ? fmtUSD(activeCampaign.pool_usd) : '—'}</div>
-                <div className="text-[12px] text-mw-ink-5 mt-[6px] font-sans">{daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left` : 'Campaign pool'}</div>
+                <div className="text-[30px] font-bold tracking-[-0.8px] text-atx-mesquite font-atx-mono leading-none">{activeCampaign?.pool_usd != null ? fmtUSD(activeCampaign.pool_usd) : '—'}</div>
+                <div className="text-[12px] text-atx-ink/45 mt-[6px] font-atx-mono">{daysLeft !== null ? `${daysLeft} day${daysLeft !== 1 ? 's' : ''} left` : 'Campaign pool'}</div>
               </div>
-              <div className="mw-accent-card bg-white rounded-md p-5 shadow-card">
+              <div className="bg-atx-panel border border-atx-ink/25 p-5">
                 <div className="flex items-center gap-[10px] mb-4">
-                  <div className="w-8 h-8 rounded-[8px] bg-[rgba(22,163,74,0.1)] flex items-center justify-center shrink-0">
-                    <TrendingUp size={15} className="text-mw-green" />
+                  <div className="w-8 h-8 border border-atx-ink flex items-center justify-center shrink-0">
+                    <TrendingUp size={15} className="text-atx-coral" />
                   </div>
-                  <div className="text-[11px] text-mw-ink-3 uppercase tracking-[0.6px] font-sans font-semibold">Daily payout</div>
+                  <div className={LABEL + ' text-[10px]'}>Daily payout</div>
                 </div>
-                <div className="text-[30px] font-bold tracking-[-0.8px] text-mw-green font-mono leading-none">{activeCampaign?.daily_payout_usd != null ? fmtUSD(activeCampaign.daily_payout_usd) : '—'}</div>
-                <div className="text-[12px] text-mw-ink-5 mt-[6px] font-sans">distributed to earners</div>
+                <div className="text-[30px] font-bold tracking-[-0.8px] text-atx-coral font-atx-mono leading-none">{activeCampaign?.daily_payout_usd != null ? fmtUSD(activeCampaign.daily_payout_usd) : '—'}</div>
+                <div className="text-[12px] text-atx-ink/45 mt-[6px] font-atx-mono">distributed to earners</div>
               </div>
             </div>
 
             {/* Table card */}
-            <div className="mw-accent-card rounded-md overflow-hidden shadow-card">
-              <div className="px-5 py-4 border-b border-[0.5px] border-mw-border flex items-center justify-between">
-                <div className="text-[15px] font-semibold text-mw-ink font-sans">Campaign leaderboard</div>
-                <div className="text-[12px] text-mw-ink-3 font-sans">Updates every 5 min</div>
+            <div className="border border-atx-ink overflow-hidden">
+              <div className="px-5 py-4 border-b border-atx-ink flex items-center justify-between bg-atx-panel">
+                <div className="text-[15px] font-semibold text-atx-ink">Campaign leaderboard</div>
+                <div className="text-[11px] text-atx-ink/45 font-atx-mono uppercase tracking-[0.06em]">Updates every 5 min</div>
               </div>
 
               {/* Sort tabs */}
-              <div className="flex border-b border-[0.5px] border-mw-border">
+              <div className="flex border-b border-atx-ink">
                 {(['points', 'score', 'referrals'] as const).map(tab => (
                   <button
                     key={tab}
-                    className={`py-[10px] px-4 text-[13px] cursor-pointer border-none bg-transparent font-sans transition-colors duration-150 border-b-2 -mb-[1px] ${
+                    className={`py-[10px] px-4 text-[12px] cursor-pointer bg-transparent font-atx-mono uppercase tracking-[0.06em] transition-colors duration-150 border-b-2 -mb-[1px] ${
                       sortBy === tab
-                        ? 'text-mw-brand border-mw-brand font-semibold'
-                        : 'text-mw-ink-3 border-transparent hover:text-mw-ink'
+                        ? 'text-atx-blue border-atx-blue font-semibold'
+                        : 'text-atx-ink/55 border-transparent hover:text-atx-ink'
                     }`}
                     onClick={() => setSortBy(tab)}
                   >
@@ -319,11 +326,11 @@ function LeaderboardContent() {
               <table className="lb-table w-full border-collapse">
                 <thead>
                   <tr>
-                    <th className="px-4 py-3 text-[10px] font-bold text-mw-ink-3 uppercase tracking-[0.8px] text-left border-b border-[0.5px] border-mw-border bg-mw-bg font-sans w-12">#</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-mw-ink-3 uppercase tracking-[0.8px] text-left border-b border-[0.5px] border-mw-border bg-mw-bg font-sans">Wallet</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-mw-ink-3 uppercase tracking-[0.8px] text-right border-b border-[0.5px] border-mw-border bg-mw-bg font-sans">Score</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-mw-ink-3 uppercase tracking-[0.8px] text-right border-b border-[0.5px] border-mw-border bg-mw-bg font-sans">Earned</th>
-                    <th className="lb-pts-col px-4 py-3 text-[10px] font-bold text-mw-ink-3 uppercase tracking-[0.8px] text-right border-b border-[0.5px] border-mw-border bg-mw-bg font-sans">Points</th>
+                    <th className={`${TH} text-left w-12`}>#</th>
+                    <th className={`${TH} text-left`}>Wallet</th>
+                    <th className={`${TH} text-right`}>Score</th>
+                    <th className={`${TH} text-right`}>Earned</th>
+                    <th className={`lb-pts-col ${TH} text-right`}>Points</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -331,15 +338,15 @@ function LeaderboardContent() {
                     <tr>
                       <td colSpan={5} className="px-5 py-4">
                         {[1, 2, 3, 4, 5].map(i => (
-                          <div key={i} className="h-11 rounded-sm bg-mw-bg mb-2" />
+                          <div key={i} className="h-11 bg-atx-bone border border-atx-ink/15 mb-2" />
                         ))}
                       </td>
                     </tr>
                   ) : sorted.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-5 py-12 text-center text-mw-ink-3 text-[14px] font-sans">
+                      <td colSpan={5} className="px-5 py-12 text-center text-atx-ink/55 text-[14px] font-atx-mono">
                         No participants yet — be the first!
-                        <span className="text-[12px] block mt-[6px] text-mw-ink-5">
+                        <span className="text-[12px] block mt-[6px] text-atx-ink/45">
                           Trade on {activeCampaign?.name ?? 'the campaign'} to appear here.
                         </span>
                       </td>
@@ -366,25 +373,25 @@ function LeaderboardContent() {
           </div>
 
           {/* ── Sidebar ── */}
-          <div className="w-[300px] shrink-0 p-7 py-7 px-5 border-l border-[0.5px] border-mw-border max-[820px]:w-full max-[820px]:border-l-0 max-[820px]:border-t max-[820px]:p-5">
+          <div className="w-[300px] shrink-0 p-7 py-7 px-5 border-l border-atx-ink/20 max-[820px]:w-full max-[820px]:border-l-0 max-[820px]:border-t max-[820px]:p-5">
 
             {/* How to earn */}
             {activeCampaign?.actions && Object.keys(activeCampaign.actions).length > 0 && (
-              <div className="mw-accent-section mt-5 rounded-[10px] p-3">
-                <div className="text-[11px] font-bold tracking-[0.8px] uppercase text-mw-ink-3 mb-3 font-sans">How to earn points</div>
+              <div className="border border-atx-ink/25 bg-atx-panel mt-5 p-3">
+                <div className={`${LABEL} mb-3`}>How to earn points</div>
                 {Object.entries(activeCampaign.actions).map(([key, action]) => {
                   const suffix = action.per_day ? '/day' : action.per_referral ? '/ref' : action.per_referred_trade ? '/trade' : ''
                   const dotColors: Record<string, string> = {
-                    trade: 'var(--color-mw-teal)',
-                    bridge: 'var(--color-mw-brand)',
-                    hold: '#C27A00',
+                    trade: 'var(--color-atx-mesquite)',
+                    bridge: 'var(--color-atx-blue)',
+                    hold: 'var(--color-atx-clay)',
                   }
-                  const dotColor = key.startsWith('referral') ? '#7B6FCC' : (dotColors[key] ?? 'var(--color-mw-brand)')
+                  const dotColor = key.startsWith('referral') ? 'var(--color-atx-coral)' : (dotColors[key] ?? 'var(--color-atx-blue)')
                   return (
-                    <div key={key} className="flex items-center gap-[10px] py-[10px] border-b border-[0.5px] border-[rgba(0,0,0,0.06)] last:border-b-0">
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
-                      <div className="flex-1 text-[13px] text-mw-ink-3 font-sans">{action.label}</div>
-                      <div className="text-[13px] font-bold text-mw-brand font-mono">+{action.points}{suffix}</div>
+                    <div key={key} className="flex items-center gap-[10px] py-[10px] border-b border-atx-ink/12 last:border-b-0">
+                      <div className="w-2 h-2 border border-atx-ink shrink-0" style={{ background: dotColor }} />
+                      <div className="flex-1 text-[13px] text-atx-ink/60">{action.label}</div>
+                      <div className="text-[13px] font-bold text-atx-blue font-atx-mono">+{action.points}{suffix}</div>
                     </div>
                   )
                 })}
@@ -394,16 +401,16 @@ function LeaderboardContent() {
             {/* Invite */}
             {wallet && (
               <div className="mt-5">
-                <div className="mw-accent-card rounded-[10px] p-[14px] shadow-card">
-                  <div className="text-[11px] font-bold tracking-[0.8px] uppercase text-mw-ink-3 mb-2 font-sans">Invite friends</div>
-                  <div className="text-[13px] text-mw-ink-3 mb-3 font-sans">Share your link to earn +60 pts per completed referral</div>
-                  <div className="bg-mw-bg rounded-sm p-[9px_12px] text-[11px] font-mono text-mw-ink-3 flex items-center justify-between">
+                <div className="border border-atx-ink/25 bg-atx-panel p-[14px]">
+                  <div className={`${LABEL} mb-2`}>Invite friends</div>
+                  <div className="text-[13px] text-atx-ink/60 mb-3">Share your link to earn +60 pts per completed referral</div>
+                  <div className="bg-atx-bone border border-atx-ink/25 p-[9px_12px] text-[11px] font-atx-mono text-atx-ink/60 flex items-center justify-between">
                     <span className="overflow-hidden text-ellipsis whitespace-nowrap">{refLink}</span>
                     <button
-                      className="text-[11px] text-mw-brand cursor-pointer font-sans bg-transparent border-0 font-semibold"
+                      className="text-[11px] text-atx-blue cursor-pointer font-atx-mono bg-transparent border-0 font-semibold uppercase tracking-[0.04em] shrink-0 ml-2"
                       onClick={copyLink}
                     >
-                      {linkCopied ? '✓ Copied' : 'Copy'}
+                      {linkCopied ? 'Copied' : 'Copy'}
                     </button>
                   </div>
                 </div>
