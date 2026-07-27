@@ -31,7 +31,7 @@ import { Redis } from '@upstash/redis'
 import { recoverMessageAddress } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
 import { bindLogger, BoundLogger } from '@/lib/logger'
-import { CRON_SECRET, toJsonSafe } from '@/lib/constants'
+import { toJsonSafe } from '@/lib/constants'
 
 // ---------------------------------------------------------------------------
 // RouteContext — injected into every handler
@@ -191,7 +191,11 @@ export function createHandler(
     let user: { address: string } | undefined
 
     if (auth === 'bearer-token') {
-      const secret = opts.bearerSecret ?? CRON_SECRET
+      // Read the default secret from process.env at REQUEST time, not from a
+      // module-load constant — otherwise env changes (incl. tests setting it in
+      // beforeEach) never take effect. Prod sets CRON_SECRET before load, so no
+      // behavior change there. An explicit opts.bearerSecret still wins.
+      const secret = opts.bearerSecret ?? process.env.CRON_SECRET ?? ''
       const header = req.headers.get('authorization')
       if (!secret) {
         if (process.env.NODE_ENV !== 'development') {
@@ -258,7 +262,11 @@ export function createHandler(
 
     const ctx: RouteContext = {
       requestId,
-      supabase: getServiceClient(),
+      // Lazy: instantiate the service client only when a handler actually reads
+      // ctx.supabase. Routes that never touch the DB (e.g. some cron pipelines)
+      // don't pay for it — and don't need Supabase env set in tests. Backed by
+      // the same memoized singleton, so repeated access is cheap.
+      get supabase() { return getServiceClient() },
       log,
       user,
       json: makeResponse,
