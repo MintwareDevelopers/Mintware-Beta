@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { fmtUSD } from '@/lib/web2/api'
 import { VaultCard } from '@/components/web2/vault/VaultCard'
+import { VaultAmplify } from '@/components/vaults/VaultAmplify'
 import type { SocialVault, VaultStatus } from '@/lib/web2/vault/types'
 
 type Filter = 'All' | 'Active' | 'Seeding' | 'Closed'
@@ -184,6 +185,9 @@ function VaultsContent() {
         )}
 
       </div>
+
+      {/* ── Amplification layer — the reputation = yield story ── */}
+      <VaultAmplify />
     </div>
   )
 }

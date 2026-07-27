@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getVaultsDiscovery } from '@/lib/vaults/discovery'
 import { VaultDiscovery } from './VaultDiscovery'
-import { VaultAmplify } from './VaultAmplify'
+import { VaultAmplify } from '@/components/vaults/VaultAmplify'
 
 // Gated preview of the ATX Settlemint Vault Discovery page (dev or NEXT_PUBLIC_ATX_PREVIEW).
 const ALLOW =

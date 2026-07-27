@@ -2,8 +2,12 @@
 
 // =============================================================================
 // VaultAmplify — the value-communication layer beneath vault discovery.
-// Sells the wedge: reputation = yield. Plus how-LPing-works, the referral
-// compounding loop, and the DeFi vs RWA distinction. ATX Settlemint.
+// Sells the wedge: reputation = yield. Shared by /vaults (production) and the
+// /style/vaults preview. ATX Settlemint.
+//
+// Sections: 01 Reputation = Yield (interactive) · 02 How LPing works ·
+//           03 Trust enforced on-chain · 04 Referral compounding loop ·
+//           05 DeFi vs RWA.
 // =============================================================================
 
 import { useState } from 'react'
@@ -29,7 +33,8 @@ function fmtUsd(n: number): string {
   return `$${Math.round(n).toLocaleString()}`
 }
 
-// Attribution tiers → fee-share multiplier (matches the rewards multiplier model).
+// Attribution tiers → fee-share multiplier (matches the rewards multiplier model:
+// 0–33 → 1.0×, 34–66 → 1.25×, 67–100 → 1.5×). These are the REAL multipliers.
 const TIERS = [
   { key: 'Bronze', mult: 1.0, pct: '0–33 percentile', color: 'var(--color-atx-grey)' },
   { key: 'Silver', mult: 1.25, pct: '34–66 percentile', color: 'var(--color-atx-blue)' },
@@ -37,6 +42,7 @@ const TIERS = [
 ] as const
 
 // Illustrative base swap-fee APY on the DeFi surface (before the reputation multiplier).
+// Tune per your target pools — kept explicit + labelled so it never reads as a promise.
 const BASE_APY = 0.08
 
 function SectionHead({ n, label, title, sub }: { n: string; label: string; title: string; sub?: string }) {
@@ -201,7 +207,40 @@ function HowItWorks() {
   )
 }
 
-// ─── 03 · Referral compounding loop ──────────────────────────────────────────
+// ─── 03 · Trust, enforced on-chain ───────────────────────────────────────────
+const TRUST = [
+  { k: 'Non-custodial', d: 'You hold ERC-4626 shares. No one — not the team — can move your principal.' },
+  { k: 'Fee split is code', d: 'The 50 / 25 / 25 depositor/protocol/provider split is hardcoded, not a policy.' },
+  { k: 'Withdrawal queue', d: 'A 7-day on-chain notice — visible, enforced by the contract, no discretion.' },
+  { k: 'Lock tiers enforced', d: 'Your multiplier and unlock date live on-chain; early exit penalty is automatic.' },
+  { k: 'MEV guard in the hook', d: 'Sandwich protection runs before every swap — value stays with LPs, not bots.' },
+]
+
+function TrustOnChain() {
+  return (
+    <div>
+      <SectionHead
+        n="03"
+        label="Trust · enforced by code, not promises"
+        title="You don't have to trust us. Trust the contract."
+        sub="The best vaults in the market moved trust from intermediaries to on-chain enforcement. Mintware is built the same way: the rules that protect your deposit are in the code, verifiable, and can't be quietly changed."
+      />
+      <div className="border border-atx-ink">
+        {TRUST.map((t, i) => (
+          <div key={t.k} className={`flex items-start gap-4 px-6 py-4 ${i < TRUST.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>
+            <span className="w-[10px] h-[10px] bg-atx-acid border border-atx-ink inline-block mt-1.5 shrink-0" />
+            <div className="flex-1 min-w-0 flex gap-4 max-[640px]:flex-col max-[640px]:gap-1">
+              <div className="text-[15px] font-bold font-atx-display w-[180px] shrink-0 max-[640px]:w-auto">{t.k}</div>
+              <div className="text-[13px] text-atx-ink/60 leading-[1.5]">{t.d}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── 04 · Referral compounding loop ──────────────────────────────────────────
 const LOOP = [
   { k: 'Refer an LP', d: 'Share your link — they deposit into any vault' },
   { k: 'Their TVL sticks', d: 'You earn on their sustained liquidity, not a one-time bounty' },
@@ -215,7 +254,7 @@ function ReferralLoop() {
     <div className="border border-atx-ink bg-atx-ink text-white">
       <div className="p-8 max-[640px]:p-6 border-b border-white/15">
         <div className="flex items-center gap-3.5 mb-4">
-          <span className="font-atx-mono text-[13px] border border-white/40 px-3 py-1.5">03</span>
+          <span className="font-atx-mono text-[13px] border border-white/40 px-3 py-1.5">04</span>
           <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/55">Referrals · the compounding loop</span>
         </div>
         <h2 className="font-atx-display font-bold tracking-[-0.03em] leading-[0.95] text-[clamp(28px,4.5vw,52px)]">
@@ -242,7 +281,7 @@ function ReferralLoop() {
   )
 }
 
-// ─── 04 · DeFi vs RWA ────────────────────────────────────────────────────────
+// ─── 05 · DeFi vs RWA ────────────────────────────────────────────────────────
 function SurfaceSplit() {
   const cols = [
     {
@@ -273,7 +312,7 @@ function SurfaceSplit() {
   return (
     <div>
       <SectionHead
-        n="04"
+        n="05"
         label="Two surfaces · one ERC-4626 base"
         title="Pick your surface. Same reputation engine underneath."
         sub="DeFi and RWA are different animals — different yield, different risk, different audience. Mintware runs both on one shared vault base, so your Attribution score compounds across everything you touch."
@@ -307,6 +346,7 @@ export function VaultAmplify() {
       <div className="max-w-[1100px] mx-auto px-7 py-16 max-[800px]:px-4 max-[800px]:py-10 flex flex-col gap-16 max-[800px]:gap-12">
         <ReputationYield />
         <HowItWorks />
+        <TrustOnChain />
         <ReferralLoop />
         <SurfaceSplit />
       </div>
