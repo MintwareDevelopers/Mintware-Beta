@@ -9,7 +9,7 @@ import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
 import type { SocialVault, LpDeposit, WithdrawalQueueEntry, LockTier } from '@/lib/web2/vault/types'
 import { LOCK_TIERS } from '@/lib/web2/vault/types'
-import { useVaultDeposit, useVaultWithdraw } from '@/lib/web3/vault/useSocialVault'
+import { useVaultDeposit, useVaultWithdraw, useVaultOnchain } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultDepositMessage, buildVaultWithdrawMessage } from '@/lib/web3/signedActionMessages'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -306,6 +306,9 @@ function VaultDetailContent() {
   const [withErr, setWithErr]     = useState('')
   const vaultWithdraw = useVaultWithdraw()
 
+  // Live on-chain state for THIS vault's contract (authoritative; mirrors DB).
+  const onchain = useVaultOnchain(vault?.contract_address, address)
+
   const loadVault = useCallback(async () => {
     if (!id) return
     const [vRes, dRes] = await Promise.all([
@@ -478,13 +481,56 @@ function VaultDetailContent() {
                 {/* ── Position tab ── */}
                 {tab === 'position' && (
                   <div>
+                    {/* Live on-chain position — read straight from the vault contract */}
+                    {address && onchain.enabled && (
+                      <div className="border border-atx-ink bg-atx-bone px-4 py-3.5 mb-3">
+                        <div className="flex items-center justify-between mb-2.5">
+                          <span className={LABEL}>On-chain position</span>
+                          <span className="flex items-center gap-1.5 font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-ink/55">
+                            <span className="w-[7px] h-[7px] bg-atx-acid border border-atx-ink inline-block" />
+                            Live
+                          </span>
+                        </div>
+                        {onchain.isLoading && !onchain.position ? (
+                          <div className="text-[12px] text-atx-ink/45 font-atx-mono">Reading chain…</div>
+                        ) : onchain.position?.hasPosition ? (
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+                            <div>
+                              <div className="text-[18px] font-bold font-atx-mono text-atx-blue leading-none">{fmtUSD(onchain.position.usdcDeposited)}</div>
+                              <div className={`${LABEL} mt-1`}>Deposited (USDC)</div>
+                            </div>
+                            <div>
+                              <div className="text-[14px] font-bold font-atx-mono text-atx-ink leading-none capitalize">{onchain.position.tier}</div>
+                              <div className={`${LABEL} mt-1`}>Lock tier</div>
+                            </div>
+                            <div>
+                              <div className="text-[13px] font-atx-mono text-atx-ink leading-none">
+                                {onchain.position.lockedUntil * 1000 > Date.now()
+                                  ? `${Math.ceil((onchain.position.lockedUntil * 1000 - Date.now()) / 86_400_000)}d left`
+                                  : 'Unlocked'}
+                              </div>
+                              <div className={`${LABEL} mt-1`}>Lock status</div>
+                            </div>
+                            <div>
+                              <div className="text-[13px] font-atx-mono text-atx-ink leading-none">{onchain.position.compoundEnabled ? 'On' : 'Off'}</div>
+                              <div className={`${LABEL} mt-1`}>Auto-compound</div>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-[12px] text-atx-ink/45 font-atx-mono">No position for this wallet on-chain yet.</div>
+                        )}
+                      </div>
+                    )}
+
                     {deposits.length === 0 && queue.length === 0 ? (
+                      onchain.position?.hasPosition ? null : (
                       <div className="py-8 text-center text-atx-ink/55 font-atx-display text-[13px]">
                         No active deposits.{' '}
                         <button onClick={() => setTab('deposit')} className="text-atx-blue font-semibold text-[13px] font-atx-display">
                           Deposit now →
                         </button>
                       </div>
+                      )
                     ) : (
                       <>
                         <div className="py-3 border-b border-atx-ink/20 mb-1 flex justify-between">

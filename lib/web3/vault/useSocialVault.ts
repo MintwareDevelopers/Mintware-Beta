@@ -345,3 +345,76 @@ export function useVaultPosition(wallet: `0x${string}` | undefined) {
     query:        { enabled: !!wallet && !!SOCIAL_VAULT_ADDRESS },
   })
 }
+
+// ─── useVaultOnchain ─────────────────────────────────────────────────────────
+// Live on-chain state for a SPECIFIC vault contract (per-vault, not the env
+// default): the connected wallet's real position + the vault's total liquidity.
+// This is the authoritative on-chain read that mirrors the Supabase records.
+
+const TIER_BY_INDEX = ['flex', 'committed', 'aligned', 'core'] as const
+
+export interface VaultOnchainState {
+  /** true once at least one read has resolved and the address is a valid vault */
+  enabled:         boolean
+  isLoading:       boolean
+  /** connected wallet's on-chain position (undefined until loaded) */
+  position?: {
+    usdcDeposited:   number   // human USDC (6-dp scaled)
+    depositedAt:     number   // unix seconds (0 if none)
+    lockedUntil:     number   // unix seconds (0 if none)
+    tier:            LockTier
+    compoundEnabled: boolean
+    hasPosition:     boolean  // usdcDeposited > 0
+  }
+  /** vault-wide Uniswap V4 liquidity units (not USD) */
+  totalLiquidity?: bigint
+}
+
+function isAddr(a?: string | null): a is `0x${string}` {
+  return !!a && /^0x[0-9a-fA-F]{40}$/.test(a)
+}
+
+export function useVaultOnchain(
+  vaultAddress: string | null | undefined,
+  wallet:       `0x${string}` | undefined,
+): VaultOnchainState {
+  const addr    = isAddr(vaultAddress) ? vaultAddress : (isAddr(SOCIAL_VAULT_ADDRESS) ? SOCIAL_VAULT_ADDRESS : undefined)
+  const enabled = !!addr
+
+  const posQuery = useReadContract({
+    address:      addr,
+    abi:          SOCIAL_VAULT_ABI,
+    functionName: 'positions',
+    args:         wallet ? [wallet] : undefined,
+    query:        { enabled: enabled && !!wallet },
+  })
+
+  const liqQuery = useReadContract({
+    address:      addr,
+    abi:          SOCIAL_VAULT_ABI,
+    functionName: 'totalLiquidity',
+    query:        { enabled },
+  })
+
+  const raw = posQuery.data as
+    | readonly [bigint, bigint, bigint, number, boolean]
+    | undefined
+
+  const position = raw
+    ? {
+        usdcDeposited:   Number(raw[0]) / 10 ** USDC_DECIMALS,
+        depositedAt:     Number(raw[1]),
+        lockedUntil:     Number(raw[2]),
+        tier:            (TIER_BY_INDEX[raw[3]] ?? 'flex') as LockTier,
+        compoundEnabled: raw[4],
+        hasPosition:     raw[0] > 0n,
+      }
+    : undefined
+
+  return {
+    enabled,
+    isLoading:      enabled && (posQuery.isLoading || liqQuery.isLoading),
+    position,
+    totalLiquidity: liqQuery.data as bigint | undefined,
+  }
+}
