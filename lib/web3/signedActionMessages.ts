@@ -87,6 +87,27 @@ export function buildVaultCreateMessage(input: {
   )
 }
 
+export function buildRwaDealMessage(input: {
+  issuerWallet: string
+  issuedAt: number
+  name: string
+  issuerId: string
+  chainId: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-rwa-deal-create',
+      issuerWallet: normalizeAddress(input.issuerWallet),
+      issuedAt: input.issuedAt,
+      name: input.name,
+      issuerId: input.issuerId,
+      chainId: input.chainId,
+    },
+    null,
+    2,
+  )
+}
+
 export function buildVaultDepositMessage(input: {
   vaultId: string
   wallet: string

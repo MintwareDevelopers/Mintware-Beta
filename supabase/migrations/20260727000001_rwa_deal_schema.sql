@@ -10,6 +10,13 @@
 -- See docs/developers/phase3-rwa-create-seed-design.md
 -- ============================================================================
 
+-- ─── social_vaults: RWA drafts have no project token / seed / pool yet ───────
+-- Relax DeFi-only NOT NULLs so an RWA deal can be created before any on-chain
+-- seed. Loosening a constraint is safe for existing rows.
+alter table social_vaults alter column project_token drop not null;
+alter table social_vaults alter column seed_amount   drop not null;
+alter table social_vaults alter column pool_key      drop not null;
+
 -- ─── vault_issuers ──────────────────────────────────────────────────────────
 -- Asset-provider (issuer) profile. `status` mirrors SPVAssetProviderRegistry
 -- (REGISTERED → VERIFIED → SUSPENDED); only VERIFIED issuers may publish a deal.
