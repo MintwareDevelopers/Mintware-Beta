@@ -5,12 +5,17 @@
 // Sells the wedge: reputation = yield. Shared by /vaults (production) and the
 // /style/vaults preview. ATX Settlemint.
 //
-// Sections: 01 Reputation = Yield (interactive) · 02 How LPing works ·
-//           03 Trust enforced on-chain · 04 Referral compounding loop ·
-//           05 DeFi vs RWA.
+//  · Live stats band (real subgraph aggregates, honest empty state)
+//  01 Reputation = Yield (interactive: deposit × tier × base-APY sliders)
+//  02 How LPing works (five-stage hook engine)
+//  03 Lock tiers (the second lever — commitment; real LockLib numbers)
+//  04 Trust, enforced on-chain
+//  05 Referral compounding loop
+//  06 DeFi vs RWA
+//  07 Vault reputation leaderboard (ranked by TVL, real vs example)
 // =============================================================================
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 const GRID_BG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
@@ -33,6 +38,12 @@ function fmtUsd(n: number): string {
   return `$${Math.round(n).toLocaleString()}`
 }
 
+const RANGE_CLASS =
+  'w-full appearance-none h-[8px] border border-atx-ink bg-atx-bone cursor-pointer ' +
+  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:h-[18px] ' +
+  '[&::-webkit-slider-thumb]:bg-atx-blue [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-atx-ink ' +
+  '[&::-webkit-slider-thumb]:rounded-none [&::-webkit-slider-thumb]:cursor-pointer'
+
 // Attribution tiers → fee-share multiplier (matches the rewards multiplier model:
 // 0–33 → 1.0×, 34–66 → 1.25×, 67–100 → 1.5×). These are the REAL multipliers.
 const TIERS = [
@@ -41,9 +52,22 @@ const TIERS = [
   { key: 'Gold', mult: 1.5, pct: '67–100 percentile', color: 'var(--color-atx-coral)' },
 ] as const
 
-// Illustrative base swap-fee APY on the DeFi surface (before the reputation multiplier).
-// Tune per your target pools — kept explicit + labelled so it never reads as a promise.
-const BASE_APY = 0.08
+// ── amplify-data shape (from /api/vaults/amplify-data) ───────────────────────
+type LbVault = {
+  id: string
+  name: string
+  surface: 'DeFi' | 'RWA'
+  pair?: string
+  tvlUsd: number
+  netApyPct: number
+  status: string
+}
+type AmplifyData = {
+  live: boolean
+  stats: { count: number; tvlUsd: number; surfaces: number; live: boolean }
+  leaderboard: LbVault[]
+}
+const isRealId = (id: string) => /^0x[0-9a-fA-F]{40}$/.test(id)
 
 function SectionHead({ n, label, title, sub }: { n: string; label: string; title: string; sub?: string }) {
   return (
@@ -60,15 +84,52 @@ function SectionHead({ n, label, title, sub }: { n: string; label: string; title
   )
 }
 
+// ─── Live stats band ─────────────────────────────────────────────────────────
+function LiveStatsBand({ data }: { data: AmplifyData | null }) {
+  const live = data?.live ?? false
+  const tvl = data?.stats.tvlUsd ?? 0
+  const count = data?.stats.count ?? 0
+
+  const cells = [
+    { v: tvl > 0 ? fmtUsd(tvl) : '—', k: 'Total TVL' },
+    { v: count > 0 ? String(count) : '—', k: 'Live vaults' },
+    { v: '2', k: 'Surfaces (DeFi + RWA)' },
+    { v: '50%', k: 'Fees to LPs' },
+  ]
+
+  return (
+    <div className="border border-atx-ink bg-atx-ink text-white">
+      <div className="flex items-center gap-2 px-5 py-2.5 border-b border-white/15">
+        <span className={`w-[9px] h-[9px] border border-white/40 inline-block ${live ? 'bg-atx-acid' : 'bg-white/25'}`} />
+        <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/70">
+          {live ? 'Live · indexed on-chain' : 'Indexing · vaults go live at launch'}
+        </span>
+      </div>
+      <div className="grid grid-cols-4 max-[640px]:grid-cols-2">
+        {cells.map((c, i) => (
+          <div
+            key={c.k}
+            className={`px-5 py-5 ${i < cells.length - 1 ? 'border-r border-white/15' : ''} ${i < 2 ? 'max-[640px]:border-b max-[640px]:border-white/15' : ''} max-[640px]:[&:nth-child(2)]:border-r-0`}
+          >
+            <div className="font-atx-mono text-[26px] font-bold leading-none">{c.v}</div>
+            <div className="font-atx-mono uppercase tracking-[0.1em] text-[10px] text-white/50 mt-2">{c.k}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── 01 · Reputation = Yield (interactive) ───────────────────────────────────
 function ReputationYield() {
   const [deposit, setDeposit] = useState(10_000)
   const [tierIdx, setTierIdx] = useState(2) // default Gold to show the upside
+  const [baseApy, setBaseApy] = useState(8) // % — user-driven model input
 
   const active = TIERS[tierIdx]
-  const baseAnnual = deposit * BASE_APY
+  const baseAnnual = (deposit * baseApy) / 100
   const earnings = TIERS.map((t) => baseAnnual * t.mult)
-  const maxEarn = Math.max(...earnings)
+  const maxEarn = Math.max(...earnings, 1)
 
   return (
     <div className="border border-atx-ink" style={{ backgroundImage: GRID_BG }}>
@@ -77,7 +138,7 @@ function ReputationYield() {
           n="01"
           label="The wedge · reputation = yield"
           title="Same deposit. Different reputation. Different yield."
-          sub="Everyone else pays LPs by size. Mintware weights your fee share by your on-chain Attribution score — so the exact same deposit earns more the higher your reputation. Your history isn't just a number. It's a multiplier."
+          sub="Everyone else pays LPs by size. Mintware weights your fee share by your on-chain Attribution score — so the exact same deposit earns more the higher your reputation. Your history isn't just a number. It's a multiplier. Drive the model below."
         />
       </div>
 
@@ -96,13 +157,29 @@ function ReputationYield() {
               step={1000}
               value={deposit}
               onChange={(e) => setDeposit(Number(e.target.value))}
-              className="w-full appearance-none h-[8px] border border-atx-ink bg-atx-bone cursor-pointer
-                [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:h-[18px]
-                [&::-webkit-slider-thumb]:bg-atx-blue [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-atx-ink
-                [&::-webkit-slider-thumb]:rounded-none [&::-webkit-slider-thumb]:cursor-pointer"
+              className={RANGE_CLASS}
             />
             <div className="flex justify-between mt-1.5 font-atx-mono text-[10px] text-atx-ink/45">
               <span>$1K</span><span>$500K</span>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-baseline justify-between mb-3">
+              <span className={LABEL}>Base swap-fee APY</span>
+              <span className="font-atx-mono text-[22px] font-bold text-atx-ink">{baseApy}%</span>
+            </div>
+            <input
+              type="range"
+              min={1}
+              max={20}
+              step={1}
+              value={baseApy}
+              onChange={(e) => setBaseApy(Number(e.target.value))}
+              className={RANGE_CLASS}
+            />
+            <div className="flex justify-between mt-1.5 font-atx-mono text-[10px] text-atx-ink/45">
+              <span>1%</span><span>model your own · 20%</span>
             </div>
           </div>
 
@@ -137,10 +214,10 @@ function ReputationYield() {
 
         {/* comparison bars */}
         <div className="p-8 max-[640px]:p-6 flex flex-col justify-center gap-5">
-          <span className={LABEL}>Same {fmtUsd(deposit)} · every tier</span>
+          <span className={LABEL}>Same {fmtUsd(deposit)} @ {baseApy}% · every tier</span>
           {TIERS.map((t, i) => {
             const val = baseAnnual * t.mult
-            const w = maxEarn > 0 ? (val / maxEarn) * 100 : 0
+            const w = (val / maxEarn) * 100
             return (
               <div key={t.key}>
                 <div className="flex items-baseline justify-between mb-1.5">
@@ -161,8 +238,7 @@ function ReputationYield() {
             )
           })}
           <p className="font-atx-mono text-[10px] text-atx-ink/40 mt-1 leading-[1.5]">
-            Illustrative · assumes an {(BASE_APY * 100).toFixed(0)}% base swap-fee APY before the Attribution multiplier.
-            Actual yield varies by pool activity.
+            Illustrative model · base APY is your input, not a Mintware projection. Actual yield varies by pool activity.
           </p>
         </div>
       </div>
@@ -207,7 +283,54 @@ function HowItWorks() {
   )
 }
 
-// ─── 03 · Trust, enforced on-chain ───────────────────────────────────────────
+// ─── 03 · Lock tiers (real LockLib numbers) ──────────────────────────────────
+const LOCK_TIERS = [
+  { name: 'Flex', dur: 'No lock', days: 0, mult: 1.0, accent: 'var(--color-atx-grey)' },
+  { name: 'Committed', dur: '30 days', days: 30, mult: 1.15, accent: 'var(--color-atx-blue)' },
+  { name: 'Aligned', dur: '90 days', days: 90, mult: 1.3, accent: 'var(--color-atx-mesquite)' },
+  { name: 'Core', dur: '180 days', days: 180, mult: 1.5, accent: 'var(--color-atx-coral)' },
+]
+
+function LockTiers() {
+  const maxMult = 1.5
+  return (
+    <div>
+      <SectionHead
+        n="03"
+        label="The second lever · commitment"
+        title="Reputation is who you are. Lock tier is how long you commit."
+        sub="Two independent levers raise the same fee share. Reputation rewards your on-chain history; lock tier rewards time you commit up front. Longer locks earn a higher multiplier — and the early-exit penalty tapers to zero as you approach unlock, so leaving early is never a cliff."
+      />
+      <div className="grid grid-cols-4 max-[720px]:grid-cols-2 border border-atx-ink">
+        {LOCK_TIERS.map((t, i) => (
+          <div
+            key={t.name}
+            className={`p-5 flex flex-col gap-4 bg-atx-panel ${i < LOCK_TIERS.length - 1 ? 'border-r border-atx-ink/20 max-[720px]:[&:nth-child(2)]:border-r-0' : ''} ${i < 2 ? 'max-[720px]:border-b max-[720px]:border-atx-ink/20' : ''}`}
+            style={{ borderTop: `3px solid ${t.accent}` }}
+          >
+            <div>
+              <div className="font-atx-display text-[17px] font-bold">{t.name}</div>
+              <div className="font-atx-mono text-[11px] text-atx-ink/50 mt-0.5">{t.dur}</div>
+            </div>
+            <div>
+              <div className="font-atx-mono text-[30px] font-bold leading-none" style={{ color: t.accent }}>
+                {t.mult.toFixed(2)}×
+              </div>
+              <div className="h-[8px] border border-atx-ink mt-2.5 relative overflow-hidden">
+                <div className="h-full absolute inset-y-0 left-0" style={{ width: `${(t.mult / maxMult) * 100}%`, background: t.accent }} />
+              </div>
+            </div>
+            <div className="font-atx-mono text-[10px] text-atx-ink/45 leading-[1.5] mt-auto">
+              {t.days === 0 ? 'Withdraw anytime · 7-day queue · no penalty' : 'Early exit ≤2.0%, tapering to 0% near unlock'}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── 04 · Trust, enforced on-chain ───────────────────────────────────────────
 const TRUST = [
   { k: 'Non-custodial', d: 'You hold ERC-4626 shares. No one — not the team — can move your principal.' },
   { k: 'Fee split is code', d: 'The 50 / 25 / 25 depositor/protocol/provider split is hardcoded, not a policy.' },
@@ -220,7 +343,7 @@ function TrustOnChain() {
   return (
     <div>
       <SectionHead
-        n="03"
+        n="04"
         label="Trust · enforced by code, not promises"
         title="You don't have to trust us. Trust the contract."
         sub="The best vaults in the market moved trust from intermediaries to on-chain enforcement. Mintware is built the same way: the rules that protect your deposit are in the code, verifiable, and can't be quietly changed."
@@ -240,7 +363,7 @@ function TrustOnChain() {
   )
 }
 
-// ─── 04 · Referral compounding loop ──────────────────────────────────────────
+// ─── 05 · Referral compounding loop ──────────────────────────────────────────
 const LOOP = [
   { k: 'Refer an LP', d: 'Share your link — they deposit into any vault' },
   { k: 'Their TVL sticks', d: 'You earn on their sustained liquidity, not a one-time bounty' },
@@ -254,7 +377,7 @@ function ReferralLoop() {
     <div className="border border-atx-ink bg-atx-ink text-white">
       <div className="p-8 max-[640px]:p-6 border-b border-white/15">
         <div className="flex items-center gap-3.5 mb-4">
-          <span className="font-atx-mono text-[13px] border border-white/40 px-3 py-1.5">04</span>
+          <span className="font-atx-mono text-[13px] border border-white/40 px-3 py-1.5">05</span>
           <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/55">Referrals · the compounding loop</span>
         </div>
         <h2 className="font-atx-display font-bold tracking-[-0.03em] leading-[0.95] text-[clamp(28px,4.5vw,52px)]">
@@ -281,7 +404,7 @@ function ReferralLoop() {
   )
 }
 
-// ─── 05 · DeFi vs RWA ────────────────────────────────────────────────────────
+// ─── 06 · DeFi vs RWA ────────────────────────────────────────────────────────
 function SurfaceSplit() {
   const cols = [
     {
@@ -312,7 +435,7 @@ function SurfaceSplit() {
   return (
     <div>
       <SectionHead
-        n="05"
+        n="06"
         label="Two surfaces · one ERC-4626 base"
         title="Pick your surface. Same reputation engine underneath."
         sub="DeFi and RWA are different animals — different yield, different risk, different audience. Mintware runs both on one shared vault base, so your Attribution score compounds across everything you touch."
@@ -339,16 +462,94 @@ function SurfaceSplit() {
   )
 }
 
+// ─── 07 · Vault reputation leaderboard ───────────────────────────────────────
+function Leaderboard({ data }: { data: AmplifyData | null }) {
+  const rows = (data?.leaderboard ?? []).slice(0, 6)
+  const anyExample = rows.some((v) => !isRealId(v.id))
+
+  return (
+    <div>
+      <SectionHead
+        n="07"
+        label="The ecosystem · ranked by TVL"
+        title="The vaults, ranked. Reputation rises to the top."
+        sub="Every vault is public and ranked by liquidity. Live vaults climb automatically as capital flows in — examples are shown until real vaults seed."
+      />
+      <div className="border border-atx-ink">
+        {/* header row */}
+        <div className="grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-2.5 border-b border-atx-ink bg-atx-panel">
+          <div className={`${LABEL} text-[10px]`}>#</div>
+          <div className={`${LABEL} text-[10px]`}>Vault</div>
+          <div className={`${LABEL} text-[10px] max-[720px]:hidden`}>Surface</div>
+          <div className={`${LABEL} text-[10px] max-[720px]:hidden text-right`}>Model APY</div>
+          <div className={`${LABEL} text-[10px] text-right`}>TVL</div>
+        </div>
+        {rows.length === 0 ? (
+          <div className="px-6 py-8 text-center font-atx-mono text-[12px] text-atx-ink/45">Loading vaults…</div>
+        ) : (
+          rows.map((v, i) => {
+            const real = isRealId(v.id)
+            return (
+              <div
+                key={v.id}
+                className={`grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-3.5 ${i < rows.length - 1 ? 'border-b border-atx-ink/12' : ''}`}
+              >
+                <div className="font-atx-mono text-[15px] font-bold text-atx-ink/40">{i + 1}</div>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span
+                    className="w-[8px] h-[8px] border border-atx-ink inline-block shrink-0"
+                    style={{ background: real ? 'var(--color-atx-acid)' : 'transparent' }}
+                  />
+                  <span className="font-atx-display text-[14px] font-semibold truncate">{v.name}</span>
+                  <span className={`font-atx-mono text-[9px] uppercase tracking-[0.1em] px-1.5 py-0.5 border shrink-0 ${real ? 'border-atx-ink text-atx-mesquite' : 'border-atx-ink/25 text-atx-ink/40'}`}>
+                    {real ? 'Live' : 'Example'}
+                  </span>
+                </div>
+                <div className="max-[720px]:hidden font-atx-mono text-[12px]" style={{ color: v.surface === 'RWA' ? 'var(--color-atx-coral)' : 'var(--color-atx-blue)' }}>
+                  {v.surface}
+                </div>
+                <div className="max-[720px]:hidden font-atx-mono text-[13px] text-right text-atx-ink/70">
+                  {v.netApyPct > 0 ? `${v.netApyPct.toFixed(1)}%` : '—'}
+                </div>
+                <div className="font-atx-mono text-[13px] font-bold text-right">{fmtUsd(v.tvlUsd)}</div>
+              </div>
+            )
+          })
+        )}
+      </div>
+      {anyExample && (
+        <p className="font-atx-mono text-[10px] text-atx-ink/40 mt-2.5 leading-[1.5]">
+          Rows marked <span className="text-atx-ink/60">Example</span> illustrate vault types on each surface · APY figures on example rows are illustrative, not projections.
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ─── Composed ────────────────────────────────────────────────────────────────
 export function VaultAmplify() {
+  const [data, setData] = useState<AmplifyData | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    fetch('/api/vaults/amplify-data')
+      .then((r) => r.json())
+      .then((d: AmplifyData) => { if (alive) setData(d) })
+      .catch(() => { /* band + leaderboard fall back to empty/loading states */ })
+    return () => { alive = false }
+  }, [])
+
   return (
     <section className="bg-atx-bone text-atx-ink font-atx-display [&_*]:rounded-none border-t border-atx-ink">
       <div className="max-w-[1100px] mx-auto px-7 py-16 max-[800px]:px-4 max-[800px]:py-10 flex flex-col gap-16 max-[800px]:gap-12">
+        <LiveStatsBand data={data} />
         <ReputationYield />
         <HowItWorks />
+        <LockTiers />
         <TrustOnChain />
         <ReferralLoop />
         <SurfaceSplit />
+        <Leaderboard data={data} />
       </div>
     </section>
   )
