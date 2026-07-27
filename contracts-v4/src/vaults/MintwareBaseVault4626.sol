@@ -264,8 +264,12 @@ abstract contract MintwareBaseVault4626 is
         if (poolInitialized) {
             poolManager.unlock(abi.encode(Action.Deploy, abi.encode(net)));
         }
+        _afterEnter(receiver, net, shares);
         emit Deposit(_msgSender(), receiver, net, shares);
     }
+
+    /// @dev Hook after a deposit mints shares. RWA vaults mint vRWA 1:1 here. Default no-op.
+    function _afterEnter(address receiver, uint256 netAssets, uint256 shares) internal virtual {}
 
     function _recordLock(address owner, LockTier tier) internal {
         LockInfo storage info = locks[owner];
@@ -301,7 +305,7 @@ abstract contract MintwareBaseVault4626 is
     }
 
     /// @notice Step 1: queue a share redemption — starts the notice period.
-    function requestRedeem(uint256 shares) external {
+    function requestRedeem(uint256 shares) public virtual {
         if (block.timestamp < locks[msg.sender].depositedAt + MIN_HOLD_PERIOD) revert MinHoldNotMet();
         if (shares == 0 || shares > balanceOf(msg.sender)) revert InsufficientShares();
 
@@ -316,8 +320,14 @@ abstract contract MintwareBaseVault4626 is
     }
 
     /// @notice Step 2: execute the queued redemption after the notice period.
-    function executeRedeem() external nonReentrant returns (uint256 assetsOut) {
-        WithdrawalRequest storage req = withdrawalRequests[msg.sender];
+    function executeRedeem() external virtual nonReentrant returns (uint256) {
+        return _executeRedeemFor(msg.sender);
+    }
+
+    /// @dev Settle `owner`'s queued redemption. Callable by the holder (DeFi executeRedeem)
+    ///      or by the issuer after KYC (RWA confirmSettlement). Callers add nonReentrant.
+    function _executeRedeemFor(address owner) internal returns (uint256 assetsOut) {
+        WithdrawalRequest storage req = withdrawalRequests[owner];
         if (req.shares == 0)                    revert NoWithdrawalRequest();
         if (req.executed)                       revert WithdrawalAlreadyExecuted();
         if (block.timestamp < req.noticeExpiry) revert NoticeNotExpired();
@@ -331,13 +341,13 @@ abstract contract MintwareBaseVault4626 is
             liqToRemove = uint128(uint256(totalLiquidity) * assets / totalPrincipal);
         }
 
-        uint256 penalty = _calculatePenalty(msg.sender, assets);
+        uint256 penalty = _calculatePenalty(owner, assets);
         uint256 exitFee = (assets * exitFeeBps) / BPS;
 
         // Effects
         req.executed    = true;
         totalPrincipal -= assets;
-        _burn(msg.sender, shares);
+        _burn(owner, shares);
 
         // Interactions — unwind liquidity back to this vault
         if (liqToRemove > 0) {
@@ -361,8 +371,8 @@ abstract contract MintwareBaseVault4626 is
         uint256 available = IERC20(asset()).balanceOf(address(this));
         if (assetsOut > available) assetsOut = available;
 
-        IERC20(asset()).safeTransfer(msg.sender, assetsOut);
-        emit WithdrawalExecuted(msg.sender, assetsOut, penalty);
+        IERC20(asset()).safeTransfer(owner, assetsOut);
+        emit WithdrawalExecuted(owner, assetsOut, penalty);
     }
 
     /// @dev Notice period — overridable so RWA can use its 30-day settlement window.
