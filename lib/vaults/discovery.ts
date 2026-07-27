@@ -162,24 +162,50 @@ const LOCK_TIERS: LockTierOption[] = [
   { tier: 'Core', days: 180, multiplier: 1.5 },
 ]
 
-/** Detail source — mock now; swap for the vault subgraph / on-chain reads later. */
+/**
+ * Detail source. Builds on getVaultsDiscovery() (which reads the subgraph when
+ * enabled), so the summary fields (name, TVL, status, surface) are already real
+ * for a deployed vault. Hook stack + lock tiers are static per-surface config.
+ * Yield breakdown is synthesized — for a REAL vault (address id) with no activity
+ * yet we show honest zeros rather than a fabricated (and negative) split.
+ */
 export async function getVault(id: string): Promise<VaultDetail | null> {
   const list = await getVaultsDiscovery()
   const v = list.find((x) => x.id === id)
   if (!v) return null
 
   const isDeFi = v.surface === 'DeFi'
-  const yieldSources: YieldSource[] = isDeFi
-    ? [
-        { label: 'Swap fees', apyPct: 6.0 },
-        { label: 'Idle capital yield', apyPct: 1.5 },
-        { label: 'Attribution multiplier', apyPct: v.netApyPct - 7.5 },
-      ]
-    : [
-        { label: 'Underlying asset', apyPct: v.underlyingApyPct ?? 9 },
-        { label: 'Swap fees', apyPct: 0.75 },
-        { label: 'Idle capital yield', apyPct: 1.4 },
-      ]
+  // A real on-chain vault is keyed by its contract address.
+  const isReal = /^0x[0-9a-fA-F]{40}$/.test(v.id)
+
+  let yieldSources: YieldSource[]
+  if (isReal) {
+    // Real vault — don't fabricate APY. These accrue once fees/yield flow;
+    // wire to real FeeVault/epoch data in a later pass.
+    yieldSources = isDeFi
+      ? [
+          { label: 'Swap fees', apyPct: 0 },
+          { label: 'Idle capital yield', apyPct: 0 },
+          { label: 'Attribution multiplier', apyPct: 0 },
+        ]
+      : [
+          { label: 'Underlying asset', apyPct: 0 },
+          { label: 'Swap fees', apyPct: 0 },
+          { label: 'Idle capital yield', apyPct: 0 },
+        ]
+  } else {
+    yieldSources = isDeFi
+      ? [
+          { label: 'Swap fees', apyPct: 6.0 },
+          { label: 'Idle capital yield', apyPct: 1.5 },
+          { label: 'Attribution multiplier', apyPct: Math.max(0, v.netApyPct - 7.5) },
+        ]
+      : [
+          { label: 'Underlying asset', apyPct: v.underlyingApyPct ?? 9 },
+          { label: 'Swap fees', apyPct: 0.75 },
+          { label: 'Idle capital yield', apyPct: 1.4 },
+        ]
+  }
 
   return {
     ...v,
@@ -187,6 +213,8 @@ export async function getVault(id: string): Promise<VaultDetail | null> {
     lockTiers: LOCK_TIERS,
     yieldSources,
     reserveSplit: isDeFi ? undefined : [40, 60],
+    // Position is read on-chain client-side (useVaultOnchain) in the real app;
+    // the /style preview only shows a sample position for the mock hero vault.
     position:
       v.id === 'social-blue-chip'
         ? { depositedUsd: 12_000, shares: 12_000, tier: 'Aligned', multiplier: 1.3, earnedUsd: 214 }
