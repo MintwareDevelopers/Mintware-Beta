@@ -100,14 +100,14 @@ export function Step1Token({ form, onChange }: Step1TokenProps) {
 
       {/* Chain selector */}
       <div>
-        <label className="font-sans text-[12px] font-bold text-mw-ink-3 tracking-[0.5px] uppercase block mb-[10px]">
+        <label className="font-atx-mono text-[10px] font-semibold tracking-[0.08em] uppercase text-atx-ink/55 block mb-[10px]">
           Chain
         </label>
         <div className="flex gap-2 flex-wrap">
           {CHAIN_OPTIONS.map(c => (
             <button
               key={c.id}
-              className={`font-sans text-[12px] font-semibold py-[7px] px-4 rounded-[20px] cursor-pointer border-[1.5px] whitespace-nowrap transition-all duration-150${form.chainId === c.id ? ' bg-[#EEF1FF] text-mw-brand-deep border-[rgba(58,92,232,0.3)]' : ' bg-white text-mw-ink-4 border-[#E0DFFF] hover:bg-mw-surface-purple hover:text-[#3A3C52]'}`}
+              className={`font-atx-mono text-[12px] font-semibold uppercase tracking-[0.06em] py-[7px] px-4 cursor-pointer border whitespace-nowrap transition-colors duration-150${form.chainId === c.id ? ' bg-atx-blue text-white border-atx-ink' : ' bg-atx-panel text-atx-ink/60 border-atx-ink/30 hover:border-atx-ink hover:text-atx-ink'}`}
               onClick={() => { onChange({ chainId: c.id, token: null }); setRawInput('') }}
             >
               {c.label}
@@ -118,14 +118,14 @@ export function Step1Token({ form, onChange }: Step1TokenProps) {
 
       {/* Token address */}
       <div>
-        <label className="font-sans text-[12px] font-bold text-mw-ink-3 tracking-[0.5px] uppercase block mb-[10px]">
+        <label className="font-atx-mono text-[10px] font-semibold tracking-[0.08em] uppercase text-atx-ink/55 block mb-[10px]">
           Token contract address
         </label>
         <input
           type="text"
           placeholder="0x..."
           value={rawInput}
-          className={`w-full box-border font-mono text-[13px] p-[11px_14px] rounded-[10px] bg-white text-[#1A1A2E] outline-none transition-[border-color] duration-150 border-[1.5px]${isInvalidAddress || isNotFound ? ' border-mw-pink' : focused ? ' border-mw-brand-deep' : ' border-[#E0DFFF]'}`}
+          className={`w-full box-border font-atx-mono text-[13px] px-[14px] py-[11px] bg-atx-panel text-atx-ink outline-none transition-[border-color] duration-150 border${isInvalidAddress || isNotFound ? ' border-atx-clay' : focused ? ' border-atx-blue' : ' border-atx-ink/30'}`}
           onFocus={() => setFocused(true)}
           onBlur={() => { setFocused(false); setTouched(true) }}
           onChange={(e) => setRawInput(e.target.value.trim())}
@@ -133,37 +133,38 @@ export function Step1Token({ form, onChange }: Step1TokenProps) {
 
         {/* Validation states */}
         {isInvalidAddress && (
-          <div className="font-sans text-[12px] text-mw-pink mt-[6px]">
+          <div className="font-atx-mono text-[12px] text-atx-clay mt-[6px]">
             Not a valid ERC-20 address
           </div>
         )}
         {isNotFound && (
-          <div className="font-sans text-[12px] text-mw-pink mt-[6px]">
+          <div className="font-atx-mono text-[12px] text-atx-clay mt-[6px]">
             Contract not found or unverified on this chain
           </div>
         )}
         {reading && validAddress && (
-          <div className="font-sans text-[12px] text-mw-ink-3 mt-[6px]">
+          <div className="font-atx-mono text-[12px] text-atx-ink/60 mt-[6px]">
             Validating contract…
           </div>
         )}
 
         {/* Token confirmed */}
         {showToken && form.token && (
-          <div className="flex items-center gap-3 mt-3 bg-[rgba(42,158,138,0.06)] border border-[rgba(42,158,138,0.2)] rounded-[10px] p-[10px_14px]">
-            <div className="w-9 h-9 rounded-[10px] bg-[rgba(42,158,138,0.12)] flex items-center justify-center font-mono text-[13px] font-bold text-mw-teal shrink-0">
+          <div className="flex items-center gap-3 mt-3 bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-mesquite px-[14px] py-[10px]">
+            <div className="w-9 h-9 border border-atx-ink bg-atx-panel flex items-center justify-center font-atx-mono text-[13px] font-bold text-atx-mesquite shrink-0">
               {form.token.symbol.charAt(0)}
             </div>
             <div>
-              <div className="font-sans text-[14px] font-bold text-[#1A1A2E]">
+              <div className="font-atx-display text-[14px] font-bold text-atx-ink">
                 {form.token.name}
               </div>
-              <div className="font-mono text-[11px] text-mw-ink-3 mt-[1px]">
+              <div className="font-atx-mono text-[11px] text-atx-ink/60 mt-[1px]">
                 {form.token.symbol} · {form.token.decimals} decimals
               </div>
             </div>
-            <span className="ml-auto font-sans text-[10px] font-bold bg-[rgba(42,158,138,0.1)] text-mw-teal border border-[rgba(42,158,138,0.2)] rounded-[20px] px-2 py-[3px]">
-              ✓ Verified
+            <span className="ml-auto inline-flex items-center gap-1.5 font-atx-mono text-[10px] font-bold uppercase tracking-[0.08em] bg-atx-bone text-atx-mesquite border border-atx-ink/25 px-2 py-[3px]">
+              <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block" />
+              Verified
             </span>
           </div>
         )}
@@ -172,14 +173,14 @@ export function Step1Token({ form, onChange }: Step1TokenProps) {
       {/* Common tokens */}
       {commonList.length > 0 && (
         <div>
-          <div className="font-sans text-[12px] font-bold text-mw-ink-3 tracking-[0.5px] uppercase mb-[10px]">
+          <div className="font-atx-mono text-[10px] font-semibold tracking-[0.1em] uppercase text-atx-ink/55 mb-[10px]">
             Common tokens
           </div>
           <div className="flex gap-2 flex-wrap">
             {commonList.map(t => (
               <button
                 key={t.address}
-                className={`font-mono text-[11px] font-bold py-[6px] px-[14px] rounded-[8px] cursor-pointer border-[1.5px] transition-all duration-150${form.token?.address === t.address ? ' bg-[#EEF1FF] border-mw-brand-deep text-mw-brand-deep' : ' bg-mw-surface-purple border-[#E0DFFF] text-[#3A3C52] hover:border-mw-brand-deep hover:text-mw-brand-deep hover:bg-[#EEF1FF]'}`}
+                className={`font-atx-mono text-[11px] font-bold py-[6px] px-[14px] cursor-pointer border transition-colors duration-150${form.token?.address === t.address ? ' bg-atx-blue border-atx-ink text-white' : ' bg-atx-panel border-atx-ink/30 text-atx-ink/70 hover:border-atx-ink hover:text-atx-ink'}`}
                 onClick={() => selectCommon(t)}
               >
                 {t.symbol}

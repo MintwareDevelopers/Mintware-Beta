@@ -51,12 +51,12 @@ interface ReviewRowProps {
 
 function ReviewRow({ label, value, mono = true }: ReviewRowProps) {
   return (
-    <div className="flex justify-between items-center py-[9px] border-b border-[#F0EFFF]">
-      <span className="font-sans text-[13px] text-mw-ink-4">
+    <div className="flex justify-between items-center py-[9px] border-b border-atx-ink/15">
+      <span className="font-atx-display text-[13px] text-atx-ink/55">
         {label}
       </span>
       <span
-        className={`text-[13px] font-semibold text-[#1A1A2E] ${mono ? 'font-mono' : 'font-sans'}`}
+        className={`text-[13px] font-semibold text-atx-ink ${mono ? 'font-atx-mono' : 'font-atx-display'}`}
       >
         {value}
       </span>
@@ -66,8 +66,8 @@ function ReviewRow({ label, value, mono = true }: ReviewRowProps) {
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-[#E0DFFF] rounded-[14px] p-[16px_18px]">
-      <div className="font-sans text-[10px] font-bold tracking-[1px] uppercase text-mw-ink-4 mb-1">
+    <div className="bg-atx-panel border border-atx-ink px-[18px] py-4">
+      <div className="font-atx-mono text-[10px] font-bold tracking-[0.1em] uppercase text-atx-ink/55 mb-1">
         {title}
       </div>
       {children}
@@ -83,7 +83,7 @@ const FUND_LABELS: Record<FundState, string> = {
   waiting_approve: 'Waiting for permission…',
   funding:         'Transferring funds…',
   waiting_fund:    'Confirming on-chain…',
-  confirmed:       '✓ Campaign funded!',
+  confirmed:       'Campaign funded!',
   error:           'Transaction failed — retry',
 }
 
@@ -393,7 +393,7 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
           <ReviewRow label="Pool size" value={fmtUSDShort(form.poolUsd)} />
           <ReviewRow label="Token"     value={form.token ? form.token.symbol : '—'} />
           <ReviewRow label="Spender"   value={spenderLabel} mono={false} />
-          <div className="mt-[10px] font-sans text-[12px] text-mw-ink-4">
+          <div className="mt-[10px] font-atx-display text-[12px] text-atx-ink/55">
             {form.token
               ? `Deposits ${fmtUSDShort(form.poolUsd)} worth of ${form.token.symbol} to MintwareDistributor contract`
               : 'Select a token to see deposit amount'
@@ -403,17 +403,17 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
 
         {/* Plain-language "what will happen" — shown before the user clicks Fund */}
         {(fundState === 'idle' || fundState === 'error') && form.token && (
-          <div className="bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.14)] rounded-[12px] px-[16px] py-[14px]">
-            <div className="font-sans text-[11px] font-bold uppercase tracking-[0.8px] text-mw-ink-4 mb-[8px]">
+          <div className="bg-atx-bone border border-atx-ink/25 px-4 py-[14px]">
+            <div className="font-atx-mono text-[10px] font-bold uppercase tracking-[0.1em] text-atx-ink/55 mb-[8px]">
               What will happen
             </div>
             {hasEnoughAllowance ? (
-              <ol className="font-sans text-[12px] text-mw-ink-3 leading-[1.6] m-0 pl-[18px] flex flex-col gap-[4px]">
+              <ol className="font-atx-display text-[12px] text-atx-ink/60 leading-[1.6] m-0 pl-[18px] flex flex-col gap-[4px]">
                 <li>Your wallet will ask you to <strong>transfer {fmtUSDShort(form.poolUsd)} of {form.token.symbol}</strong> to the campaign contract.</li>
                 <li>Once confirmed on-chain, your campaign goes live.</li>
               </ol>
             ) : (
-              <ol className="font-sans text-[12px] text-mw-ink-3 leading-[1.6] m-0 pl-[18px] flex flex-col gap-[4px]">
+              <ol className="font-atx-display text-[12px] text-atx-ink/60 leading-[1.6] m-0 pl-[18px] flex flex-col gap-[4px]">
                 <li>Your wallet will ask you to <strong>give permission</strong> for the campaign contract to use your {form.token.symbol}. This is not a transfer.</li>
                 <li>Then your wallet will ask you to <strong>transfer {fmtUSDShort(form.poolUsd)} of {form.token.symbol}</strong> to fund the campaign.</li>
                 <li>Once confirmed on-chain, your campaign goes live.</li>
@@ -423,11 +423,11 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
         )}
 
         {looksLikeZeroFirstToken && !hasEnoughAllowance && allowanceRaw !== undefined && allowanceRaw > 0n && (
-          <div className="bg-[rgba(234,179,8,0.08)] border border-[rgba(234,179,8,0.22)] rounded-[12px] px-[16px] py-[14px]">
-            <div className="font-sans text-[11px] font-bold uppercase tracking-[0.8px] text-[#a16207] mb-[6px]">
+          <div className="bg-atx-bone border border-atx-ink/25 border-l-[3px] border-l-atx-clay px-4 py-[14px]">
+            <div className="font-atx-mono text-[10px] font-bold uppercase tracking-[0.1em] text-atx-clay mb-[6px]">
               Token approval note
             </div>
-            <p className="font-sans text-[12px] text-[#92400e] leading-[1.55] m-0">
+            <p className="font-atx-display text-[12px] text-atx-ink/70 leading-[1.55] m-0">
               {form.token?.symbol ?? 'This token'} may ask for an extra wallet confirmation before the final funding step if it requires resetting an older approval first.
             </p>
           </div>
@@ -435,14 +435,14 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
 
         {/* Error */}
         {errorMsg && (
-          <div className="bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.2)] rounded-[10px] p-[12px_16px] font-sans text-[13px] text-mw-pink">
-            ⚠ {errorMsg}
+          <div className="bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-clay px-4 py-3 font-atx-mono text-[13px] text-atx-clay">
+            {errorMsg}
           </div>
         )}
 
         {!hasDistributorAddress && (
-          <div className="bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.2)] rounded-[10px] p-[12px_16px] font-sans text-[13px] text-mw-pink">
-            ⚠ Funding contract not configured for the selected chain.
+          <div className="bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-clay px-4 py-3 font-atx-mono text-[13px] text-atx-clay">
+            Funding contract not configured for the selected chain.
           </div>
         )}
 
@@ -451,14 +451,14 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
           <button
             disabled={isWorking || !form.token || !hasDistributorAddress}
             onClick={handleFund}
-            className="w-full py-[14px] px-6 rounded-[12px] border-none text-white font-sans text-[15px] font-bold transition-[background] duration-200 flex items-center justify-center gap-[10px] disabled:cursor-not-allowed"
+            className="w-full py-[14px] px-6 border border-atx-ink text-white font-atx-mono text-[15px] font-bold uppercase tracking-[0.06em] transition-opacity duration-200 flex items-center justify-center gap-[10px] disabled:cursor-not-allowed"
             style={{
-              background: isWorking ? '#C4C3F0' : fundState === 'error' ? '#C2537A' : '#3A5CE8',
+              background: isWorking ? '#8A8A84' : fundState === 'error' ? '#C95E43' : '#006FCC',
             }}
           >
             {isWorking && (
               <span
-                className="w-4 h-4 rounded-full border-2 border-[rgba(255,255,255,0.3)] border-t-white inline-block"
+                className="w-4 h-4 border-2 border-[rgba(255,255,255,0.3)] border-t-white inline-block"
                 style={{ animation: 'spin 0.7s linear infinite' }}
               />
             )}
@@ -472,33 +472,33 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
             {steps.map(s => (
               <div key={s.key} className="flex items-center gap-[10px]">
                 <div
-                  className={`w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold ${s.done ? 'bg-mw-teal text-white' : 'bg-[rgba(58,92,232,0.15)] text-mw-ink-4'}`}
+                  className={`w-[18px] h-[18px] shrink-0 flex items-center justify-center text-[10px] font-bold border ${s.done ? 'bg-atx-acid border-atx-ink text-atx-ink' : 'bg-atx-panel border-atx-ink/25 text-atx-ink/55'}`}
                 >
-                  {s.done ? '✓' : '·'}
+                  {s.done ? '' : '·'}
                 </div>
-                <span className={`font-sans text-[12px] ${s.done ? 'text-mw-teal' : 'text-mw-ink-4'}`}>
+                <span className={`font-atx-mono text-[12px] ${s.done ? 'text-atx-mesquite' : 'text-atx-ink/55'}`}>
                   {s.label}
                 </span>
               </div>
             ))}
             {/* Context for the current active step */}
             {(fundState === 'approving' || fundState === 'waiting_approve') && (
-              <div className="mt-[4px] px-[12px] py-[10px] bg-[rgba(79,126,247,0.04)] border border-[rgba(79,126,247,0.12)] rounded-[10px]">
-                <p className="font-sans text-[11px] text-mw-ink-4 leading-[1.5] m-0">
+              <div className="mt-[4px] px-3 py-[10px] bg-atx-bone border border-atx-ink/20">
+                <p className="font-atx-display text-[11px] text-atx-ink/55 leading-[1.5] m-0">
                   Your wallet will ask for <strong>permission</strong> to use {form.token?.symbol}.
                   This is a standard token approval — no funds are transferred at this step.
                 </p>
               </div>
             )}
             {(fundState === 'funding' || fundState === 'waiting_fund') && (
-              <div className="mt-[4px] px-[12px] py-[10px] bg-[rgba(42,158,138,0.05)] border border-[rgba(42,158,138,0.15)] rounded-[10px]">
-                <p className="font-sans text-[11px] text-mw-ink-4 leading-[1.5] m-0">
+              <div className="mt-[4px] px-3 py-[10px] bg-atx-bone border border-atx-ink/20 border-l-[3px] border-l-atx-mesquite">
+                <p className="font-atx-display text-[11px] text-atx-ink/55 leading-[1.5] m-0">
                   Your wallet will ask you to transfer <strong>{fmtUSDShort(form.poolUsd)} of {form.token?.symbol}</strong> to the campaign. Confirm to launch.
                 </p>
               </div>
             )}
-            <div className="mt-[4px] px-[12px] py-[10px] bg-[rgba(26,26,46,0.03)] border border-[rgba(26,26,46,0.08)] rounded-[10px]">
-              <p className="font-sans text-[11px] text-mw-ink-4 leading-[1.5] m-0">
+            <div className="mt-[4px] px-3 py-[10px] bg-atx-bone border border-atx-ink/20">
+              <p className="font-atx-display text-[11px] text-atx-ink/55 leading-[1.5] m-0">
                 If your wallet does not appear right away, open your wallet app or extension and look for a pending request.
               </p>
             </div>

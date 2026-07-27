@@ -22,7 +22,7 @@ interface Step2PoolProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="font-sans text-[12px] font-bold text-mw-ink-4 tracking-[0.5px] uppercase mb-[10px]">
+    <div className="font-atx-mono text-[10px] font-semibold tracking-[0.1em] uppercase text-atx-ink/55 mb-[10px]">
       {children}
     </div>
   )
@@ -30,11 +30,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function StatChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-mw-surface-purple border border-[#E0DFFF] rounded-[8px] p-[8px_14px] flex-1 min-w-[120px]">
-      <div className="font-mono text-[14px] font-bold text-[#1A1A2E]">
+    <div className="bg-atx-bone border border-atx-ink/25 px-[14px] py-[8px] flex-1 min-w-[120px]">
+      <div className="font-atx-mono text-[14px] font-bold text-atx-ink">
         {value}
       </div>
-      <div className="font-sans text-[10px] text-mw-ink-4 mt-[2px]">
+      <div className="font-atx-mono text-[10px] uppercase tracking-[0.06em] text-atx-ink/55 mt-[2px]">
         {label}
       </div>
     </div>
@@ -55,9 +55,9 @@ function NumberInput({
 }) {
   const [focused, setFocused] = useState(false)
   return (
-    <div className={`flex items-center border-[1.5px] rounded-[10px] bg-white overflow-hidden transition-[border-color] duration-150${focused ? ' border-[#3A5CE8]' : ' border-[#E0DFFF]'}`}>
+    <div className={`flex items-center border bg-atx-panel overflow-hidden transition-[border-color] duration-150${focused ? ' border-atx-blue' : ' border-atx-ink/30'}`}>
       {prefix && (
-        <span className="font-sans text-[13px] text-mw-ink-4 select-none pl-3 pr-[10px]">
+        <span className="font-atx-mono text-[13px] text-atx-ink/55 select-none pl-3 pr-[10px]">
           {prefix}
         </span>
       )}
@@ -68,7 +68,7 @@ function NumberInput({
         step={step ?? 1}
         value={value ?? ''}
         placeholder={placeholder}
-        className={`flex-1 border-none outline-none font-mono text-[14px] text-[#1A1A2E] bg-transparent min-w-0 ${prefix ? 'py-[10px] pr-0' : 'p-[10px_14px]'}`}
+        className={`flex-1 border-none outline-none font-atx-mono text-[14px] text-atx-ink bg-transparent min-w-0 ${prefix ? 'py-[10px] pr-0' : 'px-[14px] py-[10px]'}`}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onChange={(e) => {
@@ -77,7 +77,7 @@ function NumberInput({
         }}
       />
       {suffix && (
-        <span className="font-sans text-[13px] text-mw-ink-4 select-none px-3">
+        <span className="font-atx-mono text-[13px] text-atx-ink/55 select-none px-3">
           {suffix}
         </span>
       )}
@@ -101,14 +101,14 @@ export function Step2Pool({ form, onChange }: Step2PoolProps) {
           {POOL_PRESETS.map(p => (
             <button
               key={p}
-              className={`font-mono text-[13px] font-bold py-[9px] px-[18px] rounded-[10px] cursor-pointer border-[1.5px] whitespace-nowrap transition-all duration-150${form.poolUsd === p && !customPool ? ' bg-[#EEF1FF] border-[#3A5CE8] text-[#3A5CE8]' : ' bg-white border-[#E0DFFF] text-[#3A3C52] hover:bg-mw-surface-purple hover:border-[#C4C3F0]'}`}
+              className={`font-atx-mono text-[13px] font-bold py-[9px] px-[18px] cursor-pointer border whitespace-nowrap transition-colors duration-150${form.poolUsd === p && !customPool ? ' bg-atx-blue border-atx-ink text-white' : ' bg-atx-panel border-atx-ink/30 text-atx-ink/70 hover:border-atx-ink hover:text-atx-ink'}`}
               onClick={() => { onChange({ poolUsd: p }); setCustomPool(false) }}
             >
               {fmtUSDShort(p)}
             </button>
           ))}
           <button
-            className={`font-mono text-[13px] font-bold py-[9px] px-[18px] rounded-[10px] cursor-pointer border-[1.5px] whitespace-nowrap transition-all duration-150${customPool ? ' bg-[#EEF1FF] border-[#3A5CE8] text-[#3A5CE8]' : ' bg-white border-[#E0DFFF] text-[#3A3C52] hover:bg-mw-surface-purple hover:border-[#C4C3F0]'}`}
+            className={`font-atx-mono text-[13px] font-bold py-[9px] px-[18px] cursor-pointer border whitespace-nowrap transition-colors duration-150${customPool ? ' bg-atx-blue border-atx-ink text-white' : ' bg-atx-panel border-atx-ink/30 text-atx-ink/70 hover:border-atx-ink hover:text-atx-ink'}`}
             onClick={() => setCustomPool(true)}
           >
             Custom
@@ -134,7 +134,7 @@ export function Step2Pool({ form, onChange }: Step2PoolProps) {
             {POINTS_DURATION_PRESETS.map(d => (
               <button
                 key={d}
-                className={`font-sans text-[12px] font-semibold py-2 px-5 rounded-[10px] cursor-pointer border-[1.5px] transition-all duration-150${form.durationDays === d ? ' bg-[#EEF1FF] border-[#3A5CE8] text-[#3A5CE8]' : ' bg-white border-[#E0DFFF] text-mw-ink-4 hover:bg-mw-surface-purple hover:text-[#3A3C52]'}`}
+                className={`font-atx-mono text-[12px] font-semibold uppercase tracking-[0.06em] py-2 px-5 cursor-pointer border transition-colors duration-150${form.durationDays === d ? ' bg-atx-blue border-atx-ink text-white' : ' bg-atx-panel border-atx-ink/30 text-atx-ink/60 hover:border-atx-ink hover:text-atx-ink'}`}
                 onClick={() => onChange({ durationDays: d })}
               >
                 {d} days
@@ -182,8 +182,8 @@ export function Step2Pool({ form, onChange }: Step2PoolProps) {
 
       {/* Advanced mode extras */}
       {form.advancedMode && (
-        <div className="border-t border-[#E0DFFF] pt-6 flex flex-col gap-4">
-          <div className="font-sans text-[11px] font-bold text-mw-ink-4 tracking-[1px] uppercase">
+        <div className="border-t border-atx-ink/20 pt-6 flex flex-col gap-4">
+          <div className="font-atx-mono text-[10px] font-bold text-atx-ink/55 tracking-[0.1em] uppercase">
             Advanced settings
           </div>
 
@@ -217,7 +217,7 @@ export function Step2Pool({ form, onChange }: Step2PoolProps) {
                 {PAYOUT_PRESETS.map(p => (
                   <button
                     key={p.value}
-                    className={`font-sans text-[12px] font-semibold py-2 px-5 rounded-[10px] cursor-pointer border-[1.5px] transition-all duration-150${form.payoutPreset === p.value ? ' bg-[#EEF1FF] border-[#3A5CE8] text-[#3A5CE8]' : ' bg-white border-[#E0DFFF] text-mw-ink-4 hover:bg-mw-surface-purple hover:text-[#3A3C52]'}`}
+                    className={`font-atx-mono text-[12px] font-semibold uppercase tracking-[0.06em] py-2 px-5 cursor-pointer border transition-colors duration-150${form.payoutPreset === p.value ? ' bg-atx-blue border-atx-ink text-white' : ' bg-atx-panel border-atx-ink/30 text-atx-ink/60 hover:border-atx-ink hover:text-atx-ink'}`}
                     onClick={() => onChange({ payoutPreset: p.value })}
                   >
                     {p.label}

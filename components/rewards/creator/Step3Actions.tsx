@@ -35,7 +35,7 @@ interface Step3ActionsProps {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="font-sans text-[12px] font-bold text-mw-ink-4 tracking-[0.5px] uppercase mb-[10px]">
+    <div className="font-atx-mono text-[10px] font-semibold tracking-[0.1em] uppercase text-atx-ink/55 mb-[10px]">
       {children}
     </div>
   )
@@ -43,7 +43,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 // Slider with custom fill track — keeps <style> only for pseudo-element CSS
 function RewardSlider({
-  label, value, min, max, step, onChange, formatValue, color = '#3A5CE8',
+  label, value, min, max, step, onChange, formatValue, color = '#006FCC',
 }: {
   label:       string
   value:       number
@@ -60,10 +60,10 @@ function RewardSlider({
     <>
       <div className="flex flex-col gap-2">
         <div className="flex justify-between items-center">
-          <span className="font-sans text-[13px] text-[#3A3C52]">
+          <span className="font-atx-display text-[13px] text-atx-ink/70">
             {label}
           </span>
-          <span className="font-mono text-[14px] font-bold" style={{ color }}>
+          <span className="font-atx-mono text-[14px] font-bold" style={{ color }}>
             {formatValue(value)}
           </span>
         </div>
@@ -73,15 +73,15 @@ function RewardSlider({
           min={min} max={max} step={step}
           value={value}
           style={{
-            background: `linear-gradient(to right, ${color} ${pct}%, #E0DFFF ${pct}%)`,
+            background: `linear-gradient(to right, ${color} ${pct}%, rgba(17,17,17,0.15) ${pct}%)`,
           }}
           onChange={(e) => onChange(parseFloat(e.target.value))}
         />
         <div className="flex justify-between">
-          <span className="font-mono text-[10px] text-[#C4C3F0]">
+          <span className="font-atx-mono text-[10px] text-atx-ink/40">
             {formatValue(min)}
           </span>
-          <span className="font-mono text-[10px] text-[#C4C3F0]">
+          <span className="font-atx-mono text-[10px] text-atx-ink/40">
             {formatValue(max)}
           </span>
         </div>
@@ -96,16 +96,16 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
       className="flex items-center justify-between cursor-pointer"
       onClick={() => onChange(!value)}
     >
-      <span className="font-sans text-[13px] text-[#3A3C52]">
+      <span className="font-atx-display text-[13px] text-atx-ink/70">
         {label}
       </span>
       <div
-        className="w-10 h-[22px] rounded-[11px] relative transition-[background] duration-200 shrink-0"
-        style={{ background: value ? '#3A5CE8' : '#E0DFFF' }}
+        className="w-10 h-[22px] relative transition-[background] duration-200 shrink-0 border border-atx-ink"
+        style={{ background: value ? '#006FCC' : '#F1F0E9' }}
       >
         <div
-          className="absolute top-[3px] w-4 h-4 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.2)] transition-[left] duration-200"
-          style={{ left: value ? 21 : 3 }}
+          className="absolute top-[2px] w-4 h-4 bg-atx-panel border border-atx-ink transition-[left] duration-200"
+          style={{ left: value ? 21 : 2 }}
         />
       </div>
     </div>
@@ -127,19 +127,19 @@ function NumberField({
   return (
     <div>
       <SectionLabel>{label}</SectionLabel>
-      <div className="flex items-center border-[1.5px] border-[#E0DFFF] rounded-[10px] bg-white overflow-hidden">
+      <div className="flex items-center border border-atx-ink/30 bg-atx-panel overflow-hidden">
         {prefix && (
-          <span className="font-sans text-[13px] text-mw-ink-4 pl-3 pr-[10px]">
+          <span className="font-atx-mono text-[13px] text-atx-ink/55 pl-3 pr-[10px]">
             {prefix}
           </span>
         )}
         <input
           type="number" min={min} max={max} step={step ?? 1} value={value}
-          className={`flex-1 border-none outline-none font-mono text-[14px] text-[#1A1A2E] bg-transparent min-w-0 ${prefix ? 'py-[10px] pr-0' : 'p-[10px_14px]'}`}
+          className={`flex-1 border-none outline-none font-atx-mono text-[14px] text-atx-ink bg-transparent min-w-0 ${prefix ? 'py-[10px] pr-0' : 'px-[14px] py-[10px]'}`}
           onChange={(e) => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(v) }}
         />
         {suffix && (
-          <span className="font-sans text-[13px] text-mw-ink-4 px-3">
+          <span className="font-atx-mono text-[13px] text-atx-ink/55 px-3">
             {suffix}
           </span>
         )}
@@ -169,7 +169,7 @@ export function Step3Actions({ form, onChange }: Step3ActionsProps) {
             min={0} max={1} step={0.05}
             onChange={(v) => onChange({ buyerRewardPct: v })}
             formatValue={(v) => fmtPct(v)}
-            color="#3A5CE8"
+            color="#006FCC"
           />
           <RewardSlider
             label="Referral reward"
@@ -177,16 +177,16 @@ export function Step3Actions({ form, onChange }: Step3ActionsProps) {
             min={0} max={5} step={0.1}
             onChange={(v) => onChange({ referralRewardPct: v })}
             formatValue={(v) => fmtPct(v)}
-            color="#7B6FCC"
+            color="#006FCC"
           />
         </div>
 
         {/* Platform fee note */}
-        <div className="flex justify-between items-center bg-mw-surface-purple border border-[#E0DFFF] rounded-[10px] p-[10px_14px]">
-          <span className="font-sans text-[13px] text-mw-ink-4">
+        <div className="flex justify-between items-center bg-atx-bone border border-atx-ink/25 px-[14px] py-[10px]">
+          <span className="font-atx-display text-[13px] text-atx-ink/55">
             Platform fee
           </span>
-          <span className="font-mono text-[13px] font-bold text-mw-ink-4">
+          <span className="font-atx-mono text-[13px] font-bold text-atx-ink/60">
             2% (fixed)
           </span>
         </div>
@@ -199,8 +199,8 @@ export function Step3Actions({ form, onChange }: Step3ActionsProps) {
 
         {/* Advanced mode */}
         {form.advancedMode && (
-          <div className="border-t border-[#E0DFFF] pt-6 flex flex-col gap-5">
-            <div className="font-sans text-[11px] font-bold text-mw-ink-4 tracking-[1px] uppercase">
+          <div className="border-t border-atx-ink/20 pt-6 flex flex-col gap-5">
+            <div className="font-atx-mono text-[10px] font-bold text-atx-ink/55 tracking-[0.1em] uppercase">
               Advanced settings
             </div>
 
@@ -212,35 +212,34 @@ export function Step3Actions({ form, onChange }: Step3ActionsProps) {
 
             <div>
               <SectionLabel>Referral hold period</SectionLabel>
-              <div className="bg-mw-surface-purple border border-[#E0DFFF] rounded-[10px] p-[14px_16px]">
+              <div className="bg-atx-bone border border-atx-ink/25 px-4 py-[14px]">
                 <div className="flex justify-between mb-[10px]">
-                  <span className="font-sans text-[13px] text-[#3A3C52]">
+                  <span className="font-atx-display text-[13px] text-atx-ink/70">
                     Referral reward unlocks linearly over
                   </span>
-                  <span className="font-mono text-[14px] font-bold text-[#3A5CE8]">
+                  <span className="font-atx-mono text-[14px] font-bold text-atx-blue">
                     {form.referralHoldHours}h
                   </span>
                 </div>
                 {/* Arc visual */}
-                <div className="relative h-[6px] bg-[#E0DFFF] rounded-[3px] overflow-hidden mb-2">
+                <div className="relative h-[6px] bg-atx-ink/15 overflow-hidden mb-2">
                   <div
-                    className="absolute left-0 top-0 h-full rounded-[3px]"
+                    className="absolute left-0 top-0 h-full bg-atx-blue"
                     style={{
                       width: `${(form.referralHoldHours / 24) * 100}%`,
-                      background: 'linear-gradient(to right, #3A5CE8, #7B6FCC)',
                     }}
                   />
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-mono text-[10px] text-[#C4C3F0]">0% at t=0</span>
-                  <span className="font-mono text-[10px] text-[#C4C3F0]">100% at {form.referralHoldHours}h</span>
+                  <span className="font-atx-mono text-[10px] text-atx-ink/40">0% at t=0</span>
+                  <span className="font-atx-mono text-[10px] text-atx-ink/40">100% at {form.referralHoldHours}h</span>
                 </div>
                 <input
                   type="range" min={1} max={24} step={1}
                   value={form.referralHoldHours}
-                  className="w-full mt-[10px] cursor-pointer h-1 rounded-[2px] outline-none appearance-none"
+                  className="w-full mt-[10px] cursor-pointer h-1 outline-none appearance-none"
                   style={{
-                    background: `linear-gradient(to right, #3A5CE8 ${(form.referralHoldHours / 24) * 100}%, #E0DFFF ${(form.referralHoldHours / 24) * 100}%)`,
+                    background: `linear-gradient(to right, #006FCC ${(form.referralHoldHours / 24) * 100}%, rgba(17,17,17,0.15) ${(form.referralHoldHours / 24) * 100}%)`,
                   }}
                   onChange={(e) => onChange({ referralHoldHours: parseInt(e.target.value) })}
                 />
@@ -263,7 +262,7 @@ export function Step3Actions({ form, onChange }: Step3ActionsProps) {
           {FOCUS_OPTIONS.map(o => (
             <button
               key={o.value}
-              className={`flex-1 font-sans text-[13px] py-[10px] px-4 rounded-[10px] cursor-pointer border-[1.5px] transition-all duration-150 text-center${form.pointsFocus === o.value ? ' bg-[#EEF1FF] border-[#3A5CE8] text-[#3A5CE8] font-bold' : ' bg-white border-[#E0DFFF] text-mw-ink-4 font-semibold hover:bg-mw-surface-purple hover:text-[#3A3C52]'}`}
+              className={`flex-1 font-atx-mono text-[13px] uppercase tracking-[0.06em] py-[10px] px-4 cursor-pointer border transition-colors duration-150 text-center${form.pointsFocus === o.value ? ' bg-atx-blue border-atx-ink text-white font-bold' : ' bg-atx-panel border-atx-ink/30 text-atx-ink/60 font-semibold hover:border-atx-ink hover:text-atx-ink'}`}
               onClick={() => onChange({ pointsFocus: o.value })}
             >
               {o.label}
@@ -295,23 +294,23 @@ export function Step3Actions({ form, onChange }: Step3ActionsProps) {
       </div>
 
       {/* Points preview chip */}
-      <div className="bg-mw-surface-purple border border-[#E0DFFF] rounded-[10px] p-[12px_16px] flex gap-4 flex-wrap">
+      <div className="bg-atx-bone border border-atx-ink/25 px-4 py-3 flex gap-4 flex-wrap">
         {(form.pointsFocus === 'trade' || form.pointsFocus === 'both') && (
           <div>
-            <div className="font-mono text-[14px] font-bold text-[#3A5CE8]">
+            <div className="font-atx-mono text-[14px] font-bold text-atx-blue">
               +{form.pointsPerUsdTrade} pts
             </div>
-            <div className="font-sans text-[10px] text-mw-ink-4 mt-[1px]">
+            <div className="font-atx-mono text-[10px] uppercase tracking-[0.06em] text-atx-ink/55 mt-[1px]">
               per $1 traded
             </div>
           </div>
         )}
         {(form.pointsFocus === 'bridge' || form.pointsFocus === 'both') && (
           <div>
-            <div className="font-mono text-[14px] font-bold text-mw-teal">
+            <div className="font-atx-mono text-[14px] font-bold text-atx-mesquite">
               +{form.fixedBridgePoints} pts
             </div>
-            <div className="font-sans text-[10px] text-mw-ink-4 mt-[1px]">
+            <div className="font-atx-mono text-[10px] uppercase tracking-[0.06em] text-atx-ink/55 mt-[1px]">
               per bridge
             </div>
           </div>
@@ -320,8 +319,8 @@ export function Step3Actions({ form, onChange }: Step3ActionsProps) {
 
       {/* Advanced mode */}
       {form.advancedMode && (
-        <div className="border-t border-[#E0DFFF] pt-6 flex flex-col gap-5">
-          <div className="font-sans text-[11px] font-bold text-mw-ink-4 tracking-[1px] uppercase">
+        <div className="border-t border-atx-ink/20 pt-6 flex flex-col gap-5">
+          <div className="font-atx-mono text-[10px] font-bold text-atx-ink/55 tracking-[0.1em] uppercase">
             Advanced settings
           </div>
 

@@ -36,11 +36,12 @@ interface TypeCardProps {
 
 function TypeCard({
   title, subtitle, badge, badgeColor, highlights,
-  icon, iconBg, iconColor, onSelect, disabled,
+  iconColor, onSelect, disabled,
 }: TypeCardProps) {
   return (
     <div
-      className={`bg-white border-[1.5px] border-[#E0DFFF] rounded-[18px] p-7 cursor-pointer transition-[box-shadow,transform,border-color] duration-200 ease-[ease] flex-1 min-w-[240px] flex flex-col gap-[18px]${disabled ? ' opacity-50 cursor-not-allowed' : ' hover:shadow-[0_6px_32px_rgba(58,92,232,0.12)] hover:-translate-y-[3px] hover:border-[#3A5CE8]'}`}
+      className={`bg-atx-panel border border-atx-ink border-l-[3px] p-7 cursor-pointer transition-shadow duration-200 flex-1 min-w-[240px] flex flex-col gap-[18px]${disabled ? ' opacity-50 cursor-not-allowed' : ' hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)]'}`}
+      style={{ borderLeftColor: iconColor }}
       onClick={disabled ? undefined : onSelect}
       role="button"
       tabIndex={0}
@@ -49,18 +50,16 @@ function TypeCard({
       {/* Icon + badge row */}
       <div className="flex items-start justify-between">
         <div
-          className="w-[52px] h-[52px] rounded-[14px] flex items-center justify-center text-[24px]"
-          style={{ background: iconBg, color: iconColor }}
+          className="w-[52px] h-[52px] border border-atx-ink bg-atx-panel flex items-center justify-center"
+          style={{ color: iconColor }}
         >
-          {icon}
+          <svg viewBox="0 0 100 100" className="w-6 h-6" aria-hidden="true">
+            <path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z" />
+          </svg>
         </div>
         <span
-          className="font-sans text-[10px] font-bold px-[10px] py-[4px] rounded-[20px] tracking-[0.3px]"
-          style={{
-            background:  badgeColor + '18',
-            color:       badgeColor,
-            border:      `1px solid ${badgeColor}30`,
-          }}
+          className="font-atx-mono text-[10px] font-bold px-[10px] py-[4px] uppercase tracking-[0.08em] border border-atx-ink/30 bg-atx-bone"
+          style={{ color: badgeColor }}
         >
           {badge}
         </span>
@@ -68,10 +67,10 @@ function TypeCard({
 
       {/* Title + subtitle */}
       <div>
-        <div className="font-sans text-[18px] font-extrabold text-[#1A1A2E] mb-[6px]">
+        <div className="font-atx-display text-[18px] font-extrabold text-atx-ink mb-[6px]">
           {title}
         </div>
-        <div className="font-sans text-[13px] text-mw-ink-4 leading-[1.55]">
+        <div className="font-atx-display text-[13px] text-atx-ink/55 leading-[1.55]">
           {subtitle}
         </div>
       </div>
@@ -81,10 +80,10 @@ function TypeCard({
         {highlights.map((h, i) => (
           <div key={i} className="flex items-center gap-2">
             <div
-              className="w-[6px] h-[6px] rounded-full shrink-0"
+              className="w-[7px] h-[7px] border border-atx-ink shrink-0 inline-block"
               style={{ background: iconColor }}
             />
-            <span className="font-sans text-[12px] text-[#3A3C52]">
+            <span className="font-atx-display text-[12px] text-atx-ink/70">
               {h}
             </span>
           </div>
@@ -93,7 +92,7 @@ function TypeCard({
 
       {/* CTA */}
       <div
-        className="mt-1 font-sans text-[13px] font-bold flex items-center gap-[6px]"
+        className="mt-1 font-atx-mono text-[13px] font-bold uppercase tracking-[0.06em] flex items-center gap-[6px]"
         style={{ color: iconColor }}
       >
         {disabled ? 'Checking…' : 'Select →'}
@@ -143,10 +142,10 @@ export function CampaignTypeSelect({ onSelect }: CampaignTypeSelectProps) {
   return (
     <div className="max-w-[720px] mx-auto">
       <div className="mb-9 text-center">
-        <h2 className="font-sans text-[26px] font-extrabold text-[#1A1A2E] m-0 mb-2">
+        <h2 className="font-atx-display text-[26px] font-extrabold text-atx-ink m-0 mb-2">
           Choose a campaign type
         </h2>
-        <p className="font-sans text-[14px] text-mw-ink-4 m-0">
+        <p className="font-atx-display text-[14px] text-atx-ink/55 m-0">
           Select how you want to incentivize your community
         </p>
       </div>
@@ -155,11 +154,11 @@ export function CampaignTypeSelect({ onSelect }: CampaignTypeSelectProps) {
         <TypeCard
           icon="◎"
           iconBg="rgba(58,92,232,0.08)"
-          iconColor="#3A5CE8"
+          iconColor="#006FCC"
           title="Token Reward Pool"
           subtitle="Reward buyers and referrers directly with your token"
           badge="Self-serve · Open to anyone"
-          badgeColor="#3A5CE8"
+          badgeColor="#006FCC"
           highlights={[
             'Buyer cashback on every purchase',
             'Referral rewards for your community',
@@ -171,11 +170,11 @@ export function CampaignTypeSelect({ onSelect }: CampaignTypeSelectProps) {
         <TypeCard
           icon="◈"
           iconBg="rgba(194,83,122,0.08)"
-          iconColor="#C2537A"
+          iconColor="#FF8574"
           title="Points Campaign"
           subtitle="Run a competitive daily ranking campaign with score multipliers"
           badge="Curated · Whitelisted teams"
-          badgeColor="#C2537A"
+          badgeColor="#FF8574"
           highlights={[
             'Daily competition and ranking prizes',
             'Score multipliers reward loyal wallets',

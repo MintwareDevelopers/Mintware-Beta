@@ -67,7 +67,7 @@ function CreatorContent() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F7F6FF] font-sans">
+    <div className="min-h-screen bg-atx-bone font-atx-display text-atx-ink [&_*]:rounded-none">
       <MwNav />
 
       <main className="max-w-[660px] mx-auto px-4 pt-8 pb-20">
@@ -87,16 +87,16 @@ function CreatorContent() {
               <div className="flex items-center gap-3 mb-1">
                 <button
                   onClick={() => { setStep(0); setStepErr(null) }}
-                  className="bg-transparent border-none cursor-pointer font-sans text-[13px] text-mw-ink-4 p-0 flex items-center gap-1"
+                  className="bg-transparent border-none cursor-pointer font-atx-mono uppercase tracking-[0.06em] text-[12px] text-atx-ink/45 p-0 flex items-center gap-1 transition-colors duration-150 hover:text-atx-blue"
                 >
                   ← Campaign type
                 </button>
-                <span className="text-[#E0DFFF]">·</span>
-                <span className={`font-sans text-[13px] font-semibold ${form.type === 'token_reward' ? 'text-mw-brand-deep' : 'text-mw-pink'}`}>
+                <span className="text-atx-ink/25">·</span>
+                <span className={`font-atx-mono text-[12px] font-semibold uppercase tracking-[0.06em] ${form.type === 'token_reward' ? 'text-atx-blue' : 'text-atx-coral'}`}>
                   {form.type === 'token_reward' ? 'Token Reward Pool' : 'Points Campaign'}
                 </span>
               </div>
-              <h1 className="font-sans text-[24px] font-extrabold text-[#1A1A2E] m-0">
+              <h1 className="font-atx-display text-[24px] font-extrabold text-atx-ink m-0">
                 Create Campaign
               </h1>
             </div>
@@ -107,29 +107,29 @@ function CreatorContent() {
             </div>
 
             {/* Step card */}
-            <div className="bg-white border border-[#E0DFFF] rounded-xl p-8 shadow-[0_2px_12px_rgba(26,26,46,0.04)]">
+            <div className="bg-atx-panel border border-atx-ink p-8">
               {/* Card header: step name + mode toggle */}
               <div className="flex justify-between items-center mb-6">
                 <div>
-                  <div className="font-sans text-[11px] font-bold text-mw-ink-4 tracking-[1px] uppercase mb-[3px]">
+                  <div className="font-atx-mono text-[10px] font-bold text-atx-ink/55 tracking-[0.1em] uppercase mb-[3px]">
                     Step {step} of 5
                   </div>
-                  <div className="font-sans text-[18px] font-extrabold text-[#1A1A2E]">
+                  <div className="font-atx-display text-[18px] font-extrabold text-atx-ink">
                     {STEP_LABELS[step - 1]}
                   </div>
                 </div>
 
                 {/* Simple / Advanced toggle (not shown on Review step) */}
                 {step < 5 && (
-                  <div className="inline-flex border-[1.5px] border-[#E0DFFF] rounded-xl overflow-hidden bg-white">
+                  <div className="inline-flex border border-atx-ink overflow-hidden bg-atx-panel">
                     <button
-                      className={`font-sans text-[12px] font-semibold px-[14px] py-[6px] border-none cursor-pointer transition-all duration-150 ${!form.advancedMode ? 'bg-mw-brand-deep text-white' : 'bg-transparent text-mw-ink-4'}`}
+                      className={`font-atx-mono text-[12px] font-semibold uppercase tracking-[0.06em] px-[14px] py-[6px] border-none cursor-pointer transition-colors duration-150 ${!form.advancedMode ? 'bg-atx-blue text-white' : 'bg-transparent text-atx-ink/55'}`}
                       onClick={() => onChange({ advancedMode: false })}
                     >
                       Simple
                     </button>
                     <button
-                      className={`font-sans text-[12px] font-semibold px-[14px] py-[6px] border-none cursor-pointer transition-all duration-150 ${form.advancedMode ? 'bg-mw-brand-deep text-white' : 'bg-transparent text-mw-ink-4'}`}
+                      className={`font-atx-mono text-[12px] font-semibold uppercase tracking-[0.06em] px-[14px] py-[6px] border-l border-atx-ink cursor-pointer transition-colors duration-150 ${form.advancedMode ? 'bg-atx-blue text-white' : 'bg-transparent text-atx-ink/55'}`}
                       onClick={() => onChange({ advancedMode: true })}
                     >
                       Advanced
@@ -147,7 +147,7 @@ function CreatorContent() {
 
               {/* Step validation error */}
               {stepErr && (
-                <div className="mt-4 font-sans text-[13px] text-mw-pink bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-sm px-[14px] py-[10px]">
+                <div className="mt-4 font-atx-mono text-[13px] text-atx-clay bg-atx-panel border border-atx-clay px-[14px] py-[10px]">
                   {stepErr}
                 </div>
               )}
@@ -158,12 +158,12 @@ function CreatorContent() {
               <div className="flex gap-[10px] mt-4">
                 <button
                   onClick={handleBack}
-                  className="font-sans text-[14px] font-semibold px-6 py-[11px] rounded-[10px] cursor-pointer border-[1.5px] border-[#E0DFFF] bg-white text-mw-ink-4 transition-all duration-150 hover:border-[#C4C3F0] hover:text-[#3A3C52]"
+                  className="font-atx-mono text-[13px] font-semibold uppercase tracking-[0.06em] px-6 py-[11px] cursor-pointer border border-atx-ink bg-atx-panel text-atx-ink transition-colors duration-150 hover:bg-atx-bone"
                 >
                   ← Back
                 </button>
                 <button
-                  className="font-sans text-[14px] font-semibold px-6 py-[11px] rounded-[10px] cursor-pointer border-none bg-mw-brand-deep text-white flex-1 transition-all duration-150 hover:bg-[#2a4cd8] disabled:bg-[#C4C3F0] disabled:cursor-not-allowed"
+                  className="font-atx-mono text-[13px] font-semibold uppercase tracking-[0.06em] px-6 py-[11px] cursor-pointer border border-atx-ink bg-atx-blue text-white flex-1 transition-opacity duration-150 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={handleNext}
                   disabled={step === 1 && !form.token}
                 >
@@ -177,7 +177,7 @@ function CreatorContent() {
               <div className="mt-4">
                 <button
                   onClick={handleBack}
-                  className="font-sans text-[14px] font-semibold px-6 py-[11px] rounded-[10px] cursor-pointer border-[1.5px] border-[#E0DFFF] bg-white text-mw-ink-4 transition-all duration-150 hover:border-[#C4C3F0] hover:text-[#3A3C52]"
+                  className="font-atx-mono text-[13px] font-semibold uppercase tracking-[0.06em] px-6 py-[11px] cursor-pointer border border-atx-ink bg-atx-panel text-atx-ink transition-colors duration-150 hover:bg-atx-bone"
                 >
                   ← Edit
                 </button>
