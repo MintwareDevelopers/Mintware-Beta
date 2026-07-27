@@ -50,6 +50,7 @@ export function MwNav() {
   const NAV_LINKS = [
     { href: '/dashboard', label: 'Earn' },
     { href: '/swap', label: 'Swap' },
+    { href: '/vaults', label: 'Vaults' },
     { href: '/leaderboard', label: 'Leaderboard' },
     { href: '/agents', label: 'Agents' },
     { href: '/profile', label: 'Profile' },
@@ -92,15 +93,6 @@ export function MwNav() {
                     </Link>
                   ))}
 
-                  <span
-                    className="flex items-center gap-[6px] px-[13px] py-[8px] text-[12px] uppercase tracking-[0.06em] whitespace-nowrap font-atx-mono font-normal text-atx-ink/35 cursor-default select-none"
-                    title="Vaults launching soon"
-                  >
-                    Vaults
-                    <span className="text-[9px] font-semibold tracking-[0.08em] uppercase border border-atx-ink bg-atx-acid text-atx-ink px-[5px] py-px leading-[13px]">
-                      Soon
-                    </span>
-                  </span>
                 </div>
 
                 <button

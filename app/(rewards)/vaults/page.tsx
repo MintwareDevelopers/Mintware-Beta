@@ -49,7 +49,9 @@ const MOCK_VAULTS: SocialVault[] = [
 ]
 
 // ─── VaultsContent ──────────────────────────────────────────────────────────
-const VAULTS_LOCKED = process.env.NEXT_PUBLIC_PHASE2_ENABLED !== 'true'
+// Vaults are ungated by default (Phase-3). Set NEXT_PUBLIC_VAULTS_LOCKED='true'
+// to re-show the coming-soon overlay (kill-switch).
+const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 
 function VaultsContent() {
   const { address } = useAccount()
@@ -182,7 +184,7 @@ function VaultsContent() {
   )
 }
 
-// ─── Coming-soon overlay (shown when NEXT_PUBLIC_PHASE2_ENABLED !== 'true') ──
+// ─── Coming-soon overlay (shown only when NEXT_PUBLIC_VAULTS_LOCKED === 'true') ──
 function VaultsComingSoon() {
   return (
     <div className="fixed inset-0 z-[999] flex flex-col items-center justify-center backdrop-blur-[14px] bg-atx-bone/70 font-atx-display [&_*]:rounded-none">
