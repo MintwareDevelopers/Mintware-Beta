@@ -87,6 +87,21 @@ export function buildVaultCreateMessage(input: {
   )
 }
 
+export function buildAdminMessage(input: {
+  wallet: string
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-admin-session',
+      wallet: normalizeAddress(input.wallet),
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
+
 export function buildRwaDealMessage(input: {
   issuerWallet: string
   issuedAt: number
