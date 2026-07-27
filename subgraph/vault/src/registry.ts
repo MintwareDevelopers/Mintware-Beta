@@ -5,6 +5,7 @@ import {
 } from "../generated/MintwareVaultRegistry/MintwareVaultRegistry"
 import { Vault, VaultLookup } from "../generated/schema"
 import { MintwareVault } from "../generated/templates"
+import { MintwareDeFiVault4626 } from "../generated/templates/MintwareVault/MintwareDeFiVault4626"
 
 // Registry emits VaultRegistered(vaultId, surface, vault, feeVault, provider).
 // We key the Vault entity by its *contract address* (so per-vault Deposit/Withdraw
@@ -17,6 +18,16 @@ export function handleVaultRegistered(event: VaultRegistered): void {
   v.address = event.params.vault
   v.feeVault = event.params.feeVault
   v.provider = event.params.provider
+
+  // Read display metadata straight off the vault (ERC-4626 share token + asset).
+  let c = MintwareDeFiVault4626.bind(event.params.vault)
+  let nameRes = c.try_name()
+  if (!nameRes.reverted) v.name = nameRes.value
+  let symRes = c.try_symbol()
+  if (!symRes.reverted) v.symbol = symRes.value
+  let assetRes = c.try_asset()
+  if (!assetRes.reverted) v.asset = assetRes.value
+
   v.active = true
   v.createdAt = event.block.timestamp
   v.createdBlock = event.block.number

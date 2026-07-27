@@ -10,6 +10,11 @@ type Vault @entity {
   "0 = DeFi, 1 = RWA (VaultSurface)"
   surface: Int!
   address: Bytes!
+  "ERC-4626 share-token name / symbol (read from the vault at registration)"
+  name: String
+  symbol: String
+  "underlying asset (USDC)"
+  asset: Bytes
   feeVault: Bytes!
   provider: Bytes!
   active: Boolean!

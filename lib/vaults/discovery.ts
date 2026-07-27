@@ -74,8 +74,23 @@ const MOCK_VAULTS: VaultSummary[] = [
   },
 ]
 
-/** Discovery source. Swap the mock for the vault subgraph / on-chain reads later. */
+/**
+ * Discovery source. Reads the vault subgraph when NEXT_PUBLIC_VAULT_SUBGRAPH_URL
+ * is set (real on-chain-indexed DeFi vaults), otherwise falls back to mock. RWA
+ * vaults stay mock until the Track-B RWA contracts are deployed + indexed.
+ */
 export async function getVaultsDiscovery(): Promise<VaultSummary[]> {
+  const { isSubgraphEnabled, fetchSubgraphVaults } = await import('./subgraph')
+  if (isSubgraphEnabled()) {
+    const real = await fetchSubgraphVaults()
+    if (real.length > 0) {
+      const hasRwa = real.some((v) => v.surface === 'RWA')
+      // Real vaults + preview RWA (until RWA contracts ship) so the two-surface
+      // UI stays populated on both sides.
+      const previewRwa = hasRwa ? [] : MOCK_VAULTS.filter((v) => v.surface === 'RWA')
+      return [...real, ...previewRwa]
+    }
+  }
   return MOCK_VAULTS
 }
 
