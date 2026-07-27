@@ -80,6 +80,7 @@ contract MWHookCoordinatorTest is Test {
         });
         vault = new MintwareDeFiVault4626(cfg, address(pm), address(feeVault));
         coord.setVault(address(vault));
+        feeVault.setSocialVault(address(vault)); // authorize vault to notify trading-fee receipts
 
         (Currency c0, Currency c1) = address(usdc) < address(proj)
             ? (Currency.wrap(address(usdc)), Currency.wrap(address(proj)))
@@ -151,5 +152,25 @@ contract MWHookCoordinatorTest is Test {
         _swap(sellProjZeroForOne, 500e6);
         vm.roll(block.number + 3); // past cooldownBlocks
         _swap(!sellProjZeroForOne, 500e6); // opposite dir now allowed
+    }
+
+    function test_swap_fee_collection_splits_50_25_25() public {
+        // Swap paying USDC in → LP fees accrue in USDC on the vault position.
+        _swap(!sellProjZeroForOne, 5_000e6);
+
+        uint256 tBefore = usdc.balanceOf(treasury);
+        uint256 pBefore = usdc.balanceOf(address(this));      // provider == deployer
+        uint256 fBefore = usdc.balanceOf(address(feeVault));
+
+        (uint256 usdcFees,) = vault.collectFees();
+        assertGt(usdcFees, 0, "USDC swap fees collected");
+
+        uint256 expMint = (usdcFees * 2500) / 10_000;
+        uint256 expProv = (usdcFees * 2500) / 10_000;
+        uint256 expDep  = usdcFees - expMint - expProv;
+
+        assertEq(usdc.balanceOf(treasury) - tBefore, expMint, "25% Mintware -> treasury");
+        assertEq(usdc.balanceOf(address(this)) - pBefore, expProv, "25% provider");
+        assertEq(usdc.balanceOf(address(feeVault)) - fBefore, expDep, "50% depositors -> FeeVault");
     }
 }

@@ -67,7 +67,7 @@ abstract contract MintwareBaseVault4626 is
     }
 
     /// @dev Dispatched inside unlockCallback.
-    enum Action { Deploy, Remove, Rebalance }
+    enum Action { Deploy, Remove, Rebalance, Collect }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constants
@@ -422,6 +422,9 @@ abstract contract MintwareBaseVault4626 is
             uint128 liquidity = abi.decode(params, (uint128));
             return _removeLiquidity(liquidity);
         }
+        if (action == Action.Collect) {
+            return _collectFees();
+        }
         (int24 lo, int24 hi) = abi.decode(params, (int24, int24));
         return _rebalanceLiquidity(lo, hi);
     }
@@ -441,6 +444,12 @@ abstract contract MintwareBaseVault4626 is
         internal
         virtual
         returns (bytes memory);
+
+    /// @dev Realize accrued swap fees on the position (liquidityDelta 0). Called inside
+    ///      the V4 unlock. Returns abi.encode(usdcFees, projFees, projToken). Default no-op.
+    function _collectFees() internal virtual returns (bytes memory) {
+        return abi.encode(uint256(0), uint256(0), address(0));
+    }
 
     /// @dev Dynamic swap fee for this vault's pool (bps). Default 0 = static.
     function _calculateDynamicFee() internal view virtual returns (uint24) {

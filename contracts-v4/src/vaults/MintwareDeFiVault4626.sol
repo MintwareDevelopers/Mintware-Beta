@@ -14,7 +14,7 @@ import {LiquidityAmounts}      from "@uniswap/v4-periphery/src/libraries/Liquidi
 import {IERC20}    from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {MintwareBaseVault4626}    from "./MintwareBaseVault4626.sol";
+import {MintwareBaseVault4626, IFeeVaultNotifier} from "./MintwareBaseVault4626.sol";
 import {VaultConfig, PoolProfile} from "./VaultTypes.sol";
 
 /// @title  MintwareDeFiVault4626
@@ -42,8 +42,14 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
     /// @notice Active pool profile driving the LP tick-range half-width.
     PoolProfile public profile = PoolProfile.BLUE_CHIP;
 
+    /// @notice Swap-fee split (spec): 50% depositors / 25% Mintware / 25% provider.
+    uint256 public constant SWAP_DEPOSITOR_BPS = 5_000;
+    uint256 public constant SWAP_MINTWARE_BPS  = 2_500;
+    uint256 public constant SWAP_PROVIDER_BPS  = 2_500;
+
     event TeamSeeded(bytes32 indexed vaultId, address token, uint256 amount);
     event ProfileRebalanced(PoolProfile indexed profile, int24 tickLower, int24 tickUpper);
+    event SwapFeesCollected(uint256 usdcFees, uint256 projFees, uint256 toDepositors, uint256 toMintware, uint256 toProvider);
 
     error InvalidSeed();
     error SeedAlreadyInitialized();
@@ -133,6 +139,43 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Swap-fee collection + 50/25/25 split (spec fee model)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Realize accrued V4 swap fees on the vault position and split them
+    ///         50% depositors (→ FeeVault epoch) / 25% Mintware (→ treasury) / 25% provider.
+    /// @dev    USDC fees route natively. PROJECT-token fees: provider takes its 25%
+    ///         in-kind; the remaining 75% (depositor 50% + Mintware 25%) goes to treasury
+    ///         staging for off-chain USDC conversion + epoch credit (FeeVault is USDC-only).
+    function collectFees() external nonReentrant returns (uint256 usdcFees, uint256 projFees) {
+        if (!poolInitialized) revert PoolNotInitialized();
+
+        bytes memory res = poolManager.unlock(abi.encode(Action.Collect, bytes("")));
+        address projToken;
+        (usdcFees, projFees, projToken) = abi.decode(res, (uint256, uint256, address));
+
+        if (usdcFees > 0) {
+            uint256 toMintware = (usdcFees * SWAP_MINTWARE_BPS) / BPS;
+            uint256 toProvider = (usdcFees * SWAP_PROVIDER_BPS) / BPS;
+            uint256 toDepositors = usdcFees - toMintware - toProvider;
+
+            IERC20(asset()).safeTransfer(treasury, toMintware);
+            IERC20(asset()).safeTransfer(provider, toProvider);
+            if (toDepositors > 0) {
+                IERC20(asset()).safeTransfer(feeVault, toDepositors);
+                IFeeVaultNotifier(feeVault).notifyFeeReceipt(toDepositors, "trading_fee");
+            }
+            emit SwapFeesCollected(usdcFees, projFees, toDepositors, toMintware, toProvider);
+        }
+
+        if (projFees > 0 && projToken != address(0)) {
+            uint256 provShare = (projFees * SWAP_PROVIDER_BPS) / BPS;
+            IERC20(projToken).safeTransfer(provider, provShare);
+            IERC20(projToken).safeTransfer(treasury, projFees - provShare);
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Liquidity hooks — implement the base's virtuals
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -161,6 +204,32 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
         _settleDelta(callerDelta);
         totalLiquidity += liquidity;
         return abi.encode(liquidity);
+    }
+
+    /// @dev Realize accrued swap fees (liquidityDelta 0) and take them to the vault.
+    ///      Returns abi.encode(usdcFees, projFees, projToken).
+    function _collectFees() internal override returns (bytes memory) {
+        (BalanceDelta d,) = poolManager.modifyLiquidity(
+            poolKey,
+            ModifyLiquidityParams({
+                tickLower:      tickLower,
+                tickUpper:      tickUpper,
+                liquidityDelta: 0,
+                salt:           bytes32(0)
+            }),
+            ""
+        );
+        _settleDelta(d);
+
+        uint256 amt0 = d.amount0() > 0 ? uint256(uint128(d.amount0())) : 0;
+        uint256 amt1 = d.amount1() > 0 ? uint256(uint128(d.amount1())) : 0;
+
+        bool usdcIsToken0 = Currency.unwrap(poolKey.currency0) == asset();
+        uint256 usdcFees  = usdcIsToken0 ? amt0 : amt1;
+        uint256 projFees  = usdcIsToken0 ? amt1 : amt0;
+        address projToken = usdcIsToken0 ? Currency.unwrap(poolKey.currency1) : Currency.unwrap(poolKey.currency0);
+
+        return abi.encode(usdcFees, projFees, projToken);
     }
 
     /// @dev Remove exact `liquidity` from the current range, returning tokens here.
