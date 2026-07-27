@@ -23,7 +23,7 @@ export function MwAuthGuard({ children }: { children: React.ReactNode }) {
   }, [isDisconnected, router])
 
   if (isLoading || (!walletSettled && !isDisconnected)) {
-    return <div className="min-h-screen bg-mw-surface" />
+    return <div className="min-h-screen bg-atx-bone" />
   }
 
   if (!isConnected) return null

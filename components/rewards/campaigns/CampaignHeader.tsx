@@ -91,13 +91,13 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
 
   return (
     <>
-      <div className="bg-white border border-mw-border rounded-[18px] p-6 mb-6 shadow-card">
+      <div className="bg-atx-panel border border-atx-ink/20 p-6 mb-6">
         {/* ── Top row: icon + name + badges ── */}
         <div className="flex items-start gap-4 flex-wrap">
           {/* Protocol icon */}
           <div
-            className="w-14 h-14 rounded-[14px] shrink-0 flex items-center justify-center font-mono text-[22px] font-bold border border-[rgba(0,0,0,0.08)] overflow-hidden"
-            style={{ background: showLogo ? '#fff' : col.bg, color: col.fg }}
+            className="w-14 h-14 shrink-0 flex items-center justify-center font-atx-mono text-[22px] font-bold border border-atx-ink overflow-hidden"
+            style={showLogo ? {} : { background: col.bg, color: col.fg }}
           >
             {showLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -107,10 +107,10 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
 
           <div className="flex-1 min-w-0">
             {/* Name */}
-            <div className="font-sans text-[22px] font-extrabold text-[#1A1A2E] mb-[6px]">
+            <div className="font-atx-display text-[22px] font-extrabold text-atx-ink mb-[6px]">
               {c.name}
               {c.protocol && c.protocol !== c.name && (
-                <span className="text-[14px] font-medium text-mw-ink-4 ml-2">
+                <span className="text-[14px] font-medium text-atx-ink/45 ml-2">
                   by {c.protocol}
                 </span>
               )}
@@ -119,24 +119,24 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
             {/* Badges row */}
             <div className="flex items-center gap-2 flex-wrap">
               {/* Chain badge */}
-              <span className="font-sans text-[11px] font-bold bg-[#EEF1FF] text-mw-brand-deep rounded-[6px] px-2 py-[3px]">
+              <span className="font-atx-mono uppercase tracking-[0.08em] text-[11px] font-bold bg-atx-bone border border-atx-ink/25 text-atx-blue px-2 py-[3px]">
                 {c.chain}
               </span>
 
               {/* Status badge */}
               {isLive && (
-                <span className="inline-flex items-center gap-[5px] text-[11px] font-bold bg-[rgba(42,158,138,0.10)] text-mw-teal border border-[rgba(42,158,138,0.2)] rounded-full px-[10px] py-[3px]">
-                  <span className="w-[6px] h-[6px] rounded-full bg-mw-teal inline-block" style={{ animation: 'dot-pulse 2s ease-in-out infinite' }} />
+                <span className="inline-flex items-center gap-1.5 border border-atx-ink text-atx-ink px-[10px] py-[3px] text-[11px] uppercase tracking-[0.08em] font-medium font-atx-mono">
+                  <span className="w-[7px] h-[7px] bg-atx-acid border border-atx-ink inline-block" />
                   Live
                 </span>
               )}
               {isUpcoming && (
-                <span className="inline-flex items-center gap-[5px] text-[11px] font-bold bg-[rgba(194,122,0,0.10)] text-mw-amber border border-[rgba(194,122,0,0.2)] rounded-full px-[10px] py-[3px]">
-                  ◷ Coming soon
+                <span className="inline-flex items-center border border-atx-ink/40 text-atx-clay px-[10px] py-[3px] text-[11px] uppercase tracking-[0.08em] font-medium font-atx-mono">
+                  Coming soon
                 </span>
               )}
               {c.status === 'ended' && (
-                <span className="text-[11px] font-bold text-mw-ink-4 bg-[rgba(138,140,158,0.1)] border border-[rgba(138,140,158,0.2)] rounded-full px-[10px] py-[3px]">
+                <span className="border border-atx-ink/30 text-atx-ink/50 px-[10px] py-[3px] text-[11px] uppercase tracking-[0.08em] font-atx-mono">
                   Ended
                 </span>
               )}
@@ -145,25 +145,25 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
                 <div className="flex items-center gap-[2px] mt-2">
                   {effectiveDexUrl && (
                     <a href={effectiveDexUrl} target="_blank" rel="noopener noreferrer" title="DexScreener"
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2 transition-colors duration-150">
+                      className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline hover:bg-atx-bone hover:text-atx-ink transition-colors duration-150">
                       <IconDex />
                     </a>
                   )}
                   {links.twitter && (
                     <a href={links.twitter} target="_blank" rel="noopener noreferrer" title="X / Twitter"
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2 transition-colors duration-150">
+                      className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline hover:bg-atx-bone hover:text-atx-ink transition-colors duration-150">
                       <IconX />
                     </a>
                   )}
                   {links.website && (
                     <a href={links.website} target="_blank" rel="noopener noreferrer" title="Website"
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2 transition-colors duration-150">
+                      className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline hover:bg-atx-bone hover:text-atx-ink transition-colors duration-150">
                       <IconGlobe />
                     </a>
                   )}
                   {links.telegram && (
                     <a href={links.telegram} target="_blank" rel="noopener noreferrer" title="Telegram"
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2 transition-colors duration-150">
+                      className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline hover:bg-atx-bone hover:text-atx-ink transition-colors duration-150">
                       <IconTelegram />
                     </a>
                   )}
@@ -174,59 +174,59 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
         </div>
 
         {/* ── Stats row ── */}
-        <div className="flex gap-0 mt-[22px] bg-mw-surface-purple rounded-md border border-[#E0DFFF] overflow-hidden">
+        <div className="flex gap-0 mt-[22px] bg-atx-bone border border-atx-ink/20 overflow-hidden">
           {(c.campaign_type === 'token_pool' ? [
             // Token Reward Pool: referral earn is the headline
             (c.pool_remaining_usd != null || c.pool_usd != null) && {
               label: 'Pool remaining',
               value: `${fmtUSD(c.pool_remaining_usd ?? c.pool_usd ?? 0)}${c.token_symbol ? ` ${c.token_symbol}` : ''}`,
-              color: 'text-mw-brand',
+              color: 'text-atx-blue',
             },
             c.referral_reward_pct != null && {
               label: 'Referral earn',
               value: `${c.referral_reward_pct}% per swap`,
-              color: 'text-mw-teal',
+              color: 'text-atx-mesquite',
             },
             c.buyer_reward_pct != null && {
               label: 'Buyer rebate',
               value: `${c.buyer_reward_pct}% per swap`,
-              color: 'text-mw-brand-deep',
+              color: 'text-atx-blue',
             },
             daysLeft !== null && isLive && {
               label: 'Days remaining',
               value: `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
-              color: 'text-mw-amber',
+              color: 'text-atx-clay',
             },
           ] : [
             // Points Campaign: pool size, daily payout, days, min score
             c.pool_usd != null && {
               label: 'Pool size',
               value: `${fmtUSD(c.pool_usd)}${c.token_symbol ? ` ${c.token_symbol}` : ''}`,
-              color: 'text-mw-brand',
+              color: 'text-atx-blue',
             },
             c.daily_payout_usd != null && {
               label: 'Daily payout',
               value: `${fmtUSD(c.daily_payout_usd)}/day`,
-              color: 'text-mw-green',
+              color: 'text-atx-mesquite',
             },
             daysLeft !== null && isLive && {
               label: 'Days remaining',
               value: `${daysLeft} day${daysLeft !== 1 ? 's' : ''}`,
-              color: 'text-mw-amber',
+              color: 'text-atx-clay',
             },
             c.min_score != null && {
               label: 'Min score',
               value: `${c.min_score}+`,
-              color: 'text-[#1A1A2E]',
+              color: 'text-atx-ink',
             },
           ]).filter(Boolean).map((stat, i, arr) => {
             if (!stat) return null
             return (
-              <div key={i} className={`flex-1 px-4 py-[14px]${i < arr.length - 1 ? ' border-r border-[#E0DFFF]' : ''}`}>
-                <div className={`font-mono text-[15px] font-bold mb-[2px] ${(stat as { color: string }).color}`}>
+              <div key={i} className={`flex-1 px-4 py-[14px]${i < arr.length - 1 ? ' border-r border-atx-ink/20' : ''}`}>
+                <div className={`font-atx-mono text-[15px] font-bold mb-[2px] ${(stat as { color: string }).color}`}>
                   {(stat as { value: string }).value}
                 </div>
-                <div className="font-sans text-[10px] text-mw-ink-4">
+                <div className="font-atx-mono uppercase tracking-[0.1em] text-[10px] text-atx-ink/55">
                   {(stat as { label: string }).label}
                 </div>
               </div>
@@ -236,39 +236,39 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
 
         {/* ── Live market ticker ── */}
         {ticker && (ticker.priceUsd || ticker.priceChange24h != null || ticker.volume24h || ticker.liquidity) && (
-          <div className="flex items-center gap-0 mt-[10px] bg-mw-surface-purple rounded-[10px] border border-[#E0DFFF] overflow-hidden">
+          <div className="flex items-center gap-0 mt-[10px] bg-atx-bone border border-atx-ink/20 overflow-hidden">
             {ticker.priceUsd && (
-              <div className="px-[14px] py-[9px] border-r border-[#E0DFFF] flex flex-col gap-[1px]">
-                <span className="font-mono text-[13px] font-bold text-[#1A1A2E]">
+              <div className="px-[14px] py-[9px] border-r border-atx-ink/20 flex flex-col gap-[1px]">
+                <span className="font-atx-mono text-[13px] font-bold text-atx-ink">
                   ${parseFloat(ticker.priceUsd) < 0.01
                       ? parseFloat(ticker.priceUsd).toExponential(2)
                       : parseFloat(ticker.priceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}
                 </span>
-                <span className="font-sans text-[9px] text-mw-ink-4 uppercase tracking-[0.5px] font-semibold">Price</span>
+                <span className="font-atx-mono text-[9px] text-atx-ink/55 uppercase tracking-[0.1em] font-semibold">Price</span>
               </div>
             )}
             {ticker.priceChange24h != null && (
-              <div className={`px-[14px] py-[9px] flex flex-col gap-[1px]${(ticker.volume24h || ticker.liquidity) ? ' border-r border-[#E0DFFF]' : ''}`}>
-                <span className={`font-mono text-[13px] font-bold ${ticker.priceChange24h >= 0 ? 'text-mw-green' : 'text-mw-red'}`}>
+              <div className={`px-[14px] py-[9px] flex flex-col gap-[1px]${(ticker.volume24h || ticker.liquidity) ? ' border-r border-atx-ink/20' : ''}`}>
+                <span className={`font-atx-mono text-[13px] font-bold ${ticker.priceChange24h >= 0 ? 'text-atx-mesquite' : 'text-atx-clay'}`}>
                   {ticker.priceChange24h >= 0 ? '+' : ''}{ticker.priceChange24h.toFixed(2)}%
                 </span>
-                <span className="font-sans text-[9px] text-mw-ink-4 uppercase tracking-[0.5px] font-semibold">24h</span>
+                <span className="font-atx-mono text-[9px] text-atx-ink/55 uppercase tracking-[0.1em] font-semibold">24h</span>
               </div>
             )}
             {ticker.volume24h && (
-              <div className={`px-[14px] py-[9px] flex flex-col gap-[1px]${ticker.liquidity ? ' border-r border-[#E0DFFF]' : ''}`}>
-                <span className="font-mono text-[13px] font-bold text-[#1A1A2E]">
+              <div className={`px-[14px] py-[9px] flex flex-col gap-[1px]${ticker.liquidity ? ' border-r border-atx-ink/20' : ''}`}>
+                <span className="font-atx-mono text-[13px] font-bold text-atx-ink">
                   {fmtUSD(ticker.volume24h)}
                 </span>
-                <span className="font-sans text-[9px] text-mw-ink-4 uppercase tracking-[0.5px] font-semibold">Vol 24h</span>
+                <span className="font-atx-mono text-[9px] text-atx-ink/55 uppercase tracking-[0.1em] font-semibold">Vol 24h</span>
               </div>
             )}
             {ticker.liquidity && (
               <div className="px-[14px] py-[9px] flex flex-col gap-[1px]">
-                <span className="font-mono text-[13px] font-bold text-[#1A1A2E]">
+                <span className="font-atx-mono text-[13px] font-bold text-atx-ink">
                   {fmtUSD(ticker.liquidity)}
                 </span>
-                <span className="font-sans text-[9px] text-mw-ink-4 uppercase tracking-[0.5px] font-semibold">Liquidity</span>
+                <span className="font-atx-mono text-[9px] text-atx-ink/55 uppercase tracking-[0.1em] font-semibold">Liquidity</span>
               </div>
             )}
           </div>
@@ -277,15 +277,15 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
         {/* ── Progress bar ── */}
         {progress !== null && (
           <div className="mt-4">
-            <div className="flex justify-between mb-[6px] font-sans text-[11px] text-mw-ink-4">
+            <div className="flex justify-between mb-[6px] font-atx-mono uppercase tracking-[0.06em] text-[11px] text-atx-ink/55">
               <span>Pool utilization</span>
-              <span className="font-mono font-semibold text-mw-brand-deep">
+              <span className="font-atx-mono font-semibold text-atx-blue">
                 {progress.toFixed(1)}%
               </span>
             </div>
-            <div className="h-[6px] bg-[#E0DFFF] rounded-[3px] overflow-hidden">
+            <div className="h-[8px] border border-atx-ink overflow-hidden relative">
               <div
-                className={`h-full rounded-[3px] transition-[width] duration-[500ms] ease-[ease]${progress > 80 ? ' bg-mw-pink' : ' bg-mw-brand-deep'}`}
+                className={`h-full absolute inset-y-0 left-0 transition-[width] duration-[500ms]${progress > 80 ? ' bg-atx-coral' : ' bg-atx-blue'}`}
                 style={{ width: `${progress}%` }}
               />
             </div>

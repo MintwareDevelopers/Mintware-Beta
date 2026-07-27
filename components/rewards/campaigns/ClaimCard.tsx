@@ -316,25 +316,25 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
   const explorerBase = reward.chain ? (EXPLORER_TX[reward.chain] ?? null) : null
   const isLoading = isFetchingProof || isWritePending || isConfirming
 
-  // Icon background class based on status
+  // Icon border + text color class based on status
   const iconBgClass = reward.status === 'claimed'
-    ? 'bg-[rgba(42,158,138,0.1)]'
+    ? 'border-atx-ink/25 text-atx-mesquite'
     : reward.status === 'claimable'
-    ? 'bg-[rgba(58,92,232,0.1)]'
-    : 'bg-[rgba(194,83,122,0.1)]'
+    ? 'border-atx-ink/25 text-atx-blue'
+    : 'border-atx-ink/25 text-atx-coral'
 
   // Amount color class based on status
   const amountColorClass = reward.status === 'claimable'
-    ? 'text-mw-brand-deep'
+    ? 'text-atx-blue'
     : reward.status === 'claimed'
-    ? 'text-mw-teal'
-    : 'text-[#1A1A2E]'
+    ? 'text-atx-mesquite'
+    : 'text-atx-ink'
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex items-center gap-[14px] px-5 py-4 bg-white border border-[#E8E7F4] rounded-[14px] transition-[box-shadow,border-color] duration-150 hover:border-[rgba(58,92,232,0.2)] hover:shadow-[0_2px_8px_rgba(26,26,46,0.06)]">
+    <div className="flex items-center gap-[14px] px-5 py-4 bg-atx-panel border border-atx-ink/20 transition-shadow duration-150 hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)]">
       {/* Icon */}
-      <div className={`w-10 h-10 rounded-[10px] flex items-center justify-center text-[18px] shrink-0 ${iconBgClass}`}>
+      <div className={`w-10 h-10 border flex items-center justify-center text-[18px] shrink-0 ${iconBgClass}`}>
         {reward.status === 'claimed'
           ? <CheckCircle2 size={18} />
           : reward.status === 'claimable'
@@ -344,18 +344,18 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
 
       {/* Body */}
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold text-[#1A1A2E] mb-[2px] whitespace-nowrap overflow-hidden text-ellipsis">
+        <div className="text-[13px] font-semibold text-atx-ink font-atx-display mb-[2px] whitespace-nowrap overflow-hidden text-ellipsis">
           {reward.campaign_name} — Epoch {reward.epoch_number}
         </div>
-        <div className="text-[11px] text-mw-ink-4 font-mono">
+        <div className="text-[11px] text-atx-ink/55 font-atx-mono">
           {chainName && `${chainName} · `}
           {fmtDate(reward.created_at)}
         </div>
         {isTxSuccess && txHash && (
-          <div className="mt-1 flex items-center gap-1 text-[11px] text-mw-teal font-mono">
-            <CheckCircle2 size={11} /> Claimed!{' '}
+          <div className="mt-1 flex items-center gap-1 text-[11px] text-atx-mesquite font-atx-mono">
+            <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block" /> Claimed!{' '}
             {explorerBase && (
-              <a href={`${explorerBase}${txHash}`} target="_blank" rel="noopener noreferrer" className="text-mw-teal underline underline-offset-2">
+              <a href={`${explorerBase}${txHash}`} target="_blank" rel="noopener noreferrer" className="text-atx-mesquite underline underline-offset-2">
                 View tx ↗
               </a>
             )}
@@ -363,32 +363,32 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
         )}
         {reward.status === 'claimed' && reward.claimed_at && !isTxSuccess && (
           <div className="mt-[3px]">
-            <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[10px] text-[10px] font-semibold tracking-[0.3px] whitespace-nowrap bg-[rgba(42,158,138,0.1)] text-mw-teal">✓ Claimed {fmtDate(reward.claimed_at)}</span>
+            <span className="inline-flex items-center gap-1 px-[9px] py-[3px] text-[10px] font-semibold uppercase tracking-[0.06em] whitespace-nowrap border border-atx-ink/25 text-atx-mesquite font-atx-mono"><span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block" /> Claimed {fmtDate(reward.claimed_at)}</span>
           </div>
         )}
         {claimError && (
-          <div className="text-[11px] text-mw-pink mt-1 max-w-[220px] break-words">
+          <div className="text-[11px] text-atx-clay mt-1 max-w-[220px] break-words">
             {claimError}
           </div>
         )}
       </div>
 
       {/* Amount */}
-      <div className={`font-mono text-[15px] font-semibold whitespace-nowrap shrink-0 ${amountColorClass}`}>
+      <div className={`font-atx-mono text-[15px] font-semibold whitespace-nowrap shrink-0 ${amountColorClass}`}>
         {fmtWei(reward.amount_wei, reward.token_symbol)}
       </div>
 
       {/* Action */}
       <div className="shrink-0 ml-2">
         {reward.status === 'pending' && (
-          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[10px] text-[10px] font-semibold tracking-[0.3px] whitespace-nowrap bg-[rgba(194,83,122,0.1)] text-mw-pink">
+          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] text-[10px] font-semibold uppercase tracking-[0.06em] whitespace-nowrap border border-atx-ink/25 text-atx-coral font-atx-mono">
             <Clock size={10} /> Pending
           </span>
         )}
 
         {reward.status === 'claimed' && !isTxSuccess && (
-          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[10px] text-[10px] font-semibold tracking-[0.3px] whitespace-nowrap bg-[rgba(42,158,138,0.1)] text-mw-teal">
-            <CheckCircle2 size={10} /> Done
+          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] text-[10px] font-semibold uppercase tracking-[0.06em] whitespace-nowrap border border-atx-ink/25 text-atx-mesquite font-atx-mono">
+            <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block" /> Done
           </span>
         )}
 
@@ -396,7 +396,7 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
           <>
             {isWrongChain ? (
               <button
-                className="px-4 py-2 rounded-full text-[12px] font-semibold cursor-pointer border transition-all duration-150 whitespace-nowrap bg-mw-surface-purple text-mw-brand-deep border-[rgba(58,92,232,0.3)] hover:bg-[rgba(58,92,232,0.08)] disabled:opacity-55 disabled:cursor-not-allowed"
+                className="px-4 py-2 text-[12px] font-semibold cursor-pointer border border-atx-ink transition-colors duration-150 whitespace-nowrap bg-atx-panel text-atx-blue hover:bg-atx-bone disabled:opacity-55 disabled:cursor-not-allowed font-atx-mono uppercase tracking-[0.04em]"
                 disabled={isSwitching}
                 onClick={() => {
                   if (targetChainId) switchChain({ chainId: targetChainId })
@@ -407,12 +407,12 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
             ) : (
               <div className="flex flex-col items-end gap-[4px]">
                 {!isFetchingProof && !isWritePending && !isConfirming && (
-                  <div className="text-[10px] text-mw-ink-4 font-sans text-right">
+                  <div className="text-[10px] text-atx-ink/55 font-atx-mono text-right">
                     {fmtWei(reward.amount_wei, reward.token_symbol)} on {chainName ?? 'chain'} → your wallet
                   </div>
                 )}
                 <button
-                  className="px-4 py-2 rounded-full text-[12px] font-semibold cursor-pointer border-none transition-all duration-150 whitespace-nowrap bg-mw-brand-deep text-white hover:bg-[#2a4cd8] hover:shadow-[0_2px_8px_rgba(58,92,232,0.35)] disabled:opacity-55 disabled:cursor-not-allowed"
+                  className="px-4 py-2 text-[12px] font-semibold cursor-pointer border border-atx-ink transition-colors duration-150 whitespace-nowrap bg-atx-blue text-white hover:bg-atx-ink disabled:opacity-55 disabled:cursor-not-allowed font-atx-mono uppercase tracking-[0.04em]"
                   disabled={isLoading}
                   onClick={handleClaim}
                 >
@@ -430,8 +430,8 @@ function RewardRow({ reward, wallet, onClaimed }: RewardRowProps) {
         )}
 
         {isTxSuccess && (
-          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] rounded-[10px] text-[10px] font-semibold tracking-[0.3px] whitespace-nowrap bg-[rgba(42,158,138,0.1)] text-mw-teal">
-            <CheckCircle2 size={10} /> Claimed
+          <span className="inline-flex items-center gap-1 px-[9px] py-[3px] text-[10px] font-semibold uppercase tracking-[0.06em] whitespace-nowrap border border-atx-ink/25 text-atx-mesquite font-atx-mono">
+            <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block" /> Claimed
           </span>
         )}
       </div>
@@ -584,15 +584,15 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
   return (
     <div>
       {isLoading && (
-        <div className="text-center py-12 px-5 text-mw-ink-4 text-[13px]">Loading rewards…</div>
+        <div className="text-center py-12 px-5 text-atx-ink/55 text-[13px] font-atx-display">Loading rewards…</div>
       )}
 
       {error && !isLoading && (
-        <div className="text-center py-6 px-5 text-mw-pink text-[13px] bg-[rgba(194,83,122,0.05)] border border-[rgba(194,83,122,0.15)] rounded-md">
+        <div className="text-center py-6 px-5 text-atx-clay text-[13px] bg-atx-bone border border-atx-clay font-atx-display">
           {error}
           <br />
           <button
-            className="mt-[10px] px-[14px] py-[6px] rounded-sm border border-[rgba(194,83,122,0.3)] bg-transparent text-mw-pink text-[12px] cursor-pointer"
+            className="mt-[10px] px-[14px] py-[6px] border border-atx-ink/30 bg-transparent text-atx-clay text-[12px] cursor-pointer font-atx-mono uppercase tracking-[0.04em]"
             onClick={fetchStatus}
           >
             Retry
@@ -604,7 +604,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
         <>
           {/* Header */}
           <div className="flex items-center justify-between mb-[18px] flex-wrap gap-[10px]">
-            <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-mw-brand-deep">Campaign Rewards</span>
+            <span className="font-atx-mono text-[10px] font-bold tracking-[0.1em] uppercase text-atx-blue">Campaign Rewards</span>
             <div className="flex items-center gap-2">
               {/* Claim All — only shown when 2+ claimable rewards share a contract */}
               {(() => {
@@ -612,12 +612,12 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
                 const isBusy = isBatching || isBatchPending || isBatchConfirming || isBatchSwitching
                 return (
                   <div className="flex flex-col items-end gap-[6px]">
-                    <div className="text-[10px] text-mw-ink-4 font-sans text-right max-w-[280px]">
+                    <div className="text-[10px] text-atx-ink/55 font-atx-mono text-right max-w-[280px]">
                       Mintware will fetch each proof for you, then open your wallet once to claim {batchGroup.length} rewards on {batchGroupChainName ?? 'the correct chain'}.
                     </div>
                     {isBatchWrongChain ? (
                       <button
-                        className={`px-[14px] py-[6px] rounded-full bg-mw-surface-purple text-mw-brand-deep border border-[rgba(58,92,232,0.3)] text-[12px] font-semibold font-sans transition-opacity duration-150 ${isBusy ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={`px-[14px] py-[6px] bg-atx-panel text-atx-blue border border-atx-ink text-[12px] font-semibold font-atx-mono uppercase tracking-[0.04em] transition-opacity duration-150 ${isBusy ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                         disabled={isBusy}
                         onClick={() => {
                           if (batchGroupTargetChainId) switchChain({ chainId: batchGroupTargetChainId })
@@ -628,7 +628,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
                       </button>
                     ) : (
                       <button
-                        className={`px-[14px] py-[6px] rounded-full bg-mw-brand-deep text-white border-none text-[12px] font-semibold font-sans transition-opacity duration-150 ${isBusy ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={`px-[14px] py-[6px] bg-atx-blue text-white border border-atx-ink text-[12px] font-semibold font-atx-mono uppercase tracking-[0.04em] transition-opacity duration-150 ${isBusy ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                         disabled={isBusy}
                         onClick={() => handleBatchClaim(batchGroup)}
                         title={`Claim ${batchGroup.length} rewards in one transaction`}
@@ -648,17 +648,17 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
               {data.rewards.length > 0 && (
                 <div className="flex gap-2 items-center">
                   {data.totals.claimable_count > 0 && (
-                    <span className="px-[10px] py-[3px] rounded-[10px] text-[11px] font-semibold font-mono bg-[rgba(58,92,232,0.1)] text-mw-brand-deep">
+                    <span className="px-[10px] py-[3px] text-[11px] font-semibold font-atx-mono uppercase tracking-[0.04em] border border-atx-ink/25 text-atx-blue">
                       {data.totals.claimable_count} claimable
                     </span>
                   )}
                   {data.totals.claimed_count > 0 && (
-                    <span className="px-[10px] py-[3px] rounded-[10px] text-[11px] font-semibold font-mono bg-[rgba(42,158,138,0.1)] text-mw-teal">
+                    <span className="px-[10px] py-[3px] text-[11px] font-semibold font-atx-mono uppercase tracking-[0.04em] border border-atx-ink/25 text-atx-mesquite">
                       {data.totals.claimed_count} claimed
                     </span>
                   )}
                   {data.totals.pending_count > 0 && (
-                    <span className="px-[10px] py-[3px] rounded-[10px] text-[11px] font-semibold font-mono bg-[rgba(194,83,122,0.1)] text-mw-pink">
+                    <span className="px-[10px] py-[3px] text-[11px] font-semibold font-atx-mono uppercase tracking-[0.04em] border border-atx-ink/25 text-atx-coral">
                       {data.totals.pending_count} pending
                     </span>
                   )}
@@ -669,22 +669,22 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
 
           {/* Batch claim feedback */}
           {batchError && (
-            <div className="mb-3 px-[14px] py-[10px] bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.2)] rounded-[10px] text-[12px] text-mw-pink font-sans">
+            <div className="mb-3 px-[14px] py-[10px] bg-atx-bone border border-atx-clay text-[12px] text-atx-clay font-atx-display">
               {batchError}
             </div>
           )}
           {isBatchSuccess && (
-            <div className="mb-3 px-[14px] py-[10px] bg-[rgba(42,158,138,0.06)] border border-[rgba(42,158,138,0.2)] rounded-[10px] text-[12px] text-mw-teal font-sans flex items-center gap-[6px]">
-              <CheckCircle2 size={13} /> All rewards claimed successfully!
+            <div className="mb-3 px-[14px] py-[10px] bg-atx-bone border border-atx-ink/25 text-[12px] text-atx-mesquite font-atx-display flex items-center gap-[6px]">
+              <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block" /> All rewards claimed successfully!
             </div>
           )}
 
           {/* Empty state */}
           {data.rewards.length === 0 && (
-            <div className="text-center py-12 px-5 bg-white border border-[#E8E7F4] rounded-xl">
-              <div className="flex justify-center text-[#C4C3F0] mb-3"><Circle size={36} /></div>
-              <div className="text-[15px] font-semibold text-[#1A1A2E] mb-[6px]">No rewards yet</div>
-              <div className="text-[12px] text-mw-ink-4 max-w-[280px] mx-auto leading-[1.55]">
+            <div className="text-center py-12 px-5 bg-atx-panel border border-atx-ink/20">
+              <div className="flex justify-center text-atx-ink/30 mb-3"><Circle size={36} /></div>
+              <div className="text-[15px] font-semibold text-atx-ink font-atx-display mb-[6px]">No rewards yet</div>
+              <div className="text-[12px] text-atx-ink/55 max-w-[280px] mx-auto leading-[1.55]">
                 Join a campaign and earn points to receive token rewards at each epoch end.
               </div>
             </div>
@@ -693,7 +693,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
           {/* Claimable */}
           {claimable.length > 0 && (
             <>
-              <div className="text-[10px] font-bold tracking-[1px] uppercase text-mw-ink-4 mt-5 mb-2">Ready to claim</div>
+              <div className="font-atx-mono text-[10px] font-bold tracking-[0.1em] uppercase text-atx-ink/55 mt-5 mb-2">Ready to claim</div>
               <div className="flex flex-col gap-2">
                 {claimable.map(r => (
                   <RewardRow
@@ -710,7 +710,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
           {/* Pending */}
           {pending.length > 0 && (
             <>
-              <div className="text-[10px] font-bold tracking-[1px] uppercase text-mw-ink-4 mt-5 mb-2">Awaiting publication</div>
+              <div className="font-atx-mono text-[10px] font-bold tracking-[0.1em] uppercase text-atx-ink/55 mt-5 mb-2">Awaiting publication</div>
               <div className="flex flex-col gap-2">
                 {pending.map(r => (
                   <RewardRow
@@ -727,7 +727,7 @@ export function ClaimCard({ wallet }: ClaimCardProps) {
           {/* Claimed */}
           {claimed.length > 0 && (
             <>
-              <div className="text-[10px] font-bold tracking-[1px] uppercase text-mw-ink-4 mt-5 mb-2">Claimed history</div>
+              <div className="font-atx-mono text-[10px] font-bold tracking-[0.1em] uppercase text-atx-ink/55 mt-5 mb-2">Claimed history</div>
               <div className="flex flex-col gap-2">
                 {claimed.map(r => (
                   <RewardRow

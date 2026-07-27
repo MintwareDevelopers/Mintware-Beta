@@ -8,15 +8,15 @@
 //   • locked         — score < min_score: show score vs required
 //   • idle           — ready to join: [Join Campaign]
 //   • loading        — POST /join in flight
-//   • joined         — already a participant: show green joined state
+//   • joined         — already a participant: show joined state
 //   • error          — POST failed
 //
-// Design: #3A5CE8 primary button, locked uses #F7F6FF bg + muted text.
+// Design: ATX Settlemint — square, hairline borders, flat atx-blue primary.
 // =============================================================================
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Lock, CheckCircle2 } from 'lucide-react'
+import { Lock } from 'lucide-react'
 
 interface JoinButtonProps {
   campaignId: string
@@ -57,14 +57,8 @@ export function JoinButton({ campaignId, minScore, userScore, isJoined, wallet, 
   // ── Joined ──────────────────────────────────────────────────────────────
   if (isJoined) {
     return (
-      <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: 8,
-        background: 'rgba(42,158,138,0.10)', border: '1px solid rgba(42,158,138,0.2)',
-        borderRadius: 10, padding: '10px 20px',
-        fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 14, fontWeight: 600,
-        color: '#2A9E8A',
-      }}>
-        <CheckCircle2 size={15} /> Joined
+      <div className="inline-flex items-center gap-2 bg-atx-panel border border-atx-ink px-5 py-[10px] font-atx-display text-[14px] font-semibold text-atx-mesquite">
+        <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block" /> Joined
       </div>
     )
   }
@@ -72,12 +66,7 @@ export function JoinButton({ campaignId, minScore, userScore, isJoined, wallet, 
   // ── Not connected ────────────────────────────────────────────────────────
   if (!wallet) {
     return (
-      <div style={{
-        background: '#F7F6FF', border: '1px solid #E0DFFF', borderRadius: 10,
-        padding: '14px 24px', color: '#8A8C9E', cursor: 'not-allowed',
-        fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 14, fontWeight: 600,
-        textAlign: 'center',
-      }}>
+      <div className="bg-atx-bone border border-atx-ink/20 px-6 py-[14px] text-atx-ink/45 cursor-not-allowed font-atx-display text-[14px] font-semibold text-center">
         Connect wallet to join
       </div>
     )
@@ -86,12 +75,7 @@ export function JoinButton({ campaignId, minScore, userScore, isJoined, wallet, 
   // ── Score loading ────────────────────────────────────────────────────────
   if (userScore === null) {
     return (
-      <div style={{
-        background: '#F7F6FF', border: '1px solid #E0DFFF', borderRadius: 10,
-        padding: '14px 24px', color: '#8A8C9E',
-        fontFamily: 'Plus Jakarta Sans, sans-serif', fontSize: 14, fontWeight: 600,
-        textAlign: 'center',
-      }}>
+      <div className="bg-atx-bone border border-atx-ink/20 px-6 py-[14px] text-atx-ink/45 font-atx-display text-[14px] font-semibold text-center">
         Checking score…
       </div>
     )
@@ -100,29 +84,25 @@ export function JoinButton({ campaignId, minScore, userScore, isJoined, wallet, 
   // ── Locked: score too low ────────────────────────────────────────────────
   if (minScore > 0 && userScore < minScore) {
     return (
-      <div style={{
-        background: '#F7F6FF', border: '1px solid #E0DFFF', borderRadius: 10,
-        padding: '14px 20px', cursor: 'not-allowed',
-        fontFamily: 'Plus Jakarta Sans, sans-serif',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <Lock size={14} style={{ color: '#8A8C9E', flexShrink: 0 }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#8A8C9E' }}>
+      <div className="bg-atx-bone border border-atx-ink/25 px-5 py-[14px] cursor-not-allowed font-atx-display">
+        <div className="flex items-center gap-2 mb-[6px]">
+          <Lock size={14} className="text-atx-ink/45 shrink-0" />
+          <span className="text-[14px] font-bold text-atx-ink/55">
             Score {minScore}+ required
           </span>
         </div>
-        <div style={{ fontSize: 12, color: '#8A8C9E', lineHeight: 1.5 }}>
+        <div className="text-[12px] text-atx-ink/45 leading-[1.5]">
           Your score:{' '}
-          <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600, color: '#C2537A' }}>
+          <span className="font-atx-mono font-semibold text-atx-coral">
             {userScore}
           </span>
           {' '}·{' '}
           Need:{' '}
-          <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600, color: '#3A5CE8' }}>
+          <span className="font-atx-mono font-semibold text-atx-blue">
             {minScore}
           </span>
         </div>
-        <div style={{ fontSize: 11, color: '#8A8C9E', marginTop: 6 }}>
+        <div className="text-[11px] text-atx-ink/45 mt-[6px]">
           Improve your score to unlock this campaign
         </div>
       </div>
@@ -135,39 +115,14 @@ export function JoinButton({ campaignId, minScore, userScore, isJoined, wallet, 
       <button
         onClick={handleJoin}
         disabled={loading}
-        style={{
-          width: '100%',
-          background: loading ? '#C4C3F0' : '#3A5CE8',
-          color: '#fff',
-          border: 'none',
-          borderRadius: 10,
-          padding: '14px 24px',
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-          fontSize: 15,
-          fontWeight: 600,
-          cursor: loading ? 'not-allowed' : 'pointer',
-          transition: 'background 0.15s, box-shadow 0.15s, transform 0.15s',
-          boxShadow: loading ? 'none' : '0 2px 12px rgba(58,92,232,0.25)',
-        }}
-        onMouseEnter={(e) => {
-          if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#2a4cd8'
-        }}
-        onMouseLeave={(e) => {
-          if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#3A5CE8'
-        }}
+        className={`w-full border border-atx-ink px-6 py-[14px] font-atx-display text-[15px] font-semibold text-white transition-colors duration-150 ${loading ? 'bg-atx-blue/60 cursor-not-allowed' : 'bg-atx-blue cursor-pointer hover:bg-atx-ink'}`}
       >
         {loading ? 'Joining…' : 'Join Campaign'}
       </button>
 
       {error && (
-        <div style={{
-          marginTop: 8, fontSize: 12, color: '#C2537A',
-          background: 'rgba(194,83,122,0.06)',
-          border: '1px solid rgba(194,83,122,0.15)',
-          borderRadius: 8, padding: '8px 10px',
-          fontFamily: 'Plus Jakarta Sans, sans-serif',
-        }}>
-          ✗ {error}
+        <div className="mt-2 text-[12px] text-atx-clay bg-atx-bone border border-atx-ink/20 px-[10px] py-2 font-atx-display">
+          {error}
         </div>
       )}
     </div>

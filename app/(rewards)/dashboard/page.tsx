@@ -96,9 +96,9 @@ function DashboardContent() {
   const upcomingCount = upcomingCampaigns.length
 
   const stats = [
-    { label: 'Total pool value', value: totalPool > 0 ? fmtUSD(totalPool) : '—', sub: `↑ ${liveCount} active campaign${liveCount !== 1 ? 's' : ''}`, valueColor: 'var(--color-mw-brand)' },
-    { label: 'Daily payout',     value: totalDaily > 0 ? fmtUSD(totalDaily) : '—', sub: 'distributed per day', valueColor: 'var(--color-mw-green)' },
-    { label: 'Your points',      value: userScore !== null ? userScore.toLocaleString() : '0', sub: wallet ? 'Attribution score' : 'Start trading to earn', subGray: !wallet, valueColor: 'var(--color-mw-brand)' },
+    { label: 'Total pool value', value: totalPool > 0 ? fmtUSD(totalPool) : '—', sub: `↑ ${liveCount} active campaign${liveCount !== 1 ? 's' : ''}`, valueColor: 'var(--color-atx-blue)' },
+    { label: 'Daily payout',     value: totalDaily > 0 ? fmtUSD(totalDaily) : '—', sub: 'distributed per day', valueColor: 'var(--color-atx-mesquite)' },
+    { label: 'Your points',      value: userScore !== null ? userScore.toLocaleString() : '0', sub: wallet ? 'Attribution score' : 'Start trading to earn', subGray: !wallet, valueColor: 'var(--color-atx-blue)' },
     { label: 'Min score',        value: minScore !== null ? `${minScore}+` : '—', sub: 'to qualify', subGray: true },
   ]
 

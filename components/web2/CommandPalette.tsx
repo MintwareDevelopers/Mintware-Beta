@@ -42,7 +42,7 @@ export function CommandPalette() {
         label="Command palette"
       >
         <div className="cmdk-input-wrap">
-          <Search size={15} className="text-mw-ink-3 shrink-0" />
+          <Search size={15} className="text-atx-ink/55 shrink-0" />
           <Command.Input placeholder="Search pages, actions…" autoFocus />
           <span className="cmdk-shortcut">Esc</span>
         </div>

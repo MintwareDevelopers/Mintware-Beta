@@ -33,22 +33,22 @@ type Tab = 'overview' | 'leaderboard' | 'stats'
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 function DetailSkeleton() {
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 [&_*]:rounded-none">
       {/* Header skeleton */}
-      <div className="bg-white border border-[#E0DFFF] rounded-[18px] p-6">
+      <div className="bg-atx-panel border border-atx-ink/20 p-6">
         <div className="flex gap-4 mb-4">
-          <div className="w-14 h-14 rounded-[14px] bg-[#F0EFFF] shrink-0" />
+          <div className="w-14 h-14 bg-atx-bone border border-atx-ink/15 shrink-0" />
           <div className="flex-1">
-            <div className="h-6 bg-[#F0EFFF] rounded-[6px] mb-2 w-[45%]" />
-            <div className="h-[14px] bg-[#F0EFFF] rounded-[4px] w-[30%]" />
+            <div className="h-6 bg-atx-bone border border-atx-ink/15 mb-2 w-[45%]" />
+            <div className="h-[14px] bg-atx-bone border border-atx-ink/15 w-[30%]" />
           </div>
         </div>
-        <div className="h-[60px] bg-[#F0EFFF] rounded-md" />
+        <div className="h-[60px] bg-atx-bone border border-atx-ink/15" />
       </div>
       {/* Join skeleton */}
-      <div className="h-[52px] bg-[#F0EFFF] rounded-[10px]" />
+      <div className="h-[52px] bg-atx-bone border border-atx-ink/15" />
       {/* Tabs skeleton */}
-      <div className="h-10 bg-[#F0EFFF] rounded-sm" />
+      <div className="h-10 bg-atx-bone border border-atx-ink/15" />
     </div>
   )
 }
@@ -66,24 +66,24 @@ function ReferralCard({ refLink, earnDesc }: { refLink: string; earnDesc: string
   }
 
   return (
-    <div className="bg-[rgba(42,158,138,0.04)] border border-[rgba(42,158,138,0.2)] rounded-md px-4 py-[14px] mb-6">
-      <div className="flex items-center justify-between mb-[10px]">
-        <span className="font-sans text-[12px] font-bold tracking-[0.5px] uppercase text-mw-teal">
-          ◉ Your referral link
+    <div className="bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-mesquite px-4 py-[14px] mb-6 [&_*]:rounded-none">
+      <div className="flex items-center justify-between mb-[10px] gap-3 flex-wrap">
+        <span className="font-atx-mono text-[11px] font-bold tracking-[0.08em] uppercase text-atx-mesquite">
+          Your referral link
         </span>
-        <span className="font-sans text-[11px] text-mw-teal">
+        <span className="font-atx-mono text-[11px] text-atx-ink/55">
           {earnDesc}
         </span>
       </div>
       <div className="flex gap-2 items-center">
-        <div className="flex-1 font-mono text-[11px] text-mw-ink-2 bg-white border border-[rgba(42,158,138,0.2)] rounded-sm px-3 py-[9px] overflow-hidden text-ellipsis whitespace-nowrap">
+        <div className="flex-1 min-w-0 font-atx-mono text-[11px] text-atx-ink/70 bg-atx-bone border border-atx-ink/25 px-3 py-[9px] overflow-hidden text-ellipsis whitespace-nowrap">
           {refLink}
         </div>
         <button
           onClick={handleCopy}
-          className={`shrink-0 px-4 py-[9px] border border-[rgba(42,158,138,0.4)] rounded-sm cursor-pointer font-sans text-[12px] font-semibold transition-[background,color] duration-150 whitespace-nowrap ${copied ? 'bg-mw-teal text-white' : 'bg-white text-mw-teal'}`}
+          className={`shrink-0 px-4 py-[9px] border cursor-pointer font-atx-mono text-[12px] font-semibold uppercase tracking-[0.04em] transition-colors duration-150 whitespace-nowrap ${copied ? 'bg-atx-mesquite border-atx-ink text-white' : 'bg-atx-panel border-atx-ink text-atx-mesquite hover:bg-atx-bone'}`}
         >
-          {copied ? '✓ Copied!' : 'Copy link'}
+          {copied ? 'Copied' : 'Copy link'}
         </button>
       </div>
     </div>
@@ -177,7 +177,7 @@ function CampaignDetailContent() {
 
   return (
     <>
-      <div className="min-h-screen bg-mw-surface-purple font-sans">
+      <div className="min-h-screen bg-atx-bone font-atx-display text-atx-ink [&_*]:rounded-none">
         <MwNav />
 
         <main className="max-w-[720px] mx-auto px-4 py-8">
@@ -185,15 +185,15 @@ function CampaignDetailContent() {
           {/* ── Back link ── */}
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-[6px] font-sans text-[13px] font-semibold text-mw-ink-4 no-underline mb-5 transition-colors duration-150 hover:text-mw-brand-deep"
+            className="inline-flex items-center gap-[6px] font-atx-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-atx-ink/55 no-underline mb-5 transition-colors duration-150 hover:text-atx-blue"
           >
             ← Campaigns
           </Link>
 
           {/* ── Error ── */}
           {error && !loading && (
-            <div className="px-5 py-4 bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-md font-sans text-[13px] text-mw-pink mb-5">
-              ⚠ {error}
+            <div className="px-5 py-4 border border-atx-clay font-atx-mono text-[13px] text-atx-clay mb-5">
+              {error}
             </div>
           )}
 
@@ -213,7 +213,7 @@ function CampaignDetailContent() {
                 <div className="flex justify-end -mt-2 mb-4">
                   <Link
                     href={`/manage/${campaignId}`}
-                    className="inline-block border border-mw-brand-deep text-mw-brand-deep rounded-sm px-4 py-2 text-[13px] font-sans font-semibold no-underline transition-colors duration-150 hover:bg-[#EEF1FF]"
+                    className="inline-block border border-atx-blue text-atx-blue px-4 py-2 text-[12px] font-atx-mono font-semibold uppercase tracking-[0.05em] no-underline transition-colors duration-150 hover:bg-atx-blue hover:text-white"
                   >
                     Manage Campaign →
                   </Link>
@@ -226,26 +226,19 @@ function CampaignDetailContent() {
                 const attributionMultiplier = pct !== null ? (pct >= 67 ? 1.5 : pct >= 34 ? 1.25 : 1.0) : null
                 if (attributionMultiplier === null) return null
                 return (
-                  <div
-                    className="rounded-[12px] px-5 py-4 mb-4 flex items-center gap-5 border"
-                    style={{
-                      background: 'linear-gradient(180deg, rgba(79,126,247,0.12) 0%, rgba(79,126,247,0.07) 100%)',
-                      borderColor: 'rgba(79,126,247,0.18)',
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.55)',
-                    }}
-                  >
+                  <div className="border border-atx-ink bg-atx-panel px-5 py-4 mb-4 flex items-center gap-5 max-[480px]:flex-col max-[480px]:items-start">
                     <div className="shrink-0">
-                      <div className="text-[10px] font-bold tracking-[0.1em] uppercase text-[rgba(58,92,232,0.55)] mb-[5px] font-sans">Your multiplier</div>
+                      <div className="text-[10px] font-bold tracking-[0.1em] uppercase text-atx-ink/55 mb-[5px] font-atx-mono">Your multiplier</div>
                       <div
-                        className="text-[36px] font-bold tracking-[-1.5px] leading-none font-mono"
-                        style={{ color: attributionMultiplier >= 1.5 ? '#16a34a' : attributionMultiplier >= 1.25 ? 'var(--color-mw-brand)' : 'rgba(26,26,46,0.72)' }}
+                        className="text-[36px] font-bold tracking-[-1.5px] leading-none font-atx-mono"
+                        style={{ color: attributionMultiplier >= 1.5 ? 'var(--color-atx-mesquite)' : attributionMultiplier >= 1.25 ? 'var(--color-atx-blue)' : 'var(--color-atx-ink)' }}
                       >
                         {attributionMultiplier}×
                       </div>
-                      <div className="text-[11px] text-[rgba(26,26,46,0.52)] mt-[3px] font-sans">{pct}th percentile</div>
+                      <div className="text-[11px] text-atx-ink/50 mt-[3px] font-atx-mono">{pct}th percentile</div>
                     </div>
-                    <div className="w-px bg-[rgba(79,126,247,0.14)] self-stretch shrink-0" />
-                    <div className="flex-1 text-[13px] leading-[1.6] font-sans text-[rgba(26,26,46,0.76)]">
+                    <div className="w-px bg-atx-ink/20 self-stretch shrink-0 max-[480px]:w-full max-[480px]:h-px" />
+                    <div className="flex-1 text-[13px] leading-[1.6] text-atx-ink/70">
                       {attributionMultiplier >= 1.5
                         ? 'Top-tier wallet. You earn up to 50% more than the base reward rate from this campaign.'
                         : attributionMultiplier >= 1.25
@@ -259,12 +252,7 @@ function CampaignDetailContent() {
               {/* Join / locked / joined state */}
               <div className={isJoined ? 'mb-4' : 'mb-6'}>
                 {!address ? (
-                  <div className="w-full px-4 py-3 rounded-xl text-[13px] text-center font-sans"
-                    style={{
-                      background: 'rgba(79,126,247,0.06)',
-                      border: '1px solid rgba(79,126,247,0.18)',
-                      color: 'var(--color-mw-brand)',
-                    }}>
+                  <div className="w-full px-4 py-3 text-[13px] text-center font-atx-mono bg-atx-panel border border-atx-ink/25 text-atx-blue">
                     Campaign rewards are EVM tokens.
                   </div>
                 ) : (
@@ -293,23 +281,23 @@ function CampaignDetailContent() {
               })()}
 
               {/* ── Tab navigation ── */}
-              <div className="flex border-b border-[#E0DFFF] mb-6">
+              <div className="flex border-b border-atx-ink mb-6">
                 {tabs.map(tab => (
                   <button
                     key={tab.key}
                     disabled={tab.disabled}
                     onClick={() => !tab.disabled && setActiveTab(tab.key)}
                     className={[
-                      'bg-transparent border-0 cursor-pointer font-sans text-[14px] font-semibold px-[18px] py-[10px] border-b-2 transition-[color,border-color] duration-150',
-                      tab.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:text-mw-brand-deep',
+                      'bg-transparent border-0 cursor-pointer font-atx-mono text-[12px] font-semibold uppercase tracking-[0.06em] px-[18px] py-[10px] border-b-2 -mb-px transition-[color,border-color] duration-150',
+                      tab.disabled ? 'opacity-40 cursor-not-allowed' : 'hover:text-atx-blue',
                       activeTab === tab.key
-                        ? 'text-mw-brand-deep border-mw-brand-deep'
-                        : 'text-mw-ink-4 border-transparent',
+                        ? 'text-atx-blue border-atx-blue'
+                        : 'text-atx-ink/55 border-transparent',
                     ].join(' ')}
                   >
                     {tab.label}
                     {tab.key === 'stats' && !isJoined && (
-                      <span className="ml-1 text-[10px] bg-[#F0EFFF] text-[#C4C3F0] rounded-[4px] px-1 py-px">
+                      <span className="ml-1 text-[10px] border border-atx-ink/30 text-atx-ink/45 px-1 py-px">
                         join first
                       </span>
                     )}
@@ -350,12 +338,14 @@ function CampaignDetailContent() {
               )}
 
               {activeTab === 'stats' && !isJoined && (
-                <div className="text-center px-6 py-12 bg-white border border-[#E0DFFF] rounded-lg">
-                  <div className="text-[32px] mb-3">📊</div>
-                  <div className="font-sans text-[15px] font-bold text-mw-ink mb-[6px]">
+                <div className="text-center px-6 py-12 bg-atx-panel border border-atx-ink/25">
+                  <svg viewBox="0 0 100 100" className="w-8 h-8 text-atx-coral mx-auto mb-3" aria-hidden="true">
+                    <path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z" />
+                  </svg>
+                  <div className="text-[15px] font-bold text-atx-ink mb-[6px]">
                     Join to see your stats
                   </div>
-                  <div className="font-sans text-[13px] text-mw-ink-4">
+                  <div className="text-[13px] text-atx-ink/55">
                     Your points breakdown and earnings will appear here after joining.
                   </div>
                 </div>
