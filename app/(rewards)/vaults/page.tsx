@@ -14,6 +14,19 @@ type Filter = 'All' | 'Active' | 'Seeding' | 'Closed'
 
 const FILTERS: Filter[] = ['All', 'Active', 'Seeding', 'Closed']
 
+function Star({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
+      />
+    </svg>
+  )
+}
+
+const LABEL = 'font-atx-mono uppercase tracking-[0.08em] text-[10px]'
+
 // ─── mock data for development / before DB is seeded ───────────────────────
 const MOCK_VAULTS: SocialVault[] = [
   {
@@ -81,310 +94,107 @@ function VaultsContent() {
     : vaults.filter(v => v.status === statusFromFilter(filter))
 
   return (
-    <>
-      <style>{`
-        .vaults-page {
-          background: var(--color-mw-surface, #f5f5f7);
-          min-height: 100vh;
-        }
-        .vaults-inner {
-          max-width: 1100px;
-          margin: 0 auto;
-          padding: 28px 28px 60px;
-        }
-        @media (max-width: 800px) {
-          .vaults-inner { padding: 20px 16px 48px; }
-        }
+    <div className="font-atx-display bg-atx-bone min-h-screen text-atx-ink">
+      <MwNav />
+      <div className="max-w-[1100px] mx-auto px-7 pt-7 pb-[60px] max-[800px]:px-4 max-[800px]:pt-5 [&_*]:rounded-none">
 
-        /* ── Hero ── */
-        .vaults-hero {
-          background: var(--color-mw-dark);
-          border-radius: var(--radius-lg);
-          padding: 36px 40px;
-          margin-bottom: 28px;
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 24px;
-          overflow: hidden;
-          position: relative;
-        }
-        .vaults-hero::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: radial-gradient(ellipse at 80% 50%, rgba(79,126,247,0.12) 0%, transparent 65%);
-          pointer-events: none;
-        }
-        .vaults-hero-left { position: relative; }
-        .vaults-hero-eyebrow {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          margin-bottom: 10px;
-        }
-        .vaults-hero-dot {
-          width: 5px; height: 5px;
-          border-radius: 50%;
-          background: var(--color-mw-live);
-        }
-        .vaults-hero-label {
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: var(--color-mw-live);
-          font-family: var(--font-jakarta);
-        }
-        .vaults-hero-title {
-          font-size: 32px;
-          font-weight: 800;
-          color: var(--color-mw-dark-text);
-          font-family: var(--font-jakarta);
-          line-height: 1.15;
-          margin-bottom: 8px;
-        }
-        .vaults-hero-sub {
-          font-size: 14px;
-          color: var(--color-mw-dark-sub);
-          font-family: var(--font-jakarta);
-          max-width: 420px;
-          line-height: 1.5;
-        }
-        .vaults-hero-stats {
-          display: flex;
-          gap: 32px;
-          position: relative;
-          flex-shrink: 0;
-        }
-        @media (max-width: 720px) {
-          .vaults-hero { flex-direction: column; padding: 24px 20px; }
-          .vaults-hero-stats { gap: 20px; }
-          .vaults-hero-title { font-size: 24px; }
-        }
-        .vaults-hero-stat { display: flex; flex-direction: column; gap: 2px; }
-        .vaults-hero-stat-val {
-          font-size: 26px;
-          font-weight: 700;
-          font-family: var(--font-mono);
-          color: var(--color-mw-dark-text);
-        }
-        .vaults-hero-stat-lbl {
-          font-size: 11px;
-          color: var(--color-mw-dark-sub);
-          font-family: var(--font-jakarta);
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          font-weight: 500;
-        }
-
-        /* ── Toolbar ── */
-        .vaults-toolbar {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 20px;
-          flex-wrap: wrap;
-        }
-        .vaults-filters {
-          display: flex;
-          gap: 4px;
-          background: white;
-          border: 1px solid var(--color-mw-border);
-          border-radius: var(--radius-sm);
-          padding: 3px;
-        }
-        .vaults-filter-btn {
-          padding: 5px 14px;
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 600;
-          font-family: var(--font-jakarta);
-          border: none;
-          cursor: pointer;
-          transition: background var(--transition-fast), color var(--transition-fast);
-          color: var(--color-mw-ink-3);
-          background: transparent;
-        }
-        .vaults-filter-btn.active {
-          background: var(--color-mw-brand);
-          color: white;
-        }
-        .vaults-filter-btn:not(.active):hover {
-          background: var(--color-mw-brand-dim);
-          color: var(--color-mw-brand);
-        }
-        .vaults-create-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 8px 16px;
-          background: var(--color-mw-brand);
-          color: white;
-          border-radius: var(--radius-sm);
-          font-size: 13px;
-          font-weight: 600;
-          font-family: var(--font-jakarta);
-          text-decoration: none;
-          transition: background var(--transition-fast);
-        }
-        .vaults-create-btn:hover {
-          background: var(--color-mw-brand-deep);
-        }
-
-        /* ── Grid ── */
-        .vaults-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-          gap: 16px;
-        }
-        @media (max-width: 680px) {
-          .vaults-grid { grid-template-columns: 1fr; }
-        }
-
-        /* ── Empty / Loading ── */
-        .vaults-empty {
-          text-align: center;
-          padding: 60px 20px;
-          color: var(--color-mw-ink-3);
-          font-family: var(--font-jakarta);
-          font-size: 14px;
-        }
-        .vaults-empty-icon {
-          font-size: 32px;
-          margin-bottom: 12px;
-        }
-        .vaults-skeleton {
-          height: 200px;
-          background: linear-gradient(90deg, var(--color-mw-border) 25%, rgba(0,0,0,0.04) 50%, var(--color-mw-border) 75%);
-          background-size: 200% 100%;
-          animation: shimmer 1.4s infinite;
-          border-radius: var(--radius-md);
-        }
-        @keyframes shimmer {
-          0%   { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-
-        /* ── Mock banner ── */
-        .vaults-mock-banner {
-          background: rgba(193,119,0,0.08);
-          border: 1px solid rgba(193,119,0,0.2);
-          border-radius: var(--radius-sm);
-          padding: 10px 14px;
-          font-size: 12px;
-          color: var(--color-mw-amber);
-          font-family: var(--font-jakarta);
-          font-weight: 500;
-          margin-bottom: 16px;
-        }
-      `}</style>
-
-      <div className="vaults-page">
-        <MwNav />
-        <div className="vaults-inner">
-
-          {/* ── Hero ── */}
-          <div className="vaults-hero">
-            <div className="vaults-hero-left">
-              <div className="vaults-hero-eyebrow">
-                <div className="vaults-hero-dot" />
-                <span className="vaults-hero-label">Social LP Vaults</span>
-              </div>
-              <div className="vaults-hero-title">
-                Earn while you<br />provide liquidity
-              </div>
-              <div className="vaults-hero-sub">
-                Attribution-weighted rewards. The better your on-chain reputation, the more you earn from the same deposit.
-              </div>
+        {/* ── Hero ── */}
+        <div className="bg-atx-ink text-white border border-atx-ink px-10 py-9 mb-7 flex items-start justify-between gap-6 max-[720px]:flex-col max-[720px]:px-5 max-[720px]:py-6">
+          <div>
+            <div className="flex items-center gap-1.5 mb-2.5">
+              <span className="w-[7px] h-[7px] bg-atx-acid border border-atx-ink inline-block" />
+              <span className={`${LABEL} tracking-[0.12em] text-atx-acid`}>Social LP Vaults</span>
             </div>
-            <div className="vaults-hero-stats">
-              <div className="vaults-hero-stat">
-                <span className="vaults-hero-stat-val">
-                  {totalTvl > 0 ? fmtUSD(totalTvl) : '—'}
-                </span>
-                <span className="vaults-hero-stat-lbl">Total TVL</span>
-              </div>
-              <div className="vaults-hero-stat">
-                <span className="vaults-hero-stat-val">
-                  {totalEpoch > 0 ? fmtUSD(totalEpoch) : '—'}
-                </span>
-                <span className="vaults-hero-stat-lbl">This epoch</span>
-              </div>
-              <div className="vaults-hero-stat">
-                <span className="vaults-hero-stat-val">{activeVaults.length}</span>
-                <span className="vaults-hero-stat-lbl">Active vaults</span>
-              </div>
+            <div className="text-[32px] font-extrabold leading-[1.15] mb-2 font-atx-display max-[720px]:text-[24px]">
+              Earn while you<br />provide liquidity
+            </div>
+            <div className="text-[14px] text-white/60 max-w-[420px] leading-[1.5] font-atx-display">
+              Attribution-weighted rewards. The better your on-chain reputation, the more you earn from the same deposit.
             </div>
           </div>
-
-          {/* ── Toolbar ── */}
-          <div className="vaults-toolbar">
-            <div className="vaults-filters">
-              {FILTERS.map(f => (
-                <button
-                  key={f}
-                  className={`vaults-filter-btn${filter === f ? ' active' : ''}`}
-                  onClick={() => setFilter(f)}
-                >
-                  {f}
-                </button>
-              ))}
+          <div className="flex gap-8 shrink-0 max-[720px]:gap-5">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[26px] font-bold font-atx-mono text-white">
+                {totalTvl > 0 ? fmtUSD(totalTvl) : '—'}
+              </span>
+              <span className={`${LABEL} text-white/55`}>Total TVL</span>
             </div>
-            <Link href="/vault/create" className="vaults-create-btn">
-              + Create vault
-            </Link>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[26px] font-bold font-atx-mono text-white">
+                {totalEpoch > 0 ? fmtUSD(totalEpoch) : '—'}
+              </span>
+              <span className={`${LABEL} text-white/55`}>This epoch</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[26px] font-bold font-atx-mono text-white">{activeVaults.length}</span>
+              <span className={`${LABEL} text-white/55`}>Active vaults</span>
+            </div>
           </div>
-
-          {/* ── Mock banner ── */}
-          {useMock && (
-            <div className="vaults-mock-banner">
-              ⚠ Showing example vault — no vaults have been seeded yet. Deploy a pool via the create flow to get started.
-            </div>
-          )}
-
-          {/* ── Grid ── */}
-          {loading ? (
-            <div className="vaults-grid">
-              {[1, 2, 3].map(i => <div key={i} className="vaults-skeleton" />)}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="vaults-empty">
-              <div className="vaults-empty-icon">⬡</div>
-              <div>No {filter !== 'All' ? filter.toLowerCase() + ' ' : ''}vaults yet.</div>
-            </div>
-          ) : (
-            <div className="vaults-grid">
-              {filtered.map(v => <VaultCard key={v.id} vault={v} />)}
-            </div>
-          )}
-
         </div>
+
+        {/* ── Toolbar ── */}
+        <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+          <div className="flex border border-atx-ink">
+            {FILTERS.map(f => (
+              <button
+                key={f}
+                className={`font-atx-mono text-[12px] uppercase tracking-[0.1em] px-4 py-2 border-r border-atx-ink last:border-r-0 ${filter === f ? 'bg-atx-ink text-atx-bone' : 'bg-transparent text-atx-ink'}`}
+                onClick={() => setFilter(f)}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+          <Link
+            href="/vault/create"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-atx-blue text-white border border-atx-ink font-atx-mono text-[13px] font-semibold uppercase tracking-[0.04em] no-underline"
+          >
+            + Create vault
+          </Link>
+        </div>
+
+        {/* ── Mock banner ── */}
+        {useMock && (
+          <div className="bg-atx-panel border border-atx-ink/25 border-l-[3px] border-l-atx-clay px-3.5 py-2.5 text-[12px] text-atx-clay font-atx-mono mb-4 flex items-center gap-2">
+            <Star className="w-3.5 h-3.5 shrink-0 text-atx-clay" />
+            Showing example vault — no vaults have been seeded yet. Deploy a pool via the create flow to get started.
+          </div>
+        )}
+
+        {/* ── Grid ── */}
+        {loading ? (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-[680px]:grid-cols-1">
+            {[1, 2, 3].map(i => <div key={i} className="h-[200px] bg-atx-panel border border-atx-ink/20 animate-pulse" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-[60px] px-5 text-atx-ink/55 font-atx-display text-[14px]">
+            <div className="flex justify-center mb-3"><Star className="w-8 h-8 text-atx-coral" /></div>
+            <div>No {filter !== 'All' ? filter.toLowerCase() + ' ' : ''}vaults yet.</div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-[680px]:grid-cols-1">
+            {filtered.map(v => <VaultCard key={v.id} vault={v} />)}
+          </div>
+        )}
+
       </div>
-    </>
+    </div>
   )
 }
 
 // ─── Coming-soon overlay (shown when NEXT_PUBLIC_PHASE2_ENABLED !== 'true') ──
 function VaultsComingSoon() {
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', background: 'rgba(245,245,247,0.72)', pointerEvents: 'all' }}>
-      <style>{`
-        @keyframes vaults-pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50%       { opacity: 0.7; transform: scale(0.97); }
-        }
-      `}</style>
-      <div style={{ textAlign: 'center', maxWidth: 380, padding: '0 24px', animation: 'vaults-pulse 3s ease-in-out infinite' }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>⬡</div>
-        <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)', marginBottom: 8 }}>
+    <div className="fixed inset-0 z-[999] flex flex-col items-center justify-center backdrop-blur-[14px] bg-atx-bone/70 font-atx-display [&_*]:rounded-none">
+      <div className="text-center max-w-[380px] px-6">
+        <div className="flex justify-center mb-4"><Star className="w-10 h-10 text-atx-coral" /></div>
+        <div className="text-[24px] font-bold tracking-[-0.5px] text-atx-ink font-atx-display mb-2">
           Vaults — Coming Soon
         </div>
-        <div style={{ fontSize: 14, color: 'var(--color-mw-ink-3)', lineHeight: 1.6, fontFamily: 'var(--font-jakarta)', marginBottom: 24 }}>
+        <div className="text-[14px] text-atx-ink/55 leading-[1.6] font-atx-display mb-6">
           Social LP vaults with Attribution-weighted rewards. Earn more based on your on-chain reputation.
         </div>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--color-mw-brand-dim)', color: 'var(--color-mw-brand)', borderRadius: 'var(--radius-xl)', padding: '6px 16px', fontSize: 12, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'var(--font-jakarta)' }}>
+        <span className="inline-flex items-center gap-1.5 bg-atx-bone border border-atx-ink/25 text-atx-blue px-4 py-1.5 text-[12px] font-semibold tracking-[0.5px] uppercase font-atx-mono">
           Phase 2
         </span>
       </div>

@@ -30,40 +30,50 @@ function penaltyPct(deposit: LpDeposit): number {
   return 0
 }
 
+const LABEL = 'font-atx-mono uppercase tracking-[0.08em] text-[10px] text-atx-ink/55'
+
+function Star({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
+      />
+    </svg>
+  )
+}
+
 // ─── Status pill ─────────────────────────────────────────────────────────────
 function StatusPill({ status }: { status: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    active:  { label: 'Active',  cls: 'mw-pill-live' },
-    seeding: { label: 'Seeding', cls: 'mw-pill-soon' },
-    paused:  { label: 'Paused',  cls: 'mw-pill-ended' },
-    closed:  { label: 'Closed',  cls: 'mw-pill-ended' },
+  const map: Record<string, { label: string; dot: string }> = {
+    active:  { label: 'Active',  dot: 'bg-atx-acid' },
+    seeding: { label: 'Seeding', dot: 'bg-atx-coral' },
+    paused:  { label: 'Paused',  dot: 'bg-atx-grey' },
+    closed:  { label: 'Closed',  dot: 'bg-atx-grey' },
   }
-  const { label, cls } = map[status] ?? { label: status, cls: 'mw-pill-ended' }
-  return <span className={`mw-pill ${cls}`}>{label}</span>
+  const { label, dot } = map[status] ?? { label: status, dot: 'bg-atx-grey' }
+  return (
+    <span className="shrink-0 flex items-center gap-1.5 border border-atx-ink px-[7px] py-[2px] font-atx-mono text-[10px] uppercase tracking-[0.08em]">
+      <span className={`w-[7px] h-[7px] border border-atx-ink inline-block ${dot}`} />
+      {label}
+    </span>
+  )
 }
 
 // ─── Lock tier selector ───────────────────────────────────────────────────────
 function LockTierSelector({ value, onChange }: { value: LockTier; onChange: (t: LockTier) => void }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+    <div className="grid grid-cols-2 gap-2">
       {(Object.entries(LOCK_TIERS) as [LockTier, typeof LOCK_TIERS[LockTier]][]).map(([tier, meta]) => (
         <button
           key={tier}
           onClick={() => onChange(tier)}
-          style={{
-            padding: '10px 12px',
-            borderRadius: 'var(--radius-sm)',
-            border: `1.5px solid ${value === tier ? meta.color : 'var(--color-mw-border)'}`,
-            background: value === tier ? `color-mix(in srgb, ${meta.color} 8%, white)` : 'white',
-            cursor: 'pointer',
-            textAlign: 'left',
-            transition: 'border-color 0.15s, background 0.15s',
-          }}
+          className={`text-left px-3 py-2.5 border ${value === tier ? 'border-atx-blue bg-atx-bone' : 'border-atx-ink/30 bg-atx-panel'}`}
         >
-          <div style={{ fontSize: 13, fontWeight: 700, color: meta.color, fontFamily: 'var(--font-jakarta)', marginBottom: 2 }}>
+          <div className={`text-[13px] font-bold font-atx-display mb-0.5 ${value === tier ? 'text-atx-blue' : 'text-atx-ink'}`}>
             {meta.label}
           </div>
-          <div style={{ fontSize: 11, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>
+          <div className="text-[11px] text-atx-ink/55 font-atx-mono">
             {meta.period} · {meta.multiplier} · {meta.notice} notice
           </div>
         </button>
@@ -140,17 +150,19 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
   }
 
   if (success) return (
-    <div style={{ textAlign: 'center', padding: '24px 0' }}>
-      <div style={{ fontSize: 28, marginBottom: 8 }}>✓</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--color-mw-green)', fontFamily: 'var(--font-jakarta)' }}>
+    <div className="text-center py-6">
+      <div className="flex justify-center mb-2">
+        <span className="w-4 h-4 bg-atx-acid border border-atx-ink inline-block" />
+      </div>
+      <div className="text-[15px] font-bold text-atx-mesquite font-atx-display">
         Deposit recorded
       </div>
-      <div style={{ fontSize: 13, color: 'var(--color-mw-ink-3)', marginTop: 4, fontFamily: 'var(--font-jakarta)' }}>
+      <div className="text-[13px] text-atx-ink/55 mt-1 font-atx-display">
         Your position will appear below once confirmed on-chain.
       </div>
       <button
         onClick={() => setSuccess(false)}
-        style={{ marginTop: 16, fontSize: 13, color: 'var(--color-mw-brand)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-jakarta)', fontWeight: 600 }}
+        className="mt-4 text-[13px] text-atx-blue font-atx-display font-semibold"
       >
         Deposit more →
       </button>
@@ -158,51 +170,45 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div className="flex flex-col gap-[14px]">
       {/* Amount input */}
       <div>
-        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-mw-ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-jakarta)', display: 'block', marginBottom: 6 }}>
+        <label className={`${LABEL} block mb-1.5`}>
           USDC amount
         </label>
-        <div style={{ position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-mono)' }}>$</span>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-atx-ink/55 font-atx-mono">$</span>
           <input
             type="number"
             placeholder="0.00"
             value={amount}
             onChange={e => setAmount(e.target.value)}
-            style={{
-              width: '100%', padding: '10px 12px 10px 24px',
-              border: '1.5px solid var(--color-mw-border)',
-              borderRadius: 'var(--radius-sm)', fontSize: 15,
-              fontFamily: 'var(--font-mono)', color: 'var(--color-mw-ink)',
-              background: 'white', outline: 'none', boxSizing: 'border-box',
-            }}
+            className="w-full pl-6 pr-3 py-2.5 border border-atx-ink/30 bg-atx-panel font-atx-mono text-[15px] text-atx-ink outline-none focus:border-atx-blue box-border"
           />
         </div>
       </div>
 
       {/* Lock tier */}
       <div>
-        <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-mw-ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-jakarta)', display: 'block', marginBottom: 8 }}>
+        <label className={`${LABEL} block mb-2`}>
           Lock tier
         </label>
         <LockTierSelector value={tier} onChange={setTier} />
       </div>
 
       {/* Multiplier preview */}
-      <div style={{ background: 'var(--color-mw-brand-dim)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ fontSize: 12, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>Your fee multiplier</span>
-        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-mw-brand)', fontFamily: 'var(--font-mono)' }}>
+      <div className="bg-atx-bone border border-atx-ink/25 px-3.5 py-2.5 flex justify-between items-center">
+        <span className="text-[12px] text-atx-ink/55 font-atx-display">Your fee multiplier</span>
+        <span className="text-[16px] font-bold text-atx-blue font-atx-mono">
           {LOCK_TIERS[tier].multiplier}
         </span>
       </div>
 
-      <div style={{ background: 'rgba(79,126,247,0.04)', border: '1px solid rgba(79,126,247,0.12)', borderRadius: 10, padding: '10px 14px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-mw-ink-4)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-jakarta)', marginBottom: 6 }}>
+      <div className="bg-atx-panel border border-atx-ink/20 px-3.5 py-2.5">
+        <div className={`${LABEL} mb-1.5`}>
           What will happen
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', lineHeight: 1.55 }}>
+        <div className="flex flex-col gap-1 text-[12px] text-atx-ink/60 font-atx-display leading-[1.55]">
           <div>1. Your wallet may ask for permission to let SocialVault use your USDC. That step does not move funds.</div>
           <div>2. Mintware checks the deposit call before your wallet signs the final transaction.</div>
           <div>3. Your wallet then confirms the deposit and your LP position appears after the chain confirms it.</div>
@@ -210,21 +216,21 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
       </div>
 
       {error && (
-        <div style={{ fontSize: 12, color: 'var(--color-mw-red)', fontFamily: 'var(--font-jakarta)', background: 'rgba(239,68,68,0.06)', borderRadius: 6, padding: '8px 12px' }}>
+        <div className="text-[12px] text-atx-clay font-atx-display bg-atx-panel border border-atx-clay/40 px-3 py-2">
           {error}
         </div>
       )}
 
       {/* Stage progress */}
       {isPending && (
-        <div style={{ fontSize: 12, color: 'var(--color-mw-brand)', fontFamily: 'var(--font-jakarta)', background: 'var(--color-mw-brand-dim)', borderRadius: 6, padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--color-mw-brand)', animation: 'pulse 1s infinite' }} />
+        <div className="text-[12px] text-atx-blue font-atx-display bg-atx-bone border border-atx-ink/25 px-3 py-2 flex items-center gap-1.5">
+          <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block" />
           {stageLabel[stage]}
         </div>
       )}
 
       {isPending && (
-        <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', background: 'rgba(26,26,46,0.03)', borderRadius: 6, padding: '8px 12px', lineHeight: 1.5 }}>
+        <div className="text-[11px] text-atx-ink/55 font-atx-display bg-atx-panel border border-atx-ink/20 px-3 py-2 leading-[1.5]">
           If your wallet prompt is slow, open your wallet app or extension and look for a pending request.
         </div>
       )}
@@ -232,18 +238,11 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
       <button
         onClick={handleDeposit}
         disabled={isPending || !amount || parseFloat(amount) <= 0 || vault.status === 'closed'}
-        style={{
-          padding: '12px', borderRadius: 'var(--radius-sm)',
-          background: 'var(--color-mw-brand)', color: 'white',
-          fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-jakarta)',
-          border: 'none', cursor: 'pointer',
-          opacity: (isPending || !amount || vault.status === 'closed') ? 0.5 : 1,
-          transition: 'opacity 0.15s',
-        }}
+        className="p-3 bg-atx-blue text-white border border-atx-ink font-atx-mono text-[14px] font-bold disabled:opacity-50 transition-opacity"
       >
         {stageLabel[stage]}
       </button>
-      <p style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', textAlign: 'center', margin: 0 }}>
+      <p className="text-[11px] text-atx-ink/45 font-atx-display text-center m-0">
         7-day notice period required for all withdrawals
       </p>
     </div>
@@ -257,22 +256,22 @@ function PositionRow({ deposit, onWithdraw }: { deposit: LpDeposit; onWithdraw: 
   const daysLeft = deposit.locked_until ? daysUntil(deposit.locked_until) : 0
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '1px solid var(--color-mw-border)' }}>
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-          <span style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-mw-ink)' }}>
+    <div className="flex items-center gap-3 py-3 border-b border-atx-ink/20">
+      <div className="flex-1">
+        <div className="flex items-center gap-2 mb-[3px]">
+          <span className="text-[15px] font-bold font-atx-mono text-atx-ink">
             {fmtUSD(deposit.usdc_amount)}
           </span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: tier.color, fontFamily: 'var(--font-jakarta)', background: `color-mix(in srgb, ${tier.color} 10%, white)`, padding: '2px 7px', borderRadius: 99 }}>
+          <span className="text-[11px] font-semibold text-atx-ink/60 font-atx-mono border border-atx-ink/25 px-[7px] py-[2px] uppercase tracking-[0.06em]">
             {tier.label}
           </span>
           {deposit.status === 'withdrawal_pending' && (
-            <span style={{ fontSize: 11, color: 'var(--color-mw-amber)', fontFamily: 'var(--font-jakarta)', fontWeight: 600 }}>
+            <span className="text-[11px] text-atx-clay font-atx-mono font-semibold">
               Withdrawing
             </span>
           )}
         </div>
-        <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)' }}>
+        <div className="text-[11px] text-atx-ink/45 font-atx-display">
           {deposit.lock_tier !== 'flex' && daysLeft > 0
             ? `${daysLeft}d remaining · ${penalty > 0 ? `${penalty}% early exit` : 'no penalty'}`
             : 'No lock · can withdraw anytime'}
@@ -282,7 +281,7 @@ function PositionRow({ deposit, onWithdraw }: { deposit: LpDeposit; onWithdraw: 
       {deposit.status === 'active' && (
         <button
           onClick={() => onWithdraw(deposit.id)}
-          style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-mw-ink-3)', background: 'none', border: '1px solid var(--color-mw-border)', borderRadius: 6, padding: '5px 12px', cursor: 'pointer', fontFamily: 'var(--font-jakarta)' }}
+          className="text-[12px] font-semibold text-atx-ink/60 border border-atx-ink/25 px-3 py-[5px] font-atx-mono uppercase tracking-[0.06em] hover:border-atx-ink hover:text-atx-ink"
         >
           Withdraw
         </button>
@@ -373,16 +372,16 @@ function VaultDetailContent() {
   }, [vaultWithdraw.isSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return (
-    <div style={{ padding: '40px 28px', maxWidth: 900, margin: '0 auto' }}>
+    <div className="px-7 py-10 max-w-[900px] mx-auto">
       {[1, 2, 3].map(i => (
-        <div key={i} style={{ height: 80, background: 'linear-gradient(90deg,var(--color-mw-border) 25%,rgba(0,0,0,0.04) 50%,var(--color-mw-border) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.4s infinite', borderRadius: 12, marginBottom: 12 }} />
+        <div key={i} className="h-20 bg-atx-panel border border-atx-ink/20 animate-pulse mb-3" />
       ))}
     </div>
   )
 
   if (!vault) return (
-    <div style={{ padding: '60px 28px', textAlign: 'center', color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>
-      Vault not found. <Link href="/vaults" style={{ color: 'var(--color-mw-brand)' }}>← Back to vaults</Link>
+    <div className="px-7 py-[60px] text-center text-atx-ink/55 font-atx-display">
+      Vault not found. <Link href="/vaults" className="text-atx-blue">← Back to vaults</Link>
     </div>
   )
 
@@ -390,250 +389,240 @@ function VaultDetailContent() {
   const totalDeposited = deposits.reduce((s, d) => s + d.usdc_amount, 0)
 
   return (
-    <>
-      <style>{`
-        @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-        .vd-page { background: var(--color-mw-surface); min-height: 100vh; }
-        .vd-inner { max-width: 960px; margin: 0 auto; padding: 28px 28px 60px; }
-        @media(max-width:800px){ .vd-inner{padding:20px 16px 48px;} }
-        .vd-layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
-        @media(max-width:760px){ .vd-layout{grid-template-columns:1fr;} }
-        .vd-card { background: white; border: 1px solid var(--color-mw-border); border-radius: var(--radius-md); padding: 24px; }
-        .vd-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--color-mw-border); margin-bottom: 20px; }
-        .vd-tab { padding: 10px 16px; font-size: 13px; font-weight: 600; font-family: var(--font-jakarta); color: var(--color-mw-ink-3); border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color 0.15s, border-color 0.15s; }
-        .vd-tab.active { color: var(--color-mw-brand); border-bottom-color: var(--color-mw-brand); }
-        .vd-stat-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-        .vd-stat { display: flex; flex-direction: column; gap: 2px; }
-        .vd-stat-val { font-size: 22px; font-weight: 700; font-family: var(--font-mono); color: var(--color-mw-ink); }
-        .vd-stat-lbl { font-size: 11px; color: var(--color-mw-ink-3); font-family: var(--font-jakarta); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 500; }
-      `}</style>
+    <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
+      <MwNav />
+      <div className="max-w-[960px] mx-auto px-7 pt-7 pb-[60px] max-[800px]:px-4 max-[800px]:pt-5 [&_*]:rounded-none">
 
-      <div className="vd-page">
-        <MwNav />
-        <div className="vd-inner">
+        {/* ── Breadcrumb ── */}
+        <div className="mb-4 flex items-center gap-2">
+          <Link href="/vaults" className="text-[13px] text-atx-ink/55 font-atx-display no-underline hover:text-atx-ink">
+            ← Vaults
+          </Link>
+          <span className="text-atx-ink/30">/</span>
+          <span className="text-[13px] text-atx-ink font-atx-display font-semibold">{vault.name}</span>
+        </div>
 
-          {/* ── Breadcrumb ── */}
-          <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Link href="/vaults" style={{ fontSize: 13, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)', textDecoration: 'none' }}>
-              ← Vaults
-            </Link>
-            <span style={{ color: 'var(--color-mw-border-strong)' }}>/</span>
-            <span style={{ fontSize: 13, color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)', fontWeight: 600 }}>{vault.name}</span>
+        <div className="grid grid-cols-[1fr_360px] gap-5 items-start max-[760px]:grid-cols-1">
+
+          {/* ── Left: vault info + tabs ── */}
+          <div className="flex flex-col gap-4">
+
+            {/* Vault header card */}
+            <div className="bg-atx-panel border border-atx-ink p-6">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 border border-atx-ink bg-atx-bone flex items-center justify-center shrink-0">
+                    <Star className="w-6 h-6 text-atx-coral" />
+                  </div>
+                  <div>
+                    <div className="text-[18px] font-extrabold text-atx-ink font-atx-display leading-[1.2]">{vault.name}</div>
+                    <div className="text-[11px] text-atx-ink/45 font-atx-mono mt-0.5">
+                      {shortAddr(vault.project_token)} · chain {vault.chain_id}
+                    </div>
+                  </div>
+                </div>
+                <StatusPill status={vault.status} />
+              </div>
+
+              <div className="flex gap-5 flex-wrap mb-5">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[22px] font-bold font-atx-mono text-atx-blue">{vault.tvl_usdc > 0 ? fmtUSD(vault.tvl_usdc) : '—'}</span>
+                  <span className={LABEL}>TVL</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[22px] font-bold font-atx-mono text-atx-mesquite">{epoch?.total_pool ? fmtUSD(epoch.total_pool) : '—'}</span>
+                  <span className={LABEL}>Epoch pool</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[22px] font-bold font-atx-mono text-atx-ink">{epoch?.epoch_number ?? '—'}</span>
+                  <span className={LABEL}>Epoch</span>
+                </div>
+                {vault.tick_lower != null && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[14px] font-bold font-atx-mono text-atx-ink">
+                      [{vault.tick_lower}, {vault.tick_upper}]
+                    </span>
+                    <span className={LABEL}>Tick range</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Hook address */}
+              <div className="text-[11px] text-atx-ink/45 font-atx-mono px-3 py-2 bg-atx-bone border border-atx-ink/20">
+                Hook: {shortAddr(vault.pool_key?.hooks ?? '0x0000')}
+                {vault.contract_address && ` · Vault: ${shortAddr(vault.contract_address)}`}
+              </div>
+            </div>
+
+            {/* Tabs: Position / Epoch */}
+            <div className="bg-atx-panel border border-atx-ink">
+              <div className="flex border-b border-atx-ink/20 px-5">
+                {(['deposit', 'position', 'epoch'] as const).map(t => (
+                  <button
+                    key={t}
+                    className={`px-4 py-2.5 text-[13px] font-semibold font-atx-display -mb-px border-b-2 ${tab === t ? 'text-atx-blue border-atx-blue' : 'text-atx-ink/55 border-transparent'}`}
+                    onClick={() => setTab(t)}
+                  >
+                    {t === 'deposit' ? 'Deposit' : t === 'position' ? `Position${deposits.length > 0 ? ` (${deposits.length})` : ''}` : 'Epoch'}
+                  </button>
+                ))}
+              </div>
+
+              <div className="px-5 pb-5">
+
+                {/* ── Deposit tab ── */}
+                {tab === 'deposit' && (
+                  <DepositPanel vault={vault} onDeposited={() => { loadVault(); setTab('position') }} />
+                )}
+
+                {/* ── Position tab ── */}
+                {tab === 'position' && (
+                  <div>
+                    {deposits.length === 0 && queue.length === 0 ? (
+                      <div className="py-8 text-center text-atx-ink/55 font-atx-display text-[13px]">
+                        No active deposits.{' '}
+                        <button onClick={() => setTab('deposit')} className="text-atx-blue font-semibold text-[13px] font-atx-display">
+                          Deposit now →
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="py-3 border-b border-atx-ink/20 mb-1 flex justify-between">
+                          <span className={LABEL}>
+                            Total deposited
+                          </span>
+                          <span className="text-[14px] font-bold font-atx-mono text-atx-blue">
+                            {fmtUSD(totalDeposited)}
+                          </span>
+                        </div>
+                        {withErr && (
+                          <div className="text-[12px] text-atx-clay bg-atx-panel border border-atx-clay/40 px-3 py-2 mb-2 font-atx-display">
+                            {withErr}
+                          </div>
+                        )}
+                        {deposits.map(d => (
+                          <PositionRow
+                            key={d.id}
+                            deposit={d}
+                            onWithdraw={id => { setWithErr(''); handleWithdraw(id) }}
+                          />
+                        ))}
+                        {queue.length > 0 && (
+                          <div className="mt-4">
+                            <div className={`${LABEL} mb-2`}>
+                              Pending withdrawals
+                            </div>
+                            {queue.map(q => (
+                              <div key={q.id} className="flex justify-between items-center py-2.5 border-b border-atx-ink/20">
+                                <div>
+                                  <div className="text-[14px] font-bold font-atx-mono text-atx-ink">
+                                    {fmtUSD(q.requested_amount)}
+                                    {q.penalty_pct > 0 && <span className="text-[11px] text-atx-clay ml-1.5">−{q.penalty_pct}%</span>}
+                                  </div>
+                                  <div className="text-[11px] text-atx-ink/45 font-atx-display">
+                                    Executable {daysUntil(q.executable_at) === 0 ? 'today' : `in ${daysUntil(q.executable_at)}d`}
+                                  </div>
+                                </div>
+                                <span className="shrink-0 flex items-center gap-1.5 border border-atx-ink px-[7px] py-[2px] font-atx-mono text-[10px] uppercase tracking-[0.08em]">
+                                  <span className="w-[7px] h-[7px] border border-atx-ink inline-block bg-atx-coral" />
+                                  Pending
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {withdrawing && <div className="text-[12px] text-atx-ink/55 mt-2 font-atx-display">Processing withdrawal…</div>}
+                  </div>
+                )}
+
+                {/* ── Epoch tab ── */}
+                {tab === 'epoch' && (
+                  <div className="flex flex-col gap-3">
+                    {!epoch ? (
+                      <div className="py-8 text-center text-atx-ink/55 font-atx-display text-[13px]">
+                        No active epoch yet.
+                      </div>
+                    ) : (
+                      <>
+                        {[
+                          { label: 'Epoch',        value: `#${epoch.epoch_number}` },
+                          { label: 'Total pool',   value: fmtUSD(epoch.total_pool) },
+                          { label: 'Bonus pool',   value: epoch.bonus_pool > 0 ? fmtUSD(epoch.bonus_pool) : '—' },
+                          { label: 'Claimed',      value: fmtUSD(epoch.total_claimed) },
+                          { label: 'Status',       value: epoch.status.charAt(0).toUpperCase() + epoch.status.slice(1) },
+                          { label: 'Opened',       value: new Date(epoch.opened_at).toLocaleDateString() },
+                          { label: 'Deadline',     value: epoch.deadline ? `${daysUntil(epoch.deadline)}d remaining` : 'Active' },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="flex justify-between py-2 border-b border-atx-ink/20">
+                            <span className="text-[12px] text-atx-ink/55 font-atx-display">{label}</span>
+                            <span className="text-[13px] font-semibold font-atx-mono text-atx-ink">{value}</span>
+                          </div>
+                        ))}
+                        {epoch.merkle_root && (
+                          <div className="text-[11px] text-atx-ink/45 font-atx-mono break-all px-3 py-2 bg-atx-bone border border-atx-ink/20">
+                            Root: {epoch.merkle_root.slice(0, 16)}…
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+              </div>
+            </div>
           </div>
 
-          <div className="vd-layout">
+          {/* ── Right: info panel ── */}
+          <div className="flex flex-col gap-4">
 
-            {/* ── Left: vault info + tabs ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-              {/* Vault header card */}
-              <div className="vd-card">
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--color-mw-brand-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>⬡</div>
-                    <div>
-                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)', lineHeight: 1.2 }}>{vault.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
-                        {shortAddr(vault.project_token)} · chain {vault.chain_id}
-                      </div>
-                    </div>
-                  </div>
-                  <StatusPill status={vault.status} />
-                </div>
-
-                <div className="vd-stat-row">
-                  <div className="vd-stat">
-                    <span className="vd-stat-val" style={{ color: 'var(--color-mw-brand)' }}>{vault.tvl_usdc > 0 ? fmtUSD(vault.tvl_usdc) : '—'}</span>
-                    <span className="vd-stat-lbl">TVL</span>
-                  </div>
-                  <div className="vd-stat">
-                    <span className="vd-stat-val" style={{ color: 'var(--color-mw-green)' }}>{epoch?.total_pool ? fmtUSD(epoch.total_pool) : '—'}</span>
-                    <span className="vd-stat-lbl">Epoch pool</span>
-                  </div>
-                  <div className="vd-stat">
-                    <span className="vd-stat-val">{epoch?.epoch_number ?? '—'}</span>
-                    <span className="vd-stat-lbl">Epoch</span>
-                  </div>
-                  {vault.tick_lower != null && (
-                    <div className="vd-stat">
-                      <span className="vd-stat-val" style={{ fontSize: 14 }}>
-                        [{vault.tick_lower}, {vault.tick_upper}]
-                      </span>
-                      <span className="vd-stat-lbl">Tick range</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Hook address */}
-                <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-mono)', padding: '8px 12px', background: 'var(--color-mw-surface)', borderRadius: 6 }}>
-                  Hook: {shortAddr(vault.pool_key?.hooks ?? '0x0000')}
-                  {vault.contract_address && ` · Vault: ${shortAddr(vault.contract_address)}`}
-                </div>
+            {/* Fee split */}
+            <div className="bg-atx-panel border border-atx-ink p-6">
+              <div className="font-atx-mono uppercase tracking-[0.1em] text-[12px] text-atx-ink/60 mb-3.5">
+                Fee split
               </div>
-
-              {/* Tabs: Position / Epoch */}
-              <div className="vd-card" style={{ padding: 0 }}>
-                <div className="vd-tabs" style={{ padding: '0 20px' }}>
-                  {(['deposit', 'position', 'epoch'] as const).map(t => (
-                    <button key={t} className={`vd-tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-                      {t === 'deposit' ? 'Deposit' : t === 'position' ? `Position${deposits.length > 0 ? ` (${deposits.length})` : ''}` : 'Epoch'}
-                    </button>
-                  ))}
+              {[
+                { label: 'LPs (you)',              pct: 70, bar: 'bg-atx-blue',     txt: 'text-atx-blue' },
+                { label: 'Referrers',              pct: 15, bar: 'bg-atx-coral',    txt: 'text-atx-coral' },
+                { label: 'Protocol treasury',      pct: 10, bar: 'bg-atx-grey',     txt: 'text-atx-ink/55' },
+                { label: 'Attribution bonus pool', pct: 5,  bar: 'bg-atx-clay',     txt: 'text-atx-clay' },
+              ].map(({ label, pct, bar, txt }) => (
+                <div key={label} className="mb-2.5">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-[12px] text-atx-ink/55 font-atx-display">{label}</span>
+                    <span className={`text-[13px] font-bold font-atx-mono ${txt}`}>{pct}%</span>
+                  </div>
+                  <div className="h-[8px] border border-atx-ink overflow-hidden relative">
+                    <div className={`absolute inset-y-0 left-0 ${bar}`} style={{ width: `${pct}%` }} />
+                  </div>
                 </div>
-
-                <div style={{ padding: '0 20px 20px' }}>
-
-                  {/* ── Deposit tab ── */}
-                  {tab === 'deposit' && (
-                    <DepositPanel vault={vault} onDeposited={() => { loadVault(); setTab('position') }} />
-                  )}
-
-                  {/* ── Position tab ── */}
-                  {tab === 'position' && (
-                    <div>
-                      {deposits.length === 0 && queue.length === 0 ? (
-                        <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)', fontSize: 13 }}>
-                          No active deposits.{' '}
-                          <button onClick={() => setTab('deposit')} style={{ color: 'var(--color-mw-brand)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontFamily: 'var(--font-jakarta)' }}>
-                            Deposit now →
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div style={{ padding: '12px 0', borderBottom: '1px solid var(--color-mw-border)', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                              Total deposited
-                            </span>
-                            <span style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-mw-brand)' }}>
-                              {fmtUSD(totalDeposited)}
-                            </span>
-                          </div>
-                          {withErr && (
-                            <div style={{ fontSize: 12, color: 'var(--color-mw-red)', background: 'rgba(239,68,68,0.06)', padding: '8px 12px', borderRadius: 6, marginBottom: 8, fontFamily: 'var(--font-jakarta)' }}>
-                              {withErr}
-                            </div>
-                          )}
-                          {deposits.map(d => (
-                            <PositionRow
-                              key={d.id}
-                              deposit={d}
-                              onWithdraw={id => { setWithErr(''); handleWithdraw(id) }}
-                            />
-                          ))}
-                          {queue.length > 0 && (
-                            <div style={{ marginTop: 16 }}>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-mw-ink-3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-jakarta)', marginBottom: 8 }}>
-                                Pending withdrawals
-                              </div>
-                              {queue.map(q => (
-                                <div key={q.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--color-mw-border)' }}>
-                                  <div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--color-mw-ink)' }}>
-                                      {fmtUSD(q.requested_amount)}
-                                      {q.penalty_pct > 0 && <span style={{ fontSize: 11, color: 'var(--color-mw-red)', marginLeft: 6 }}>−{q.penalty_pct}%</span>}
-                                    </div>
-                                    <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)' }}>
-                                      Executable {daysUntil(q.executable_at) === 0 ? 'today' : `in ${daysUntil(q.executable_at)}d`}
-                                    </div>
-                                  </div>
-                                  <span className="mw-pill mw-pill-soon">Pending</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {withdrawing && <div style={{ fontSize: 12, color: 'var(--color-mw-ink-3)', marginTop: 8, fontFamily: 'var(--font-jakarta)' }}>Processing withdrawal…</div>}
-                    </div>
-                  )}
-
-                  {/* ── Epoch tab ── */}
-                  {tab === 'epoch' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                      {!epoch ? (
-                        <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)', fontSize: 13 }}>
-                          No active epoch yet.
-                        </div>
-                      ) : (
-                        <>
-                          {[
-                            { label: 'Epoch',        value: `#${epoch.epoch_number}` },
-                            { label: 'Total pool',   value: fmtUSD(epoch.total_pool) },
-                            { label: 'Bonus pool',   value: epoch.bonus_pool > 0 ? fmtUSD(epoch.bonus_pool) : '—' },
-                            { label: 'Claimed',      value: fmtUSD(epoch.total_claimed) },
-                            { label: 'Status',       value: epoch.status.charAt(0).toUpperCase() + epoch.status.slice(1) },
-                            { label: 'Opened',       value: new Date(epoch.opened_at).toLocaleDateString() },
-                            { label: 'Deadline',     value: epoch.deadline ? `${daysUntil(epoch.deadline)}d remaining` : 'Active' },
-                          ].map(({ label, value }) => (
-                            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-mw-border)' }}>
-                              <span style={{ fontSize: 12, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>{label}</span>
-                              <span style={{ fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-mono)', color: 'var(--color-mw-ink)' }}>{value}</span>
-                            </div>
-                          ))}
-                          {epoch.merkle_root && (
-                            <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-mono)', wordBreak: 'break-all', padding: '8px 12px', background: 'var(--color-mw-surface)', borderRadius: 6 }}>
-                              Root: {epoch.merkle_root.slice(0, 16)}…
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                </div>
-              </div>
+              ))}
             </div>
 
-            {/* ── Right: info panel ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-              {/* Fee split */}
-              <div className="vd-card">
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-mw-ink-2)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-jakarta)', marginBottom: 14 }}>
-                  Fee split
-                </div>
-                {[
-                  { label: 'LPs (you)',            pct: 70, color: 'var(--color-mw-brand)' },
-                  { label: 'Referrers',             pct: 15, color: 'var(--color-mw-pink)' },
-                  { label: 'Protocol treasury',    pct: 10, color: 'var(--color-mw-ink-3)' },
-                  { label: 'Attribution bonus pool', pct: 5, color: 'var(--color-mw-amber)' },
-                ].map(({ label, pct, color }) => (
-                  <div key={label} style={{ marginBottom: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                      <span style={{ fontSize: 12, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>{label}</span>
-                      <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color }}>{pct}%</span>
-                    </div>
-                    <div style={{ height: 3, borderRadius: 2, background: 'var(--color-mw-border)' }}>
-                      <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: color }} />
-                    </div>
-                  </div>
-                ))}
+            {/* Multiplier table */}
+            <div className="bg-atx-panel border border-atx-ink p-6">
+              <div className="font-atx-mono uppercase tracking-[0.1em] text-[12px] text-atx-ink/60 mb-3.5">
+                Lock tier multipliers
               </div>
-
-              {/* Multiplier table */}
-              <div className="vd-card">
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--color-mw-ink-2)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-jakarta)', marginBottom: 14 }}>
-                  Lock tier multipliers
-                </div>
-                {(Object.entries(LOCK_TIERS) as [LockTier, typeof LOCK_TIERS[LockTier]][]).map(([tier, meta]) => (
-                  <div key={tier} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid var(--color-mw-border)' }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: meta.color, fontFamily: 'var(--font-jakarta)' }}>{meta.label}</div>
-                      <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)' }}>{meta.period}</div>
-                    </div>
-                    <span style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-mono)', color: meta.color }}>{meta.multiplier}</span>
+              {(Object.entries(LOCK_TIERS) as [LockTier, typeof LOCK_TIERS[LockTier]][]).map(([tier, meta]) => (
+                <div key={tier} className="flex justify-between items-center py-[7px] border-b border-atx-ink/20">
+                  <div>
+                    <div className="text-[13px] font-semibold text-atx-ink font-atx-display">{meta.label}</div>
+                    <div className="text-[11px] text-atx-ink/45 font-atx-display">{meta.period}</div>
                   </div>
-                ))}
-                <p style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', margin: '12px 0 0' }}>
-                  Combined with your Attribution score percentile for final payout.
-                </p>
-              </div>
-
+                  <span className="text-[15px] font-bold font-atx-mono text-atx-blue">{meta.multiplier}</span>
+                </div>
+              ))}
+              <p className="text-[11px] text-atx-ink/45 font-atx-display mt-3">
+                Combined with your Attribution score percentile for final payout.
+              </p>
             </div>
+
           </div>
         </div>
       </div>
-    </>
+    </div>
   )
 }
 

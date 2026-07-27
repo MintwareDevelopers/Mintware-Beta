@@ -51,43 +51,39 @@ const CHAINS = [
 ]
 
 const FEE_SPLIT = [
-  { label: 'LPs (community)',      pct: 70, color: 'var(--color-mw-brand)' },
-  { label: 'Referrers',             pct: 15, color: 'var(--color-mw-pink)' },
-  { label: 'Protocol treasury',    pct: 10, color: 'var(--color-mw-ink-3)' },
-  { label: 'Attribution bonus',    pct: 5,  color: 'var(--color-mw-amber)' },
+  { label: 'LPs (community)',   pct: 70, bar: 'bg-atx-blue',  txt: 'text-atx-blue' },
+  { label: 'Referrers',         pct: 15, bar: 'bg-atx-coral', txt: 'text-atx-coral' },
+  { label: 'Protocol treasury', pct: 10, bar: 'bg-atx-grey',  txt: 'text-atx-ink/55' },
+  { label: 'Attribution bonus', pct: 5,  bar: 'bg-atx-clay',  txt: 'text-atx-clay' },
 ]
 
-// ─── shared input style ───────────────────────────────────────────────────────
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '10px 12px',
-  border: '1.5px solid var(--color-mw-border)',
-  borderRadius: 'var(--radius-sm)', fontSize: 14,
-  fontFamily: 'var(--font-jakarta)', color: 'var(--color-mw-ink)',
-  background: 'white', outline: 'none', boxSizing: 'border-box',
-}
+// ─── shared input / label classes ─────────────────────────────────────────────
+const INPUT = 'w-full px-3 py-2.5 border border-atx-ink/30 bg-atx-panel font-atx-mono text-[14px] text-atx-ink outline-none focus:border-atx-blue box-border'
+const LABEL = 'block mb-1.5 font-atx-mono uppercase tracking-[0.08em] text-[10px] text-atx-ink/55'
+const HINT  = 'block mt-1 text-[11px] text-atx-ink/45 font-atx-display'
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: 600, color: 'var(--color-mw-ink-3)',
-  textTransform: 'uppercase', letterSpacing: '0.08em',
-  fontFamily: 'var(--font-jakarta)', display: 'block', marginBottom: 6,
+// ─── star glyph ───────────────────────────────────────────────────────────────
+function Star({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
+      />
+    </svg>
+  )
 }
 
 // ─── step indicator ───────────────────────────────────────────────────────────
 function StepDots({ current, total }: { current: number; total: number }) {
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+    <div className="flex gap-1.5 items-center">
       {Array.from({ length: total }, (_, i) => (
         <div
           key={i}
-          style={{
-            width: i === current ? 20 : 7, height: 7,
-            borderRadius: 99, transition: 'all 0.25s',
-            background: i === current
-              ? 'var(--color-mw-brand)'
-              : i < current
-              ? 'var(--color-mw-teal)'
-              : 'var(--color-mw-border-strong)',
-          }}
+          className={`h-[7px] border border-atx-ink transition-all duration-200 ${
+            i === current ? 'w-5 bg-atx-blue' : i < current ? 'w-[7px] bg-atx-mesquite' : 'w-[7px] bg-transparent'
+          }`}
         />
       ))}
     </div>
@@ -97,46 +93,41 @@ function StepDots({ current, total }: { current: number; total: number }) {
 // ─── step 1: project details ──────────────────────────────────────────────────
 function Step1({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<VaultDraft>) => void }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div className="flex flex-col gap-[18px]">
       <div>
-        <label style={labelStyle}>Vault name</label>
+        <label className={LABEL}>Vault name</label>
         <input
-          style={inputStyle}
+          className={INPUT}
           placeholder="e.g. PROJ/USDC Vault"
           value={draft.name}
           onChange={e => onChange({ name: e.target.value })}
         />
-        <span style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', marginTop: 4, display: 'block' }}>
+        <span className={HINT}>
           Displayed to LPs on the vault listing page.
         </span>
       </div>
       <div>
-        <label style={labelStyle}>Project token address</label>
+        <label className={LABEL}>Project token address</label>
         <input
-          style={{ ...inputStyle, fontFamily: 'var(--font-mono)', fontSize: 13 }}
+          className={`${INPUT} text-[13px]`}
           placeholder="0x…"
           value={draft.tokenAddress}
           onChange={e => onChange({ tokenAddress: e.target.value })}
         />
-        <span style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', marginTop: 4, display: 'block' }}>
+        <span className={HINT}>
           The ERC-20 token your team will seed into the pool.
         </span>
       </div>
       <div>
-        <label style={labelStyle}>Chain</label>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <label className={LABEL}>Chain</label>
+        <div className="flex gap-2">
           {CHAINS.map(c => (
             <button
               key={c.id}
               onClick={() => onChange({ chainId: c.id })}
-              style={{
-                padding: '9px 20px', borderRadius: 'var(--radius-sm)', fontSize: 13,
-                fontWeight: 600, fontFamily: 'var(--font-jakarta)', cursor: 'pointer',
-                border: `1.5px solid ${draft.chainId === c.id ? 'var(--color-mw-brand)' : 'var(--color-mw-border)'}`,
-                background: draft.chainId === c.id ? 'var(--color-mw-brand-dim)' : 'white',
-                color: draft.chainId === c.id ? 'var(--color-mw-brand)' : 'var(--color-mw-ink-3)',
-                transition: 'all 0.15s',
-              }}
+              className={`px-5 py-2 border font-atx-mono text-[13px] font-semibold ${
+                draft.chainId === c.id ? 'border-atx-blue bg-atx-bone text-atx-blue' : 'border-atx-ink/30 bg-atx-panel text-atx-ink/60'
+              }`}
             >
               {c.label}
             </button>
@@ -150,31 +141,27 @@ function Step1({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
 // ─── step 2: pool config ──────────────────────────────────────────────────────
 function Step2({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<VaultDraft>) => void }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div className="flex flex-col gap-[18px]">
       <div>
-        <label style={labelStyle}>Fee tier</label>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label className={LABEL}>Fee tier</label>
+        <div className="flex flex-col gap-2">
           {FEE_TIERS.map(f => (
             <button
               key={f.bps}
               onClick={() => onChange({ feeTier: f.bps, tickSpacing: f.spacing })}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '12px 16px', borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                border: `1.5px solid ${draft.feeTier === f.bps ? 'var(--color-mw-brand)' : 'var(--color-mw-border)'}`,
-                background: draft.feeTier === f.bps ? 'var(--color-mw-brand-dim)' : 'white',
-                transition: 'all 0.15s', textAlign: 'left',
-              }}
+              className={`flex items-center justify-between px-4 py-3 border text-left ${
+                draft.feeTier === f.bps ? 'border-atx-blue bg-atx-bone' : 'border-atx-ink/30 bg-atx-panel'
+              }`}
             >
               <div>
-                <span style={{ fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-mono)', color: draft.feeTier === f.bps ? 'var(--color-mw-brand)' : 'var(--color-mw-ink)' }}>
+                <span className={`text-[15px] font-bold font-atx-mono ${draft.feeTier === f.bps ? 'text-atx-blue' : 'text-atx-ink'}`}>
                   {f.label}
                 </span>
-                <span style={{ fontSize: 12, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)', marginLeft: 10 }}>
+                <span className="text-[12px] text-atx-ink/55 font-atx-display ml-2.5">
                   {f.desc}
                 </span>
               </div>
-              <span style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-mono)' }}>
+              <span className="text-[11px] text-atx-ink/45 font-atx-mono">
                 tick ±{f.spacing}
               </span>
             </button>
@@ -182,18 +169,18 @@ function Step2({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
         </div>
       </div>
       <div>
-        <label style={labelStyle}>Seed amount (USDC value of tokens)</label>
-        <div style={{ position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-mono)' }}>$</span>
+        <label className={LABEL}>Seed amount (USDC value of tokens)</label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-atx-ink/55 font-atx-mono">$</span>
           <input
             type="number"
-            style={{ ...inputStyle, paddingLeft: 24 }}
+            className={`${INPUT} pl-6`}
             placeholder="100000"
             value={draft.seedAmount || ''}
             onChange={e => onChange({ seedAmount: parseFloat(e.target.value) || 0 })}
           />
         </div>
-        <span style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', marginTop: 4, display: 'block' }}>
+        <span className={HINT}>
           Minimum recommended: $50,000 to establish meaningful liquidity depth.
         </span>
       </div>
@@ -204,29 +191,25 @@ function Step2({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
 // ─── step 3: defaults + fee preview ──────────────────────────────────────────
 function Step3({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<VaultDraft>) => void }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="flex flex-col gap-5">
       <div>
-        <label style={labelStyle}>Suggested lock tier for LPs</label>
-        <span style={{ fontSize: 12, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', display: 'block', marginBottom: 10 }}>
+        <label className={LABEL}>Suggested lock tier for LPs</label>
+        <span className="block mb-2.5 text-[12px] text-atx-ink/45 font-atx-display">
           LPs can always choose any tier — this is the pre-selected default shown on your vault page.
         </span>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="flex flex-col gap-2">
           {LOCK_DEFAULTS.map(l => (
             <button
               key={l.value}
               onClick={() => onChange({ defaultTier: l.value })}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px',
-                borderRadius: 'var(--radius-sm)', cursor: 'pointer', textAlign: 'left',
-                border: `1.5px solid ${draft.defaultTier === l.value ? 'var(--color-mw-teal)' : 'var(--color-mw-border)'}`,
-                background: draft.defaultTier === l.value ? 'rgba(42,158,138,0.05)' : 'white',
-                transition: 'all 0.15s',
-              }}
+              className={`flex items-center gap-3 px-4 py-3 text-left border ${
+                draft.defaultTier === l.value ? 'border-atx-mesquite bg-atx-bone' : 'border-atx-ink/30 bg-atx-panel'
+              }`}
             >
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: draft.defaultTier === l.value ? 'var(--color-mw-teal)' : 'var(--color-mw-border-strong)', flexShrink: 0 }} />
+              <div className={`w-2 h-2 shrink-0 border border-atx-ink ${draft.defaultTier === l.value ? 'bg-atx-mesquite' : 'bg-transparent'}`} />
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)' }}>{l.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>{l.desc}</div>
+                <div className="text-[13px] font-bold text-atx-ink font-atx-display">{l.label}</div>
+                <div className="text-[11px] text-atx-ink/55 font-atx-display">{l.desc}</div>
               </div>
             </button>
           ))}
@@ -234,18 +217,18 @@ function Step3({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
       </div>
 
       {/* Fee split preview */}
-      <div style={{ background: 'var(--color-mw-surface-card)', border: '1px solid var(--color-mw-border)', borderRadius: 'var(--radius-md)', padding: 16 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-mw-ink-2)', textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-jakarta)', marginBottom: 12 }}>
+      <div className="bg-atx-panel border border-atx-ink p-4">
+        <div className="mb-3 font-atx-mono uppercase tracking-[0.1em] text-[11px] text-atx-ink/60">
           Fee split (fixed by protocol)
         </div>
-        {FEE_SPLIT.map(({ label, pct, color }) => (
-          <div key={label} style={{ marginBottom: 10 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>{label}</span>
-              <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)', color }}>{pct}%</span>
+        {FEE_SPLIT.map(({ label, pct, bar, txt }) => (
+          <div key={label} className="mb-2.5">
+            <div className="flex justify-between mb-1">
+              <span className="text-[12px] text-atx-ink/55 font-atx-display">{label}</span>
+              <span className={`text-[13px] font-bold font-atx-mono ${txt}`}>{pct}%</span>
             </div>
-            <div style={{ height: 3, borderRadius: 2, background: 'var(--color-mw-border)' }}>
-              <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: color }} />
+            <div className="h-[8px] border border-atx-ink overflow-hidden relative">
+              <div className={`absolute inset-y-0 left-0 ${bar}`} style={{ width: `${pct}%` }} />
             </div>
           </div>
         ))}
@@ -278,32 +261,29 @@ function Step4({
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ background: 'var(--color-mw-surface-card)', border: '1px solid var(--color-mw-border)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+    <div className="flex flex-col gap-4">
+      <div className="bg-atx-panel border border-atx-ink overflow-hidden">
         {rows.map(({ label, value, mono }, i) => (
           <div
             key={label}
-            style={{
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '11px 16px',
-              borderBottom: i < rows.length - 1 ? '1px solid var(--color-mw-border)' : 'none',
-            }}
+            className={`flex justify-between items-center px-4 py-[11px] ${i < rows.length - 1 ? 'border-b border-atx-ink/20' : ''}`}
           >
-            <span style={{ fontSize: 12, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>{label}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, fontFamily: mono ? 'var(--font-mono)' : 'var(--font-jakarta)', color: 'var(--color-mw-ink)' }}>{value}</span>
+            <span className="text-[12px] text-atx-ink/55 font-atx-display">{label}</span>
+            <span className={`text-[13px] font-semibold text-atx-ink ${mono ? 'font-atx-mono' : 'font-atx-display'}`}>{value}</span>
           </div>
         ))}
       </div>
 
-      <div style={{ background: 'rgba(193,119,0,0.06)', border: '1px solid rgba(193,119,0,0.18)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 12, color: 'var(--color-mw-amber)', fontFamily: 'var(--font-jakarta)', lineHeight: 1.5 }}>
-        ⚠ This will call <code style={{ fontFamily: 'var(--font-mono)' }}>SocialVault.seedTeamTokens()</code> on-chain. Make sure your wallet has sufficient project tokens approved for transfer.
+      <div className="bg-atx-panel border border-atx-ink/25 border-l-[3px] border-l-atx-clay px-3.5 py-2.5 text-[12px] text-atx-clay font-atx-display leading-[1.5] flex items-start gap-2">
+        <Star className="w-3.5 h-3.5 shrink-0 mt-0.5 text-atx-clay" />
+        <span>This will call <code className="font-atx-mono">SocialVault.seedTeamTokens()</code> on-chain. Make sure your wallet has sufficient project tokens approved for transfer.</span>
       </div>
 
-      <div style={{ background: 'rgba(79,126,247,0.04)', border: '1px solid rgba(79,126,247,0.12)', borderRadius: 'var(--radius-sm)', padding: '10px 14px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-mw-ink-4)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: 'var(--font-jakarta)', marginBottom: 6 }}>
+      <div className="bg-atx-panel border border-atx-ink/20 px-3.5 py-2.5">
+        <div className="mb-1.5 font-atx-mono uppercase tracking-[0.08em] text-[10px] text-atx-ink/55">
           What will happen
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', lineHeight: 1.55 }}>
+        <div className="flex flex-col gap-1 text-[12px] text-atx-ink/60 font-atx-display leading-[1.55]">
           <div>1. Mintware creates the vault record so the on-chain seed can point at the right vault ID.</div>
           <div>2. Your wallet may ask for token permission first. That step is not a transfer.</div>
           <div>3. Mintware simulates the seed call, then your wallet confirms the final on-chain seed transaction.</div>
@@ -311,7 +291,7 @@ function Step4({
       </div>
 
       {error && (
-        <div style={{ fontSize: 12, color: 'var(--color-mw-red)', background: 'rgba(239,68,68,0.06)', borderRadius: 6, padding: '10px 14px', fontFamily: 'var(--font-jakarta)' }}>
+        <div className="text-[12px] text-atx-clay bg-atx-panel border border-atx-clay/40 px-3.5 py-2.5 font-atx-display">
           {error}
         </div>
       )}
@@ -319,19 +299,13 @@ function Step4({
       <button
         onClick={onDeploy}
         disabled={submitting}
-        style={{
-          padding: '13px', borderRadius: 'var(--radius-sm)',
-          background: 'var(--color-mw-brand)', color: 'white',
-          fontSize: 15, fontWeight: 700, fontFamily: 'var(--font-jakarta)',
-          border: 'none', cursor: submitting ? 'not-allowed' : 'pointer',
-          opacity: submitting ? 0.6 : 1, transition: 'opacity 0.15s',
-        }}
+        className="p-[13px] bg-atx-blue text-white border border-atx-ink font-atx-mono text-[15px] font-bold disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
       >
         {submitting ? submitLabel : 'Deploy vault →'}
       </button>
 
       {submitting && (
-        <div style={{ fontSize: 11, color: 'var(--color-mw-ink-4)', fontFamily: 'var(--font-jakarta)', background: 'rgba(26,26,46,0.03)', borderRadius: 6, padding: '8px 12px', lineHeight: 1.5 }}>
+        <div className="text-[11px] text-atx-ink/55 font-atx-display bg-atx-panel border border-atx-ink/20 px-3 py-2 leading-[1.5]">
           If your wallet does not appear right away, open your wallet app or extension and look for a pending request.
         </div>
       )}
@@ -458,117 +432,98 @@ function CreateVaultContentInner() {
   }
 
   if (deployed) return (
-    <>
-      <style>{`.vc-page{background:var(--color-mw-surface);min-height:100vh;}`}</style>
-      <div className="vc-page">
-        <MwNav />
-        <div style={{ maxWidth: 560, margin: '80px auto', padding: '0 28px', textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>⬡</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)', marginBottom: 8 }}>
-            Vault created
-          </div>
-          <div style={{ fontSize: 14, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)', marginBottom: 28, lineHeight: 1.6 }}>
-            <strong>{draft.name}</strong> is now seeded on-chain and ready for LP deposits as soon as the network confirms the transaction.
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-            <Link href="/vaults" style={{ padding: '10px 20px', background: 'var(--color-mw-brand)', color: 'white', borderRadius: 'var(--radius-sm)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-jakarta)', textDecoration: 'none' }}>
-              View all vaults
+    <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
+      <MwNav />
+      <div className="max-w-[560px] mx-auto my-20 px-7 text-center [&_*]:rounded-none">
+        <div className="flex justify-center mb-4"><Star className="w-12 h-12 text-atx-coral" /></div>
+        <div className="text-[22px] font-extrabold text-atx-ink font-atx-display mb-2">
+          Vault created
+        </div>
+        <div className="text-[14px] text-atx-ink/55 font-atx-display mb-7 leading-[1.6]">
+          <strong>{draft.name}</strong> is now seeded on-chain and ready for LP deposits as soon as the network confirms the transaction.
+        </div>
+        <div className="flex gap-2.5 justify-center">
+          <Link href="/vaults" className="px-5 py-2.5 bg-atx-blue text-white border border-atx-ink text-[14px] font-semibold font-atx-mono no-underline">
+            View all vaults
+          </Link>
+          {deployed !== 'new' && (
+            <Link href={`/vault/${deployed}`} className="px-5 py-2.5 border border-atx-ink/30 bg-atx-panel text-atx-ink text-[14px] font-semibold font-atx-mono no-underline">
+              View vault →
             </Link>
-            {deployed !== 'new' && (
-              <Link href={`/vault/${deployed}`} style={{ padding: '10px 20px', border: '1.5px solid var(--color-mw-border)', color: 'var(--color-mw-ink)', borderRadius: 'var(--radius-sm)', fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-jakarta)', textDecoration: 'none' }}>
-                View vault →
-              </Link>
-            )}
-          </div>
+          )}
         </div>
       </div>
-    </>
+    </div>
   )
 
   return (
-    <>
-      <style>{`
-        .vc-page { background: var(--color-mw-surface); min-height: 100vh; }
-        .vc-inner { max-width: 560px; margin: 0 auto; padding: 28px 28px 60px; }
-        @media(max-width:640px){ .vc-inner{padding:20px 16px 48px;} }
-        .vc-card { background: white; border: 1px solid var(--color-mw-border); border-radius: var(--radius-md); padding: 28px; }
-        .vc-nav { display: flex; align-items: center; justify-content: space-between; margin-top: 24px; }
-        .vc-btn { padding: 10px 22px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; font-family: var(--font-jakarta); cursor: pointer; transition: opacity 0.15s; border: none; }
-        .vc-btn-primary { background: var(--color-mw-brand); color: white; }
-        .vc-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
-        .vc-btn-ghost { background: none; border: 1.5px solid var(--color-mw-border); color: var(--color-mw-ink-3); }
-        .vc-btn-ghost:hover { border-color: var(--color-mw-border-strong); }
-      `}</style>
+    <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
+      <MwNav />
+      <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px] max-[640px]:px-4 max-[640px]:pt-5 [&_*]:rounded-none">
 
-      <div className="vc-page">
-        <MwNav />
-        <div className="vc-inner">
-
-          {/* Breadcrumb */}
-          <div style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Link href="/vaults" style={{ fontSize: 13, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)', textDecoration: 'none' }}>
-              ← Vaults
-            </Link>
-            <span style={{ color: 'var(--color-mw-border-strong)' }}>/</span>
-            <span style={{ fontSize: 13, color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)', fontWeight: 600 }}>Create vault</span>
-          </div>
-
-          {/* Header */}
-          <div style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-mw-ink)', fontFamily: 'var(--font-jakarta)', margin: 0 }}>
-                {STEPS[step]}
-              </h1>
-              <StepDots current={step} total={STEPS.length} />
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>
-              {step === 0 && 'Tell us about your project and the token you\'re seeding.'}
-              {step === 1 && 'Configure the V4 pool parameters for your vault.'}
-              {step === 2 && 'Set LP defaults and review the fee distribution.'}
-              {step === 3 && 'Review everything before deploying on-chain.'}
-            </div>
-          </div>
-
-          {/* Step card */}
-          <div className="vc-card">
-            {step === 0 && <Step1 draft={draft} onChange={patch} />}
-            {step === 1 && <Step2 draft={draft} onChange={patch} />}
-            {step === 2 && <Step3 draft={draft} onChange={patch} />}
-            {step === 3 && <Step4 draft={draft} submitting={vaultSeed.isPending} submitLabel={seedStageLabel[vaultSeed.stage]} error={error} onDeploy={handleDeploy} />}
-
-            {/* Nav buttons (hidden on step 3 which has its own deploy button) */}
-            {step < 3 && (
-              <div className="vc-nav">
-                <button
-                  className="vc-btn vc-btn-ghost"
-                  onClick={() => step > 0 ? setStep(s => s - 1) : undefined}
-                  style={{ visibility: step === 0 ? 'hidden' : 'visible' }}
-                >
-                  Back
-                </button>
-                <button
-                  className="vc-btn vc-btn-primary"
-                  onClick={() => setStep(s => s + 1)}
-                  disabled={!canAdvance()}
-                >
-                  {step === 2 ? 'Review →' : 'Continue →'}
-                </button>
-              </div>
-            )}
-            {step === 3 && (
-              <button
-                className="vc-btn vc-btn-ghost"
-                onClick={() => setStep(2)}
-                style={{ marginTop: 10, width: '100%' }}
-              >
-                ← Back to edit
-              </button>
-            )}
-          </div>
-
+        {/* Breadcrumb */}
+        <div className="mb-5 flex items-center gap-2">
+          <Link href="/vaults" className="text-[13px] text-atx-ink/55 font-atx-display no-underline hover:text-atx-ink">
+            ← Vaults
+          </Link>
+          <span className="text-atx-ink/30">/</span>
+          <span className="text-[13px] text-atx-ink font-atx-display font-semibold">Create vault</span>
         </div>
+
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <h1 className="text-[22px] font-extrabold text-atx-ink font-atx-display m-0">
+              {STEPS[step]}
+            </h1>
+            <StepDots current={step} total={STEPS.length} />
+          </div>
+          <div className="text-[13px] text-atx-ink/55 font-atx-display">
+            {step === 0 && 'Tell us about your project and the token you\'re seeding.'}
+            {step === 1 && 'Configure the V4 pool parameters for your vault.'}
+            {step === 2 && 'Set LP defaults and review the fee distribution.'}
+            {step === 3 && 'Review everything before deploying on-chain.'}
+          </div>
+        </div>
+
+        {/* Step card */}
+        <div className="bg-atx-panel border border-atx-ink p-7">
+          {step === 0 && <Step1 draft={draft} onChange={patch} />}
+          {step === 1 && <Step2 draft={draft} onChange={patch} />}
+          {step === 2 && <Step3 draft={draft} onChange={patch} />}
+          {step === 3 && <Step4 draft={draft} submitting={vaultSeed.isPending} submitLabel={seedStageLabel[vaultSeed.stage]} error={error} onDeploy={handleDeploy} />}
+
+          {/* Nav buttons (hidden on step 3 which has its own deploy button) */}
+          {step < 3 && (
+            <div className="flex items-center justify-between mt-6">
+              <button
+                className="px-[22px] py-2.5 bg-transparent border border-atx-ink/30 text-atx-ink/60 font-atx-mono text-[14px] font-semibold hover:border-atx-ink"
+                onClick={() => step > 0 ? setStep(s => s - 1) : undefined}
+                style={{ visibility: step === 0 ? 'hidden' : 'visible' }}
+              >
+                Back
+              </button>
+              <button
+                className="px-[22px] py-2.5 bg-atx-blue text-white border border-atx-ink font-atx-mono text-[14px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed"
+                onClick={() => setStep(s => s + 1)}
+                disabled={!canAdvance()}
+              >
+                {step === 2 ? 'Review →' : 'Continue →'}
+              </button>
+            </div>
+          )}
+          {step === 3 && (
+            <button
+              className="mt-2.5 w-full px-[22px] py-2.5 bg-transparent border border-atx-ink/30 text-atx-ink/60 font-atx-mono text-[14px] font-semibold hover:border-atx-ink"
+              onClick={() => setStep(2)}
+            >
+              ← Back to edit
+            </button>
+          )}
+        </div>
+
       </div>
-    </>
+    </div>
   )
 }
 
@@ -581,11 +536,11 @@ function CreateVaultContent() {
 
   if (!mounted) {
     return (
-      <div className="vc-page" style={{ background: 'var(--color-mw-surface)', minHeight: '100vh' }}>
+      <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
         <MwNav />
-        <div style={{ maxWidth: 560, margin: '0 auto', padding: '28px 28px 60px' }}>
-          <div style={{ background: 'white', border: '1px solid var(--color-mw-border)', borderRadius: 'var(--radius-md)', padding: 28 }}>
-            <div style={{ fontSize: 13, color: 'var(--color-mw-ink-3)', fontFamily: 'var(--font-jakarta)' }}>
+        <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px] [&_*]:rounded-none">
+          <div className="bg-atx-panel border border-atx-ink p-7">
+            <div className="text-[13px] text-atx-ink/55 font-atx-display">
               Loading vault creator…
             </div>
           </div>
