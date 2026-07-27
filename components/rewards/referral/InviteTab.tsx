@@ -36,34 +36,27 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
   return (
     <>
       {/* Hero — value prop */}
-      <div
-        className="rounded-xl p-[28px_28px_24px] mb-3 relative overflow-hidden"
-        style={{ background: 'linear-gradient(135deg, var(--color-mw-ink) 0%, #2A1A46 100%)' }}
-      >
-        {/* pseudo ::before glow — rendered as absolute div */}
-        <div className="absolute top-[-40px] right-[-40px] w-[200px] h-[200px] rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(circle, rgba(194,83,122,0.25) 0%, transparent 70%)' }}
-        />
-        <div className="text-[10px] font-bold tracking-[1.4px] uppercase text-mw-pink mb-[10px] font-sans">
+      <div className="border border-atx-ink p-[28px_28px_24px] mb-3 relative overflow-hidden bg-atx-ink">
+        <div className="font-atx-mono uppercase tracking-[0.1em] text-[10px] text-atx-coral mb-[10px]">
           Sharing score
         </div>
-        <div className="text-[22px] font-bold text-[rgba(255,255,255,0.92)] leading-[1.25] mb-[6px] font-sans tracking-[-0.4px]">
+        <div className="text-[22px] font-bold text-white leading-[1.25] mb-[6px] tracking-[-0.4px]">
           Grow your network,<br />earn more rewards.
         </div>
-        <div className="text-[13px] text-[rgba(255,255,255,0.55)] leading-[1.55] mb-[22px] font-sans max-w-[320px]">
+        <div className="text-[13px] text-white/60 leading-[1.55] mb-[22px] max-w-[320px]">
           Every wallet you refer that stays active raises your Sharing score — which multiplies your reward allocation.
         </div>
-        <div className="flex items-center gap-[14px] bg-[rgba(255,255,255,0.06)] border border-[rgba(194,83,122,0.25)] rounded-md p-[14px_18px]">
-          <div className="text-[36px] font-bold text-mw-pink font-mono leading-[1] tracking-[-1px] shrink-0">
-            {isLoading ? '—' : sharingScore}<span className="text-[14px] text-[rgba(194,83,122,0.45)]"> / 125</span>
+        <div className="flex items-center gap-[14px] bg-white/5 border border-white/20 p-[14px_18px]">
+          <div className="text-[36px] font-bold text-atx-coral font-atx-mono leading-[1] tracking-[-1px] shrink-0">
+            {isLoading ? '—' : sharingScore}<span className="text-[14px] text-white/45"> / 125</span>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.8px] text-[rgba(255,255,255,0.5)] mb-[6px] font-sans">
+            <div className="font-atx-mono uppercase tracking-[0.1em] text-[10px] text-white/50 mb-[6px]">
               Sharing score
             </div>
-            <div className="h-[4px] bg-[rgba(194,83,122,0.15)] rounded-[2px] overflow-hidden">
+            <div className="h-[8px] border border-white/40 overflow-hidden relative">
               <div
-                className="h-full bg-mw-pink rounded-[2px] transition-[width] duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+                className="h-full bg-atx-coral absolute inset-y-0 left-0 transition-[width] duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
                 style={{ width: pct + '%' }}
               />
             </div>
@@ -73,65 +66,65 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
 
       {/* Why refer */}
       <div className="flex gap-2 mb-3">
-        <div className="mw-accent-card flex-1 rounded-md p-[12px_14px] flex items-start gap-[10px]">
-          <div className="text-[18px] leading-[1] mt-[1px]">◉</div>
+        <div className="bg-atx-panel border border-atx-ink/25 flex-1 p-[12px_14px] flex items-start gap-[10px]">
+          <svg viewBox="0 0 100 100" className="w-[18px] h-[18px] text-atx-coral mt-[1px] shrink-0" aria-hidden="true"><path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"/></svg>
           <div>
-            <div className="text-[12px] font-bold text-mw-ink mb-[2px] font-sans">Boost your score</div>
-            <div className="text-[11px] text-mw-ink-4 leading-[1.4] font-sans">Active referrals raise your Sharing score up to 125 pts</div>
+            <div className="text-[12px] font-bold text-atx-ink mb-[2px]">Boost your score</div>
+            <div className="text-[11px] text-atx-ink/55 leading-[1.4]">Active referrals raise your Sharing score up to 125 pts</div>
           </div>
         </div>
-        <div className="mw-accent-card flex-1 rounded-md p-[12px_14px] flex items-start gap-[10px]">
-          <div className="text-[18px] leading-[1] mt-[1px]">⬡</div>
+        <div className="bg-atx-panel border border-atx-ink/25 flex-1 p-[12px_14px] flex items-start gap-[10px]">
+          <svg viewBox="0 0 100 100" className="w-[18px] h-[18px] text-atx-coral mt-[1px] shrink-0" aria-hidden="true"><path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"/></svg>
           <div>
-            <div className="text-[12px] font-bold text-mw-ink mb-[2px] font-sans">Earn rewards</div>
-            <div className="text-[11px] text-mw-ink-4 leading-[1.4] font-sans">Score multipliers increase your campaign reward allocation</div>
+            <div className="text-[12px] font-bold text-atx-ink mb-[2px]">Earn rewards</div>
+            <div className="text-[11px] text-atx-ink/55 leading-[1.4]">Score multipliers increase your campaign reward allocation</div>
           </div>
         </div>
       </div>
 
       {/* Stats */}
       <div className="flex gap-3 mb-3">
-        <div className="mw-accent-card flex-1 rounded-md p-[14px_16px] text-center">
+        <div className="bg-atx-panel border border-atx-ink/25 flex-1 p-[14px_16px] text-center">
           {isLoading
-            ? <div className="h-[24px] w-[36px] bg-[rgba(26,26,46,0.06)] rounded-[4px] mx-auto mb-[4px] animate-pulse" />
-            : <div className="text-[24px] font-bold font-mono tracking-[-0.5px] leading-[1] mb-[4px] text-mw-brand-deep">{treeSize}</div>
+            ? <div className="h-[24px] w-[36px] bg-atx-bone border border-atx-ink/20 mx-auto mb-[4px] animate-pulse" />
+            : <div className="text-[24px] font-bold font-atx-mono tracking-[-0.5px] leading-[1] mb-[4px] text-atx-blue">{treeSize}</div>
           }
-          <div className="text-[10px] font-semibold tracking-[0.5px] uppercase text-mw-ink-4 font-sans">Referred</div>
+          <div className="font-atx-mono uppercase tracking-[0.08em] text-[10px] font-semibold text-atx-ink/55">Referred</div>
         </div>
-        <div className="mw-accent-card flex-1 rounded-md p-[14px_16px] text-center">
+        <div className="bg-atx-panel border border-atx-ink/25 flex-1 p-[14px_16px] text-center">
           {isLoading
-            ? <div className="h-[24px] w-[36px] bg-[rgba(26,26,46,0.06)] rounded-[4px] mx-auto mb-[4px] animate-pulse" />
-            : <div className="text-[24px] font-bold font-mono tracking-[-0.5px] leading-[1] mb-[4px] text-mw-teal">{qualityPct}%</div>
+            ? <div className="h-[24px] w-[36px] bg-atx-bone border border-atx-ink/20 mx-auto mb-[4px] animate-pulse" />
+            : <div className="text-[24px] font-bold font-atx-mono tracking-[-0.5px] leading-[1] mb-[4px] text-atx-mesquite">{qualityPct}%</div>
           }
-          <div className="text-[10px] font-semibold tracking-[0.5px] uppercase text-mw-ink-4 font-sans">Active</div>
+          <div className="font-atx-mono uppercase tracking-[0.08em] text-[10px] font-semibold text-atx-ink/55">Active</div>
         </div>
       </div>
 
       {/* Share Your Link */}
-      <div className="mw-accent-card rounded-[18px] p-[20px_22px] mb-3 shadow-card">
-        <div className="text-[10px] font-bold tracking-[1.2px] uppercase text-mw-brand-deep mb-[14px] font-sans">
+      <div className="bg-atx-panel border border-atx-ink p-[20px_22px] mb-3">
+        <div className="font-atx-mono uppercase tracking-[0.1em] text-[10px] text-atx-blue mb-[14px]">
           Share Your Link
         </div>
         <div className="flex flex-col gap-[10px]">
           {refCode === null ? (
             <div className="flex flex-col gap-2">
-              <div className="h-[40px] w-full bg-[rgba(26,26,46,0.06)] rounded-[8px] animate-pulse" />
-              <div className="h-[40px] w-[60%] bg-[rgba(26,26,46,0.06)] rounded-[8px] animate-pulse" />
+              <div className="h-[40px] w-full bg-atx-bone border border-atx-ink/20 animate-pulse" />
+              <div className="h-[40px] w-[60%] bg-atx-bone border border-atx-ink/20 animate-pulse" />
             </div>
           ) : (
             <>
               <div>
-                <div className="text-[11px] text-mw-ink-4 font-sans mb-[4px]">Referral link</div>
+                <div className="text-[11px] text-atx-ink/55 mb-[4px]">Referral link</div>
                 <RefCodeInput value={refLink!} buttonLabel="Copy Link" />
               </div>
               <div>
-                <div className="text-[11px] text-mw-ink-4 font-sans mb-[4px]">Referral code</div>
+                <div className="text-[11px] text-atx-ink/55 mb-[4px]">Referral code</div>
                 <RefCodeInput value={refCode} buttonLabel="Copy Code" ghost />
               </div>
             </>
           )}
           <button
-            className="w-full p-3 bg-[#1DA1F2] text-white border-none rounded-md text-[13px] font-semibold font-sans cursor-pointer transition-opacity duration-150 flex items-center justify-center gap-[7px] mt-[4px] active:opacity-80 disabled:opacity-40"
+            className="w-full p-3 bg-atx-blue text-white border border-atx-ink text-[13px] font-semibold font-atx-mono uppercase tracking-[0.05em] cursor-pointer transition-opacity duration-150 flex items-center justify-center gap-[7px] mt-[4px] active:opacity-80 disabled:opacity-40"
             onClick={shareOnTwitter}
             disabled={!refCode}
             style={{ opacity: refCode ? 1 : 0.4 }}
@@ -145,27 +138,27 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
       </div>
 
       {/* Referred Wallets */}
-      <div className="mw-accent-card rounded-[18px] p-[20px_22px] mb-3 shadow-card">
-        <div className="text-[10px] font-bold tracking-[1.2px] uppercase text-mw-brand-deep mb-[14px] font-sans">
+      <div className="bg-atx-panel border border-atx-ink p-[20px_22px] mb-3">
+        <div className="font-atx-mono uppercase tracking-[0.1em] text-[10px] text-atx-blue mb-[14px]">
           Referred Wallets
         </div>
         {isLoading ? (
           <div className="flex flex-col items-center gap-2 py-6">
-            <div className="h-[12px] w-[80px] bg-[rgba(26,26,46,0.06)] rounded-[4px] animate-pulse" />
+            <div className="h-[12px] w-[80px] bg-atx-bone border border-atx-ink/20 animate-pulse" />
           </div>
         ) : sortedRecords.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 pt-6 pb-3 text-mw-ink-4">
-            <div className="text-[26px] opacity-40">◉</div>
-            <div className="text-[13px] font-sans text-center max-w-[220px] leading-[1.55]">
+          <div className="flex flex-col items-center gap-2 pt-6 pb-3 text-atx-ink/55">
+            <svg viewBox="0 0 100 100" className="w-[26px] h-[26px] text-atx-coral" aria-hidden="true"><path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"/></svg>
+            <div className="text-[13px] text-center max-w-[220px] leading-[1.55]">
               No referrals yet. Share your link to get started.
             </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
             {sortedRecords.map(r => (
-              <div key={r.id} className="flex items-center justify-between p-[10px_14px] bg-mw-surface-purple border-[1.5px] border-mw-border rounded-sm">
-                <span className="text-[12px] font-mono text-mw-ink-2">{truncateAddress(r.referred)}</span>
-                <span className={`text-[10px] font-bold tracking-[0.4px] px-[9px] py-[3px] rounded-full uppercase ${r.status === 'active' ? 'bg-[rgba(42,158,138,0.12)] text-mw-teal' : 'bg-[rgba(194,122,0,0.1)] text-mw-amber'}`}>
+              <div key={r.id} className="flex items-center justify-between p-[10px_14px] bg-atx-bone border border-atx-ink/25">
+                <span className="text-[12px] font-atx-mono text-atx-ink/60">{truncateAddress(r.referred)}</span>
+                <span className={`text-[10px] font-bold tracking-[0.08em] px-[9px] py-[3px] uppercase font-atx-mono border ${r.status === 'active' ? 'border-atx-ink/25 text-atx-mesquite' : 'border-atx-ink/25 text-atx-clay'}`}>
                   {r.status}
                 </span>
               </div>
