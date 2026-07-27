@@ -9,11 +9,26 @@ MintwareDeFiVault4626 → wiring → MintwareVaultRegistry → register`.
 > the standalone `MintwareVaultFactory` are **not** in `DeployPhase3.s.sol` yet — they get
 > their own deploy once the DeFi surface is validated on testnet.
 
-## Status (verified 2026-07-27)
+## Status
 - ✅ All contracts compile (`pnpm forge:build`)
 - ✅ Full contract suite green — **181/181** (`pnpm forge:test`)
-- ✅ Deploy script present: `contracts-v4/script/DeployPhase3.s.sol`
-- ⛒ Not yet deployed — needs your deployer key (below)
+- ✅ Deploy script: `contracts-v4/script/DeployPhase3.s.sol`
+- ✅ **DEPLOYED + verified on Base Sepolia (2026-07-27)** — see addresses below
+
+### Deployed addresses (Base Sepolia 84532, startBlock 44706790)
+| Contract | Address |
+|---|---|
+| FeeVault | `0x53dd1b7ea00cf8ae9152fd139a2c6ad67826941c` |
+| MintwareDeFiVault4626 | `0x8dd409b81e6ec30475055983c5a3d7d2768697a3` |
+| MWSocialHook | `0xfa099da6234f06433c19c70c4c56dcf58caecac4` |
+| MintwareVaultRegistry | `0x35067e7603ee971d03c81471d25ae181ac79a972` |
+
+On-chain wiring verified: DeFiVault `asset()`→USDC, `feeVault()`→FeeVault; FeeVault
+`socialVault()`→DeFiVault, `usdc()`→USDC; Registry `vaultCount()`→1. Addresses recorded in
+`.env.local` (`NEXT_PUBLIC_VAULT_REGISTRY_ADDRESS` etc.) and indexed by `subgraph/vault`.
+
+> The steps below are retained as the reference for **re-deploying** (mainnet, or a fresh
+> testnet stack).
 
 ---
 

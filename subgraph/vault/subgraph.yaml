@@ -1,0 +1,85 @@
+specVersion: 1.0.0
+description: Mintware Phase-3 vaults — registry, positions, fee epochs (Base Sepolia)
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  # ── Registry: source of vault discovery; spawns a template per registered vault ──
+  - kind: ethereum
+    name: MintwareVaultRegistry
+    network: base-sepolia
+    source:
+      address: "0x35067e7603ee971d03c81471d25ae181ac79a972"
+      abi: MintwareVaultRegistry
+      startBlock: 44706790
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Vault
+      abis:
+        - name: MintwareVaultRegistry
+          file: ./abis/MintwareVaultRegistry.json
+      eventHandlers:
+        - event: VaultRegistered(indexed bytes32,uint8,indexed address,address,indexed address)
+          handler: handleVaultRegistered
+        - event: VaultDeactivated(indexed bytes32)
+          handler: handleVaultDeactivated
+      file: ./src/registry.ts
+
+  # ── FeeVault: epoch lifecycle + fee receipts ──
+  - kind: ethereum
+    name: FeeVault
+    network: base-sepolia
+    source:
+      address: "0x53dd1b7ea00cf8ae9152fd139a2c6ad67826941c"
+      abi: FeeVault
+      startBlock: 44706790
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - FeeEpoch
+        - FeeReceipt
+      abis:
+        - name: FeeVault
+          file: ./abis/FeeVault.json
+      eventHandlers:
+        - event: EpochOpened(indexed uint256)
+          handler: handleEpochOpened
+        - event: FeesReceived(indexed uint256,uint256,string)
+          handler: handleFeesReceived
+        - event: EpochClosed(indexed uint256,uint256,bytes32)
+          handler: handleEpochClosed
+      file: ./src/feeVault.ts
+
+templates:
+  # ── Per-vault: instantiated by the registry handler on VaultRegistered ──
+  - kind: ethereum
+    name: MintwareVault
+    network: base-sepolia
+    source:
+      abi: MintwareDeFiVault4626
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Vault
+        - Position
+        - Deposit
+        - Withdraw
+      abis:
+        - name: MintwareDeFiVault4626
+          file: ./abis/MintwareDeFiVault4626.json
+      eventHandlers:
+        - event: Deposit(indexed address,indexed address,uint256,uint256)
+          handler: handleDeposit
+        - event: Withdraw(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleWithdraw
+        - event: LockRecorded(indexed address,uint8,uint256)
+          handler: handleLockRecorded
+      file: ./src/vault.ts

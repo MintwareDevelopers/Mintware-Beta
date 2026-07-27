@@ -1,0 +1,16 @@
+{
+  "name": "@mintware/vault-subgraph",
+  "version": "0.1.0",
+  "description": "The Graph subgraph for Mintware Phase-3 vaults — registry, positions, fee epochs (Base Sepolia)",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy:studio": "graph deploy --studio mintware-vaults",
+    "create:local": "graph create --node http://localhost:8020/ mintware-vaults",
+    "deploy:local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 mintware-vaults"
+  },
+  "devDependencies": {
+    "@graphprotocol/graph-cli": "0.79.2",
+    "@graphprotocol/graph-ts": "0.35.1"
+  }
+}

@@ -1,0 +1,101 @@
+# Mintware Phase-3 Vault subgraph — schema
+# Indexes the on-chain vault stack (Registry → per-vault template + FeeVault) so the
+# frontend can read vault discovery, TVL, positions, and fee epochs without RPC fan-out.
+
+type Vault @entity {
+  "vault contract address (hex)"
+  id: ID!
+  "registry vaultId (bytes32)"
+  vaultId: Bytes!
+  "0 = DeFi, 1 = RWA (VaultSurface)"
+  surface: Int!
+  address: Bytes!
+  feeVault: Bytes!
+  provider: Bytes!
+  active: Boolean!
+  createdAt: BigInt!
+  createdBlock: BigInt!
+  "sum of shares outstanding (ERC-4626 shares)"
+  totalShares: BigInt!
+  "net assets deposited (USDC, 6-dp) — deposits − withdrawals"
+  totalAssets: BigInt!
+  depositorCount: Int!
+  positions: [Position!]! @derivedFrom(field: "vault")
+  deposits: [Deposit!]!   @derivedFrom(field: "vault")
+  withdraws: [Withdraw!]!  @derivedFrom(field: "vault")
+}
+
+# vaultId (bytes32) → vault address, so VaultDeactivated (which carries only vaultId)
+# can resolve the address-keyed Vault entity.
+type VaultLookup @entity {
+  "vaultId (bytes32 hex)"
+  id: ID!
+  vault: Bytes!
+}
+
+type Position @entity {
+  "vaultAddress-userAddress"
+  id: ID!
+  vault: Vault!
+  user: Bytes!
+  shares: BigInt!
+  "net USDC contributed (approx: deposited − withdrawn)"
+  netAssets: BigInt!
+  "LockTier index (0 flex … 3 core)"
+  lockTier: Int!
+  lockedUntil: BigInt!
+  lastActivity: BigInt!
+}
+
+type Deposit @entity(immutable: true) {
+  "txHash-logIndex"
+  id: ID!
+  vault: Vault!
+  sender: Bytes!
+  owner: Bytes!
+  assets: BigInt!
+  shares: BigInt!
+  timestamp: BigInt!
+  block: BigInt!
+  txHash: Bytes!
+}
+
+type Withdraw @entity(immutable: true) {
+  "txHash-logIndex"
+  id: ID!
+  vault: Vault!
+  sender: Bytes!
+  receiver: Bytes!
+  owner: Bytes!
+  assets: BigInt!
+  shares: BigInt!
+  timestamp: BigInt!
+  block: BigInt!
+  txHash: Bytes!
+}
+
+type FeeEpoch @entity {
+  "feeVaultAddress-epochId"
+  id: ID!
+  feeVault: Bytes!
+  epochId: BigInt!
+  "open | closed"
+  status: String!
+  "running total of fees received this epoch (USDC)"
+  feesReceived: BigInt!
+  totalAllocated: BigInt!
+  merkleRoot: Bytes
+  openedAt: BigInt!
+  closedAt: BigInt
+  receipts: [FeeReceipt!]! @derivedFrom(field: "epoch")
+}
+
+type FeeReceipt @entity(immutable: true) {
+  "txHash-logIndex"
+  id: ID!
+  epoch: FeeEpoch!
+  amount: BigInt!
+  source: String!
+  timestamp: BigInt!
+  txHash: Bytes!
+}
