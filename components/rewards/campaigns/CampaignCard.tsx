@@ -2,9 +2,9 @@
 
 // =============================================================================
 // CampaignCard.tsx — Campaign list card for /dashboard
-// Design: white card, 0.5px border, 12px radius, thin hover highlight.
-// Structure: header (real token logo) → stats → reward pills → progress → socials
-// Token logos: LI.FI API. Socials: DexScreener API. Both free, no key needed.
+// Design: ATX Settlemint — square, hairline rules, JetBrains Mono data, flat
+// duotone. Structure: header (real token logo) → stats → reward pills →
+// progress → socials. Token logos: LI.FI API. Socials: DexScreener API.
 // =============================================================================
 
 import { useRouter } from 'next/navigation'
@@ -57,12 +57,13 @@ function actionSuffix(action: ActionItem): string {
   return ''
 }
 
+// ATX: flat duotone pills — hairline border + tinted text, square corners.
 function actionPillClass(key: string): string {
-  if (key.startsWith('referral')) return 'bg-[rgba(123,111,204,0.08)] text-[#7B6FCC] border border-[rgba(123,111,204,0.2)]'
-  if (key === 'bridge')           return 'bg-[rgba(79,126,247,0.08)] text-mw-brand border border-[rgba(79,126,247,0.2)]'
-  if (key === 'trade')            return 'bg-[rgba(42,158,138,0.08)] text-mw-teal border border-[rgba(42,158,138,0.2)]'
-  if (key === 'hold')             return 'bg-[rgba(194,122,0,0.08)] text-mw-amber border border-[rgba(194,122,0,0.2)]'
-  return                                 'bg-[rgba(79,126,247,0.08)] text-mw-brand border border-[rgba(79,126,247,0.2)]'
+  if (key.startsWith('referral')) return 'border border-atx-ink/25 text-atx-mesquite'
+  if (key === 'bridge')           return 'border border-atx-ink/25 text-atx-blue'
+  if (key === 'trade')            return 'border border-atx-ink/25 text-atx-mesquite'
+  if (key === 'hold')             return 'border border-atx-ink/25 text-atx-clay'
+  return                                 'border border-atx-ink/25 text-atx-blue'
 }
 
 // ─── SVG Icons ──────────────────────────────────────────────────────────────
@@ -199,95 +200,97 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   const showBar    = isLive && (totalDays !== null || daysLeft !== null)
   const showLogo   = logoURI && !logoError
 
+  const LINE = 'border-atx-ink/15'
+
   return (
     <div
-      className={`mw-accent-bg bg-white rounded-md overflow-hidden cursor-pointer transition-shadow duration-200 flex flex-col shadow-card border-l-[3px] border-mw-brand hover:shadow-card-hover${isEnded ? ' opacity-60' : ''}`}
+      className={`font-atx-display bg-atx-panel overflow-hidden cursor-pointer transition-shadow duration-200 flex flex-col border border-atx-ink border-l-[3px] border-l-atx-coral hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] [&_*]:rounded-none${isEnded ? ' opacity-60' : ''}`}
       onClick={() => router.push(`/campaign/${c.id}`)}
       role="link"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && router.push(`/campaign/${c.id}`)}
     >
       {/* ── Header ── */}
-      <div className="px-5 pt-[18px] pb-4 border-b border-[rgba(0,0,0,0.06)] flex items-start justify-between gap-[10px]">
+      <div className={`px-5 pt-[18px] pb-4 border-b ${LINE} flex items-start justify-between gap-[10px]`}>
         <div className="flex items-center gap-3">
           <div
-            className="w-10 h-10 rounded-[10px] flex items-center justify-center text-[14px] font-bold shrink-0 border border-mw-border font-mono overflow-hidden"
+            className="w-10 h-10 flex items-center justify-center text-[14px] font-bold shrink-0 border border-atx-ink font-atx-mono overflow-hidden"
             style={showLogo ? {} : { background: col.bg, color: col.fg }}
           >
             {showLogo ? (
               <img
                 src={logoURI!}
                 alt={c.name}
-                className="w-10 h-10 object-cover rounded-[9px]"
+                className="w-10 h-10 object-cover"
                 onError={() => setLogoError(true)}
               />
             ) : initial}
           </div>
           <div>
-            <div className="text-[15px] font-semibold text-mw-ink font-sans mb-1">{c.name}</div>
-            <div className="flex items-center gap-[6px] text-[12px] text-mw-ink-3 flex-wrap font-sans">
+            <div className="text-[15px] font-semibold text-atx-ink font-atx-display mb-1">{c.name}</div>
+            <div className="flex items-center gap-[6px] text-[12px] text-atx-ink/55 flex-wrap font-atx-mono">
               {isLive && (
-                <span className="inline-flex items-center gap-1 bg-[rgba(34,197,94,0.1)] text-mw-green border border-[rgba(34,197,94,0.3)] rounded-full px-[7px] py-[2px] text-[11px] font-medium">
-                  <span className="w-[5px] h-[5px] rounded-full bg-mw-live inline-block" />
+                <span className="inline-flex items-center gap-1.5 border border-atx-ink px-[7px] py-[2px] text-[10px] uppercase tracking-[0.08em] font-medium">
+                  <span className="w-[7px] h-[7px] bg-atx-acid border border-atx-ink inline-block" />
                   Live
                 </span>
               )}
               {isUpcoming && (
-                <span className="bg-[rgba(245,158,11,0.1)] text-[#d97706] border border-[rgba(245,158,11,0.3)] rounded-full px-[7px] py-[2px] text-[11px] font-medium">
-                  ◷ {daysToStart !== null ? `In ${daysToStart}d` : 'Soon'}
+                <span className="border border-atx-ink/40 text-atx-clay px-[7px] py-[2px] text-[10px] uppercase tracking-[0.08em] font-medium">
+                  {daysToStart !== null ? `In ${daysToStart}d` : 'Soon'}
                 </span>
               )}
               {isEnded && (
-                <span className="bg-[rgba(107,114,128,0.08)] text-mw-ink-5 border border-[rgba(107,114,128,0.2)] rounded-full px-[7px] py-[2px] text-[11px]">
+                <span className="border border-atx-ink/30 text-atx-ink/50 px-[7px] py-[2px] text-[10px] uppercase tracking-[0.08em]">
                   Ended
                 </span>
               )}
-              <span>{c.chain}</span>
+              <span className="uppercase tracking-[0.04em]">{c.chain}</span>
               {isLive && daysLeft !== null && <span>· {daysLeft}d left</span>}
             </div>
           </div>
         </div>
-        <span className="shrink-0 px-2 py-[3px] rounded-[6px] text-[11px] font-semibold bg-mw-bg text-mw-ink-3 border border-mw-border font-sans">
+        <span className="shrink-0 px-2 py-[3px] text-[10px] font-semibold uppercase tracking-[0.06em] bg-atx-bone text-atx-ink/55 border border-atx-ink/30 font-atx-mono">
           {c.chain}
         </span>
       </div>
 
       {/* ── Stats ── */}
       {hasStats && (
-        <div className="grid grid-cols-3 px-5 py-4 gap-3 border-b border-[rgba(0,0,0,0.06)]">
+        <div className={`grid grid-cols-3 px-5 py-4 gap-3 border-b ${LINE}`}>
           {(c.pool_remaining_usd != null || c.pool_usd != null) && (
             <div>
-              <div className="text-[22px] font-bold text-mw-brand font-mono tracking-[-0.5px]">
+              <div className="text-[22px] font-bold text-atx-blue font-atx-mono tracking-[-0.5px]">
                 {fmtUSD(c.pool_remaining_usd ?? c.pool_usd ?? 0)}
-                {c.token_symbol && <span className="text-[11px] font-normal text-mw-ink-5 ml-[2px]">{c.token_symbol}</span>}
+                {c.token_symbol && <span className="text-[11px] font-normal text-atx-ink/45 ml-[2px]">{c.token_symbol}</span>}
               </div>
-              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">{isTokenPool ? 'pool remaining' : 'pool size'}</div>
+              <div className="text-[10px] text-atx-ink/45 mt-[3px] font-atx-mono uppercase tracking-[0.08em] font-medium">{isTokenPool ? 'pool remaining' : 'pool size'}</div>
             </div>
           )}
           {isTokenPool && c.referral_reward_pct != null && (
             <div>
-              <div className="text-[22px] font-bold text-mw-teal font-mono tracking-[-0.5px]">
+              <div className="text-[22px] font-bold text-atx-mesquite font-atx-mono tracking-[-0.5px]">
                 {c.referral_reward_pct}%
               </div>
-              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">referral earn</div>
+              <div className="text-[10px] text-atx-ink/45 mt-[3px] font-atx-mono uppercase tracking-[0.08em] font-medium">referral earn</div>
             </div>
           )}
           {isTokenPool && c.buyer_reward_pct != null && (
             <div>
-              <div className="text-[22px] font-bold text-mw-brand-deep font-mono tracking-[-0.5px]">{c.buyer_reward_pct}%</div>
-              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">buyer rebate</div>
+              <div className="text-[22px] font-bold text-atx-coral font-atx-mono tracking-[-0.5px]">{c.buyer_reward_pct}%</div>
+              <div className="text-[10px] text-atx-ink/45 mt-[3px] font-atx-mono uppercase tracking-[0.08em] font-medium">buyer rebate</div>
             </div>
           )}
           {!isTokenPool && c.daily_payout_usd != null && (
             <div>
-              <div className="text-[22px] font-bold text-mw-ink font-mono tracking-[-0.5px]">{fmtUSD(c.daily_payout_usd)}</div>
-              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">daily payout</div>
+              <div className="text-[22px] font-bold text-atx-ink font-atx-mono tracking-[-0.5px]">{fmtUSD(c.daily_payout_usd)}</div>
+              <div className="text-[10px] text-atx-ink/45 mt-[3px] font-atx-mono uppercase tracking-[0.08em] font-medium">daily payout</div>
             </div>
           )}
           {!isTokenPool && c.min_score != null && (
             <div>
-              <div className="text-[22px] font-bold text-mw-ink font-mono tracking-[-0.5px]">{c.min_score}+</div>
-              <div className="text-[11px] text-mw-ink-5 mt-[3px] font-sans uppercase tracking-[0.3px] font-medium">min score</div>
+              <div className="text-[22px] font-bold text-atx-ink font-atx-mono tracking-[-0.5px]">{c.min_score}+</div>
+              <div className="text-[10px] text-atx-ink/45 mt-[3px] font-atx-mono uppercase tracking-[0.08em] font-medium">min score</div>
             </div>
           )}
         </div>
@@ -295,20 +298,20 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
 
       {/* ── Reward pills ── */}
       {isTokenPool ? (
-        <div className="px-5 py-3 flex flex-wrap gap-[6px] border-b border-[rgba(0,0,0,0.06)]">
-          <span className="px-[10px] py-1 rounded-full text-[11px] font-medium font-sans bg-[rgba(42,158,138,0.08)] text-mw-teal border border-[rgba(42,158,138,0.2)]">
-            ◉ {c.referral_reward_pct ?? 0}% per swap you refer
+        <div className={`px-5 py-3 flex flex-wrap gap-[6px] border-b ${LINE}`}>
+          <span className="px-[10px] py-1 text-[11px] font-medium font-atx-mono border border-atx-ink/25 text-atx-mesquite">
+            {c.referral_reward_pct ?? 0}% per swap you refer
           </span>
           {(c.buyer_reward_pct ?? 0) > 0 && (
-            <span className="px-[10px] py-1 rounded-full text-[11px] font-medium font-sans bg-[rgba(58,92,232,0.08)] text-mw-brand-deep border border-[rgba(58,92,232,0.2)]">
+            <span className="px-[10px] py-1 text-[11px] font-medium font-atx-mono border border-atx-ink/25 text-atx-blue">
               + {c.buyer_reward_pct}% buyer rebate
             </span>
           )}
         </div>
       ) : hasActions ? (
-        <div className="px-5 py-3 flex flex-wrap gap-[6px] border-b border-[rgba(0,0,0,0.06)]">
+        <div className={`px-5 py-3 flex flex-wrap gap-[6px] border-b ${LINE}`}>
           {Object.entries(c.actions!).map(([key, action]) => (
-            <span key={key} className={`px-[10px] py-1 rounded-full text-[11px] font-medium font-sans ${actionPillClass(key)}`}>
+            <span key={key} className={`px-[10px] py-1 text-[11px] font-medium font-atx-mono ${actionPillClass(key)}`}>
               +{action.points} {action.label.split(' ')[0].toLowerCase()}{actionSuffix(action)}
             </span>
           ))}
@@ -318,7 +321,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
       {/* ── Progress bar ── */}
       {showBar && (
         <div className="px-5 py-3">
-          <div className="flex justify-between text-[11px] text-mw-ink-5 mb-[6px] font-sans">
+          <div className="flex justify-between text-[10px] text-atx-ink/45 mb-[6px] font-atx-mono uppercase tracking-[0.06em]">
             <span>Campaign progress</span>
             {totalDays !== null && elapsedDays !== null
               ? <span>{elapsedDays} of {totalDays} days</span>
@@ -327,9 +330,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
                 : null
             }
           </div>
-          <div className="h-[6px] bg-mw-border rounded-[4px] overflow-hidden">
+          <div className="h-[8px] border border-atx-ink overflow-hidden relative">
             <div
-              className="h-full bg-mw-brand rounded-[4px] transition-[width] duration-[600ms] ease-[ease]"
+              className="h-full bg-atx-blue absolute inset-y-0 left-0"
               style={{ width: `${totalDays !== null ? progressPct : Math.max(5, 100 - (daysLeft! / 30) * 100)}%` }}
             />
           </div>
@@ -338,17 +341,17 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
 
       {/* ── Live price ticker ── */}
       {ticker?.priceUsd && (
-        <div className="px-5 py-[9px] border-t border-[rgba(0,0,0,0.06)] flex items-center gap-4" onClick={e => e.stopPropagation()}>
+        <div className={`px-5 py-[9px] border-t ${LINE} flex items-center gap-4`} onClick={e => e.stopPropagation()}>
           <div className="flex items-center gap-[6px]">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.6px] text-mw-ink-5 font-sans">Price</span>
-            <span className="font-mono text-[13px] font-bold text-mw-ink-2">
+            <span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-atx-ink/45 font-atx-mono">Price</span>
+            <span className="font-atx-mono text-[13px] font-bold text-atx-ink">
               ${parseFloat(ticker.priceUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 8 })}
             </span>
           </div>
           {ticker.priceChange24h != null && (
             <div className="flex items-center gap-[6px]">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.6px] text-mw-ink-5 font-sans">24h</span>
-              <span className={`font-mono text-[13px] font-semibold ${ticker.priceChange24h >= 0 ? 'text-mw-green' : 'text-mw-red'}`}>
+              <span className="text-[9px] font-semibold uppercase tracking-[0.1em] text-atx-ink/45 font-atx-mono">24h</span>
+              <span className={`font-atx-mono text-[13px] font-semibold ${ticker.priceChange24h >= 0 ? 'text-atx-mesquite' : 'text-atx-clay'}`}>
                 {ticker.priceChange24h >= 0 ? '+' : ''}{ticker.priceChange24h.toFixed(2)}%
               </span>
             </div>
@@ -358,14 +361,14 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
 
       {/* ── Social links ── */}
       {hasSocials && (
-        <div className="flex items-center gap-[2px] px-5 py-[8px] border-t border-[rgba(0,0,0,0.06)] mt-auto justify-end">
+        <div className={`flex items-center gap-[2px] px-5 py-[8px] border-t ${LINE} mt-auto justify-end`}>
           <div className="flex items-center gap-[2px]">
           {effectiveDexUrl && (
             <a
               href={effectiveDexUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline transition-colors duration-150 hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2"
+              className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline transition-colors duration-150 hover:bg-atx-bone hover:text-atx-ink"
               title="DexScreener"
               onClick={e => e.stopPropagation()}
             >
@@ -377,7 +380,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
               href={dexLinks.twitter}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline transition-colors duration-150 hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2"
+              className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline transition-colors duration-150 hover:bg-atx-bone hover:text-atx-ink"
               title="X / Twitter"
               onClick={e => e.stopPropagation()}
             >
@@ -389,7 +392,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
               href={dexLinks.website}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline transition-colors duration-150 hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2"
+              className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline transition-colors duration-150 hover:bg-atx-bone hover:text-atx-ink"
               title="Website"
               onClick={e => e.stopPropagation()}
             >
@@ -401,7 +404,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
               href={dexLinks.telegram}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center w-7 h-7 rounded-[7px] text-mw-ink-5 no-underline transition-colors duration-150 hover:bg-[rgba(0,0,0,0.05)] hover:text-mw-ink-2"
+              className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline transition-colors duration-150 hover:bg-atx-bone hover:text-atx-ink"
               title="Telegram"
               onClick={e => e.stopPropagation()}
             >

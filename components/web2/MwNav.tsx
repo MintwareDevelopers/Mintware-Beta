@@ -6,6 +6,17 @@ import Link                   from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useMintwarePrivy }   from '@/components/web2/providers'
 
+function Star({ className = '' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
+      />
+    </svg>
+  )
+}
+
 export function MwNav() {
   const pathname = usePathname()
   const router = useRouter()
@@ -45,12 +56,13 @@ export function MwNav() {
   ]
 
   return (
-    <nav className="sticky top-0 z-[200] flex items-center justify-between px-7 h-[49px] bg-[rgba(255,255,255,0.92)] backdrop-blur-[12px] border-b border-[0.5px] border-mw-border">
+    <nav className="sticky top-0 z-[200] flex items-center justify-between px-7 h-[58px] bg-atx-bone border-b border-atx-ink/20 [&_*]:rounded-none font-atx-display">
       <Link
         href="/"
-        className="text-[19px] font-extrabold tracking-[-0.6px] no-underline text-mw-ink shrink-0 font-sans"
+        className="flex items-center gap-2.5 no-underline text-atx-ink shrink-0"
       >
-        mint<span className="text-mw-brand">ware</span>
+        <Star className="w-[18px] h-[18px] text-atx-blue" />
+        <span className="text-[17px] font-bold tracking-[-0.02em]">MINTWARE</span>
       </Link>
 
       <ConnectButton.Custom>
@@ -69,13 +81,11 @@ export function MwNav() {
                       key={href}
                       href={href}
                       className={[
-                        'mw-nav-link',
-                        'px-[14px] py-[7px] rounded-xl text-[13px] no-underline whitespace-nowrap font-sans',
+                        'px-[13px] py-[8px] text-[12px] uppercase tracking-[0.06em] no-underline whitespace-nowrap font-atx-mono',
                         'transition-colors duration-150',
-                        'hover:bg-mw-surface hover:text-mw-ink',
                         isActive(href)
-                          ? 'font-semibold text-mw-brand bg-mw-brand-dim'
-                          : 'font-normal text-mw-ink-3 bg-transparent',
+                          ? 'font-semibold text-atx-blue'
+                          : 'font-normal text-atx-ink/55 hover:text-atx-ink',
                       ].join(' ')}
                     >
                       {label}
@@ -83,16 +93,11 @@ export function MwNav() {
                   ))}
 
                   <span
-                    className="flex items-center gap-[5px] px-[14px] py-[7px] rounded-xl text-[13px] whitespace-nowrap font-sans font-normal text-mw-ink-5 cursor-default select-none"
+                    className="flex items-center gap-[6px] px-[13px] py-[8px] text-[12px] uppercase tracking-[0.06em] whitespace-nowrap font-atx-mono font-normal text-atx-ink/35 cursor-default select-none"
                     title="Vaults launching soon"
                   >
                     Vaults
-                    <span style={{
-                      fontSize: '9px', fontWeight: 600, letterSpacing: '0.5px',
-                      textTransform: 'uppercase', background: 'var(--color-mw-brand-dim)',
-                      color: 'var(--color-mw-brand)', borderRadius: '4px',
-                      padding: '1px 5px', lineHeight: '14px',
-                    }}>
+                    <span className="text-[9px] font-semibold tracking-[0.08em] uppercase border border-atx-ink bg-atx-acid text-atx-ink px-[5px] py-px leading-[13px]">
                       Soon
                     </span>
                   </span>
@@ -101,32 +106,27 @@ export function MwNav() {
                 <button
                   onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
                   title="Command palette (⌘K)"
-                  className="ml-[6px] flex items-center gap-[5px] px-[10px] py-[5px] rounded-sm text-[11px] border-[0.5px] border-mw-border bg-mw-surface cursor-pointer text-mw-ink-3 font-mono transition-colors duration-150 hover:border-[rgba(79,126,247,0.35)] hover:text-mw-brand"
+                  className="ml-[6px] flex items-center gap-[5px] px-[9px] py-[6px] text-[11px] border border-atx-ink/25 bg-atx-panel cursor-pointer text-atx-ink/55 font-atx-mono transition-colors duration-150 hover:border-atx-blue hover:text-atx-blue"
                 >
                   ⌘K
                 </button>
 
                 {evmConnected && (
                   <div
-                    className="mw-wallet-pill ml-2 flex items-center gap-[6px] px-[14px] py-[7px] rounded-xl text-[12px] border-[0.5px] border-mw-border-strong bg-white cursor-pointer text-mw-ink font-mono select-none transition-all duration-150 hover:border-[rgba(239,68,68,0.3)] hover:text-mw-red hover:bg-[rgba(239,68,68,0.04)]"
+                    className="ml-2 flex items-center gap-[7px] px-[13px] py-[7px] text-[12px] border border-atx-ink bg-atx-panel cursor-pointer text-atx-ink font-atx-mono select-none transition-colors duration-150 hover:border-atx-clay hover:text-atx-clay group"
                     onClick={() => { void disconnectEvmSession() }}
                     title="Click to disconnect EVM wallet"
                   >
-                    <span className="w-[6px] h-[6px] rounded-full bg-mw-live shrink-0" />
-                    <span className="mw-label">{account.displayName}</span>
-                    <span className="mw-disconnect text-mw-red font-sans text-[11px]">✕</span>
+                    <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink shrink-0" />
+                    <span>{account.displayName}</span>
+                    <span className="text-atx-clay text-[12px]">✕</span>
                   </div>
                 )}
 
                 {evmConnected && privy.authenticated && privy.hasEmbeddedWallet && (
                   <button
                     onClick={() => privy.linkWallet({ walletChainType: 'ethereum-only' })}
-                    className="ml-1 px-3 py-[6px] rounded-xl text-[11px] font-semibold border-[0.5px] cursor-pointer font-sans transition-all duration-150"
-                    style={{
-                      background: 'rgba(37,99,235,0.06)',
-                      border: '0.5px solid rgba(37,99,235,0.2)',
-                      color: '#2563EB',
-                    }}
+                    className="ml-1 px-3 py-[7px] text-[11px] font-semibold uppercase tracking-[0.06em] border border-atx-blue text-atx-blue bg-transparent cursor-pointer font-atx-mono transition-colors duration-150 hover:bg-atx-blue hover:text-white"
                     title="Link an external EVM wallet to this Privy session"
                   >
                     + EVM
@@ -140,21 +140,21 @@ export function MwNav() {
             <div className="flex items-center gap-2">
               <Link
                 href="/explorer"
-                className="mw-nav-link px-[14px] py-[7px] rounded-xl text-[13px] text-mw-ink-3 no-underline font-sans transition-colors duration-150 hover:bg-mw-surface hover:text-mw-ink"
+                className="px-[13px] py-[8px] text-[12px] uppercase tracking-[0.06em] text-atx-ink/55 no-underline font-atx-mono transition-colors duration-150 hover:text-atx-ink"
               >
                 Explorer
               </Link>
               {privy.enabled && (
                 <button
                   onClick={openPrivyOnboarding}
-                  className="px-4 py-2 rounded-xl border text-[13px] font-semibold cursor-pointer font-sans transition-all duration-150 bg-white text-[#2563EB] border-[rgba(37,99,235,0.18)] hover:border-[rgba(37,99,235,0.3)] hover:bg-[rgba(37,99,235,0.04)]"
+                  className="px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.05em] cursor-pointer font-atx-mono border border-atx-ink text-atx-ink bg-transparent transition-colors duration-150 hover:bg-atx-coral"
                 >
                   Continue with Email
                 </button>
               )}
               <button
                 onClick={openConnectModal}
-                className="px-4 py-2 rounded-xl bg-[#2563EB] text-white border-0 text-[13px] font-semibold cursor-pointer font-sans"
+                className="px-5 py-2 bg-atx-blue text-white border border-atx-ink text-[12px] font-semibold uppercase tracking-[0.05em] cursor-pointer font-atx-mono transition-opacity duration-150 hover:opacity-90"
               >
                 Connect Wallet
               </button>
