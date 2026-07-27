@@ -91,3 +91,91 @@ export function fmtUsd(n: number): string {
   if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`
   return `$${n.toFixed(0)}`
 }
+
+// ── Vault Detail ────────────────────────────────────────────────────────────
+
+export interface HookStep {
+  order: number
+  name: string
+  phase: 'beforeSwap' | 'afterSwap'
+  note: string
+}
+export interface LockTierOption {
+  tier: string
+  days: number
+  multiplier: number
+}
+export interface YieldSource {
+  label: string
+  apyPct: number
+}
+export interface VaultPosition {
+  depositedUsd: number
+  shares: number
+  tier: string
+  multiplier: number
+  earnedUsd: number
+}
+export interface VaultDetail extends VaultSummary {
+  hookStack: HookStep[]
+  lockTiers: LockTierOption[]
+  yieldSources: YieldSource[]
+  position?: VaultPosition
+  reserveSplit?: [number, number] // [reserve%, yield%] — RWA only
+}
+
+// Ordered hook stacks per surface (from the two-surface architecture).
+const DEFI_HOOK_STACK: HookStep[] = [
+  { order: 0, name: 'MEV Protection', phase: 'beforeSwap', note: 'TWAP verify · sandwich guard · cooldown' },
+  { order: 1, name: 'Dynamic Fee', phase: 'beforeSwap', note: 'Volatility + depth fee override' },
+  { order: 2, name: 'Idle Capital', phase: 'afterSwap', note: 'Rebalance idle → yield pools' },
+  { order: 3, name: 'Attribution', phase: 'afterSwap', note: 'Fee split weighted by reputation' },
+  { order: 4, name: 'FeeVault', phase: 'afterSwap', note: 'Accumulate for epoch distribution' },
+]
+const RWA_HOOK_STACK: HookStep[] = [
+  { order: 0, name: 'Oracle Bands', phase: 'beforeSwap', note: 'Enforce ±15% / ±45% price bands' },
+  { order: 1, name: 'MEV Protection', phase: 'beforeSwap', note: 'TWAP verify · sandwich guard' },
+  { order: 2, name: 'Idle Capital', phase: 'afterSwap', note: 'Maintain 40 / 60 reserve ratio' },
+  { order: 3, name: 'Attribution', phase: 'afterSwap', note: 'Fee split weighted by reputation' },
+  { order: 4, name: 'FeeVault', phase: 'afterSwap', note: 'Accumulate for epoch distribution' },
+]
+
+const LOCK_TIERS: LockTierOption[] = [
+  { tier: 'Flex', days: 0, multiplier: 1.0 },
+  { tier: 'Committed', days: 30, multiplier: 1.15 },
+  { tier: 'Aligned', days: 90, multiplier: 1.3 },
+  { tier: 'Core', days: 180, multiplier: 1.5 },
+]
+
+/** Detail source — mock now; swap for the vault subgraph / on-chain reads later. */
+export async function getVault(id: string): Promise<VaultDetail | null> {
+  const list = await getVaultsDiscovery()
+  const v = list.find((x) => x.id === id)
+  if (!v) return null
+
+  const isDeFi = v.surface === 'DeFi'
+  const yieldSources: YieldSource[] = isDeFi
+    ? [
+        { label: 'Swap fees', apyPct: 6.0 },
+        { label: 'Idle capital yield', apyPct: 1.5 },
+        { label: 'Attribution multiplier', apyPct: v.netApyPct - 7.5 },
+      ]
+    : [
+        { label: 'Underlying asset', apyPct: v.underlyingApyPct ?? 9 },
+        { label: 'Swap fees', apyPct: 0.75 },
+        { label: 'Idle capital yield', apyPct: 1.4 },
+      ]
+
+  return {
+    ...v,
+    hookStack: isDeFi ? DEFI_HOOK_STACK : RWA_HOOK_STACK,
+    lockTiers: LOCK_TIERS,
+    yieldSources,
+    reserveSplit: isDeFi ? undefined : [40, 60],
+    position:
+      v.id === 'social-blue-chip'
+        ? { depositedUsd: 12_000, shares: 12_000, tier: 'Aligned', multiplier: 1.3, earnedUsd: 214 }
+        : undefined,
+  }
+}
+
