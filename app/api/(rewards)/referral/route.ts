@@ -22,19 +22,25 @@ export const GET = createHandler(async (req, ctx) => {
   }
 
   const address = raw.toLowerCase()
-  // Service client: bypasses RLS for consistent reads from the referral_stats view.
-  // referral_stats is a read-only view with no sensitive data — safe to expose publicly.
-  const { data, error } = await ctx.supabase
-    .from('referral_stats')
-    .select('*')
-    .eq('address', address)
-    .single()
+  // Service client: bypasses RLS for consistent reads. referral_stats is a
+  // read-only view with no sensitive data — safe to expose publicly. This is
+  // the single referral-read endpoint (the browser anon key can't read these
+  // tables client-side), so it returns stats + the referrer's tree + referred_by.
+  const [statsRes, recordsRes, referredByRes] = await Promise.all([
+    ctx.supabase.from('referral_stats').select('*').eq('address', address).maybeSingle(),
+    ctx.supabase.from('referral_records').select('*').eq('referrer', address).order('status', { ascending: true }).limit(10),
+    ctx.supabase.from('referral_records').select('referrer').eq('referred', address).maybeSingle(),
+  ])
 
-  if (error || !data) {
-    return ctx.json({ error: error?.message ?? 'not found' }, 404)
+  const stats = statsRes.data ?? {
+    address, ref_code: null, ref_link: null, tree_size: 0, tree_quality: 0, sharing_score: 0,
   }
 
-  return ctx.json(data)
+  return ctx.json({
+    ...stats,
+    records:     recordsRes.data ?? [],
+    referred_by: referredByRes.data?.referrer ?? null,
+  })
 })
 
 // POST /api/referral

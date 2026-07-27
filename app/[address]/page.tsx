@@ -13,7 +13,6 @@ import { Sparkline }             from '@/components/web2/Sparkline'
 import { computeBadges, topBadgeLabel } from '@/lib/rewards/badges'
 import { getAddress, isAddress }  from 'viem'
 import { API, shortAddr }        from '@/lib/web2/api'
-import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import { useEffect, useState }   from 'react'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
@@ -85,28 +84,21 @@ export default function PublicProfile() {
   useEffect(() => {
     if (!isValid) { setLoading(false); return }
 
-    const supabase = createSupabaseBrowserClient()
-
-    // Fetch score + referral stats + referred-by in parallel
+    // Score comes from the external Attribution API; referral stats + referred-by
+    // come from our server route (service-role) — the browser anon key can't read
+    // referral_stats / referral_records directly.
     const scoreAddr = isAddress(address) ? getAddress(address) : address
     Promise.all([
       fetch(`${API}/score?address=${scoreAddr}`).then(r => r.json()).catch(() => null),
-      supabase
-        .from('referral_stats')
-        .select('tree_size, sharing_score, tree_quality')
-        .eq('address', address)
-        .maybeSingle()
-        .then(({ data }) => data),
-      supabase
-        .from('referral_records')
-        .select('referrer')
-        .eq('referred', address)
-        .maybeSingle()
-        .then(({ data }) => data?.referrer ?? null),
-    ]).then(([scoreData, stats, referrer]) => {
+      fetch(`/api/referral?address=${address}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
+    ]).then(([scoreData, ref]) => {
       setScore(scoreData)
-      setRefStats(stats)
-      setReferredBy(referrer)
+      setRefStats(ref ? {
+        tree_size:     ref.tree_size ?? 0,
+        sharing_score: ref.sharing_score ?? 0,
+        tree_quality:  ref.tree_quality ?? '0.00',
+      } : null)
+      setReferredBy(ref?.referred_by ?? null)
     }).finally(() => setLoading(false))
   }, [address, isValid])
 

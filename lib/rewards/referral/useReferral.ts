@@ -174,27 +174,22 @@ export function useReferral(address: string | undefined): UseReferralReturn {
     }
   }, [loadCachedConnectSession, persistConnectSession, signMessageAsync])
 
+  // Reads go through the server route (service-role): the browser anon key
+  // cannot read referral_stats / referral_records client-side. Returns the
+  // parsed payload so init() can reuse referred_by for the prompt check.
   const fetchStats = useCallback(async (addr: string) => {
-    const { data, error } = await supabase
-      .from('referral_stats')
-      .select('*')
-      .eq('address', addr)
-      .single()
-    // PGRST116 = no rows found (not an error if wallet has no stats yet)
-    if (error && error.code !== 'PGRST116') {
-      console.error('[useReferral] referral_stats error:', error.code, error.message, error.details)
+    try {
+      const res = await fetch(`/api/referral?address=${addr}`)
+      if (!res.ok) return null
+      const data = await res.json() as ReferralStats & { records?: ReferralRecord[]; referred_by?: string | null }
+      setStats(data)
+      setReferralRecords(data.records ?? [])
+      return data
+    } catch (err) {
+      console.error('[useReferral] stats fetch error:', err)
+      return null
     }
-    if (data) setStats(data as ReferralStats)
-
-    const { data: records, error: recErr } = await supabase
-      .from('referral_records')
-      .select('*')
-      .eq('referrer', addr)
-      .order('status', { ascending: true })
-      .limit(10)
-    if (recErr) console.error('[useReferral] referral_records error:', recErr.code, recErr.message, recErr.details)
-    if (records) setReferralRecords(records as ReferralRecord[])
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   const init = useCallback(async (addr: string) => {
     setIsLoading(true)
@@ -203,26 +198,18 @@ export function useReferral(address: string | undefined): UseReferralReturn {
       setRefCode(storedRefCode)
       setIsFirstConnect(isNew)
 
-      // ── If first connect, no URL ref was applied, check if prompt should show ─
+      // ── Fetch stats for display (also gives us referred_by for the prompt) ──
+      const data = await fetchStats(addr)
+
+      // ── If first connect, no URL ref was applied, and nobody referred them,
+      //    offer the manual ref-code prompt ────────────────────────────────────
       if (isNew && !refWasApplied) {
         const dismissedKey = `mw_ref_dismissed_${addr}`
         const dismissed    = typeof window !== 'undefined' && localStorage.getItem(dismissedKey)
-
-        if (!dismissed) {
-          const { data: existingRef } = await supabase
-            .from('referral_records')
-            .select('referred')
-            .eq('referred', addr)
-            .maybeSingle()
-
-          if (!existingRef) {
-            setShowRefCodePrompt(true)
-          }
+        if (!dismissed && !data?.referred_by) {
+          setShowRefCodePrompt(true)
         }
       }
-
-      // ── Fetch stats for display ──────────────────────────────────────────────
-      await fetchStats(addr)
     } finally {
       setIsLoading(false)
     }
