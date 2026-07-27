@@ -28,15 +28,10 @@ interface TokenSelectorProps {
   balances?: Record<string, string>
 }
 
-// Fallback icon rendered as a colored circle when logoURI is absent/broken
+// Fallback icon rendered as a square chip when logoURI is absent/broken
 function FallbackIcon({ symbol }: { symbol: string }) {
-  const palette = ['#3A5CE8', '#2A9E8A', '#C27A00', '#7B6FCC', '#C2537A']
-  const color   = palette[symbol.charCodeAt(0) % palette.length]
   return (
-    <div
-      className="w-[32px] h-[32px] rounded-full flex items-center justify-center font-mono text-[13px] font-bold text-white shrink-0"
-      style={{ background: color }}
-    >
+    <div className="w-[32px] h-[32px] bg-atx-blue border border-atx-ink flex items-center justify-center font-atx-mono text-[13px] font-bold text-white shrink-0">
       {symbol[0]}
     </div>
   )
@@ -86,23 +81,23 @@ export function TokenSelector({ tokens = [], selected, onSelect, onClose, chainN
 
   return (
     <div
-      className="fixed inset-0 bg-[rgba(26,26,46,0.48)] z-[9999] flex items-end justify-center animate-[ts-fade_0.15s_ease]"
+      className="fixed inset-0 bg-atx-ink/40 z-[9999] flex items-end justify-center animate-[ts-fade_0.15s_ease]"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-t-[20px] w-full max-w-[480px] max-h-[76vh] flex flex-col shadow-[0_-4px_40px_rgba(58,92,232,0.14)] animate-[ts-up_0.22s_ease] overflow-hidden"
+        className="bg-atx-panel border border-atx-ink w-full max-w-[480px] max-h-[76vh] flex flex-col shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] animate-[ts-up_0.22s_ease] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-[16px] pt-[16px] pb-[10px] border-b border-[#F0EFFF] shrink-0">
+        <div className="px-[16px] pt-[16px] pb-[10px] border-b border-atx-ink/25 shrink-0">
           <div className="flex items-center justify-between mb-[12px]">
             <div className="flex items-center gap-[8px]">
-              <span className="font-sans text-[15px] font-bold text-mw-ink">Select token</span>
-              <span className="font-sans text-[10px] font-bold bg-[#EEF1FF] text-mw-brand-deep rounded-[4px] px-[6px] py-[2px]">
+              <span className="font-atx-display text-[15px] font-bold text-atx-ink">Select token</span>
+              <span className="font-atx-mono text-[10px] font-bold uppercase tracking-[0.08em] bg-atx-bone border border-atx-ink/25 text-atx-blue px-[6px] py-[2px]">
                 {chainName}
               </span>
             </div>
             <button
-              className="bg-transparent border-0 cursor-pointer text-mw-ink-4 text-[22px] leading-none px-[4px] transition-colors duration-150 hover:text-mw-ink"
+              className="bg-transparent border-0 cursor-pointer text-atx-ink/45 text-[22px] leading-none px-[4px] transition-colors duration-150 hover:text-atx-ink"
               onClick={onClose}
               aria-label="Close"
             >
@@ -110,10 +105,10 @@ export function TokenSelector({ tokens = [], selected, onSelect, onClose, chainN
             </button>
           </div>
           <div className="relative">
-            <span className="absolute left-[10px] top-1/2 -translate-y-1/2 text-mw-ink-4 text-[14px] pointer-events-none">⌕</span>
+            <span className="absolute left-[10px] top-1/2 -translate-y-1/2 text-atx-ink/45 text-[14px] pointer-events-none">⌕</span>
             <input
               ref={inputRef}
-              className="w-full font-sans text-[13px] border-[1.5px] border-[#E0DFFF] rounded-[10px] py-[8px] pr-[10px] pl-[32px] outline-none text-mw-ink bg-mw-surface-purple box-border transition-[border-color,background] duration-150 placeholder:text-mw-ink-4 focus:border-mw-brand-deep focus:bg-white"
+              className="w-full font-atx-mono text-[13px] border border-atx-ink/25 py-[8px] pr-[10px] pl-[32px] outline-none text-atx-ink bg-atx-bone box-border transition-[border-color,background] duration-150 placeholder:text-atx-ink/45 focus:border-atx-blue focus:bg-atx-panel"
               type="text"
               placeholder="Search by name, symbol, or address…"
               value={query}
@@ -124,7 +119,7 @@ export function TokenSelector({ tokens = [], selected, onSelect, onClose, chainN
 
         <div className="overflow-y-auto flex-1 pt-[4px] pb-[8px]">
           {filtered.length === 0 ? (
-            <div className="px-[16px] py-[36px] text-center font-sans text-[13px] text-mw-ink-4">
+            <div className="px-[16px] py-[36px] text-center font-atx-display text-[13px] text-atx-ink/45">
               No tokens match "{query}"
             </div>
           ) : (
@@ -133,15 +128,15 @@ export function TokenSelector({ tokens = [], selected, onSelect, onClose, chainN
               return (
                 <div
                   key={token.address}
-                  className={`flex items-center gap-[10px] px-[16px] py-[8px] cursor-pointer transition-colors duration-100 hover:bg-mw-surface-purple${isSel ? ' bg-[#EEF1FF]' : ''}`}
+                  className={`flex items-center gap-[10px] px-[16px] py-[8px] cursor-pointer transition-colors duration-100 hover:bg-atx-bone${isSel ? ' bg-atx-bone' : ''}`}
                   onClick={() => { onSelect(token); onClose() }}
                 >
                   <TokenIcon token={token} />
                   <div className="flex-1 min-w-0">
-                    <div className="font-mono text-[13px] font-semibold text-mw-ink">{token.symbol}</div>
-                    <div className="font-sans text-[11px] text-mw-ink-4 whitespace-nowrap overflow-hidden text-ellipsis">{token.name}</div>
+                    <div className="font-atx-mono text-[13px] font-semibold text-atx-ink">{token.symbol}</div>
+                    <div className="font-atx-display text-[11px] text-atx-ink/45 whitespace-nowrap overflow-hidden text-ellipsis">{token.name}</div>
                   </div>
-                  {isSel && <span className="text-[16px] text-mw-brand-deep shrink-0">✓</span>}
+                  {isSel && <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block shrink-0" />}
                 </div>
               )
             })
