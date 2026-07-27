@@ -20,7 +20,19 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json({ error: 'Failed to load vaults' }, 500)
   }
 
-  const res = ctx.json(data ?? [])
+  // vault_epochs is a to-many join → collapse `current_epoch` to the single
+  // active (or latest) epoch so the shape matches SocialVault.current_epoch.
+  const rows = (data ?? []).map((v: Record<string, unknown>) => ({
+    ...v,
+    current_epoch: pickEpoch(v.current_epoch),
+  }))
+
+  const res = ctx.json(rows)
   res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
   return res
 })
+
+function pickEpoch(e: unknown) {
+  if (!Array.isArray(e)) return e ?? null
+  return e.find((x) => x?.status === 'active') ?? e[0] ?? null
+}

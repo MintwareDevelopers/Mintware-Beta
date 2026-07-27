@@ -14,7 +14,14 @@ export const GET = createHandler(async (req, ctx) => {
       .select(`*, current_epoch:vault_epochs(id, epoch_number, total_pool, bonus_pool, total_claimed, status, opened_at, closed_at, deadline, merkle_root)`)
       .eq('id', id).single()
     if (error || !vault) return ctx.json({ error: 'Vault not found' }, 404)
-    return ctx.json(vault)
+    // Collapse the vault_epochs to-many join to a single current epoch.
+    const epochs = (vault as Record<string, unknown>).current_epoch
+    return ctx.json({
+      ...vault,
+      current_epoch: Array.isArray(epochs)
+        ? (epochs.find((e) => e?.status === 'active') ?? epochs[0] ?? null)
+        : epochs ?? null,
+    })
   }
 
   if (address) {

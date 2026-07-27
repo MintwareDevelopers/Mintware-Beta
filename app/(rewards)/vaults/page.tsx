@@ -6,7 +6,6 @@ import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { fmtUSD } from '@/lib/web2/api'
-import { fetchVaults } from '@/lib/web2/vault/queries'
 import { VaultCard } from '@/components/web2/vault/VaultCard'
 import type { SocialVault, VaultStatus } from '@/lib/web2/vault/types'
 
@@ -64,10 +63,13 @@ function VaultsContent() {
   const [useMock, setUseMock] = useState(false)
 
   useEffect(() => {
-    fetchVaults()
-      .then(data => {
-        if (data.length === 0) {
-          // No vaults in DB yet — show mock data in dev
+    // Read via the server route (service-role) — the browser anon key can't
+    // read social_vaults, and this matches how /vault/[id] already fetches.
+    fetch('/api/vaults')
+      .then(r => r.json())
+      .then((data: SocialVault[]) => {
+        if (!Array.isArray(data) || data.length === 0) {
+          // No vaults seeded yet — show an illustrative example.
           setVaults(MOCK_VAULTS)
           setUseMock(true)
         } else {
