@@ -37,8 +37,7 @@ contract IntegrationTest is Test {
     // Actors
     // ─────────────────────────────────────────────────────────────────────────
 
-    address internal deployer = address(this); // test contract is deployer
-    address internal team     = makeAddr("team");
+    address internal deployer = address(this); // test contract is deployer + vault owner
     address internal alice    = makeAddr("alice");
     address internal bob      = makeAddr("bob");
     address internal oracle   = makeAddr("oracle");
@@ -150,7 +149,7 @@ contract IntegrationTest is Test {
         poolId = poolKey.toId();
 
         // ── 9. Mint tokens ────────────────────────────────────────────────────
-        proj.mint(team,  1_000_000e6);   // team seeds 1M PROJECT
+        proj.mint(deployer, 1_000_000e6); // owner (deployer) seeds — seedTeamTokens is onlyOwner
         usdc.mint(alice,   100_000e6);   // alice deposits USDC
         usdc.mint(bob,      50_000e6);   // bob for withdrawal tests
         // Mint some proj to TestSwapRouter-caller (bob) for swap tests
@@ -173,10 +172,10 @@ contract IntegrationTest is Test {
     /// @dev Seeds and initializes the V4 pool WITHOUT setting a tick range.
     ///      Use only in tests that need to verify pre-init or pre-rebalance state.
     function _initPoolOnly() internal {
-        vm.startPrank(team);
+        // The vault owner (deployer) seeds — seedTeamTokens is onlyOwner by design
+        // (the provider that deploys/owns the vault seeds it).
         proj.approve(address(socialVault), 100_000e6);
         socialVault.seedTeamTokens(VAULT_ID, address(proj), 100_000e6, poolKey, INIT_SQRT_PRICE);
-        vm.stopPrank();
     }
 
     function _deposit(address user, uint256 amount, SocialVault.LockTier tier) internal {

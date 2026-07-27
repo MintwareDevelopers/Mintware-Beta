@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {FeeVault} from "../src/FeeVault.sol";
+import {MockERC20} from "./mocks/MockERC20.sol";
 
 /// @notice FeeVault unit tests — epoch lifecycle, sweep, soft expiry, share config.
 contract FeeVaultTest is Test {
@@ -18,12 +19,13 @@ contract FeeVaultTest is Test {
     address internal oracleSigner = makeAddr("oracleSigner");
     address internal distributor  = makeAddr("distributor");
 
-    // Stub USDC — real mock ERC20 wired in T1.5
-    address internal mockUsdc = makeAddr("mockUsdc");
+    // Real mock ERC20 (6-dp) so closeEpoch's SafeERC20 transfers work.
+    MockERC20 internal mockUsdc;
 
     function setUp() public {
+        mockUsdc = new MockERC20("USD Coin", "USDC", 6);
         vm.prank(owner);
-        fv = new FeeVault(mockUsdc, distributor, oracleSigner, treasury);
+        fv = new FeeVault(address(mockUsdc), distributor, oracleSigner, treasury);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -164,6 +166,8 @@ contract FeeVaultTest is Test {
 
         vm.prank(hook);
         fv.notifyFeeReceipt(10_000, "mev");
+        // Fund the vault so closeEpoch can actually distribute the fees.
+        mockUsdc.mint(address(fv), 10_000);
 
         vm.prank(owner);
         fv.setShares(5_000, 2_500, 2_000, 500);
