@@ -99,16 +99,16 @@ function fmtTime(iso: string): string {
 // ---------------------------------------------------------------------------
 function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="bg-white border border-[#E0DFFF] rounded-md p-5 flex-1 min-w-0">
-      <div className="font-mono text-[22px] font-bold text-[#1A1A2E] mb-1 tracking-[-0.5px]">
+    <div className="bg-atx-panel border border-atx-ink/20 rounded-md p-5 flex-1 min-w-0">
+      <div className="font-atx-mono text-[22px] font-bold text-atx-ink mb-1 tracking-[-0.5px]">
         {value}
       </div>
       {sub && (
-        <div className="font-mono text-[11px] text-mw-ink-4 mb-1">
+        <div className="font-atx-mono text-[11px] text-atx-ink/55 mb-1">
           {sub}
         </div>
       )}
-      <div className="font-sans text-[12px] text-mw-ink-4">
+      <div className="font-atx-display text-[12px] text-atx-ink/55">
         {label}
       </div>
     </div>
@@ -120,11 +120,11 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 // ---------------------------------------------------------------------------
 function ManageSkeleton() {
   const block = (h: number, w = '100%') => (
-    <div style={{ height: h, background: '#F0EFFF', borderRadius: 8, width: w }} />
+    <div style={{ height: h, background: 'var(--color-atx-bone)', borderRadius: 0, border: '1px solid rgba(17,17,17,0.15)', width: w }} />
   )
   return (
     <div className="flex flex-col gap-5">
-      <div className="bg-white border border-[#E0DFFF] rounded-[18px] p-7">
+      <div className="bg-atx-panel border border-atx-ink/20 rounded-[18px] p-7">
         {block(28, '40%')}
         <div className="mt-3 flex gap-2">
           {block(22, '80px')}{block(22, '80px')}
@@ -132,7 +132,7 @@ function ManageSkeleton() {
       </div>
       <div className="flex gap-4">
         {[1,2,3,4].map(i => (
-          <div key={i} className="flex-1 bg-white border border-[#E0DFFF] rounded-md p-5">
+          <div key={i} className="flex-1 bg-atx-panel border border-atx-ink/20 rounded-md p-5">
             {block(24)}
             <div className="mt-2">{block(14, '55%')}</div>
           </div>
@@ -225,11 +225,13 @@ function ManageContent() {
   // ── No wallet ─────────────────────────────────────────────────────────────
   if (!address) {
     return (
-      <div className="min-h-screen bg-[#F7F6FF]">
+      <div className="min-h-screen bg-atx-bone font-atx-display text-atx-ink [&_*]:rounded-none">
         <MwNav />
         <main className="max-w-[760px] mx-auto px-4 pt-12 text-center">
-          <div className="text-[32px] mb-3 text-[#C4C3F0]">◎</div>
-          <div className="font-sans text-[16px] font-bold text-[#1A1A2E]">
+          <svg viewBox="0 0 100 100" className="w-8 h-8 text-atx-coral mx-auto mb-3" aria-hidden="true">
+            <path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z" />
+          </svg>
+          <div className="text-[16px] font-bold text-atx-ink">
             Connect wallet to manage
           </div>
         </main>
@@ -243,7 +245,7 @@ function ManageContent() {
   const campType = (campaign?.campaign_type as string) ?? ''
 
   return (
-    <div className="min-h-screen bg-[#F7F6FF] font-sans">
+    <div className="min-h-screen bg-atx-bone font-atx-display text-atx-ink [&_*]:rounded-none">
       <MwNav />
 
       <main className="max-w-[760px] mx-auto px-4 py-8">
@@ -251,17 +253,17 @@ function ManageContent() {
         {/* ── Back link ── */}
         <Link
           href="/dashboard"
-          className="inline-flex items-center gap-[6px] font-sans text-[13px] font-semibold text-mw-ink-4 no-underline mb-5 hover:text-mw-brand-deep transition-colors duration-150"
+          className="inline-flex items-center gap-[6px] font-atx-display text-[13px] font-semibold text-atx-ink/55 no-underline mb-5 hover:text-atx-blue transition-colors duration-150"
         >
           ← Back to Dashboard
         </Link>
 
         {/* ── Error / access denied ── */}
         {error && !loading && (
-          <div className="px-6 py-5 bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-md font-sans text-[14px] text-mw-pink mb-6 text-center">
+          <div className="px-6 py-5 bg-atx-panel border border-atx-clay font-atx-mono text-[14px] text-atx-clay mb-6 text-center">
             {error.includes('Access denied')
-              ? '🔒 Access denied — you are not the creator of this campaign'
-              : `⚠ ${error}`}
+              ? 'Access denied — you are not the creator of this campaign'
+              : error}
           </div>
         )}
 
@@ -272,42 +274,42 @@ function ManageContent() {
         {!loading && !error && campaign && (
           <>
             {/* ── 1. HEADER ── */}
-            <div className="bg-white border border-[#E0DFFF] rounded-lg p-6 mb-5">
+            <div className="bg-atx-panel border border-atx-ink/20 rounded-lg p-6 mb-5">
               <div className="flex items-start justify-between flex-wrap gap-4">
 
                 {/* Name + badges */}
                 <div>
-                  <h1 className="font-sans text-[22px] font-extrabold text-[#1A1A2E] mt-0 mb-[10px]">
+                  <h1 className="font-atx-display text-[22px] font-extrabold text-atx-ink mt-0 mb-[10px]">
                     {campName}
                   </h1>
                   <div className="flex gap-2 flex-wrap">
                     {/* Chain badge */}
-                    <span className="inline-block font-sans text-[12px] font-bold px-3 py-1 rounded-xl border text-mw-brand-deep border-[rgba(58,92,232,0.2)] bg-[#EEF1FF]">
+                    <span className="inline-block font-atx-display text-[12px] font-bold px-3 py-1 rounded-xl border text-atx-blue border-atx-ink/30">
                       {campaign.chain as string}
                     </span>
                     {/* Type badge */}
-                    <span className="inline-block font-sans text-[12px] font-bold px-3 py-1 rounded-xl border text-[#7B6FCC] border-[rgba(123,111,204,0.2)] bg-[rgba(123,111,204,0.08)]">
+                    <span className="inline-block font-atx-display text-[12px] font-bold px-3 py-1 rounded-xl border text-atx-blue border-atx-ink/30">
                       {campType === 'token_pool' ? 'Token Pool' : 'Points'}
                     </span>
                     {/* Status badge */}
                     {status === 'live' && (
-                      <span className="inline-block font-sans text-[12px] font-bold px-3 py-1 rounded-xl border text-mw-teal border-[rgba(42,158,138,0.2)] bg-[rgba(42,158,138,0.08)]">
-                        ● Live
+                      <span className="inline-block font-atx-display text-[12px] font-bold px-3 py-1 rounded-xl border text-atx-mesquite border-atx-ink/30">
+                        Live
                       </span>
                     )}
                     {status === 'paused' && (
-                      <span className="inline-block font-sans text-[12px] font-bold px-3 py-1 rounded-xl border text-mw-amber border-[rgba(194,122,0,0.2)] bg-[rgba(194,122,0,0.08)]">
-                        ⏸ Paused
+                      <span className="inline-block font-atx-display text-[12px] font-bold px-3 py-1 rounded-xl border text-atx-clay border-atx-ink/30">
+                        Paused
                       </span>
                     )}
                     {status === 'ended' && (
-                      <span className="inline-block font-sans text-[12px] font-bold px-3 py-1 rounded-xl border text-mw-ink-4 border-[#E0DFFF] bg-[#F7F6FF]">
+                      <span className="inline-block font-atx-display text-[12px] font-bold px-3 py-1 rounded-xl border text-atx-ink/55 border-atx-ink/30">
                         Ended
                       </span>
                     )}
                     {status === 'upcoming' && (
-                      <span className="inline-block font-sans text-[12px] font-bold px-3 py-1 rounded-xl border text-mw-amber border-[rgba(194,122,0,0.2)] bg-[rgba(194,122,0,0.08)]">
-                        ◷ Upcoming
+                      <span className="inline-block font-atx-display text-[12px] font-bold px-3 py-1 rounded-xl border text-atx-clay border-atx-ink/30">
+                        Upcoming
                       </span>
                     )}
                   </div>
@@ -319,24 +321,24 @@ function ManageContent() {
                     <button
                       disabled={actionLoading}
                       onClick={() => handleAction('pause')}
-                      className="font-sans text-[13px] font-bold border-none rounded-sm px-[18px] py-[9px] cursor-pointer transition-opacity duration-150 bg-mw-amber text-white disabled:opacity-40 disabled:cursor-not-allowed hover:not-disabled:opacity-85"
+                      className="font-atx-display text-[13px] font-bold border-none rounded-sm px-[18px] py-[9px] cursor-pointer transition-opacity duration-150 bg-atx-clay text-white border border-atx-ink disabled:opacity-40 disabled:cursor-not-allowed hover:not-disabled:opacity-85"
                     >
-                      ⏸ Pause Campaign
+                      Pause Campaign
                     </button>
                   )}
                   {status === 'paused' && (
                     <button
                       disabled={actionLoading}
                       onClick={() => handleAction('resume')}
-                      className="font-sans text-[13px] font-bold border-none rounded-sm px-[18px] py-[9px] cursor-pointer transition-opacity duration-150 bg-mw-teal text-white disabled:opacity-40 disabled:cursor-not-allowed hover:not-disabled:opacity-85"
+                      className="font-atx-display text-[13px] font-bold border-none rounded-sm px-[18px] py-[9px] cursor-pointer transition-opacity duration-150 bg-atx-mesquite text-white border border-atx-ink disabled:opacity-40 disabled:cursor-not-allowed hover:not-disabled:opacity-85"
                     >
-                      ▶ Resume Campaign
+                      Resume Campaign
                     </button>
                   )}
                   {status === 'ended' && (
                     <button
                       disabled
-                      className="font-sans text-[13px] font-bold border-none rounded-sm px-[18px] py-[9px] cursor-not-allowed opacity-40 bg-[#F0EFFF] text-[#C4C3F0]"
+                      className="font-atx-display text-[13px] font-bold border-none rounded-sm px-[18px] py-[9px] cursor-not-allowed opacity-40 bg-atx-bone text-atx-ink/40"
                     >
                       Campaign Ended
                     </button>
@@ -372,25 +374,25 @@ function ManageContent() {
 
             {/* ── 3. TOKEN POOL SECTION ── */}
             {campType === 'token_pool' && (
-              <div className="bg-white border border-[#E0DFFF] rounded-lg p-6 mb-5">
-                <h2 className="font-sans text-[16px] font-bold text-[#1A1A2E] mt-0 mb-4">Token Reward Pool</h2>
+              <div className="bg-atx-panel border border-atx-ink/20 rounded-lg p-6 mb-5">
+                <h2 className="font-atx-display text-[16px] font-bold text-atx-ink mt-0 mb-4">Token Reward Pool</h2>
 
                 {/* Rate chips */}
                 <div className="flex gap-2 flex-wrap mb-5">
-                  <span className="inline-block font-sans text-[12px] font-bold px-3 py-1 rounded-xl border text-mw-teal border-[rgba(42,158,138,0.2)] bg-[rgba(42,158,138,0.07)]">
+                  <span className="inline-block font-atx-display text-[12px] font-bold px-3 py-1 rounded-xl border text-atx-mesquite border-atx-ink/30">
                     Buyer {campaign.buyer_reward_pct as number ?? 0}%
                   </span>
-                  <span className="inline-block font-sans text-[12px] font-bold px-3 py-1 rounded-xl border text-[#7B6FCC] border-[rgba(123,111,204,0.2)] bg-[rgba(123,111,204,0.07)]">
+                  <span className="inline-block font-atx-display text-[12px] font-bold px-3 py-1 rounded-xl border text-atx-blue border-atx-ink/30">
                     Referral {campaign.referral_reward_pct as number ?? 0}%
                   </span>
-                  <span className="inline-block font-sans text-[12px] font-bold px-3 py-1 rounded-xl border text-mw-ink-4 border-[#E0DFFF] bg-[#F7F6FF]">
+                  <span className="inline-block font-atx-display text-[12px] font-bold px-3 py-1 rounded-xl border text-atx-ink/55 border-atx-ink/30">
                     Platform 2%
                   </span>
                 </div>
 
                 {/* Burn rate */}
                 {data!.stats.total_volume_usd > 0 && data!.stats.pool_remaining_usd != null && (
-                  <div className="px-4 py-3 bg-[#FFFBF0] border border-[rgba(194,122,0,0.15)] rounded-[10px] font-sans text-[13px] text-mw-amber mb-6">
+                  <div className="px-4 py-3 bg-atx-bone border border-atx-clay/40 rounded-[10px] font-atx-display text-[13px] text-atx-clay mb-6">
                     {(() => {
                       const dailyRate = data!.stats.total_volume_usd / Math.max(1, 30) *
                         ((campaign.buyer_reward_pct as number ?? 0) +
@@ -406,11 +408,11 @@ function ManageContent() {
                 )}
 
                 {/* Top referrers */}
-                <h3 className="font-sans text-[14px] font-bold text-[#1A1A2E] mt-0 mb-3">
+                <h3 className="font-atx-display text-[14px] font-bold text-atx-ink mt-0 mb-3">
                   Top Referrers
                 </h3>
                 {!data!.top_referrers || data!.top_referrers.length === 0 ? (
-                  <div className="font-sans text-[13px] text-mw-ink-4 py-4">
+                  <div className="font-atx-display text-[13px] text-atx-ink/55 py-4">
                     No referrals yet.
                   </div>
                 ) : (
@@ -418,17 +420,17 @@ function ManageContent() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Wallet</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Referred</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Earned</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Wallet</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Referred</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Earned</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data!.top_referrers.map((r, i) => (
-                          <tr key={i} className="hover:bg-[#FAFAFF]">
-                            <td className="px-3 py-[10px] font-mono text-[12px] text-[#1A1A2E] border-b border-[#F0EFFF] last:border-b-0">{shortAddr(r.wallet)}</td>
-                            <td className="px-3 py-[10px] font-mono text-[13px] text-[#1A1A2E] border-b border-[#F0EFFF] last:border-b-0">{r.referred}</td>
-                            <td className="px-3 py-[10px] font-mono text-[13px] text-[#1A1A2E] border-b border-[#F0EFFF] last:border-b-0">{fmtUSD(r.earned)}</td>
+                          <tr key={i} className="hover:bg-atx-bone">
+                            <td className="px-3 py-[10px] font-atx-mono text-[12px] text-atx-ink border-b border-atx-ink/12 last:border-b-0">{shortAddr(r.wallet)}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[13px] text-atx-ink border-b border-atx-ink/12 last:border-b-0">{r.referred}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[13px] text-atx-ink border-b border-atx-ink/12 last:border-b-0">{fmtUSD(r.earned)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -437,11 +439,11 @@ function ManageContent() {
                 )}
 
                 {/* Recent transactions */}
-                <h3 className="font-sans text-[14px] font-bold text-[#1A1A2E] mt-0 mb-3">
+                <h3 className="font-atx-display text-[14px] font-bold text-atx-ink mt-0 mb-3">
                   Recent Transactions
                 </h3>
                 {!data!.recent_txs || data!.recent_txs.length === 0 ? (
-                  <div className="font-sans text-[13px] text-mw-ink-4 py-4">
+                  <div className="font-atx-display text-[13px] text-atx-ink/55 py-4">
                     No transactions yet.
                   </div>
                 ) : (
@@ -449,19 +451,19 @@ function ManageContent() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Time</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Wallet</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Swap $</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Reward $</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Time</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Wallet</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Swap $</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Reward $</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data!.recent_txs.map((tx, i) => (
-                          <tr key={i} className="hover:bg-[#FAFAFF]">
-                            <td className="px-3 py-[10px] font-mono text-[12px] text-mw-ink-4 border-b border-[#F0EFFF]">{fmtTime(tx.time)}</td>
-                            <td className="px-3 py-[10px] font-mono text-[12px] text-[#1A1A2E] border-b border-[#F0EFFF]">{shortAddr(tx.wallet)}</td>
-                            <td className="px-3 py-[10px] font-mono text-[13px] text-[#1A1A2E] border-b border-[#F0EFFF]">{fmtUSD(tx.amount_usd)}</td>
-                            <td className="px-3 py-[10px] font-mono text-[13px] text-mw-teal border-b border-[#F0EFFF]">
+                          <tr key={i} className="hover:bg-atx-bone">
+                            <td className="px-3 py-[10px] font-atx-mono text-[12px] text-atx-ink/55 border-b border-atx-ink/12">{fmtTime(tx.time)}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[12px] text-atx-ink border-b border-atx-ink/12">{shortAddr(tx.wallet)}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[13px] text-atx-ink border-b border-atx-ink/12">{fmtUSD(tx.amount_usd)}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[13px] text-atx-mesquite border-b border-atx-ink/12">
                               {fmtUSD(tx.amount_usd *
                                 ((campaign.buyer_reward_pct as number ?? 0) / 100))}
                             </td>
@@ -476,15 +478,15 @@ function ManageContent() {
 
             {/* ── 4. POINTS SECTION ── */}
             {campType === 'points' && (
-              <div className="bg-white border border-[#E0DFFF] rounded-lg p-6 mb-5">
-                <h2 className="font-sans text-[16px] font-bold text-[#1A1A2E] mt-0 mb-4">Points Campaign</h2>
+              <div className="bg-atx-panel border border-atx-ink/20 rounded-lg p-6 mb-5">
+                <h2 className="font-atx-display text-[16px] font-bold text-atx-ink mt-0 mb-4">Points Campaign</h2>
 
                 {/* Leaderboard */}
-                <h3 className="font-sans text-[14px] font-bold text-[#1A1A2E] mt-0 mb-3">
+                <h3 className="font-atx-display text-[14px] font-bold text-atx-ink mt-0 mb-3">
                   Leaderboard
                 </h3>
                 {!data!.leaderboard || data!.leaderboard.length === 0 ? (
-                  <div className="font-sans text-[13px] text-mw-ink-4 py-4 mb-6">
+                  <div className="font-atx-display text-[13px] text-atx-ink/55 py-4 mb-6">
                     No participants yet.
                   </div>
                 ) : (
@@ -492,21 +494,21 @@ function ManageContent() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">#</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Wallet</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Points</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Est. Payout</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">#</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Wallet</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Points</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Est. Payout</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data!.leaderboard.map(row => (
-                          <tr key={row.rank} className="hover:bg-[#FAFAFF]">
-                            <td className={`px-3 py-[10px] font-mono text-[13px] border-b border-[#F0EFFF] ${row.rank <= 3 ? 'text-mw-brand-deep font-bold' : 'text-mw-ink-4 font-normal'}`}>
+                          <tr key={row.rank} className="hover:bg-atx-bone">
+                            <td className={`px-3 py-[10px] font-atx-mono text-[13px] border-b border-atx-ink/12 ${row.rank <= 3 ? 'text-atx-blue font-bold' : 'text-atx-ink/55 font-normal'}`}>
                               {row.rank}
                             </td>
-                            <td className="px-3 py-[10px] font-mono text-[12px] text-[#1A1A2E] border-b border-[#F0EFFF]">{shortAddr(row.wallet)}</td>
-                            <td className="px-3 py-[10px] font-mono text-[13px] text-[#1A1A2E] border-b border-[#F0EFFF]">{row.points.toLocaleString()}</td>
-                            <td className="px-3 py-[10px] font-mono text-[13px] text-mw-teal border-b border-[#F0EFFF]">{fmtUSD(row.est_payout)}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[12px] text-atx-ink border-b border-atx-ink/12">{shortAddr(row.wallet)}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[13px] text-atx-ink border-b border-atx-ink/12">{row.points.toLocaleString()}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[13px] text-atx-mesquite border-b border-atx-ink/12">{fmtUSD(row.est_payout)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -515,11 +517,11 @@ function ManageContent() {
                 )}
 
                 {/* Epoch history */}
-                <h3 className="font-sans text-[14px] font-bold text-[#1A1A2E] mt-0 mb-3">
+                <h3 className="font-atx-display text-[14px] font-bold text-atx-ink mt-0 mb-3">
                   Epoch History
                 </h3>
                 {!data!.epoch_history || data!.epoch_history.length === 0 ? (
-                  <div className="font-sans text-[13px] text-mw-ink-4 py-4">
+                  <div className="font-atx-display text-[13px] text-atx-ink/55 py-4">
                     No epoch distributions yet.
                   </div>
                 ) : (
@@ -527,19 +529,19 @@ function ManageContent() {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Epoch</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Date</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Participants</th>
-                          <th className="text-left px-3 py-[10px] font-sans text-[11px] font-bold text-mw-ink-4 uppercase tracking-[0.4px] border-b border-[#E0DFFF]">Paid Out</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Epoch</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Date</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Participants</th>
+                          <th className="text-left px-3 py-[10px] font-atx-display text-[11px] font-bold text-atx-ink/55 uppercase tracking-[0.4px] border-b border-atx-ink">Paid Out</th>
                         </tr>
                       </thead>
                       <tbody>
                         {data!.epoch_history.map((ep, i) => (
-                          <tr key={i} className="hover:bg-[#FAFAFF]">
-                            <td className="px-3 py-[10px] font-mono text-[13px] text-[#1A1A2E] border-b border-[#F0EFFF]">#{ep.epoch_number}</td>
-                            <td className="px-3 py-[10px] font-mono text-[12px] text-mw-ink-4 border-b border-[#F0EFFF]">{fmtDate(ep.date)}</td>
-                            <td className="px-3 py-[10px] font-mono text-[13px] text-[#1A1A2E] border-b border-[#F0EFFF]">{ep.participants}</td>
-                            <td className="px-3 py-[10px] font-mono text-[13px] text-[#1A1A2E] border-b border-[#F0EFFF]">{fmtUSD(ep.paid_out_usd)}</td>
+                          <tr key={i} className="hover:bg-atx-bone">
+                            <td className="px-3 py-[10px] font-atx-mono text-[13px] text-atx-ink border-b border-atx-ink/12">#{ep.epoch_number}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[12px] text-atx-ink/55 border-b border-atx-ink/12">{fmtDate(ep.date)}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[13px] text-atx-ink border-b border-atx-ink/12">{ep.participants}</td>
+                            <td className="px-3 py-[10px] font-atx-mono text-[13px] text-atx-ink border-b border-atx-ink/12">{fmtUSD(ep.paid_out_usd)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -550,29 +552,29 @@ function ManageContent() {
             )}
 
             {/* ── 5. DANGER ZONE ── */}
-            <div className="border border-mw-pink bg-[rgba(194,83,122,0.04)] rounded-lg overflow-hidden mb-10">
+            <div className="border border-atx-clay bg-atx-panel rounded-lg overflow-hidden mb-10">
               {/* Collapsed header / toggle */}
               <button
                 onClick={() => setDangerOpen(!dangerOpen)}
                 className="w-full px-6 py-4 bg-transparent border-none cursor-pointer flex items-center justify-between"
               >
-                <span className="font-sans text-[14px] font-bold text-mw-pink">
-                  ⚠ Danger Zone
+                <span className="font-atx-display text-[14px] font-bold text-atx-clay">
+                  Danger Zone
                 </span>
-                <span className="text-mw-pink text-[16px]">
+                <span className="text-atx-clay text-[16px]">
                   {dangerOpen ? '▲' : '▼'}
                 </span>
               </button>
 
               {dangerOpen && (
                 <div className="px-6 pb-6">
-                  <p className="font-sans text-[13px] text-mw-ink-4 mt-0 mb-4">
+                  <p className="font-atx-display text-[13px] text-atx-ink/55 mt-0 mb-4">
                     Ending the campaign will immediately stop all reward accrual.
                     Remaining pool can be withdrawn after ending.
                   </p>
 
                   <div className="mb-3">
-                    <label className="font-sans text-[12px] font-semibold text-mw-pink block mb-[6px]">
+                    <label className="font-atx-display text-[12px] font-semibold text-atx-clay block mb-[6px]">
                       Type campaign name to confirm: <strong>{campName}</strong>
                     </label>
                     <input
@@ -580,14 +582,14 @@ function ManageContent() {
                       value={confirmName}
                       onChange={e => setConfirmName(e.target.value)}
                       placeholder={campName}
-                      className="w-full px-[14px] py-[10px] border border-[rgba(194,83,122,0.3)] rounded-sm text-[13px] font-sans outline-none bg-white box-border"
+                      className="w-full px-[14px] py-[10px] border border-atx-ink/30 rounded-sm text-[13px] font-atx-display outline-none bg-atx-panel box-border"
                     />
                   </div>
 
                   <button
                     disabled={confirmName !== campName || actionLoading || status === 'ended'}
                     onClick={() => handleAction('end')}
-                    className={`font-sans text-[13px] font-bold border-none rounded-sm px-[18px] py-[9px] cursor-pointer transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${confirmName === campName && status !== 'ended' ? 'bg-mw-pink text-white' : 'bg-[#F0EFFF] text-[#C4C3F0]'}`}
+                    className={`font-atx-display text-[13px] font-bold border-none rounded-sm px-[18px] py-[9px] cursor-pointer transition-opacity duration-150 disabled:opacity-40 disabled:cursor-not-allowed ${confirmName === campName && status !== 'ended' ? 'bg-atx-clay text-white border border-atx-ink' : 'bg-atx-bone text-atx-ink/40'}`}
                   >
                     End Campaign Early
                   </button>
