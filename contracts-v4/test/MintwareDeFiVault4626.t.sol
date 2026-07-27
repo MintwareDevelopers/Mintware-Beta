@@ -19,6 +19,7 @@ import {MintwareBaseVault4626}   from "../src/vaults/MintwareBaseVault4626.sol";
 import {VaultSurface, LockTier, VaultConfig, PoolProfile} from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20} from "./mocks/MockERC20.sol";
+import {MockYieldAdapter} from "./mocks/MockYieldAdapter.sol";
 
 /// @notice Integration tests for the Phase-3 ERC-4626 DeFi vault against a real V4 PoolManager.
 ///         Proves: deposit → shares minted + liquidity deployed → async lock redeem →
@@ -294,5 +295,67 @@ contract MintwareDeFiVault4626Test is Test {
 
         assertEq(usdc.balanceOf(feeTreasury) - tBefore, 100e6, "exit fee 1% to treasury");
         assertApproxEqAbs(usdc.balanceOf(alice) - aBefore, 9_900e6, 1, "payout net of exit fee");
+    }
+
+    // ── Track A4: idle-capital routing ───────────────────────────────────────
+
+    function test_idle_reduces_deployed_liquidity_to_40pct() public {
+        // Single-sided LP at a straddling range doesn't consume a clean USDC amount, but
+        // deployed liquidity is LINEAR in the input, so a 60%-idle deposit deploys ~40% of
+        // the liquidity a full deposit would (price is static across single-sided adds).
+        _seedPool();
+        _deposit(alice, 10_000e6, LockTier.Flex); // idle off
+        uint128 lFull = vault.totalLiquidity();
+        assertGt(lFull, 0, "full deposit deploys liquidity");
+
+        vault.setIdleConfig(true, 6_000); // 60% reserve
+        _deposit(bob, 10_000e6, LockTier.Flex); // idle on
+        uint128 lIdle = vault.totalLiquidity() - lFull; // incremental from bob's deposit
+
+        assertApproxEqRel(uint256(lIdle), (uint256(lFull) * 40) / 100, 0.01e18, "idle deploys ~40%");
+        assertEq(vault.totalPrincipal(), 20_000e6, "principal counts both deposits fully");
+        assertGt(vault.idleReserve(), 0, "idle reserve accumulates");
+    }
+
+    function test_route_and_harvest_yield_splits_70_30() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        _seedPool();
+        vault.setIdleConfig(true, 6_000);
+        vault.setYieldAdapter(address(adapter));
+
+        _deposit(alice, 10_000e6, LockTier.Flex); // 6_000 reserve in vault
+        vault.routeIdleToYield(6_000e6);
+        assertEq(adapter.totalAssets(), 6_000e6, "reserve routed to adapter");
+        assertEq(vault.principalInAdapter(), 6_000e6);
+
+        // Simulate 600 USDC of yield accruing in the adapter.
+        usdc.mint(address(adapter), 600e6);
+
+        uint256 fBefore = usdc.balanceOf(address(feeVault));
+        uint256 tBefore = usdc.balanceOf(feeTreasury); // setUp vault's treasury == feeTreasury
+        uint256 yield = vault.harvestYield();
+
+        assertEq(yield, 600e6, "yield = balance above principal");
+        assertEq(usdc.balanceOf(address(feeVault)) - fBefore, 420e6, "70% depositors -> FeeVault");
+        assertEq(usdc.balanceOf(feeTreasury) - tBefore, 180e6, "30% Mintware -> treasury");
+        assertEq(vault.principalInAdapter(), 6_000e6, "principal untouched by harvest");
+    }
+
+    function test_harvest_no_yield_returns_zero() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        vault.setYieldAdapter(address(adapter));
+        assertEq(vault.harvestYield(), 0, "no yield");
+    }
+
+    function test_setIdleConfig_rejects_ratio_over_100pct() public {
+        vm.expectRevert(MintwareDeFiVault4626.RatioTooHigh.selector);
+        vault.setIdleConfig(true, 10_001);
+    }
+
+    function test_routeIdleToYield_requires_enabled() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        vault.setYieldAdapter(address(adapter));
+        vm.expectRevert(MintwareDeFiVault4626.IdleNotEnabled.selector);
+        vault.routeIdleToYield(1e6);
     }
 }

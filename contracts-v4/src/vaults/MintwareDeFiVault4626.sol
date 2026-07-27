@@ -16,6 +16,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 
 import {MintwareBaseVault4626, IFeeVaultNotifier} from "./MintwareBaseVault4626.sol";
 import {VaultConfig, PoolProfile} from "./VaultTypes.sol";
+import {IYieldAdapter} from "./IYieldAdapter.sol";
 
 /// @title  MintwareDeFiVault4626
 /// @notice Surface-1 (DeFi) vault. Extends the ERC-4626 base with single-sided
@@ -47,14 +48,35 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
     uint256 public constant SWAP_MINTWARE_BPS  = 2_500;
     uint256 public constant SWAP_PROVIDER_BPS  = 2_500;
 
+    /// @notice Idle-capital yield split (spec): 70% depositors / 30% Mintware.
+    uint256 public constant IDLE_DEPOSITOR_BPS = 7_000;
+    uint256 public constant IDLE_MINTWARE_BPS  = 3_000;
+
+    // Idle-capital state (Track A4). When enabled, deposits deploy only
+    // (1 - idleTargetRatioBps) into the LP and hold the rest as a USDC reserve that a
+    // keeper routes to `yieldAdapter`. The reserve covers the idle portion at redemption,
+    // so the base redeem logic is unchanged.
+    address public yieldAdapter;
+    bool    public idleEnabled;
+    uint256 public idleTargetRatioBps;  // e.g. 6_000 = 60%
+    uint256 public principalInAdapter;  // USDC principal currently in the adapter
+
     event TeamSeeded(bytes32 indexed vaultId, address token, uint256 amount);
     event ProfileRebalanced(PoolProfile indexed profile, int24 tickLower, int24 tickUpper);
     event SwapFeesCollected(uint256 usdcFees, uint256 projFees, uint256 toDepositors, uint256 toMintware, uint256 toProvider);
+    event IdleConfigured(bool enabled, uint256 targetRatioBps);
+    event YieldAdapterSet(address indexed adapter);
+    event IdleRouted(uint256 amount);
+    event IdleRecalled(uint256 amount);
+    event YieldHarvested(uint256 yield, uint256 toDepositors, uint256 toMintware);
 
     error InvalidSeed();
     error SeedAlreadyInitialized();
     error InvalidPoolKey();
     error EmptyProfileRange();
+    error IdleNotEnabled();
+    error NoYieldAdapter();
+    error RatioTooHigh();
 
     constructor(VaultConfig memory cfg, address _poolManager, address _feeVault)
         MintwareBaseVault4626(cfg, _poolManager, _feeVault)
@@ -176,11 +198,81 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Idle-capital routing (Track A4)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Enable/disable idle capital and set the reserve target (bps of a deposit
+    ///         held back from the LP). e.g. 6_000 = 60% reserve / 40% LP.
+    function setIdleConfig(bool enabled, uint256 targetRatioBps) external onlyOwner {
+        if (targetRatioBps > BPS) revert RatioTooHigh();
+        idleEnabled        = enabled;
+        idleTargetRatioBps = targetRatioBps;
+        emit IdleConfigured(enabled, targetRatioBps);
+    }
+
+    function setYieldAdapter(address adapter) external onlyOwner {
+        yieldAdapter = adapter;
+        emit YieldAdapterSet(adapter);
+    }
+
+    /// @notice Route `amount` of the idle USDC reserve into the yield adapter.
+    function routeIdleToYield(uint256 amount) external onlyOwner {
+        if (!idleEnabled) revert IdleNotEnabled();
+        if (yieldAdapter == address(0)) revert NoYieldAdapter();
+        IERC20(asset()).forceApprove(yieldAdapter, amount);
+        IYieldAdapter(yieldAdapter).deposit(amount);
+        principalInAdapter += amount;
+        emit IdleRouted(amount);
+    }
+
+    /// @notice Pull `amount` of routed principal back from the adapter into the vault.
+    function recallIdleFromYield(uint256 amount) external onlyOwner {
+        if (yieldAdapter == address(0)) revert NoYieldAdapter();
+        IYieldAdapter(yieldAdapter).withdraw(amount);
+        principalInAdapter = amount >= principalInAdapter ? 0 : principalInAdapter - amount;
+        emit IdleRecalled(amount);
+    }
+
+    /// @notice Harvest adapter yield (balance above routed principal) and split it
+    ///         70% depositors (→ FeeVault epoch) / 30% Mintware (→ treasury).
+    function harvestYield() external nonReentrant returns (uint256 yield) {
+        if (yieldAdapter == address(0)) revert NoYieldAdapter();
+
+        uint256 bal = IYieldAdapter(yieldAdapter).totalAssets();
+        yield = bal > principalInAdapter ? bal - principalInAdapter : 0;
+        if (yield == 0) return 0;
+
+        IYieldAdapter(yieldAdapter).withdraw(yield);
+
+        uint256 toDepositors = (yield * IDLE_DEPOSITOR_BPS) / BPS;
+        uint256 toMintware   = yield - toDepositors;
+
+        IERC20(asset()).safeTransfer(treasury, toMintware);
+        if (toDepositors > 0) {
+            IERC20(asset()).safeTransfer(feeVault, toDepositors);
+            IFeeVaultNotifier(feeVault).notifyFeeReceipt(toDepositors, "idle_yield");
+        }
+        emit YieldHarvested(yield, toDepositors, toMintware);
+    }
+
+    /// @notice Idle USDC held by the vault + routed to the adapter (excludes LP position).
+    function idleReserve() external view returns (uint256) {
+        return IERC20(asset()).balanceOf(address(this)) + principalInAdapter;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Liquidity hooks — implement the base's virtuals
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// @dev Add `assets` USDC as single-sided liquidity at the current tick range.
+    /// @dev Add USDC as single-sided liquidity at the current tick range. When idle
+    ///      capital is enabled, only (1 - idleTargetRatioBps) is deployed; the remainder
+    ///      stays as a USDC reserve in the vault for the keeper to route to yield.
     function _deployLiquidity(uint256 assets) internal override returns (bytes memory) {
+        if (idleEnabled && idleTargetRatioBps > 0) {
+            assets = assets - (assets * idleTargetRatioBps) / BPS;
+            if (assets == 0) return "";
+        }
+
         uint160 sqrtLower = TickMath.getSqrtPriceAtTick(tickLower);
         uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(tickUpper);
         bool usdcIsToken0 = Currency.unwrap(poolKey.currency0) == asset();
