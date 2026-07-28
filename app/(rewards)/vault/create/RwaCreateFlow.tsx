@@ -89,7 +89,7 @@ function StepIssuer({ draft, patch }: { draft: RwaDraft; patch: (d: Partial<RwaD
       <div className="text-[12px] text-atx-ink/70 font-atx-display leading-[1.55]">
         No <strong>verified</strong> asset providers yet. RWA deals can only be published by a
         VERIFIED issuer (registered + diligence-checked in the SPV registry).
-        Contact Mintware to onboard as an asset provider.
+        <a href="/issuer/register" className="text-atx-blue font-semibold no-underline hover:underline"> Register as an asset provider →</a>
       </div>
     </div>
   )

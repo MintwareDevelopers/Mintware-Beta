@@ -102,6 +102,25 @@ export function buildAdminMessage(input: {
   )
 }
 
+export function buildIssuerRegisterMessage(input: {
+  wallet: string
+  issuedAt: number
+  id: string
+  name: string
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-issuer-register',
+      wallet: normalizeAddress(input.wallet),
+      issuedAt: input.issuedAt,
+      id: input.id,
+      name: input.name,
+    },
+    null,
+    2,
+  )
+}
+
 export function buildRwaDealMessage(input: {
   issuerWallet: string
   issuedAt: number
