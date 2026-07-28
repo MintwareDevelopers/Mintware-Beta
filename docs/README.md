@@ -8,7 +8,7 @@ Mintware is also designed to make on-chain actions easier to understand before y
 
 ---
 
-## Three Products, One Stack
+## The Mintware Stack
 
 ### Attribution — On-Chain Reputation
 A live scoring engine that analyses your full wallet history across 100+ chains and produces a single composite reputation score. Your score reflects the depth, consistency, and quality of your on-chain behaviour — not just your balance.
@@ -28,10 +28,13 @@ Depending on the route and token pair, Mintware can show:
 - route and chain context
 - warnings for missing gas balance or unusual price impact
 
-### Social Liquidity Vaults *(Coming Soon)*
-LP vaults built on Uniswap V4 where your share of the fee pool is weighted by your Attribution score and referral network. The same deposit earns more if you've built a stronger on-chain reputation.
+### Two-Surface Vaults — DeFi + RWA
+Liquidity vaults on Uniswap V4 where your share of the fee pool is weighted by your Attribution score and referral network — the same deposit earns more if you've built a stronger on-chain reputation. Two surfaces on one shared ERC-4626 base:
 
-Vault flows are also being built with clearer staged guidance around approvals, deposits, and higher-trust actions.
+- **DeFi** — permissionless yield: dynamic fees, idle-capital routing, MEV protection, attribution-weighted fee share.
+- **RWA** — tokenized real-world assets (private credit, real-estate, energy), SPV-wrapped with oracle-banded pricing, KYC-at-redemption, and async 30-day settlement.
+
+The reputation-yield experience and the full RWA deal pipeline (register → verify → author → approve → publish → redeem) are live in production. See [Two-Surface Vaults](vaults/overview.md) and [RWA Deals](vaults/rwa-deals.md).
 
 ---
 
@@ -42,7 +45,8 @@ Vault flows are also being built with clearer staged guidance around approvals, 
 * [Token Reward Pools](campaigns/token-reward-pools.md)
 * [Points Campaigns](campaigns/points-campaigns.md)
 * [AI Agent Campaigns](campaigns/ai-campaigns.md)
-* [Social Vaults](vaults/overview.md)
+* [Two-Surface Vaults](vaults/overview.md)
+* [RWA Deals — Lifecycle & Trust](vaults/rwa-deals.md)
 * [Connect your wallet](getting-started/connect-wallet.md)
 * [API reference](developers/api-reference.md)
 * [Smart contracts](developers/smart-contracts.md)
@@ -60,5 +64,6 @@ Vault flows are also being built with clearer staged guidance around approvals, 
 | Referral system | ✅ Live |
 | Arbitrum campaigns | ✅ Live |
 | AI Agent Campaigns | ✅ Live — Base mainnet |
-| Social Liquidity Vaults | 🔜 Coming soon — Phase 2 |
+| Two-Surface Vaults (DeFi + RWA) | ✅ Live — reputation-yield + RWA deal pipeline in production |
+| RWA on-chain settlement | 🟡 Testnet — gated on the legal track before mainnet |
 | Self-serve campaign creation | 🔜 Coming soon |
