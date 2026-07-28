@@ -215,20 +215,23 @@ does that, if at all.
 
 ## 8. Build tracks & sequencing
 
-| Track | Work | New mechanics | Depends on |
+| Track | Work | Status | Depends on |
 |---|---|---|---|
-| **R0 — Surface flag** ✅ | `campaigns.surface` / `linked_deal_id` / `duration_match_days` | None (config) | migration `20260728000001` |
-| **R1 — Volume + referral on RWA** | Volume/referral campaigns on the RWA pool | None | R0, live `vRWA/USDC` pool |
-| **R2 — LP incentive on RWA** | Attribution-weighted LP rewards on RWA pool | None (`FeeVault` exists) | R0 |
-| **R4 — Hold-snapshot credit** | `subscribe`/`hold` actions + snapshot cron | §4.1 | R0 |
-| **R5 — Duration-match lock** | Lock-to-maturity bonus | §4.2 | R4, `LockLib` |
-| **R6 — Reward denomination** | Per-class denomination (incentive vs. yield token) | §7 | — |
+| **R0 — Surface flag** | `campaigns.surface` / `linked_deal_id` / `duration_match_days` + create-route | ✅ built | migration `20260728000001` |
+| **R1 — RWA campaign creation** | `/api/vaults/deals` + surface picker + deal-linking in creator | ✅ built | R0 |
+| **R2 — LP incentive on RWA** | Attribution-weighted LP rewards | ✅ by reuse — the existing `vault-epoch-close` cron + `processVaultEpoch` + `FeeVault` cover any vault, including RWA | a real RWA vault on those contracts |
+| **R4 — Hold-snapshot credit** | `hold` action + weekly snapshot cron | ✅ built (16 unit tests) — cron skips `no_vault_token` until a live vault | live `vRWA` vault for real balances |
+| **R5 — Duration-match lock** | Lock-to-maturity bonus | ✅ math built + tested; ⏳ on-chain `lockDays` source still to wire (bonus inert until then) | R4, on-chain lock read |
+| **R6 — Reward denomination** | Incentive vs. yield-token rewards | ✅ by construction — the creator's token selection (Step 1) *is* the denomination lever | — |
 
 > **R3 (KYC gate) is deleted, not deferred** — the incentive layer is permissionless by
 > construction (§3.0). Track numbers R1–R6 are kept stable for continuity; there is no R3.
 
-R0–R2 are near-free (config over the existing engine) and can ship as soon as a real `vRWA/USDC`
-pool is live. R4–R5 are the genuine build. R6 is a denomination lever, not a gate.
+**What remains before this runs end-to-end in production:** (1) apply migration
+`20260728000001`; (2) deploy a real `vRWA/USDC` vault so the hold-snapshot cron reads live balances
+(volume/referral/LP campaigns also verify swaps against it); (3) wire an on-chain `lockDays` source
+to activate the R5 duration-match bonus. The engine, credit path, and creation flow are all built
+and tested; they light up the moment a live vault exists.
 
 ---
 
