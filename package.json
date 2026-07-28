@@ -36,6 +36,7 @@
     "forge:deploy:seedpool:dry-run": "forge script contracts-v4/script/DeploySeedPool.s.sol --rpc-url base_sepolia -vvvv",
     "forge:deploy:seedadapter:base-sepolia": "forge script contracts-v4/script/DeploySeedAdapter.s.sol --rpc-url base_sepolia --broadcast --verify -vvvv",
     "forge:deploy:seedadapter:base": "forge script contracts-v4/script/DeploySeedAdapter.s.sol --rpc-url base --broadcast --verify -vvvv",
+    "forge:seed-demo:base-sepolia": "forge script contracts-v4/script/SeedDemo.s.sol --rpc-url base_sepolia --broadcast -vvvv",
     "ai:build": "forge build --root contracts-ai",
     "ai:test": "forge test --root contracts-ai -vv",
     "ai:deploy:base-sepolia": "forge script contracts-ai/script/Deploy.s.sol --root contracts-ai --rpc-url base_sepolia --broadcast --verify -vvvv",

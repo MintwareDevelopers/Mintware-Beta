@@ -9,6 +9,27 @@
 
 ---
 
+## One-shot testnet demo (fastest way to see it work)
+
+`SeedDemo.s.sol` deploys a **self-contained** stack (fresh test tokens → FeeVault → mined hook →
+DeFi vault → SeedPool → adapter) and runs a **full raise** (open → contribute → finalize → grow) in a
+single broadcast. The deployer plays team + public; no faucet needed beyond Base Sepolia ETH for gas.
+
+```bash
+export PATH="$HOME/.foundry/bin:$PATH"
+DEPLOYER_PRIVATE_KEY=0x… pnpm forge:seed-demo:base-sepolia
+```
+
+- **Wallet:** the `DEPLOYER_PRIVATE_KEY` you run it with (expected: `0x9c646C48a302f4725450669f1218d3FDb3e933AD`),
+  funded with Base Sepolia ETH. Run this yourself — never share the key.
+- **PoolManager:** Base Sepolia `0x05e73354CfDd6745C338B50bcFDfA7e2c1b33b63` (baked in; override with `V4_POOL_MANAGER`).
+- The script prints every deployed address (tUSDC, tPROJ, FeeVault, hook, vault, SeedPool, adapter),
+  the `VAULT_ID` / `SEED` ids, and the final raise state (phase Grown, liquidity + shares live).
+
+This is a **demo of the mechanics**, not a production deploy — for a real vault use the steps below.
+
+---
+
 ## Prerequisites
 
 - Foundry on PATH: `export PATH="$HOME/.foundry/bin:$PATH"`
