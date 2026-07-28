@@ -40,6 +40,16 @@ interface PendingDeal {
   vault_deal_documents?: PendingDoc[]
   issuer_id?: string
 }
+interface PendingRedemption {
+  id: string
+  holder: string
+  shares_usd: number
+  requested_at: string
+  settles_at: string
+  status: string
+  kyc_verified: boolean
+  social_vaults?: { name?: string } | null
+}
 
 function AdminContent() {
   const { address } = useAccount()
@@ -48,6 +58,7 @@ function AdminContent() {
   const [creds, setCreds] = useState<Creds | null>(null)
   const [issuers, setIssuers] = useState<PendingIssuer[]>([])
   const [deals, setDeals] = useState<PendingDeal[]>([])
+  const [redemptions, setRedemptions] = useState<PendingRedemption[]>([])
   const [loading, setLoading] = useState(true)
   const [unauth, setUnauth] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -66,6 +77,7 @@ function AdminContent() {
       setUnauth(false)
       setIssuers(d.pendingIssuers ?? [])
       setDeals(d.pendingDeals ?? [])
+      setRedemptions(d.pendingRedemptions ?? [])
     } catch { setErr('Failed to load review queue') }
     setLoading(false)
   }, [authHeaders])
@@ -96,7 +108,7 @@ function AdminContent() {
     setBusy(null)
   }
 
-  const total = issuers.length + deals.length
+  const total = issuers.length + deals.length + redemptions.length
 
   return (
     <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
@@ -210,6 +222,37 @@ function AdminContent() {
                           </div>
                         </div>
                       )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Pending redemptions */}
+            {redemptions.length > 0 && (
+              <div>
+                <div className={`${LABEL} mb-3`}>Pending redemptions · {redemptions.length}</div>
+                <div className="flex flex-col gap-3">
+                  {redemptions.map((r) => (
+                    <div key={r.id} className="border border-atx-ink bg-atx-panel p-4 flex items-center justify-between gap-4 max-[560px]:flex-col max-[560px]:items-stretch">
+                      <div className="min-w-0">
+                        <div className="text-[15px] font-bold">{r.social_vaults?.name ?? 'Vault'} · ${r.shares_usd.toLocaleString()}</div>
+                        <div className="font-atx-mono text-[11px] text-atx-ink/50 mt-0.5">
+                          {r.holder.slice(0, 8)}…{r.holder.slice(-4)} · req {r.requested_at} · settles {r.settles_at} · {r.status}{r.kyc_verified ? ' · KYC ✓' : ''}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        {r.status === 'pending' && (
+                          <button disabled={busy === r.id} onClick={() => act(`/api/admin/vaults/redemptions/${r.id}`, { status: 'ready' }, r.id)}
+                            className="px-3 py-2 border border-atx-ink bg-atx-bone text-atx-ink font-atx-mono text-[12px] font-semibold uppercase tracking-[0.04em] disabled:opacity-50">
+                            Mark ready
+                          </button>
+                        )}
+                        <button disabled={busy === r.id} onClick={() => act(`/api/admin/vaults/redemptions/${r.id}`, { status: 'settled', kyc_verified: true }, r.id)}
+                          className="px-3 py-2 border border-atx-ink bg-atx-mesquite text-white font-atx-mono text-[12px] font-semibold uppercase tracking-[0.04em] disabled:opacity-50">
+                          Settle
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
