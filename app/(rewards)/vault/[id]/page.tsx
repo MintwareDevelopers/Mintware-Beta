@@ -12,6 +12,7 @@ import { LOCK_TIERS } from '@/lib/web2/vault/types'
 import { useVaultDeposit, useVaultWithdraw, useVaultOnchain } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultDepositMessage, buildVaultWithdrawMessage } from '@/lib/web3/signedActionMessages'
 import { RwaVaultDetailView } from './RwaVaultDetail'
+import { SeedPanel } from '@/components/vaults/SeedPanel'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 function shortAddr(a: string) { return `${a.slice(0, 6)}…${a.slice(-4)}` }
@@ -408,6 +409,9 @@ function VaultDetailContent() {
           <span className="text-atx-ink/30">/</span>
           <span className="text-[13px] text-atx-ink font-atx-display font-semibold">{vault.name}</span>
         </div>
+
+        {/* Fair-launch seed (self-hides when the vault has no seed) */}
+        <div className="mb-5"><SeedPanel vaultId={vault.id} /></div>
 
         <div className="grid grid-cols-[1fr_360px] gap-5 items-start max-[760px]:grid-cols-1">
 

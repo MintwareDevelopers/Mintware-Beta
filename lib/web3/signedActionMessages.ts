@@ -140,6 +140,25 @@ export function buildIssuerRegisterMessage(input: {
   )
 }
 
+export function buildSeedOpenMessage(input: {
+  teamWallet: string
+  issuedAt: number
+  vaultId: string
+  chainId: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-seed-open',
+      teamWallet: normalizeAddress(input.teamWallet),
+      issuedAt: input.issuedAt,
+      vaultId: input.vaultId,
+      chainId: input.chainId,
+    },
+    null,
+    2,
+  )
+}
+
 export function buildRwaDealMessage(input: {
   issuerWallet: string
   issuedAt: number
