@@ -59,6 +59,7 @@ export default function HomePage() {
         <div className="hidden md:flex items-center gap-1">
           {[
             { label: 'Swap', href: '/swap' },
+            { label: 'Vaults', href: '/vaults' },
             { label: 'Profile', href: '/profile' },
             { label: 'Earn', href: '/dashboard' },
             { label: 'Leaderboard', href: '/leaderboard' },

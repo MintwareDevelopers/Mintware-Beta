@@ -10,6 +10,7 @@ export const GET = createHandler(async (req, ctx) => {
   let q = ctx.supabase
     .from('social_vaults')
     .select(`*, current_epoch:vault_epochs(id, epoch_number, total_pool, bonus_pool, status, opened_at, closed_at, deadline)`)
+    .neq('surface', 'rwa') // DeFi vault list only — RWA vaults render via their deal pages
     .order('created_at', { ascending: false })
 
   if (status) q = q.eq('status', status)

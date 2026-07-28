@@ -68,7 +68,7 @@ export function VaultCard({ vault }: { vault: SocialVault }) {
           <div>
             <div className="text-[15px] font-semibold text-atx-ink font-atx-display leading-[1.3]">{vault.name}</div>
             <div className="text-[11px] text-atx-ink/55 font-atx-mono mt-[2px]">
-              {vault.project_token.slice(0, 6)}…{vault.project_token.slice(-4)}
+              {vault.project_token ? `${vault.project_token.slice(0, 6)}…${vault.project_token.slice(-4)}` : '—'}
             </div>
           </div>
         </div>
