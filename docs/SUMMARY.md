@@ -25,8 +25,9 @@
 * [Joining a Campaign](campaigns/joining.md)
 * [Claiming Rewards](campaigns/claiming-rewards.md)
 
-## Social Vaults
-* [Overview](vaults/overview.md)
+## Vaults
+* [Two-Surface Vaults](vaults/overview.md)
+* [RWA Deals — Lifecycle & Trust](vaults/rwa-deals.md)
 
 ## Leaderboard
 * [Leaderboard](leaderboard/overview.md)
@@ -47,6 +48,7 @@
 ## Developers
 * [API Reference](developers/api-reference.md)
 * [Smart Contracts](developers/smart-contracts.md)
+* [Vaults & RWA Build Spec](developers/vaults-rwa-build-spec.md)
 * [EAS Attestations](developers/eas-attestations.md)
 * [Ethereum UX Upgrades](developers/ethereum-ux-upgrades.md)
 * [Platform System Map](developers/platform-system-map.md)
