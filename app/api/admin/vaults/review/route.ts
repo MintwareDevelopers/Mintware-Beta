@@ -9,22 +9,28 @@ export const GET = createHandler(async (req, ctx) => {
   const admin = await verifyAdmin(req)
   if (!admin) return ctx.json({ error: 'unauthorized' }, 401)
 
-  const [issuersRes, dealsRes] = await Promise.all([
+  const [issuersRes, dealsRes, redemptionsRes] = await Promise.all([
     ctx.supabase.from('vault_issuers').select('*').eq('status', 'REGISTERED').order('created_at', { ascending: true }),
     ctx.supabase
       .from('vault_deals')
       .select('*, social_vaults(name), vault_deal_documents(*)')
       .eq('review_status', 'in_review')
       .order('created_at', { ascending: true }),
+    ctx.supabase
+      .from('vault_redemptions')
+      .select('*, social_vaults(name)')
+      .neq('status', 'settled')
+      .order('requested_at', { ascending: true }),
   ])
 
-  if (issuersRes.error || dealsRes.error) {
-    ctx.log.error('admin/review', 'load failed', { i: issuersRes.error?.message, d: dealsRes.error?.message })
+  if (issuersRes.error || dealsRes.error || redemptionsRes.error) {
+    ctx.log.error('admin/review', 'load failed', { i: issuersRes.error?.message, d: dealsRes.error?.message, r: redemptionsRes.error?.message })
     return ctx.json({ error: 'Failed to load review queue' }, 500)
   }
 
   return ctx.json({
     pendingIssuers: issuersRes.data ?? [],
     pendingDeals: dealsRes.data ?? [],
+    pendingRedemptions: redemptionsRes.data ?? [],
   })
 })

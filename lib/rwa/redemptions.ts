@@ -41,14 +41,16 @@ const MOCK: RedemptionRequest[] = [
   },
 ]
 
-export async function getRedemptions(): Promise<RedemptionRequest[]> {
+export async function getRedemptions(holder?: string): Promise<RedemptionRequest[]> {
   // Real redemptions from Supabase when present; mock fallback pre-migration.
   try {
     const { dbGetRedemptions } = await import('./db')
-    const real = await dbGetRedemptions()
-    if (real && real.length > 0) return real
+    const real = await dbGetRedemptions(holder)
+    // A holder-scoped query legitimately returns [] (no requests yet) — trust it,
+    // don't fall through to mock. Only the unscoped call falls back to mock.
+    if (real && (holder !== undefined || real.length > 0)) return real
   } catch { /* fall back to mock */ }
-  return MOCK
+  return holder ? [] : MOCK
 }
 
 export function summarizeRedemptions(rs: RedemptionRequest[]) {

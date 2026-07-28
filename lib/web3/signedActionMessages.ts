@@ -102,6 +102,25 @@ export function buildAdminMessage(input: {
   )
 }
 
+export function buildRedeemRequestMessage(input: {
+  vaultId: string
+  wallet: string
+  sharesUsd: number | string
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-redeem-request',
+      vaultId: input.vaultId,
+      wallet: normalizeAddress(input.wallet),
+      sharesUsd: normalizeNumericString(input.sharesUsd),
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
+
 export function buildIssuerRegisterMessage(input: {
   wallet: string
   issuedAt: number

@@ -132,13 +132,12 @@ export async function dbGetDeal(vaultId: string): Promise<DealMeta | null> {
 }
 
 // ─── Redemptions ──────────────────────────────────────────────────────────────
-export async function dbGetRedemptions(): Promise<RedemptionRequest[] | null> {
+export async function dbGetRedemptions(holder?: string): Promise<RedemptionRequest[] | null> {
   try {
     const sb = getServiceClient()
-    const { data, error } = await sb
-      .from('vault_redemptions')
-      .select('*, social_vaults(name)')
-      .order('requested_at', { ascending: false })
+    let q = sb.from('vault_redemptions').select('*, social_vaults(name)').order('requested_at', { ascending: false })
+    if (holder) q = q.eq('holder', holder.toLowerCase())
+    const { data, error } = await q
     if (error || !data) return null
     const today = new Date().toISOString().slice(0, 10)
     return data.map((r: Record<string, unknown>) => {
