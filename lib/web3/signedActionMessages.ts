@@ -225,7 +225,6 @@ export function buildCampaignCreateMessage(input: {
     // RWA incentive layer (R0 surface foundation) — see docs/developers/rwa-incentive-layer.md
     surface?: string
     linkedDealId?: string | null
-    minKycTier?: string
     durationMatchDays?: number
     token: {
       address: string
@@ -254,7 +253,6 @@ export function buildCampaignCreateMessage(input: {
         dailyPoolCapUsd: input.form.dailyPoolCapUsd ?? 0,
         surface: input.form.surface ?? 'defi',
         linkedDealId: input.form.linkedDealId ?? null,
-        minKycTier: input.form.minKycTier ?? 'NONE',
         durationMatchDays: input.form.durationMatchDays ?? 0,
         token: {
           address: normalizeAddress(input.form.token.address),

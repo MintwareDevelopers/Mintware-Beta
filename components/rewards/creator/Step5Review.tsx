@@ -236,7 +236,6 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
           dailyPoolCapUsd: form.dailyPoolCapUsd,
           surface: form.surface,
           linkedDealId: form.linkedDealId,
-          minKycTier: form.minKycTier,
           durationMatchDays: form.durationMatchDays,
           token: {
             address: form.token.address,
