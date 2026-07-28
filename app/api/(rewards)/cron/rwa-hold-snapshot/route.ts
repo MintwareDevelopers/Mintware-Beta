@@ -145,14 +145,20 @@ export const GET = createHandler(async (_req, ctx) => {
         } as HoldInput
       }))
 
-      // Epoch number from the active epoch_state, if present (idempotency also keyed on date).
+      // Epoch number from the active epoch_state. If there is NO active epoch,
+      // increment_epoch_points would no-op (it targets status='active'), desyncing
+      // participant points from the epoch total — so skip crediting entirely.
       const { data: epochRow } = await supabase
         .from('epoch_state')
         .select('epoch_number')
         .eq('campaign_id', campaign.id)
         .eq('status', 'active')
         .maybeSingle()
-      const epochNumber = Number(epochRow?.epoch_number ?? 0)
+      if (!epochRow) {
+        results.push({ campaign_id: campaign.id, name, skipped: 'no_active_epoch' })
+        continue
+      }
+      const epochNumber = Number(epochRow.epoch_number)
 
       const res = await processHoldSnapshot(supabase, campaign, epochNumber, snapshotDate, balances)
 

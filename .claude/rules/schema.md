@@ -35,7 +35,10 @@ Source of truth: `docs/schema.sql`
 
 **`activity`**
 - `campaign_id`, `tx_hash`, `wallet`, `action_type`, `points`
-- Unique: `(campaign_id, tx_hash, wallet, action_type)`
+- **Unique: `(wallet, tx_hash, action_type)` — NOT campaign-scoped.** Any per-campaign idempotency
+  key must therefore encode the campaign id *inside* `tx_hash` (see `holdSnapshot.ts` — `hold:<campaignId>:<epoch>:<date>`).
+- `action_type` CHECK: `bridge | trade | referral_bridge | referral_trade | subscribe | hold | referral_subscribe`
+  (RWA action types added in `20260728000002`).
 
 **`participants`**
 - Joined wallets per campaign
@@ -43,11 +46,14 @@ Source of truth: `docs/schema.sql`
 **`campaigns`** (Supabase-side)
 - Includes `closed` (bool) and `closed_at` columns
 - `contract_address` — set after contract deploy
+- RWA incentive layer: `surface` (`defi`|`rwa`), `linked_deal_id` (→ `vault_deals`), `duration_match_days` (`20260728000001`)
 
 ## Applied Migrations
 
 - `supabase/migrations/20260317000001_campaign_engine_schema.sql` — pending_rewards, distributions, epoch_state
 - `pending_rewards` composite unique index (campaign-scoped)
 - `campaigns.closed` + `campaigns.closed_at` columns
-- `activity` unique constraint: `(campaign_id, tx_hash, wallet, action_type)`
+- `activity` unique constraint: `(wallet, tx_hash, action_type)` (migration `20260319000003`)
 - `distributions.deadline` bigint column (nullable, backward compat)
+- `20260728000001_rwa_incentive_surface.sql` — `campaigns.surface` / `linked_deal_id` / `duration_match_days` (applied)
+- `20260728000002_activity_action_types.sql` — widens `activity.action_type` CHECK for RWA (`subscribe`/`hold`/`referral_subscribe`)

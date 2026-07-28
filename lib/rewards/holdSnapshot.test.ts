@@ -136,19 +136,38 @@ describe('holdConfigFromCampaign', () => {
 
 describe('processHoldSnapshot (idempotent writer)', () => {
   const campaign = { id: 'camp-1', actions: null, epoch_duration_days: 7 } as unknown as Campaign
+  const holder = (wallet: string, balance: number): HoldInput =>
+    ({ wallet, balance, attribution_score: 0, sharing_score: 0, lockDays: 0 })
 
-  function mockSupabase(insertBehaviour: () => { error: unknown }) {
-    const rpc = vi.fn().mockResolvedValue({ error: null })
-    const insert = vi.fn().mockImplementation(async () => insertBehaviour())
-    const from = vi.fn().mockReturnValue({ insert })
-    return { supabase: { from, rpc }, insert, rpc, from }
+  // Mock supabase that records inserted rows, counts delete (rollback) chains, and can
+  // fail the activity insert or the participant-increment RPC on demand.
+  function mockSupabase({ insertError = null as unknown, rpcError = null as unknown } = {}) {
+    const inserted: Record<string, unknown>[] = []
+    const deleteState = { count: 0 }
+    const insert = vi.fn(async (row: Record<string, unknown>) => {
+      if (!insertError) inserted.push(row)
+      return { error: insertError }
+    })
+    const from = vi.fn(() => ({
+      insert,
+      delete: () => {
+        deleteState.count++
+        // supabase delete().eq().eq()… is a thenable chain resolving to { error }
+        const chain: Record<string, unknown> = {}
+        chain.eq = vi.fn(() => chain)
+        chain.then = (onF: (v: { error: null }) => unknown) => Promise.resolve({ error: null }).then(onF)
+        return chain
+      },
+    }))
+    const rpc = vi.fn(async (fnName: string) =>
+      ({ error: fnName === 'increment_participant_points' ? rpcError : null }))
+    return { supabase: { from, rpc }, inserted, deleteState, insert, rpc }
   }
 
   it('credits each holder once and accumulates the epoch total', async () => {
-    const { supabase, insert, rpc } = mockSupabase(() => ({ error: null }))
+    const { supabase, insert, rpc } = mockSupabase()
     const res = await processHoldSnapshot(supabase, campaign, 1, '2026-07-28', [
-      { wallet: '0xa', balance: 1000, attribution_score: 0, sharing_score: 0, lockDays: 0 },
-      { wallet: '0xb', balance: 500,  attribution_score: 0, sharing_score: 0, lockDays: 0 },
+      holder('0xa', 1000), holder('0xb', 500),
     ])
     // 7000 + 3500 = 10500
     expect(res).toEqual({ credited: 2, skipped: 0, totalPoints: 10500 })
@@ -159,23 +178,40 @@ describe('processHoldSnapshot (idempotent writer)', () => {
   })
 
   it('skips zero-point holders without touching the DB', async () => {
-    const { supabase, insert, rpc } = mockSupabase(() => ({ error: null }))
-    const res = await processHoldSnapshot(supabase, campaign, 1, '2026-07-28', [
-      { wallet: '0xz', balance: 0, attribution_score: 0, sharing_score: 0, lockDays: 0 },
-    ])
+    const { supabase, insert, rpc } = mockSupabase()
+    const res = await processHoldSnapshot(supabase, campaign, 1, '2026-07-28', [holder('0xz', 0)])
     expect(res).toEqual({ credited: 0, skipped: 1, totalPoints: 0 })
     expect(insert).not.toHaveBeenCalled()
     expect(rpc).not.toHaveBeenCalled()
   })
 
   it('is idempotent — a duplicate activity insert skips the credit (no double count)', async () => {
-    // Simulate the unique-index collision on a second cron pass.
-    const { supabase, rpc } = mockSupabase(() => ({ error: { code: '23505' } }))
-    const res = await processHoldSnapshot(supabase, campaign, 1, '2026-07-28', [
-      { wallet: '0xa', balance: 1000, attribution_score: 0, sharing_score: 0, lockDays: 0 },
-    ])
+    const { supabase, rpc } = mockSupabase({ insertError: { code: '23505' } })
+    const res = await processHoldSnapshot(supabase, campaign, 1, '2026-07-28', [holder('0xa', 1000)])
     expect(res).toEqual({ credited: 0, skipped: 1, totalPoints: 0 })
     // No increments at all — the insert collision short-circuits before RPCs.
     expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('scopes the idempotency tx_hash by campaign id (no cross-campaign collision)', async () => {
+    const { supabase, inserted } = mockSupabase()
+    // Same wallet, same date/epoch, two different campaigns — must produce distinct keys,
+    // because the real activity unique index is (wallet, tx_hash, action_type) — NOT campaign-scoped.
+    await processHoldSnapshot(supabase, { ...campaign, id: 'camp-A' } as Campaign, 1, '2026-07-28', [holder('0xa', 1000)])
+    await processHoldSnapshot(supabase, { ...campaign, id: 'camp-B' } as Campaign, 1, '2026-07-28', [holder('0xa', 1000)])
+    const [rowA, rowB] = inserted
+    expect(String(rowA.tx_hash)).toContain('camp-A')
+    expect(String(rowB.tx_hash)).toContain('camp-B')
+    expect(rowA.tx_hash).not.toBe(rowB.tx_hash)
+  })
+
+  it('rolls back the guard row and skips when the points increment fails', async () => {
+    const { supabase, deleteState, rpc } = mockSupabase({ rpcError: { message: 'rpc timeout' } })
+    const res = await processHoldSnapshot(supabase, campaign, 1, '2026-07-28', [holder('0xa', 1000)])
+    // Not credited, and the epoch total excludes it (payout denominator stays honest).
+    expect(res).toEqual({ credited: 0, skipped: 1, totalPoints: 0 })
+    expect(deleteState.count).toBe(1)                        // guard row rolled back for retry
+    expect(rpc).toHaveBeenCalledTimes(1)                     // only the failed participant increment
+    expect(rpc).toHaveBeenCalledWith('increment_participant_points', expect.anything())
   })
 })

@@ -44,6 +44,10 @@
 | `/api/cron/pool-settle` | `0 2 * * *` (2am) |
 | `/api/treasury/sweep` | `0 3 * * *` (3am) |
 | `/api/cron/vault-epoch-close` | `0 0 * * 1` (Monday midnight) |
+| `/api/cron/rwa-hold-snapshot` | `0 0 * * 1` (Monday midnight) |
+
+RWA hold-snapshot cron reads on-chain vRWA balances via `BASE_RPC_URL` / `BASE_SEPOLIA_RPC_URL`
+(server-only) — set these in Vercel for the RWA incentive layer.
 
 Hobby plan: max once/day per cron.
 

@@ -99,14 +99,15 @@ export interface HoldSnapshotResult {
 }
 
 /**
- * Credit a full hold snapshot for one campaign+epoch. Mirrors processPoints:
- * writes an `activity` row (action_type='hold'), atomically increments the
- * participant's points, then bumps the epoch accumulator.
+ * Credit a full hold snapshot for one campaign+epoch: writes an `activity` row
+ * (action_type='hold'), increments the participant's points, then bumps the epoch
+ * accumulator. On a failed increment the guard row is rolled back so the next run retries.
  *
- * Idempotent: the activity row's synthetic tx_hash `hold:<epoch>:<date>` collides
- * with the unique index (campaign_id, tx_hash, wallet, action_type) on re-run, so a
- * second cron pass for the same snapshot skips already-credited wallets and never
- * double-credits.
+ * Idempotent: the synthetic tx_hash `hold:<campaignId>:<epoch>:<date>` collides with the
+ * activity unique index `(wallet, tx_hash, action_type)` on re-run — so a second cron pass
+ * for the same snapshot skips already-credited wallets and never double-credits. The campaign
+ * id must live IN the tx_hash because that index is NOT campaign-scoped; otherwise two
+ * campaigns crediting the same wallet on the same date would collide.
  */
 export async function processHoldSnapshot(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -117,7 +118,7 @@ export async function processHoldSnapshot(
   holdings: HoldInput[],
 ): Promise<HoldSnapshotResult> {
   const cfg = holdConfigFromCampaign(campaign)
-  const txKey = `hold:${epochNumber}:${snapshotDate}`
+  const txKey = `hold:${campaign.id}:${epochNumber}:${snapshotDate}`
   const recordedAt = `${snapshotDate}T00:00:00Z`
 
   let credited = 0
@@ -128,8 +129,8 @@ export async function processHoldSnapshot(
     const pts = computeHoldPoints(h, cfg)
     if (pts <= 0) { skipped++; continue }
 
-    // Insert FIRST so a duplicate (already snapshotted this epoch) short-circuits
-    // before we touch the running totals — this is what makes the cron re-runnable.
+    // Insert the activity row FIRST — its unique index is the idempotency guard that makes
+    // the cron re-runnable (a duplicate short-circuits before we credit).
     const { error: insErr } = await supabase.from('activity').insert({
       campaign_id:   campaign.id,
       wallet:        h.wallet,
@@ -138,18 +139,31 @@ export async function processHoldSnapshot(
       tx_hash:       txKey,
       recorded_at:   recordedAt,
     })
-    if (insErr) { skipped++; continue }  // unique-violation on re-run, or transient error
+    if (insErr) { skipped++; continue }  // already credited (duplicate) or a transient error — safe to skip
 
-    await supabase.rpc('increment_participant_points', {
+    // Credit the wallet. If this fails, roll back the guard row so the NEXT run can retry —
+    // otherwise the row would block the retry and the wallet would silently lose the points.
+    const { error: rpcErr } = await supabase.rpc('increment_participant_points', {
       p_campaign_id: campaign.id,
       p_wallet:      h.wallet,
       p_delta:       pts,
     })
+    if (rpcErr) {
+      await supabase.from('activity').delete()
+        .eq('campaign_id', campaign.id)
+        .eq('wallet', h.wallet)
+        .eq('tx_hash', txKey)
+        .eq('action_type', 'hold')
+      skipped++
+      continue
+    }
 
     credited++
     totalPoints += pts
   }
 
+  // Only points actually credited to participants reach the epoch total, so the
+  // payout-share denominator (epoch_state.total_points) stays consistent.
   if (totalPoints > 0) {
     await supabase.rpc('increment_epoch_points', {
       p_campaign_id: campaign.id,

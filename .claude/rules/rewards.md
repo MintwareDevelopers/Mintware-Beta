@@ -76,5 +76,11 @@ wallet_payout = (epoch_pool / epoch_count) × (wallet_points / total_points) × 
 | `/api/cron/pool-settle` | `0 2 * * *` |
 | `/api/treasury/sweep` | `0 3 * * *` |
 | `/api/cron/vault-epoch-close` | `0 0 * * 1` (Monday) |
+| `/api/cron/rwa-hold-snapshot` | `0 0 * * 1` (Monday) |
+
+RWA incentive layer (see `docs/developers/rwa-incentive-layer.md`): campaigns carry `surface` (`defi`|`rwa`).
+New `action_type`s `subscribe`/`hold`/`referral_subscribe`. `hold` credit runs off the weekly
+`rwa-hold-snapshot` cron (`lib/rewards/holdSnapshot.ts`): `points = rate × vRWA_held × 7d × attribution × duration-match`,
+opt-in via `actions.hold`. Permissionless — NO KYC gate; eligibility lives in the wrapped token.
 
 Universal reward settlement now has its own pipeline: `trade_signals` ingestion, epoch close, and distribution bridge. Keep the hot path thin, do the allocation math off-chain, and make cron route responses JSON-safe because `BigInt` values from sync ranges will otherwise 500 under `NextResponse.json`.
