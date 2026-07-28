@@ -1,0 +1,8 @@
+# GitBook Git Sync configuration.
+# Pins the docs root + structure in the repo so sync doesn't depend on the
+# dashboard settings. Paths under `structure` are relative to `root`.
+root: ./docs/
+
+structure:
+  readme: README.md
+  summary: SUMMARY.md
