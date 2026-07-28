@@ -72,6 +72,39 @@ const MOCK_VAULTS: VaultSummary[] = [
     feeSplit: [70, 15, 10, 5], underlyingApyPct: 10.0, settleDays: 30,
     priceBand: '±15/±45', kycAtRedeem: true,
   },
+  {
+    id: 'sovereign-tbill', name: 'Sovereign T-Bill', surface: 'RWA',
+    pair: 'vRWA / USDC', descriptor: 'US T-bills · weekly roll · low-vol',
+    tvlUsd: 8_450_000, netApyPct: 5.1, status: 'active', epochLabel: 'T−3d',
+    feeSplit: [70, 15, 10, 5], underlyingApyPct: 5.0, settleDays: 7,
+    priceBand: '±5/±15', kycAtRedeem: true,
+  },
+  {
+    id: 'meridian-trade', name: 'Meridian Trade Finance', surface: 'RWA',
+    pair: 'vRWA / USDC', descriptor: 'Invoice factoring · 90-day paper',
+    tvlUsd: 2_240_000, netApyPct: 11.8, status: 'active', epochLabel: 'T−3d',
+    feeSplit: [70, 15, 10, 5], underlyingApyPct: 13.0, settleDays: 30,
+    priceBand: '±15/±45', kycAtRedeem: true,
+  },
+  {
+    id: 'verdant-carbon', name: 'Verdant Carbon Note', surface: 'RWA',
+    pair: 'vRWA / USDC', descriptor: 'Verified carbon-offset yield',
+    tvlUsd: 640_000, netApyPct: 7.2, status: 'seeding', epochLabel: 'T−8d',
+    feeSplit: [70, 15, 10, 5], underlyingApyPct: 8.5, settleDays: 45,
+    priceBand: '±20/±60', kycAtRedeem: true,
+  },
+  {
+    id: 'stable-yield', name: 'Stable Yield', surface: 'DeFi',
+    pair: 'USDC / USDT', descriptor: 'Stable pair · tight-range LP',
+    tvlUsd: 3_120_000, netApyPct: 6.8, status: 'active', epochLabel: 'T−3d',
+    feeSplit: [70, 15, 10, 5], profile: 'BLUE_CHIP', profileRange: '±2%',
+  },
+  {
+    id: 'base-cbbtc', name: 'Base cbBTC', surface: 'DeFi',
+    pair: 'cbBTC / USDC', descriptor: 'cbBTC LP · MEV-protected',
+    tvlUsd: 1_580_000, netApyPct: 9.3, status: 'active', epochLabel: 'T−3d',
+    feeSplit: [70, 15, 10, 5], profile: 'BLUE_CHIP', profileRange: '±8%',
+  },
 ]
 
 /**
@@ -85,10 +118,11 @@ export async function getVaultsDiscovery(): Promise<VaultSummary[]> {
     const real = await fetchSubgraphVaults()
     if (real.length > 0) {
       const hasRwa = real.some((v) => v.surface === 'RWA')
-      // Real vaults + preview RWA (until RWA contracts ship) so the two-surface
-      // UI stays populated on both sides.
-      const previewRwa = hasRwa ? [] : MOCK_VAULTS.filter((v) => v.surface === 'RWA')
-      return [...real, ...previewRwa]
+      // Real vaults + illustrative examples so both surfaces stay populated. DeFi
+      // examples showcase the range of pool profiles alongside the live vault(s);
+      // RWA examples drop once real RWA vaults are indexed. Flagged "Example" in the UI.
+      const previews = MOCK_VAULTS.filter((v) => v.surface === 'DeFi' || !hasRwa)
+      return [...real, ...previews]
     }
   }
   return MOCK_VAULTS
