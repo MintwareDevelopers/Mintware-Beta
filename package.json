@@ -31,6 +31,8 @@
     "forge:deploy:phase3:base-sepolia": "forge script contracts-v4/script/DeployPhase3.s.sol --rpc-url base_sepolia --broadcast --verify -vvvv",
     "forge:deploy:phase3:base": "forge script contracts-v4/script/DeployPhase3.s.sol --rpc-url base --broadcast --verify -vvvv",
     "forge:deploy:phase3:dry-run": "forge script contracts-v4/script/DeployPhase3.s.sol --rpc-url base_sepolia -vvvv",
+    "forge:rwa-vault-demo:base-sepolia": "forge script contracts-v4/script/DeployRwaVaultDemo.s.sol --rpc-url base_sepolia --broadcast -vvvv",
+    "forge:rwa-vault-demo:dry-run": "forge script contracts-v4/script/DeployRwaVaultDemo.s.sol -vvvv",
     "ai:build": "forge build --root contracts-ai",
     "ai:test": "forge test --root contracts-ai -vv",
     "ai:deploy:base-sepolia": "forge script contracts-ai/script/Deploy.s.sol --root contracts-ai --rpc-url base_sepolia --broadcast --verify -vvvv",
