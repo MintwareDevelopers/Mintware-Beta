@@ -63,6 +63,7 @@ contract MintwareSeedPool is ReentrancyGuard {
         bytes32 poolInit;        // opaque pool/vault ref passed through to the target
         Phase   phase;
         bool    teamReclaimed;   // refund path: team already pulled its funds
+        bool    fullReserveOnFinalize; // true → deploy the WHOLE reserve at finalize, then quote-only growth
     }
 
     struct OpenParams {
@@ -76,6 +77,7 @@ contract MintwareSeedPool is ReentrancyGuard {
         uint64  raiseDeadline;
         uint160 sqrtPriceX96;
         bytes32 poolInit;
+        bool    fullReserveOnFinalize;
     }
 
     mapping(bytes32 => Seed) public seeds;
@@ -132,7 +134,8 @@ contract MintwareSeedPool is ReentrancyGuard {
             sqrtPriceX96:  p.sqrtPriceX96,
             poolInit:      p.poolInit,
             phase:         Phase.Seeding,
-            teamReclaimed: false
+            teamReclaimed: false,
+            fullReserveOnFinalize: p.fullReserveOnFinalize
         });
 
         // Escrow the team's full token reserve (+ any pre-funded quote).
@@ -170,7 +173,11 @@ contract MintwareSeedPool is ReentrancyGuard {
         if (s.quoteRaised < s.threshold) revert BelowThreshold();
 
         uint256 quoteToDeploy = s.quoteRaised - s.deployedQuote;
-        uint256 tokenToDeploy = _matchToken(s, quoteToDeploy);
+        // Full-reserve mode: seed the WHOLE token side once (vault pairs single-sided
+        // quote against it thereafter). Proportional mode: match this tranche.
+        uint256 tokenToDeploy = s.fullReserveOnFinalize
+            ? (s.tokenReserve - s.deployedToken)
+            : _matchToken(s, quoteToDeploy);
 
         s.deployedQuote += quoteToDeploy;
         s.deployedToken += tokenToDeploy;
@@ -189,11 +196,15 @@ contract MintwareSeedPool is ReentrancyGuard {
 
         uint256 quoteToDeploy = s.quoteRaised - s.deployedQuote;
         if (quoteToDeploy == 0) revert NothingToDo();
-        uint256 tokenToDeploy = _matchToken(s, quoteToDeploy);
+        // Full-reserve mode: reserve already fully deployed at finalize → quote-only growth.
+        uint256 tokenToDeploy = s.fullReserveOnFinalize ? 0 : _matchToken(s, quoteToDeploy);
 
         s.deployedQuote += quoteToDeploy;
         s.deployedToken += tokenToDeploy;
-        bool fully = s.deployedToken >= s.tokenReserve;
+        // Grown when nothing more can deploy: all quote in (full mode) or reserve spent (prop mode).
+        bool fully = s.fullReserveOnFinalize
+            ? (s.deployedQuote >= s.quoteTarget)
+            : (s.deployedToken >= s.tokenReserve);
         if (fully) s.phase = Phase.Grown;
 
         _push(s, tokenToDeploy, quoteToDeploy, false);

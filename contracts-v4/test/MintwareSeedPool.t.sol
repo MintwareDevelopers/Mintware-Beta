@@ -80,7 +80,31 @@ contract MintwareSeedPoolTest is Test {
                 deployThresholdBps: 5_000,
                 raiseDeadline: uint64(block.timestamp + 14 days),
                 sqrtPriceX96: SQRT,
-                poolInit: POOL_INIT
+                poolInit: POOL_INIT,
+                fullReserveOnFinalize: false
+            })
+        );
+        vm.stopPrank();
+    }
+
+    function _openFull() internal {
+        vm.startPrank(team);
+        shib.approve(address(pool), RESERVE);
+        usdc.approve(address(pool), TEAM_QUOTE);
+        pool.openSeed(
+            SEED,
+            MintwareSeedPool.OpenParams({
+                projectToken: address(shib),
+                quoteToken: address(usdc),
+                target: address(target),
+                tokenReserve: RESERVE,
+                teamQuote: TEAM_QUOTE,
+                publicQuoteTarget: PUBLIC_TARGET,
+                deployThresholdBps: 5_000,
+                raiseDeadline: uint64(block.timestamp + 14 days),
+                sqrtPriceX96: SQRT,
+                poolInit: POOL_INIT,
+                fullReserveOnFinalize: true
             })
         );
         vm.stopPrank();
@@ -121,7 +145,7 @@ contract MintwareSeedPoolTest is Test {
         vm.expectRevert(MintwareSeedPool.SeedExists.selector);
         pool.openSeed(
             SEED,
-            MintwareSeedPool.OpenParams(address(shib), address(usdc), address(target), RESERVE, TEAM_QUOTE, PUBLIC_TARGET, 5_000, uint64(block.timestamp + 1 days), SQRT, POOL_INIT)
+            MintwareSeedPool.OpenParams(address(shib), address(usdc), address(target), RESERVE, TEAM_QUOTE, PUBLIC_TARGET, 5_000, uint64(block.timestamp + 1 days), SQRT, POOL_INIT, false)
         );
     }
 
@@ -129,8 +153,29 @@ contract MintwareSeedPoolTest is Test {
         vm.expectRevert(MintwareSeedPool.BadConfig.selector);
         pool.openSeed(
             SEED,
-            MintwareSeedPool.OpenParams(address(shib), address(shib), address(target), RESERVE, TEAM_QUOTE, PUBLIC_TARGET, 5_000, uint64(block.timestamp + 1 days), SQRT, POOL_INIT)
+            MintwareSeedPool.OpenParams(address(shib), address(shib), address(target), RESERVE, TEAM_QUOTE, PUBLIC_TARGET, 5_000, uint64(block.timestamp + 1 days), SQRT, POOL_INIT, false)
         );
+    }
+
+    // ─── full-reserve mode (vault-backed: whole reserve at finalize, quote-only growth) ─
+    function test_fullReserve_finalizeDeploysAll_thenQuoteOnlyGrowth() public {
+        _openFull();
+        _contribute(alice, 1_000e6); // raised 5_000e6 == threshold
+        pool.finalizeSeed(SEED);
+
+        (uint256 dToken, uint256 dQuote) = _deployed();
+        assertEq(dToken, RESERVE, "full reserve deployed at finalize");
+        assertEq(dQuote, 5_000e6);
+        assertEq(uint256(_phase()), uint256(MintwareSeedPool.Phase.Live));
+
+        _contribute(bob, 5_000e6); // fill to target
+        pool.growLiquidity(SEED);
+        (uint256 dToken2, uint256 dQuote2) = _deployed();
+        assertEq(dToken2, RESERVE, "no additional token on growth");
+        assertEq(dQuote2, 10_000e6, "all quote deployed");
+        assertEq(uint256(_phase()), uint256(MintwareSeedPool.Phase.Grown));
+        assertEq(target.tokenReceived(), RESERVE);
+        assertEq(target.quoteReceived(), 10_000e6);
     }
 
     // ─── contribute ─────────────────────────────────────────────────────────────

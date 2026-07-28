@@ -159,13 +159,22 @@ redemption request + settle (off-chain intent ledger) · schema + RLS.
 - **On-chain RWA deposits + settlement** — the RWA contract family is on testnet; mainnet is gated on
   the legal track. The redemption rail is an off-chain intent ledger until then.
 - **Threshold seeding** — the fair-launch bootstrap (team escrows the token side, public co-seeds the
-  quote side, pool deploys at a fill threshold, grows proportionally). Design:
-  [RWA create-seed design](phase3-rwa-create-seed-design.md).
-  - **Contract: BUILT + TESTED** — `contracts-v4/src/MintwareSeedPool.sol` (permissionless per-seed
-    escrow; `openSeed` / `contributeQuote` / `finalizeSeed` / `growLiquidity` / `closeSeed` / refund
-    path). Proportional matching uses the fixed reserve:quoteTarget ratio, so the reserve is consumed
-    exactly at a full raise. Pool-init is handed to the vault via the `ISeedTarget` interface. Forge:
-    **12/12 passing** (`contracts-v4/test/MintwareSeedPool.t.sol`).
-  - **Pending:** the `ISeedTarget` adapter on `MintwareDeFiVault4626` (receive seed → init V4 pool;
-    receive growth → add liquidity), the `vault_seeding` + `seed_contributions` schema, the seed API,
-    and the public "Seed this vault" panel. Not yet deployed to any network.
+  quote side, pool deploys at a fill threshold, grows). Design:
+  [RWA create-seed design](phase3-rwa-create-seed-design.md). **Built end-to-end, not yet deployed.**
+  - **`MintwareSeedPool.sol`** — permissionless per-seed escrow: `openSeed` / `contributeQuote` /
+    `finalizeSeed` / `growLiquidity` / `closeSeed` / refund path. Two matching modes:
+    *proportional* (reserve:quoteTarget ratio, consumed exactly at a full raise) and
+    *`fullReserveOnFinalize`* (seed the whole reserve once, then quote-only growth — for vault targets).
+    Pool-init handed off via `ISeedTarget`.
+  - **`MintwareSeedAdapter.sol`** — the `ISeedTarget` bridge into a live `MintwareDeFiVault4626`
+    (deployed one-per-vault, set as vault owner): `receiveSeed` → seed the reserve + init the V4 pool +
+    set the LP range + deposit raised quote; `receiveGrowth` → deposit more quote; LP shares accrue to
+    the adapter.
+  - **Forge: 14/14** — `MintwareSeedPool.t.sol` (13) + `SeedPoolIntegration.t.sol` (1, full flow
+    SeedPool → adapter → **real V4 PoolManager + vault**: pool initialized, liquidity deployed, shares
+    minted, principal correct, no funds stranded).
+  - **Coordination layer (app)** — `vault_seeding` + `seed_contributions` schema, `GET/POST
+    /api/vaults/seed`, and the `SeedPanel` fill-bar UI on the vault detail (self-hides until seeded).
+  - **Pending:** deploy (SeedPool + per-vault adapter) + **audit** (handles escrowed funds); wire the
+    UI "Seed this vault" button to the deployed `contributeQuote`; per-contributor LP-share
+    distribution from the adapter (shares currently accrue to the adapter in aggregate).
