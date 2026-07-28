@@ -159,6 +159,13 @@ redemption request + settle (off-chain intent ledger) · schema + RLS.
 - **On-chain RWA deposits + settlement** — the RWA contract family is on testnet; mainnet is gated on
   the legal track. The redemption rail is an off-chain intent ledger until then.
 - **Threshold seeding** — the fair-launch bootstrap (team escrows the token side, public co-seeds the
-  quote side, pool deploys at a fill threshold, grows proportionally). Design is complete
-  ([RWA create-seed design](phase3-rwa-create-seed-design.md)); the escrow/bootstrap contract is **not
-  built** — it's the next separate contract track.
+  quote side, pool deploys at a fill threshold, grows proportionally). Design:
+  [RWA create-seed design](phase3-rwa-create-seed-design.md).
+  - **Contract: BUILT + TESTED** — `contracts-v4/src/MintwareSeedPool.sol` (permissionless per-seed
+    escrow; `openSeed` / `contributeQuote` / `finalizeSeed` / `growLiquidity` / `closeSeed` / refund
+    path). Proportional matching uses the fixed reserve:quoteTarget ratio, so the reserve is consumed
+    exactly at a full raise. Pool-init is handed to the vault via the `ISeedTarget` interface. Forge:
+    **12/12 passing** (`contracts-v4/test/MintwareSeedPool.t.sol`).
+  - **Pending:** the `ISeedTarget` adapter on `MintwareDeFiVault4626` (receive seed → init V4 pool;
+    receive growth → add liquidity), the `vault_seeding` + `seed_contributions` schema, the seed API,
+    and the public "Seed this vault" panel. Not yet deployed to any network.
