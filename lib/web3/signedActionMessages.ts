@@ -222,6 +222,11 @@ export function buildCampaignCreateMessage(input: {
     useScoreMultiplier?: boolean
     dailyWalletCapUsd?: number
     dailyPoolCapUsd?: number
+    // RWA incentive layer (R0 surface foundation) — see docs/developers/rwa-incentive-layer.md
+    surface?: string
+    linkedDealId?: string | null
+    minKycTier?: string
+    durationMatchDays?: number
     token: {
       address: string
       symbol: string
@@ -247,6 +252,10 @@ export function buildCampaignCreateMessage(input: {
         useScoreMultiplier: input.form.useScoreMultiplier ?? false,
         dailyWalletCapUsd: input.form.dailyWalletCapUsd ?? 0,
         dailyPoolCapUsd: input.form.dailyPoolCapUsd ?? 0,
+        surface: input.form.surface ?? 'defi',
+        linkedDealId: input.form.linkedDealId ?? null,
+        minKycTier: input.form.minKycTier ?? 'NONE',
+        durationMatchDays: input.form.durationMatchDays ?? 0,
         token: {
           address: normalizeAddress(input.form.token.address),
           symbol: input.form.token.symbol,

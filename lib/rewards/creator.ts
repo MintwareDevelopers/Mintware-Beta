@@ -4,6 +4,9 @@
 
 export type CampaignType  = 'token_reward' | 'points'
 export type ScheduleType  = 'now' | 'scheduled'
+// RWA incentive layer (see docs/developers/rwa-incentive-layer.md)
+export type CampaignSurface = 'defi' | 'rwa'
+export type KycTier         = 'NONE' | 'BASIC' | 'ACCREDITED'
 export type PointsFocus   = 'trade' | 'bridge' | 'both'
 export type PayoutPreset  = '3' | '5' | '10' | '20'
 
@@ -19,6 +22,13 @@ export interface TokenInfo {
 export interface CreatorFormState {
   // Type
   type: CampaignType | null
+
+  // Surface (RWA incentive layer) — 'defi' points the campaign at a DeFi pool;
+  // 'rwa' links it to an approved deal and enables KYC / duration-match gating.
+  surface: CampaignSurface
+  linkedDealId: string | null    // required when surface === 'rwa'
+  minKycTier: KycTier            // KYC gate on credit + claim (default NONE)
+  durationMatchDays?: number     // lock ≥ this many days earns the duration-match bonus
 
   // Step 1 — Token
   token:   TokenInfo | null
@@ -60,6 +70,12 @@ export interface CreatorFormState {
 
 export const DEFAULT_FORM: CreatorFormState = {
   type:    null,
+
+  surface:       'defi',
+  linkedDealId:  null,
+  minKycTier:    'NONE',
+  durationMatchDays: undefined,
+
   token:   null,
   chainId: 8453,
 
