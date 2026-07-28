@@ -4,10 +4,12 @@
 // Reuses the shared DealSection; fetches the approved deal for this vault.
 
 import { useEffect, useState } from 'react'
+import { useAccount, useSignMessage } from 'wagmi'
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
 import { DealSection } from '@/components/vaults/DealSection'
 import { fmtUSD } from '@/lib/web2/api'
+import { buildRedeemRequestMessage } from '@/lib/web3/signedActionMessages'
 import type { SocialVault } from '@/lib/web2/vault/types'
 import type { DealMeta } from '@/lib/rwa/deal'
 
@@ -21,9 +23,35 @@ function Star({ className = '' }: { className?: string }) {
 
 const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
 
-// Redemption action rail — honest informational state (on-chain deposit/redeem
-// is gated on the RWA vault contract being live).
-function RwaActionRail({ deal }: { deal: DealMeta | null }) {
+// Redemption action rail. Deposit is gated on the on-chain RWA vault; the
+// redemption REQUEST is the off-chain intent ledger and is live now.
+function RwaActionRail({ vaultId, deal }: { vaultId: string; deal: DealMeta | null }) {
+  const { address } = useAccount()
+  const { signMessageAsync } = useSignMessage()
+  const [amount, setAmount] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [done, setDone] = useState<string | null>(null)
+  const amt = parseFloat(amount) || 0
+
+  async function requestRedeem() {
+    if (!address || amt <= 0) return
+    setBusy(true); setErr('')
+    try {
+      const issuedAt = Date.now()
+      const authMessage = buildRedeemRequestMessage({ vaultId, wallet: address, sharesUsd: amt, issuedAt })
+      const authSignature = await signMessageAsync({ message: authMessage })
+      const res = await fetch('/api/vaults/redemptions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vault_id: vaultId, holder: address, shares_usd: amt, issuedAt, authMessage, authSignature }),
+      })
+      if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error ?? `HTTP ${res.status}`) }
+      const d = await res.json()
+      setDone(d.settles_at ?? null)
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Request failed') }
+    finally { setBusy(false) }
+  }
+
   return (
     <div className="border border-atx-ink bg-atx-bone sticky top-[74px]">
       <div className="px-[18px] py-3 border-b border-atx-ink bg-atx-ink text-white font-atx-mono text-[12px] uppercase tracking-[0.1em]">
@@ -41,13 +69,41 @@ function RwaActionRail({ deal }: { deal: DealMeta | null }) {
         <button disabled className="w-full font-semibold text-[14px] py-3 border border-atx-ink bg-atx-coral text-atx-ink uppercase tracking-[0.04em] disabled:opacity-45">
           Deposit
         </button>
-        <p className="font-atx-mono text-[11px] text-atx-ink/45 leading-[1.5]">
-          Request burns your vRWA claim ticket and starts a {deal?.settleDays ?? 30}-day settlement
-          window; the issuer settles after a KYC check.
-        </p>
-        <button disabled className="w-full font-semibold text-[13px] py-2.5 border border-atx-ink/30 bg-atx-panel text-atx-ink/60 uppercase tracking-[0.04em] disabled:opacity-60">
-          Request Redeem
-        </button>
+        <div className="border-t border-atx-ink/20 pt-3" />
+        {done ? (
+          <div className="border border-atx-ink bg-atx-panel p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2.5 h-2.5 bg-atx-acid border border-atx-ink inline-block" />
+              <span className="font-atx-mono text-[12px] font-bold uppercase tracking-[0.06em]">Redemption requested</span>
+            </div>
+            <p className="font-atx-mono text-[11px] text-atx-ink/55 leading-[1.5]">
+              Settles by <strong>{done}</strong> after the issuer&apos;s KYC check.{' '}
+              <Link href="/redemptions" className="text-atx-blue no-underline hover:underline">Track it →</Link>
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className={`${LABEL} mb-0.5`}>Request redemption · USDC value</div>
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+              inputMode="decimal"
+              placeholder="0.00"
+              className="w-full border border-atx-ink bg-transparent px-3 py-2.5 font-atx-mono text-[16px] outline-none focus:border-atx-blue"
+            />
+            <button
+              onClick={requestRedeem}
+              disabled={busy || amt <= 0 || !address}
+              className="w-full font-semibold text-[13px] py-2.5 border border-atx-ink bg-atx-panel text-atx-ink uppercase tracking-[0.04em] disabled:opacity-45 disabled:cursor-not-allowed"
+            >
+              {busy ? 'Requesting…' : !address ? 'Connect to redeem' : 'Request Redeem'}
+            </button>
+            {err && <div className="text-[11px] text-atx-clay font-atx-display">{err}</div>}
+            <p className="font-atx-mono text-[11px] text-atx-ink/45 leading-[1.5]">
+              Starts a {deal?.settleDays ?? 30}-day settlement window; the issuer settles after a KYC check.
+            </p>
+          </>
+        )}
         <div className="border-t border-atx-ink/20 pt-3 font-atx-mono text-[10px] text-atx-ink/40 leading-[1.5]">
           On-chain deposits open once the vault is live on-chain. Deal terms are enforced by the
           SPV wrapper + oracle price bands.
@@ -121,7 +177,7 @@ export function RwaVaultDetailView({ vault }: { vault: SocialVault }) {
               </div>
             )}
           </div>
-          <RwaActionRail deal={deal} />
+          <RwaActionRail vaultId={vault.id} deal={deal} />
         </div>
       </div>
     </div>
