@@ -227,15 +227,40 @@ does that, if at all.
 > **R3 (KYC gate) is deleted, not deferred** — the incentive layer is permissionless by
 > construction (§3.0). Track numbers R1–R6 are kept stable for continuity; there is no R3.
 
-**What remains before this runs end-to-end in production:** (1) apply migration
-`20260728000001`; (2) deploy a real `vRWA/USDC` vault so the hold-snapshot cron reads live balances
-(volume/referral/LP campaigns also verify swaps against it); (3) wire an on-chain `lockDays` source
-to activate the R5 duration-match bonus. The engine, credit path, and creation flow are all built
-and tested; they light up the moment a live vault exists.
+**What remains before this runs end-to-end in production:** (1) ~~apply migration `20260728000001`~~
+✅ applied; (2) deploy an RWA vault so the hold-snapshot cron reads live balances — see §9 below;
+(3) wire an on-chain `lockDays` source to activate the R5 duration-match bonus.
 
 ---
 
-## 9. Open questions
+## 9. Going live — deploy an RWA vault + wire the hold snapshot
+
+The RWA 4626 vault is **reserve-only in v1** (USDC held in the vault, no V4 pool), so a hold-credit
+deploy needs no hook mining. `DeployRwaVaultDemo.s.sol` is a self-contained one-shot that deploys the
+stack (test USDC → FeeVault → SPV registry → vRWA → RWA vault) and seeds two holders with real share
+balances. Dry-run verified on a local EVM (holders end with 10,000 / 5,000 shares).
+
+```bash
+DEPLOYER_PRIVATE_KEY=0x… pnpm forge:rwa-vault-demo:base-sepolia
+```
+
+It prints a `VAULT` address. Point a seeded deal's vault at it so the cron reads its balances (example
+wires the Sovereign T-Bill deal — swap the id + address):
+
+```sql
+update social_vaults
+set contract_address = '0xYOUR_DEPLOYED_VAULT', chain_id = 84532
+where id = 'bae63093-98f6-44ba-80d0-c5453b64290f';  -- Sovereign T-Bill vault
+```
+
+Then close the loop: create an RWA campaign linked to that deal (creator → surface = RWA → pick the
+deal) with an `actions.hold` rate, have the share-holders join as participants, and the weekly
+`rwa-hold-snapshot` cron credits them. The **vRWA/USDC oracle-banded pool** (for R1 volume/LP on the
+secondary market) is a separate, heavier deploy (oracle hook + CREATE2 mining) — the next milestone.
+
+---
+
+## 10. Open questions
 
 - [ ] Hold-snapshot cadence — align to coupon epoch, or independent weekly snapshot averaged over
       the epoch (smoother, harder to game by end-of-epoch top-ups)?
