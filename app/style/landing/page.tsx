@@ -1,4 +1,8 @@
-import { notFound } from 'next/navigation'
+'use client'
+
+import { notFound, useRouter } from 'next/navigation'
+import { useConnectModal } from '@rainbow-me/rainbowkit'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // Gated preview — only in dev, or when NEXT_PUBLIC_ATX_PREVIEW=true. Not linked in nav.
 // This is the reframed marketing landing (Phase-3). Promote to app/page.tsx once approved.
@@ -80,7 +84,20 @@ const TRAD = ['$50k–$250k minimum', 'KYC before you can invest', 'Locked — p
 const MW = ['Any amount', 'KYC only if you redeem', 'Trade on Uniswap, 24/7', 'You hold a bearer token']
 
 export default function LandingPreview() {
+  const { isConnected } = useMintwareIdentity()
+  const { openConnectModal } = useConnectModal()
+  const router = useRouter()
+
   if (!ALLOW) notFound()
+
+  // Enter the app: connect first if needed, else route into the authenticated surface.
+  function launchApp(dest = '/dashboard') {
+    if (isConnected) router.push(dest)
+    else openConnectModal?.()
+  }
+  function checkScore() {
+    router.push('/explorer')
+  }
 
   const ey = 'font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55'
 
@@ -97,8 +114,8 @@ export default function LandingPreview() {
             <span>Vaults</span><span>Attribution</span><span>Agents</span><span>Docs</span>
           </nav>
           <div className="flex gap-2.5">
-            <button className="font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-ink bg-atx-bone">✴ Check score</button>
-            <button className="font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white">Launch app →</button>
+            <button onClick={checkScore} className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-ink bg-atx-bone">✴ Check score</button>
+            <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white">Launch app →</button>
           </div>
         </div>
       </header>
@@ -114,8 +131,8 @@ export default function LandingPreview() {
             {'Mintware reads everything you’ve done on-chain, turns it into a score, and pays you more for it — across vaults, referrals, and every action you take.'}
           </p>
           <div className="flex flex-wrap gap-3 mt-8">
-            <button className="font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-blue bg-atx-blue text-white">Launch app →</button>
-            <button className="font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-ink bg-atx-bone">Check your score</button>
+            <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-blue bg-atx-blue text-white">Launch app →</button>
+            <button onClick={checkScore} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-ink bg-atx-bone">Check your score</button>
           </div>
         </div>
       </section>
@@ -162,7 +179,7 @@ export default function LandingPreview() {
                 <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55">Effective APY</span>
                 <span className="font-atx-mono font-bold text-[26px] tracking-tight" style={{ color: CORAL_INK }}>10.4%</span>
               </div>
-              <button className="w-full mt-3 py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-ink text-atx-bone border border-atx-ink">
+              <button onClick={() => launchApp('/vaults')} className="w-full mt-3 py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-ink text-atx-bone border border-atx-ink cursor-pointer">
                 Launch app to deposit →
               </button>
             </div>
@@ -331,7 +348,7 @@ export default function LandingPreview() {
           <div className="text-[24px] font-bold tracking-[-0.01em] max-w-[24ch]">
             Your wallet already has a history. Come get paid for it.
           </div>
-          <button className="font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-blue bg-atx-blue text-white">
+          <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-blue bg-atx-blue text-white">
             Launch app →
           </button>
         </div>
