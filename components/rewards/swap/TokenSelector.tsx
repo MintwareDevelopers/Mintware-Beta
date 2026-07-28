@@ -16,7 +16,10 @@ import type { Token } from '@lifi/sdk'
 type MinToken = Pick<Token, 'address' | 'symbol' | 'name'> & { logoURI?: string }
 
 interface TokenSelectorProps {
-  tokens?: Token[]
+  // MinToken (not the strict @lifi/sdk Token) so both the LI.FI token list and
+  // the local config/tokens list are accepted — the selector only reads
+  // address / symbol / name / logoURI.
+  tokens?: MinToken[]
   selected: MinToken | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSelect: (token: any) => void

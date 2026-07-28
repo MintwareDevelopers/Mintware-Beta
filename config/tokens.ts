@@ -28,9 +28,11 @@ export const COMMON_TOKENS: Record<number, string[]> = {
   1116: ['CORE'],
 }
 
-// Uniswap default token list URL for ETH and Base
+// Uniswap default token list URL for ETH and Base.
+// Use the canonical host (clean 200 + CORS) — the ipfs.io gateway 301-redirects
+// to a target without CORS headers, which fails the browser fetch.
 export const UNISWAP_TOKEN_LIST_URL =
-  'https://gateway.ipfs.io/ipns/tokens.uniswap.org'
+  'https://tokens.uniswap.org'
 
 // Native token placeholder addresses
 export const NATIVE_TOKEN_ADDRESS =

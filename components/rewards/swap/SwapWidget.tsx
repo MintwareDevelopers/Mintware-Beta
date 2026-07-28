@@ -17,6 +17,7 @@ import { useAccount, useBalance, useReadContract, useChainId } from 'wagmi'
 import { useQuote } from '@/hooks/useQuote'
 import { useSwap } from '@/hooks/useSwap'
 import { useCampaign } from '@/hooks/useCampaign'
+import { useTokenList } from '@/hooks/useTokenList'
 import { getChainConfig } from '@/config/chains'
 import { getNativeToken } from '@/config/tokens'
 import { TokenSelector } from './TokenSelector'
@@ -47,6 +48,7 @@ export function SwapWidget() {
 
   // Token state
   const native = getNativeToken(chainId)
+  const { tokens: availableTokens } = useTokenList(chainId)
   const [sellToken, setSellToken] = useState<Token | null>(native)
   const [buyToken, setBuyToken] = useState<Token | null>(null)
   const [sellAmount, setSellAmount] = useState('')
@@ -542,18 +544,22 @@ export function SwapWidget() {
       {/* Token selectors */}
       {showSellSelector && (
         <TokenSelector
+          tokens={availableTokens}
           selected={sellToken}
           onSelect={(t) => { setSellToken(t); setShowSellSelector(false) }}
           excludeAddress={buyToken?.address}
           onClose={() => setShowSellSelector(false)}
+          chainName={chainConfig?.name ?? ''}
         />
       )}
       {showBuySelector && (
         <TokenSelector
+          tokens={availableTokens}
           selected={buyToken}
           onSelect={(t) => { setBuyToken(t); setShowBuySelector(false) }}
           excludeAddress={sellToken?.address}
           onClose={() => setShowBuySelector(false)}
+          chainName={chainConfig?.name ?? ''}
         />
       )}
 
