@@ -327,7 +327,7 @@ function ProfileContent() {
               transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
             >
               {activeTab === 'portfolio' && (
-                <PortfolioTab data={data} loading={loading} />
+                <PortfolioTab data={data} loading={loading} hasWallet={!!wallet} />
               )}
               {activeTab === 'score' && (
                 <ScoreTab

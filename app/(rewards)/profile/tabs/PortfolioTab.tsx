@@ -6,9 +6,10 @@ import type { ScoreResponse } from '../types'
 interface Props {
   data: ScoreResponse | null
   loading: boolean
+  hasWallet: boolean
 }
 
-export function PortfolioTab({ data, loading }: Props) {
+export function PortfolioTab({ data, loading, hasWallet }: Props) {
   return (
     <>
       {loading && (
@@ -153,7 +154,9 @@ export function PortfolioTab({ data, loading }: Props) {
 
       {!loading && !data && (
         <div className="text-center py-12 text-atx-ink/60 text-[13px]">
-          Could not load data. The API may be indexing your wallet.
+          {hasWallet
+            ? 'Could not load data. The API may be indexing your wallet.'
+            : 'Connect your wallet to see your Attribution score.'}
         </div>
       )}
     </>
