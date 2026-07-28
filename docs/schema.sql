@@ -220,15 +220,20 @@ CREATE TABLE IF NOT EXISTS activity (
   campaign_id   text        REFERENCES campaigns (id) ON DELETE CASCADE,
   wallet        text        NOT NULL,
   action_type   text        NOT NULL
-                  CHECK (action_type IN ('bridge', 'trade', 'referral_bridge', 'referral_trade')),
+                  CHECK (action_type IN ('bridge', 'trade', 'referral_bridge', 'referral_trade',
+                                         'subscribe', 'hold', 'referral_subscribe')),  -- RWA: 20260728000002
   points_earned int         NOT NULL DEFAULT 0,
   tx_hash       text,
   referred_by   text,
   recorded_at   timestamptz DEFAULT now()
 );
 
+-- Global dedup (DeFi path): one credit per (wallet, tx_hash, action_type).
 CREATE UNIQUE INDEX IF NOT EXISTS activity_wallet_tx_action_uidx
   ON activity (wallet, tx_hash, action_type);
+-- Campaign-scoped dedup (RWA hold-credit): ON CONFLICT target for credit_hold_points (20260728000003).
+CREATE UNIQUE INDEX IF NOT EXISTS activity_campaign_wallet_tx_action_uidx
+  ON activity (campaign_id, tx_hash, wallet, action_type);
 CREATE INDEX IF NOT EXISTS activity_tx_hash_wallet_idx
   ON activity (tx_hash, wallet, action_type);
 CREATE INDEX IF NOT EXISTS activity_campaign_wallet_action_time_idx

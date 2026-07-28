@@ -57,3 +57,4 @@ Source of truth: `docs/schema.sql`
 - `distributions.deadline` bigint column (nullable, backward compat)
 - `20260728000001_rwa_incentive_surface.sql` — `campaigns.surface` / `linked_deal_id` / `duration_match_days` (applied)
 - `20260728000002_activity_action_types.sql` — widens `activity.action_type` CHECK for RWA (`subscribe`/`hold`/`referral_subscribe`)
+- `20260728000003_credit_hold_points.sql` — campaign-scoped unique index `(campaign_id, tx_hash, wallet, action_type)` + atomic idempotent `credit_hold_points()` RPC (guard-insert + participant-increment in one tx; ON CONFLICT DO NOTHING → no double-credit). The global `(wallet, tx_hash, action_type)` index stays for the DeFi path.
