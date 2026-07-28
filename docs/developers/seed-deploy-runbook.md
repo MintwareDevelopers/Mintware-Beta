@@ -22,11 +22,17 @@ DEPLOYER_PRIVATE_KEY=0x… pnpm forge:seed-demo:base-sepolia
 
 - **Wallet:** the `DEPLOYER_PRIVATE_KEY` you run it with (expected: `0x9c646C48a302f4725450669f1218d3FDb3e933AD`),
   funded with Base Sepolia ETH. Run this yourself — never share the key.
-- **PoolManager:** Base Sepolia `0x05e73354CfDd6745C338B50bcFDfA7e2c1b33b63` (baked in; override with `V4_POOL_MANAGER`).
-- The script prints every deployed address (tUSDC, tPROJ, FeeVault, hook, vault, SeedPool, adapter),
-  the `VAULT_ID` / `SEED` ids, and the final raise state (phase Grown, liquidity + shares live).
+- **PoolManager:** the demo deploys its **own** PoolManager — fully self-contained, no canonical
+  address needed. (Verified on an anvil Base-Sepolia fork: phase Grown, live liquidity + LP shares.)
+- The script prints every deployed address (PoolManager, tUSDC, tPROJ, FeeVault, hook, vault, SeedPool,
+  adapter), the `VAULT_ID` / `SEED` ids, and the final raise state.
 
 This is a **demo of the mechanics**, not a production deploy — for a real vault use the steps below.
+
+> ⚠️ **PoolManager address bug (found while testing this):** the Base Sepolia PoolManager documented
+> in `DeployPhase3.s.sol` (`0x05e733…`) has **no code on-chain** — a real deploy against it reverts on
+> `initialize`. Verify the canonical Uniswap V4 Base-Sepolia PoolManager address before the production
+> deploy in the steps below.
 
 ---
 

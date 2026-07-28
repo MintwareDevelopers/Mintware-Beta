@@ -2,6 +2,7 @@
 pragma solidity ^0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
+import {PoolManager}  from "@uniswap/v4-core/src/PoolManager.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks}       from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}      from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -34,7 +35,6 @@ import {MockERC20}               from "../test/mocks/MockERC20.sol";
 ///   DEPLOYER_PRIVATE_KEY=0x… pnpm forge:seed-demo:base-sepolia
 contract SeedDemo is Script {
     address constant C2_FACTORY = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
-    address constant BASE_SEPOLIA_PM = 0x05e73354CfDd6745C338B50bcFDfA7e2c1b33b63;
     uint160 constant INIT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
     bytes32 constant VAULT_ID = keccak256("seed-demo-vault");
     bytes32 constant SEED     = keccak256("seed-demo-1");
@@ -46,15 +46,16 @@ contract SeedDemo is Script {
     function run() external {
         uint256 key = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address me  = vm.addr(key);
-        address poolMgr = vm.envOr("V4_POOL_MANAGER", BASE_SEPOLIA_PM);
 
         console.log("=== Mintware Seed Demo ===");
         console.log("Chain:      ", block.chainid);
         console.log("Deployer:   ", me);
-        console.log("PoolManager:", poolMgr);
 
-        // 1) Test tokens + FeeVault (broadcast)
+        // 1) Fresh PoolManager + test tokens + FeeVault (broadcast) — fully self-contained,
+        //    no dependency on a canonical V4 address.
         vm.startBroadcast(key);
+        PoolManager pm = new PoolManager(me);
+        address poolMgr = address(pm);
         MockERC20 usdc = new MockERC20("Test USDC", "tUSDC", 6);
         MockERC20 proj = new MockERC20("Demo Project", "tPROJ", 6);
         usdc.mint(me, 20_000e6);
@@ -118,6 +119,7 @@ contract SeedDemo is Script {
         (MintwareSeedPool.Phase phase, uint256 raised, , uint256 dTok, uint256 dQuote) = seedPool.getState(SEED);
         console.log("");
         console.log("=== Deployed ===");
+        console.log("PoolManager: ", poolMgr);
         console.log("tUSDC:       ", address(usdc));
         console.log("tPROJ:       ", address(proj));
         console.log("FeeVault:    ", address(feeVault));
