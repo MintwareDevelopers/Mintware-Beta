@@ -11,6 +11,7 @@ import { getServiceClient } from '@/lib/web2/supabase'
 import type { IssuerProfile } from './issuer'
 import type { RedemptionRequest } from './redemptions'
 import type { DealMeta, DealDocument, DocKind, DocReviewStatus, KycTier, DealReviewStatus } from './deal'
+import type { VaultSummary, VaultStatus } from '@/lib/vaults/discovery'
 
 function daysBetween(fromISO: string, toISO: string): number {
   const ms = new Date(toISO).getTime() - new Date(fromISO).getTime()
@@ -126,6 +127,47 @@ export async function dbGetDeal(vaultId: string): Promise<DealMeta | null> {
       reviewStatus: (deal.review_status as DealReviewStatus) ?? 'draft',
       documents,
     }
+  } catch {
+    return null
+  }
+}
+
+// ─── RWA vaults for discovery (approved deals → VaultSummary) ──────────────────
+/// Real, approved RWA deals mapped to the discovery model. `id` is the vault UUID,
+/// so discovery rows link straight to the /vault/[id] deal page. Returns null on
+/// error / missing tables so callers fall back to mock RWA.
+export async function dbGetRwaVaults(): Promise<VaultSummary[] | null> {
+  try {
+    const sb = getServiceClient()
+    const { data, error } = await sb
+      .from('vault_deals')
+      .select('target_apy_pct, price_band, settle_days, underlying_asset_class, social_vaults(id, name, status, tvl_usdc)')
+      .eq('review_status', 'approved')
+    if (error || !data) return null
+
+    return data.flatMap((d: Record<string, unknown>) => {
+      const v = d.social_vaults as { id?: string; name?: string; status?: string; tvl_usdc?: number } | null
+      if (!v?.id) return []
+      const status: VaultStatus = v.status === 'seeding' ? 'seeding' : v.status === 'active' ? 'active' : 'paused'
+      const asset = (d.underlying_asset_class as string) ?? 'RWA'
+      const apy = d.target_apy_pct != null ? Number(d.target_apy_pct) : 0
+      return [{
+        id: v.id,
+        name: v.name ?? 'RWA Deal',
+        surface: 'RWA' as const,
+        pair: 'vRWA / USDC',
+        descriptor: `${asset} · oracle-banded · SPV-wrapped`,
+        tvlUsd: Number(v.tvl_usdc ?? 0),
+        netApyPct: apy,
+        status,
+        epochLabel: 'T−7d',
+        feeSplit: [70, 15, 10, 5] as [number, number, number, number],
+        underlyingApyPct: apy,
+        settleDays: Number(d.settle_days ?? 30),
+        priceBand: (d.price_band as string) ?? '±15/±45',
+        kycAtRedeem: true,
+      }]
+    })
   } catch {
     return null
   }

@@ -114,18 +114,27 @@ const MOCK_VAULTS: VaultSummary[] = [
  */
 export async function getVaultsDiscovery(): Promise<VaultSummary[]> {
   const { isSubgraphEnabled, fetchSubgraphVaults } = await import('./subgraph')
-  if (isSubgraphEnabled()) {
-    const real = await fetchSubgraphVaults()
-    if (real.length > 0) {
-      const hasRwa = real.some((v) => v.surface === 'RWA')
-      // Real vaults + illustrative examples so both surfaces stay populated. DeFi
-      // examples showcase the range of pool profiles alongside the live vault(s);
-      // RWA examples drop once real RWA vaults are indexed. Flagged "Example" in the UI.
-      const previews = MOCK_VAULTS.filter((v) => v.surface === 'DeFi' || !hasRwa)
-      return [...real, ...previews]
-    }
-  }
-  return MOCK_VAULTS
+
+  // Real DeFi vaults from the subgraph.
+  let realDeFi: VaultSummary[] = []
+  if (isSubgraphEnabled()) realDeFi = await fetchSubgraphVaults()
+
+  // Real, approved RWA deals from Supabase (ids are vault UUIDs → link to /vault/[id]).
+  let realRwa: VaultSummary[] = []
+  try {
+    const { dbGetRwaVaults } = await import('@/lib/rwa/db')
+    realRwa = (await dbGetRwaVaults()) ?? []
+  } catch { /* fall through to mock RWA */ }
+
+  const real = [...realDeFi, ...realRwa]
+  if (real.length === 0) return MOCK_VAULTS
+
+  // DeFi examples always showcase the range of pool profiles alongside the live
+  // vault(s); RWA examples drop once real approved deals exist (they replace them).
+  // Examples are flagged "Example" in the UI; real RWA deals link to /vault/[id].
+  const hasRwa = real.some((v) => v.surface === 'RWA')
+  const previews = MOCK_VAULTS.filter((v) => v.surface === 'DeFi' || !hasRwa)
+  return [...real, ...previews]
 }
 
 /** Aggregate stats for the discovery header title-block. */
