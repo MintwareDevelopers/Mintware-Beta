@@ -93,7 +93,7 @@ export default function HomePage() {
           <div>
             <p className={`${LABEL} mb-4`}>On-chain reputation · 100+ chains</p>
             <h1 className="font-bold tracking-[-0.03em] leading-[0.92] text-[clamp(44px,7vw,88px)] text-wrap-balance">
-              Your history should mean <span className="text-atx-blue">something.</span>
+              Your Contribution should mean <span className="text-atx-blue">something.</span>
             </h1>
             <p className="text-atx-ink/55 text-[16px] max-w-[46ch] mt-5">
               Every interaction. Every position. Every referral. Paste any wallet to see what it&apos;s built.
@@ -165,11 +165,11 @@ export default function HomePage() {
 
       {/* ── Three audiences ── */}
       <section className="border-b border-atx-ink max-w-[1160px] mx-auto px-7 py-16">
-        <div className="flex items-center gap-3.5 mb-8">
+        <div className="flex items-center gap-3.5 mb-4">
           <span className="font-atx-mono text-[14px] border border-atx-ink px-3 py-2">01</span>
-          <span className={LABEL}>Built for everyone in DeFi</span>
-          <h2 className="ml-auto font-bold text-[clamp(22px,3vw,34px)] tracking-tight max-md:hidden">One score. Three audiences.</h2>
+          <span className={LABEL}>Built for everyone</span>
         </div>
+        <h2 className="font-bold text-[clamp(22px,3vw,34px)] tracking-tight mb-8">One score. Three audiences.</h2>
         <div className="grid grid-cols-3 border border-atx-ink max-md:grid-cols-1">
           {[
             { tag: 'Protocols', accent: 'var(--color-atx-blue)', h: "You've been rewarding the wrong people.", sub: 'Most emissions go to mercenary farmers. Attribution changes who gets rewarded — and why.', points: ['Reward contributors, not bots', 'Score-weighted distributions', 'One call: getScore(wallet)'] },
@@ -358,6 +358,56 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── Real-world yield (RWA moat) ── */}
+      <section id="rwa" className="border-b border-atx-ink max-w-[1160px] mx-auto px-7 py-16">
+        <div className="flex items-center gap-2 mb-4">
+          <span className="w-[9px] h-[9px] bg-atx-coral border border-atx-ink inline-block" />
+          <span className={LABEL}>Real-world yield · no gatekeepers</span>
+        </div>
+        <h2 className="font-bold text-[clamp(28px,3.5vw,42px)] tracking-[-0.02em] leading-[1.05] max-w-[20ch] mb-3">
+          Real estate yield, <span className="text-atx-blue">without the $50k door.</span>
+        </h2>
+        <p className="text-[15px] text-atx-ink/55 max-w-[56ch] leading-relaxed mb-8">
+          Tokenized real-world assets have always been walled off — accreditation checks, six-figure
+          minimums, capital locked behind phone calls. Mintware&apos;s RWA vaults change that: deposit any
+          amount, hold a bearer token, earn automatically.
+        </p>
+        <div className="grid grid-cols-4 border border-atx-ink mb-6 max-md:grid-cols-2 max-sm:grid-cols-1">
+          {[
+            ['01', 'Deposit USDC', 'Any amount. No accreditation, no minimum, no upfront KYC.'],
+            ['02', 'Receive vRWA', 'A bearer token, 1:1 with your share — yours to hold or trade.'],
+            ['03', 'Earn + trade', 'Real-world yield accrues automatically. Trade vRWA on Uniswap, 24/7.'],
+            ['04', 'Redeem — if you want', 'Only here does KYC apply, and only if you redeem the underlying.'],
+          ].map(([n, t, d], i) => (
+            <div key={n} className={`p-6 ${i < 3 ? 'border-r border-atx-ink max-md:[&:nth-child(2)]:border-r-0 max-sm:border-r-0 max-md:border-b' : 'max-md:border-b'}`}>
+              <div className="font-atx-mono text-[12px] text-atx-blue mb-3">{n}</div>
+              <div className="font-bold text-[15px] tracking-tight mb-1.5 leading-tight">{t}</div>
+              <div className="text-[12px] text-atx-ink/55 leading-relaxed">{d}</div>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 border border-atx-ink max-md:grid-cols-1">
+          <div className="p-6 border-r border-atx-ink max-md:border-r-0 max-md:border-b">
+            <div className={`${LABEL} mb-3`}>Traditional RWA</div>
+            {['$50k–$250k minimum', 'KYC before you can invest', 'Locked — phone calls to exit', 'You own a database entry'].map((r, i, a) => (
+              <div key={r} className={`py-2.5 text-[13px] text-atx-ink/55 ${i < a.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>{r}</div>
+            ))}
+          </div>
+          <div className="p-6">
+            <div className="flex items-center gap-1.5 mb-3">
+              <Star className="w-3.5 h-3.5 text-atx-blue" />
+              <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-blue">Mintware</span>
+            </div>
+            {['Any amount', 'KYC only if you redeem', 'Trade on Uniswap, 24/7', 'You hold a bearer token'].map((r, i, a) => (
+              <div key={r} className={`py-2.5 text-[13px] font-medium ${i < a.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>{r}</div>
+            ))}
+          </div>
+        </div>
+        <p className="text-[19px] font-bold leading-[1.3] max-w-[36ch] mt-8 tracking-[-0.01em]">
+          Your real-estate position trades at 3am on a Sunday. <span className="text-atx-blue">Try that with a REIT.</span>
+        </p>
+      </section>
+
       {/* ── Teams ── */}
       <section id="teams" className="border-b border-atx-ink max-w-[1160px] mx-auto px-7 py-16">
         <div className="flex items-center gap-3.5 mb-3">
@@ -387,23 +437,23 @@ export default function HomePage() {
 
       {/* ── Footer ── */}
       <footer className="bg-atx-ink text-atx-bone">
-        <div className="max-w-[1160px] mx-auto px-7 py-10 flex items-center justify-between flex-wrap gap-5">
+        <div className="max-w-[1160px] mx-auto px-7 py-[30px] flex items-center justify-between flex-wrap gap-4">
           <Link href="/" className="flex items-center gap-2.5 no-underline text-atx-bone">
             <Star className="w-5 h-5 text-atx-acid" />
-            <span className="font-bold text-[16px]">MINTWARE</span>
+            <span className="font-bold text-[15px] tracking-[0.06em]">MINTWARE</span>
           </Link>
-          <div className="flex gap-5 flex-wrap font-atx-mono text-[12px] uppercase tracking-[0.06em]">
+          <div className="flex gap-5 flex-wrap font-atx-mono text-[10px] uppercase tracking-[0.1em]">
             {[
-              { href: '/explorer', label: 'Explorer' },
-              { href: '/#how-it-works', label: 'How it works' },
+              { href: '/vaults', label: 'Vaults' },
+              { href: '/explorer', label: 'Attribution' },
+              { href: '/agents', label: 'Agents' },
               { href: '/for-protocols.html', label: 'Protocols' },
-              { href: '/for-agents.html', label: 'Agents' },
               { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
             ].map((l) => (
-              <a key={l.label} href={l.href} className="text-atx-bone/50 no-underline hover:text-atx-bone" {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}>{l.label}</a>
+              <a key={l.label} href={l.href} className="text-atx-bone/60 no-underline hover:text-atx-bone" {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}>{l.label}</a>
             ))}
           </div>
-          <div className="font-atx-mono text-[11px] text-atx-bone/35">© 2026 Mintware ✴ Powered by Attribution</div>
+          <div className="font-atx-mono text-[10px] text-atx-bone/45">© 2026 Mintware ✴ Contribution is identity</div>
         </div>
       </footer>
 
