@@ -251,7 +251,7 @@ const FLOW = [
   { k: 'MEV Protection', d: 'TWAP verify · sandwich guard blocks value leaking to bots' },
   { k: 'Dynamic Fee', d: 'Fee auto-tunes to volatility + depth so LPs capture more' },
   { k: 'Idle Capital', d: 'Un-ranged liquidity routed to yield instead of sitting idle' },
-  { k: 'Attribution Split', d: 'Fees split 50 / 25 / 25, your share weighted by reputation' },
+  { k: 'Attribution Split', d: 'Fees split 70/15/10/5, your LP share weighted by reputation' },
   { k: 'FeeVault', d: 'Accrues per-epoch, claimable — no manual compounding' },
 ]
 
@@ -333,7 +333,7 @@ function LockTiers() {
 // ─── 04 · Trust, enforced on-chain ───────────────────────────────────────────
 const TRUST = [
   { k: 'Non-custodial', d: 'You hold ERC-4626 shares. No one — not the team — can move your principal.' },
-  { k: 'Fee split is code', d: 'The 50 / 25 / 25 depositor/protocol/provider split is hardcoded, not a policy.' },
+  { k: 'Fee split on-chain', d: 'The 70/15/10/5 LP/referrer/protocol/bonus split lives in the FeeVault — any change emits a public event, never a silent tweak.' },
   { k: 'Withdrawal queue', d: 'A 7-day on-chain notice — visible, enforced by the contract, no discretion.' },
   { k: 'Lock tiers enforced', d: 'Your multiplier and unlock date live on-chain; early exit penalty is automatic.' },
   { k: 'MEV guard in the hook', d: 'Sandwich protection runs before every swap — value stays with LPs, not bots.' },

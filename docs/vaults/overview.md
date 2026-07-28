@@ -81,13 +81,14 @@ the pool — automatically:
 01  MEV Protection    — TWAP verify + sandwich guard; value stays with LPs, not bots
 02  Dynamic Fee       — fee auto-tunes to volatility + depth so LPs capture more
 03  Idle Capital      — un-ranged liquidity is routed to yield instead of sitting idle
-04  Attribution Split — fees split 50 / 25 / 25, your share weighted by reputation
+04  Attribution Split — fees split 70/15/10/5, your LP share weighted by reputation
 05  FeeVault          — accrues per 7-day epoch, claimable — no manual compounding
 ```
 
-**Fee split:** every swap fee is split **50% to depositors · 25% to the protocol · 25% to the
-liquidity provider**. The split is hardcoded in the FeeVault, not a policy that can be quietly
-changed.
+**Fee split:** every swap fee is split **70% to LPs · 15% to referrers · 10% to the protocol
+treasury · 5% to a rolling Attribution bonus pool**. The bonus pool seeds the next epoch and
+absorbs any unclaimed rewards, then pays out to the highest-reputation active LPs — so nothing is
+wasted. The split lives on-chain in the FeeVault; any change emits a public event.
 
 ---
 

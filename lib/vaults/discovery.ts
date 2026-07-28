@@ -20,8 +20,8 @@ export interface VaultSummary {
   netApyPct: number
   status: VaultStatus
   epochLabel: string    // e.g. "T−3d"
-  // Swap-fee split, 50 / 25 / 25 depositors / mintware / provider
-  feeSplit: [number, number, number]
+  // Swap-fee split: LPs / referrers / protocol / Attribution bonus pool (70/15/10/5 default)
+  feeSplit: [number, number, number, number]
   // DeFi-only
   profile?: PoolProfile
   profileRange?: string // e.g. "±6%"
@@ -37,39 +37,39 @@ const MOCK_VAULTS: VaultSummary[] = [
     id: 'social-blue-chip', name: 'Social Blue-Chip', surface: 'DeFi',
     pair: 'ETH / USDC', descriptor: 'V4 hook-gated LP · MEV-protected',
     tvlUsd: 2_412_900, netApyPct: 11.0, status: 'active', epochLabel: 'T−3d',
-    feeSplit: [50, 25, 25], profile: 'BLUE_CHIP', profileRange: '±6%',
+    feeSplit: [70, 15, 10, 5], profile: 'BLUE_CHIP', profileRange: '±6%',
   },
   {
     id: 'degen-emerging', name: 'Degen Emerging', surface: 'DeFi',
     pair: 'ARB / USDC', descriptor: 'Volatility-adjusted dynamic fee',
     tvlUsd: 684_300, netApyPct: 18.4, status: 'active', epochLabel: 'T−3d',
-    feeSplit: [50, 25, 25], profile: 'EMERGING', profileRange: '±13%',
+    feeSplit: [70, 15, 10, 5], profile: 'EMERGING', profileRange: '±13%',
   },
   {
     id: 'meme-wide', name: 'Meme Wide-Range', surface: 'DeFi',
     pair: 'PEPE / USDC', descriptor: 'Wide range · idle-capital routed',
     tvlUsd: 129_500, netApyPct: 41.2, status: 'seeding', epochLabel: 'T−6d',
-    feeSplit: [50, 25, 25], profile: 'MEME', profileRange: '±27%',
+    feeSplit: [70, 15, 10, 5], profile: 'MEME', profileRange: '±27%',
   },
   {
     id: 'liquidhectar-note', name: 'LiquidHectar Note', surface: 'RWA',
     pair: 'vRWA / USDC', descriptor: 'Real-estate note · oracle-banded',
     tvlUsd: 4_180_000, netApyPct: 9.0, status: 'active', epochLabel: 'T−3d',
-    feeSplit: [50, 25, 25], underlyingApyPct: 12.0, settleDays: 30,
+    feeSplit: [70, 15, 10, 5], underlyingApyPct: 12.0, settleDays: 30,
     priceBand: '±15/±45', kycAtRedeem: true,
   },
   {
     id: 'atx-credit', name: 'ATX Credit Facility', surface: 'RWA',
     pair: 'vRWA / USDC', descriptor: 'Private-credit facility · SPV-wrapped',
     tvlUsd: 1_960_000, netApyPct: 10.4, status: 'active', epochLabel: 'T−3d',
-    feeSplit: [50, 25, 25], underlyingApyPct: 13.5, settleDays: 30,
+    feeSplit: [70, 15, 10, 5], underlyingApyPct: 13.5, settleDays: 30,
     priceBand: '±15/±45', kycAtRedeem: true,
   },
   {
     id: 'mesquite-solar', name: 'Mesquite Solar', surface: 'RWA',
     pair: 'vRWA / USDC', descriptor: 'Energy off-take · commodity yield',
     tvlUsd: 512_000, netApyPct: 8.1, status: 'seeding', epochLabel: 'T−9d',
-    feeSplit: [50, 25, 25], underlyingApyPct: 10.0, settleDays: 30,
+    feeSplit: [70, 15, 10, 5], underlyingApyPct: 10.0, settleDays: 30,
     priceBand: '±15/±45', kycAtRedeem: true,
   },
 ]

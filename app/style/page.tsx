@@ -137,7 +137,7 @@ export default function StylePage() {
             ['Display / 56', <span className="text-[56px] font-bold tracking-[-0.02em] leading-none">Settlemint</span>],
             ['Heading / 34', <span className="text-[34px] font-bold tracking-tight">Social Liquidity Vaults</span>],
             ['Body / 15', <span className="text-[15px] max-w-[60ch] block">Lock tiers raise your FeeVault multiplier; longer commitment earns a disproportionate share of swap fees over time.</span>],
-            ['Data / mono', <span className="font-atx-mono text-[15px] tracking-[0.02em]">TVL $2,412,900 · APY 11.0% · EPOCH T−3d · 50 / 25 / 25</span>],
+            ['Data / mono', <span className="font-atx-mono text-[15px] tracking-[0.02em]">TVL $2,412,900 · APY 11.0% · EPOCH T−3d · 70 / 15 / 10 / 5</span>],
           ].map(([tag, node], i) => (
             <div key={i} className={`flex items-baseline gap-[18px] py-3.5 ${i ? 'border-t ' + line : ''}`}>
               <span className={label + ' w-[120px] shrink-0'}>{tag}</span>
@@ -192,7 +192,7 @@ export default function StylePage() {
                 ))}
               </div>
               <div className={`p-[14px_18px] border-t ${line}`}>
-                <div className={label + ' mb-2'}>Swap fee · 50 / 25 / 25</div>
+                <div className={label + ' mb-2'}>Swap fee · 70 / 15 / 10 / 5</div>
                 <div className="flex h-7 border border-atx-ink font-atx-mono text-[11px]">
                   <span className="flex items-center justify-center bg-atx-blue text-white border-r border-atx-ink" style={{ flex: 50 }}>DEPOSITORS</span>
                   <span className="flex items-center justify-center bg-atx-coral text-atx-ink border-r border-atx-ink" style={{ flex: 25 }}>MINTWARE</span>

@@ -51,7 +51,10 @@ Mintware review, so it ships to production ahead of the RWA contracts clearing l
 | `SPVAssetProviderRegistry.sol` | Issuer lifecycle (None / Registered / Verified / Suspended) + `metadataHash` |
 | `PVDistributionEscrow.sol` | Merkle-based, KYC-gated dividend distribution |
 
-**Fee split:** 50% depositors / 25% protocol / 25% liquidity provider — hardcoded in `FeeVault`.
+**Fee split** (`FeeVault` default, owner-configurable, sums to BPS): 70% LPs / 15% referrers /
+10% protocol treasury / 5% Attribution bonus pool. The bonus pool is a rolling pot — each epoch
+seeds the next, and `sweep()` adds unclaimed rewards from expired epochs — redistributed to
+Attribution-weighted LPs the following epoch.
 
 ---
 

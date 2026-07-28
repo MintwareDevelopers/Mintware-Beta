@@ -71,25 +71,19 @@ function VaultCard({ v }: { v: VaultSummary }) {
 
       {isDeFi ? (
         <div className={`p-[14px_18px] border-t ${LINE}`}>
-          <div className={`${LABEL} mb-2`}>Swap fee · {v.feeSplit.join(' / ')}</div>
-          <div className="flex h-7 border border-atx-ink font-atx-mono text-[11px]">
-            <span
-              className="flex items-center justify-center bg-atx-blue text-white border-r border-atx-ink overflow-hidden"
-              style={{ flex: v.feeSplit[0] }}
-            >
-              DEPOSITORS
+          <div className={`${LABEL} mb-2`}>Swap fee · {v.feeSplit.join(' / ')} · LP / ref / protocol / bonus</div>
+          <div className="flex h-7 border border-atx-ink font-atx-mono text-[10px]">
+            <span className="flex items-center justify-center bg-atx-blue text-white border-r border-atx-ink overflow-hidden" style={{ flex: v.feeSplit[0] }}>
+              LPS
             </span>
-            <span
-              className="flex items-center justify-center bg-atx-coral text-atx-ink border-r border-atx-ink overflow-hidden"
-              style={{ flex: v.feeSplit[1] }}
-            >
-              MW
+            <span className="flex items-center justify-center bg-atx-coral text-atx-ink border-r border-atx-ink overflow-hidden" style={{ flex: v.feeSplit[1] }}>
+              REF
             </span>
-            <span
-              className="flex items-center justify-center bg-atx-acid text-atx-ink overflow-hidden"
-              style={{ flex: v.feeSplit[2] }}
-            >
-              PROVIDER
+            <span className="flex items-center justify-center bg-atx-mesquite text-white border-r border-atx-ink overflow-hidden" style={{ flex: v.feeSplit[2] }}>
+              PROT
+            </span>
+            <span className="flex items-center justify-center bg-atx-acid text-atx-ink overflow-hidden" style={{ flex: v.feeSplit[3] }}>
+              BONUS
             </span>
           </div>
         </div>

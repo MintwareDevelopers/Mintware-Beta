@@ -69,7 +69,7 @@ function mapVault(v: SgVault): VaultSummary {
     netApyPct: 0, // APY needs fee/yield history — not yet derived on-chain
     status,
     epochLabel: '—',
-    feeSplit: [50, 25, 25],
+    feeSplit: [70, 15, 10, 5],
   }
 
   if (surface === 'DeFi') {
