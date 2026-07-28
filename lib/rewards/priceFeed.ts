@@ -126,20 +126,27 @@ export async function getTokenPrice(symbol: string): Promise<number> {
 //
 // amount_wei = floor((payout_usd / token_price_usd) * 10^decimals)
 // Returns as bigint for precision — stored as string in DB (numeric type).
+//
+// Integer arithmetic: both USD inputs are scaled to 8 dp and that scale cancels
+// in the ratio, so the only floating-point step is rounding two *dollar* values
+// (small, well within MAX_SAFE_INTEGER) into integers. The 10^decimals multiply
+// and the final division are exact BigInt ops — no precision loss at 18 decimals
+// or sub-cent payouts, which the old `float * 10**18` path silently corrupted.
 // ---------------------------------------------------------------------------
-// WARNING: Uses floating-point arithmetic — precision loss is possible for tokens with
-// 18 decimals and small USD payouts (< $0.01). The intermediate float division
-// `payout_usd / token_price_usd` can lose ~15 significant digits.
-// TODO: Replace with BigInt integer arithmetic or a library like decimal.js before
-// production high-value campaigns are running.
+const USD_DP = 1e8 // 8 decimal places of USD precision; cancels between payout and price
+
 export function usdToWei(
   payout_usd: number,
   token_price_usd: number,
   decimals: number
 ): bigint {
   if (token_price_usd <= 0) throw new Error('[priceFeed] token_price_usd must be > 0')
-  // Use string math to avoid floating point precision issues on large decimals
-  const token_amount = payout_usd / token_price_usd
-  const multiplier = 10 ** decimals
-  return BigInt(Math.floor(token_amount * multiplier))
+  if (!Number.isFinite(payout_usd) || payout_usd < 0) {
+    throw new Error('[priceFeed] payout_usd must be a non-negative finite number')
+  }
+  const payoutScaled = BigInt(Math.round(payout_usd * USD_DP))
+  const priceScaled = BigInt(Math.round(token_price_usd * USD_DP))
+  if (priceScaled <= 0n) throw new Error('[priceFeed] token_price_usd too small to represent')
+  // (payout_usd / token_price_usd) * 10^decimals, floored — the 1e8 scale cancels.
+  return (payoutScaled * 10n ** BigInt(decimals)) / priceScaled
 }

@@ -515,7 +515,10 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
                 <div className="max-[720px]:hidden font-atx-mono text-[13px] text-right text-atx-ink/70">
                   {v.netApyPct > 0 ? `${v.netApyPct.toFixed(1)}%` : '—'}
                 </div>
-                <div className="font-atx-mono text-[13px] font-bold text-right">{fmtUsd(v.tvlUsd)}</div>
+                {/* Real vaults show real TVL; example rows never render a fabricated $ figure. */}
+                <div className="font-atx-mono text-[13px] font-bold text-right">
+                  {real ? fmtUsd(v.tvlUsd) : <span className="text-atx-ink/35 font-normal">—</span>}
+                </div>
               </>
             )
             return clickable

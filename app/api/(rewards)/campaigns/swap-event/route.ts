@@ -275,7 +275,14 @@ export const POST = createHandler(async (req, ctx) => {
     { credited: anyCredited, results },
     200
   )
-}, { auth: 'none' })
+}, {
+  // Open by design: client-side LI.FI calls can't carry a secret, so auth stays
+  // 'none'. Real protections are payload validation + the $10k cap + tx-hash dedup
+  // + on-chain fee verification. Rate-limit (per-IP; fails open if Upstash unset)
+  // caps abuse of the unauthenticated ingest.
+  auth: 'none',
+  rateLimit: { max: 20, windowMs: 60_000 },
+})
 
 // Reject non-POST methods
 export const GET = createHandler(async (_req, ctx) => {
