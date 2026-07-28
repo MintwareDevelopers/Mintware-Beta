@@ -16,6 +16,7 @@
 // =============================================================================
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
 const GRID_BG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
@@ -67,7 +68,10 @@ type AmplifyData = {
   stats: { count: number; tvlUsd: number; surfaces: number; live: boolean }
   leaderboard: LbVault[]
 }
-const isRealId = (id: string) => /^0x[0-9a-fA-F]{40}$/.test(id)
+const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+// Real = an on-chain DeFi vault (address) or an approved RWA deal (UUID). UUID deals
+// resolve at /vault/[id]; slug ids are illustrative examples.
+const isRealId = (id: string) => /^0x[0-9a-fA-F]{40}$/.test(id) || isUuid(id)
 
 function SectionHead({ n, label, title, sub }: { n: string; label: string; title: string; sub?: string }) {
   return (
@@ -489,11 +493,10 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
         ) : (
           rows.map((v, i) => {
             const real = isRealId(v.id)
-            return (
-              <div
-                key={v.id}
-                className={`grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-3.5 ${i < rows.length - 1 ? 'border-b border-atx-ink/12' : ''}`}
-              >
+            const clickable = isUuid(v.id) // approved RWA deals resolve at /vault/[id]
+            const rowClass = `grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-3.5 ${i < rows.length - 1 ? 'border-b border-atx-ink/12' : ''}${clickable ? ' hover:bg-atx-panel no-underline text-inherit' : ''}`
+            const inner = (
+              <>
                 <div className="font-atx-mono text-[15px] font-bold text-atx-ink/40">{i + 1}</div>
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span
@@ -504,6 +507,7 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
                   <span className={`font-atx-mono text-[9px] uppercase tracking-[0.1em] px-1.5 py-0.5 border shrink-0 ${real ? 'border-atx-ink text-atx-mesquite' : 'border-atx-ink/25 text-atx-ink/40'}`}>
                     {real ? 'Live' : 'Example'}
                   </span>
+                  {clickable && <span className="font-atx-mono text-[11px] text-atx-ink/40 max-[720px]:hidden">↗</span>}
                 </div>
                 <div className="max-[720px]:hidden font-atx-mono text-[12px]" style={{ color: v.surface === 'RWA' ? 'var(--color-atx-coral)' : 'var(--color-atx-blue)' }}>
                   {v.surface}
@@ -512,8 +516,11 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
                   {v.netApyPct > 0 ? `${v.netApyPct.toFixed(1)}%` : '—'}
                 </div>
                 <div className="font-atx-mono text-[13px] font-bold text-right">{fmtUsd(v.tvlUsd)}</div>
-              </div>
+              </>
             )
+            return clickable
+              ? <Link key={v.id} href={`/vault/${v.id}`} className={rowClass}>{inner}</Link>
+              : <div key={v.id} className={rowClass}>{inner}</div>
           })
         )}
       </div>
