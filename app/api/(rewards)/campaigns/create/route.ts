@@ -75,7 +75,6 @@ export const POST = createHandler(async (req, ctx) => {
       dailyPoolCapUsd: form.dailyPoolCapUsd,
       surface: form.surface,
       linkedDealId: form.linkedDealId,
-      minKycTier: form.minKycTier,
       durationMatchDays: form.durationMatchDays,
       token: {
         address: form.token.address,
@@ -104,11 +103,11 @@ export const POST = createHandler(async (req, ctx) => {
   const now           = new Date()
 
   // ── RWA incentive layer (R0) — surface validation ──────────────────────────
-  // 'rwa' campaigns must attach to an APPROVED deal; that deal supplies the KYC
-  // gate + duration-match default. DeFi campaigns are unaffected (surface='defi').
+  // 'rwa' campaigns attach to an APPROVED deal (for discovery + duration-match
+  // default). Permissionless by design: NO KYC gate — eligibility lives in the
+  // wrapped token, not the campaign. DeFi campaigns are unaffected (surface='defi').
   const surface = form.surface === 'rwa' ? 'rwa' : 'defi'
   let linkedDealId: string | null = null
-  let minKycTier: string | null = null
   let durationMatchDays: number | null = null
 
   if (surface === 'rwa') {
@@ -117,7 +116,7 @@ export const POST = createHandler(async (req, ctx) => {
     }
     const { data: deal } = await ctx.supabase
       .from('vault_deals')
-      .select('id, review_status, kyc_tier_required, settle_days')
+      .select('id, review_status, settle_days')
       .eq('id', form.linkedDealId)
       .maybeSingle()
     if (!deal) {
@@ -127,8 +126,6 @@ export const POST = createHandler(async (req, ctx) => {
       return ctx.json({ error: 'Linked deal is not approved' }, 400)
     }
     linkedDealId = deal.id
-    // Campaign gate defaults to the deal's own KYC requirement; the form may only tighten it.
-    minKycTier = form.minKycTier && form.minKycTier !== 'NONE' ? form.minKycTier : (deal.kyc_tier_required ?? 'BASIC')
     durationMatchDays = form.durationMatchDays ?? deal.settle_days ?? null
   }
 
@@ -174,7 +171,6 @@ export const POST = createHandler(async (req, ctx) => {
       end_date:             endDate.toISOString(),
       surface,
       linked_deal_id:       linkedDealId,
-      min_kyc_tier:         minKycTier,
       duration_match_days:  durationMatchDays,
     })
     .select('id')
