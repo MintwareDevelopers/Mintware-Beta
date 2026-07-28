@@ -49,6 +49,7 @@
 * [API Reference](developers/api-reference.md)
 * [Smart Contracts](developers/smart-contracts.md)
 * [Vaults & RWA Build Spec](developers/vaults-rwa-build-spec.md)
+* [RWA Incentive Layer](developers/rwa-incentive-layer.md)
 * [EAS Attestations](developers/eas-attestations.md)
 * [Ethereum UX Upgrades](developers/ethereum-ux-upgrades.md)
 * [Platform System Map](developers/platform-system-map.md)
