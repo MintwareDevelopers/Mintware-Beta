@@ -73,6 +73,10 @@ export const POST = createHandler(async (req, ctx) => {
       useScoreMultiplier: form.useScoreMultiplier,
       dailyWalletCapUsd: form.dailyWalletCapUsd,
       dailyPoolCapUsd: form.dailyPoolCapUsd,
+      surface: form.surface,
+      linkedDealId: form.linkedDealId,
+      minKycTier: form.minKycTier,
+      durationMatchDays: form.durationMatchDays,
       token: {
         address: form.token.address,
         symbol: form.token.symbol,
@@ -98,6 +102,35 @@ export const POST = createHandler(async (req, ctx) => {
   const campaignType  = form.type === 'token_reward' ? 'token_pool' : 'points'
   const distributorAddress = DISTRIBUTOR_ADDRESS[form.chainId] ?? ''
   const now           = new Date()
+
+  // ── RWA incentive layer (R0) — surface validation ──────────────────────────
+  // 'rwa' campaigns must attach to an APPROVED deal; that deal supplies the KYC
+  // gate + duration-match default. DeFi campaigns are unaffected (surface='defi').
+  const surface = form.surface === 'rwa' ? 'rwa' : 'defi'
+  let linkedDealId: string | null = null
+  let minKycTier: string | null = null
+  let durationMatchDays: number | null = null
+
+  if (surface === 'rwa') {
+    if (!form.linkedDealId) {
+      return ctx.json({ error: 'RWA campaigns must link an approved deal' }, 400)
+    }
+    const { data: deal } = await ctx.supabase
+      .from('vault_deals')
+      .select('id, review_status, kyc_tier_required, settle_days')
+      .eq('id', form.linkedDealId)
+      .maybeSingle()
+    if (!deal) {
+      return ctx.json({ error: 'Linked deal not found' }, 400)
+    }
+    if (deal.review_status !== 'approved') {
+      return ctx.json({ error: 'Linked deal is not approved' }, 400)
+    }
+    linkedDealId = deal.id
+    // Campaign gate defaults to the deal's own KYC requirement; the form may only tighten it.
+    minKycTier = form.minKycTier && form.minKycTier !== 'NONE' ? form.minKycTier : (deal.kyc_tier_required ?? 'BASIC')
+    durationMatchDays = form.durationMatchDays ?? deal.settle_days ?? null
+  }
 
   if (!CHAIN_LABELS[form.chainId]) {
     return ctx.json({ error: 'Unsupported campaign chain' }, 400)
@@ -139,6 +172,10 @@ export const POST = createHandler(async (req, ctx) => {
       contract_address:     distributorAddress,
       creator:              wallet.toLowerCase(),
       end_date:             endDate.toISOString(),
+      surface,
+      linked_deal_id:       linkedDealId,
+      min_kyc_tier:         minKycTier,
+      duration_match_days:  durationMatchDays,
     })
     .select('id')
     .single()
