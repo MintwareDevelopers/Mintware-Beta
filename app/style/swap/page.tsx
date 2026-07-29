@@ -81,13 +81,6 @@ export default function StyleSwapConcept() {
   const isLoaded = (s: Suggestion) =>
     s.surface === surface && s.idx === (s.surface === 'DeFi' ? defiToIdx : dealIdx)
 
-  // rail: campaigns this swap feeds — primary reflects the current selection
-  const feeds = isDeFi
-    ? [{ s: 'DeFi', n: tok.campaign, d: `${tok.reward} · live`, a: 'text-atx-blue' },
-       { s: 'RWA',  n: 'Sovereign T-Bill · Hold', d: 'oracle-banded · duration-matched', a: 'text-atx-coral' }]
-    : [{ s: 'RWA',  n: deal.campaign, d: deal.reward, a: 'text-atx-coral' },
-       { s: 'DeFi', n: 'Base Volume Sprint', d: '8 pts / trade · ends T−4d', a: 'text-atx-blue' }]
-
   return (
     <div className="font-atx-display bg-atx-bone text-atx-ink min-h-screen [&_*]:rounded-none">
       {/* Top bar */}
@@ -95,6 +88,13 @@ export default function StyleSwapConcept() {
         <Star className="w-[18px] h-[18px] text-atx-blue" />
         <span className="font-bold">Swap</span>
         <button className="ml-auto font-atx-mono text-[12px] text-atx-ink/55 border border-atx-ink/20 px-2.5 py-1.5">Search ⌘K</button>
+        {/* persistent standing — score lives top-right */}
+        <span className="hidden sm:flex items-center gap-2 font-atx-mono text-[12px] bg-atx-ink text-atx-bone px-2.5 py-1.5">
+          <Star className="w-3.5 h-3.5 text-atx-acid" />
+          <span className="font-bold">{ME.score}</span>
+          <span className="text-atx-bone/45">{ME.tier}</span>
+          <span className="text-atx-acid">{ME.mult}×</span>
+        </span>
         <button className="font-semibold text-[13px] font-atx-mono px-3 py-1.5 border border-atx-blue bg-atx-blue text-white uppercase tracking-[0.04em]">Connect Wallet</button>
       </div>
 
@@ -127,39 +127,8 @@ export default function StyleSwapConcept() {
         </div>
       </section>
 
-      {/* Suggested swaps — click loads it into the widget */}
-      <div className="px-7 pt-7">
-        <div className="flex items-baseline gap-3 mb-3">
-          <span className={LABEL}>Suggested · where the points are</span>
-          <span className="font-atx-mono text-[11px] text-atx-ink/40">tap to load ↓</span>
-        </div>
-        <div className="flex gap-3 overflow-x-auto pb-1.5 [scrollbar-width:thin]">
-          {SUGGESTIONS.map((s) => {
-            const on = isLoaded(s)
-            const a = s.surface === 'DeFi' ? 'text-atx-blue' : 'text-atx-coral'
-            const chip = s.surface === 'DeFi' ? 'border-atx-blue text-atx-blue' : 'border-atx-coral text-atx-coral'
-            return (
-              <button
-                key={`${s.surface}-${s.idx}`}
-                onClick={() => load(s)}
-                className={`shrink-0 w-[218px] text-left border p-[13px_15px] transition-colors ${on ? 'border-atx-ink bg-atx-ink text-atx-bone' : 'border-atx-ink/25 bg-atx-bone hover:border-atx-ink'}`}
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Star className={`w-3.5 h-3.5 ${on ? '' : a}`} />
-                  <span className={`font-atx-mono text-[10px] uppercase tracking-[0.1em] ${on ? 'text-atx-bone/60' : 'text-atx-ink/50'}`}>{s.surface}</span>
-                  {on && <span className="ml-auto font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-acid">loaded</span>}
-                </div>
-                <div className="font-bold text-[15px] tracking-tight">USDC → {s.sym}</div>
-                <div className={`font-atx-mono text-[11px] mt-0.5 ${on ? 'text-atx-bone/55' : 'text-atx-ink/55'}`}>{s.campaign}</div>
-                <span className={`inline-block mt-2.5 font-atx-mono text-[10px] uppercase tracking-[0.05em] px-2 py-1 border ${on ? 'border-atx-bone/40 text-atx-bone' : chip}`}>{s.reward}</span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Swap surface + attribution rail */}
-      <div className="px-7 py-7 grid [grid-template-columns:1.35fr_1fr] gap-[22px] max-[900px]:grid-cols-1">
+      {/* Swap widget (left) + swap options (right) */}
+      <div className="px-7 py-8 grid [grid-template-columns:1.35fr_1fr] gap-[22px] max-[900px]:grid-cols-1">
         {/* ── Swap card ── */}
         <div className="border border-atx-ink bg-atx-bone flex flex-col">
           <div className="flex items-stretch border-b border-atx-ink">
@@ -250,71 +219,57 @@ export default function StyleSwapConcept() {
               {isDeFi ? 'Swap →' : 'Swap into yield →'}
             </button>
           </div>
+
+          {/* earn footer — at the very bottom of the widget, at the point of commitment */}
+          <div className="border-t border-atx-ink bg-atx-ink text-atx-bone p-[14px_18px] flex items-center justify-between gap-3">
+            <div>
+              <div className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-bone/45 mb-0.5">You earn this swap</div>
+              <div className="font-atx-mono text-[11px] text-atx-bone/55">
+                {basePts.toLocaleString()} base × {ME.mult} {ME.multTier} · builds Volume &amp; Trading signals
+              </div>
+            </div>
+            <div className="font-bold text-[28px] tabular-nums text-atx-acid leading-none shrink-0">
+              {boostedPts.toLocaleString()}<span className="text-[13px] text-atx-bone/50 ml-1 font-atx-mono">pts</span>
+            </div>
+          </div>
         </div>
 
-        {/* ── Attribution rail ── */}
-        <aside className="flex flex-col gap-[22px]">
-          <div className="border border-atx-ink bg-atx-ink text-atx-bone">
-            <div className="p-[16px_18px] flex items-start justify-between">
-              <div>
-                <div className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-bone/45 mb-1">Your standing</div>
-                <div className="font-bold text-[40px] leading-none tabular-nums">{ME.score}</div>
-                <div className="font-atx-mono text-[11px] text-atx-bone/50 mt-1">{ME.handle}</div>
-              </div>
-              <span className="font-atx-mono text-[10px] uppercase tracking-[0.1em] px-2 py-1 border border-atx-bone/40">{ME.tier}</span>
-            </div>
-            <div className="grid grid-cols-2 border-t border-atx-bone/20">
-              <div className="px-[18px] py-3 border-r border-atx-bone/20">
-                <div className="font-atx-mono text-[9px] uppercase tracking-[0.12em] text-atx-bone/40 mb-1">Percentile</div>
-                <div className="font-bold text-[15px]">top {ME.pct}%</div>
-              </div>
-              <div className="px-[18px] py-3">
-                <div className="font-atx-mono text-[9px] uppercase tracking-[0.12em] text-atx-bone/40 mb-1">Reward tier</div>
-                <div className="font-bold text-[15px] text-atx-acid">{ME.multTier} · {ME.mult}×</div>
-              </div>
-            </div>
+        {/* ── Swap options — campaign-backed, tap to load into the widget ── */}
+        <aside className="flex flex-col">
+          <div className="flex items-baseline gap-3 mb-3">
+            <span className={LABEL}>Suggested · where the points are</span>
+            <span className="ml-auto font-atx-mono text-[11px] text-atx-ink/40">tap to load ←</span>
           </div>
-
-          <div className="border border-atx-ink bg-atx-bone">
-            <div className={`px-[18px] py-3 border-b ${LINE} ${LABEL}`}>What this swap earns</div>
-            <div className="p-[16px_18px] flex flex-col gap-2.5">
-              <Row l="Base points" v={`${basePts.toLocaleString()}`} />
-              <Row l={`${ME.multTier} multiplier`} v={`× ${ME.mult}`} accent={accent} />
-              <div className={`border-t ${LINE} pt-2.5 flex items-center justify-between`}>
-                <span className="font-bold text-[14px]">You earn</span>
-                <span className={`font-bold text-[22px] tabular-nums ${accent}`}>{boostedPts.toLocaleString()} pts</span>
-              </div>
-              <div className="font-atx-mono text-[10px] text-atx-ink/45">+ builds Volume &amp; Trading signals on your Attribution score</div>
-            </div>
+          <div className="flex flex-col border border-atx-ink">
+            {SUGGESTIONS.map((s) => {
+              const on = isLoaded(s)
+              const a = s.surface === 'DeFi' ? 'text-atx-blue' : 'text-atx-coral'
+              const chip = s.surface === 'DeFi' ? 'border-atx-blue text-atx-blue' : 'border-atx-coral text-atx-coral'
+              return (
+                <button
+                  key={`${s.surface}-${s.idx}`}
+                  onClick={() => load(s)}
+                  className={`text-left p-[13px_15px] border-b border-atx-ink/20 last:border-b-0 flex items-center gap-3 transition-colors ${on ? 'bg-atx-ink text-atx-bone' : 'bg-atx-bone hover:bg-atx-ink/[0.04]'}`}
+                >
+                  <Star className={`w-4 h-4 shrink-0 ${on ? 'text-atx-acid' : a}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-[14px] tracking-tight">USDC → {s.sym}</div>
+                    <div className={`font-atx-mono text-[11px] mt-0.5 truncate ${on ? 'text-atx-bone/55' : 'text-atx-ink/50'}`}>{s.surface} · {s.campaign}</div>
+                  </div>
+                  {on ? (
+                    <span className="shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-acid">loaded</span>
+                  ) : (
+                    <span className={`shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.04em] px-1.5 py-1 border leading-tight ${chip}`}>{s.reward}</span>
+                  )}
+                </button>
+              )
+            })}
           </div>
-
-          <div className="border border-atx-ink bg-atx-bone">
-            <div className={`px-[18px] py-3 border-b ${LINE} ${LABEL}`}>Feeds 2 live campaigns</div>
-            {feeds.map((c) => (
-              <div key={c.n} className={`p-[13px_18px] border-b ${LINE} last:border-b-0 flex items-center gap-3`}>
-                <Star className={`w-4 h-4 ${c.a}`} />
-                <div className="min-w-0">
-                  <div className="font-bold text-[14px] truncate">{c.n}</div>
-                  <div className="font-atx-mono text-[11px] text-atx-ink/50">{c.s} · {c.d}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/40 flex items-center gap-1.5 px-1">
+          <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/40 flex items-center gap-1.5 px-1 mt-4">
             <Star className="w-3 h-3" /> Powered by Attribution
           </div>
         </aside>
       </div>
-    </div>
-  )
-}
-
-function Row({ l, v, accent }: { l: string; v: string; accent?: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="font-atx-mono text-[12px] text-atx-ink/60">{l}</span>
-      <span className={`font-atx-mono text-[14px] tabular-nums ${accent ?? ''}`}>{v}</span>
     </div>
   )
 }
