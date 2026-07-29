@@ -12,8 +12,8 @@
 //   - Plain language throughout: "network fee" not "gas", etc.
 // =============================================================================
 
-import { useState, useCallback, useMemo, useEffect } from 'react'
-import { useAccount, useBalance, useReadContract, useChainId } from 'wagmi'
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
+import { useAccount, useBalance, useReadContract, useChainId, useSwitchChain } from 'wagmi'
 import { useQuote } from '@/hooks/useQuote'
 import { useSwap } from '@/hooks/useSwap'
 import { useCampaign } from '@/hooks/useCampaign'
@@ -38,7 +38,10 @@ function fmt(val: string, decimals = 6): string {
   return n.toFixed(Math.min(decimals, 6))
 }
 
-export function SwapWidget() {
+export function SwapWidget({ preselectBuy, preselectChainId }: {
+  preselectBuy?: { address: string; chainId: number; symbol?: string }
+  preselectChainId?: number
+} = {}) {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
   const chainConfig = getChainConfig(chainId)
@@ -56,6 +59,31 @@ export function SwapWidget() {
   const [customSlippage, setCustomSlippage] = useState('')
   const [showSellSelector, setShowSellSelector] = useState(false)
   const [showBuySelector, setShowBuySelector] = useState(false)
+
+  // ── Campaign preselect (SwapModal): switch to the campaign chain, then
+  //    pre-fill the buy token so the user lands ready to trade it. ──
+  const { switchChain } = useSwitchChain()
+  const preselectApplied = useRef(false)
+
+  useEffect(() => {
+    if (preselectChainId && preselectChainId !== chainId) {
+      try { switchChain?.({ chainId: preselectChainId }) } catch { /* user can switch via ChainSelector */ }
+    }
+  }, [preselectChainId, chainId, switchChain])
+
+  useEffect(() => {
+    if (!preselectBuy || preselectApplied.current) return
+    if (preselectBuy.chainId !== chainId) return
+    const found = availableTokens.find(t => t.address?.toLowerCase() === preselectBuy.address.toLowerCase())
+    setBuyToken(found ?? {
+      address: preselectBuy.address,
+      symbol: preselectBuy.symbol ?? 'TOKEN',
+      name: preselectBuy.symbol ?? 'Token',
+      decimals: 18,
+      chainId: preselectBuy.chainId,
+    })
+    preselectApplied.current = true
+  }, [preselectBuy, availableTokens, chainId])
 
   // Confirmation sheet — shown before the wallet popup
   const [showConfirm, setShowConfirm] = useState(false)

@@ -14,6 +14,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { SwapModal } from '@/components/rewards/swap/SwapModal'
 
 export interface ActionDef {
   label: string
@@ -32,6 +33,9 @@ interface ActionsPanelProps {
   referralRewardPct?: number
   buyerRewardPct?: number
   tokenSymbol?: string
+  tokenContract?: string
+  chainId?: number
+  campaignName?: string
   // CTA context — needed for buttons
   isJoined?: boolean
   walletAddress?: string
@@ -41,7 +45,7 @@ interface ActionsPanelProps {
 // Icon + description + CTA per action key. `color` is an ATX text-color class.
 function actionMeta(key: string): {
   icon: string; color: string; desc: string
-  cta?: { label: string; href?: string; copy?: boolean; comingSoon?: boolean }
+  cta?: { label: string; href?: string; copy?: boolean; comingSoon?: boolean; swap?: boolean }
 } {
   if (key === 'bridge') return {
     icon: '✴', color: 'text-atx-blue',
@@ -51,7 +55,7 @@ function actionMeta(key: string): {
   if (key === 'trade') return {
     icon: '✴', color: 'text-atx-mesquite',
     desc: 'Trade each day on Mintware to accumulate daily points.',
-    cta: { label: 'Swap now →', href: '/swap' },
+    cta: { label: 'Swap now →', swap: true },
   }
   if (key === 'referral_bridge') return {
     icon: '✴', color: 'text-atx-blue',
@@ -85,9 +89,9 @@ function fmtDate(iso: string) {
 
 // ── Small CTA button ──────────────────────────────────────────────────────────
 function CtaButton({
-  label, href, color, onCopy,
+  label, href, color, onCopy, onClick,
 }: {
-  label: string; href?: string; color: string; onCopy?: () => void
+  label: string; href?: string; color: string; onCopy?: () => void; onClick?: () => void
 }) {
   const cls = `inline-flex items-center px-3 py-[6px] font-atx-mono text-[11px] font-semibold uppercase tracking-[0.05em] border border-atx-ink/30 whitespace-nowrap cursor-pointer no-underline shrink-0 transition-colors duration-150 hover:bg-atx-bone ${color}`
 
@@ -95,7 +99,7 @@ function CtaButton({
     return <Link href={href} className={cls}>{label}</Link>
   }
   return (
-    <button onClick={onCopy} className={cls}>
+    <button onClick={onClick ?? onCopy} className={cls}>
       {label}
     </button>
   )
@@ -142,11 +146,24 @@ function ScheduleBlock({ startDate, endDate }: { startDate?: string; endDate?: s
 // ── Main export ───────────────────────────────────────────────────────────────
 export function ActionsPanel({
   actions, startDate, endDate, campaignType,
-  referralRewardPct, buyerRewardPct,
+  referralRewardPct, buyerRewardPct, tokenSymbol,
+  tokenContract, chainId, campaignName,
   isJoined, walletAddress, campaignId,
 }: ActionsPanelProps) {
   const entries = Object.entries(actions)
   const isTokenPool = campaignType === 'token_pool'
+  const [swapOpen, setSwapOpen] = useState(false)
+  const swapModalEl = (
+    <SwapModal
+      open={swapOpen}
+      onClose={() => setSwapOpen(false)}
+      tokenContract={tokenContract}
+      chainId={chainId}
+      symbol={tokenSymbol}
+      campaignId={campaignId}
+      campaignName={campaignName}
+    />
+  )
 
   // Build ref link for copy buttons
   const refCode = walletAddress ? `mw_${walletAddress.slice(2, 8).toLowerCase()}` : null
@@ -206,13 +223,14 @@ export function ActionsPanel({
                 <div className="font-atx-mono text-[12px] font-bold text-atx-blue border border-atx-ink/25 px-[10px] py-1 whitespace-nowrap">
                   {buyerRewardPct ?? 0}% rebate
                 </div>
-                <CtaButton label='Swap now →' href='/swap' color='text-atx-blue' />
+                <CtaButton label='Swap now →' onClick={() => setSwapOpen(true)} color='text-atx-blue' />
               </div>
             </div>
           )}
         </div>
 
         <ScheduleBlock startDate={startDate} endDate={endDate} />
+        {swapModalEl}
       </div>
     )
   }
@@ -276,6 +294,7 @@ export function ActionsPanel({
                     href={meta.cta!.href}
                     color={meta.color}
                     onCopy={isCopyAction ? () => copy(copyKey) : undefined}
+                    onClick={meta.cta?.swap ? () => setSwapOpen(true) : undefined}
                   />
                 )}
 
@@ -292,6 +311,7 @@ export function ActionsPanel({
       </div>
 
       <ScheduleBlock startDate={startDate} endDate={endDate} />
+      {swapModalEl}
     </div>
   )
 }

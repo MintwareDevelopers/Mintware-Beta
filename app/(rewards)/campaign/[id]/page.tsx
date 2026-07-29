@@ -315,6 +315,9 @@ function CampaignDetailContent() {
                   referralRewardPct={(campaign as Campaign & { referral_reward_pct?: number }).referral_reward_pct}
                   buyerRewardPct={(campaign as Campaign & { buyer_reward_pct?: number }).buyer_reward_pct}
                   tokenSymbol={campaign.token_symbol}
+                  tokenContract={(campaign as Campaign & { token_contract?: string }).token_contract}
+                  chainId={(campaign as Campaign & { chain_id?: number }).chain_id}
+                  campaignName={(campaign as Campaign & { name?: string }).name}
                   isJoined={isJoined}
                   walletAddress={address}
                   campaignId={campaignId}
