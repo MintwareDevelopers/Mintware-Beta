@@ -33,11 +33,13 @@ const ERC20_ABI = parseAbi([
   'function decimals() view returns (uint8)',
 ])
 
-function rpcUrlForChain(chainId: number): string {
+// Base only. Returns null for any other chain so the caller skips loudly instead
+// of silently reading balances off the wrong chain (→ 0 → silent under-credit).
+function rpcUrlForChain(chainId: number): string | null {
   switch (chainId) {
+    case 8453:  return process.env.BASE_RPC_URL ?? 'https://mainnet.base.org'
     case 84532: return process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org'
-    case 8453:
-    default:    return process.env.BASE_RPC_URL ?? 'https://mainnet.base.org'
+    default:    return null
   }
 }
 
@@ -82,6 +84,13 @@ export const GET = createHandler(async (_req, ctx) => {
     const campaign = raw as Campaign
     const name = campaign.name
 
+    // Belt-and-suspenders (mirrors swapHook.ts): closeCampaign() sets closed=true
+    // directly, which can land before the status sync flips status → 'ended'. Never
+    // credit into a closed campaign (its distributor can be swept after the cooldown).
+    if (campaign.closed) {
+      results.push({ campaign_id: campaign.id, name, skipped: 'campaign_closed' })
+      continue
+    }
     if (!campaign.actions || campaign.actions['hold'] == null) {
       results.push({ campaign_id: campaign.id, name, skipped: 'hold_not_configured' })
       continue
@@ -117,12 +126,19 @@ export const GET = createHandler(async (_req, ctx) => {
       continue
     }
 
+    const rpcUrl = rpcUrlForChain(vault?.chain_id ?? 8453)
+    if (!rpcUrl) {
+      results.push({ campaign_id: campaign.id, name, skipped: `unsupported_chain:${vault?.chain_id}` })
+      continue
+    }
+
     try {
-      const client = createPublicClient({ transport: http(rpcUrlForChain(vault?.chain_id ?? 8453)) })
+      const client = createPublicClient({ transport: http(rpcUrl) })
       const token = getAddress(tokenAddr)
 
-      const decimals = await client.readContract({ address: token, abi: ERC20_ABI, functionName: 'decimals' })
-        .catch(() => 18) as number
+      // No fallback on decimals: a wrong scale (e.g. 18 vs USDC's 6) would zero out the
+      // whole campaign silently. Let it throw → the outer catch skips with a visible reason.
+      const decimals = await client.readContract({ address: token, abi: ERC20_ABI, functionName: 'decimals' }) as number
       const scale = 10 ** Number(decimals)
 
       const balances = await Promise.all(holders.map(async (p: Record<string, unknown>) => {

@@ -12,6 +12,7 @@ import {
   processHoldSnapshot,
   DURATION_MATCH_BONUS,
   DEFAULT_HOLD_RATE,
+  HOLD_SNAPSHOT_DAYS,
   type HoldConfig,
   type HoldInput,
 } from './holdSnapshot'
@@ -118,16 +119,16 @@ describe('holdConfigFromCampaign', () => {
     expect(cfg.durationMatchDays).toBe(null)
   })
 
-  it('reads rate from actions.hold, epoch length, flag, and duration_match_days', () => {
+  it('reads rate/flag/duration-match, and IGNORES epoch_duration_days for the snapshot window', () => {
     const cfg = holdConfigFromCampaign(campaign({
       actions: { hold: { points: 3 } },
-      epoch_duration_days: 30,
+      epoch_duration_days: 30,          // must NOT leak into durationDays
       use_score_multiplier: true,
       duration_match_days: 90,
     }))
     expect(cfg).toEqual({
       pointsPerUnitPerDay: 3,
-      durationDays: 30,
+      durationDays: HOLD_SNAPSHOT_DAYS,  // fixed weekly cadence, not the 30-day epoch
       useScoreMultiplier: true,
       durationMatchDays: 90,
     })

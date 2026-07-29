@@ -30,6 +30,12 @@ const ATTRIBUTION_SCORE_MAX = 925
  *  does not configure `actions.hold.points`. Campaigns tune this per deal. */
 export const DEFAULT_HOLD_RATE = 1
 
+/** Snapshot window, in days. MUST mirror the cron cadence (vercel.json: weekly,
+ *  `0 0 * * 1`). This is the crediting period per snapshot — NOT the campaign
+ *  epoch length. Decoupled from `epoch_duration_days` so a 30-day epoch doesn't
+ *  make each weekly snapshot credit ×30 (≈4.3× over-credit over the month). */
+export const HOLD_SNAPSHOT_DAYS = 7
+
 /** Multiplier applied when a wallet's lock covers the asset's required duration (R5). */
 export const DURATION_MATCH_BONUS = 1.5
 
@@ -87,7 +93,7 @@ export function computeHoldPoints(input: HoldInput, cfg: HoldConfig): number {
 export function holdConfigFromCampaign(campaign: Campaign): HoldConfig {
   return {
     pointsPerUnitPerDay: getActionPoints(campaign.actions?.['hold'], DEFAULT_HOLD_RATE),
-    durationDays:        campaign.epoch_duration_days ?? 7,
+    durationDays:        HOLD_SNAPSHOT_DAYS,  // snapshot cadence, not epoch length (see const)
     useScoreMultiplier:  campaign.use_score_multiplier ?? false,
     durationMatchDays:   campaign.duration_match_days ?? null,
   }
