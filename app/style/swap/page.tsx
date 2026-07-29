@@ -89,11 +89,11 @@ export default function StyleSwapConcept() {
         <span className="font-bold">Swap</span>
         <button className="ml-auto font-atx-mono text-[12px] text-atx-ink/55 border border-atx-ink/20 px-2.5 py-1.5">Search ⌘K</button>
         {/* persistent standing — score lives top-right */}
-        <span className="hidden sm:flex items-center gap-2 font-atx-mono text-[12px] bg-atx-ink text-atx-bone px-2.5 py-1.5">
-          <Star className="w-3.5 h-3.5 text-atx-acid" />
-          <span className="font-bold">{ME.score}</span>
-          <span className="text-atx-bone/45">{ME.tier}</span>
-          <span className="text-atx-acid">{ME.mult}×</span>
+        <span className="hidden sm:flex items-center gap-2 font-atx-mono text-[12px] border border-atx-blue px-2.5 py-1.5">
+          <Star className="w-3.5 h-3.5 text-atx-blue" />
+          <span className="font-bold text-atx-blue">{ME.score}</span>
+          <span className="text-atx-ink/45">{ME.tier}</span>
+          <span className="text-atx-coral">{ME.mult}×</span>
         </span>
         <button className="font-semibold text-[13px] font-atx-mono px-3 py-1.5 border border-atx-blue bg-atx-blue text-white uppercase tracking-[0.04em]">Connect Wallet</button>
       </div>
@@ -221,15 +221,15 @@ export default function StyleSwapConcept() {
           </div>
 
           {/* earn footer — at the very bottom of the widget, at the point of commitment */}
-          <div className="border-t border-atx-ink bg-atx-ink text-atx-bone p-[14px_18px] flex items-center justify-between gap-3">
+          <div className="border-t border-atx-ink bg-atx-panel p-[14px_18px] flex items-center justify-between gap-3">
             <div>
-              <div className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-bone/45 mb-0.5">You earn this swap</div>
-              <div className="font-atx-mono text-[11px] text-atx-bone/55">
+              <div className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-ink/50 mb-0.5">You earn this swap</div>
+              <div className="font-atx-mono text-[11px] text-atx-ink/55">
                 {basePts.toLocaleString()} base × {ME.mult} {ME.multTier} · builds Volume &amp; Trading signals
               </div>
             </div>
-            <div className="font-bold text-[28px] tabular-nums text-atx-acid leading-none shrink-0">
-              {boostedPts.toLocaleString()}<span className="text-[13px] text-atx-bone/50 ml-1 font-atx-mono">pts</span>
+            <div className={`font-bold text-[28px] tabular-nums leading-none shrink-0 ${accent}`}>
+              {boostedPts.toLocaleString()}<span className="text-[13px] text-atx-ink/45 ml-1 font-atx-mono">pts</span>
             </div>
           </div>
         </div>
@@ -245,19 +245,20 @@ export default function StyleSwapConcept() {
               const on = isLoaded(s)
               const a = s.surface === 'DeFi' ? 'text-atx-blue' : 'text-atx-coral'
               const chip = s.surface === 'DeFi' ? 'border-atx-blue text-atx-blue' : 'border-atx-coral text-atx-coral'
+              const onCls = s.surface === 'DeFi' ? 'bg-atx-blue/[0.08] border-l-2 border-l-atx-blue' : 'bg-atx-coral/[0.10] border-l-2 border-l-atx-coral'
               return (
                 <button
                   key={`${s.surface}-${s.idx}`}
                   onClick={() => load(s)}
-                  className={`text-left p-[13px_15px] border-b border-atx-ink/20 last:border-b-0 flex items-center gap-3 transition-colors ${on ? 'bg-atx-ink text-atx-bone' : 'bg-atx-bone hover:bg-atx-ink/[0.04]'}`}
+                  className={`text-left p-[13px_15px] border-b border-atx-ink/20 last:border-b-0 flex items-center gap-3 transition-colors ${on ? onCls : 'bg-atx-bone hover:bg-atx-ink/[0.04]'}`}
                 >
-                  <Star className={`w-4 h-4 shrink-0 ${on ? 'text-atx-acid' : a}`} />
+                  <Star className={`w-4 h-4 shrink-0 ${a}`} />
                   <div className="min-w-0 flex-1">
                     <div className="font-bold text-[14px] tracking-tight">USDC → {s.sym}</div>
-                    <div className={`font-atx-mono text-[11px] mt-0.5 truncate ${on ? 'text-atx-bone/55' : 'text-atx-ink/50'}`}>{s.surface} · {s.campaign}</div>
+                    <div className="font-atx-mono text-[11px] mt-0.5 truncate text-atx-ink/50">{s.surface} · {s.campaign}</div>
                   </div>
                   {on ? (
-                    <span className="shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-acid">loaded</span>
+                    <span className={`shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.1em] ${a}`}>loaded</span>
                   ) : (
                     <span className={`shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.04em] px-1.5 py-1 border leading-tight ${chip}`}>{s.reward}</span>
                   )}
