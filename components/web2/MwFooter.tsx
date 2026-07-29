@@ -2,11 +2,13 @@ import Link from 'next/link'
 
 // Shared platform footer (ATX Settlemint). Mounted once in the root layout so it
 // renders on every page. Extracted verbatim from the homepage footer.
+// Current live app sections only — legacy static mockups (/explorer, /for-protocols.html)
+// dropped. Add { href: '/docs', label: 'Docs' } once the docs section ships.
 const FOOTER_LINKS = [
   { href: '/vaults', label: 'Vaults' },
-  { href: '/explorer', label: 'Attribution' },
+  { href: '/rewards', label: 'Rewards' },
+  { href: '/swap', label: 'Swap' },
   { href: '/agents', label: 'Agents' },
-  { href: '/for-protocols.html', label: 'Protocols' },
   { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
 ]
 
