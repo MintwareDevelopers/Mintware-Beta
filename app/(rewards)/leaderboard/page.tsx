@@ -3,7 +3,7 @@
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { API, shortAddr, daysUntil } from '@/lib/web2/api'
+import { API, shortAddr, daysUntil, fmtUSD } from '@/lib/web2/api'
 import { generateRefCode } from '@/lib/rewards/referral/utils'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
@@ -28,11 +28,14 @@ interface Campaign {
   name: string
   status: string
   end_date?: string
+  pool_usd?: number
+  daily_payout_usd?: number
   actions?: Record<string, { label: string; points: number; per_day?: boolean; per_referral?: boolean; per_referred_trade?: boolean }>
 }
 interface Entry {
   wallet: string
   total_points?: number
+  total_earned_usd?: number
   attribution_score?: number
   referral_bridge_points?: number
   referral_trade_points?: number
@@ -73,6 +76,7 @@ function LeaderboardContent() {
   const [entries, setEntries] = useState<Entry[]>([])
   const [metric, setMetric] = useState<Metric>('score')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
   const refCode = wallet ? generateRefCode(wallet) : ''
@@ -92,13 +96,14 @@ function LeaderboardContent() {
   }, [])
 
   const loadBoard = useCallback(async () => {
-    if (!activeCampaignId) return
-    setLoading(true); setEntries([])
+    if (!activeCampaignId) { setLoading(false); return }  // clears loading if no valid campaign
+    setLoading(true); setEntries([]); setError(false)
     try {
       const res = await fetch(`${API}/leaderboard?campaign_id=${encodeURIComponent(activeCampaignId)}&limit=100`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setEntries(Array.isArray(data) ? data : [])
-    } catch { setEntries([]) } finally { setLoading(false) }
+    } catch { setError(true); setEntries([]) } finally { setLoading(false) }
   }, [activeCampaignId])
   useEffect(() => { loadBoard() }, [loadBoard])
 
@@ -136,7 +141,7 @@ function LeaderboardContent() {
           {[
             ['Ranked wallets', loading ? '—' : String(total).padStart(3, '0'), 'this campaign'],
             ['Top score', loading ? '—' : String(topScore), 'attribution'],
-            ['Your rank', me ? `#${me.rank}` : '—', me ? `${me.tier} · ${me.attribution_score || 0}` : wallet ? 'not ranked yet' : 'connect'],
+            ['Your rank', me ? `#${me.rank}` : '—', me ? `${me.tier} · ${me.attribution_score || 0}` : loading ? 'loading…' : wallet ? 'not ranked yet' : 'connect'],
             ['Ends', daysLeft !== null ? `${daysLeft}d` : 'live', 'this epoch'],
           ].map(([l, v, sub], i) => (
             <div key={i} className={`px-7 py-3 max-[560px]:px-4 ${i < 3 ? 'border-r border-atx-ink/20' : ''}`}>
@@ -186,11 +191,20 @@ function LeaderboardContent() {
         </div>
       )}
 
-      {/* This campaign's earn actions — preserves the per-campaign point detail */}
-      {activeCampaign?.actions && Object.keys(activeCampaign.actions).length > 0 && (
+      {/* Campaign context — pool / daily payout / per-action point rewards (preserved) */}
+      {activeCampaign && (
         <div className="px-7 pt-3 flex items-center gap-2 flex-wrap max-[560px]:px-4">
-          <span className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-ink/40">Rewards</span>
-          {Object.entries(activeCampaign.actions).map(([k, a]) => {
+          {activeCampaign.pool_usd != null && (
+            <span className="font-atx-mono text-[11px] border border-atx-ink/25 px-2 py-1 text-atx-ink/60">
+              Pool <span className="text-atx-mesquite font-bold">{fmtUSD(activeCampaign.pool_usd)}</span>
+            </span>
+          )}
+          {activeCampaign.daily_payout_usd != null && (
+            <span className="font-atx-mono text-[11px] border border-atx-ink/25 px-2 py-1 text-atx-ink/60">
+              <span className="text-atx-coral font-bold">{fmtUSD(activeCampaign.daily_payout_usd)}</span>/day
+            </span>
+          )}
+          {activeCampaign.actions && Object.entries(activeCampaign.actions).map(([k, a]) => {
             const suffix = a.per_day ? '/day' : a.per_referral ? '/ref' : a.per_referred_trade ? '/trade' : ''
             return (
               <span key={k} className="font-atx-mono text-[11px] border border-atx-ink/25 px-2 py-1 text-atx-ink/60">
@@ -253,8 +267,8 @@ function LeaderboardContent() {
         {/* Table */}
         <div className="px-7 py-7 max-[560px]:px-4">
           <div className="border border-atx-ink bg-atx-bone">
-            <div className="grid [grid-template-columns:64px_1fr_120px_repeat(3,110px)] max-[820px]:[grid-template-columns:52px_1fr_100px] border-b border-atx-ink bg-atx-panel">
-              {['Rank', 'Wallet', 'Tier', 'Attribution', 'Points', 'Tree'].map((h, i) => (
+            <div className="grid [grid-template-columns:60px_1fr_104px_repeat(4,92px)] max-[820px]:[grid-template-columns:52px_1fr] border-b border-atx-ink bg-atx-panel">
+              {['Rank', 'Wallet', 'Tier', 'Attribution', 'Points', 'Tree', 'Earned'].map((h, i) => (
                 <div key={h} className={`${LABEL} text-[9px] px-[16px] py-3 ${i >= 3 ? 'text-right max-[820px]:hidden' : ''} ${i === 2 ? 'max-[820px]:hidden' : ''}`}>{h}</div>
               ))}
             </div>
@@ -262,6 +276,12 @@ function LeaderboardContent() {
             {loading ? (
               <div className="p-4 flex flex-col gap-2">
                 {[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-11 border border-atx-ink/15 bg-atx-panel" />)}
+              </div>
+            ) : error ? (
+              <div className="px-5 py-14 text-center font-atx-mono text-[14px] text-atx-ink/55">
+                Couldn’t load the rankings.
+                <span className="block mt-1.5 text-[12px] text-atx-ink/45">The Attribution service didn’t respond.</span>
+                <button onClick={loadBoard} className="mt-3 font-atx-mono text-[12px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue text-atx-blue hover:bg-atx-blue hover:text-white transition-colors">Retry</button>
               </div>
             ) : ranked.length === 0 ? (
               <div className="px-5 py-14 text-center font-atx-mono text-[14px] text-atx-ink/55">
@@ -281,8 +301,8 @@ function LeaderboardContent() {
             )}
           </div>
 
-          {/* Your rank + invite */}
-          {me && me.rank > 3 && (
+          {/* Your rank + invite — shown for any ranked wallet so the invite link is always reachable */}
+          {me && (
             <div className="mt-[22px] border border-atx-blue bg-atx-blue/[0.06] p-[14px_18px] flex items-center gap-4 flex-wrap">
               <span className="font-bold text-[26px] tabular-nums text-atx-blue">#{me.rank}</span>
               <div className="min-w-0">
@@ -308,6 +328,11 @@ function LeaderboardContent() {
                 <div className="font-bold text-[15px]">{wallet ? 'You’re not on the board yet.' : 'Connect to see your rank.'}</div>
                 <div className="font-atx-mono text-[11px] text-atx-ink/55">One swap enters you — your Attribution score gives you a head start.</div>
               </div>
+              {refLink && (
+                <button onClick={copyLink} className="ml-auto font-semibold text-[13px] font-atx-mono px-4 py-2.5 border border-atx-blue bg-atx-blue text-white uppercase tracking-[0.04em]">
+                  {linkCopied ? 'Copied ✓' : 'Invite · +60 pts'}
+                </button>
+              )}
             </div>
           )}
 
@@ -326,7 +351,7 @@ function Row({ r, metric, isMe }: { r: Entry & { rank: number; tier: string }; m
   const col = (k: Metric) => (metric === k ? 'font-bold' : 'text-atx-ink/70')
   const tree = (r.referral_bridge_points || 0) + (r.referral_trade_points || 0)
   return (
-    <div className={`grid [grid-template-columns:64px_1fr_120px_repeat(3,110px)] max-[820px]:[grid-template-columns:52px_1fr_100px] items-center border-b border-atx-ink/20 last:border-b-0 ${isMe ? 'bg-atx-blue/[0.07] border-l-2 border-l-atx-blue' : ''}`}>
+    <div className={`grid [grid-template-columns:60px_1fr_104px_repeat(4,92px)] max-[820px]:[grid-template-columns:52px_1fr] items-center border-b border-atx-ink/20 last:border-b-0 ${isMe ? 'bg-atx-blue/[0.07] border-l-2 border-l-atx-blue' : ''}`}>
       <div className={`px-[16px] py-3.5 font-atx-mono tabular-nums ${isTop ? `text-[18px] font-bold ${rankCls}` : `text-[15px] ${rankCls}`}`}>{String(r.rank).padStart(2, '0')}</div>
       <div className="px-[16px] py-3.5 min-w-0 flex items-center gap-2.5">
         <Star className={`w-4 h-4 shrink-0 ${TIER_ACCENT[r.tier]}`} />
@@ -344,6 +369,9 @@ function Row({ r, metric, isMe }: { r: Entry & { rank: number; tier: string }; m
       <div className={`px-[16px] py-3.5 text-right font-atx-mono text-[15px] tabular-nums max-[820px]:hidden ${col('score')}`}>{r.attribution_score || 0}</div>
       <div className={`px-[16px] py-3.5 text-right font-atx-mono text-[15px] tabular-nums max-[820px]:hidden ${col('points')}`}>{fmt(r.total_points || 0)}</div>
       <div className={`px-[16px] py-3.5 text-right font-atx-mono text-[15px] tabular-nums max-[820px]:hidden ${col('tree')}`}>{tree}</div>
+      <div className="px-[16px] py-3.5 text-right font-atx-mono text-[15px] tabular-nums max-[820px]:hidden">
+        {r.total_earned_usd != null ? <span className="text-atx-mesquite font-semibold">{fmtUSD(r.total_earned_usd)}</span> : <span className="text-atx-ink/30">—</span>}
+      </div>
     </div>
   )
 }
