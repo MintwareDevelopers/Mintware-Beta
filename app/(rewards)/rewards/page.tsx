@@ -543,7 +543,7 @@ function TeamsView() {
       <section className="border-b border-atx-ink">
         <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
           <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />What it drives</div>
-          <h2 className={H2}>Retention. Conversion. <span className="text-atx-blue">And the one RWAs are missing.</span></h2>
+          <h2 className={H2}>Retention. Conversion. <span className="text-atx-blue">And the one thing RWAs are missing.</span></h2>
           <div className="grid grid-cols-3 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
             <Cell k="Retention" h="Capital that stays" p="Duration-matched locks reward holding through maturity — you keep the capital exactly as long as the asset needs it." />
             <Cell k="Conversion" h="Qualified demand" p="Relationship-sourced referrals with a 24h anti-sybil gate. Placement, not spam — buyers who convert and stay." />
