@@ -70,10 +70,10 @@ export default function StyleLeaderboardConcept() {
         <Star className="w-[18px] h-[18px] text-atx-blue" />
         <span className="font-bold">Leaderboard</span>
         <button className="ml-auto font-atx-mono text-[12px] text-atx-ink/55 border border-atx-ink/20 px-2.5 py-1.5">Search ⌘K</button>
-        <span className="hidden sm:flex items-center gap-2 font-atx-mono text-[12px] bg-atx-ink text-atx-bone px-2.5 py-1.5">
-          <Star className="w-3.5 h-3.5 text-atx-acid" />
-          <span className="font-bold">#{me?.rank ?? '—'}</span>
-          <span className="text-atx-bone/45">your rank</span>
+        <span className="hidden sm:flex items-center gap-2 font-atx-mono text-[12px] border border-atx-blue px-2.5 py-1.5">
+          <Star className="w-3.5 h-3.5 text-atx-blue" />
+          <span className="font-bold text-atx-blue">#{me?.rank ?? '—'}</span>
+          <span className="text-atx-ink/45">your rank</span>
         </span>
         <button className="font-semibold text-[13px] font-atx-mono px-3 py-1.5 border border-atx-blue bg-atx-blue text-white uppercase tracking-[0.04em]">Connect Wallet</button>
       </div>
@@ -106,37 +106,60 @@ export default function StyleLeaderboardConcept() {
         </div>
       </section>
 
+      {/* How you climb — the three ways a rank is earned (maps to the metric tabs below) */}
+      <section className="border-b border-atx-ink bg-atx-blue/[0.05] px-7 py-7">
+        <span className={`${LABEL} block mb-4`}>How you climb — ranks are earned by contribution</span>
+        <div className="grid grid-cols-3 border border-atx-ink max-[720px]:grid-cols-1">
+          {[
+            { a: 'text-atx-blue', t: 'Attribution', d: 'Your whole on-chain history, scored across six signals — volume, trading, holding, liquidity, governance, sharing. It carries across 100+ chains.' },
+            { a: 'text-atx-coral', t: 'Campaign points', d: 'Earned per contribution — every swap, hold, and referral in a live campaign, multiplied by your Attribution tier.' },
+            { a: 'text-atx-mesquite', t: 'Referral tree', d: 'The wallets you bring on-chain, weighted by how real and active they are. Quality over quantity.' },
+          ].map((c, i) => (
+            <div key={i} className={`p-[16px_18px] ${i < 2 ? 'border-r border-atx-ink/20 max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink/20' : ''}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Star className={`w-4 h-4 ${c.a}`} />
+                <span className="font-bold text-[15px] tracking-tight">{c.t}</span>
+              </div>
+              <p className="text-atx-ink/60 text-[13px] leading-[1.5]">{c.d}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Podium — top 3 by the active metric */}
-      <div className="px-7 pt-8 grid grid-cols-3 gap-[22px] max-[720px]:grid-cols-1">
+      <div className="px-7 pt-7 grid grid-cols-3 gap-[22px] max-[720px]:grid-cols-1">
         {top3.map((r, i) => (
-          <div key={r.addr} className={`border border-atx-ink bg-atx-bone p-[16px_18px] flex flex-col ${i === 0 ? 'bg-atx-ink text-atx-bone' : ''}`}>
+          <div
+            key={r.addr}
+            className={`p-[16px_18px] flex flex-col ${i === 0 ? 'border-2 border-atx-coral bg-atx-coral/[0.06]' : 'border border-atx-ink bg-atx-bone'}`}
+          >
             <div className="flex items-center justify-between">
-              <span className={`font-bold text-[34px] leading-none tabular-nums ${i === 0 ? 'text-atx-acid' : PODIUM[i]}`}>
-                {String(r.rank).padStart(2, '0')}
-              </span>
-              <Star className={`w-6 h-6 ${i === 0 ? 'text-atx-acid' : PODIUM[i]}`} />
+              <span className={`font-bold text-[34px] leading-none tabular-nums ${PODIUM[i]}`}>{String(r.rank).padStart(2, '0')}</span>
+              <Star className={`w-6 h-6 ${PODIUM[i]}`} />
             </div>
             <div className="mt-3">
               <div className="font-bold text-[16px] tracking-tight truncate">{r.handle}</div>
-              <div className={`font-atx-mono text-[11px] mt-0.5 ${i === 0 ? 'text-atx-bone/50' : 'text-atx-ink/50'}`}>{r.addr} · {r.tier}</div>
+              <div className="font-atx-mono text-[11px] mt-0.5 text-atx-ink/50">{r.addr} · {r.tier}</div>
             </div>
-            <div className={`mt-3 pt-3 border-t ${i === 0 ? 'border-atx-bone/20' : LINE} flex items-baseline gap-2`}>
+            <div className={`mt-3 pt-3 border-t ${i === 0 ? 'border-atx-coral/30' : LINE} flex items-baseline gap-2`}>
               <span className="font-atx-mono text-[26px] font-bold tabular-nums">{fmt(r[metric])}</span>
-              <span className={`font-atx-mono text-[11px] ${i === 0 ? 'text-atx-bone/50' : 'text-atx-ink/45'}`}>{unit.trim() || TABS.find((t) => t.k === metric)?.label}</span>
+              <span className="font-atx-mono text-[11px] text-atx-ink/45">{unit.trim() || TABS.find((t) => t.k === metric)?.label}</span>
             </div>
           </div>
         ))}
       </div>
 
+      {/* Board — the ranked list, on a panel band for tonal contrast */}
+      <section className="bg-atx-panel border-t border-atx-ink">
       {/* Metric tabs */}
-      <div className="px-7 pt-8 flex items-center gap-3.5">
-        <span className="font-atx-mono text-[14px] border border-atx-ink px-3 py-2">{String(ranked.length).padStart(2, '0')}</span>
-        <div className="flex border border-atx-ink">
+      <div className="px-7 pt-7 flex items-center gap-3.5">
+        <span className="font-atx-mono text-[14px] border border-atx-ink px-3 py-2 bg-atx-bone">{String(ranked.length).padStart(2, '0')}</span>
+        <div className="flex border border-atx-ink bg-atx-bone">
           {TABS.map((t) => (
             <button
               key={t.k}
               onClick={() => setMetric(t.k)}
-              className={`font-atx-mono text-[12px] uppercase tracking-[0.1em] px-4 py-2 border-r border-atx-ink last:border-r-0 ${metric === t.k ? 'bg-atx-ink text-atx-bone' : 'bg-transparent text-atx-ink'}`}
+              className={`font-atx-mono text-[12px] uppercase tracking-[0.1em] px-4 py-2 border-r border-atx-ink last:border-r-0 ${metric === t.k ? 'bg-atx-blue text-white' : 'bg-transparent text-atx-ink'}`}
             >
               {t.label}
             </button>
@@ -147,9 +170,9 @@ export default function StyleLeaderboardConcept() {
 
       {/* Table */}
       <div className="px-7 py-7">
-        <div className="border border-atx-ink">
+        <div className="border border-atx-ink bg-atx-bone">
           {/* header */}
-          <div className={`grid [grid-template-columns:64px_1fr_120px_repeat(3,110px)] max-[820px]:[grid-template-columns:52px_1fr_100px] border-b border-atx-ink bg-atx-bone`}>
+          <div className={`grid [grid-template-columns:64px_1fr_120px_repeat(3,110px)] max-[820px]:[grid-template-columns:52px_1fr_100px] border-b border-atx-ink bg-atx-panel`}>
             {['Rank', 'Wallet', 'Tier', 'Attribution', 'Points', 'Tree'].map((h, i) => (
               <div key={h} className={`${LABEL} text-[9px] px-[16px] py-3 ${i >= 3 ? 'text-right max-[820px]:hidden' : ''} ${i === 2 ? 'max-[820px]:hidden' : ''}`}>{h}</div>
             ))}
@@ -188,15 +211,15 @@ export default function StyleLeaderboardConcept() {
 
         {/* your rank — pinned reminder */}
         {me && me.rank > 3 && (
-          <div className="mt-[22px] border border-atx-ink bg-atx-ink text-atx-bone p-[14px_18px] flex items-center gap-4">
-            <span className="font-bold text-[26px] tabular-nums text-atx-acid">#{me.rank}</span>
+          <div className="mt-[22px] border border-atx-blue bg-atx-blue/[0.06] p-[14px_18px] flex items-center gap-4">
+            <span className="font-bold text-[26px] tabular-nums text-atx-blue">#{me.rank}</span>
             <div className="min-w-0">
-              <div className="font-bold text-[15px] truncate">{me.handle} <span className="font-atx-mono text-[11px] text-atx-bone/50">· {me.tier}</span></div>
-              <div className="font-atx-mono text-[11px] text-atx-bone/55">
+              <div className="font-bold text-[15px] truncate">{me.handle} <span className="font-atx-mono text-[11px] text-atx-ink/50">· {me.tier}</span></div>
+              <div className="font-atx-mono text-[11px] text-atx-ink/55">
                 {fmt(me[metric])}{unit} · {ranked[me.rank - 2] ? `${fmt(ranked[me.rank - 2][metric] - me[metric])}${unit} to rank #${me.rank - 1}` : 'climbing'}
               </div>
             </div>
-            <button className="ml-auto font-semibold text-[13px] font-atx-mono px-4 py-2.5 border border-atx-bone bg-atx-bone text-atx-ink uppercase tracking-[0.04em]">Climb →</button>
+            <button className="ml-auto font-semibold text-[13px] font-atx-mono px-4 py-2.5 border border-atx-blue bg-atx-blue text-white uppercase tracking-[0.04em]">Climb →</button>
           </div>
         )}
 
@@ -204,6 +227,7 @@ export default function StyleLeaderboardConcept() {
           <Star className="w-3 h-3" /> Powered by Attribution
         </div>
       </div>
+      </section>
     </div>
   )
 }
