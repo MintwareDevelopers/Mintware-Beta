@@ -80,13 +80,6 @@ const STEPS = [
 const TRAD = ['$50k–$250k minimum', 'KYC before you can invest', 'Locked — phone calls to exit', 'You own a database entry']
 const MW = ['Any amount', 'KYC only if you redeem', 'Trade on Uniswap, 24/7', 'You hold a bearer token']
 
-const FOOTER_LINKS = [
-  { href: '/vaults', label: 'Vaults' },
-  { href: '/explorer', label: 'Attribution' },
-  { href: '/agents', label: 'Agents' },
-  { href: '/for-protocols.html', label: 'Protocols' },
-  { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
-]
 
 function Star({ className = '' }: { className?: string }) {
   return (
@@ -427,21 +420,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="bg-atx-ink text-atx-bone">
-        <div className="mx-auto max-w-[1180px] px-6 py-[30px] flex items-center justify-between flex-wrap gap-4">
-          <Link href="/" className="flex items-center gap-2.5 no-underline text-atx-bone">
-            <Star className="w-5 h-5 text-atx-acid" />
-            <b className="text-[15px] tracking-[0.06em]">MINTWARE</b>
-          </Link>
-          <div className="flex gap-5 font-atx-mono text-[10px] uppercase tracking-[0.1em] flex-wrap">
-            {FOOTER_LINKS.map((l) => (
-              <a key={l.label} href={l.href} className="text-atx-bone/60 no-underline hover:text-atx-bone" {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}>{l.label}</a>
-            ))}
-          </div>
-          <div className="font-atx-mono text-[10px] text-atx-bone/45">© 2026 Mintware ✴ Contribution is identity</div>
-        </div>
-      </footer>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { Providers } from '@/components/web2/providers'
 import { Toaster } from 'sonner'
 import { CommandPalette } from '@/components/web2/CommandPalette'
+import { MwFooter } from '@/components/web2/MwFooter'
 import '@rainbow-me/rainbowkit/styles.css'
 import './globals.css'
 
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${jakarta.variable} ${dmMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased`}>
         <Providers>
           {children}
+          <MwFooter />
           <CommandPalette />
           <Toaster
             position="bottom-right"
