@@ -17,6 +17,7 @@
 - `swapHook.test.ts` — swap hook logic + multipliers
 - `merkleBuilder.test.ts` — Merkle tree construction
 - `holdSnapshot.test.ts` — RWA hold-credit math + idempotent writer (campaign-scoped tx_hash, rollback-on-rpc-error)
+- `holdLocks.test.ts` — R5 lock decode guard: vault `locks()` getter returns `(depositedAt, lockedUntil, tier, initialized)`; `lockedUntil` is index **1** (not 0)
 
 ## Hardhat Notes
 

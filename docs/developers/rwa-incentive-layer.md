@@ -221,15 +221,16 @@ does that, if at all.
 | **R1 — RWA campaign creation** | `/api/vaults/deals` + surface picker + deal-linking in creator | ✅ built | R0 |
 | **R2 — LP incentive on RWA** | Attribution-weighted LP rewards | ✅ by reuse — the existing `vault-epoch-close` cron + `processVaultEpoch` + `FeeVault` cover any vault, including RWA | a real RWA vault on those contracts |
 | **R4 — Hold-snapshot credit** | `hold` action + weekly snapshot cron | ✅ built (16 unit tests) — cron skips `no_vault_token` until a live vault | live `vRWA` vault for real balances |
-| **R5 — Duration-match lock** | Lock-to-maturity bonus | ✅ math built + tested; ⏳ on-chain `lockDays` source still to wire (bonus inert until then) | R4, on-chain lock read |
+| **R5 — Duration-match lock** | Lock-to-maturity bonus | ✅ live — cron reads the vault's `locks(address)` per wallet; remaining-lock ≥ `settle_days` earns the bonus | R4, `MintwareBaseVault4626.locks` |
 | **R6 — Reward denomination** | Incentive vs. yield-token rewards | ✅ by construction — the creator's token selection (Step 1) *is* the denomination lever | — |
 
 > **R3 (KYC gate) is deleted, not deferred** — the incentive layer is permissionless by
 > construction (§3.0). Track numbers R1–R6 are kept stable for continuity; there is no R3.
 
 **What remains before this runs end-to-end in production:** (1) ~~apply migration `20260728000001`~~
-✅ applied; (2) deploy an RWA vault so the hold-snapshot cron reads live balances — see §9 below;
-(3) wire an on-chain `lockDays` source to activate the R5 duration-match bonus.
+✅ applied; (2) deploy an RWA vault so the hold-snapshot cron reads live balances — see §9 below
+(demo vault live on Base Sepolia); (3) ~~wire an on-chain `lockDays` source~~ ✅ done — the cron reads
+`MintwareBaseVault4626.locks(address)` per wallet.
 
 ---
 

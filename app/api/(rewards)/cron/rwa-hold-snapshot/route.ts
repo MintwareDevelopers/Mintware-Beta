@@ -16,14 +16,18 @@
 //
 // Honest degradation: a campaign whose vault has no on-chain token yet is skipped
 // with reason 'no_vault_token' (the math + credit path are proven; they light up
-// the moment a real vRWA/USDC vault is deployed). Lock durations are not yet read
-// on-chain, so the R5 duration-match bonus stays inert (lockDays = 0) until a lock
-// source is wired — flagged per campaign in the response.
+// the moment a real vRWA/USDC vault is deployed).
+//
+// R5 duration-match is LIVE: per wallet the cron reads the vault's `locks(address)`
+// (MintwareBaseVault4626) and passes the remaining lock in days as lockDays; a wallet
+// whose lock still covers the deal's settle_days earns the bonus. Vaults that don't
+// expose locks (or Flex deposits) → lockDays 0 → bonus simply doesn't apply.
 // =============================================================================
 
 import { createPublicClient, http, parseAbi, getAddress } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { processHoldSnapshot, type HoldInput } from '@/lib/rewards/holdSnapshot'
+import { LOCK_ABI, remainingLockDays, type LockTuple } from '@/lib/rewards/holdLocks'
 import type { Campaign } from '@/lib/rewards/types'
 
 export const maxDuration = 300  // 5 min
@@ -32,6 +36,7 @@ const ERC20_ABI = parseAbi([
   'function balanceOf(address) view returns (uint256)',
   'function decimals() view returns (uint8)',
 ])
+
 
 // Base only. Returns null for any other chain so the caller skips loudly instead
 // of silently reading balances off the wrong chain (→ 0 → silent under-credit).
@@ -141,6 +146,8 @@ export const GET = createHandler(async (_req, ctx) => {
       const decimals = await client.readContract({ address: token, abi: ERC20_ABI, functionName: 'decimals' }) as number
       const scale = 10 ** Number(decimals)
 
+      const nowSec = Math.floor(Date.now() / 1000)
+
       const balances = await Promise.all(holders.map(async (p: Record<string, unknown>) => {
         const wallet = String(p.wallet)
         let balance = 0
@@ -152,12 +159,26 @@ export const GET = createHandler(async (_req, ctx) => {
         } catch {
           balance = 0  // unreadable balance → no credit this snapshot
         }
+
+        // R5 duration-match: read the wallet's on-chain lock. lockDays = remaining lock
+        // in whole days, so the bonus applies while the lock still covers the asset's
+        // settlement horizon. Non-lock vaults / Flex deposits → 0 (bonus inert), caught.
+        let lockDays = 0
+        try {
+          const lock = await client.readContract({
+            address: token, abi: LOCK_ABI, functionName: 'locks', args: [getAddress(wallet)],
+          }) as LockTuple
+          lockDays = remainingLockDays(lock, nowSec)
+        } catch {
+          lockDays = 0  // vault doesn't expose locks (or read failed) → no bonus
+        }
+
         return {
           wallet,
           balance,
           attribution_score: Number(p.attribution_score ?? 0),
           sharing_score: Number(p.sharing_score ?? 0),
-          lockDays: 0,  // R5: on-chain lock source not yet wired — bonus stays inert
+          lockDays,
         } as HoldInput
       }))
 
@@ -184,7 +205,7 @@ export const GET = createHandler(async (_req, ctx) => {
       results.push({
         campaign_id: campaign.id, name,
         credited: res.credited, wallets: holders.length, total_points: res.totalPoints,
-        duration_match_active: false,
+        duration_match_active: (campaign.duration_match_days ?? 0) > 0,
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
