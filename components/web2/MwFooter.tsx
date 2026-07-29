@@ -9,6 +9,7 @@ const FOOTER_LINKS = [
   { href: '/rewards', label: 'Rewards' },
   { href: '/swap', label: 'Swap' },
   { href: '/agents', label: 'Agents' },
+  { href: '/docs', label: 'Docs' },
   { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
 ]
 
