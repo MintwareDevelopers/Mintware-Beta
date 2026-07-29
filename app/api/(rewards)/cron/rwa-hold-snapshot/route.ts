@@ -27,6 +27,7 @@
 import { createPublicClient, http, parseAbi, getAddress } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { processHoldSnapshot, type HoldInput } from '@/lib/rewards/holdSnapshot'
+import { LOCK_ABI, remainingLockDays, type LockTuple } from '@/lib/rewards/holdLocks'
 import type { Campaign } from '@/lib/rewards/types'
 
 export const maxDuration = 300  // 5 min
@@ -36,11 +37,6 @@ const ERC20_ABI = parseAbi([
   'function decimals() view returns (uint8)',
 ])
 
-// MintwareBaseVault4626 exposes `mapping(address => LockInfo) public locks`.
-// LockInfo = { uint256 lockedUntil, LockTier tier } → tuple (lockedUntil, tier).
-const LOCK_ABI = parseAbi([
-  'function locks(address) view returns (uint256 lockedUntil, uint8 tier)',
-])
 
 // Base only. Returns null for any other chain so the caller skips loudly instead
 // of silently reading balances off the wrong chain (→ 0 → silent under-credit).
@@ -171,9 +167,8 @@ export const GET = createHandler(async (_req, ctx) => {
         try {
           const lock = await client.readContract({
             address: token, abi: LOCK_ABI, functionName: 'locks', args: [getAddress(wallet)],
-          }) as readonly [bigint, number]
-          const lockedUntil = Number(lock[0])
-          if (lockedUntil > nowSec) lockDays = Math.floor((lockedUntil - nowSec) / 86_400)
+          }) as LockTuple
+          lockDays = remainingLockDays(lock, nowSec)
         } catch {
           lockDays = 0  // vault doesn't expose locks (or read failed) → no bonus
         }
