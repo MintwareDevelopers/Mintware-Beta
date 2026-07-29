@@ -47,7 +47,15 @@ const ROWS: Row[] = [
 const TIER_ACCENT: Record<string, string> = {
   Oracle: 'text-atx-coral', Builder: 'text-atx-blue', Signal: 'text-atx-mesquite', Ghost: 'text-atx-ink/45',
 }
+// filled tier chips — color down every row
+const TIER_CHIP: Record<string, string> = {
+  Oracle: 'bg-atx-coral text-atx-ink border-atx-ink',
+  Builder: 'bg-atx-blue text-white border-atx-blue',
+  Signal: 'bg-atx-mesquite text-white border-atx-mesquite',
+  Ghost: 'bg-transparent text-atx-ink/50 border-atx-ink/25',
+}
 const PODIUM = ['text-atx-coral', 'text-atx-mesquite', 'text-atx-clay'] // 1 · 2 · 3
+const STRIPE = ['bg-atx-coral', 'bg-atx-mesquite', 'bg-atx-clay']
 const fmt = (n: number) => n.toLocaleString()
 
 export default function StyleLeaderboardConcept() {
@@ -99,7 +107,7 @@ export default function StyleLeaderboardConcept() {
           ].map(([l, v, sub], i) => (
             <div key={i} className={`px-7 py-3 ${i < 3 ? 'border-r border-atx-ink/20' : ''}`}>
               <div className={`${LABEL} text-[9px] mb-1.5`}>{l}</div>
-              <div className={`font-bold text-[15px] tabular-nums ${i === 2 ? 'text-atx-blue' : ''}`}>{v}</div>
+              <div className={`font-bold text-[15px] tabular-nums ${i === 1 ? 'text-atx-coral' : i === 2 ? 'text-atx-blue' : ''}`}>{v}</div>
               <div className="font-atx-mono text-[10px] text-atx-ink/45 mt-0.5 truncate">{sub}</div>
             </div>
           ))}
@@ -128,25 +136,28 @@ export default function StyleLeaderboardConcept() {
 
       {/* Podium — top 3 by the active metric */}
       <div className="px-7 pt-7 grid grid-cols-3 gap-[22px] max-[720px]:grid-cols-1">
-        {top3.map((r, i) => (
-          <div
-            key={r.addr}
-            className={`p-[16px_18px] flex flex-col ${i === 0 ? 'border-2 border-atx-coral bg-atx-coral/[0.06]' : 'border border-atx-ink bg-atx-bone'}`}
-          >
-            <div className="flex items-center justify-between">
-              <span className={`font-bold text-[34px] leading-none tabular-nums ${PODIUM[i]}`}>{String(r.rank).padStart(2, '0')}</span>
-              <Star className={`w-6 h-6 ${PODIUM[i]}`} />
+        {top3.map((r, i) => {
+          const lead = i === 0
+          return (
+            <div key={r.addr} className={`flex flex-col border border-atx-ink ${lead ? 'bg-atx-coral text-atx-ink' : 'bg-atx-bone'}`}>
+              {!lead && <div className={`h-[6px] ${STRIPE[i]}`} />}
+              <div className="p-[16px_18px] flex flex-col flex-1">
+                <div className="flex items-center justify-between">
+                  <span className={`font-bold text-[34px] leading-none tabular-nums ${lead ? 'text-atx-ink' : PODIUM[i]}`}>{String(r.rank).padStart(2, '0')}</span>
+                  <Star className={`w-6 h-6 ${lead ? 'text-atx-ink' : PODIUM[i]}`} />
+                </div>
+                <div className="mt-3">
+                  <div className="font-bold text-[16px] tracking-tight truncate">{r.handle}</div>
+                  <div className={`font-atx-mono text-[11px] mt-0.5 ${lead ? 'text-atx-ink/60' : 'text-atx-ink/50'}`}>{r.addr} · {r.tier}</div>
+                </div>
+                <div className={`mt-3 pt-3 border-t ${lead ? 'border-atx-ink/25' : LINE} flex items-baseline gap-2`}>
+                  <span className="font-atx-mono text-[26px] font-bold tabular-nums">{fmt(r[metric])}</span>
+                  <span className={`font-atx-mono text-[11px] ${lead ? 'text-atx-ink/55' : 'text-atx-ink/45'}`}>{unit.trim() || TABS.find((t) => t.k === metric)?.label}</span>
+                </div>
+              </div>
             </div>
-            <div className="mt-3">
-              <div className="font-bold text-[16px] tracking-tight truncate">{r.handle}</div>
-              <div className="font-atx-mono text-[11px] mt-0.5 text-atx-ink/50">{r.addr} · {r.tier}</div>
-            </div>
-            <div className={`mt-3 pt-3 border-t ${i === 0 ? 'border-atx-coral/30' : LINE} flex items-baseline gap-2`}>
-              <span className="font-atx-mono text-[26px] font-bold tabular-nums">{fmt(r[metric])}</span>
-              <span className="font-atx-mono text-[11px] text-atx-ink/45">{unit.trim() || TABS.find((t) => t.k === metric)?.label}</span>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Board — the ranked list, on a panel band for tonal contrast */}
@@ -200,7 +211,9 @@ export default function StyleLeaderboardConcept() {
                     <div className="font-atx-mono text-[11px] text-atx-ink/45 truncate">{r.addr}</div>
                   </div>
                 </div>
-                <div className={`px-[16px] py-3.5 font-atx-mono text-[12px] uppercase tracking-[0.06em] max-[820px]:hidden ${TIER_ACCENT[r.tier]}`}>{r.tier}</div>
+                <div className="px-[16px] py-3.5 max-[820px]:hidden">
+                  <span className={`font-atx-mono text-[10px] uppercase tracking-[0.06em] px-2 py-1 border ${TIER_CHIP[r.tier]}`}>{r.tier}</span>
+                </div>
                 <div className={`px-[16px] py-3.5 text-right font-atx-mono text-[15px] tabular-nums max-[820px]:hidden ${active('score')}`}>{r.score}</div>
                 <div className={`px-[16px] py-3.5 text-right font-atx-mono text-[15px] tabular-nums max-[820px]:hidden ${active('points')}`}>{fmt(r.points)}</div>
                 <div className={`px-[16px] py-3.5 text-right font-atx-mono text-[15px] tabular-nums max-[820px]:hidden ${active('tree')}`}>{r.tree}</div>
