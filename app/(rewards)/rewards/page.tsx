@@ -2,7 +2,7 @@
 
 import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/web2/MwNav'
-import { useEffect, useState, useCallback, type ReactNode } from 'react'
+import { useEffect, useState, useCallback, Suspense, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
@@ -602,7 +602,9 @@ export default function RewardsPage() {
   return (
     <>
       <MwNav />
-      <RewardsContent />
+      <Suspense fallback={null}>
+        <RewardsContent />
+      </Suspense>
     </>
   )
 }
