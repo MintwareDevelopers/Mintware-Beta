@@ -444,7 +444,7 @@ function TeamsView() {
           <div className="py-11 pr-9 max-[820px]:pr-0">
             <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />For teams · Issuers &amp; protocols</div>
             <h1 className="font-bold tracking-[-0.02em] leading-[0.99] text-[clamp(32px,4.6vw,54px)] mt-5 max-w-[17ch] text-wrap-balance">
-              Your deal doesn&apos;t need more dollars. <span className="text-atx-blue">It needs the right ones.</span>
+              We measure Contribution and <span className="text-atx-blue">reward it.</span>
             </h1>
             <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-atx-ink/70 max-w-[54ch] mt-5">
               Tokenizing an asset is solved and commoditized. What isn&apos;t: your <b className="text-atx-ink">cold-start</b>, your <b className="text-atx-ink">distribution</b>, and your <b className="text-atx-ink">dead secondary market</b>. Mintware brings you sticky, eligible, relationship-sourced capital — rewarded by how good it is rather than how much — and makes the resulting position tradeable.
