@@ -2,7 +2,6 @@
 
 import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/web2/MwNav'
-import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { VaultCard } from '@/components/web2/vault/VaultCard'
@@ -313,11 +312,13 @@ function VaultsComingSoon() {
   )
 }
 
+// Public front door — no wallet required to browse. Deposit/create actions live on
+// their own guarded pages (/vault/[id], /vault/create), so funds still need a wallet.
 export default function VaultsPage() {
   return (
-    <MwAuthGuard>
+    <>
       {VAULTS_LOCKED && <VaultsComingSoon />}
       <VaultsContent />
-    </MwAuthGuard>
+    </>
   )
 }
