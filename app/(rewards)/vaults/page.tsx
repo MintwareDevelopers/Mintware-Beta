@@ -257,30 +257,30 @@ function RwaWhyDefi() {
     <section className="border-b border-atx-ink">
       <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
         <div className="flex items-center gap-2.5">
-          <span className="w-[9px] h-[9px] border border-atx-ink inline-block" style={{ background: '#FF8574' }} />
+          <span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />
           <span className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55">Why real-world assets belong on DeFi</span>
         </div>
         <h2 className="font-bold tracking-[-0.02em] text-[clamp(26px,3.6vw,44px)] leading-[1.02] max-w-[20ch] mt-4">
-          Tokenizing was the easy part. <span style={{ color: CORAL_INK }}>DeFi is where RWAs come alive.</span>
+          Tokenizing was the easy part. <span className="text-atx-blue">DeFi is where RWAs come alive.</span>
         </h2>
         <p className="text-[16px] leading-[1.55] text-atx-ink/70 max-w-[62ch] mt-4">
           Trillions got “tokenized” this cycle — and most of it just sits there: gated, illiquid, and no more useful than the spreadsheet it replaced. Wrapping an asset in a token was never the point. What the token can <i>do</i> is.
         </p>
         <div className="grid grid-cols-2 border border-atx-ink mt-8 max-[720px]:grid-cols-1">
           <div className="p-6 border-r border-atx-ink bg-atx-panel max-[720px]:border-r-0 max-[720px]:border-b">
-            <div className="font-atx-mono text-[12px] uppercase tracking-[0.12em] text-atx-clay mb-4">✕ Tokenized — still stuck</div>
+            <div className="font-atx-mono text-[12px] uppercase tracking-[0.12em] text-atx-ink/45 mb-4">✕ Tokenized — still stuck</div>
             {GAP.map(([h, d]) => (
               <div key={h} className="flex gap-3 items-start py-3 border-b border-atx-ink/10 last:border-b-0">
-                <span className="font-atx-mono font-bold text-atx-clay">✕</span>
+                <span className="font-atx-mono font-bold text-atx-ink/35">✕</span>
                 <span className="text-[14px] leading-[1.45]"><b>{h}</b> {d}</span>
               </div>
             ))}
           </div>
           <div className="p-6">
-            <div className="font-atx-mono text-[12px] uppercase tracking-[0.12em] mb-4" style={{ color: CORAL_INK }}>✴ On Mintware — unlocked</div>
+            <div className="font-atx-mono text-[12px] uppercase tracking-[0.12em] mb-4 text-atx-blue">✴ On Mintware — unlocked</div>
             {FIX.map(([h, d, hot]) => (
               <div key={h as string} className="flex gap-3 items-start py-3 border-b border-atx-ink/10 last:border-b-0">
-                <span className="font-atx-mono font-bold" style={{ color: CORAL_INK }}>✓</span>
+                <span className="font-atx-mono font-bold text-atx-blue">✓</span>
                 <span className="text-[14px] leading-[1.45]">
                   <b>{h}</b> {d}
                   {hot && <span className="font-atx-mono text-[9px] uppercase tracking-[0.1em] bg-atx-acid border border-atx-ink px-1.5 py-0.5 ml-2 whitespace-nowrap">only on Mintware</span>}
@@ -290,7 +290,7 @@ function RwaWhyDefi() {
           </div>
         </div>
         <div className="text-[clamp(19px,2.4vw,28px)] font-bold tracking-[-0.4px] leading-[1.25] max-w-[26ch] mt-9">
-          Real-world assets don’t need a blockchain to exist. <span style={{ color: CORAL_INK }}>They need DeFi to finally move.</span>
+          Real-world assets don’t need a blockchain to exist. <span className="text-atx-blue">They need DeFi to finally move.</span>
         </div>
       </div>
     </section>
