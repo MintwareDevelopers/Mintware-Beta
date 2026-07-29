@@ -1,5 +1,11 @@
 'use client'
 
+// =============================================================================
+// Homepage — the vault-forward reframe (promoted from /style/landing).
+// Concept design + the load-bearing production features woven back in with live
+// wiring: wallet search (→ /{address}), Privy email onboarding, WaitlistForm.
+// =============================================================================
+
 import React, { useState } from 'react'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useRouter } from 'next/navigation'
@@ -7,22 +13,88 @@ import Link from 'next/link'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
-const SAMPLE_ADDRS = [
-  { label: 'vitalik.eth',    addr: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
-  { label: '0xAb58…eC9B',   addr: '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B' },
-  { label: '0x47ac…D503',   addr: '0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503' },
-]
-
+const CORAL_INK = '#5a1e12'
 const GRID_BG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 
-const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
-const btn = 'font-semibold text-[14px] px-6 py-3 border uppercase tracking-[0.04em] cursor-pointer transition-none'
+const SAMPLE_ADDRS = [
+  { label: 'vitalik.eth', addr: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
+  { label: '0xAb58…eC9B', addr: '0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B' },
+  { label: '0x47ac…D503', addr: '0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503' },
+]
 
-function Star({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
+const STATS = [
+  { n: '24,817', k: 'Wallets scored' },
+  { n: '100+', k: 'Chains indexed' },
+  { n: '138K', k: 'Referral links' },
+  { n: 'Free', k: 'Always' },
+]
+
+const AUDIENCES = [
+  {
+    tag: 'Protocols', star: 'text-atx-blue', sq: 'bg-atx-blue',
+    tagCls: 'border-atx-blue bg-atx-blue text-white',
+    h: 'You’ve been rewarding the wrong people.',
+    p: 'Most emissions go to mercenary farmers. Attribution changes who gets rewarded — and why.',
+    bullets: ['Reward contributors, not bots', 'Score-weighted distributions', 'One call: getScore(wallet)'],
+  },
+  {
+    tag: 'People', star: 'text-atx-coral', sq: 'bg-atx-coral',
+    tagCls: 'bg-atx-coral',
+    h: 'You show up every day. DeFi should reward that.',
+    p: 'Every LP position, every vote, every referral — invisible to protocols until now.',
+    bullets: ['One score across 100+ chains', 'Public profile per wallet', 'Referral network builds rank'],
+  },
+  {
+    tag: 'Agents', star: 'text-atx-mesquite', sq: 'bg-atx-mesquite',
+    tagCls: 'border-atx-mesquite bg-atx-mesquite text-atx-bone',
+    h: 'Agents transact. Attribution makes them trustworthy.',
+    p: 'AI agents are major DeFi participants. Attribution gives them a reputation that compounds.',
+    bullets: ['Machine-readable manifests', 'On-chain EAS attestations', 'Reputation that compounds'],
+  },
+]
+
+const SIGNALS = [
+  { n: 'Liquidity', w: '74%', v: '111', c: '#006FCC' },
+  { n: 'Volume', w: '41%', v: '41', c: '#006FCC' },
+  { n: 'Sharing', w: '58%', v: '232', c: '#FF8574' },
+  { n: 'Holding', w: '39%', v: '39', c: '#006FCC' },
+]
+
+const ACTIONS = [
+  { b: 'Swap', fd: 'Every trade feeds Volume + Trading', pts: 'Volume · Trading', hot: false },
+  { b: 'Provide liquidity', fd: 'Real LP positions, held', pts: 'Liquidity · 150', hot: true },
+  { b: 'Refer a friend', fd: 'Their activity grows your tree, for life', pts: 'Sharing · 400', hot: true },
+  { b: 'Hold quality', fd: 'Conviction — positions over 7 days', pts: 'Holding · 100', hot: false },
+  { b: 'Govern', fd: 'Votes and proposals across protocols', pts: 'Governance · 100', hot: false },
+  { b: 'Run an agent', fd: 'Machines earn reputation — ERC-8004', pts: 'Agent trust', hot: false },
+]
+
+const STEPS = [
+  { n: '01', t: 'Deposit USDC', d: 'Any amount. No accreditation, no minimum, no upfront KYC.' },
+  { n: '02', t: 'Receive vRWA', d: 'A bearer token, 1:1 with your share. It’s yours to hold or move.' },
+  { n: '03', t: 'Earn + trade', d: 'Real-world yield accrues automatically. Trade vRWA on Uniswap, 24/7.' },
+  { n: '04', t: 'Redeem — if you want', d: 'Only here does KYC apply, and only if you redeem the underlying.' },
+]
+
+const TRAD = ['$50k–$250k minimum', 'KYC before you can invest', 'Locked — phone calls to exit', 'You own a database entry']
+const MW = ['Any amount', 'KYC only if you redeem', 'Trade on Uniswap, 24/7', 'You hold a bearer token']
+
+const FOOTER_LINKS = [
+  { href: '/vaults', label: 'Vaults' },
+  { href: '/explorer', label: 'Attribution' },
+  { href: '/agents', label: 'Agents' },
+  { href: '/for-protocols.html', label: 'Protocols' },
+  { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
+]
+
+function Star({ className = '' }: { className?: string }) {
   return (
-    <svg viewBox="0 0 100 100" className={className} style={style} aria-hidden="true">
-      <path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z" />
+    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
+      />
     </svg>
   )
 }
@@ -34,12 +106,13 @@ export default function HomePage() {
   const router = useRouter()
   const [walletInput, setWalletInput] = useState('')
 
-  function handleHeroConnect() {
-    if (isConnected) router.push('/profile')
+  // Enter the app: connect first if needed, else route into the authenticated surface.
+  function launchApp(dest = '/dashboard') {
+    if (isConnected) router.push(dest)
     else openConnectModal?.()
   }
   function handlePrivyOnboarding() {
-    if (isConnected) { router.push('/profile'); return }
+    if (isConnected) { router.push('/dashboard'); return }
     if (privy.authenticated) { privy.connectOrCreateWallet(); return }
     privy.login({ loginMethods: ['email'], walletChainType: 'ethereum-only' })
   }
@@ -48,425 +121,341 @@ export default function HomePage() {
     if (target) router.push(`/${target}`)
   }
 
+  const ey = 'font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55'
+  const navLink = 'no-underline text-atx-ink/55 hover:text-atx-ink'
+
   return (
-    <div className="font-atx-display bg-atx-bone text-atx-ink [&_*]:rounded-none">
-      {/* ── Nav ── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-7 h-[58px] bg-atx-bone border-b border-atx-ink max-md:px-4">
-        <Link href="/" className="flex items-center gap-2.5 no-underline text-atx-ink">
-          <Star className="w-5 h-5 text-atx-blue" />
-          <span className="font-bold text-[16px] tracking-tight">MINTWARE</span>
-        </Link>
-        <div className="hidden md:flex items-center gap-1">
-          {[
-            { label: 'Swap', href: '/swap' },
-            { label: 'Vaults', href: '/vaults' },
-            { label: 'Profile', href: '/profile' },
-            { label: 'Earn', href: '/dashboard' },
-            { label: 'Leaderboard', href: '/leaderboard' },
-          ].map(({ label, href }) =>
-            !isConnected ? (
-              <button key={label} onClick={() => openConnectModal?.()} className="px-3 py-1.5 font-atx-mono text-[12px] uppercase tracking-[0.08em] text-atx-ink/60 hover:text-atx-ink bg-transparent border-none cursor-pointer">
-                {label}
-              </button>
-            ) : (
-              <Link key={label} href={href} className="px-3 py-1.5 font-atx-mono text-[12px] uppercase tracking-[0.08em] text-atx-ink/60 hover:text-atx-ink no-underline">
-                {label}
-              </Link>
-            )
-          )}
-        </div>
-        <div className="flex items-center gap-2.5">
-          {privy.enabled && (
-            <button onClick={handlePrivyOnboarding} className={`${btn} border-atx-ink bg-transparent text-atx-ink max-md:hidden`}>
-              Email
+    <div className="font-atx-display bg-atx-bone text-atx-ink min-h-screen [&_*]:rounded-none">
+      {/* NAV */}
+      <header className="sticky top-0 z-20 bg-atx-bone border-b border-atx-ink">
+        <div className="mx-auto max-w-[1220px] px-6 h-[56px] flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 no-underline text-atx-ink">
+            <Star className="w-5 h-5 text-atx-blue" />
+            <b className="text-[15px] font-bold tracking-[0.06em]">MINTWARE</b>
+          </Link>
+          <nav className="hidden md:flex gap-6 font-atx-mono text-[11px] uppercase tracking-[0.14em]">
+            <Link href="/vaults" className={navLink}>Vaults</Link>
+            <Link href="/swap" className={navLink}>Swap</Link>
+            <Link href="/explorer" className={navLink}>Attribution</Link>
+            <Link href="/agents" className={navLink}>Agents</Link>
+          </nav>
+          <div className="flex gap-2.5">
+            {privy.enabled && !isConnected && (
+              <button onClick={handlePrivyOnboarding} className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-ink bg-atx-bone max-md:hidden">Email</button>
+            )}
+            <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white">
+              {isConnected ? 'Dashboard →' : 'Launch app →'}
             </button>
-          )}
-          <button onClick={handleHeroConnect} className={`${btn} border-atx-blue bg-atx-blue text-white`}>
-            {isConnected ? 'Dashboard →' : 'Connect'}
+          </div>
+        </div>
+      </header>
+
+      {/* HERO 1 — reputation + wallet search */}
+      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
+        <div className="mx-auto max-w-[1180px] px-6 py-[52px]">
+          <div className={ey}>✴ On-chain reputation · 100+ chains</div>
+          <h1 className="font-bold tracking-[-0.03em] leading-[0.96] text-[clamp(40px,7vw,96px)] max-w-[18ch] mt-4">
+            Your Contribution should mean <span className="text-atx-blue">something.</span>
+          </h1>
+          <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[48ch] mt-6">
+            {'Every interaction. Every position. Every referral. Paste any wallet to see what it’s built.'}
+          </p>
+
+          {/* wallet search */}
+          <div className="mt-8 max-w-[560px]">
+            <div className="flex">
+              <input
+                type="text"
+                placeholder="0x… wallet address or ENS"
+                value={walletInput}
+                onChange={(e) => setWalletInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+                className="flex-1 py-3.5 px-4 bg-transparent border border-atx-ink border-r-0 font-atx-mono text-[14px] text-atx-ink outline-none focus:bg-white placeholder:text-atx-ink/40"
+              />
+              <button onClick={() => handleAnalyze()} title="Analyze" className="px-5 border border-atx-blue bg-atx-blue text-white cursor-pointer">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+              </button>
+            </div>
+            <div className="flex items-center gap-2 mt-3 flex-wrap">
+              <span className={ey}>Try</span>
+              {SAMPLE_ADDRS.map((s) => (
+                <button key={s.label} onClick={() => { setWalletInput(s.label); handleAnalyze(s.addr) }} className="font-atx-mono text-[11px] text-atx-ink/70 border border-atx-ink px-2.5 py-1 cursor-pointer hover:bg-atx-ink hover:text-atx-bone">
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 mt-7">
+            <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-blue bg-atx-blue text-white">
+              {isConnected ? 'Go to the app →' : 'Launch app →'}
+            </button>
+            {privy.enabled && !isConnected && (
+              <button onClick={handlePrivyOnboarding} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-ink bg-atx-coral text-atx-ink">
+                Continue with email
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* HERO 2 — product preview */}
+      <section
+        className="border-b border-atx-ink grid [grid-template-columns:1.05fr_0.95fr] max-[720px]:[grid-template-columns:1fr]"
+        style={{ backgroundImage: GRID_BG }}
+      >
+        <div className="px-6 py-[44px] border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink">
+          <div className={ey}>✴ Two-surface vaults · reputation-weighted yield</div>
+          <h2 className="font-bold tracking-[-0.02em] leading-[1.04] text-[clamp(28px,3.4vw,44px)] mt-3.5">
+            Real estate, credit, crypto — one vault, <span className="text-atx-blue">no walls.</span>
+          </h2>
+          <p className="text-[16px] leading-[1.5] text-atx-ink/70 max-w-[34ch] mt-4">
+            No KYC. No minimums. DeFi and real-world yield in one deposit — and your score sets the rate.
+          </p>
+          <button onClick={() => launchApp('/vaults')} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-ink bg-atx-bone mt-6">
+            Browse the vaults →
           </button>
         </div>
-      </nav>
-
-      {/* ── Hero ── */}
-      <section className="border-b border-atx-ink pt-[58px]" style={{ backgroundImage: GRID_BG }}>
-        <div className="max-w-[1160px] mx-auto px-7 pt-14 pb-12 grid [grid-template-columns:1.5fr_0.85fr] gap-10 items-center max-[900px]:grid-cols-1">
-          <div>
-            <p className={`${LABEL} mb-4`}>On-chain reputation · 100+ chains</p>
-            <h1 className="font-bold tracking-[-0.03em] leading-[0.92] text-[clamp(44px,7vw,88px)] text-wrap-balance">
-              Your Contribution should mean <span className="text-atx-blue">something.</span>
-            </h1>
-            <p className="text-atx-ink/55 text-[16px] max-w-[46ch] mt-5">
-              Every interaction. Every position. Every referral. Paste any wallet to see what it&apos;s built.
-            </p>
-
-            {/* Search */}
-            <div className="mt-8 max-w-[560px]">
-              <div className="flex">
-                <input
-                  type="text"
-                  placeholder="0x… wallet address or ENS"
-                  value={walletInput}
-                  onChange={(e) => setWalletInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-                  className="flex-1 py-3.5 px-4 bg-transparent border border-atx-ink border-r-0 font-atx-mono text-[14px] text-atx-ink outline-none focus:bg-white placeholder:text-atx-ink/40"
-                />
-                <button onClick={() => handleAnalyze()} title="Analyze" className="px-5 border border-atx-blue bg-atx-blue text-white cursor-pointer">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
-                </button>
-              </div>
-              <div className="flex items-center gap-2 mt-3 flex-wrap">
-                <span className={LABEL}>Try</span>
-                {SAMPLE_ADDRS.map((s) => (
-                  <button key={s.label} onClick={() => { setWalletInput(s.label); handleAnalyze(s.addr) }} className="font-atx-mono text-[11px] text-atx-ink/70 border border-atx-ink px-2.5 py-1 cursor-pointer hover:bg-atx-ink hover:text-atx-bone">
-                    {s.label}
-                  </button>
-                ))}
-              </div>
+        <div className="px-6 py-[30px] bg-atx-panel relative">
+          <span className="absolute top-[30px] right-6 font-atx-mono text-[9px] uppercase tracking-[0.14em] text-atx-ink/55 border border-atx-ink/20 px-1.5 py-1">Preview</span>
+          <div className={ey}>A vault, up close</div>
+          <div className="border border-atx-ink bg-atx-bone mt-3">
+            <div className="grid grid-cols-2 border-b border-atx-ink font-atx-mono text-[11px] uppercase tracking-[0.12em] text-center">
+              <div className="py-3 border-r border-atx-ink text-atx-ink/55">DeFi</div>
+              <div className="py-3 bg-atx-ink text-atx-bone">RWA</div>
             </div>
-
-            <div className="flex items-center gap-3 mt-6 flex-wrap">
-              <button onClick={handleHeroConnect} className={`${btn} border-atx-blue bg-atx-blue text-white`}>
-                {isConnected ? 'Go to my profile →' : 'Connect your wallet →'}
+            <div className="p-4">
+              <div className="flex items-baseline justify-between border border-atx-ink px-3.5 py-3.5">
+                <span className="text-[24px] font-bold tracking-tight">5,000</span>
+                <span className="font-atx-mono text-[11px] text-atx-ink/55">USDC</span>
+              </div>
+              <div className="mt-3 border-t border-atx-ink/20">
+                <Bdr k="Asset yield" v="9.0%" />
+                <Bdr k="vRWA swap fees" v="+0.8%" />
+                <div className="flex items-center justify-between py-2 border-b border-atx-ink/10 text-[12px] text-atx-ink/80">
+                  <span className="flex items-center gap-2">
+                    Your multiplier
+                    <span className="font-atx-mono text-[9px] bg-atx-acid border border-atx-ink px-1.5 py-0.5">Builder · 82</span>
+                  </span>
+                  <span className="font-atx-mono">×1.3</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-3.5">
+                <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55">Effective APY</span>
+                <span className="font-atx-mono font-bold text-[26px] tracking-tight" style={{ color: CORAL_INK }}>10.4%</span>
+              </div>
+              <button onClick={() => launchApp('/vaults')} className="w-full mt-3 py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-ink text-atx-bone border border-atx-ink cursor-pointer">
+                {isConnected ? 'Open vaults →' : 'Launch app to deposit →'}
               </button>
-              {privy.enabled && !isConnected && (
-                <button onClick={handlePrivyOnboarding} className={`${btn} border-atx-ink bg-atx-coral text-atx-ink`}>
-                  Continue with email
-                </button>
-              )}
             </div>
           </div>
-
-          {/* FIG engineering drawing */}
-          <figure className="border border-atx-ink bg-atx-bone m-0 max-[900px]:hidden">
-            <svg viewBox="0 0 300 230" className="block w-full h-auto" aria-hidden="true">
-              <circle cx="150" cy="110" r="84" fill="none" stroke="#111111" strokeOpacity="0.35" strokeDasharray="3 5" />
-              <circle cx="150" cy="110" r="50" fill="#F4FF00" stroke="#111111" />
-              <use href="#atxstar" x="112" y="72" width="76" height="76" fill="none" stroke="#111111" strokeWidth="1.5" />
-              <line x1="20" y1="110" x2="280" y2="110" stroke="#111111" strokeOpacity="0.3" />
-              <line x1="150" y1="20" x2="150" y2="200" stroke="#111111" strokeOpacity="0.3" />
-              <circle cx="150" cy="110" r="3" fill="#006FCC" />
-            </svg>
-            <figcaption className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-ink/55 px-3 py-2.5 border-t border-atx-ink/20">
-              FIG 01 · Attribution Score · 0–925
-            </figcaption>
-          </figure>
-        </div>
-
-        {/* Stats title-block */}
-        <div className="border-t border-atx-ink grid [grid-template-columns:repeat(4,1fr)] max-[600px]:grid-cols-2">
-          {[['24,817', 'Wallets scored'], ['100+', 'Chains indexed'], ['138K', 'Referral links'], ['Free', 'Always']].map(([v, k], i) => (
-            <div key={k} className={`px-7 py-4 ${i < 3 ? 'border-r border-atx-ink/20' : ''} max-[600px]:border-b max-[600px]:border-atx-ink/20`}>
-              <div className="font-bold text-[24px] tracking-tight">{v}</div>
-              <div className={`${LABEL} text-[9px] mt-1`}>{k}</div>
-            </div>
-          ))}
         </div>
       </section>
 
-      {/* ── Three audiences ── */}
-      <section className="border-b border-atx-ink max-w-[1160px] mx-auto px-7 py-16">
-        <div className="flex items-center gap-3.5 mb-4">
-          <span className="font-atx-mono text-[14px] border border-atx-ink px-3 py-2">01</span>
-          <span className={LABEL}>Built for everyone</span>
-        </div>
-        <h2 className="font-bold text-[clamp(22px,3vw,34px)] tracking-tight mb-8">One score. Three audiences.</h2>
-        <div className="grid grid-cols-3 border border-atx-ink max-md:grid-cols-1">
-          {[
-            { tag: 'Protocols', accent: 'var(--color-atx-blue)', h: "You've been rewarding the wrong people.", sub: 'Most emissions go to mercenary farmers. Attribution changes who gets rewarded — and why.', points: ['Reward contributors, not bots', 'Score-weighted distributions', 'One call: getScore(wallet)'] },
-            { tag: 'People', accent: 'var(--color-atx-coral)', h: 'You show up every day. DeFi should reward that.', sub: 'Every LP position, every vote, every referral — invisible to protocols until now.', points: ['One score across 100+ chains', 'Public profile per wallet', 'Referral network builds rank'] },
-            { tag: 'Agents', accent: 'var(--color-atx-mesquite)', h: 'Agents transact. Attribution makes them trustworthy.', sub: 'AI agents are major DeFi participants. Attribution gives them a reputation that compounds.', points: ['Machine-readable manifests', 'On-chain EAS attestations', 'Reputation that compounds'] },
-          ].map((c, i) => (
-            <div key={c.tag} className={`p-6 flex flex-col gap-4 ${i < 2 ? 'border-r border-atx-ink max-md:border-r-0 max-md:border-b' : ''}`}>
-              <div className="flex items-center justify-between">
-                <Star className="w-5 h-5" style={{ color: c.accent }} />
-                <span className="font-atx-mono text-[10px] uppercase tracking-[0.1em] px-2 py-1 border border-atx-ink" style={{ background: c.accent, color: c.accent === 'var(--color-atx-mesquite)' ? '#F1F0E9' : c.accent === 'var(--color-atx-blue)' ? '#fff' : '#111' }}>{c.tag}</span>
+      {/* STATS */}
+      <section className="border-b border-atx-ink grid grid-cols-4 max-[720px]:grid-cols-2">
+        {STATS.map((s, i) => (
+          <div key={s.k} className={`px-5 py-6 ${i < 3 ? 'border-r border-atx-ink' : ''} max-[720px]:border-b max-[720px]:border-atx-ink`}>
+            <div className="font-atx-mono text-[28px] font-bold tracking-[-0.03em]">{s.n}</div>
+            <div className="font-atx-mono text-[9px] uppercase tracking-[0.14em] text-atx-ink/55 mt-1.5">{s.k}</div>
+          </div>
+        ))}
+      </section>
+
+      {/* 01 — THREE AUDIENCES */}
+      <section className="border-b border-atx-ink">
+        <div className="mx-auto max-w-[1180px] px-6 py-[52px]">
+          <div className="flex items-baseline gap-3.5">
+            <span className="font-atx-mono text-[12px] text-atx-blue">01</span>
+            <span className={ey}>Built for everyone</span>
+          </div>
+          <h2 className="font-bold tracking-[-0.02em] text-[clamp(24px,3vw,38px)] mt-3.5">One score. Three audiences.</h2>
+          <div className="grid grid-cols-3 border border-atx-ink mt-7 max-[720px]:grid-cols-1">
+            {AUDIENCES.map((a, i) => (
+              <div
+                key={a.tag}
+                className={`p-[22px] ${i < 2 ? 'border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink' : ''}`}
+              >
+                <div className="flex items-center justify-between mb-[18px]">
+                  <Star className={`w-5 h-5 ${a.star}`} />
+                  <span
+                    className={`font-atx-mono text-[10px] uppercase tracking-[0.1em] px-2.5 py-1.5 border ${a.tagCls}`}
+                    style={a.tag === 'People' ? { color: CORAL_INK, borderColor: CORAL_INK } : undefined}
+                  >
+                    {a.tag}
+                  </span>
+                </div>
+                <h3 className="text-[19px] font-bold tracking-[-0.01em] leading-[1.18]">{a.h}</h3>
+                <p className="text-[14px] leading-[1.5] text-atx-ink/55 mt-3">{a.p}</p>
+                <div className="mt-[18px] border-t border-atx-ink/20 pt-3.5 flex flex-col gap-1.5">
+                  {a.bullets.map((b) => (
+                    <div key={b} className="flex items-center gap-2.5 text-[13.5px] py-1.5">
+                      <span className={`w-[9px] h-[9px] border border-atx-ink inline-block shrink-0 ${a.sq}`} />
+                      {b}
+                    </div>
+                  ))}
+                </div>
               </div>
-              <h3 className="font-bold text-[18px] tracking-tight leading-tight">{c.h}</h3>
-              <p className="text-[13px] text-atx-ink/55 leading-relaxed">{c.sub}</p>
-              <ul className="flex flex-col gap-2 mt-auto pt-3 border-t border-atx-ink/20">
-                {c.points.map((p) => (
-                  <li key={p} className="flex items-start gap-2 text-[13px]">
-                    <span className="w-[7px] h-[7px] mt-1.5 border border-atx-ink shrink-0" style={{ background: c.accent }} />
-                    {p}
-                  </li>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* 02 — HOW IT WORKS */}
+      <section className="border-b border-atx-ink">
+        <div className="mx-auto max-w-[1180px] px-6 py-[52px]">
+          <div className="flex items-baseline gap-3.5">
+            <span className="font-atx-mono text-[12px] text-atx-blue">02</span>
+            <span className={ey}>How it works</span>
+          </div>
+          <h2 className="font-bold tracking-[-0.03em] text-[clamp(24px,3vw,38px)] leading-[1.05] max-w-[22ch] mt-3.5">
+            Every swap, every referral, <span className="text-atx-blue">every position — rewarded.</span>
+          </h2>
+          <p className="text-[16px] leading-[1.55] text-atx-ink/70 max-w-[58ch] mt-3.5">
+            {'Your score isn’t a black box. It’s six signals, and everything you already do on-chain feeds them. Do more, score higher, earn a bigger multiplier — automatically.'}
+          </p>
+          <div className="grid [grid-template-columns:0.85fr_1.15fr] gap-[26px] mt-7 items-start max-[720px]:grid-cols-1">
+            <div className="border border-atx-ink bg-atx-bone">
+              <div className="flex items-end justify-between p-[18px] border-b border-atx-ink">
+                <div>
+                  <div className={ey}>Attribution</div>
+                  <div className="font-atx-mono text-[52px] font-bold tracking-[-0.04em] leading-[0.9]">82</div>
+                </div>
+                <span className="font-atx-mono text-[10px] tracking-[0.06em] bg-atx-acid border border-atx-ink px-2 py-1">Builder · top 5%</span>
+              </div>
+              <div className="px-[18px] py-4 flex flex-col gap-2.5">
+                {SIGNALS.map((s) => (
+                  <div key={s.n} className="flex items-center gap-2.5">
+                    <span className="font-atx-mono text-[10px] text-atx-ink/55 w-[74px]">{s.n}</span>
+                    <span className="flex-1 h-2 border border-atx-ink bg-atx-bone">
+                      <span className="block h-full" style={{ width: s.w, background: s.c }} />
+                    </span>
+                    <span className="font-atx-mono text-[10px] w-7 text-right">{s.v}</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
+              <div className="font-atx-mono text-[10px] text-atx-mesquite px-[18px] py-3 border-t border-atx-ink/20">
+                vaultking.mintware · scored across 6 chains
+              </div>
             </div>
-          ))}
+            <div>
+              <div className={`${ey} mb-2.5`}>Six signals · everything you do feeds them</div>
+              <div className="border-t border-atx-ink/20">
+                {ACTIONS.map((a) => (
+                  <div key={a.b} className="flex items-center gap-3.5 py-3.5 border-b border-atx-ink/10">
+                    <b className="text-[15px] min-w-[132px] max-[720px]:min-w-[110px]">{a.b}</b>
+                    <span className="font-atx-mono text-[10.5px] text-atx-ink/55 flex-1 leading-[1.4]">{a.fd}</span>
+                    <span className={`font-atx-mono text-[10px] whitespace-nowrap ${a.hot ? 'bg-atx-acid border border-atx-ink px-1.5 py-1 text-atx-ink' : 'text-atx-blue'}`}>
+                      {a.pts}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="font-atx-mono text-[12px] text-atx-mesquite mt-[22px] tracking-[0.02em]">
+            <b className="text-atx-blue">↳</b> All six roll into one multiplier — the same ×1.3 you saw on the vault. Nothing you do on-chain is wasted.
+          </div>
         </div>
       </section>
 
-      {/* ── How it works ── */}
-      <section id="how-it-works" className="border-b border-atx-ink max-w-[1160px] mx-auto px-7 py-16">
-        <div className="flex items-center gap-3.5 mb-8">
-          <span className="font-atx-mono text-[14px] border border-atx-ink px-3 py-2">02</span>
-          <span className={LABEL}>How it works</span>
-        </div>
-        <h2 className="font-bold text-[clamp(28px,4vw,50px)] tracking-[-0.02em] leading-[1.02] max-w-[18ch] text-wrap-balance">
-          Every wallet has a history. We make it <span className="text-atx-blue">legible.</span>
-        </h2>
-        <div className="grid grid-cols-4 border border-atx-ink mt-9 max-md:grid-cols-2 max-sm:grid-cols-1">
-          {[
-            { n: '01', title: 'We read the chain', desc: 'Every LP, swap, vote, and referral — across 100+ chains, indexed in real time.' },
-            { n: '02', title: 'We compute a score', desc: 'Six behavioral signals weighted into one score out of 925.' },
-            { n: '03', title: 'We attest on-chain', desc: 'Scores published as EAS attestations — verifiable by any contract.' },
-            { n: '04', title: 'Protocols distribute', desc: 'Vaults call getScore(wallet) to weight distributions by contribution.' },
-          ].map((s, i) => (
-            <div key={s.n} className={`p-6 ${i < 3 ? 'border-r border-atx-ink max-md:[&:nth-child(1)]:border-r max-md:[&:nth-child(2)]:border-r-0 max-md:border-b' : 'max-md:border-b'}`}>
-              <div className="font-atx-mono text-[12px] text-atx-blue mb-3">{s.n}</div>
-              <div className="font-bold text-[16px] tracking-tight mb-2 leading-tight">{s.title}</div>
-              <div className="text-[12px] text-atx-ink/55 leading-relaxed">{s.desc}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* 6 signals */}
-        <div className="border border-atx-ink mt-6">
-          <div className={`${LABEL} px-[18px] py-3 border-b border-atx-ink/20`}>Six scoring signals</div>
-          <div className="grid grid-cols-3 max-md:grid-cols-1">
-            {[
-              { name: 'Liquidity', pts: 150, color: '#C27A00' }, { name: 'Volume', pts: 100, color: '#006FCC' },
-              { name: 'Holding', pts: 100, color: '#2A9E8A' }, { name: 'Trading', pts: 75, color: '#8A8A84' },
-              { name: 'Governance', pts: 100, color: '#7B6FCC' }, { name: 'Sharing', pts: 400, color: '#FF8574' },
-            ].map((sig, i) => (
-              <div key={sig.name} className={`px-[18px] py-4 border-atx-ink/20 ${(i % 3 !== 2) ? 'border-r' : ''} ${i < 3 ? 'border-b' : ''} max-md:border-r-0`}>
-                <div className="flex items-baseline justify-between mb-2">
-                  <span className="text-[14px]">{sig.name}</span>
-                  <span className="font-atx-mono text-[13px] text-atx-ink/55">{sig.pts} pts</span>
-                </div>
-                <span className="block h-2 border border-atx-ink relative">
-                  <i className="absolute inset-y-0 left-0 block" style={{ width: `${Math.round((sig.pts / 400) * 100)}%`, background: sig.color }} />
-                </span>
+      {/* 03 — RWA (blue tentpole) */}
+      <section className="border-b border-atx-ink bg-atx-blue text-white">
+        <div className="mx-auto max-w-[1180px] px-6 py-[56px]">
+          <div className="flex items-baseline gap-3.5">
+            <span className="font-atx-mono text-[12px] text-atx-acid">03</span>
+            <span className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-white/70">Real-world yield, no gatekeepers</span>
+          </div>
+          <h2 className="font-bold tracking-[-0.03em] text-[clamp(24px,3vw,38px)] leading-[1.05] max-w-[22ch] mt-3.5">
+            Real estate yield, <span className="text-atx-acid">without the $50k door.</span>
+          </h2>
+          <p className="text-[16px] leading-[1.55] text-white/90 max-w-[58ch] mt-3.5">
+            Tokenized real-world assets have always been walled off — accreditation checks, six-figure minimums, capital locked behind phone calls. Mintware opens the door: deposit any amount, hold a bearer token, earn automatically.
+          </p>
+          <div className="grid grid-cols-4 border border-white/40 mt-8 max-[720px]:grid-cols-1">
+            {STEPS.map((s, i) => (
+              <div key={s.n} className={`p-[18px] ${i < 3 ? 'border-r border-white/40 max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-white/40' : ''}`}>
+                <div className="font-atx-mono text-[11px] text-atx-acid tracking-[0.08em]">{s.n}</div>
+                <div className="text-[15px] font-bold mt-2.5 mb-1.5">{s.t}</div>
+                <div className="font-atx-mono text-[10.5px] leading-[1.5] text-white/85">{s.d}</div>
               </div>
             ))}
           </div>
+          <div className="grid grid-cols-2 border border-white/40 mt-4 max-[720px]:grid-cols-1">
+            <div className="p-[18px] border-r border-white/40 max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-white/40">
+              <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] opacity-75 mb-3">Traditional RWA</div>
+              {TRAD.map((r, i) => (
+                <div key={r} className={`py-2.5 text-[13px] ${i < TRAD.length - 1 ? 'border-b border-white/20' : ''}`}>{r}</div>
+              ))}
+            </div>
+            <div className="p-[18px]">
+              <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-acid mb-3">✴ Mintware</div>
+              {MW.map((r, i) => (
+                <div key={r} className={`py-2.5 text-[13px] ${i < MW.length - 1 ? 'border-b border-white/20' : ''}`}>{r}</div>
+              ))}
+            </div>
+          </div>
+          <div className="text-[19px] font-bold leading-[1.3] max-w-[30ch] mt-7 tracking-[-0.01em]">
+            Your real-estate position trades at 3am on a Sunday. <span className="text-atx-acid">Try that with a REIT.</span>
+          </div>
         </div>
       </section>
 
-      {/* ── Attribution ── */}
-      <section id="attribution" className="border-b border-atx-ink max-w-[1160px] mx-auto px-7 py-16">
-        <div className="grid grid-cols-2 gap-12 items-center max-md:grid-cols-1 max-md:gap-8">
+      {/* WAITLIST */}
+      <section className="border-b border-atx-ink">
+        <div className="mx-auto max-w-[1180px] px-6 py-[44px] grid [grid-template-columns:1fr_0.9fr] gap-10 items-center max-[720px]:grid-cols-1 max-[720px]:gap-6">
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="w-[9px] h-[9px] bg-atx-acid border border-atx-ink inline-block" />
-              <span className={LABEL}>Attribution · live now</span>
-            </div>
-            <h2 className="font-bold text-[clamp(28px,3.5vw,42px)] tracking-[-0.015em] leading-[1.05] mb-3">Your on-chain reputation, finally visible.</h2>
-            <p className="text-[15px] text-atx-ink/55 leading-relaxed mb-6 max-w-[46ch]">
-              Attribution reads your full on-chain history and computes one score that captures your real contribution to DeFi — not just your balance.
-            </p>
-            <div className="border border-atx-ink mb-6">
-              {[
-                ['Wallet score', 'LP behavior, competence, age, network — scored across 100+ chains.'],
-                ['Global leaderboard', 'Top score, top earners, top referrers — live rankings.'],
-                ['Referral network', 'Refer wallets and build your network. Quality lifts your score.'],
-                ['Public profiles', 'Every wallet gets a profile. Paste any address to explore.'],
-              ].map(([t, d], i) => (
-                <div key={t} className={`flex items-start gap-3 px-4 py-3 ${i ? 'border-t border-atx-ink/20' : ''}`}>
-                  <Star className="w-4 h-4 text-atx-blue shrink-0 mt-0.5" />
-                  <div>
-                    <div className="text-[13px] font-semibold">{t}</div>
-                    <div className="text-[12px] text-atx-ink/55 leading-relaxed">{d}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <Link href="/explorer" className={`${btn} border-atx-blue bg-atx-blue text-white no-underline inline-block`}>Check your score →</Link>
+            <div className={ey}>✴ Stay in the loop</div>
+            <h2 className="font-bold tracking-[-0.02em] text-[clamp(22px,2.6vw,32px)] leading-[1.1] mt-3">
+              New vaults, drops, and score boosts — first.
+            </h2>
+            <p className="text-[15px] text-atx-ink/55 mt-2.5 max-w-[46ch]">Score-holders get priority access. No spam — just the good stuff.</p>
           </div>
-
-          {/* Score card (ink) */}
-          <div className="border border-atx-ink bg-atx-ink text-atx-bone">
-            <div className="p-6 border-b border-atx-bone/15">
-              <div className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-bone/45 mb-1">Attribution score</div>
-              <div className="flex items-start justify-between">
-                <div className="font-bold text-[58px] leading-none text-atx-blue tracking-[-0.03em]" style={{ color: '#4d9fff' }}>82</div>
-                <span className="font-atx-mono text-[10px] uppercase tracking-[0.1em] px-2 py-1 border border-atx-bone/40 mt-1">Builder</span>
-              </div>
-              <div className="font-atx-mono text-[11px] text-atx-bone/40 mt-1">vaultking.mintware · top 5%</div>
-            </div>
-            <div className="p-6 flex flex-col gap-2.5">
-              {[['LP behavior', '91'], ['DeFi competence', '85'], ['Wallet longevity', '78'], ['Network & referral', '64'], ['Mintware native', '72']].map(([label, val]) => (
-                <div key={label} className="flex flex-col gap-1">
-                  <div className="flex justify-between font-atx-mono text-[11px] text-atx-bone/45">
-                    <span>{label}</span><span style={{ color: '#4d9fff' }}>{val}</span>
-                  </div>
-                  <span className="block h-1.5 bg-atx-bone/10 relative"><i className="absolute inset-y-0 left-0 block bg-atx-blue" style={{ width: `${val}%` }} /></span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <WaitlistForm />
         </div>
       </section>
 
-      {/* ── Mintware / vaults ── */}
-      <section id="mintware" className="bg-atx-blue text-white border-b border-atx-ink">
-        <div className="max-w-[1160px] mx-auto px-7 py-16 grid grid-cols-2 gap-12 items-start max-md:grid-cols-1 max-md:gap-8">
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <span className="w-[9px] h-[9px] bg-atx-acid border border-white inline-block" />
-              <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-acid">Mintware · coming soon</span>
-            </div>
-            <h2 className="font-bold text-[clamp(28px,3.5vw,42px)] tracking-[-0.015em] leading-[1.05] mb-3">Where reputation becomes earnings.</h2>
-            <p className="text-[15px] text-white/80 leading-relaxed mb-6 max-w-[46ch]">
-              Protocols deploy two-surface vaults on Mintware. Your Attribution score determines how rewards flow — the more you contribute, the more you earn.
-            </p>
-            <div className="flex flex-col gap-2.5 mb-6">
-              {[
-                ['Two-surface vaults', 'DeFi + RWA on a shared ERC-4626 base. Deposit once.'],
-                ['Attribution fee share', 'Your score lifts your share of swap fees up to 2×.'],
-                ['MEV protection', 'V4 hooks capture value that would go to bots — back to LPs.'],
-                ['Idle-capital routing', 'Reserve auto-routed to yield when not actively LPing.'],
-              ].map(([t, d]) => (
-                <div key={t} className="flex items-start gap-3 py-1">
-                  <Star className="w-4 h-4 text-atx-acid shrink-0 mt-0.5" />
-                  <div>
-                    <div className="text-[13px] font-semibold">{t}</div>
-                    <div className="text-[12px] text-white/70 leading-relaxed">{d}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="border border-white/40 p-5">
-              <div className="font-bold text-[17px] mb-1">Join the waitlist</div>
-              <div className="text-[13px] text-white/70 mb-4">Be first when Mintware vaults go live. Score-holders get priority.</div>
-              <WaitlistForm />
-            </div>
+      {/* LAUNCH BAND */}
+      <section className="border-b border-atx-ink">
+        <div className="mx-auto max-w-[1180px] px-6 py-[34px] flex items-center justify-between flex-wrap gap-4">
+          <div className="text-[24px] font-bold tracking-[-0.01em] max-w-[24ch]">
+            Your wallet already has a history. Come get paid for it.
           </div>
-
-          {/* Vaults preview */}
-          <div>
-            <div className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/60 mb-3">Vaults preview</div>
-            <div className="border border-white">
-              {[
-                ['Social Blue-Chip', 'ETH / USDC · DeFi', '11.0%'],
-                ['LiquidHectar Note', 'vRWA / USDC · RWA', '9.0%'],
-                ['Degen Emerging', 'ARB / USDC · DeFi', '18.4%'],
-                ['ATX Credit Facility', 'vRWA / USDC · RWA', '10.4%'],
-              ].map(([name, pair, apy], i) => (
-                <div key={name} className={`flex items-center gap-3.5 px-[18px] py-3.5 ${i ? 'border-t border-white/25' : ''}`}>
-                  <Star className="w-4 h-4 text-atx-acid shrink-0" />
-                  <div>
-                    <div className="text-[14px] font-bold">{name}</div>
-                    <div className="font-atx-mono text-[11px] text-white/60 mt-0.5">{pair}</div>
-                  </div>
-                  <div className="ml-auto font-atx-mono text-[16px] text-atx-acid">{apy}</div>
-                </div>
-              ))}
-              <div className="text-center py-3 font-atx-mono text-[11px] text-white/45 border-t border-white/25">+ more vaults at launch</div>
-            </div>
-          </div>
+          <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-blue bg-atx-blue text-white">
+            {isConnected ? 'Go to the app →' : 'Launch app →'}
+          </button>
         </div>
       </section>
 
-      {/* ── Real-world yield (RWA moat) ── */}
-      <section id="rwa" className="border-b border-atx-ink max-w-[1160px] mx-auto px-7 py-16">
-        <div className="flex items-center gap-2 mb-4">
-          <span className="w-[9px] h-[9px] bg-atx-coral border border-atx-ink inline-block" />
-          <span className={LABEL}>Real-world yield · no gatekeepers</span>
-        </div>
-        <h2 className="font-bold text-[clamp(28px,3.5vw,42px)] tracking-[-0.02em] leading-[1.05] max-w-[20ch] mb-3">
-          Real estate yield, <span className="text-atx-blue">without the $50k door.</span>
-        </h2>
-        <p className="text-[15px] text-atx-ink/55 max-w-[56ch] leading-relaxed mb-8">
-          Tokenized real-world assets have always been walled off — accreditation checks, six-figure
-          minimums, capital locked behind phone calls. Mintware&apos;s RWA vaults change that: deposit any
-          amount, hold a bearer token, earn automatically.
-        </p>
-        <div className="grid grid-cols-4 border border-atx-ink mb-6 max-md:grid-cols-2 max-sm:grid-cols-1">
-          {[
-            ['01', 'Deposit USDC', 'Any amount. No accreditation, no minimum, no upfront KYC.'],
-            ['02', 'Receive vRWA', 'A bearer token, 1:1 with your share — yours to hold or trade.'],
-            ['03', 'Earn + trade', 'Real-world yield accrues automatically. Trade vRWA on Uniswap, 24/7.'],
-            ['04', 'Redeem — if you want', 'Only here does KYC apply, and only if you redeem the underlying.'],
-          ].map(([n, t, d], i) => (
-            <div key={n} className={`p-6 ${i < 3 ? 'border-r border-atx-ink max-md:[&:nth-child(2)]:border-r-0 max-sm:border-r-0 max-md:border-b' : 'max-md:border-b'}`}>
-              <div className="font-atx-mono text-[12px] text-atx-blue mb-3">{n}</div>
-              <div className="font-bold text-[15px] tracking-tight mb-1.5 leading-tight">{t}</div>
-              <div className="text-[12px] text-atx-ink/55 leading-relaxed">{d}</div>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-2 border border-atx-ink max-md:grid-cols-1">
-          <div className="p-6 border-r border-atx-ink max-md:border-r-0 max-md:border-b">
-            <div className={`${LABEL} mb-3`}>Traditional RWA</div>
-            {['$50k–$250k minimum', 'KYC before you can invest', 'Locked — phone calls to exit', 'You own a database entry'].map((r, i, a) => (
-              <div key={r} className={`py-2.5 text-[13px] text-atx-ink/55 ${i < a.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>{r}</div>
-            ))}
-          </div>
-          <div className="p-6">
-            <div className="flex items-center gap-1.5 mb-3">
-              <Star className="w-3.5 h-3.5 text-atx-blue" />
-              <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-blue">Mintware</span>
-            </div>
-            {['Any amount', 'KYC only if you redeem', 'Trade on Uniswap, 24/7', 'You hold a bearer token'].map((r, i, a) => (
-              <div key={r} className={`py-2.5 text-[13px] font-medium ${i < a.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>{r}</div>
-            ))}
-          </div>
-        </div>
-        <p className="text-[19px] font-bold leading-[1.3] max-w-[36ch] mt-8 tracking-[-0.01em]">
-          Your real-estate position trades at 3am on a Sunday. <span className="text-atx-blue">Try that with a REIT.</span>
-        </p>
-      </section>
-
-      {/* ── Teams ── */}
-      <section id="teams" className="border-b border-atx-ink max-w-[1160px] mx-auto px-7 py-16">
-        <div className="flex items-center gap-3.5 mb-3">
-          <span className="font-atx-mono text-[14px] border border-atx-ink px-3 py-2">03</span>
-          <span className={LABEL}>For teams &amp; protocols</span>
-        </div>
-        <h2 className="font-bold text-[clamp(28px,3.5vw,42px)] tracking-[-0.02em] mb-3">Deploy smarter. Reward better.</h2>
-        <p className="text-[15px] text-atx-ink/55 max-w-[52ch] mb-8 leading-relaxed">
-          Deploy vaults and reward pools that distribute to participants who actually contribute — not just whoever holds the most tokens.
-        </p>
-        <div className="grid grid-cols-3 border border-atx-ink mb-8 max-md:grid-cols-1">
-          {[
-            ['Two-surface vaults', 'Community deposits USDC. Mintware handles MEV capture, range management, and score-weighted distribution.', 'Mintware'],
-            ['Reward pools', 'Attribution scores determine who earns and how much. Reward your real community — not bots.', 'Mintware'],
-            ['Attribution plugin', "One contract integration. getScore(wallet) routes rewards through your existing infra.", 'Coming soon'],
-          ].map(([title, desc, tag], i) => (
-            <div key={title as string} className={`p-6 ${i < 2 ? 'border-r border-atx-ink max-md:border-r-0 max-md:border-b' : ''}`}>
-              <Star className="w-5 h-5 text-atx-blue mb-3" />
-              <div className="font-bold text-[17px] tracking-tight mb-1.5">{title}</div>
-              <div className="text-[13px] text-atx-ink/55 leading-relaxed">{desc}</div>
-              <span className="inline-block mt-3 font-atx-mono text-[10px] uppercase tracking-[0.08em] px-2 py-1 border border-atx-ink/40">{tag}</span>
-            </div>
-          ))}
-        </div>
-        <button className={`${btn} border-atx-ink bg-atx-ink text-atx-bone`}>Join the team waitlist →</button>
-      </section>
-
-      {/* ── Footer ── */}
+      {/* FOOTER */}
       <footer className="bg-atx-ink text-atx-bone">
-        <div className="max-w-[1160px] mx-auto px-7 py-[30px] flex items-center justify-between flex-wrap gap-4">
+        <div className="mx-auto max-w-[1180px] px-6 py-[30px] flex items-center justify-between flex-wrap gap-4">
           <Link href="/" className="flex items-center gap-2.5 no-underline text-atx-bone">
             <Star className="w-5 h-5 text-atx-acid" />
-            <span className="font-bold text-[15px] tracking-[0.06em]">MINTWARE</span>
+            <b className="text-[15px] tracking-[0.06em]">MINTWARE</b>
           </Link>
-          <div className="flex gap-5 flex-wrap font-atx-mono text-[10px] uppercase tracking-[0.1em]">
-            {[
-              { href: '/vaults', label: 'Vaults' },
-              { href: '/explorer', label: 'Attribution' },
-              { href: '/agents', label: 'Agents' },
-              { href: '/for-protocols.html', label: 'Protocols' },
-              { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
-            ].map((l) => (
+          <div className="flex gap-5 font-atx-mono text-[10px] uppercase tracking-[0.1em] flex-wrap">
+            {FOOTER_LINKS.map((l) => (
               <a key={l.label} href={l.href} className="text-atx-bone/60 no-underline hover:text-atx-bone" {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}>{l.label}</a>
             ))}
           </div>
           <div className="font-atx-mono text-[10px] text-atx-bone/45">© 2026 Mintware ✴ Contribution is identity</div>
         </div>
       </footer>
-
-      <svg width="0" height="0" className="absolute" aria-hidden="true">
-        <symbol id="atxstar" viewBox="0 0 100 100">
-          <path d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z" />
-        </symbol>
-      </svg>
     </div>
   )
 }
 
-// ─── Waitlist form (ATX, on blue) ────────────────────────────────────────────
+function Bdr({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="flex items-center justify-between py-2 border-b border-atx-ink/10 text-[12px] text-atx-ink/80">
+      <span>{k}</span>
+      <span className="font-atx-mono">{v}</span>
+    </div>
+  )
+}
+
+// ─── Waitlist form (ATX, on bone) ────────────────────────────────────────────
 function WaitlistForm() {
   const [email, setEmail] = React.useState('')
   const [status, setStatus] = React.useState<'idle' | 'loading' | 'done' | 'error'>('idle')
@@ -494,8 +483,8 @@ function WaitlistForm() {
 
   if (status === 'done') {
     return (
-      <div className="font-atx-mono text-[12px] uppercase tracking-[0.08em] py-3 px-4 border border-atx-acid bg-atx-acid text-atx-ink">
-        ✴ You&apos;re on the list
+      <div className="font-atx-mono text-[12px] uppercase tracking-[0.08em] py-3.5 px-4 border border-atx-ink bg-atx-acid text-atx-ink">
+        ✴ You’re on the list
       </div>
     )
   }
@@ -504,18 +493,18 @@ function WaitlistForm() {
     <form onSubmit={handleSubmit} className="flex flex-col gap-2">
       <div className="flex">
         <input
-          className="flex-1 py-3 px-3.5 bg-white/10 border border-white/40 border-r-0 font-atx-mono text-[13px] text-white outline-none focus:bg-white/20 placeholder:text-white/40"
+          className="flex-1 py-3.5 px-4 bg-transparent border border-atx-ink border-r-0 font-atx-mono text-[13px] text-atx-ink outline-none focus:bg-white placeholder:text-atx-ink/40"
           type="email"
           placeholder="your@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        <button type="submit" disabled={status === 'loading'} className="py-3 px-5 bg-atx-acid text-atx-ink font-semibold text-[13px] uppercase tracking-[0.04em] border border-atx-acid cursor-pointer disabled:opacity-60">
+        <button type="submit" disabled={status === 'loading'} className="py-3.5 px-5 bg-atx-blue text-white font-atx-mono text-[12px] uppercase tracking-[0.08em] border border-atx-blue cursor-pointer disabled:opacity-60">
           {status === 'loading' ? '…' : 'Notify me'}
         </button>
       </div>
-      {status === 'error' && <div className="font-atx-mono text-[12px] text-atx-acid">{errMsg}</div>}
+      {status === 'error' && <div className="font-atx-mono text-[12px] text-atx-clay">{errMsg}</div>}
     </form>
   )
 }
