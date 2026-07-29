@@ -1,7 +1,7 @@
 'use client'
 
 // =============================================================================
-// CampaignCard.tsx — Campaign list card for /dashboard
+// CampaignCard.tsx — Campaign list card for /rewards
 // Design: ATX Settlemint — square, hairline rules, JetBrains Mono data, flat
 // duotone. Structure: header (real token logo) → stats → reward pills →
 // progress → socials. Token logos: LI.FI API. Socials: DexScreener API.

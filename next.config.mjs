@@ -12,6 +12,10 @@ const nextConfig = {
   // Disable Turbopack for production builds (use webpack) — Turbopack panics on 16.1.6 prod build
   bundlePagesRouterDependencies: true,
 
+  async redirects() {
+    return [{ source: '/dashboard', destination: '/rewards', permanent: true }]
+  },
+
   images: {
     unoptimized: true,
   },

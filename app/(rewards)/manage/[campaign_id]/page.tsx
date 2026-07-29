@@ -252,7 +252,7 @@ function ManageContent() {
 
         {/* ── Back link ── */}
         <Link
-          href="/dashboard"
+          href="/rewards"
           className="inline-flex items-center gap-[6px] font-atx-display text-[13px] font-semibold text-atx-ink/55 no-underline mb-5 hover:text-atx-blue transition-colors duration-150"
         >
           ← Back to Dashboard

@@ -50,7 +50,7 @@ export function CommandPalette() {
           <Command.Empty>No results.</Command.Empty>
 
           <Command.Group heading="Navigate">
-            <Command.Item onSelect={() => go('/dashboard')}>
+            <Command.Item onSelect={() => go('/rewards')}>
               <div className="cmdk-icon"><LayoutDashboard size={14} /></div>
               Dashboard
             </Command.Item>

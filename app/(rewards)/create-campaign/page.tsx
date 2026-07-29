@@ -62,7 +62,7 @@ function CreatorContent() {
     if (form.schedule === 'now' && campaignId) {
       router.push(`/campaign/${campaignId}`)
     } else {
-      router.push('/dashboard')
+      router.push('/rewards')
     }
   }
 

@@ -91,7 +91,7 @@ export default function LandingPreview() {
   if (!ALLOW) notFound()
 
   // Enter the app: connect first if needed, else route into the authenticated surface.
-  function launchApp(dest = '/dashboard') {
+  function launchApp(dest = '/rewards') {
     if (isConnected) router.push(dest)
     else openConnectModal?.()
   }
