@@ -156,7 +156,7 @@ function RewardsContent() {
               <div className="py-11 pr-9 max-[820px]:pr-0">
                 <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-acid" />Rewards · Reputation-weighted</div>
                 <h1 className="font-bold tracking-[-0.02em] leading-[0.99] text-[clamp(32px,4.6vw,54px)] mt-5 max-w-[17ch] text-wrap-balance">
-                  We don&apos;t reward how much you bring. <span className="text-atx-blue">We reward how good it is.</span>
+                  Contribution that is <span className="text-atx-blue">seen and rewarded</span>
                 </h1>
                 <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-atx-ink/70 max-w-[54ch] mt-5">
                   Every swap, subscription, hold, and referral — across <b className="text-atx-ink">DeFi markets and real-world assets</b> — earns points, then multiplied by your Attribution score. Come get paid for the history you&apos;ve already built.
