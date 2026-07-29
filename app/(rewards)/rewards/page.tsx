@@ -2,7 +2,6 @@
 
 import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/web2/MwNav'
-import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -202,6 +201,35 @@ function RewardsContent() {
             </div>
           </section>
 
+          {/* ── How earning works ── */}
+          <section className="border-b border-atx-ink">
+            <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
+              <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-acid" />Every action, both surfaces, rewarded</div>
+              <h2 className={H2}>Four ways to earn. <span className="text-atx-blue">One multiplier.</span></h2>
+              <p className={LEAD}>Earn on both surfaces — DeFi markets and real-world assets. Every action is scored, then multiplied by your reputation.</p>
+              <div className="grid grid-cols-4 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
+                {[
+                  ['Trade', 'DeFi + RWA', false, 'Swap on any pool — including the vRWA/USDC oracle-banded market. On RWA, your volume is what turns a tokenized asset into a liquid one.', '+8 pts / trade'],
+                  ['Subscribe', 'RWA', true, 'Deposit into a deal at launch — the sticky primary capital an issuer actually needs. Credited the moment you commit.', '+ deal rate / subscribe'],
+                  ['Hold', 'RWA · new', true, 'Keep vRWA through the epoch. A weekly snapshot credits you by balance × duration × reputation — hold-to-maturity, rewarded.', 'rate × held × duration'],
+                  ['Refer', 'DeFi + RWA', false, 'Bring qualified buyers. On RWA this is placement-agent distribution — the referral that sources a real relationship, not a bot.', '+60 pts / referral'],
+                ].map(([name, badge, rwa, desc, pts], i) => (
+                  <div key={name as string} className={`p-5 ${i < 3 ? 'border-r border-atx-ink max-[800px]:border-r-0 max-[800px]:border-b' : ''}`}>
+                    <div className="text-[19px] font-bold flex items-center gap-2 flex-wrap">
+                      {name}
+                      <span className={`font-atx-mono text-[9px] uppercase tracking-[0.1em] border border-atx-ink px-1.5 py-0.5 ${rwa ? 'bg-atx-coral' : 'bg-atx-acid'}`}>{badge}</span>
+                    </div>
+                    <div className="text-[13px] text-atx-ink/70 leading-[1.45] mt-2.5 min-h-[82px]">{desc}</div>
+                    <div className="font-atx-mono text-[13px] text-atx-blue font-bold mt-2 border-t border-atx-ink/10 pt-2.5">{pts}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="font-atx-mono text-[13px] text-atx-mesquite mt-4.5">
+                <b className="text-atx-blue">↳</b> Same action, better reputation, bigger reward — and because rewards are quality-weighted, you&apos;re never diluted by mercenary farmers.
+              </div>
+            </div>
+          </section>
+
           {/* ── Campaigns ── */}
           <div id="campaigns" className="px-7 pb-12 pt-8 max-w-[1100px] mx-auto max-[800px]:px-4">
             {error && (
@@ -379,35 +407,6 @@ function RewardsContent() {
               </>
             )}
           </div>
-
-          {/* ── How earning works (education, below campaigns) ── */}
-          <section className="border-t border-atx-ink">
-            <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
-              <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-acid" />Every action, both surfaces, rewarded</div>
-              <h2 className={H2}>Four ways to earn. <span className="text-atx-blue">One multiplier.</span></h2>
-              <p className={LEAD}>Earn on both surfaces — DeFi markets and real-world assets. Every action is scored, then multiplied by your reputation.</p>
-              <div className="grid grid-cols-4 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
-                {[
-                  ['Trade', 'DeFi + RWA', false, 'Swap on any pool — including the vRWA/USDC oracle-banded market. On RWA, your volume is what turns a tokenized asset into a liquid one.', '+8 pts / trade'],
-                  ['Subscribe', 'RWA', true, 'Deposit into a deal at launch — the sticky primary capital an issuer actually needs. Credited the moment you commit.', '+ deal rate / subscribe'],
-                  ['Hold', 'RWA · new', true, 'Keep vRWA through the epoch. A weekly snapshot credits you by balance × duration × reputation — hold-to-maturity, rewarded.', 'rate × held × duration'],
-                  ['Refer', 'DeFi + RWA', false, 'Bring qualified buyers. On RWA this is placement-agent distribution — the referral that sources a real relationship, not a bot.', '+60 pts / referral'],
-                ].map(([name, badge, rwa, desc, pts], i) => (
-                  <div key={name as string} className={`p-5 ${i < 3 ? 'border-r border-atx-ink max-[800px]:border-r-0 max-[800px]:border-b' : ''}`}>
-                    <div className="text-[19px] font-bold flex items-center gap-2 flex-wrap">
-                      {name}
-                      <span className={`font-atx-mono text-[9px] uppercase tracking-[0.1em] border border-atx-ink px-1.5 py-0.5 ${rwa ? 'bg-atx-coral' : 'bg-atx-acid'}`}>{badge}</span>
-                    </div>
-                    <div className="text-[13px] text-atx-ink/70 leading-[1.45] mt-2.5 min-h-[82px]">{desc}</div>
-                    <div className="font-atx-mono text-[13px] text-atx-blue font-bold mt-2 border-t border-atx-ink/10 pt-2.5">{pts}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="font-atx-mono text-[13px] text-atx-mesquite mt-4.5">
-                <b className="text-atx-blue">↳</b> Same action, better reputation, bigger reward — and because rewards are quality-weighted, you&apos;re never diluted by mercenary farmers.
-              </div>
-            </div>
-          </section>
         </>
       ) : (
         <TeamsView />
@@ -597,13 +596,13 @@ function TeamsView() {
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
+// Public front door — no wallet required to browse rewards + the teams pitch.
+// Join / create / swap still require a wallet on their own flows.
 export default function RewardsPage() {
   return (
     <>
       <MwNav />
-      <MwAuthGuard>
-        <RewardsContent />
-      </MwAuthGuard>
+      <RewardsContent />
     </>
   )
 }

@@ -119,7 +119,7 @@ function VaultsContent() {
                 <button
                   key={s}
                   onClick={() => setSurface(s)}
-                  className={`font-atx-mono text-[12px] uppercase tracking-[0.12em] px-6 py-2.5 cursor-pointer ${i === 0 ? 'border-r border-atx-ink' : ''} ${surface === s ? 'bg-atx-ink text-atx-bone' : 'bg-atx-bone text-atx-ink/55'}`}
+                  className={`font-atx-mono text-[12px] uppercase tracking-[0.12em] px-6 py-2.5 cursor-pointer ${i === 0 ? 'border-r border-atx-ink' : ''} ${surface === s ? 'bg-atx-blue text-white' : 'bg-atx-bone text-atx-ink/55'}`}
                 >
                   {s === 'rwa' ? 'RWA' : 'DeFi'}
                 </button>
@@ -195,7 +195,7 @@ function VaultsContent() {
           <div className="flex border border-atx-ink">
             {FILTERS.map(f => (
               <button key={f} onClick={() => setFilter(f)}
-                className={`font-atx-mono text-[12px] uppercase tracking-[0.1em] px-4 py-2 border-r border-atx-ink last:border-r-0 ${filter === f ? 'bg-atx-ink text-atx-bone' : 'bg-transparent text-atx-ink'}`}>
+                className={`font-atx-mono text-[12px] uppercase tracking-[0.1em] px-4 py-2 border-r border-atx-ink last:border-r-0 ${filter === f ? 'bg-atx-blue text-white' : 'bg-transparent text-atx-ink'}`}>
                 {f}
               </button>
             ))}

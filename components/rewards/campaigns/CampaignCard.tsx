@@ -9,6 +9,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { SwapModal } from '@/components/rewards/swap/SwapModal'
 import { fmtUSD, daysUntil, iconColor } from '@/lib/web2/api'
 import { fetchTokenMeta, fetchDexMeta, dexUrl } from '@/lib/web2/tokenMeta'
 
@@ -203,6 +204,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
 
   const LINE = 'border-atx-ink/15'
 
+  const [swapOpen, setSwapOpen] = useState(false)
+  const tradeable = isLive && !!c.token_contract && !!chainId
+
   return (
     <div
       className={`font-atx-display bg-atx-panel overflow-hidden cursor-pointer transition-shadow duration-200 flex flex-col border border-atx-ink border-l-[3px] border-l-atx-coral hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] [&_*]:rounded-none${isEnded ? ' opacity-60' : ''}`}
@@ -251,9 +255,19 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
             </div>
           </div>
         </div>
-        <span className="shrink-0 px-2 py-[3px] text-[10px] font-semibold uppercase tracking-[0.06em] bg-atx-bone text-atx-ink/55 border border-atx-ink/30 font-atx-mono">
-          {c.chain}
-        </span>
+        <div className="shrink-0 flex flex-col items-end gap-1.5">
+          <span className="px-2 py-[3px] text-[10px] font-semibold uppercase tracking-[0.06em] bg-atx-bone text-atx-ink/55 border border-atx-ink/30 font-atx-mono">
+            {c.chain}
+          </span>
+          {tradeable && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setSwapOpen(true) }}
+              className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.06em] bg-atx-blue text-white border border-atx-ink font-atx-mono cursor-pointer whitespace-nowrap transition-opacity duration-150 hover:opacity-90"
+            >
+              Trade now →
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Stats ── */}
@@ -413,6 +427,20 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
             </a>
           )}
           </div>{/* end social icons */}
+        </div>
+      )}
+
+      {swapOpen && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <SwapModal
+            open={swapOpen}
+            onClose={() => setSwapOpen(false)}
+            tokenContract={c.token_contract}
+            chainId={chainId}
+            symbol={c.token_symbol}
+            campaignId={c.id}
+            campaignName={c.name}
+          />
         </div>
       )}
     </div>
