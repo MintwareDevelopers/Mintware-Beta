@@ -32,6 +32,7 @@ function RewardsContent() {
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([])
   const [activeTab, setActiveTab] = useState<'explore' | 'mine'>('explore')
   const [currentFilter, setCurrentFilter] = useState('All')
+  const [surface, setSurface] = useState<'all' | 'defi' | 'rwa'>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [userScore, setUserScore]           = useState<number | null>(null)
@@ -109,7 +110,8 @@ function RewardsContent() {
   ]
 
   function getFiltered() {
-    const base = activeTab === 'mine' ? allCampaigns.filter(c => myCampaignIds.has(c.id)) : allCampaigns
+    let base = activeTab === 'mine' ? allCampaigns.filter(c => myCampaignIds.has(c.id)) : allCampaigns
+    if (surface !== 'all') base = base.filter(c => (c.surface ?? 'defi') === surface)
     if (currentFilter === 'Live')     return base.filter(c => c.status === 'live')
     if (currentFilter === 'Upcoming') return base.filter(c => c.status === 'upcoming')
     if (currentFilter === 'Ended')    return base.filter(c => c.status === 'ended')
@@ -226,26 +228,39 @@ function RewardsContent() {
               </Link>
             </div>
 
-            {/* Filters */}
-            <div className="flex gap-2 mb-5 items-center flex-wrap">
-              {filterDefs.map(f => (
-                <button
-                  key={f.key}
-                  className={`text-[12px] font-medium font-atx-mono uppercase tracking-[0.06em] py-1.5 px-4 cursor-pointer inline-flex items-center gap-1.5 border transition-colors duration-150 ${
-                    currentFilter === f.key
-                      ? 'border-atx-ink bg-atx-blue text-white'
-                      : 'border-atx-ink/30 text-atx-ink/60 hover:border-atx-ink hover:text-atx-ink'
-                  }`}
-                  onClick={() => setCurrentFilter(f.key)}
-                >
-                  {f.key}
-                  {f.count !== null && (
-                    <span className={`inline-flex items-center justify-center min-w-4 h-4 px-1 border text-[10px] font-semibold ${currentFilter === f.key ? 'border-white text-white' : 'border-atx-ink text-atx-ink'}`}>
-                      {f.count}
-                    </span>
-                  )}
-                </button>
-              ))}
+            {/* Filters + surface select */}
+            <div className="flex gap-3 mb-5 items-center flex-wrap justify-between">
+              <div className="flex gap-2 items-center flex-wrap">
+                {filterDefs.map(f => (
+                  <button
+                    key={f.key}
+                    className={`text-[12px] font-medium font-atx-mono uppercase tracking-[0.06em] py-1.5 px-4 cursor-pointer inline-flex items-center gap-1.5 border transition-colors duration-150 ${
+                      currentFilter === f.key
+                        ? 'border-atx-ink bg-atx-blue text-white'
+                        : 'border-atx-ink/30 text-atx-ink/60 hover:border-atx-ink hover:text-atx-ink'
+                    }`}
+                    onClick={() => setCurrentFilter(f.key)}
+                  >
+                    {f.key}
+                    {f.count !== null && (
+                      <span className={`inline-flex items-center justify-center min-w-4 h-4 px-1 border text-[10px] font-semibold ${currentFilter === f.key ? 'border-white text-white' : 'border-atx-ink text-atx-ink'}`}>
+                        {f.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+              <div className="inline-flex border border-atx-ink shrink-0">
+                {(['all', 'defi', 'rwa'] as const).map((s, i) => (
+                  <button
+                    key={s}
+                    onClick={() => setSurface(s)}
+                    className={`font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-1.5 cursor-pointer ${i > 0 ? 'border-l border-atx-ink' : ''} ${surface === s ? 'bg-atx-blue text-white' : 'bg-transparent text-atx-ink/55 hover:text-atx-ink'}`}
+                  >
+                    {s === 'all' ? 'All' : s === 'defi' ? 'DeFi' : 'RWA'}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {(loading || mineLoading) ? (

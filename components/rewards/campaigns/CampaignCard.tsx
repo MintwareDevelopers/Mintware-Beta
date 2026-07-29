@@ -27,6 +27,7 @@ export interface Campaign {
   chain_id?: number
   status: 'live' | 'upcoming' | 'ended' | string
   campaign_type?: 'token_pool' | 'points'
+  surface?: 'defi' | 'rwa'
   end_date?: string
   start_date?: string
   pool_usd?: number
