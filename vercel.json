@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/vault-epoch-close",
       "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/cron/rwa-hold-snapshot",
+      "schedule": "0 0 * * 1"
     }
   ]
 }

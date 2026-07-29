@@ -16,6 +16,7 @@
 - `utils.test.ts` — shared utilities
 - `swapHook.test.ts` — swap hook logic + multipliers
 - `merkleBuilder.test.ts` — Merkle tree construction
+- `holdSnapshot.test.ts` — RWA hold-credit math + idempotent writer (campaign-scoped tx_hash, rollback-on-rpc-error)
 
 ## Hardhat Notes
 

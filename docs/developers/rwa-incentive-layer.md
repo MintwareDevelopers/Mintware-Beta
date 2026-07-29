@@ -36,7 +36,7 @@ diagram into a functioning market.
 
 **The pitch to an issuer** is therefore not "we tokenise your asset" (solved, commoditised). It is:
 > *"We solve your cold-start, your distribution, and your secondary liquidity — we bring you
-> sticky, KYC'd, relationship-sourced capital, let you reward it by how good it is rather than how
+> sticky, eligible, relationship-sourced capital, let you reward it by how good it is rather than how
 > much it is, and we make the resulting position tradeable."*
 
 Almost nobody has solved **incentivised primary distribution + secondary liquidity weighted by
@@ -58,13 +58,39 @@ believe they can exit it.
 | **Subscribe / hold** | Duration-matched sticky capital | Hold-to-maturity bonus |
 
 **Why it is cleaner on RWA than DeFi.** In DeFi, volume farming is mostly wash-trading garbage you
-pay for. On the RWA surface the **oracle band constrains price** and **KYC constrains who trades**,
-so incentivised volume is far closer to genuine price discovery than mercenary noise. It is not
-zero-manipulation, but the band + identity gate change its character entirely.
+pay for. On the RWA surface the **oracle band constrains price**, and where a deal's wrapped token
+is permissioned the **token itself constrains who can trade** (on-chain, upstream of us) — so
+incentivised volume is far closer to genuine price discovery than mercenary noise. It is not
+zero-manipulation, but the band + the token's own gate change its character entirely.
 
 ---
 
-## 3. Core architectural decision — the engine is surface-agnostic
+## 3. Core architectural decision — permissionless, surface-agnostic engine
+
+### 3.0 Locked decision: PERMISSIONLESS by construction — zero KYC in Mintware
+
+**Mintware incentivises the *wrapped* token, and never enforces holder eligibility.** Eligibility
+lives entirely in the wrapper, upstream of us:
+
+- **Bearer-style transferable token** (e.g. Backed bTokens) — the issuer KYCs holders at the
+  mint / redeem gateway; the token then trades freely. Mintware sees a plain, transferable ERC-20.
+- **Permissioned token** — the token enforces an on-chain allowlist on every transfer. An
+  ineligible wallet's swap simply reverts on-chain. Still not Mintware's gate — the *token* rejects it.
+
+Either way the gate is **in the asset**, not in our campaign engine. Mintware's surfaces — pool,
+vaults, campaigns, referrals — treat `vRWA` as an ordinary ERC-20 and stay **permissionless**.
+
+**Why this is the whole moat.** Open, permissionless liquidity + rewards on RWA-backed tokens is
+exactly what walled-garden RWA platforms structurally cannot offer. Bolting KYC into the engine
+would rebuild their cage and kill the liquidity thesis (§1). It also collapses our regulatory
+posture to that of *any* DEX + rewards layer over transferable tokens — referral becomes "come
+trade this liquid token," not "solicitation into a private placement."
+
+**Consequence for the build:** there is **no `min_kyc_tier`, no KYC gate, and no credit/claim
+eligibility check** anywhere in the incentive layer. If a deal's token is permissioned, on-chain
+transfer rules do the work for free.
+
+### 3.1 The engine is surface-agnostic
 
 **Locked decision:** we do **not** build a parallel "RWA campaign system." The campaign engine
 becomes **surface-agnostic**, and RWA is a **superset user** of it.
@@ -93,21 +119,9 @@ need essentially *zero* new mechanics to run on RWA.
 
 ## 4. What is genuinely new (the ~20%)
 
-Three net-new pieces. Everything else is config.
+Two net-new pieces. Everything else is config. **There is no KYC piece** — see §3.0.
 
-### 4.1 KYC gate on campaign participation
-
-RWA campaigns must gate participation and credit on KYC tier — mirroring exactly how Points
-Campaigns already gate on `min_score` today.
-
-- Add `min_kyc_tier` to the campaign config (`NONE | BASIC | ACCREDITED`), reusing the
-  `kyc_tier_required` enum already on `vault_deals`.
-- Check KYC-verified status at **credit time** (in the credit hook) *and* at **claim time**
-  (in `/api/claim`), so an un-KYC'd wallet neither accrues nor claims on a gated RWA campaign.
-- KYC status source: reuse the redemption KYC path (`vault_redemptions.kyc_verified`) → promote to
-  a wallet-level `kyc_status` lookup.
-
-### 4.2 Hold-snapshot crediting (the one net-new engine part)
+### 4.1 Hold-snapshot crediting (the one net-new engine part)
 
 DeFi credits per swap **tx**. RWA subscription/hold campaigns credit per **epoch holding**:
 
@@ -121,7 +135,7 @@ points = vRWA_held × duration_held × attribution_multiplier
   it feeds the existing distribution rail; it does not replace it.
 - Snapshot source: vault share balances (on-chain read) + duration since last snapshot.
 
-### 4.3 Duration-matched lock bonus
+### 4.2 Duration-matched lock bonus
 
 Tie the lock tier to the deal's maturity so capital that locks *to/through* the asset's settlement
 earns a bonus multiplier.
@@ -141,7 +155,7 @@ surface unchanged (volume/referral). Only `subscribe` / `hold` are new mechanics
 |---|---|---|
 | `trade` | `trade` (on `vRWA/USDC`) | No — reuse `swap-event` |
 | `bridge` | `subscribe` (primary deposit) | Yes — deposit-event credit |
-| — | `hold` (per-epoch snapshot) | Yes — snapshot cron (§4.2) |
+| — | `hold` (per-epoch snapshot) | Yes — snapshot cron (§4.1) |
 | `referral_trade` | `referral_trade` (buyer acquisition) | No |
 | `referral_bridge` | `referral_subscribe` (placement) | Rename only |
 | LP provision | LP provision (attribution-weighted fee share) | No — `FeeVault` exists |
@@ -153,15 +167,16 @@ surface unchanged (volume/referral). Only `subscribe` / `hold` are new mechanics
 Additive only. No breaking changes to the DeFi campaign path.
 
 ```sql
--- campaigns: surface + RWA gating
+-- campaigns: surface + RWA association (NO KYC column — permissionless by design, §3.0)
 alter table campaigns add column if not exists surface text not null default 'defi';   -- 'defi' | 'rwa'
-alter table campaigns add column if not exists min_kyc_tier text;                        -- NONE|BASIC|ACCREDITED
 alter table campaigns add column if not exists linked_deal_id uuid references vault_deals(id);
 alter table campaigns add column if not exists duration_match_days integer;              -- from deal settle_days
 
 -- new RWA action types are values in activity.action_type; no schema change needed
 --   'subscribe' | 'hold' | 'referral_subscribe'
 ```
+
+Shipped as migration `20260728000001_rwa_incentive_surface.sql` (R0).
 
 Holding snapshots reuse `activity` (`action_type = 'hold'`) — no new custody table. Keep the hot
 path thin; do the holding-weighted allocation math in the snapshot cron, off-chain, and keep the
@@ -170,55 +185,90 @@ use `ctx.json`).
 
 ---
 
-## 7. Compliance-aware reward denomination
+## 7. Reward denomination
 
-This is the part with a real regulatory surface DeFi never had. **Not a blocker — a structuring
-requirement.** The engine must let rewards be **denominated and gated per surface and per
-recipient class**, because the regulatory weight differs sharply:
+Because Mintware incentivises the **wrapped, transferable token** and never enforces holder
+eligibility (§3.0), our regulatory posture is that of any DEX + rewards layer over an ERC-20 — we
+are not distributing, custodying, or gating a security. The eligibility question sits with the
+issuer at the wrapper, not with us.
 
-| Reward flavour | Recipient | Regulatory character | Engine handling |
-|---|---|---|---|
-| Hold / subscribe bonus | Investor | Lightest — rewarding one's own holding | Standard credit |
-| Coupon / yield distribution | Investor | Yield on the instrument | Denominate in yield token |
-| Volume incentive | Trader | Paying for volume *in a security* — has optics | Band + KYC-gated; flag per deal |
-| Referral / placement | Distributor | Heaviest — solicitation / placement-agent territory, varies by jurisdiction | Gate; may require distributor status |
+What remains is a design lever, not a compliance gate: **how a reward is denominated.**
 
-**Locked principle:** rewards to the *investor* for holding are categorically different from
-rewards to a *distributor* for introductions. The engine keeps them as distinct reward classes so
-each can be denominated, gated, disclosed, and (where required) switched off per deal/jurisdiction.
-**Structure with counsel** before enabling the distributor/referral class on any regulated RWA.
+| Reward flavour | Recipient | Denomination |
+|---|---|---|
+| Hold / subscribe bonus | Holder of `vRWA` | Incentive token |
+| Coupon / yield distribution | Holder of `vRWA` | The deal's yield token |
+| Volume incentive | Trader | Incentive token |
+| Referral | Referrer | Incentive token |
+
+The engine keeps reward classes distinct so each can be denominated (incentive token vs. the deal's
+yield token) and switched on/off per campaign. Nothing here gates *who* may participate — the token
+does that, if at all.
+
+> **Note:** this is the payoff of the §3.0 decision. By incentivising only the wrapped token we
+> stayed out of placement-agent / private-placement territory entirely. Should a future product
+> ever touch *primary issuance of a restricted instrument directly* (not the plan), that would
+> reopen a real regulatory surface and belongs with counsel — but the incentive layer described
+> here does not.
 
 ---
 
 ## 8. Build tracks & sequencing
 
-| Track | Work | New mechanics | Depends on |
+| Track | Work | Status | Depends on |
 |---|---|---|---|
-| **R0 — Surface flag** | `campaigns.surface`, point campaigns at `vRWA/USDC` pool | None (config) | migration |
-| **R1 — Volume + referral on RWA** | Volume/referral campaigns on the RWA pool | None | R0, live vRWA pool |
-| **R2 — LP incentive on RWA** | Attribution-weighted LP rewards on RWA pool | None (`FeeVault` exists) | R0 |
-| **R3 — KYC gate** | `min_kyc_tier` credit + claim gating | §4.1 | wallet KYC lookup |
-| **R4 — Hold-snapshot credit** | `subscribe`/`hold` actions + snapshot cron | §4.2 | R3 |
-| **R5 — Duration-match lock** | Lock-to-maturity bonus | §4.3 | R4, `LockLib` |
-| **R6 — Reward-class denomination** | Per-class gating/denomination + disclosure | §7 | counsel |
+| **R0 — Surface flag** | `campaigns.surface` / `linked_deal_id` / `duration_match_days` + create-route | ✅ built | migration `20260728000001` |
+| **R1 — RWA campaign creation** | `/api/vaults/deals` + surface picker + deal-linking in creator | ✅ built | R0 |
+| **R2 — LP incentive on RWA** | Attribution-weighted LP rewards | ✅ by reuse — the existing `vault-epoch-close` cron + `processVaultEpoch` + `FeeVault` cover any vault, including RWA | a real RWA vault on those contracts |
+| **R4 — Hold-snapshot credit** | `hold` action + weekly snapshot cron | ✅ built (16 unit tests) — cron skips `no_vault_token` until a live vault | live `vRWA` vault for real balances |
+| **R5 — Duration-match lock** | Lock-to-maturity bonus | ✅ math built + tested; ⏳ on-chain `lockDays` source still to wire (bonus inert until then) | R4, on-chain lock read |
+| **R6 — Reward denomination** | Incentive vs. yield-token rewards | ✅ by construction — the creator's token selection (Step 1) *is* the denomination lever | — |
 
-R0–R2 are near-free (config over the existing engine) and can ship as soon as a real `vRWA/USDC`
-pool is live. R3–R5 are the genuine build. R6 gates the referral/distributor class behind legal
-structuring.
+> **R3 (KYC gate) is deleted, not deferred** — the incentive layer is permissionless by
+> construction (§3.0). Track numbers R1–R6 are kept stable for continuity; there is no R3.
+
+**What remains before this runs end-to-end in production:** (1) ~~apply migration `20260728000001`~~
+✅ applied; (2) deploy an RWA vault so the hold-snapshot cron reads live balances — see §9 below;
+(3) wire an on-chain `lockDays` source to activate the R5 duration-match bonus.
 
 ---
 
-## 9. Open questions
+## 9. Going live — deploy an RWA vault + wire the hold snapshot
 
-- [ ] Wallet-level KYC lookup: promote `vault_redemptions.kyc_verified` to a `wallet_kyc` table, or
-      resolve per-campaign against the issuer's KYC provider?
+The RWA 4626 vault is **reserve-only in v1** (USDC held in the vault, no V4 pool), so a hold-credit
+deploy needs no hook mining. `DeployRwaVaultDemo.s.sol` is a self-contained one-shot that deploys the
+stack (test USDC → FeeVault → SPV registry → vRWA → RWA vault) and seeds two holders with real share
+balances. Dry-run verified on a local EVM (holders end with 10,000 / 5,000 shares).
+
+```bash
+DEPLOYER_PRIVATE_KEY=0x… pnpm forge:rwa-vault-demo:base-sepolia
+```
+
+It prints a `VAULT` address. Point a seeded deal's vault at it so the cron reads its balances (example
+wires the Sovereign T-Bill deal — swap the id + address):
+
+```sql
+update social_vaults
+set contract_address = '0xYOUR_DEPLOYED_VAULT', chain_id = 84532
+where id = 'bae63093-98f6-44ba-80d0-c5453b64290f';  -- Sovereign T-Bill vault
+```
+
+Then close the loop: create an RWA campaign linked to that deal (creator → surface = RWA → pick the
+deal) with an `actions.hold` rate, have the share-holders join as participants, and the weekly
+`rwa-hold-snapshot` cron credits them. The **vRWA/USDC oracle-banded pool** (for R1 volume/LP on the
+secondary market) is a separate, heavier deploy (oracle hook + CREATE2 mining) — the next milestone.
+
+---
+
+## 10. Open questions
+
 - [ ] Hold-snapshot cadence — align to coupon epoch, or independent weekly snapshot averaged over
       the epoch (smoother, harder to game by end-of-epoch top-ups)?
 - [ ] Reward denomination — incentive token vs. the deal's yield token vs. dual. Per-deal choice?
-- [ ] Does the referral/placement class require the distributor to hold a status attestation
-      on-chain before rewards accrue (compliance gate as a soulbound credential)?
-- [ ] Volume-incentive anti-manipulation — is band + KYC sufficient, or add a per-wallet volume cap
-      and wash-trade heuristics (round-trip detection) before crediting?
+- [ ] Volume-incentive anti-manipulation — is band + token permissioning sufficient, or add a
+      per-wallet volume cap and wash-trade heuristics (round-trip detection) before crediting?
+- [ ] `vRWA` balance source for the hold snapshot — vault share balance on-chain vs. an indexed
+      subgraph entity (cheaper reads, one more moving part)?
 
 ---
 

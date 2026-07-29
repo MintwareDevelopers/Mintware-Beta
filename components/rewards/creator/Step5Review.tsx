@@ -234,6 +234,9 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
           useScoreMultiplier: form.useScoreMultiplier,
           dailyWalletCapUsd: form.dailyWalletCapUsd,
           dailyPoolCapUsd: form.dailyPoolCapUsd,
+          surface: form.surface,
+          linkedDealId: form.linkedDealId,
+          durationMatchDays: form.durationMatchDays,
           token: {
             address: form.token.address,
             symbol: form.token.symbol,

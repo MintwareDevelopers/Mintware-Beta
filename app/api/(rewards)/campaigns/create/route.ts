@@ -73,6 +73,9 @@ export const POST = createHandler(async (req, ctx) => {
       useScoreMultiplier: form.useScoreMultiplier,
       dailyWalletCapUsd: form.dailyWalletCapUsd,
       dailyPoolCapUsd: form.dailyPoolCapUsd,
+      surface: form.surface,
+      linkedDealId: form.linkedDealId,
+      durationMatchDays: form.durationMatchDays,
       token: {
         address: form.token.address,
         symbol: form.token.symbol,
@@ -98,6 +101,33 @@ export const POST = createHandler(async (req, ctx) => {
   const campaignType  = form.type === 'token_reward' ? 'token_pool' : 'points'
   const distributorAddress = DISTRIBUTOR_ADDRESS[form.chainId] ?? ''
   const now           = new Date()
+
+  // ── RWA incentive layer (R0) — surface validation ──────────────────────────
+  // 'rwa' campaigns attach to an APPROVED deal (for discovery + duration-match
+  // default). Permissionless by design: NO KYC gate — eligibility lives in the
+  // wrapped token, not the campaign. DeFi campaigns are unaffected (surface='defi').
+  const surface = form.surface === 'rwa' ? 'rwa' : 'defi'
+  let linkedDealId: string | null = null
+  let durationMatchDays: number | null = null
+
+  if (surface === 'rwa') {
+    if (!form.linkedDealId) {
+      return ctx.json({ error: 'RWA campaigns must link an approved deal' }, 400)
+    }
+    const { data: deal } = await ctx.supabase
+      .from('vault_deals')
+      .select('id, review_status, settle_days')
+      .eq('id', form.linkedDealId)
+      .maybeSingle()
+    if (!deal) {
+      return ctx.json({ error: 'Linked deal not found' }, 400)
+    }
+    if (deal.review_status !== 'approved') {
+      return ctx.json({ error: 'Linked deal is not approved' }, 400)
+    }
+    linkedDealId = deal.id
+    durationMatchDays = form.durationMatchDays ?? deal.settle_days ?? null
+  }
 
   if (!CHAIN_LABELS[form.chainId]) {
     return ctx.json({ error: 'Unsupported campaign chain' }, 400)
@@ -139,6 +169,9 @@ export const POST = createHandler(async (req, ctx) => {
       contract_address:     distributorAddress,
       creator:              wallet.toLowerCase(),
       end_date:             endDate.toISOString(),
+      surface,
+      linked_deal_id:       linkedDealId,
+      duration_match_days:  durationMatchDays,
     })
     .select('id')
     .single()

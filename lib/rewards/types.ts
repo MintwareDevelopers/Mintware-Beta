@@ -6,7 +6,15 @@
 export type CampaignType = 'token_pool' | 'points'
 export type CampaignStatus = 'upcoming' | 'live' | 'ended' | 'paused'
 export type RewardType = 'buyer' | 'referrer' | 'platform_fee'
-export type ActionType = 'bridge' | 'trade' | 'referral_bridge' | 'referral_trade'
+export type ActionType =
+  | 'bridge' | 'trade' | 'referral_bridge' | 'referral_trade'
+  // RWA incentive layer — 'subscribe'/'hold' are net-new mechanics (R4);
+  // 'referral_subscribe' is a rename of referral_bridge for the RWA surface.
+  | 'subscribe' | 'hold' | 'referral_subscribe'
+// RWA incentive layer (see docs/developers/rwa-incentive-layer.md).
+// No KYC type here by design — the incentive layer is permissionless; eligibility
+// lives in the wrapped token / issuer gateway, never in Mintware.
+export type CampaignSurface = 'defi' | 'rwa'
 export type DistributionStatus = 'pending' | 'published' | 'finalized'
 export type PendingRewardStatus = 'locked' | 'claimable' | 'claimed' | 'expired'
 
@@ -73,6 +81,12 @@ export interface Campaign {
   daily_wallet_cap_usd: number | null
   daily_pool_cap_usd: number | null
   use_score_multiplier: boolean
+
+  // RWA incentive layer (R0 surface foundation — docs/developers/rwa-incentive-layer.md).
+  // Optional so DeFi reads/mocks stay valid; DB supplies defaults (surface='defi').
+  surface?: CampaignSurface           // 'defi' (default) | 'rwa'
+  linked_deal_id?: string | null      // vault_deals.id this campaign is attached to (RWA)
+  duration_match_days?: number | null // lock ≥ this earns the duration-match bonus (R5)
 
   created_at: string
   updated_at: string
