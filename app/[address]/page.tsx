@@ -17,6 +17,7 @@ import { useEffect, useState }   from 'react'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
 import { ProfileSocials } from '@/components/rewards/profile/ProfileSocials'
+import { AttestationBadge } from '@/components/rewards/profile/AttestationBadge'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Signal {
@@ -82,7 +83,7 @@ export default function PublicProfile() {
   const [copied,     setCopied]     = useState(false)
 
   const isValid = EVM_RE.test(address)
-  const { meta } = useProfileMeta(isValid ? address : undefined)
+  const { meta, refetch: refetchMeta } = useProfileMeta(isValid ? address : undefined)
 
   useEffect(() => {
     if (!isValid) { setLoading(false); return }
@@ -572,7 +573,10 @@ export default function PublicProfile() {
                     <span className="pp-chip" style={{ color: score.character.color }}>{score.character.label}</span>
                   )}
                 </div>
-                <ProfileSocials socials={meta?.socials} className="mt-2.5" />
+                <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+                  <ProfileSocials socials={meta?.socials} />
+                  <AttestationBadge attestationUid={meta?.attestationUid ?? null} address={address} isOwner={isOwner} onAttested={refetchMeta} />
+                </div>
               </div>
             </div>
 

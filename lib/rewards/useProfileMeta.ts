@@ -3,7 +3,7 @@
 // Profile 2.0 · Slice 3 — client hook to read custom identity from /api/profile.
 // Public (no auth). Returns null while absent/loading; never throws.
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 export interface ProfileSocials {
   twitter:   string | null
@@ -22,15 +22,17 @@ export interface ProfileMeta {
   attestationUid: string | null
 }
 
-export function useProfileMeta(address?: string | null): { meta: ProfileMeta | null; loading: boolean } {
+export function useProfileMeta(address?: string | null): { meta: ProfileMeta | null; loading: boolean; refetch: () => void } {
   const [meta, setMeta] = useState<ProfileMeta | null>(null)
   const [loading, setLoading] = useState(false)
+  const [nonce, setNonce] = useState(0)
+  const refetch = useCallback(() => setNonce((n) => n + 1), [])
 
   useEffect(() => {
     if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) { setMeta(null); return }
     let alive = true
     setLoading(true)
-    fetch(`/api/profile?address=${address}`)
+    fetch(`/api/profile?address=${address}`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!alive) return
@@ -48,7 +50,7 @@ export function useProfileMeta(address?: string | null): { meta: ProfileMeta | n
       .catch(() => {})
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
-  }, [address])
+  }, [address, nonce])
 
-  return { meta, loading }
+  return { meta, loading, refetch }
 }

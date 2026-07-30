@@ -8,6 +8,7 @@ import { recoverMessageAddress } from 'viem'
 import { resolveBasename } from '@/lib/web2/identity'
 import { generateRefCodeForWallet } from '@/lib/rewards/referral-code'
 import { buildProfileUpdateMessage } from '@/lib/web3/signedActionMessages'
+import { cleanProfileField, cleanProfileHandle, cleanProfileUrl, AVATAR_TYPES } from '@/lib/rewards/profileSanitize'
 
 const IDENTITY_COLS =
   'address, display_name, bio, avatar_type, avatar_ref, twitter, farcaster, telegram, website, attestation_uid, ref_code, created_at, updated_at'
@@ -23,6 +24,19 @@ export const GET = createHandler(async (req, ctx) => {
     .select(IDENTITY_COLS)
     .eq('address', address)
     .maybeSingle()
+
+  // EAS badge (Slice 5): surface the wallet's latest AttributionScore attestation
+  // UID. eas_attestations is the source of truth (maintained by /api/eas/attest-
+  // score); fall back to a UID pinned on the profile row. No write needed here.
+  const { data: att } = await ctx.supabase
+    .from('eas_attestations')
+    .select('eas_uid')
+    .eq('wallet', address)
+    .eq('schema_name', 'AttributionScore')
+    .order('attested_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const attestationUid = att?.eas_uid ?? data?.attestation_uid ?? null
 
   const basename = await resolveBasename(address)
 
@@ -40,7 +54,7 @@ export const GET = createHandler(async (req, ctx) => {
       telegram:  data?.telegram ?? null,
       website:   data?.website ?? null,
     },
-    attestationUid: data?.attestation_uid ?? null,
+    attestationUid,
     refCode:        data?.ref_code ?? null,
     createdAt:      data?.created_at ?? null,
     updatedAt:      data?.updated_at ?? null,
@@ -64,26 +78,6 @@ interface UpdatePayload {
 }
 
 const MAX_AUTH_AGE_MS = 15 * 60 * 1000
-const AVATAR_TYPES = ['basename', 'nft', 'upload', 'default']
-
-// Strip ASCII control chars + angle brackets; keep spaces, punctuation, emoji. Trim + cap.
-function clean(v: unknown, max: number): string | null {
-  if (typeof v !== 'string') return null
-  const s = Array.from(v)
-    .filter((c) => c.charCodeAt(0) >= 32 && c !== '<' && c !== '>')
-    .join('')
-    .trim()
-  return s ? s.slice(0, max) : null
-}
-function cleanHandle(v: unknown): string | null {
-  const s = clean(v, 40)
-  return s ? s.replace(/^@+/, '') : null
-}
-function cleanUrl(v: unknown): string | null {
-  const s = clean(v, 200)
-  if (!s) return null
-  return /^https?:\/\//i.test(s) ? s : `https://${s}`
-}
 
 export const POST = createHandler(async (req, ctx) => {
   let body: UpdatePayload
@@ -96,15 +90,15 @@ export const POST = createHandler(async (req, ctx) => {
   if (Math.abs(Date.now() - body.issuedAt) > MAX_AUTH_AGE_MS)
     return ctx.json({ error: 'Authorization expired — please sign again' }, 401)
 
-  // sanitize the same way the signed payload was built
-  const displayName = clean(body.displayName, 40)
-  const bio         = clean(body.bio, 200)
-  const twitter     = cleanHandle(body.twitter)
-  const farcaster   = cleanHandle(body.farcaster)
-  const telegram    = cleanHandle(body.telegram)
-  const website     = cleanUrl(body.website)
-  const avatarType  = AVATAR_TYPES.includes(String(body.avatarType)) ? String(body.avatarType) : null
-  const avatarRef   = clean(body.avatarRef, 300)
+  // sanitize the same way the signed payload was built (shared lib — client + server)
+  const displayName = cleanProfileField(body.displayName, 40)
+  const bio         = cleanProfileField(body.bio, 200)
+  const twitter     = cleanProfileHandle(body.twitter)
+  const farcaster   = cleanProfileHandle(body.farcaster)
+  const telegram    = cleanProfileHandle(body.telegram)
+  const website     = cleanProfileUrl(body.website)
+  const avatarType  = (AVATAR_TYPES as readonly string[]).includes(String(body.avatarType)) ? String(body.avatarType) : null
+  const avatarRef   = cleanProfileField(body.avatarRef, 300)
 
   const expected = buildProfileUpdateMessage({
     wallet: body.wallet, issuedAt: body.issuedAt,

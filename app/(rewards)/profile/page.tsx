@@ -9,6 +9,8 @@ import { computeBadges } from '@/lib/rewards/badges'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
 import { ProfileSocials } from '@/components/rewards/profile/ProfileSocials'
+import { ProfileEditPanel } from '@/components/rewards/profile/ProfileEditPanel'
+import { AttestationBadge } from '@/components/rewards/profile/AttestationBadge'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { ReferralSheet } from '@/components/rewards/referral/ReferralSheet'
 import { InviteTab } from '@/components/rewards/referral/InviteTab'
@@ -37,6 +39,7 @@ function ProfileContent() {
   const [data, setData]           = useState<ScoreResponse | null>(null)
   const [loading, setLoading]     = useState(false)
   const [copied, setCopied]       = useState(false)
+  const [editOpen, setEditOpen]   = useState(false)
 
   const {
     stats: refStats,
@@ -46,7 +49,7 @@ function ProfileContent() {
     isLoading: refLoading,
   } = useReferral(wallet || undefined)
 
-  const { meta } = useProfileMeta(wallet || undefined)
+  const { meta, refetch: refetchMeta } = useProfileMeta(wallet || undefined)
 
   useEffect(() => {
     if (!wallet) return
@@ -88,6 +91,9 @@ function ProfileContent() {
   return (
     <div className="min-h-screen bg-atx-bone font-atx-display text-atx-ink [&_*]:rounded-none">
       <ReferralSheet stats={refStats} trigger={isFirstConnect && !loading && !!data} />
+      {editOpen && wallet && (
+        <ProfileEditPanel wallet={wallet} meta={meta} onClose={() => setEditOpen(false)} onSaved={refetchMeta} />
+      )}
 
       {/* ── BAND 1 · HERO (bone + grid) ── */}
       <div className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
@@ -127,13 +133,23 @@ function ProfileContent() {
                   {earnedBadges.map(b => (
                     <span key={b.id} className="inline-flex items-center gap-[5px] px-2.5 py-[3px] text-[11px] font-semibold border font-atx-mono" style={{ color: b.color, borderColor: b.color }} title={b.desc}>{b.icon} {b.label}</span>
                   ))}
+                  {wallet && (
+                    <AttestationBadge attestationUid={meta?.attestationUid ?? null} address={wallet} isOwner onAttested={refetchMeta} />
+                  )}
                 </div>
                 <ProfileSocials socials={meta?.socials} className="mt-3" />
-                {wallet && (
-                  <Link href={`/${wallet}`} className="inline-flex items-center gap-[5px] text-[11px] font-semibold text-atx-blue no-underline font-atx-mono uppercase tracking-[0.06em] mt-3">
-                    <ChevronRight size={12} />View public profile
-                  </Link>
-                )}
+                <div className="flex items-center gap-4 mt-3 flex-wrap">
+                  {wallet && (
+                    <button onClick={() => setEditOpen(true)} className="inline-flex items-center gap-[5px] text-[11px] font-semibold text-atx-ink no-underline font-atx-mono uppercase tracking-[0.06em] border border-atx-ink/30 px-2.5 py-1.5 bg-atx-bone cursor-pointer hover:border-atx-ink transition-colors">
+                      ✎ Edit profile
+                    </button>
+                  )}
+                  {wallet && (
+                    <Link href={`/${wallet}`} className="inline-flex items-center gap-[5px] text-[11px] font-semibold text-atx-blue no-underline font-atx-mono uppercase tracking-[0.06em]">
+                      <ChevronRight size={12} />View public profile
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
 
