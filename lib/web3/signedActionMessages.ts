@@ -370,3 +370,38 @@ export function buildAgentMwpMessage(input: {
     2,
   )
 }
+
+// Profile 2.0 — owner-only custom identity edit (name, bio, socials, avatar).
+// The wallet signs this exact payload; the server rebuilds it and recovers the
+// signer to confirm the editor owns the row. Null fields must match the route's
+// sanitized values (see app/api/(web2)/profile/route.ts).
+export function buildProfileUpdateMessage(input: {
+  wallet: string
+  issuedAt: number
+  displayName?: string | null
+  bio?: string | null
+  twitter?: string | null
+  farcaster?: string | null
+  telegram?: string | null
+  website?: string | null
+  avatarType?: string | null
+  avatarRef?: string | null
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-profile-update',
+      wallet: normalizeAddress(input.wallet),
+      issuedAt: input.issuedAt,
+      displayName: input.displayName ?? null,
+      bio: input.bio ?? null,
+      twitter: input.twitter ?? null,
+      farcaster: input.farcaster ?? null,
+      telegram: input.telegram ?? null,
+      website: input.website ?? null,
+      avatarType: input.avatarType ?? null,
+      avatarRef: input.avatarRef ?? null,
+    },
+    null,
+    2,
+  )
+}

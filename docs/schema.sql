@@ -49,7 +49,18 @@ CREATE TABLE IF NOT EXISTS wallet_profiles (
   address         text          PRIMARY KEY,
   ref_code        varchar(32)   NOT NULL UNIQUE,
   last_seen_at    timestamptz   NOT NULL DEFAULT now(),
-  created_at      timestamptz   DEFAULT now()
+  created_at      timestamptz   DEFAULT now(),
+  -- Profile 2.0 identity fields (migration 20260729000001_wallet_profile_identity)
+  display_name    varchar(40),
+  bio             varchar(200),
+  avatar_type     text,           -- 'basename' | 'nft' | 'upload' | 'default'
+  avatar_ref      text,
+  twitter         varchar(64),
+  farcaster       varchar(64),
+  telegram        varchar(64),
+  website         varchar(200),
+  attestation_uid text,           -- EAS AttributionScore attestation UID (Base)
+  updated_at      timestamptz   DEFAULT now()
 );
 
 ALTER TABLE wallet_profiles ENABLE ROW LEVEL SECURITY;
