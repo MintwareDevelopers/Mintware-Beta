@@ -11,7 +11,7 @@
 import { useState } from 'react'
 import { useSignMessage } from 'wagmi'
 import { buildProfileUpdateMessage } from '@/lib/web3/signedActionMessages'
-import { cleanProfileField, cleanProfileHandle, cleanProfileUrl } from '@/lib/rewards/profileSanitize'
+import { cleanProfileField, cleanProfileHandle, cleanProfileUrl, cleanProfileImageUrl } from '@/lib/rewards/profileSanitize'
 import type { ProfileMeta } from '@/lib/rewards/useProfileMeta'
 
 const LABEL = 'font-atx-mono uppercase tracking-[0.12em] text-[10px] text-atx-ink/55 mb-1.5 block'
@@ -52,7 +52,7 @@ export function ProfileEditPanel({
         farcaster:   cleanProfileHandle(farcaster),
         telegram:    cleanProfileHandle(telegram),
         website:     cleanProfileUrl(website),
-        avatarRef:   cleanProfileField(avatarUrl, 300),
+        avatarRef:   cleanProfileImageUrl(avatarUrl),
       }
       const avatarType = sanitized.avatarRef ? 'upload' : 'default'
       const authMessage = buildProfileUpdateMessage({ wallet, issuedAt, ...sanitized, avatarType })

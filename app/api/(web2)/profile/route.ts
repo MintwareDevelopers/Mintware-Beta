@@ -8,7 +8,7 @@ import { recoverMessageAddress } from 'viem'
 import { resolveBasename } from '@/lib/web2/identity'
 import { generateRefCodeForWallet } from '@/lib/rewards/referral-code'
 import { buildProfileUpdateMessage } from '@/lib/web3/signedActionMessages'
-import { cleanProfileField, cleanProfileHandle, cleanProfileUrl, AVATAR_TYPES } from '@/lib/rewards/profileSanitize'
+import { cleanProfileField, cleanProfileHandle, cleanProfileUrl, cleanProfileImageUrl, AVATAR_TYPES } from '@/lib/rewards/profileSanitize'
 
 const IDENTITY_COLS =
   'address, display_name, bio, avatar_type, avatar_ref, twitter, farcaster, telegram, website, attestation_uid, ref_code, created_at, updated_at'
@@ -98,7 +98,7 @@ export const POST = createHandler(async (req, ctx) => {
   const telegram    = cleanProfileHandle(body.telegram)
   const website     = cleanProfileUrl(body.website)
   const avatarType  = (AVATAR_TYPES as readonly string[]).includes(String(body.avatarType)) ? String(body.avatarType) : null
-  const avatarRef   = cleanProfileField(body.avatarRef, 300)
+  const avatarRef   = cleanProfileImageUrl(body.avatarRef)
 
   const expected = buildProfileUpdateMessage({
     wallet: body.wallet, issuedAt: body.issuedAt,
