@@ -13,7 +13,6 @@ import Link from 'next/link'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
-const CORAL_INK = '#5a1e12'
 const GRID_BG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 
@@ -40,7 +39,7 @@ const AUDIENCES = [
   },
   {
     tag: 'People', star: 'text-atx-coral', sq: 'bg-atx-coral',
-    tagCls: 'bg-atx-coral',
+    tagCls: 'border-atx-ink bg-atx-coral text-atx-ink',
     h: 'You show up every day. DeFi should reward that.',
     p: 'Every LP position, every vote, every referral — invisible to protocols until now.',
     bullets: ['One score across 100+ chains', 'Public profile per wallet', 'Referral network builds rank'],
@@ -215,7 +214,7 @@ export default function HomePage() {
           <div className="border border-atx-ink bg-atx-bone mt-3">
             <div className="grid grid-cols-2 border-b border-atx-ink font-atx-mono text-[11px] uppercase tracking-[0.12em] text-center">
               <div className="py-3 border-r border-atx-ink text-atx-ink/55">DeFi</div>
-              <div className="py-3 bg-atx-ink text-atx-bone">RWA</div>
+              <div className="py-3 bg-atx-coral text-atx-ink">RWA</div>
             </div>
             <div className="p-4">
               <div className="flex items-baseline justify-between border border-atx-ink px-3.5 py-3.5">
@@ -235,9 +234,9 @@ export default function HomePage() {
               </div>
               <div className="flex items-center justify-between pt-3.5">
                 <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55">Effective APY</span>
-                <span className="font-atx-mono font-bold text-[26px] tracking-tight" style={{ color: CORAL_INK }}>10.4%</span>
+                <span className="font-atx-mono font-bold text-[26px] tracking-tight text-atx-mesquite">10.4%</span>
               </div>
-              <button onClick={() => launchApp('/vaults')} className="w-full mt-3 py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-ink text-atx-bone border border-atx-ink cursor-pointer">
+              <button onClick={() => launchApp('/vaults')} className="w-full mt-3 py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-blue text-white border border-atx-blue cursor-pointer">
                 {isConnected ? 'Open vaults →' : 'Launch app to deposit →'}
               </button>
             </div>
@@ -271,10 +270,7 @@ export default function HomePage() {
               >
                 <div className="flex items-center justify-between mb-[18px]">
                   <Star className={`w-5 h-5 ${a.star}`} />
-                  <span
-                    className={`font-atx-mono text-[10px] uppercase tracking-[0.1em] px-2.5 py-1.5 border ${a.tagCls}`}
-                    style={a.tag === 'People' ? { color: CORAL_INK, borderColor: CORAL_INK } : undefined}
-                  >
+                  <span className={`font-atx-mono text-[10px] uppercase tracking-[0.1em] px-2.5 py-1.5 border ${a.tagCls}`}>
                     {a.tag}
                   </span>
                 </div>
@@ -352,44 +348,44 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 03 — RWA (blue tentpole) */}
-      <section className="border-b border-atx-ink bg-atx-blue text-white">
+      {/* 03 — RWA (soft-blue tonal band) */}
+      <section className="border-b border-atx-ink bg-atx-blue/[0.05] text-atx-ink">
         <div className="mx-auto max-w-[1180px] px-6 py-[56px]">
           <div className="flex items-baseline gap-3.5">
-            <span className="font-atx-mono text-[12px] text-atx-acid">03</span>
-            <span className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-white/70">Real-world yield, no gatekeepers</span>
+            <span className="font-atx-mono text-[12px] text-atx-blue">03</span>
+            <span className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55">Real-world yield, no gatekeepers</span>
           </div>
           <h2 className="font-bold tracking-[-0.03em] text-[clamp(24px,3vw,38px)] leading-[1.05] max-w-[22ch] mt-3.5">
-            Real estate yield, <span className="text-atx-acid">without the $50k door.</span>
+            Real estate yield, <span className="text-atx-blue">without the $50k door.</span>
           </h2>
-          <p className="text-[16px] leading-[1.55] text-white/90 max-w-[58ch] mt-3.5">
+          <p className="text-[16px] leading-[1.55] text-atx-ink/70 max-w-[58ch] mt-3.5">
             Tokenized real-world assets have always been walled off — accreditation checks, six-figure minimums, capital locked behind phone calls. Mintware opens the door: deposit any amount, hold a bearer token, earn automatically.
           </p>
-          <div className="grid grid-cols-4 border border-white/40 mt-8 max-[720px]:grid-cols-1">
+          <div className="grid grid-cols-4 border border-atx-ink bg-atx-bone mt-8 max-[720px]:grid-cols-1">
             {STEPS.map((s, i) => (
-              <div key={s.n} className={`p-[18px] ${i < 3 ? 'border-r border-white/40 max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-white/40' : ''}`}>
-                <div className="font-atx-mono text-[11px] text-atx-acid tracking-[0.08em]">{s.n}</div>
+              <div key={s.n} className={`p-[18px] ${i < 3 ? 'border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink' : ''}`}>
+                <div className="font-atx-mono text-[11px] text-atx-blue tracking-[0.08em]">{s.n}</div>
                 <div className="text-[15px] font-bold mt-2.5 mb-1.5">{s.t}</div>
-                <div className="font-atx-mono text-[10.5px] leading-[1.5] text-white/85">{s.d}</div>
+                <div className="font-atx-mono text-[10.5px] leading-[1.5] text-atx-ink/55">{s.d}</div>
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-2 border border-white/40 mt-4 max-[720px]:grid-cols-1">
-            <div className="p-[18px] border-r border-white/40 max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-white/40">
-              <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] opacity-75 mb-3">Traditional RWA</div>
+          <div className="grid grid-cols-2 border border-atx-ink bg-atx-bone mt-4 max-[720px]:grid-cols-1">
+            <div className="p-[18px] border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink">
+              <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/45 mb-3">Traditional RWA</div>
               {TRAD.map((r, i) => (
-                <div key={r} className={`py-2.5 text-[13px] ${i < TRAD.length - 1 ? 'border-b border-white/20' : ''}`}>{r}</div>
+                <div key={r} className={`py-2.5 text-[13px] text-atx-ink/55 ${i < TRAD.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>{r}</div>
               ))}
             </div>
             <div className="p-[18px]">
-              <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-acid mb-3">✴ Mintware</div>
+              <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-blue mb-3">✴ Mintware</div>
               {MW.map((r, i) => (
-                <div key={r} className={`py-2.5 text-[13px] ${i < MW.length - 1 ? 'border-b border-white/20' : ''}`}>{r}</div>
+                <div key={r} className={`py-2.5 text-[13px] font-medium ${i < MW.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>{r}</div>
               ))}
             </div>
           </div>
           <div className="text-[19px] font-bold leading-[1.3] max-w-[30ch] mt-7 tracking-[-0.01em]">
-            Your real-estate position trades at 3am on a Sunday. <span className="text-atx-acid">Try that with a REIT.</span>
+            Your real-estate position trades at 3am on a Sunday. <span className="text-atx-blue">Try that with a REIT.</span>
           </div>
         </div>
       </section>
