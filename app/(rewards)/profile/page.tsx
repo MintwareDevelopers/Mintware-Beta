@@ -7,6 +7,8 @@ import { useEffect, useState } from 'react'
 import { API } from '@/lib/web2/api'
 import { computeBadges } from '@/lib/rewards/badges'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
+import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
+import { ProfileSocials } from '@/components/rewards/profile/ProfileSocials'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { ReferralSheet } from '@/components/rewards/referral/ReferralSheet'
 import { InviteTab } from '@/components/rewards/referral/InviteTab'
@@ -43,6 +45,8 @@ function ProfileContent() {
     isFirstConnect,
     isLoading: refLoading,
   } = useReferral(wallet || undefined)
+
+  const { meta } = useProfileMeta(wallet || undefined)
 
   useEffect(() => {
     if (!wallet) return
@@ -93,13 +97,17 @@ function ProfileContent() {
           <div className="flex justify-between items-start gap-8 mt-5 flex-wrap">
             {/* identity */}
             <div className="flex gap-[18px] items-center">
-              <div className="w-[76px] h-[76px] bg-atx-bone border border-atx-ink flex items-center justify-center text-[30px] font-bold font-atx-mono shrink-0 relative">
-                {avatarLetter}
-                <span className="absolute -bottom-[9px] -right-[9px] w-[22px] h-[22px] bg-atx-acid border border-atx-ink flex items-center justify-center text-[12px]">✴</span>
+              <div className="w-[76px] h-[76px] bg-atx-bone border border-atx-ink flex items-center justify-center text-[30px] font-bold font-atx-mono shrink-0 relative overflow-hidden">
+                {meta?.avatar?.ref
+                  ? <img src={meta.avatar.ref} alt="" className="w-full h-full object-cover" />
+                  : avatarLetter}
+                <span className="absolute -bottom-[9px] -right-[9px] w-[22px] h-[22px] bg-atx-acid border border-atx-ink flex items-center justify-center text-[12px] z-[1]">✴</span>
               </div>
               <div>
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <WalletDisplay address={wallet} mono className="text-atx-ink text-[24px] font-bold tracking-[-0.02em] font-atx-mono" />
+                  {meta?.displayName
+                    ? <span className="text-atx-ink text-[24px] font-bold tracking-[-0.02em] font-atx-display">{meta.displayName}</span>
+                    : <WalletDisplay address={wallet} mono className="text-atx-ink text-[24px] font-bold tracking-[-0.02em] font-atx-mono" />}
                   {data && (
                     <span className="text-[10px] font-semibold border border-atx-blue text-atx-blue bg-atx-blue/[0.06] px-2.5 py-[3px] tracking-[0.06em] uppercase font-atx-mono">{tier} tier</span>
                   )}
@@ -111,6 +119,7 @@ function ProfileContent() {
                   </button>
                   {data?.walletAge && <span>· {data.walletAge} on-chain</span>}
                 </div>
+                {meta?.bio && <div className="text-[13px] text-atx-ink/70 mt-2.5 max-w-[52ch] leading-[1.45]">{meta.bio}</div>}
                 <div className="flex items-center gap-2 mt-3 flex-wrap">
                   {data?.character && (
                     <span className="border px-2.5 py-[3px] text-[11px] font-atx-mono" style={{ color: data.character.color, borderColor: data.character.color }}>{data.character.icon} {data.character.label}</span>
@@ -119,6 +128,7 @@ function ProfileContent() {
                     <span key={b.id} className="inline-flex items-center gap-[5px] px-2.5 py-[3px] text-[11px] font-semibold border font-atx-mono" style={{ color: b.color, borderColor: b.color }} title={b.desc}>{b.icon} {b.label}</span>
                   ))}
                 </div>
+                <ProfileSocials socials={meta?.socials} className="mt-3" />
                 {wallet && (
                   <Link href={`/${wallet}`} className="inline-flex items-center gap-[5px] text-[11px] font-semibold text-atx-blue no-underline font-atx-mono uppercase tracking-[0.06em] mt-3">
                     <ChevronRight size={12} />View public profile
