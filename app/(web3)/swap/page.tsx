@@ -16,8 +16,9 @@
 //     (the RWA incentive layer is not live in prod).
 // =============================================================================
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { MwNav } from '@/components/web2/MwNav'
@@ -101,47 +102,51 @@ function multForPct(pct: number | null): number | null {
 }
 
 // ─── Swap Page ─────────────────────────────────────────────────────────────────
-export default function SwapPage() {
+function SwapContent() {
   const { address } = useAccount()
   const wallet = address?.toLowerCase() ?? ''
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
   const [campaigns, setCampaigns]       = useState<Campaign[]>([])
-  const [activeId, setActiveId]         = useState<string | null>(null)
   const [participant, setParticipant]   = useState<Participant | null>(null)
   const [swapScore, setSwapScore]       = useState<number | null>(null)
   const [swapTier,  setSwapTier]        = useState<string | null>(null)
   const [swapPct,   setSwapPct]         = useState<number | null>(null)
 
-  // Live campaigns. Seed the active campaign from any arrival context
-  // (?cid= URL param or an existing mw_campaign_id) so the page reflects the
-  // campaign the user came in for; otherwise default to the first live one.
+  // ── The URL's ?cid= is the SINGLE source of truth for the active/credited
+  //    campaign. SwapWidget's useCampaign() reads ?cid= first, so driving
+  //    selection through the URL guarantees the credited campaign always equals
+  //    the visibly-active one (no sessionStorage write-timing race vs the widget
+  //    remount). We never write mw_campaign_id ourselves — useCampaign owns it. ──
+  const urlCid = searchParams.get('cid')
+  const activeId = urlCid && campaigns.some(c => c.id === urlCid) ? urlCid : null
+
+  // Live campaigns
   useEffect(() => {
     fetch(`${API}/campaigns`)
       .then(r => r.json())
       .then(data => {
         if (!Array.isArray(data)) return
-        const live = (data as Campaign[]).filter(c => c.status === 'live')
-        setCampaigns(live)
-        let seed: string | null = null
-        try {
-          const urlCid = new URLSearchParams(window.location.search).get('cid')
-          const stored = sessionStorage.getItem('mw_campaign_id')
-          const wanted = urlCid || stored
-          if (wanted && live.some(c => c.id === wanted)) seed = wanted
-        } catch { /* no-op */ }
-        setActiveId(prev => prev ?? seed ?? live[0]?.id ?? null)
+        setCampaigns((data as Campaign[]).filter(c => c.status === 'live'))
       })
       .catch(() => {})
   }, [])
 
-  // Keep the reward-crediting context (read by useCampaign) in lockstep with the
-  // visibly-active campaign, so what a swap credits always matches the banner +
-  // the preselected token. Cleared on unmount so it can't leak into a later swap.
+  // Once campaigns load, ensure a valid ?cid= is present — default to the first
+  // live campaign — so the displayed/preselected campaign is also the credited
+  // one. Runs once; explicit taps thereafter set ?cid= directly.
+  const didSeed = useRef(false)
   useEffect(() => {
-    if (!activeId) return
-    try { sessionStorage.setItem('mw_campaign_id', activeId) } catch { /* no-op */ }
-  }, [activeId])
-  useEffect(() => () => { try { sessionStorage.removeItem('mw_campaign_id') } catch { /* no-op */ } }, [])
+    if (didSeed.current || !campaigns.length) return
+    if (activeId) { didSeed.current = true; return }  // URL already carries a live cid
+    const first = campaigns[0]?.id
+    if (!first) return
+    didSeed.current = true
+    const p = new URLSearchParams(Array.from(searchParams.entries()))
+    p.set('cid', first)
+    router.replace(`/swap?${p.toString()}`, { scroll: false })
+  }, [campaigns, activeId, router, searchParams])
 
   // Attribution score for the reputation rail
   useEffect(() => {
@@ -167,10 +172,13 @@ export default function SwapPage() {
       .catch(() => setParticipant(null))
   }, [activeCampaign, wallet])
 
-  // Selecting a suggested campaign makes it active; the sync effect above then
-  // updates the crediting context and the widget remounts (key) with its token.
+  // Selecting a suggested campaign = navigate to its ?cid=. useCampaign (URL-first,
+  // reactive to searchParams) then credits it; the widget remounts (key) so its
+  // token preselect re-applies. Displayed and credited stay in lockstep.
   function selectCampaign(c: Campaign) {
-    setActiveId(c.id)
+    const p = new URLSearchParams(Array.from(searchParams.entries()))
+    p.set('cid', c.id)
+    router.replace(`/swap?${p.toString()}`, { scroll: false })
   }
 
   // Preselect for the active campaign (only when it has a tradable token).
@@ -199,9 +207,7 @@ export default function SwapPage() {
   const suggested = campaigns.filter(c => c.token_contract && chainIdOf(c))
 
   return (
-    <MwAuthGuard>
-      <MwNav />
-      <div className="page-swap bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
+    <div className="page-swap bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
 
         {/* ── Editorial hero ── */}
         <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
@@ -267,6 +273,12 @@ export default function SwapPage() {
                 )}
               </div>
             )}
+
+            {/* Compact pre-swap guidance — review the route/fee before the wallet
+                opens, mind the chain, keep native token for gas. */}
+            <div className="border border-atx-ink/20 bg-atx-panel px-4 py-3 font-atx-mono text-[11px] text-atx-ink/55 leading-[1.6]">
+              Review the route and fee before confirming · check you’re on the expected chain · keep some native token for the network fee.
+            </div>
 
             {/* The real swap widget — money-path. Remounts (key) when the
                 selected campaign changes so its token preselect applies. */}
@@ -386,7 +398,25 @@ export default function SwapPage() {
           </aside>
         </div>
       </div>
+  )
+}
+
+export default function SwapPage() {
+  return (
+    <MwAuthGuard>
+      <MwNav />
+      <Suspense fallback={<PageFallback />}>
+        <SwapContent />
+      </Suspense>
     </MwAuthGuard>
+  )
+}
+
+function PageFallback() {
+  return (
+    <div className="page-swap bg-atx-bone min-h-screen font-atx-display text-atx-ink flex items-center justify-center text-atx-ink/55 text-[13px] font-atx-mono uppercase tracking-[0.08em]">
+      Loading swap…
+    </div>
   )
 }
 
