@@ -301,7 +301,7 @@ export default function HomePage() {
             Every swap, every referral, <span className="text-atx-blue">every position — rewarded.</span>
           </h2>
           <p className="text-[16px] leading-[1.55] text-atx-ink/70 max-w-[58ch] mt-3.5">
-            {'Your score isn’t a black box. It’s six signals, and everything you already do on-chain feeds them. Do more, score higher, earn a bigger multiplier — automatically.'}
+            {'Your score isn’t a black box — it’s six signals, and everything you already do on-chain feeds them.'}
           </p>
           <div className="grid [grid-template-columns:0.85fr_1.15fr] gap-[26px] mt-7 items-start max-[720px]:grid-cols-1">
             <div className="border border-atx-ink bg-atx-bone">
@@ -328,7 +328,7 @@ export default function HomePage() {
               </div>
             </div>
             <div>
-              <div className={`${ey} mb-2.5`}>Six signals · everything you do feeds them</div>
+              <div className={`${ey} mb-2.5`}>What feeds your score</div>
               <div className="border-t border-atx-ink/20">
                 {ACTIONS.map((a) => (
                   <div key={a.b} className="flex items-center gap-3.5 py-3.5 border-b border-atx-ink/10">
@@ -359,7 +359,7 @@ export default function HomePage() {
             Real estate yield, <span className="text-atx-blue">without the $50k door.</span>
           </h2>
           <p className="text-[16px] leading-[1.55] text-atx-ink/70 max-w-[58ch] mt-3.5">
-            Tokenized real-world assets have always been walled off — accreditation checks, six-figure minimums, capital locked behind phone calls. Mintware opens the door: deposit any amount, hold a bearer token, earn automatically.
+            Tokenized real-world assets have always been walled off — accreditation checks, six-figure minimums, capital locked behind phone calls. Mintware opens the door:
           </p>
           <div className="grid grid-cols-4 border border-atx-ink bg-atx-bone mt-8 max-[720px]:grid-cols-1">
             {STEPS.map((s, i) => (

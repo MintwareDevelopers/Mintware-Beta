@@ -70,8 +70,6 @@ const SURFACES: Record<Surface, {
     featured: [['Social Blue-Chip', 'ETH / USDC', '11.0%'], ['Degen Emerging', 'ARB / USDC', '18.4%']],
   },
 }
-const TIERS: [string, number][] = [['Bronze', 1.0], ['Silver', 1.25], ['Gold', 1.5]]
-const usd = (n: number) => '$' + Math.round(n).toLocaleString()
 
 // ── VaultsContent ────────────────────────────────────────────────────────────
 function VaultsContent() {
@@ -81,7 +79,6 @@ function VaultsContent() {
   const [filter, setFilter]   = useState<Filter>('All')
   const [useMock, setUseMock] = useState(false)
   const [surface, setSurface] = useState<Surface>('rwa')
-  const [deposit, setDeposit] = useState(10000)
 
   useEffect(() => {
     fetch('/api/vaults')
@@ -157,39 +154,7 @@ function VaultsContent() {
         </div>
       </section>
 
-      {/* ── THE WOW — reputation calculator ── */}
-      <section className="border-b border-atx-ink bg-atx-panel">
-        <div className="max-w-[1100px] mx-auto px-7 py-9 max-[800px]:px-4">
-          <div className="text-[clamp(18px,2.3vw,28px)] font-bold tracking-[-0.5px] leading-[1.15] max-w-[24ch]">
-            Same deposit. Your reputation. <span style={{ color: S.acc }}>Different yield.</span>
-          </div>
-          <div className="flex items-center gap-3 mt-5 max-w-[520px]">
-            <span className={`${ey} whitespace-nowrap`}>Your deposit</span>
-            <input type="range" min={1000} max={500000} step={1000} value={deposit} onChange={e => setDeposit(Number(e.target.value))}
-              className="flex-1 h-2 border border-atx-ink bg-atx-bone appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:h-[18px] [&::-webkit-slider-thumb]:bg-atx-ink [&::-webkit-slider-thumb]:cursor-pointer" />
-            <span className="font-atx-mono text-[18px] font-bold w-[92px] text-right">{usd(deposit)}</span>
-          </div>
-          <div className="grid grid-cols-3 border border-atx-ink mt-6 max-[560px]:grid-cols-1">
-            {TIERS.map(([name, mult], i) => {
-              const amt = deposit * (S.base / 100) * mult
-              const isGold = i === 2
-              return (
-                <div key={name} className={`p-5 ${i < 2 ? 'border-r border-atx-ink max-[560px]:border-r-0 max-[560px]:border-b' : ''}`}
-                  style={isGold ? { background: S.acc, color: S.accInk } : undefined}>
-                  <div className="font-atx-mono text-[11px] uppercase tracking-[0.12em] opacity-70">{name} · {mult.toFixed(2)}×</div>
-                  <div className="font-atx-mono text-[clamp(26px,3vw,34px)] font-bold tracking-[-1px] mt-2.5 tabular-nums">{usd(amt)}</div>
-                  <div className="font-atx-mono text-[10px] uppercase tracking-[0.1em] opacity-60 mt-0.5">per year</div>
-                </div>
-              )
-            })}
-          </div>
-          <div className="font-atx-mono text-[12px] text-atx-mesquite mt-4">
-            <b style={{ color: S.acc }}>↳</b> {usd(deposit * (S.base / 100) * 0.5)} more per year — same deposit, same vault. That gap is your Attribution score, paid.
-          </div>
-        </div>
-      </section>
-
-      {/* ── vault list ── */}
+      {/* ── vault list — the main event, straight after the hero ── */}
       <div className="max-w-[1100px] mx-auto px-7 pt-8 pb-[52px] max-[800px]:px-4">
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
           <div className="flex border border-atx-ink">
@@ -228,71 +193,9 @@ function VaultsContent() {
         )}
       </div>
 
-      {/* ── RWA · why DeFi ── */}
-      <RwaWhyDefi />
-
-      {/* ── educational deep-dive ── */}
+      {/* ── educational deep-dive — the "why", below the vaults ── */}
       <VaultAmplify />
     </div>
-  )
-}
-
-// ── RWA "why DeFi" section ───────────────────────────────────────────────────
-function RwaWhyDefi() {
-  const GAP = [
-    ['Gated.', 'Same accreditation wall, new wrapper — accredited investors only.'],
-    ['Illiquid.', 'Redemption by request, quarterly windows, thin-to-no secondary market.'],
-    ['Siloed.', 'A token that can’t touch the rest of DeFi — no collateral, no composability.'],
-    ['Paper ownership.', 'Still a database entry on someone else’s cap table.'],
-  ]
-  const FIX = [
-    ['Permissionless.', 'Any wallet, any amount. KYC only if you redeem the underlying.', false],
-    ['Liquid.', 'Trade vRWA 24/7 on Uniswap — no phone calls, no lockups.', false],
-    ['Composable.', 'Use vRWA as collateral, in strategies, in other vaults.', false],
-    ['Bearer ownership.', 'A token you actually hold, in your wallet.', false],
-    ['Reputation-weighted yield.', '', true],
-  ]
-  return (
-    <section className="border-b border-atx-ink">
-      <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
-        <div className="flex items-center gap-2.5">
-          <span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />
-          <span className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55">Why real-world assets belong on DeFi</span>
-        </div>
-        <h2 className="font-bold tracking-[-0.02em] text-[clamp(26px,3.6vw,44px)] leading-[1.02] max-w-[20ch] mt-4">
-          Tokenizing was the easy part. <span className="text-atx-blue">DeFi is where RWAs come alive.</span>
-        </h2>
-        <p className="text-[16px] leading-[1.55] text-atx-ink/70 max-w-[62ch] mt-4">
-          Trillions got “tokenized” this cycle — and most of it just sits there: gated, illiquid, and no more useful than the spreadsheet it replaced. Wrapping an asset in a token was never the point. What the token can <i>do</i> is.
-        </p>
-        <div className="grid grid-cols-2 border border-atx-ink mt-8 max-[720px]:grid-cols-1">
-          <div className="p-6 border-r border-atx-ink bg-atx-panel max-[720px]:border-r-0 max-[720px]:border-b">
-            <div className="font-atx-mono text-[12px] uppercase tracking-[0.12em] text-atx-ink/45 mb-4">✕ Tokenized — still stuck</div>
-            {GAP.map(([h, d]) => (
-              <div key={h} className="flex gap-3 items-start py-3 border-b border-atx-ink/10 last:border-b-0">
-                <span className="font-atx-mono font-bold text-atx-ink/35">✕</span>
-                <span className="text-[14px] leading-[1.45]"><b>{h}</b> {d}</span>
-              </div>
-            ))}
-          </div>
-          <div className="p-6">
-            <div className="font-atx-mono text-[12px] uppercase tracking-[0.12em] mb-4 text-atx-blue">✴ On Mintware — unlocked</div>
-            {FIX.map(([h, d, hot]) => (
-              <div key={h as string} className="flex gap-3 items-start py-3 border-b border-atx-ink/10 last:border-b-0">
-                <span className="font-atx-mono font-bold text-atx-blue">✓</span>
-                <span className="text-[14px] leading-[1.45]">
-                  <b>{h}</b> {d}
-                  {hot && <span className="font-atx-mono text-[9px] uppercase tracking-[0.1em] bg-atx-acid border border-atx-ink px-1.5 py-0.5 ml-2 whitespace-nowrap">only on Mintware</span>}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="text-[clamp(19px,2.4vw,28px)] font-bold tracking-[-0.4px] leading-[1.25] max-w-[26ch] mt-9">
-          Real-world assets don’t need a blockchain to exist. <span className="text-atx-blue">They need DeFi to finally move.</span>
-        </div>
-      </div>
-    </section>
   )
 }
 
