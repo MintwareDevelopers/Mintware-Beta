@@ -1,27 +1,43 @@
 // GET /api/vaults/amplify-data
 // Feeds the vault amplification layer (live stats band + reputation leaderboard).
-// Real aggregates come from the subgraph; the leaderboard falls back to the
-// illustrative discovery set until real vaults seed, each row flagged real/example.
+// Stats reflect the social_vaults grid; leaderboard falls back to the illustrative
+// discovery set until real vaults seed, each row flagged real/example.
 // Auth: none (public marketing surface).
 
 import { createHandler } from '@/lib/web2/routeHandler'
 import { getVaultsDiscovery, summarize } from '@/lib/vaults/discovery'
 import { fetchSubgraphVaults, isSubgraphEnabled } from '@/lib/vaults/subgraph'
 
+// Reads live Supabase aggregates + the external subgraph — must run per-request.
+// Without this, Next tries to statically prerender it at build, where the Supabase
+// client can't initialise (no runtime env) and the build fails.
+export const dynamic = 'force-dynamic'
+
 export const GET = createHandler(async (_req, ctx) => {
-  // Real, indexed vaults (empty when the subgraph isn't wired yet).
+  // Seeded vaults live in social_vaults — the same source the /vaults list renders.
+  // The stats band reflects these so it stays in sync with the visible grid.
+  const { data: seeded } = await ctx.supabase
+    .from('social_vaults')
+    .select('tvl_usdc')
+    .neq('surface', 'rwa')
+  const rows = (seeded ?? []) as Array<{ tvl_usdc: number | null }>
+  const seededCount = rows.length
+  const seededTvl = rows.reduce((s, r) => s + (Number(r.tvl_usdc) || 0), 0)
+
+  // Real, indexed vaults from the subgraph (empty when not wired on mainnet yet).
   const real = await fetchSubgraphVaults()
   const realTvl = real.reduce((s, v) => s + v.tvlUsd, 0)
-  const live = isSubgraphEnabled() && real.length > 0 && realTvl > 0
+
+  // Prefer the seeded social_vaults aggregate; fall back to subgraph aggregates.
+  const live = seededCount > 0 ? true : (isSubgraphEnabled() && real.length > 0 && realTvl > 0)
+  const stats = seededCount > 0
+    ? { count: seededCount, tvlUsd: seededTvl, surfaces: 2, live }
+    : { ...summarize(real), live }
 
   // Display leaderboard: real + illustrative, ranked by TVL desc.
   const display = (await getVaultsDiscovery())
     .slice()
     .sort((a, b) => b.tvlUsd - a.tvlUsd)
-
-  // Stats band always reflects REAL indexed vaults (honest — shows 0/— pre-launch).
-  // Illustrative data lives only in the clearly-labelled leaderboard below.
-  const stats = { ...summarize(real), live }
 
   const res = ctx.json({
     live,
