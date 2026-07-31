@@ -406,11 +406,11 @@ export default function HomePage() {
 
       {/* LAUNCH BAND */}
       <section className="border-b border-atx-ink">
-        <div className="mx-auto max-w-[1180px] px-6 py-[34px] flex items-center justify-between flex-wrap gap-4">
-          <div className="text-[24px] font-bold tracking-[-0.01em] max-w-[24ch]">
+        <div className="mx-auto max-w-[1180px] px-6 py-[18px] flex items-center justify-between flex-wrap gap-4">
+          <div className="text-[16px] font-bold tracking-[-0.01em] max-w-[30ch]">
             Your wallet already has a history. Come get paid for it.
           </div>
-          <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-blue bg-atx-blue text-white">
+          <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white">
             {isConnected ? 'Go to the app →' : 'Launch app →'}
           </button>
         </div>
