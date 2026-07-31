@@ -5,6 +5,9 @@ import Link from 'next/link'
 // Current live app sections only — legacy static mockups (/explorer, /for-protocols.html)
 // dropped. Add { href: '/docs', label: 'Docs' } once the docs section ships.
 const FOOTER_LINKS = [
+  { href: '/attribution', label: 'Attribution' },
+  { href: '/defi', label: 'DeFi' },
+  { href: '/rwa', label: 'RWA' },
   { href: '/vaults', label: 'Vaults' },
   { href: '/rewards', label: 'Rewards' },
   { href: '/swap', label: 'Swap' },
