@@ -133,8 +133,7 @@ function LeaderboardContent() {
             REPUTATION, <span className="text-atx-blue">RANKED.</span>
           </h1>
           <p className="text-atx-ink/60 text-[15px] max-w-[62ch] mt-4">
-            Every wallet has a history. This is the board — ranked by Attribution score, campaign points,
-            and the referral trees they&apos;ve grown. One swap enters you.
+            Every wallet has a history. This is the board. One swap enters you.
           </p>
         </div>
         <div className="border-t border-atx-ink grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
@@ -148,26 +147,6 @@ function LeaderboardContent() {
               <div className={`${LABEL} text-[9px] mb-1.5`}>{l}</div>
               <div className={`font-bold text-[15px] tabular-nums ${i === 1 ? 'text-atx-coral' : i === 2 ? 'text-atx-blue' : ''}`}>{v}</div>
               <div className="font-atx-mono text-[10px] text-atx-ink/45 mt-0.5 truncate">{sub}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* How you climb */}
-      <section className="border-b border-atx-ink bg-atx-blue/[0.05] px-7 py-7 max-[560px]:px-4">
-        <span className={`${LABEL} block mb-4`}>How you climb — ranks are earned by contribution</span>
-        <div className="grid grid-cols-3 border border-atx-ink max-[720px]:grid-cols-1">
-          {[
-            { a: 'text-atx-blue', t: 'Attribution', d: 'Your whole on-chain history, scored across six signals — volume, trading, holding, liquidity, governance, sharing. It carries across 100+ chains.' },
-            { a: 'text-atx-coral', t: 'Campaign points', d: 'Earned per contribution — every swap, hold, and referral in a live campaign, multiplied by your Attribution tier.' },
-            { a: 'text-atx-mesquite', t: 'Referral tree', d: 'The wallets you bring on-chain, weighted by how real and active they are. Quality over quantity.' },
-          ].map((c, i) => (
-            <div key={i} className={`p-[16px_18px] ${i < 2 ? 'border-r border-atx-ink/20 max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink/20' : ''}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Star className={`w-4 h-4 ${c.a}`} />
-                <span className="font-bold text-[15px] tracking-tight">{c.t}</span>
-              </div>
-              <p className="text-atx-ink/60 text-[13px] leading-[1.5]">{c.d}</p>
             </div>
           ))}
         </div>
@@ -339,6 +318,26 @@ function LeaderboardContent() {
           <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/40 flex items-center gap-1.5 px-1 mt-6">
             <Star className="w-3 h-3" /> Powered by Attribution
           </div>
+        </div>
+      </section>
+
+      {/* How you climb — the "why", below the board */}
+      <section className="border-t border-atx-ink bg-atx-blue/[0.05] px-7 py-7 max-[560px]:px-4">
+        <span className={`${LABEL} block mb-4`}>How you climb — ranks are earned by contribution</span>
+        <div className="grid grid-cols-3 border border-atx-ink max-[720px]:grid-cols-1">
+          {[
+            { a: 'text-atx-blue', t: 'Attribution', d: 'Your whole on-chain history, scored across six signals — volume, trading, holding, liquidity, governance, sharing. It carries across 100+ chains.' },
+            { a: 'text-atx-coral', t: 'Campaign points', d: 'Earned per contribution — every swap, hold, and referral in a live campaign, multiplied by your Attribution tier.' },
+            { a: 'text-atx-mesquite', t: 'Referral tree', d: 'The wallets you bring on-chain, weighted by how real and active they are. Quality over quantity.' },
+          ].map((c, i) => (
+            <div key={i} className={`p-[16px_18px] ${i < 2 ? 'border-r border-atx-ink/20 max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink/20' : ''}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <Star className={`w-4 h-4 ${c.a}`} />
+                <span className="font-bold text-[15px] tracking-tight">{c.t}</span>
+              </div>
+              <p className="text-atx-ink/60 text-[13px] leading-[1.5]">{c.d}</p>
+            </div>
+          ))}
         </div>
       </section>
     </div>

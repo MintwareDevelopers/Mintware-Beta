@@ -142,7 +142,7 @@ function ReputationYield() {
           n="01"
           label="The wedge · reputation = yield"
           title="Same deposit. Different reputation. Different yield."
-          sub="Everyone else pays LPs by size. Mintware weights your fee share by your on-chain Attribution score — so the exact same deposit earns more the higher your reputation. Your history isn't just a number. It's a multiplier. Drive the model below."
+          sub="Everyone else pays LPs by size. Mintware weights your fee share by reputation — drive the model below."
         />
       </div>
 
@@ -266,7 +266,7 @@ function HowItWorks() {
         n="02"
         label="Deposit once · the vault does the rest"
         title="One deposit. A five-stage V4 hook engine."
-        sub="You provide liquidity once. Every swap that touches the pool runs your capital through a hook stack that protects it, optimizes it, and pays you — automatically."
+        sub="Provide liquidity once. Every swap runs it through a hook stack that protects, optimizes, and pays you — automatically."
       />
       <div className="grid grid-cols-5 max-[900px]:grid-cols-1 border border-atx-ink">
         {FLOW.map((s, i) => (
@@ -303,7 +303,7 @@ function LockTiers() {
         n="03"
         label="The second lever · commitment"
         title="Reputation is who you are. Lock tier is how long you commit."
-        sub="Two independent levers raise the same fee share. Reputation rewards your on-chain history; lock tier rewards time you commit up front. Longer locks earn a higher multiplier — and the early-exit penalty tapers to zero as you approach unlock, so leaving early is never a cliff."
+        sub="The second lever on your fee share: longer locks earn a higher multiplier, and the early-exit penalty tapers to zero as you near unlock."
       />
       <div className="grid grid-cols-4 max-[720px]:grid-cols-2 border border-atx-ink">
         {LOCK_TIERS.map((t, i) => (
@@ -350,7 +350,7 @@ function TrustOnChain() {
         n="04"
         label="Trust · enforced by code, not promises"
         title="You don't have to trust us. Trust the contract."
-        sub="The best vaults in the market moved trust from intermediaries to on-chain enforcement. Mintware is built the same way: the rules that protect your deposit are in the code, verifiable, and can't be quietly changed."
+        sub="The rules that protect your deposit live in the contract — verifiable, and impossible to quietly change."
       />
       <div className="border border-atx-ink">
         {TRUST.map((t, i) => (
@@ -388,7 +388,7 @@ function ReferralLoop() {
           Refer liquidity. Build reputation. Earn more forever.
         </h2>
         <p className="text-white/60 text-[15px] leading-[1.6] mt-4 max-w-[70ch]">
-          Other protocols pay a flat referral bounty. Here, referring an LP feeds your reputation — and reputation is yield. It's the only referral program that pays you twice: once in fees, and again by raising the multiplier on every deposit you'll ever make.
+          Other protocols pay a flat bounty. Here, referring an LP feeds your reputation — so you're paid twice: in fees now, and in a higher multiplier on every future deposit.
         </p>
       </div>
       <div className="grid grid-cols-5 max-[900px]:grid-cols-1">
@@ -442,7 +442,7 @@ function SurfaceSplit() {
         n="06"
         label="Two surfaces · one ERC-4626 base"
         title="Pick your surface. Same reputation engine underneath."
-        sub="DeFi and RWA are different animals — different yield, different risk, different audience. Mintware runs both on one shared vault base, so your Attribution score compounds across everything you touch."
+        sub="Different yield, different risk — one shared vault base, so your reputation compounds across both."
       />
       <div className="grid grid-cols-2 max-[820px]:grid-cols-1 gap-4">
         {cols.map((c) => (

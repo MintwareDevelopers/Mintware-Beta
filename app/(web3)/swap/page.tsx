@@ -387,7 +387,7 @@ function SwapContent() {
                 </div>
                 <p className="text-[13px] text-atx-ink/55 leading-[1.5]">
                   SPV-wrapped real-world assets — T-bills, trade finance, carbon — subscribed at NAV.
-                  Your reputation carries across. Explore the RWA vaults surface.
+                  Explore the RWA vaults surface.
                 </p>
               </Link>
             </div>
