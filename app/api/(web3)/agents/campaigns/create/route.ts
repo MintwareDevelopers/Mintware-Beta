@@ -1,8 +1,11 @@
 // POST /api/agents/campaigns/create
 // Mirrors an already-created on-chain agent volume campaign.
-// Auth: none (campaignId is on-chain verified)
+// Auth: Bearer AI_ATTRIBUTION_ORACLE_SECRET — oracle/server-only. (The handler does NOT verify
+// campaignId on-chain, so this must not be public: attacker-controlled name/target/protocol
+// would otherwise be writable to ai_volume_campaigns. Matches the sibling `record` route.)
 
 import { createHandler } from '@/lib/web2/routeHandler'
+import { AI_ATTRIBUTION_ORACLE_SECRET } from '@/lib/constants'
 
 export const POST = createHandler(async (req, ctx) => {
   let body: { campaignId?: number; protocolAddress?: string; name?: string; targetVolume?: string; durationDays?: number }
@@ -32,4 +35,4 @@ export const POST = createHandler(async (req, ctx) => {
   }
 
   return ctx.json({ ok: true, campaign: data }, 201)
-})
+}, { auth: 'bearer-token', bearerSecret: AI_ATTRIBUTION_ORACLE_SECRET })
