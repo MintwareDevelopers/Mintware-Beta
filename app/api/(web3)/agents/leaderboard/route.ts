@@ -3,7 +3,6 @@
 // GET /api/agents/leaderboard?limit=N — override limit (max 100)
 // =============================================================================
 
-import { NextResponse } from 'next/server'
 import { createHandler } from '@/lib/web2/routeHandler'
 
 export const GET = createHandler(async (req, ctx) => {
@@ -20,8 +19,7 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json({ error: 'failed to load leaderboard' }, 500)
   }
 
-  return NextResponse.json(
-    { leaderboard: data ?? [], total: data?.length ?? 0 },
-    { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' } }
-  )
+  const res = ctx.json({ leaderboard: data ?? [], total: data?.length ?? 0 })
+  res.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=60')
+  return res
 })

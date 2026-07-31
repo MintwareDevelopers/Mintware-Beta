@@ -20,7 +20,6 @@
 //   For Molten's server-side callback, set SWAP_WEBHOOK_SECRET.
 // =============================================================================
 
-import { NextResponse } from 'next/server'
 import { processSwapEvent } from '@/lib/rewards/swapHook'
 import { getServiceClient } from '@/lib/web2/supabase'
 import { attestSwap } from '@/lib/rewards/eas'
@@ -155,7 +154,7 @@ export const POST = createHandler(async (req, ctx) => {
         })
         .catch(err => ctx.log.error('swap-event', 'EAS attestation error', { error: String(err) }))
 
-      return NextResponse.json(result, { status: 200 })
+      return ctx.json(result)
     } catch (err) {
       ctx.log.error('swap-event', 'Unhandled error', { error: String(err) })
       return ctx.json({ error: 'internal error' }, 500)
