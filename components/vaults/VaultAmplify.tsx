@@ -98,7 +98,7 @@ function LiveStatsBand({ data }: { data: AmplifyData | null }) {
     { v: tvl > 0 ? fmtUsd(tvl) : '—', k: 'Total TVL' },
     { v: count > 0 ? String(count) : '—', k: 'Live vaults' },
     { v: '2', k: 'Surfaces (DeFi + RWA)' },
-    { v: '50%', k: 'Fees to LPs' },
+    { v: '70%', k: 'Fees to LPs' },
   ]
 
   return (
