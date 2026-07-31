@@ -1,8 +1,15 @@
 // RWA oracle-pool NAV keeper.
 //
-// Reads the RWA vault's on-chain NAV (ERC-4626 convertToAssets) and posts the
+// Reads the RWA vault's ERC-4626 share price (convertToAssets) and posts the
 // corresponding Q96 appraisal to MintwareOracleHook.setAppraisal, keeping the
-// vRWA/USDC pool's price bands centred on NAV. Called by the weekly cron.
+// vRWA/USDC pool's price bands centred on the vault's accounting. Called weekly.
+//
+// ⚠ NAV source caveat: MintwareRWAVault4626 v1 is RESERVE-ONLY — totalAssets()
+// tracks principal and yield is skimmed to the FeeVault, so convertToAssets is
+// static at PAR. This keeper therefore posts a par heartbeat (which correctly
+// keeps enforcement centred at par for a par-stable wrapper). A live market NAV
+// (premium/discount) would need an off-chain oracle/admin NAV input — a follow-up;
+// when the vault later folds NAV into share price, this keeper tracks it for free.
 //
 // Fully env-gated: if the pool isn't wired up yet, it no-ops with skipped:
 // 'not_configured' (safe to ship before the pool is deployed). Mirrors the
@@ -25,7 +32,6 @@ const VAULT_ABI = parseAbi([
   'function decimals() view returns (uint8)',
   'function convertToAssets(uint256 shares) view returns (uint256)',
 ])
-const ERC20_ABI = parseAbi(['function decimals() view returns (uint8)'])
 const HOOK_ABI = parseAbi([
   'function keeper() view returns (address)',
   'function setAppraisal(bytes32 poolId, uint256 appraisalX96)',
@@ -45,7 +51,8 @@ export interface NavKeeperReport {
 }
 
 function normKey(k: string): Hex {
-  const s = k.startsWith('0x') ? k.slice(2) : k
+  const t = k.trim()
+  const s = t.startsWith('0x') ? t.slice(2) : t
   return `0x${s}` as Hex
 }
 
@@ -70,10 +77,11 @@ export async function runNavAppraisal(): Promise<NavKeeperReport> {
   const account = privateKeyToAccount(normKey(keeperKey))
   const publicClient = createPublicClient({ chain, transport: http(rpc) })
 
-  // Read on-chain NAV + token metadata.
-  const [shareDecimals, vrwaDecimals, onChainKeeper] = await Promise.all([
+  // Read share decimals + the keeper. (vRWA's own decimals is intentionally NOT
+  // used: vRWA mints 1:1 with shares in raw units, so the price is assetsRaw /
+  // sharesRaw — see appraisalX96FromNav.)
+  const [shareDecimals, onChainKeeper] = await Promise.all([
     publicClient.readContract({ address: vaultAddr as Address, abi: VAULT_ABI, functionName: 'decimals' }),
-    publicClient.readContract({ address: vrwaAddr as Address, abi: ERC20_ABI, functionName: 'decimals' }),
     publicClient.readContract({ address: hookAddr as Address, abi: HOOK_ABI, functionName: 'keeper' }),
   ])
 
@@ -85,19 +93,16 @@ export async function runNavAppraisal(): Promise<NavKeeperReport> {
     }
   }
 
-  const oneWholeShare = 10n ** BigInt(shareDecimals)
+  const sharesRaw = 10n ** BigInt(shareDecimals) // 1 whole share = 1 whole vRWA (raw 1:1)
   const navAssetsRaw = await publicClient.readContract({
-    address: vaultAddr as Address, abi: VAULT_ABI, functionName: 'convertToAssets', args: [oneWholeShare],
+    address: vaultAddr as Address, abi: VAULT_ABI, functionName: 'convertToAssets', args: [sharesRaw],
   })
 
-  // currency0 is the lower token address (Uniswap ordering).
+  // currency0 is the lower token address (Uniswap ordering) — matches the deploy
+  // script's `vFirst = address(vrwa) < address(usdc)`.
   const vrwaIsCurrency0 = BigInt(vrwaAddr) < BigInt(usdcAddr)
 
-  const appraisalX96 = appraisalX96FromNav({
-    assetsPerWholeShareRaw: navAssetsRaw,
-    vrwaDecimals: Number(vrwaDecimals),
-    vrwaIsCurrency0,
-  })
+  const appraisalX96 = appraisalX96FromNav({ assetsRaw: navAssetsRaw, sharesRaw, vrwaIsCurrency0 })
 
   const walletClient = createWalletClient({ account, chain, transport: http(rpc) })
   const txHash = await walletClient.writeContract({
@@ -106,6 +111,13 @@ export async function runNavAppraisal(): Promise<NavKeeperReport> {
     functionName: 'setAppraisal',
     args: [poolId as Hex, appraisalX96],
   })
+
+  // Wait for inclusion and confirm it didn't revert (a reverted setAppraisal
+  // would otherwise be reported as success). Matches sweep.ts.
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+  if (receipt.status !== 'success') {
+    throw new Error(`setAppraisal reverted (tx ${txHash})`)
+  }
 
   return {
     configured: true,
