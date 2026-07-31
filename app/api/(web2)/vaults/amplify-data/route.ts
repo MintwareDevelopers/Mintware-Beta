@@ -15,11 +15,10 @@ export const dynamic = 'force-dynamic'
 
 export const GET = createHandler(async (_req, ctx) => {
   // Seeded vaults live in social_vaults — the same source the /vaults list renders.
-  // The stats band reflects these so it stays in sync with the visible grid.
+  // The stats band reflects the whole platform (both surfaces), in sync with the grid.
   const { data: seeded } = await ctx.supabase
     .from('social_vaults')
     .select('tvl_usdc')
-    .neq('surface', 'rwa')
   const rows = (seeded ?? []) as Array<{ tvl_usdc: number | null }>
   const seededCount = rows.length
   const seededTvl = rows.reduce((s, r) => s + (Number(r.tvl_usdc) || 0), 0)

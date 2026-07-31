@@ -1,17 +1,23 @@
-// GET /api/vaults               — list all vaults (public)
-// GET /api/vaults?status=active — filter by status
+// GET /api/vaults                — DeFi vault list (default, back-compat)
+// GET /api/vaults?status=active  — filter by status
+// GET /api/vaults?surface=all    — both surfaces (DeFi + RWA), each row carries `surface`
+// GET /api/vaults?surface=rwa    — RWA vaults only
 // Auth: none
 
 import { createHandler } from '@/lib/web2/routeHandler'
 
 export const GET = createHandler(async (req, ctx) => {
-  const status = req.nextUrl.searchParams.get('status')
+  const status  = req.nextUrl.searchParams.get('status')
+  const surface = req.nextUrl.searchParams.get('surface')  // 'all' | 'defi' | 'rwa' | null
 
   let q = ctx.supabase
     .from('social_vaults')
     .select(`*, current_epoch:vault_epochs(id, epoch_number, total_pool, bonus_pool, status, opened_at, closed_at, deadline)`)
-    .neq('surface', 'rwa') // DeFi vault list only — RWA vaults render via their deal pages
     .order('created_at', { ascending: false })
+
+  // Surface scope: 'all' → both; 'rwa' → RWA only; default/'defi' → DeFi only (back-compat).
+  if (surface === 'rwa') q = q.eq('surface', 'rwa')
+  else if (surface !== 'all') q = q.neq('surface', 'rwa')
 
   if (status) q = q.eq('status', status)
 
