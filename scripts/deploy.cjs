@@ -80,8 +80,9 @@ async function main() {
   console.log('Deploying MintwareDistributor...')
   const Distributor = await ethers.getContractFactory('MintwareDistributor')
 
-  // Constructor: (initialOwner, initialOracleSigner)
-  const distributor = await Distributor.deploy(ownerAddress, oracleAddress)
+  // Constructor (v2): (initialOracleSigner, initialOwner) — see MintwareDistributor.sol:254.
+  // Order matters: arg1 becomes oracleSigner, arg2 becomes the Ownable owner.
+  const distributor = await Distributor.deploy(oracleAddress, ownerAddress)
   await distributor.waitForDeployment()
 
   const contractAddress = await distributor.getAddress()
@@ -128,7 +129,7 @@ async function main() {
   try {
     await run('verify:verify', {
       address:              contractAddress,
-      constructorArguments: [ownerAddress, oracleAddress],
+      constructorArguments: [oracleAddress, ownerAddress],
     })
     console.log(`✓ Verified: ${getExplorerUrl(network.name, contractAddress)}`)
   } catch (err) {
