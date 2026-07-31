@@ -81,7 +81,7 @@ function VaultsContent() {
   const [surface, setSurface] = useState<Surface>('rwa')
 
   useEffect(() => {
-    fetch('/api/vaults')
+    fetch('/api/vaults?surface=all')
       .then(r => r.json())
       .then((data: SocialVault[]) => {
         if (!Array.isArray(data) || data.length === 0) { setVaults(MOCK_VAULTS); setUseMock(true) }
@@ -97,7 +97,10 @@ function VaultsContent() {
     if (f === 'Closed') return 'closed'
     return undefined
   }
-  const filtered = filter === 'All' ? vaults : vaults.filter(v => v.status === statusFromFilter(filter))
+  // Show only the selected surface's vaults; then apply the status filter within it.
+  const filtered = vaults
+    .filter(v => (v.surface ?? 'defi') === surface)
+    .filter(v => filter === 'All' || v.status === statusFromFilter(filter))
 
   const S = SURFACES[surface]
   const ey = 'font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55'
@@ -184,7 +187,7 @@ function VaultsContent() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-[60px] px-5 text-atx-ink/55 font-atx-display text-[14px]">
             <div className="flex justify-center mb-3"><Star className="w-8 h-8 text-atx-coral" /></div>
-            <div>No {filter !== 'All' ? filter.toLowerCase() + ' ' : ''}vaults yet.</div>
+            <div>No {surface === 'rwa' ? 'RWA' : 'DeFi'} {filter !== 'All' ? filter.toLowerCase() + ' ' : ''}vaults yet.</div>
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-[680px]:grid-cols-1">
