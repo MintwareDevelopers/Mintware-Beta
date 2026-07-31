@@ -9,22 +9,31 @@
 | 3 | LI.FI quote proxy | ✅ `POST /api/swap/quote` — API key server-only, fee server-injected |
 | 4 | On-chain tx verification | ✅ `verifySwapTx()` in `swap-event/route.ts` |
 | 5 | Fee enforcement in calldata | ✅ Treasury must appear in `tx.input` |
-| 6 | Rate limiting | ✅ `middleware.ts` — sliding window per IP |
+| 6 | Rate limiting | ⚠️ Declarative `createHandler` `rateLimit` (Upstash). **Fails OPEN — `UPSTASH_REDIS_REST_URL`/`_TOKEN` unset in prod → limits currently INACTIVE.** Old `middleware.ts` limiter removed in 2026-04-07 route-handler migration (no `middleware.ts` exists). |
 | 7 | Referral time-gate | ✅ `POST /api/referral/apply` — referrer ≥ 24h old |
 | 8 | sessionStorage for ref sheet | ✅ not localStorage |
 | 9 | Server component migration | ⏸ Phase 2 |
 | 10 | Bot farming / Sybil resistance | ⏸ Campaign hardening sprint |
 
-## Rate Limits (`middleware.ts`)
+## Rate Limits (`createHandler` `rateLimit` option)
 
-| Route | Method | Limit |
+Rate limiting is declared per-route via the `createHandler` factory's `rateLimit: { max, windowMs }`
+option (`lib/web2/routeHandler.ts`), keyed by wallet address (signed-message routes) or IP,
+using an Upstash Redis sliding window.
+
+⚠️ **Currently INACTIVE in production.** `createHandler` **fails open** when
+`UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` are unset — and they are unset in Vercel.
+Set both to activate. There is **no `middleware.ts`** — the old in-memory limiter was removed in
+the 2026-04-07 route-handler migration.
+
+Representative declared limits (advisory until Upstash is set):
+
+| Route | Key | Limit |
 |---|---|---|
-| `POST /api/campaigns/swap-event` | POST | 10 req/min per IP |
-| `POST /api/campaigns/join` | POST | 5 req/min per IP |
-| `POST /api/swap/quote` | POST | 20 req/min per IP |
-| `POST /api/claim` | POST | 10 req/min per address + 30 req/min per IP |
-
-Note: In-memory Map per serverless instance — sufficient vs simple bots. Upgrade to `@upstash/ratelimit` for cross-instance limiting when needed.
+| `POST /api/campaigns/swap-event` | IP | 10 req/min |
+| `POST /api/campaigns/join` | IP | 5 req/min |
+| `POST /api/swap/quote` | IP | 20 req/min |
+| `POST /api/claim` | address + IP | 10/min + 30/min |
 
 ## LI.FI Quote Proxy
 
