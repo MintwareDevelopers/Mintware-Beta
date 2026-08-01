@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useChainId, useWalletClient, usePublicClient } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { executeSwap as executeLifi } from '@/lib/web2/providers/lifi'
+import { executeSwap as executeMwInternal, type MwInternalQuote } from '@/lib/web2/providers/mwInternal'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
 import type { Quote } from './useQuote'
 import type { Token } from '@/config/tokens'
@@ -63,15 +64,28 @@ export function useSwap(): SwapState {
     setStatus('swapping')
 
     try {
-      // LI.FI — quote contains the signed transaction envelope from the aggregator
-      const lifiQuote = args.quote as LifiQuote
-      await publicClient.call({
-        account: walletClient.account.address,
-        to:      lifiQuote._txReq.to as `0x${string}`,
-        data:    lifiQuote._txReq.data as `0x${string}`,
-        value:   BigInt(lifiQuote._txReq.value ?? '0x0'),
-      })
-      const hash: `0x${string}` = await executeLifi(lifiQuote, walletClient)
+      let hash: `0x${string}`
+
+      // MW internal route — selected per-quote (not per-chain) when the meta-router
+      // picked a Mintware pool. Only MwInternalQuote carries `provider`.
+      if ((args.quote as { provider?: string }).provider === 'mw-internal') {
+        hash = await executeMwInternal(
+          args.quote as MwInternalQuote,
+          walletClient,
+          publicClient,
+          { campaignId: args.campaignId, referrer: args.referrer },
+        )
+      } else {
+        // LI.FI — quote contains the signed transaction envelope from the aggregator
+        const lifiQuote = args.quote as LifiQuote
+        await publicClient.call({
+          account: walletClient.account.address,
+          to:      lifiQuote._txReq.to as `0x${string}`,
+          data:    lifiQuote._txReq.data as `0x${string}`,
+          value:   BigInt(lifiQuote._txReq.value ?? '0x0'),
+        })
+        hash = await executeLifi(lifiQuote, walletClient)
+      }
 
       setTxHash(hash)
       setStatus('success')

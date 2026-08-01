@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from 'react'
 import { useChainId } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { getQuote as getLifiQuote } from '@/lib/web2/providers/lifi'
+import { fetchBestRoute, type MwInternalQuote } from '@/lib/web2/providers/mwInternal'
 import type { Token } from '@/config/tokens'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
 
-export type Quote = LifiQuote
+export type Quote = LifiQuote | MwInternalQuote
 
 interface QuoteState {
   quote: Quote | null
@@ -89,7 +90,7 @@ export function useQuote(params: UseQuoteParams): QuoteState {
         // Convert decimal amount to wei
         const sellAmountWei = toWei(sellAmount, sellToken.decimals)
 
-        const quote: Quote = await getLifiQuote({
+        const lifiQuote = await getLifiQuote({
           chainId,
           sellToken:  sellToken.address,
           buyToken:   buyToken.address,
@@ -99,6 +100,26 @@ export function useQuote(params: UseQuoteParams): QuoteState {
           campaignId: campaignId ?? undefined,
           referrer:   referrer   ?? undefined,
         })
+        let quote: Quote = lifiQuote
+
+        // ── MW meta-router augmentation (flag-gated, best-effort) ──────────
+        // Ask whether a Mintware V4 pool beats LI.FI for this pair. Any failure
+        // or non-internal winner leaves the LI.FI quote untouched. Inert until
+        // the router is deployed + a pool is listed. See lib/web2/router.
+        try {
+          const internal = await fetchBestRoute({
+            chainId,
+            tokenIn:          sellToken.address,
+            tokenOut:         buyToken.address,
+            amountInWei:      sellAmountWei,
+            buyTokenDecimals: buyToken.decimals,
+            lifiBuyAmount:    lifiQuote.buyAmount,
+            lifiGasCostUsd:   lifiQuote.gasCostUSD ? Number(lifiQuote.gasCostUSD) : null,
+            fromAmountUsd:    lifiQuote.fromAmountUSD ? Number(lifiQuote.fromAmountUSD) : null,
+            signal:           abortRef.current?.signal,
+          })
+          if (internal) quote = internal
+        } catch { /* keep LI.FI */ }
 
         const buyAmountDecimal = fromWei(quote.buyAmount, buyToken.decimals)
 
