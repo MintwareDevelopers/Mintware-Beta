@@ -5,6 +5,7 @@ import { useChainId, useWalletClient, usePublicClient } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { executeSwap as executeLifi } from '@/lib/web2/providers/lifi'
 import { executeSwap as executeMolten, isMoltenReady } from '@/lib/web2/providers/molten'
+import { executeSwap as executeMwInternal, type MwInternalQuote } from '@/lib/web2/providers/mwInternal'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
 import type { Quote } from './useQuote'
 import type { Token } from '@/config/tokens'
@@ -66,7 +67,16 @@ export function useSwap(): SwapState {
     try {
       let hash: `0x${string}`
 
-      if (chainConfig.swapProvider === 'lifi') {
+      // MW internal route — selected per-quote (not per-chain) when the meta-router
+      // picked a Mintware pool. Only MwInternalQuote carries `provider`.
+      if ((args.quote as { provider?: string }).provider === 'mw-internal') {
+        hash = await executeMwInternal(
+          args.quote as MwInternalQuote,
+          walletClient,
+          publicClient,
+          { campaignId: args.campaignId, referrer: args.referrer },
+        )
+      } else if (chainConfig.swapProvider === 'lifi') {
         // LI.FI — quote contains the signed transaction envelope from the aggregator
         const lifiQuote = args.quote as LifiQuote
         await publicClient.call({

@@ -112,6 +112,18 @@ const LIFI_ROUTERS: ReadonlySet<string> = new Set([
   '0xe592427a0aece92de3edee1f18e0157c05861564', // Uniswap V3 SwapRouter (LI.FI DEX step)
 ])
 
+// Mintware internal routers (MWRouter). Internal swaps route here instead of a
+// LI.FI router. MWRouter skims the protocol fee to treasury ON-CHAIN by
+// construction, so an MWRouter tx is intrinsically fee-paying — recognizing the
+// router address IS the fee proof (the treasury need not appear in calldata).
+// Comma-separated per-chain deploys. See docs/developers/phase3-router-design.md §7.
+const MW_ROUTERS: ReadonlySet<string> = new Set(
+  (process.env.MW_ROUTER_ADDRESSES ?? '')
+    .split(',')
+    .map(a => a.trim().toLowerCase())
+    .filter(a => a.startsWith('0x') && a.length === 42),
+)
+
 async function verifySwapTx(
   txHash: string,
   wallet: string,
@@ -148,18 +160,23 @@ async function verifySwapTx(
       return { ok: false, skip_reason: 'wallet_mismatch' }
     }
 
-    // 2b. tx.to must be a known LI.FI router
-    if (tx.to && !LIFI_ROUTERS.has(tx.to.toLowerCase())) {
+    const to = tx.to?.toLowerCase()
+    const isMwRouter = !!to && MW_ROUTERS.has(to)
+
+    // 2b. tx.to must be a known LI.FI router OR a Mintware internal router
+    if (to && !isMwRouter && !LIFI_ROUTERS.has(to)) {
       console.warn(
-        `[swapHook] verifySwapTx: tx.to=${tx.to} is not a known LI.FI router for tx ${txHash} ` +
+        `[swapHook] verifySwapTx: tx.to=${tx.to} is not a known LI.FI/MW router for tx ${txHash} ` +
         `(chain=${chain}) — reward denied (router_mismatch)`
       )
       return { ok: false, skip_reason: 'router_mismatch' }
     }
 
-    // 3. Treasury address must appear in calldata (fee enforcement)
-    //    Only enforced when MINTWARE_TREASURY_ADDRESS is configured.
-    if (treasuryAddress) {
+    // 3. Fee enforcement. LI.FI encodes the treasury referrer in calldata, so we
+    //    grep for it. MWRouter pays the fee to treasury on-chain by construction,
+    //    so treasury need not appear in the router-call calldata — recognizing the
+    //    router address (2b) IS the fee proof. Skip the calldata check for MW routers.
+    if (treasuryAddress && !isMwRouter) {
       const input = (tx.input ?? '').toLowerCase()
       if (!input.includes(treasuryAddress) && !input.includes(treasuryAddressPad)) {
         console.warn(

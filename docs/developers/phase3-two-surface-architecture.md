@@ -57,7 +57,7 @@ Full analysis: [[spec_v1_direction]] (memory). Three buckets:
 ### 🔴 Net-new
 - **Entire RWA surface** — `vRWA`, SPV/KYC registries, oracle price bands, async redemption, reserve ratios
 - **On-chain soulbound Attribution token** (mirror of off-chain score)
-- **On-chain Router** — routing is via LI.FI proxy today
+- **On-chain Router** — routing is via LI.FI proxy today. Design: [`phase3-router-design.md`](phase3-router-design.md) (best-execution meta-router: MW pools for listed assets, LI.FI fallback; prerequisite for RWA tradability)
 - **Chainlink Data Streams / appraisal feed** — Pyth (DeFi) + CoinGecko today
 
 **Stack note:** we are *ahead* of the spec — Next 16 (spec: 14), Solidity 0.8.26 (spec: 0.8.25), wagmi 3 / viem 2. No Safe multisig deploy yet.

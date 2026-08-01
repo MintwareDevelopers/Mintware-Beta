@@ -6,7 +6,7 @@
 |---|---|---|---|
 | Contract tests | Hardhat/Mocha | 72/72 | `pnpm hardhat:test` |
 | Unit tests | Vitest | 147/147 | `pnpm test` |
-| Contract tests (Phase 2) | Forge | 36/36 | `pnpm forge:test` |
+| Contract tests (V4/Phase 2+3) | Forge | 195/195 | `pnpm forge:test` |
 | All | — | — | `pnpm test:all` |
 
 ## Vitest Suites (`pnpm test`)
@@ -30,7 +30,11 @@
 
 - Binary: `~/.foundry/bin/forge`
 - Add to PATH: `export PATH="$HOME/.foundry/bin:$PATH"`
-- Tests in `contracts-v4/test/` — currently stubbed (Phase 2 T1 work)
+- Tests in `contracts-v4/test/` — real (no longer stubbed): full V4 stack against a live `PoolManager`
+  (`Integration.t.sol` is the reference harness — real pool seed/deposit/swap; mirror it for new swap tests)
+- `MWRouter.t.sol` — internal swap router: exact fee accounting, best-exec floor (net of hook capture +
+  router fee), guards, admin cap, and the two-stream proof (router fee to treasury coexists with the hook's
+  MEV capture to FeeVault on one swap). See [[mw_router]].
 - `contracts-v4/out/` gitignored
 
 ## Key Invariants to Test

@@ -5,11 +5,12 @@ import { useChainId } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { getQuote as getLifiQuote } from '@/lib/web2/providers/lifi'
 import { getQuote as getMoltenQuote, isMoltenReady } from '@/lib/web2/providers/molten'
+import { fetchBestRoute, type MwInternalQuote } from '@/lib/web2/providers/mwInternal'
 import type { Token } from '@/config/tokens'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
 import type { MoltenQuote } from '@/lib/web2/providers/molten'
 
-export type Quote = LifiQuote | MoltenQuote
+export type Quote = LifiQuote | MoltenQuote | MwInternalQuote
 
 interface QuoteState {
   quote: Quote | null
@@ -94,7 +95,7 @@ export function useQuote(params: UseQuoteParams): QuoteState {
         let quote: Quote
 
         if (chainConfig.swapProvider === 'lifi') {
-          quote = await getLifiQuote({
+          const lifiQuote = await getLifiQuote({
             chainId,
             sellToken:  sellToken.address,
             buyToken:   buyToken.address,
@@ -104,6 +105,26 @@ export function useQuote(params: UseQuoteParams): QuoteState {
             campaignId: campaignId ?? undefined,
             referrer:   referrer   ?? undefined,
           })
+          quote = lifiQuote
+
+          // ── MW meta-router augmentation (flag-gated, best-effort) ──────────
+          // Ask whether a Mintware V4 pool beats LI.FI for this pair. Any failure
+          // or non-internal winner leaves the LI.FI quote untouched. Inert until
+          // the router is deployed + a pool is listed. See lib/web2/router.
+          try {
+            const internal = await fetchBestRoute({
+              chainId,
+              tokenIn:          sellToken.address,
+              tokenOut:         buyToken.address,
+              amountInWei:      sellAmountWei,
+              buyTokenDecimals: buyToken.decimals,
+              lifiBuyAmount:    lifiQuote.buyAmount,
+              lifiGasCostUsd:   lifiQuote.gasCostUSD ? Number(lifiQuote.gasCostUSD) : null,
+              fromAmountUsd:    lifiQuote.fromAmountUSD ? Number(lifiQuote.fromAmountUSD) : null,
+              signal:           abortRef.current?.signal,
+            })
+            if (internal) quote = internal
+          } catch { /* keep LI.FI */ }
         } else {
           // Molten (Core chain)
           if (!isMoltenReady()) {
