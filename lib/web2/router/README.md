@@ -7,8 +7,8 @@ Full design: [`docs/developers/phase3-router-design.md`](../../../docs/developer
 
 ## What this module is
 
-The **off-chain decision brain**. Pure, dependency-injected, fully tested (62 tests). It decides
-*which venue wins*; it does not execute swaps.
+The **off-chain decision brain**. Pure, dependency-injected, fully tested. It decides *which venue
+wins*; execution happens in `MWRouter.sol` (on-chain) via `lib/web2/providers/mwInternal.ts`.
 
 ```
 resolveSwapRoute()                 ← orchestrator (index.ts)
@@ -18,18 +18,19 @@ resolveSwapRoute()                 ← orchestrator (index.ts)
   └─ pickBest()                    ← SAFETY-CRITICAL comparator (pickBest.ts)
 ```
 
-## Status — Slice 1 (this module): COMPLETE ✅
+## Status — BUILT ✅ (shipped behind a feature flag)
 
-Built + tested: fee math, best-execution comparator, listing seam, internal-quote normalization,
-orchestrator, LI.FI adapter. **Inert by default** — the live LI.FI swap path is untouched:
+The full router is implemented and tested end-to-end — engine, on-chain `MWRouter.sol`, and live wiring.
+Verified: Vitest 273/273, Forge 195/195, changed files typecheck clean.
 
-- `NEXT_PUBLIC_MW_ROUTER_ENABLED` is unset → `resolveSwapRoute` returns LI.FI immediately.
-- The pool registry is empty (`EMPTY_REGISTRY`) and there is no on-chain reader → even if the flag
-  were on today, every pair resolves to LI.FI.
+It ships **inert by default** so the existing swap path is untouched until rollout:
 
-## Status — Slice 2 (make it live): CODE-COMPLETE ✅ (pending deploy)
+- `NEXT_PUBLIC_MW_ROUTER_ENABLED` unset → `resolveSwapRoute` returns LI.FI immediately.
+- The `router_pools` registry is empty until seeded → every pair resolves to LI.FI even if the flag is on.
 
-All four pieces are built, tested where testable, and **flag-gated inert** until deployed:
+### The stack
+
+All pieces are built and tested where testable:
 
 1. **`MWRouter.sol`** — ✅ `contracts-v4/src/MWRouter.sol` + `MWRouter.t.sol` (14 forge tests, suite 195/195).
    V4 exact-input swap + router-fee skim to treasury; `amountOutMinimum` net of hook capture AND router fee;

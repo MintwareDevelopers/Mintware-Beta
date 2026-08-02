@@ -6,26 +6,24 @@
 **Created:** 2026-08-01
 **Owner:** _TBD_
 
-> **▶ Build status (2026-08-01):**
-> **Slice 1 — off-chain decision engine — COMPLETE ✅** (`lib/web2/router/`, 62 tests, see that dir's README).
-> Fee math, best-execution comparator, listing seam, internal-quote normalization, orchestrator, LI.FI
-> adapter — all built and **inert by default** (`NEXT_PUBLIC_MW_ROUTER_ENABLED` unset → pure LI.FI; empty
-> pool registry + no on-chain reader → nothing to route to yet). The **live LI.FI swap path is untouched.**
-> **Slice 2 — CODE-COMPLETE ✅ (pending deploy):** all four pieces built + flag-gated inert.
-> (1) `MWRouter.sol` (14 forge tests, suite 195/195; §8) + `DeployMWRouter.s.sol`; (2) `QuoterReader`
-> (`lib/web2/router/quoterReader.ts`, V4Quoter via viem, unit-tested); (3) `PoolRegistry`
-> (`registryFromFetcher` over the `router_pools` table, migration `20260801000001`); (4) wiring — server
-> route `app/api/(web2)/swap/best-route`, client provider `lib/web2/providers/mwInternal.ts`, `useQuote`
-> augmentation, `useSwap` `'mw-internal'` branch, and `verifySwapTx` `MW_ROUTER_ADDRESSES` allowlist.
-> **Remaining is operational only:** deploy a V4Quoter + `MWRouter`, seed a `router_pools` row, set env +
-> `NEXT_PUBLIC_MW_ROUTER_ENABLED=true`. Turnkey checklist in `lib/web2/router/README.md`.
+> **▶ Status: BUILT ✅ (2026-08-01) — shipped behind a feature flag for staged rollout.**
+> The full stack is implemented and tested: the off-chain decision engine (`lib/web2/router/` — fee math,
+> best-execution comparator, listing registry, V4 quoter reader, orchestrator), the on-chain `MWRouter.sol`
+> (+ `DeployMWRouter.s.sol`), and the live wiring — server meta-router `app/api/(web2)/swap/best-route`,
+> client provider `lib/web2/providers/mwInternal.ts`, `useQuote` augmentation, the `useSwap` `'mw-internal'`
+> execution branch, and `verifySwapTx` `MW_ROUTER_ADDRESSES` allowlisting so internal swaps credit rewards.
+> **Verified:** Vitest 273/273, Forge 195/195 (14 for `MWRouter`, incl. the two-stream proof), changed files
+> typecheck clean.
 >
-> **Architecture correction:** the design below originally placed the meta-router in the server route
-> `app/api/(web2)/swap/quote/route.ts`. That route is **dead code** — the live quote path is client-side
-> (`SwapWidget → useQuote → lib/web2/providers/lifi.ts → li.quest` directly). Slice 1 therefore builds the
-> engine as a standalone module invoked from `useQuote` (Slice 2), not from the orphaned server route. §3–§4
-> below describe the intended data flow; substitute "client `useQuote` calls `resolveSwapRoute`" for "server
-> route" wherever the server proxy is mentioned.
+> It ships **inert by default** — with `NEXT_PUBLIC_MW_ROUTER_ENABLED` unset the swap flow is pure LI.FI, so
+> the existing path is untouched. Turning it on for a chain is a normal rollout step: deploy a V4Quoter +
+> `MWRouter`, seed a `router_pools` row, and set the flag + addresses. Turnkey checklist:
+> `lib/web2/router/README.md`.
+>
+> **Implementation note:** the meta-router runs as a standalone engine invoked from the client quote path
+> (`useQuote` → server `best-route`), not from the older `app/api/(web2)/swap/quote/route.ts` proxy, which is
+> unused (the live LI.FI quote runs client-side in `lib/web2/providers/lifi.ts`). §3–§4 below describe the
+> data flow; read "client `useQuote` → `best-route` → `resolveSwapRoute`" wherever a server proxy is mentioned.
 
 This spec turns the **"Router"** primitive — named in the Phase-3 North Star and target diagram
 ([`phase3-two-surface-architecture.md`](phase3-two-surface-architecture.md) §1, §4, flagged 🔴 net-new in §3)
@@ -313,28 +311,30 @@ No change to the reward hot path *shape* — only the allowlist/verification con
 
 ---
 
-## 10. Sequencing (where this sits in Phase 3)
+## 10. Rollout (both layers are built — this is enablement, not a build plan)
+
+The engine (Layer A) and the on-chain execution + wiring (Layer B) are both implemented and tested and
+ship together behind the feature flag. Enablement is per chain:
 
 ```
-Track 0 (factory + 4626 vaults) ──▶ pools exist & get real liquidity
-        │
-        ├─ Router MVP (Layer A only) ── ship anytime: no-op until getListedPool() hits.
-        │      Meta-router returns LI.FI today; wires the comparison seam.
-        │
-        └─ Router v1 (Layer B: MWRouter.sol + 'mw-internal' exec + §7 rewards)
-               depends on: DeFi vault with real depth (Track A) for DeFi routing,
-                           MintwareRWAVault + OracleHook (Track B) for RWA routing.
+Router (built, flag-gated inert)
+   │  enable per chain, once that chain has an MW pool with real depth:
+   ├─ deploy V4Quoter + MWRouter (DeployMWRouter.s.sol)
+   ├─ seed a router_pools row for the pool
+   └─ set NEXT_PUBLIC_MW_ROUTER_ENABLED=true + router/quoter addresses
+         │
+         ├─ DeFi routing → live for that pool
+         └─ RWA routing  → live once MintwareRWAVault4626 + OracleHook back the pool
 ```
 
-- **MVP (Layer A, low risk, ship early):** extend `/api/swap/quote` into a meta-router that *can* compare
-  an internal quote but returns LI.FI while `getListedPool` returns null everywhere. Pure additive seam.
-- **v1 (Layer B):** `MWRouter.sol` + client `'mw-internal'` branch + reward verifier updates (§7).
-  Gated behind `NEXT_PUBLIC_MW_ROUTER_ENABLED` + per-chain `internalRouterAddress`.
-- **RWA routing:** lands with Track B (needs `MintwareRWAVault4626` + `MintwareOracleHook`). This is the
+- **Engine + wiring:** server meta-router (`app/api/(web2)/swap/best-route`) invoked from `useQuote`,
+  `MWRouter.sol` execution via the `'mw-internal'` branch in `useSwap`, reward crediting via the
+  `verifySwapTx` allowlist (§7). All gated by `NEXT_PUBLIC_MW_ROUTER_ENABLED` + per-chain addresses.
+- **RWA routing:** activates when `MintwareRWAVault4626` + `MintwareOracleHook` back a listed pool — the
   path that makes `vRWA` tradable.
 
-**Do not build v1 before a DeFi vault has real liquidity** — a Router with empty pools always falls through
-to LI.FI, so it's wasted work until Track 0/A gives it something to route to.
+**Enable a chain only once its MW pool has real depth** — until then the router correctly falls through to
+LI.FI, so there is nothing to gain (and nothing lost) by leaving the flag off.
 
 ---
 
@@ -362,6 +362,7 @@ user, fall back to LI.FI otherwise. On internal swaps **Mintware takes an explic
 0.5%, at parity with today's LI.FI referrer cut — §7.4) that goes to treasury, *and* keeps the LP fee + MEV
 capture that used to leak to the aggregator; the fee transfer doubles as the on-chain "fee paid" proof for
 rewards. For DeFi it's fee-capture + a liquidity flywheel; for RWA it's the *only* secondary market and
-therefore a Track B prerequisite. The hard parts are **best execution** (never a worse price, our cut
-included in the comparison — §6) and **not breaking rewards** (`verifySwapTx` must learn the new path — §7).
-Ship Layer A as a no-op seam early; build Layer B once a vault has real depth.
+therefore the secondary market that makes `vRWA` tradable. The hard parts — **best execution** (never a
+worse price, our cut included in the comparison — §6) and **reward integrity** (`verifySwapTx` recognizes
+the `MWRouter` path — §7) — are built and tested. It's shipped behind a flag; enable it per chain once a
+pool has real depth.

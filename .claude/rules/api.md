@@ -73,8 +73,9 @@ All internal API routes use the `createHandler` factory — see `.claude/rules/r
 |---|---|---|
 | `/api/referral` | GET | `?address=` reads `referral_stats` |
 | `/api/referral/apply` | POST | Server-gated referral insert — 24h time-gate |
-| `/api/swap/quote` | POST | LI.FI proxy (hides API key, injects fee) |
-| `/api/campaigns/swap-event` | POST | On-chain tx verification before reward credit |
+| `/api/swap/best-route` | POST | Best-execution meta-router — MW V4 pool (via V4 quoter + `router_pools` registry) vs LI.FI; returns the winning route. Flag-gated (`NEXT_PUBLIC_MW_ROUTER_ENABLED`), fail-safe to LI.FI. See `lib/web2/router/`. |
+| `/api/swap/quote` | POST | LI.FI proxy — legacy/unused (live LI.FI quote runs client-side in `lib/web2/providers/lifi.ts`) |
+| `/api/campaigns/swap-event` | POST | On-chain tx verification before reward credit (LI.FI **and** `MWRouter` allowlisted) |
 | `/api/claim` | POST | Merkle proof + oracle sig — fetches `deadline` from DB |
 | `/api/claim/status` | GET | Returns `deadline` in distribution shape |
 | `/api/claim/mark-claimed` | POST | Bearer-auth — marks pending_rewards as claimed |
