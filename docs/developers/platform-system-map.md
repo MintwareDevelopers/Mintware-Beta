@@ -57,7 +57,7 @@ External systems
 ### External but depended-on
 
 - Privy for auth/onboarding and embedded wallets
-- LI.FI for swap routing and quote generation
+- LI.FI for external swap aggregation — the fallback leg of Mintware's best-execution router (§3)
 - Cloudflare attribution worker for score/read-side data
 - Pyth price data for vault volatility/rebalance logic
 - Base/EVM contracts for distributor claims and vault-adjacent on-chain actions
@@ -114,30 +114,43 @@ Current shape:
 
 ### 3. Swap and trading
 
+Mintware runs its own **best-execution meta-router**. On pairs it lists (a Mintware V4
+pool), it compares its own pool against LI.FI and routes the user to whichever price is
+better; every other pair uses LI.FI aggregation. When the internal pool wins, the swap
+executes through `MWRouter`, capturing a protocol router fee to treasury and the LP/MEV
+to the FeeVault — value that otherwise leaks to the aggregator. For RWA (`vRWA`), the
+internal router is the venue: those tokens have no external market.
+
 Primary files:
 
 - [`app/(web3)/swap/page.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/(web3)/swap/page.tsx)
 - [`components/rewards/swap/SwapWidget.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/components/rewards/swap/SwapWidget.tsx)
-- [`components/rewards/swap/SwapConfirmSheet.tsx`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/components/rewards/swap/SwapConfirmSheet.tsx)
-- [`hooks/useSwap.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/hooks/useSwap.ts)
-- [`app/api/(web2)/swap/quote/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(web2)/swap/quote/route.ts)
+- [`hooks/useQuote.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/hooks/useQuote.ts) · [`hooks/useSwap.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/hooks/useSwap.ts)
+- Router engine — [`lib/web2/router/`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/lib/web2/router) (best-execution comparator, fee math, V4 quoter, registry)
+- Server meta-router — [`app/api/(web2)/swap/best-route/route.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/app/api/(web2)/swap/best-route/route.ts)
+- Internal execution — [`lib/web2/providers/mwInternal.ts`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/lib/web2/providers/mwInternal.ts) → [`contracts-v4/src/MWRouter.sol`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/contracts-v4/src/MWRouter.sol)
 
 Current shape:
 
-- quote generation is proxied server-side
-- LI.FI API key is server-only
-- fee/referrer injection is enforced server-side
-- pre-wallet confirmation and gas/fee UX now happen in-app before wallet signing
+- best-execution is guaranteed: the internal route is taken only on a strict,
+  gas-inclusive improvement over LI.FI; ties and any uncertainty go to LI.FI
+- LI.FI runs client-side (key gated by integrator verification); the server
+  meta-router augments it with the internal comparison (registry + V4 quoter)
+- staged rollout behind `NEXT_PUBLIC_MW_ROUTER_ENABLED` + per-chain router/quoter
+  addresses; unset ⇒ pure LI.FI
+- full stack is built and tested (Vitest + 14 `MWRouter` forge tests); design +
+  activation live in [`docs/developers/phase3-router-design.md`](/Users/nicolasrobinson/Downloads/Mintware%20Phase%201%20app%20Build/docs/developers/phase3-router-design.md)
 
 Flow:
 
 ```text
 Swap page
--> quote proxy
+-> LI.FI quote (client) + best-route meta-router (server: MW pool vs LI.FI)
+-> best price wins for the user (LI.FI, or MWRouter for a listed pair)
 -> pre-wallet review
--> wallet signs route execution
+-> wallet signs route execution (LI.FI router or MWRouter)
 -> completion event is sent to swap-event route
--> reward attribution engine writes activity/rewards
+-> reward attribution engine writes activity/rewards (MWRouter txs credit too)
 ```
 
 ### 4. Campaigns and reward attribution
@@ -280,7 +293,7 @@ some route headers/comments still talk about “every 15 minutes.” The deploye
 ### Read-side external data
 
 - attribution score and some campaign analytics from the external worker
-- swap routing from LI.FI
+- external swap aggregation from LI.FI (fallback leg of the best-execution router)
 - volatility/pricing inputs from Pyth
 
 ### Contracts / on-chain truth
