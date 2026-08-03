@@ -23,6 +23,9 @@ export interface SocialVault {
   surface?:         'defi' | 'rwa'
   vault_standard?:  'legacy' | 'erc4626'
   provider?:        string | null
+  // RWA on-chain deployment (set once the deal is listed on-chain; null = paperwork-only)
+  vault_address?:   string | null   // MintwareRWAVault4626 — the deposit/wrap target
+  vrwa_address?:    string | null   // MintwareVRWA — the tradeable bearer token
   // joined from vault_epochs (latest active)
   current_epoch?:   VaultEpoch | null
 }
