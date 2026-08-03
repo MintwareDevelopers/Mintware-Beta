@@ -10,6 +10,13 @@
 > **Phase 3 locked decisions:** both surfaces in parallel · keep off-chain attribution + add a
 > thin on-chain soulbound mirror · commit to ERC-4626 base + multi-tenant factory · evolve, don't
 > greenfield. **Phase-3 branch:** `feature/phase-3`.
+>
+> **RWA flow — wrap→list→trade COMPLETE (2026-08-01, PR #29).** `MintwareRWAVault4626.listAndSeedPool()`
+> lists the vRWA on an oracle-banded vRWA/USDC V4 pool (`MintwareOracleHook`, dynamic fee) + seeds
+> two-sided liquidity (reserve model: seed-aware `_deployLiquidity`; deposits/redemptions never touch the
+> market). Full path proven in `MintwareRWAFlow.t.sol` (wrap→list→trade via `MWRouter` + out-of-band revert).
+> Turnkey `DeployRwaFlow.s.sol`; `/api/admin/vaults/rwa/[id]/list` records the deploy + seeds `router_pools`;
+> the RWA deposit UI activates on `vault_address`. Remaining is per-deal deploy + KYC/legal only.
 
 ---
 
