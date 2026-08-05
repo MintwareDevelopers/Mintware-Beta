@@ -4,6 +4,8 @@ pragma solidity ^0.8.26;
 import {ERC20}   from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
+import {SPVBeneficiaryRegistry} from "./SPVBeneficiaryRegistry.sol";
+
 /// @dev Transfer regimes for the vRWA bearer instrument.
 enum TransferMode {
     PERMISSIONLESS, // freely transferable (default — it is a bearer instrument)
@@ -32,12 +34,18 @@ contract MintwareVRWA is ERC20, Ownable {
     TransferMode public transferMode = TransferMode.PERMISSIONLESS;
     mapping(address => bool) public whitelisted;
 
+    /// @notice KYC source of truth for the WHITELISTED regime. Human holders pass when the registry
+    ///         marks them verified; infra addresses (PoolManager / router / vault / issuer) pass via
+    ///         the `whitelisted` allowlist. Zero address ⇒ registry disabled (allowlist-only).
+    SPVBeneficiaryRegistry public registry;
+
     TransferMode public pendingMode;
     uint256 public pendingModeEta; // 0 = none pending
 
     event MinterSet(address indexed minter);
     event GuardianSet(address indexed guardian);
     event WhitelistSet(address indexed account, bool allowed);
+    event RegistrySet(address indexed registry);
     event TransferModeProposed(TransferMode mode, uint256 eta);
     event TransferModeConfirmed(TransferMode mode);
     event EmergencyFrozen();
@@ -75,6 +83,12 @@ contract MintwareVRWA is ERC20, Ownable {
     function setWhitelist(address account, bool allowed) external onlyOwner {
         whitelisted[account] = allowed;
         emit WhitelistSet(account, allowed);
+    }
+
+    /// @notice Set the KYC registry consulted in WHITELISTED mode (owner). Zero disables it.
+    function setRegistry(address _registry) external onlyOwner {
+        registry = SPVBeneficiaryRegistry(_registry);
+        emit RegistrySet(_registry);
     }
 
     // ── mint / burn (vault only) ──────────────────────────────────────────────
@@ -119,10 +133,20 @@ contract MintwareVRWA is ERC20, Ownable {
         // Mint (from == 0) and burn (to == 0) are always allowed.
         if (from != address(0) && to != address(0)) {
             if (transferMode == TransferMode.FROZEN) revert TransfersFrozen();
-            if (transferMode == TransferMode.WHITELISTED && (!whitelisted[from] || !whitelisted[to])) {
+            if (transferMode == TransferMode.WHITELISTED && (!_permitted(from) || !_permitted(to))) {
                 revert NotWhitelisted();
             }
         }
         super._update(from, to, value);
+    }
+
+    /// @dev A permitted vRWA counterparty is either explicitly whitelisted (infra: PoolManager /
+    ///      router / vault / issuer) or KYC-verified in the registry (human traders). This is the
+    ///      three-role trader gate — vRWA can only reach a verified wallet on the swap-out leg.
+    function _permitted(address account) internal view returns (bool) {
+        if (whitelisted[account]) return true;
+        if (address(registry) == address(0)) return false;
+        (bool verified,) = registry.checkBeneficiary(account);
+        return verified;
     }
 }
