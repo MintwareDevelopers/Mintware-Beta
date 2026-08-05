@@ -111,4 +111,39 @@ contract MintwareVRWAGateTest is Test {
         vm.expectRevert(MintwareVRWA.NotWhitelisted.selector);
         vrwa.transfer(trader, 10e6);
     }
+
+    /// End-to-end enrollment recipe (mirrors script/RwaWhitelistEnroll.s.sol): set registry + KYC
+    /// provider, enroll infra, propose+confirm WHITELISTED, then verify a trader and prove the gate.
+    function test_enrollmentRecipe_endToEnd() public {
+        address router = makeAddr("router");
+        address issuer = makeAddr("issuer");
+
+        // --- script run(): enroll + propose ---
+        registry.setKycProvider(kycProvider);
+        vrwa.setRegistry(address(registry));
+        vrwa.setWhitelist(pool, true);
+        vrwa.setWhitelist(router, true);
+        vrwa.setWhitelist(issuer, true);
+        vrwa.proposeTransferMode(TransferMode.WHITELISTED);
+
+        // --- script confirm(): after the 48h timelock ---
+        vm.warp(block.timestamp + 48 hours);
+        vrwa.confirmTransferMode();
+        assertEq(uint8(vrwa.transferMode()), uint8(TransferMode.WHITELISTED));
+
+        // infra moves freely; an un-KYC'd human cannot receive the swap-out leg
+        vm.prank(pool);
+        vrwa.transfer(router, 100e6);
+        assertEq(vrwa.balanceOf(router), 100e6);
+
+        vm.prank(pool);
+        vm.expectRevert(MintwareVRWA.NotWhitelisted.selector);
+        vrwa.transfer(trader, 100e6);
+
+        // oracle verifies the trader → the swap-out leg now lands
+        _verify(trader);
+        vm.prank(pool);
+        vrwa.transfer(trader, 100e6);
+        assertEq(vrwa.balanceOf(trader), 100e6);
+    }
 }
