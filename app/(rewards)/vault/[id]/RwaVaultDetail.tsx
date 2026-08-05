@@ -12,6 +12,7 @@ import { fmtUSD } from '@/lib/web2/api'
 import { buildRedeemRequestMessage } from '@/lib/web3/signedActionMessages'
 import type { SocialVault } from '@/lib/web2/vault/types'
 import type { DealMeta } from '@/lib/rwa/deal'
+import { useKyc } from '@/lib/rwa/useKyc'
 
 // USDC (the RWA vault underlying) by chain — used to approve before an ERC-4626 deposit.
 const USDC_BY_CHAIN: Record<number, `0x${string}`> = {
@@ -47,6 +48,7 @@ function RwaActionRail({ vaultId, deal, vaultAddress, vrwaAddress, chainId }: {
   chainId: number
 }) {
   const { address } = useAccount()
+  const kyc = useKyc(address)
   const { signMessageAsync } = useSignMessage()
   const publicClient = usePublicClient()
   const { writeContractAsync } = useWriteContract()
@@ -149,11 +151,24 @@ function RwaActionRail({ vaultId, deal, vaultAddress, vrwaAddress, chainId }: {
             Deposit
           </button>
         )}
-        {vrwaAddress && (
-          <Link href={`/swap?buy=${vrwaAddress}`} className="text-center font-atx-mono text-[11px] text-atx-blue no-underline hover:underline">
-            Trade vRWA on the secondary market →
-          </Link>
-        )}
+        {vrwaAddress && (() => {
+          // Reg D deals gate trading on KYC; Reg A+ (no required tier) trade openly.
+          const needsKyc = !!deal?.kycTierRequired && deal.kycTierRequired !== 'NONE'
+          if (!needsKyc || kyc.verified) {
+            return (
+              <Link href={`/swap?buy=${vrwaAddress}`} className="text-center font-atx-mono text-[11px] text-atx-blue no-underline hover:underline">
+                Trade vRWA on the secondary market →
+              </Link>
+            )
+          }
+          return (
+            <div className="text-center font-atx-mono text-[10.5px] text-atx-ink/55 leading-[1.5]">
+              {kyc.loading
+                ? 'Checking verification…'
+                : `KYC (${deal?.kycTierRequired}) required before you can hold or trade vRWA.`}
+            </div>
+          )
+        })()}
         <div className="border-t border-atx-ink/20 pt-3" />
         {done ? (
           <div className="border border-atx-ink bg-atx-panel p-3">

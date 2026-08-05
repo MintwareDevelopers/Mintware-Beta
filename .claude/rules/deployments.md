@@ -34,6 +34,9 @@
 | `NEXT_PUBLIC_PHASE2_ENABLED` | Public | Gates vault pages — not set until Phase 2 launch |
 | `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS` | Public | Gates V4 contract reads |
 | `NEXT_PUBLIC_MW_TREASURY_ADDRESS` | Public | Set after contract deploy |
+| `PERSONA_WEBHOOK_SECRET` | Server-only | HMAC secret for `POST /api/kyc/webhook` (WS1 RWA KYC) |
+| `RWA_KYC_ORACLE_PRIVATE_KEY` | Server-only | Oracle signer = `SPVBeneficiaryRegistry.kycProvider`; writes `verifyBeneficiary` |
+| `SPV_REGISTRY_ADDRESS` | Server-only | Deal's `SPVBeneficiaryRegistry` (KYC oracle target); with `RWA_POOL_CHAIN`/RPC |
 
 ## Cron Jobs (defined in vercel.json)
 
