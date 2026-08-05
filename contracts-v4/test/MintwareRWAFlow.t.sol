@@ -25,12 +25,12 @@ import {VaultSurface, VaultConfig} from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20}            from "./mocks/MockERC20.sol";
 
-/// @title  RWA end-to-end flow — wrap → list → trade
-/// @notice Proves the full RWA pipeline against a real V4 PoolManager on ONE real vRWA:
-///         (1) deposit USDC → mint vRWA (wrap), (2) issuer lists + seeds an oracle-banded
-///         vRWA/USDC pool (list), (3) a holder swaps vRWA↔USDC through MWRouter (trade),
-///         (4) an out-of-band swap reverts — the band enforcement that was never tested
-///         against a live swap. This is the integration the two RWA demo scripts lacked.
+/// @title  RWA end-to-end flow — list → trade (pure-token model)
+/// @notice Proves the RWA pipeline against a real V4 PoolManager on ONE real vRWA. Under the
+///         three-role model vRWA is the issuer-supplied security (public deposit is CLOSED), so:
+///         (1) public deposit reverts, (2) the issuer lists + seeds an oracle-banded vRWA/USDC pool
+///         from its own inventory (list), (3) a trader swaps vRWA↔USDC through MWRouter (trade),
+///         (4) an out-of-band swap reverts — band enforcement against a live swap.
 contract MintwareRWAFlowTest is Test {
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
@@ -118,15 +118,7 @@ contract MintwareRWAFlowTest is Test {
         usdc.mint(deployer, 100_000e6); // issuer's pool-seed USDC
     }
 
-    // Stage 1 — WRAP
-    function _deposit(address who, uint256 amt) internal returns (uint256 shares) {
-        vm.startPrank(who);
-        usdc.approve(address(vault), amt);
-        shares = vault.deposit(amt, who);
-        vm.stopPrank();
-    }
-
-    // Stage 2 — LIST + seed a two-sided vRWA/USDC market.
+    // Stage 1 — LIST + seed a two-sided vRWA/USDC market (issuer supplies vRWA inventory).
     function _listPool(uint256 usdcSeed, uint256 vrwaSeed) internal {
         usdc.approve(address(vault), usdcSeed); // deployer (issuer) provides USDC
         vault.listAndSeedPool(poolKey, SQRT_1_0, -6000, 6000, usdcSeed, vrwaSeed);
@@ -152,12 +144,13 @@ contract MintwareRWAFlowTest is Test {
 
     // ─────────────────────────────────────────────────────────────────────────
 
-    function test_stage1_deposit_wraps_into_vrwa() public {
-        uint256 shares = _deposit(alice, 10_000e6);
-        assertEq(vault.balanceOf(alice), shares, "shares minted");
-        assertEq(vrwa.balanceOf(alice), shares, "vRWA minted 1:1");
-        assertEq(vault.totalPrincipal(), 10_000e6, "principal tracked");
-        assertEq(usdc.balanceOf(address(vault)), 10_000e6, "USDC held as reserve (no adapter)");
+    function test_stage1_public_deposit_disabled() public {
+        // Three-role model: vRWA is issuer-supplied inventory, not a wrapper minted to depositors.
+        vm.startPrank(alice);
+        usdc.approve(address(vault), 10_000e6);
+        vm.expectRevert(MintwareRWAVault4626.DepositsDisabled.selector);
+        vault.deposit(10_000e6, alice);
+        vm.stopPrank();
     }
 
     function test_stage2_list_seeds_oracle_banded_pool() public {
@@ -174,7 +167,6 @@ contract MintwareRWAFlowTest is Test {
     }
 
     function test_stage3_trade_in_band_through_mwrouter() public {
-        _deposit(alice, 10_000e6);
         _listPool(50_000e6, 50_000e6);
 
         uint256 bobVrwaBefore = vrwa.balanceOf(bob);
@@ -196,7 +188,6 @@ contract MintwareRWAFlowTest is Test {
     }
 
     function test_stage4_out_of_band_swap_reverts() public {
-        _deposit(alice, 10_000e6);
         _listPool(50_000e6, 50_000e6);
 
         // Keeper moves the appraisal to 2.0 while the pool sits at 1.0 → 50% deviation,
@@ -220,30 +211,18 @@ contract MintwareRWAFlowTest is Test {
     }
 
     function test_full_flow_end_to_end() public {
-        // 1. WRAP
-        uint256 shares = _deposit(alice, 20_000e6);
-        assertEq(vrwa.balanceOf(alice), shares);
-
-        // 2. LIST
+        // 1. LIST — issuer seeds inventory + USDC into the oracle-banded pool.
         _listPool(50_000e6, 50_000e6);
         assertTrue(vault.poolInitialized());
 
-        // 3. TRADE — alice sells some of her wrapped vRWA back to USDC via MWRouter.
-        uint256 usdcBefore = usdc.balanceOf(alice);
-        uint256 sellAmt = 500e6;
-        vm.prank(alice);
-        vrwa.approve(address(router), sellAmt);
-        vm.prank(alice);
-        uint256 usdcOut = router.swapExactInputSingle(MWRouter.ExactInputSingleParams({
-            key:              poolKey,
-            zeroForOne:       !usdcIsToken0, // selling vRWA
-            amountIn:         sellAmt,
-            amountOutMinimum: 0,
-            recipient:        alice,
-            deadline:         block.timestamp + 1 hours,
-            tag:              ""
-        }));
-        assertGt(usdcOut, 0, "alice got USDC for her vRWA");
-        assertEq(usdc.balanceOf(alice) - usdcBefore, usdcOut, "USDC delivered");
+        // 2. TRADE (buy) — a secondary-market trader buys vRWA with USDC.
+        uint256 bought = _swap(bob, true, 2_000e6);
+        assertGt(bought, 0, "bob bought vRWA");
+
+        // 3. TRADE (sell) — bob sells half of it back to USDC via MWRouter.
+        uint256 usdcBefore = usdc.balanceOf(bob);
+        uint256 usdcOut = _swap(bob, false, bought / 2);
+        assertGt(usdcOut, 0, "bob got USDC back for his vRWA");
+        assertEq(usdc.balanceOf(bob) - usdcBefore, usdcOut, "USDC delivered");
     }
 }

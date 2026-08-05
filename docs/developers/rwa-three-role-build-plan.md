@@ -80,18 +80,29 @@ router-forwarded recipient in `hookData` (UX only; not the enforcement). Permiss
 **Tests (Forge):** transfer/swap-payout to non-verified reverts; verified trader succeeds; infra
 addresses pass; existing redemption path (`confirmSettlement`) still works; expired/revoked KYC blocks.
 
-### WS3 — Repurpose `MintwareRWAVault4626` as issuer/holder vault  *(dependency of WS1; build now)*
+### WS3 — RWA vault as issuer-inventory + holder-redemption vault  *(✅ BUILT 2026-08-05)*
 
-- **Remove** `vrwa.mint(receiver, shares)` from `_afterEnter` (contracts-v4/src/rwa/MintwareRWAVault4626.sol:183)
-  — public depositors no longer mint vRWA. Public USDC LPing moves to `MintwareULV4626`.
-- Restrict/close the public `deposit` path on this vault (issuer-only, or remove) — its remaining jobs
-  are: issuer wraps real RWA → vRWA inventory (via `listAndSeedPool`, which already mints vRWA to the
-  vault), and holder redemption (`requestRedeem` burn + issuer `confirmSettlement`, KYC-gated — keep).
-- **Decision to make:** how the USDC reserve that funds redemptions is capitalized now that public USDC
-  deposits leave this vault (issuer-funded reserve vs. redemption-fee-funded vs. draw from ULV). Flag
-  for design before coding this WS.
+**Model clarified:** `vRWA` is the tokenized security ITSELF (issuer-supplied), **not** a synthetic
+wrapper minted to depositors. What shipped:
 
-**Tests:** deposit path no longer mints vRWA; `listAndSeedPool` still seeds; redemption still settles.
+- **Public 4626 deposit CLOSED** — `_afterEnter` reverts `DepositsDisabled`, so `deposit`/`mint`/
+  `depositWithLock` all revert. A depositor can no longer mint vRWA. (Public USDC LPing → the future ULV.)
+- **`fundReserve(usdc)`** — the issuer capitalizes the USDC redemption reserve (non-reserve portion
+  routes to the yield adapter, as the old deposit path did). **Reserve-funding decision resolved:
+  issuer-funded.**
+- **vRWA-keyed redemption (decision: on-chain, issuer-settled)** — `requestRedeem(vrwaAmount)` burns the
+  holder's vRWA into a `rwaRedemptions` request (NOT keyed on 4626 shares), so a **secondary-market
+  holder with zero vault shares can redeem**. `confirmSettlement(holder)` — issuer-only, KYC-gated,
+  after the 30-day window — pays USDC at par (1:1) from the reserve, recalling from yield on shortfall.
+- `listAndSeedPool` (issuer inventory + seed) unchanged.
+
+**Tests (green, Forge 201/201):** `test_deposit_disabled`, `test_secondary_market_holder_redeems_at_par`
+(the headline: no shares → redeems), pending-guard, reserve/yield routing, KYC + issuer gates; flow test
+reworked to list → trade (no deposit-wrap).
+
+**UI follow-up (not in the contract PR):** the `RwaVaultDetail` "Invest" panel still offers a public
+deposit that now reverts on-chain — it should be replaced with a buy-on-secondary-market primary action.
+Gated on an undeployed `vault_address`, so not live-facing yet. Overlaps WS1's RWA-UI edits.
 
 ### WS2 — `MintwareULV4626` (public USDC LP vault)  *(gated on 3(c)(7); build in parallel, parameterized)*
 

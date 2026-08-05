@@ -21,17 +21,18 @@ import {MintwareVRWA}          from "./MintwareVRWA.sol";
 import {SPVBeneficiaryRegistry, KYCLevel} from "./SPVBeneficiaryRegistry.sol";
 
 /// @title  MintwareRWAVault4626
-/// @notice Surface-2 (RWA) vault. Extends the ERC-4626 base and reuses its async-redeem
-///         machinery with a 30-day settlement window. On deposit it mints a `vRWA`
-///         token 1:1 with shares; redemption burns the vRWA up front (a claim
-///         ticket) and is settled by the issuer only after the window AND a KYC check
-///         on the redeeming holder (SPVBeneficiaryRegistry).
+/// @notice Surface-2 (RWA) issuer-inventory + holder-redemption vault (three-role model). `vRWA`
+///         is the tokenized security ITSELF — issuer-supplied, not a synthetic claim minted to
+///         depositors — so the public 4626 deposit path is CLOSED here (public USDC LPing lives in
+///         MintwareULV4626). The issuer mints `vRWA` inventory via listAndSeedPool() and capitalizes
+///         the USDC redemption reserve via fundReserve(). Redemption is keyed on `vRWA` (not vault
+///         shares), so a secondary-market holder can redeem: they burn `vRWA` up front (requestRedeem)
+///         and the issuer settles USDC at par from the reserve after the 30-day window AND a KYC check
+///         on the holder (SPVBeneficiaryRegistry) — confirmSettlement.
 ///
-/// @dev    KYC boundary (target model — see docs/developers/rwa-compliance-three-role-model.md):
-///         for Reg D assets the `vRWA` token is WHITELISTED, so trading/holding is gated at every
-///         transfer and redemption re-checks KYC here; Reg A+ assets trade openly. Under the
-///         three-role restructure this contract is repurposed as the issuer wrapping +
-///         holder-redemption vault (the public USDC LP path moves to a new MintwareULV4626).
+/// @dev    KYC boundary (see docs/developers/rwa-compliance-three-role-model.md): for Reg D assets
+///         the `vRWA` token is WHITELISTED, so trading/holding is gated at every transfer and
+///         redemption re-checks KYC here; Reg A+ assets trade openly.
 contract MintwareRWAVault4626 is MintwareBaseVault4626 {
     using SafeERC20     for IERC20;
     using PoolIdLibrary for PoolKey;
@@ -49,6 +50,18 @@ contract MintwareRWAVault4626 is MintwareBaseVault4626 {
     uint256  public constant REDEMPTION_WINDOW = 30 days;
     KYCLevel public constant MIN_KYC = KYCLevel.BASIC;
 
+    // vRWA-keyed redemption (three-role model): a holder redeems the `vRWA` they hold — whether
+    // acquired on the secondary market or otherwise — NOT a 4626 vault share. Par 1:1 vRWA→USDC
+    // (reserve-only, par-stable wrapper; see navKeeper). The issuer settles from the USDC reserve,
+    // KYC-gated, after the window. The base 4626 share-redemption path is unused on this surface.
+    struct RwaRedemption {
+        uint256 amountVrwa;   // vRWA burned up front = USDC owed at par
+        uint64  requestedAt;
+        uint64  settleAfter;  // requestedAt + REDEMPTION_WINDOW
+        bool    settled;
+    }
+    mapping(address => RwaRedemption) public rwaRedemptions;
+
     // Capital deployment (spec): reserveRatioBps held as USDC reserve, the rest routed to
     // the yield adapter. Default 40% reserve / 60% yield.
     address public yieldAdapter;
@@ -63,6 +76,8 @@ contract MintwareRWAVault4626 is MintwareBaseVault4626 {
     event ReserveRatioSet(uint256 bps);
     event YieldHarvested(uint256 yield, uint256 toDepositors, uint256 toMintware);
     event PoolListed(bytes32 indexed poolId, uint160 sqrtPriceX96, uint128 liquidity);
+    event ReserveFunded(address indexed from, uint256 usdc);
+    event RedemptionRequested(address indexed holder, uint256 amountVrwa, uint256 settleAfter);
 
     error OnlyIssuer();
     error UseConfirmSettlement();
@@ -70,6 +85,10 @@ contract MintwareRWAVault4626 is MintwareBaseVault4626 {
     error RatioTooHigh();
     error NoYieldAdapter();
     error InvalidPoolPair();
+    error DepositsDisabled();
+    error RedemptionPending();
+    error NoRedemption();
+    // NoticeNotExpired is inherited from MintwareBaseVault4626.
 
     constructor(
         VaultConfig memory cfg,
@@ -179,27 +198,47 @@ contract MintwareRWAVault4626 is MintwareBaseVault4626 {
         return REDEMPTION_WINDOW;
     }
 
-    /// @dev Mint the vRWA bearer instrument 1:1 with shares on deposit, and route the
-    ///      non-reserve portion (default 60%) of the net USDC to the yield adapter.
-    function _afterEnter(address receiver, uint256 netAssets, uint256 shares) internal override {
-        vrwa.mint(receiver, shares);
+    /// @dev Three-role model: the public 4626 deposit path is CLOSED on the RWA surface — a
+    ///      depositor must never receive `vRWA` (it is the issuer-supplied security, not a wrapper
+    ///      minted per deposit), and public USDC LPing lives in MintwareULV4626, not here. Reverting
+    ///      in this post-mint hook disables deposit() / mint() / depositWithLock() atomically.
+    function _afterEnter(address, uint256, uint256) internal pure override {
+        revert DepositsDisabled();
+    }
 
+    /// @notice Issuer capitalizes the USDC redemption reserve. The non-reserve portion (default
+    ///         60%) is routed to the yield adapter; the rest stays as reserve to settle redemptions.
+    function fundReserve(uint256 usdc) external nonReentrant {
+        if (usdc == 0) return;
+        IERC20(asset()).safeTransferFrom(_msgSender(), address(this), usdc);
         if (yieldAdapter != address(0) && reserveRatioBps < BPS) {
-            uint256 toYield = netAssets - (netAssets * reserveRatioBps) / BPS;
+            uint256 toYield = usdc - (usdc * reserveRatioBps) / BPS;
             if (toYield > 0) {
                 IERC20(asset()).forceApprove(yieldAdapter, toYield);
                 IYieldAdapter(yieldAdapter).deposit(toYield);
                 principalInYield += toYield;
             }
         }
+        emit ReserveFunded(_msgSender(), usdc);
     }
 
-    /// @notice Queue a redemption — burns the caller's vRWA claim ticket up front, then
-    ///         starts the 30-day window on the shares.
-    function requestRedeem(uint256 shares) public override {
-        if (vrwa.balanceOf(msg.sender) < shares) revert InsufficientVRWA();
-        vrwa.burn(msg.sender, shares);
-        super.requestRedeem(shares);
+    /// @notice Queue a redemption keyed on `vRWA` (not 4626 shares) — so a secondary-market holder
+    ///         who never deposited can still redeem. Burns the caller's `vRWA` up front; the issuer
+    ///         settles USDC from reserve after the window (confirmSettlement).
+    function requestRedeem(uint256 vrwaAmount) public override {
+        if (vrwaAmount == 0 || vrwa.balanceOf(msg.sender) < vrwaAmount) revert InsufficientVRWA();
+        RwaRedemption storage existing = rwaRedemptions[msg.sender];
+        if (existing.amountVrwa != 0 && !existing.settled) revert RedemptionPending();
+
+        vrwa.burn(msg.sender, vrwaAmount);
+        uint64 settleAfter = uint64(block.timestamp + REDEMPTION_WINDOW);
+        rwaRedemptions[msg.sender] = RwaRedemption({
+            amountVrwa:  vrwaAmount,
+            requestedAt: uint64(block.timestamp),
+            settleAfter: settleAfter,
+            settled:     false
+        });
+        emit RedemptionRequested(msg.sender, vrwaAmount, settleAfter);
     }
 
     /// @dev Holder self-service redemption is disabled — the issuer settles (KYC-gated).
@@ -207,13 +246,17 @@ contract MintwareRWAVault4626 is MintwareBaseVault4626 {
         revert UseConfirmSettlement();
     }
 
-    /// @notice Issuer settles a holder's queued redemption after the window + a KYC check.
-    /// @dev    Recalls from the yield adapter if the USDC reserve can't cover the payout.
+    /// @notice Issuer settles a holder's queued `vRWA` redemption after the window + a KYC check,
+    ///         paying USDC at par (1:1) from the reserve. Recalls from the yield adapter on shortfall.
     function confirmSettlement(address holder) external nonReentrant returns (uint256 assetsOut) {
         if (msg.sender != issuer) revert OnlyIssuer();
-        registry.requireBeneficiary(holder, MIN_KYC); // KYC only at the redemption boundary
+        registry.requireBeneficiary(holder, MIN_KYC); // KYC enforced at the settlement boundary
 
-        uint256 needed = convertToAssets(withdrawalRequests[holder].shares);
+        RwaRedemption storage r = rwaRedemptions[holder];
+        if (r.amountVrwa == 0 || r.settled)  revert NoRedemption();
+        if (block.timestamp < r.settleAfter) revert NoticeNotExpired();
+
+        uint256 needed = r.amountVrwa; // par 1:1 vRWA → USDC (both 6dp; par-stable wrapper)
         uint256 bal    = IERC20(asset()).balanceOf(address(this));
         if (bal < needed && yieldAdapter != address(0) && principalInYield > 0) {
             uint256 shortfall = needed - bal;
@@ -222,7 +265,9 @@ contract MintwareRWAVault4626 is MintwareBaseVault4626 {
             principalInYield -= pull;
         }
 
-        assetsOut = _executeRedeemFor(holder);
+        r.settled = true;
+        assetsOut = needed;
+        IERC20(asset()).safeTransfer(holder, needed);
         emit SettlementConfirmed(holder, assetsOut);
     }
 
