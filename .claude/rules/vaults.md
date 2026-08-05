@@ -17,6 +17,16 @@
 > market). Full path proven in `MintwareRWAFlow.t.sol` (wrap→list→trade via `MWRouter` + out-of-band revert).
 > Turnkey `DeployRwaFlow.s.sol`; `/api/admin/vaults/rwa/[id]/list` records the deploy + seeds `router_pools`;
 > the RWA deposit UI activates on `vault_address`. Remaining is per-deal deploy + KYC/legal only.
+>
+> **⚠ Compliance restructure (2026-08-05) — target model changed, NOT yet built.** Legal/compliance
+> set the RWA secondary-liquidity structure to a **three-role model**: LPs are USDC-only and ungated
+> (never touch vRWA), the pool is a whitelisted *permitted holder* of issuer-supplied vRWA inventory,
+> and traders are KYC-checked in `beforeSwap` **on receipt only** (vRWA-out leg). This supersedes the
+> current "permissionless everything, KYC only at redemption" code as the **target** for Reg D assets
+> (Reg A+ runs fully open). The current code diverges on 3 points (deposit mints vRWA to the depositor;
+> `beforeSwap` gates nothing; pool not enrolled as permitted holder). One open blocker for counsel:
+> whether the LP side needs a 3(c)(7) qualified-purchaser gate (Investment Company Act, per Ondo OUSG).
+> Decision of record + gap analysis: [`docs/developers/rwa-compliance-three-role-model.md`](../../docs/developers/rwa-compliance-three-role-model.md).
 
 ---
 

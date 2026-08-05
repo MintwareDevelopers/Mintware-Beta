@@ -65,30 +65,39 @@ zero-manipulation, but the band + the token's own gate change its character enti
 
 ---
 
-## 3. Core architectural decision — permissionless, surface-agnostic engine
+## 3. Core architectural decision — surface-agnostic engine, gate lives in the token
 
-### 3.0 Locked decision: PERMISSIONLESS by construction — zero KYC in Mintware
+### 3.0 The engine adds no gate of its own — the token's transfer rules do (Reg D: allowlist · Reg A+: open)
 
-**Mintware incentivises the *wrapped* token, and never enforces holder eligibility.** Eligibility
-lives entirely in the wrapper, upstream of us:
+> **⚠ Superseded framing (2026-08-05).** This section originally read "PERMISSIONLESS by
+> construction — zero KYC in Mintware." Corrected: for **Reg D** assets the wrapped `vRWA` is
+> whitelist-gated at transfer (traders must be KYC-verified via `SPVBeneficiaryRegistry`), so the
+> trade/hold reward path necessarily runs over verified holders. **Reg A+** assets still run open.
+> The engine-neutrality point below (Mintware adds no gate *of its own*) still holds. See
+> [`rwa-compliance-three-role-model.md`](rwa-compliance-three-role-model.md).
 
-- **Bearer-style transferable token** (e.g. Backed bTokens) — the issuer KYCs holders at the
-  mint / redeem gateway; the token then trades freely. Mintware sees a plain, transferable ERC-20.
-- **Permissioned token** — the token enforces an on-chain allowlist on every transfer. An
-  ineligible wallet's swap simply reverts on-chain. Still not Mintware's gate — the *token* rejects it.
+**Mintware incentivises the *wrapped* token, and never enforces holder eligibility of its own.**
+Eligibility lives entirely in the wrapper, upstream of us:
+
+- **Permissioned token (Reg D — the current tier)** — the token enforces an on-chain allowlist on
+  every transfer (`SPVBeneficiaryRegistry`). An ineligible wallet's swap simply reverts on-chain.
+  The gate is the *token's*, not Mintware's — but rewarded holders are therefore KYC-verified.
+- **Bearer-style transferable token (Reg A+)** — the issuer KYCs at the mint / redeem gateway; the
+  token then trades openly. Mintware sees a plain, transferable ERC-20.
 
 Either way the gate is **in the asset**, not in our campaign engine. Mintware's surfaces — pool,
-vaults, campaigns, referrals — treat `vRWA` as an ordinary ERC-20 and stay **permissionless**.
+vaults, campaigns, referrals — add no eligibility check of their own; they respect whatever the
+token enforces.
 
-**Why this is the whole moat.** Open, permissionless liquidity + rewards on RWA-backed tokens is
-exactly what walled-garden RWA platforms structurally cannot offer. Bolting KYC into the engine
-would rebuild their cage and kill the liquidity thesis (§1). It also collapses our regulatory
-posture to that of *any* DEX + rewards layer over transferable tokens — referral becomes "come
-trade this liquid token," not "solicitation into a private placement."
+**Why this is still the moat.** Incentivised, liquid secondary markets + rewards on RWA-backed
+tokens is exactly what walled-garden RWA platforms structurally cannot offer. Mintware never becomes
+the gatekeeper — the token's own rules (or the issuer's gateway) do — so referral stays "come trade
+this liquid token," not "solicitation into a private placement."
 
-**Consequence for the build:** there is **no `min_kyc_tier`, no KYC gate, and no credit/claim
-eligibility check** anywhere in the incentive layer. If a deal's token is permissioned, on-chain
-transfer rules do the work for free.
+**Consequence for the build:** Mintware's incentive layer has **no `min_kyc_tier` and no eligibility
+check of its own** — but for Reg D deals the token's on-chain allowlist means the KYC gate is real
+and upstream, enforced for free at transfer. See the
+[three-role build plan](rwa-three-role-build-plan.md).
 
 ### 3.1 The engine is surface-agnostic
 
@@ -119,7 +128,7 @@ need essentially *zero* new mechanics to run on RWA.
 
 ## 4. What is genuinely new (the ~20%)
 
-Two net-new pieces. Everything else is config. **There is no KYC piece** — see §3.0.
+Two net-new pieces. Everything else is config. **Mintware's engine adds no KYC piece of its own** — the wrapped token gates transfers for Reg D (see §3.0).
 
 ### 4.1 Hold-snapshot crediting (the one net-new engine part)
 
@@ -167,7 +176,7 @@ surface unchanged (volume/referral). Only `subscribe` / `hold` are new mechanics
 Additive only. No breaking changes to the DeFi campaign path.
 
 ```sql
--- campaigns: surface + RWA association (NO KYC column — permissionless by design, §3.0)
+-- campaigns: surface + RWA association (no KYC column in the engine — the token gates transfers for Reg D, §3.0)
 alter table campaigns add column if not exists surface text not null default 'defi';   -- 'defi' | 'rwa'
 alter table campaigns add column if not exists linked_deal_id uuid references vault_deals(id);
 alter table campaigns add column if not exists duration_match_days integer;              -- from deal settle_days
@@ -224,8 +233,9 @@ does that, if at all.
 | **R5 — Duration-match lock** | Lock-to-maturity bonus | ✅ live — cron reads the vault's `locks(address)` per wallet; remaining-lock ≥ `settle_days` earns the bonus | R4, `MintwareBaseVault4626.locks` |
 | **R6 — Reward denomination** | Incentive vs. yield-token rewards | ✅ by construction — the creator's token selection (Step 1) *is* the denomination lever | — |
 
-> **R3 (KYC gate) is deleted, not deferred** — the incentive layer is permissionless by
-> construction (§3.0). Track numbers R1–R6 are kept stable for continuity; there is no R3.
+> **R3 (KYC gate) lives in the token, not the engine** — Mintware's incentive layer adds no KYC gate
+> of its own, but for Reg D deals the wrapped token's transfer whitelist enforces it upstream (§3.0).
+> Track numbers R1–R6 are kept stable for continuity; there is no separate R3 in the engine.
 
 **What remains before this runs end-to-end in production:** (1) ~~apply migration `20260728000001`~~
 ✅ applied; (2) deploy an RWA vault so the hold-snapshot cron reads live balances — see §9 below

@@ -55,9 +55,9 @@ const SURFACES: Record<Surface, {
 }> = {
   rwa: {
     eyName: 'RWA surface', acc: '#FF8574', accInk: CORAL_INK,
-    head: ['Institutional yield. ', 'No gatekeepers.'],
-    sub: 'Real estate, credit, T-bills — as a bearer token. Deposit any amount, no KYC, no minimums. Hold it, trade it 24/7, or redeem the underlying only if you ever want to.',
-    bullets: ['Any amount — no $50k minimum', 'No KYC to deposit — only at redemption', 'vRWA bearer token, trade on Uniswap 24/7', 'Oracle-banded, fair-valued pricing'],
+    head: ['Institutional yield. ', 'No six-figure door.'],
+    sub: 'Real estate, credit, T-bills — as a token you self-custody. Deposit any amount, no minimums. Trade it 24/7 wherever the asset permits, or redeem the underlying on request. Verification scales with the asset — open for Reg A+, verified wallets for Reg D.',
+    bullets: ['Any amount — no $50k minimum', 'Verification scaled to asset — open Reg A+ / verified Reg D', 'Trade vRWA on Uniswap 24/7', 'Oracle-banded, fair-valued pricing'],
     base: 9.0,
     featured: [['ATX Credit Facility', 'vRWA / USDC', '10.4%'], ['LiquidHectar Note', 'vRWA / USDC', '9.0%']],
   },

@@ -42,6 +42,12 @@ Mintware review, so it ships to production ahead of the RWA contracts clearing l
 | `MintwareVaultRegistry` | On-chain vault registry (`keccak256(chainId, vault)` → vaultId) |
 
 ### RWA family (`contracts-v4/src/rwa/`) — testnet, mainnet gated on legal
+
+> **⚠ Target compliance structure changed (2026-08-05).** The table below is the *current* code
+> ("permissionless everything, KYC only at settle"). Legal set the target to the **three-role model**
+> (LP USDC-only/ungated · pool = whitelisted permitted holder · trader KYC-gated in `beforeSwap` on
+> receipt). Not yet built; the current contracts diverge on 3 points. See
+> [RWA Compliance — Three-Role Model](rwa-compliance-three-role-model.md).
 | Contract | Role |
 |---|---|
 | `MintwareRWAVault4626.sol` | Mints `vRWA` 1:1; async `requestRedeem` → 30-day window → `confirmSettlement` (KYC at settle) |

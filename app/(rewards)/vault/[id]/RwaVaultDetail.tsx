@@ -115,8 +115,8 @@ function RwaActionRail({ vaultId, deal, vaultAddress, vrwaAddress, chainId }: {
           <div className="font-atx-mono text-[20px]">{deal && deal.minInvestmentUsd > 0 ? fmtUSD(deal.minInvestmentUsd) : '—'}</div>
         </div>
         <p className="font-atx-mono text-[11px] text-atx-ink/55 leading-[1.55]">
-          Deposit mints vRWA 1:1 with your shares — a bearer instrument you can trade freely.
-          KYC ({deal?.kycTierRequired ?? 'BASIC'}) is required only to redeem the underlying.
+          Deposit mints vRWA 1:1 with your shares. Holding and trading vRWA require this deal’s
+          KYC tier ({deal?.kycTierRequired ?? 'BASIC'}) unless it trades openly (Reg A+); redemption always re-checks KYC.
         </p>
         {vaultAddress ? (
           depDone ? (

@@ -12,9 +12,9 @@ import { MarketingNav } from '@/components/web2/MarketingNav'
 // =============================================================================
 
 export const metadata: Metadata = {
-  title: 'RWA — Real-world yield, no gatekeepers | Mintware',
+  title: 'RWA — Real-world yield, without the six-figure door | Mintware',
   description:
-    'Tokenized real-world assets as a bearer token: deposit any amount, no KYC to deposit, trade vRWA 24/7, redeem the underlying only if you want to. Built on the exact legal structures BlackRock, Backed, and Ondo already run in production.',
+    'Tokenized real-world assets as a token you actually hold: deposit any amount, no six-figure minimum, trade vRWA 24/7 wherever the asset permits, redeem the underlying on request. Verification scales with the asset — open for Reg A+, verified wallets for Reg D. Built on the exact legal structures BlackRock, Backed, and Ondo already run in production.',
 }
 
 const GRID_BG =
@@ -47,20 +47,20 @@ function SectionHead({ n, label, children }: { n: string; label: string; childre
 }
 
 // ── data ─────────────────────────────────────────────────────────────────────
-const HERO_CHIPS = ['Any amount — no $50k minimum', 'No KYC to deposit', 'Trade vRWA on Uniswap 24/7', 'You hold a bearer token']
+const HERO_CHIPS = ['Any amount — no $50k minimum', 'Verified wallets for Reg D · open for Reg A+', 'Trade vRWA on Uniswap 24/7', 'You hold the token — self-custody']
 
 const STUCK = [
-  ['Accredited investors only', 'Any wallet, any amount — no KYC to hold or trade'],
+  ['$5M minimums, accreditation walls', 'Any amount, no six-figure minimum — access set by the asset, not by us'],
   ['Redemption by request, thin secondary', 'Trade vRWA 24/7 on Uniswap'],
   ['A token that can’t touch DeFi', 'Composable ERC-20 — collateral, strategies, vaults'],
-  ['A database entry on someone’s cap table', 'A bearer token you actually hold'],
+  ['A database entry on someone’s cap table', 'A token you actually hold — self-custody'],
 ]
 
 const STEPS = [
-  ['01', 'Deposit USDC', 'Any amount. No accreditation, no minimum, no upfront KYC.'],
-  ['02', 'Receive vRWA', 'The vault’s ERC-4626 share — a bearer token, 1:1, tracking the SPV’s NAV. Yours to hold or move.'],
+  ['01', 'Deposit USDC', 'Any amount. No six-figure minimum. Verification scales with the asset.'],
+  ['02', 'Receive vRWA', 'The vault’s ERC-4626 share — 1:1, tracking the SPV’s NAV. Self-custodied and composable.'],
   ['03', 'Earn + trade', 'Real-world yield accrues automatically. Trade vRWA against USDC on Uniswap, 24/7.'],
-  ['04', 'Redeem — if you want', 'Request → 30-day settlement window. This is the only step that touches the asset, so it’s the only step that needs KYC.'],
+  ['04', 'Redeem — if you want', 'Request → 30-day settlement window. Redemption always re-checks KYC.'],
 ]
 
 const PRECEDENT: [string, string, string, string, boolean][] = [
@@ -103,13 +103,14 @@ export default function RwaLandingPage() {
       {/* ── HERO ── */}
       <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
         <div className={`${wrap} py-[54px]`}>
-          <div className={ey}>✴ RWA surface · real-world yield, no gatekeepers</div>
+          <div className={ey}>✴ RWA surface · real-world yield, without the six-figure door</div>
           <h1 className="font-bold tracking-[-0.03em] leading-[0.97] text-[clamp(38px,6.4vw,86px)] max-w-[15ch] mt-4">
-            Wall Street’s yield. <span style={{ color: CORAL }}>None of the walls.</span>
+            Wall Street’s yield. <span style={{ color: CORAL }}>Without the six-figure door.</span>
           </h1>
           <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[52ch] mt-6">
-            Tokenized real-world assets — private credit, T-bills, trade finance — as a bearer token you actually hold.
-            Deposit any amount, no KYC. Earn real yield. Trade 24/7. Redeem the underlying only if you ever want to.
+            Tokenized real-world assets — private credit, T-bills, trade finance — as a token you actually hold.
+            Deposit any amount, no six-figure minimum. Earn real yield. Trade 24/7. Verification scales with the asset:
+            open for Reg A+, verified wallets for Reg D.
           </p>
           <div className="grid grid-cols-2 gap-y-2.5 gap-x-8 mt-7 max-w-[720px] max-[560px]:grid-cols-1">
             {HERO_CHIPS.map((c) => (
@@ -165,8 +166,8 @@ export default function RwaLandingPage() {
       <section className="border-b border-atx-ink bg-atx-coral/[0.05]">
         <div className={`${wrap} py-[52px]`}>
           <SectionHead n="02" label="Deposit → vRWA → earn → redeem">How it works</SectionHead>
-          <h2 className={h2}>Four steps. <span style={{ color: CORAL }}>KYC touches only the last one.</span></h2>
-          <p className={lead}>The bearer token trades freely; KYC is checked only when you redeem the underlying — never on deposit, hold, or transfer.</p>
+          <h2 className={h2}>Four steps. <span style={{ color: CORAL }}>Verification scales with the asset.</span></h2>
+          <p className={lead}>For Reg A+ assets the token trades openly; for Reg D assets it only reaches verified wallets — the token enforces this on every transfer. Redemption always re-checks KYC.</p>
           <div className="grid grid-cols-4 border border-atx-ink bg-atx-bone mt-8 max-[720px]:grid-cols-1">
             {STEPS.map(([n, t, d], i) => (
               <div key={n} className={`p-[18px] ${i < 3 ? 'border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink' : ''}`}>
@@ -231,8 +232,8 @@ export default function RwaLandingPage() {
             </div>
           </div>
           <div className="text-[clamp(18px,2.3vw,26px)] font-bold tracking-[-0.3px] leading-[1.3] max-w-[36ch] mt-9">
-            Open, permissionless liquidity <i>plus</i> reputation-weighted rewards is exactly what walled-garden platforms
-            <span style={{ color: CORAL }}> structurally cannot offer</span> — bolting it on would mean dismantling the walls their model is built on.
+            Deep, incentivized liquidity <i>plus</i> reputation-weighted rewards — on a bearer or a permissioned token alike —
+            is exactly what walled-garden platforms<span style={{ color: CORAL }}> structurally cannot offer</span> — bolting it on would mean dismantling the walls their model is built on.
           </div>
         </div>
       </section>

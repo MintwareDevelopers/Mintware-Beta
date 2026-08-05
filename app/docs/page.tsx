@@ -184,10 +184,10 @@ function RwaWhy() {
       <table className={TABLE}>
         <thead><tr><th>Tokenized — still stuck</th><th>On Mintware — unlocked</th></tr></thead>
         <tbody>
-          <tr><td>Accredited investors only</td><td className={YES}>Any wallet, any amount — no KYC to hold or trade</td></tr>
+          <tr><td>$5M minimums, accreditation walls</td><td className={YES}>Any amount, no six-figure minimum — access set by the asset, not by us</td></tr>
           <tr><td>Redemption by request, thin secondary</td><td className={YES}>Trade vRWA 24/7 on Uniswap</td></tr>
           <tr><td>A token that can&apos;t touch DeFi</td><td className={YES}>Composable ERC-20 — collateral, strategies, vaults</td></tr>
-          <tr><td>A database entry on someone&apos;s cap table</td><td className={YES}>A bearer token you actually hold</td></tr>
+          <tr><td>A database entry on someone&apos;s cap table</td><td className={YES}>A token you actually hold — self-custody</td></tr>
         </tbody>
       </table>
       <Claim>Real-world assets don&apos;t need a blockchain to exist. <b>They need DeFi to finally move.</b></Claim>
@@ -199,7 +199,7 @@ function RwaWrapper() {
     <>
       <div className={EY}>✴ For RWA issuers · The breakthrough</div>
       <h1>The wrapper: liquidity without becoming a securities dealer</h1>
-      <p className={SUB}>This is the piece competitors can&apos;t copy without tearing down their own walls. It&apos;s why Mintware can offer open, rewarded, liquid markets on RWA-backed tokens when walled-garden platforms structurally cannot.</p>
+      <p className={SUB}>This is the piece competitors can&apos;t copy without tearing down their own walls. It&apos;s why Mintware can offer rewarded, liquid markets on RWA-backed tokens when walled-garden platforms structurally cannot.</p>
       <h2>The trap every RWA platform falls into</h2>
       <p>The instant a platform decides <i>who is allowed to hold or buy</i> an asset, it becomes a gatekeeper — and legally, a distributor soliciting a private placement. That forces KYC walls onto every surface, which kills liquidity and rebuilds the exact cage RWAs were supposed to escape. Access and liquidity die together.</p>
       <h2>Our move: incentivize the token, never the holder</h2>
@@ -211,9 +211,9 @@ function RwaWrapper() {
           <tr><td><b>Permissioned</b></td><td>The token enforces an on-chain allowlist on every transfer — an ineligible wallet&apos;s swap reverts, on-chain, before it touches us.</td><td className={YES}>An ERC-20 whose own rules do the gating</td></tr>
         </tbody>
       </table>
-      <p>Either way, the gate is <b>in the asset, not in our engine</b>. There is no <code>min_kyc_tier</code>, no eligibility check, no allowlist anywhere in the incentive layer. Our pool, vaults, campaigns, and referrals treat <code>vRWA</code> as an ordinary ERC-20 and stay fully permissionless.</p>
+      <p>Either way, the gate is <b>in the asset, not in our engine</b>. There is no <code>min_kyc_tier</code> and no eligibility check anywhere in our incentive layer — the wrapped token&apos;s own transfer rules do the gating (an on-chain allowlist for Reg D; open for Reg A+). Our pool, vaults, campaigns, and referrals just respect whatever the token enforces.</p>
       <h2>Why this is the whole moat</h2>
-      <p>Open, permissionless liquidity <i>plus</i> reputation-weighted rewards on RWA-backed tokens is precisely what walled-garden platforms cannot offer — bolting it on would mean dismantling the KYC walls their model is built on. We get the liquidity and the rewards; they can&apos;t follow without becoming us.</p>
+      <p>Incentivized, liquid secondary markets <i>plus</i> reputation-weighted rewards on RWA-backed tokens is precisely what walled-garden platforms cannot offer — bolting it on would mean dismantling the KYC walls their model is built on. We get the liquidity and the rewards; they can&apos;t follow without becoming us.</p>
       <Claim>By touching only the wrapped token, we deliver distribution, liquidity, and rewards — and stay out of placement-agent and private-placement territory <b>entirely.</b></Claim>
       <Note k="✴ For the issuer, concretely">You keep your compliance exactly where it belongs — at your mint/redeem gateway or in your token&apos;s transfer rules. You hand Mintware a transferable token, and we hand you a distributed, liquid, incentivized market for it. Nothing about your regulatory posture changes; everything about your token&apos;s usefulness does.</Note>
     </>
@@ -419,7 +419,7 @@ function Security() {
       <h1>Security &amp; guarantees</h1>
       <p className={SUB}>What&apos;s enforced on-chain, what&apos;s enforced off-chain, and what we deliberately don&apos;t do.</p>
       <ul>
-        <li><b>Permissionless by construction.</b> No KYC, no eligibility gate anywhere in the incentive engine — the wrapped token gates, if at all.</li>
+        <li><b>Permissionless engine by construction.</b> Mintware&apos;s incentive engine adds no KYC or eligibility gate of its own — the wrapped token&apos;s transfer rules do the gating (an allowlist for Reg D; open for Reg A+).</li>
         <li><b>On-chain verification.</b> Every reward-credited swap is verified against its receipt (sender, router, fee, status) before a point is written.</li>
         <li><b>Oracle bands + guardian.</b> vRWA price is band-constrained to NAV; a guardian freeze can halt a compromised deal.</li>
         <li><b>Anti-sybil.</b> A 24-hour referral time-gate and reputation-weighting blunt farming; reward caps bound per-transaction abuse.</li>

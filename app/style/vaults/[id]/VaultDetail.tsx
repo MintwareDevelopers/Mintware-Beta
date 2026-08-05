@@ -82,8 +82,8 @@ function ActionPanel({ v }: { v: VaultDetail }) {
 
           {!isDeFi && (
             <p className="font-atx-mono text-[11px] text-atx-ink/55 mt-4">
-              Deposit mints vRWA 1:1 with your shares — a bearer instrument you can trade freely.
-              KYC is required only to redeem the underlying.
+              Deposit mints vRWA 1:1 with your shares. Holding and trading require the deal’s KYC tier
+              unless it trades openly (Reg A+); redemption always re-checks KYC.
             </p>
           )}
 

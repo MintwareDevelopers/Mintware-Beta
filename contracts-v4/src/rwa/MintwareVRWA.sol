@@ -12,13 +12,16 @@ enum TransferMode {
 }
 
 /// @title  MintwareVRWA
-/// @notice ERC-20 bearer instrument minted 1:1 with RWA vault shares (Track B). Freely
-///         transferable by default; governance can tighten transfers via a 48h-timelocked
-///         mode change, and a guardian can FREEZE instantly in an emergency. Mint/burn are
-///         restricted to the vault (minter). Mint/burn are always allowed regardless of mode.
+/// @notice ERC-20 vault-share instrument minted 1:1 with RWA vault shares (Track B). The default
+///         PERMISSIONLESS mode suits Reg A+ assets; for Reg D assets governance moves it to
+///         WHITELISTED via a 48h-timelocked mode change so transfers are gated to verified holders,
+///         and a guardian can FREEZE instantly in an emergency. Mint/burn are restricted to the
+///         vault (minter) and are always allowed regardless of mode.
 ///
-/// @dev    KYC is NOT enforced here — vRWA trades permissionlessly. KYC applies only at
-///         SPV redemption / dividend claims / governance (the SPVBeneficiaryRegistry).
+/// @dev    In WHITELISTED mode (Reg D) transfer eligibility is enforced here in `_update` against
+///         the whitelist (registry-driven per the three-role build plan) — i.e. KYC is enforced at
+///         the trade/transfer boundary, not only at redemption. In PERMISSIONLESS mode (Reg A+) vRWA
+///         trades openly and KYC applies at SPV redemption / dividend claims / governance only.
 contract MintwareVRWA is ERC20, Ownable {
     uint8   private immutable _dec;
     uint256 public constant TRANSFER_MODE_TIMELOCK = 48 hours;

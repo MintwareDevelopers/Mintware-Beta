@@ -14,7 +14,7 @@ This document is the authoritative roadmap for Phase 3. The PDF spec is idealize
 A multi-tenant vault coordination layer on **Uniswap V4** with **two surfaces sharing one foundation**:
 
 - **Surface 1 — DeFi:** permissionless yield coordination. Volatility-adjusted fees, idle-capital routing, MEV protection, attribution-boosted fee share.
-- **Surface 2 — RWA:** legal-wrapped tokenization. Oracle-anchored price bands (±15% core / ±45% spec), `vRWA` bearer instrument, SPV + KYC registry, async redemption, kill switch.
+- **Surface 2 — RWA:** legal-wrapped tokenization. Oracle-anchored price bands (±15% core / ±45% spec), `vRWA` instrument (whitelist-gated at transfer for Reg D; open for Reg A+), SPV + KYC registry, async redemption, kill switch.
 
 **Shared foundation both surfaces inherit:** ERC-4626 base vault, multi-tenant factory, FeeVault epochs (7-day), Attribution (off-chain scoring + on-chain soulbound mirror), a V4 hook layer, and a Router.
 

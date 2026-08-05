@@ -16,7 +16,8 @@ verification gate. Nothing here is automatic — a real asset going on-chain is 
       `MW_V4_QUOTER_BASE[_SEPOLIA]`, `MW_ROUTER_ADDRESSES=<MWRouter>`, chain RPC. The RWA trade path *is*
       the router — without it there is no trade step.
 - [ ] **Legal / SPV green light**: SPV formed, legal opinion in hand, KYC vendor live. RWA mainnet is
-      legal-gated by design (KYC is checked only at redemption — see step 6).
+      legal-gated by design. For Reg D deals KYC is enforced at the trade/transfer boundary (whitelisted
+      vRWA) and re-checked at redemption (step 6); Reg A+ deals trade openly.
 - [ ] **The deal is `approved`** in the app (`vault_deals.review_status = 'approved'`, admin review done).
 - [ ] You have the **issuer's market-making USDC** (the seed) and a funded **deployer key** for gas.
 - [ ] Decide the **appraisal (NAV)** and the **bands** (default ±15% core / ±45% spec). The initial pool
@@ -48,7 +49,10 @@ forge script contracts-v4/script/DeployRwaFlow.s.sol --rpc-url <chain> --broadca
 - [ ] `vault.poolInitialized() == true`, `vault.totalLiquidity() > 0`.
 - [ ] `getSlot0(poolId)` sqrtPrice == the appraisal price.
 - [ ] `hook.vault() == vault`, `hook.bands(poolId).configured == true`, appraisal set.
-- [ ] `vrwa.minter() == vault`, `vrwa.transferMode() == PERMISSIONLESS`.
+- [ ] `vrwa.minter() == vault`. **Transfer mode by tier:** for a **Reg D** deal assert
+      `vrwa.transferMode() == WHITELISTED` AND the pool (PoolManager), router, vault, and issuer are
+      enrolled as permitted holders before any trade — shipping `PERMISSIONLESS` for a Reg D asset is a
+      compliance failure. `PERMISSIONLESS` is correct **only** for Reg A+ deals.
 
 ---
 

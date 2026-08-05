@@ -13,12 +13,13 @@ enum KYCLevel {
 
 /// @title  SPVBeneficiaryRegistry
 /// @notice KYC/beneficiary registry for the RWA surface (Track B). A KYC provider records
-///         verification; the RWA vault (and SPV distribution/governance flows) check it
-///         ONLY at the redemption boundary — never on deposit, trade, or fee accrual.
+///         verification; for Reg D assets the vRWA token's WHITELISTED transfer gate reads this
+///         registry, so KYC is enforced at the trade/transfer boundary as well as at redemption.
+///         (Reg A+ assets trade openly; the registry then gates redemption only.)
 ///
-/// @dev    KYC is checked at: redeem vRWA for underlying, claim SPV distributions, vote in
-///         SPV governance. It is NOT checked in the DeFi/deposit/trade path — vRWA is a
-///         permissionless bearer instrument until redemption.
+/// @dev    Under the three-role model this registry is the on-chain source of truth for who may
+///         hold/receive a Reg D vRWA: the token's `_update` gate and the redemption / SPV
+///         distribution / governance flows all check it. See rwa-compliance-three-role-model.md.
 contract SPVBeneficiaryRegistry is Ownable {
     struct KYCRecord {
         KYCLevel level;

@@ -64,7 +64,7 @@ the vaults' capture mechanism from "hope flow arrives" into "we direct our own f
 | P2 | **Internal-if-competitive, LI.FI otherwise** | The Router is a *meta-router*: get both quotes, return the winner. Unlisted pairs skip the internal quote entirely. |
 | P3 | **RWA tradability is structural, not an optimization** | `vRWA` exists only in Mintware pools — there is no LI.FI route. For RWA, the Router is the *only* venue. |
 | P4 | **Rewards + attribution must survive the new path** | `verifySwapTx` currently allowlists LI.FI routers and checks treasury-in-calldata. Internal-route txs go to `MWRouter`, so both checks must learn the new path (§7) or rewards silently break. |
-| P5 | **KYC is never on the swap path** | Per Phase-3 locked decision, KYC is checked only at RWA redeem/dividend/governance — **never** at deposit/trade. RWA swaps through the Router stay permissionless; the OracleHook price-band is the only on-chain gate. |
+| P5 | **KYC is on the vRWA-receipt leg for Reg D** | Superseded (2026-08-05): for Reg D assets the wrapped `vRWA` is whitelist-gated at transfer, so a swap that would deliver vRWA to a non-verified wallet reverts on-chain (the token's own gate in `_update`). Reg A+ swaps stay open. The OracleHook price-band is an additional gate; the Router itself adds no KYC check. See [rwa-compliance-three-role-model.md](rwa-compliance-three-role-model.md). |
 | P6 | **Fail safe, fail to LI.FI** | Any internal-quote error, stale quote, or sim revert → transparently fall back to the LI.FI path. The Router never blocks a swap that LI.FI could serve. |
 
 ---

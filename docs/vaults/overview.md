@@ -26,7 +26,7 @@ engine, fee accounting, and epoch distribution apply across everything you touch
 | Yield source | Swap fees + idle-capital routing + MEV capture | Underlying asset + fees |
 | Risk shape | Smart-contract + market volatility | Issuer / counterparty · oracle-banded price |
 | Protection | MEV guard · dynamic fee · range optimization | SPV wrapper · oracle price bands · 40/60 reserve |
-| Access | Permissionless — deposit anytime | KYC at redemption · 30-day settlement window |
+| Access | Permissionless — deposit anytime | Reg D: KYC/whitelisted holders (trade + redeem) · Reg A+: open · 30-day settlement |
 | Instrument | ERC-4626 share | `vRWA` bearer token (1:1 with shares) |
 | Best for | Active on-chain LPs chasing trading yield | Allocators wanting off-chain yield on on-chain rails |
 
@@ -95,14 +95,14 @@ wasted. The split lives on-chain in the FeeVault; any change emits a public even
 ## The RWA surface
 
 The RWA surface tokenizes real-world assets — private credit, real-estate notes, energy off-take —
-as a `vRWA` bearer instrument on a legal-wrapped foundation:
+as a `vRWA` instrument on a legal-wrapped foundation:
 
 - **SPV-wrapped** — each deal sits in a bankruptcy-remote special-purpose vehicle.
 - **Oracle-banded price** — on-chain swaps are constrained to ±15% (core) / ±45% (spec) around the
   published NAV; trades outside the spec band revert.
 - **40 / 60 reserve** — a reserve ratio backs redemptions.
-- **KYC only at redemption** — `vRWA` trades freely as a bearer token; KYC is checked only when you
-  redeem the underlying, not on deposit or transfer.
+- **KYC at transfer for Reg D** — Reg D `vRWA` only reaches whitelisted/verified wallets (enforced on
+  every transfer via `SPVBeneficiaryRegistry`); redemption re-checks KYC. Reg A+ `vRWA` trades openly.
 - **Async 30-day settlement** — redemption is a request → 30-day window → issuer settlement flow.
 
 Full issuer + redemption detail is in **[RWA Deals — Lifecycle & Trust Model](rwa-deals.md)**.

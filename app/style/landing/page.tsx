@@ -74,14 +74,14 @@ const ACTIONS = [
 ]
 
 const STEPS = [
-  { n: '01', t: 'Deposit USDC', d: 'Any amount. No accreditation, no minimum, no upfront KYC.' },
-  { n: '02', t: 'Receive vRWA', d: 'A bearer token, 1:1 with your share. It’s yours to hold or move.' },
+  { n: '01', t: 'Deposit USDC', d: 'Any amount. No six-figure minimum. Verification scales with the asset.' },
+  { n: '02', t: 'Receive vRWA', d: 'A token 1:1 with your share — self-custodied and composable.' },
   { n: '03', t: 'Earn + trade', d: 'Real-world yield accrues automatically. Trade vRWA on Uniswap, 24/7.' },
-  { n: '04', t: 'Redeem — if you want', d: 'Only here does KYC apply, and only if you redeem the underlying.' },
+  { n: '04', t: 'Redeem — if you want', d: 'Request the underlying → 30-day window. Redemption re-checks KYC.' },
 ]
 
-const TRAD = ['$50k–$250k minimum', 'KYC before you can invest', 'Locked — phone calls to exit', 'You own a database entry']
-const MW = ['Any amount', 'KYC only if you redeem', 'Trade on Uniswap, 24/7', 'You hold a bearer token']
+const TRAD = ['$50k–$250k minimum', 'Accreditation wall to enter', 'Locked — phone calls to exit', 'You own a database entry']
+const MW = ['Any amount, no minimum', 'Verification scaled to the asset', 'Trade on Uniswap, 24/7', 'You self-custody the token']
 
 export default function LandingPreview() {
   const { isConnected } = useMintwareIdentity()
@@ -145,10 +145,10 @@ export default function LandingPreview() {
         <div className="px-6 py-[44px] border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink">
           <div className={ey}>✴ Two-surface vaults · reputation-weighted yield</div>
           <h2 className="font-bold tracking-[-0.02em] leading-[1.04] text-[clamp(28px,3.4vw,44px)] mt-3.5">
-            Real estate, credit, crypto — one vault, <span className="text-atx-blue">no walls.</span>
+            Real estate, credit, crypto — one vault, <span className="text-atx-blue">no minimums.</span>
           </h2>
           <p className="text-[16px] leading-[1.5] text-atx-ink/70 max-w-[34ch] mt-4">
-            No KYC. No minimums. DeFi and real-world yield in one deposit — and your score sets the rate.
+            No minimums. Instant mobility. DeFi and real-world yield in one deposit — and your score sets the rate.
           </p>
         </div>
         <div className="px-6 py-[30px] bg-atx-panel relative">
@@ -305,7 +305,7 @@ export default function LandingPreview() {
         <div className="mx-auto max-w-[1180px] px-6 py-[56px]">
           <div className="flex items-baseline gap-3.5">
             <span className="font-atx-mono text-[12px] text-atx-acid">03</span>
-            <span className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-white/70">Real-world yield, no gatekeepers</span>
+            <span className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-white/70">Real-world yield, without the six-figure door</span>
           </div>
           <h2 className="font-bold tracking-[-0.03em] text-[clamp(24px,3vw,38px)] leading-[1.05] max-w-[22ch] mt-3.5">
             Real estate yield, <span className="text-atx-acid">without the $50k door.</span>

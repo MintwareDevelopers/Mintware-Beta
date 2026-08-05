@@ -22,14 +22,16 @@ import {SPVBeneficiaryRegistry, KYCLevel} from "./SPVBeneficiaryRegistry.sol";
 
 /// @title  MintwareRWAVault4626
 /// @notice Surface-2 (RWA) vault. Extends the ERC-4626 base and reuses its async-redeem
-///         machinery with a 30-day settlement window. On deposit it mints a `vRWA` bearer
-///         token 1:1 with shares; redemption burns the vRWA up front (a permissionless
-///         claim ticket) and is settled by the issuer only after the window AND a KYC check
+///         machinery with a 30-day settlement window. On deposit it mints a `vRWA`
+///         token 1:1 with shares; redemption burns the vRWA up front (a claim
+///         ticket) and is settled by the issuer only after the window AND a KYC check
 ///         on the redeeming holder (SPVBeneficiaryRegistry).
 ///
-/// @dev    KYC is enforced ONLY at settlement — deposits, vRWA trading, and fee accrual are
-///         permissionless. This v1 is reserve-only (USDC held in the vault, no V4 pool); the
-///         vRWA/USDC pool + oracle-band OracleHook + 40/60 reserve deployment land next.
+/// @dev    KYC boundary (target model — see docs/developers/rwa-compliance-three-role-model.md):
+///         for Reg D assets the `vRWA` token is WHITELISTED, so trading/holding is gated at every
+///         transfer and redemption re-checks KYC here; Reg A+ assets trade openly. Under the
+///         three-role restructure this contract is repurposed as the issuer wrapping +
+///         holder-redemption vault (the public USDC LP path moves to a new MintwareULV4626).
 contract MintwareRWAVault4626 is MintwareBaseVault4626 {
     using SafeERC20     for IERC20;
     using PoolIdLibrary for PoolKey;

@@ -431,7 +431,7 @@ function SurfaceSplit() {
         ['Yield source', 'Underlying asset (credit, notes, energy) + fees'],
         ['Risk shape', 'Issuer / counterparty · oracle-banded price'],
         ['Protection', 'SPV-wrapped · oracle price bands · 40/60 reserve'],
-        ['Access', 'KYC at redemption · 30-day settlement window'],
+        ['Access', 'KYC scaled to asset (open Reg A+ / verified Reg D) · 30-day redemption'],
         ['Best for', 'Allocators wanting off-chain yield, on-chain rails'],
       ],
     },

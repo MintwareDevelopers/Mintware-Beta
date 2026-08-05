@@ -88,10 +88,10 @@ changed:
 
 | Guarantee | How it's enforced |
 |---|---|
-| **Non-custodial** | You hold `vRWA` — a bearer instrument. No one, including the team, can move your principal. |
+| **Non-custodial** | You self-custody `vRWA`. No one, including the team, can move your principal. |
 | **Oracle-banded price** | Swaps are constrained to **±15% (core) / ±45% (spec)** around the published NAV; trades outside the spec band revert. |
 | **Reserve-backed** | A **40 / 60** reserve/yield split with a reserve-ratio invariant backs redemptions. |
-| **KYC at redemption only** | `vRWA` trades freely; KYC (tiered: Basic / Accredited / Institutional) is checked only when you redeem the underlying. |
+| **KYC at the trade boundary (Reg D)** | Reg D `vRWA` transfers are whitelist-gated (`SPVBeneficiaryRegistry`, tiered: Basic / Accredited / Institutional); redemption re-checks KYC. Reg A+ deals trade openly. |
 | **Guardian / kill-switch** | Transfer modes (permissionless / whitelisted / frozen) and a guardian freeze protect the instrument, behind a 48-hour timelock. |
 
 ---
