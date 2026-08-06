@@ -69,16 +69,6 @@ const ACTIONS = [
   { b: 'Run an agent', fd: 'Machines earn reputation — ERC-8004', pts: 'Agent trust', hot: false },
 ]
 
-const STEPS = [
-  { n: '01', t: 'Deposit USDC', d: 'Any amount. No accreditation, no minimum, no upfront KYC.' },
-  { n: '02', t: 'Receive vRWA', d: 'A bearer token, 1:1 with your share. It’s yours to hold or move.' },
-  { n: '03', t: 'Earn + trade', d: 'Real-world yield accrues automatically. Trade vRWA on Uniswap, 24/7.' },
-  { n: '04', t: 'Redeem — if you want', d: 'Only here does KYC apply, and only if you redeem the underlying.' },
-]
-
-const TRAD = ['$50k–$250k minimum', 'KYC before you can invest', 'Locked — phone calls to exit', 'You own a database entry']
-const MW = ['Any amount', 'KYC only if you redeem', 'Trade on Uniswap, 24/7', 'You hold a bearer token']
-
 
 function Star({ className = '' }: { className?: string }) {
   return (
