@@ -12,7 +12,7 @@ import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
 import {StateLibrary}        from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
 import {FeeVault}                from "../src/FeeVault.sol";
-import {MWSocialHook}            from "../src/MWSocialHook.sol";
+import {MWHookCoordinator}       from "../src/hooks/MWHookCoordinator.sol";
 import {HookMiner}               from "../src/lib/HookMiner.sol";
 import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
 import {MintwareBaseVault4626}   from "../src/vaults/MintwareBaseVault4626.sol";
@@ -44,7 +44,7 @@ contract MintwareDeFiVault4626Test is Test {
 
     PoolManager internal pm;
     FeeVault    internal feeVault;
-    MWSocialHook internal hook;
+    MWHookCoordinator internal hook;
     MintwareDeFiVault4626 internal vault;
 
     MockERC20 internal usdc;
@@ -66,24 +66,18 @@ contract MintwareDeFiVault4626Test is Test {
 
         feeVault = new FeeVault(address(usdc), dist, oracle, treasury);
 
-        // Mine + deploy MWSocialHook at an address with the correct permission bits.
-        bytes memory hookArgs = abi.encode(
-            IPoolManager(address(pm)), address(usdc), address(feeVault),
-            treasury, address(0), address(0), deployer
-        );
+        // Mine + deploy the canonical MWHookCoordinator at an address with the right bits.
+        bytes memory hookArgs = abi.encode(IPoolManager(address(pm)), address(0), deployer);
         (, bytes32 salt) = HookMiner.find(
-            deployer, uint160(0x0AC4), type(MWSocialHook).creationCode, hookArgs
+            deployer, uint160(0xAC0), type(MWHookCoordinator).creationCode, hookArgs
         );
-        hook = new MWSocialHook{salt: salt}(
-            IPoolManager(address(pm)), address(usdc), address(feeVault),
-            treasury, address(0), address(0), deployer
-        );
+        hook = new MWHookCoordinator{salt: salt}(IPoolManager(address(pm)), address(0), deployer);
 
         // Deploy the ERC-4626 DeFi vault.
         vault = new MintwareDeFiVault4626(_cfg(0, 0), address(pm), address(feeVault));
 
         // Wire cross-references (hook gates LP to the vault).
-        hook.setSocialVault(address(vault));
+        hook.setVault(address(vault));
         feeVault.setSocialVault(address(vault));
         feeVault.setHook(address(hook));
 

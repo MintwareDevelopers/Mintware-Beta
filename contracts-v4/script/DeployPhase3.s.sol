@@ -3,7 +3,7 @@ pragma solidity ^0.8.26;
 
 import {Script, console} from "forge-std/Script.sol";
 import {FeeVault}                from "../src/FeeVault.sol";
-import {MWSocialHook}            from "../src/MWSocialHook.sol";
+import {MWHookCoordinator}       from "../src/hooks/MWHookCoordinator.sol";
 import {HookMiner}               from "../src/lib/HookMiner.sol";
 import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
 import {MintwareVaultRegistry}   from "../src/vaults/MintwareVaultRegistry.sol";
@@ -14,10 +14,11 @@ import {IPoolManager}            from "@uniswap/v4-core/src/interfaces/IPoolMana
 ///
 /// ─── Deploy order (mirrors the Phase-2 script; avoids circular deps) ─────────
 ///   1. Deploy  FeeVault(usdc, distributor, oracle, treasury)
-///   2. Mine    CREATE2 salt for MWSocialHook (flags 0x0AC4)
+///   2. Mine    CREATE2 salt for MWHookCoordinator (flags 0xAC0)
 ///   3. Deploy  MintwareDeFiVault4626(cfg, poolManager, feeVault)
-///   4. Deploy  MWSocialHook at the mined address
-///   5. Wire    hook.setSocialVault(vault) / feeVault.setSocialVault(vault) / feeVault.setHook(hook)
+///   4. Deploy  MWHookCoordinator at the mined address
+///   5. Wire    hook.setVault(vault) / feeVault.setSocialVault(vault) / feeVault.setHook(hook)
+///      (then configurePool(...) per pool to enable dynamic fee / oracle guard)
 ///   6. Deploy  MintwareVaultRegistry (reuse REGISTRY_ADDRESS if provided)
 ///   7. Register the vault in the registry
 ///
@@ -44,7 +45,6 @@ contract DeployPhase3 is Script {
 
         address usdc        = vm.envAddress("USDC_ADDRESS");
         address poolMgr     = vm.envAddress("V4_POOL_MANAGER");
-        address pyth        = vm.envOr("PYTH_ORACLE", address(0));
         address oracle      = vm.envAddress("ORACLE_SIGNER");
         address treasury    = vm.envAddress("TREASURY_ADDRESS");
         address distributor = vm.envAddress("MINTWARE_DISTRIBUTOR");
@@ -62,12 +62,10 @@ contract DeployPhase3 is Script {
         console.log("FeeVault:   ", address(feeVault));
         vm.stopBroadcast();
 
-        // 2. Mine hook salt
-        bytes memory hookArgs = abi.encode(
-            IPoolManager(poolMgr), usdc, address(feeVault), treasury, address(0), pyth, deployer
-        );
+        // 2. Mine hook salt (coordinator: vault wired post-deploy, so vault == address(0) here)
+        bytes memory hookArgs = abi.encode(IPoolManager(poolMgr), address(0), deployer);
         (address expectedHook, bytes32 hookSalt) = HookMiner.find(
-            C2_FACTORY, uint160(0x0AC4), type(MWSocialHook).creationCode, hookArgs
+            C2_FACTORY, uint160(0xAC0), type(MWHookCoordinator).creationCode, hookArgs
         );
         console.log("Expected hook:", expectedHook);
 
@@ -91,13 +89,13 @@ contract DeployPhase3 is Script {
         MintwareDeFiVault4626 vault = new MintwareDeFiVault4626(cfg, poolMgr, address(feeVault));
         console.log("DeFiVault:  ", address(vault));
 
-        MWSocialHook hook = new MWSocialHook{salt: hookSalt}(
-            IPoolManager(poolMgr), usdc, address(feeVault), treasury, address(0), pyth, deployer
+        MWHookCoordinator hook = new MWHookCoordinator{salt: hookSalt}(
+            IPoolManager(poolMgr), address(0), deployer
         );
         require(address(hook) == expectedHook, "hook address mismatch");
         console.log("Hook:       ", address(hook));
 
-        hook.setSocialVault(address(vault));
+        hook.setVault(address(vault));
         feeVault.setSocialVault(address(vault));
         feeVault.setHook(address(hook));
 
