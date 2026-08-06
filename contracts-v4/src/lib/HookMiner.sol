@@ -22,20 +22,20 @@ pragma solidity ^0.8.26;
 ///           bit  1  AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG
 ///           bit  0  AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG
 ///
-///         MWSocialHook requires flags: 0x0AC4 (bits 11, 9, 7, 6, 2)
-///           beforeAddLiquidity + beforeRemoveLiquidity + beforeSwap + afterSwap + afterSwapReturnDelta
+///         MWHookCoordinator requires flags: 0xAC0 (bits 11, 9, 7, 6)
+///           beforeAddLiquidity + beforeRemoveLiquidity + beforeSwap + afterSwap
 ///
 /// @dev    Usage in Foundry scripts / tests:
 ///
-///           bytes memory creationCode = type(MWSocialHook).creationCode;
-///           bytes memory constructorArgs = abi.encode(poolManager, feeVault, address(0), pyth);
+///           bytes memory creationCode = type(MWHookCoordinator).creationCode;
+///           bytes memory constructorArgs = abi.encode(poolManager, vault, owner);
 ///           (address hookAddr, bytes32 salt) = HookMiner.find(
 ///               deployer,
-///               MWSocialHook.HOOK_FLAGS,      // 0x0AC4
+///               MWHookCoordinator.HOOK_FLAGS, // 0xAC0
 ///               creationCode,
 ///               constructorArgs
 ///           );
-///           MWSocialHook hook = new MWSocialHook{salt: salt}(poolManager, feeVault, address(0), pyth);
+///           MWHookCoordinator hook = new MWHookCoordinator{salt: salt}(poolManager, vault, owner);
 ///           require(address(hook) == hookAddr, "HookMiner: deploy address mismatch");
 library HookMiner {
 
