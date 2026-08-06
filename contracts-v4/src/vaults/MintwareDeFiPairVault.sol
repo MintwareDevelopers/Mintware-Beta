@@ -14,9 +14,8 @@ import {LiquidityAmounts}      from "@uniswap/v4-periphery/src/libraries/Liquidi
 
 import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import {MWGuardianPausable} from "../lib/MWGuardianPausable.sol";
+import {MintwarePairVault} from "./MintwarePairVault.sol";
 import {PoolProfile, LockTier} from "./VaultTypes.sol";
 
 /// @title  MintwareDeFiPairVault
@@ -38,7 +37,7 @@ import {PoolProfile, LockTier} from "./VaultTypes.sol";
 ///         Follow-on: a shared MintwarePairVault base to be extracted from this + the
 ///         MatchedLiquidityVault once both are proven; attribution/lock-weighted reward
 ///         layering on top of the raw per-share accrual.
-contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCallback {
+contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     using SafeERC20     for IERC20;
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
@@ -84,10 +83,8 @@ contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCa
     // Immutables
     // ─────────────────────────────────────────────────────────────────────────
 
-    IPoolManager public immutable poolManager;
     IERC20       public immutable token0;
     IERC20       public immutable token1;
-    address      public immutable treasury;  // Mintware protocol-fee recipient
     address      public immutable provider;   // strategy manager
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -95,10 +92,6 @@ contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCa
     // ─────────────────────────────────────────────────────────────────────────
 
     PoolProfile public profile;
-    PoolKey     public poolKey;
-    bool        public poolInitialized;
-    int24       public tickLower;
-    int24       public tickUpper;
 
     uint128 public totalLiquidity; // == total shares outstanding
     mapping(address => uint256) public shares;
@@ -117,7 +110,6 @@ contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCa
     // Events
     // ─────────────────────────────────────────────────────────────────────────
 
-    event PoolInitialized(bytes32 indexed poolId, uint160 sqrtPriceX96);
     event Deposited(address indexed lp, uint256 amount0, uint256 amount1, uint256 sharesMinted, LockTier tier);
     event RedeemRequested(address indexed lp, uint256 shares, uint256 noticeExpiry);
     event Redeemed(address indexed lp, uint256 shares, uint256 amount0, uint256 amount1, uint256 penalty0, uint256 penalty1);
@@ -132,7 +124,6 @@ contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCa
 
     error BadConfig();
     error PoolNotInitialized();
-    error PoolAlreadyInitialized();
     error ZeroLiquidity();
     error MinHoldNotMet();
     error InsufficientShares();
@@ -141,7 +132,6 @@ contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCa
     error NoticeNotExpired();
     error AlreadyExecuted();
     error EmptyRange();
-    error OnlyPoolManager();
     error OnlyProvider();
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -155,18 +145,16 @@ contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCa
         address _treasury,
         address _provider,
         address _initialOwner
-    ) MWGuardianPausable(_initialOwner) {
+    ) MintwarePairVault(_poolManager, _treasury, _initialOwner) {
         if (_treasury == address(0) || _provider == address(0)) revert BadConfig();
         address c0 = Currency.unwrap(_poolKey.currency0);
         address c1 = Currency.unwrap(_poolKey.currency1);
         if (c0 == address(0) || c1 == address(0) || c0 == c1) revert BadConfig();
 
-        poolManager = IPoolManager(_poolManager);
         poolKey     = _poolKey;
         token0      = IERC20(c0);
         token1      = IERC20(c1);
         profile     = _profile;
-        treasury    = _treasury;
         provider    = _provider;
     }
 
@@ -181,13 +169,9 @@ contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCa
 
     /// @notice Initialize the V4 pool at a launch price and set the initial profile range.
     function initializePool(uint160 sqrtPriceX96) external onlyProvider {
-        if (poolInitialized) revert PoolAlreadyInitialized();
-        poolManager.initialize(poolKey, sqrtPriceX96);
-        poolInitialized = true;
-
+        _initializePool(sqrtPriceX96);
         int24 launchTick = TickMath.getTickAtSqrtPrice(sqrtPriceX96);
         (tickLower, tickUpper) = _profileRange(launchTick);
-        emit PoolInitialized(PoolId.unwrap(poolKey.toId()), sqrtPriceX96);
     }
 
     function profileHalfWidth(PoolProfile p) public pure returns (int24) {
@@ -369,7 +353,7 @@ contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCa
     // ─────────────────────────────────────────────────────────────────────────
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
-        if (msg.sender != address(poolManager)) revert OnlyPoolManager();
+        _onlyPoolManager();
         (Action action, bytes memory params) = abi.decode(data, (Action, bytes));
 
         if (action == Action.Deploy) {
@@ -466,25 +450,6 @@ contract MintwareDeFiPairVault is MWGuardianPausable, ReentrancyGuard, IUnlockCa
         // totalLiquidity (share supply) is unchanged by a rebalance — shares track ownership, not
         // the raw V4 liquidity number, which may shift slightly at a new range.
         return "";
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // V4 settlement
-    // ─────────────────────────────────────────────────────────────────────────
-
-    function _settleDelta(BalanceDelta delta) internal {
-        int128 d0 = delta.amount0();
-        int128 d1 = delta.amount1();
-        if (d0 < 0)      _pay(poolKey.currency0, uint256(uint128(-d0)));
-        else if (d0 > 0) poolManager.take(poolKey.currency0, address(this), uint256(uint128(d0)));
-        if (d1 < 0)      _pay(poolKey.currency1, uint256(uint128(-d1)));
-        else if (d1 > 0) poolManager.take(poolKey.currency1, address(this), uint256(uint128(d1)));
-    }
-
-    function _pay(Currency currency, uint256 amount) internal {
-        poolManager.sync(currency);
-        IERC20(Currency.unwrap(currency)).safeTransfer(address(poolManager), amount);
-        poolManager.settle();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
