@@ -207,6 +207,50 @@ contract MintwareDeFiVault4626Test is Test {
         vm.stopPrank();
     }
 
+    // ── D6: instant redemption for unlocked/Flex, async for locked ───────────
+
+    function test_flex_instant_withdraw_after_min_hold() public {
+        _seedPool();
+        uint256 amount = 5_000e6;
+        uint256 shares = _deposit(alice, amount, LockTier.Flex);
+
+        // Not instant-eligible during the 24h anti-JIT window.
+        assertEq(vault.maxRedeem(alice), 0, "not instant before min-hold");
+
+        vm.warp(block.timestamp + 25 hours);
+        assertEq(vault.maxRedeem(alice), shares, "instant-eligible after 24h");
+
+        uint256 balBefore = usdc.balanceOf(alice);
+        vm.prank(alice);
+        vault.redeem(shares, alice, alice); // instant — no 7-day notice
+        assertApproxEqAbs(usdc.balanceOf(alice) - balBefore, amount, 1, "instant redeem returns principal");
+        assertEq(vault.balanceOf(alice), 0, "shares burned");
+    }
+
+    function test_locked_tier_cannot_instant_withdraw() public {
+        _seedPool();
+        uint256 shares = _deposit(alice, 10_000e6, LockTier.Committed); // 30-day lock
+        vm.warp(block.timestamp + 25 hours); // past min-hold but still locked
+
+        assertEq(vault.maxRedeem(alice), 0, "locked - not instant-eligible");
+        vm.prank(alice);
+        vm.expectRevert(MintwareBaseVault4626.SynchronousRedemptionDisabled.selector);
+        vault.redeem(shares, alice, alice);
+    }
+
+    function test_expired_lock_can_instant_withdraw() public {
+        _seedPool();
+        uint256 shares = _deposit(alice, 10_000e6, LockTier.Committed);
+        vm.warp(block.timestamp + 31 days); // past the 30-day lock → unlocked, no penalty
+
+        assertEq(vault.maxRedeem(alice), shares, "expired lock - instant-eligible");
+        uint256 balBefore = usdc.balanceOf(alice);
+        vm.prank(alice);
+        vault.redeem(shares, alice, alice);
+        assertApproxEqAbs(usdc.balanceOf(alice) - balBefore, 10_000e6, 1, "full principal, no penalty");
+        assertEq(vault.balanceOf(alice), 0, "shares burned");
+    }
+
     function test_second_deposit_cannot_change_lock_tier() public {
         _seedPool();
         _deposit(alice, 1_000e6, LockTier.Core);
