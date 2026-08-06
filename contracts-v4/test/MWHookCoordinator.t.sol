@@ -246,4 +246,36 @@ contract MWHookCoordinatorTest is Test {
     function BalanceDeltaZero() internal pure returns (BalanceDelta) {
         return BalanceDelta.wrap(0);
     }
+
+    // ── Stage-2.1: routing-discoverability gas budget ────────────────────────
+
+    /// @notice The full swap hot path (dynamic fee + oracle guard + fee rate-limit) must stay
+    ///         well under ~200k gas on beforeSwap+afterSwap — above that, routing bots treat a
+    ///         hook as "hostile" and skip the pool. This is the concrete payoff of retiring the
+    ///         heavier take()-skim MWSocialHook.
+    function test_gas_hook_hot_path_under_routing_budget() public {
+        // Everything on: dynamic fee, oracle guard, rate-limit.
+        coord.configurePool(poolId, 3000, 100000, 5, 500, true, true, 60, 6000, 10);
+        // Warm oracle + fee/tick state so we measure steady-state (not first-touch) cost.
+        _swap(sellProjZeroForOne, 200e6);
+        vm.roll(block.number + 1);
+        _swap(sellProjZeroForOne, 200e6);
+        vm.roll(block.number + 1);
+
+        SwapParams memory sp = SwapParams(sellProjZeroForOne, -int256(100e6), 0);
+
+        vm.startPrank(address(pm));
+        uint256 g0 = gasleft();
+        coord.beforeSwap(alice, poolKey, sp, "");
+        uint256 beforeGas = g0 - gasleft();
+        uint256 g1 = gasleft();
+        coord.afterSwap(alice, poolKey, sp, BalanceDeltaZero(), "");
+        uint256 afterGas = g1 - gasleft();
+        vm.stopPrank();
+
+        emit log_named_uint("beforeSwap gas", beforeGas);
+        emit log_named_uint("afterSwap gas ", afterGas);
+        emit log_named_uint("combined gas  ", beforeGas + afterGas);
+        assertLt(beforeGas + afterGas, 200_000, "hook hot path exceeds the ~200k routing budget");
+    }
 }
