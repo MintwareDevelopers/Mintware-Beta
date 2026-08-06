@@ -9,9 +9,12 @@ import {IHooks}              from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}             from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta}         from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 import {FeeVault}                from "../src/FeeVault.sol";
 import {HookMiner}               from "../src/lib/HookMiner.sol";
+import {MWGuardianPausable}      from "../src/lib/MWGuardianPausable.sol";
 import {MWHookCoordinator}       from "../src/hooks/MWHookCoordinator.sol";
 import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
 import {VaultSurface, LockTier, VaultConfig} from "../src/vaults/VaultTypes.sol";
@@ -172,5 +175,66 @@ contract MWHookCoordinatorTest is Test {
         assertEq(usdc.balanceOf(treasury) - tBefore, expMint, "25% Mintware -> treasury");
         assertEq(usdc.balanceOf(address(this)) - pBefore, expProv, "25% provider");
         assertEq(usdc.balanceOf(address(feeVault)) - fBefore, expDep, "50% depositors -> FeeVault");
+    }
+
+    // ── Stage 1.3: callback gating (Trail-of-Bits pattern #1) ────────────────
+
+    function test_callbacks_reject_non_pool_manager() public {
+        ModifyLiquidityParams memory lp = ModifyLiquidityParams(-60000, 60000, 1, bytes32(0));
+        SwapParams memory sp = SwapParams(true, 1, 0);
+
+        vm.startPrank(alice);
+        vm.expectRevert(MWHookCoordinator.OnlyPoolManager.selector);
+        coord.beforeAddLiquidity(address(vault), poolKey, lp, "");
+        vm.expectRevert(MWHookCoordinator.OnlyPoolManager.selector);
+        coord.beforeRemoveLiquidity(address(vault), poolKey, lp, "");
+        vm.expectRevert(MWHookCoordinator.OnlyPoolManager.selector);
+        coord.beforeSwap(alice, poolKey, sp, "");
+        vm.expectRevert(MWHookCoordinator.OnlyPoolManager.selector);
+        coord.afterSwap(alice, poolKey, sp, BalanceDeltaZero(), "");
+        vm.stopPrank();
+    }
+
+    function test_permission_bits_match_declared_flags() public view {
+        // Declared HOOK_FLAGS must equal the low bits actually encoded in the address
+        // (an Angstrom-class mismatch would otherwise brick or mis-gate the pool).
+        assertEq(coord.HOOK_FLAGS(), 0xAC0, "declared flags");
+        assertEq(uint160(address(coord)) & 0x3FFF, 0xAC0, "address-encoded flags match");
+    }
+
+    // ── Stage 1.4: kill-switch on the hook ───────────────────────────────────
+
+    function test_pause_blocks_new_liquidity_but_swaps_continue() public {
+        coord.pause();
+
+        // New liquidity (via the vault) is blocked at beforeAddLiquidity. V4's PoolManager
+        // wraps hook reverts (EnforcedPause bubbles inside a WrappedError), so match on any revert.
+        vm.startPrank(alice);
+        usdc.approve(address(vault), 10_000e6);
+        vm.expectRevert();
+        vault.depositWithLock(10_000e6, alice, LockTier.Flex);
+        vm.stopPrank();
+
+        // Trading continues — a paused hook must never brick the pool's swap path.
+        _swap(sellProjZeroForOne, 500e6);
+    }
+
+    function test_guardian_can_pause_hook() public {
+        address guardian = makeAddr("guardian");
+        coord.setGuardian(guardian);
+        vm.prank(guardian);
+        coord.pause();
+        assertTrue(coord.paused(), "guardian paused hook");
+
+        vm.prank(guardian);
+        vm.expectRevert(); // guardian cannot unpause
+        coord.unpause();
+
+        coord.unpause();
+        assertFalse(coord.paused(), "owner unpaused hook");
+    }
+
+    function BalanceDeltaZero() internal pure returns (BalanceDelta) {
+        return BalanceDelta.wrap(0);
     }
 }

@@ -11,8 +11,8 @@ import {BeforeSwapDelta, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/Bef
 import {StateLibrary}        from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {LPFeeLibrary}        from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {Hooks}               from "@uniswap/v4-core/src/libraries/Hooks.sol";
-import {Ownable}             from "@openzeppelin/contracts/access/Ownable.sol";
 
+import {MWGuardianPausable} from "../lib/MWGuardianPausable.sol";
 import {MWMEVGuard}   from "./MWMEVGuard.sol";
 import {MWDynamicFee} from "./MWDynamicFee.sol";
 
@@ -31,7 +31,14 @@ import {MWDynamicFee} from "./MWDynamicFee.sol";
 /// @dev    Trader identity for MEV cooldown keys on tx.origin, because V4 reports the
 ///         router as `sender`. This catches naive single-EOA sandwiches; multi-address
 ///         attackers are the Attribution/sybil layer's job. Documented tradeoff.
-contract MWHookCoordinator is IHooks, Ownable {
+///
+/// @dev    Kill-switch (Stage-1.4): an emergency pause gates `beforeAddLiquidity` only —
+///         it blocks NEW liquidity while always allowing `beforeRemoveLiquidity` so
+///         positions can still exit to safety during an incident (mirrors the vault's
+///         recall-stays-open asymmetry). The swap callbacks are deliberately NOT gated —
+///         reverting `beforeSwap` would brick the pool, and swaps cannot drain this hook
+///         (it holds no funds and skims no delta). Guardian fast-pauses; owner unpauses.
+contract MWHookCoordinator is IHooks, MWGuardianPausable {
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
     using MWMEVGuard    for MWMEVGuard.State;
@@ -66,7 +73,7 @@ contract MWHookCoordinator is IHooks, Ownable {
         _;
     }
 
-    constructor(IPoolManager _poolManager, address _vault, address _initialOwner) Ownable(_initialOwner) {
+    constructor(IPoolManager _poolManager, address _vault, address _initialOwner) MWGuardianPausable(_initialOwner) {
         POOL_MANAGER = _poolManager;
         vault        = _vault;
 
@@ -128,7 +135,7 @@ contract MWHookCoordinator is IHooks, Ownable {
     // ── IHooks: liquidity gate ───────────────────────────────────────────────
 
     function beforeAddLiquidity(address sender, PoolKey calldata, ModifyLiquidityParams calldata, bytes calldata)
-        external view override onlyPoolManager returns (bytes4)
+        external view override onlyPoolManager whenNotPaused returns (bytes4)
     {
         if (sender != vault) revert OnlyVaultCanModifyLiquidity();
         return IHooks.beforeAddLiquidity.selector;

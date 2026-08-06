@@ -18,8 +18,12 @@ import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
 import {MintwareBaseVault4626}   from "../src/vaults/MintwareBaseVault4626.sol";
 import {VaultSurface, LockTier, VaultConfig, PoolProfile} from "../src/vaults/VaultTypes.sol";
 
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
+import {MWGuardianPausable} from "../src/lib/MWGuardianPausable.sol";
+
 import {MockERC20} from "./mocks/MockERC20.sol";
 import {MockYieldAdapter} from "./mocks/MockYieldAdapter.sol";
+import {MockHostileYieldAdapter} from "./mocks/MockHostileYieldAdapter.sol";
 
 /// @notice Integration tests for the Phase-3 ERC-4626 DeFi vault against a real V4 PoolManager.
 ///         Proves: deposit → shares minted + liquidity deployed → async lock redeem →
@@ -126,6 +130,14 @@ contract MintwareDeFiVault4626Test is Test {
         usdc.approve(address(vault), amount);
         shares = vault.depositWithLock(amount, user, tier);
         vm.stopPrank();
+    }
+
+    /// @dev Allowlist + activate a yield adapter (propose → 48h timelock → confirm → set).
+    function _enableAdapter(address adapter) internal {
+        vault.proposeAdapter(adapter);
+        vm.warp(block.timestamp + vault.ADAPTER_TIMELOCK());
+        vault.confirmAdapter(adapter);
+        vault.setYieldAdapter(adapter);
     }
 
     // ── tests ──────────────────────────────────────────────────────────────
@@ -321,7 +333,7 @@ contract MintwareDeFiVault4626Test is Test {
         MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
         _seedPool();
         vault.setIdleConfig(true, 6_000);
-        vault.setYieldAdapter(address(adapter));
+        _enableAdapter(address(adapter));
 
         _deposit(alice, 10_000e6, LockTier.Flex); // 6_000 reserve in vault
         vault.routeIdleToYield(6_000e6);
@@ -343,7 +355,7 @@ contract MintwareDeFiVault4626Test is Test {
 
     function test_harvest_no_yield_returns_zero() public {
         MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
-        vault.setYieldAdapter(address(adapter));
+        _enableAdapter(address(adapter));
         assertEq(vault.harvestYield(), 0, "no yield");
     }
 
@@ -354,8 +366,174 @@ contract MintwareDeFiVault4626Test is Test {
 
     function test_routeIdleToYield_requires_enabled() public {
         MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
-        vault.setYieldAdapter(address(adapter));
+        _enableAdapter(address(adapter));
         vm.expectRevert(MintwareDeFiVault4626.IdleNotEnabled.selector);
         vault.routeIdleToYield(1e6);
+    }
+
+    // ── Stage 1.1: adapter allowlist + 48h timelock ──────────────────────────
+
+    function test_setYieldAdapter_rejects_non_allowlisted() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        vm.expectRevert(MintwareDeFiVault4626.AdapterNotAllowed.selector);
+        vault.setYieldAdapter(address(adapter));
+    }
+
+    function test_confirmAdapter_reverts_before_timelock() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        vault.proposeAdapter(address(adapter));
+        vm.warp(block.timestamp + vault.ADAPTER_TIMELOCK() - 1);
+        vm.expectRevert(MintwareDeFiVault4626.AdapterTimelockPending.selector);
+        vault.confirmAdapter(address(adapter));
+    }
+
+    function test_confirmAdapter_reverts_if_not_proposed() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        vm.expectRevert(MintwareDeFiVault4626.AdapterNotProposed.selector);
+        vault.confirmAdapter(address(adapter));
+    }
+
+    function test_revoked_adapter_cannot_receive_routing() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        _seedPool();
+        vault.setIdleConfig(true, 6_000);
+        _enableAdapter(address(adapter));
+        _deposit(alice, 10_000e6, LockTier.Flex);
+
+        vault.revokeAdapter(address(adapter));
+        vm.expectRevert(MintwareDeFiVault4626.AdapterNotAllowed.selector);
+        vault.routeIdleToYield(1_000e6);
+    }
+
+    // ── Stage 1.1: withdrawal-buffer invariant (rehypothecation cap) ──────────
+
+    function test_route_reverts_above_rehypothecation_cap() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        _seedPool();
+        vault.setIdleConfig(true, 9_000); // 90% reserve so plenty is idle
+        _enableAdapter(address(adapter));
+        _deposit(alice, 10_000e6, LockTier.Flex);
+
+        // Default cap = 70% of 10_000 = 7_000. Routing 7_001 must revert.
+        vm.expectRevert(MintwareDeFiVault4626.RehypothecationCapExceeded.selector);
+        vault.routeIdleToYield(7_001e6);
+
+        // Exactly at the cap is allowed.
+        vault.routeIdleToYield(7_000e6);
+        assertEq(vault.principalInAdapter(), 7_000e6, "routed up to the cap");
+    }
+
+    function test_setRehypothecationCap_hard_ceiling() public {
+        vm.expectRevert(MintwareDeFiVault4626.RatioTooHigh.selector);
+        vault.setRehypothecationCap(8_001); // > MAX_REHYP_CAP_BPS (80%)
+        vault.setRehypothecationCap(5_000);
+        assertEq(vault.rehypothecationCapBps(), 5_000, "cap updated");
+    }
+
+    // ── Stage 1.1: adapter-trust — post-transfer balance assertions ───────────
+
+    function test_route_reverts_on_short_pulling_adapter() public {
+        MockHostileYieldAdapter adapter = new MockHostileYieldAdapter(address(usdc));
+        adapter.setDepositShortfall(1e6); // pull 1 USDC less than requested
+        _seedPool();
+        vault.setIdleConfig(true, 6_000);
+        _enableAdapter(address(adapter));
+        _deposit(alice, 10_000e6, LockTier.Flex);
+
+        vm.expectRevert(MintwareDeFiVault4626.AdapterTransferMismatch.selector);
+        vault.routeIdleToYield(5_000e6);
+    }
+
+    function test_harvest_reverts_on_short_sending_adapter() public {
+        MockHostileYieldAdapter adapter = new MockHostileYieldAdapter(address(usdc));
+        _seedPool();
+        vault.setIdleConfig(true, 6_000);
+        _enableAdapter(address(adapter));
+        _deposit(alice, 10_000e6, LockTier.Flex);
+        vault.routeIdleToYield(6_000e6);
+
+        // Real 600 USDC of yield accrues, but the adapter short-sends on withdraw.
+        usdc.mint(address(adapter), 600e6);
+        adapter.setWithdrawShortfall(1e6); // sends 1 USDC less than requested
+        vm.expectRevert(MintwareDeFiVault4626.AdapterTransferMismatch.selector);
+        vault.harvestYield();
+    }
+
+    // ── Stage 1.4: kill-switch (pause / guardian) ────────────────────────────
+
+    function test_pause_blocks_deposit() public {
+        _seedPool();
+        vault.pause();
+        vm.startPrank(alice);
+        usdc.approve(address(vault), 1_000e6);
+        vm.expectRevert(Pausable.EnforcedPause.selector);
+        vault.depositWithLock(1_000e6, alice, LockTier.Flex);
+        vm.stopPrank();
+    }
+
+    function test_pause_freezes_executeRedeem_but_allows_requestRedeem() public {
+        _seedPool();
+        uint256 shares = _deposit(alice, 5_000e6, LockTier.Flex);
+        vm.warp(block.timestamp + 25 hours);
+
+        vault.pause();
+
+        // requestRedeem stays open during a pause…
+        vm.prank(alice);
+        vault.requestRedeem(shares);
+
+        // …but the money-out path is frozen.
+        vm.warp(block.timestamp + 7 days + 1);
+        vm.prank(alice);
+        vm.expectRevert(Pausable.EnforcedPause.selector);
+        vault.executeRedeem();
+
+        // After unpause, redemption proceeds.
+        vault.unpause();
+        vm.prank(alice);
+        vault.executeRedeem();
+        assertEq(vault.balanceOf(alice), 0, "redeemed after unpause");
+    }
+
+    function test_pause_blocks_route_but_allows_recall() public {
+        MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
+        _seedPool();
+        vault.setIdleConfig(true, 6_000);
+        _enableAdapter(address(adapter));
+        _deposit(alice, 10_000e6, LockTier.Flex);
+        vault.routeIdleToYield(5_000e6);
+
+        vault.pause();
+
+        // Routing more is frozen…
+        vm.expectRevert(Pausable.EnforcedPause.selector);
+        vault.routeIdleToYield(1_000e6);
+
+        // …but recalling capital to safety still works while paused.
+        vault.recallIdleFromYield(5_000e6);
+        assertEq(vault.principalInAdapter(), 0, "recalled during pause");
+    }
+
+    function test_guardian_can_pause_owner_unpauses() public {
+        address guardian = makeAddr("guardian");
+        vault.setGuardian(guardian);
+
+        vm.prank(guardian);
+        vault.pause();
+        assertTrue(vault.paused(), "guardian paused");
+
+        // Guardian cannot unpause — owner only.
+        vm.prank(guardian);
+        vm.expectRevert(); // OwnableUnauthorizedAccount
+        vault.unpause();
+
+        vault.unpause();
+        assertFalse(vault.paused(), "owner unpaused");
+    }
+
+    function test_non_guardian_cannot_pause() public {
+        vm.prank(alice);
+        vm.expectRevert(MWGuardianPausable.NotGuardianOrOwner.selector);
+        vault.pause();
     }
 }

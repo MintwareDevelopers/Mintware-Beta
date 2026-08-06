@@ -13,11 +13,11 @@ import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20}           from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC4626}         from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable}         from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {EIP712}          from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA}           from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+import {MWGuardianPausable} from "../lib/MWGuardianPausable.sol";
 import {VaultSurface, LockTier, VaultConfig} from "./VaultTypes.sol";
 
 interface IFeeVaultNotifier {
@@ -39,7 +39,7 @@ interface IFeeVaultNotifier {
 ///         maxWithdraw/maxRedeem == 0; use requestRedeem() → notice → executeRedeem().
 abstract contract MintwareBaseVault4626 is
     ERC4626,
-    Ownable,
+    MWGuardianPausable,
     ReentrancyGuard,
     IUnlockCallback,
     EIP712
@@ -170,7 +170,7 @@ abstract contract MintwareBaseVault4626 is
     constructor(VaultConfig memory cfg, address _poolManager, address _feeVault)
         ERC20(cfg.name, cfg.symbol)
         ERC4626(IERC20(cfg.underlyingToken))
-        Ownable(msg.sender)
+        MWGuardianPausable(msg.sender)
         EIP712("MintwareVault", "1")
     {
         poolManager = IPoolManager(_poolManager);
@@ -203,6 +203,7 @@ abstract contract MintwareBaseVault4626 is
         public
         override
         nonReentrant
+        whenNotPaused
         returns (uint256)
     {
         _pendingTier = LockTier.Flex;
@@ -213,6 +214,7 @@ abstract contract MintwareBaseVault4626 is
     function depositWithLock(uint256 assets, address receiver, LockTier tier)
         public
         nonReentrant
+        whenNotPaused
         returns (uint256)
     {
         _pendingTier = tier;
@@ -225,6 +227,7 @@ abstract contract MintwareBaseVault4626 is
         public
         override
         nonReentrant
+        whenNotPaused
         returns (uint256 grossAssets)
     {
         _pendingTier = LockTier.Flex;
@@ -320,7 +323,10 @@ abstract contract MintwareBaseVault4626 is
     }
 
     /// @notice Step 2: execute the queued redemption after the notice period.
-    function executeRedeem() external virtual nonReentrant returns (uint256) {
+    /// @dev    Gated by `whenNotPaused`: an emergency pause freezes the money-out path
+    ///         to stop an active drain. `requestRedeem` stays open so the notice clock
+    ///         keeps running for honest users while an incident is triaged.
+    function executeRedeem() external virtual nonReentrant whenNotPaused returns (uint256) {
         return _executeRedeemFor(msg.sender);
     }
 
@@ -398,7 +404,7 @@ abstract contract MintwareBaseVault4626 is
     }
 
     /// @notice Owner-initiated rebalance to a new tick range.
-    function rebalance(int24 newTickLower, int24 newTickUpper) external onlyOwner nonReentrant {
+    function rebalance(int24 newTickLower, int24 newTickUpper) external onlyOwner nonReentrant whenNotPaused {
         if (!poolInitialized) revert PoolNotInitialized();
         poolManager.unlock(abi.encode(Action.Rebalance, abi.encode(newTickLower, newTickUpper)));
         emit Rebalanced(newTickLower, newTickUpper, totalLiquidity);
@@ -412,7 +418,7 @@ abstract contract MintwareBaseVault4626 is
         uint256 validUntil,
         uint256 nonce,
         bytes calldata oracleSignature
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         if (!poolInitialized)             revert PoolNotInitialized();
         if (oracleSigner == address(0))   revert OracleSignerNotSet();
         if (block.timestamp > validUntil) revert ProposalExpired();
