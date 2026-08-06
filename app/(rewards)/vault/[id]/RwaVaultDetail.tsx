@@ -4,7 +4,7 @@
 // Reuses the shared DealSection; fetches the approved deal for this vault.
 
 import { useEffect, useState } from 'react'
-import { useAccount, useSignMessage, usePublicClient, useWriteContract } from 'wagmi'
+import { useAccount, useSignMessage } from 'wagmi'
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
 import { DealSection } from '@/components/vaults/DealSection'
@@ -12,20 +12,6 @@ import { fmtUSD } from '@/lib/web2/api'
 import { buildRedeemRequestMessage } from '@/lib/web3/signedActionMessages'
 import type { SocialVault } from '@/lib/web2/vault/types'
 import type { DealMeta } from '@/lib/rwa/deal'
-
-// USDC (the RWA vault underlying) by chain — used to approve before an ERC-4626 deposit.
-const USDC_BY_CHAIN: Record<number, `0x${string}`> = {
-  8453:  '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // Base mainnet
-  84532: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // Base Sepolia
-}
-
-const ERC20_APPROVE_ABI = [
-  { name: 'approve', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] },
-] as const
-
-const RWA_VAULT_DEPOSIT_ABI = [
-  { name: 'deposit', type: 'function', stateMutability: 'nonpayable', inputs: [{ name: 'assets', type: 'uint256' }, { name: 'receiver', type: 'address' }], outputs: [{ type: 'uint256' }] },
-] as const
 
 function Star({ className = '' }: { className?: string }) {
   return (
@@ -48,43 +34,11 @@ function RwaActionRail({ vaultId, deal, vaultAddress, vrwaAddress, chainId }: {
 }) {
   const { address } = useAccount()
   const { signMessageAsync } = useSignMessage()
-  const publicClient = usePublicClient()
-  const { writeContractAsync } = useWriteContract()
   const [amount, setAmount] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [done, setDone] = useState<string | null>(null)
   const amt = parseFloat(amount) || 0
-
-  // ── Deposit (wrap) — active once the deal is listed on-chain (vaultAddress set) ──
-  const [depAmount, setDepAmount] = useState('')
-  const [depBusy, setDepBusy] = useState(false)
-  const [depErr, setDepErr] = useState('')
-  const [depDone, setDepDone] = useState(false)
-  const depAmt = parseFloat(depAmount) || 0
-  const usdc = USDC_BY_CHAIN[chainId]
-  const canDeposit = Boolean(vaultAddress && usdc && address && depAmt > 0)
-
-  async function deposit() {
-    if (!vaultAddress || !usdc || !address || depAmt <= 0 || !publicClient) return
-    setDepBusy(true); setDepErr('')
-    try {
-      const assets = BigInt(Math.round(depAmt * 1e6)) // USDC has 6 decimals
-      const approveHash = await writeContractAsync({
-        address: usdc, abi: ERC20_APPROVE_ABI, functionName: 'approve',
-        args: [vaultAddress as `0x${string}`, assets],
-      })
-      await publicClient.waitForTransactionReceipt({ hash: approveHash })
-      const depositHash = await writeContractAsync({
-        address: vaultAddress as `0x${string}`, abi: RWA_VAULT_DEPOSIT_ABI, functionName: 'deposit',
-        args: [assets, address],
-      })
-      await publicClient.waitForTransactionReceipt({ hash: depositHash })
-      setDepDone(true); setDepAmount('')
-    } catch (e) {
-      setDepErr(e instanceof Error ? e.message.slice(0, 140) : 'Deposit failed')
-    } finally { setDepBusy(false) }
-  }
 
   async function requestRedeem() {
     if (!address || amt <= 0) return
@@ -115,44 +69,21 @@ function RwaActionRail({ vaultId, deal, vaultAddress, vrwaAddress, chainId }: {
           <div className="font-atx-mono text-[20px]">{deal && deal.minInvestmentUsd > 0 ? fmtUSD(deal.minInvestmentUsd) : '—'}</div>
         </div>
         <p className="font-atx-mono text-[11px] text-atx-ink/55 leading-[1.55]">
-          Deposit mints vRWA 1:1 with your shares. Holding and trading vRWA require this deal’s
-          KYC tier ({deal?.kycTierRequired ?? 'BASIC'}) unless it trades openly (Reg A+); redemption always re-checks KYC.
+          vRWA is the tokenized security itself — buy it on the secondary market. Holding and trading
+          require this deal’s KYC tier ({deal?.kycTierRequired ?? 'BASIC'}) unless it trades openly (Reg A+);
+          redeem the underlying via the issuer (KYC-checked).
         </p>
-        {vaultAddress ? (
-          depDone ? (
-            <div className="border border-atx-ink bg-atx-panel p-3 font-atx-mono text-[11px] leading-[1.5]">
-              <strong>Deposit confirmed.</strong> vRWA minted to your wallet.
-              <button onClick={() => setDepDone(false)} className="block mt-1 text-atx-blue">Deposit more →</button>
-            </div>
-          ) : (
-            <>
-              <div className={`${LABEL} mb-0.5`}>Deposit · USDC</div>
-              <input
-                value={depAmount}
-                onChange={(e) => setDepAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                inputMode="decimal"
-                placeholder="0.00"
-                className="w-full border border-atx-ink bg-transparent px-3 py-2.5 font-atx-mono text-[16px] outline-none focus:border-atx-blue"
-              />
-              <button
-                onClick={deposit}
-                disabled={depBusy || !canDeposit}
-                className="w-full font-semibold text-[14px] py-3 border border-atx-ink bg-atx-coral text-atx-ink uppercase tracking-[0.04em] disabled:opacity-45 disabled:cursor-not-allowed"
-              >
-                {depBusy ? 'Depositing…' : !address ? 'Connect to deposit' : 'Deposit'}
-              </button>
-              {depErr && <div className="text-[11px] text-atx-clay font-atx-display">{depErr}</div>}
-            </>
-          )
+        {vrwaAddress ? (
+          <Link
+            href={`/swap?buy=${vrwaAddress}`}
+            className="w-full text-center font-semibold text-[14px] py-3 border border-atx-ink bg-atx-coral text-atx-ink uppercase tracking-[0.04em] no-underline"
+          >
+            Buy vRWA on the secondary market →
+          </Link>
         ) : (
           <button disabled className="w-full font-semibold text-[14px] py-3 border border-atx-ink bg-atx-coral text-atx-ink uppercase tracking-[0.04em] disabled:opacity-45">
-            Deposit
+            Trading opens once the deal is live on-chain
           </button>
-        )}
-        {vrwaAddress && (
-          <Link href={`/swap?buy=${vrwaAddress}`} className="text-center font-atx-mono text-[11px] text-atx-blue no-underline hover:underline">
-            Trade vRWA on the secondary market →
-          </Link>
         )}
         <div className="border-t border-atx-ink/20 pt-3" />
         {done ? (
@@ -191,8 +122,8 @@ function RwaActionRail({ vaultId, deal, vaultAddress, vrwaAddress, chainId }: {
         )}
         <div className="border-t border-atx-ink/20 pt-3 font-atx-mono text-[10px] text-atx-ink/40 leading-[1.5]">
           {vaultAddress
-            ? 'Deposits mint vRWA on-chain. Deal terms are enforced by the SPV wrapper + oracle price bands.'
-            : 'On-chain deposits open once the vault is live on-chain. Deal terms are enforced by the SPV wrapper + oracle price bands.'}
+            ? 'vRWA is the issuer-issued security; buy/sell it on the pool. Deal terms are enforced by the SPV + oracle price bands.'
+            : 'Trading opens once the vault is live on-chain. Deal terms are enforced by the SPV + oracle price bands.'}
         </div>
       </div>
     </div>

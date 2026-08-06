@@ -100,12 +100,18 @@ internally through `MWRouter`.
 
 ---
 
-## 4. Verify the WRAP path + rewards
+## 4. Verify issuer capitalization + trade path + rewards
 
-- [ ] On the deal page (`/vault/<id>`), the **Deposit button is now active** (it un-gates on
-      `vault_address`). A deposit approves USDC + calls the vault's ERC-4626 `deposit` → mints vRWA 1:1.
-- [ ] After a test deposit: the wallet holds vRWA; `vault.totalPrincipal()` increased; USDC sits as
-      reserve (no yield adapter set yet).
+- [ ] **Issuer funds the reserve**: `vault.fundReserve(usdc)` (issuer, USDC pre-approved) — the reserve
+      backs redemptions. If a yield adapter is set, `vault.principalInYield()` reflects the 60% routed to
+      yield; the rest sits as USDC reserve.
+- [ ] **A trader acquires vRWA by BUYING on the pool** — public deposit is CLOSED (`deposit` reverts
+      `DepositsDisabled`); vRWA is issuer-supplied inventory, not a wrapper minted per deposit. On the deal
+      page the primary action is "Buy vRWA on the secondary market" (un-gates on `vault_address`). Confirm
+      a small buy delivers vRWA (this is the in-band swap from step 3).
+- [ ] **Redemption**: a holder `requestRedeem(vrwaAmount)` burns vRWA; after the window + a KYC check the
+      issuer `confirmSettlement(holder)` pays USDC at par from reserve. (Proven by
+      `MintwareRWAVault4626.t.sol::test_secondary_market_holder_redeems_at_par`.)
 - [ ] **Rewards credit on internal swaps**: an `MWRouter` swap tx is allowlisted by `verifySwapTx`
       (`MW_ROUTER_ADDRESSES`), so a campaign-tagged swap credits points. Confirm one credits (no
       `router_mismatch` / `fee_not_paid` skip).
@@ -144,7 +150,7 @@ internally through `MWRouter`.
 ## 7. Go / no-go summary
 
 Ship only when: step-0 preconditions ✅ · on-chain stack verified (step 1) · listed on router (step 2) ·
-in-band swap + out-of-band revert confirmed (step 3) · deposit mints vRWA + rewards credit (step 4) ·
+in-band swap + out-of-band revert confirmed (step 3) · issuer capitalization + buy + redemption + rewards credit (step 4) ·
 keeper + KYC operational (step 5) · rollback rehearsed (step 6).
 
 > Reminder: until a real deal completes this runbook, the RWA vaults visible in the app are **fictional

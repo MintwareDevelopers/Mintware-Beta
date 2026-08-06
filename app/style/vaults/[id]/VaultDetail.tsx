@@ -82,8 +82,8 @@ function ActionPanel({ v }: { v: VaultDetail }) {
 
           {!isDeFi && (
             <p className="font-atx-mono text-[11px] text-atx-ink/55 mt-4">
-              Deposit mints vRWA 1:1 with your shares. Holding and trading require the deal’s KYC tier
-              unless it trades openly (Reg A+); redemption always re-checks KYC.
+              vRWA is the tokenized security itself — buy it on the secondary market. Holding and trading
+              require the deal’s KYC tier unless it trades openly (Reg A+); redeem the underlying via the issuer.
             </p>
           )}
 

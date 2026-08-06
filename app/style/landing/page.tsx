@@ -74,10 +74,10 @@ const ACTIONS = [
 ]
 
 const STEPS = [
-  { n: '01', t: 'Deposit USDC', d: 'Any amount. No six-figure minimum. Verification scales with the asset.' },
-  { n: '02', t: 'Receive vRWA', d: 'A token 1:1 with your share — self-custodied and composable.' },
-  { n: '03', t: 'Earn + trade', d: 'Real-world yield accrues automatically. Trade vRWA on Uniswap, 24/7.' },
-  { n: '04', t: 'Redeem — if you want', d: 'Request the underlying → 30-day window. Redemption re-checks KYC.' },
+  { n: '01', t: 'Buy vRWA', d: 'The tokenized security itself — buy it on the pool. Any amount, no six-figure minimum.' },
+  { n: '02', t: 'Hold it', d: 'A self-custodied, composable ERC-20 that tracks the SPV’s NAV.' },
+  { n: '03', t: 'Trade 24/7', d: 'Real-world yield accrues to the asset. Trade vRWA on Uniswap, any time.' },
+  { n: '04', t: 'Redeem — if you want', d: 'Burn vRWA → the issuer settles the underlying at par after a 30-day window + KYC.' },
 ]
 
 const TRAD = ['$50k–$250k minimum', 'Accreditation wall to enter', 'Locked — phone calls to exit', 'You own a database entry']
@@ -311,7 +311,7 @@ export default function LandingPreview() {
             Real estate yield, <span className="text-atx-acid">without the $50k door.</span>
           </h2>
           <p className="text-[16px] leading-[1.55] text-white/90 max-w-[58ch] mt-3.5">
-            Tokenized real-world assets have always been walled off — accreditation checks, six-figure minimums, capital locked behind phone calls. Mintware opens the door: deposit any amount, hold a bearer token, earn automatically.
+            Tokenized real-world assets have always been walled off — six-figure minimums, capital locked behind phone calls, no secondary market. Mintware drops the minimum and makes the token move: buy any amount, self-custody it, trade 24/7.
           </p>
           <div className="grid grid-cols-4 border border-white/40 mt-8 max-[720px]:grid-cols-1">
             {STEPS.map((s, i) => (

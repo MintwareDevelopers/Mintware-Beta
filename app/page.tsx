@@ -70,10 +70,10 @@ const ACTIONS = [
 ]
 
 const STEPS = [
-  { n: '01', t: 'Deposit USDC', d: 'Any amount. No six-figure minimum. Verification scales with the asset.' },
-  { n: '02', t: 'Receive vRWA', d: 'A token 1:1 with your share — self-custodied and composable.' },
-  { n: '03', t: 'Earn + trade', d: 'Real-world yield accrues automatically. Trade vRWA on Uniswap, 24/7.' },
-  { n: '04', t: 'Redeem — if you want', d: 'Request the underlying → 30-day window. Redemption re-checks KYC.' },
+  { n: '01', t: 'Buy vRWA', d: 'The tokenized security itself — buy it on the pool. Any amount, no six-figure minimum.' },
+  { n: '02', t: 'Hold it', d: 'A self-custodied, composable ERC-20 that tracks the SPV’s NAV.' },
+  { n: '03', t: 'Trade 24/7', d: 'Real-world yield accrues to the asset. Trade vRWA on Uniswap, any time.' },
+  { n: '04', t: 'Redeem — if you want', d: 'Burn vRWA → the issuer settles the underlying at par after a 30-day window + KYC.' },
 ]
 
 const TRAD = ['$50k–$250k minimum', 'Accreditation wall to enter', 'Locked — phone calls to exit', 'You own a database entry']

@@ -14,7 +14,7 @@ import { MarketingNav } from '@/components/web2/MarketingNav'
 export const metadata: Metadata = {
   title: 'RWA — Real-world yield, without the six-figure door | Mintware',
   description:
-    'Tokenized real-world assets as a token you actually hold: deposit any amount, no six-figure minimum, trade vRWA 24/7 wherever the asset permits, redeem the underlying on request. Verification scales with the asset — open for Reg A+, verified wallets for Reg D. Built on the exact legal structures BlackRock, Backed, and Ondo already run in production.',
+    'Tokenized real-world assets as a token you actually hold: buy any amount, no six-figure minimum, trade vRWA 24/7 wherever the asset permits, redeem the underlying on request. Verification scales with the asset — open for Reg A+, verified wallets for Reg D. Built on the exact legal structures BlackRock, Backed, and Ondo already run in production.',
 }
 
 const GRID_BG =
@@ -57,10 +57,10 @@ const STUCK = [
 ]
 
 const STEPS = [
-  ['01', 'Deposit USDC', 'Any amount. No six-figure minimum. Verification scales with the asset.'],
-  ['02', 'Receive vRWA', 'The vault’s ERC-4626 share — 1:1, tracking the SPV’s NAV. Self-custodied and composable.'],
-  ['03', 'Earn + trade', 'Real-world yield accrues automatically. Trade vRWA against USDC on Uniswap, 24/7.'],
-  ['04', 'Redeem — if you want', 'Request → 30-day settlement window. Redemption always re-checks KYC.'],
+  ['01', 'Buy vRWA', 'The tokenized security itself — buy it on the pool. Any amount, no six-figure minimum.'],
+  ['02', 'Hold it', 'A self-custodied, composable ERC-20 that tracks the SPV’s NAV. Verification scales with the asset.'],
+  ['03', 'Trade 24/7', 'Real-world yield accrues to the asset; trade vRWA against USDC on Uniswap, any time.'],
+  ['04', 'Redeem — if you want', 'Burn vRWA → the issuer settles the underlying at par after a 30-day window + KYC.'],
 ]
 
 const PRECEDENT: [string, string, string, string, boolean][] = [
@@ -78,7 +78,7 @@ const SAFE = [
   ['On-chain guardian', 'A freeze / kill-switch in the contracts can halt a compromised deal — behind a 48-hour timelock.'],
   ['Automatic holder gating', 'For permissioned tokens, an ineligible transfer reverts on-chain — the token protects itself, with no action from us.'],
   ['Review before public', 'Issuer verification + a content review gate (draft → in_review → approved) stand between a deal and its first public wallet.'],
-  ['Non-custodial, end to end', 'Mintware never holds your deposits, never holds the underlying (the SPV does), never holds your keys.'],
+  ['Non-custodial, end to end', 'Mintware never holds your funds, never holds the underlying (the SPV does), never holds your keys.'],
 ]
 
 const NOT = [
@@ -109,7 +109,7 @@ export default function RwaLandingPage() {
           </h1>
           <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[52ch] mt-6">
             Tokenized real-world assets — private credit, T-bills, trade finance — as a token you actually hold.
-            Deposit any amount, no six-figure minimum. Earn real yield. Trade 24/7. Verification scales with the asset:
+            Buy any amount, no six-figure minimum. Earn real yield. Trade 24/7. Verification scales with the asset:
             open for Reg A+, verified wallets for Reg D.
           </p>
           <div className="grid grid-cols-2 gap-y-2.5 gap-x-8 mt-7 max-w-[720px] max-[560px]:grid-cols-1">
@@ -165,7 +165,7 @@ export default function RwaLandingPage() {
       {/* ── 02 · How it works ── */}
       <section className="border-b border-atx-ink bg-atx-coral/[0.05]">
         <div className={`${wrap} py-[52px]`}>
-          <SectionHead n="02" label="Deposit → vRWA → earn → redeem">How it works</SectionHead>
+          <SectionHead n="02" label="Buy → hold → trade → redeem">How it works</SectionHead>
           <h2 className={h2}>Four steps. <span style={{ color: CORAL }}>Verification scales with the asset.</span></h2>
           <p className={lead}>For Reg A+ assets the token trades openly; for Reg D assets it only reaches verified wallets — the token enforces this on every transfer. Redemption always re-checks KYC.</p>
           <div className="grid grid-cols-4 border border-atx-ink bg-atx-bone mt-8 max-[720px]:grid-cols-1">
@@ -348,7 +348,7 @@ export default function RwaLandingPage() {
           </div>
           <p className="font-atx-mono text-[10.5px] text-atx-ink/45 leading-[1.5] mt-3">
             Representative deals, illustrative of each asset class. On-chain RWA vaults (vRWA, oracle bands, async redeem) are
-            built and on testnet; mainnet deposits are gated on the legal track. The deal pipeline and incentive layer are live.
+            built and on testnet; mainnet is gated on the legal track. The deal pipeline and incentive layer are live.
           </p>
         </div>
       </section>
