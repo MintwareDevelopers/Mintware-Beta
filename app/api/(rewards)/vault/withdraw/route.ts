@@ -81,8 +81,8 @@ export const POST = createHandler(async (req, ctx) => {
   if ((tx.to ?? '').toLowerCase() !== vaultAddress) return ctx.json({ error: 'Withdrawal transaction target mismatch' }, 403)
 
   const decoded = decodeFunctionData({ abi: SOCIAL_VAULT_ABI, data: tx.input })
-  if (decoded.functionName !== 'requestWithdrawal') return ctx.json({ error: 'Withdrawal transaction calldata mismatch' }, 403)
-  const [amountWei] = decoded.args
+  if (decoded.functionName !== 'requestRedeem') return ctx.json({ error: 'Withdrawal transaction calldata mismatch' }, 403)
+  const [amountWei] = decoded.args // requestRedeem(shares); shares ~1:1 with USDC (6-dp)
   if (amountWei !== parseUnits(String(requested_amount), 6)) return ctx.json({ error: 'Withdrawal amount mismatch' }, 403)
 
   const { pct: penalty_pct, amount: penalty_amount } = calcPenalty(deposit, requested_amount)
