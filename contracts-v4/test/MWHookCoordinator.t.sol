@@ -105,13 +105,15 @@ contract MWHookCoordinatorTest is Test {
         vault.depositWithLock(50_000e6, alice, LockTier.Flex);
         vm.stopPrank();
 
-        // MEV on, deviation guard off (isolate the cooldown behavior), static fee.
-        coord.configurePool(poolId, 3000, 0, 0, false, true, 3, 0, 2000);
+        // Generic swap tests: guard ON with a WIDE band (never trips on normal swaps) so the
+        // oracle tracks; dynamic fee OFF (pool is static-fee, so the override would be inert).
+        // The circuit-breaker test reconfigures with a tight band.
+        // configurePool(id, base, max, slopePerTick, maxFeeStepPerBlock, dynFee, guard, maxTickMove, maxDev, catchup)
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 60, 6000, 10);
         vm.roll(1000);
     }
 
     function _swap(bool zeroForOne, uint256 amtIn) internal {
-        // prank sets both msg.sender and tx.origin to alice (coordinator keys on tx.origin)
         vm.startPrank(alice, alice);
         if (zeroForOne) {
             MockERC20(Currency.unwrap(poolKey.currency0)).approve(address(swapRouter), amtIn);
@@ -130,31 +132,38 @@ contract MWHookCoordinatorTest is Test {
         pm.unlock(abi.encode("direct-lp"));
     }
 
-    function test_first_swap_succeeds_and_records() public {
-        _swap(sellProjZeroForOne, 500e6); // no prior swap → allowed
-    }
-
-    function test_sandwich_backrun_blocked_same_block() public {
-        _swap(sellProjZeroForOne, 500e6);          // frontrun leg
-        vm.startPrank(alice, alice);               // backrun, opposite dir, same block
-        MockERC20 tokenIn = sellProjZeroForOne
-            ? MockERC20(Currency.unwrap(poolKey.currency1))
-            : MockERC20(Currency.unwrap(poolKey.currency0));
-        tokenIn.approve(address(swapRouter), 500e6);
-        vm.expectRevert(); // MEV cooldown blocks the backrun
-        swapRouter.swap(poolKey, !sellProjZeroForOne, 500e6);
-        vm.stopPrank();
-    }
-
-    function test_same_direction_second_swap_allowed() public {
-        _swap(sellProjZeroForOne, 300e6);
-        _swap(sellProjZeroForOne, 300e6); // same direction → not a sandwich → allowed
-    }
-
-    function test_backrun_allowed_after_cooldown() public {
+    function test_swap_succeeds() public {
         _swap(sellProjZeroForOne, 500e6);
-        vm.roll(block.number + 3); // past cooldownBlocks
-        _swap(!sellProjZeroForOne, 500e6); // opposite dir now allowed
+    }
+
+    // ── Stage-1.2: oracle-based MEV model (no tx.origin) ─────────────────────
+
+    function test_oracle_initializes_after_first_swap() public {
+        (, bool initBefore) = coord.oracleTick(poolId); // guard on (setUp), so afterSwap tracks
+        assertFalse(initBefore, "oracle uninitialized pre-swap");
+        _swap(sellProjZeroForOne, 500e6);
+        (, bool initAfter) = coord.oracleTick(poolId);
+        assertTrue(initAfter, "oracle initialized by afterSwap");
+    }
+
+    /// @notice The circuit breaker trips when spot deviates far from the truncated oracle —
+    ///         with NO trader identity involved (works regardless of who swaps).
+    function test_circuit_breaker_reverts_extreme_deviation() public {
+        // Tight guard: oracle barely moves (maxTickMove 1, catchup 1), narrow band (20 ticks).
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 1, 20, 1);
+
+        _swap(sellProjZeroForOne, 100e6);        // seeds the oracle near the current tick
+        vm.roll(block.number + 1);
+        _swap(sellProjZeroForOne, 30_000e6);     // pushes price far; oracle truncates (~stays put)
+        vm.roll(block.number + 1);
+
+        // Next swap: pre-swap tick is now far from the truncated oracle → breaker reverts.
+        vm.startPrank(alice, alice);
+        MockERC20(Currency.unwrap(poolKey.currency0)).approve(address(swapRouter), 100e6);
+        MockERC20(Currency.unwrap(poolKey.currency1)).approve(address(swapRouter), 100e6);
+        vm.expectRevert(); // PriceDeviationTooHigh, wrapped by PoolManager
+        swapRouter.swap(poolKey, sellProjZeroForOne, 100e6);
+        vm.stopPrank();
     }
 
     function test_swap_fee_collection_splits_50_25_25() public {

@@ -30,6 +30,21 @@ library MWDynamicFee {
         return uint24(fee);
     }
 
+    /// @notice Rate-limit a fee move: clamp `target` to within `maxStep` of `last` (Stage-1.2).
+    /// @dev    Prevents a single-block jump from base fee to max fee, which is what lets an MEV
+    ///         searcher cleanly front-run a predictable hike / back-run a predictable drop. The
+    ///         caller passes `maxStep = maxFeeStepPerBlock × blocksElapsed` so the budget scales
+    ///         with elapsed time. `last == 0` (uninitialized) adopts `target` directly.
+    function rateLimit(uint24 last, uint24 target, uint256 maxStep) internal pure returns (uint24) {
+        if (last == 0) return target;
+        if (target > last) {
+            uint256 up = uint256(last) + maxStep;
+            return target > up ? uint24(up) : target;
+        }
+        uint256 down = uint256(last) > maxStep ? uint256(last) - maxStep : 0;
+        return uint256(target) < down ? uint24(down) : target;
+    }
+
     /// @notice Reduce `feePips` by up to `maxDiscountBps` as liquidity scales from
     ///         1× the reference (no discount) to ≥2× (full discount), linearly.
     function applyDepthDiscount(
