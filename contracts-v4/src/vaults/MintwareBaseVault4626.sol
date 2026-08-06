@@ -293,18 +293,61 @@ abstract contract MintwareBaseVault4626 is
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Redemption — async only (D6)
+    // Redemption (D6) — instant for unlocked/Flex, async queue for locked positions
     // ─────────────────────────────────────────────────────────────────────────
 
-    function maxWithdraw(address) public pure override returns (uint256) { return 0; }
-    function maxRedeem(address) public pure override returns (uint256) { return 0; }
-
-    function withdraw(uint256, address, address) public pure override returns (uint256) {
-        revert SynchronousRedemptionDisabled();
+    /// @notice A position is instantly (synchronously) redeemable once it is UNLOCKED — Flex,
+    ///         or any tier past its `lockedUntil` — and past the 24h anti-JIT minimum hold.
+    ///         Still-locked positions are not instant-eligible and must exit via the async
+    ///         requestRedeem()/executeRedeem() queue (which carries the early-exit penalty).
+    /// @dev    D6: standard withdraw()/redeem() succeed only for unlocked/Flex, else revert;
+    ///         maxWithdraw/maxRedeem return 0 while locked (honest 4626 semi-liquid signalling).
+    function _instantEligible(address owner) internal view returns (bool) {
+        LockInfo storage info = locks[owner];
+        if (!info.initialized) return false;
+        return block.timestamp >= info.depositedAt + MIN_HOLD_PERIOD
+            && block.timestamp >= info.lockedUntil;
     }
 
-    function redeem(uint256, address, address) public pure override returns (uint256) {
-        revert SynchronousRedemptionDisabled();
+    function maxWithdraw(address owner) public view override returns (uint256) {
+        return _instantEligible(owner) ? convertToAssets(balanceOf(owner)) : 0;
+    }
+
+    function maxRedeem(address owner) public view override returns (uint256) {
+        return _instantEligible(owner) ? balanceOf(owner) : 0;
+    }
+
+    /// @notice Instant synchronous withdraw for unlocked/Flex positions (D6). Locked positions
+    ///         revert — use requestRedeem()/executeRedeem().
+    function withdraw(uint256 assets, address receiver, address owner)
+        public
+        override
+        nonReentrant
+        whenNotPaused
+        returns (uint256 shares)
+    {
+        if (!_instantEligible(owner)) revert SynchronousRedemptionDisabled();
+        shares = previewWithdraw(assets);
+        if (shares == 0 || shares > balanceOf(owner)) revert InsufficientShares();
+        if (msg.sender != owner) _spendAllowance(owner, msg.sender, shares);
+        uint256 out = _settleRedemption(owner, receiver, shares);
+        emit Withdraw(msg.sender, receiver, owner, out, shares);
+    }
+
+    /// @notice Instant synchronous redeem for unlocked/Flex positions (D6). Locked positions
+    ///         revert — use requestRedeem()/executeRedeem().
+    function redeem(uint256 shares, address receiver, address owner)
+        public
+        override
+        nonReentrant
+        whenNotPaused
+        returns (uint256 assets)
+    {
+        if (!_instantEligible(owner)) revert SynchronousRedemptionDisabled();
+        if (shares == 0 || shares > balanceOf(owner)) revert InsufficientShares();
+        if (msg.sender != owner) _spendAllowance(owner, msg.sender, shares);
+        assets = _settleRedemption(owner, receiver, shares);
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
     /// @notice Step 1: queue a share redemption — starts the notice period.
@@ -339,6 +382,18 @@ abstract contract MintwareBaseVault4626 is
         if (block.timestamp < req.noticeExpiry) revert NoticeNotExpired();
 
         uint256 shares = req.shares;
+        if (shares > balanceOf(owner)) shares = balanceOf(owner);
+        req.executed = true;
+        assetsOut = _settleRedemption(owner, owner, shares);
+    }
+
+    /// @dev Core redemption settlement shared by the async (executeRedeem) and instant
+    ///      (withdraw/redeem) paths: unwind proportional liquidity, apply the early-exit
+    ///      penalty (0 for unlocked/Flex) + exit fee, and pay `receiver`.
+    function _settleRedemption(address owner, address receiver, uint256 shares)
+        internal
+        returns (uint256 assetsOut)
+    {
         uint256 assets = convertToAssets(shares);
 
         // Proportional liquidity to unwind (pre-state-change principal).
@@ -351,7 +406,6 @@ abstract contract MintwareBaseVault4626 is
         uint256 exitFee = (assets * exitFeeBps) / BPS;
 
         // Effects
-        req.executed    = true;
         totalPrincipal -= assets;
         _burn(owner, shares);
 
@@ -377,7 +431,7 @@ abstract contract MintwareBaseVault4626 is
         uint256 available = IERC20(asset()).balanceOf(address(this));
         if (assetsOut > available) assetsOut = available;
 
-        IERC20(asset()).safeTransfer(owner, assetsOut);
+        IERC20(asset()).safeTransfer(receiver, assetsOut);
         emit WithdrawalExecuted(owner, assetsOut, penalty);
     }
 
