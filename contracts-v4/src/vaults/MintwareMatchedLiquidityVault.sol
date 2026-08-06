@@ -15,9 +15,8 @@ import {LiquidityAmounts}      from "@uniswap/v4-periphery/src/libraries/Liquidi
 
 import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-import {MWGuardianPausable} from "../lib/MWGuardianPausable.sol";
+import {MintwarePairVault} from "./MintwarePairVault.sol";
 import {PoolProfile}        from "./VaultTypes.sol";
 
 interface IFeeVaultNotifier {
@@ -46,7 +45,7 @@ interface IFeeVaultNotifier {
 ///         Mintware protocol cut) accrue per *community* liquidity unit only — the team's
 ///         units are excluded from the denominator, so the team earns 0% and the community
 ///         absorbs the forgone share exactly, no off-chain merkle, no rounding drift.
-contract MintwareMatchedLiquidityVault is MWGuardianPausable, ReentrancyGuard, IUnlockCallback {
+contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     using SafeERC20     for IERC20;
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
@@ -80,12 +79,10 @@ contract MintwareMatchedLiquidityVault is MWGuardianPausable, ReentrancyGuard, I
     // Immutables
     // ─────────────────────────────────────────────────────────────────────────
 
-    IPoolManager public immutable poolManager;
     IERC20       public immutable projectToken; // team-locked side
     IERC20       public immutable quoteToken;   // community side (USDC / WETH / USDI / …)
     bool         public immutable projIsToken0;
     address      public immutable team;         // provider / launch team
-    address      public immutable treasury;     // Mintware protocol-fee recipient
     address      public immutable feeVault;     // epoch sink for the Mintware cut (optional)
     PoolProfile  public immutable profile;      // MEME or EMERGING only
 
@@ -100,16 +97,12 @@ contract MintwareMatchedLiquidityVault is MWGuardianPausable, ReentrancyGuard, I
     uint256 public lockDuration;
     uint256 public lockExpiry;              // set at activation
     uint160 public launchSqrtPriceX96;
-    int24   public tickLower;
-    int24   public tickUpper;
 
     // ─────────────────────────────────────────────────────────────────────────
     // State
     // ─────────────────────────────────────────────────────────────────────────
 
     Phase   public phase;
-    PoolKey public poolKey;
-    bool    public poolInitialized;
 
     uint256 public communityDeposited;      // total quote escrowed during funding
     uint256 public communityDepositorCount;
@@ -174,7 +167,6 @@ contract MintwareMatchedLiquidityVault is MWGuardianPausable, ReentrancyGuard, I
     error AlreadyExecuted();
     error StillLocked();
     error NothingToWithdraw();
-    error OnlyPoolManager();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -189,17 +181,15 @@ contract MintwareMatchedLiquidityVault is MWGuardianPausable, ReentrancyGuard, I
         address _feeVault,
         PoolProfile _profile,
         address _initialOwner
-    ) MWGuardianPausable(_initialOwner) {
+    ) MintwarePairVault(_poolManager, _treasury, _initialOwner) {
         if (_profile != PoolProfile.MEME && _profile != PoolProfile.EMERGING) revert BadProfile();
         if (_projectToken == address(0) || _quoteToken == address(0) || _projectToken == _quoteToken) revert BadConfig();
         if (_team == address(0) || _treasury == address(0)) revert BadConfig();
 
-        poolManager  = IPoolManager(_poolManager);
         projectToken = IERC20(_projectToken);
         quoteToken   = IERC20(_quoteToken);
         projIsToken0 = _projectToken < _quoteToken;
         team         = _team;
-        treasury     = _treasury;
         feeVault     = _feeVault;
         profile      = _profile;
     }
@@ -568,7 +558,7 @@ contract MintwareMatchedLiquidityVault is MWGuardianPausable, ReentrancyGuard, I
     // ─────────────────────────────────────────────────────────────────────────
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
-        if (msg.sender != address(poolManager)) revert OnlyPoolManager();
+        _onlyPoolManager();
         (Action action, bytes memory params) = abi.decode(data, (Action, bytes));
 
         if (action == Action.DeployMatched) {
@@ -588,8 +578,7 @@ contract MintwareMatchedLiquidityVault is MWGuardianPausable, ReentrancyGuard, I
 
     function _deployMatched(uint256 projAmt, uint256 quoteAmt) internal returns (bytes memory) {
         if (!poolInitialized) {
-            poolManager.initialize(poolKey, launchSqrtPriceX96);
-            poolInitialized = true;
+            _initializePool(launchSqrtPriceX96);
         }
         (uint256 amt0, uint256 amt1) = projIsToken0 ? (projAmt, quoteAmt) : (quoteAmt, projAmt);
 
@@ -641,21 +630,6 @@ contract MintwareMatchedLiquidityVault is MWGuardianPausable, ReentrancyGuard, I
     // ─────────────────────────────────────────────────────────────────────────
     // V4 settlement helpers
     // ─────────────────────────────────────────────────────────────────────────
-
-    function _settleDelta(BalanceDelta delta) internal {
-        int128 d0 = delta.amount0();
-        int128 d1 = delta.amount1();
-        if (d0 < 0)      _pay(poolKey.currency0, uint256(uint128(-d0)));
-        else if (d0 > 0) poolManager.take(poolKey.currency0, address(this), uint256(uint128(d0)));
-        if (d1 < 0)      _pay(poolKey.currency1, uint256(uint128(-d1)));
-        else if (d1 > 0) poolManager.take(poolKey.currency1, address(this), uint256(uint128(d1)));
-    }
-
-    function _pay(Currency currency, uint256 amount) internal {
-        poolManager.sync(currency);
-        IERC20(Currency.unwrap(currency)).safeTransfer(address(poolManager), amount);
-        poolManager.settle();
-    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Internal helpers
