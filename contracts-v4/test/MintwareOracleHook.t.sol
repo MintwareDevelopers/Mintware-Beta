@@ -3,7 +3,11 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {IPoolManager}        from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks}              from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolId}              from "@uniswap/v4-core/src/types/PoolId.sol";
+import {PoolKey}             from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
+import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 import {MintwareOracleHook} from "../src/rwa/MintwareOracleHook.sol";
 import {HookMiner}          from "../src/lib/HookMiner.sol";
@@ -76,5 +80,54 @@ contract MintwareOracleHookTest is Test {
     function test_priceX96_from_sqrt_1to1() public view {
         uint160 sqrtAtTick0 = 79228162514264337593543950336; // = 2^96
         assertEq(hook.priceX96FromSqrt(sqrtAtTick0), Q96, "sqrt(1.0) -> price 1.0 (Q96)");
+    }
+
+    // ── LP authorization (multi-LP: primary vault + additional LPs like the ULV) ──────
+
+    function _key() internal view returns (PoolKey memory) {
+        return PoolKey({
+            currency0:   Currency.wrap(address(0)),
+            currency1:   Currency.wrap(address(1)),
+            fee:         0,
+            tickSpacing: 60,
+            hooks:       IHooks(address(hook))
+        });
+    }
+
+    function _mlp() internal pure returns (ModifyLiquidityParams memory) {
+        return ModifyLiquidityParams({tickLower: -60, tickUpper: 60, liquidityDelta: 1, salt: bytes32(0)});
+    }
+
+    function test_lp_gate_primary_vault_passes() public {
+        vm.prank(pmAddr);
+        hook.beforeAddLiquidity(vault, _key(), _mlp(), "");
+        vm.prank(pmAddr);
+        hook.beforeRemoveLiquidity(vault, _key(), _mlp(), "");
+    }
+
+    function test_lp_gate_unauthorized_reverts() public {
+        vm.prank(pmAddr);
+        vm.expectRevert(MintwareOracleHook.OnlyVaultCanModifyLiquidity.selector);
+        hook.beforeAddLiquidity(makeAddr("ulv"), _key(), _mlp(), "");
+    }
+
+    function test_lp_gate_authorized_lp_passes_and_revoke() public {
+        address ulv = makeAddr("ulv");
+        hook.setLp(ulv, true);
+        vm.prank(pmAddr);
+        hook.beforeAddLiquidity(ulv, _key(), _mlp(), "");
+        vm.prank(pmAddr);
+        hook.beforeRemoveLiquidity(ulv, _key(), _mlp(), "");
+
+        hook.setLp(ulv, false); // revoke → back to reverting
+        vm.prank(pmAddr);
+        vm.expectRevert(MintwareOracleHook.OnlyVaultCanModifyLiquidity.selector);
+        hook.beforeAddLiquidity(ulv, _key(), _mlp(), "");
+    }
+
+    function test_setLp_only_owner() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        hook.setLp(makeAddr("ulv"), true);
     }
 }

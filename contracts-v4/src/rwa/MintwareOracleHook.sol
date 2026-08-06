@@ -42,13 +42,18 @@ contract MintwareOracleHook is IHooks, Ownable {
     }
 
     IPoolManager public immutable POOL_MANAGER;
-    address public vault;    // only LP
+    address public vault;    // primary LP (the RWA issuer-inventory vault)
     address public keeper;   // sets appraisals
+
+    /// @notice Additional authorized LPs (e.g. MintwareULV4626) permitted to modify liquidity
+    ///         alongside `vault` — lets the USDC-only ULV add depth to this oracle-banded pool.
+    mapping(address => bool) public authorizedLp;
 
     mapping(PoolId => BandConfig) public bands;
 
     event VaultSet(address indexed vault);
     event KeeperSet(address indexed keeper);
+    event LpAuthorized(address indexed lp, bool allowed);
     event PoolConfigured(PoolId indexed poolId, uint16 coreBandBps, uint16 specBandBps);
     event AppraisalSet(PoolId indexed poolId, uint256 appraisalX96);
 
@@ -102,6 +107,13 @@ contract MintwareOracleHook is IHooks, Ownable {
         emit KeeperSet(_keeper);
     }
 
+    /// @notice Authorize (or revoke) an additional LP — e.g. MintwareULV4626 — to modify liquidity
+    ///         alongside `vault`. Backward-compatible: `vault` stays authorized unconditionally.
+    function setLp(address lp, bool allowed) external onlyOwner {
+        authorizedLp[lp] = allowed;
+        emit LpAuthorized(lp, allowed);
+    }
+
     function configurePool(PoolId poolId, uint16 coreBandBps, uint16 specBandBps) external onlyOwner {
         BandConfig storage b = bands[poolId];
         b.coreBandBps = coreBandBps;
@@ -148,14 +160,14 @@ contract MintwareOracleHook is IHooks, Ownable {
     function beforeAddLiquidity(address sender, PoolKey calldata, ModifyLiquidityParams calldata, bytes calldata)
         external view override onlyPoolManager returns (bytes4)
     {
-        if (sender != vault) revert OnlyVaultCanModifyLiquidity();
+        if (sender != vault && !authorizedLp[sender]) revert OnlyVaultCanModifyLiquidity();
         return IHooks.beforeAddLiquidity.selector;
     }
 
     function beforeRemoveLiquidity(address sender, PoolKey calldata, ModifyLiquidityParams calldata, bytes calldata)
         external view override onlyPoolManager returns (bytes4)
     {
-        if (sender != vault) revert OnlyVaultCanModifyLiquidity();
+        if (sender != vault && !authorizedLp[sender]) revert OnlyVaultCanModifyLiquidity();
         return IHooks.beforeRemoveLiquidity.selector;
     }
 
