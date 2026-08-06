@@ -2,23 +2,25 @@
 pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {MWMEVGuard}   from "../src/hooks/MWMEVGuard.sol";
-import {MWDynamicFee} from "../src/hooks/MWDynamicFee.sol";
+import {MWOracleGuard} from "../src/hooks/MWOracleGuard.sol";
+import {MWDynamicFee}  from "../src/hooks/MWDynamicFee.sol";
 
-/// @dev Harness exposing the MWMEVGuard library over a storage State.
-contract MEVGuardHarness {
-    using MWMEVGuard for MWMEVGuard.State;
-    MWMEVGuard.State internal s;
+/// @dev Harness exposing the MWOracleGuard library over a storage State.
+contract OracleGuardHarness {
+    using MWOracleGuard for MWOracleGuard.State;
+    MWOracleGuard.State internal s;
 
-    constructor(uint32 cooldown, uint16 maxDev, uint16 alpha) {
-        s.cooldownBlocks  = cooldown;
-        s.maxDeviationBps = maxDev;
-        s.emaAlphaBps     = alpha;
+    constructor(int24 maxMove, int24 maxDev, uint32 catchup) {
+        s.maxTickMovePerBlock = maxMove;
+        s.maxDeviationTicks   = maxDev;
+        s.maxCatchupBlocks    = catchup;
     }
 
-    function checkBefore(address t, bool z, uint160 p) external view { s.checkBefore(t, z, p); }
-    function recordAfter(address t, bool z, uint160 p) external { s.recordAfter(t, z, p); }
-    function ema() external view returns (uint160) { return s.emaSqrtPriceX96; }
+    function update(int24 tick) external { s.update(tick); }
+    function checkCircuitBreaker(int24 tick) external view { s.checkCircuitBreaker(tick); }
+    function deviation(int24 tick) external view returns (uint256) { return s.deviationTicks(tick); }
+    function oracleTick() external view returns (int24) { return s.oracleTick; }
+    function initialized() external view returns (bool) { return s.initialized; }
 }
 
 contract FeeHarness {
@@ -28,66 +30,82 @@ contract FeeHarness {
     function depth(uint24 f, uint128 l, uint128 r, uint16 d) external pure returns (uint24) {
         return MWDynamicFee.applyDepthDiscount(f, l, r, d);
     }
+    function rl(uint24 last, uint24 target, uint256 step) external pure returns (uint24) {
+        return MWDynamicFee.rateLimit(last, target, step);
+    }
 }
 
 contract MWHooksLibTest is Test {
-    MEVGuardHarness internal guard;
-    FeeHarness      internal fees;
-
-    address internal alice = makeAddr("alice");
-    uint160 internal constant P = 79228162514264337593543950336; // 1:1
+    OracleGuardHarness internal guard;
+    FeeHarness         internal fees;
 
     function setUp() public {
-        guard = new MEVGuardHarness(3, 100, 2000); // cooldown 3 blocks, 1% dev, alpha 0.2
+        // maxTickMovePerBlock = 100, circuit breaker at 500 ticks, catch-up cap 10 blocks.
+        guard = new OracleGuardHarness(int24(100), int24(500), uint32(10));
         fees  = new FeeHarness();
         vm.roll(100);
     }
 
-    // ── MEV guard ────────────────────────────────────────────────────────────
+    // ── truncated oracle ──────────────────────────────────────────────────────
 
-    function test_first_swap_not_blocked() public view {
-        guard.checkBefore(alice, true, P); // no prior swap → ok
+    function test_first_update_initializes() public {
+        guard.update(1000);
+        assertTrue(guard.initialized(), "initialized");
+        assertEq(guard.oracleTick(), int24(1000), "oracle seeded at first tick");
     }
 
-    function test_cooldown_blocks_opposite_direction_in_window() public {
-        guard.recordAfter(alice, true, P);          // block 100, zeroForOne
-        vm.expectRevert(MWMEVGuard.SandwichCooldownActive.selector);
-        guard.checkBefore(alice, false, P);         // same block, opposite dir → blocked
+    function test_intra_block_updates_are_frozen() public {
+        guard.update(1000);
+        guard.update(5000); // same block → no move
+        assertEq(guard.oracleTick(), int24(1000), "oracle frozen within a block");
     }
 
-    function test_same_direction_not_blocked() public {
-        guard.recordAfter(alice, true, P);
-        guard.checkBefore(alice, true, P);          // same direction → allowed
+    function test_cross_block_move_is_truncated() public {
+        guard.update(1000);
+        vm.roll(block.number + 1);
+        guard.update(5000); // wants +4000, capped to +100
+        assertEq(guard.oracleTick(), int24(1100), "move truncated to maxTickMovePerBlock");
     }
 
-    function test_cooldown_expires() public {
-        guard.recordAfter(alice, true, P);          // block 100
-        vm.roll(103);                                // 100 + cooldown(3)
-        guard.checkBefore(alice, false, P);         // now allowed
+    function test_move_budget_scales_with_blocks_then_caps() public {
+        guard.update(1000);
+        vm.roll(block.number + 5);
+        guard.update(9000); // budget 100*5 = 500 → 1500
+        assertEq(guard.oracleTick(), int24(1500), "budget scales with elapsed blocks");
+
+        vm.roll(block.number + 50); // elapsed 50 > catchup 10 → budget 100*10 = 1000
+        guard.update(99000);
+        assertEq(guard.oracleTick(), int24(2500), "budget capped by maxCatchupBlocks");
     }
 
-    function test_deviation_guard_blocks_offband_price() public {
-        guard.recordAfter(alice, true, P);          // seeds EMA = P
-        uint160 off = uint160(uint256(P) + uint256(P) / 20); // +5% >> 1%
-        vm.expectRevert(MWMEVGuard.PriceDeviationTooHigh.selector);
-        guard.checkBefore(alice, true, off);
+    function test_downward_move_also_truncated() public {
+        guard.update(1000);
+        vm.roll(block.number + 1);
+        guard.update(-5000); // capped to -100
+        assertEq(guard.oracleTick(), int24(900), "downward move truncated");
     }
 
-    function test_ema_moves_toward_new_price() public {
-        guard.recordAfter(alice, true, P);
-        uint160 higher = uint160(uint256(P) + uint256(P) / 10); // +10%
-        guard.recordAfter(alice, true, higher);
-        uint160 e = guard.ema();
-        assertGt(e, P, "EMA rose");
-        assertLt(e, higher, "EMA below latest (smoothed)");
+    // ── circuit breaker + deviation ─────────────────────────────────────────────
+
+    function test_circuit_breaker_reverts_offband() public {
+        guard.update(1000); // oracle = 1000, band = 500
+        guard.checkCircuitBreaker(1500); // exactly at band → ok
+        vm.expectRevert(MWOracleGuard.PriceDeviationTooHigh.selector);
+        guard.checkCircuitBreaker(1501); // beyond band → revert
+    }
+
+    function test_deviation_ticks() public {
+        guard.update(1000);
+        assertEq(guard.deviation(1300), 300, "abs tick deviation");
+        assertEq(guard.deviation(600), 400, "abs tick deviation (below)");
     }
 
     // ── dynamic fee ────────────────────────────────────────────────────────────
 
     function test_volatility_fee_scales_and_clamps() public view {
-        assertEq(fees.volFee(3000, 5000, 50, 10), 3500, "base + 50bp*10");
+        assertEq(fees.volFee(3000, 5000, 50, 10), 3500, "base + 50*10");
         assertEq(fees.volFee(3000, 5000, 500, 10), 5000, "clamped to max");
-        assertEq(fees.volFee(3000, 0, 0, 10), 3000, "zero vol = base");
+        assertEq(fees.volFee(3000, 0, 0, 10), 3000, "zero deviation = base");
     }
 
     function test_depth_discount() public view {
@@ -95,5 +113,16 @@ contract MWHooksLibTest is Test {
         assertEq(fees.depth(3000, 2000, 1000, 5000), 1500, "2x -> 50% off");
         assertEq(fees.depth(3000, 1500, 1000, 5000), 2250, "1.5x -> 25% off");
         assertEq(fees.depth(3000, 5000, 1000, 5000), 1500, ">=2x caps at 50% off");
+    }
+
+    // ── fee rate limit (Stage-1.2) ──────────────────────────────────────────────
+
+    function test_rate_limit_clamps_moves() public view {
+        assertEq(fees.rl(0, 5000, 100), 5000, "uninitialized adopts target");
+        assertEq(fees.rl(3000, 5000, 100), 3100, "up-move clamped to last + step");
+        assertEq(fees.rl(3000, 5000, 5000), 5000, "step large enough -> reaches target");
+        assertEq(fees.rl(5000, 3000, 100), 4900, "down-move clamped to last - step");
+        assertEq(fees.rl(3000, 3200, 500), 3200, "within budget -> exact target");
+        assertEq(fees.rl(50, 3000, 100), 150, "small last, up-clamped");
     }
 }

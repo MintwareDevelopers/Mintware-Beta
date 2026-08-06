@@ -13,11 +13,11 @@ import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20}           from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC4626}         from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Ownable}         from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {EIP712}          from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA}           from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+import {MWGuardianPausable} from "../lib/MWGuardianPausable.sol";
 import {VaultSurface, LockTier, VaultConfig} from "./VaultTypes.sol";
 
 interface IFeeVaultNotifier {
@@ -39,7 +39,7 @@ interface IFeeVaultNotifier {
 ///         maxWithdraw/maxRedeem == 0; use requestRedeem() → notice → executeRedeem().
 abstract contract MintwareBaseVault4626 is
     ERC4626,
-    Ownable,
+    MWGuardianPausable,
     ReentrancyGuard,
     IUnlockCallback,
     EIP712
@@ -170,7 +170,7 @@ abstract contract MintwareBaseVault4626 is
     constructor(VaultConfig memory cfg, address _poolManager, address _feeVault)
         ERC20(cfg.name, cfg.symbol)
         ERC4626(IERC20(cfg.underlyingToken))
-        Ownable(msg.sender)
+        MWGuardianPausable(msg.sender)
         EIP712("MintwareVault", "1")
     {
         poolManager = IPoolManager(_poolManager);
@@ -203,6 +203,7 @@ abstract contract MintwareBaseVault4626 is
         public
         override
         nonReentrant
+        whenNotPaused
         returns (uint256)
     {
         _pendingTier = LockTier.Flex;
@@ -213,6 +214,7 @@ abstract contract MintwareBaseVault4626 is
     function depositWithLock(uint256 assets, address receiver, LockTier tier)
         public
         nonReentrant
+        whenNotPaused
         returns (uint256)
     {
         _pendingTier = tier;
@@ -225,6 +227,7 @@ abstract contract MintwareBaseVault4626 is
         public
         override
         nonReentrant
+        whenNotPaused
         returns (uint256 grossAssets)
     {
         _pendingTier = LockTier.Flex;
@@ -290,18 +293,61 @@ abstract contract MintwareBaseVault4626 is
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Redemption — async only (D6)
+    // Redemption (D6) — instant for unlocked/Flex, async queue for locked positions
     // ─────────────────────────────────────────────────────────────────────────
 
-    function maxWithdraw(address) public pure override returns (uint256) { return 0; }
-    function maxRedeem(address) public pure override returns (uint256) { return 0; }
-
-    function withdraw(uint256, address, address) public pure override returns (uint256) {
-        revert SynchronousRedemptionDisabled();
+    /// @notice A position is instantly (synchronously) redeemable once it is UNLOCKED — Flex,
+    ///         or any tier past its `lockedUntil` — and past the 24h anti-JIT minimum hold.
+    ///         Still-locked positions are not instant-eligible and must exit via the async
+    ///         requestRedeem()/executeRedeem() queue (which carries the early-exit penalty).
+    /// @dev    D6: standard withdraw()/redeem() succeed only for unlocked/Flex, else revert;
+    ///         maxWithdraw/maxRedeem return 0 while locked (honest 4626 semi-liquid signalling).
+    function _instantEligible(address owner) internal view returns (bool) {
+        LockInfo storage info = locks[owner];
+        if (!info.initialized) return false;
+        return block.timestamp >= info.depositedAt + MIN_HOLD_PERIOD
+            && block.timestamp >= info.lockedUntil;
     }
 
-    function redeem(uint256, address, address) public pure override returns (uint256) {
-        revert SynchronousRedemptionDisabled();
+    function maxWithdraw(address owner) public view override returns (uint256) {
+        return _instantEligible(owner) ? convertToAssets(balanceOf(owner)) : 0;
+    }
+
+    function maxRedeem(address owner) public view override returns (uint256) {
+        return _instantEligible(owner) ? balanceOf(owner) : 0;
+    }
+
+    /// @notice Instant synchronous withdraw for unlocked/Flex positions (D6). Locked positions
+    ///         revert — use requestRedeem()/executeRedeem().
+    function withdraw(uint256 assets, address receiver, address owner)
+        public
+        override
+        nonReentrant
+        whenNotPaused
+        returns (uint256 shares)
+    {
+        if (!_instantEligible(owner)) revert SynchronousRedemptionDisabled();
+        shares = previewWithdraw(assets);
+        if (shares == 0 || shares > balanceOf(owner)) revert InsufficientShares();
+        if (msg.sender != owner) _spendAllowance(owner, msg.sender, shares);
+        uint256 out = _settleRedemption(owner, receiver, shares);
+        emit Withdraw(msg.sender, receiver, owner, out, shares);
+    }
+
+    /// @notice Instant synchronous redeem for unlocked/Flex positions (D6). Locked positions
+    ///         revert — use requestRedeem()/executeRedeem().
+    function redeem(uint256 shares, address receiver, address owner)
+        public
+        override
+        nonReentrant
+        whenNotPaused
+        returns (uint256 assets)
+    {
+        if (!_instantEligible(owner)) revert SynchronousRedemptionDisabled();
+        if (shares == 0 || shares > balanceOf(owner)) revert InsufficientShares();
+        if (msg.sender != owner) _spendAllowance(owner, msg.sender, shares);
+        assets = _settleRedemption(owner, receiver, shares);
+        emit Withdraw(msg.sender, receiver, owner, assets, shares);
     }
 
     /// @notice Step 1: queue a share redemption — starts the notice period.
@@ -320,7 +366,10 @@ abstract contract MintwareBaseVault4626 is
     }
 
     /// @notice Step 2: execute the queued redemption after the notice period.
-    function executeRedeem() external virtual nonReentrant returns (uint256) {
+    /// @dev    Gated by `whenNotPaused`: an emergency pause freezes the money-out path
+    ///         to stop an active drain. `requestRedeem` stays open so the notice clock
+    ///         keeps running for honest users while an incident is triaged.
+    function executeRedeem() external virtual nonReentrant whenNotPaused returns (uint256) {
         return _executeRedeemFor(msg.sender);
     }
 
@@ -333,6 +382,18 @@ abstract contract MintwareBaseVault4626 is
         if (block.timestamp < req.noticeExpiry) revert NoticeNotExpired();
 
         uint256 shares = req.shares;
+        if (shares > balanceOf(owner)) shares = balanceOf(owner);
+        req.executed = true;
+        assetsOut = _settleRedemption(owner, owner, shares);
+    }
+
+    /// @dev Core redemption settlement shared by the async (executeRedeem) and instant
+    ///      (withdraw/redeem) paths: unwind proportional liquidity, apply the early-exit
+    ///      penalty (0 for unlocked/Flex) + exit fee, and pay `receiver`.
+    function _settleRedemption(address owner, address receiver, uint256 shares)
+        internal
+        returns (uint256 assetsOut)
+    {
         uint256 assets = convertToAssets(shares);
 
         // Proportional liquidity to unwind (pre-state-change principal).
@@ -345,7 +406,6 @@ abstract contract MintwareBaseVault4626 is
         uint256 exitFee = (assets * exitFeeBps) / BPS;
 
         // Effects
-        req.executed    = true;
         totalPrincipal -= assets;
         _burn(owner, shares);
 
@@ -371,7 +431,7 @@ abstract contract MintwareBaseVault4626 is
         uint256 available = IERC20(asset()).balanceOf(address(this));
         if (assetsOut > available) assetsOut = available;
 
-        IERC20(asset()).safeTransfer(owner, assetsOut);
+        IERC20(asset()).safeTransfer(receiver, assetsOut);
         emit WithdrawalExecuted(owner, assetsOut, penalty);
     }
 
@@ -398,7 +458,7 @@ abstract contract MintwareBaseVault4626 is
     }
 
     /// @notice Owner-initiated rebalance to a new tick range.
-    function rebalance(int24 newTickLower, int24 newTickUpper) external onlyOwner nonReentrant {
+    function rebalance(int24 newTickLower, int24 newTickUpper) external onlyOwner nonReentrant whenNotPaused {
         if (!poolInitialized) revert PoolNotInitialized();
         poolManager.unlock(abi.encode(Action.Rebalance, abi.encode(newTickLower, newTickUpper)));
         emit Rebalanced(newTickLower, newTickUpper, totalLiquidity);
@@ -412,7 +472,7 @@ abstract contract MintwareBaseVault4626 is
         uint256 validUntil,
         uint256 nonce,
         bytes calldata oracleSignature
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         if (!poolInitialized)             revert PoolNotInitialized();
         if (oracleSigner == address(0))   revert OracleSignerNotSet();
         if (block.timestamp > validUntil) revert ProposalExpired();
