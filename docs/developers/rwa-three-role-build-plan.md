@@ -114,9 +114,23 @@ New contract extending `MintwareBaseVault4626`, `asset() == USDC`:
   the pool the ULV position accrues vRWA. The *vault* holds it (it's a whitelisted permitted holder);
   **LPs must be paid back in USDC only.** Fund USDC-only withdrawals via a reserve buffer + keeper
   rebalance (swap vault-held vRWA → USDC through the pool). This is the existing reserve model made active.
-- **LP gate parameter:** `requireQualifiedPurchaser` (default `false`). When set, `_afterEnter`/deposit
-  gates the LP on `registry` level ≥ `ACCREDITED`. Counsel's 3(c)(7) ruling flips this flag — not a rewrite.
+- **LP gate parameter:** `requireQualifiedPurchaser` — **default `true` (safe/gated)** so the code never
+  ships open by accident; counsel's 3(c)(7) ruling *relaxes* it via the owner setter. When set, `_afterEnter`
+  gates the LP on `registry` level ≥ `ACCREDITED`.
 - Async USDC redemption via the base machinery.
+
+> **⚠ Design locked + scope discovered (2026-08-05) — NOT yet built.** Liquidity model chosen (user):
+> **async + keeper-rebalanced** — single-sided USDC LP; withdrawals use the async notice window for a
+> keeper to unwind + swap accrued vRWA→USDC so LPs always get USDC. Two things surfaced while scoping the
+> contract:
+> 1. **Hook dependency (blocker):** the vRWA/USDC pool's `MintwareOracleHook.beforeAddLiquidity` hard-
+>    restricts LP to a single `vault` address (`OnlyVaultCanModifyLiquidity`). The ULV cannot add liquidity
+>    until the hook authorizes **multiple LPs** (add an `authorizedLps` mapping + `setLp`). So WS2 is a
+>    multi-contract change: **ULV + hook + keeper router-swap + tests** — not just a new vault.
+> 2. **Share pricing:** v1 prices shares on par-principal (`totalAssets == totalPrincipal`), like the RWA
+>    vault; mark-to-market of the live position (IL/fees) is a v2 refinement.
+>
+> Money-path + interconnected → deserves a dedicated build, not a session-tail sprint.
 
 **Tests:** LP deposits USDC → shares, holds **no** vRWA; withdrawal returns USDC only even when the
 position holds vRWA; QP flag on → sub-accredited deposit reverts; fees accrue to LPs.
