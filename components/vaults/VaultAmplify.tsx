@@ -97,7 +97,6 @@ function LiveStatsBand({ data }: { data: AmplifyData | null }) {
   const cells = [
     { v: tvl > 0 ? fmtUsd(tvl) : '—', k: 'Total TVL' },
     { v: count > 0 ? String(count) : '—', k: 'Live vaults' },
-    { v: '2', k: 'Surfaces (DeFi + RWA)' },
     { v: '70%', k: 'Fees to LPs' },
   ]
 
@@ -558,7 +557,6 @@ export function VaultAmplify() {
         <LockTiers />
         <TrustOnChain />
         <ReferralLoop />
-        <SurfaceSplit />
         <Leaderboard data={data} />
       </div>
     </section>

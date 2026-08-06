@@ -17,7 +17,6 @@ import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
 import { useVaultSeed } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultCreateMessage } from '@/lib/web3/signedActionMessages'
-import { RwaCreateFlow } from './RwaCreateFlow'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 interface VaultDraft {
@@ -584,12 +583,9 @@ function SurfacePicker({ onPick }: { onPick: (s: 'defi' | 'rwa') => void }) {
   )
 }
 
-// ─── surface router ───────────────────────────────────────────────────────────
+// ─── single-surface (DeFi) — the RWA surface was shelved ────────────────────────
 function CreateVaultContentInner() {
-  const [surface, setSurface] = useState<'defi' | 'rwa' | null>(null)
-  if (surface === 'defi') return <DefiCreateFlow onBack={() => setSurface(null)} />
-  if (surface === 'rwa') return <RwaCreateFlow onBack={() => setSurface(null)} />
-  return <SurfacePicker onPick={setSurface} />
+  return <DefiCreateFlow onBack={() => { window.location.href = '/vaults' }} />
 }
 
 function CreateVaultContent() {

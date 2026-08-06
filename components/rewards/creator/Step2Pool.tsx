@@ -14,7 +14,6 @@ import {
   POOL_PRESETS, POINTS_DURATION_PRESETS, PAYOUT_PRESETS,
   dailyBudget, depletionVolumeUsd, fmtUSDShort,
 } from '@/lib/rewards/creator'
-import { SurfaceSelect } from './SurfaceSelect'
 
 interface Step2PoolProps {
   form:     CreatorFormState
@@ -95,8 +94,6 @@ export function Step2Pool({ form, onChange }: Step2PoolProps) {
   return (
     <div className="flex flex-col gap-7">
 
-      {/* Surface — DeFi pool vs RWA deal (R1) */}
-      <SurfaceSelect form={form} onChange={onChange} />
 
       {/* Pool size */}
       <div>

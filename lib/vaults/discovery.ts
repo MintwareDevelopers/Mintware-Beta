@@ -52,48 +52,6 @@ const MOCK_VAULTS: VaultSummary[] = [
     feeSplit: [70, 15, 10, 5], profile: 'MEME', profileRange: '±27%',
   },
   {
-    id: 'liquidhectar-note', name: 'LiquidHectar Note', surface: 'RWA',
-    pair: 'vRWA / USDC', descriptor: 'Real-estate note · oracle-banded',
-    tvlUsd: 4_180_000, netApyPct: 9.0, status: 'active', epochLabel: 'T−3d',
-    feeSplit: [70, 15, 10, 5], underlyingApyPct: 12.0, settleDays: 30,
-    priceBand: '±15/±45', kycAtRedeem: true,
-  },
-  {
-    id: 'atx-credit', name: 'ATX Credit Facility', surface: 'RWA',
-    pair: 'vRWA / USDC', descriptor: 'Private-credit facility · SPV-wrapped',
-    tvlUsd: 1_960_000, netApyPct: 10.4, status: 'active', epochLabel: 'T−3d',
-    feeSplit: [70, 15, 10, 5], underlyingApyPct: 13.5, settleDays: 30,
-    priceBand: '±15/±45', kycAtRedeem: true,
-  },
-  {
-    id: 'mesquite-solar', name: 'Mesquite Solar', surface: 'RWA',
-    pair: 'vRWA / USDC', descriptor: 'Energy off-take · commodity yield',
-    tvlUsd: 512_000, netApyPct: 8.1, status: 'seeding', epochLabel: 'T−9d',
-    feeSplit: [70, 15, 10, 5], underlyingApyPct: 10.0, settleDays: 30,
-    priceBand: '±15/±45', kycAtRedeem: true,
-  },
-  {
-    id: 'sovereign-tbill', name: 'Sovereign T-Bill', surface: 'RWA',
-    pair: 'vRWA / USDC', descriptor: 'US T-bills · weekly roll · low-vol',
-    tvlUsd: 8_450_000, netApyPct: 5.1, status: 'active', epochLabel: 'T−3d',
-    feeSplit: [70, 15, 10, 5], underlyingApyPct: 5.0, settleDays: 7,
-    priceBand: '±5/±15', kycAtRedeem: true,
-  },
-  {
-    id: 'meridian-trade', name: 'Meridian Trade Finance', surface: 'RWA',
-    pair: 'vRWA / USDC', descriptor: 'Invoice factoring · 90-day paper',
-    tvlUsd: 2_240_000, netApyPct: 11.8, status: 'active', epochLabel: 'T−3d',
-    feeSplit: [70, 15, 10, 5], underlyingApyPct: 13.0, settleDays: 30,
-    priceBand: '±15/±45', kycAtRedeem: true,
-  },
-  {
-    id: 'verdant-carbon', name: 'Verdant Carbon Note', surface: 'RWA',
-    pair: 'vRWA / USDC', descriptor: 'Verified carbon-offset yield',
-    tvlUsd: 640_000, netApyPct: 7.2, status: 'seeding', epochLabel: 'T−8d',
-    feeSplit: [70, 15, 10, 5], underlyingApyPct: 8.5, settleDays: 45,
-    priceBand: '±20/±60', kycAtRedeem: true,
-  },
-  {
     id: 'stable-yield', name: 'Stable Yield', surface: 'DeFi',
     pair: 'USDC / USDT', descriptor: 'Stable pair · tight-range LP',
     tvlUsd: 3_120_000, netApyPct: 6.8, status: 'active', epochLabel: 'T−3d',
@@ -115,26 +73,12 @@ const MOCK_VAULTS: VaultSummary[] = [
 export async function getVaultsDiscovery(): Promise<VaultSummary[]> {
   const { isSubgraphEnabled, fetchSubgraphVaults } = await import('./subgraph')
 
-  // Real DeFi vaults from the subgraph.
+  // Real DeFi vaults from the subgraph; mock examples showcase the pool profiles.
   let realDeFi: VaultSummary[] = []
   if (isSubgraphEnabled()) realDeFi = await fetchSubgraphVaults()
 
-  // Real, approved RWA deals from Supabase (ids are vault UUIDs → link to /vault/[id]).
-  let realRwa: VaultSummary[] = []
-  try {
-    const { dbGetRwaVaults } = await import('@/lib/rwa/db')
-    realRwa = (await dbGetRwaVaults()) ?? []
-  } catch { /* fall through to mock RWA */ }
-
-  const real = [...realDeFi, ...realRwa]
-  if (real.length === 0) return MOCK_VAULTS
-
-  // DeFi examples always showcase the range of pool profiles alongside the live
-  // vault(s); RWA examples drop once real approved deals exist (they replace them).
-  // Examples are flagged "Example" in the UI; real RWA deals link to /vault/[id].
-  const hasRwa = real.some((v) => v.surface === 'RWA')
-  const previews = MOCK_VAULTS.filter((v) => v.surface === 'DeFi' || !hasRwa)
-  return [...real, ...previews]
+  if (realDeFi.length === 0) return MOCK_VAULTS
+  return [...realDeFi, ...MOCK_VAULTS]
 }
 
 /** Aggregate stats for the discovery header title-block. */
@@ -179,8 +123,6 @@ export interface VaultDetail extends VaultSummary {
   lockTiers: LockTierOption[]
   yieldSources: YieldSource[]
   position?: VaultPosition
-  reserveSplit?: [number, number] // [reserve%, yield%] — RWA only
-  deal?: import('@/lib/rwa/deal').DealMeta // RWA only — team-authored deal page content
 }
 
 // Ordered hook stacks per surface (from the two-surface architecture).
@@ -251,23 +193,11 @@ export async function getVault(id: string): Promise<VaultDetail | null> {
         ]
   }
 
-  // RWA vaults carry a team-authored deal (Supabase, server-only read). Attached
-  // when a real deal exists; the deal page falls back to structural data otherwise.
-  let deal: import('@/lib/rwa/deal').DealMeta | undefined
-  if (!isDeFi) {
-    try {
-      const { dbGetDeal } = await import('@/lib/rwa/db')
-      deal = (await dbGetDeal(v.id)) ?? undefined
-    } catch { /* no deal — page renders structural RWA info only */ }
-  }
-
   return {
     ...v,
-    hookStack: isDeFi ? DEFI_HOOK_STACK : RWA_HOOK_STACK,
+    hookStack: DEFI_HOOK_STACK,
     lockTiers: LOCK_TIERS,
     yieldSources,
-    reserveSplit: isDeFi ? undefined : [40, 60],
-    deal,
     // Position is read on-chain client-side (useVaultOnchain) in the real app;
     // the /style preview only shows a sample position for the mock hero vault.
     position:

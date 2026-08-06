@@ -47,20 +47,12 @@ const MOCK_VAULTS: SocialVault[] = [
 
 const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 
-// ── Surface pitches (RWA is the default / first tab) ─────────────────────────
-type Surface = 'rwa' | 'defi'
+// ── DeFi vault pitch ─────────────────────────────────────────────────────────
+type Surface = 'defi'
 const SURFACES: Record<Surface, {
   eyName: string; acc: string; accInk: string; head: [string, string]; sub: string;
   bullets: string[]; base: number; featured: [string, string, string][]
 }> = {
-  rwa: {
-    eyName: 'RWA surface', acc: '#FF8574', accInk: CORAL_INK,
-    head: ['Institutional yield. ', 'No gatekeepers.'],
-    sub: 'Real estate, credit, T-bills — as a bearer token. Deposit any amount, no KYC, no minimums. Hold it, trade it 24/7, or redeem the underlying only if you ever want to.',
-    bullets: ['Any amount — no $50k minimum', 'No KYC to deposit — only at redemption', 'vRWA bearer token, trade on Uniswap 24/7', 'Oracle-banded, fair-valued pricing'],
-    base: 9.0,
-    featured: [['ATX Credit Facility', 'vRWA / USDC', '10.4%'], ['LiquidHectar Note', 'vRWA / USDC', '9.0%']],
-  },
   defi: {
     eyName: 'DeFi surface', acc: '#006FCC', accInk: '#ffffff',
     head: ['Same deposit. Your reputation. ', 'More yield.'],
@@ -78,7 +70,7 @@ function VaultsContent() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter]   = useState<Filter>('All')
   const [useMock, setUseMock] = useState(false)
-  const [surface, setSurface] = useState<Surface>('rwa')
+  const surface: Surface = 'defi'
 
   useEffect(() => {
     fetch('/api/vaults?surface=all')
@@ -113,18 +105,7 @@ function VaultsContent() {
       <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
         <div className="max-w-[1100px] mx-auto px-7 pt-10 pb-9 max-[800px]:px-4">
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className={ey}>✴ Two-surface vaults · {S.eyName}</div>
-            <div className="inline-flex border border-atx-ink">
-              {(['rwa', 'defi'] as Surface[]).map((s, i) => (
-                <button
-                  key={s}
-                  onClick={() => setSurface(s)}
-                  className={`font-atx-mono text-[12px] uppercase tracking-[0.12em] px-6 py-2.5 cursor-pointer ${i === 0 ? 'border-r border-atx-ink' : ''} ${surface === s ? 'bg-atx-blue text-white' : 'bg-atx-bone text-atx-ink/55'}`}
-                >
-                  {s === 'rwa' ? 'RWA' : 'DeFi'}
-                </button>
-              ))}
-            </div>
+            <div className={ey}>✴ {S.eyName} · reputation-weighted yield</div>
           </div>
 
           <h1 className="font-bold tracking-[-0.02em] leading-[0.98] text-[clamp(32px,5vw,62px)] mt-6 max-w-[16ch] text-wrap-balance">
@@ -187,7 +168,7 @@ function VaultsContent() {
         ) : filtered.length === 0 ? (
           <div className="text-center py-[60px] px-5 text-atx-ink/55 font-atx-display text-[14px]">
             <div className="flex justify-center mb-3"><Star className="w-8 h-8 text-atx-coral" /></div>
-            <div>No {surface === 'rwa' ? 'RWA' : 'DeFi'} {filter !== 'All' ? filter.toLowerCase() + ' ' : ''}vaults yet.</div>
+            <div>No DeFi {filter !== 'All' ? filter.toLowerCase() + ' ' : ''}vaults yet.</div>
           </div>
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-[680px]:grid-cols-1">
