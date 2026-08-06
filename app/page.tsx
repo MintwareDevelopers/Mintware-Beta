@@ -197,12 +197,12 @@ export default function HomePage() {
         style={{ backgroundImage: GRID_BG }}
       >
         <div className="px-6 py-[44px] border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink">
-          <div className={ey}>✴ Two-surface vaults · reputation-weighted yield</div>
+          <div className={ey}>✴ Reputation-weighted vaults</div>
           <h2 className="font-bold tracking-[-0.02em] leading-[1.04] text-[clamp(28px,3.4vw,44px)] mt-3.5">
-            Real estate, credit, crypto — one vault, <span className="text-atx-blue">no walls.</span>
+            The same position, <span className="text-atx-blue">earning you more.</span>
           </h2>
           <p className="text-[16px] leading-[1.5] text-atx-ink/70 max-w-[34ch] mt-4">
-            No KYC. No minimums. DeFi and real-world yield in one deposit — and your score sets the rate.
+            MEV-protected, auto-managed LP on Uniswap V4 — and your Attribution score lifts your fee share up to 2×.
           </p>
           <button onClick={() => launchApp('/vaults')} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-ink bg-atx-bone mt-6">
             Browse the vaults →
@@ -212,9 +212,8 @@ export default function HomePage() {
           <span className="absolute top-[30px] right-6 font-atx-mono text-[9px] uppercase tracking-[0.14em] text-atx-ink/55 border border-atx-ink/20 px-1.5 py-1">Preview</span>
           <div className={ey}>A vault, up close</div>
           <div className="border border-atx-ink bg-atx-bone mt-3">
-            <div className="grid grid-cols-2 border-b border-atx-ink font-atx-mono text-[11px] uppercase tracking-[0.12em] text-center">
-              <div className="py-3 border-r border-atx-ink text-atx-ink/55">DeFi</div>
-              <div className="py-3 bg-atx-coral text-atx-ink">RWA</div>
+            <div className="border-b border-atx-ink font-atx-mono text-[11px] uppercase tracking-[0.12em] text-center">
+              <div className="py-3 bg-atx-blue text-white">DeFi vault</div>
             </div>
             <div className="p-4">
               <div className="flex items-baseline justify-between border border-atx-ink px-3.5 py-3.5">
@@ -222,8 +221,8 @@ export default function HomePage() {
                 <span className="font-atx-mono text-[11px] text-atx-ink/55">USDC</span>
               </div>
               <div className="mt-3 border-t border-atx-ink/20">
-                <Bdr k="Asset yield" v="9.0%" />
-                <Bdr k="vRWA swap fees" v="+0.8%" />
+                <Bdr k="Swap fees + MEV" v="8.5%" />
+                <Bdr k="Idle-capital yield" v="+0.6%" />
                 <div className="flex items-center justify-between py-2 border-b border-atx-ink/10 text-[12px] text-atx-ink/80">
                   <span className="flex items-center gap-2">
                     Your multiplier
@@ -348,47 +347,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 03 — RWA (soft-blue tonal band) */}
-      <section className="border-b border-atx-ink bg-atx-blue/[0.05] text-atx-ink">
-        <div className="mx-auto max-w-[1180px] px-6 py-[56px]">
-          <div className="flex items-baseline gap-3.5">
-            <span className="font-atx-mono text-[12px] text-atx-blue">03</span>
-            <span className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55">Real-world yield, no gatekeepers</span>
-          </div>
-          <h2 className="font-bold tracking-[-0.03em] text-[clamp(24px,3vw,38px)] leading-[1.05] max-w-[22ch] mt-3.5">
-            Real estate yield, <span className="text-atx-blue">without the $50k door.</span>
-          </h2>
-          <p className="text-[16px] leading-[1.55] text-atx-ink/70 max-w-[58ch] mt-3.5">
-            Tokenized real-world assets have always been walled off — accreditation checks, six-figure minimums, capital locked behind phone calls. Mintware opens the door:
-          </p>
-          <div className="grid grid-cols-4 border border-atx-ink bg-atx-bone mt-8 max-[720px]:grid-cols-1">
-            {STEPS.map((s, i) => (
-              <div key={s.n} className={`p-[18px] ${i < 3 ? 'border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink' : ''}`}>
-                <div className="font-atx-mono text-[11px] text-atx-blue tracking-[0.08em]">{s.n}</div>
-                <div className="text-[15px] font-bold mt-2.5 mb-1.5">{s.t}</div>
-                <div className="font-atx-mono text-[10.5px] leading-[1.5] text-atx-ink/55">{s.d}</div>
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-2 border border-atx-ink bg-atx-bone mt-4 max-[720px]:grid-cols-1">
-            <div className="p-[18px] border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink">
-              <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/45 mb-3">Traditional RWA</div>
-              {TRAD.map((r, i) => (
-                <div key={r} className={`py-2.5 text-[13px] text-atx-ink/55 ${i < TRAD.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>{r}</div>
-              ))}
-            </div>
-            <div className="p-[18px]">
-              <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-blue mb-3">✴ Mintware</div>
-              {MW.map((r, i) => (
-                <div key={r} className={`py-2.5 text-[13px] font-medium ${i < MW.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>{r}</div>
-              ))}
-            </div>
-          </div>
-          <div className="text-[19px] font-bold leading-[1.3] max-w-[30ch] mt-7 tracking-[-0.01em]">
-            Your real-estate position trades at 3am on a Sunday. <span className="text-atx-blue">Try that with a REIT.</span>
-          </div>
-        </div>
-      </section>
 
       {/* WAITLIST */}
       <section className="border-b border-atx-ink">

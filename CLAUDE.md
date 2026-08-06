@@ -5,10 +5,10 @@ Stack: Next.js 16, TypeScript, RainbowKit + wagmi, Supabase, Tailwind v4, pnpm.
 
 Today's date: 2026-03-27.
 
-> **▶ Current direction — Phase 3 (Two-Surface Vaults):** the platform is evolving into a
-> two-surface (DeFi + RWA) Uniswap V4 vault system on a shared ERC-4626 base + factory.
-> **Read [`docs/developers/phase3-two-surface-architecture.md`](docs/developers/phase3-two-surface-architecture.md) first** for target
-> architecture, locked decisions, and build tracks. Active branch: `feature/phase-3`.
+> **▶ Current direction (2026-08-05): reputation-first DeFi.** The RWA surface was **shelved** off the
+> platform (preserved on branch `archive/rwa-surface` + PRs #28–34; see [`docs/archive/rwa/SHELVED.md`](docs/archive/rwa/SHELVED.md)).
+> Mintware is the on-chain **reputation layer** — Attribution scores behavior, and rewards / social LP
+> vaults / agents route value by the score. Vaults are single-surface DeFi (reputation-weighted LP on V4).
 
 ## Rules (load by topic)
 
@@ -21,8 +21,7 @@ Today's date: 2026-03-27.
 | Campaign engine, epoch formula, multipliers, crons | `.claude/rules/rewards.md` |
 | Referral system, ref codes, Supabase tables | `.claude/rules/referrals.md` |
 | MintwareDistributor v2, AIAttribution v3, deploy | `.claude/rules/smart-contracts.md` |
-| Vaults — two-surface (DeFi+RWA), V4 hook, FeeVault, 4626 base | `.claude/rules/vaults.md` |
-| **Phase 3 plan of record** — two-surface architecture, tracks | `docs/developers/phase3-two-surface-architecture.md` |
+| Vaults — DeFi social LP, V4 hook, FeeVault, 4626 base | `.claude/rules/vaults.md` |
 | Supabase schema, migrations, constraints | `.claude/rules/schema.md` |
 | Vercel, env vars, build, crons, domains | `.claude/rules/deployments.md` |
 | MintGuard, CSP, rate limits, on-chain verification | `.claude/rules/security.md` |

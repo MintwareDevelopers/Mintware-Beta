@@ -243,7 +243,6 @@ export default function DefiLandingPage() {
           </div>
           <div className="flex gap-3 flex-wrap">
             <Link href="/vaults" className={btnAcc}>Open the vaults →</Link>
-            <Link href="/rwa" className={btnGhost}>See the RWA surface →</Link>
           </div>
         </div>
       </section>
