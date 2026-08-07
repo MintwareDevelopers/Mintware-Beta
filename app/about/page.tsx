@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MarketingNav } from '@/components/web2/MarketingNav'
+import { PageHero } from '@/components/web2/PageHero'
 
 // =============================================================================
 // /about — the mission page. Home of the mission line "Liquidity should be a
@@ -16,8 +17,6 @@ export const metadata: Metadata = {
     'Our thesis: liquidity should be neutral, shared infrastructure that works for the people who supply it — not something one team gatekeeps, and not capital left idle. Mintware routes value by contribution, not wallet size.',
 }
 
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 const BLUE = 'var(--color-atx-blue)'
 
 function Star({ className = '' }: { className?: string }) {
@@ -57,19 +56,11 @@ export default function AboutPage() {
       <MarketingNav />
 
       {/* ── HERO · the mission ── */}
-      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className={`${wrap} py-[60px]`}>
-          <div className={ey}>✴ Our thesis</div>
-          <h1 className="font-bold tracking-[-0.03em] leading-[0.97] text-[clamp(38px,6.6vw,88px)] max-w-[15ch] mt-4">
-            Liquidity should be a <span style={{ color: BLUE }}>public good.</span>
-          </h1>
-          <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[56ch] mt-6">
-            Neutral, shared infrastructure that works for the people who supply the capital — not something one team
-            gatekeeps, and not capital left sitting idle. That belief is why Mintware exists. Everything we build is a way
-            of making it real.
-          </p>
-        </div>
-      </section>
+      <PageHero
+        eyebrow="Our thesis"
+        title={<>Liquidity should be a <span className="text-atx-blue">public good.</span></>}
+        sub="Neutral, shared infrastructure that works for the people who supply the capital — not something one team gatekeeps, and not capital left sitting idle. That belief is why Mintware exists. Everything we build is a way of making it real."
+      />
 
       {/* ── 01 · Why we exist (the villain) ── */}
       <section className="border-b border-atx-ink">

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MarketingNav } from '@/components/web2/MarketingNav'
+import { PageHero } from '@/components/web2/PageHero'
 
 // =============================================================================
 // /attribution — marketing landing for the Attribution reputation layer.
@@ -15,8 +16,6 @@ export const metadata: Metadata = {
     'Attribution reads your complete on-chain history across 100+ chains and produces one composite reputation score from six signals. Not based on wealth — based on contribution. Verifiable on Base via EAS.',
 }
 
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 const BLUE = 'var(--color-atx-blue)'
 
 function Star({ className = '' }: { className?: string }) {
@@ -81,29 +80,25 @@ export default function AttributionLandingPage() {
       <MarketingNav active="attribution" />
 
       {/* ── HERO ── */}
-      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className={`${wrap} py-[54px]`}>
-          <div className={ey}>✴ On-chain reputation · 100+ chains</div>
-          <h1 className="font-bold tracking-[-0.03em] leading-[0.97] text-[clamp(38px,6.4vw,86px)] max-w-[16ch] mt-4">
-            Your contribution should mean <span style={{ color: BLUE }}>something.</span>
-          </h1>
-          <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[52ch] mt-6">
-            Attribution reads your complete on-chain history — every position, vote, and referral across 100+ chains —
-            and produces one composite reputation score. Not based on wealth. Based on what you’ve actually done.
-          </p>
-          <div className="flex flex-wrap gap-3 mt-8">
-            <Link href="/explorer" className={btnAcc}>Explore scores →</Link>
-            <Link href="/profile" className={btnGhost}>See your score →</Link>
+      <PageHero
+        eyebrow="On-chain reputation · 100+ chains"
+        title={<>Your contribution should mean <span className="text-atx-blue">something.</span></>}
+        sub="Attribution reads your complete on-chain history — every position, vote, and referral across 100+ chains — and produces one composite reputation score. Not based on wealth. Based on what you’ve actually done."
+      >
+        <div className="flex flex-wrap gap-3">
+          <Link href="/explorer" className={btnAcc}>Explore scores →</Link>
+          <Link href="/profile" className={btnGhost}>See your score →</Link>
+        </div>
+      </PageHero>
+
+      {/* stat band */}
+      <section className="border-b border-atx-ink grid grid-cols-4 max-[720px]:grid-cols-2">
+        {STATS.map(([n, k], i) => (
+          <div key={k} className={`px-6 py-6 ${i < 3 ? 'border-r border-atx-ink' : ''} max-[720px]:[&:nth-child(-n+2)]:border-b max-[720px]:border-atx-ink max-[720px]:[&:nth-child(2)]:border-r-0`}>
+            <div className="font-atx-mono text-[28px] font-bold tracking-[-0.03em]">{n}</div>
+            <div className="font-atx-mono text-[9px] uppercase tracking-[0.14em] text-atx-ink/55 mt-1.5">{k}</div>
           </div>
-        </div>
-        <div className="border-t border-atx-ink grid grid-cols-4 max-[720px]:grid-cols-2">
-          {STATS.map(([n, k], i) => (
-            <div key={k} className={`px-6 py-6 ${i < 3 ? 'border-r border-atx-ink' : ''} max-[720px]:[&:nth-child(-n+2)]:border-b max-[720px]:border-atx-ink max-[720px]:[&:nth-child(2)]:border-r-0`}>
-              <div className="font-atx-mono text-[28px] font-bold tracking-[-0.03em]">{n}</div>
-              <div className="font-atx-mono text-[9px] uppercase tracking-[0.14em] text-atx-ink/55 mt-1.5">{k}</div>
-            </div>
-          ))}
-        </div>
+        ))}
       </section>
 
       {/* ── 01 · The six signals ── */}
