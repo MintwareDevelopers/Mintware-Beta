@@ -101,6 +101,25 @@ function VaultsContent() {
     <div className="font-atx-display bg-atx-bone min-h-screen text-atx-ink [&_*]:rounded-none">
       <MwNav />
 
+      {/* ── Testnet-beta notice — keeps the preview data honest ── */}
+      <div className="border-b border-atx-ink bg-atx-ink text-white">
+        <div className="max-w-[1100px] mx-auto px-7 py-2.5 max-[800px]:px-4 flex items-center gap-3 flex-wrap font-atx-mono text-[11px]">
+          <span className="w-[8px] h-[8px] bg-atx-acid border border-white/40 inline-block shrink-0" />
+          <span className="uppercase tracking-[0.14em] text-white/70">Base Sepolia · testnet beta</span>
+          <span className="text-white/55 normal-case tracking-normal">
+            Vaults run on a testnet contract — deposit test USDC to try the full flow. Figures shown are illustrative, not live TVL.
+          </span>
+          <a
+            href="https://faucet.circle.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto underline underline-offset-2 text-atx-acid hover:text-white normal-case tracking-normal"
+          >
+            Get test USDC →
+          </a>
+        </div>
+      </div>
+
       {/* ── HERO — two-surface toggle + surface pitch ── */}
       <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
         <div className="max-w-[1100px] mx-auto px-7 pt-10 pb-9 max-[800px]:px-4">
