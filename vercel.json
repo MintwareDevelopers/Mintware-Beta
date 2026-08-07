@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/vault-epoch-close",
       "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/cron/vault-weighted-epoch-close",
+      "schedule": "0 1 * * 1"
     }
   ]
 }

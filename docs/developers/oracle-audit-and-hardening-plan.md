@@ -398,13 +398,27 @@ producing exactly the `closeEpoch(...)` args the contract verifies.
 allocation → two-token tree → oracle-signed EpochRoot → on-chain verify (C1) + no-over-allocation (C5) +
 guardian (C4) → claim.
 
-**Deployment-time glue that remains (needs deployed addresses + live schema + keeper key, best done at
-deploy):** the cron that fetches a vault epoch's LP set + `referrerOf` + percentiles from Supabase, calls
-the orchestrator, persists the tree, submits `closeEpoch` via a keeper wallet, and the claim/proof-serving
-route. Thin plumbing over the tested core.
+### ✅ Slice 4 (deployment glue) — cron + claim route + schema (2026-08-07)
+- `lib/rewards/vault/weightedEpochCloser.ts` — `assembleLpInputs` (joins referral + percentiles onto raw
+  LP positions; **fail-closed** — a null score map or a per-wallet miss yields `scoresAvailable=false` /
+  NaN, never a fabricated 0), `buildClaimIndex`, and a thin `submitCloseEpoch` (keeper viem write; keeper
+  pays gas only, holds no reward authority). 4 vitest.
+- `app/api/(rewards)/cron/vault-weighted-epoch-close/route.ts` — bearer-gated cron: loads wired vaults →
+  LP positions + referral graph + percentiles → orchestrator → `closeEpoch` on-chain → persists tree.
+  **Env-gated to no-op cleanly** until `KEEPER_PRIVATE_KEY` + a deployed/wired distributor exist;
+  fail-closed per vault (skips, leaves epoch open). Wired into `vercel.json` (`0 1 * * 1`).
+- `app/api/(rewards)/vault/weighted-claim/route.ts` — public claim/proof server from the persisted tree.
+- `supabase/migrations/20260807000002_weighted_epoch_schema.sql` — `vault_weighted_epochs` sink +
+  `vault_lp_positions` + `social_vaults` wiring columns (idempotent).
 
-### ▶ Remaining
-- **Tier 1** — KMS/HSM signer → 2-of-3 multisig; alerting; remaining hygiene (C8/C12/C13/C14).
+Full vitest **195**; tsc clean; Forge **175** (unchanged). **The migration is code-complete.**
+
+### ▶ Remaining — operator / infra only (no code)
+1. **Deploy** `MintwareWeightedDistributor`; `setWeightedDistributor()` on each pair vault; set
+   `NEXT_PUBLIC_*`/keeper envs; apply the migration; stand up the `vault_lp_positions` indexer.
+2. **Rotate `ORACLE_PRIVATE_KEY`** on-chain (§5 runbook — exposure confirmed) and provision the per-role
+   keys (`WEIGHT_/RANGE_/AGENT_/ROOT_ORACLE_PRIVATE_KEY`) to complete the physical key split.
+3. **Tier 1** — KMS/HSM signer → 2-of-3 multisig; alerting; remaining hygiene (C8/C12/C13/C14).
 
 > ⚠ **Unrelated concurrent breakage noticed (not this work):** another session is mid-refactor removing
 > `lib/web2/providers/molten.ts` (staged deletion) while `hooks/useSwap.ts` still imports it — 2 tsc
