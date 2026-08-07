@@ -11,8 +11,7 @@
 //  03 Lock tiers (the second lever — commitment; real LockLib numbers)
 //  04 Trust, enforced on-chain
 //  05 Referral compounding loop
-//  06 DeFi vs RWA
-//  07 Vault reputation leaderboard (ranked by TVL, real vs example)
+//  06 Vault reputation leaderboard (ranked by TVL, real vs example)
 // =============================================================================
 
 import { useEffect, useState } from 'react'
@@ -57,7 +56,7 @@ const TIERS = [
 type LbVault = {
   id: string
   name: string
-  surface: 'DeFi' | 'RWA'
+  surface: 'DeFi'
   pair?: string
   tvlUsd: number
   netApyPct: number
@@ -69,7 +68,7 @@ type AmplifyData = {
   leaderboard: LbVault[]
 }
 const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-// Real = an on-chain DeFi vault (address) or an approved RWA deal (UUID). UUID deals
+// Real = an on-chain vault (address) or an approved vault (UUID). UUID entries
 // resolve at /vault/[id]; slug ids are illustrative examples.
 const isRealId = (id: string) => /^0x[0-9a-fA-F]{40}$/.test(id) || isUuid(id)
 
@@ -406,64 +405,6 @@ function ReferralLoop() {
   )
 }
 
-// ─── 06 · DeFi vs RWA ────────────────────────────────────────────────────────
-function SurfaceSplit() {
-  const cols = [
-    {
-      tag: 'DeFi surface',
-      accent: 'var(--color-atx-blue)',
-      head: 'Earn from on-chain activity',
-      rows: [
-        ['Yield source', 'Swap fees + idle-capital + MEV capture'],
-        ['Risk shape', 'Smart-contract + market volatility'],
-        ['Protection', 'MEV guard · dynamic fee · range optimization'],
-        ['Access', 'Permissionless · deposit anytime'],
-        ['Best for', 'Active on-chain LPs chasing real trading yield'],
-      ],
-    },
-    {
-      tag: 'RWA surface',
-      accent: 'var(--color-atx-coral)',
-      head: 'Earn from real-world yield',
-      rows: [
-        ['Yield source', 'Underlying asset (credit, notes, energy) + fees'],
-        ['Risk shape', 'Issuer / counterparty · oracle-banded price'],
-        ['Protection', 'SPV-wrapped · oracle price bands · 40/60 reserve'],
-        ['Access', 'KYC at redemption · 30-day settlement window'],
-        ['Best for', 'Allocators wanting off-chain yield, on-chain rails'],
-      ],
-    },
-  ]
-  return (
-    <div>
-      <SectionHead
-        n="06"
-        label="Two surfaces · one ERC-4626 base"
-        title="Pick your surface. Same reputation engine underneath."
-        sub="Different yield, different risk — one shared vault base, so your reputation compounds across both."
-      />
-      <div className="grid grid-cols-2 max-[820px]:grid-cols-1 gap-4">
-        {cols.map((c) => (
-          <div key={c.tag} className="border border-atx-ink bg-atx-panel" style={{ borderTop: `3px solid ${c.accent}` }}>
-            <div className="p-6 border-b border-atx-ink/20">
-              <div className="font-atx-mono text-[11px] uppercase tracking-[0.1em]" style={{ color: c.accent }}>{c.tag}</div>
-              <div className="text-[20px] font-bold font-atx-display mt-1.5">{c.head}</div>
-            </div>
-            <div>
-              {c.rows.map(([k, v], i) => (
-                <div key={k} className={`flex gap-4 px-6 py-3.5 ${i < c.rows.length - 1 ? 'border-b border-atx-ink/12' : ''}`}>
-                  <div className={`${LABEL} text-[10px] w-[92px] shrink-0 pt-0.5`}>{k}</div>
-                  <div className="text-[13px] text-atx-ink/80 leading-[1.4]">{v}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ─── 07 · Vault reputation leaderboard ───────────────────────────────────────
 function Leaderboard({ data }: { data: AmplifyData | null }) {
   const rows = (data?.leaderboard ?? []).slice(0, 6)
@@ -472,7 +413,7 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
   return (
     <div>
       <SectionHead
-        n="07"
+        n="06"
         label="The ecosystem · ranked by TVL"
         title="The vaults, ranked. Reputation rises to the top."
         sub="Every vault is public and ranked by liquidity. Live vaults climb automatically as capital flows in — examples are shown until real vaults seed."
@@ -491,7 +432,7 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
         ) : (
           rows.map((v, i) => {
             const real = isRealId(v.id)
-            const clickable = isUuid(v.id) // approved RWA deals resolve at /vault/[id]
+            const clickable = isUuid(v.id) // approved vaults resolve at /vault/[id]
             const rowClass = `grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-3.5 ${i < rows.length - 1 ? 'border-b border-atx-ink/12' : ''}${clickable ? ' hover:bg-atx-panel no-underline text-inherit' : ''}`
             const inner = (
               <>
@@ -507,7 +448,7 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
                   </span>
                   {clickable && <span className="font-atx-mono text-[11px] text-atx-ink/40 max-[720px]:hidden">↗</span>}
                 </div>
-                <div className="max-[720px]:hidden font-atx-mono text-[12px]" style={{ color: v.surface === 'RWA' ? 'var(--color-atx-coral)' : 'var(--color-atx-blue)' }}>
+                <div className="max-[720px]:hidden font-atx-mono text-[12px]" style={{ color: 'var(--color-atx-blue)' }}>
                   {v.surface}
                 </div>
                 <div className="max-[720px]:hidden font-atx-mono text-[13px] text-right text-atx-ink/70">
