@@ -45,7 +45,6 @@ export const LIFI_ROUTERS: ReadonlySet<string> = new Set([
 export const CHAIN_RPC: Record<string, string> = {
   base:         process.env.BASE_RPC_URL         ?? 'https://mainnet.base.org',
   base_sepolia: process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org',
-  core_dao:     process.env.CORE_DAO_RPC_URL     ?? 'https://rpc.coredao.org',
   bnb:          process.env.BNB_RPC_URL          ?? 'https://bsc-dataseed.binance.org',
 }
 
@@ -57,7 +56,6 @@ export const DISTRIBUTOR_ADDRESSES: Record<number, string> = {
   8453:  process.env.NEXT_PUBLIC_MW_TREASURY_ADDRESS ?? '', // Base mainnet
   84532: '',                                                // Base Sepolia
   56:    '',                                                // BNB Chain
-  1116:  '',                                                // Core DAO
 }
 
 // Human-readable chain labels
@@ -65,7 +63,6 @@ export const CHAIN_LABELS: Record<number, string> = {
   8453:  'Base',
   84532: 'Base Sepolia',
   56:    'BNB Chain',
-  1116:  'Core DAO',
 }
 
 // ---------------------------------------------------------------------------

@@ -13,7 +13,6 @@
 // Common token symbol → CoinGecko API ID mapping
 // Extend as new campaign tokens are added.
 const COINGECKO_ID_MAP: Record<string, string> = {
-  CORE:   'coredaoorg',
   WCORE:  'wrapped-core',
   ETH:    'ethereum',
   WETH:   'weth',

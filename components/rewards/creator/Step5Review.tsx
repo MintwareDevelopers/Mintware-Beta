@@ -379,13 +379,7 @@ export function Step5Review({ form, onConfirmed }: Step5ReviewProps) {
           )}
           {isPoints && (
             <>
-              <ReviewRow label="Focus" value={form.pointsFocus === 'both' ? 'Trade + Bridge' : form.pointsFocus.charAt(0).toUpperCase() + form.pointsFocus.slice(1)} mono={false} />
-              {(form.pointsFocus === 'trade' || form.pointsFocus === 'both') && (
-                <ReviewRow label="Points per $1 traded" value={`${form.pointsPerUsdTrade} pts`} />
-              )}
-              {(form.pointsFocus === 'bridge' || form.pointsFocus === 'both') && (
-                <ReviewRow label="Bridge points" value={`${form.fixedBridgePoints} pts`} />
-              )}
+              <ReviewRow label="Points per $1 traded" value={`${form.pointsPerUsdTrade} pts`} />
               <ReviewRow label="Payout preset"  value={`Top ${form.payoutPreset}`} />
             </>
           )}

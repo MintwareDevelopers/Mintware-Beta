@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CORE_TOKENS, UNISWAP_TOKEN_LIST_URL, getNativeToken } from '@/config/tokens'
+import { UNISWAP_TOKEN_LIST_URL, getNativeToken } from '@/config/tokens'
 import type { Token } from '@/config/tokens'
 
 interface TokenListState {
@@ -23,16 +23,6 @@ export function useTokenList(chainId: number | undefined): TokenListState {
   useEffect(() => {
     if (!chainId) {
       setState({ tokens: [], isLoading: false, error: null })
-      return
-    }
-
-    // Core chain — use hardcoded list
-    if (chainId === 1116) {
-      setState({
-        tokens: [getNativeToken(chainId), ...CORE_TOKENS],
-        isLoading: false,
-        error: null,
-      })
       return
     }
 

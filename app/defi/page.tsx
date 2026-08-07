@@ -60,7 +60,7 @@ const HOOK = [
 ]
 
 const LOCK_TIERS: [string, string, string, string][] = [
-  ['Flex', 'No lock', '1.00×', 'Withdraw anytime · 7-day queue · no penalty'],
+  ['Flex', 'No lock', '1.00×', 'Withdraw anytime — redeems instantly, no penalty'],
   ['Committed', '30 days', '1.15×', 'Early exit ≤2%, tapering to 0% near unlock'],
   ['Aligned', '90 days', '1.30×', 'Early exit ≤2%, tapering to 0% near unlock'],
   ['Core', '180 days', '1.50×', 'Early exit ≤2%, tapering to 0% near unlock'],
@@ -83,9 +83,11 @@ const LOOP = [
 
 const TRUST = [
   ['Non-custodial', 'You hold ERC-4626 shares. No one — not the team — can move your principal.'],
+  ['Guardian kill-switch', 'A guardian can pause deposits and swaps in one call if anything looks wrong — a circuit breaker, not a promise.'],
+  ['MEV-resistant hook', 'A truncated-oracle price guard and deviation-priced dynamic fee neutralize sandwich attacks — with no reliance on trader identity.'],
   ['Fee split on-chain', 'The 70/15/10/5 split lives in the FeeVault; any change emits a public event, never a silent tweak.'],
   ['Withdrawal queue', 'A 7-day on-chain notice — visible, enforced by the contract, no discretion.'],
-  ['MEV guard in the hook', 'Sandwich protection runs before every swap — value stays with LPs, not bots.'],
+  ['Invariant-tested', 'Core accounting invariants are fuzz-tested across stateful runs — verified, not asserted. Independent audit pending before mainnet.'],
 ]
 
 export default function DefiLandingPage() {
@@ -239,7 +241,7 @@ export default function DefiLandingPage() {
       <section className="border-b border-atx-ink">
         <div className={`${wrap} py-[38px] flex items-center justify-between flex-wrap gap-4`}>
           <div className="text-[24px] font-bold tracking-[-0.01em] max-w-[26ch]">
-            Model your own deposit on the live vaults.
+            Model your own deposit on the vaults page.
           </div>
           <div className="flex gap-3 flex-wrap">
             <Link href="/vaults" className={btnAcc}>Open the vaults →</Link>

@@ -208,7 +208,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
     if (!sellToken || !buyToken) return 'Select Token'
     if (!sellAmount || parseFloat(sellAmount) <= 0) return 'Enter an Amount'
     if (isQuoting) return 'Getting quote…'
-    if (quoteError === 'CORE_COMING_SOON') return 'Core Swaps Coming Soon'
     if (quoteError) return 'Retry Quote'
     if (!quote) return 'Enter an Amount'
     if (isSwapping) return 'Swapping…'
@@ -219,7 +218,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
     if (!isConnected) return true
     if (!sellToken || !buyToken) return true
     if (!sellAmount || parseFloat(sellAmount) <= 0) return true
-    if (quoteError === 'CORE_COMING_SOON') return true
     if (isQuoting || isSwapping) return true
     if (!quote) return true
     return false
@@ -486,12 +484,7 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
           )}
 
           {/* Errors */}
-          {quoteError === 'CORE_COMING_SOON' && (
-            <div className="px-[14px] py-[10px] border border-atx-blue font-atx-mono text-[13px] text-atx-blue text-center uppercase tracking-[0.04em]">
-              Core swaps coming soon — Molten router deploying shortly
-            </div>
-          )}
-          {quoteError && quoteError !== 'CORE_COMING_SOON' && (
+          {quoteError && (
             <div className="px-[14px] py-[10px] border border-atx-clay font-atx-mono text-[13px] text-atx-clay">
               {quoteError}
             </div>
@@ -549,8 +542,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
             className={`w-full py-[14px] border cursor-pointer font-atx-mono text-[14px] font-bold uppercase tracking-[0.06em] transition-all duration-150 mt-[2px] disabled:cursor-not-allowed${
               isActionDisabled()
                 ? ' bg-atx-bone border-atx-ink/20 text-atx-ink/40'
-                : quoteError === 'CORE_COMING_SOON'
-                ? ' bg-transparent border-atx-blue text-atx-blue'
                 : ' bg-atx-blue border-atx-ink text-white hover:opacity-90'
             }`}
             disabled={isActionDisabled()}

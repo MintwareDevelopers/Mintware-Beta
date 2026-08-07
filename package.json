@@ -21,7 +21,6 @@
     "hardhat:test": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat test --config hardhat.config.cts",
     "hardhat:deploy:base-sepolia": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network base_sepolia --config hardhat.config.cts",
     "hardhat:deploy:base": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network base --config hardhat.config.cts",
-    "hardhat:deploy:core-dao": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network core_dao --config hardhat.config.cts",
     "hardhat:deploy:bnb": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network bnb --config hardhat.config.cts",
     "hardhat:deploy:arbitrum-sepolia": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network arbitrum_sepolia --config hardhat.config.cts",
     "hardhat:deploy:arbitrum": "TS_NODE_PROJECT=tsconfig.hardhat.json npx hardhat run scripts/deploy.cjs --network arbitrum --config hardhat.config.cts",

@@ -37,7 +37,6 @@ interface Entry {
   total_points?: number
   total_earned_usd?: number
   attribution_score?: number
-  referral_bridge_points?: number
   referral_trade_points?: number
 }
 
@@ -50,7 +49,7 @@ const TABS: Array<{ k: Metric; label: string }> = [
 const metricVal = (e: Entry, m: Metric) =>
   m === 'score' ? (e.attribution_score || 0)
   : m === 'points' ? (e.total_points || 0)
-  : (e.referral_bridge_points || 0) + (e.referral_trade_points || 0)
+  : (e.referral_trade_points || 0)
 
 const tierFor = (score = 0) => score >= 800 ? 'Oracle' : score >= 500 ? 'Builder' : score >= 250 ? 'Signal' : 'Ghost'
 const TIER_CHIP: Record<string, string> = {
@@ -73,31 +72,31 @@ const fmt = (n: number) => n.toLocaleString()
 // ONLY as a fallback — any real worker data always takes precedence. A subtle
 // "preview data" marker is displayed whenever these rows are in use.
 const DEMO_ENTRIES: Entry[] = [
-  { wallet: '0x8a1f4c9b2d3e5a6f7089c1b2d3e4f5a6b7c8d9e0', attribution_score: 892, total_points: 41200, total_earned_usd: 3180, referral_bridge_points: 540, referral_trade_points: 264 },
-  { wallet: '0x2b7d9e0f1a3c4b5d6e7f8091a2b3c4d5e6f70819', attribution_score: 861, total_points: 28740, total_earned_usd: 2610, referral_bridge_points: 300, referral_trade_points: 96 },
-  { wallet: '0x5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d', attribution_score: 830, total_points: 52310, total_earned_usd: 1990, referral_bridge_points: 420, referral_trade_points: 312 },
-  { wallet: '0x9f0e1d2c3b4a5968778695a4b3c2d1e0f9a8b7c6', attribution_score: 788, total_points: 19850, total_earned_usd: 4120, referral_bridge_points: 720, referral_trade_points: 408 },
-  { wallet: '0x1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d', attribution_score: 754, total_points: 33600, total_earned_usd: 1740, referral_bridge_points: 180, referral_trade_points: 72 },
-  { wallet: '0x6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091', attribution_score: 712, total_points: 15420, total_earned_usd: 2280, referral_bridge_points: 360, referral_trade_points: 144 },
-  { wallet: '0x3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f', attribution_score: 690, total_points: 44180, total_earned_usd: 990, referral_bridge_points: 240, referral_trade_points: 216 },
-  { wallet: '0xa0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f70819', attribution_score: 651, total_points: 21030, total_earned_usd: 1560, referral_bridge_points: 480, referral_trade_points: 120 },
-  { wallet: '0x7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e', attribution_score: 620, total_points: 12760, total_earned_usd: 3020, referral_bridge_points: 600, referral_trade_points: 288 },
-  { wallet: '0x4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5', attribution_score: 588, total_points: 26910, total_earned_usd: 820, referral_bridge_points: 120, referral_trade_points: 48 },
-  { wallet: '0x0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f708192', attribution_score: 559, total_points: 9840, total_earned_usd: 1880, referral_bridge_points: 300, referral_trade_points: 180 },
-  { wallet: '0x8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70819', attribution_score: 521, total_points: 31450, total_earned_usd: 640, referral_bridge_points: 180, referral_trade_points: 96 },
-  { wallet: '0x5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6', attribution_score: 498, total_points: 8320, total_earned_usd: 1420, referral_bridge_points: 420, referral_trade_points: 156 },
-  { wallet: '0x2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4', attribution_score: 470, total_points: 17690, total_earned_usd: 510, referral_bridge_points: 60,  referral_trade_points: 24 },
-  { wallet: '0x9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b', attribution_score: 442, total_points: 6180, total_earned_usd: 1120, referral_bridge_points: 240, referral_trade_points: 132 },
-  { wallet: '0x6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f7', attribution_score: 410, total_points: 22540, total_earned_usd: 380, referral_bridge_points: 120, referral_trade_points: 60 },
-  { wallet: '0x3e4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5', attribution_score: 388, total_points: 5470, total_earned_usd: 860, referral_bridge_points: 180, referral_trade_points: 108 },
-  { wallet: '0x0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c', attribution_score: 355, total_points: 13920, total_earned_usd: 290, referral_bridge_points: 60,  referral_trade_points: 36 },
-  { wallet: '0x7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f708', attribution_score: 322, total_points: 4210, total_earned_usd: 640, referral_bridge_points: 120, referral_trade_points: 72 },
-  { wallet: '0x4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6', attribution_score: 298, total_points: 9130, total_earned_usd: 210, referral_bridge_points: 60,  referral_trade_points: 12 },
-  { wallet: '0x1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f809192', attribution_score: 271, total_points: 3350, total_earned_usd: 420, referral_bridge_points: 120, referral_trade_points: 48 },
-  { wallet: '0x8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80919', attribution_score: 244, total_points: 6740, total_earned_usd: 150, referral_bridge_points: 60,  referral_trade_points: 24 },
-  { wallet: '0x5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7', attribution_score: 210, total_points: 2180, total_earned_usd: 260, referral_bridge_points: 60,  referral_trade_points: 12 },
-  { wallet: '0x2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f80919293', attribution_score: 176, total_points: 4520, total_earned_usd: 90,  referral_bridge_points: 0,   referral_trade_points: 0 },
-  { wallet: '0x9d0e1f2a3b4c5d6e7f708192a3b4c5d6e7f80919', attribution_score: 142, total_points: 1240, total_earned_usd: 140, referral_bridge_points: 60,  referral_trade_points: 12 },
+  { wallet: '0x8a1f4c9b2d3e5a6f7089c1b2d3e4f5a6b7c8d9e0', attribution_score: 892, total_points: 41200, total_earned_usd: 3180, referral_trade_points: 264 },
+  { wallet: '0x2b7d9e0f1a3c4b5d6e7f8091a2b3c4d5e6f70819', attribution_score: 861, total_points: 28740, total_earned_usd: 2610, referral_trade_points: 96 },
+  { wallet: '0x5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d', attribution_score: 830, total_points: 52310, total_earned_usd: 1990, referral_trade_points: 312 },
+  { wallet: '0x9f0e1d2c3b4a5968778695a4b3c2d1e0f9a8b7c6', attribution_score: 788, total_points: 19850, total_earned_usd: 4120, referral_trade_points: 408 },
+  { wallet: '0x1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d', attribution_score: 754, total_points: 33600, total_earned_usd: 1740, referral_trade_points: 72 },
+  { wallet: '0x6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091', attribution_score: 712, total_points: 15420, total_earned_usd: 2280, referral_trade_points: 144 },
+  { wallet: '0x3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f', attribution_score: 690, total_points: 44180, total_earned_usd: 990, referral_trade_points: 216 },
+  { wallet: '0xa0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f70819', attribution_score: 651, total_points: 21030, total_earned_usd: 1560, referral_trade_points: 120 },
+  { wallet: '0x7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e', attribution_score: 620, total_points: 12760, total_earned_usd: 3020, referral_trade_points: 288 },
+  { wallet: '0x4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5', attribution_score: 588, total_points: 26910, total_earned_usd: 820, referral_trade_points: 48 },
+  { wallet: '0x0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f708192', attribution_score: 559, total_points: 9840, total_earned_usd: 1880, referral_trade_points: 180 },
+  { wallet: '0x8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f70819', attribution_score: 521, total_points: 31450, total_earned_usd: 640, referral_trade_points: 96 },
+  { wallet: '0x5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6', attribution_score: 498, total_points: 8320, total_earned_usd: 1420, referral_trade_points: 156 },
+  { wallet: '0x2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4', attribution_score: 470, total_points: 17690, total_earned_usd: 510, referral_trade_points: 24 },
+  { wallet: '0x9e0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b', attribution_score: 442, total_points: 6180, total_earned_usd: 1120, referral_trade_points: 132 },
+  { wallet: '0x6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f7', attribution_score: 410, total_points: 22540, total_earned_usd: 380, referral_trade_points: 60 },
+  { wallet: '0x3e4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5', attribution_score: 388, total_points: 5470, total_earned_usd: 860, referral_trade_points: 108 },
+  { wallet: '0x0f1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c', attribution_score: 355, total_points: 13920, total_earned_usd: 290, referral_trade_points: 36 },
+  { wallet: '0x7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f708', attribution_score: 322, total_points: 4210, total_earned_usd: 640, referral_trade_points: 72 },
+  { wallet: '0x4f5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6', attribution_score: 298, total_points: 9130, total_earned_usd: 210, referral_trade_points: 12 },
+  { wallet: '0x1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f809192', attribution_score: 271, total_points: 3350, total_earned_usd: 420, referral_trade_points: 48 },
+  { wallet: '0x8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7f80919', attribution_score: 244, total_points: 6740, total_earned_usd: 150, referral_trade_points: 24 },
+  { wallet: '0x5a6b7c8d9e0f1a2b3c4d5e6f708192a3b4c5d6e7', attribution_score: 210, total_points: 2180, total_earned_usd: 260, referral_trade_points: 12 },
+  { wallet: '0x2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f80919293', attribution_score: 176, total_points: 4520, total_earned_usd: 90,  referral_trade_points: 0 },
+  { wallet: '0x9d0e1f2a3b4c5d6e7f708192a3b4c5d6e7f80919', attribution_score: 142, total_points: 1240, total_earned_usd: 140, referral_trade_points: 12 },
 ]
 
 // ─── Content ──────────────────────────────────────────────────────────────────
@@ -391,7 +390,7 @@ function Row({ r, metric, isMe }: { r: Entry & { rank: number; tier: string }; m
   const isTop = r.rank <= 3
   const rankCls = r.rank === 1 ? 'text-atx-coral' : r.rank === 2 ? 'text-atx-mesquite' : r.rank === 3 ? 'text-atx-clay' : 'text-atx-ink/45'
   const col = (k: Metric) => (metric === k ? 'font-bold' : 'text-atx-ink/70')
-  const tree = (r.referral_bridge_points || 0) + (r.referral_trade_points || 0)
+  const tree = (r.referral_trade_points || 0)
   return (
     <div className={`grid [grid-template-columns:60px_1fr_104px_repeat(4,92px)] max-[820px]:[grid-template-columns:52px_1fr] items-center border-b border-atx-ink/20 last:border-b-0 ${isMe ? 'bg-atx-blue/[0.07] border-l-2 border-l-atx-blue' : ''}`}>
       <div className={`px-[16px] py-3.5 font-atx-mono tabular-nums ${isTop ? `text-[18px] font-bold ${rankCls}` : `text-[15px] ${rankCls}`}`}>{String(r.rank).padStart(2, '0')}</div>

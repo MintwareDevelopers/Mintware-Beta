@@ -24,7 +24,7 @@ export interface DexMeta {
 }
 
 // LI.FI supported chain IDs (numeric — the API rejects string names)
-const LIFI_SUPPORTED = new Set([1, 10, 56, 137, 8453, 42161, 1116])
+const LIFI_SUPPORTED = new Set([1, 10, 56, 137, 8453, 42161])
 
 // DexScreener chain slugs
 const DEX_CHAIN: Record<number, string> = {
@@ -34,7 +34,6 @@ const DEX_CHAIN: Record<number, string> = {
   56:    'bsc',
   137:   'polygon',
   10:    'optimism',
-  1116:  'coredao',
 }
 
 const _tokenCache = new Map<string, TokenMeta | null>()

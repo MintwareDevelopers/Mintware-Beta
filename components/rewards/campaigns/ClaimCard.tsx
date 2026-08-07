@@ -88,7 +88,6 @@ const BATCH_DISTRIBUTOR_ABI = [
 const CHAIN_IDS: Record<string, number> = {
   base:         8453,
   base_sepolia: 84532,
-  core_dao:     1116,
   bnb:          56,
   hardhat:      31337,
 }
@@ -96,7 +95,6 @@ const CHAIN_IDS: Record<string, number> = {
 const CHAIN_NAMES: Record<string, string> = {
   base:         'Base',
   base_sepolia: 'Base Sepolia',
-  core_dao:     'Core DAO',
   bnb:          'BNB Chain',
   hardhat:      'Hardhat (local)',
 }
@@ -104,7 +102,6 @@ const CHAIN_NAMES: Record<string, string> = {
 const EXPLORER_TX: Record<string, string> = {
   base:         'https://basescan.org/tx/',
   base_sepolia: 'https://sepolia.basescan.org/tx/',
-  core_dao:     'https://scan.coredao.org/tx/',
   bnb:          'https://bscscan.com/tx/',
 }
 

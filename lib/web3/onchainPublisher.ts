@@ -26,7 +26,6 @@
 //                              treasury wallet (MINTWARE_TREASURY_ADDRESS).
 //   BASE_RPC_URL             — (optional) defaults to https://mainnet.base.org
 //   BASE_SEPOLIA_RPC_URL     — (optional) defaults to https://sepolia.base.org
-//   CORE_DAO_RPC_URL         — (optional) defaults to https://rpc.coredao.org
 //   BNB_RPC_URL              — (optional) defaults to https://bsc-dataseed.binance.org
 //
 // Security: DISTRIBUTOR_PRIVATE_KEY is a server-side secret. It must NEVER
@@ -57,27 +56,13 @@ const DISTRIBUTOR_ABI = parseAbi([
 
 // ---------------------------------------------------------------------------
 // Chain definitions
-// viem/chains ships base, baseSepolia, bsc. Core DAO needs a custom definition.
+// viem/chains ships base, baseSepolia, bsc.
 // ---------------------------------------------------------------------------
-
-const CORE_DAO: Chain = {
-  id: 1116,
-  name: 'Core DAO',
-  nativeCurrency: { name: 'CORE', symbol: 'CORE', decimals: 18 },
-  rpcUrls: {
-    default: { http: ['https://rpc.coredao.org'] },
-    public:  { http: ['https://rpc.coredao.org'] },
-  },
-  blockExplorers: {
-    default: { name: 'CoreScan', url: 'https://scan.coredao.org' },
-  },
-}
 
 function getChain(slug: string): Chain {
   switch (slug) {
     case 'base':         return base
     case 'base_sepolia': return baseSepolia
-    case 'core_dao':     return CORE_DAO
     case 'bnb':          return bsc
     default:             throw new Error(`[onchainPublisher] Unknown chain slug: "${slug}"`)
   }
@@ -87,7 +72,6 @@ function getRpcUrl(slug: string): string {
   switch (slug) {
     case 'base':         return process.env.BASE_RPC_URL         ?? 'https://mainnet.base.org'
     case 'base_sepolia': return process.env.BASE_SEPOLIA_RPC_URL  ?? 'https://sepolia.base.org'
-    case 'core_dao':     return process.env.CORE_DAO_RPC_URL      ?? 'https://rpc.coredao.org'
     case 'bnb':          return process.env.BNB_RPC_URL            ?? 'https://bsc-dataseed.binance.org'
     default:             throw new Error(`[onchainPublisher] No RPC URL for chain: "${slug}"`)
   }
@@ -125,7 +109,7 @@ export interface PublishParams {
   merkle_root: string
   /** Deployed MintwareDistributor contract address */
   contract_address: string
-  /** Chain slug: 'base' | 'base_sepolia' | 'core_dao' | 'bnb' */
+  /** Chain slug: 'base' | 'base_sepolia' | 'bnb' */
   chain: string
   /**
    * Unix timestamp deadline for the oracle signature.

@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { useChainId, useWalletClient, usePublicClient } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { executeSwap as executeLifi } from '@/lib/web2/providers/lifi'
-import { executeSwap as executeMolten, isMoltenReady } from '@/lib/web2/providers/molten'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
 import type { Quote } from './useQuote'
 import type { Token } from '@/config/tokens'
@@ -64,41 +63,21 @@ export function useSwap(): SwapState {
     setStatus('swapping')
 
     try {
-      let hash: `0x${string}`
-
-      if (chainConfig.swapProvider === 'lifi') {
-        // LI.FI — quote contains the signed transaction envelope from the aggregator
-        const lifiQuote = args.quote as LifiQuote
-        await publicClient.call({
-          account: walletClient.account.address,
-          to:      lifiQuote._txReq.to as `0x${string}`,
-          data:    lifiQuote._txReq.data as `0x${string}`,
-          value:   BigInt(lifiQuote._txReq.value ?? '0x0'),
-        })
-        hash = await executeLifi(lifiQuote, walletClient)
-      } else {
-        // Molten (Core DAO)
-        if (!isMoltenReady()) {
-          throw new Error('Core swaps coming soon — Molten router not deployed yet')
-        }
-        hash = await executeMolten(
-          {
-            sellToken:  args.sellToken,
-            buyToken:   args.buyToken,
-            sellAmount: args.sellAmount,
-            taker:      walletClient.account.address,
-            campaignId: args.campaignId ?? undefined,
-            referrer:   args.referrer   ?? undefined,
-          },
-          walletClient
-        )
-      }
+      // LI.FI — quote contains the signed transaction envelope from the aggregator
+      const lifiQuote = args.quote as LifiQuote
+      await publicClient.call({
+        account: walletClient.account.address,
+        to:      lifiQuote._txReq.to as `0x${string}`,
+        data:    lifiQuote._txReq.data as `0x${string}`,
+        value:   BigInt(lifiQuote._txReq.value ?? '0x0'),
+      })
+      const hash: `0x${string}` = await executeLifi(lifiQuote, walletClient)
 
       setTxHash(hash)
       setStatus('success')
 
       // ── Credit campaign points (fire-and-forget, non-fatal) ───────────────
-      // Parse USD value from the LI.FI quote; Molten computes it inline.
+      // Parse USD value from the LI.FI quote.
       // Falls back to 0.01 if the field is absent so the webhook never rejects.
       const amountUsd =
         parseFloat((args.quote as LifiQuote).fromAmountUSD ?? '0') || 0.01

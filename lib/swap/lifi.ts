@@ -43,28 +43,24 @@ export const LIFI_TREASURY   = process.env.NEXT_PUBLIC_MINTWARE_TREASURY
 // ---------------------------------------------------------------------------
 // Chain constants
 // ---------------------------------------------------------------------------
-export const MINTWARE_CHAIN_IDS = [8453, 1116] as const
+export const MINTWARE_CHAIN_IDS = [8453] as const
 
 export const CHAIN_NAMES: Record<number, string> = {
   8453: 'Base',
-  1116: 'Core DAO',
 }
 
 export const CHAIN_EXPLORER: Record<number, string> = {
   8453: 'https://basescan.org/tx/',
-  1116: 'https://scan.coredao.org/tx/',
 }
 
 // Native / zero address — used for gas tokens
 export const NATIVE_TOKEN_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-// Default tokens per chain (ETH on Base, CORE on Core DAO)
+// Default tokens per chain (ETH on Base)
 export const DEFAULT_FROM_TOKENS: Record<number, string> = {
   8453: NATIVE_TOKEN_ADDRESS, // ETH on Base
-  1116: NATIVE_TOKEN_ADDRESS, // CORE on Core DAO
 }
 
 export const DEFAULT_TO_TOKENS: Record<number, string> = {
   8453: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC on Base
-  1116: '0x900101d06A7426441Ae63e9AB3B9b0F63Be145F1', // USDC on Core DAO
 }

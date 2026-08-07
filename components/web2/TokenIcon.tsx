@@ -10,7 +10,7 @@ import { fetchTokenMeta } from '@/lib/web2/tokenMeta'
 
 const CHAIN_NAME_TO_ID: Record<string, number> = {
   base: 8453, arbitrum: 42161, ethereum: 1, eth: 1,
-  bsc: 56, polygon: 137, optimism: 10, coredao: 1116, core: 1116,
+  bsc: 56, polygon: 137, optimism: 10,
 }
 
 interface TokenIconProps {

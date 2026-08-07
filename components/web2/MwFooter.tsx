@@ -7,12 +7,13 @@ import Link from 'next/link'
 const FOOTER_LINKS = [
   { href: '/attribution', label: 'Attribution' },
   { href: '/defi', label: 'DeFi' },
-  { href: '/rwa', label: 'RWA' },
+  { href: '/teams', label: 'For Teams' },
   { href: '/vaults', label: 'Vaults' },
   { href: '/rewards', label: 'Rewards' },
   { href: '/swap', label: 'Swap' },
   { href: '/agents', label: 'Agents' },
   { href: '/docs', label: 'Docs' },
+  { href: '/about', label: 'About' },
   { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
 ]
 
@@ -47,7 +48,7 @@ export function MwFooter() {
             </a>
           ))}
         </div>
-        <div className="font-atx-mono text-[10px] text-atx-bone/45">© 2026 Mintware ✴ Contribution is identity</div>
+        <div className="font-atx-mono text-[10px] text-atx-bone/45">© 2026 Mintware ✴ Liquidity should be a public good</div>
       </div>
     </footer>
   )

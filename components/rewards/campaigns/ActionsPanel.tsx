@@ -47,20 +47,10 @@ function actionMeta(key: string): {
   icon: string; color: string; desc: string
   cta?: { label: string; href?: string; copy?: boolean; comingSoon?: boolean; swap?: boolean }
 } {
-  if (key === 'bridge') return {
-    icon: '✴', color: 'text-atx-blue',
-    desc: 'Bridge assets to this chain once to earn points.',
-    cta: { label: 'Coming soon', comingSoon: true },
-  }
   if (key === 'trade') return {
     icon: '✴', color: 'text-atx-mesquite',
     desc: 'Trade each day on Mintware to accumulate daily points.',
     cta: { label: 'Swap now →', swap: true },
-  }
-  if (key === 'referral_bridge') return {
-    icon: '✴', color: 'text-atx-blue',
-    desc: 'Refer wallets who bridge — earn per successful bridge.',
-    cta: { label: 'Coming soon', comingSoon: true },
   }
   if (key === 'referral_trade') return {
     icon: '↗', color: 'text-atx-coral',

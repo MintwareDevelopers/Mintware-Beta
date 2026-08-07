@@ -88,31 +88,30 @@ function SectionHead({ n, label, title, sub }: { n: string; label: string; title
   )
 }
 
-// ─── Live stats band ─────────────────────────────────────────────────────────
-function LiveStatsBand({ data }: { data: AmplifyData | null }) {
-  const live = data?.live ?? false
-  const tvl = data?.stats.tvlUsd ?? 0
-  const count = data?.stats.count ?? 0
-
+// ─── Stats band — evergreen vault economics ──────────────────────────────────
+// Deliberately NOT live TVL / vault-count: vaults are pre-launch (testnet-first),
+// and per the framing doc we never publish specific TVL/count stats. These three
+// facts are true before and after launch.
+function LiveStatsBand() {
   const cells = [
-    { v: tvl > 0 ? fmtUsd(tvl) : '—', k: 'Total TVL' },
-    { v: count > 0 ? String(count) : '—', k: 'Live vaults' },
     { v: '70%', k: 'Fees to LPs' },
+    { v: '1.95×', k: 'Max fee-share multiplier' },
+    { v: '4', k: 'Lock tiers · Flex → Core' },
   ]
 
   return (
     <div className="border border-atx-ink bg-atx-ink text-white">
       <div className="flex items-center gap-2 px-5 py-2.5 border-b border-white/15">
-        <span className={`w-[9px] h-[9px] border border-white/40 inline-block ${live ? 'bg-atx-acid' : 'bg-white/25'}`} />
+        <span className="w-[9px] h-[9px] border border-white/40 inline-block bg-white/25" />
         <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/70">
-          {live ? 'Live · indexed on-chain' : 'Indexing · vaults go live at launch'}
+          In testing · Base — the economics, live at launch
         </span>
       </div>
-      <div className="grid grid-cols-4 max-[640px]:grid-cols-2">
+      <div className="grid grid-cols-3 max-[640px]:grid-cols-1">
         {cells.map((c, i) => (
           <div
             key={c.k}
-            className={`px-5 py-5 ${i < cells.length - 1 ? 'border-r border-white/15' : ''} ${i < 2 ? 'max-[640px]:border-b max-[640px]:border-white/15' : ''} max-[640px]:[&:nth-child(2)]:border-r-0`}
+            className={`px-5 py-5 ${i < cells.length - 1 ? 'border-r border-white/15 max-[640px]:border-r-0 max-[640px]:border-b max-[640px]:border-white/15' : ''}`}
           >
             <div className="font-atx-mono text-[26px] font-bold leading-none">{c.v}</div>
             <div className="font-atx-mono uppercase tracking-[0.1em] text-[10px] text-white/50 mt-2">{c.k}</div>
@@ -551,7 +550,7 @@ export function VaultAmplify() {
   return (
     <section className="bg-atx-bone text-atx-ink font-atx-display [&_*]:rounded-none border-t border-atx-ink">
       <div className="max-w-[1100px] mx-auto px-7 py-16 max-[800px]:px-4 max-[800px]:py-10 flex flex-col gap-16 max-[800px]:gap-12">
-        <LiveStatsBand data={data} />
+        <LiveStatsBand />
         <ReputationYield />
         <HowItWorks />
         <LockTiers />

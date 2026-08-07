@@ -4,12 +4,10 @@ import { useState, useEffect, useRef } from 'react'
 import { useChainId } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { getQuote as getLifiQuote } from '@/lib/web2/providers/lifi'
-import { getQuote as getMoltenQuote, isMoltenReady } from '@/lib/web2/providers/molten'
 import type { Token } from '@/config/tokens'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
-import type { MoltenQuote } from '@/lib/web2/providers/molten'
 
-export type Quote = LifiQuote | MoltenQuote
+export type Quote = LifiQuote
 
 interface QuoteState {
   quote: Quote | null
@@ -85,44 +83,26 @@ export function useQuote(params: UseQuoteParams): QuoteState {
       try {
         const chainConfig = getChainConfig(chainId)
         if (!chainConfig) {
-          throw new Error('Unsupported chain — please switch to Ethereum, Base, Arbitrum, or Core')
+          throw new Error('Unsupported chain — please switch to Ethereum, Base, or Arbitrum')
         }
 
         // Convert decimal amount to wei
         const sellAmountWei = toWei(sellAmount, sellToken.decimals)
 
-        let quote: Quote
-
-        if (chainConfig.swapProvider === 'lifi') {
-          quote = await getLifiQuote({
-            chainId,
-            sellToken:  sellToken.address,
-            buyToken:   buyToken.address,
-            sellAmount: sellAmountWei,
-            taker,
-            feeBps:     feeBps ?? chainConfig.feeBps,
-            campaignId: campaignId ?? undefined,
-            referrer:   referrer   ?? undefined,
-          })
-        } else {
-          // Molten (Core chain)
-          if (!isMoltenReady()) {
-            throw new Error('CORE_COMING_SOON')
-          }
-          quote = await getMoltenQuote({
-            sellToken,
-            buyToken,
-            sellAmount: sellAmountWei,
-            taker,
-            campaignId: campaignId ?? undefined,
-            referrer:   referrer   ?? undefined,
-          })
-        }
+        const quote: Quote = await getLifiQuote({
+          chainId,
+          sellToken:  sellToken.address,
+          buyToken:   buyToken.address,
+          sellAmount: sellAmountWei,
+          taker,
+          feeBps:     feeBps ?? chainConfig.feeBps,
+          campaignId: campaignId ?? undefined,
+          referrer:   referrer   ?? undefined,
+        })
 
         const buyAmountDecimal = fromWei(quote.buyAmount, buyToken.decimals)
 
         // Price impact: LI.FI returns price='0' so impact will be null (no warning shown)
-        // Molten returns a real price ratio so impact is calculated normally
         const impact = estimatePriceImpact(
           parseFloat(sellAmount),
           parseFloat(buyAmountDecimal),
@@ -139,25 +119,14 @@ export function useQuote(params: UseQuoteParams): QuoteState {
         })
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Quote failed'
-        if (msg === 'CORE_COMING_SOON') {
-          setState({
-            quote: null,
-            buyAmount: '',
-            priceImpact: null,
-            isLoading: false,
-            error: 'CORE_COMING_SOON',
-            highImpactWarning: false,
-          })
-        } else {
-          setState({
-            quote: null,
-            buyAmount: '',
-            priceImpact: null,
-            isLoading: false,
-            error: msg.includes('insufficient') ? 'Insufficient liquidity for this trade' : msg,
-            highImpactWarning: false,
-          })
-        }
+        setState({
+          quote: null,
+          buyAmount: '',
+          priceImpact: null,
+          isLoading: false,
+          error: msg.includes('insufficient') ? 'Insufficient liquidity for this trade' : msg,
+          highImpactWarning: false,
+        })
       }
     }, DEBOUNCE_MS)
 

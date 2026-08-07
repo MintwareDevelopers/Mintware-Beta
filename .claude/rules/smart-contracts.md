@@ -65,7 +65,6 @@ Uses `abi.encode` (64-byte padded), **NOT** `abi.encodePacked` (52 bytes). Misma
 ```bash
 pnpm hardhat:deploy:base-sepolia   # Base Sepolia (84532)
 pnpm hardhat:deploy:base           # Base mainnet (8453)
-pnpm hardhat:deploy:core-dao       # Core DAO (1116)
 pnpm hardhat:deploy:bnb            # BNB Chain (56)
 ```
 

@@ -17,14 +17,12 @@
 //   - hardhat          : Local in-process network (testing only)
 //   - base_sepolia     : Base Sepolia testnet (chain 84532) — primary test target
 //   - base             : Base mainnet (chain 8453)
-//   - core_dao         : Core DAO mainnet (chain 1116)
 //   - bnb              : BNB Chain mainnet (chain 56)
 //   - arbitrum_sepolia : Arbitrum Sepolia testnet (chain 421614) — Arbitrum test target
 //   - arbitrum         : Arbitrum One mainnet (chain 42161)
 //
 // Block explorer verification:
 //   - Base / Base Sepolia          → Basescan  (ARBISCAN_API_KEY — Etherscan v2 unified key)
-//   - Core DAO                     → CoreScan  (ARBISCAN_API_KEY)
 //   - BNB Chain                    → BscScan   (ARBISCAN_API_KEY)
 //   - Arbitrum One / Arb Sepolia   → Arbiscan  (ARBISCAN_API_KEY)
 //
@@ -32,7 +30,6 @@
 //   DEPLOYER_PRIVATE_KEY      — 64 hex chars, no 0x prefix
 //   BASE_SEPOLIA_RPC_URL      — default: https://sepolia.base.org
 //   BASE_RPC_URL              — default: https://mainnet.base.org
-//   CORE_DAO_RPC_URL          — default: https://rpc.coredao.org
 //   BNB_RPC_URL               — default: https://bsc-dataseed.binance.org
 //   ARBITRUM_SEPOLIA_RPC_URL  — default: https://sepolia-rollup.arbitrum.io/rpc
 //   ARBITRUM_RPC_URL          — default: https://arb1.arbitrum.io/rpc
@@ -125,15 +122,6 @@ const config: HardhatUserConfig = {
     },
 
     // -----------------------------------------------------------------------
-    // Core DAO mainnet (chain 1116)
-    // -----------------------------------------------------------------------
-    core_dao: {
-      url: process.env.CORE_DAO_RPC_URL ?? 'https://rpc.coredao.org',
-      chainId: 1116,
-      accounts: [deployerKey()],
-    },
-
-    // -----------------------------------------------------------------------
     // BNB Chain mainnet (chain 56)
     // -----------------------------------------------------------------------
     bnb: {
@@ -183,14 +171,6 @@ const config: HardhatUserConfig = {
         urls: {
           apiURL: 'https://api.basescan.org/api',
           browserURL: 'https://basescan.org',
-        },
-      },
-      {
-        network: 'core_dao',
-        chainId: 1116,
-        urls: {
-          apiURL: 'https://openapi.coredao.org/api',
-          browserURL: 'https://scan.coredao.org',
         },
       },
       {

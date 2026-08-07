@@ -91,7 +91,6 @@ function getSwapRpcUrl(chain: string | null): string | null {
     case 'arbitrum':     return process.env.ARBITRUM_RPC_URL     ?? 'https://arb1.arbitrum.io/rpc'
     case 'base':         return process.env.BASE_RPC_URL         ?? 'https://mainnet.base.org'
     case 'base_sepolia': return process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org'
-    case 'core_dao':     return process.env.CORE_DAO_RPC_URL     ?? 'https://rpc.coredao.org'
     case 'bnb':          return process.env.BNB_RPC_URL          ?? 'https://bsc-dataseed.binance.org'
     default:             return null
   }

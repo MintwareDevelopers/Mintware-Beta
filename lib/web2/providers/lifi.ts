@@ -2,7 +2,6 @@
 // lib/providers/lifi.ts — LI.FI aggregator for same-chain swaps
 //
 // Covers: Ethereum (1), Base (8453), Arbitrum (42161)
-// Does NOT cover: Core DAO (1116) — use lib/providers/molten.ts for that
 //
 // Fee collection: pass `integrator` + `fee` (decimal fraction of feeBps/10000)
 // to LI.FI. The integrator account must be registered at https://li.fi/integrators

@@ -7,9 +7,9 @@ export type CampaignType = 'token_pool' | 'points'
 export type CampaignStatus = 'upcoming' | 'live' | 'ended' | 'paused'
 export type RewardType = 'buyer' | 'referrer' | 'platform_fee'
 export type ActionType =
-  | 'bridge' | 'trade' | 'referral_bridge' | 'referral_trade'
+  | 'trade' | 'referral_trade'
   // RWA incentive layer — 'subscribe'/'hold' are net-new mechanics (R4);
-  // 'referral_subscribe' is a rename of referral_bridge for the RWA surface.
+  // 'referral_subscribe' is the referral action for the RWA surface.
   | 'subscribe' | 'hold' | 'referral_subscribe'
 // RWA incentive layer (see docs/developers/rwa-incentive-layer.md).
 // No KYC type here by design — the incentive layer is permissionless; eligibility
@@ -75,7 +75,7 @@ export interface Campaign {
   // On-chain settlement (Ticket 5 / Ticket 6)
   // Set by operator after deploying MintwareDistributor via scripts/deploy.ts
   contract_address: string | null   // deployed MintwareDistributor address
-  chain: string | null              // 'base' | 'base_sepolia' | 'core_dao' | 'bnb'
+  chain: string | null              // 'base' | 'base_sepolia' | 'bnb'
 
   // New columns from migration 000004
   daily_wallet_cap_usd: number | null

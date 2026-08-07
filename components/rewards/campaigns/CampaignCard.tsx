@@ -62,7 +62,6 @@ function actionSuffix(action: ActionItem): string {
 // ATX: flat duotone pills — hairline border + tinted text, square corners.
 function actionPillClass(key: string): string {
   if (key.startsWith('referral')) return 'border border-atx-ink/25 text-atx-mesquite'
-  if (key === 'bridge')           return 'border border-atx-ink/25 text-atx-blue'
   if (key === 'trade')            return 'border border-atx-ink/25 text-atx-mesquite'
   if (key === 'hold')             return 'border border-atx-ink/25 text-atx-clay'
   return                                 'border border-atx-ink/25 text-atx-blue'
@@ -107,8 +106,6 @@ const CHAIN_NAME_TO_ID: Record<string, number> = {
   bsc:       56,
   polygon:   137,
   optimism:  10,
-  coredao:   1116,
-  core:      1116,
 }
 
 export function CampaignCard({ campaign: c }: CampaignCardProps) {
@@ -163,7 +160,7 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
     })
   }, [c.token_contract, chainId, c.links])
 
-  // For campaigns with no token_contract (Core DAO manual links)
+  // For campaigns with no token_contract (manual links)
   useEffect(() => {
     if (c.token_contract) return // handled above
     if (!c.links) return

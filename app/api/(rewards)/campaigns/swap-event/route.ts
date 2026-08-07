@@ -122,7 +122,7 @@ export const POST = createHandler(async (req, ctx) => {
       // Derive chain IDs from body.chain if provided, default to Base
       const _CHAIN_TO_ID: Record<string, number> = {
         base: 8453, base_sepolia: 84532, ethereum: 1, eth: 1,
-        bsc: 56, bnb: 56, arbitrum: 42161, optimism: 10, coredao: 1116, core_dao: 1116,
+        bsc: 56, bnb: 56, arbitrum: 42161, optimism: 10,
       }
       const _chainId = body.chain ? (_CHAIN_TO_ID[body.chain.toLowerCase()] ?? 8453) : 8453
       void attestSwap(event.wallet, {
@@ -230,7 +230,7 @@ export const POST = createHandler(async (req, ctx) => {
         const feeVerifiedB = (result as any).fee_verified ?? false
         const _CHAIN_TO_ID_B: Record<string, number> = {
           base: 8453, base_sepolia: 84532, ethereum: 1, eth: 1,
-          bsc: 56, bnb: 56, arbitrum: 42161, optimism: 10, coredao: 1116, core_dao: 1116,
+          bsc: 56, bnb: 56, arbitrum: 42161, optimism: 10,
         }
         const _chainIdB = body.chain ? (_CHAIN_TO_ID_B[body.chain.toLowerCase()] ?? 8453) : 8453
         void attestSwap(event.wallet, {

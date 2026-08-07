@@ -14,9 +14,7 @@
 //   + referral_hold_hours arc (default 9h)
 //
 // Points (simple):
-//   Focus selector: Trade | Bridge | Trade + Bridge
 //   points_per_usd_trade input (default 10)
-//   fixed_bridge_points input (default 500)
 //
 // Points (advanced):
 //   + referral base_points, share_pct
@@ -24,7 +22,7 @@
 //   + min_daily_volume_usd, max_points_per_wallet_pct
 // =============================================================================
 
-import type { CreatorFormState, PointsFocus } from '@/lib/rewards/creator'
+import type { CreatorFormState } from '@/lib/rewards/creator'
 import { fmtPct } from '@/lib/rewards/creator'
 import { LivePreview } from '@/components/rewards/creator/LivePreview'
 
@@ -148,12 +146,6 @@ function NumberField({
   )
 }
 
-const FOCUS_OPTIONS: { value: PointsFocus; label: string }[] = [
-  { value: 'trade',  label: 'Trade'          },
-  { value: 'bridge', label: 'Bridge'         },
-  { value: 'both',   label: 'Trade + Bridge' },
-]
-
 export function Step3Actions({ form, onChange }: Step3ActionsProps) {
   const isTokenReward = form.type === 'token_reward'
 
@@ -255,66 +247,26 @@ export function Step3Actions({ form, onChange }: Step3ActionsProps) {
   return (
     <div className="flex flex-col gap-7">
 
-      {/* Focus selector */}
-      <div>
-        <SectionLabel>Campaign focus</SectionLabel>
-        <div className="flex gap-2">
-          {FOCUS_OPTIONS.map(o => (
-            <button
-              key={o.value}
-              className={`flex-1 font-atx-mono text-[13px] uppercase tracking-[0.06em] py-[10px] px-4 cursor-pointer border transition-colors duration-150 text-center${form.pointsFocus === o.value ? ' bg-atx-blue border-atx-ink text-white font-bold' : ' bg-atx-panel border-atx-ink/30 text-atx-ink/60 font-semibold hover:border-atx-ink hover:text-atx-ink'}`}
-              onClick={() => onChange({ pointsFocus: o.value })}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Points config */}
       <div className="grid grid-cols-2 gap-4">
-        {(form.pointsFocus === 'trade' || form.pointsFocus === 'both') && (
-          <NumberField
-            label="Points per $1 traded"
-            value={form.pointsPerUsdTrade}
-            onChange={(v) => onChange({ pointsPerUsdTrade: v })}
-            min={1}
-          />
-        )}
-        {(form.pointsFocus === 'bridge' || form.pointsFocus === 'both') && (
-          <NumberField
-            label="Bridge points (fixed)"
-            value={form.fixedBridgePoints}
-            onChange={(v) => onChange({ fixedBridgePoints: v })}
-            suffix="pts"
-            min={0}
-            step={50}
-          />
-        )}
+        <NumberField
+          label="Points per $1 traded"
+          value={form.pointsPerUsdTrade}
+          onChange={(v) => onChange({ pointsPerUsdTrade: v })}
+          min={1}
+        />
       </div>
 
       {/* Points preview chip */}
       <div className="bg-atx-bone border border-atx-ink/25 px-4 py-3 flex gap-4 flex-wrap">
-        {(form.pointsFocus === 'trade' || form.pointsFocus === 'both') && (
-          <div>
-            <div className="font-atx-mono text-[14px] font-bold text-atx-blue">
-              +{form.pointsPerUsdTrade} pts
-            </div>
-            <div className="font-atx-mono text-[10px] uppercase tracking-[0.06em] text-atx-ink/55 mt-[1px]">
-              per $1 traded
-            </div>
+        <div>
+          <div className="font-atx-mono text-[14px] font-bold text-atx-blue">
+            +{form.pointsPerUsdTrade} pts
           </div>
-        )}
-        {(form.pointsFocus === 'bridge' || form.pointsFocus === 'both') && (
-          <div>
-            <div className="font-atx-mono text-[14px] font-bold text-atx-mesquite">
-              +{form.fixedBridgePoints} pts
-            </div>
-            <div className="font-atx-mono text-[10px] uppercase tracking-[0.06em] text-atx-ink/55 mt-[1px]">
-              per bridge
-            </div>
+          <div className="font-atx-mono text-[10px] uppercase tracking-[0.06em] text-atx-ink/55 mt-[1px]">
+            per $1 traded
           </div>
-        )}
+        </div>
       </div>
 
       {/* Advanced mode */}

@@ -59,24 +59,20 @@ interface Campaign {
 }
 interface Participant {
   trading_points?:         number
-  bridge_points?:          number
   referral_trade_points?:  number
-  referral_bridge_points?: number
   total_points?:           number
   active_trading_days?:    number
 }
 
 const ACTION_FIELD_MAP: Record<string, keyof Participant> = {
   trade:           'trading_points',
-  bridge:          'bridge_points',
   referral_trade:  'referral_trade_points',
-  referral_bridge: 'referral_bridge_points',
 }
 
 // Resolve a campaign's numeric chain id the same way CampaignCard does.
 const CHAIN_NAME_TO_ID: Record<string, number> = {
   base: 8453, arbitrum: 42161, ethereum: 1, eth: 1, mainnet: 1,
-  bsc: 56, bnb: 56, polygon: 137, optimism: 10, coredao: 1116, core: 1116,
+  bsc: 56, bnb: 56, polygon: 137, optimism: 10,
 }
 const chainIdOf = (c: Campaign) => c.chain_id ?? CHAIN_NAME_TO_ID[c.chain?.toLowerCase() ?? ''] ?? 0
 
@@ -89,7 +85,6 @@ function actionSuffix(a: ActionValue): string {
 }
 function actionDesc(key: string, campaignName: string): string {
   if (key === 'trade')                                      return `Swap any token on ${campaignName} to earn daily points`
-  if (key === 'bridge')                                     return `Bridge from Base or Ethereum to ${campaignName} for bonus points`
   if (key.startsWith('referral') && key.includes('trade'))  return `Earn points for every wallet that trades via your invite link`
   if (key.startsWith('referral'))                          return `One-time bonus when a referred wallet completes a full trade`
   return `Complete this action on ${campaignName}`
@@ -238,7 +233,7 @@ function SwapContent() {
                 v: String(campaigns.length).padStart(2, '0'),
                 sub: campaigns.length ? 'earning now' : 'none active',
               },
-              { l: 'Routing', v: 'Aggregated', sub: '0x · Molten · LI.FI' },
+              { l: 'Routing', v: 'Aggregated', sub: '0x · LI.FI' },
             ].map((s, i) => (
               <div key={i} className={`px-7 py-3 max-[600px]:px-4 ${i < 3 ? 'border-r border-atx-ink/20' : ''}`}>
                 <div className={`${LABEL} text-[9px] mb-1.5`}>{s.l}</div>

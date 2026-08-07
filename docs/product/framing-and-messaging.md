@@ -22,6 +22,23 @@ mercenary money that farms an emission and leaves.** The root cause is rewards p
 size of your wallet instead of the quality of your contribution. Attribution prices the
 contribution; the vaults and rewards pay it.
 
+## 1a. Messaging hierarchy (locked 2026-08-07)
+
+Four layers, each with a home. **Never stack the mission line and the product tagline in the
+same hero** — the mission is the *why*, the tagline is the *what*.
+
+| Layer | Line | Where it lives |
+|---|---|---|
+| **Mission** (the why) | *Liquidity should be a public good.* | About page, deck opener, founder's note — **never** a product hero. |
+| **Tagline** (the what) | *Own your share of the market you make.* | Homepage hero, primary product surfaces. "Your share" = your LP position — literally true. |
+| **One-liner** (the how) | *Mintware is reputation-weighted DeFi: Attribution scores on-chain behavior, and rewards, vaults, and agents route value by the score.* | Sub-heros, meta descriptions, opening paragraph. |
+| **Villain** (the wedge) | *Most launches concentrate liquidity in insider wallets, rent mercenary capital for a week, and leave retail holding a market that can be pulled out from under them.* | "The problem" sections; every page ladders back to this. |
+
+**Ownership-language rule.** Say *"your share"* / *"own your LP position"* / *"a market owned
+by its LPs, not one treasury."* Do **NOT** say **"community-owned"** for the matched vault's
+*team* liquidity — that liquidity is **locked, matched, and fee-redirected under transparent
+on-chain rules**, not transferred to community ownership. The precise claim is the stronger claim.
+
 ## 2. The three groupings
 
 Every feature maps to one of three (this is the architecture *and* the audience story):
@@ -91,6 +108,17 @@ The vault line is now a **coherent family**:
 - ❌ "Audited" / "fully audited" (audit pending) · ❌ "risk-free" / "guaranteed" / fixed-APY
   promises · ❌ vaults "live" / "deposit now" (undeployed) · ❌ specific TVL or wallet-count
   stats (we don't publish them) · ❌ "KYC-free" as a selling point.
+
+**Reputation-weighted-yield scope (confirmed against contracts 2026-08-07).** The
+Attribution-weighted reward claim applies to the **Growth vault (FeeVault) only** today —
+LP share = Attribution percentile × lock tier (real). The **matched liquidity vault pays
+community fees pro-rata to deposit size** (per community liquidity unit — confirmed in
+`MintwareMatchedLiquidityVault.sol`), **not** by Attribution / lock tier / referrals. Do **not**
+claim reputation-weighted rewards for the matched vault; scope its copy to lock + match +
+on-chain proof-of-commitment. (Eng task tracked to add weighting there; unblock this copy when it
+ships.) Corollary: **do not imply reputation-weighting is universal / "everywhere you trade"** —
+it is the Growth vault today. And do not brand **"AWY" / "Attribution-Weighted Yield"** as a
+coined acronym yet; ship the mechanism in plain English until the term is earned in the wild.
 
 ## 6. Per-page direction (audit map)
 

@@ -27,9 +27,7 @@ Applied at point-credit time in `processPoints` (`swapHook.ts`) when `use_score_
 
 | Action | Points | Frequency |
 |---|---|---|
-| `bridge` | 15 | One-time per wallet |
 | `trade` | 8 | Once per calendar day |
-| `referral_bridge` | 60 | Per referred wallet that bridges |
 | `referral_trade` | 8 | Per referred wallet per trading day |
 
 ## Epoch Reward Formula
@@ -71,7 +69,6 @@ wallet_payout = (epoch_pool / epoch_count) × (wallet_points / total_points) × 
 
 | Path | Schedule |
 |---|---|
-| `/api/cron/bridge-verify` | `0 0 * * *` |
 | `/api/cron/epoch-end` | `0 1 * * *` |
 | `/api/cron/pool-settle` | `0 2 * * *` |
 | `/api/treasury/sweep` | `0 3 * * *` |

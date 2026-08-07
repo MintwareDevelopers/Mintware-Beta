@@ -44,7 +44,7 @@ const PLUGINS = [
     iconColor: 'var(--color-atx-blue)',
     desc: 'The three actions below, callable by any AgentKit-powered agent straight from natural language.',
     install: 'pnpm add @mintware/agentkit-actions @coinbase/agentkit zod',
-    docs: 'https://docs.mintware.finance/agents/agentkit',
+    docs: '/docs',
   },
   {
     id: 'eliza',
@@ -55,7 +55,7 @@ const PLUGINS = [
     iconColor: 'var(--color-atx-blue)',
     desc: 'Drop-in plugin for ElizaOS agents — the same actions, fired by conversational triggers.',
     install: 'pnpm add @mintware/eliza-plugin',
-    docs: 'https://docs.mintware.finance/agents/eliza',
+    docs: '/docs',
   },
   {
     id: 'mcp',
@@ -66,7 +66,7 @@ const PLUGINS = [
     iconColor: 'var(--color-atx-mesquite)',
     desc: 'Model Context Protocol server for Claude Desktop and Cursor — the same actions, no code required.',
     install: 'pnpm add -g @mintware/mcp-server',
-    docs: 'https://docs.mintware.finance/agents/mcp',
+    docs: '/docs',
   },
 ]
 
