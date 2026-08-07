@@ -23,9 +23,9 @@ const SAMPLE_ADDRS = [
 ]
 
 const STATS = [
-  { n: '24,817', k: 'Wallets scored' },
+  { n: '925', k: 'Max score' },
   { n: '100+', k: 'Chains indexed' },
-  { n: '138K', k: 'Referral links' },
+  { n: 'EAS', k: 'Attested on Base' },
   { n: 'Free', k: 'Always' },
 ]
 
@@ -137,10 +137,10 @@ export default function HomePage() {
         <div className="mx-auto max-w-[1180px] px-6 py-[52px]">
           <div className={ey}>✴ On-chain reputation · 100+ chains</div>
           <h1 className="font-bold tracking-[-0.03em] leading-[0.96] text-[clamp(40px,7vw,96px)] max-w-[18ch] mt-4">
-            Your Contribution should mean <span className="text-atx-blue">something.</span>
+            Own your share of the <span className="text-atx-blue">market you make.</span>
           </h1>
           <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[48ch] mt-6">
-            {'Every interaction. Every position. Every referral. Paste any wallet to see what it’s built.'}
+            {'DeFi pays mercenary money that farms an emission and leaves. Mintware scores what your wallet actually did — holding, LPing, referring — and pays a bigger share of every pool to the people who show up. Paste any wallet to see what it’s built.'}
           </p>
 
           {/* wallet search */}
@@ -192,7 +192,7 @@ export default function HomePage() {
             The same position, <span className="text-atx-blue">earning you more.</span>
           </h2>
           <p className="text-[16px] leading-[1.5] text-atx-ink/70 max-w-[34ch] mt-4">
-            MEV-protected, auto-managed LP on Uniswap V4 — and your Attribution score lifts your fee share up to 2×.
+            MEV-protected, auto-managed LP on Uniswap V4 — your Attribution score and lock tier lift your share of every pool. In testing on Base — not yet live.
           </p>
           <button onClick={() => launchApp('/vaults')} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-ink bg-atx-bone mt-6">
             Browse the vaults →
@@ -222,11 +222,11 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="flex items-center justify-between pt-3.5">
-                <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55">Effective APY</span>
+                <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55">Example APY</span>
                 <span className="font-atx-mono font-bold text-[26px] tracking-tight text-atx-mesquite">10.4%</span>
               </div>
               <button onClick={() => launchApp('/vaults')} className="w-full mt-3 py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-blue text-white border border-atx-blue cursor-pointer">
-                {isConnected ? 'Open vaults →' : 'Launch app to deposit →'}
+                {isConnected ? 'Open vaults →' : 'Explore the vaults →'}
               </button>
             </div>
           </div>

@@ -165,7 +165,6 @@ function DeFi({ nav }: { nav: Nav }) {
         <li><b>Reward the right users.</b> Point a campaign at any pool and pay loyal, high-reputation wallets instead of mercenary farmers.</li>
         <li><b>Retention &amp; conversion.</b> The reputation filter drives the stickiness raw emissions never could — your best users earn more, and stay.</li>
         <li><b>Two campaign types.</b> A <b>Token Reward Pool</b> (per-swap, self-serve, depletes) or a <b>Points Campaign</b> (epoch-distributed, score-gated, multiplier-weighted).</li>
-        <li><b>Embeddable.</b> A live campaign can run on your own site, verified as served from your domain.</li>
       </ul>
       <Note k="✴ Integrity you can point to">Because every credited swap is verified against its on-chain receipt (see <Ln to="rewards" nav={nav}>how we track</Ln>), your emissions can&apos;t be drained by wash-traded volume. You pay for real flow by real wallets with real reputation.</Note>
     </>
