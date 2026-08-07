@@ -5,7 +5,7 @@ import { MwNav } from '@/components/web2/MwNav'
 import { useEffect, useState, useCallback, Suspense, type ReactNode } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
+import { API, fmtUSD, daysUntil, fetchScore } from '@/lib/web2/api'
 import { AnimatedScore } from '@/components/web2/AnimatedScore'
 import { CampaignCard, Campaign } from '@/components/rewards/campaigns/CampaignCard'
 import { TokenIcon } from '@/components/web2/TokenIcon'
@@ -49,9 +49,9 @@ function RewardsContent() {
   // Load Attribution score, tier, percentile
   useEffect(() => {
     if (!wallet) return
-    fetch(`${API}/score?address=${wallet}`)
-      .then(r => r.json())
-      .then(d => {
+    fetchScore(wallet)
+      .then((raw) => {
+        const d = raw as { score?: number; tier?: string; percentile?: number }
         setUserScore(d.score ?? 0)
         setUserTier(d.tier ? d.tier.charAt(0).toUpperCase() + d.tier.slice(1) : null)
         setUserPercentile(d.percentile ?? null)

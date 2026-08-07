@@ -1,5 +1,21 @@
 export const API = 'https://attribution-scorer.ceo-1f9.workers.dev'
 
+import { getDemoPersona, demoScore } from '@/lib/web2/demoMode'
+
+/**
+ * Fetch a wallet's Attribution score. In demo mode (client-only, via ?demo=…) this
+ * returns the selected persona's deterministic score instead of hitting the live
+ * worker — so the connected experience is controllable for a live demo. Outside demo
+ * mode it behaves exactly like `fetch(`${API}/score?address=`).then(r => r.json())`.
+ */
+export async function fetchScore(address: string): Promise<unknown> {
+  const persona = getDemoPersona()
+  if (persona) return demoScore(persona)
+  const res = await fetch(`${API}/score?address=${address}`)
+  if (!res.ok) throw new Error(`score fetch failed: ${res.status}`)
+  return res.json()
+}
+
 export function fmtUSD(n: number | null | undefined): string {
   if (n === null || n === undefined) return '—'
   if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M'

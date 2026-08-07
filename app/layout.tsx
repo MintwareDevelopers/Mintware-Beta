@@ -5,6 +5,7 @@ import { Providers } from '@/components/web2/providers'
 import { Toaster } from 'sonner'
 import { CommandPalette } from '@/components/web2/CommandPalette'
 import { MwFooter } from '@/components/web2/MwFooter'
+import { DemoBar } from '@/components/web2/DemoBar'
 import '@rainbow-me/rainbowkit/styles.css'
 import './globals.css'
 
@@ -75,6 +76,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <MwFooter />
           <CommandPalette />
+          <DemoBar />
           <Toaster
             position="bottom-right"
             toastOptions={{

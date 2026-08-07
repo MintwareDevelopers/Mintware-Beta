@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
-import { API } from '@/lib/web2/api'
+import { fetchScore } from '@/lib/web2/api'
 import { computeBadges } from '@/lib/rewards/badges'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
@@ -54,9 +54,8 @@ function ProfileContent() {
   useEffect(() => {
     if (!wallet) return
     setLoading(true)
-    fetch(`${API}/score?address=${wallet}`)
-      .then(r => r.json())
-      .then(d => setData(d))
+    fetchScore(wallet)
+      .then(d => setData(d as ScoreResponse))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [wallet])
