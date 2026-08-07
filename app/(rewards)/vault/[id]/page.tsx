@@ -141,6 +141,7 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
 
   const stageLabel: Record<typeof stage, string> = {
     idle:       'Deposit USDC',
+    switching_chain: 'Switch to Base Sepolia…',
     resetting_approval: 'Resetting token permission…',
     approving:  'Approving USDC…',
     approved:   'Approval confirmed',
