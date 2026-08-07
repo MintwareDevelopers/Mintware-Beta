@@ -388,7 +388,7 @@ function VaultDetailContent() {
     </div>
   )
 
-  // RWA vaults render the deal page (surface-aware); DeFi keeps the LP detail below.
+  // Single-surface DeFi vault — the LP detail renders below.
 
   const epoch       = vault.current_epoch
   const totalDeposited = deposits.reduce((s, d) => s + d.usdc_amount, 0)

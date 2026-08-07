@@ -31,7 +31,7 @@ function RewardsContent() {
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([])
   const [activeTab, setActiveTab] = useState<'explore' | 'mine'>('explore')
   const [currentFilter, setCurrentFilter] = useState('All')
-  const [surface, setSurface] = useState<'all' | 'defi' | 'rwa'>('all')
+  const [surface, setSurface] = useState<'all' | 'defi'>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [userScore, setUserScore]           = useState<number | null>(null)
@@ -159,7 +159,7 @@ function RewardsContent() {
                   Contribution that is <span className="text-atx-blue">seen and rewarded</span>
                 </h1>
                 <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-atx-ink/70 max-w-[54ch] mt-5">
-                  Every swap, subscription, hold, and referral — across <b className="text-atx-ink">DeFi markets and real-world assets</b> — earns points, then multiplied by your Attribution score. Come get paid for the history you&apos;ve already built.
+                  Every swap, liquidity position, lock, and referral — across <b className="text-atx-ink">every pool and campaign</b> — earns points, then multiplied by your Attribution score. Come get paid for the history you&apos;ve already built.
                 </p>
                 <div className="flex gap-2.5 mt-7 flex-wrap">
                   <a href="#campaigns" className={BTN_ACC}>Browse campaigns ↓</a>
@@ -250,13 +250,13 @@ function RewardsContent() {
                 ))}
               </div>
               <div className="inline-flex border border-atx-ink shrink-0">
-                {(['all', 'defi', 'rwa'] as const).map((s, i) => (
+                {(['all', 'defi'] as const).map((s, i) => (
                   <button
                     key={s}
                     onClick={() => setSurface(s)}
                     className={`font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-1.5 cursor-pointer ${i > 0 ? 'border-l border-atx-ink' : ''} ${surface === s ? 'bg-atx-blue text-white' : 'bg-transparent text-atx-ink/55 hover:text-atx-ink'}`}
                   >
-                    {s === 'all' ? 'All' : s === 'defi' ? 'DeFi' : 'RWA'}
+                    {s === 'all' ? 'All' : 'DeFi'}
                   </button>
                 ))}
               </div>
@@ -382,20 +382,20 @@ function RewardsContent() {
           {/* ── How earning works — the "why", below the campaigns ── */}
           <section className="border-t border-atx-ink">
             <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
-              <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-acid" />Every action, both surfaces, rewarded</div>
+              <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-acid" />Every action, rewarded</div>
               <h2 className={H2}>Four ways to earn. <span className="text-atx-blue">One multiplier.</span></h2>
-              <p className={LEAD}>Earn on both surfaces — DeFi markets and real-world assets.</p>
+              <p className={LEAD}>Every action is scored, then multiplied by your reputation.</p>
               <div className="grid grid-cols-4 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
                 {[
-                  ['Trade', 'DeFi + RWA', false, 'Swap on any pool — including the vRWA/USDC oracle-banded market. On RWA, your volume is what turns a tokenized asset into a liquid one.', '+8 pts / trade'],
-                  ['Subscribe', 'RWA', true, 'Deposit into a deal at launch — the sticky primary capital an issuer actually needs. Credited the moment you commit.', '+ deal rate / subscribe'],
-                  ['Hold', 'RWA · new', true, 'Keep vRWA through the epoch. A weekly snapshot credits you by balance × duration × reputation — hold-to-maturity, rewarded.', 'rate × held × duration'],
-                  ['Refer', 'DeFi + RWA', false, 'Bring qualified buyers. On RWA this is placement-agent distribution — the referral that sources a real relationship, not a bot.', '+60 pts / referral'],
-                ].map(([name, badge, rwa, desc, pts], i) => (
+                  ['Trade', 'DeFi', false, 'Swap on any pool — best-execution routing, and every trade builds your Attribution score and earns rewards weighted by who you are.', '+8 pts / trade'],
+                  ['Provide liquidity', 'DeFi', true, 'Deposit into a reputation-weighted vault — the sticky capital a pool actually needs. Your fee share is lifted by your Attribution score.', 'fee share × reputation'],
+                  ['Lock', 'DeFi · new', true, 'Commit your LP to a lock tier — longer commitment, higher multiplier. A weekly snapshot credits you by balance × duration × reputation.', 'rate × held × duration'],
+                  ['Refer', 'DeFi', false, 'Bring qualified LPs and traders — relationship-sourced distribution, the referral that sources a real relationship, not a bot.', '+60 pts / referral'],
+                ].map(([name, badge, hot, desc, pts], i) => (
                   <div key={name as string} className={`p-5 ${i < 3 ? 'border-r border-atx-ink max-[800px]:border-r-0 max-[800px]:border-b' : ''}`}>
                     <div className="text-[19px] font-bold flex items-center gap-2 flex-wrap">
                       {name}
-                      <span className={`font-atx-mono text-[9px] uppercase tracking-[0.1em] border border-atx-ink px-1.5 py-0.5 ${rwa ? 'bg-atx-coral' : 'bg-atx-acid'}`}>{badge}</span>
+                      <span className={`font-atx-mono text-[9px] uppercase tracking-[0.1em] border border-atx-ink px-1.5 py-0.5 ${hot ? 'bg-atx-coral' : 'bg-atx-acid'}`}>{badge}</span>
                     </div>
                     <div className="text-[13px] text-atx-ink/70 leading-[1.45] mt-2.5 min-h-[82px]">{desc}</div>
                     <div className="font-atx-mono text-[13px] text-atx-blue font-bold mt-2 border-t border-atx-ink/10 pt-2.5">{pts}</div>
@@ -475,13 +475,13 @@ function TeamsView() {
       {/* Problem */}
       <section className="border-b border-atx-ink">
         <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
-          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />Tokenizing is the easy part</div>
-          <h2 className={H2}>Everything after the token is <span className="text-atx-blue">where deals die.</span></h2>
-          <p className={LEAD}>A tokenized asset is just a wrapper until three things happen. Almost nobody has solved them together for RWAs — that&apos;s the gap.</p>
+          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />An emission is the easy part</div>
+          <h2 className={H2}>The capital an emission buys is <span className="text-atx-blue">where programs die.</span></h2>
+          <p className={LEAD}>A rewards program is only as good as the capital it attracts. Three problems sink most of them — and paying a bigger APY makes all three worse.</p>
           <div className="grid grid-cols-3 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
-            <Cell k="01 · Cold-start" h="No capital on day one" p="A new deal launches to an empty book. You need qualified capital in the door before the economics work." />
-            <Cell k="02 · Distribution" h="Reaching real buyers" p="Finding eligible, relationship-sourced demand — not paid mercenaries — is the placement problem every issuer faces." />
-            <Cell shine k="03 · Secondary liquidity" h="Tokenized ≠ tradeable" p="Tokenization's broken promise. Secondary markets for tokenized credit and T-bills are thin to dead. An asset you can't exit is a roach motel." />
+            <Cell k="01 · Cold-start" h="No liquidity on day one" p="A new pool launches to an empty book. You need qualified capital in the door before the economics work." />
+            <Cell k="02 · Distribution" h="Reaching real users" p="Finding high-reputation, relationship-sourced demand — not paid mercenaries — is the acquisition problem every program faces." />
+            <Cell shine k="03 · Retention" h="TVL rented, never owned" p="The moment an emission tapers, mercenary capital races for the door and the pool goes thin. You rented the liquidity; you never owned it." />
           </div>
         </div>
       </section>
@@ -490,8 +490,8 @@ function TeamsView() {
       <section className="border-b border-atx-ink">
         <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
           <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />Why reputation beats raw APY</div>
-          <h2 className={H2}>Every DeFi rewards program fights its own users. <span className="text-atx-blue">RWAs flip it.</span></h2>
-          <p className={LEAD}>An SPV wrapping a 90-day note doesn&apos;t want the most dollars — it wants capital whose <i>duration matches the asset</i>, and whose behaviour is sticky and qualified. That&apos;s a filter no issuer can buy with emissions.</p>
+          <h2 className={H2}>Every rewards program fights its own users. <span className="text-atx-blue">Reputation flips it.</span></h2>
+          <p className={LEAD}>A pool doesn&apos;t want the most dollars — it wants capital that&apos;s <i>sticky, qualified, and stays</i>. That&apos;s a filter no program can buy with a bigger emission.</p>
           <div className="grid grid-cols-2 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
             <div className="p-6 border-r border-atx-ink bg-atx-panel max-[800px]:border-r-0 max-[800px]:border-b">
               <div className="font-atx-mono text-[12px] uppercase tracking-[0.14em] text-atx-ink/45">✕ Raw emissions</div>
@@ -503,9 +503,9 @@ function TeamsView() {
             <div className="p-6">
               <div className="font-atx-mono text-[12px] uppercase tracking-[0.14em] text-atx-blue">✴ Mintware rewards</div>
               <div className="text-[12.5px] text-atx-grey mb-4 mt-1.5">Quality by design</div>
-              <Row good><b>Duration-matched.</b> Capital locks to/through your settlement date.</Row>
+              <Row good><b>Duration-committed.</b> Capital locks by tier — longer commitment, higher multiplier.</Row>
               <Row good><b>Reputation-weighted.</b> Attribution score, lock, and referral quality — not dollar count.</Row>
-              <Row good><b>Makes the token trade.</b> Volume + LP rewards give your asset a real secondary market.</Row>
+              <Row good><b>Keeps pools deep.</b> Attribution-weighted fees + LP rewards attract liquidity that stays.</Row>
             </div>
           </div>
         </div>
@@ -514,13 +514,13 @@ function TeamsView() {
       {/* Two surfaces */}
       <section className="border-b border-atx-ink">
         <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
-          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-coral" />Two surfaces, one reputation engine</div>
-          <h2 className={H2}>Built for RWA. <span className="text-atx-blue">Just as sharp on DeFi.</span></h2>
-          <p className={LEAD}>Reputation-weighting reaches its full power on real-world assets — but the same filter upgrades any DeFi rewards program you run. Point a campaign at either.</p>
+          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-coral" />One reputation engine, every pool</div>
+          <h2 className={H2}>Reward the right capital. <span className="text-atx-blue">Not the mercenaries.</span></h2>
+          <p className={LEAD}>The same reputation filter pays the users who actually build — and upgrades any rewards program you run. Point a campaign at any pool.</p>
           <div className="grid grid-cols-2 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
-            <Cell shine k="Real-world assets · lead" h="Where it's transformative" p={<>Solves cold-start, distribution, and the dead secondary market at once. Duration-matched, qualified capital — and the volume that makes a tokenized asset finally trade. Nobody else has solved incentivised distribution <i>and</i> secondary liquidity, weighted by capital quality.</>} />
+            <Cell shine k="For users · lead" h="Your reputation is paid" p={<>The identical action out-earns a cold wallet&apos;s — up to <i>1.95×</i>. Trade, provide liquidity, hold, refer: each builds a portable score that pays a bigger share of every pool you enter.</>} />
             <div className="p-6">
-              <div className="font-atx-mono text-[11px] uppercase tracking-[0.14em] text-atx-blue">DeFi markets</div>
+              <div className="font-atx-mono text-[11px] uppercase tracking-[0.14em] text-atx-blue">For teams</div>
               <div className="text-[20px] font-bold mt-2 text-atx-blue">Reward the right users</div>
               <div className="text-[13.5px] text-atx-ink/70 leading-[1.5] mt-2.5">Point a campaign at any DeFi pool and reward loyal, high-reputation users instead of mercenary farmers. The same quality filter drives the retention and conversion raw emissions never could — your best users earn more, and stay.</div>
             </div>
@@ -532,11 +532,11 @@ function TeamsView() {
       <section className="border-b border-atx-ink">
         <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
           <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />What it drives</div>
-          <h2 className={H2}>Retention. Conversion. <span className="text-atx-blue">And the one thing RWAs are missing.</span></h2>
+          <h2 className={H2}>Retention. Conversion. <span className="text-atx-blue">And capital that actually stays.</span></h2>
           <div className="grid grid-cols-3 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
-            <Cell k="Retention" h="Capital that stays" p="Duration-matched locks reward holding through maturity — you keep the capital exactly as long as the asset needs it." />
-            <Cell k="Conversion" h="Qualified demand" p="Relationship-sourced referrals with a 24h anti-sybil gate. Placement, not spam — buyers who convert and stay." />
-            <Cell shine k="Liquidity · RWA shines" h="A market, not a wrapper" p="Volume and LP rewards turn your dead secondary into a live one. The vRWA/USDC band is theoretical until real flow exists — this is the machine that creates it." />
+            <Cell k="Retention" h="Capital that stays" p="Lock tiers reward commitment — longer locks earn a higher multiplier, so the capital stays instead of fleeing the moment an emission tapers." />
+            <Cell k="Conversion" h="Qualified demand" p="Relationship-sourced referrals with a 24h anti-sybil gate. Placement, not spam — users who convert and stay." />
+            <Cell shine k="Liquidity" h="Deeper, stickier pools" p="Attribution-weighted fees plus lock tiers attract LPs who stay, so pools stay deep — the opposite of mercenary TVL that races its own users to the door." />
           </div>
         </div>
       </section>
@@ -544,24 +544,24 @@ function TeamsView() {
       {/* Lifecycle */}
       <section className="border-b border-atx-ink">
         <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
-          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />One engine, both sides</div>
-          <h2 className={H2}>Raise the deal <span className="text-atx-blue">and</span> keep it liquid.</h2>
-          <p className={LEAD}>Secondary liquidity de-risks the primary — investors subscribe when they believe they can exit. The same campaign types cover the whole lifecycle.</p>
+          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />One engine, whole lifecycle</div>
+          <h2 className={H2}>Attract the capital <span className="text-atx-blue">and</span> keep it.</h2>
+          <p className={LEAD}>The same campaign types cover the whole lifecycle — the reputation filter brings quality flow in, and the lock + multiplier mechanics keep it.</p>
           <div className="overflow-x-auto mt-7">
             <table className="w-full border-collapse border border-atx-ink text-[13px] min-w-[600px]">
               <thead>
                 <tr>
-                  {['Campaign', 'Primary — raise the deal', 'Secondary — keep it liquid'].map(h => (
+                  {['Campaign', 'Attract', 'Retain'].map(h => (
                     <th key={h} className="border border-atx-ink/20 bg-atx-panel px-3.5 py-3 text-left font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-grey">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {[
-                  ['Volume', '—', 'Real flow → price discovery, tighter bands, exit liquidity'],
-                  ['Referral', 'Placement-agent distribution', 'Demand-side buyer acquisition'],
-                  ['LP / vault', 'Seed the pool at launch', 'Attribution-weighted market-making that keeps vRWA tradeable'],
-                  ['Subscribe / hold', 'Duration-matched sticky capital', 'Hold-to-maturity bonus'],
+                  ['Token Reward Pool', 'Per-swap rewards bring first flow', 'Reputation-weighting keeps quality wallets trading'],
+                  ['Points Campaign', 'Score-gated epochs draw qualified users', 'Multipliers compound for the users who stay'],
+                  ['LP / vault', 'Seed a reputation-weighted pool', 'Attribution-weighted fees + lock tiers keep LPs deep'],
+                  ['Referral', 'Relationship-sourced distribution', '24h anti-sybil gate — real users, not bots'],
                 ].map(([v, pr, se]) => (
                   <tr key={v}>
                     <td className="border border-atx-ink/20 px-3.5 py-3 font-atx-mono text-[12px] font-bold whitespace-nowrap align-top">{v}</td>
@@ -573,7 +573,7 @@ function TeamsView() {
             </table>
           </div>
           <div className="text-[clamp(19px,2.5vw,28px)] font-bold tracking-[-0.5px] leading-[1.25] max-w-[30ch] mt-9">
-            We don&apos;t tokenize your asset. <span className="text-atx-blue">We make it work.</span>
+            We don&apos;t pay the biggest wallet. <span className="text-atx-blue">We pay the best one.</span>
           </div>
           <div className="mt-7">
             <Link href="/create-campaign" className={BTN_ACC}>Launch a campaign →</Link>

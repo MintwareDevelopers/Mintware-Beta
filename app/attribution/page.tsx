@@ -65,7 +65,7 @@ const MAX = 925
 const USES = [
   ['Rewards', 'Every campaign action is multiplied by your reputation — up to 1.95×. Same action, better score, bigger reward.', '/rewards'],
   ['DeFi vaults', 'Your fee share is weighted by your Attribution tier — up to 1.5× on the same deposit as the wallet next to you.', '/defi'],
-  ['RWA', 'Duration-matched, reputation-weighted capital — the filter no issuer can buy with emissions.', '/rwa'],
+  ['Launch liquidity', 'Team-locked, community-matched launch pools — a team that provably can’t pull its liquidity, and LPs who earn its forgone fees.', '/defi'],
   ['Agents', 'AI agents earn an on-chain reputation that compounds — machine-readable, EAS-attested.', '/agents'],
 ]
 

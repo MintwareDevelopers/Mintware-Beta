@@ -527,62 +527,6 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
   )
 }
 
-// ─── surface picker ───────────────────────────────────────────────────────────
-function SurfacePicker({ onPick }: { onPick: (s: 'defi' | 'rwa') => void }) {
-  const cards = [
-    {
-      s: 'defi' as const, accent: 'border-l-atx-blue', star: 'text-atx-blue',
-      title: 'DeFi vault', tag: 'Permissionless · on-chain yield',
-      desc: 'A V4 hook-gated LP pool. Seed a token, earn swap fees + idle-capital yield, attribution-weighted. Deploys on-chain now.',
-      bullets: ['Swap-fee + MEV + idle-capital yield', 'Seed on-chain in one flow', 'Permissionless deposits'],
-    },
-    {
-      s: 'rwa' as const, accent: 'border-l-atx-coral', star: 'text-atx-coral',
-      title: 'RWA deal', tag: 'Legal-wrapped · real-world yield',
-      desc: 'A tokenized real-world asset (credit, real-estate, energy). Author a full deal page with docs; enters Mintware review before publish.',
-      bullets: ['Issuer must be VERIFIED', 'Deal page: NAV, docs, redemption terms', 'Reviewed before public'],
-    },
-  ]
-  return (
-    <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
-      <MwNav />
-      <div className="max-w-[760px] mx-auto px-7 pt-7 pb-[60px] max-[640px]:px-4 [&_*]:rounded-none">
-        <div className="mb-5 flex items-center gap-2">
-          <Link href="/vaults" className="text-[13px] text-atx-ink/55 font-atx-display no-underline hover:text-atx-ink">← Vaults</Link>
-          <span className="text-atx-ink/30">/</span>
-          <span className="text-[13px] text-atx-ink font-atx-display font-semibold">Create vault</span>
-        </div>
-        <div className="mb-6">
-          <h1 className="text-[26px] font-extrabold font-atx-display m-0 mb-2">Which surface?</h1>
-          <div className="text-[13px] text-atx-ink/55 font-atx-display">Both share one ERC-4626 base + the reputation engine. Pick what you&apos;re launching.</div>
-        </div>
-        <div className="grid grid-cols-2 gap-4 max-[640px]:grid-cols-1">
-          {cards.map(c => (
-            <button key={c.s} onClick={() => onPick(c.s)}
-              className={`text-left bg-atx-panel border border-atx-ink border-l-[3px] ${c.accent} p-6 hover:bg-atx-bone transition-colors`}>
-              <Star className={`w-7 h-7 mb-4 ${c.star}`} />
-              <div className="text-[19px] font-bold font-atx-display mb-1">{c.title}</div>
-              <div className="font-atx-mono uppercase tracking-[0.08em] text-[10px] text-atx-ink/55 mb-3">{c.tag}</div>
-              <div className="text-[13px] text-atx-ink/65 font-atx-display leading-[1.55] mb-4">{c.desc}</div>
-              <div className="flex flex-col gap-1.5">
-                {c.bullets.map(b => (
-                  <div key={b} className="flex items-start gap-2 text-[12px] text-atx-ink/70 font-atx-display">
-                    <span className={`w-[7px] h-[7px] mt-1 shrink-0 border border-atx-ink ${c.s === 'defi' ? 'bg-atx-blue' : 'bg-atx-coral'}`} />
-                    {b}
-                  </div>
-                ))}
-              </div>
-              <div className="mt-5 font-atx-mono text-[13px] font-semibold" style={{ color: c.s === 'defi' ? 'var(--color-atx-blue)' : 'var(--color-atx-coral)' }}>
-                {c.title} →
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── single-surface (DeFi) — the RWA surface was shelved ────────────────────────
 function CreateVaultContentInner() {
   return <DefiCreateFlow onBack={() => { window.location.href = '/vaults' }} />

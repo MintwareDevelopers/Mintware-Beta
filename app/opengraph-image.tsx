@@ -52,13 +52,13 @@ export default async function OgImage() {
               <span style={{ display: 'flex', color: BLUE }}>mean something.</span>
             </div>
             <div style={{ display: 'flex', fontSize: 24, lineHeight: 1.45, color: 'rgba(17,17,17,0.6)', marginTop: 26, maxWidth: 780 }}>
-              One reputation score across every chain — powering reward campaigns, reputation-weighted DeFi vaults, and tokenized real-world assets.
+              One reputation score across every chain — powering reward campaigns and reputation-weighted DeFi liquidity vaults.
             </div>
           </div>
 
           {/* square chips */}
           <div style={{ display: 'flex', gap: 12 }}>
-            {['Attribution', 'DeFi Vaults', 'RWA', 'AI Agents'].map((l) => (
+            {['Attribution', 'DeFi Vaults', 'Rewards', 'AI Agents'].map((l) => (
               <div key={l} style={{
                 display: 'flex', padding: '10px 18px', border: `1px solid ${INK}`,
                 fontSize: 16, fontWeight: 600, color: INK, background: PANEL,
