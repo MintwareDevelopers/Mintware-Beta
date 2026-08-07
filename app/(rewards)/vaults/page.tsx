@@ -2,6 +2,7 @@
 
 import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/web2/MwNav'
+import { PageHero } from '@/components/web2/PageHero'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { VaultCard } from '@/components/web2/vault/VaultCard'
@@ -20,8 +21,6 @@ function Star({ className = '' }: { className?: string }) {
 }
 
 const LABEL = 'font-atx-mono uppercase tracking-[0.08em] text-[10px]'
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 const CORAL_INK = '#5a1e12'
 
 // ── mock data for development / before DB is seeded ───────────────────────
@@ -101,46 +100,39 @@ function VaultsContent() {
     <div className="font-atx-display bg-atx-bone min-h-screen text-atx-ink [&_*]:rounded-none">
       <MwNav />
 
-      {/* ── HERO — two-surface toggle + surface pitch ── */}
-      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className="max-w-[1100px] mx-auto px-7 pt-10 pb-9 max-[800px]:px-4">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className={ey}>✴ {S.eyName} · reputation-weighted yield</div>
-          </div>
-
-          <h1 className="font-bold tracking-[-0.02em] leading-[0.98] text-[clamp(32px,5vw,62px)] mt-6 max-w-[16ch] text-wrap-balance">
-            {S.head[0]}<span style={{ color: S.acc }}>{S.head[1]}</span>
-          </h1>
-          <p className="text-[clamp(15px,1.8vw,19px)] leading-[1.5] text-atx-ink/70 max-w-[54ch] mt-5">{S.sub}</p>
-
-          <div className="grid grid-cols-2 gap-y-2.5 gap-x-8 mt-6 max-w-[760px] max-[560px]:grid-cols-1">
-            {S.bullets.map(b => (
-              <div key={b} className="flex gap-2.5 items-start text-[14px] leading-[1.4]">
-                <span className="w-[9px] h-[9px] mt-1 border border-atx-ink inline-block shrink-0" style={{ background: S.acc }} />
-                {b}
-              </div>
-            ))}
-          </div>
-
-          {/* featured vaults — illustrative examples, not live offers */}
-          <div className={`${ey} mt-8 mb-2.5`}>Example vaults · illustrative</div>
-          <div className="grid grid-cols-2 gap-3 max-w-[760px] max-[560px]:grid-cols-1">
-            {S.featured.map(([name, pair, apy]) => (
-              <div key={name} className="border border-atx-ink bg-atx-panel p-[18px]" style={{ borderTop: `4px solid ${S.acc}` }}>
-                <div className="text-[17px] font-bold">{name}</div>
-                <div className="font-atx-mono text-[11px] text-atx-ink/55 mt-1">{pair}</div>
-                <div className="flex items-center justify-between mt-3.5 border-t border-atx-ink/15 pt-3">
-                  <span className="flex items-baseline gap-1.5">
-                    <span className="font-atx-mono text-[20px] font-bold" style={{ color: S.accInk === '#ffffff' ? S.acc : S.accInk }}>{apy}</span>
-                    <span className="font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-ink/45">example APY</span>
-                  </span>
-                  <span className="font-atx-mono text-[11px] uppercase tracking-[0.08em] border border-atx-ink/40 text-atx-ink/55 px-3 py-1.5">Example</span>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* ── HERO — surface pitch ── */}
+      <PageHero
+        eyebrow={`${S.eyName} · reputation-weighted yield`}
+        title={<>{S.head[0]}<span className="text-atx-blue">{S.head[1]}</span></>}
+        sub={S.sub}
+      >
+        <div className="grid grid-cols-2 gap-y-2.5 gap-x-8 max-w-[760px] max-[560px]:grid-cols-1">
+          {S.bullets.map(b => (
+            <div key={b} className="flex gap-2.5 items-start text-[14px] leading-[1.4]">
+              <span className="w-[9px] h-[9px] mt-1 border border-atx-ink inline-block shrink-0 bg-atx-blue" />
+              {b}
+            </div>
+          ))}
         </div>
-      </section>
+
+        {/* featured vaults — illustrative examples, not live offers */}
+        <div className={`${ey} mt-8 mb-2.5`}>Example vaults · illustrative</div>
+        <div className="grid grid-cols-2 gap-3 max-w-[760px] max-[560px]:grid-cols-1">
+          {S.featured.map(([name, pair, apy]) => (
+            <div key={name} className="border border-atx-ink bg-atx-panel p-[18px] border-t-4 border-t-atx-blue">
+              <div className="text-[17px] font-bold">{name}</div>
+              <div className="font-atx-mono text-[11px] text-atx-ink/55 mt-1">{pair}</div>
+              <div className="flex items-center justify-between mt-3.5 border-t border-atx-ink/15 pt-3">
+                <span className="flex items-baseline gap-1.5">
+                  <span className="font-atx-mono text-[20px] font-bold text-atx-blue">{apy}</span>
+                  <span className="font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-ink/45">example APY</span>
+                </span>
+                <span className="font-atx-mono text-[11px] uppercase tracking-[0.08em] border border-atx-ink/40 text-atx-ink/55 px-3 py-1.5">Example</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </PageHero>
 
       {/* ── vault list — the main event, straight after the hero ── */}
       <div className="max-w-[1100px] mx-auto px-7 pt-8 pb-[52px] max-[800px]:px-4">
