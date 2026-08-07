@@ -40,7 +40,6 @@ import {
   type Chain,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { getOracleSignerKey } from '@/lib/web3/oracleKeys'
 import { base, baseSepolia, bsc } from 'viem/chains'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
@@ -161,8 +160,17 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
   // Default: 30 days from now. The contract requires block.timestamp <= deadline.
   const deadline = params.deadline ?? Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
 
-  // ── Oracle wallet setup (root role — Merkle distribution signing) ───────────
-  const account = privateKeyToAccount(getOracleSignerKey('root'))
+  // ── Oracle wallet setup ────────────────────────────────────────────────────
+  const rawKey = process.env.DISTRIBUTOR_PRIVATE_KEY
+  if (!rawKey) {
+    throw new Error(
+      '[onchainPublisher] DISTRIBUTOR_PRIVATE_KEY is not set. ' +
+      'Add it to .env.local: DISTRIBUTOR_PRIVATE_KEY=<64 hex chars>'
+    )
+  }
+
+  const privateKey = (rawKey.startsWith('0x') ? rawKey : `0x${rawKey}`) as `0x${string}`
+  const account    = privateKeyToAccount(privateKey)
 
   const chain     = getChain(chainSlug)
   const transport = http(getRpcUrl(chainSlug))
