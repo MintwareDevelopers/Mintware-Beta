@@ -186,6 +186,49 @@ export function useVaultWithdraw(): UseVaultWithdrawResult {
   return { isPending, isSuccess, txHash, error, withdraw, reset }
 }
 
+// ─── useVaultExecuteRedeem ────────────────────────────────────────────────────
+// Step 2 of async redemption: executeRedeem() settles the wallet's queued request
+// after its notice period has elapsed. Takes no args — the vault stores one pending
+// WithdrawalRequest per wallet.
+
+export interface UseVaultExecuteResult {
+  isPending: boolean
+  isSuccess: boolean
+  txHash:    `0x${string}` | undefined
+  error:     string
+  execute:   () => void
+  reset:     () => void
+}
+
+export function useVaultExecuteRedeem(): UseVaultExecuteResult {
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
+  const [error, setError]   = useState('')
+
+  const { writeContract, isPending } = useWriteContract()
+  const { isSuccess }                = useWaitForTransactionReceipt({ hash: txHash })
+
+  function execute() {
+    if (!SOCIAL_VAULT_ADDRESS) { setError('Vault address not configured'); return }
+    setError('')
+    writeContract(
+      {
+        address:      SOCIAL_VAULT_ADDRESS,
+        abi:          SOCIAL_VAULT_ABI,
+        functionName: 'executeRedeem',
+        args:         [],
+      },
+      {
+        onSuccess: hash => setTxHash(hash),
+        onError:   e    => setError(e.message),
+      }
+    )
+  }
+
+  function reset() { setTxHash(undefined); setError('') }
+
+  return { isPending, isSuccess, txHash, error, execute, reset }
+}
+
 // ─── useVaultSeed ────────────────────────────────────────────────────────────
 // Step 1: approve project token to SocialVault
 // Step 2: seedTeamTokens(vaultId, projectToken, amount, poolKey, sqrtPrice)

@@ -9,7 +9,7 @@ import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
 import type { SocialVault, LpDeposit, WithdrawalQueueEntry, LockTier } from '@/lib/web2/vault/types'
 import { LOCK_TIERS } from '@/lib/web2/vault/types'
-import { useVaultDeposit, useVaultWithdraw, useVaultOnchain } from '@/lib/web3/vault/useSocialVault'
+import { useVaultDeposit, useVaultWithdraw, useVaultExecuteRedeem, useVaultOnchain } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultDepositMessage, buildVaultWithdrawMessage } from '@/lib/web3/signedActionMessages'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -305,6 +305,7 @@ function VaultDetailContent() {
   const [withdrawing, setWith]    = useState<string | null>(null)
   const [withErr, setWithErr]     = useState('')
   const vaultWithdraw = useVaultWithdraw()
+  const vaultExecute  = useVaultExecuteRedeem()
 
   // Live on-chain state for THIS vault's contract (authoritative; mirrors DB).
   const onchain = useVaultOnchain(vault?.contract_address, address)
@@ -373,6 +374,20 @@ function VaultDetailContent() {
       .catch(() => { loadVault() })
       .finally(() => setWith(null))
   }, [vaultWithdraw.isSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Step 2: settle a queued withdrawal on-chain once its notice period has elapsed.
+  function handleComplete() {
+    if (!address) return
+    setWithErr('')
+    vaultExecute.execute()
+  }
+
+  // After executeRedeem success → refresh (the on-chain request is settled).
+  useEffect(() => {
+    if (!vaultExecute.isSuccess) return
+    loadVault()
+    vaultExecute.reset()
+  }, [vaultExecute.isSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return (
     <div className="px-7 py-10 max-w-[900px] mx-auto">
@@ -571,12 +586,25 @@ function VaultDetailContent() {
                                     Executable {daysUntil(q.executable_at) === 0 ? 'today' : `in ${daysUntil(q.executable_at)}d`}
                                   </div>
                                 </div>
-                                <span className="shrink-0 flex items-center gap-1.5 border border-atx-ink px-[7px] py-[2px] font-atx-mono text-[10px] uppercase tracking-[0.08em]">
-                                  <span className="w-[7px] h-[7px] border border-atx-ink inline-block bg-atx-coral" />
-                                  Pending
-                                </span>
+                                {new Date(q.executable_at) <= new Date() ? (
+                                  <button
+                                    onClick={handleComplete}
+                                    disabled={vaultExecute.isPending}
+                                    className="shrink-0 text-[11px] font-semibold text-atx-ink border border-atx-ink px-3 py-[4px] font-atx-mono uppercase tracking-[0.06em] hover:bg-atx-ink hover:text-atx-bone disabled:opacity-50"
+                                  >
+                                    {vaultExecute.isPending ? 'Completing…' : 'Complete withdrawal'}
+                                  </button>
+                                ) : (
+                                  <span className="shrink-0 flex items-center gap-1.5 border border-atx-ink px-[7px] py-[2px] font-atx-mono text-[10px] uppercase tracking-[0.08em]">
+                                    <span className="w-[7px] h-[7px] border border-atx-ink inline-block bg-atx-coral" />
+                                    Pending
+                                  </span>
+                                )}
                               </div>
                             ))}
+                            {vaultExecute.error && (
+                              <div className="text-[11px] text-atx-clay font-atx-display mt-2">{vaultExecute.error}</div>
+                            )}
                           </div>
                         )}
                       </>
