@@ -14,7 +14,7 @@ import type { Campaign } from './CampaignCard'
 
 const CHAIN_NAME_TO_ID: Record<string, number> = {
   base: 8453, arbitrum: 42161, ethereum: 1, eth: 1,
-  bsc: 56, polygon: 137, optimism: 10, coredao: 1116, core: 1116,
+  bsc: 56, polygon: 137, optimism: 10,
 }
 
 interface CampaignHeaderProps {
@@ -56,7 +56,7 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
 
   useEffect(() => {
     if (!c.token_contract || !chainId) {
-      // Manual links (e.g. Core DAO)
+      // Manual links (no token_contract / off-chain chain)
       if (c.links) setLinks({ dexUrl: c.links.dex ?? null, twitter: c.links.twitter ?? null, website: c.links.website ?? null, telegram: c.links.telegram ?? null })
       return
     }

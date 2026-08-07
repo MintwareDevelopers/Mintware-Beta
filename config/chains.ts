@@ -1,20 +1,7 @@
 import { mainnet, base, arbitrum } from 'wagmi/chains'
 import type { Chain } from 'viem'
 
-export const coreChain: Chain = {
-  id: 1116,
-  name: 'Core',
-  nativeCurrency: { name: 'CORE', symbol: 'CORE', decimals: 18 },
-  rpcUrls: {
-    default: { http: ['https://rpc.coredao.org'] },
-    public:  { http: ['https://rpc.coredao.org'] },
-  },
-  blockExplorers: {
-    default: { name: 'Core Explorer', url: 'https://scan.coredao.org' },
-  },
-}
-
-export type SwapProvider = 'lifi' | 'molten'
+export type SwapProvider = 'lifi'
 
 export interface ChainConfig {
   chain:        Chain
@@ -49,14 +36,6 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     feeBps:       50,
     name:         'Arbitrum',
     logoUrl:      '/chains/arbitrum.svg',
-  },
-  {
-    chain:        coreChain,
-    swapProvider: 'molten',
-    feeRecipient: process.env.NEXT_PUBLIC_MINTWARE_TREASURY || '',
-    feeBps:       50,
-    name:         'Core',
-    logoUrl:      '/chains/core.svg',
   },
 ]
 

@@ -15,7 +15,7 @@ import Link           from 'next/link'
 import { MwNav }       from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
-import { createPublicClient, http, erc20Abi, isAddress } from 'viem'
+import { createPublicClient, http, erc20Abi, isAddress, type Chain } from 'viem'
 import { base, baseSepolia } from 'viem/chains'
 import { useVaultSeed } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultCreateMessage } from '@/lib/web3/signedActionMessages'
@@ -54,7 +54,7 @@ const CHAINS = [
 
 // Resolve an ERC-20 symbol directly (bypasses the RainbowKit config, which omits
 // Base Sepolia) so the auto-generated vault name resolves on both offered chains.
-const CHAIN_FOR: Record<number, typeof base> = { 8453: base, 84532: baseSepolia }
+const CHAIN_FOR: Record<number, Chain> = { 8453: base, 84532: baseSepolia }
 
 async function readTokenSymbol(address: string, chainId: number): Promise<string | null> {
   const chain = CHAIN_FOR[chainId]

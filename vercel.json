@@ -6,10 +6,6 @@
       "schedule": "30 4 * * *"
     },
     {
-      "path": "/api/cron/bridge-verify",
-      "schedule": "0 0 * * *"
-    },
-    {
       "path": "/api/cron/epoch-end",
       "schedule": "0 1 * * *"
     },

@@ -7,7 +7,7 @@ export type ScheduleType  = 'now' | 'scheduled'
 // RWA incentive layer (see docs/developers/rwa-incentive-layer.md).
 // Permissionless by design — no KYC field; eligibility lives in the wrapped token.
 export type CampaignSurface = 'defi' | 'rwa'
-export type PointsFocus   = 'trade' | 'bridge' | 'both'
+export type PointsFocus   = 'trade'
 export type PayoutPreset  = '3' | '5' | '10' | '20'
 
 export interface TokenInfo {
@@ -51,7 +51,6 @@ export interface CreatorFormState {
   // Step 3 — Actions (points)
   pointsFocus:               PointsFocus
   pointsPerUsdTrade:         number
-  fixedBridgePoints:         number
   // Advanced only
   referralBasePoints:         number
   referralSharePct:           number
@@ -89,9 +88,8 @@ export const DEFAULT_FORM: CreatorFormState = {
   useScoreMultiplier: false,
   referralHoldHours:  9,
 
-  pointsFocus:               'both',
+  pointsFocus:               'trade',
   pointsPerUsdTrade:         10,
-  fixedBridgePoints:         500,
   referralBasePoints:         200,
   referralSharePct:           10,
   useAttributionMultiplier:   true,

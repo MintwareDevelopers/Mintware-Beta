@@ -192,7 +192,7 @@ export default function StyleSwapConcept() {
 
           {isDeFi ? (
             <div className={`p-[13px_18px] border-t ${LINE} grid grid-cols-3`}>
-              {[['Route', '0x · Molten'], ['Aggregated', `${ROUTES} sources`], ['Fee', '0.50%']].map(([l, v], i) => (
+              {[['Route', '0x · LI.FI'], ['Aggregated', `${ROUTES} sources`], ['Fee', '0.50%']].map(([l, v], i) => (
                 <div key={i} className={i < 2 ? `border-r ${LINE} pr-3` : ''}>
                   <div className={`${LABEL} text-[9px]`}>{l}</div>
                   <div className="font-atx-mono text-[14px] mt-0.5">{v}</div>

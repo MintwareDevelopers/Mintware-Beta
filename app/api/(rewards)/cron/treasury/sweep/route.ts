@@ -31,21 +31,10 @@ const DISTRIBUTOR_ABI = parseAbi([
   'function claim(string calldata campaignId, uint256 epochNumber, bytes32 merkleRoot, bytes calldata oracleSignature, uint256 deadline, uint256 amount, bytes32[] calldata merkleProof)',
 ])
 
-const CORE_DAO: Chain = {
-  id: 1116,
-  name: 'Core DAO',
-  nativeCurrency: { name: 'CORE', symbol: 'CORE', decimals: 18 },
-  rpcUrls: {
-    default: { http: ['https://rpc.coredao.org'] },
-    public:  { http: ['https://rpc.coredao.org'] },
-  },
-}
-
 function getChain(slug: string): Chain | null {
   switch (slug) {
     case 'base':         return base
     case 'base_sepolia': return baseSepolia
-    case 'core_dao':     return CORE_DAO
     case 'bnb':          return bsc
     default:             return null
   }

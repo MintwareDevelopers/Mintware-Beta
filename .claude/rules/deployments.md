@@ -39,7 +39,6 @@
 
 | Path | Schedule |
 |---|---|
-| `/api/cron/bridge-verify` | `0 0 * * *` (midnight) |
 | `/api/cron/epoch-end` | `0 1 * * *` (1am) |
 | `/api/cron/pool-settle` | `0 2 * * *` (2am) |
 | `/api/treasury/sweep` | `0 3 * * *` (3am) |
@@ -60,7 +59,6 @@ Allowlisted: `localhost:3000`, `mintware-beta.vercel.app`
 
 ## Pending
 
-- `CORE_DAO_BRIDGE_CONTRACT` — blocked on Molten confirmation (`0x__PENDING_MOLTEN_CONFIRMATION__`)
 - Oracle signer key: stored ONLY in the secret manager (Vercel `ORACLE_PRIVATE_KEY` / 1Password) — never commit. ⚠ The value previously committed here was EXPOSED and must be rotated on-chain (see audit 2026-07-31).
 
 If a cron route 404s in production, verify the route file and matching `vercel.json` cron entry are actually merged to `main` before debugging envs. The universal pipeline also depends on the first two schema tables (`trade_signals`, `trade_signal_sync_state`) existing in Supabase; without them the cron cannot create its sync cursor or ingest anything.

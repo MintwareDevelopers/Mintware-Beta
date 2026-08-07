@@ -14,7 +14,6 @@ type ActionDef = NonNullable<Campaign['actions']>[string]
 
 function actionMeta(key: string): { icon: string; color: string; bg: string; border: string } {
   if (key === 'trade')             return { icon: '◈', color: '#2A9E8A', bg: 'rgba(42,158,138,0.07)',  border: 'rgba(42,158,138,0.18)'  }
-  if (key === 'bridge')            return { icon: '⇄', color: '#3A5CE8', bg: 'rgba(58,92,232,0.07)',   border: 'rgba(58,92,232,0.18)'   }
   if (key.startsWith('referral'))  return { icon: '◉', color: '#7B6FCC', bg: 'rgba(123,111,204,0.07)', border: 'rgba(123,111,204,0.18)' }
   if (key === 'hold')              return { icon: '◆', color: '#C27A00', bg: 'rgba(194,122,0,0.07)',   border: 'rgba(194,122,0,0.18)'   }
   return                                  { icon: '⬡', color: '#3A5CE8', bg: 'rgba(58,92,232,0.07)',   border: 'rgba(58,92,232,0.18)'   }

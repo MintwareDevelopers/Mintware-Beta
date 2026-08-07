@@ -17,9 +17,7 @@ export interface Participant {
   score_multiplier?: string | number  // optional — legacy field, may be absent for new participants
   total_points: number
   total_earned_usd: string | number
-  bridge_points?: number
   trading_points?: number
-  referral_bridge_points?: number
   referral_trade_points?: number
   active_trading_days?: number
   tree_size?: number
@@ -77,14 +75,8 @@ export function ParticipantStats({ participant: p, campaignId, walletAddress, re
           Points Breakdown
         </div>
 
-        {p.bridge_points != null && p.bridge_points > 0 && (
-          <StatRow label="Bridge points"           value={p.bridge_points.toLocaleString()} />
-        )}
         {p.trading_points != null && p.trading_points > 0 && (
           <StatRow label="Trading points"          value={p.trading_points.toLocaleString()} />
-        )}
-        {p.referral_bridge_points != null && p.referral_bridge_points > 0 && (
-          <StatRow label="Referral bridge pts"     value={p.referral_bridge_points.toLocaleString()} />
         )}
         {p.referral_trade_points != null && p.referral_trade_points > 0 && (
           <StatRow label="Referral trade pts"      value={p.referral_trade_points.toLocaleString()} />

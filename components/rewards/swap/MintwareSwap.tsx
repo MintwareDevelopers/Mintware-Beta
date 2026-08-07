@@ -10,7 +10,7 @@
 //   - executeRoute() → executes swap with wallet via EVM provider
 //   - On completion: extracts txHash → POSTs to /api/campaigns/swap-event
 //
-// Chain support: Base (8453) + Core DAO (1116)
+// Chain support: Base (8453)
 // Attribution: campaign_id omitted — API resolves active participations
 // =============================================================================
 
@@ -522,7 +522,7 @@ export function MintwareSwap() {
         {/* ─── Unsupported chain warning ─── */}
         {walletOnUnsupportedChain && (
           <div className="font-sans text-[12px] text-mw-pink bg-[rgba(194,83,122,0.06)] border border-[rgba(194,83,122,0.15)] rounded-sm px-[10px] py-[8px] mt-[10px]">
-            ⚠ Your wallet is on an unsupported network. LI.FI routes on Base and Core DAO mainnet only — testnets (Sepolia etc.) are not supported.
+            ⚠ Your wallet is on an unsupported network. LI.FI routes on Base mainnet only — testnets (Sepolia etc.) are not supported.
           </div>
         )}
 

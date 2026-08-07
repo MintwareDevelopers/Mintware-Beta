@@ -37,7 +37,7 @@ Source of truth: `docs/schema.sql`
 - `campaign_id`, `tx_hash`, `wallet`, `action_type`, `points`
 - **Unique: `(wallet, tx_hash, action_type)` — NOT campaign-scoped.** Any per-campaign idempotency
   key must therefore encode the campaign id *inside* `tx_hash` (see `holdSnapshot.ts` — `hold:<campaignId>:<epoch>:<date>`).
-- `action_type` CHECK: `bridge | trade | referral_bridge | referral_trade | subscribe | hold | referral_subscribe`
+- `action_type` CHECK: `trade | referral_trade | subscribe | hold | referral_subscribe`
   (RWA action types added in `20260728000002`).
 
 **`participants`**
