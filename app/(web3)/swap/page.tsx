@@ -380,8 +380,8 @@ function SwapContent() {
                   <span className="ml-auto font-atx-mono text-[16px] text-atx-coral">→</span>
                 </div>
                 <p className="text-[13px] text-atx-ink/55 leading-[1.5]">
-                  Provide liquidity in reputation-weighted Uniswap V4 vaults — your fee share is
-                  lifted by your Attribution score. Explore the vaults surface.
+                  Reputation-weighted Uniswap V4 vaults — the same position earns more when your
+                  Attribution score is stronger. In testing on Base — explore the vaults.
                 </p>
               </Link>
             </div>
