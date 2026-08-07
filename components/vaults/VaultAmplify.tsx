@@ -364,7 +364,7 @@ function TrustOnChain() {
   )
 }
 
-// ─── 05 · Referral compounding loop ──────────────────────────────────────────
+// ─── 05 · Referral compounding loop + earnings model ─────────────────────────
 const LOOP = [
   { k: 'Refer an LP', d: 'Share your link — they deposit into any vault' },
   { k: 'Their TVL sticks', d: 'You earn on their sustained liquidity, not a one-time bounty' },
@@ -372,6 +372,110 @@ const LOOP = [
   { k: 'Attribution rises', d: 'A higher score means a higher tier — permanently' },
   { k: 'Every deposit earns more', d: 'Your own fee share multiplier goes up. Loop repeats.' },
 ]
+
+// The REAL referral economics (lib/rewards/vault/weightedDistribution.ts):
+//   referee boost +10% · referrer 20% of the referred LP's fee earning, lifetime,
+//   scaled linearly by the referred LP's Attribution percentile (anti-sybil).
+const REFEREE_BOOST = 0.10
+const REFERRER_RATE = 0.20
+const REF_BASE_APY = 0.08 // illustrative model assumption, same as the wedge default
+
+function ReferralEarnings() {
+  const [count, setCount] = useState(8)        // referred LPs
+  const [avgDeposit, setAvgDeposit] = useState(15_000)
+  const [avgPct, setAvgPct] = useState(70)     // referred LPs' avg Attribution percentile
+
+  const perLpBase = avgDeposit * REF_BASE_APY
+  const quality = avgPct / 100
+  const referrerPerLp = REFERRER_RATE * perLpBase * quality
+  const totalReferrer = count * referrerPerLp
+  const totalRefereeBoost = count * REFEREE_BOOST * perLpBase
+
+  // Anti-sybil punchline: one Gold LP earns real money; a score-0 sybil's quality
+  // factor is 0, so any number of sybils earns the referrer exactly nothing.
+  const oneGold = REFERRER_RATE * (avgDeposit * REF_BASE_APY) * 0.85
+
+  return (
+    <div className="border-t border-white/15 p-8 max-[640px]:p-6">
+      <div className="flex items-center gap-3.5 mb-6">
+        <span className="w-[9px] h-[9px] bg-atx-acid border border-atx-ink inline-block" />
+        <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/55">
+          Model your referral income
+        </span>
+      </div>
+
+      <div className="grid grid-cols-[1fr_1.1fr] max-[820px]:grid-cols-1 gap-8">
+        {/* controls */}
+        <div className="flex flex-col gap-6">
+          <div>
+            <div className="flex items-baseline justify-between mb-2.5">
+              <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/55">LPs you refer</span>
+              <span className="font-atx-mono text-[22px] font-bold text-white">{count}</span>
+            </div>
+            <input type="range" min={1} max={50} step={1} value={count}
+              onChange={(e) => setCount(Number(e.target.value))} className={RANGE_CLASS} />
+          </div>
+          <div>
+            <div className="flex items-baseline justify-between mb-2.5">
+              <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/55">Avg deposit each</span>
+              <span className="font-atx-mono text-[22px] font-bold text-white">{fmtUsd(avgDeposit)}</span>
+            </div>
+            <input type="range" min={1000} max={100_000} step={1000} value={avgDeposit}
+              onChange={(e) => setAvgDeposit(Number(e.target.value))} className={RANGE_CLASS} />
+          </div>
+          <div>
+            <div className="flex items-baseline justify-between mb-2.5">
+              <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/55">Their avg Attribution</span>
+              <span className="font-atx-mono text-[22px] font-bold text-white">top {100 - avgPct}%</span>
+            </div>
+            <input type="range" min={1} max={100} step={1} value={avgPct}
+              onChange={(e) => setAvgPct(Number(e.target.value))} className={RANGE_CLASS} />
+            <div className="font-atx-mono text-[10px] text-white/40 mt-1.5">
+              Quality-weighted {quality.toFixed(2)}× — a score-0 sybil earns you nothing.
+            </div>
+          </div>
+        </div>
+
+        {/* result */}
+        <div className="flex flex-col gap-4">
+          <div className="border border-atx-acid bg-white/[0.04] p-6">
+            <div className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/55 mb-1">
+              Your referral income / yr — lifetime
+            </div>
+            <div className="font-atx-mono text-[42px] font-bold leading-none text-atx-acid">
+              {fmtUsd(totalReferrer)}
+            </div>
+            <div className="font-atx-mono text-[12px] text-white/60 mt-2 leading-[1.5]">
+              Paid every epoch your referred LPs stay in — not a one-time bounty. Funded from
+              Mintware&apos;s margin, so being referred never taxes the LP.
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="border border-white/20 p-4">
+              <div className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-white/45">Your network also earns</div>
+              <div className="font-atx-mono text-[19px] font-bold text-white mt-1">+{fmtUsd(totalRefereeBoost)}</div>
+              <div className="font-atx-mono text-[10px] text-white/40 mt-0.5">+10% referee boost, on them</div>
+            </div>
+            <div className="border border-white/20 p-4">
+              <div className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-white/45">Anti-sybil</div>
+              <div className="font-atx-mono text-[13px] font-bold text-white mt-1 leading-tight">
+                1 Gold LP {fmtUsd(oneGold)}/yr
+              </div>
+              <div className="font-atx-mono text-[11px] text-white/45 leading-tight">
+                1,000 score-0 sybils $0
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="font-atx-mono text-[10px] text-white/35 mt-6 leading-[1.5]">
+        Illustrative model at {(REF_BASE_APY * 100).toFixed(0)}% base swap-fee APY · referrer earns
+        {' '}{(REFERRER_RATE * 100).toFixed(0)}% of each referred LP&apos;s fee earning × their Attribution,
+        referee earns +{(REFEREE_BOOST * 100).toFixed(0)}%. Actual yield varies by pool activity.
+      </p>
+    </div>
+  )
+}
 
 function ReferralLoop() {
   return (
@@ -385,10 +489,10 @@ function ReferralLoop() {
           Refer liquidity. Build reputation. Earn more forever.
         </h2>
         <p className="text-white/60 text-[15px] leading-[1.6] mt-4 max-w-[70ch]">
-          Other protocols pay a flat bounty. Here, referring an LP feeds your reputation — so you're paid twice: in fees now, and in a higher multiplier on every future deposit.
+          Other protocols pay a flat bounty. Here, referring an LP feeds your reputation — so you&apos;re paid twice: in fees now, and in a higher multiplier on every future deposit.
         </p>
       </div>
-      <div className="grid grid-cols-5 max-[900px]:grid-cols-1">
+      <div className="grid grid-cols-5 max-[900px]:grid-cols-1 border-b border-white/15">
         {LOOP.map((s, i) => (
           <div
             key={s.k}
@@ -401,6 +505,7 @@ function ReferralLoop() {
           </div>
         ))}
       </div>
+      <ReferralEarnings />
     </div>
   )
 }
