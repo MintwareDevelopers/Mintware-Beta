@@ -140,8 +140,17 @@ export default function HomePage() {
             Own your share of the <span className="text-atx-blue">market you make.</span>
           </h1>
           <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[48ch] mt-6">
-            {'DeFi pays mercenary money that farms an emission and leaves. Mintware scores what your wallet actually did — holding, LPing, referring — and pays a bigger share of every pool to the people who show up. Paste any wallet to see what it’s built.'}
+            {'The same position earns more when your on-chain history is stronger — holding, LPing, referring all lift your share of every pool’s fees. Paste any wallet to see what it’s already built.'}
           </p>
+
+          {/* proof strip — honest, evergreen facts (no TVL/wallet-count stats) */}
+          <div className="mt-5 font-atx-mono text-[12px] uppercase tracking-[0.1em] text-atx-ink/55 flex items-center gap-2 flex-wrap">
+            <span className="text-atx-ink font-bold">925</span> max score
+            <span className="text-atx-ink/30">·</span>
+            <span className="text-atx-ink font-bold">100+</span> chains scored
+            <span className="text-atx-ink/30">·</span>
+            EAS-attested on Base
+          </div>
 
           {/* wallet search */}
           <div className="mt-8 max-w-[560px]">
@@ -181,53 +190,84 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* HERO 2 — product preview */}
-      <section
-        className="border-b border-atx-ink grid [grid-template-columns:1.05fr_0.95fr] max-[720px]:[grid-template-columns:1fr]"
-        style={{ backgroundImage: GRID_BG }}
-      >
-        <div className="px-6 py-[44px] border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink">
-          <div className={ey}>✴ Reputation-weighted vaults</div>
-          <h2 className="font-bold tracking-[-0.02em] leading-[1.04] text-[clamp(28px,3.4vw,44px)] mt-3.5">
-            The same position, <span className="text-atx-blue">earning you more.</span>
-          </h2>
-          <p className="text-[16px] leading-[1.5] text-atx-ink/70 max-w-[34ch] mt-4">
-            MEV-protected, auto-managed LP on Uniswap V4 — your Attribution score and lock tier lift your share of every pool. In testing on Base — not yet live.
-          </p>
-          <button onClick={() => launchApp('/vaults')} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-ink bg-atx-bone mt-6">
-            Browse the vaults →
-          </button>
-        </div>
-        <div className="px-6 py-[30px] bg-atx-panel relative">
-          <span className="absolute top-[30px] right-6 font-atx-mono text-[9px] uppercase tracking-[0.14em] text-atx-ink/55 border border-atx-ink/20 px-1.5 py-1">Preview</span>
-          <div className={ey}>A vault, up close</div>
-          <div className="border border-atx-ink bg-atx-bone mt-3">
-            <div className="border-b border-atx-ink font-atx-mono text-[11px] uppercase tracking-[0.12em] text-center">
-              <div className="py-3 bg-atx-blue text-white">DeFi vault</div>
+      {/* HERO 2 — two vault products */}
+      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
+        <div className="mx-auto max-w-[1180px] px-6 py-[44px]">
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <div>
+              <div className={ey}>✴ Two ways to earn</div>
+              <h2 className="font-bold tracking-[-0.02em] leading-[1.04] text-[clamp(26px,3.2vw,42px)] mt-3">
+                The same liquidity, <span className="text-atx-blue">two different jobs.</span>
+              </h2>
             </div>
-            <div className="p-4">
-              <div className="flex items-baseline justify-between border border-atx-ink px-3.5 py-3.5">
-                <span className="text-[24px] font-bold tracking-tight">5,000</span>
-                <span className="font-atx-mono text-[11px] text-atx-ink/55">USDC</span>
+            <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55 border border-atx-ink/20 px-2.5 py-1.5">In testing on Base — not yet live</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 mt-8 max-[820px]:grid-cols-1">
+            {/* Card 1 — Growth Vaults */}
+            <div className="border border-atx-ink bg-atx-bone flex flex-col" style={{ borderTop: '4px solid var(--color-atx-blue)' }}>
+              <div className="p-5 border-b border-atx-ink/15">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[19px] font-bold">Growth Vaults</span>
+                  <span className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-ink/45">For tokens &amp; treasuries</span>
+                </div>
+                <p className="text-[14px] leading-[1.5] text-atx-ink/70 mt-2.5">
+                  MEV-protected, auto-managed LP on Uniswap V4 — your Attribution score and lock tier lift your fee share up to 1.95× vs. the wallet beside you.
+                </p>
               </div>
-              <div className="mt-3 border-t border-atx-ink/20">
-                <Bdr k="Swap fees + MEV" v="8.5%" />
-                <Bdr k="Idle-capital yield" v="+0.6%" />
-                <div className="flex items-center justify-between py-2 border-b border-atx-ink/10 text-[12px] text-atx-ink/80">
-                  <span className="flex items-center gap-2">
-                    Your multiplier
-                    <span className="font-atx-mono text-[9px] bg-atx-acid border border-atx-ink px-1.5 py-0.5">Builder · 82</span>
-                  </span>
-                  <span className="font-atx-mono">×1.3</span>
+              <div className="p-5 bg-atx-panel">
+                <div className="flex items-baseline justify-between border border-atx-ink px-3.5 py-3 bg-atx-bone">
+                  <span className="text-[22px] font-bold tracking-tight">5,000</span>
+                  <span className="font-atx-mono text-[11px] text-atx-ink/55">USDC</span>
+                </div>
+                <div className="mt-3 border-t border-atx-ink/15">
+                  <Bdr k="Swap fees + MEV" v="8.5%" />
+                  <Bdr k="Idle-capital yield" v="+0.6%" />
+                  <div className="flex items-center justify-between py-2 border-b border-atx-ink/10 text-[12px] text-atx-ink/80">
+                    <span className="flex items-center gap-2">
+                      Your multiplier
+                      <span className="font-atx-mono text-[9px] bg-atx-acid border border-atx-ink px-1.5 py-0.5">Builder · 82</span>
+                    </span>
+                    <span className="font-atx-mono">×1.3</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-3">
+                  <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55">Example APY</span>
+                  <span className="font-atx-mono font-bold text-[24px] tracking-tight text-atx-mesquite">10.4%</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between pt-3.5">
-                <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55">Example APY</span>
-                <span className="font-atx-mono font-bold text-[26px] tracking-tight text-atx-mesquite">10.4%</span>
-              </div>
-              <button onClick={() => launchApp('/vaults')} className="w-full mt-3 py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-blue text-white border border-atx-blue cursor-pointer">
-                {isConnected ? 'Open vaults →' : 'Explore the vaults →'}
+              <button onClick={() => launchApp('/vaults')} className="mt-auto w-full py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-blue text-white border-t border-atx-ink cursor-pointer">
+                Browse Growth vaults →
               </button>
+            </div>
+
+            {/* Card 2 — Matched Liquidity */}
+            <div className="border border-atx-ink bg-atx-bone flex flex-col" style={{ borderTop: '4px solid var(--color-atx-coral)' }}>
+              <div className="p-5 border-b border-atx-ink/15">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[19px] font-bold">Matched Liquidity</span>
+                  <span className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-ink/45">For teams</span>
+                </div>
+                <p className="text-[14px] leading-[1.5] text-atx-ink/70 mt-2.5">
+                  Lock your token liquidity. Your community matches it. No early exit — checkable on-chain, not promised. During the lock, your fees flow to the people who backed you.
+                </p>
+              </div>
+              <div className="p-5 bg-atx-panel flex-1">
+                <div className="grid grid-cols-2 gap-px bg-atx-ink/15 border border-atx-ink/15">
+                  {[['Team locks', 'its own token'], ['Community', 'matches in USDC'], ['Hard cliff', '≥ 90 days'], ['During lock', 'team earns 0%']].map(([k, v]) => (
+                    <div key={k} className="bg-atx-bone px-3.5 py-3.5">
+                      <div className="font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-ink/45">{k}</div>
+                      <div className="text-[14px] font-bold mt-0.5">{v}</div>
+                    </div>
+                  ))}
+                </div>
+                <p className="font-atx-mono text-[11px] text-atx-ink/50 leading-[1.5] mt-3">
+                  A restriction on withdrawal, not a transfer of ownership — enforced by the contract.
+                </p>
+              </div>
+              <Link href="/teams" className="mt-auto w-full py-3 text-center font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-ink text-atx-bone border-t border-atx-ink no-underline cursor-pointer">
+                See how it works →
+              </Link>
             </div>
           </div>
         </div>

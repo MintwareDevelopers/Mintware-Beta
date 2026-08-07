@@ -48,7 +48,7 @@ export function MwFooter() {
             </a>
           ))}
         </div>
-        <div className="font-atx-mono text-[10px] text-atx-bone/45">© 2026 Mintware ✴ Contribution is identity</div>
+        <div className="font-atx-mono text-[10px] text-atx-bone/45">© 2026 Mintware ✴ Liquidity should be a public good</div>
       </div>
     </footer>
   )
