@@ -14,7 +14,6 @@ import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 const FEATURES = [
   { key: 'attribution', href: '/attribution', label: 'Attribution' },
   { key: 'defi', href: '/defi', label: 'DeFi' },
-  { key: 'rwa', href: '/rwa', label: 'RWA' },
 ] as const
 
 function Star({ className = '' }: { className?: string }) {
@@ -28,7 +27,7 @@ function Star({ className = '' }: { className?: string }) {
   )
 }
 
-export function MarketingNav({ active }: { active?: 'attribution' | 'defi' | 'rwa' }) {
+export function MarketingNav({ active }: { active?: 'attribution' | 'defi' }) {
   const { isConnected } = useMintwareIdentity()
   const { openConnectModal } = useConnectModal()
   const router = useRouter()

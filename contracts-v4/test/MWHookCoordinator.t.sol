@@ -9,9 +9,12 @@ import {IHooks}              from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}             from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta}         from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 import {FeeVault}                from "../src/FeeVault.sol";
 import {HookMiner}               from "../src/lib/HookMiner.sol";
+import {MWGuardianPausable}      from "../src/lib/MWGuardianPausable.sol";
 import {MWHookCoordinator}       from "../src/hooks/MWHookCoordinator.sol";
 import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
 import {VaultSurface, LockTier, VaultConfig} from "../src/vaults/VaultTypes.sol";
@@ -102,13 +105,15 @@ contract MWHookCoordinatorTest is Test {
         vault.depositWithLock(50_000e6, alice, LockTier.Flex);
         vm.stopPrank();
 
-        // MEV on, deviation guard off (isolate the cooldown behavior), static fee.
-        coord.configurePool(poolId, 3000, 0, 0, false, true, 3, 0, 2000);
+        // Generic swap tests: guard ON with a WIDE band (never trips on normal swaps) so the
+        // oracle tracks; dynamic fee OFF (pool is static-fee, so the override would be inert).
+        // The circuit-breaker test reconfigures with a tight band.
+        // configurePool(id, base, max, slopePerTick, maxFeeStepPerBlock, dynFee, guard, maxTickMove, maxDev, catchup)
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 60, 6000, 10);
         vm.roll(1000);
     }
 
     function _swap(bool zeroForOne, uint256 amtIn) internal {
-        // prank sets both msg.sender and tx.origin to alice (coordinator keys on tx.origin)
         vm.startPrank(alice, alice);
         if (zeroForOne) {
             MockERC20(Currency.unwrap(poolKey.currency0)).approve(address(swapRouter), amtIn);
@@ -127,31 +132,38 @@ contract MWHookCoordinatorTest is Test {
         pm.unlock(abi.encode("direct-lp"));
     }
 
-    function test_first_swap_succeeds_and_records() public {
-        _swap(sellProjZeroForOne, 500e6); // no prior swap → allowed
-    }
-
-    function test_sandwich_backrun_blocked_same_block() public {
-        _swap(sellProjZeroForOne, 500e6);          // frontrun leg
-        vm.startPrank(alice, alice);               // backrun, opposite dir, same block
-        MockERC20 tokenIn = sellProjZeroForOne
-            ? MockERC20(Currency.unwrap(poolKey.currency1))
-            : MockERC20(Currency.unwrap(poolKey.currency0));
-        tokenIn.approve(address(swapRouter), 500e6);
-        vm.expectRevert(); // MEV cooldown blocks the backrun
-        swapRouter.swap(poolKey, !sellProjZeroForOne, 500e6);
-        vm.stopPrank();
-    }
-
-    function test_same_direction_second_swap_allowed() public {
-        _swap(sellProjZeroForOne, 300e6);
-        _swap(sellProjZeroForOne, 300e6); // same direction → not a sandwich → allowed
-    }
-
-    function test_backrun_allowed_after_cooldown() public {
+    function test_swap_succeeds() public {
         _swap(sellProjZeroForOne, 500e6);
-        vm.roll(block.number + 3); // past cooldownBlocks
-        _swap(!sellProjZeroForOne, 500e6); // opposite dir now allowed
+    }
+
+    // ── Stage-1.2: oracle-based MEV model (no tx.origin) ─────────────────────
+
+    function test_oracle_initializes_after_first_swap() public {
+        (, bool initBefore) = coord.oracleTick(poolId); // guard on (setUp), so afterSwap tracks
+        assertFalse(initBefore, "oracle uninitialized pre-swap");
+        _swap(sellProjZeroForOne, 500e6);
+        (, bool initAfter) = coord.oracleTick(poolId);
+        assertTrue(initAfter, "oracle initialized by afterSwap");
+    }
+
+    /// @notice The circuit breaker trips when spot deviates far from the truncated oracle —
+    ///         with NO trader identity involved (works regardless of who swaps).
+    function test_circuit_breaker_reverts_extreme_deviation() public {
+        // Tight guard: oracle barely moves (maxTickMove 1, catchup 1), narrow band (20 ticks).
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 1, 20, 1);
+
+        _swap(sellProjZeroForOne, 100e6);        // seeds the oracle near the current tick
+        vm.roll(block.number + 1);
+        _swap(sellProjZeroForOne, 30_000e6);     // pushes price far; oracle truncates (~stays put)
+        vm.roll(block.number + 1);
+
+        // Next swap: pre-swap tick is now far from the truncated oracle → breaker reverts.
+        vm.startPrank(alice, alice);
+        MockERC20(Currency.unwrap(poolKey.currency0)).approve(address(swapRouter), 100e6);
+        MockERC20(Currency.unwrap(poolKey.currency1)).approve(address(swapRouter), 100e6);
+        vm.expectRevert(); // PriceDeviationTooHigh, wrapped by PoolManager
+        swapRouter.swap(poolKey, sellProjZeroForOne, 100e6);
+        vm.stopPrank();
     }
 
     function test_swap_fee_collection_splits_50_25_25() public {
@@ -172,5 +184,98 @@ contract MWHookCoordinatorTest is Test {
         assertEq(usdc.balanceOf(treasury) - tBefore, expMint, "25% Mintware -> treasury");
         assertEq(usdc.balanceOf(address(this)) - pBefore, expProv, "25% provider");
         assertEq(usdc.balanceOf(address(feeVault)) - fBefore, expDep, "50% depositors -> FeeVault");
+    }
+
+    // ── Stage 1.3: callback gating (Trail-of-Bits pattern #1) ────────────────
+
+    function test_callbacks_reject_non_pool_manager() public {
+        ModifyLiquidityParams memory lp = ModifyLiquidityParams(-60000, 60000, 1, bytes32(0));
+        SwapParams memory sp = SwapParams(true, 1, 0);
+
+        vm.startPrank(alice);
+        vm.expectRevert(MWHookCoordinator.OnlyPoolManager.selector);
+        coord.beforeAddLiquidity(address(vault), poolKey, lp, "");
+        vm.expectRevert(MWHookCoordinator.OnlyPoolManager.selector);
+        coord.beforeRemoveLiquidity(address(vault), poolKey, lp, "");
+        vm.expectRevert(MWHookCoordinator.OnlyPoolManager.selector);
+        coord.beforeSwap(alice, poolKey, sp, "");
+        vm.expectRevert(MWHookCoordinator.OnlyPoolManager.selector);
+        coord.afterSwap(alice, poolKey, sp, BalanceDeltaZero(), "");
+        vm.stopPrank();
+    }
+
+    function test_permission_bits_match_declared_flags() public view {
+        // Declared HOOK_FLAGS must equal the low bits actually encoded in the address
+        // (an Angstrom-class mismatch would otherwise brick or mis-gate the pool).
+        assertEq(coord.HOOK_FLAGS(), 0xAC0, "declared flags");
+        assertEq(uint160(address(coord)) & 0x3FFF, 0xAC0, "address-encoded flags match");
+    }
+
+    // ── Stage 1.4: kill-switch on the hook ───────────────────────────────────
+
+    function test_pause_blocks_new_liquidity_but_swaps_continue() public {
+        coord.pause();
+
+        // New liquidity (via the vault) is blocked at beforeAddLiquidity. V4's PoolManager
+        // wraps hook reverts (EnforcedPause bubbles inside a WrappedError), so match on any revert.
+        vm.startPrank(alice);
+        usdc.approve(address(vault), 10_000e6);
+        vm.expectRevert();
+        vault.depositWithLock(10_000e6, alice, LockTier.Flex);
+        vm.stopPrank();
+
+        // Trading continues — a paused hook must never brick the pool's swap path.
+        _swap(sellProjZeroForOne, 500e6);
+    }
+
+    function test_guardian_can_pause_hook() public {
+        address guardian = makeAddr("guardian");
+        coord.setGuardian(guardian);
+        vm.prank(guardian);
+        coord.pause();
+        assertTrue(coord.paused(), "guardian paused hook");
+
+        vm.prank(guardian);
+        vm.expectRevert(); // guardian cannot unpause
+        coord.unpause();
+
+        coord.unpause();
+        assertFalse(coord.paused(), "owner unpaused hook");
+    }
+
+    function BalanceDeltaZero() internal pure returns (BalanceDelta) {
+        return BalanceDelta.wrap(0);
+    }
+
+    // ── Stage-2.1: routing-discoverability gas budget ────────────────────────
+
+    /// @notice The full swap hot path (dynamic fee + oracle guard + fee rate-limit) must stay
+    ///         well under ~200k gas on beforeSwap+afterSwap — above that, routing bots treat a
+    ///         hook as "hostile" and skip the pool. This is the concrete payoff of retiring the
+    ///         heavier take()-skim MWSocialHook.
+    function test_gas_hook_hot_path_under_routing_budget() public {
+        // Everything on: dynamic fee, oracle guard, rate-limit.
+        coord.configurePool(poolId, 3000, 100000, 5, 500, true, true, 60, 6000, 10);
+        // Warm oracle + fee/tick state so we measure steady-state (not first-touch) cost.
+        _swap(sellProjZeroForOne, 200e6);
+        vm.roll(block.number + 1);
+        _swap(sellProjZeroForOne, 200e6);
+        vm.roll(block.number + 1);
+
+        SwapParams memory sp = SwapParams(sellProjZeroForOne, -int256(100e6), 0);
+
+        vm.startPrank(address(pm));
+        uint256 g0 = gasleft();
+        coord.beforeSwap(alice, poolKey, sp, "");
+        uint256 beforeGas = g0 - gasleft();
+        uint256 g1 = gasleft();
+        coord.afterSwap(alice, poolKey, sp, BalanceDeltaZero(), "");
+        uint256 afterGas = g1 - gasleft();
+        vm.stopPrank();
+
+        emit log_named_uint("beforeSwap gas", beforeGas);
+        emit log_named_uint("afterSwap gas ", afterGas);
+        emit log_named_uint("combined gas  ", beforeGas + afterGas);
+        assertLt(beforeGas + afterGas, 200_000, "hook hot path exceeds the ~200k routing budget");
     }
 }

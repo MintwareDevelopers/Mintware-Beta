@@ -231,7 +231,7 @@ export async function signRangeProposal(params: RangeProposalParams): Promise<Si
   const vaultIdBytes32 = keccak256(toBytes(vaultDbId)) as `0x${string}`
 
   const domain = {
-    name:              'MWSocialVault',
+    name:              'MintwareVault', // must match MintwareBaseVault4626 EIP712("MintwareVault","1")
     version:           '1',
     chainId:           chain.id,
     verifyingContract: socialVaultAddress as `0x${string}`,

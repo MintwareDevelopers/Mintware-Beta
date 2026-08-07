@@ -56,16 +56,47 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
     // (1 - idleTargetRatioBps) into the LP and hold the rest as a USDC reserve that a
     // keeper routes to `yieldAdapter`. The reserve covers the idle portion at redemption,
     // so the base redeem logic is unchanged.
+    //
+    // Stage-1.1 hardening (rehypothecation-reentrancy category — Bunni/Cyfrin):
+    //   1. Destination allowlist + 48h timelock — `yieldAdapter` can only be set to an
+    //      address that was proposed and confirmed after the timelock. No function ever
+    //      accepts a caller-supplied arbitrary vault address (Cyfrin pattern #7).
+    //   2. Withdrawal-buffer invariant — `rehypothecationCapBps` caps how much principal
+    //      can ever sit in the external adapter, so a hard-floor fraction is always held
+    //      by the vault itself (Aave-V4 Reinvestment-Module pattern).
+    //   3. CEI + nonReentrant on every route/recall/harvest, with post-transfer balance
+    //      assertions so a lying/short-sending adapter cannot desync accounting.
     address public yieldAdapter;
     bool    public idleEnabled;
     uint256 public idleTargetRatioBps;  // e.g. 6_000 = 60%
     uint256 public principalInAdapter;  // USDC principal currently in the adapter
+
+    /// @notice Timelock a new adapter must clear between proposal and activation.
+    uint256 public constant ADAPTER_TIMELOCK = 48 hours;
+
+    /// @notice Hard ceiling on the rehypothecation cap — ≥20% of principal is ALWAYS
+    ///         retained by the vault (never in the external adapter), even if misconfigured.
+    uint256 public constant MAX_REHYP_CAP_BPS = 8_000;
+
+    /// @notice Max fraction of `totalPrincipal` permitted in the external adapter. Default
+    ///         70% (30% withdrawal buffer). Owner-settable within [0, MAX_REHYP_CAP_BPS].
+    uint256 public rehypothecationCapBps = 7_000;
+
+    /// @notice Allowlisted yield-adapter destinations. Only an allowed adapter may be set
+    ///         as `yieldAdapter` or receive routed capital.
+    mapping(address => bool)    public adapterAllowed;
+    /// @notice Timestamp an adapter was proposed; 0 = not proposed. Confirmable after timelock.
+    mapping(address => uint256) public adapterProposedAt;
 
     event TeamSeeded(bytes32 indexed vaultId, address token, uint256 amount);
     event ProfileRebalanced(PoolProfile indexed profile, int24 tickLower, int24 tickUpper);
     event SwapFeesCollected(uint256 usdcFees, uint256 projFees, uint256 toDepositors, uint256 toMintware, uint256 toProvider);
     event IdleConfigured(bool enabled, uint256 targetRatioBps);
     event YieldAdapterSet(address indexed adapter);
+    event AdapterProposed(address indexed adapter, uint256 confirmableAt);
+    event AdapterConfirmed(address indexed adapter);
+    event AdapterRevoked(address indexed adapter);
+    event RehypothecationCapSet(uint256 capBps);
     event IdleRouted(uint256 amount);
     event IdleRecalled(uint256 amount);
     event YieldHarvested(uint256 yield, uint256 toDepositors, uint256 toMintware);
@@ -77,6 +108,11 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
     error IdleNotEnabled();
     error NoYieldAdapter();
     error RatioTooHigh();
+    error AdapterNotAllowed();
+    error AdapterNotProposed();
+    error AdapterTimelockPending();
+    error RehypothecationCapExceeded();
+    error AdapterTransferMismatch();
 
     constructor(VaultConfig memory cfg, address _poolManager, address _feeVault)
         MintwareBaseVault4626(cfg, _poolManager, _feeVault)
@@ -136,7 +172,7 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
 
     /// @notice Rebalance liquidity into a symmetric range around the current pool
     ///         tick, sized by `p`'s half-width and aligned to the pool's tickSpacing.
-    function rebalanceToProfile(PoolProfile p) external onlyOwner nonReentrant {
+    function rebalanceToProfile(PoolProfile p) external onlyOwner nonReentrant whenNotPaused {
         if (!poolInitialized) revert PoolNotInitialized();
 
         int24 spacing = poolKey.tickSpacing;
@@ -210,46 +246,120 @@ contract MintwareDeFiVault4626 is MintwareBaseVault4626 {
         emit IdleConfigured(enabled, targetRatioBps);
     }
 
+    /// @notice Set the withdrawal-buffer invariant — the max fraction of `totalPrincipal`
+    ///         that may sit in the external adapter. The remainder is always held by the
+    ///         vault, guaranteeing instant-withdrawal liquidity independent of the adapter.
+    /// @dev    Hard-capped at MAX_REHYP_CAP_BPS (80%) so a misconfig can never rehypothecate
+    ///         the whole pool. Lowering it below current exposure is allowed; the invariant
+    ///         is enforced at route time, so existing exposure is simply frozen until recalled.
+    function setRehypothecationCap(uint256 capBps) external onlyOwner {
+        if (capBps > MAX_REHYP_CAP_BPS) revert RatioTooHigh();
+        rehypothecationCapBps = capBps;
+        emit RehypothecationCapSet(capBps);
+    }
+
+    // ── Adapter allowlist (hard-allowlisted destinations + 48h timelock) ──────
+
+    /// @notice Step 1: propose a yield-adapter destination. Starts the 48h timelock.
+    function proposeAdapter(address adapter) external onlyOwner {
+        if (adapter == address(0)) revert NoYieldAdapter();
+        adapterProposedAt[adapter] = block.timestamp;
+        emit AdapterProposed(adapter, block.timestamp + ADAPTER_TIMELOCK);
+    }
+
+    /// @notice Step 2: confirm a proposed adapter after the timelock — adds it to the allowlist.
+    function confirmAdapter(address adapter) external onlyOwner {
+        uint256 proposedAt = adapterProposedAt[adapter];
+        if (proposedAt == 0)                                     revert AdapterNotProposed();
+        if (block.timestamp < proposedAt + ADAPTER_TIMELOCK)     revert AdapterTimelockPending();
+        adapterAllowed[adapter] = true;
+        emit AdapterConfirmed(adapter);
+    }
+
+    /// @notice Remove an adapter from the allowlist — instant (a safety action). Does not
+    ///         touch `yieldAdapter`/`principalInAdapter`; recall still works to pull funds back.
+    function revokeAdapter(address adapter) external onlyOwner {
+        adapterAllowed[adapter]   = false;
+        adapterProposedAt[adapter] = 0;
+        emit AdapterRevoked(adapter);
+    }
+
+    /// @notice Point routing at an allowlisted adapter (or address(0) to disable routing).
     function setYieldAdapter(address adapter) external onlyOwner {
+        if (adapter != address(0) && !adapterAllowed[adapter]) revert AdapterNotAllowed();
         yieldAdapter = adapter;
         emit YieldAdapterSet(adapter);
     }
 
     /// @notice Route `amount` of the idle USDC reserve into the yield adapter.
-    function routeIdleToYield(uint256 amount) external onlyOwner {
+    /// @dev    CEI: accounting is updated before the external deposit; a post-transfer
+    ///         balance assertion rejects a short-pulling adapter. Frozen while paused.
+    function routeIdleToYield(uint256 amount) external onlyOwner nonReentrant whenNotPaused {
         if (!idleEnabled) revert IdleNotEnabled();
-        if (yieldAdapter == address(0)) revert NoYieldAdapter();
-        IERC20(asset()).forceApprove(yieldAdapter, amount);
-        IYieldAdapter(yieldAdapter).deposit(amount);
+        address adapter = yieldAdapter;
+        if (adapter == address(0))        revert NoYieldAdapter();
+        if (!adapterAllowed[adapter])     revert AdapterNotAllowed();
+
+        // Withdrawal-buffer invariant: never let external exposure exceed the cap.
+        if (principalInAdapter + amount > (totalPrincipal * rehypothecationCapBps) / BPS) {
+            revert RehypothecationCapExceeded();
+        }
+
+        // Effects
         principalInAdapter += amount;
+
+        // Interactions
+        IERC20 a = IERC20(asset());
+        uint256 balBefore = a.balanceOf(address(this));
+        a.forceApprove(adapter, amount);
+        IYieldAdapter(adapter).deposit(amount);
+        a.forceApprove(adapter, 0); // clear any dangling allowance
+        if (balBefore - a.balanceOf(address(this)) != amount) revert AdapterTransferMismatch();
+
         emit IdleRouted(amount);
     }
 
     /// @notice Pull `amount` of routed principal back from the adapter into the vault.
-    function recallIdleFromYield(uint256 amount) external onlyOwner {
-        if (yieldAdapter == address(0)) revert NoYieldAdapter();
-        IYieldAdapter(yieldAdapter).withdraw(amount);
+    /// @dev    NOT gated by `whenNotPaused` — recalling capital to safety must remain
+    ///         possible during an emergency pause. CEI + balance assertion as above.
+    function recallIdleFromYield(uint256 amount) external onlyOwner nonReentrant {
+        address adapter = yieldAdapter;
+        if (adapter == address(0)) revert NoYieldAdapter();
+
+        // Effects
         principalInAdapter = amount >= principalInAdapter ? 0 : principalInAdapter - amount;
+
+        // Interactions
+        IERC20 a = IERC20(asset());
+        uint256 balBefore = a.balanceOf(address(this));
+        IYieldAdapter(adapter).withdraw(amount);
+        if (a.balanceOf(address(this)) - balBefore != amount) revert AdapterTransferMismatch();
+
         emit IdleRecalled(amount);
     }
 
     /// @notice Harvest adapter yield (balance above routed principal) and split it
     ///         70% depositors (→ FeeVault epoch) / 30% Mintware (→ treasury).
-    function harvestYield() external nonReentrant returns (uint256 yield) {
-        if (yieldAdapter == address(0)) revert NoYieldAdapter();
+    /// @dev    Balance assertion on the withdraw rejects a lying adapter; frozen while paused.
+    function harvestYield() external nonReentrant whenNotPaused returns (uint256 yield) {
+        address adapter = yieldAdapter;
+        if (adapter == address(0)) revert NoYieldAdapter();
 
-        uint256 bal = IYieldAdapter(yieldAdapter).totalAssets();
+        uint256 bal = IYieldAdapter(adapter).totalAssets();
         yield = bal > principalInAdapter ? bal - principalInAdapter : 0;
         if (yield == 0) return 0;
 
-        IYieldAdapter(yieldAdapter).withdraw(yield);
+        IERC20 a = IERC20(asset());
+        uint256 balBefore = a.balanceOf(address(this));
+        IYieldAdapter(adapter).withdraw(yield);
+        if (a.balanceOf(address(this)) - balBefore != yield) revert AdapterTransferMismatch();
 
         uint256 toDepositors = (yield * IDLE_DEPOSITOR_BPS) / BPS;
         uint256 toMintware   = yield - toDepositors;
 
-        IERC20(asset()).safeTransfer(treasury, toMintware);
+        a.safeTransfer(treasury, toMintware);
         if (toDepositors > 0) {
-            IERC20(asset()).safeTransfer(feeVault, toDepositors);
+            a.safeTransfer(feeVault, toDepositors);
             IFeeVaultNotifier(feeVault).notifyFeeReceipt(toDepositors, "idle_yield");
         }
         emit YieldHarvested(yield, toDepositors, toMintware);

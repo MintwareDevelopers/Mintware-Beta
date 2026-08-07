@@ -73,9 +73,10 @@ export const POST = createHandler(async (req, ctx) => {
   if ((tx.to ?? '').toLowerCase() !== vaultAddress) return ctx.json({ error: 'Deposit transaction target mismatch' }, 403)
 
   const decoded = decodeFunctionData({ abi: SOCIAL_VAULT_ABI, data: tx.input })
-  if (decoded.functionName !== 'deposit') return ctx.json({ error: 'Deposit transaction calldata mismatch' }, 403)
+  if (decoded.functionName !== 'depositWithLock') return ctx.json({ error: 'Deposit transaction calldata mismatch' }, 403)
 
-  const [amountWei, tierIndex] = decoded.args
+  // depositWithLock(assets, receiver, tier) — skip the receiver arg
+  const [amountWei, , tierIndex] = decoded.args
   if (amountWei !== parseUnits(String(usdc_amount), 6)) return ctx.json({ error: 'Deposit amount mismatch' }, 403)
   if (Number(tierIndex) !== LOCK_TIER_INDEX[lock_tier]) return ctx.json({ error: 'Deposit tier mismatch' }, 403)
 

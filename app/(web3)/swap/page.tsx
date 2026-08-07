@@ -11,9 +11,8 @@
 //     sets the campaign context (sessionStorage mw_campaign_id, exactly like
 //     SwapModal) and remounts the widget with the campaign's token preselected.
 //   • Earn-by-action detail (real participant progress) is preserved, not dropped.
-//   • RWA is represented honestly — the second surface links to the real /vaults
-//     product. We do NOT fabricate RWA deals/NAV on the production money-path page
-//     (the RWA incentive layer is not live in prod).
+//   • The "other surface" panel cross-links to the real /vaults product (reputation-
+//     weighted DeFi liquidity vaults). The RWA surface was shelved; no RWA copy here.
 // =============================================================================
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
@@ -218,8 +217,8 @@ function SwapContent() {
             </h1>
             <p className="text-atx-ink/60 text-[15px] max-w-[64ch] mt-4">
               Every swap builds your Attribution score and earns rewards weighted by who you are.
-              Trade tokens across chains here — real-world yield lives on the RWA surface. One reputation
-              carries both.
+              Trade tokens across chains here; provide liquidity in the reputation-weighted vaults.
+              One reputation carries across both.
             </p>
           </div>
           <div className="border-t border-atx-ink grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
@@ -329,7 +328,7 @@ function SwapContent() {
             )}
           </div>
 
-          {/* ── Right: suggested campaign swaps (tap to load) + RWA surface ── */}
+          {/* ── Right: suggested campaign swaps (tap to load) + vaults cross-link ── */}
           <aside className="flex flex-col gap-6 max-[900px]:gap-5">
 
             {/* Suggested · where the points are */}
@@ -373,7 +372,7 @@ function SwapContent() {
               )}
             </div>
 
-            {/* RWA surface — the honest second surface (real product, not a mock) */}
+            {/* Cross-link to the reputation-weighted liquidity vaults */}
             <div>
               <div className={`${LABEL} mb-3`}>The other surface</div>
               <Link
@@ -382,12 +381,12 @@ function SwapContent() {
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <Star className="w-4 h-4 text-atx-coral" />
-                  <span className="font-bold text-[15px] tracking-tight">Real-world yield</span>
+                  <span className="font-bold text-[15px] tracking-tight">Liquidity vaults</span>
                   <span className="ml-auto font-atx-mono text-[16px] text-atx-coral">→</span>
                 </div>
                 <p className="text-[13px] text-atx-ink/55 leading-[1.5]">
-                  SPV-wrapped real-world assets — T-bills, trade finance, carbon — subscribed at NAV.
-                  Explore the RWA vaults surface.
+                  Provide liquidity in reputation-weighted Uniswap V4 vaults — your fee share is
+                  lifted by your Attribution score. Explore the vaults surface.
                 </p>
               </Link>
             </div>

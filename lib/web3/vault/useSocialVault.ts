@@ -108,18 +108,18 @@ export function useVaultDeposit(): UseVaultDepositResult {
       await publicClient.simulateContract({
         address:      SOCIAL_VAULT_ADDRESS,
         abi:          SOCIAL_VAULT_ABI,
-        functionName: 'deposit',
-        args:         [amountWei, tierIndex],
+        functionName: 'depositWithLock',
+        args:         [amountWei, _wallet as `0x${string}`, tierIndex],
         account:      _wallet as `0x${string}`,
       })
 
-      // Step 2: deposit
+      // Step 2: deposit (assets, receiver, tier)
       setStage('depositing')
       const hash = await writeDeposit({
         address:      SOCIAL_VAULT_ADDRESS,
         abi:          SOCIAL_VAULT_ABI,
-        functionName: 'deposit',
-        args:         [amountWei, tierIndex],
+        functionName: 'depositWithLock',
+        args:         [amountWei, _wallet as `0x${string}`, tierIndex],
       })
       setDepositHash(hash)
     } catch (e: unknown) {
@@ -164,13 +164,15 @@ export function useVaultWithdraw(): UseVaultWithdrawResult {
   function withdraw(amountUsdc: number) {
     if (!SOCIAL_VAULT_ADDRESS) { setError('Vault address not configured'); return }
     setError('')
-    const amountWei = parseUnits(amountUsdc.toString(), USDC_DECIMALS)
+    // Shares are principal-denominated (~1:1 with USDC, 6-dp), so the USDC amount maps
+    // directly to the share count for requestRedeem.
+    const sharesWei = parseUnits(amountUsdc.toString(), USDC_DECIMALS)
     writeContract(
       {
         address:      SOCIAL_VAULT_ADDRESS,
         abi:          SOCIAL_VAULT_ABI,
-        functionName: 'requestWithdrawal',
-        args:         [amountWei],
+        functionName: 'requestRedeem',
+        args:         [sharesWei],
       },
       {
         onSuccess: hash => setTxHash(hash),
@@ -182,6 +184,49 @@ export function useVaultWithdraw(): UseVaultWithdrawResult {
   function reset() { setTxHash(undefined); setError('') }
 
   return { isPending, isSuccess, txHash, error, withdraw, reset }
+}
+
+// ─── useVaultExecuteRedeem ────────────────────────────────────────────────────
+// Step 2 of async redemption: executeRedeem() settles the wallet's queued request
+// after its notice period has elapsed. Takes no args — the vault stores one pending
+// WithdrawalRequest per wallet.
+
+export interface UseVaultExecuteResult {
+  isPending: boolean
+  isSuccess: boolean
+  txHash:    `0x${string}` | undefined
+  error:     string
+  execute:   () => void
+  reset:     () => void
+}
+
+export function useVaultExecuteRedeem(): UseVaultExecuteResult {
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
+  const [error, setError]   = useState('')
+
+  const { writeContract, isPending } = useWriteContract()
+  const { isSuccess }                = useWaitForTransactionReceipt({ hash: txHash })
+
+  function execute() {
+    if (!SOCIAL_VAULT_ADDRESS) { setError('Vault address not configured'); return }
+    setError('')
+    writeContract(
+      {
+        address:      SOCIAL_VAULT_ADDRESS,
+        abi:          SOCIAL_VAULT_ABI,
+        functionName: 'executeRedeem',
+        args:         [],
+      },
+      {
+        onSuccess: hash => setTxHash(hash),
+        onError:   e    => setError(e.message),
+      }
+    )
+  }
+
+  function reset() { setTxHash(undefined); setError('') }
+
+  return { isPending, isSuccess, txHash, error, execute, reset }
 }
 
 // ─── useVaultSeed ────────────────────────────────────────────────────────────
@@ -334,13 +379,13 @@ export function useVaultSeed(): UseVaultSeedResult {
 }
 
 // ─── useVaultPosition ────────────────────────────────────────────────────────
-// Read positions(wallet) from SocialVault
+// Read locks(wallet) from the DeFi vault (share balance via useVaultOnchain).
 
 export function useVaultPosition(wallet: `0x${string}` | undefined) {
   return useReadContract({
     address:      SOCIAL_VAULT_ADDRESS,
     abi:          SOCIAL_VAULT_ABI,
-    functionName: 'positions',
+    functionName: 'locks',
     args:         wallet ? [wallet] : undefined,
     query:        { enabled: !!wallet && !!SOCIAL_VAULT_ADDRESS },
   })
@@ -381,10 +426,20 @@ export function useVaultOnchain(
   const addr    = isAddr(vaultAddress) ? vaultAddress : (isAddr(SOCIAL_VAULT_ADDRESS) ? SOCIAL_VAULT_ADDRESS : undefined)
   const enabled = !!addr
 
-  const posQuery = useReadContract({
+  // Lock metadata: locks(wallet) → (depositedAt, lockedUntil, tier, initialized)
+  const locksQuery = useReadContract({
     address:      addr,
     abi:          SOCIAL_VAULT_ABI,
-    functionName: 'positions',
+    functionName: 'locks',
+    args:         wallet ? [wallet] : undefined,
+    query:        { enabled: enabled && !!wallet },
+  })
+
+  // Position size: ERC-20 share balance (principal-denominated, ~1:1 USDC at 6-dp)
+  const balQuery = useReadContract({
+    address:      addr,
+    abi:          SOCIAL_VAULT_ABI,
+    functionName: 'balanceOf',
     args:         wallet ? [wallet] : undefined,
     query:        { enabled: enabled && !!wallet },
   })
@@ -396,24 +451,23 @@ export function useVaultOnchain(
     query:        { enabled },
   })
 
-  const raw = posQuery.data as
-    | readonly [bigint, bigint, bigint, number, boolean]
-    | undefined
+  const lock   = locksQuery.data as readonly [bigint, bigint, number, boolean] | undefined
+  const shares = balQuery.data as bigint | undefined
 
-  const position = raw
+  const position = (lock && shares !== undefined)
     ? {
-        usdcDeposited:   Number(raw[0]) / 10 ** USDC_DECIMALS,
-        depositedAt:     Number(raw[1]),
-        lockedUntil:     Number(raw[2]),
-        tier:            (TIER_BY_INDEX[raw[3]] ?? 'flex') as LockTier,
-        compoundEnabled: raw[4],
-        hasPosition:     raw[0] > 0n,
+        usdcDeposited:   Number(shares) / 10 ** USDC_DECIMALS,
+        depositedAt:     Number(lock[0]),
+        lockedUntil:     Number(lock[1]),
+        tier:            (TIER_BY_INDEX[lock[2]] ?? 'flex') as LockTier,
+        compoundEnabled: false, // no auto-compound on the 4626 vault
+        hasPosition:     shares > 0n,
       }
     : undefined
 
   return {
     enabled,
-    isLoading:      enabled && (posQuery.isLoading || liqQuery.isLoading),
+    isLoading:      enabled && (locksQuery.isLoading || balQuery.isLoading || liqQuery.isLoading),
     position,
     totalLiquidity: liqQuery.data as bigint | undefined,
   }
