@@ -56,8 +56,8 @@ const SURFACES: Record<Surface, {
   defi: {
     eyName: 'DeFi surface', acc: '#006FCC', accInk: '#ffffff',
     head: ['Same deposit. Your reputation. ', 'More yield.'],
-    sub: 'MEV-protected, auto-managed LP on Uniswap V4. Your Attribution score lifts your fee share up to 2× — so the exact same position earns you more than the wallet next to you.',
-    bullets: ['MEV protection — V4 hooks route bot value back to LPs', 'Auto-managed range — no rebalancing', 'Idle capital routed to yield', 'Reputation fee share, up to 2×'],
+    sub: 'MEV-protected, auto-managed LP on Uniswap V4. Your Attribution score and lock tier lift your fee share — so the exact same position earns you more than the wallet next to you.',
+    bullets: ['MEV protection — V4 hooks route bot value back to LPs', 'Auto-managed range — no rebalancing', 'Idle capital routed to yield', 'Reputation fee share, up to 1.95×'],
     base: 8.5,
     featured: [['Social Blue-Chip', 'ETH / USDC', '11.0%'], ['Degen Emerging', 'ARB / USDC', '18.4%']],
   },
@@ -122,15 +122,19 @@ function VaultsContent() {
             ))}
           </div>
 
-          {/* featured vaults for this surface */}
-          <div className="grid grid-cols-2 gap-3 mt-8 max-w-[760px] max-[560px]:grid-cols-1">
+          {/* featured vaults — illustrative examples, not live offers */}
+          <div className={`${ey} mt-8 mb-2.5`}>Example vaults · illustrative</div>
+          <div className="grid grid-cols-2 gap-3 max-w-[760px] max-[560px]:grid-cols-1">
             {S.featured.map(([name, pair, apy]) => (
               <div key={name} className="border border-atx-ink bg-atx-panel p-[18px]" style={{ borderTop: `4px solid ${S.acc}` }}>
                 <div className="text-[17px] font-bold">{name}</div>
                 <div className="font-atx-mono text-[11px] text-atx-ink/55 mt-1">{pair}</div>
                 <div className="flex items-center justify-between mt-3.5 border-t border-atx-ink/15 pt-3">
-                  <span className="font-atx-mono text-[20px] font-bold" style={{ color: S.accInk === '#ffffff' ? S.acc : S.accInk }}>{apy}</span>
-                  <span className="font-atx-mono text-[11px] uppercase tracking-[0.08em] border border-atx-ink px-3 py-1.5">Deposit →</span>
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="font-atx-mono text-[20px] font-bold" style={{ color: S.accInk === '#ffffff' ? S.acc : S.accInk }}>{apy}</span>
+                    <span className="font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-ink/45">example APY</span>
+                  </span>
+                  <span className="font-atx-mono text-[11px] uppercase tracking-[0.08em] border border-atx-ink/40 text-atx-ink/55 px-3 py-1.5">Example</span>
                 </div>
               </div>
             ))}

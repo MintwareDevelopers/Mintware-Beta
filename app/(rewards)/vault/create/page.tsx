@@ -15,6 +15,8 @@ import Link           from 'next/link'
 import { MwNav }       from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
+import { createPublicClient, http, erc20Abi, isAddress } from 'viem'
+import { base, baseSepolia } from 'viem/chains'
 import { useVaultSeed } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultCreateMessage } from '@/lib/web3/signedActionMessages'
 
@@ -49,6 +51,22 @@ const CHAINS = [
   { id: 8453,  label: 'Base' },
   { id: 84532, label: 'Base Sepolia' },
 ]
+
+// Resolve an ERC-20 symbol directly (bypasses the RainbowKit config, which omits
+// Base Sepolia) so the auto-generated vault name resolves on both offered chains.
+const CHAIN_FOR: Record<number, typeof base> = { 8453: base, 84532: baseSepolia }
+
+async function readTokenSymbol(address: string, chainId: number): Promise<string | null> {
+  const chain = CHAIN_FOR[chainId]
+  if (!chain || !isAddress(address)) return null
+  try {
+    const client = createPublicClient({ chain, transport: http() })
+    const sym = await client.readContract({ address, abi: erc20Abi, functionName: 'symbol' })
+    return typeof sym === 'string' && sym.length > 0 ? sym : null
+  } catch {
+    return null
+  }
+}
 
 const FEE_SPLIT = [
   { label: 'LPs (community)',   pct: 70, bar: 'bg-atx-blue',  txt: 'text-atx-blue' },
@@ -92,20 +110,40 @@ function StepDots({ current, total }: { current: number; total: number }) {
 
 // ─── step 1: project details ──────────────────────────────────────────────────
 function Step1({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<VaultDraft>) => void }) {
+  const addr = draft.tokenAddress.trim()
+  const validAddr = isAddress(addr)
+  const [symbol, setSymbol] = useState<string | null>(null)
+  const [symStatus, setSymStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
+
+  // Resolve the token symbol on-chain — teams never name their own pools. The name
+  // is derived from the pair so it can never misrepresent what's actually seeded.
+  useEffect(() => {
+    if (!validAddr) { setSymbol(null); setSymStatus('idle'); return }
+    let cancelled = false
+    setSymStatus('loading')
+    readTokenSymbol(addr, draft.chainId).then(sym => {
+      if (cancelled) return
+      setSymbol(sym)
+      setSymStatus(sym ? 'ok' : 'error')
+    })
+    return () => { cancelled = true }
+  }, [addr, draft.chainId, validAddr])
+
+  const derivedName = symbol ? `${symbol}/USDC Vault` : ''
+
+  // Keep the draft name in lockstep with the derived name (never user input).
+  useEffect(() => {
+    if (draft.name !== derivedName) onChange({ name: derivedName })
+  }, [derivedName]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const nameDisplay = !validAddr
+    ? 'Enter a token address above'
+    : symStatus === 'loading' ? 'Reading token…'
+    : symStatus === 'error'   ? 'Couldn’t read this token’s symbol'
+    : derivedName || '—'
+
   return (
     <div className="flex flex-col gap-[18px]">
-      <div>
-        <label className={LABEL}>Vault name</label>
-        <input
-          className={INPUT}
-          placeholder="e.g. PROJ/USDC Vault"
-          value={draft.name}
-          onChange={e => onChange({ name: e.target.value })}
-        />
-        <span className={HINT}>
-          Displayed to LPs on the vault listing page.
-        </span>
-      </div>
       <div>
         <label className={LABEL}>Project token address</label>
         <input
@@ -115,7 +153,20 @@ function Step1({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
           onChange={e => onChange({ tokenAddress: e.target.value })}
         />
         <span className={HINT}>
-          The ERC-20 token your team will seed into the pool.
+          The ERC-20 token your team will seed into the pool. It’s paired with USDC.
+        </span>
+      </div>
+      <div>
+        <label className={LABEL}>Vault name</label>
+        <div
+          className={`${INPUT} flex items-center justify-between ${symStatus === 'ok' ? 'text-atx-ink' : 'text-atx-ink/40'}`}
+          aria-readonly="true"
+        >
+          <span>{nameDisplay}</span>
+          <span className="font-atx-mono text-[9px] uppercase tracking-[0.12em] text-atx-ink/40 border border-atx-ink/20 px-1.5 py-0.5 shrink-0 ml-2">Auto</span>
+        </div>
+        <span className={HINT}>
+          Generated from the pair as <b>{'{TOKEN}'}/USDC Vault</b> — so the name always matches the pool. Not editable.
         </span>
       </div>
       <div>
