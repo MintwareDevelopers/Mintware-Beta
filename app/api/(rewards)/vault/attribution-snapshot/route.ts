@@ -1,12 +1,18 @@
 // GET /api/vault/attribution-snapshot?vault_id=&wallet=
 // Returns oracle-signed AttributionSnapshot for FeeVault epoch weighting.
-// Auth: none
+//
+// Auth: bearer-token (CRON_SECRET). This route makes the production oracle key
+// sign an AttributionSnapshot, so it MUST NOT be publicly callable — an open
+// endpoint is a free signing-oracle over the crown-jewel key (audit C3). The
+// only caller is the server-side epoch processor (vaultEpochProcessor.ts),
+// which forwards the bearer token; there is no client/wallet flow to preserve.
 
 import { createHandler } from '@/lib/web2/routeHandler'
 import { createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base, baseSepolia } from 'viem/chains'
 import { API } from '@/lib/web2/api'
+import { getOracleSignerKey } from '@/lib/web3/oracleKeys'
 
 function attributionMultiplierBps(percentile: number) {
   if (percentile >= 67) return 15000
@@ -80,14 +86,14 @@ export const GET = createHandler(async (req, ctx) => {
   const attrBps = attributionMultiplierBps(percentile)
   const multBps = combinedMultiplierBps(attrBps, durationBps)
 
-  const oracleKey = process.env.DISTRIBUTOR_PRIVATE_KEY
-  if (!oracleKey) {
-    ctx.log.error('attribution-snapshot', 'DISTRIBUTOR_PRIVATE_KEY not set')
+  // Weight role (audit C2) — separable from the root/merkle key via WEIGHT_ORACLE_PRIVATE_KEY.
+  let account
+  try {
+    account = privateKeyToAccount(getOracleSignerKey('weight'))
+  } catch (e) {
+    ctx.log.error('attribution-snapshot', 'weight oracle key not configured', { error: String(e) })
     return ctx.json({ error: 'Oracle not configured' }, 500)
   }
-
-  const keyHex = oracleKey.startsWith('0x') ? oracleKey : `0x${oracleKey}`
-  const account = privateKeyToAccount(keyHex as `0x${string}`)
   const chain   = vault.chain_id === 8453 ? base : baseSepolia
 
   let signature: `0x${string}`
@@ -111,4 +117,4 @@ export const GET = createHandler(async (req, ctx) => {
     combined_multiplier_bps: multBps, combined_multiplier: (multBps / 10000).toFixed(4),
     epoch_number: epochNumber, deadline, oracle_signer: account.address, signature,
   })
-})
+}, { auth: 'bearer-token' })

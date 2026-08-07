@@ -6,8 +6,7 @@ import { AI_ATTRIBUTION_ORACLE_SECRET } from '@/lib/constants'
 import { createPublicClient, http, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base, baseSepolia } from 'viem/chains'
-
-const ORACLE_PRIV_KEY = process.env.ORACLE_PRIVATE_KEY as Hex | undefined
+import { getOracleSignerKey } from '@/lib/web3/oracleKeys'
 
 const CHAIN_ID = Number(process.env.AI_ATTRIBUTION_CHAIN_ID ?? 84532)
 const CHAIN    = CHAIN_ID === 8453 ? base : baseSepolia
@@ -32,7 +31,13 @@ const ACTION_TYPES = {
 const NONCES_ABI = [{ name: 'nonces', type: 'function', stateMutability: 'view', inputs: [{ name: 'agent', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] }] as const
 
 export const POST = createHandler(async (req, ctx) => {
-  if (!ORACLE_PRIV_KEY) return ctx.json({ error: 'oracle key not configured' }, 500)
+  // Agent role (audit C2) — separable from the range key via AGENT_ORACLE_PRIVATE_KEY.
+  let agentAccount
+  try {
+    agentAccount = privateKeyToAccount(getOracleSignerKey('agent'))
+  } catch {
+    return ctx.json({ error: 'oracle key not configured' }, 500)
+  }
 
   let body: { address?: string; volumeWei?: string; mwpHash?: string; campaignId?: number }
   try { body = await req.clone().json() } catch { return ctx.json({ error: 'invalid json' }, 400) }
@@ -52,7 +57,7 @@ export const POST = createHandler(async (req, ctx) => {
   const nonce = await publicClient.readContract({ address: CONTRACT_ADDRESS, abi: NONCES_ABI, functionName: 'nonces', args: [address as Hex] }) as bigint
 
   const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600)
-  const account  = privateKeyToAccount(ORACLE_PRIV_KEY)
+  const account  = agentAccount
 
   const signature = await account.signTypedData({
     domain: { name: 'AIAttribution', version: '2', chainId: CHAIN_ID, verifyingContract: CONTRACT_ADDRESS },

@@ -22,6 +22,7 @@
 // =============================================================================
 
 import type { LockTier } from '@/lib/web2/vault/types'
+import { CRON_SECRET } from '@/lib/constants'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -116,8 +117,11 @@ async function fetchAttrPercentile(
 ): Promise<number> {
   try {
     const url = `${baseUrl}/api/vault/attribution-snapshot?vault_id=${encodeURIComponent(vaultId)}&wallet=${wallet}`
+    // The snapshot route is bearer-gated (it signs with the oracle key) — forward
+    // the cron secret so this server-side call authenticates.
     const res = await fetch(url, {
       cache: 'no-store',
+      headers: { Authorization: `Bearer ${CRON_SECRET}` },
       signal: AbortSignal.timeout(8000),
     })
     if (!res.ok) return 0

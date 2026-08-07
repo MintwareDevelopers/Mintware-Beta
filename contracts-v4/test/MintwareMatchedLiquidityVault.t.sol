@@ -13,6 +13,7 @@ import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
 import {Pausable}                       from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MWGuardianPausable}             from "../src/lib/MWGuardianPausable.sol";
 import {MintwareMatchedLiquidityVault}  from "../src/vaults/MintwareMatchedLiquidityVault.sol";
+import {MintwareWeightedDistributor}    from "../src/MintwareWeightedDistributor.sol";
 import {PoolProfile}                    from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20}      from "./mocks/MockERC20.sol";
@@ -259,6 +260,42 @@ contract MintwareMatchedLiquidityVaultTest is Test {
     }
 
     // ── on-chain fee redirection (§2.3) ───────────────────────────────────────
+
+    function test_community_fees_route_to_weighted_distributor_when_wired() public {
+        _commit();
+        _fundThree(CAP);
+        vault.activate();
+
+        MintwareWeightedDistributor dist =
+            new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        bytes32 vid = keccak256("matched");
+        vault.setWeightedDistributor(address(dist), vid);
+
+        _genFees();
+        (uint256 pf, uint256 qf) = vault.collectFees();
+        assertTrue(pf > 0 || qf > 0, "fees realized");
+
+        // Community LP portion (fee minus Mintware cut) routed to the distributor pot.
+        uint256 mintP = (pf * vault.MINTWARE_FEE_BPS()) / vault.BPS();
+        uint256 mintQ = (qf * vault.MINTWARE_FEE_BPS()) / vault.BPS();
+        MintwareWeightedDistributor.Epoch memory e = dist.getEpoch(vid, 1);
+        assertEq(e.pot0, pf - mintP, "proj LP fees routed");
+        assertEq(e.pot1, qf - mintQ, "quote LP fees routed");
+
+        // Accumulator untouched; community claims its weighted share from the distributor.
+        assertEq(vault.accProjPerShare(), 0, "accumulator not credited");
+        (uint256 pp, uint256 qq) = vault.pendingCommunityFees(a);
+        assertEq(pp, 0, "no pending accumulator fees");
+        assertEq(qq, 0, "no pending accumulator fees");
+    }
+
+    function test_matched_setWeightedDistributor_is_one_time() public {
+        MintwareWeightedDistributor dist =
+            new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        vault.setWeightedDistributor(address(dist), keccak256("v"));
+        vm.expectRevert(MintwareMatchedLiquidityVault.WeightedDistributorAlreadySet.selector);
+        vault.setWeightedDistributor(address(dist), keccak256("v2"));
+    }
 
     function test_team_earns_zero_community_absorbs_fees_during_lock() public {
         _commit();

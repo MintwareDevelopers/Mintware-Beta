@@ -17,7 +17,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {EIP712}          from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA}           from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-import {MWGuardianPausable} from "../lib/MWGuardianPausable.sol";
+import {MWGuardianPausable}       from "../lib/MWGuardianPausable.sol";
+import {MWTimelockedOracleSigner} from "../lib/MWTimelockedOracleSigner.sol";
 import {VaultSurface, LockTier, VaultConfig} from "./VaultTypes.sol";
 
 interface IFeeVaultNotifier {
@@ -40,6 +41,7 @@ interface IFeeVaultNotifier {
 abstract contract MintwareBaseVault4626 is
     ERC4626,
     MWGuardianPausable,
+    MWTimelockedOracleSigner,
     ReentrancyGuard,
     IUnlockCallback,
     EIP712
@@ -121,8 +123,8 @@ abstract contract MintwareBaseVault4626 is
     int24   public tickUpper =  887220;
     uint128 public totalLiquidity;
 
-    /// @notice Oracle signer for signed rebalance proposals.
-    address public oracleSigner;
+    /// @notice Oracle signer for signed rebalance proposals lives in
+    ///         MWTimelockedOracleSigner (48h timelocked rotation).
     mapping(bytes32 => mapping(uint256 => bool)) public usedNonces;
 
     /// @dev Lock tier for the in-flight deposit; consumed by _deposit().
@@ -136,7 +138,6 @@ abstract contract MintwareBaseVault4626 is
     event WithdrawalRequested(address indexed owner, uint256 shares, uint256 noticeExpiry);
     event WithdrawalExecuted(address indexed owner, uint256 assetsOut, uint256 penalty);
     event PoolInitialized(bytes32 indexed poolId, uint160 sqrtPriceX96);
-    event OracleSignerSet(address indexed signer);
     event FeeVaultSet(address indexed feeVault);
     event Rebalanced(int24 tickLower, int24 tickUpper, uint128 liquidity);
     event RebalancedWithProposal(bytes32 indexed vaultId, int24 tickLower, int24 tickUpper, uint256 nonce, address submitter);
@@ -444,10 +445,16 @@ abstract contract MintwareBaseVault4626 is
     // Rebalancing
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// @notice One-time wiring of the oracle signer post-deploy. After it is set,
+    ///         rotation must go through the 48h timelock below (audit C7).
     function setOracleSigner(address signer) external onlyOwner {
-        oracleSigner = signer;
-        emit OracleSignerSet(signer);
+        _initOracleSigner(signer);
     }
+
+    /// @notice Rotate the oracle signer through the 48h timelock.
+    function proposeOracleSigner(address proposed) external onlyOwner { _proposeOracleSigner(proposed); }
+    function confirmOracleSigner() external onlyOwner { _confirmOracleSigner(); }
+    function cancelOracleRotation() external onlyOwner { _cancelOracleRotation(); }
 
     /// @notice One-time wiring of the FeeVault for factory-deployed vaults.
     function setFeeVault(address _feeVault) external onlyOwner {
