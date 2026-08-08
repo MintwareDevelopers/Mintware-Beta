@@ -31,7 +31,7 @@
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public | |
 | `AI_ATTRIBUTION_CHAIN_ID` | Server | `8453` (Base mainnet) |
 | `CLAIM_MARK_SECRET` | Server | Bearer auth for mark-claimed route |
-| `NEXT_PUBLIC_PHASE2_ENABLED` | Public | Gates vault pages — not set until Phase 2 launch |
+| `NEXT_PUBLIC_VAULTS_LOCKED` | Public | Set `true` to hide vault pages behind "coming soon" (the real gate; `PHASE2_ENABLED` was removed) |
 | `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS` | Public | Gates V4 contract reads |
 | `NEXT_PUBLIC_MW_TREASURY_ADDRESS` | Public | Set after contract deploy |
 
@@ -39,14 +39,15 @@
 
 | Path | Schedule |
 |---|---|
+| `/api/cron/universal-pipeline` | `30 4 * * *` (4:30am) |
 | `/api/cron/epoch-end` | `0 1 * * *` (1am) |
 | `/api/cron/pool-settle` | `0 2 * * *` (2am) |
-| `/api/treasury/sweep` | `0 3 * * *` (3am) |
+| `/api/treasury/normalize-mev` | `0 3 * * *` (3am) |
 | `/api/cron/vault-epoch-close` | `0 0 * * 1` (Monday midnight) |
-| `/api/cron/rwa-hold-snapshot` | `0 0 * * 1` (Monday midnight) |
+| `/api/cron/vault-weighted-epoch-close` | `0 1 * * 1` (Monday 1am) |
 
-RWA hold-snapshot cron reads on-chain vRWA balances via `BASE_RPC_URL` / `BASE_SEPOLIA_RPC_URL`
-(server-only) — set these in Vercel for the RWA incentive layer.
+> Reconciled to `vercel.json` (2026-08-08). The old table listed `/api/treasury/sweep`
+> (replaced by `normalize-mev`) and `/api/cron/rwa-hold-snapshot` (RWA shelved — removed).
 
 Hobby plan: max once/day per cron.
 

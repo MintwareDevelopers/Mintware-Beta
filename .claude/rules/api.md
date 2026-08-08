@@ -84,4 +84,3 @@ All internal API routes use the `createHandler` factory — see `.claude/rules/r
 | `/api/eas/attest-reward` | POST | EAS offchain reward attestation |
 | `/api/auth/connect` | POST | Wallet connect + basename ref code resolution |
 | `/api/waitlist` | POST | Waitlist signup → `waitlist` Supabase table |
-| `/api/vaults/deals` | GET | Approved RWA deals for the campaign creator surface picker (R1) |
