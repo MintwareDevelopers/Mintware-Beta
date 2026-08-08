@@ -5,13 +5,12 @@
 
 import { ImageResponse } from 'next/og'
 import { NextRequest }   from 'next/server'
+import { API }           from '@/lib/web2/api'
 
 export const runtime = 'edge'
 export const alt     = 'Mintware — Wallet Attribution Score'
 export const size    = { width: 1200, height: 630 }
 export const contentType = 'image/png'
-
-const API = 'https://attribution-scorer.ceo-1f9.workers.dev'
 
 function tierColor(tier: string): string {
   if (tier === 'gold')   return '#C27A00'

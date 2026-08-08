@@ -11,7 +11,8 @@
 // External APIs
 // ---------------------------------------------------------------------------
 
-export const ATTRIBUTION_API = 'https://attribution-scorer.ceo-1f9.workers.dev'
+// Single source of truth for the Attribution worker URL lives in lib/web2/api.ts.
+export { API as ATTRIBUTION_API } from './web2/api'
 
 // ---------------------------------------------------------------------------
 // Treasury
