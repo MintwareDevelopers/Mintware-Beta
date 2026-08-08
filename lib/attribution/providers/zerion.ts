@@ -163,14 +163,26 @@ export function zerionConfigured(): boolean {
   return Boolean(process.env.ZERION_API_KEY)
 }
 
-async function zerionGet(path: string, apiKey: string): Promise<{ data?: unknown[] }> {
-  // Zerion uses HTTP Basic auth: base64("<key>:").
-  const auth = Buffer.from(`${apiKey}:`).toString('base64')
-  const res = await fetch(`${ZERION_BASE}${path}`, {
-    headers: { authorization: `Basic ${auth}`, accept: 'application/json' },
-  })
-  if (!res.ok) throw new Error(`Zerion ${path} → ${res.status}`)
-  return res.json() as Promise<{ data?: unknown[] }>
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+
+// One GET with polite retry on 429 (free-tier rate limit). Honors `Retry-After`
+// when present, else exponential backoff. Keeps total wait small so the request
+// never hangs a serverless function.
+async function zerionGet(path: string, apiKey: string, attempts = 3): Promise<{ data?: unknown[] }> {
+  const auth = Buffer.from(`${apiKey}:`).toString('base64') // Basic auth: base64("<key>:")
+  for (let i = 0; i < attempts; i++) {
+    const res = await fetch(`${ZERION_BASE}${path}`, {
+      headers: { authorization: `Basic ${auth}`, accept: 'application/json' },
+    })
+    if (res.ok) return res.json() as Promise<{ data?: unknown[] }>
+    if (res.status === 429 && i < attempts - 1) {
+      const retryAfter = Number(res.headers.get('retry-after'))
+      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 700 * (i + 1))
+      continue
+    }
+    throw new Error(`Zerion ${path} → ${res.status}`)
+  }
+  throw new Error(`Zerion ${path} → retries exhausted`)
 }
 
 /**
@@ -181,10 +193,10 @@ async function zerionGet(path: string, apiKey: string): Promise<{ data?: unknown
 export async function fetchZerionActivity(address: string, nowMs: number, txPageSize = 100): Promise<WalletActivity> {
   const apiKey = process.env.ZERION_API_KEY
   if (!apiKey) throw new Error('ZERION_API_KEY not set')
-  const [pos, txs] = await Promise.all([
-    zerionGet(`/wallets/${address}/positions/?filter[trash]=only_non_trash&sort=value`, apiKey),
-    zerionGet(`/wallets/${address}/transactions/?page[size]=${txPageSize}`, apiKey),
-  ])
+  // Sequential (not parallel) — the free tier rate-limits concurrent requests.
+  const pos = await zerionGet(`/wallets/${address}/positions/?filter[trash]=only_non_trash&sort=value`, apiKey)
+  await sleep(350)
+  const txs = await zerionGet(`/wallets/${address}/transactions/?page[size]=${txPageSize}`, apiKey)
   return mapZerionToActivity({
     address,
     positions: (pos.data ?? []) as ZerionPosition[],
