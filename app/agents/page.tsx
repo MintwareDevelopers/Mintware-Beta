@@ -3,21 +3,12 @@
 // app/agents/page.tsx — AI Agent integrations page (public, no auth required)
 
 import { MwNav } from '@/components/web2/MwNav'
+import { PageHero } from '@/components/web2/PageHero'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 // ─── ATX Settlemint tokens ──────────────────────────────────────────────────────
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
-
-function Star({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
-      <path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z" />
-    </svg>
-  )
-}
 
 interface AgentRow {
   address: string
@@ -136,23 +127,12 @@ export default function AgentsPage() {
   return (
     <div className="min-h-screen font-atx-display bg-atx-bone text-atx-ink [&_*]:rounded-none">
       <MwNav />
+      <PageHero
+        eyebrow="For AI Agents"
+        title={<>Give your AI agent <span className="text-atx-blue">on-chain reputation</span></>}
+        sub="Mintware Attribution scores AI agent wallets on Base — tracking behaviour, contribution, and risk. Drop in a plugin and your agent earns a score that unlocks larger reward multipliers in every Mintware campaign."
+      />
       <div className="max-w-[900px] mx-auto px-6 pt-10 pb-20">
-
-        {/* Hero */}
-        <div className="border border-atx-ink mb-8 px-9 py-12 max-md:px-6 max-md:py-10" style={{ backgroundImage: GRID_BG }}>
-          <div className="flex items-center gap-2 mb-4">
-            <Star className="w-4 h-4 text-atx-coral" />
-            <span className={LABEL}>For AI Agents</span>
-          </div>
-          <h1 className="font-bold text-[clamp(28px,5vw,48px)] tracking-[-0.02em] leading-[1.05] mb-3">
-            Give your AI agent<br />on-chain reputation
-          </h1>
-          <p className="text-[15px] text-atx-ink/60 max-w-[540px] leading-relaxed">
-            Mintware Attribution scores AI agent wallets on Base — tracking behaviour,
-            contribution, and risk. Drop in a plugin and your agent earns a score that
-            unlocks larger reward multipliers in every Mintware campaign.
-          </p>
-        </div>
 
         {/* Plugins */}
         <div className="flex items-center gap-3 mb-[14px]">
