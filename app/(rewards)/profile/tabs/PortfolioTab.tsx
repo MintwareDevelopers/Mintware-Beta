@@ -9,6 +9,31 @@ interface Props {
   hasWallet: boolean
 }
 
+// Common tokens shown even at zero balance so the holdings grid always looks
+// populated (DeBank-style). Real holdings (data.projects) render above these;
+// these fill the rest so the profile never looks empty. Zero balances are
+// clearly labelled — nothing fabricated.
+const COMMON_TOKENS: { symbol: string; name: string; cat: string }[] = [
+  { symbol: 'ETH',   name: 'Ethereum',     cat: 'Token' },
+  { symbol: 'USDC',  name: 'USD Coin',     cat: 'Stable' },
+  { symbol: 'USDT',  name: 'Tether',       cat: 'Stable' },
+  { symbol: 'WBTC',  name: 'Wrapped BTC',  cat: 'Token' },
+  { symbol: 'DAI',   name: 'Dai',          cat: 'Stable' },
+  { symbol: 'WETH',  name: 'Wrapped ETH',  cat: 'Token' },
+  { symbol: 'ARB',   name: 'Arbitrum',     cat: 'Token' },
+  { symbol: 'cbETH', name: 'Coinbase ETH', cat: 'LST' },
+]
+
+type Row = {
+  name: string
+  symbol?: string
+  cat: string
+  deployed: number
+  pnlPct: number
+  stillActive: boolean
+  held: boolean
+}
+
 export function PortfolioTab({ data, loading, hasWallet }: Props) {
   return (
     <>
@@ -20,90 +45,95 @@ export function PortfolioTab({ data, loading, hasWallet }: Props) {
         </div>
       )}
 
-      {/* ── Holdings ──────────────────────────────────────────────────────────── */}
-      {!loading && data && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <span className="font-atx-mono uppercase tracking-[0.08em] text-[11px] text-atx-ink/55">
-              On-chain assets
-            </span>
-            {(data.projects?.length ?? 0) > 0 && (
-              <span className="text-[11px] font-bold font-atx-mono text-atx-ink">
-                {fmtUSD(data.projects!.reduce((s, p) => s + p.deployed, 0))} total
-              </span>
-            )}
-          </div>
+      {/* ── Holdings — always populated (real first, then common tokens at 0) ──── */}
+      {!loading && data && (() => {
+        const held: Row[] = (data.projects ?? []).map(p => ({
+          name: p.name, symbol: p.symbol, cat: p.cat,
+          deployed: p.deployed, pnlPct: p.pnlPct, stillActive: p.stillActive, held: true,
+        }))
+        const heldSyms = new Set(held.map(p => (p.symbol || p.name).toUpperCase()))
+        const filler: Row[] = COMMON_TOKENS
+          .filter(t => !heldSyms.has(t.symbol.toUpperCase()))
+          .map(t => ({ name: t.name, symbol: t.symbol, cat: t.cat, deployed: 0, pnlPct: 0, stillActive: false, held: false }))
+        const rows: Row[] = [...held.slice().sort((a, b) => b.deployed - a.deployed), ...filler]
+        const total = held.reduce((s, p) => s + p.deployed, 0)
+        const maxDeployed = held[0]?.deployed || 1
 
-          {(data.projects?.length ?? 0) === 0 ? (
-            <div className="bg-atx-panel border border-atx-ink/25 px-5 py-10 flex flex-col items-center text-center gap-2">
-              <svg viewBox="0 0 100 100" className="w-7 h-7 text-atx-coral" aria-hidden="true"><path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"/></svg>
-              <div className="text-[13px] font-semibold text-atx-ink/60">No on-chain assets detected</div>
-              <div className="text-[11px] text-atx-ink/55 max-w-[240px] leading-[1.55]">
-                Hold tokens, provide liquidity, or bridge to Base — assets appear here once indexed.
-              </div>
-              <a
-                href="/swap"
-                className="mt-2 text-[11px] font-semibold text-atx-blue no-underline hover:underline font-atx-mono uppercase tracking-[0.06em]"
-              >
-                Start with a swap →
-              </a>
+        return (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3">
+              <span className="font-atx-mono uppercase tracking-[0.08em] text-[11px] text-atx-ink/55">
+                On-chain assets
+              </span>
+              <span className="text-[11px] font-bold font-atx-mono text-atx-ink">{fmtUSD(total)} total</span>
             </div>
-          ) : (
+
             <div className="bg-atx-panel border border-atx-ink overflow-hidden">
-              {data.projects!
-                .slice()
-                .sort((a, b) => b.deployed - a.deployed)
-                .map((p, i, arr) => {
-                  const ic = iconColor(p.symbol || p.name)
-                  const maxDeployed = arr[0].deployed || 1
-                  const barPct = Math.round((p.deployed / maxDeployed) * 100)
-                  return (
+              {rows.map((p, i) => {
+                const ic = iconColor(p.symbol || p.name)
+                const barPct = p.held ? Math.round((p.deployed / maxDeployed) * 100) : 0
+                return (
+                  <div
+                    key={`${p.symbol ?? p.name}-${i}`}
+                    className={`flex items-center gap-3.5 px-4 py-3 transition-colors duration-150 hover:bg-atx-bone ${p.held ? '' : 'opacity-[0.55]'}`}
+                    style={{ borderBottom: i < rows.length - 1 ? '1px solid rgba(17,17,17,0.15)' : undefined }}
+                  >
                     <div
-                      key={i}
-                      className="flex items-center gap-3.5 px-4 py-3 transition-colors duration-150 hover:bg-atx-bone"
-                      style={{ borderBottom: i < arr.length - 1 ? '1px solid rgba(17,17,17,0.15)' : undefined }}
+                      className="w-9 h-9 border border-atx-ink flex items-center justify-center text-[13px] font-bold shrink-0 font-atx-mono"
+                      style={{ background: ic.bg, color: ic.fg }}
                     >
-                      <div
-                        className="w-9 h-9 border border-atx-ink flex items-center justify-center text-[13px] font-bold shrink-0 font-atx-mono"
-                        style={{ background: ic.bg, color: ic.fg }}
-                      >
-                        {p.symbol?.slice(0, 3) ?? p.name?.slice(0, 2)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 mb-[3px]">
-                          <span className="text-[13px] font-semibold text-atx-ink truncate">{p.name}</span>
-                          <span className="text-[10px] text-atx-ink/55 shrink-0 font-atx-mono">{p.cat}</span>
-                          {p.stillActive && (
-                            <span className="w-[7px] h-[7px] bg-atx-acid border border-atx-ink inline-block shrink-0" title="Active position" />
-                          )}
-                        </div>
-                        <div className="h-[6px] border border-atx-ink/40 overflow-hidden relative">
-                          <div
-                            className="h-full bg-atx-blue absolute inset-y-0 left-0 transition-[width] duration-700"
-                            style={{ width: `${barPct}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="text-[13px] font-bold font-atx-mono text-atx-ink">{fmtUSD(p.deployed)}</div>
-                        {p.pnlPct !== 0 ? (
-                          <div
-                            className="text-[10px] font-semibold font-atx-mono mt-[1px]"
-                            style={{ color: p.pnlPct >= 0 ? 'var(--color-atx-mesquite)' : 'var(--color-atx-clay)' }}
-                          >
-                            {p.pnlPct >= 0 ? '+' : ''}{p.pnlPct.toFixed(1)}%
-                          </div>
-                        ) : (
-                          <div className="text-[10px] text-atx-ink/55 mt-[1px] font-atx-mono">deployed</div>
+                      {p.symbol?.slice(0, 3) ?? p.name?.slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-[3px]">
+                        <span className="text-[13px] font-semibold text-atx-ink truncate">{p.name}</span>
+                        <span className="text-[10px] text-atx-ink/55 shrink-0 font-atx-mono">{p.cat}</span>
+                        {p.stillActive && (
+                          <span className="w-[7px] h-[7px] bg-atx-acid border border-atx-ink inline-block shrink-0" title="Active position" />
                         )}
                       </div>
+                      <div className="h-[6px] border border-atx-ink/40 overflow-hidden relative">
+                        <div
+                          className="h-full bg-atx-blue absolute inset-y-0 left-0 transition-[width] duration-700"
+                          style={{ width: `${barPct}%` }}
+                        />
+                      </div>
                     </div>
-                  )
-                })}
+                    <div className="text-right shrink-0">
+                      {p.held ? (
+                        <>
+                          <div className="text-[13px] font-bold font-atx-mono text-atx-ink">{fmtUSD(p.deployed)}</div>
+                          {p.pnlPct !== 0 ? (
+                            <div
+                              className="text-[10px] font-semibold font-atx-mono mt-[1px]"
+                              style={{ color: p.pnlPct >= 0 ? 'var(--color-atx-mesquite)' : 'var(--color-atx-clay)' }}
+                            >
+                              {p.pnlPct >= 0 ? '+' : ''}{p.pnlPct.toFixed(1)}%
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-atx-ink/55 mt-[1px] font-atx-mono">deployed</div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-[13px] font-bold font-atx-mono text-atx-ink/45">—</div>
+                          <div className="text-[10px] text-atx-ink/40 mt-[1px] font-atx-mono">0 balance</div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          )}
-        </div>
-      )}
+
+            {held.length === 0 && (
+              <div className="text-[11px] text-atx-ink/50 mt-2.5 font-atx-mono leading-[1.55]">
+                Common tokens shown · your balances populate here as your wallet transacts on-chain.
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Protocol opportunities ────────────────────────────────────────────── */}
       {!loading && data && data.uvOpportunities?.length > 0 && (
