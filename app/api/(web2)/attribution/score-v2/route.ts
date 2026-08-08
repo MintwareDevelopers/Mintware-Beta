@@ -17,13 +17,16 @@ import { resolveWalletActivity } from '@/lib/attribution/provider'
 import { buildReferralFetcher } from '@/lib/attribution/providers/referrals'
 import { buildSanctionsFetcher } from '@/lib/attribution/providers/chainalysis'
 import { buildNansenRiskFetcher } from '@/lib/attribution/providers/nansen'
+import { toLegacyScore } from '@/lib/attribution/legacyShape'
 
 export const dynamic = 'force-dynamic'
 
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/
 
 export const GET = createHandler(async (req, ctx) => {
-  const address = new URL(req.url).searchParams.get('address')?.trim()
+  const url = new URL(req.url)
+  const address = url.searchParams.get('address')?.trim()
+  const legacy = url.searchParams.get('legacy') === '1'
   if (!address) {
     return ctx.json({ success: false, error: 'address query param required', code: 'missing_address' }, 400)
   }
@@ -34,21 +37,27 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json({ success: false, error: 'invalid address', code: 'bad_address' }, 400)
   }
 
-  const { activity, source, degraded } = await resolveWalletActivity(address, Date.now(), {
+  const now = Date.now()
+  const { activity, source, degraded } = await resolveWalletActivity(address, now, {
     referralFetcher: buildReferralFetcher(ctx.supabase),
     sanctionsFetcher: buildSanctionsFetcher(),
     riskFetcher: buildNansenRiskFetcher(),
   })
-  const result = computeScore(activity, Date.now())
-  // Diagnostics — safe (never exposes the key, only whether one is present).
-  // `zerionKeyPresent:false` = env var not reaching this runtime; true + source
-  // 'mock' + a fallbackReason = key is present but the Zerion call failed.
+  const result = computeScore(activity, now)
+  ctx.log.info('attribution', 'scored wallet', { address, score: result.score, tier: result.tier, source, degraded })
+
+  // Legacy-shaped response for the app UI cutover (drop-in for the old worker's
+  // `/score`). Everything derived from real data; invented old-worker fields empty.
+  if (legacy) {
+    return ctx.json({ ...toLegacyScore(result, activity, now), source })
+  }
+
+  // Native v2 response + safe diagnostics (never exposes the key).
   const diagnostics = {
     zerionKeyPresent: Boolean(process.env.ZERION_API_KEY),
     fallbackReason: degraded ?? null,
-    firstSeenMs: activity.firstSeenMs, // 0 = age lookup failed; a real ts = chart worked
+    firstSeenMs: activity.firstSeenMs,
     txCount: activity.totalTxCount,
   }
-  ctx.log.info('attribution', 'scored wallet', { address, score: result.score, tier: result.tier, source, degraded })
   return ctx.json({ ...result, source, diagnostics })
 })
