@@ -13,6 +13,7 @@ import { getWalletActivity as getMockActivity } from './mockProvider'
 import { fetchZerionActivity, zerionConfigured } from './providers/zerion'
 import type { ReferralFetcher } from './providers/referrals'
 import type { SanctionsFetcher } from './providers/chainalysis'
+import type { RiskFetcher } from './providers/nansen'
 
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/
 
@@ -24,6 +25,8 @@ export interface ResolveOptions {
   referralFetcher?: ReferralFetcher
   // Sanctions hard-gate via the free Chainalysis on-chain oracle. Fails open.
   sanctionsFetcher?: SanctionsFetcher
+  // Graded illicit-exposure (mixer/scam) via a paid vendor. Inert without a key.
+  riskFetcher?: RiskFetcher
 }
 
 export async function resolveWalletActivity(
@@ -67,6 +70,14 @@ export async function resolveWalletActivity(
         if (flag) activity = { ...activity, riskFlags: [...activity.riskFlags, flag] }
       } catch {
         // sanctions oracle fails open — never block a score on an RPC error
+      }
+    }
+    if (opts.riskFetcher) {
+      try {
+        const flags = await opts.riskFetcher(address)
+        if (flags.length) activity = { ...activity, riskFlags: [...activity.riskFlags, ...flags] }
+      } catch {
+        // graded-risk vendor is best-effort — inert/failing never blocks a score
       }
     }
   }
