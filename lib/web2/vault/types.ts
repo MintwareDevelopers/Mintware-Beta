@@ -23,6 +23,10 @@ export interface SocialVault {
   surface?:         'defi' | 'rwa'
   vault_standard?:  'legacy' | 'erc4626'
   provider?:        string | null
+  // Categorizes example/showcase vaults from genuinely-deployed ones. Absent or
+  // true = SAMPLE (illustrative, not real capital); explicit false = a real vault.
+  // Everything defaults to sample until a vault is deliberately marked real.
+  is_sample?:       boolean
   // joined from vault_epochs (latest active)
   current_epoch?:   VaultEpoch | null
 }
