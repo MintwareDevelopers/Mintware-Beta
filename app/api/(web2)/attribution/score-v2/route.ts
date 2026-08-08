@@ -16,21 +16,15 @@ import { computeScore } from '@/lib/attribution/score'
 import { resolveWalletActivity } from '@/lib/attribution/provider'
 import { buildReferralFetcher } from '@/lib/attribution/providers/referrals'
 import { buildSanctionsFetcher } from '@/lib/attribution/providers/chainalysis'
-import { debugZerionChart } from '@/lib/attribution/providers/zerion'
 
 export const dynamic = 'force-dynamic'
 
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/
 
 export const GET = createHandler(async (req, ctx) => {
-  const url = new URL(req.url)
-  const address = url.searchParams.get('address')?.trim()
+  const address = new URL(req.url).searchParams.get('address')?.trim()
   if (!address) {
     return ctx.json({ success: false, error: 'address query param required', code: 'missing_address' }, 400)
-  }
-  // Temporary probe: /score-v2?address=0x…&debug=chart → raw Zerion chart result.
-  if (url.searchParams.get('debug') === 'chart' && ADDR_RE.test(address)) {
-    return ctx.json({ chartDebug: await debugZerionChart(address) })
   }
   // Accept the golden-wallet aliases (0xLP, 0xFARM, …) in preview so the engine
   // is demonstrable before the live data layer lands; real addresses must be well-formed.
