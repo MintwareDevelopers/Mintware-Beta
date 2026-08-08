@@ -100,4 +100,4 @@ export const POST = createHandler(async (req, ctx) => {
   }
 
   return ctx.json({ ok: true, campaign_id, wallet, attribution_score })
-})
+}, { rateLimit: { max: 15, windowMs: 60_000 } })
