@@ -85,13 +85,21 @@ export const POST = createHandler(async (req, ctx) => {
 
   const { data: deposit, error: depErr } = await ctx.supabase
     .from('lp_deposits')
-    .insert({ vault_id, wallet: walletLower, usdc_amount, lock_tier, locked_until: lockedUntil, status: 'active' })
+    .insert({ vault_id, wallet: walletLower, usdc_amount, lock_tier, locked_until: lockedUntil, status: 'active', tx_hash })
     .select('id').single()
 
-  if (depErr || !deposit) {
-    ctx.log.error('vault/deposit', 'insert failed', { error: depErr?.message })
+  if (depErr) {
+    // 23505 = unique violation on tx_hash → this on-chain deposit was already
+    // recorded. Idempotent: return ok WITHOUT re-crediting positions/TVL/referrals
+    // (this is the replay-protection guard).
+    if (depErr.code === '23505') {
+      ctx.log.info('vault/deposit', 'duplicate tx_hash — already recorded, skipping credit', { tx_hash })
+      return ctx.json({ ok: true, duplicate: true }, 200)
+    }
+    ctx.log.error('vault/deposit', 'insert failed', { error: depErr.message })
     return ctx.json({ error: 'Failed to record deposit' }, 500)
   }
+  if (!deposit) return ctx.json({ error: 'Failed to record deposit' }, 500)
 
   // Mirror the deposit into vault_lp_positions — the source of truth the weighted
   // epoch cron reads to compute reward weights (lp_deposits is the per-tx ledger;
