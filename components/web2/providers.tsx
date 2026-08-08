@@ -85,9 +85,9 @@ function AppWalletProviders({ children }: { children: ReactNode }) {
   return (
     <RainbowKitProvider
       theme={lightTheme({
-        accentColor: '#0052FF',
+        accentColor: '#006FCC',       // ATX blue — match the app accent
         accentColorForeground: 'white',
-        borderRadius: 'medium',
+        borderRadius: 'none',         // square system — no rounded wallet modal
         fontStack: 'system',
       })}
       modalSize="compact"
