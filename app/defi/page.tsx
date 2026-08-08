@@ -96,6 +96,7 @@ export default function DefiLandingPage() {
 
       {/* ── HERO ── */}
       <PageHero
+        size="compact"
         eyebrow="DeFi surface · reputation-weighted yield"
         title={<>Same deposit. <span className="text-atx-blue">More yield.</span></>}
         sub="MEV-protected, auto-managed liquidity on Uniswap V4 — where your Attribution score lifts your fee share. Two wallets deposit the same amount into the same vault; the one with the stronger on-chain history earns more. Something no capital-only vault can offer."

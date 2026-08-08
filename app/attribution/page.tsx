@@ -81,6 +81,7 @@ export default function AttributionLandingPage() {
 
       {/* ── HERO ── */}
       <PageHero
+        size="compact"
         eyebrow="On-chain reputation · 100+ chains"
         title={<>Your contribution should mean <span className="text-atx-blue">something.</span></>}
         sub="Attribution reads your complete on-chain history — every position, vote, and referral across 100+ chains — and produces one composite reputation score. Not based on wealth. Based on what you’ve actually done."

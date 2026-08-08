@@ -135,6 +135,7 @@ export default function HomePage() {
 
       {/* HERO 1 — reputation + wallet search */}
       <PageHero
+        size="compact"
         eyebrow="On-chain reputation · 100+ chains"
         title={<>Own your share of the <span className="text-atx-blue">market you make.</span></>}
         sub="The same position earns more when your on-chain history is stronger — holding, LPing, referring all lift your share of every pool’s fees. Paste any wallet to see what it’s already built."

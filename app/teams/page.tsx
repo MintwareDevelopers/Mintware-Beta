@@ -83,6 +83,7 @@ export default function TeamsLandingPage() {
 
       {/* ── HERO ── */}
       <PageHero
+        size="compact"
         eyebrow="For teams · matched liquidity"
         title={<>Prove it. <span className="text-atx-blue">Don’t say it.</span></>}
         sub="Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock, your fee share flows to the people who backed you. “Trust us” becomes “check the contract.”"
