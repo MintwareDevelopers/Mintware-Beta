@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
+import { PageHero } from '@/components/web2/PageHero'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
 import { API } from '@/lib/web2/api'
@@ -95,7 +96,14 @@ function ProfileContent() {
         <ProfileEditPanel wallet={wallet} meta={meta} onClose={() => setEditOpen(false)} onSaved={refetchMeta} />
       )}
 
-      {/* ── BAND 1 · HERO (bone + grid) ── */}
+      {/* ── Hero band ── */}
+      <PageHero
+        eyebrow="On-chain reputation · your profile"
+        title={<>Your reputation, <span className="text-atx-blue">on-chain.</span></>}
+        sub="Everything your wallet has done — holding, LPing, referring — scored into one number. This is your Attribution profile."
+      />
+
+      {/* ── BAND 1 · IDENTITY (bone + grid) ── */}
       <div className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
         <div className={`${WRAP} pt-7 pb-7`}>
           <div className={EY}><span className="w-[9px] h-[9px] bg-atx-acid border border-atx-ink" />Your Attribution · The reputation economy</div>
