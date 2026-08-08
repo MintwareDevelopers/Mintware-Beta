@@ -14,6 +14,7 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { computeScore } from '@/lib/attribution/score'
 import { resolveWalletActivity } from '@/lib/attribution/provider'
+import { buildReferralFetcher } from '@/lib/attribution/providers/referrals'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,7 +32,9 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json({ success: false, error: 'invalid address', code: 'bad_address' }, 400)
   }
 
-  const { activity, source, degraded } = await resolveWalletActivity(address, Date.now())
+  const { activity, source, degraded } = await resolveWalletActivity(address, Date.now(), {
+    referralFetcher: buildReferralFetcher(ctx.supabase),
+  })
   const result = computeScore(activity, Date.now())
   ctx.log.info('attribution', 'scored wallet', { address, score: result.score, tier: result.tier, source, degraded })
   return ctx.json({ ...result, source })
