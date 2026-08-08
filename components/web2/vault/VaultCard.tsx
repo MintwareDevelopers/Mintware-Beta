@@ -33,6 +33,19 @@ function StatusPill({ status }: { status: SocialVault['status'] }) {
   )
 }
 
+// A deliberately loud tag so a showcase vault is never mistaken for a real one.
+function SampleBadge() {
+  return (
+    <span className="shrink-0 flex items-center gap-1.5 border border-dashed border-atx-mesquite bg-atx-mesquite/10 text-atx-mesquite px-[7px] py-[2px] font-atx-mono text-[10px] uppercase tracking-[0.08em] font-semibold">
+      Sample
+    </span>
+  )
+}
+
+const CHAIN_NAME: Record<number, string> = {
+  1: 'Ethereum', 8453: 'Base', 84532: 'Base Sepolia', 42161: 'Arbitrum', 10: 'Optimism',
+}
+
 function LockMultiBar() {
   // Visual representation of lock tier multipliers
   const tiers = [
@@ -51,10 +64,13 @@ function LockMultiBar() {
 }
 
 export function VaultCard({ vault }: { vault: SocialVault }) {
+  // Default to SAMPLE unless a vault is explicitly marked real — never present
+  // showcase data as a live vault.
+  const sample = vault.is_sample !== false
   return (
     <Link
       href={`/vault/${vault.id}`}
-      className="font-atx-display bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-blue flex flex-col gap-[14px] p-5 no-underline text-inherit transition-shadow duration-200 hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] [&_*]:rounded-none"
+      className={`font-atx-display bg-atx-panel border border-atx-ink border-l-[3px] flex flex-col gap-[14px] p-5 no-underline text-inherit transition-shadow duration-200 hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] [&_*]:rounded-none ${sample ? 'border-l-atx-mesquite' : 'border-l-atx-blue'}`}
     >
       <div className="flex items-start justify-between gap-[10px]">
         <div className="flex items-start gap-[10px] flex-1">
@@ -68,20 +84,37 @@ export function VaultCard({ vault }: { vault: SocialVault }) {
             </div>
           </div>
         </div>
-        <StatusPill status={vault.status} />
+        <div className="flex items-center gap-2 shrink-0">
+          {sample && <SampleBadge />}
+          <StatusPill status={vault.status} />
+        </div>
       </div>
 
-      {/* Testnet beta: no fabricated TVL/pool dollars — show the honest network + status. */}
-      <div className="grid grid-cols-2 gap-[10px]">
-        <div className="flex flex-col gap-[2px]">
-          <span className="text-[15px] font-bold font-atx-mono text-atx-ink/70">Base Sepolia</span>
-          <span className={LABEL}>Network · testnet</span>
+      {sample ? (
+        /* Sample: no fabricated TVL/pool dollars — honest illustrative framing. */
+        <div className="grid grid-cols-2 gap-[10px]">
+          <div className="flex flex-col gap-[2px]">
+            <span className="text-[15px] font-bold font-atx-mono text-atx-ink/70">Illustrative</span>
+            <span className={LABEL}>Example vault</span>
+          </div>
+          <div className="flex flex-col gap-[2px]">
+            <span className="text-[15px] font-bold font-atx-mono text-atx-mesquite">Not live</span>
+            <span className={LABEL}>Preview only</span>
+          </div>
         </div>
-        <div className="flex flex-col gap-[2px]">
-          <span className="text-[15px] font-bold font-atx-mono text-atx-mesquite">Test USDC</span>
-          <span className={LABEL}>Deposit asset</span>
+      ) : (
+        /* Real vault: show actual TVL + network. */
+        <div className="grid grid-cols-2 gap-[10px]">
+          <div className="flex flex-col gap-[2px]">
+            <span className="text-[15px] font-bold font-atx-mono text-atx-ink/70">${vault.tvl_usdc.toLocaleString()}</span>
+            <span className={LABEL}>TVL</span>
+          </div>
+          <div className="flex flex-col gap-[2px]">
+            <span className="text-[15px] font-bold font-atx-mono text-atx-blue">{CHAIN_NAME[vault.chain_id] ?? 'Chain'}</span>
+            <span className={LABEL}>Network</span>
+          </div>
         </div>
-      </div>
+      )}
 
       <div>
         <div className={`${LABEL} mb-[6px]`}>Lock tier multipliers</div>

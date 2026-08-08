@@ -38,6 +38,7 @@ const MOCK_VAULTS: SocialVault[] = [
     tick_lower:       -60000,
     tick_upper:       60000,
     tvl_usdc:         247500,
+    is_sample:        true,
     created_at:       new Date().toISOString(),
     updated_at:       new Date().toISOString(),
     current_epoch:    { id: 'ep1', vault_id: 'mock-vault-1', epoch_number: 1, total_pool: 3840, bonus_pool: 0, total_claimed: 0, deadline: null, merkle_root: null, ipfs_cid: null, tx_hash: null, status: 'active', opened_at: new Date().toISOString(), closed_at: null },
