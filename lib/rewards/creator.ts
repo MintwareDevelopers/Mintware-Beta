@@ -4,9 +4,7 @@
 
 export type CampaignType  = 'token_reward' | 'points'
 export type ScheduleType  = 'now' | 'scheduled'
-// RWA incentive layer (see docs/developers/rwa-incentive-layer.md).
-// Permissionless by design — no KYC field; eligibility lives in the wrapped token.
-export type CampaignSurface = 'defi' | 'rwa'
+export type CampaignSurface = 'defi' // RWA surface shelved
 export type PointsFocus   = 'trade'
 export type PayoutPreset  = '3' | '5' | '10' | '20'
 
@@ -27,7 +25,7 @@ export interface CreatorFormState {
   // 'rwa' links it to an approved deal (for discovery + duration-match). Permissionless:
   // no KYC — eligibility is enforced by the wrapped token, not the campaign.
   surface: CampaignSurface
-  linkedDealId: string | null    // required when surface === 'rwa'
+  linkedDealId: string | null    // inert (RWA shelved) — always null
   durationMatchDays?: number     // lock ≥ this many days earns the duration-match bonus
 
   // Step 1 — Token
@@ -184,9 +182,6 @@ export function validateStep(step: number, form: CreatorFormState): string | nul
       if (!form.token) return 'Please select or paste a token address.'
       return null
     case 2:
-      if (form.surface === 'rwa' && !form.linkedDealId) {
-        return 'Select an approved RWA deal, or switch the surface to DeFi.'
-      }
       if (form.poolUsd <= 0)    return 'Pool size must be greater than 0.'
       if (form.durationDays < 1) return 'Duration must be at least 1 day.'
       return null

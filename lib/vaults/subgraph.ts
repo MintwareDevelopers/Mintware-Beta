@@ -52,33 +52,21 @@ export async function fetchSubgraphVaults(): Promise<VaultSummary[]> {
 }
 
 function mapVault(v: SgVault): VaultSummary {
-  const surface: VaultSurface = v.surface === 1 ? 'RWA' : 'DeFi'
   const tvlUsd = Number(v.totalAssets ?? '0') / 1e6 // USDC is 6-dp
   const status: VaultStatus = v.active ? 'active' : 'paused'
 
-  const base: VaultSummary = {
+  return {
     id: v.id,
     name: v.name ?? 'Mintware Vault',
-    surface,
+    surface: 'DeFi', // RWA surface shelved — the subgraph indexes DeFi vaults only
     pair: v.symbol ?? 'USDC',
-    descriptor:
-      surface === 'RWA'
-        ? 'RWA · SPV-wrapped · oracle-banded'
-        : 'ERC-4626 · V4 hook-gated · MEV-protected',
+    descriptor: 'ERC-4626 · V4 hook-gated · MEV-protected',
     tvlUsd,
     netApyPct: 0, // APY needs fee/yield history — not yet derived on-chain
     status,
     epochLabel: '—',
     feeSplit: [70, 15, 10, 5],
+    profile: 'BLUE_CHIP',
+    profileRange: '±6%',
   }
-
-  if (surface === 'DeFi') {
-    base.profile = 'BLUE_CHIP'
-    base.profileRange = '±6%'
-  } else {
-    base.settleDays = 30
-    base.priceBand = '±15/±45'
-    base.kycAtRedeem = true
-  }
-  return base
 }
