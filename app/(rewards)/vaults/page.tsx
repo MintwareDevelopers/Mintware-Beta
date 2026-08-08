@@ -21,7 +21,6 @@ function Star({ className = '' }: { className?: string }) {
 }
 
 const LABEL = 'font-atx-mono uppercase tracking-[0.08em] text-[10px]'
-const CORAL_INK = '#5a1e12'
 
 // ── mock data for development / before DB is seeded ───────────────────────
 const MOCK_VAULTS: SocialVault[] = [
