@@ -163,30 +163,6 @@ export function zerionConfigured(): boolean {
   return Boolean(process.env.ZERION_API_KEY)
 }
 
-// Diagnostic probe for the age chart — returns exactly what Zerion sends back so
-// we can see WHY firstSeen isn't resolving (bad status? empty points? param?).
-export async function debugZerionChart(address: string): Promise<Record<string, unknown>> {
-  const apiKey = process.env.ZERION_API_KEY
-  if (!apiKey) return { error: 'no key' }
-  const auth = Buffer.from(`${apiKey}:`).toString('base64')
-  const url = `${ZERION_BASE}/wallets/${address}/charts/max`
-  try {
-    const res = await fetch(url, { headers: { authorization: `Basic ${auth}`, accept: 'application/json' } })
-    const text = await res.text()
-    let pointsLen = -1
-    let firstTs: number | null = null
-    try {
-      const json = JSON.parse(text) as { data?: { attributes?: { points?: [number, number][] } } }
-      const pts = json.data?.attributes?.points ?? []
-      pointsLen = pts.length
-      firstTs = pts.length ? pts[0][0] : null
-    } catch { /* not json */ }
-    return { url, status: res.status, ok: res.ok, pointsLen, firstTs, bodySnippet: text.slice(0, 300) }
-  } catch (e) {
-    return { url, error: e instanceof Error ? e.message : String(e) }
-  }
-}
-
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 // One GET with polite retry on 429 (free-tier rate limit). Honors `Retry-After`
@@ -242,11 +218,11 @@ export async function fetchZerionActivity(address: string, nowMs: number, txPage
 
 // Earliest point of the `max` balance chart ≈ wallet age. Returns 0 (→ caller
 // keeps its fallback) on any error. Timestamps come back in Unix SECONDS.
-async function fetchZerionFirstSeenMs(address: string, apiKey: string, attempts = 3): Promise<number> {
+async function fetchZerionChartFirstSec(address: string, apiKey: string, period: string, attempts = 3): Promise<number> {
   const auth = Buffer.from(`${apiKey}:`).toString('base64')
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch(`${ZERION_BASE}/wallets/${address}/charts/max`, {
+      const res = await fetch(`${ZERION_BASE}/wallets/${address}/charts/${period}`, {
         headers: { authorization: `Basic ${auth}`, accept: 'application/json' },
       })
       if (res.status === 429 && i < attempts - 1) {
@@ -259,10 +235,21 @@ async function fetchZerionFirstSeenMs(address: string, apiKey: string, attempts 
       const points = json.data?.attributes?.points ?? []
       if (!points.length) return 0
       const earliestSec = Math.min(...points.map(p => p[0]).filter(t => Number.isFinite(t) && t > 0))
-      return Number.isFinite(earliestSec) && earliestSec > 0 ? earliestSec * 1000 : 0
+      return Number.isFinite(earliestSec) && earliestSec > 0 ? earliestSec : 0
     } catch {
       return 0
     }
+  }
+  return 0
+}
+
+// Wallet age from the earliest chart point. `max` is ideal, but Zerion's chart
+// 500s on pathologically huge wallets (millions of txs) — fall back to `5years`
+// (still far better than the 100-tx window). Returns ms, or 0 if all fail.
+async function fetchZerionFirstSeenMs(address: string, apiKey: string): Promise<number> {
+  for (const period of ['max', '5years']) {
+    const sec = await fetchZerionChartFirstSec(address, apiKey, period)
+    if (sec > 0) return sec * 1000
   }
   return 0
 }
