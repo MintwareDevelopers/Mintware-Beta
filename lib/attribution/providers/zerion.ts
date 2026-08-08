@@ -197,10 +197,40 @@ export async function fetchZerionActivity(address: string, nowMs: number, txPage
   const pos = await zerionGet(`/wallets/${address}/positions/?filter[trash]=only_non_trash&sort=value`, apiKey)
   await sleep(350)
   const txs = await zerionGet(`/wallets/${address}/transactions/?page[size]=${txPageSize}`, apiKey)
-  return mapZerionToActivity({
+  const activity = mapZerionToActivity({
     address,
     positions: (pos.data ?? []) as ZerionPosition[],
     transactions: (txs.data ?? []) as ZerionTransaction[],
     nowMs,
   })
+
+  // Transactions have no sort param and only a 100-row page, so firstSeen from a
+  // single page badly understates the age of old/active wallets (Longevity ≈ 0).
+  // The `max` portfolio chart's earliest point is a cheap, reliable age proxy —
+  // one extra call. Best-effort: on any failure we keep the tx-derived value.
+  await sleep(350)
+  const chartFirstSeen = await fetchZerionFirstSeenMs(address, apiKey)
+  if (chartFirstSeen > 0 && (activity.firstSeenMs === 0 || chartFirstSeen < activity.firstSeenMs)) {
+    activity.firstSeenMs = chartFirstSeen
+  }
+  return activity
+}
+
+// Earliest point of the `max` balance chart ≈ wallet age. Returns 0 (→ caller
+// keeps its fallback) on any error. Timestamps come back in Unix SECONDS.
+async function fetchZerionFirstSeenMs(address: string, apiKey: string): Promise<number> {
+  try {
+    const auth = Buffer.from(`${apiKey}:`).toString('base64')
+    const res = await fetch(`${ZERION_BASE}/wallets/${address}/charts/max`, {
+      headers: { authorization: `Basic ${auth}`, accept: 'application/json' },
+    })
+    if (!res.ok) return 0
+    const json = (await res.json()) as { data?: { attributes?: { points?: [number, number][] } } }
+    const points = json.data?.attributes?.points ?? []
+    if (!points.length) return 0
+    const earliestSec = Math.min(...points.map(p => p[0]).filter(t => Number.isFinite(t) && t > 0))
+    return Number.isFinite(earliestSec) && earliestSec > 0 ? earliestSec * 1000 : 0
+  } catch {
+    return 0
+  }
 }
