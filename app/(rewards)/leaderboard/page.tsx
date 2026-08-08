@@ -168,6 +168,7 @@ function LeaderboardContent() {
     <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
       {/* Hero */}
       <PageHero
+        size="compact"
         eyebrow={`Attribution · ${activeCampaign?.name ?? 'global'} rankings · ${sample ? 'preview data' : 'live'}`}
         title={<>REPUTATION, <span className="text-atx-blue">RANKED.</span></>}
         sub="Every wallet has a history. This is the board. One swap enters you."

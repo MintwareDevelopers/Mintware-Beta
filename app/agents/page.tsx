@@ -128,6 +128,7 @@ export default function AgentsPage() {
     <div className="min-h-screen font-atx-display bg-atx-bone text-atx-ink [&_*]:rounded-none">
       <MwNav />
       <PageHero
+        size="compact"
         eyebrow="For AI Agents"
         title={<>Give your AI agent <span className="text-atx-blue">on-chain reputation</span></>}
         sub="Mintware Attribution scores AI agent wallets on Base — tracking behaviour, contribution, and risk. Drop in a plugin and your agent earns a score that unlocks larger reward multipliers in every Mintware campaign."

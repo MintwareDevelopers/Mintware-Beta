@@ -24,30 +24,33 @@ export function PageHero({
   sub,
   children,
   align = 'left',
+  size = 'default',
 }: {
   eyebrow?: string
   title: ReactNode
   sub?: ReactNode
   children?: ReactNode
   align?: 'left' | 'center'
+  size?: 'default' | 'compact'
 }) {
   const center = align === 'center'
+  const compact = size === 'compact'
   return (
     <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-      <div className={`mx-auto max-w-[1180px] px-6 py-[54px] max-[800px]:px-4 ${center ? 'text-center' : ''}`}>
+      <div className={`mx-auto max-w-[1180px] px-6 ${compact ? 'py-[44px]' : 'py-[54px]'} max-[800px]:px-4 ${center ? 'text-center' : ''}`}>
         {eyebrow && (
           <div className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55">
             ✴ {eyebrow}
           </div>
         )}
         <h1
-          className={`font-atx-display font-bold tracking-[-0.03em] leading-[0.98] text-[clamp(38px,6.4vw,86px)] mt-4 max-w-[16ch] ${center ? 'mx-auto' : ''}`}
+          className={`font-atx-display font-bold mt-4 ${compact ? 'tracking-[-0.02em] leading-[0.99] text-[clamp(32px,4.6vw,54px)] max-w-[17ch] text-wrap-balance' : 'tracking-[-0.03em] leading-[0.98] text-[clamp(38px,6.4vw,86px)] max-w-[16ch]'} ${center ? 'mx-auto' : ''}`}
         >
           {title}
         </h1>
         {sub && (
           <p
-            className={`text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 mt-6 max-w-[54ch] ${center ? 'mx-auto' : ''}`}
+            className={`text-atx-ink/70 ${compact ? 'text-[16px] leading-[1.55] mt-4 max-w-[60ch]' : 'text-[clamp(15px,1.9vw,20px)] leading-[1.5] mt-6 max-w-[54ch]'} ${center ? 'mx-auto' : ''}`}
           >
             {sub}
           </p>
