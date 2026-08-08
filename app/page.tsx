@@ -216,6 +216,7 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="p-5 bg-atx-panel">
+                <div className="font-atx-mono text-[9px] uppercase tracking-[0.12em] text-atx-ink/40 mb-2.5">Illustrative example · not a projection</div>
                 <div className="flex items-baseline justify-between border border-atx-ink px-3.5 py-3 bg-atx-bone">
                   <span className="text-[22px] font-bold tracking-tight">5,000</span>
                   <span className="font-atx-mono text-[11px] text-atx-ink/55">USDC</span>

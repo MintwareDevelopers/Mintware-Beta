@@ -194,8 +194,8 @@ function AgentsLeaderboardContent() {
             <div className="text-[13px] text-atx-ink/60 font-atx-display leading-relaxed max-w-[300px]">
               Drop your agent onto the leaderboard and start earning Attribution score on Base.
             </div>
-            <a href="/docs/ai-attribution/sdk" target="_blank" rel="noopener" className="inline-flex items-center gap-1 mt-3 text-atx-blue text-[13px] font-semibold font-atx-mono uppercase tracking-[0.04em] no-underline hover:underline">
-              View SDK docs →
+            <a href="/docs" className="inline-flex items-center gap-1 mt-3 text-atx-blue text-[13px] font-semibold font-atx-mono uppercase tracking-[0.04em] no-underline hover:underline">
+              View docs →
             </a>
           </div>
           <pre className="bg-atx-bone border border-atx-ink/25 px-[18px] py-[14px] text-[12px] font-atx-mono text-atx-ink/70 leading-[1.7] self-center whitespace-pre shrink-0">

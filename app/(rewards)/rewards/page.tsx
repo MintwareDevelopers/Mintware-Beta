@@ -306,7 +306,6 @@ function RewardsContent() {
                         >
                           <div className="text-[13px] font-medium text-atx-ink/70 font-atx-mono uppercase tracking-[0.04em]">More campaigns coming soon</div>
                           <div className="text-[12px] text-atx-ink/45">New protocol partnerships are being finalized. Check back weekly.</div>
-                          <div className="text-[12px] text-atx-blue mt-1 cursor-pointer font-atx-mono">Get notified →</div>
                         </motion.div>
                       )}
                     </div>
