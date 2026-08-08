@@ -74,11 +74,32 @@ These are known and tracked — the engine is correct; these are data-coverage a
    `"percentileBasis": "estimate"` — a calibrated curve, not a rank against a real scored
    population. The machinery for true percentiles is built; producing the population sample
    (a backfill) is an operational step not yet run.
-2. **History depth is limited on the Zerion free tier.** We fetch a slice of each wallet's history
-   per request, so **Longevity and Volume can read low for very old or very high-volume wallets**
-   (e.g. a 2015 wallet may show almost no "age"). Fetching deeper history is the next refinement.
+2. **Volume can read low; the largest wallets degrade.** Wallet age (Longevity) is read from
+   Zerion's portfolio chart and **resolves correctly for normal wallets** (verified: a real wallet
+   scored 5.7 years / Longevity 104). Two residuals: lifetime **Volume** is summed from a single
+   transaction page, so it understates heavy traders; and for *pathologically large* wallets
+   (millions of txs) Zerion's chart endpoint returns a 500, so their age falls back to the shallow
+   value — the score still computes, just with a low Longevity. Deeper volume history is a small
+   future refinement.
 3. **Graded risk beyond sanctions** (mixer / scam scoring) requires a paid compliance vendor
    (TRM / Elliptic / Nansen) and is **not** enabled. The free sanctions hard-gate is.
+
+## What's left
+
+The engine, three live data sources, the methodology, and the calibration machinery are **done and
+in production**. What remains is either operational or a deliberate decision — none of it blocks the
+engine from working today:
+
+| # | Item | Type | Notes |
+|---|---|---|---|
+| 1 | **Volume depth** | small code | sum more than one tx page so heavy traders aren't understated |
+| 2 | **Population backfill** | operational | score a large stratified wallet sample → flip percentiles from `estimate` to real `population` |
+| 3 | **App cutover** | staged migration | point the app UI at v2; needs a compat layer for old-worker-only fields (`timeline`, `character`, earnings range) and must not fabricate them |
+| 4 | **Reward + EAS cutover** | gated on #2 | move payout math and on-chain attestations to v2 **only after** calibration |
+| 5 | **Graded risk vendor** | optional / paid | TRM / Elliptic / Nansen for mixer/scam beyond the free sanctions gate |
+
+Nothing here is required for the score to be live and real — it already is. These are the steps from
+"live and proven" to "the number the whole app runs on."
 
 ## How to read a score
 
