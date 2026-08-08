@@ -12,6 +12,7 @@ import type { WalletActivity } from './types'
 import { getWalletActivity as getMockActivity } from './mockProvider'
 import { fetchZerionActivity, zerionConfigured } from './providers/zerion'
 import type { ReferralFetcher } from './providers/referrals'
+import type { SanctionsFetcher } from './providers/chainalysis'
 
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/
 
@@ -21,6 +22,8 @@ export interface ResolveOptions {
   // Injected by the route (backed by ctx.supabase). Fills the Network signal +
   // referral-farm Risk from our own referral DB, independent of Zerion.
   referralFetcher?: ReferralFetcher
+  // Sanctions hard-gate via the free Chainalysis on-chain oracle. Fails open.
+  sanctionsFetcher?: SanctionsFetcher
 }
 
 export async function resolveWalletActivity(
@@ -46,15 +49,25 @@ export async function resolveWalletActivity(
     source = 'mock'
   }
 
-  // 2. Enrich Network + referral-farm Risk from our own DB (real addresses only —
-  // golden fixtures keep their own referrals). Enrichment never fails the request.
-  if (opts.referralFetcher && ADDR_RE.test(address)) {
-    try {
-      const { referrals, sybilFlag } = await opts.referralFetcher(address, nowMs)
-      if (referrals.length) activity = { ...activity, referrals }
-      if (sybilFlag) activity = { ...activity, riskFlags: [...activity.riskFlags, sybilFlag] }
-    } catch {
-      // referral enrichment is best-effort; the base score still stands
+  // 2. Enrich from our own sources for real addresses (golden fixtures keep their
+  // own referrals/flags). All enrichment is best-effort — never fails the request.
+  if (ADDR_RE.test(address)) {
+    if (opts.referralFetcher) {
+      try {
+        const { referrals, sybilFlag } = await opts.referralFetcher(address, nowMs)
+        if (referrals.length) activity = { ...activity, referrals }
+        if (sybilFlag) activity = { ...activity, riskFlags: [...activity.riskFlags, sybilFlag] }
+      } catch {
+        // referral enrichment is best-effort; the base score still stands
+      }
+    }
+    if (opts.sanctionsFetcher) {
+      try {
+        const flag = await opts.sanctionsFetcher(address)
+        if (flag) activity = { ...activity, riskFlags: [...activity.riskFlags, flag] }
+      } catch {
+        // sanctions oracle fails open — never block a score on an RPC error
+      }
     }
   }
 

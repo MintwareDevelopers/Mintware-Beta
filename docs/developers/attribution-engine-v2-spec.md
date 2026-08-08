@@ -213,8 +213,12 @@ weighting the farmer could win; under v2 it scores zero. That inversion is the w
      *other* people acted). Replace `percentileFor`'s calibrated curve with `percentileScore`.
   3. Set **tier cutoffs on percentiles, not raw scores**, with hysteresis/dead-zones so wallets
      don't flicker across a boundary.
-  4. Wire real risk feeds (Chainalysis oracle + graded provider) and the sybil feature extraction
-     (funding graph, referral-tree entropy, action-sequence similarity) that feeds `sybil.ts`.
+  4. Wire real risk feeds. The **Chainalysis Sanctions Oracle adapter is built + tested**
+     (`lib/attribution/providers/chainalysis.ts`) — a free on-chain `isSanctioned` call (Base
+     oracle by default; the injected-reader design keeps the mapping unit-tested and fails open on
+     RPC error). Remaining: a graded-risk provider (TRM/Elliptic/Nansen) for mixer/scam beyond
+     sanctions, and the on-chain sybil feature extraction (funding graph, action-sequence
+     similarity, temporal batching) that unlocks `sybil.ts`'s `confirmedRing`.
   5. **Drift monitoring.** Recompute distributions on a schedule; **PSI vs the frozen CDF** per
      signal (PSI < 0.1 stable, 0.1–0.25 watch, > 0.25 → recalibrate as a new MINOR version).
 - **v2.2 — validation + cutover.**
