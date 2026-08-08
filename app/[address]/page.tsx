@@ -12,7 +12,7 @@ import { WalletDisplay }         from '@/components/web3/WalletDisplay'
 import { Sparkline }             from '@/components/web2/Sparkline'
 import { computeBadges, topBadgeLabel } from '@/lib/rewards/badges'
 import { getAddress, isAddress }  from 'viem'
-import { API, shortAddr }        from '@/lib/web2/api'
+import { shortAddr }        from '@/lib/web2/api'
 import { useEffect, useState }   from 'react'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
@@ -93,7 +93,7 @@ export default function PublicProfile() {
     // referral_stats / referral_records directly.
     const scoreAddr = isAddress(address) ? getAddress(address) : address
     Promise.all([
-      fetch(`${API}/score?address=${scoreAddr}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/attribution/score-v2?address=${scoreAddr}&legacy=1`).then(r => r.json()).catch(() => null),
       fetch(`/api/referral?address=${address}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
     ]).then(([scoreData, ref]) => {
       setScore(scoreData)
@@ -697,12 +697,14 @@ export default function PublicProfile() {
                     </span>
                   </div>
                 )}
-                <div className="pp-stat-row">
-                  <span className="pp-stat-key">Est. earnings</span>
-                  <span className="pp-stat-val teal">
-                    ${score.totalLo.toLocaleString()}–${score.totalHi.toLocaleString()}/yr
-                  </span>
-                </div>
+                {(score.totalLo > 0 || score.totalHi > 0) && (
+                  <div className="pp-stat-row">
+                    <span className="pp-stat-key">Est. earnings</span>
+                    <span className="pp-stat-val teal">
+                      ${score.totalLo.toLocaleString()}–${score.totalHi.toLocaleString()}/yr
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Referral network */}
