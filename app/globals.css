@@ -490,3 +490,14 @@
   .font-atx-display { font-family: var(--font-space-grotesk), 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif; }
   .font-atx-mono    { font-family: var(--font-jetbrains), 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; }
 }
+
+@layer base {
+  /* Keyboard-only focus ring — visible for tab users, clean for mouse/touch.
+     The app's custom buttons had no visible focus state (a11y gap). */
+  :focus-visible {
+    outline: 2px solid #006FCC; /* ATX blue */
+    outline-offset: 2px;
+  }
+  /* Never suppress the ring on keyboard focus. */
+  :focus:not(:focus-visible) { outline: none; }
+}
