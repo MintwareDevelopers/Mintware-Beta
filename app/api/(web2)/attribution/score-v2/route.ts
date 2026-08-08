@@ -16,6 +16,7 @@ import { computeScore } from '@/lib/attribution/score'
 import { resolveWalletActivity } from '@/lib/attribution/provider'
 import { buildReferralFetcher } from '@/lib/attribution/providers/referrals'
 import { buildSanctionsFetcher } from '@/lib/attribution/providers/chainalysis'
+import { buildNansenRiskFetcher } from '@/lib/attribution/providers/nansen'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,7 @@ export const GET = createHandler(async (req, ctx) => {
   const { activity, source, degraded } = await resolveWalletActivity(address, Date.now(), {
     referralFetcher: buildReferralFetcher(ctx.supabase),
     sanctionsFetcher: buildSanctionsFetcher(),
+    riskFetcher: buildNansenRiskFetcher(),
   })
   const result = computeScore(activity, Date.now())
   // Diagnostics — safe (never exposes the key, only whether one is present).

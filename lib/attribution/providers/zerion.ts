@@ -168,21 +168,41 @@ const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 // One GET with polite retry on 429 (free-tier rate limit). Honors `Retry-After`
 // when present, else exponential backoff. Keeps total wait small so the request
 // never hangs a serverless function.
-async function zerionGet(path: string, apiKey: string, attempts = 3): Promise<{ data?: unknown[] }> {
+interface ZerionPage { data?: unknown[]; links?: { next?: string } }
+
+// One GET with polite retry on 429 (free-tier rate limit). Honors `Retry-After`
+// when present, else exponential backoff. Accepts a relative path OR an absolute
+// pagination URL (Zerion's `links.next`). Keeps total wait small.
+async function zerionGet(pathOrUrl: string, apiKey: string, attempts = 3): Promise<ZerionPage> {
   const auth = Buffer.from(`${apiKey}:`).toString('base64') // Basic auth: base64("<key>:")
+  const url = pathOrUrl.startsWith('http') ? pathOrUrl : `${ZERION_BASE}${pathOrUrl}`
   for (let i = 0; i < attempts; i++) {
-    const res = await fetch(`${ZERION_BASE}${path}`, {
+    const res = await fetch(url, {
       headers: { authorization: `Basic ${auth}`, accept: 'application/json' },
     })
-    if (res.ok) return res.json() as Promise<{ data?: unknown[] }>
+    if (res.ok) return res.json() as Promise<ZerionPage>
     if (res.status === 429 && i < attempts - 1) {
       const retryAfter = Number(res.headers.get('retry-after'))
       await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 700 * (i + 1))
       continue
     }
-    throw new Error(`Zerion ${path} → ${res.status}`)
+    throw new Error(`Zerion ${pathOrUrl} → ${res.status}`)
   }
-  throw new Error(`Zerion ${path} → retries exhausted`)
+  throw new Error(`Zerion ${pathOrUrl} → retries exhausted`)
+}
+
+// Follow `links.next` up to maxPages, accumulating `data`. Stops early when
+// there's no next cursor. Bounded so heavy wallets don't hammer the free tier.
+async function zerionGetPaged(path: string, apiKey: string, maxPages: number): Promise<unknown[]> {
+  const all: unknown[] = []
+  let next: string | undefined = path
+  for (let p = 0; p < maxPages && next; p++) {
+    const page: ZerionPage = await zerionGet(next, apiKey)
+    all.push(...(page.data ?? []))
+    next = page.links?.next
+    if (next) await sleep(350)
+  }
+  return all
 }
 
 /**
@@ -190,23 +210,23 @@ async function zerionGet(path: string, apiKey: string, attempts = 3): Promise<{ 
  * WalletActivity. Throws if `ZERION_API_KEY` is unset or the API errors — the
  * composite provider decides whether to fall back to the mock.
  */
-export async function fetchZerionActivity(address: string, nowMs: number, txPageSize = 100): Promise<WalletActivity> {
+export async function fetchZerionActivity(address: string, nowMs: number, txPages = 3): Promise<WalletActivity> {
   const apiKey = process.env.ZERION_API_KEY
   if (!apiKey) throw new Error('ZERION_API_KEY not set')
   // Sequential (not parallel) — the free tier rate-limits concurrent requests.
   // The age chart goes FIRST: it's the request most likely to be dropped by the
-  // rate limit, so we spend the wallet's freshest budget on it. Transactions have
-  // no sort param + a 100-row cap, so firstSeen from tx alone badly understates
-  // old wallets (Longevity ≈ 0); the `max` chart's earliest point is the age proxy.
+  // rate limit, so we spend the wallet's freshest budget on it. Then positions,
+  // then several pages of transactions (widening the window so lifetime Volume and
+  // active-weeks aren't understated to a single 100-row page).
   const chartFirstSeen = await fetchZerionFirstSeenMs(address, apiKey)
   await sleep(350)
   const pos = await zerionGet(`/wallets/${address}/positions/?filter[trash]=only_non_trash&sort=value`, apiKey)
   await sleep(350)
-  const txs = await zerionGet(`/wallets/${address}/transactions/?page[size]=${txPageSize}`, apiKey)
+  const txs = await zerionGetPaged(`/wallets/${address}/transactions/?page[size]=100`, apiKey, txPages)
   const activity = mapZerionToActivity({
     address,
     positions: (pos.data ?? []) as ZerionPosition[],
-    transactions: (txs.data ?? []) as ZerionTransaction[],
+    transactions: txs as ZerionTransaction[],
     nowMs,
   })
 
