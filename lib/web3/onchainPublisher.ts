@@ -40,6 +40,7 @@ import {
   type Chain,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
+import { getOracleSignerKey } from './oracleKeys'
 import { base, baseSepolia, bsc } from 'viem/chains'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
@@ -160,16 +161,11 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
   // Default: 30 days from now. The contract requires block.timestamp <= deadline.
   const deadline = params.deadline ?? Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
 
-  // ── Oracle wallet setup ────────────────────────────────────────────────────
-  const rawKey = process.env.DISTRIBUTOR_PRIVATE_KEY
-  if (!rawKey) {
-    throw new Error(
-      '[onchainPublisher] DISTRIBUTOR_PRIVATE_KEY is not set. ' +
-      'Add it to .env.local: DISTRIBUTOR_PRIVATE_KEY=<64 hex chars>'
-    )
-  }
-
-  const privateKey = (rawKey.startsWith('0x') ? rawKey : `0x${rawKey}`) as `0x${string}`
+  // ── Oracle wallet setup — per-role signing key (root/merkle family, audit C2).
+  // Resolves ROOT_ORACLE_PRIVATE_KEY, falling back within-family to
+  // DISTRIBUTOR_PRIVATE_KEY (non-breaking); provision a dedicated ROOT key to
+  // complete the split. Throws a clear, env-naming error if none is set.
+  const privateKey = getOracleSignerKey('root')
   const account    = privateKeyToAccount(privateKey)
 
   const chain     = getChain(chainSlug)

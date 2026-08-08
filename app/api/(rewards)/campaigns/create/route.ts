@@ -16,12 +16,14 @@ import { createHandler } from '@/lib/web2/routeHandler'
 
 const CHAIN_LABELS: Record<number, string> = {
   8453:  'Base',
+  84532: 'Base Sepolia',
   1:     'Ethereum',
   42161: 'Arbitrum',
 }
 
 const DISTRIBUTOR_ADDRESS: Record<number, string> = {
   8453:  process.env.DISTRIBUTOR_ADDRESS_BASE      ?? process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS ?? '',
+  84532: process.env.DISTRIBUTOR_ADDRESS_BASE_SEPOLIA ?? process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS ?? '',
   1:     process.env.DISTRIBUTOR_ADDRESS_ETHEREUM  ?? process.env.DISTRIBUTOR_ADDRESS_MAINNET ?? '',
   42161: process.env.DISTRIBUTOR_ADDRESS_ARBITRUM  ?? '',
 }
