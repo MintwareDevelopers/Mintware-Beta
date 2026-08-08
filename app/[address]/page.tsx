@@ -13,6 +13,7 @@ import { Sparkline }             from '@/components/web2/Sparkline'
 import { computeBadges, topBadgeLabel } from '@/lib/rewards/badges'
 import { getAddress, isAddress }  from 'viem'
 import { API, shortAddr }   from '@/lib/web2/api'
+import { AnimatedScore }    from '@/components/web2/AnimatedScore'
 import { useEffect, useState }   from 'react'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
@@ -585,7 +586,7 @@ export default function PublicProfile() {
               <div className="pp-skel" style={{ height: 72, width: 200 }} />
             ) : score ? (
               <div className="pp-score-block">
-                <div className="pp-score-num">{score.score}</div>
+                <div className="pp-score-num"><AnimatedScore value={score.score} /></div>
                 <div className="pp-score-meta">
                   <div className="pp-score-of">of 925 pts</div>
                   <div className="pp-rank">Top {100 - score.percentile}% · {score.percentile}th percentile</div>
