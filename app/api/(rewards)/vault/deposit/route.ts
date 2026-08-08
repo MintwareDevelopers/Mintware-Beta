@@ -93,6 +93,25 @@ export const POST = createHandler(async (req, ctx) => {
     return ctx.json({ error: 'Failed to record deposit' }, 500)
   }
 
+  // Mirror the deposit into vault_lp_positions — the source of truth the weighted
+  // epoch cron reads to compute reward weights (lp_deposits is the per-tx ledger;
+  // this is the per-wallet aggregate). Accumulate liquidity_units across deposits.
+  // (liquidity_units = USDC contributed; the cron applies lock-tier + attribution
+  // multipliers on top.) Best-effort: a failure here must not fail the deposit.
+  try {
+    const { data: existingPos } = await ctx.supabase
+      .from('vault_lp_positions')
+      .select('liquidity_units')
+      .eq('vault_id', vault_id).eq('wallet', walletLower).maybeSingle()
+    const newUnits = Number(existingPos?.liquidity_units ?? 0) + usdc_amount
+    await ctx.supabase.from('vault_lp_positions').upsert(
+      { vault_id, wallet: walletLower, liquidity_units: newUnits, lock_tier, status: 'active' },
+      { onConflict: 'vault_id,wallet', ignoreDuplicates: false },
+    )
+  } catch (e) {
+    ctx.log.warn('vault/deposit', 'vault_lp_positions upsert failed', { error: e instanceof Error ? e.message : String(e) })
+  }
+
   if (referrerLower && referrerLower !== walletLower) {
     await ctx.supabase.from('vault_referrals').upsert(
       { vault_id, referrer: referrerLower, referred_wallet: walletLower, deposit_id: deposit.id, net_liquidity: usdc_amount },
