@@ -14,6 +14,7 @@ import {StateLibrary}        from "@uniswap/v4-core/src/libraries/StateLibrary.s
 import {Pausable}               from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MWGuardianPausable}     from "../src/lib/MWGuardianPausable.sol";
 import {MintwareDeFiPairVault}  from "../src/vaults/MintwareDeFiPairVault.sol";
+import {MintwareWeightedDistributor} from "../src/MintwareWeightedDistributor.sol";
 import {PoolProfile, LockTier}  from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20}      from "./mocks/MockERC20.sol";
@@ -197,6 +198,51 @@ contract MintwareDeFiPairVaultTest is Test {
         vm.prank(alice);
         vault.claimFees();
         assertGe(_t0().balanceOf(alice), aliceT0, "alice claimed (t0 >= before)");
+    }
+
+    // ── slice 4: oracle-weighted fee routing ─────────────────────────────────
+
+    function test_fees_route_to_weighted_distributor_when_wired() public {
+        _init();
+        _deposit(alice, 200_000e18, 200_000e18, LockTier.Flex);
+
+        MintwareWeightedDistributor dist =
+            new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        bytes32 vid = keccak256("defi-pair");
+        vault.setWeightedDistributor(address(dist), vid);
+
+        _genFees();
+        (uint256 f0, uint256 f1) = vault.collectFees();
+        assertTrue(f0 > 0 || f1 > 0, "fees realized");
+
+        // LP portion (fee minus the Mintware cut) landed in the distributor's epoch pot.
+        uint256 mint0 = (f0 * vault.MINTWARE_FEE_BPS()) / vault.BPS();
+        uint256 mint1 = (f1 * vault.MINTWARE_FEE_BPS()) / vault.BPS();
+        MintwareWeightedDistributor.Epoch memory e = dist.getEpoch(vid, 1);
+        assertEq(e.pot0, f0 - mint0, "t0 LP fees routed to distributor");
+        assertEq(e.pot1, f1 - mint1, "t1 LP fees routed to distributor");
+
+        // Accumulator untouched — LPs claim their weighted share from the distributor.
+        assertEq(vault.accFee0PerShare(), 0, "accumulator not credited");
+        (uint256 ap0, uint256 ap1) = vault.pendingFees(alice);
+        assertEq(ap0, 0, "no pending accumulator fees");
+        assertEq(ap1, 0, "no pending accumulator fees");
+    }
+
+    function test_setWeightedDistributor_is_one_time() public {
+        MintwareWeightedDistributor dist =
+            new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        vault.setWeightedDistributor(address(dist), keccak256("v"));
+        vm.expectRevert(MintwareDeFiPairVault.WeightedDistributorAlreadySet.selector);
+        vault.setWeightedDistributor(address(dist), keccak256("v2"));
+    }
+
+    function test_setWeightedDistributor_only_owner() public {
+        MintwareWeightedDistributor dist =
+            new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        vm.prank(alice);
+        vm.expectRevert(); // Ownable: caller is not the owner
+        vault.setWeightedDistributor(address(dist), keccak256("v"));
     }
 
     // ── rebalance ────────────────────────────────────────────────────────────

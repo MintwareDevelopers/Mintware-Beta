@@ -5,6 +5,7 @@ import {ERC721}  from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {EIP712}  from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {ECDSA}   from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {MWTimelockedOracleSigner} from "../lib/MWTimelockedOracleSigner.sol";
 
 /// @dev EIP-5192 minimal soulbound interface.
 interface IERC5192 {
@@ -23,7 +24,7 @@ interface IERC5192 {
 /// @dev    Stores the scalar `total` plus the economic/network/technical rollup so the vault
 ///         surfaces can weight it (DeFi 70/30/0, RWA 60/25/15). Per-wallet nonce prevents
 ///         replay; the oracle attests the CURRENT nonce.
-contract MintwareAttributionToken is ERC721, Ownable, EIP712, IERC5192 {
+contract MintwareAttributionToken is ERC721, Ownable, EIP712, IERC5192, MWTimelockedOracleSigner {
     struct Score {
         uint256 total;
         uint256 economic;
@@ -36,14 +37,13 @@ contract MintwareAttributionToken is ERC721, Ownable, EIP712, IERC5192 {
         "AttributionAttestation(address wallet,uint256 total,uint256 economic,uint256 network,uint256 technical,uint256 nonce,uint256 deadline)"
     );
 
-    address public oracleSigner;
+    // oracleSigner + 48h timelocked rotation live in MWTimelockedOracleSigner.
     uint256 public nextTokenId = 1;
 
     mapping(address => uint256) public tokenOf; // wallet => tokenId (0 = none)
     mapping(address => Score)   public scores;  // wallet => score
     mapping(address => uint256) public nonces;  // wallet => attest nonce
 
-    event OracleSignerSet(address indexed signer);
     event Attested(address indexed wallet, uint256 indexed tokenId, uint256 total);
 
     error Soulbound();
@@ -56,13 +56,18 @@ contract MintwareAttributionToken is ERC721, Ownable, EIP712, IERC5192 {
         EIP712("MintwareAttribution", "1")
         Ownable(owner_)
     {
-        oracleSigner = _oracleSigner;
+        _initOracleSigner(_oracleSigner);
     }
 
+    /// @notice One-time wiring of the oracle signer; rotation goes through the 48h
+    ///         timelock below (audit C7).
     function setOracleSigner(address signer) external onlyOwner {
-        oracleSigner = signer;
-        emit OracleSignerSet(signer);
+        _initOracleSigner(signer);
     }
+
+    function proposeOracleSigner(address proposed) external onlyOwner { _proposeOracleSigner(proposed); }
+    function confirmOracleSigner() external onlyOwner { _confirmOracleSigner(); }
+    function cancelOracleRotation() external onlyOwner { _cancelOracleRotation(); }
 
     // ── attestation ────────────────────────────────────────────────────────────
 

@@ -21,9 +21,10 @@
 // Response 400: missing params
 // Response 500: RPC error
 //
-// Security: this endpoint is read-only — no state changes, no auth token.
-// The data it returns is public on-chain. In production, add IP allowlist or
-// admin JWT guard before deploying to a public-facing host.
+// Security: read-only — no state changes. The data it returns is already public
+// on-chain, but the route is bearer-gated (CRON_SECRET) anyway so an anonymous
+// caller can't enumerate operator contracts against our RPC or use it as a free
+// RPC proxy (audit C11). Operator dashboards pass `Authorization: Bearer <secret>`.
 // =============================================================================
 
 import { CHAIN_RPC } from '@/lib/constants'
@@ -134,4 +135,4 @@ export const GET = createHandler(async (req, ctx) => {
     rotation_pending:           rotationPending,
     rotation_available_in_secs: rotationAvailableInSecs,
   })
-})
+}, { auth: 'bearer-token' })

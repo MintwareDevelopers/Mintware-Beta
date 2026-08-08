@@ -26,6 +26,7 @@
 
 import { createWalletClient, http, keccak256, toBytes } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
+import { getOracleSignerKey } from '@/lib/web3/oracleKeys'
 import { base, baseSepolia } from 'viem/chains'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import type { VolatilityMetrics } from './volatilityMonitor'
@@ -203,24 +204,13 @@ export function assessRebalanceNeed(
 export async function signRangeProposal(params: RangeProposalParams): Promise<SignedRangeProposal> {
   const { vaultDbId, chain: chainSlug, tickLower, tickUpper, reason, nonce } = params
 
-  // ── Oracle wallet ───────────────────────────────────────────────────────────
-  const rawKey =
-    process.env.ORACLE_PRIVATE_KEY ??
-    process.env.DISTRIBUTOR_PRIVATE_KEY
-  if (!rawKey) {
-    throw new Error(
-      '[rangeProposer] ORACLE_PRIVATE_KEY is not set. ' +
-      'Add it to .env.local (falls back to DISTRIBUTOR_PRIVATE_KEY).'
-    )
-  }
-
+  // ── Oracle wallet (range role — audit C2: no longer falls back to the root key)
   const socialVaultAddress = process.env.NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS
   if (!socialVaultAddress) {
     throw new Error('[rangeProposer] NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS is not set.')
   }
 
-  const privateKey = (rawKey.startsWith('0x') ? rawKey : `0x${rawKey}`) as `0x${string}`
-  const account    = privateKeyToAccount(privateKey)
+  const account    = privateKeyToAccount(getOracleSignerKey('range'))
   const chain      = getChainForSlug(chainSlug)
   const transport  = http(getRpcForSlug(chainSlug))
   const client     = createWalletClient({ account, chain, transport })

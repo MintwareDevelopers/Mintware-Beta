@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 import {MintwareAttributionToken, IERC5192} from "../src/attribution/MintwareAttributionToken.sol";
+import {MWTimelockedOracleSigner} from "../src/lib/MWTimelockedOracleSigner.sol";
 
 contract MintwareAttributionTokenTest is Test {
     MintwareAttributionToken internal tok;
@@ -90,5 +91,55 @@ contract MintwareAttributionTokenTest is Test {
     function test_supportsInterface_5192() public view {
         assertTrue(tok.supportsInterface(type(IERC5192).interfaceId), "IERC5192");
         assertTrue(tok.supportsInterface(0x80ac58cd), "ERC721");
+    }
+
+    // ── C7: timelocked oracle-signer rotation (via MWTimelockedOracleSigner) ────
+
+    function test_setOracleSigner_is_one_time_only() public {
+        // constructor already initialized it; a second instant set must revert —
+        // rotation now goes through the 48h timelock, not an instant setter.
+        vm.expectRevert(MWTimelockedOracleSigner.OracleSignerAlreadyInitialized.selector);
+        tok.setOracleSigner(makeAddr("other"));
+    }
+
+    function test_rotation_timelock_and_cutover() public {
+        uint256 newPk = 0xC0FFEE;
+        address newSigner = vm.addr(newPk);
+        tok.proposeOracleSigner(newSigner);
+
+        // cannot confirm before the 48h delay
+        vm.expectRevert(MWTimelockedOracleSigner.RotationDelayNotElapsed.selector);
+        tok.confirmOracleSigner();
+
+        vm.warp(block.timestamp + 48 hours);
+        tok.confirmOracleSigner();
+        assertEq(tok.oracleSigner(), newSigner);
+
+        // old key rejected, new key accepted
+        uint256 dl = block.timestamp + 1 hours;
+        bytes memory oldSig = _sign(oraclePk, alice, 500, 250, 125, 125, dl);
+        vm.expectRevert(MintwareAttributionToken.InvalidSignature.selector);
+        tok.attest(alice, 500, 250, 125, 125, dl, oldSig);
+
+        bytes memory newSig = _sign(newPk, alice, 500, 250, 125, 125, dl);
+        tok.attest(alice, 500, 250, 125, 125, dl, newSig);
+        assertEq(tok.scoreOf(alice).total, 500);
+    }
+
+    function test_rotation_cancel() public {
+        tok.proposeOracleSigner(makeAddr("newSigner"));
+        tok.cancelOracleRotation();
+        assertEq(tok.pendingOracleSigner(), address(0));
+    }
+
+    function test_rotation_zero_signer_reverts() public {
+        vm.expectRevert(MWTimelockedOracleSigner.ZeroOracleSigner.selector);
+        tok.proposeOracleSigner(address(0));
+    }
+
+    function test_rotation_onlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert(); // Ownable: caller is not the owner
+        tok.proposeOracleSigner(makeAddr("x"));
     }
 }

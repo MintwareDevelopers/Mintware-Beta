@@ -18,6 +18,12 @@ import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC
 import {MintwarePairVault} from "./MintwarePairVault.sol";
 import {PoolProfile, LockTier} from "./VaultTypes.sol";
 
+/// @dev Minimal view of MintwareWeightedDistributor used for oracle-weighted fee routing.
+interface IMWWeightedDistributor {
+    function registerVault(bytes32 vaultId, address token0, address token1) external;
+    function fundFees(bytes32 vaultId, uint256 amount0, uint256 amount1) external;
+}
+
 /// @title  MintwareDeFiPairVault
 /// @notice A true dual-sided pair liquidity vault (generic token0/token1). Depositors provide
 ///         BOTH tokens in the current pool ratio and receive shares == V4 liquidity units — a
@@ -104,6 +110,13 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     mapping(address => uint256) public fee0Debt;
     mapping(address => uint256) public fee1Debt;
 
+    // Oracle-weighted reward routing (audit migration slice 4). When set, the realized
+    // LP fee portion is forwarded to MintwareWeightedDistributor for reputation + referral
+    // weighting off-chain, instead of the pro-rata per-share accumulator above. This is the
+    // "attribution/lock-weighted reward layering" the header anticipates.
+    address public weightedDistributor;
+    bytes32 public distributorVaultId;
+
     LockTier private _pendingTier; // consumed within a deposit
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -115,6 +128,8 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     event Redeemed(address indexed lp, uint256 shares, uint256 amount0, uint256 amount1, uint256 penalty0, uint256 penalty1);
     event FeesCollected(uint256 fee0, uint256 fee1, uint256 mintware0, uint256 mintware1);
     event FeesClaimed(address indexed lp, uint256 amount0, uint256 amount1);
+    event WeightedDistributorSet(address indexed distributor, bytes32 indexed vaultId);
+    event FeesRoutedToDistributor(bytes32 indexed vaultId, uint256 lp0, uint256 lp1);
     event Rebalanced(int24 tickLower, int24 tickUpper, uint128 liquidity);
     event ProfileSet(PoolProfile profile);
 
@@ -133,6 +148,8 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     error AlreadyExecuted();
     error EmptyRange();
     error OnlyProvider();
+    error ZeroDistributor();
+    error WeightedDistributorAlreadySet();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -309,9 +326,34 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
 
         uint256 lp0 = fee0 - mint0;
         uint256 lp1 = fee1 - mint1;
-        accFee0PerShare += (lp0 * ACC_PRECISION) / totalLiquidity;
-        accFee1PerShare += (lp1 * ACC_PRECISION) / totalLiquidity;
+        if (weightedDistributor != address(0)) {
+            // Canonical path: route LP fees to the oracle-weighted distributor. LPs claim
+            // their reputation + referral weighted share there, not from the accumulator.
+            if (lp0 > 0 || lp1 > 0) {
+                IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, lp0, lp1);
+                emit FeesRoutedToDistributor(distributorVaultId, lp0, lp1);
+            }
+        } else {
+            // Legacy path: pro-rata per-share accrual (pre-wiring / un-migrated vaults).
+            accFee0PerShare += (lp0 * ACC_PRECISION) / totalLiquidity;
+            accFee1PerShare += (lp1 * ACC_PRECISION) / totalLiquidity;
+        }
         emit FeesCollected(fee0, fee1, mint0, mint1);
+    }
+
+    /// @notice One-time wiring of the reputation + referral weighted distributor. Once set,
+    ///         realized LP fees route there (oracle-weighted) instead of the pro-rata
+    ///         accumulator. Registers this vault's token pair with the distributor and
+    ///         grants it the pull allowance it needs for fundFees().
+    function setWeightedDistributor(address dist, bytes32 vaultId) external onlyOwner {
+        if (dist == address(0))                revert ZeroDistributor();
+        if (weightedDistributor != address(0)) revert WeightedDistributorAlreadySet();
+        weightedDistributor = dist;
+        distributorVaultId  = vaultId;
+        IMWWeightedDistributor(dist).registerVault(vaultId, address(token0), address(token1));
+        token0.forceApprove(dist, type(uint256).max);
+        token1.forceApprove(dist, type(uint256).max);
+        emit WeightedDistributorSet(dist, vaultId);
     }
 
     function claimFees() external nonReentrant {
