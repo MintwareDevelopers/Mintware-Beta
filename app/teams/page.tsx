@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MarketingNav } from '@/components/web2/MarketingNav'
+import { PageHero } from '@/components/web2/PageHero'
 
 // =============================================================================
 // /teams — marketing landing for the Matched Liquidity vault (team-facing).
@@ -24,8 +25,6 @@ export const metadata: Metadata = {
     'Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock your fee share flows to the people who backed you. Trust us becomes check the contract.',
 }
 
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 const BLUE = 'var(--color-atx-blue)'
 const TWITTER = 'https://x.com/Mintware_org'
 
@@ -83,23 +82,17 @@ export default function TeamsLandingPage() {
       <MarketingNav active="teams" />
 
       {/* ── HERO ── */}
-      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className={`${wrap} py-[54px]`}>
-          <div className={ey}>✴ For teams · matched liquidity</div>
-          <h1 className="font-bold tracking-[-0.03em] leading-[0.97] text-[clamp(38px,6.4vw,86px)] max-w-[15ch] mt-4">
-            Prove it. <span style={{ color: BLUE }}>Don’t say it.</span>
-          </h1>
-          <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[54ch] mt-6">
-            Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no
-            early-exit path. During the lock, your fee share flows to the people who backed you. “Trust us” becomes
-            “check the contract.”
-          </p>
-          <div className="flex flex-wrap gap-3 mt-8">
-            <a href="#how" className={btnAcc}>How it works ↓</a>
-            <Link href="/defi" className={btnGhost}>The LP side →</Link>
-          </div>
+      <PageHero
+        size="compact"
+        eyebrow="For teams · matched liquidity"
+        title={<>Prove it. <span className="text-atx-blue">Don’t say it.</span></>}
+        sub="Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock, your fee share flows to the people who backed you. “Trust us” becomes “check the contract.”"
+      >
+        <div className="flex flex-wrap gap-3">
+          <a href="#how" className={btnAcc}>How it works ↓</a>
+          <Link href="/defi" className={btnGhost}>The LP side →</Link>
         </div>
-      </section>
+      </PageHero>
 
       {/* ── 01 · The problem ── */}
       <section className="border-b border-atx-ink">

@@ -21,12 +21,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { MwNav } from '@/components/web2/MwNav'
+import { PageHero } from '@/components/web2/PageHero'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
 import { API } from '@/lib/web2/api'
 
 // ─── ATX Settlemint tokens ──────────────────────────────────────────────────────
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
 const LINE = 'border-atx-ink/20'
 
@@ -204,19 +203,16 @@ function SwapContent() {
     <div className="page-swap bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
 
         {/* ── Editorial hero ── */}
-        <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-          <div className="px-7 pt-8 pb-7 max-[600px]:px-4">
-            <p className={`${LABEL} mb-4`}>On-chain reputation · rewards · 100+ chains</p>
-            <h1 className="font-bold tracking-[-0.03em] leading-[0.85] text-[clamp(40px,8vw,88px)]">
-              TRADE LIKE IT <span className="text-atx-blue">COUNTS.</span>
-            </h1>
-            <p className="text-atx-ink/60 text-[15px] max-w-[64ch] mt-4">
-              Every swap builds your Attribution score and earns rewards weighted by who you are.
-              Trade tokens across chains here; provide liquidity in the reputation-weighted vaults.
-              One reputation carries across both.
-            </p>
-          </div>
-          <div className="border-t border-atx-ink grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
+        <PageHero
+          size="compact"
+          eyebrow="On-chain reputation · rewards · 100+ chains"
+          title={<>TRADE LIKE IT <span className="text-atx-blue">COUNTS.</span></>}
+          sub="Every swap builds your Attribution score and earns rewards weighted by who you are. Trade tokens across chains here; provide liquidity in the reputation-weighted vaults. One reputation carries across both."
+        />
+
+        {/* stat band */}
+        <section className="border-b border-atx-ink">
+          <div className="grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
             {[
               {
                 l: 'Your score',
@@ -380,8 +376,8 @@ function SwapContent() {
                   <span className="ml-auto font-atx-mono text-[16px] text-atx-coral">→</span>
                 </div>
                 <p className="text-[13px] text-atx-ink/55 leading-[1.5]">
-                  Provide liquidity in reputation-weighted Uniswap V4 vaults — your fee share is
-                  lifted by your Attribution score. Explore the vaults surface.
+                  Reputation-weighted Uniswap V4 vaults — the same position earns more when your
+                  Attribution score is stronger. In testing on Base — explore the vaults.
                 </p>
               </Link>
             </div>

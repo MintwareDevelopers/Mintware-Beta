@@ -19,6 +19,12 @@ import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC
 import {MintwarePairVault} from "./MintwarePairVault.sol";
 import {PoolProfile}        from "./VaultTypes.sol";
 
+/// @dev Minimal view of MintwareWeightedDistributor used for oracle-weighted fee routing.
+interface IMWWeightedDistributor {
+    function registerVault(bytes32 vaultId, address token0, address token1) external;
+    function fundFees(bytes32 vaultId, uint256 amount0, uint256 amount1) external;
+}
+
 interface IFeeVaultNotifier {
     function notifyFeeReceipt(uint256 amount, string calldata source) external;
 }
@@ -126,6 +132,13 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     uint256 public teamProjDebt;
     uint256 public teamQuoteDebt;
 
+    // Oracle-weighted reward routing (audit migration slice 4). When set, the community
+    // LP fee pot routes to MintwareWeightedDistributor (reputation + referral weighting
+    // off-chain) instead of the pro-rata per-share accumulator above. Team redirection and
+    // the denom==0 protocol-takes-it rule are preserved.
+    address public weightedDistributor;
+    bytes32 public distributorVaultId;
+
     mapping(address => WithdrawalRequest) public withdrawals;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -141,6 +154,8 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     event CommunityRedeemed(address indexed lp, uint256 shares, uint256 projOut, uint256 quoteOut);
     event TeamWithdrawn(uint256 projOut, uint256 quoteOut);
     event FeesCollected(uint256 projFees, uint256 quoteFees, uint256 mintwareCut, uint256 denom);
+    event WeightedDistributorSet(address indexed distributor, bytes32 indexed vaultId);
+    event FeesRoutedToDistributor(bytes32 indexed vaultId, uint256 lpProj, uint256 lpQuote);
     event FeesClaimed(address indexed account, uint256 projOut, uint256 quoteOut);
     event LockExpired();
 
@@ -167,6 +182,8 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     error AlreadyExecuted();
     error StillLocked();
     error NothingToWithdraw();
+    error ZeroDistributor();
+    error WeightedDistributorAlreadySet();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -546,11 +563,32 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
             // No eligible liquidity to reward (e.g. all community exited mid-lock) → protocol takes it.
             if (lpProj > 0)  projectToken.safeTransfer(treasury, lpProj);
             if (lpQuote > 0) quoteToken.safeTransfer(treasury, lpQuote);
+        } else if (weightedDistributor != address(0)) {
+            // Canonical: route the community LP fee pot to the oracle-weighted distributor.
+            // Off-chain weighting excludes the team while locked (mirrors the denom rule).
+            if (lpProj > 0 || lpQuote > 0) {
+                IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, lpProj, lpQuote);
+                emit FeesRoutedToDistributor(distributorVaultId, lpProj, lpQuote);
+            }
         } else {
             accProjPerShare  += (lpProj  * ACC_PRECISION) / denom;
             accQuotePerShare += (lpQuote * ACC_PRECISION) / denom;
         }
         emit FeesCollected(projFees, quoteFees, mintProj + mintQuote, denom);
+    }
+
+    /// @notice One-time wiring of the reputation + referral weighted distributor. Once set,
+    ///         realized community LP fees route there instead of the pro-rata accumulator.
+    ///         Registers the (project, quote) pair and grants the pull allowance for fundFees().
+    function setWeightedDistributor(address dist, bytes32 vaultId) external onlyOwner {
+        if (dist == address(0))                revert ZeroDistributor();
+        if (weightedDistributor != address(0)) revert WeightedDistributorAlreadySet();
+        weightedDistributor = dist;
+        distributorVaultId  = vaultId;
+        IMWWeightedDistributor(dist).registerVault(vaultId, address(projectToken), address(quoteToken));
+        projectToken.forceApprove(dist, type(uint256).max);
+        quoteToken.forceApprove(dist, type(uint256).max);
+        emit WeightedDistributorSet(dist, vaultId);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

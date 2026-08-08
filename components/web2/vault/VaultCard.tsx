@@ -51,17 +51,15 @@ function LockMultiBar() {
 }
 
 export function VaultCard({ vault }: { vault: SocialVault }) {
-  const isRwa = vault.surface === 'rwa'
-
   return (
     <Link
       href={`/vault/${vault.id}`}
-      className={`font-atx-display bg-atx-panel border border-atx-ink border-l-[3px] ${isRwa ? 'border-l-atx-coral' : 'border-l-atx-blue'} flex flex-col gap-[14px] p-5 no-underline text-inherit transition-shadow duration-200 hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] [&_*]:rounded-none`}
+      className="font-atx-display bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-blue flex flex-col gap-[14px] p-5 no-underline text-inherit transition-shadow duration-200 hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] [&_*]:rounded-none"
     >
       <div className="flex items-start justify-between gap-[10px]">
         <div className="flex items-start gap-[10px] flex-1">
           <div className="w-10 h-10 border border-atx-ink bg-atx-bone flex items-center justify-center shrink-0">
-            <Star className={`w-5 h-5 ${isRwa ? 'text-atx-coral' : 'text-atx-blue'}`} />
+            <Star className="w-5 h-5 text-atx-blue" />
           </div>
           <div>
             <div className="text-[15px] font-semibold text-atx-ink font-atx-display leading-[1.3]">{vault.name}</div>

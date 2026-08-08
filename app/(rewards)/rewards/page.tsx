@@ -387,8 +387,8 @@ function RewardsContent() {
               <div className="grid grid-cols-4 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
                 {[
                   ['Trade', 'DeFi', false, 'Swap on any pool — best-execution routing, and every trade builds your Attribution score and earns rewards weighted by who you are.', '+8 pts / trade'],
-                  ['Provide liquidity', 'DeFi', true, 'Deposit into a reputation-weighted vault — the sticky capital a pool actually needs. Your fee share is lifted by your Attribution score.', 'fee share × reputation'],
-                  ['Lock', 'DeFi · new', true, 'Commit your LP to a lock tier — longer commitment, higher multiplier. A weekly snapshot credits you by balance × duration × reputation.', 'rate × held × duration'],
+                  ['Provide liquidity', 'DeFi · soon', true, 'Reputation-weighted liquidity vaults are in testing — the sticky capital a pool actually needs. When they launch, your fee share will be lifted by your Attribution score.', 'fee share × reputation'],
+                  ['Lock', 'DeFi · soon', true, 'Commit your LP to a lock tier — longer commitment, higher multiplier. In testing: a weekly snapshot will credit you by balance × duration × reputation.', 'rate × held × duration'],
                   ['Refer', 'DeFi', false, 'Bring qualified LPs and traders — relationship-sourced distribution, the referral that sources a real relationship, not a bot.', '+60 pts / referral'],
                 ].map(([name, badge, hot, desc, pts], i) => (
                   <div key={name as string} className={`p-5 ${i < 3 ? 'border-r border-atx-ink max-[800px]:border-r-0 max-[800px]:border-b' : ''}`}>
@@ -459,7 +459,7 @@ function TeamsView() {
               {[
                 ['Quality', 'rewarded, not quantity'],
                 ['Duration-matched', 'capital that stays to maturity'],
-                ['Permissionless', 'zero KYC in the engine — the token gates, not us'],
+                ['Permissionless', 'open by design — no gatekeeper decides who earns'],
               ].map(([n, l]) => (
                 <div key={n} className="px-[18px] py-4 border-b border-atx-ink/10 last:border-b-0">
                   <div className="font-atx-mono text-[24px] font-bold text-atx-blue tracking-[-1px] leading-none">{n}</div>
@@ -517,7 +517,7 @@ function TeamsView() {
           <h2 className={H2}>Reward the right capital. <span className="text-atx-blue">Not the mercenaries.</span></h2>
           <p className={LEAD}>The same reputation filter pays the users who actually build — and upgrades any rewards program you run. Point a campaign at any pool.</p>
           <div className="grid grid-cols-2 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
-            <Cell shine k="For users · lead" h="Your reputation is paid" p={<>The identical action out-earns a cold wallet&apos;s — up to <i>1.95×</i>. Trade, provide liquidity, hold, refer: each builds a portable score that pays a bigger share of every pool you enter.</>} />
+            <Cell shine k="For users · lead" h="Your reputation is paid" p={<>The identical action out-earns a cold wallet&apos;s — up to <i>1.95×</i>. Trade, provide liquidity, hold, refer: each builds a portable score that pays a bigger share of every reward you earn.</>} />
             <div className="p-6">
               <div className="font-atx-mono text-[11px] uppercase tracking-[0.14em] text-atx-blue">For teams</div>
               <div className="text-[20px] font-bold mt-2 text-atx-blue">Reward the right users</div>
@@ -559,7 +559,7 @@ function TeamsView() {
                 {[
                   ['Token Reward Pool', 'Per-swap rewards bring first flow', 'Reputation-weighting keeps quality wallets trading'],
                   ['Points Campaign', 'Score-gated epochs draw qualified users', 'Multipliers compound for the users who stay'],
-                  ['LP / vault', 'Seed a reputation-weighted pool', 'Attribution-weighted fees + lock tiers keep LPs deep'],
+                  ['LP / vault', 'Seed a reputation-weighted pool — in testing', 'Attribution-weighted fees + lock tiers keep LPs deep'],
                   ['Referral', 'Relationship-sourced distribution', '24h anti-sybil gate — real users, not bots'],
                 ].map(([v, pr, se]) => (
                   <tr key={v}>

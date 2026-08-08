@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { MarketingNav } from '@/components/web2/MarketingNav'
+import { PageHero } from '@/components/web2/PageHero'
 
 // =============================================================================
 // /defi — marketing landing for the DeFi vault surface. Footer-linked only.
@@ -16,8 +17,6 @@ export const metadata: Metadata = {
     'MEV-protected, auto-managed Uniswap V4 vaults where your Attribution score lifts your fee share. Same deposit, stronger on-chain history, more yield — something no capital-only vault can offer.',
 }
 
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 const BLUE = 'var(--color-atx-blue)'
 
 function Star({ className = '' }: { className?: string }) {
@@ -96,23 +95,17 @@ export default function DefiLandingPage() {
       <MarketingNav active="defi" />
 
       {/* ── HERO ── */}
-      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className={`${wrap} py-[54px]`}>
-          <div className={ey}>✴ DeFi surface · reputation-weighted yield</div>
-          <h1 className="font-bold tracking-[-0.03em] leading-[0.97] text-[clamp(38px,6.4vw,86px)] max-w-[15ch] mt-4">
-            Same deposit. <span style={{ color: BLUE }}>More yield.</span>
-          </h1>
-          <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[52ch] mt-6">
-            MEV-protected, auto-managed liquidity on Uniswap V4 — where your Attribution score lifts your fee share.
-            Two wallets deposit the same amount into the same vault; the one with the stronger on-chain history earns more.
-            Something no capital-only vault can offer.
-          </p>
-          <div className="flex flex-wrap gap-3 mt-8">
-            <Link href="/vaults" className={btnAcc}>Open the vaults →</Link>
-            <Link href="/attribution" className={btnGhost}>How the score works →</Link>
-          </div>
+      <PageHero
+        size="compact"
+        eyebrow="DeFi surface · reputation-weighted yield"
+        title={<>Same deposit. <span className="text-atx-blue">More yield.</span></>}
+        sub="MEV-protected, auto-managed liquidity on Uniswap V4 — where your Attribution score lifts your fee share. Two wallets deposit the same amount into the same vault; the one with the stronger on-chain history earns more. Something no capital-only vault can offer."
+      >
+        <div className="flex flex-wrap gap-3">
+          <Link href="/vaults" className={btnAcc}>Open the vaults →</Link>
+          <Link href="/attribution" className={btnGhost}>How the score works →</Link>
         </div>
-      </section>
+      </PageHero>
 
       {/* ── 01 · The wedge ── */}
       <section className="border-b border-atx-ink">

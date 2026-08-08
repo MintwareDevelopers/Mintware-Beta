@@ -10,6 +10,7 @@ import React, { useState } from 'react'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { PageHero } from '@/components/web2/PageHero'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
@@ -133,18 +134,14 @@ export default function HomePage() {
       </header>
 
       {/* HERO 1 — reputation + wallet search */}
-      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className="mx-auto max-w-[1180px] px-6 py-[52px]">
-          <div className={ey}>✴ On-chain reputation · 100+ chains</div>
-          <h1 className="font-bold tracking-[-0.03em] leading-[0.96] text-[clamp(40px,7vw,96px)] max-w-[18ch] mt-4">
-            Own your share of the <span className="text-atx-blue">market you make.</span>
-          </h1>
-          <p className="text-[clamp(15px,1.9vw,20px)] leading-[1.5] text-atx-ink/70 max-w-[48ch] mt-6">
-            {'The same position earns more when your on-chain history is stronger — holding, LPing, referring all lift your share of every pool’s fees. Paste any wallet to see what it’s already built.'}
-          </p>
-
+      <PageHero
+        size="compact"
+        eyebrow="On-chain reputation · 100+ chains"
+        title={<>Own your share of the <span className="text-atx-blue">market you make.</span></>}
+        sub="The same position earns more when your on-chain history is stronger — holding, LPing, referring all lift your share of every pool’s fees. Paste any wallet to see what it’s already built."
+      >
           {/* proof strip — honest, evergreen facts (no TVL/wallet-count stats) */}
-          <div className="mt-5 font-atx-mono text-[12px] uppercase tracking-[0.1em] text-atx-ink/55 flex items-center gap-2 flex-wrap">
+          <div className="font-atx-mono text-[12px] uppercase tracking-[0.1em] text-atx-ink/55 flex items-center gap-2 flex-wrap">
             <span className="text-atx-ink font-bold">925</span> max score
             <span className="text-atx-ink/30">·</span>
             <span className="text-atx-ink font-bold">100+</span> chains scored
@@ -187,8 +184,7 @@ export default function HomePage() {
               </button>
             )}
           </div>
-        </div>
-      </section>
+      </PageHero>
 
       {/* HERO 2 — two vault products */}
       <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>

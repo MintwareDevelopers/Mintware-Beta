@@ -1,6 +1,7 @@
 'use client'
 
 import { MwNav } from '@/components/web2/MwNav'
+import { PageHero } from '@/components/web2/PageHero'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { API, shortAddr, daysUntil, fmtUSD } from '@/lib/web2/api'
@@ -9,8 +10,6 @@ import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 // ─── ATX Settlemint tokens ──────────────────────────────────────────────────────
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
 const LINE = 'border-atx-ink/20'
 
@@ -174,17 +173,16 @@ function LeaderboardContent() {
   return (
     <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
       {/* Hero */}
-      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className="px-7 pt-8 pb-7 max-[560px]:px-4">
-          <p className={`${LABEL} mb-4`}>Attribution · {activeCampaign?.name ?? 'global'} rankings · {sample ? 'preview data' : 'live'}</p>
-          <h1 className="font-bold tracking-[-0.03em] leading-[0.85] text-[clamp(40px,8vw,88px)]">
-            REPUTATION, <span className="text-atx-blue">RANKED.</span>
-          </h1>
-          <p className="text-atx-ink/60 text-[15px] max-w-[62ch] mt-4">
-            Every wallet has a history. This is the board. One swap enters you.
-          </p>
-        </div>
-        <div className="border-t border-atx-ink grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
+      <PageHero
+        size="compact"
+        eyebrow={`Attribution · ${activeCampaign?.name ?? 'global'} rankings · ${sample ? 'preview data' : 'live'}`}
+        title={<>REPUTATION, <span className="text-atx-blue">RANKED.</span></>}
+        sub="Every wallet has a history. This is the board. One swap enters you."
+      />
+
+      {/* stat band */}
+      <section className="border-b border-atx-ink">
+        <div className="grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
           {[
             ['Ranked wallets', loading ? '—' : String(total).padStart(3, '0'), 'this campaign'],
             ['Top score', loading ? '—' : String(topScore), 'attribution'],
