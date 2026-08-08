@@ -65,6 +65,11 @@ const PODIUM = ['text-atx-coral', 'text-atx-mesquite', 'text-atx-clay']
 const STRIPE = ['bg-atx-coral', 'bg-atx-mesquite', 'bg-atx-clay']
 const fmt = (n: number) => n.toLocaleString()
 
+// The sample board is shown ONLY in preview/dev — real users must never see fabricated rows.
+const SHOW_SAMPLE =
+  process.env.NEXT_PUBLIC_ATX_PREVIEW === 'true' ||
+  process.env.NODE_ENV === 'development'
+
 // ─── Demo fallback ─────────────────────────────────────────────────────────────
 // The wallet leaderboard is served by the external Attribution worker. When that
 // worker returns nothing (or errors), we render this fictional sample board so the
@@ -131,8 +136,9 @@ function LeaderboardContent() {
 
   const loadBoard = useCallback(async () => {
     if (!activeCampaignId) {
-      // No campaign from the worker → show the sample board rather than a blank page.
-      setEntries(DEMO_ENTRIES); setSample(true); setError(false); setLoading(false); return
+      // No campaign yet → sample board in preview only; real users get a clean empty state.
+      if (SHOW_SAMPLE) { setEntries(DEMO_ENTRIES); setSample(true) } else { setEntries([]); setSample(false) }
+      setError(false); setLoading(false); return
     }
     setLoading(true); setEntries([]); setError(false); setSample(false)
     try {
@@ -140,11 +146,11 @@ function LeaderboardContent() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       const rows = Array.isArray(data) ? data : []
-      if (rows.length === 0) { setEntries(DEMO_ENTRIES); setSample(true) }  // empty board → sample fallback
+      if (rows.length === 0) { if (SHOW_SAMPLE) { setEntries(DEMO_ENTRIES); setSample(true) } else { setEntries([]); setSample(false) } }  // empty → sample only in preview
       else { setEntries(rows); setSample(false) }
     } catch {
-      // Worker down/erroring → sample fallback so the board isn't broken for demos.
-      setEntries(DEMO_ENTRIES); setSample(true)
+      // Worker down → sample fallback in preview only; real users see an error state.
+      if (SHOW_SAMPLE) { setEntries(DEMO_ENTRIES); setSample(true) } else { setError(true) }
     } finally { setLoading(false) }
   }, [activeCampaignId])
   useEffect(() => { loadBoard() }, [loadBoard])

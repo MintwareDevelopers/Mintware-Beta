@@ -313,16 +313,21 @@ function VaultDetailContent() {
 
   const loadVault = useCallback(async () => {
     if (!id) return
-    const [vRes, dRes] = await Promise.all([
-      fetch(`/api/vault?id=${id}`).then(r => r.json()),
-      wallet ? fetch(`/api/vault?address=${wallet}`).then(r => r.json()) : Promise.resolve({ deposits: [], withdrawal_queue: [] }),
-    ])
-    setVault(vRes?.error ? null : vRes)
-    if (!vRes?.error) {
-      setDeposits((dRes.deposits ?? []).filter((d: LpDeposit) => d.vault_id === id || (d as LpDeposit & { vault?: { id: string } }).vault?.id === id))
-      setQueue((dRes.withdrawal_queue ?? []).filter((q: WithdrawalQueueEntry) => q.vault_id === id))
+    try {
+      const [vRes, dRes] = await Promise.all([
+        fetch(`/api/vault?id=${id}`).then(r => r.json()),
+        wallet ? fetch(`/api/vault?address=${wallet}`).then(r => r.json()) : Promise.resolve({ deposits: [], withdrawal_queue: [] }),
+      ])
+      setVault(vRes?.error ? null : vRes)
+      if (!vRes?.error) {
+        setDeposits((dRes.deposits ?? []).filter((d: LpDeposit) => d.vault_id === id || (d as LpDeposit & { vault?: { id: string } }).vault?.id === id))
+        setQueue((dRes.withdrawal_queue ?? []).filter((q: WithdrawalQueueEntry) => q.vault_id === id))
+      }
+    } catch {
+      setVault(null) // network/parse failure → clean "not found" state, not an infinite skeleton
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [id, wallet])
 
   useEffect(() => { loadVault() }, [loadVault])

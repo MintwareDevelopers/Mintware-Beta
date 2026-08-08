@@ -4,6 +4,7 @@ import { ConnectButton }      from '@rainbow-me/rainbowkit'
 import { useDisconnect }      from 'wagmi'
 import Link                   from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useState }           from 'react'
 import { useMintwarePrivy }   from '@/components/web2/providers'
 
 function Star({ className = '' }: { className?: string }) {
@@ -20,6 +21,7 @@ function Star({ className = '' }: { className?: string }) {
 export function MwNav() {
   const pathname = usePathname()
   const router = useRouter()
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const { disconnect: evmDisconnect } = useDisconnect()
   const privy = useMintwarePrivy()
@@ -76,7 +78,7 @@ export function MwNav() {
           if (isConnected) {
             return (
               <div className="flex items-center gap-1">
-                <div className="flex items-center gap-0.5">
+                <div className="flex items-center gap-0.5 max-[880px]:hidden">
                   {NAV_LINKS.map(({ href, label }) => (
                     <Link
                       key={href}
@@ -98,7 +100,7 @@ export function MwNav() {
                 <button
                   onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }))}
                   title="Command palette (⌘K)"
-                  className="ml-[6px] flex items-center gap-[5px] px-[9px] py-[6px] text-[11px] border border-atx-ink/25 bg-atx-panel cursor-pointer text-atx-ink/55 font-atx-mono transition-colors duration-150 hover:border-atx-blue hover:text-atx-blue"
+                  className="ml-[6px] flex items-center gap-[5px] px-[9px] py-[6px] text-[11px] border border-atx-ink/25 bg-atx-panel cursor-pointer text-atx-ink/55 font-atx-mono transition-colors duration-150 hover:border-atx-blue hover:text-atx-blue max-[880px]:hidden"
                 >
                   ⌘K
                 </button>
@@ -118,11 +120,39 @@ export function MwNav() {
                 {evmConnected && privy.authenticated && privy.hasEmbeddedWallet && (
                   <button
                     onClick={() => privy.linkWallet({ walletChainType: 'ethereum-only' })}
-                    className="ml-1 px-3 py-[7px] text-[11px] font-semibold uppercase tracking-[0.06em] border border-atx-blue text-atx-blue bg-transparent cursor-pointer font-atx-mono transition-colors duration-150 hover:bg-atx-blue hover:text-white"
+                    className="ml-1 px-3 py-[7px] text-[11px] font-semibold uppercase tracking-[0.06em] border border-atx-blue text-atx-blue bg-transparent cursor-pointer font-atx-mono transition-colors duration-150 hover:bg-atx-blue hover:text-white max-[560px]:hidden"
                     title="Link an external EVM wallet to this Privy session"
                   >
                     + EVM
                   </button>
+                )}
+
+                {/* Mobile menu toggle — the inline links hide below 880px */}
+                <button
+                  onClick={() => setMenuOpen(o => !o)}
+                  aria-label="Menu"
+                  className="hidden max-[880px]:flex items-center justify-center w-9 h-9 ml-1 border border-atx-ink/25 bg-atx-panel text-atx-ink cursor-pointer font-atx-mono text-[15px]"
+                >
+                  {menuOpen ? '✕' : '☰'}
+                </button>
+
+                {/* Mobile dropdown */}
+                {menuOpen && (
+                  <div className="hidden max-[880px]:flex flex-col absolute top-[58px] left-0 right-0 bg-atx-bone border-b border-atx-ink/20 shadow-[0_8px_24px_rgba(17,17,17,0.12)] z-[199]">
+                    {NAV_LINKS.map(({ href, label }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={() => setMenuOpen(false)}
+                        className={[
+                          'px-7 py-3.5 text-[13px] uppercase tracking-[0.06em] no-underline font-atx-mono border-t border-atx-ink/10',
+                          isActive(href) ? 'font-semibold text-atx-blue bg-atx-panel' : 'text-atx-ink/70',
+                        ].join(' ')}
+                      >
+                        {label}
+                      </Link>
+                    ))}
+                  </div>
                 )}
               </div>
             )

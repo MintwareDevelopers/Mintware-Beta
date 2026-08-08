@@ -175,7 +175,9 @@ function ProfileContent() {
                   <div className="font-atx-mono text-[12px] text-atx-grey mt-2">
                     of {maxScore} · <span className="text-atx-ink font-semibold">{tier}</span>{percentile ? <> · <span className="text-atx-mesquite">top {100 - percentile}%</span></> : null} · <span className="text-atx-ink font-semibold">{mult}</span> multiplier
                   </div>
-                  <div className="font-atx-mono text-[13px] text-atx-mesquite font-bold mt-3">${data.totalLo.toLocaleString()}–${data.totalHi.toLocaleString()}<span className="text-atx-grey font-normal"> est. / yr</span></div>
+                  {data.totalLo != null && data.totalHi != null && (
+                    <div className="font-atx-mono text-[13px] text-atx-mesquite font-bold mt-3">${data.totalLo.toLocaleString()}–${data.totalHi.toLocaleString()}<span className="text-atx-grey font-normal"> est. opportunity / yr</span></div>
+                  )}
                 </>
               ) : loading ? (
                 <div className="text-[13px] text-atx-grey font-atx-mono mt-2">Loading…</div>
