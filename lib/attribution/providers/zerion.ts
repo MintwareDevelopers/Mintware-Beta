@@ -163,6 +163,30 @@ export function zerionConfigured(): boolean {
   return Boolean(process.env.ZERION_API_KEY)
 }
 
+// Diagnostic probe for the age chart — returns exactly what Zerion sends back so
+// we can see WHY firstSeen isn't resolving (bad status? empty points? param?).
+export async function debugZerionChart(address: string): Promise<Record<string, unknown>> {
+  const apiKey = process.env.ZERION_API_KEY
+  if (!apiKey) return { error: 'no key' }
+  const auth = Buffer.from(`${apiKey}:`).toString('base64')
+  const url = `${ZERION_BASE}/wallets/${address}/charts/max`
+  try {
+    const res = await fetch(url, { headers: { authorization: `Basic ${auth}`, accept: 'application/json' } })
+    const text = await res.text()
+    let pointsLen = -1
+    let firstTs: number | null = null
+    try {
+      const json = JSON.parse(text) as { data?: { attributes?: { points?: [number, number][] } } }
+      const pts = json.data?.attributes?.points ?? []
+      pointsLen = pts.length
+      firstTs = pts.length ? pts[0][0] : null
+    } catch { /* not json */ }
+    return { url, status: res.status, ok: res.ok, pointsLen, firstTs, bodySnippet: text.slice(0, 300) }
+  } catch (e) {
+    return { url, error: e instanceof Error ? e.message : String(e) }
+  }
+}
+
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 // One GET with polite retry on 429 (free-tier rate limit). Honors `Retry-After`
