@@ -134,15 +134,16 @@ Severity: 🔴 blocks the relevant launch · 🟠 should-fix · 🟡 polish. Cit
 
 ## 3. Remediation roadmap
 
-### To open the TESTNET BETA (small — mostly done)
-**Code (remaining):** mobile-nav fix (UX #1) · the 3 crash/skeleton guards (UX #2–4) · gate the
-`DEMO_ENTRIES` leaderboard · scope the "every campaign" reward copy + drop the RWA/issuer wording in
-`/rewards` · label the homepage vault yields "illustrative."
-**Already shipped:** chain-switch + testnet banner + de-faked cards + rate-limit declarations (PR #50);
-per-role keys + reward-path hardening (PR #48); `/style` gating + `fmtUSD` NaN (this commit).
-**Operator:** set `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS`/`NEXT_PUBLIC_USDC_ADDRESS` (Base Sepolia) · set Upstash
-env · clean/reseed the fabricated `social_vaults` rows · verify a **Vercel preview build** passes ·
-confirm CI green.
+### To open the TESTNET BETA — CODE DONE ✅ (operator config remains)
+**Code — all shipped on PR #50:** chain-switch + testnet banner + de-faked cards + rate-limits · `/style`
+RWA-page gating + `fmtUSD` NaN · **mobile-nav hamburger (UX #1)** · **3 crash/skeleton guards (UX #2–4)** ·
+**`DEMO_ENTRIES` leaderboard gated** to preview/dev · **reward multiplier copy scoped + RWA/issuer wording
+dropped from `/rewards`.** Reward-path hardening + per-role keys are on PR #48.
+Optional remaining polish (non-blocking): label the homepage vault-yield component rows "illustrative"
+(`app/page.tsx:219-231`); broken "View SDK docs" 404; dead "Get notified →" CTA; marketing-nav mobile menu.
+**Operator (the actual gate now):** set `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS`/`NEXT_PUBLIC_USDC_ADDRESS`
+(Base Sepolia) · set Upstash env · clean/reseed the fabricated `social_vaults` rows · verify a **Vercel
+preview build** passes · confirm CI green.
 
 ### To open MAINNET (the high bar — do NOT skip)
 1. **Independent contract audit** of the vault/hook/distributor family. Blocker.
