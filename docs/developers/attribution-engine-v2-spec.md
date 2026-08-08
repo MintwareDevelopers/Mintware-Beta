@@ -205,12 +205,16 @@ weighting the farmer could win; under v2 it scores zero. That inversion is the w
      retention-weighted) and doubles as the referral-farm sybil sensor (a 120-wallet pending farm
      scores <20 Network and takes a graded Risk deduction). Remaining backbone: Chainalysis/Nansen
      Risk, Helius (Solana), and self-indexed LP depth-over-time.
-  2. **Scored-population backfill → true percentiles.** Sample **≥200k–500k wallets**, stratified
-     by chain, activity-recency, and birth cohort — *including dormant/dead wallets* (active-only
-     sampling is survivorship bias that inflates every percentile). Compute all 8 signals; freeze
-     an **empirical CDF per signal + a composite CDF** tagged to the model version. Percentile
-     lookups read the frozen artifact, not live data (so a wallet's score never moves because
-     *other* people acted). Replace `percentileFor`'s calibrated curve with `percentileScore`.
+  2. **Scored-population backfill → true percentiles.** The **calibration machinery is built +
+     tested** (`lib/attribution/calibration.ts`): `buildCalibrationArtifact` freezes a 101-knot
+     ECDF from a population of composite scores, `percentileFromArtifact` is the O(log n) lookup
+     the engine reads (`computeScore(..., { calibration })`), and `psi` monitors drift. It ships
+     **no distribution** — `percentileBasis` on every result is `'estimate'` until a real artifact
+     is dropped in, so an estimate is never presented as a population percentile. The remaining
+     work is the operator backfill that produces the artifact: sample **≥200k–500k wallets**,
+     stratified by chain, activity-recency, and birth cohort — *including dormant/dead wallets*
+     (active-only sampling is survivorship bias that inflates every percentile) — compute all 8
+     signals, and freeze the artifact tagged to the model version.
   3. Set **tier cutoffs on percentiles, not raw scores**, with hysteresis/dead-zones so wallets
      don't flicker across a boundary.
   4. Wire real risk feeds. The **Chainalysis Sanctions Oracle adapter is built + tested**

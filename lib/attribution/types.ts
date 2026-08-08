@@ -91,7 +91,11 @@ export interface ScoreResult {
   rawScore: number   // sum of positive signals, BEFORE risk
   riskPenalty: number
   tier: Tier
-  percentile: number // 0..100 (calibrated estimate in v2.0; population-derived in v2.1)
+  percentile: number // 0..100
+  // How `percentile` was derived: 'estimate' = the v2.0 calibrated curve (no
+  // population yet); 'population' = a real percentile against a frozen backfilled
+  // ECDF. Never present an estimate as a population percentile.
+  percentileBasis: 'estimate' | 'population'
   signals: SignalResult[]
   topDrivers: ScoreDriver[]
   risk: { penalty: number; flags: { type: RiskType; severity: number }[] }

@@ -14,6 +14,14 @@ import {
   liquiditySignal, holdingSignal, activitySignal, longevitySignal,
   volumeSignal, governanceSignal, networkSignal, riskPenalty,
 } from './signals'
+import { percentileFromArtifact, type CalibrationArtifact } from './calibration'
+
+export interface ScoreOptions {
+  // A frozen population ECDF from the operator backfill. When present (and
+  // 'population' basis), percentile is a REAL population percentile; otherwise
+  // the engine uses its labeled 'estimate' curve.
+  calibration?: CalibrationArtifact
+}
 
 function tierFor(score: number): Tier {
   if (score >= 617) return 'gold'   // ≥ ⅔ of MAX_SCORE
@@ -56,7 +64,7 @@ function deriveDrivers(positive: SignalResult[], riskPenalty: number, flags: Ris
   return drivers.slice(0, 4)
 }
 
-export function computeScore(activity: WalletActivity, nowMs: number): ScoreResult {
+export function computeScore(activity: WalletActivity, nowMs: number, opts: ScoreOptions = {}): ScoreResult {
   const signals: SignalResult[] = [
     liquiditySignal(activity),
     holdingSignal(activity),
@@ -78,13 +86,19 @@ export function computeScore(activity: WalletActivity, nowMs: number): ScoreResu
     max: 0, score: -risk.penalty, insights: risk.insights,
   }
 
+  // Population percentile when a real frozen ECDF is supplied; else the labeled
+  // estimate curve. `percentileBasis` keeps the two from being confused.
+  const usePopulation = opts.calibration?.basis === 'population'
+  const percentile = usePopulation ? percentileFromArtifact(score, opts.calibration!) : percentileFor(score)
+
   return {
     address: activity.address,
     score,
     rawScore,
     riskPenalty: risk.penalty,
     tier: tierFor(score),
-    percentile: percentileFor(score),
+    percentile,
+    percentileBasis: usePopulation ? 'population' : 'estimate',
     signals: [...signals, riskSignal],
     topDrivers: deriveDrivers(signals, risk.penalty, activity.riskFlags),
     risk: { penalty: risk.penalty, flags: activity.riskFlags },
