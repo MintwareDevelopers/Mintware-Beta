@@ -4,9 +4,14 @@
 
 | Suite | Runner | Count | Command |
 |---|---|---|---|
-| Contract tests | Hardhat/Mocha | 72/72 | `pnpm hardhat:test` |
-| Unit tests | Vitest | 147/147 | `pnpm test` |
-| Contract tests (Phase 2) | Forge | 36/36 | `pnpm forge:test` |
+| Unit tests | Vitest | 256 (27 files) | `pnpm test` |
+| Contract tests | Hardhat/Mocha | ~74 | `pnpm hardhat:test` |
+| Contract tests (Phase 2/3) | Forge | 175 | `pnpm forge:test` |
+
+> Counts verified 2026-08-08 (`pnpm test` = 256 green; Forge = 175/175). The old
+> "147/72/36" figures were stale by a wide margin. New suites now covered:
+> `lib/attribution/*`, `lib/rewards/universal/*`, `lib/rewards/vault/weighted*`.
+> (Removed: the RWA `holdSnapshot`/`holdLocks` suites no longer exist.)
 | All | — | — | `pnpm test:all` |
 
 ## Vitest Suites (`pnpm test`)

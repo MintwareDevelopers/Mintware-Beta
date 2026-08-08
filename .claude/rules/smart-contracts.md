@@ -6,7 +6,13 @@
 > Target design + sequencing: [`docs/developers/phase3-two-surface-architecture.md`](../../docs/developers/phase3-two-surface-architecture.md).
 > The contracts below are the **current** deployed set; Phase-3 contracts are documented here as they merge.
 
-## MintwareDistributor v2 — Base Mainnet
+## MintwareDistributor v2 — multi-chain via env (⚠ NOT confirmed on Base mainnet)
+
+> ⚠ **Deployment reality (2026-08-08 audit):** there is **no deployment record for
+> MintwareDistributor on Base mainnet**. The address is resolved purely from env per
+> chain (`lib/rewards/creator.ts`) — configured for Arbitrum + Base Sepolia. The
+> "Base Mainnet" heading below was aspirational. Everything on testnet per the current
+> direction; treat mainnet as not-yet-deployed until a broadcast record exists.
 
 Contract files:
 - `contracts/MintwareDistributor.sol` — v2.0.0
