@@ -8,6 +8,12 @@
 // =============================================================================
 
 import { useMemo, useState } from 'react'
+import { notFound } from 'next/navigation'
+
+// Design-lab route — gated out of production (fabricated leaderboard data).
+const ALLOW =
+  process.env.NEXT_PUBLIC_ATX_PREVIEW === 'true' ||
+  process.env.NODE_ENV === 'development'
 
 const GRID_BG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
@@ -59,6 +65,7 @@ const STRIPE = ['bg-atx-coral', 'bg-atx-mesquite', 'bg-atx-clay']
 const fmt = (n: number) => n.toLocaleString()
 
 export default function StyleLeaderboardConcept() {
+  if (!ALLOW) notFound()
   const [metric, setMetric] = useState<Metric>('score')
 
   const ranked = useMemo(() => {
