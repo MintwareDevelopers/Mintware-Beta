@@ -57,6 +57,7 @@ export default function AboutPage() {
 
       {/* ── HERO · the mission ── */}
       <PageHero
+        size="compact"
         eyebrow="Our thesis"
         title={<>Liquidity should be a <span className="text-atx-blue">public good.</span></>}
         sub="Neutral, shared infrastructure that works for the people who supply the capital — not something one team gatekeeps, and not capital left sitting idle. That belief is why Mintware exists. Everything we build is a way of making it real."
