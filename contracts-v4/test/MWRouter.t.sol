@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.26;
 
-import {Test, console2} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 
 // V4 core
 import {PoolManager}         from "@uniswap/v4-core/src/PoolManager.sol";
@@ -10,25 +10,24 @@ import {IHooks}              from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}             from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
-import {StateLibrary}        from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
 // Our contracts
-import {FeeVault}            from "../src/FeeVault.sol";
-import {SocialVault}         from "../src/SocialVault.sol";
-import {MWSocialHook}        from "../src/MWSocialHook.sol";
-import {MWRouter}            from "../src/MWRouter.sol";
-import {HookMiner}           from "../src/lib/HookMiner.sol";
+import {FeeVault}              from "../src/FeeVault.sol";
+import {MWRouter}              from "../src/MWRouter.sol";
+import {MWHookCoordinator}     from "../src/hooks/MWHookCoordinator.sol";
+import {MintwareDeFiVault4626} from "../src/vaults/MintwareDeFiVault4626.sol";
+import {VaultSurface, LockTier, VaultConfig} from "../src/vaults/VaultTypes.sol";
+import {HookMiner}             from "../src/lib/HookMiner.sol";
 
 // Test helpers
 import {MockERC20}           from "./mocks/MockERC20.sol";
 
 /// @title  MWRouter tests — internal swap + router-fee skim against a real V4 pool
-/// @notice Mirrors Integration.t.sol's harness (real PoolManager, mined hook, seeded
-///         pool) and proves: exact fee accounting, best-execution floor, guards, admin,
-///         and that the router fee coexists with the hook's MEV capture (two streams).
+/// @notice Real PoolManager + canonical MWHookCoordinator hook + DeFi-vault-seeded pool.
+///         Proves: exact fee accounting, best-execution floor, guards, admin, and that the
+///         router fee is skimmed exactly on swaps routed through the live coordinator hook.
 contract MWRouterTest is Test {
     using PoolIdLibrary for PoolKey;
-    using StateLibrary  for IPoolManager;
 
     // Actors
     address internal deployer      = address(this);
@@ -44,8 +43,8 @@ contract MWRouterTest is Test {
     // V4 infra
     PoolManager internal pm;
     FeeVault    internal feeVault;
-    SocialVault internal socialVault;
-    MWSocialHook internal hook;
+    MintwareDeFiVault4626 internal vault;
+    MWHookCoordinator     internal coord;
     MWRouter    internal router;
 
     // Tokens + pool
@@ -71,25 +70,38 @@ contract MWRouterTest is Test {
 
         feeVault = new FeeVault(address(usdc), dist, oracle, mevTreasury);
 
-        bytes memory hookArgs = abi.encode(
-            IPoolManager(address(pm)), address(usdc), address(feeVault),
-            mevTreasury, address(0), address(0), deployer
+        // Mine + deploy the canonical coordinator hook. MWSocialHook was retired in PR #40
+        // (converged on MWHookCoordinator); vault is wired after, same as the old pattern.
+        bytes memory hookArgs = abi.encode(IPoolManager(address(pm)), address(0), deployer);
+        (address expected, bytes32 salt) = HookMiner.find(
+            deployer, uint160(0xAC0), type(MWHookCoordinator).creationCode, hookArgs
         );
-        (, bytes32 salt) = HookMiner.find(deployer, uint160(0x0AC4), type(MWSocialHook).creationCode, hookArgs);
-        hook = new MWSocialHook{salt: salt}(
-            IPoolManager(address(pm)), address(usdc), address(feeVault),
-            mevTreasury, address(0), address(0), deployer
-        );
+        coord = new MWHookCoordinator{salt: salt}(IPoolManager(address(pm)), address(0), deployer);
+        require(address(coord) == expected, "coord addr mismatch");
 
-        socialVault = new SocialVault(address(usdc), address(pm), address(feeVault));
-        hook.setSocialVault(address(socialVault));
-        feeVault.setSocialVault(address(socialVault));
-        feeVault.setHook(address(hook));
+        // DeFi vault seeds the pool's liquidity (replaces retired SocialVault).
+        VaultConfig memory cfg = VaultConfig({
+            surface:             VaultSurface.DeFi,
+            provider:            deployer,
+            underlyingToken:     address(usdc),
+            treasury:            mevTreasury,
+            name:                "MW DeFi Vault Share",
+            symbol:              "mwDEFI",
+            minDeposit:          0,
+            entryFeeBps:         0,
+            exitFeeBps:          0,
+            enableMEVProtection: true,
+            enableIdleCapital:   false,
+            idleTargetRatio:     0
+        });
+        vault = new MintwareDeFiVault4626(cfg, address(pm), address(feeVault));
+        coord.setVault(address(vault));
+        feeVault.setSocialVault(address(vault)); // authorize vault to notify trading-fee receipts
 
         (Currency c0, Currency c1) = usdcIsToken0
             ? (Currency.wrap(address(usdc)), Currency.wrap(address(proj)))
             : (Currency.wrap(address(proj)), Currency.wrap(address(usdc)));
-        poolKey = PoolKey({ currency0: c0, currency1: c1, fee: 3000, tickSpacing: 60, hooks: IHooks(address(hook)) });
+        poolKey = PoolKey({ currency0: c0, currency1: c1, fee: 3000, tickSpacing: 60, hooks: IHooks(address(coord)) });
         poolId  = poolKey.toId();
 
         // Router under test
@@ -97,17 +109,22 @@ contract MWRouterTest is Test {
 
         // Fund
         proj.mint(deployer, 1_000_000e6); // owner seeds the pool
-        usdc.mint(alice,    500_000e6);   // alice provides deep liquidity
+        usdc.mint(alice,    500_000e6);   // alice provides deep USDC liquidity
         proj.mint(bob,      100_000e6);   // bob swaps PROJ → USDC
 
-        // Seed + rebalance + deep liquidity so swaps have room
-        proj.approve(address(socialVault), 100_000e6);
-        socialVault.seedTeamTokens(VAULT_ID, address(proj), 100_000e6, poolKey, INIT_SQRT_PRICE);
-        socialVault.rebalance(-60000, 60000);
+        // Seed team tokens + open a wide LP range, then deposit USDC so swaps have room.
+        proj.approve(address(vault), 100_000e6);
+        vault.seedTeamTokens(VAULT_ID, address(proj), 100_000e6, poolKey, INIT_SQRT_PRICE);
+        vault.rebalance(-60000, 60000);
         vm.startPrank(alice);
-        usdc.approve(address(socialVault), 200_000e6);
-        socialVault.deposit(200_000e6, SocialVault.LockTier.Flex);
+        usdc.approve(address(vault), 200_000e6);
+        vault.depositWithLock(200_000e6, alice, LockTier.Flex);
         vm.stopPrank();
+
+        // Guard ON with a WIDE band so normal swaps never trip; dynamic fee OFF.
+        // configurePool(id, base, max, slopePerTick, maxFeeStepPerBlock, dynFee, guard, maxTickMove, maxDev, catchup)
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 60, 6000, 10);
+        vm.roll(1000);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -261,37 +278,26 @@ contract MWRouterTest is Test {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Two streams: hook MEV capture AND router fee on one swap
+    // Router fee is skimmed exactly through the live coordinator hook
     // ─────────────────────────────────────────────────────────────────────────
-
-    function test_router_fee_coexists_with_hook_mev_capture() public {
-        // Configure the pool for MEV capture and set a reference price ~2% off so the
-        // hook's afterSwap fires and routes USDC to the FeeVault.
-        hook.configurePool(poolId, bytes32(0), 6, 6, 20, 50, 0);
-        (uint160 currentSqrt,,,) = IPoolManager(address(pm)).getSlot0(poolId);
-        hook.setReferencePrice(poolId, uint160(currentSqrt + currentSqrt / 50));
-
-        uint256 feeVaultBefore  = usdc.balanceOf(address(feeVault));      // hook capture target
-        uint256 treasuryBefore  = usdc.balanceOf(routerTreasury);         // router fee target
-        uint256 recipBefore     = usdc.balanceOf(bob);
+    // The original test asserted MWSocialHook's "capture MEV → FeeVault" stream landing
+    // alongside the router fee. That mechanism was retired in PR #40: MWHookCoordinator's
+    // MEV protection is a sandwich/cooldown *guard*, not a FeeVault skim. The pool here is
+    // already hooked with the live coordinator (guard active), so this pins that the router
+    // fee accounting stays exact on a swap routed through the real hook.
+    function test_router_fee_exact_through_live_coordinator_hook() public {
+        uint256 treasuryBefore = usdc.balanceOf(routerTreasury); // router fee target
+        uint256 recipBefore    = usdc.balanceOf(bob);
 
         uint256 userOut = _swap(bob, 1_000e6, 0, bob);
 
-        uint256 hookCapture = usdc.balanceOf(address(feeVault)) - feeVaultBefore;
-        uint256 routerFee   = usdc.balanceOf(routerTreasury) - treasuryBefore;
-        uint256 recipDelta  = usdc.balanceOf(bob) - recipBefore;
+        uint256 routerFee  = usdc.balanceOf(routerTreasury) - treasuryBefore;
+        uint256 recipDelta = usdc.balanceOf(bob) - recipBefore;
+        uint256 grossOut   = recipDelta + routerFee;
 
-        // Both streams paid, to distinct addresses.
-        assertGt(hookCapture, 0, "FeeVault received hook MEV capture");
-        assertGt(routerFee,   0, "treasury received router fee");
         assertEq(userOut, recipDelta, "user got the net output");
-
-        // Router fee is 0.5% of the GROSS the router received — which is already net of
-        // the hook's capture. So: grossToRouter = recipDelta + routerFee.
-        uint256 grossToRouter = recipDelta + routerFee;
-        assertEq(routerFee, (grossToRouter * FEE_BPS) / 10_000, "router fee = 0.5% of post-capture output");
-        console2.log("hook capture (USDC):", hookCapture);
-        console2.log("router fee   (USDC):", routerFee);
-        console2.log("user out     (USDC):", userOut);
+        assertGt(routerFee, 0, "treasury received router fee through the hooked pool");
+        assertEq(routerFee, (grossOut * FEE_BPS) / 10_000, "router fee = 0.5% of gross (guard active)");
+        assertEq(usdc.balanceOf(address(router)), 0, "router holds no output dust");
     }
 }
