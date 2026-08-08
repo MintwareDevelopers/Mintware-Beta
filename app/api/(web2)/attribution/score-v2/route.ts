@@ -38,6 +38,13 @@ export const GET = createHandler(async (req, ctx) => {
     sanctionsFetcher: buildSanctionsFetcher(),
   })
   const result = computeScore(activity, Date.now())
+  // Diagnostics — safe (never exposes the key, only whether one is present).
+  // `zerionKeyPresent:false` = env var not reaching this runtime; true + source
+  // 'mock' + a fallbackReason = key is present but the Zerion call failed.
+  const diagnostics = {
+    zerionKeyPresent: Boolean(process.env.ZERION_API_KEY),
+    fallbackReason: degraded ?? null,
+  }
   ctx.log.info('attribution', 'scored wallet', { address, score: result.score, tier: result.tier, source, degraded })
-  return ctx.json({ ...result, source })
+  return ctx.json({ ...result, source, diagnostics })
 })
