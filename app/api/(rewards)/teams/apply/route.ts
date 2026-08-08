@@ -115,4 +115,4 @@ export const POST = createHandler(async (req, ctx) => {
   }
 
   return ctx.json({ success: true, status: 'pending' })
-}, {})
+}, { rateLimit: { max: 5, windowMs: 60_000 } })

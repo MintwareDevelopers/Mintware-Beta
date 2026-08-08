@@ -33,4 +33,4 @@ export const POST = createHandler(async (req, ctx) => {
   }
 
   return ctx.json({ ok: true })
-})
+}, { rateLimit: { max: 5, windowMs: 60_000 } })

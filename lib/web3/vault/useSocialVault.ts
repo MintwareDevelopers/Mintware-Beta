@@ -14,13 +14,18 @@
 // =============================================================================
 
 import { useState, useEffect }  from 'react'
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useReadContract } from 'wagmi'
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useReadContract, useChainId, useSwitchChain } from 'wagmi'
 import { parseUnits, keccak256, toBytes }  from 'viem'
 import type { LockTier }        from '@/lib/web2/vault/types'
 import { SOCIAL_VAULT_ABI, ERC20_ABI, LOCK_TIER_INDEX } from './socialVaultAbi'
 
 const SOCIAL_VAULT_ADDRESS = (process.env.NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS ?? '') as `0x${string}`
 const USDC_ADDRESS         = (process.env.NEXT_PUBLIC_USDC_ADDRESS ?? '0x036CbD53842c5426634e7929541eC2318f3dCF7e') as `0x${string}`
+
+// The chain the vault is deployed on (Base Sepolia for the testnet beta). Deposits/
+// withdrawals MUST run here — on any other chain the tx silently reverts, so we
+// switch the wallet first.
+export const VAULT_CHAIN_ID = Number(process.env.NEXT_PUBLIC_VAULT_CHAIN_ID ?? 84532)
 
 // USDC has 6 decimals
 const USDC_DECIMALS = 6
@@ -31,7 +36,7 @@ const USDC_DECIMALS = 6
 // After success → caller should POST /api/vault/deposit to record in DB
 
 export interface UseVaultDepositResult {
-  stage:       'idle' | 'resetting_approval' | 'approving' | 'approved' | 'depositing' | 'success' | 'error'
+  stage:       'idle' | 'switching_chain' | 'resetting_approval' | 'approving' | 'approved' | 'depositing' | 'success' | 'error'
   isPending:   boolean
   isSuccess:   boolean
   txHash:      `0x${string}` | undefined
@@ -43,6 +48,8 @@ export interface UseVaultDepositResult {
 export function useVaultDeposit(): UseVaultDepositResult {
   const { address } = useAccount()
   const publicClient = usePublicClient()
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
   const [stage, setStage]     = useState<UseVaultDepositResult['stage']>('idle')
   const [error, setError]     = useState('')
   const [depositHash, setDepositHash] = useState<`0x${string}` | undefined>()
@@ -59,7 +66,20 @@ export function useVaultDeposit(): UseVaultDepositResult {
   async function deposit(amountUsdc: number, tier: LockTier, _wallet: string) {
     if (!SOCIAL_VAULT_ADDRESS) { setError('Vault address not configured'); return }
     if (!publicClient) { setError('Network client unavailable'); return }
-    setError(''); setStage('approving')
+    setError('')
+    // Ensure the wallet is on the vault's chain first — otherwise approve/deposit
+    // silently reverts (the vault only exists on Base Sepolia for the beta).
+    if (chainId !== VAULT_CHAIN_ID) {
+      try {
+        setStage('switching_chain')
+        await switchChainAsync({ chainId: VAULT_CHAIN_ID })
+      } catch {
+        setError('Switch your wallet to Base Sepolia to deposit into the beta vault.')
+        setStage('error')
+        return
+      }
+    }
+    setStage('approving')
     try {
       const amountWei = parseUnits(amountUsdc.toString(), USDC_DECIMALS)
       const tierIndex = LOCK_TIER_INDEX[tier]
@@ -132,7 +152,7 @@ export function useVaultDeposit(): UseVaultDepositResult {
 
   return {
     stage,
-    isPending: stage === 'resetting_approval' || stage === 'approving' || stage === 'approved' || stage === 'depositing',
+    isPending: stage === 'switching_chain' || stage === 'resetting_approval' || stage === 'approving' || stage === 'approved' || stage === 'depositing',
     isSuccess: stage === 'success',
     txHash:    depositHash,
     error,
@@ -157,13 +177,28 @@ export interface UseVaultWithdrawResult {
 export function useVaultWithdraw(): UseVaultWithdrawResult {
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>()
   const [error, setError]   = useState('')
+  const [switching, setSwitching] = useState(false)
 
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
   const { writeContract, isPending }        = useWriteContract()
   const { isSuccess }                       = useWaitForTransactionReceipt({ hash: txHash })
 
-  function withdraw(amountUsdc: number) {
+  async function withdraw(amountUsdc: number) {
     if (!SOCIAL_VAULT_ADDRESS) { setError('Vault address not configured'); return }
     setError('')
+    // Same-chain requirement as deposit — switch to the vault's chain first.
+    if (chainId !== VAULT_CHAIN_ID) {
+      try {
+        setSwitching(true)
+        await switchChainAsync({ chainId: VAULT_CHAIN_ID })
+      } catch {
+        setError('Switch your wallet to Base Sepolia to withdraw.')
+        setSwitching(false)
+        return
+      }
+      setSwitching(false)
+    }
     // Shares are principal-denominated (~1:1 with USDC, 6-dp), so the USDC amount maps
     // directly to the share count for requestRedeem.
     const sharesWei = parseUnits(amountUsdc.toString(), USDC_DECIMALS)
@@ -181,9 +216,9 @@ export function useVaultWithdraw(): UseVaultWithdrawResult {
     )
   }
 
-  function reset() { setTxHash(undefined); setError('') }
+  function reset() { setTxHash(undefined); setError(''); setSwitching(false) }
 
-  return { isPending, isSuccess, txHash, error, withdraw, reset }
+  return { isPending: isPending || switching, isSuccess, txHash, error, withdraw, reset }
 }
 
 // ─── useVaultExecuteRedeem ────────────────────────────────────────────────────

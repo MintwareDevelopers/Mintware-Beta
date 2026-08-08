@@ -59,8 +59,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card:        'summary_large_image',
-    site:        '@MintwareDev',
-    creator:     '@MintwareDev',
+    site:        '@Mintware_org',
+    creator:     '@Mintware_org',
     title:       'Mintware — The reputation economy of DeFi',
     description: 'Attribution measures every on-chain contribution. Mintware is where those contributions earn rewards.',
     images:      ['/opengraph-image'],

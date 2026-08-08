@@ -129,7 +129,7 @@ function RewardsContent() {
       <div className="border-b border-atx-ink bg-atx-panel">
         <div className="max-w-[1100px] mx-auto px-7 py-3.5 flex items-center justify-between gap-4 flex-wrap max-[800px]:px-4">
           <div className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-grey">
-            {view === 'users' ? '✴ For earners' : '✴ For issuers & protocols'}
+            {view === 'users' ? '✴ For earners' : '✴ For protocols & teams'}
           </div>
           <div className="inline-flex border border-atx-ink">
             {(['users', 'teams'] as const).map((v, i) => (
@@ -140,7 +140,7 @@ function RewardsContent() {
               >
                 {v === 'users' ? 'Users' : 'Teams'}
                 <span className="block text-[9px] tracking-[0.06em] opacity-70 mt-0.5 normal-case">
-                  {v === 'users' ? 'I want to earn' : 'I run a protocol / deal'}
+                  {v === 'users' ? 'I want to earn' : 'I run a protocol'}
                 </span>
               </button>
             ))}
@@ -159,7 +159,7 @@ function RewardsContent() {
                   Contribution that is <span className="text-atx-blue">seen and rewarded</span>
                 </h1>
                 <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-atx-ink/70 max-w-[54ch] mt-5">
-                  Every swap, liquidity position, lock, and referral — across <b className="text-atx-ink">every pool and campaign</b> — earns points, then multiplied by your Attribution score. Come get paid for the history you&apos;ve already built.
+                  Every swap, liquidity position, lock, and referral earns points — and in <b className="text-atx-ink">score-multiplied campaigns</b>, your Attribution score lifts them up to 1.95×. Come get paid for the history you&apos;ve already built.
                 </p>
                 <div className="flex gap-2.5 mt-7 flex-wrap">
                   <a href="#campaigns" className={BTN_ACC}>Browse campaigns ↓</a>
@@ -185,7 +185,7 @@ function RewardsContent() {
                       </div>
                     )}
                     <div className="text-[13px] text-atx-ink/55 leading-relaxed max-w-[26ch] mt-3.5">
-                      Your score sets your multiplier on every action, in every campaign — up to 1.95×.
+                      In score-multiplied campaigns, your Attribution score lifts your points — up to 1.95×.
                     </div>
                   </>
                 ) : (
@@ -306,7 +306,6 @@ function RewardsContent() {
                         >
                           <div className="text-[13px] font-medium text-atx-ink/70 font-atx-mono uppercase tracking-[0.04em]">More campaigns coming soon</div>
                           <div className="text-[12px] text-atx-ink/45">New protocol partnerships are being finalized. Check back weekly.</div>
-                          <div className="text-[12px] text-atx-blue mt-1 cursor-pointer font-atx-mono">Get notified →</div>
                         </motion.div>
                       )}
                     </div>
@@ -447,7 +446,7 @@ function TeamsView() {
               We measure Contribution and <span className="text-atx-blue">reward it.</span>
             </h1>
             <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-atx-ink/70 max-w-[54ch] mt-5">
-              Tokenizing an asset is solved and commoditized. What isn&apos;t: your <b className="text-atx-ink">cold-start</b>, your <b className="text-atx-ink">distribution</b>, and your <b className="text-atx-ink">dead secondary market</b>. Mintware brings you sticky, eligible, relationship-sourced capital — rewarded by how good it is rather than how much — and makes the resulting position tradeable.
+              Emissions attract mercenary capital that farms and leaves. What&apos;s hard is your <b className="text-atx-ink">cold-start</b>, your <b className="text-atx-ink">distribution</b>, and keeping liquidity that <b className="text-atx-ink">stays</b>. Mintware brings you sticky, relationship-sourced LPs — rewarded by the quality of their contribution rather than the size of their wallet.
             </p>
             <div className="flex gap-2.5 mt-7 flex-wrap">
               <Link href="/create-campaign" className={BTN_ACC}>Launch a campaign →</Link>

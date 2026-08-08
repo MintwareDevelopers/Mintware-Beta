@@ -677,11 +677,11 @@ export default function PublicProfile() {
                 <div className="pp-section-label">Contribution</div>
                 <div className="pp-stat-row">
                   <span className="pp-stat-key">Chains active</span>
-                  <span className="pp-stat-val brand">{score.chains}</span>
+                  <span className="pp-stat-val brand">{score.chains ?? '—'}</span>
                 </div>
                 <div className="pp-stat-row">
                   <span className="pp-stat-key">Total txns</span>
-                  <span className="pp-stat-val">{score.totalTxCount.toLocaleString()}</span>
+                  <span className="pp-stat-val">{(score.totalTxCount ?? 0).toLocaleString()}</span>
                 </div>
                 <div className="pp-stat-row">
                   <span className="pp-stat-key">Character</span>

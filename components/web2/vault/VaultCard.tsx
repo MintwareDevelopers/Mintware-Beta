@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import type { SocialVault } from '@/lib/web2/vault/types'
-import { fmtUSD } from '@/lib/web2/api'
 
 const LABEL = 'font-atx-mono uppercase tracking-[0.1em] text-[10px] text-atx-ink/55'
 const LINE = 'border-atx-ink/20'
@@ -52,9 +51,6 @@ function LockMultiBar() {
 }
 
 export function VaultCard({ vault }: { vault: SocialVault }) {
-  const tvl       = vault.tvl_usdc ?? 0
-  const epochPool = vault.current_epoch?.total_pool ?? 0
-
   return (
     <Link
       href={`/vault/${vault.id}`}
@@ -75,14 +71,15 @@ export function VaultCard({ vault }: { vault: SocialVault }) {
         <StatusPill status={vault.status} />
       </div>
 
+      {/* Testnet beta: no fabricated TVL/pool dollars — show the honest network + status. */}
       <div className="grid grid-cols-2 gap-[10px]">
         <div className="flex flex-col gap-[2px]">
-          <span className="text-[17px] font-bold font-atx-mono text-atx-blue">{tvl > 0 ? fmtUSD(tvl) : '—'}</span>
-          <span className={LABEL}>TVL</span>
+          <span className="text-[15px] font-bold font-atx-mono text-atx-ink/70">Base Sepolia</span>
+          <span className={LABEL}>Network · testnet</span>
         </div>
         <div className="flex flex-col gap-[2px]">
-          <span className="text-[17px] font-bold font-atx-mono text-atx-mesquite">{epochPool > 0 ? fmtUSD(epochPool) : '—'}</span>
-          <span className={LABEL}>Epoch pool</span>
+          <span className="text-[15px] font-bold font-atx-mono text-atx-mesquite">Test USDC</span>
+          <span className={LABEL}>Deposit asset</span>
         </div>
       </div>
 
