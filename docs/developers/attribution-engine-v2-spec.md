@@ -195,7 +195,13 @@ weighting the farmer could win; under v2 it scores zero. That inversion is the w
 - **v2.0 (done).** Deterministic engine, log normalization, risk deduction, graded sybil scorer,
   reason codes, mock provider, 26 golden-wallet + invariant tests, `GET /api/attribution/score-v2`.
 - **v2.1 — live data + true percentiles + validation.**
-  1. Implement a live `getWalletActivity` adapter over the §10 data stack.
+  1. **Live data adapter (backbone started).** The **Zerion adapter is built + tested**
+     (`lib/attribution/providers/zerion.ts`, pure mapper, 7 fixture tests) — it maps Zerion
+     positions + transactions → Holding, Activity, Longevity, Volume, and current Liquidity, and
+     goes live the moment `ZERION_API_KEY` is set (the composite `resolveWalletActivity` falls back
+     to the golden-wallet mock until then, and on any provider error). Remaining backbone: enrich
+     with referral-DB Network, Chainalysis/Nansen Risk, Helius (Solana), and self-indexed LP
+     depth-over-time.
   2. **Scored-population backfill → true percentiles.** Sample **≥200k–500k wallets**, stratified
      by chain, activity-recency, and birth cohort — *including dormant/dead wallets* (active-only
      sampling is survivorship bias that inflates every percentile). Compute all 8 signals; freeze

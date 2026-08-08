@@ -13,7 +13,7 @@
 
 import { createHandler } from '@/lib/web2/routeHandler'
 import { computeScore } from '@/lib/attribution/score'
-import { getWalletActivity } from '@/lib/attribution/mockProvider'
+import { resolveWalletActivity } from '@/lib/attribution/provider'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,8 +31,8 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json({ success: false, error: 'invalid address', code: 'bad_address' }, 400)
   }
 
-  const activity = await getWalletActivity(address)
+  const { activity, source, degraded } = await resolveWalletActivity(address, Date.now())
   const result = computeScore(activity, Date.now())
-  ctx.log.info('attribution', 'scored wallet', { address, score: result.score, tier: result.tier })
-  return ctx.json(result)
+  ctx.log.info('attribution', 'scored wallet', { address, score: result.score, tier: result.tier, source, degraded })
+  return ctx.json({ ...result, source })
 })
