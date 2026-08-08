@@ -102,6 +102,7 @@ function VaultsContent() {
 
       {/* ── HERO — surface pitch ── */}
       <PageHero
+        size="compact"
         eyebrow={`${S.eyName} · reputation-weighted yield`}
         title={<>{S.head[0]}<span className="text-atx-blue">{S.head[1]}</span></>}
         sub={S.sub}

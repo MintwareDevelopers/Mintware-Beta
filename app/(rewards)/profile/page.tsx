@@ -98,6 +98,7 @@ function ProfileContent() {
 
       {/* ── Hero band ── */}
       <PageHero
+        size="compact"
         eyebrow="On-chain reputation · your profile"
         title={<>Your reputation, <span className="text-atx-blue">on-chain.</span></>}
         sub="Everything your wallet has done — holding, LPing, referring — scored into one number. This is your Attribution profile."

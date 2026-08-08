@@ -204,6 +204,7 @@ function SwapContent() {
 
         {/* ── Editorial hero ── */}
         <PageHero
+          size="compact"
           eyebrow="On-chain reputation · rewards · 100+ chains"
           title={<>TRADE LIKE IT <span className="text-atx-blue">COUNTS.</span></>}
           sub="Every swap builds your Attribution score and earns rewards weighted by who you are. Trade tokens across chains here; provide liquidity in the reputation-weighted vaults. One reputation carries across both."
