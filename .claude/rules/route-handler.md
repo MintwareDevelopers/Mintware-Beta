@@ -1,7 +1,7 @@
 # Route Handler Factory (`createHandler`)
 
 **File:** `lib/web2/routeHandler.ts`
-**Status:** Complete — all 46 non-cron, non-treasury `route.ts` files migrated (2026-04-07).
+**Status:** Complete — all `route.ts` files use `createHandler` (60 route files as of 2026-08-08; a couple of cron routes still read `NextResponse.json` directly — migrate when convenient).
 
 ## What It Does
 
