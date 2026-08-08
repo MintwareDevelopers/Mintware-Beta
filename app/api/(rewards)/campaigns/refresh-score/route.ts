@@ -46,4 +46,4 @@ export const POST = createHandler(async (req, ctx) => {
   const updated = updatedRows?.length ?? 0
   ctx.log.info('refresh-score', 'Score refreshed', { wallet, newScore, rows_updated: updated })
   return ctx.json({ updated, score: newScore })
-})
+}, { rateLimit: { max: 10, windowMs: 60_000 } }) // throttle external-worker score recompute

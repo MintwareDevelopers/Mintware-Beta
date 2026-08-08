@@ -60,4 +60,4 @@ export const POST = createHandler(async (req, ctx) => {
     ctx.log.error('swap/quote', 'upstream error', { error: String(err) })
     return ctx.json({ error: 'quote failed', message: err instanceof Error ? err.message : 'unknown' }, 502)
   }
-})
+}, { rateLimit: { max: 20, windowMs: 60_000 } }) // protect the LI.FI key/quota from cost abuse
