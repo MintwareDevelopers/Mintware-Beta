@@ -3,7 +3,7 @@
 Rewards-driven DeFi reputation platform. Three groupings: **Web2 / Web3 / Rewards**.
 Stack: Next.js 16, TypeScript, RainbowKit + wagmi, Supabase, Tailwind v4, pnpm.
 
-Today's date: 2026-03-27.
+Today's date: 2026-08-08.
 
 > **▶ Current direction (2026-08-05): reputation-first DeFi.** The RWA surface was **shelved** off the
 > platform (preserved on branch `archive/rwa-surface` + PRs #28–34; see [`docs/archive/rwa/SHELVED.md`](docs/archive/rwa/SHELVED.md)).

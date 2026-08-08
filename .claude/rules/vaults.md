@@ -1,5 +1,11 @@
 # Vaults — Two-Surface Architecture (Phase 3)
 
+> ⚠ **RECONCILE BANNER (2026-08-08 contract audit — read before trusting the tables below):**
+> - **RWA is SHELVED** — the "two-surface (DeFi + RWA)" framing is aspirational, not live. Ignore RWA references here.
+> - **Contract names below are STALE.** `SocialVault.sol` / `MWSocialHook.sol` / `LockLib` / `FeeLib` **no longer exist**. The canonical DeFi hook is **`MWHookCoordinator.sol`** (+ `MWDynamicFee`/`MWOracleGuard`); vaults are on the `MintwareBaseVault4626` / `MintwareVaultFactory` stack.
+> - **Two contract tiers exist.** The *newest* contracts are genuinely state-of-the-art — **`MintwareWeightedDistributor`** (on-chain sig-verified epoch close; the correct fix for FeeVault's dead-attestation C1), **`MintwareMatchedLiquidityVault`** (two-sided, invariant-fuzzed), **`MintwareDeFiPairVault`** (correct dual-sided). But `DeployPhase3.s.sol` ships the *weaker* stack (**single-sided `MintwareDeFiVault4626` + legacy `FeeVault`**), and that 4626 vault has a **known NAV/solvency flaw** (principal-pegged shares vs 2-token LP backing → late-redeemer loss). **Do NOT put real value on the DeployPhase3 stack.** The good stack + `MintwareVaultFactory` are built/tested but **unwired** — wiring them + deleting the dead layer (`FeeLib`/`LockLib`/`IPyth`, dead FeeVault attestation) is pending, then external audit.
+> - The working vault reward loop is **Rail B** (`MintwareWeightedDistributor` + `cron/vault-weighted-epoch-close` + `vault/weighted-claim`); deploy script `contracts-v4/script/DeployWeightedDistributor.s.sol` (2026-08-08, PR #73).
+
 > **⤴ Direction (2026-07-26): Phase 3 evolves these Phase-2 Social Vaults into a two-surface
 > (DeFi + RWA) system on a shared ERC-4626 base + factory.** Target architecture, tracks, and
 > sequencing live in [`docs/developers/phase3-two-surface-architecture.md`](../../docs/developers/phase3-two-surface-architecture.md).
