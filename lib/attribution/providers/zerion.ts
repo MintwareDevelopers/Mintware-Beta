@@ -194,6 +194,12 @@ export async function fetchZerionActivity(address: string, nowMs: number, txPage
   const apiKey = process.env.ZERION_API_KEY
   if (!apiKey) throw new Error('ZERION_API_KEY not set')
   // Sequential (not parallel) — the free tier rate-limits concurrent requests.
+  // The age chart goes FIRST: it's the request most likely to be dropped by the
+  // rate limit, so we spend the wallet's freshest budget on it. Transactions have
+  // no sort param + a 100-row cap, so firstSeen from tx alone badly understates
+  // old wallets (Longevity ≈ 0); the `max` chart's earliest point is the age proxy.
+  const chartFirstSeen = await fetchZerionFirstSeenMs(address, apiKey)
+  await sleep(350)
   const pos = await zerionGet(`/wallets/${address}/positions/?filter[trash]=only_non_trash&sort=value`, apiKey)
   await sleep(350)
   const txs = await zerionGet(`/wallets/${address}/transactions/?page[size]=${txPageSize}`, apiKey)
@@ -204,14 +210,8 @@ export async function fetchZerionActivity(address: string, nowMs: number, txPage
     nowMs,
   })
 
-  // Transactions have no sort param and only a 100-row page, so firstSeen from a
-  // single page badly understates the age of old/active wallets (Longevity ≈ 0).
-  // The `max` portfolio chart's earliest point is a cheap, reliable age proxy —
-  // one extra call. Best-effort: on any failure we keep the tx-derived value.
-  await sleep(350)
-  const chartFirstSeen = await fetchZerionFirstSeenMs(address, apiKey)
   if (chartFirstSeen > 0 && (activity.firstSeenMs === 0 || chartFirstSeen < activity.firstSeenMs)) {
-    activity.firstSeenMs = chartFirstSeen
+    activity.firstSeenMs = chartFirstSeen // best-effort; keeps tx value on failure
   }
   return activity
 }
