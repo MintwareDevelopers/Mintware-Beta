@@ -1,9 +1,11 @@
 # Attribution Engine v2 — Signal Spec & Methodology
 
-> **Status:** v2.0 engine built and tested in-repo (`lib/attribution/`, 14/14 golden-wallet
-> tests green). Runs on a mock data provider today; live data adapter + population calibration
-> are v2.1. This document is the **published methodology** — the thing partners audit and the
-> score explains itself against.
+> **Status:** v2 engine **live in production** at `GET /api/attribution/score-v2`, scoring real
+> wallets from live data (Zerion behavior + our referral Network + Chainalysis sanctions Risk).
+> Population-percentile calibration and the app cutover are the remaining steps. For the
+> plain-language current-state summary see [`attribution-engine-v2-status.md`](attribution-engine-v2-status.md).
+> This document is the **published methodology** — the thing partners audit and the score explains
+> itself against.
 >
 > **Author:** Attribution team · **Engine version:** `attribution-v2.0.0`
 

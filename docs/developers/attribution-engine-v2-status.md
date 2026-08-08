@@ -1,98 +1,96 @@
-# Attribution Engine v2 — Status & What's Live
+# What Attribution Is — Current State
 
-Plain-language companion to the full methodology in
-[`attribution-engine-v2-spec.md`](attribution-engine-v2-spec.md). This page answers one question:
-**what actually exists and works right now.**
+The plain-language definition of the Attribution score as it exists **today**. For the full
+methodology (formulas, competitive benchmark, calibration plan) see
+[`attribution-engine-v2-spec.md`](attribution-engine-v2-spec.md).
 
-_Last updated: 2026-08-08._
+_Status: Attribution Engine v2 is **live in production**. Last updated: 2026-08-08._
 
 ---
 
-## The one-paragraph version
+## In one sentence
 
-We re-engineered the Attribution reputation score from scratch as a real, tested, in-repo engine
-(`lib/attribution/`). It fixes the legacy score's core flaw — referrals were 43% of the total, so a
-farmer could out-score a genuine LP — by rebalancing to reward what's expensive to fake (liquidity,
-holding, tenure) and deducting for risk (sanctions, sybil). It runs live at
-`GET /api/attribution/score-v2`, powered by three real data sources, two of which need no API key.
-It is **not yet the score the app displays** — that's a deliberate, separate cutover step.
+Attribution is Mintware's **on-chain reputation score** — a single **0–925** number that measures how
+much a wallet has genuinely contributed to and participated in on-chain ecosystems, built to reward
+what's expensive to fake and penalize what's cheap to farm.
 
-## There are two attribution scores right now
+## In one paragraph
 
-| | Legacy score (live in the app today) | Engine v2 (new) |
-|---|---|---|
-| Where | External Cloudflare worker | In-repo `lib/attribution/` |
-| Endpoint | the old `/score` the app calls | `GET /api/attribution/score-v2` |
-| Status | unchanged, still powers the app | built + deployed, **not yet wired into the app** |
+Attribution v2 scores a wallet from **eight weighted, log-normalized signals** minus a **risk
+deduction**, and returns the number with plain-language **reason codes** (why it scored what it did).
+It runs live at `GET /api/attribution/score-v2`, pulling **real data** from three sources: Zerion
+(on-chain behavior), our own referral system (network), and the Chainalysis on-chain oracle
+(sanctions risk). It replaces a legacy score whose core flaw was that referrals were 43% of the
+total — so a referral farmer could out-score a genuine liquidity provider. v2 makes that impossible.
 
-v2 is **additive** — it did not touch or replace the legacy score. The app keeps working exactly as
-before until we choose to cut over.
+## The score: eight signals + a risk deduction
 
-## What v2 measures
+Log-normalized (whale-resistant), summing to a **925** max:
 
-Eight signals, log-normalized (whale-resistant), summing to the same **925** max, minus a risk
-deduction:
-
-| Signal | Weight | |
+| Signal | Weight | What it rewards |
 |---|--:|---|
-| Liquidity | 200 | LP depth × duration |
-| Holding | 150 | conviction — value kept, weighted by how long |
-| Activity | 150 | consistency + breadth |
-| Longevity | 150 | wallet age + tenure + recency |
-| Volume | 100 | lifetime traded value (log-scaled) |
-| Network | 100 | referral-tree **quality** (was 400) |
-| Governance | 75 | votes / proposals / delegations |
-| **Risk** | **−200** | sanctions / mixer / scam / wash / sybil |
+| Liquidity | 200 | Committed LP depth × how long it's provided |
+| Holding | 150 | Conviction — value kept, weighted by how long held |
+| Activity | 150 | Consistency + breadth across weeks and chains |
+| Longevity | 150 | Wallet age + tenure + recency |
+| Volume | 100 | Lifetime traded value (log-scaled, not whale size) |
+| Network | 100 | Referral-tree **quality** (was 400 in the legacy score) |
+| Governance | 75 | Votes, proposals, delegations |
+| **Risk** | **−200** | Sanctions / mixer / scam / wash-trading / sybil exposure |
 
-Every score also carries **reason codes** (`topDrivers`) and per-signal **insights** — a wallet
-always sees why it scored what it did.
+Every result also includes a **tier** (bronze / silver / gold), a **percentile**, per-signal
+**insights**, and **top drivers** (the few factors most moving the score, like a credit report's
+reason codes).
 
-## What's live right now, and from where
+## What powers it (all live)
 
-The engine reads a provider-agnostic `WalletActivity`; a composite provider fills it from real
-sources, each independent and each degrading gracefully:
+The engine reads a provider-agnostic wallet profile; a composite provider fills it from real
+sources, each independent and each degrading gracefully if one is unavailable:
 
-| Signal group | Source | Needs a key? | Status |
-|---|---|---|---|
-| Holding · Activity · Longevity · Volume · current Liquidity | **Zerion API** | Yes (free tier) | ✅ built; lights up when `ZERION_API_KEY` is set |
-| **Network** + referral-farm sybil | **our own Supabase** referral data | No | ✅ live |
-| **Risk** (sanctions) | **Chainalysis on-chain oracle** (OFAC/EU/UN) | No (free) | ✅ live |
+| Signals | Source | Live? |
+|---|---|---|
+| Holding · Activity · Longevity · Volume · Liquidity | **Zerion API** (on-chain behavior) | ✅ live |
+| **Network** + referral-farm detection | **our own Supabase** referral data | ✅ live (no external key) |
+| **Risk** (sanctions) | **Chainalysis on-chain oracle** (OFAC/EU/UN) | ✅ live (free) |
 
-Without the Zerion key, a real wallet still gets a live **Network** and **Risk** result; the on-chain
-behavioral signals return empty until the key is present (the provider falls back to safe mock data,
-and the response says `"source": "mock"` vs `"zerion"`).
+The response includes `"source": "zerion" \| "mock"` so it's always clear whether a score came from
+live data or the safe fallback.
 
-## Calibration (percentiles)
+## What's live vs. what still uses the legacy score
 
-The machinery for **true population percentiles** is built (`calibration.ts`: frozen-ECDF lookup +
-PSI drift monitoring). It ships **no distribution**, so every result is marked
-`"percentileBasis": "estimate"` until a real backfill artifact is produced — an estimate is never
-presented as a real population percentile. Producing that artifact (scoring a large, stratified
-wallet sample) is an operational step, not a code change.
+- **The v2 engine is live and callable** at `/api/attribution/score-v2`, returning real scores.
+- **The score currently shown in the Mintware app UI still comes from the older external scorer.**
+  Pointing the app at v2 (the "cutover") is a deliberate, separate step we have **not** taken yet —
+  so the app is completely unaffected by everything above until we choose to switch it.
 
-## How to call it
+This is intentional: v2 was built **additively** so it could be proven in production without any risk
+to the running app.
+
+## Honest limitations (today)
+
+These are known and tracked — the engine is correct; these are data-coverage and calibration gaps:
+
+1. **Percentiles are estimates, not population percentiles.** Every result is marked
+   `"percentileBasis": "estimate"` — a calibrated curve, not a rank against a real scored
+   population. The machinery for true percentiles is built; producing the population sample
+   (a backfill) is an operational step not yet run.
+2. **History depth is limited on the Zerion free tier.** We fetch a slice of each wallet's history
+   per request, so **Longevity and Volume can read low for very old or very high-volume wallets**
+   (e.g. a 2015 wallet may show almost no "age"). Fetching deeper history is the next refinement.
+3. **Graded risk beyond sanctions** (mixer / scam scoring) requires a paid compliance vendor
+   (TRM / Elliptic / Nansen) and is **not** enabled. The free sanctions hard-gate is.
+
+## How to read a score
 
 ```
 GET /api/attribution/score-v2?address=0x…
 ```
 
-Returns `score`, `tier`, `percentile` (+ `percentileBasis`), the full `signals[]` breakdown,
-`topDrivers[]` reason codes, `risk`, and `source` (`zerion` | `mock`).
+Returns `score` (0–925), `tier`, `percentile` (+ `percentileBasis`), the full `signals[]` breakdown,
+`topDrivers[]` reason codes, `risk`, and `source`.
 
-## What's done vs. what's left
+## The full methodology
 
-**Done (code):** the engine, the graded sybil scorer, reason codes, the monotonicity invariant, the
-Zerion / referral / sanctions adapters, the calibration machinery, the published methodology, and 49
-passing tests.
-
-**Left (not code — decisions / ops):**
-1. **Set `ZERION_API_KEY`** in the runtime (env var) → turns on the behavioral signals.
-2. **Population backfill** → real percentiles instead of the estimate curve.
-3. **Optional paid risk vendor** (TRM / Elliptic / Nansen) → graded risk beyond sanctions.
-4. **Cutover** → point the app's score at `/api/attribution/score-v2` instead of the legacy worker
-   (a small, contained change, done when you're ready — the app is unaffected until then).
-
-## Where the detail lives
-
-Full methodology, competitive benchmark, data-stack, and roadmap:
+Formulas, the competitive benchmark against the leading on-chain scores, the data-provider stack,
+and the calibration/validation roadmap all live in
 [`attribution-engine-v2-spec.md`](attribution-engine-v2-spec.md).
