@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useChainId, useWalletClient, usePublicClient } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { executeSwap as executeLifi } from '@/lib/web2/providers/lifi'
+import { createTxToast } from '@/lib/web3/txToast'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
 import type { Quote } from './useQuote'
 import type { Token } from '@/config/tokens'
@@ -61,6 +62,7 @@ export function useSwap(): SwapState {
 
     setError(null)
     setStatus('swapping')
+    const tx = createTxToast({ chainId, label: 'Swap' })
 
     try {
       // LI.FI — quote contains the signed transaction envelope from the aggregator
@@ -75,6 +77,7 @@ export function useSwap(): SwapState {
 
       setTxHash(hash)
       setStatus('success')
+      tx.success(hash)
 
       // ── Credit campaign points (fire-and-forget, non-fatal) ───────────────
       // Parse USD value from the LI.FI quote.
@@ -99,9 +102,13 @@ export function useSwap(): SwapState {
       }).catch(() => { /* non-fatal — swap succeeded even if points don't credit */ })
 
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Swap failed'
-      setError(msg.includes('execution reverted') ? 'This route is no longer valid. Refresh the quote and try again.' : msg)
+      const raw = err instanceof Error ? err.message : 'Swap failed'
+      const friendly = raw.includes('execution reverted')
+        ? 'This route is no longer valid. Refresh the quote and try again.'
+        : raw
+      setError(friendly)
       setStatus('error')
+      tx.error(friendly)
     }
   }
 
