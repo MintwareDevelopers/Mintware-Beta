@@ -164,14 +164,12 @@ export function ScoreTab({
               </div>
             </div>
             {easAttestation && (
-              <a
-                href={easAttestation.eas_explorer_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-[11px] font-semibold text-atx-blue no-underline whitespace-nowrap px-3 py-[6px] bg-atx-bone border border-atx-ink/25 transition-colors duration-150 hover:border-atx-blue font-atx-mono uppercase tracking-[0.06em]"
-              >
-                View on EAS ↗
-              </a>
+              // Gasless OFFCHAIN EIP-712 attestation — a bare offchain UID 404s on
+              // EASScan (see AttestationBadge), so we show an honest descriptor,
+              // not a dead "View on EAS" link.
+              <span className="text-[11px] font-semibold text-atx-ink/55 whitespace-nowrap px-3 py-[6px] bg-atx-bone border border-atx-ink/25 font-atx-mono uppercase tracking-[0.06em]">
+                Gasless · offchain EIP-712
+              </span>
             )}
           </div>
 
