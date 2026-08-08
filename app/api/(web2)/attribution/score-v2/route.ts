@@ -44,6 +44,8 @@ export const GET = createHandler(async (req, ctx) => {
   const diagnostics = {
     zerionKeyPresent: Boolean(process.env.ZERION_API_KEY),
     fallbackReason: degraded ?? null,
+    firstSeenMs: activity.firstSeenMs, // 0 = age lookup failed; a real ts = chart worked
+    txCount: activity.totalTxCount,
   }
   ctx.log.info('attribution', 'scored wallet', { address, score: result.score, tier: result.tier, source, degraded })
   return ctx.json({ ...result, source, diagnostics })

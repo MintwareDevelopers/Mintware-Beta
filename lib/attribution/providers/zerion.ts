@@ -218,19 +218,27 @@ export async function fetchZerionActivity(address: string, nowMs: number, txPage
 
 // Earliest point of the `max` balance chart ≈ wallet age. Returns 0 (→ caller
 // keeps its fallback) on any error. Timestamps come back in Unix SECONDS.
-async function fetchZerionFirstSeenMs(address: string, apiKey: string): Promise<number> {
-  try {
-    const auth = Buffer.from(`${apiKey}:`).toString('base64')
-    const res = await fetch(`${ZERION_BASE}/wallets/${address}/charts/max`, {
-      headers: { authorization: `Basic ${auth}`, accept: 'application/json' },
-    })
-    if (!res.ok) return 0
-    const json = (await res.json()) as { data?: { attributes?: { points?: [number, number][] } } }
-    const points = json.data?.attributes?.points ?? []
-    if (!points.length) return 0
-    const earliestSec = Math.min(...points.map(p => p[0]).filter(t => Number.isFinite(t) && t > 0))
-    return Number.isFinite(earliestSec) && earliestSec > 0 ? earliestSec * 1000 : 0
-  } catch {
-    return 0
+async function fetchZerionFirstSeenMs(address: string, apiKey: string, attempts = 3): Promise<number> {
+  const auth = Buffer.from(`${apiKey}:`).toString('base64')
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(`${ZERION_BASE}/wallets/${address}/charts/max`, {
+        headers: { authorization: `Basic ${auth}`, accept: 'application/json' },
+      })
+      if (res.status === 429 && i < attempts - 1) {
+        const ra = Number(res.headers.get('retry-after'))
+        await sleep(Number.isFinite(ra) && ra > 0 ? ra * 1000 : 700 * (i + 1))
+        continue
+      }
+      if (!res.ok) return 0
+      const json = (await res.json()) as { data?: { attributes?: { points?: [number, number][] } } }
+      const points = json.data?.attributes?.points ?? []
+      if (!points.length) return 0
+      const earliestSec = Math.min(...points.map(p => p[0]).filter(t => Number.isFinite(t) && t > 0))
+      return Number.isFinite(earliestSec) && earliestSec > 0 ? earliestSec * 1000 : 0
+    } catch {
+      return 0
+    }
   }
+  return 0
 }
