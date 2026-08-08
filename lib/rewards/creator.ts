@@ -276,6 +276,9 @@ export const DISTRIBUTOR_ADDRESS =
 export function getDistributorAddressForChain(chainId: number): `0x${string}` {
   const addressMap: Record<number, string | undefined> = {
     8453: process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_BASE ?? process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS,
+    // Base Sepolia — the testnet target. Set NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_BASE_SEPOLIA
+    // after `pnpm hardhat:deploy:base-sepolia`, or reuse the generic address.
+    84532: process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_BASE_SEPOLIA ?? process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS,
     1: process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_ETHEREUM ?? process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_MAINNET,
     42161: process.env.NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_ARBITRUM,
   }
