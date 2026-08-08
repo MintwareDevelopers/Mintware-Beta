@@ -6,15 +6,8 @@
 export type CampaignType = 'token_pool' | 'points'
 export type CampaignStatus = 'upcoming' | 'live' | 'ended' | 'paused'
 export type RewardType = 'buyer' | 'referrer' | 'platform_fee'
-export type ActionType =
-  | 'trade' | 'referral_trade'
-  // RWA incentive layer — 'subscribe'/'hold' are net-new mechanics (R4);
-  // 'referral_subscribe' is the referral action for the RWA surface.
-  | 'subscribe' | 'hold' | 'referral_subscribe'
-// RWA incentive layer (see docs/developers/rwa-incentive-layer.md).
-// No KYC type here by design — the incentive layer is permissionless; eligibility
-// lives in the wrapped token / issuer gateway, never in Mintware.
-export type CampaignSurface = 'defi' | 'rwa'
+export type ActionType = 'trade' | 'referral_trade'
+export type CampaignSurface = 'defi' // RWA surface shelved
 export type DistributionStatus = 'pending' | 'published' | 'finalized'
 export type PendingRewardStatus = 'locked' | 'claimable' | 'claimed' | 'expired'
 

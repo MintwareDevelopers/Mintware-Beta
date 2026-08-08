@@ -6,7 +6,7 @@
 // subgraph / on-chain reads once contracts are deployed (see Track D plan).
 // =============================================================================
 
-export type VaultSurface = 'DeFi' | 'RWA'
+export type VaultSurface = 'DeFi' // RWA surface shelved
 export type PoolProfile = 'BLUE_CHIP' | 'EMERGING' | 'MEME'
 export type VaultStatus = 'active' | 'seeding' | 'paused'
 
@@ -14,7 +14,7 @@ export interface VaultSummary {
   id: string
   name: string
   surface: VaultSurface
-  pair: string          // e.g. "ETH / USDC" or "vRWA / USDC"
+  pair: string          // e.g. "ETH / USDC"
   descriptor: string    // one-line mechanism
   tvlUsd: number
   netApyPct: number
@@ -22,14 +22,8 @@ export interface VaultSummary {
   epochLabel: string    // e.g. "T−3d"
   // Swap-fee split: LPs / referrers / protocol / Attribution bonus pool (70/15/10/5 default)
   feeSplit: [number, number, number, number]
-  // DeFi-only
   profile?: PoolProfile
   profileRange?: string // e.g. "±6%"
-  // RWA-only
-  underlyingApyPct?: number
-  settleDays?: number
-  priceBand?: string    // e.g. "±15/±45"
-  kycAtRedeem?: boolean
 }
 
 const MOCK_VAULTS: VaultSummary[] = [
@@ -67,8 +61,7 @@ const MOCK_VAULTS: VaultSummary[] = [
 
 /**
  * Discovery source. Reads the vault subgraph when NEXT_PUBLIC_VAULT_SUBGRAPH_URL
- * is set (real on-chain-indexed DeFi vaults), otherwise falls back to mock. RWA
- * vaults stay mock until the Track-B RWA contracts are deployed + indexed.
+ * is set (real on-chain-indexed DeFi vaults), otherwise falls back to mock.
  */
 export async function getVaultsDiscovery(): Promise<VaultSummary[]> {
   const { isSubgraphEnabled, fetchSubgraphVaults } = await import('./subgraph')
@@ -133,14 +126,6 @@ const DEFI_HOOK_STACK: HookStep[] = [
   { order: 3, name: 'Attribution', phase: 'afterSwap', note: 'Fee split weighted by reputation' },
   { order: 4, name: 'FeeVault', phase: 'afterSwap', note: 'Accumulate for epoch distribution' },
 ]
-const RWA_HOOK_STACK: HookStep[] = [
-  { order: 0, name: 'Oracle Bands', phase: 'beforeSwap', note: 'Enforce ±15% / ±45% price bands' },
-  { order: 1, name: 'MEV Protection', phase: 'beforeSwap', note: 'TWAP verify · sandwich guard' },
-  { order: 2, name: 'Idle Capital', phase: 'afterSwap', note: 'Maintain 40 / 60 reserve ratio' },
-  { order: 3, name: 'Attribution', phase: 'afterSwap', note: 'Fee split weighted by reputation' },
-  { order: 4, name: 'FeeVault', phase: 'afterSwap', note: 'Accumulate for epoch distribution' },
-]
-
 const LOCK_TIERS: LockTierOption[] = [
   { tier: 'Flex', days: 0, multiplier: 1.0 },
   { tier: 'Committed', days: 30, multiplier: 1.15 },
@@ -160,38 +145,22 @@ export async function getVault(id: string): Promise<VaultDetail | null> {
   const v = list.find((x) => x.id === id)
   if (!v) return null
 
-  const isDeFi = v.surface === 'DeFi'
   // A real on-chain vault is keyed by its contract address.
   const isReal = /^0x[0-9a-fA-F]{40}$/.test(v.id)
 
-  let yieldSources: YieldSource[]
-  if (isReal) {
-    // Real vault — don't fabricate APY. These accrue once fees/yield flow;
-    // wire to real FeeVault/epoch data in a later pass.
-    yieldSources = isDeFi
-      ? [
-          { label: 'Swap fees', apyPct: 0 },
-          { label: 'Idle capital yield', apyPct: 0 },
-          { label: 'Attribution multiplier', apyPct: 0 },
-        ]
-      : [
-          { label: 'Underlying asset', apyPct: 0 },
-          { label: 'Swap fees', apyPct: 0 },
-          { label: 'Idle capital yield', apyPct: 0 },
-        ]
-  } else {
-    yieldSources = isDeFi
-      ? [
-          { label: 'Swap fees', apyPct: 6.0 },
-          { label: 'Idle capital yield', apyPct: 1.5 },
-          { label: 'Attribution multiplier', apyPct: Math.max(0, v.netApyPct - 7.5) },
-        ]
-      : [
-          { label: 'Underlying asset', apyPct: v.underlyingApyPct ?? 9 },
-          { label: 'Swap fees', apyPct: 0.75 },
-          { label: 'Idle capital yield', apyPct: 1.4 },
-        ]
-  }
+  // Real vault — don't fabricate APY (accrues once fees/yield flow). Mock example
+  // vaults show the illustrative split.
+  const yieldSources: YieldSource[] = isReal
+    ? [
+        { label: 'Swap fees', apyPct: 0 },
+        { label: 'Idle capital yield', apyPct: 0 },
+        { label: 'Attribution multiplier', apyPct: 0 },
+      ]
+    : [
+        { label: 'Swap fees', apyPct: 6.0 },
+        { label: 'Idle capital yield', apyPct: 1.5 },
+        { label: 'Attribution multiplier', apyPct: Math.max(0, v.netApyPct - 7.5) },
+      ]
 
   return {
     ...v,
