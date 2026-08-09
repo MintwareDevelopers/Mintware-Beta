@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react'
 import { SwapModal } from '@/components/rewards/swap/SwapModal'
 import { fmtUSD, daysUntil, iconColor } from '@/lib/web2/api'
 import { fetchTokenMeta, fetchDexMeta, dexUrl } from '@/lib/web2/tokenMeta'
+import { safeUrl } from '@/lib/web2/safeUrl'
 
 export interface CampaignLinks {
   dex?:      string
@@ -173,10 +174,15 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
   }, [c.token_contract, c.links])
 
   // DexScreener link always available if we have token_contract
-  const effectiveDexUrl = dexLinks.dexUrl
-    ?? (c.token_contract && chainId ? dexUrl(chainId, c.token_contract) : null)
+  // Socials come from the DexScreener API (untrusted) — sanitize every URL to http(s) before it
+  // reaches an href, so a javascript:/data: link can't execute on click (audit MED: link XSS).
+  const safeDexUrl   = safeUrl(dexLinks.dexUrl
+    ?? (c.token_contract && chainId ? dexUrl(chainId, c.token_contract) : null))
+  const safeTwitter  = safeUrl(dexLinks.twitter)
+  const safeWebsite  = safeUrl(dexLinks.website)
+  const safeTelegram = safeUrl(dexLinks.telegram)
 
-  const hasSocials = effectiveDexUrl || dexLinks.twitter || dexLinks.website || dexLinks.telegram
+  const hasSocials = safeDexUrl || safeTwitter || safeWebsite || safeTelegram
 
   // ── Progress bar ──
   let progressPct = 0
@@ -375,9 +381,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
       {hasSocials && (
         <div className={`flex items-center gap-[2px] px-5 py-[8px] border-t ${LINE} mt-auto justify-end`}>
           <div className="flex items-center gap-[2px]">
-          {effectiveDexUrl && (
+          {safeDexUrl && (
             <a
-              href={effectiveDexUrl}
+              href={safeDexUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline transition-colors duration-150 hover:bg-atx-bone hover:text-atx-ink"
@@ -387,9 +393,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
               <IconDex />
             </a>
           )}
-          {dexLinks.twitter && (
+          {safeTwitter && (
             <a
-              href={dexLinks.twitter}
+              href={safeTwitter}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline transition-colors duration-150 hover:bg-atx-bone hover:text-atx-ink"
@@ -399,9 +405,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
               <IconX />
             </a>
           )}
-          {dexLinks.website && (
+          {safeWebsite && (
             <a
-              href={dexLinks.website}
+              href={safeWebsite}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline transition-colors duration-150 hover:bg-atx-bone hover:text-atx-ink"
@@ -411,9 +417,9 @@ export function CampaignCard({ campaign: c }: CampaignCardProps) {
               <IconGlobe />
             </a>
           )}
-          {dexLinks.telegram && (
+          {safeTelegram && (
             <a
-              href={dexLinks.telegram}
+              href={safeTelegram}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline transition-colors duration-150 hover:bg-atx-bone hover:text-atx-ink"
