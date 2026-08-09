@@ -295,4 +295,46 @@ contract MintwareDeFiPairVaultTest is Test {
         vm.expectRevert(MintwareDeFiPairVault.OnlyProvider.selector);
         vault.initializePool(INIT_SQRT_PRICE);
     }
+
+    // ── fundRent (am-AMM rent sink) ──────────────────────────────────────────
+
+    function test_fundRent_token0_accrues_to_lp() public {
+        _init();
+        _deposit(alice, 100_000e18, 100_000e18, LockTier.Flex);
+        _t0().mint(address(this), 1000e18);
+        _t0().approve(address(vault), 1000e18);
+        vault.fundRent(address(_t0()), 1000e18);
+        (uint256 f0, uint256 f1) = vault.pendingFees(alice);
+        assertApproxEqAbs(f0, 1000e18, 1e9, "sole LP accrues the rent as token0");
+        assertEq(f1, 0, "no token1 rent");
+    }
+
+    function test_fundRent_token1_accrues_to_lp() public {
+        _init();
+        _deposit(alice, 100_000e18, 100_000e18, LockTier.Flex);
+        _t1().mint(address(this), 300e18);
+        _t1().approve(address(vault), 300e18);
+        vault.fundRent(address(_t1()), 300e18);
+        (uint256 f0, uint256 f1) = vault.pendingFees(alice);
+        assertEq(f0, 0);
+        assertApproxEqAbs(f1, 300e18, 1e9, "sole LP accrues the rent as token1");
+    }
+
+    function test_fundRent_no_lp_forwards_to_treasury() public {
+        _init(); // no deposits → totalLiquidity 0
+        _t0().mint(address(this), 500e18);
+        _t0().approve(address(vault), 500e18);
+        uint256 before = _t0().balanceOf(treasury);
+        vault.fundRent(address(_t0()), 500e18);
+        assertEq(_t0().balanceOf(treasury) - before, 500e18, "rent to treasury when no LPs");
+    }
+
+    function test_fundRent_bad_token_reverts() public {
+        _init();
+        MockERC20 rogue = new MockERC20("Rogue", "RGE", 18);
+        rogue.mint(address(this), 100e18);
+        rogue.approve(address(vault), 100e18);
+        vm.expectRevert(MintwareDeFiPairVault.BadConfig.selector);
+        vault.fundRent(address(rogue), 100e18);
+    }
 }

@@ -130,6 +130,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     event FeesClaimed(address indexed lp, uint256 amount0, uint256 amount1);
     event WeightedDistributorSet(address indexed distributor, bytes32 indexed vaultId);
     event FeesRoutedToDistributor(bytes32 indexed vaultId, uint256 lp0, uint256 lp1);
+    event RentFunded(address indexed token, uint256 amount);
     event Rebalanced(int24 tickLower, int24 tickUpper, uint128 liquidity);
     event ProfileSet(PoolProfile profile);
 
@@ -354,6 +355,32 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         token0.forceApprove(dist, type(uint256).max);
         token1.forceApprove(dist, type(uint256).max);
         emit WeightedDistributorSet(dist, vaultId);
+    }
+
+    /// @notice Receive am-AMM rent for the LPs. The auction (as the pool's manager
+    ///         market) pushes rent here in one of the two pool tokens; it is routed to
+    ///         LPs exactly like realized swap fees — via the weighted distributor if
+    ///         wired, else the pro-rata per-share accumulator. This is the
+    ///         IAmAmmRentSink entrypoint MWAmAuction calls.
+    function fundRent(address token, uint256 amount) external nonReentrant {
+        if (amount == 0) return;
+        bool isToken0 = token == address(token0);
+        if (!isToken0 && token != address(token1)) revert BadConfig();
+
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+
+        if (weightedDistributor != address(0)) {
+            (uint256 r0, uint256 r1) = isToken0 ? (amount, uint256(0)) : (uint256(0), amount);
+            IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, r0, r1);
+        } else if (totalLiquidity == 0) {
+            // No LPs to credit — forward to treasury rather than strand it or divide by zero.
+            IERC20(token).safeTransfer(treasury, amount);
+        } else if (isToken0) {
+            accFee0PerShare += (amount * ACC_PRECISION) / totalLiquidity;
+        } else {
+            accFee1PerShare += (amount * ACC_PRECISION) / totalLiquidity;
+        }
+        emit RentFunded(token, amount);
     }
 
     function claimFees() external nonReentrant {
