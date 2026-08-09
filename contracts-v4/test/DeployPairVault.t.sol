@@ -66,7 +66,7 @@ contract DeployPairVaultTest is Test {
         // 1. Mine coordinator (vault wired post-deploy → vault == address(0))
         bytes memory hookArgs = abi.encode(IPoolManager(address(pm)), address(0), deployer);
         (address expected, bytes32 salt) =
-            HookMiner.find(deployer, uint160(0xAC0), type(MWHookCoordinator).creationCode, hookArgs);
+            HookMiner.find(deployer, uint160(0xAC8), type(MWHookCoordinator).creationCode, hookArgs);
 
         // 2. PoolKey with the mined hook
         poolKey = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: 60, hooks: IHooks(expected)});
@@ -117,7 +117,7 @@ contract DeployPairVaultTest is Test {
 
     function test_deploy_wiring_is_correct() public view {
         assertEq(hook.vault(), address(vault), "hook.vault -> vault");
-        assertEq(uint160(address(hook)) & 0x3FFF, 0xAC0, "hook permission bits");
+        assertEq(uint160(address(hook)) & 0x3FFF, 0xAC8, "hook permission bits");
         assertEq(registry.getVault(vaultId).vault, address(vault), "registry has the vault");
         assertEq(registry.getVault(vaultId).feeVault, address(0), "pair vault has no FeeVault");
         assertEq(address(vault.token0()), Currency.unwrap(poolKey.currency0), "token0 wired");

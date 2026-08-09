@@ -22,7 +22,7 @@ pragma solidity ^0.8.26;
 ///           bit  1  AFTER_ADD_LIQUIDITY_RETURNS_DELTA_FLAG
 ///           bit  0  AFTER_REMOVE_LIQUIDITY_RETURNS_DELTA_FLAG
 ///
-///         MWHookCoordinator requires flags: 0xAC0 (bits 11, 9, 7, 6)
+///         MWHookCoordinator requires flags: 0xAC8 (bits 11, 9, 7, 6)
 ///           beforeAddLiquidity + beforeRemoveLiquidity + beforeSwap + afterSwap
 ///
 /// @dev    Usage in Foundry scripts / tests:
@@ -31,7 +31,7 @@ pragma solidity ^0.8.26;
 ///           bytes memory constructorArgs = abi.encode(poolManager, vault, owner);
 ///           (address hookAddr, bytes32 salt) = HookMiner.find(
 ///               deployer,
-///               MWHookCoordinator.HOOK_FLAGS, // 0xAC0
+///               MWHookCoordinator.HOOK_FLAGS, // 0xAC8
 ///               creationCode,
 ///               constructorArgs
 ///           );
@@ -51,7 +51,7 @@ library HookMiner {
     /// @param deployer       Address that will call `new ContractName{salt: salt}(...)`.
     ///                       In scripts this is `msg.sender` inside `vm.startBroadcast`.
     ///                       In tests this is the test contract itself, or use `vm.addr(key)`.
-    /// @param flags          Required permission bits (e.g. 0xAC0 for MWHookCoordinator).
+    /// @param flags          Required permission bits (e.g. 0xAC8 for MWHookCoordinator).
     /// @param creationCode   `type(Contract).creationCode`
     /// @param constructorArgs `abi.encode(arg1, arg2, ...)` — constructor arguments
     ///
