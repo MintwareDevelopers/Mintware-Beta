@@ -1,6 +1,7 @@
 # am-AMM for the Mintware V4 Hook + Pair Vault — Design & Staged Build
 
-**Status:** Stage 1 shipped (pure auction core + unit tests). Stages 2–4 pending.
+**Status:** Stages 1, 2, and the custody-level of Stage 4 shipped. Stage 3 (hook fork) +
+the swap-path invariants pending.
 **Goal:** Spec item **2.2** — the auction-managed AMM that makes the hook *competitively*
 "better than Bunni", not just securely so. Money-critical: **not for real value until externally audited.**
 
@@ -52,16 +53,20 @@ and price the fee optimally; the auction competes that surplus back to LPs as re
 - **Stage 1 — pure core (SHIPPED).** `MWAmAuctionLib.sol` — rent accrual + depletion, the 1.1×
   out-bid rule, K-block reserve + notice, bid validity, safe withdrawal, effective-fee clamp — all
   pure, zero custody. `MWAmAuctionLib.t.sol` — 36 boundary tests. This is the correctness heart.
-- **Stage 2 — stateful contract.** `MWAmAuction.sol`: per-pool `topBid`/`nextBid`, bid-token custody,
-  `bid`/`depositIntoBid`/`withdrawFromBid`/`cancelBid`/`claimRefund`/`claimManagerFees` (all
-  `nonReentrant`, pull-payment), and coordinator-only `poke()` (charge rent → `fundRent` to vault →
-  evict/promote) + `recordManagerFee()`.
-- **Stage 3 — hook fork + wire.** New `HOOK_FLAGS 0xAC8`; `beforeSwap` branch for enrolled pools
-  (override LP fee to 0, skim the manager fee as a delta, credit the manager); `configurePool`
+- **Stage 2 — stateful contract (SHIPPED).** `MWAmAuction.sol`: per-pool `topBid`/`nextBid`, bid-token
+  custody, `bid`/`depositIntoBid`/`withdrawFromBid`/`claim` (all `nonReentrant`, pull-payment ledger
+  for third-party refunds + manager fees), and coordinator-only `poke()` (charge rent → push to the
+  LP rent-sink → evict/promote) + `recordManagerFee()`. 18 integration tests. Rent is PUSHED to an
+  `IAmAmmRentSink` (the pair vault's future `fundRent`).
+- **Stage 3 — hook fork + wire (PENDING).** New `HOOK_FLAGS 0xAC8`; `beforeSwap` branch for enrolled
+  pools (override LP fee to 0, skim the manager fee as a delta, credit the manager); `configurePool`
   gains `AmParams`; `MintwareDeFiPairVault.fundRent()`; re-mine + redeploy + rewire.
-- **Stage 4 — invariant fuzzing.** rent solvency, continuity reserve, fee ≤ cap, no free swaps, no
-  griefing, LP-rent conservation, refund conservation, no-manager-before-K, handover attribution.
-  **Then external audit before any real value.**
+- **Stage 4 — invariant fuzzing.** Custody-level SHIPPED (`MWAmAuctionInvariant.t.sol`, ~128k calls):
+  **solvency** (balance == escrows + unclaimed ledger), **continuity reserve** (manager deposit always
+  an exact multiple of rent), **fee ≤ cap**. Fuzzing already caught + fixed two real bugs (challenger
+  non-multiple withdrawal → dust after promotion; `recordManagerFee` stranding funds with no manager).
+  **Pending (needs Stage 3):** swap-path invariants — no free swaps, end-to-end LP-rent conservation,
+  handover attribution. **Then external audit before any real value.**
 
 ## Security invariants (the fuzz targets)
 
