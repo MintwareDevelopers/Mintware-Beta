@@ -79,8 +79,11 @@ and price the fee optimally; the auction competes that surplus back to LPs as re
   **solvency** (balance == escrows + unclaimed ledger), **continuity reserve** (manager deposit always
   an exact multiple of rent), **fee ≤ cap**. Fuzzing already caught + fixed two real bugs (challenger
   non-multiple withdrawal → dust after promotion; `recordManagerFee` stranding funds with no manager).
-  **Pending (needs Stage 3):** swap-path invariants — no free swaps, end-to-end LP-rent conservation,
-  handover attribution. **Then external audit before any real value.**
+  **Swap-path SHIPPED** (`MWHookCoordinatorAmAmmInvariant.t.sol`, 256×128k calls): random swap × bid
+  × roll × claim sequences through the LIVE hook keep the auction solvent per token — bidToken
+  balance == escrows + unclaimed ledger, and the other token's balance == its skim ledger (no
+  swap-driven skim, rent charge, or bid churn can conjure or lose funds). **Then external audit
+  before any real value.**
 
 ## Self-audit (2026-08-08) — findings + disposition
 
