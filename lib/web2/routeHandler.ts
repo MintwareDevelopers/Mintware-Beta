@@ -98,6 +98,14 @@ export type HandlerOptions = {
    * Fails open if UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN are unset.
    */
   rateLimit?: RateLimitConfig
+
+  /**
+   * For `auth: 'signed-message'` only. The expected `action` tag inside the signed message
+   * (e.g. 'mintware-referral-apply'). When set, the factory verifies the signed payload's
+   * `action` matches — binding the signature to THIS route so a signature captured for one
+   * action can't be replayed against another. Strongly recommended for every signed-message route.
+   */
+  action?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +139,7 @@ export function createHandler(
   fn: (req: NextRequest, ctx: RouteContext) => Promise<NextResponse>,
   opts: HandlerOptions = {}
 ) {
-  const { auth = 'none', rateLimit } = opts
+  const { auth = 'none', rateLimit, action: expectedAction } = opts
 
   // Ratelimit instance created once per handler at module load (not per request).
   // Redis connection is the shared singleton above.
@@ -226,6 +234,29 @@ export function createHandler(
 
       if (Math.abs(Date.now() - (issuedAt as number)) > 15 * 60 * 1000) {
         return errorResponse('Authorization expired', 401, 'AUTH_EXPIRED')
+      }
+
+      // Bind the freshness-checked issuedAt (and the action) to the SIGNATURE. The signed message
+      // is canonical JSON (see lib/web3/signedActionMessages.ts) that embeds `issuedAt` and
+      // `action`. Without this, the body's issuedAt is unbound from the signature, so a captured
+      // signature replays forever with a fresh body issuedAt, and across any route (audit MED:
+      // signed-message replay / no action binding). We require the signed payload's issuedAt to
+      // equal the freshness-checked body issuedAt, and — when the route declares one — its action.
+      let signedPayload: Record<string, unknown>
+      try {
+        signedPayload = JSON.parse(authMessage as string)
+      } catch {
+        return errorResponse('Malformed signed authorization', 401, 'AUTH_MALFORMED')
+      }
+      if (signedPayload.issuedAt !== issuedAt) {
+        log.warn('auth', 'Signed issuedAt does not match body issuedAt (replay guard)')
+        return errorResponse('Authorization payload mismatch', 401, 'AUTH_MISMATCH')
+      }
+      if (expectedAction && signedPayload.action !== expectedAction) {
+        log.warn('auth', 'Signed action does not match route (cross-action replay guard)', {
+          expected: expectedAction, got: signedPayload.action,
+        })
+        return errorResponse('Authorization payload mismatch', 401, 'AUTH_MISMATCH')
       }
 
       try {
