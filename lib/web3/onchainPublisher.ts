@@ -266,10 +266,14 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
 
   if (params.treasury_claim) {
     const treasuryAddr = (process.env.MINTWARE_TREASURY_ADDRESS ?? '').toLowerCase()
-    if (treasuryAddr && account.address.toLowerCase() !== treasuryAddr) {
+    // FAIL CLOSED: auto-claim sends tokens to msg.sender (the oracle wallet). It is only safe when
+    // the oracle wallet IS the treasury. If the treasury address is UNSET we cannot prove that, so
+    // we must NOT auto-claim — otherwise fees silently land in the oracle EOA (audit HIGH #9). An
+    // unset OR mismatched address both skip; the treasury claims manually via the stored signature.
+    if (!treasuryAddr || account.address.toLowerCase() !== treasuryAddr) {
       console.warn(
         `[onchainPublisher] Skipping treasury auto-claim for distribution ${distribution_db_id}: ` +
-        `oracle wallet (${account.address}) ≠ MINTWARE_TREASURY_ADDRESS (${treasuryAddr}). ` +
+        `${treasuryAddr ? `oracle wallet (${account.address}) ≠ MINTWARE_TREASURY_ADDRESS (${treasuryAddr})` : 'MINTWARE_TREASURY_ADDRESS is unset'}. ` +
         `claim() sends to msg.sender — fees would land in the oracle wallet, not the treasury. ` +
         `Treasury must call claim() manually using the stored oracle_signature.`
       )
