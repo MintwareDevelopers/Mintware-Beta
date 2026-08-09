@@ -46,7 +46,10 @@ contract MintwareVaultRegistry is Ownable {
         address provider
     ) external onlyOwner {
         if (vaults[vaultId].vault != address(0)) revert VaultExists();
-        if (vault == address(0) || feeVault == address(0) || provider == address(0)) revert ZeroAddress();
+        // feeVault may be address(0): the dual-sided MintwareDeFiPairVault has no FeeVault
+        // (penalties → treasury, rewards → MintwareWeightedDistributor). Only vault + provider
+        // are structurally required.
+        if (vault == address(0) || provider == address(0)) revert ZeroAddress();
 
         vaults[vaultId] = VaultRecord({
             vault:     vault,
