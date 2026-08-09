@@ -69,7 +69,7 @@ contract MintwareDeFiVault4626Test is Test {
         // Mine + deploy the canonical MWHookCoordinator at an address with the right bits.
         bytes memory hookArgs = abi.encode(IPoolManager(address(pm)), address(0), deployer);
         (, bytes32 salt) = HookMiner.find(
-            deployer, uint160(0xAC0), type(MWHookCoordinator).creationCode, hookArgs
+            deployer, uint160(0xAC8), type(MWHookCoordinator).creationCode, hookArgs
         );
         hook = new MWHookCoordinator{salt: salt}(IPoolManager(address(pm)), address(0), deployer);
 

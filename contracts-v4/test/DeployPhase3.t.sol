@@ -73,7 +73,7 @@ contract DeployPhase3Test is Test {
         // 2. Mine coordinator salt (vault wired post-deploy → vault == address(0))
         bytes memory hookArgs = abi.encode(IPoolManager(address(pm)), address(0), deployer);
         (address expected, bytes32 salt) =
-            HookMiner.find(deployer, uint160(0xAC0), type(MWHookCoordinator).creationCode, hookArgs);
+            HookMiner.find(deployer, uint160(0xAC8), type(MWHookCoordinator).creationCode, hookArgs);
 
         // 3. Vault (script config: 0.5% entry / 1.0% exit fee)
         VaultConfig memory cfg = VaultConfig({
@@ -134,7 +134,7 @@ contract DeployPhase3Test is Test {
         assertEq(vault.feeVault(), address(feeVault), "vault.feeVault -> feeVault");
         assertEq(feeVault.socialVault(), address(vault), "feeVault.vault -> vault");
         assertEq(feeVault.hook(), address(hook),      "feeVault.hook -> hook");
-        assertEq(uint160(address(hook)) & 0x3FFF, 0xAC0, "hook permission bits");
+        assertEq(uint160(address(hook)) & 0x3FFF, 0xAC8, "hook permission bits");
         bytes32 vaultId = keccak256(abi.encode(block.chainid, address(vault)));
         assertEq(registry.getVault(vaultId).vault, address(vault), "registry has the vault");
     }

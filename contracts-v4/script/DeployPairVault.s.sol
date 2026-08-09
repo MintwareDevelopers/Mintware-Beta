@@ -20,7 +20,7 @@ import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
 /// returns both tokens at their real value. There is no par-NAV / bank-run flaw here.
 ///
 /// ─── Deploy order (hook↔vault chicken-and-egg, mirrors DeployPhase3) ──────────
-///   1. Mine  CREATE2 salt for MWHookCoordinator (flags 0xAC0; vault wired post-deploy)
+///   1. Mine  CREATE2 salt for MWHookCoordinator (flags 0xAC8; vault wired post-deploy)
 ///   2. Build PoolKey (sorted currencies, hooks = mined hook address)
 ///   3. Deploy MintwareDeFiPairVault(poolManager, poolKey, profile, treasury, provider, owner)
 ///   4. Deploy MWHookCoordinator at the mined address; hook.setVault(vault)
@@ -76,7 +76,7 @@ contract DeployPairVault is Script {
         // 1. Mine coordinator salt (vault wired post-deploy → vault == address(0))
         bytes memory hookArgs = abi.encode(IPoolManager(poolMgr), address(0), deployer);
         (address expectedHook, bytes32 hookSalt) = HookMiner.find(
-            C2_FACTORY, uint160(0xAC0), type(MWHookCoordinator).creationCode, hookArgs
+            C2_FACTORY, uint160(0xAC8), type(MWHookCoordinator).creationCode, hookArgs
         );
         console.log("Expected hook:", expectedHook);
 

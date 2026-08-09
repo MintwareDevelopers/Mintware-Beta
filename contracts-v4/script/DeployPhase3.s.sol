@@ -14,7 +14,7 @@ import {IPoolManager}            from "@uniswap/v4-core/src/interfaces/IPoolMana
 ///
 /// ─── Deploy order (mirrors the Phase-2 script; avoids circular deps) ─────────
 ///   1. Deploy  FeeVault(usdc, distributor, oracle, treasury)
-///   2. Mine    CREATE2 salt for MWHookCoordinator (flags 0xAC0)
+///   2. Mine    CREATE2 salt for MWHookCoordinator (flags 0xAC8)
 ///   3. Deploy  MintwareDeFiVault4626(cfg, poolManager, feeVault)
 ///   4. Deploy  MWHookCoordinator at the mined address
 ///   5. Wire    hook.setVault(vault) / feeVault.setSocialVault(vault) / feeVault.setHook(hook)
@@ -65,7 +65,7 @@ contract DeployPhase3 is Script {
         // 2. Mine hook salt (coordinator: vault wired post-deploy, so vault == address(0) here)
         bytes memory hookArgs = abi.encode(IPoolManager(poolMgr), address(0), deployer);
         (address expectedHook, bytes32 hookSalt) = HookMiner.find(
-            C2_FACTORY, uint160(0xAC0), type(MWHookCoordinator).creationCode, hookArgs
+            C2_FACTORY, uint160(0xAC8), type(MWHookCoordinator).creationCode, hookArgs
         );
         console.log("Expected hook:", expectedHook);
 

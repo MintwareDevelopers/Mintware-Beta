@@ -62,7 +62,7 @@ contract MWHookCoordinatorTest is Test {
         // Mine + deploy the coordinator (vault wired after, like the socialVault pattern).
         bytes memory args = abi.encode(IPoolManager(address(pm)), address(0), deployer);
         (address expected, bytes32 salt) = HookMiner.find(
-            deployer, uint160(0xAC0), type(MWHookCoordinator).creationCode, args
+            deployer, uint160(0xAC8), type(MWHookCoordinator).creationCode, args
         );
         coord = new MWHookCoordinator{salt: salt}(IPoolManager(address(pm)), address(0), deployer);
         require(address(coord) == expected, "coord addr mismatch");
@@ -207,8 +207,8 @@ contract MWHookCoordinatorTest is Test {
     function test_permission_bits_match_declared_flags() public view {
         // Declared HOOK_FLAGS must equal the low bits actually encoded in the address
         // (an Angstrom-class mismatch would otherwise brick or mis-gate the pool).
-        assertEq(coord.HOOK_FLAGS(), 0xAC0, "declared flags");
-        assertEq(uint160(address(coord)) & 0x3FFF, 0xAC0, "address-encoded flags match");
+        assertEq(coord.HOOK_FLAGS(), 0xAC8, "declared flags");
+        assertEq(uint160(address(coord)) & 0x3FFF, 0xAC8, "address-encoded flags match");
     }
 
     // ── Stage 1.4: kill-switch on the hook ───────────────────────────────────

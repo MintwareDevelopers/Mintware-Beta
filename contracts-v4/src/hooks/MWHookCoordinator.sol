@@ -11,10 +11,17 @@ import {BeforeSwapDelta, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/Bef
 import {StateLibrary}        from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {LPFeeLibrary}        from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {Hooks}               from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
 
 import {MWGuardianPausable} from "../lib/MWGuardianPausable.sol";
 import {MWOracleGuard} from "./MWOracleGuard.sol";
 import {MWDynamicFee}  from "./MWDynamicFee.sol";
+
+/// @dev Minimal view of MWAmAuction the swap hot path needs.
+interface IMWAmAuction {
+    function poke(PoolId id) external returns (address manager, uint24 fee);
+    function recordManagerFee(PoolId id, address token, uint256 amount) external;
+}
 
 /// @title  MWHookCoordinator
 /// @notice Phase-3 DeFi V4 hook. Composes modular protection:
@@ -24,10 +31,9 @@ import {MWDynamicFee}  from "./MWDynamicFee.sol";
 ///         Built on the dependency-free MWOracleGuard + MWDynamicFee libraries.
 ///
 /// @dev    Permission bits (address-encoded via HookMiner): beforeAddLiquidity(11) +
-///         beforeRemoveLiquidity(9) + beforeSwap(7) + afterSwap(6) = 0xAC0. No return-delta
-///         permissions — this hook skims no swap delta. (Stage-1.2 changed beforeSwap from
-///         `view` to state-changing for the fee rate-limiter, but the permission BITS are
-///         unchanged, so no CREATE2 re-mine is needed.)
+///         beforeRemoveLiquidity(9) + beforeSwap(7) + afterSwap(6) + beforeSwapReturnDelta(3)
+///         = 0xAC8. The return-delta bit lets enrolled am-AMM pools skim the manager fee in
+///         beforeSwap (Stage 2.2); non-enrolled pools return a zero delta (bit unused).
 ///
 /// @dev    MEV model (Stage-1.2 rebuild): NO trader identity is read — the old `tx.origin`
 ///         sandwich cooldown is gone. Manipulation resistance comes from MWOracleGuard's
@@ -51,7 +57,7 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     using StateLibrary  for IPoolManager;
     using MWOracleGuard for MWOracleGuard.State;
 
-    uint160 public constant HOOK_FLAGS = 0xAC0;
+    uint160 public constant HOOK_FLAGS = 0xAC8;
 
     struct FeeParams {
         uint24  baseFeePips;        // floor fee (3000 = 0.30%)
@@ -68,6 +74,14 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     /// @notice The only address permitted to add/remove liquidity in coordinated pools.
     address public vault;
 
+    /// @notice The am-AMM auction driving enrolled pools (set once by the owner).
+    address public auction;
+    /// @notice Per-pool am-AMM enrollment. Owner mirrors the auction's `amParams.enabled`.
+    mapping(PoolId => bool) public amAmmEnabled;
+    /// @notice Per-pool exact-output allowance on managed am-AMM swaps. Default false: v1 handles
+    ///         exact-input only and reverts exact-output, closing a manager-fee-avoidance hole.
+    mapping(PoolId => bool) public allowExactOutput;
+
     mapping(PoolId => FeeParams) public feeParams;
     mapping(PoolId => MWOracleGuard.State) internal oracle;
 
@@ -80,6 +94,9 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
 
     error OnlyPoolManager();
     error OnlyVaultCanModifyLiquidity();
+    error ExactOutputNotSupported();
+    error AuctionAlreadySet();
+    error FeeTooHigh();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(POOL_MANAGER)) revert OnlyPoolManager();
@@ -103,7 +120,7 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
                 afterSwap:                     true,
                 beforeDonate:                  false,
                 afterDonate:                   false,
-                beforeSwapReturnDelta:         false,
+                beforeSwapReturnDelta:         true,
                 afterSwapReturnDelta:          false,
                 afterAddLiquidityReturnDelta:  false,
                 afterRemoveLiquidityReturnDelta: false
@@ -116,6 +133,24 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     function setVault(address _vault) external onlyOwner {
         vault = _vault;
         emit VaultUpdated(_vault);
+    }
+
+    /// @notice Wire the am-AMM auction once (chicken-and-egg with the auction's setCoordinator).
+    function setAuction(address _auction) external onlyOwner {
+        if (auction != address(0)) revert AuctionAlreadySet();
+        auction = _auction;
+    }
+
+    /// @notice Enroll/unenroll a pool in the am-AMM. Owner must keep this in sync with the
+    ///         auction's `configurePool`/`setEnabled` for the same pool.
+    function setAmAmmEnabled(PoolId poolId, bool enabled) external onlyOwner {
+        amAmmEnabled[poolId] = enabled;
+    }
+
+    /// @notice Allow exact-output swaps on a managed am-AMM pool (default false). Flip on only
+    ///         after the exact-output skim path is fuzzed (see am-amm-design.md).
+    function setAllowExactOutput(PoolId poolId, bool allowed) external onlyOwner {
+        allowExactOutput[poolId] = allowed;
     }
 
     /// @notice Configure a pool's dynamic-fee + oracle-guard parameters.
@@ -165,7 +200,7 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
 
     // ── IHooks: swap — oracle circuit breaker + deviation-priced dynamic fee ─────
 
-    function beforeSwap(address, PoolKey calldata key, SwapParams calldata, bytes calldata)
+    function beforeSwap(address, PoolKey calldata key, SwapParams calldata params, bytes calldata)
         external override onlyPoolManager returns (bytes4, BeforeSwapDelta, uint24)
     {
         PoolId id = key.toId();
@@ -178,6 +213,12 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
             oracle[id].checkCircuitBreaker(currentTick);
         }
 
+        // ── am-AMM enrolled pools: the manager sets the fee and receives it; LP fee is zeroed ──
+        // (Non-enrolled pools fall through to the deviation-priced dynamic fee below.)
+        if (amAmmEnabled[id] && auction != address(0)) {
+            return _beforeSwapAmAmm(id, key, params);
+        }
+
         uint24 feeOverride = 0;
         if (fp.dynamicFeeEnabled) {
             uint256 dev = oracle[id].deviationTicks(currentTick);
@@ -187,6 +228,49 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         }
 
         return (IHooks.beforeSwap.selector, toBeforeSwapDelta(0, 0), feeOverride);
+    }
+
+    /// @dev The am-AMM manager-fee skim. Grounded in the v4-core delta accounting (see
+    ///      docs/developers/am-amm-design.md §skim): for an exact-input swap the fee is taken on
+    ///      the SPECIFIED (input) currency — a positive `deltaSpecified` shrinks the amount that
+    ///      reaches the pool, and `POOL_MANAGER.take(spec, auction, fee)` books the offsetting
+    ///      `-fee`, so the hook nets ZERO across the unlock (no residual delta → swap settles).
+    ///      The trader covers `fee`; LPs earn nothing on managed swaps (the manager bought the flow).
+    function _beforeSwapAmAmm(PoolId id, PoolKey calldata key, SwapParams calldata params)
+        internal returns (bytes4, BeforeSwapDelta, uint24)
+    {
+        (address mgr, uint24 feePips) = IMWAmAuction(auction).poke(id);
+
+        // Unmanaged: LPs keep the auction's default fee; no skim.
+        if (mgr == address(0)) {
+            return (IHooks.beforeSwap.selector, toBeforeSwapDelta(0, 0), feePips | LPFeeLibrary.OVERRIDE_FEE_FLAG);
+        }
+
+        // Managed: LP fee 0, manager skims. Guard against a fee that could zero/flip the swap.
+        if (feePips >= 1_000_000) revert FeeTooHigh();
+        uint24 zeroLp = uint24(0) | LPFeeLibrary.OVERRIDE_FEE_FLAG;
+
+        // v1 handles exact-input only; a silent exact-output pass-through would let traders dodge
+        // the manager fee (fee basis is only known for the specified amount in beforeSwap).
+        if (params.amountSpecified > 0 && !allowExactOutput[id]) revert ExactOutputNotSupported();
+
+        // Specified currency == the token the trader gave an exact amount of (v4-core Hooks.sol).
+        Currency spec = (params.amountSpecified < 0 == params.zeroForOne) ? key.currency0 : key.currency1;
+        uint256 amt = params.amountSpecified < 0
+            ? uint256(-params.amountSpecified)
+            : uint256(params.amountSpecified);
+        uint256 fee = (amt * uint256(feePips)) / 1_000_000; // floor; feePips < 1e6 ⇒ fee < amt
+
+        if (fee == 0) {
+            return (IHooks.beforeSwap.selector, toBeforeSwapDelta(0, 0), zeroLp);
+        }
+
+        // (A) take the fee straight to the auction (books -fee to the hook), then
+        // (B) credit the manager (tokens are now at the auction — its push-then-record model), then
+        // (C) return +fee on the specified delta, booked to the hook in afterSwap → net zero.
+        POOL_MANAGER.take(spec, auction, fee);
+        IMWAmAuction(auction).recordManagerFee(id, Currency.unwrap(spec), fee);
+        return (IHooks.beforeSwap.selector, toBeforeSwapDelta(int128(int256(fee)), 0), zeroLp);
     }
 
     /// @dev Clamp the fee to `maxStepPerBlock × blocksElapsed` of the last applied fee. Within a

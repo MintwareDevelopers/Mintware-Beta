@@ -1,7 +1,21 @@
 # am-AMM for the Mintware V4 Hook + Pair Vault — Design & Staged Build
 
-**Status:** Stages 1, 2, and the custody-level of Stage 4 shipped. Stage 3 (hook fork) +
-the swap-path invariants pending.
+**Status:** Stages 1, 2, 3, and the custody-level of Stage 4 shipped. The auction now functions
+on swaps (manager sets + receives the fee; LP fee zeroed on managed swaps). Remaining: the
+swap-path invariants (fuzz the skim) + external audit.
+
+## Stage 3 skim — verified V4 delta accounting (implemented)
+
+`MWHookCoordinator` is now `HOOK_FLAGS 0xAC8` (`beforeSwapReturnDelta`). For an enrolled+managed pool,
+`beforeSwap`: `auction.poke(id)` → override LP fee to 0 → take the manager fee on the SPECIFIED
+(exact-input) currency straight to the auction via `POOL_MANAGER.take(spec, auction, fee)` →
+`recordManagerFee` → return `toBeforeSwapDelta(+fee, 0)`. The `+fee` (booked in afterSwap) and the
+`-fee` (from `take`) cancel, so the hook nets ZERO across the unlock → the swap settles; the trader
+covers the fee. **v1 is exact-input only** — managed exact-output reverts `ExactOutputNotSupported`
+(per-pool `allowExactOutput`, default false) to close a fee-avoidance hole. Wiring: `coord.setAuction`
++ `auction.setCoordinator` + `coord.setAmAmmEnabled(id,true)` + `auction.configurePool(id,...)` — and
+per F-D, enroll a pool ONLY once the auction is configured. Proof: `MWHookCoordinatorAmAmm.t.sol`
+(fee reaches the auction both directions, swap settles, unmanaged = no skim, manager claims).
 **Goal:** Spec item **2.2** — the auction-managed AMM that makes the hook *competitively*
 "better than Bunni", not just securely so. Money-critical: **not for real value until externally audited.**
 
@@ -65,8 +79,11 @@ and price the fee optimally; the auction competes that surplus back to LPs as re
   **solvency** (balance == escrows + unclaimed ledger), **continuity reserve** (manager deposit always
   an exact multiple of rent), **fee ≤ cap**. Fuzzing already caught + fixed two real bugs (challenger
   non-multiple withdrawal → dust after promotion; `recordManagerFee` stranding funds with no manager).
-  **Pending (needs Stage 3):** swap-path invariants — no free swaps, end-to-end LP-rent conservation,
-  handover attribution. **Then external audit before any real value.**
+  **Swap-path SHIPPED** (`MWHookCoordinatorAmAmmInvariant.t.sol`, 256×128k calls): random swap × bid
+  × roll × claim sequences through the LIVE hook keep the auction solvent per token — bidToken
+  balance == escrows + unclaimed ledger, and the other token's balance == its skim ledger (no
+  swap-driven skim, rent charge, or bid churn can conjure or lose funds). **Then external audit
+  before any real value.**
 
 ## Self-audit (2026-08-08) — findings + disposition
 
