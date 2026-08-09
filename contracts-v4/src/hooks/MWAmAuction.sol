@@ -71,6 +71,8 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
     error NothingToClaim();
     error ZeroAddress();
     error NoManager();
+    error BidTokenLocked();
+    error AlreadyManaging();
 
     constructor(address initialOwner) Ownable(initialOwner) {}
 
@@ -92,7 +94,13 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
     /// @notice Configure a pool's auction. Owner is responsible for the BLUE_CHIP gate.
     function configurePool(PoolId id, address _rentSink, AmParams calldata p) external onlyOwner {
         if (_rentSink == address(0) || p.bidToken == address(0)) revert ZeroAddress();
-        if (p.K == 0 || p.minRent == 0 || p.minBidMultBps < 10_000) revert InvalidBid();
+        // minBidMultBps must be strictly > 1.0x (10_000) — 1.0x allows 1-wei slot churn.
+        if (p.K == 0 || p.minRent == 0 || p.minBidMultBps <= 10_000) revert InvalidBid();
+        if (p.defaultFeePips > p.feeMaxPips) revert InvalidBid();
+        // bidToken is locked once set: changing it while deposits are escrowed in the old
+        // token would pay out / charge rent in the wrong asset and break custody accounting.
+        address existing = amParams[id].bidToken;
+        if (existing != address(0) && existing != p.bidToken) revert BidTokenLocked();
         amParams[id] = p;
         rentSink[id] = _rentSink;
         emit PoolConfigured(id, _rentSink, p.bidToken, p.feeMaxPips, p.K);
@@ -112,6 +120,10 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
         AmParams memory p = amParams[id];
         if (!p.enabled) revert NotEnabled();
         _poke(id); // keep state fresh before reading the standing challenger
+
+        // A manager can't also squat the challenger slot: one address holding both slots
+        // would be unable to manage each escrow independently via _ownedBid.
+        if (msg.sender == topBid[id].manager) revert AlreadyManaging();
 
         Bid memory standing = nextBid[id];
         if (!MWAmAuctionLib.validBid(rent, deposit, feePips, standing, p)) revert InvalidBid();
@@ -152,17 +164,10 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
         _poke(id);
         (Bid storage b, bool isTop) = _ownedBid(id);
 
-        if (isTop) {
-            // canWithdraw enforces both the K reserve AND the exact-multiple invariant.
-            if (!MWAmAuctionLib.canWithdraw(b.deposit, b.rent, amount, p.K)) revert ReserveBreach();
-        } else {
-            // A challenger has no reserve to keep, but the remainder must still be a
-            // clean multiple of rent (or a full exit) — else a later promotion would
-            // seat a manager whose deposit can't deplete cleanly.
-            if (amount > b.deposit) revert InvalidBid();
-            uint128 remaining = b.deposit - amount;
-            if (remaining != 0 && remaining % b.rent != 0) revert InvalidBid();
-        }
+        // Both slots must keep the continuity reserve (or fully exit). A challenger is NOT
+        // exempt: if it could sit below reserve it would be promoted under-collateralized,
+        // defeating the K-block guarantee. canWithdraw = (remaining == 0) OR meetsReserve.
+        if (!MWAmAuctionLib.canWithdraw(b.deposit, b.rent, amount, p.K)) revert ReserveBreach();
 
         // Effects
         b.deposit -= amount;
@@ -189,7 +194,7 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
     /// @notice Advance the auction for a block: charge rent → push to LP → evict on
     ///         depletion → promote the challenger after its notice. Returns the manager
     ///         and effective fee the hook should apply this swap.
-    function poke(PoolId id) external onlyCoordinator returns (address manager, uint24 fee) {
+    function poke(PoolId id) external onlyCoordinator nonReentrant returns (address manager, uint24 fee) {
         return _poke(id);
     }
 
@@ -217,15 +222,17 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
 
         Bid memory top = topBid[id];
 
-        // 1. Charge rent for elapsed blocks and push it to the LP.
+        // 1. Charge rent for elapsed blocks and push it to the LP. Effects (deposit debit +
+        //    lastCharged) are committed BEFORE the external _fundRent call (CEI): even without
+        //    the reentrancy guard, a re-entering sink would see fully-updated state.
         (uint256 rentDue, bool depleted) = MWAmAuctionLib.rentOwed(top, block.number, last);
+        lastCharged[id] = block.number;
         if (rentDue > 0) {
             top.deposit = uint128(uint256(top.deposit) - rentDue);
             topBid[id].deposit = top.deposit;
             _fundRent(id, p.bidToken, rentDue);
             emit RentCharged(id, top.manager, rentDue);
         }
-        lastCharged[id] = block.number;
 
         // 2. Evict a depleted manager.
         if (depleted) {
@@ -255,6 +262,7 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
         address sink = rentSink[id];
         IERC20(token).forceApprove(sink, amount);
         IAmAmmRentSink(sink).fundRent(token, amount);
+        IERC20(token).forceApprove(sink, 0); // clear any residual allowance a partial-pull sink left
     }
 
     /// @dev Resolve which of the caller's bids to act on (top preferred), or revert.

@@ -68,6 +68,40 @@ and price the fee optimally; the auction competes that surplus back to LPs as re
   **Pending (needs Stage 3):** swap-path invariants — no free swaps, end-to-end LP-rent conservation,
   handover attribution. **Then external audit before any real value.**
 
+## Self-audit (2026-08-08) — findings + disposition
+
+Three adversarial reviews (custody, economics, vault-integration). The fuzzed core held
+(solvency, overflow, evict/promote), but real defects surfaced beyond the fuzzer's mocks.
+
+**FIXED (with regression tests):**
+- **Reentrancy/CEI on `poke`** — `poke` was missing `nonReentrant`, and `lastCharged` was
+  written *after* the external rent push. Added the guard + moved the effect before the call;
+  a hostile reentering sink now trips the guard (`test_poke_reentrant_sink_is_blocked`).
+- **Under-reserved challenger** — the challenger withdraw branch checked only the multiple, not
+  the K reserve, so a challenger could be promoted with ~1 block of runway. Both branches now use
+  `canWithdraw` (full exit OR meetsReserve).
+- **`bidToken` swap footgun** — `configurePool` now locks `bidToken` once set.
+- **Manager squatting own challenger** — `bid` reverts `AlreadyManaging` if the caller holds the top slot.
+- **`fundRent` fee-on-transfer over-credit** — now balance-diff intake (credit what arrived), plus
+  a carried dust remainder so sub-threshold rent is never stranded, `whenNotPaused`, and
+  caller-restricted to an owner-set `rentFunder` (the auction).
+- Config: reject `minBidMultBps <= 10_000` (1.0x churn) and `defaultFeePips > feeMaxPips`; reset the
+  rent approval to 0 after the sink call.
+
+**FLAGGED — deliberate, for the external audit / later passes (NOT fund-loss):**
+- **`nextBid` squatting (F-B)** — the single challenger slot pays no rent and can be cheaply
+  re-placed (epoch reset), letting an adversary gate entry / inflate the real-challenger bar to
+  mult². Mitigation is a *mechanism* choice (griefing bond, min bid lifetime, or multiple
+  challengers) — deferred to a considered design pass, not a rushed patch.
+- **Rent-only until the hook lands (F-D)** — `recordManagerFee` exists but the coordinator doesn't
+  yet call `poke`/`recordManagerFee` (Stage 3). Until then managing is value-negative → **do NOT
+  `setEnabled(true)` on a pool before the Stage-3 hook wiring lands atomically.**
+- **`rebalanceToProfile` absorbs unclaimed fee/rent reserves (pre-existing)** — the accumulator
+  backs claims from raw balance, which `_rebalance` sweeps into the position. Affects swap fees too;
+  proper fix is a segregated `feeReserve0/1`. Larger change, recommended before mainnet.
+- `withdrawFeeBps` is reserved (anti-exit-race, Stage 3); manager fee is immutable per bid
+  (LP-protective simplification); `weightedDistributor` holds a max approval (owner-set trust).
+
 ## Security invariants (the fuzz targets)
 
 rent monotonic-drain & no free management block · `deposit/rent >= K` always (withdraw can't break it)

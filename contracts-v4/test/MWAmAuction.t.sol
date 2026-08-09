@@ -18,6 +18,22 @@ contract MockRentSink is IAmAmmRentSink {
     }
 }
 
+/// @dev A hostile sink that tries to reenter the auction during the rent push. The
+///      reentrancy guard on poke + CEI ordering must make this impossible.
+contract ReentrantSink is IAmAmmRentSink {
+    MWAmAuction public auction;
+    bool public armed;
+    constructor(MWAmAuction _a) { auction = _a; }
+    function arm() external { armed = true; }
+    function fundRent(address token, uint256 amount) external {
+        IERC20(token).transferFrom(msg.sender, address(this), amount);
+        if (armed) {
+            // Any reentry into a guarded auction fn must revert while poke holds the lock.
+            auction.claim(token);
+        }
+    }
+}
+
 /// @notice Integration tests for the stateful am-AMM auction, driven as the hook
 ///         (coordinator) would drive it: escrow, rent → LP, promotion after the
 ///         K-block notice, eviction on depletion, refunds, and access control.
@@ -229,6 +245,69 @@ contract MWAmAuctionTest is Test {
         vm.prank(owner);
         vm.expectRevert(MWAmAuction.CoordinatorAlreadySet.selector);
         auction.setCoordinator(bob);
+    }
+
+    // ── audit-fix regressions ───────────────────────────────────────────────────
+
+    /// F-A: a challenger must keep the K reserve too, or it gets promoted under-collateralized.
+    function test_challenger_cannot_withdraw_below_reserve() public {
+        _bid(alice, 100, 1000, 1200); // challenger, deposit == rent*K exactly
+        vm.prank(alice);
+        vm.expectRevert(MWAmAuction.ReserveBreach.selector);
+        auction.withdrawFromBid(id, 100); // would leave 900 < 1000 reserve
+    }
+
+    /// custody: an active manager cannot also squat the challenger slot.
+    function test_manager_cannot_bid_own_challenger() public {
+        _bid(alice, 100, 1000, 1200);
+        vm.roll(110); _poke(); // alice promoted to manager
+        vm.startPrank(alice);
+        bidToken.approve(address(auction), 1500);
+        vm.expectRevert(MWAmAuction.AlreadyManaging.selector);
+        auction.bid(id, 1200, 150, 1500);
+        vm.stopPrank();
+    }
+
+    /// custody: bidToken is locked once configured (can't swap it out from under escrow).
+    function test_configurePool_bidToken_locked() public {
+        MockERC20 other = new MockERC20("Other", "OTH", 18);
+        AmParams memory p2 = _params();
+        p2.bidToken = address(other);
+        vm.prank(owner);
+        vm.expectRevert(MWAmAuction.BidTokenLocked.selector);
+        auction.configurePool(id, address(sink), p2);
+    }
+
+    /// F-E: 1.0x multiplier (free churn) is rejected.
+    function test_configurePool_rejects_1x_multiplier() public {
+        AmParams memory p2 = _params();
+        p2.minBidMultBps = 10_000;
+        vm.prank(owner);
+        vm.expectRevert(MWAmAuction.InvalidBid.selector);
+        auction.configurePool(PoolId.wrap(keccak256("p2")), address(sink), p2);
+    }
+
+    /// F-J: default fee above the cap is rejected at config time.
+    function test_configurePool_rejects_default_over_cap() public {
+        AmParams memory p2 = _params();
+        p2.defaultFeePips = 3001; // > feeMaxPips 3000
+        vm.prank(owner);
+        vm.expectRevert(MWAmAuction.InvalidBid.selector);
+        auction.configurePool(PoolId.wrap(keccak256("p3")), address(sink), p2);
+    }
+
+    /// F-C: a reentering rent sink cannot double-charge — the guard trips and poke reverts.
+    function test_poke_reentrant_sink_is_blocked() public {
+        ReentrantSink rs = new ReentrantSink(auction);
+        vm.prank(owner);
+        auction.configurePool(id, address(rs), _params()); // same bidToken, hostile sink
+        _bid(alice, 100, 1000, 1200);
+        vm.roll(110); _poke();   // seat alice (sink not armed yet)
+        rs.arm();
+        vm.roll(115);
+        vm.prank(coord);
+        vm.expectRevert();       // reentry into claim() trips ReentrancyGuard -> whole poke reverts
+        auction.poke(id);
     }
 
     // ── helpers to read packed bids ─────────────────────────────────────────────

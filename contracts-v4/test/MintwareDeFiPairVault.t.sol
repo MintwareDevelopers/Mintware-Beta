@@ -300,6 +300,7 @@ contract MintwareDeFiPairVaultTest is Test {
 
     function test_fundRent_token0_accrues_to_lp() public {
         _init();
+        vault.setRentFunder(address(this));
         _deposit(alice, 100_000e18, 100_000e18, LockTier.Flex);
         _t0().mint(address(this), 1000e18);
         _t0().approve(address(vault), 1000e18);
@@ -311,6 +312,7 @@ contract MintwareDeFiPairVaultTest is Test {
 
     function test_fundRent_token1_accrues_to_lp() public {
         _init();
+        vault.setRentFunder(address(this));
         _deposit(alice, 100_000e18, 100_000e18, LockTier.Flex);
         _t1().mint(address(this), 300e18);
         _t1().approve(address(vault), 300e18);
@@ -322,6 +324,7 @@ contract MintwareDeFiPairVaultTest is Test {
 
     function test_fundRent_no_lp_forwards_to_treasury() public {
         _init(); // no deposits → totalLiquidity 0
+        vault.setRentFunder(address(this));
         _t0().mint(address(this), 500e18);
         _t0().approve(address(vault), 500e18);
         uint256 before = _t0().balanceOf(treasury);
@@ -331,10 +334,33 @@ contract MintwareDeFiPairVaultTest is Test {
 
     function test_fundRent_bad_token_reverts() public {
         _init();
+        vault.setRentFunder(address(this));
         MockERC20 rogue = new MockERC20("Rogue", "RGE", 18);
         rogue.mint(address(this), 100e18);
         rogue.approve(address(vault), 100e18);
         vm.expectRevert(MintwareDeFiPairVault.BadConfig.selector);
         vault.fundRent(address(rogue), 100e18);
+    }
+
+    function test_fundRent_only_rent_funder() public {
+        _init();
+        vault.setRentFunder(address(this));
+        _t0().mint(bob, 100e18);
+        vm.startPrank(bob);
+        _t0().approve(address(vault), 100e18);
+        vm.expectRevert(MintwareDeFiPairVault.OnlyRentFunder.selector);
+        vault.fundRent(address(_t0()), 100e18); // bob is not the rent funder
+        vm.stopPrank();
+    }
+
+    function test_fundRent_reverts_when_paused() public {
+        _init();
+        vault.setRentFunder(address(this));
+        vault.setGuardian(address(this));
+        vault.pause();
+        _t0().mint(address(this), 100e18);
+        _t0().approve(address(vault), 100e18);
+        vm.expectRevert(Pausable.EnforcedPause.selector);
+        vault.fundRent(address(_t0()), 100e18);
     }
 }
