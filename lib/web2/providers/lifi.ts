@@ -3,18 +3,13 @@
 //
 // Covers: Ethereum (1), Base (8453), Arbitrum (42161)
 //
-// Fee collection: pass `integrator` + `fee` (decimal fraction of feeBps/10000)
-// to LI.FI. The integrator account must be registered at https://li.fi/integrators
-// If NEXT_PUBLIC_LIFI_INTEGRATOR is unset, fee is omitted (dev mode).
-//
-// API key: optional but rate-limited without one. Set NEXT_PUBLIC_LIFI_API_KEY.
+// Quotes are fetched through our OWN server proxy (`POST /api/swap/quote`), never
+// li.quest directly. The proxy holds the API key (server-only) and injects the
+// platform fee server-side, so neither the key nor the fee is exposed to — or
+// strippable by — the browser. See app/api/(web2)/swap/quote/route.ts.
 // =============================================================================
 
 import type { WalletClient } from 'viem'
-
-const LIFI_API      = 'https://li.quest/v1'
-const LIFI_API_KEY  = process.env.NEXT_PUBLIC_LIFI_API_KEY  || ''
-const INTEGRATOR    = process.env.NEXT_PUBLIC_LIFI_INTEGRATOR || 'mintware'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,38 +59,19 @@ function safeBigInt(val: string | undefined): bigint {
   try { return BigInt(val) } catch { return 0n }
 }
 
-function makeHeaders(): Record<string, string> {
-  const h: Record<string, string> = { Accept: 'application/json' }
-  if (LIFI_API_KEY) h['x-lifi-api-key'] = LIFI_API_KEY
-  return h
-}
-
 // ─── getQuote ─────────────────────────────────────────────────────────────────
 
 export async function getQuote(params: LifiQuoteParams): Promise<LifiQuote> {
-  const { chainId, sellToken, buyToken, sellAmount, taker, feeBps } = params
+  const { chainId, sellToken, buyToken, sellAmount, taker } = params
 
-  const qp = new URLSearchParams({
-    fromChain:   chainId.toString(),
-    toChain:     chainId.toString(),
-    fromToken:   sellToken,
-    toToken:     buyToken,
-    fromAmount:  sellAmount,
-    fromAddress: taker,
-    integrator:  INTEGRATOR,
-    // Disable bridge routes — same-chain only
-    allowBridges: 'false',
-  })
-
-  // Fee: LI.FI accepts `fee` as a decimal fraction (0.001 = 0.1% = 10 BPS)
-  // Only applied when an integrator account is registered with LI.FI
-  if (feeBps && feeBps > 0) {
-    qp.set('fee', (feeBps / 10000).toFixed(6))
-  }
-
-  const res = await fetch(`${LIFI_API}/quote?${qp.toString()}`, {
-    headers: makeHeaders(),
-    cache: 'no-store',
+  // Go through our server proxy — the API key and fee are injected there.
+  // `feeBps` is intentionally NOT forwarded: the fee is a server decision so a
+  // tampered client cannot zero it out.
+  const res = await fetch('/api/swap/quote', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body:    JSON.stringify({ chainId, sellToken, buyToken, sellAmount, taker }),
+    cache:   'no-store',
   })
 
   if (!res.ok) {

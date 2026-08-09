@@ -109,7 +109,7 @@ async function getLifiQuote(
   wallet:    string,
   toToken:   string
 ): Promise<LifiQuote | null> {
-  const apiKey = process.env.NEXT_PUBLIC_LIFI_API_KEY
+  const apiKey = process.env.LIFI_API_KEY || process.env.NEXT_PUBLIC_LIFI_API_KEY
   const params = new URLSearchParams({
     fromChain:       '8453',
     toChain:         '8453',
