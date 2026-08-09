@@ -100,12 +100,19 @@ library MWAmAuctionLib {
     }
 
     /// @notice Validate the ECONOMIC terms of a new challenger bid (custody is the
-    ///         caller's job). Must be enabled, above the rent floor, within the fee
-    ///         cap, satisfy the reserve, and beat any standing challenger.
+    ///         caller's job). Must be enabled, above the rent floor, within the fee cap,
+    ///         satisfy the reserve, be PROMOTABLE against the manager, and beat any
+    ///         standing challenger.
+    /// @dev    Promotable-only occupancy (audit F-B): a challenger must beat the current
+    ///         MANAGER by the multiplier — not merely a standing challenger. This removes
+    ///         the sub-promotion "squat" position and the mult^2 entry barrier: any slot
+    ///         occupant is, by construction, someone who will be force-promoted within K
+    ///         blocks and pay >= mult x the manager's rent to the LP.
     function validBid(
         uint128 rent,
         uint128 deposit,
         uint24  feePips,
+        Bid memory top,
         Bid memory standingNext,
         AmParams memory p
     ) internal pure returns (bool) {
@@ -113,22 +120,24 @@ library MWAmAuctionLib {
         if (rent < p.minRent) return false;
         if (feePips > p.feeMaxPips) return false;
         if (!meetsReserve(deposit, rent, p.K)) return false;
+        if (top.manager != address(0) && !outbids(rent, top.rent, p.minBidMultBps)) return false;
         if (standingNext.manager != address(0) && !outbids(rent, standingNext.rent, p.minBidMultBps)) {
             return false;
         }
         return true;
     }
 
-    /// @notice Whether `amount` can be withdrawn from a bid: either a full exit, or
-    ///         the remaining deposit still satisfies the continuity reserve. This is
-    ///         what stops a manager draining below the K-block guarantee.
+    /// @notice Whether `amount` can be withdrawn from a bid. There is NO free exit: the
+    ///         remaining deposit must still satisfy the continuity reserve (>= rent*K, exact
+    ///         multiple). Escrow can only leave a slot by being out-bid (refund) or promoted.
+    /// @dev    Audit F-B / BidDog parity: allowing a withdrawal to zero is exactly the
+    ///         free place<->cancel<->re-bid churn that makes challenger-slot squatting free.
+    ///         Committed capital + forced promotion is the anti-squat mechanism.
     function canWithdraw(uint128 deposit, uint128 rent, uint128 amount, uint32 K)
         internal pure returns (bool)
     {
         if (amount > deposit) return false;
-        uint128 remaining = deposit - amount;
-        if (remaining == 0) return true;
-        return meetsReserve(remaining, rent, K);
+        return meetsReserve(deposit - amount, rent, K);
     }
 
     /// @notice The effective fee for the current block: the manager's chosen fee if

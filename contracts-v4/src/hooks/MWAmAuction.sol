@@ -126,7 +126,7 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
         if (msg.sender == topBid[id].manager) revert AlreadyManaging();
 
         Bid memory standing = nextBid[id];
-        if (!MWAmAuctionLib.validBid(rent, deposit, feePips, standing, p)) revert InvalidBid();
+        if (!MWAmAuctionLib.validBid(rent, deposit, feePips, topBid[id], standing, p)) revert InvalidBid();
 
         // Escrow the new deposit first.
         IERC20(p.bidToken).safeTransferFrom(msg.sender, address(this), deposit);

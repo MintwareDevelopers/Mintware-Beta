@@ -162,44 +162,55 @@ contract MWAmAuctionLibTest is Test {
         AmParams memory p = _params();
         p.enabled = false;
         Bid memory none = _bid(address(0), 0, 0, 0, 0);
-        assertFalse(MWAmAuctionLib.validBid(200, 2000, 1000, none, p));
+        assertFalse(MWAmAuctionLib.validBid(200, 2000, 1000, none, none, p));
     }
 
     function test_validBid_below_minRent_false() public pure {
         AmParams memory p = _params(); // minRent 100
         Bid memory none = _bid(address(0), 0, 0, 0, 0);
-        assertFalse(MWAmAuctionLib.validBid(99, 990, 1000, none, p));
+        assertFalse(MWAmAuctionLib.validBid(99, 990, 1000, none, none, p));
     }
 
     function test_validBid_fee_over_cap_false() public pure {
         AmParams memory p = _params(); // cap 3000
         Bid memory none = _bid(address(0), 0, 0, 0, 0);
-        assertFalse(MWAmAuctionLib.validBid(200, 2000, 3001, none, p));
+        assertFalse(MWAmAuctionLib.validBid(200, 2000, 3001, none, none, p));
     }
 
     function test_validBid_bad_reserve_false() public pure {
         AmParams memory p = _params(); // K 10
         Bid memory none = _bid(address(0), 0, 0, 0, 0);
-        assertFalse(MWAmAuctionLib.validBid(200, 1000, 1000, none, p), "1000 < 200*10");
+        assertFalse(MWAmAuctionLib.validBid(200, 1000, 1000, none, none, p), "1000 < 200*10");
     }
 
     function test_validBid_does_not_beat_standing_false() public pure {
         AmParams memory p = _params();
+        Bid memory none = _bid(address(0), 0, 0, 0, 0);
         Bid memory standing = _bid(address(9), 0, 500, 200, 2000);
         // 210 < 220 (1.1x of 200)
-        assertFalse(MWAmAuctionLib.validBid(210, 2100, 1000, standing, p));
+        assertFalse(MWAmAuctionLib.validBid(210, 2100, 1000, none, standing, p));
     }
 
     function test_validBid_no_standing_valid_true() public pure {
         AmParams memory p = _params();
         Bid memory none = _bid(address(0), 0, 0, 0, 0);
-        assertTrue(MWAmAuctionLib.validBid(200, 2000, 1000, none, p));
+        assertTrue(MWAmAuctionLib.validBid(200, 2000, 1000, none, none, p));
     }
 
     function test_validBid_beats_standing_true() public pure {
         AmParams memory p = _params();
+        Bid memory none = _bid(address(0), 0, 0, 0, 0);
         Bid memory standing = _bid(address(9), 0, 500, 200, 2000);
-        assertTrue(MWAmAuctionLib.validBid(221, 2210, 1000, standing, p), "221 > 220");
+        assertTrue(MWAmAuctionLib.validBid(221, 2210, 1000, none, standing, p), "221 > 220");
+    }
+
+    /// F-B: a challenger must be promotable against the MANAGER, not just beat a challenger.
+    function test_validBid_must_beat_manager() public pure {
+        AmParams memory p = _params();
+        Bid memory top = _bid(address(7), 0, 500, 200, 2000); // manager at rent 200
+        Bid memory noNext = _bid(address(0), 0, 0, 0, 0);
+        assertFalse(MWAmAuctionLib.validBid(210, 2100, 1000, top, noNext, p), "must beat manager*mult");
+        assertTrue(MWAmAuctionLib.validBid(221, 2210, 1000, top, noNext, p), "221 > 220 promotable");
     }
 
     // ── canWithdraw ──────────────────────────────────────────────────────────
@@ -208,8 +219,9 @@ contract MWAmAuctionLibTest is Test {
         assertFalse(MWAmAuctionLib.canWithdraw(1000, 10, 1001, 10));
     }
 
-    function test_canWithdraw_full_exit_true() public pure {
-        assertTrue(MWAmAuctionLib.canWithdraw(1000, 10, 1000, 10), "full exit allowed");
+    function test_canWithdraw_full_exit_now_blocked() public pure {
+        // No free exit (F-B fix): escrow can't be withdrawn to zero — only out-bid/promotion.
+        assertFalse(MWAmAuctionLib.canWithdraw(1000, 10, 1000, 10), "full exit blocked");
     }
 
     function test_canWithdraw_breaks_reserve_false() public pure {

@@ -124,6 +124,12 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     uint256 public rentDust0;
     uint256 public rentDust1;
 
+    /// @notice Vault-held tokens that back UNCLAIMED accumulator fees + rent (the accumulator
+    ///         liability). Segregated so `_rebalance` never sweeps LPs' owed fees into the pool
+    ///         position — a share of the raw balance would otherwise silently reassign them.
+    uint256 public feeReserve0;
+    uint256 public feeReserve1;
+
     LockTier private _pendingTier; // consumed within a deposit
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -347,6 +353,8 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
             // Legacy path: pro-rata per-share accrual (pre-wiring / un-migrated vaults).
             accFee0PerShare += (lp0 * ACC_PRECISION) / totalLiquidity;
             accFee1PerShare += (lp1 * ACC_PRECISION) / totalLiquidity;
+            feeReserve0 += lp0; // these tokens stay in the vault to back claims — segregate them
+            feeReserve1 += lp1;
         }
         emit FeesCollected(fee0, fee1, mint0, mint1);
     }
@@ -401,11 +409,13 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
             uint256 add0  = (pool0 * ACC_PRECISION) / totalLiquidity;
             accFee0PerShare += add0;
             rentDust0 = pool0 - (add0 * totalLiquidity) / ACC_PRECISION;
+            feeReserve0 += received; // rent tokens stay in the vault to back claims — segregate
         } else {
             uint256 pool1 = rentDust1 + received;
             uint256 add1  = (pool1 * ACC_PRECISION) / totalLiquidity;
             accFee1PerShare += add1;
             rentDust1 = pool1 - (add1 * totalLiquidity) / ACC_PRECISION;
+            feeReserve1 += received;
         }
         emit RentFunded(token, received);
     }
@@ -421,6 +431,8 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         uint256 a1 = (s * accFee1PerShare) / ACC_PRECISION - fee1Debt[lp];
         fee0Debt[lp] = (s * accFee0PerShare) / ACC_PRECISION;
         fee1Debt[lp] = (s * accFee1PerShare) / ACC_PRECISION;
+        if (a0 > 0) feeReserve0 -= a0; // release from the reserve as it's paid out
+        if (a1 > 0) feeReserve1 -= a1;
         if (a0 > 0) token0.safeTransfer(lp, a0);
         if (a1 > 0) token1.safeTransfer(lp, a1);
         if (a0 > 0 || a1 > 0) emit FeesClaimed(lp, a0, a1);
@@ -528,9 +540,10 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         tickLower = newLower;
         tickUpper = newUpper;
 
-        // Re-add the maximal balanced liquidity from the tokens now held by the vault.
-        uint256 a0 = token0.balanceOf(address(this));
-        uint256 a1 = token1.balanceOf(address(this));
+        // Re-add the maximal balanced liquidity from the tokens now held by the vault, MINUS the
+        // segregated fee/rent reserve — that balance backs LP claims and must never be deployed.
+        uint256 a0 = token0.balanceOf(address(this)) - feeReserve0;
+        uint256 a1 = token1.balanceOf(address(this)) - feeReserve1;
         (uint160 sqrtP,,,) = poolManager.getSlot0(poolKey.toId());
         uint160 sqrtLower = TickMath.getSqrtPriceAtTick(newLower);
         uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(newUpper);

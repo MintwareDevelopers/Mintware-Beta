@@ -88,7 +88,10 @@ Three adversarial reviews (custody, economics, vault-integration). The fuzzed co
 - Config: reject `minBidMultBps <= 10_000` (1.0x churn) and `defaultFeePips > feeMaxPips`; reset the
   rent approval to 0 after the sink call.
 
-**FLAGGED — deliberate, for the external audit / later passes (NOT fund-loss):**
+**FLAGGED — now RESEARCHED + RESOLVED (see `am-amm-flagged-decisions.md`):** F-B squatting fixed
+(BidDog parity: no free cancel + promotable-only occupancy); rebalance-absorbs-reserves fixed
+(segregated `feeReserve`); F-D is an operational gate (don't `setEnabled` pre-Stage-3); lower items
+are conscious keeps. Original flag text below for reference:
 - **`nextBid` squatting (F-B)** — the single challenger slot pays no rent and can be cheaply
   re-placed (epoch reset), letting an adversary gate entry / inflate the real-challenger bar to
   mult². Mitigation is a *mechanism* choice (griefing bond, min bid lifetime, or multiple

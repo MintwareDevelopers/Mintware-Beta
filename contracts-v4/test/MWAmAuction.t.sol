@@ -195,14 +195,13 @@ contract MWAmAuctionTest is Test {
         assertEq(bidToken.balanceOf(alice) - before, 1000, "withdrew to reserve floor");
     }
 
-    function test_challenger_can_cancel_fully() public {
-        _bid(alice, 100, 1000, 1200);        // challenger, not yet manager
-        uint256 before = bidToken.balanceOf(alice);
+    function test_challenger_cannot_cancel_fully() public {
+        // F-B: no free exit. A challenger's escrow can only leave via out-bid or promotion —
+        // full withdrawal (the squatting churn primitive) is blocked at the reserve floor.
+        _bid(alice, 100, 1000, 1200); // deposit == rent*K exactly
         vm.prank(alice);
-        auction.withdrawFromBid(id, 1000);   // full exit allowed for challenger
-        assertEq(bidToken.balanceOf(alice) - before, 1000);
-        (address m,,,,) = _nextBid();
-        assertEq(m, address(0), "challenger slot cleared");
+        vm.expectRevert(MWAmAuction.ReserveBreach.selector);
+        auction.withdrawFromBid(id, 1000);
     }
 
     // ── manager fees ────────────────────────────────────────────────────────────

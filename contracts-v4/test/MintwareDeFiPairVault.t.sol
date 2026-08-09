@@ -363,4 +363,25 @@ contract MintwareDeFiPairVaultTest is Test {
         vm.expectRevert(Pausable.EnforcedPause.selector);
         vault.fundRent(address(_t0()), 100e18);
     }
+
+    /// Audit (segregated reserve): a rebalance must NOT sweep unclaimed rent into the pool.
+    function test_rebalance_preserves_unclaimed_rent() public {
+        _init();
+        vault.setRentFunder(address(this));
+        _deposit(alice, 100_000e18, 100_000e18, LockTier.Flex);
+
+        _t0().mint(address(this), 1000e18);
+        _t0().approve(address(vault), 1000e18);
+        vault.fundRent(address(_t0()), 1000e18);
+        assertApproxEqAbs(vault.feeReserve0(), 1000e18, 1, "rent reserved");
+
+        // Provider rebalances — previously this swept the rent into the LP position.
+        vault.rebalanceToProfile(PoolProfile.EMERGING);
+
+        // Alice's rent is still fully claimable from the vault (backed by the reserve).
+        uint256 before = _t0().balanceOf(alice);
+        vm.prank(alice);
+        vault.claimFees();
+        assertApproxEqAbs(_t0().balanceOf(alice) - before, 1000e18, 1e9, "rent survived the rebalance");
+    }
 }
