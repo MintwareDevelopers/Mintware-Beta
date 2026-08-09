@@ -136,6 +136,30 @@ contract MWAmAuctionTest is Test {
 
     // ── promotion after K-block notice ─────────────────────────────────────────
 
+    /// Audit MED: setEnabled(false) must NOT freeze a bidder's reserve. While disabled there is no
+    /// continuity to protect (no rent, no promotion, no displacement), so a full exit is allowed;
+    /// while enabled the reserve still blocks an instant full cancel.
+    function test_disabled_pool_allows_full_escrow_exit() public {
+        _bid(alice, 100, 1000, 1200); // challenger, deposit == reserve (rent 100 * K 10)
+        assertEq(bidToken.balanceOf(address(auction)), 1000, "escrow held");
+
+        // While ENABLED: full exit blocked (reserve invariant / no free cancel).
+        vm.prank(alice);
+        vm.expectRevert(MWAmAuction.ReserveBreach.selector);
+        auction.withdrawFromBid(id, 1000);
+
+        // Owner disables the pool -> no displacement, no eviction -> escrow would otherwise freeze.
+        vm.prank(owner);
+        auction.setEnabled(id, false);
+
+        // Now the bidder can recover the full deposit.
+        uint256 before = bidToken.balanceOf(alice);
+        vm.prank(alice);
+        auction.withdrawFromBid(id, 1000);
+        assertEq(bidToken.balanceOf(alice) - before, 1000, "full escrow recovered when disabled");
+        assertEq(bidToken.balanceOf(address(auction)), 0, "auction escrow drained");
+    }
+
     function test_no_manager_returns_default_fee() public {
         (address m, uint24 f) = _poke();
         assertEq(m, address(0), "no manager yet");

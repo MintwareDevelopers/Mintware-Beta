@@ -362,6 +362,7 @@ contract MintwareMatchedLiquidityVaultTest is Test {
         MintwareWeightedDistributor dist =
             new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
         bytes32 vid = keccak256("matched");
+        dist.setAuthorizedRegistrar(address(vault), true); // front-run guard (audit MED)
         vault.setWeightedDistributor(address(dist), vid);
 
         _genFees();
@@ -385,6 +386,7 @@ contract MintwareMatchedLiquidityVaultTest is Test {
     function test_matched_setWeightedDistributor_is_one_time() public {
         MintwareWeightedDistributor dist =
             new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        dist.setAuthorizedRegistrar(address(vault), true); // front-run guard (audit MED)
         vault.setWeightedDistributor(address(dist), keccak256("v"));
         vm.expectRevert(MintwareMatchedLiquidityVault.WeightedDistributorAlreadySet.selector);
         vault.setWeightedDistributor(address(dist), keccak256("v2"));

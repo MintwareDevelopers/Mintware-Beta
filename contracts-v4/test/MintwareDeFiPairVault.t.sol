@@ -209,6 +209,7 @@ contract MintwareDeFiPairVaultTest is Test {
         MintwareWeightedDistributor dist =
             new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
         bytes32 vid = keccak256("defi-pair");
+        dist.setAuthorizedRegistrar(address(vault), true); // front-run guard (audit MED)
         vault.setWeightedDistributor(address(dist), vid);
 
         _genFees();
@@ -232,6 +233,7 @@ contract MintwareDeFiPairVaultTest is Test {
     function test_setWeightedDistributor_is_one_time() public {
         MintwareWeightedDistributor dist =
             new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        dist.setAuthorizedRegistrar(address(vault), true); // front-run guard (audit MED)
         vault.setWeightedDistributor(address(dist), keccak256("v"));
         vm.expectRevert(MintwareDeFiPairVault.WeightedDistributorAlreadySet.selector);
         vault.setWeightedDistributor(address(dist), keccak256("v2"));

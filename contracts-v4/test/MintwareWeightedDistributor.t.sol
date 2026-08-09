@@ -36,6 +36,10 @@ contract MintwareWeightedDistributorTest is Test {
         vm.prank(owner);
         dist.setGuardian(guardian);
 
+        // Authorize this test contract as a registrar (front-run guard — audit MED).
+        vm.prank(owner);
+        dist.setAuthorizedRegistrar(address(this), true);
+
         token0 = new MockERC20("Token0", "PEPE", 18);
         token1 = new MockERC20("Token1", "USDC", 6);
 
@@ -113,6 +117,26 @@ contract MintwareWeightedDistributorTest is Test {
     function test_Register_RevertZeroToken0() public {
         vm.expectRevert(MintwareWeightedDistributor.ZeroToken0.selector);
         dist.registerVault(keccak256("v2"), address(0), address(token1));
+    }
+
+    /// Audit MED: an unauthorized address cannot register (and thus cannot front-run to become
+    /// funder-of-record and later steal swept remainders).
+    function test_Register_RevertUnauthorized() public {
+        address attacker = makeAddr("attacker");
+        vm.prank(attacker);
+        vm.expectRevert(MintwareWeightedDistributor.NotAuthorizedRegistrar.selector);
+        dist.registerVault(keccak256("hijack"), address(token0), address(token1));
+    }
+
+    function test_Register_AuthorizedRegistrarSucceeds() public {
+        address vaultLike = makeAddr("vaultLike");
+        vm.prank(owner);
+        dist.setAuthorizedRegistrar(vaultLike, true);
+        vm.prank(vaultLike);
+        dist.registerVault(keccak256("authz"), address(token0), address(token1));
+        (,, address funder, bool registered) = dist.vaults(keccak256("authz"));
+        assertTrue(registered, "registered");
+        assertEq(funder, vaultLike, "authorized caller is funder-of-record");
     }
 
     // ── funding ───────────────────────────────────────────────────────────────

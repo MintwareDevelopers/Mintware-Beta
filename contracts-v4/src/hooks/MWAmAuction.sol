@@ -164,10 +164,21 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
         _poke(id);
         (Bid storage b, bool isTop) = _ownedBid(id);
 
-        // Both slots must keep the continuity reserve (or fully exit). A challenger is NOT
-        // exempt: if it could sit below reserve it would be promoted under-collateralized,
-        // defeating the K-block guarantee. canWithdraw = (remaining == 0) OR meetsReserve.
-        if (!MWAmAuctionLib.canWithdraw(b.deposit, b.rent, amount, p.K)) revert ReserveBreach();
+        // While ENABLED, both slots must keep the K-block continuity reserve (no free cancel): a
+        // bidder below reserve could be promoted under-collateralized, defeating the guarantee.
+        // NOTE: meetsReserve(0,...) is false, so this also blocks an instant full exit while
+        // enabled — a manager leaves only by displacement or rent-eviction (both route the
+        // remainder to the `owed` pull-ledger).
+        //
+        // While DISABLED there is NO continuity to protect: _poke is inert (no rent, no promotion),
+        // bid() reverts, so a stuck bidder can neither be displaced nor evicted. The reserve would
+        // then strand their capital forever (audit MED: setEnabled(false) freezes escrow). So when
+        // disabled we waive the reserve and allow withdrawal up to the full deposit.
+        if (p.enabled) {
+            if (!MWAmAuctionLib.canWithdraw(b.deposit, b.rent, amount, p.K)) revert ReserveBreach();
+        } else if (amount > b.deposit) {
+            revert ReserveBreach();
+        }
 
         // Effects
         b.deposit -= amount;
