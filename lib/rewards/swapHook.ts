@@ -147,8 +147,9 @@ async function verifySwapTx(
       return { ok: false, skip_reason: 'wallet_mismatch' }
     }
 
-    // 2b. tx.to must be a known LI.FI router
-    if (tx.to && !LIFI_ROUTERS.has(tx.to.toLowerCase())) {
+    // 2b. tx.to must be a known LI.FI router. A contract-creation tx has tx.to === null and
+    //     MUST be rejected, not slip past the allowlist (audit HIGH: fabricated-swap reward).
+    if (!tx.to || !LIFI_ROUTERS.has(tx.to.toLowerCase())) {
       console.warn(
         `[swapHook] verifySwapTx: tx.to=${tx.to} is not a known LI.FI router for tx ${txHash} ` +
         `(chain=${chain}) — reward denied (router_mismatch)`

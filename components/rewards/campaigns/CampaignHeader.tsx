@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { useEffect, useState } from 'react'
+import { safeUrl } from '@/lib/web2/safeUrl'
 import { fmtUSD, daysUntil, iconColor } from '@/lib/web2/api'
 import { fetchTokenMeta, fetchDexMeta, dexUrl } from '@/lib/web2/tokenMeta'
 import type { Campaign } from './CampaignCard'
@@ -150,19 +151,19 @@ export function CampaignHeader({ campaign: c, poolUsed }: CampaignHeaderProps) {
                     </a>
                   )}
                   {links.twitter && (
-                    <a href={links.twitter} target="_blank" rel="noopener noreferrer" title="X / Twitter"
+                    <a href={safeUrl(links.twitter)} target="_blank" rel="noopener noreferrer" title="X / Twitter"
                       className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline hover:bg-atx-bone hover:text-atx-ink transition-colors duration-150">
                       <IconX />
                     </a>
                   )}
                   {links.website && (
-                    <a href={links.website} target="_blank" rel="noopener noreferrer" title="Website"
+                    <a href={safeUrl(links.website)} target="_blank" rel="noopener noreferrer" title="Website"
                       className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline hover:bg-atx-bone hover:text-atx-ink transition-colors duration-150">
                       <IconGlobe />
                     </a>
                   )}
                   {links.telegram && (
-                    <a href={links.telegram} target="_blank" rel="noopener noreferrer" title="Telegram"
+                    <a href={safeUrl(links.telegram)} target="_blank" rel="noopener noreferrer" title="Telegram"
                       className="inline-flex items-center justify-center w-7 h-7 text-atx-ink/45 no-underline hover:bg-atx-bone hover:text-atx-ink transition-colors duration-150">
                       <IconTelegram />
                     </a>

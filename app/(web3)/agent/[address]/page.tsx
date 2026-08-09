@@ -4,6 +4,7 @@ import { useAccount }   from 'wagmi'
 import { useParams }    from 'next/navigation'
 import { MwNav }        from '@/components/web2/MwNav'
 import { MwAuthGuard }  from '@/components/web2/MwAuthGuard'
+import { safeUrl }      from '@/lib/web2/safeUrl'
 import { useEffect, useState } from 'react'
 
 interface AgentScore {
@@ -187,7 +188,7 @@ function AgentProfileContent() {
                         <div className="text-[12px] font-semibold text-atx-ink">{svc.name}{svc.version ? ` v${svc.version}` : ''}</div>
                         <div className="font-atx-mono text-[11px] text-atx-ink/60 overflow-hidden text-ellipsis whitespace-nowrap max-w-[200px]">{svc.endpoint}</div>
                       </div>
-                      <a href={svc.endpoint} target="_blank" rel="noopener noreferrer" className="text-[11px] text-atx-blue no-underline font-semibold whitespace-nowrap font-atx-mono">↗</a>
+                      <a href={safeUrl(svc.endpoint)} target="_blank" rel="noopener noreferrer" className="text-[11px] text-atx-blue no-underline font-semibold whitespace-nowrap font-atx-mono">↗</a>
                     </div>
                   ))}
                 </div>
