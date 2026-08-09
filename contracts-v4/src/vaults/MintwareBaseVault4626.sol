@@ -543,11 +543,17 @@ abstract contract MintwareBaseVault4626 is
     }
 
     /// @dev Dynamic swap fee for this vault's pool (bps). Default 0 = static.
+    ///      RESERVED: no subclass overrides this yet and nothing calls it. A real
+    ///      vault-level dynamic fee is Phase 4 work — today the live dynamic fee
+    ///      lives in the hook (MWHookCoordinator + MWDynamicFee), not here.
     function _calculateDynamicFee() internal view virtual returns (uint24) {
         return 0;
     }
 
-    /// @dev Idle-capital rebalance hook. Default no-op (Track A implements for DeFi).
+    /// @dev Idle-capital rebalance hook. RESERVED — unwired stub: no subclass
+    ///      overrides it and nothing calls it. Automatic idle-capital deployment is
+    ///      Phase 4 work. The only real rebalance today is the provider-gated manual
+    ///      MintwareDeFiPairVault.rebalanceToProfile().
     function _rebalanceIdleCapital() internal virtual {}
 
     // ─────────────────────────────────────────────────────────────────────────
