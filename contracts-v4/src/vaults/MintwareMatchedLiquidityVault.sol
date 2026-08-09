@@ -168,6 +168,7 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     error BadProfile();
     error BadLockDuration();
     error BadConfig();
+    error PoolPreInitialized();
     error AlreadyCommitted();
     error FundingClosed();
     error FundingStillOpen();
@@ -254,14 +255,32 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         launchSqrtPriceX96 = launchSqrt;
         tickLower          = lower;
         tickUpper          = upper;
-        teamTokenCommitment   = teamTokens;
         targetMatchQuote      = targetQuote;
         activationThresholdBps = thresholdBps;
         lockDuration          = lockDur;
         fundingWindowEnd      = block.timestamp + fundingWindow;
 
+        // Initialize the V4 pool NOW — atomic with committing the key — so no griefer can front-run
+        // a hostile pre-init between commit and activate (audit HIGH: pre-init permanently bricks
+        // activate() and freezes team funds). V4 init is permissionless, so tolerate an existing
+        // pool ONLY if it sits at our launch price; a hostile pre-init reverts here, before any
+        // escrow, so the team simply retries (no funds staked).
+        (uint160 liveSqrt,,,) = StateLibrary.getSlot0(poolManager, PoolIdLibrary.toId(poolKey_));
+        if (liveSqrt == 0) {
+            _initializePool(launchSqrt);
+        } else if (liveSqrt == launchSqrt) {
+            poolInitialized = true;
+        } else {
+            revert PoolPreInitialized();
+        }
+
+        // Balance-diff intake — credit what ACTUALLY arrived. This vault is MEME/EMERGING-gated
+        // and those tokens commonly carry a transfer tax; nominal accounting would over-book the
+        // commitment and revert activate() on settlement (audit: FoT intake, confirmed 4x).
+        uint256 balBefore = projectToken.balanceOf(address(this));
         projectToken.safeTransferFrom(msg.sender, address(this), teamTokens);
-        emit TeamCommitted(teamTokens, targetQuote, fundingWindowEnd, lockDur);
+        teamTokenCommitment = projectToken.balanceOf(address(this)) - balBefore;
+        emit TeamCommitted(teamTokenCommitment, targetQuote, fundingWindowEnd, lockDur);
     }
 
     /// @notice Community matches with quote-asset deposits, first-come up to the cap.
@@ -272,14 +291,18 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         if (block.timestamp >= fundingWindowEnd) revert FundingClosed();
         if (quoteAmount == 0) revert ZeroAmount();
         if (msg.sender == team) revert TeamCannotMatch(); // self-dealing guard
-        if (communityDeposited + quoteAmount > targetMatchQuote) revert CapExceeded();
+        if (communityDeposited + quoteAmount > targetMatchQuote) revert CapExceeded(); // nominal upper bound (safe)
+
+        // Balance-diff intake (fee-on-transfer safe): credit what actually arrived.
+        uint256 balBefore = quoteToken.balanceOf(address(this));
+        quoteToken.safeTransferFrom(msg.sender, address(this), quoteAmount);
+        uint256 received = quoteToken.balanceOf(address(this)) - balBefore;
+        if (received == 0) revert ZeroAmount();
 
         if (communityContribution[msg.sender] == 0) communityDepositorCount += 1;
-        communityContribution[msg.sender] += quoteAmount;
-        communityDeposited += quoteAmount;
-
-        quoteToken.safeTransferFrom(msg.sender, address(this), quoteAmount);
-        emit CommunityDeposited(msg.sender, quoteAmount, communityDeposited);
+        communityContribution[msg.sender] += received;
+        communityDeposited += received;
+        emit CommunityDeposited(msg.sender, received, communityDeposited);
     }
 
     /// @notice Community can pull their escrowed deposit back during funding, or reclaim it
@@ -615,9 +638,8 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     }
 
     function _deployMatched(uint256 projAmt, uint256 quoteAmt) internal returns (bytes memory) {
-        if (!poolInitialized) {
-            _initializePool(launchSqrtPriceX96);
-        }
+        // The pool is initialized atomically in commitTeam (front-run-proof), so it is always
+        // initialized by the time activation deploys liquidity here.
         (uint256 amt0, uint256 amt1) = projIsToken0 ? (projAmt, quoteAmt) : (quoteAmt, projAmt);
 
         uint160 sqrtLower = TickMath.getSqrtPriceAtTick(tickLower);
