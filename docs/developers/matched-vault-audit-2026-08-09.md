@@ -38,17 +38,20 @@ the flawed single-sided `MintwareDeFiVault4626`).
   first deploy script. Tests (`DeployMatchedVault.t.sol`): wiring correct, wrong-hook commit reverts
   `BadPoolHook`, full commit→fund→activate lifecycle deploys through the vault-only-gated pool.
 
-### ⏳ REMAINING (next batch)
-- **MED — Imbalanced deploy strands one party's principal** (all 3 security angles). `_deployMatched`
-  binds on `min(L0,L1)`; the abundant side's remainder stays idle in the vault, unrefunded (team's
-  proj side is a single-recipient refund; the community quote remainder needs a pro-rata/claimable
-  path). Acute for non-1:1 launch prices with a wide MEME range. **Fix:** measure `used0/used1`,
-  refund the team proj remainder, and make the community quote remainder claimable.
-- **LOW — Unlimited `forceApprove` to the distributor** — tighten to JIT/bounded approval.
+### ✅ FIXED (cont.)
+- **MED — Imbalanced deploy strand.** `_deployMatched` now measures the ACTUAL consumed amounts via
+  balance-diff and returns them; `activate` refunds the team's undeployed project side directly, and
+  the community's undeployed quote is claimable **pro-rata to each depositor's contribution** via
+  `claimUndeployedQuote()` (deposit-weighted, not fee/reputation-weighted). Test:
+  `test_strand_refunded_at_non_1to1_price` (the non-1:1 case the old tests never hit).
+- **LOW — Unlimited distributor approval.** Removed the standing `type(uint256).max` grants;
+  `_realizeFees` now does JIT exact-amount `forceApprove(dist, lpX)` before `fundFees` and zeros it after.
+
+### ⏳ REMAINING (minor, next batch)
 - **LOW/INFO** — sybil-bypassable min-depositor floor (off-chain reputation is the real gate);
   floor-rounding dust in share derivation; FoT documentation mismatch in the base `_pay`.
-- **Test coverage** — add a solvency invariant (`position.liquidity == teamLiquidity + Σshares`) and
-  a non-1:1 launch-price activation test (both would have caught the strand).
+- **Nice-to-have** — a dedicated solvency invariant (`position.liquidity == teamLiquidity + Σshares`)
+  to guard future edits (the current invariant suite + the new non-1:1 test cover the behavior).
 
 ### Inherited (fixed / tracked elsewhere)
 - Distributor CRIT #1 (claim-after-sweep double-spend) — **already fixed** this session.

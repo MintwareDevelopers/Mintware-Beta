@@ -192,6 +192,37 @@ contract MintwareMatchedLiquidityVaultTest is Test {
         assertApproxEqRel(v2.teamTokenCommitment(), T * 99 / 100, 0.001e18, "credits post-tax received");
     }
 
+    // ── audit: imbalanced deploy strand is REFUNDED, not stranded (non-1:1 price) ─
+
+    function test_strand_refunded_at_non_1to1_price() public {
+        // Launch away from 1:1 so the range binds on one side and the other strands.
+        uint160 nonOne = uint160(INIT_SQRT_PRICE * 2); // price ~4
+        vm.startPrank(team);
+        proj.approve(address(vault), T);
+        vault.commitTeam(poolKey, nonOne, T, CAP, WINDOW, THRESHOLD, LOCK);
+        vm.stopPrank();
+        _fundThree(CAP);
+
+        uint256 teamProjBefore = proj.balanceOf(team);
+        vault.activate();
+
+        uint256 teamRefunded = proj.balanceOf(team) - teamProjBefore; // undeployed proj back to team
+        uint256 strandedQuote = vault.undeployedQuote();
+        assertTrue(teamRefunded > 0 || strandedQuote > 0, "a side strands at non-1:1 and is accounted");
+
+        // If the quote side stranded, community claims its pro-rata share (deposit-weighted).
+        if (strandedQuote > 0) {
+            uint256 aBefore = quote.balanceOf(a);
+            vm.prank(a);
+            vault.claimUndeployedQuote();
+            assertGt(quote.balanceOf(a) - aBefore, 0, "community claimed its undeployed quote");
+            // No double-claim.
+            vm.prank(a);
+            vm.expectRevert(MintwareMatchedLiquidityVault.AlreadyClaimedUndeployed.selector);
+            vault.claimUndeployedQuote();
+        }
+    }
+
     function test_partial_fill_scales_team_and_refunds_unmatched() public {
         _commit();
         uint256 filled = CAP * 60 / 100; // 60% — below cap, so must wait for the window

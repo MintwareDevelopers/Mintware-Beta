@@ -144,6 +144,12 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     ///         pool (no vault-only-LP gate / oracle guard). Owner-set at deploy, before any commit.
     address public expectedHook;
 
+    /// @notice Community quote that didn't fit the range at activation (the strand), claimable
+    ///         pro-rata to each depositor's contribution (basis frozen at activation).
+    uint256 public undeployedQuote;
+    uint256 public undeployedQuoteBasis;
+    mapping(address => bool) public undeployedClaimed;
+
     mapping(address => WithdrawalRequest) public withdrawals;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -161,6 +167,7 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     event FeesCollected(uint256 projFees, uint256 quoteFees, uint256 mintwareCut, uint256 denom);
     event WeightedDistributorSet(address indexed distributor, bytes32 indexed vaultId);
     event ExpectedHookSet(address indexed hook);
+    event UndeployedQuoteClaimed(address indexed account, uint256 amount);
     event FeesRoutedToDistributor(bytes32 indexed vaultId, uint256 lpProj, uint256 lpQuote);
     event FeesClaimed(address indexed account, uint256 projOut, uint256 quoteOut);
     event LockExpired();
@@ -177,6 +184,7 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     error PoolPreInitialized();
     error BadPoolHook();
     error HookAlreadySet();
+    error AlreadyClaimedUndeployed();
     error AlreadyCommitted();
     error FundingClosed();
     error FundingStillOpen();
@@ -361,12 +369,20 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         bytes memory res = poolManager.unlock(
             abi.encode(Action.DeployMatched, abi.encode(matchedTokens, matched))
         );
-        uint128 liquidity = abi.decode(res, (uint128));
+        (uint128 liquidity, uint256 usedProj, uint256 usedQuote) = abi.decode(res, (uint128, uint256, uint256));
 
         teamLiquidity        = liquidity / 2;
         totalCommunityShares = liquidity - teamLiquidity; // remainder to community (favor community)
         totalCommunityShares0 = totalCommunityShares;      // frozen basis for pro-rata derivation
         totalLiquidity       = liquidity;
+
+        // Refund the undeployed remainder: the team's project side directly (single recipient), and
+        // the community's quote side pro-rata to each depositor's contribution via claimUndeployedQuote.
+        if (matchedTokens > usedProj) projectToken.safeTransfer(team, matchedTokens - usedProj);
+        if (matched > usedQuote) {
+            undeployedQuote      = matched - usedQuote;
+            undeployedQuoteBasis = matched; // == communityDeposited at activation, frozen
+        }
 
         // Community shares are pro-rata to quote contribution, derived lazily from `communityContribution`
         // on first interaction (keeps activation O(1)). The fee accumulators are 0 here, so every
@@ -598,7 +614,12 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
             // Canonical: route the community LP fee pot to the oracle-weighted distributor.
             // Off-chain weighting excludes the team while locked (mirrors the denom rule).
             if (lpProj > 0 || lpQuote > 0) {
+                // JIT exact-amount approvals (audit LOW: no standing max allowance to the distributor).
+                if (lpProj  > 0) projectToken.forceApprove(weightedDistributor, lpProj);
+                if (lpQuote > 0) quoteToken.forceApprove(weightedDistributor, lpQuote);
                 IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, lpProj, lpQuote);
+                if (lpProj  > 0) projectToken.forceApprove(weightedDistributor, 0);
+                if (lpQuote > 0) quoteToken.forceApprove(weightedDistributor, 0);
                 emit FeesRoutedToDistributor(distributorVaultId, lpProj, lpQuote);
             }
         } else {
@@ -617,8 +638,7 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         weightedDistributor = dist;
         distributorVaultId  = vaultId;
         IMWWeightedDistributor(dist).registerVault(vaultId, address(projectToken), address(quoteToken));
-        projectToken.forceApprove(dist, type(uint256).max);
-        quoteToken.forceApprove(dist, type(uint256).max);
+        // No standing max approval (audit LOW): fundFees gets a JIT exact-amount approval instead.
         emit WeightedDistributorSet(dist, vaultId);
     }
 
@@ -630,6 +650,19 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         if (expectedHook != address(0))  revert HookAlreadySet();
         expectedHook = hook;
         emit ExpectedHookSet(hook);
+    }
+
+    /// @notice Claim your pro-rata share of the community quote that didn't fit the range at
+    ///         activation (refunded by contribution, once). No-op-safe; not gated by pause so
+    ///         community can always recover.
+    function claimUndeployedQuote() external nonReentrant {
+        if (undeployedClaimed[msg.sender]) revert AlreadyClaimedUndeployed();
+        uint256 contrib = communityContribution[msg.sender];
+        if (contrib == 0 || undeployedQuote == 0) revert ZeroAmount();
+        undeployedClaimed[msg.sender] = true;
+        uint256 amt = (undeployedQuote * contrib) / undeployedQuoteBasis;
+        if (amt > 0) quoteToken.safeTransfer(msg.sender, amt);
+        emit UndeployedQuoteClaimed(msg.sender, amt);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -666,13 +699,20 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
             launchSqrtPriceX96, sqrtLower, sqrtUpper, amt0, amt1
         );
 
+        uint256 b0 = IERC20(Currency.unwrap(poolKey.currency0)).balanceOf(address(this));
+        uint256 b1 = IERC20(Currency.unwrap(poolKey.currency1)).balanceOf(address(this));
         (BalanceDelta delta,) = poolManager.modifyLiquidity(
             poolKey,
             ModifyLiquidityParams({tickLower: tickLower, tickUpper: tickUpper, liquidityDelta: int256(uint256(liquidity)), salt: bytes32(0)}),
             ""
         );
         _settleDelta(delta);
-        return abi.encode(liquidity);
+        // Measure what was ACTUALLY consumed — the range binds on min(L0,L1), so one side is only
+        // partially deployed and its remainder must be refunded (audit: imbalanced-deploy strand).
+        uint256 used0 = b0 - IERC20(Currency.unwrap(poolKey.currency0)).balanceOf(address(this));
+        uint256 used1 = b1 - IERC20(Currency.unwrap(poolKey.currency1)).balanceOf(address(this));
+        (uint256 usedProj, uint256 usedQuote) = projIsToken0 ? (used0, used1) : (used1, used0);
+        return abi.encode(liquidity, usedProj, usedQuote);
     }
 
     function _removeLiquidityTo(uint128 liquidity, address to) internal returns (bytes memory) {
