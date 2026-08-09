@@ -1,6 +1,6 @@
 // =============================================================================
 // Block-explorer URL helper — single source of truth.
-// (Replaces the duplicated maps in ClaimCard.tsx + lib/swap/lifi.ts.)
+// (Replaces the duplicated explorer maps that used to live across swap/claim code.)
 // Keyed by chainId so callers don't juggle chain slugs.
 // =============================================================================
 

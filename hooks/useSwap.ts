@@ -1,13 +1,26 @@
 'use client'
 
 import { useState } from 'react'
+import { parseUnits } from 'viem'
 import { useChainId, useWalletClient, usePublicClient } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { executeSwap as executeLifi } from '@/lib/web2/providers/lifi'
-import { createTxToast } from '@/lib/web3/txToast'
+import { createTxToast, type TxToast } from '@/lib/web3/txToast'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
 import type { Quote } from './useQuote'
 import type { Token } from '@/config/tokens'
+
+// LI.FI represents the chain's native asset with these sentinels — no approval needed.
+const NATIVE_SENTINELS = new Set([
+  '0x0000000000000000000000000000000000000000',
+  '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+])
+const isNative = (addr: string) => NATIVE_SENTINELS.has(addr.toLowerCase())
+
+const ERC20_ABI = [
+  { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ type: 'address' }, { type: 'address' }], outputs: [{ type: 'uint256' }] },
+  { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ type: 'address' }, { type: 'uint256' }], outputs: [{ type: 'bool' }] },
+] as const
 
 type SwapStatus = 'idle' | 'approving' | 'swapping' | 'success' | 'error'
 
@@ -61,27 +74,68 @@ export function useSwap(): SwapState {
     }
 
     setError(null)
-    setStatus('swapping')
-    const tx = createTxToast({ chainId, label: 'Swap' })
+    const lifiQuote = args.quote as LifiQuote
+    const owner   = walletClient.account.address
+    const spender = lifiQuote._txReq.to as `0x${string}`
+    let tx: TxToast | null = null
 
     try {
-      // LI.FI — quote contains the signed transaction envelope from the aggregator
-      const lifiQuote = args.quote as LifiQuote
+      // ── ERC-20 approval (native sells need none) ──────────────────────────
+      // The aggregator's transactionRequest assumes the router already has
+      // allowance; without this an ERC-20 sell reverts on first use.
+      if (!isNative(args.sellToken.address)) {
+        const sellWei = parseUnits(args.sellAmount, args.sellToken.decimals)
+        const allowance = await publicClient.readContract({
+          address: args.sellToken.address as `0x${string}`,
+          abi: ERC20_ABI, functionName: 'allowance', args: [owner, spender],
+        }) as bigint
+
+        if (allowance < sellWei) {
+          setStatus('approving')
+          const appr = createTxToast({ chainId, label: `Approve ${args.sellToken.symbol}` })
+          try {
+            const approveHash = await walletClient.writeContract({
+              address: args.sellToken.address as `0x${string}`,
+              abi: ERC20_ABI, functionName: 'approve', args: [spender, sellWei],
+              account: walletClient.account, chain: walletClient.chain,
+            })
+            appr.submitted(approveHash)
+            const ar = await publicClient.waitForTransactionReceipt({ hash: approveHash })
+            if (ar.status !== 'success') throw new Error('Token approval reverted')
+            appr.success(approveHash)
+          } catch (e) {
+            appr.error(e instanceof Error ? e.message : 'Approval failed')
+            throw e
+          }
+        }
+      }
+
+      // ── Swap ──────────────────────────────────────────────────────────────
+      setStatus('swapping')
+      tx = createTxToast({ chainId, label: 'Swap' })
+      // Static preflight so an already-doomed route fails before the wallet prompt
       await publicClient.call({
-        account: walletClient.account.address,
-        to:      lifiQuote._txReq.to as `0x${string}`,
+        account: owner,
+        to:      spender,
         data:    lifiQuote._txReq.data as `0x${string}`,
         value:   BigInt(lifiQuote._txReq.value ?? '0x0'),
       })
       const hash: `0x${string}` = await executeLifi(lifiQuote, walletClient)
+      tx.submitted(hash)
+
+      // Confirm on-chain BEFORE calling it a success — a submitted tx can revert.
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
+      if (receipt.status !== 'success') {
+        throw new Error('Swap transaction reverted on-chain')
+      }
 
       setTxHash(hash)
       setStatus('success')
       tx.success(hash)
 
       // ── Credit campaign points (fire-and-forget, non-fatal) ───────────────
-      // Parse USD value from the LI.FI quote.
-      // Falls back to 0.01 if the field is absent so the webhook never rejects.
+      // Only after on-chain confirmation. Parse USD value from the LI.FI quote;
+      // falls back to 0.01 if the field is absent so the webhook never rejects.
       const amountUsd =
         parseFloat((args.quote as LifiQuote).fromAmountUSD ?? '0') || 0.01
 
@@ -108,7 +162,7 @@ export function useSwap(): SwapState {
         : raw
       setError(friendly)
       setStatus('error')
-      tx.error(friendly)
+      tx?.error(friendly)
     }
   }
 
