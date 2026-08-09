@@ -139,6 +139,11 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     address public weightedDistributor;
     bytes32 public distributorVaultId;
 
+    /// @notice The canonical MWHookCoordinator this vault's launches must use. Once set, commitTeam
+    ///         requires poolKey.hooks == expectedHook — so a launch can't land in an UNPROTECTED
+    ///         pool (no vault-only-LP gate / oracle guard). Owner-set at deploy, before any commit.
+    address public expectedHook;
+
     mapping(address => WithdrawalRequest) public withdrawals;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -155,6 +160,7 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     event TeamWithdrawn(uint256 projOut, uint256 quoteOut);
     event FeesCollected(uint256 projFees, uint256 quoteFees, uint256 mintwareCut, uint256 denom);
     event WeightedDistributorSet(address indexed distributor, bytes32 indexed vaultId);
+    event ExpectedHookSet(address indexed hook);
     event FeesRoutedToDistributor(bytes32 indexed vaultId, uint256 lpProj, uint256 lpQuote);
     event FeesClaimed(address indexed account, uint256 projOut, uint256 quoteOut);
     event LockExpired();
@@ -169,6 +175,8 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     error BadLockDuration();
     error BadConfig();
     error PoolPreInitialized();
+    error BadPoolHook();
+    error HookAlreadySet();
     error AlreadyCommitted();
     error FundingClosed();
     error FundingStillOpen();
@@ -614,6 +622,16 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         emit WeightedDistributorSet(dist, vaultId);
     }
 
+    /// @notice One-time wiring of the canonical MWHookCoordinator. Must be set (to a coordinator
+    ///         whose `vault` is this contract) before any commitTeam so launches use the protected
+    ///         pool. See DeployMatchedVault.s.sol.
+    function setExpectedHook(address hook) external onlyOwner {
+        if (hook == address(0))          revert BadPoolHook();
+        if (expectedHook != address(0))  revert HookAlreadySet();
+        expectedHook = hook;
+        emit ExpectedHookSet(hook);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // IUnlockCallback — V4 liquidity operations
     // ─────────────────────────────────────────────────────────────────────────
@@ -702,6 +720,9 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
             ? (c0 == address(projectToken) && c1 == address(quoteToken))
             : (c1 == address(projectToken) && c0 == address(quoteToken));
         if (!ok) revert BadConfig();
+        // Bind to the canonical hook once wired — an arbitrary/zero hook would leave the launch
+        // pool without the vault-only-LP gate + oracle guard (audit HIGH: unprotected pool).
+        if (expectedHook != address(0) && address(key.hooks) != expectedHook) revert BadPoolHook();
     }
 
     function _profileHalfWidth() internal view returns (int24) {

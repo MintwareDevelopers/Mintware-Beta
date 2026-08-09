@@ -30,12 +30,15 @@ the flawed single-sided `MintwareDeFiVault4626`).
   usually taxed). **Fix:** balance-diff intake in `commitTeam` + `depositCommunity` (credit what
   arrived). Test: `test_commitTeam_balance_diff_for_tax_token`.
 
+### ✅ FIXED (cont.)
+- **HIGH (arch) — Not bound to the canonical hook.** Fixed: added an owner-set `expectedHook` +
+  `setExpectedHook` (once); `_validatePoolKey` now requires `poolKey.hooks == expectedHook` once
+  wired, so a launch can't land in an unprotected pool. Wrote **`DeployMatchedVault.s.sol`**
+  (deploy vault → mine+deploy coordinator with the vault baked in → `setExpectedHook`), the vault's
+  first deploy script. Tests (`DeployMatchedVault.t.sol`): wiring correct, wrong-hook commit reverts
+  `BadPoolHook`, full commit→fund→activate lifecycle deploys through the vault-only-gated pool.
+
 ### ⏳ REMAINING (next batch)
-- **HIGH (arch) — Not bound to the canonical hook.** `commitTeam` accepts an arbitrary `PoolKey`
-  and `_validatePoolKey` never checks `key.hooks` — a launch could land in an *unprotected* pool (no
-  vault-only-LP gate, no oracle guard). And there is **no matched-vault deploy script** wiring
-  `coordinator.setVault(thisVault)`. **Fix:** harden `_validatePoolKey` to require the expected
-  coordinator hook + write a deploy script mirroring `DeployPairVault` (mine coordinator, `setVault`).
 - **MED — Imbalanced deploy strands one party's principal** (all 3 security angles). `_deployMatched`
   binds on `min(L0,L1)`; the abundant side's remainder stays idle in the vault, unrefunded (team's
   proj side is a single-recipient refund; the community quote remainder needs a pro-rata/claimable
