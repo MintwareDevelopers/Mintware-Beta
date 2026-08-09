@@ -364,6 +364,58 @@ contract MintwareDeFiPairVaultTest is Test {
         vault.fundRent(address(_t0()), 100e18);
     }
 
+    /// Audit HIGH #4: after a rebalance the raw V4 position liquidity diverges from the share
+    /// supply. Redemption must map shares to a PRO-RATA slice of the live position, not remove
+    /// `s` raw units 1:1 — otherwise the sum of all shares exceeds the position and the LAST
+    /// redeemer is locked out (their removal underflows the pool position and reverts).
+    function test_rebalance_then_every_lp_can_fully_redeem() public {
+        _init();
+        uint256 sa = _deposit(alice, 120_000e18, 120_000e18, LockTier.Flex);
+        uint256 sb = _deposit(bob,    60_000e18,  60_000e18, LockTier.Flex);
+
+        // Rebalance to a different range: the vault re-derives the raw V4 liquidity for the same
+        // tokens, so positionLiquidity moves away from totalLiquidity (the share supply).
+        vault.rebalanceToProfile(PoolProfile.MEME);
+        assertEq(vault.totalLiquidity(), sa + sb, "shares unchanged by rebalance");
+        assertTrue(
+            vault.positionLiquidity() != vault.totalLiquidity(),
+            "precondition: position liquidity diverged from shares"
+        );
+
+        // Both LPs exit fully. Alice first, then bob LAST — pre-fix, bob's removal would revert.
+        vm.warp(block.timestamp + 25 hours);
+        vm.prank(alice);
+        vault.requestRedeem(sa);
+        vm.prank(bob);
+        vault.requestRedeem(sb);
+        vm.warp(block.timestamp + 7 days + 1);
+
+        vm.prank(alice);
+        (uint256 a0, uint256 a1) = vault.executeRedeem();
+        vm.prank(bob);
+        (uint256 b0, uint256 b1) = vault.executeRedeem(); // last redeemer must NOT be locked out
+
+        assertTrue(a0 > 0 || a1 > 0, "alice got tokens");
+        assertTrue(b0 > 0 || b1 > 0, "bob (last) got tokens");
+        assertEq(vault.shares(alice), 0, "alice fully exited");
+        assertEq(vault.shares(bob),   0, "bob fully exited");
+        assertEq(vault.totalLiquidity(), 0, "share supply drained");
+        // Alice put in ~2x bob, so she takes out ~2x (same range, same price) within rounding.
+        assertApproxEqRel(a0, b0 * 2, 0.02e18, "payouts track share ratio");
+    }
+
+    /// Audit HIGH #4 (cont.): a depositor who arrives AFTER a rebalance is priced against the live
+    /// position, so their share of the pool matches what they put in relative to sitting LPs.
+    function test_deposit_after_rebalance_is_priced_fairly() public {
+        _init();
+        uint256 sa = _deposit(alice, 100_000e18, 100_000e18, LockTier.Flex);
+        vault.rebalanceToProfile(PoolProfile.MEME);
+
+        // Bob deposits the SAME amount alice did, now against the re-derived position.
+        uint256 sb = _deposit(bob, 100_000e18, 100_000e18, LockTier.Flex);
+        assertApproxEqRel(sb, sa, 0.02e18, "equal deposit at same price -> equal shares");
+    }
+
     /// Audit (segregated reserve): a rebalance must NOT sweep unclaimed rent into the pool.
     function test_rebalance_preserves_unclaimed_rent() public {
         _init();
