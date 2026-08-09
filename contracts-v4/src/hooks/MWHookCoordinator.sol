@@ -91,6 +91,7 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
 
     event VaultUpdated(address indexed vault);
     event PoolConfigured(PoolId indexed poolId, bool dynamicFee, bool guard);
+    event OraclePoked(PoolId indexed poolId, int24 oracleTick, int24 currentTick);
 
     error OnlyPoolManager();
     error OnlyVaultCanModifyLiquidity();
@@ -308,6 +309,26 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     function oracleTick(PoolId id) external view returns (int24 tick, bool initialized) {
         MWOracleGuard.State storage o = oracle[id];
         return (o.oracleTick, o.initialized);
+    }
+
+
+    /// @notice Permissionless circuit-breaker heal path. The breaker reverts swaps at extreme
+    ///         deviation, and the oracle only advances in `afterSwap` — which a reverting
+    ///         `beforeSwap` never reaches. Without this, one large swap that pushes spot past the
+    ///         band would brick the pool forever (audit HIGH: circuit-breaker deadlock). `pokeOracle`
+    ///         advances the truncated oracle toward CURRENT spot using the identical clamped
+    ///         per-block budget the swap path uses (intra-block frozen, capped per block), so over a
+    ///         few blocks the reference catches up, the deviation falls back within band, and swaps
+    ///         resume. It grants no new power: the same clamp that resists single-block manipulation
+    ///         applies here, so nobody can jump the oracle — poke only lets the natural per-block
+    ///         catch-up proceed while swaps are halted.
+    function pokeOracle(PoolKey calldata key) external {
+        PoolId id = key.toId();
+        MWOracleGuard.State storage o = oracle[id];
+        if (!o.initialized) return; // nothing to heal until the first swap seeds the oracle
+        (, int24 currentTick,,) = POOL_MANAGER.getSlot0(id);
+        o.update(currentTick);
+        emit OraclePoked(id, o.oracleTick, currentTick);
     }
 
     // ── IHooks: unused callbacks (selector-only) ─────────────────────────────
