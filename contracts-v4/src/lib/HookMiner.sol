@@ -51,7 +51,7 @@ library HookMiner {
     /// @param deployer       Address that will call `new ContractName{salt: salt}(...)`.
     ///                       In scripts this is `msg.sender` inside `vm.startBroadcast`.
     ///                       In tests this is the test contract itself, or use `vm.addr(key)`.
-    /// @param flags          Required permission bits (e.g. 0x0AC4 for MWSocialHook).
+    /// @param flags          Required permission bits (e.g. 0xAC0 for MWHookCoordinator).
     /// @param creationCode   `type(Contract).creationCode`
     /// @param constructorArgs `abi.encode(arg1, arg2, ...)` — constructor arguments
     ///

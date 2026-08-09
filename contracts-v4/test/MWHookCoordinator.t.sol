@@ -251,8 +251,8 @@ contract MWHookCoordinatorTest is Test {
 
     /// @notice The full swap hot path (dynamic fee + oracle guard + fee rate-limit) must stay
     ///         well under ~200k gas on beforeSwap+afterSwap — above that, routing bots treat a
-    ///         hook as "hostile" and skip the pool. This is the concrete payoff of retiring the
-    ///         heavier take()-skim MWSocialHook.
+    ///         hook as "hostile" and skip the pool. This is the concrete payoff of not carrying a
+    ///         heavier take()-skim in the swap hot path (that capture is deferred to Phase 4).
     function test_gas_hook_hot_path_under_routing_budget() public {
         // Everything on: dynamic fee, oracle guard, rate-limit.
         coord.configurePool(poolId, 3000, 100000, 5, 500, true, true, 60, 6000, 10);

@@ -8,18 +8,16 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {ECDSA}           from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {EIP712}          from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
-interface ISocialVault {
-    function compound(address lp, uint256 feeAmount) external;
-}
-
 /// @title  FeeVault
-/// @notice Accumulates all captured value from MWSocialHook and distributes
+/// @notice Accumulates captured value from the swap hook and vault and distributes
 ///         it to LPs, referrers, and protocol at epoch close via Merkle claims.
 ///
 /// @dev    Income sources:
-///           1. MEV surplus   — transferred by MWSocialHook.afterSwap
-///           2. Trading fees  — swept from V4 ERC-6909 claim tokens by SocialVault
-///           3. LP penalties  — transferred by SocialVault.executeWithdrawal
+///           1. Trading fees  — swept from V4 fees by the vault
+///           2. LP penalties  — transferred by the vault on early withdrawal
+///         MEV-surplus capture by the hook is RESERVED for a future hook upgrade and
+///         is NOT wired today: the MWHookCoordinator hook does not transfer surplus
+///         to this vault (see Phase 4 in the plumbing plan).
 ///
 ///         Distribution split (owner-configurable):
 ///           ~70%  Community LPs    (Attribution + lock tier weighted, via MintwareDistributor)
@@ -122,10 +120,8 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     error InvalidShares();
     error InvalidOracleSignature();
     error DeadlinePassed();
-    error SocialVaultNotSet();
     error ClaimExceedsAllocation();
     error EpochStillActive();
-    error CompoundingDisabled();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -133,8 +129,8 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
 
     /// @dev    socialVault and hook are NOT set in constructor — set post-deploy via
     ///         setSocialVault() and setHook() to break the circular dep.
-    ///         Deploy order: FeeVault → SocialVault → FeeVault.setSocialVault(addr)
-    ///                       → MWSocialHook → FeeVault.setHook(addr)
+    ///         Deploy order: FeeVault → vault → FeeVault.setSocialVault(addr)
+    ///                       → hook (MWHookCoordinator) → FeeVault.setHook(addr)
     constructor(
         address _usdc,
         address _distributor,
@@ -245,29 +241,6 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Auto-compound — routes LP fees back into SocialVault position
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /// @notice Instead of Merkle claim, compound LP earnings directly into vault
-    /// @dev    Called off-chain at epoch close for LPs who opted in
-    function compound(address lp, uint256 amount, uint256 epochId) external onlyOwner nonReentrant {
-        revert CompoundingDisabled();
-
-        Epoch storage epoch = epochs[epochId];
-        require(epoch.closed, "epoch not closed");
-
-        if (socialVault == address(0)) revert SocialVaultNotSet();
-        if (epoch.totalClaimed + amount > epoch.totalAllocated) revert ClaimExceedsAllocation();
-
-        epoch.totalClaimed += amount;
-
-        usdc.forceApprove(socialVault, amount);
-        ISocialVault(socialVault).compound(lp, amount);
-
-        emit ClaimRecorded(epochId, lp, amount);
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
     // Admin
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -277,7 +250,7 @@ contract FeeVault is Ownable, ReentrancyGuard, EIP712 {
         socialVault = _socialVault;
     }
 
-    /// @notice Wire MWSocialHook after deploy
+    /// @notice Wire the swap hook (MWHookCoordinator) after deploy
     function setHook(address _hook) external onlyOwner {
         require(_hook != address(0), "zero address");
         hook = _hook;

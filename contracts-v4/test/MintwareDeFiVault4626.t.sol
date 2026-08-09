@@ -28,7 +28,7 @@ import {MockHostileYieldAdapter} from "./mocks/MockHostileYieldAdapter.sol";
 /// @notice Integration tests for the Phase-3 ERC-4626 DeFi vault against a real V4 PoolManager.
 ///         Proves: deposit → shares minted + liquidity deployed → async lock redeem →
 ///         penalty routing → synchronous-redemption disabled. Mirrors the existing
-///         Integration.t.sol harness (real PoolManager, mined MWSocialHook).
+///         Integration.t.sol harness (real PoolManager, mined MWHookCoordinator).
 contract MintwareDeFiVault4626Test is Test {
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;

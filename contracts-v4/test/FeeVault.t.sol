@@ -267,12 +267,6 @@ contract FeeVaultTest is Test {
         fv.setOracleSigner(address(0));
     }
 
-    function test_compound_reverts_while_disabled() public {
-        vm.prank(owner);
-        vm.expectRevert(FeeVault.CompoundingDisabled.selector);
-        fv.compound(makeAddr("lp"), 1e6, 1);
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     // Sweep math (full test in T1.5 with real ERC20)
     // ─────────────────────────────────────────────────────────────────────────
