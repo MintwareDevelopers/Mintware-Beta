@@ -91,6 +91,20 @@ contract MintwareWeightedDistributorTest is Test {
         assertEq(dist.currentEpoch(VAULT), 1);
     }
 
+    /// Audit CRIT: a claim AFTER sweep must revert — otherwise it drains other epochs/vaults
+    /// from the shared token balance (the swept remainder already went to the funder).
+    function test_claim_after_sweep_reverts() public {
+        _fund(100e18, 200e6);
+        vm.warp(block.timestamp + 7 days); // let the epoch duration elapse so it can close
+        (uint256 ep,) = _closeSingle(alice, 10e18, 20e6);
+        vm.warp(block.timestamp + 91 days); // past the 90-day claim window
+        dist.sweep(VAULT, ep);
+        bytes32[] memory emptyProof = new bytes32[](0); // single-leaf tree → root == leaf
+        vm.prank(alice);
+        vm.expectRevert(MintwareWeightedDistributor.AlreadySwept.selector);
+        dist.claim(VAULT, ep, 10e18, 20e6, emptyProof);
+    }
+
     function test_Register_RevertDouble() public {
         vm.expectRevert(MintwareWeightedDistributor.VaultAlreadyRegistered.selector);
         dist.registerVault(VAULT, address(token0), address(token1));

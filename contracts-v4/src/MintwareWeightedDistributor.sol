@@ -257,6 +257,9 @@ contract MintwareWeightedDistributor is EIP712, MWGuardianPausable, MWTimelocked
 
         Epoch storage e = epochs[vaultId][epochNumber];
         if (!e.closed) revert EpochNotClosed();
+        // Audit CRIT: no claims after sweep — the epoch's remainder has been returned to the
+        // funder, so a late claim would pay out of OTHER epochs'/vaults' pooled balance (drain).
+        if (e.swept) revert AlreadySwept();
         if (claimed[vaultId][epochNumber][msg.sender]) revert AlreadyClaimed();
 
         // Leaf encoding matches OZ StandardMerkleTree (two-token generalization):
