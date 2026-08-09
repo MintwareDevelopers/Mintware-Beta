@@ -64,16 +64,26 @@ doesn't poke first (stale-manager mis-credit).
 
 ---
 
-## Triage / fix order (go-forward, confirmed, highest-value first)
+## Triage / fix order — STATUS (branch `fix/audit-findings`)
 
-1. **CRIT #1** WeightedDistributor claim/sweep double-spend
-2. **HIGH #4** Pair-vault rebalance shares==liquidity
-3. **HIGH #3** Circuit-breaker deadlock
-4. **HIGH #5–7** swapHook `verifySwapTx` (tx.to null, fee substring, client amount_usd) — reward integrity
-5. **HIGH #8** Frontend XSS (agent endpoint + javascript: links)
-6. **HIGH #9** Treasury auto-claim guard
-7. MEDIUM go-forward batch (registerVault auth, setEnabled escrow, signed-message binding, concurrency idempotency, pool pre-init)
-8. LOW batch + retire the deprecated 4626 stack (removes #2, #10, #11, rehyp)
+1. ✅ **CRIT #1** WeightedDistributor claim/sweep double-spend — `if (e.swept) revert AlreadySwept()` + test.
+2. ✅ **HIGH #4** Pair-vault rebalance shares==liquidity — decoupled `positionLiquidity` from share
+   supply; redeem removes `positionLiquidity*s/shares` (rounds down); 2 regression tests.
+3. ✅ **HIGH #3** Circuit-breaker deadlock — permissionless `pokeOracle()` heal path (breaker still
+   hard-halts; oracle catches up over blocks); self-heal + poke-noop tests.
+4. ◐ **HIGH #5–7** swapHook reward integrity — #5 (tx.to null) FIXED; #6 (fee substring) + #7 (client
+   amount_usd) scoped honestly: blast radius bounded by $10k cap + enforced daily wallet/pool caps +
+   atomic finite-pool deduction + router allowlist; the real fix (server-recorded quotes) is a
+   tracked follow-on, documented in-code — NOT faked with a shallow patch.
+5. ✅ **HIGH #8** Frontend XSS — agent endpoint + CampaignHeader (prior) + CampaignCard DexScreener
+   socials, all via `safeUrl()` (http(s)-only).
+6. ✅ **HIGH #9** Treasury auto-claim guard — fail-closed when `MINTWARE_TREASURY_ADDRESS` unset.
+7. MEDIUM go-forward: ✅ registerVault auth (owner allowlist + funder-hijack guard), ✅ setEnabled
+   escrow escape (waive reserve while disabled), ✅ javascript: link XSS, ✅ pool pre-init (matched
+   vault). ⏳ signed-message replay binding + ⏳ concurrency idempotency — deferred as scoped
+   follow-ons (coordinated client+server / Postgres RPC changes needing dedicated testing).
+8. ⏳ LOW batch + retire the deprecated 4626 stack (removes #2, #10, #11, rehyp) — frontend Phase-3B
+   migration to the pair vault must land first, then delete.
 
 Independence note: this is a rigorous FIRST layer. Before real value at scale, one independent set
 of eyes (a cheap audit contest / solo auditor) remains worth it for correlated-blind-spot coverage.
