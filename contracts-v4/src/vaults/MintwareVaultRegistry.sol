@@ -58,16 +58,31 @@ contract MintwareVaultRegistry is Ownable {
             vRWA:      vRWA,
             surface:   surface,
             provider:  provider,
-            createdAt: block.timestamp
+            createdAt: block.timestamp,
+            active:    true
         });
         vaultIds.push(vaultId);
 
         emit VaultRegistered(vaultId, surface, vault, feeVault, provider);
     }
 
+    /// @notice Retire a registered vault (e.g. the deprecated single-sided 4626 in favour of the
+    ///         pair vault). The record is kept for provenance; `active` flips to false so indexers
+    ///         and front-ends can stop surfacing it. Idempotent-safe: reverts on unknown vaults.
+    function deactivateVault(bytes32 vaultId) external onlyOwner {
+        if (vaults[vaultId].vault == address(0)) revert UnknownVault();
+        vaults[vaultId].active = false;
+        emit VaultDeactivated(vaultId);
+    }
+
     function getVault(bytes32 vaultId) external view returns (VaultRecord memory) {
         if (vaults[vaultId].vault == address(0)) revert UnknownVault();
         return vaults[vaultId];
+    }
+
+    /// @notice Whether a registered vault is still active (false for unknown or retired vaults).
+    function isActive(bytes32 vaultId) external view returns (bool) {
+        return vaults[vaultId].active;
     }
 
     function vaultCount() external view returns (uint256) {

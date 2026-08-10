@@ -17,8 +17,7 @@ contract MWAmAuctionLibTest is Test {
             defaultFeePips: 500,       // 0.05% when unmanaged
             minRent:        100,
             K:              10,
-            minBidMultBps:  11_000,    // 1.1x
-            withdrawFeeBps: 2
+            minBidMultBps:  11_000     // 1.1x
         });
     }
 

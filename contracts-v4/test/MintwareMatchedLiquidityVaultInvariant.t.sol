@@ -8,7 +8,9 @@ import {PoolManager}         from "@uniswap/v4-core/src/PoolManager.sol";
 import {IPoolManager}        from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks}              from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}             from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
+import {StateLibrary}        from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
 import {MintwareMatchedLiquidityVault} from "../src/vaults/MintwareMatchedLiquidityVault.sol";
 import {PoolProfile}                   from "../src/vaults/VaultTypes.sol";
@@ -132,6 +134,9 @@ contract MLVHandler is Test {
 
 /// @notice Stateful invariant tests for the matched-liquidity vault's §6 acceptance bar.
 contract MintwareMatchedLiquidityVaultInvariantTest is StdInvariant, Test {
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary  for IPoolManager;
+
     PoolManager    internal pm;
     TestSwapRouter internal router;
     MintwareMatchedLiquidityVault internal vault;
@@ -234,5 +239,21 @@ contract MintwareMatchedLiquidityVaultInvariantTest is StdInvariant, Test {
     /// @notice Fee accumulators are monotonic — no negative accrual / accounting corruption.
     function invariant_fee_accumulators_monotonic() public view {
         assertFalse(handler.accEverDecreased(), "a fee accumulator decreased");
+    }
+
+    /// @notice SOLVENCY: the deployed V4 position always exactly backs the split accounting.
+    ///         (1) the tracked total is split with no leak: totalLiquidity == team + community;
+    ///         (2) the real on-chain position liquidity equals that tracked total. If either ever
+    ///         drifts, the vault is over- or under-collateralized. (angle-3 audit recommendation.)
+    function invariant_position_backs_split() public view {
+        assertEq(
+            uint256(vault.totalLiquidity()),
+            uint256(vault.teamLiquidity()) + uint256(vault.totalCommunityShares()),
+            "totalLiquidity != teamLiquidity + totalCommunityShares"
+        );
+        (uint128 onchain,,) = IPoolManager(address(pm)).getPositionInfo(
+            key.toId(), address(vault), vault.tickLower(), vault.tickUpper(), bytes32(0)
+        );
+        assertEq(uint256(onchain), uint256(vault.totalLiquidity()), "on-chain position != totalLiquidity");
     }
 }

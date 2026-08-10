@@ -48,6 +48,13 @@ Source of truth: `docs/schema.sql`
 - `contract_address` — set after contract deploy
 - RWA incentive layer: `surface` (`defi`|`rwa`), `linked_deal_id` (→ `vault_deals`), `duration_match_days` (`20260728000001`)
 
+**`token_pool_deductions`** — idempotency guard for token-pool swap deductions
+- PK: `(campaign_id, tx_hash)` — one deduction per swap tx
+- Written atomically by `deduct_token_pool_reward_idempotent(campaign_id, tx_hash, required_usd)` RPC,
+  which guards the pool decrement so concurrent/replay same-tx requests can't drain the pool twice
+  (returns `'ok'|'duplicate'|'insufficient'|'not_found'`). Supersedes the non-idempotent
+  `deduct_token_pool_reward()` in the swap-reward hot path (`swapHook.ts` → `processTokenPool`).
+
 **`swap_quotes`** — server-recorded LI.FI quotes (audit HIGH #6/#7)
 - `id` (uuid pk), `wallet`, `chain_id`, `sell_token`, `buy_token`, `sell_amount`, `amount_usd`
   (server-computed from LI.FI `estimate.fromAmountUSD`), `fee_bps`, `referrer`, `expires_at` (30-min TTL)

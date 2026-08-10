@@ -27,9 +27,6 @@ contract FeeHarness {
     function volFee(uint24 b, uint24 m, uint256 v, uint256 slope) external pure returns (uint24) {
         return MWDynamicFee.volatilityFee(b, m, v, slope);
     }
-    function depth(uint24 f, uint128 l, uint128 r, uint16 d) external pure returns (uint24) {
-        return MWDynamicFee.applyDepthDiscount(f, l, r, d);
-    }
     function rl(uint24 last, uint24 target, uint256 step) external pure returns (uint24) {
         return MWDynamicFee.rateLimit(last, target, step);
     }
@@ -106,13 +103,6 @@ contract MWHooksLibTest is Test {
         assertEq(fees.volFee(3000, 5000, 50, 10), 3500, "base + 50*10");
         assertEq(fees.volFee(3000, 5000, 500, 10), 5000, "clamped to max");
         assertEq(fees.volFee(3000, 0, 0, 10), 3000, "zero deviation = base");
-    }
-
-    function test_depth_discount() public view {
-        assertEq(fees.depth(3000, 1000, 1000, 5000), 3000, "1x -> no discount");
-        assertEq(fees.depth(3000, 2000, 1000, 5000), 1500, "2x -> 50% off");
-        assertEq(fees.depth(3000, 1500, 1000, 5000), 2250, "1.5x -> 25% off");
-        assertEq(fees.depth(3000, 5000, 1000, 5000), 1500, ">=2x caps at 50% off");
     }
 
     // ── fee rate limit (Stage-1.2) ──────────────────────────────────────────────

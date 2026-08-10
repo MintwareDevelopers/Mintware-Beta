@@ -57,4 +57,35 @@ contract MintwareVaultRegistryTest is Test {
         vm.expectRevert(MintwareVaultRegistry.UnknownVault.selector);
         reg.getVault(keccak256("nope"));
     }
+
+    function test_register_is_active_by_default() public {
+        _register();
+        assertTrue(reg.getVault(ID).active, "newly registered vault is active");
+        assertTrue(reg.isActive(ID), "isActive true");
+    }
+
+    /// Retiring a vault (e.g. the deprecated single-sided 4626) flips `active` but keeps the record.
+    function test_deactivate_retires_vault() public {
+        _register();
+        reg.deactivateVault(ID);
+        assertFalse(reg.isActive(ID), "vault retired");
+        assertFalse(reg.getVault(ID).active, "record flag cleared");
+        assertEq(reg.getVault(ID).vault, vault, "record kept for provenance");
+    }
+
+    function test_deactivate_onlyOwner() public {
+        _register();
+        vm.prank(stranger);
+        vm.expectRevert();
+        reg.deactivateVault(ID);
+    }
+
+    function test_deactivate_unknown_reverts() public {
+        vm.expectRevert(MintwareVaultRegistry.UnknownVault.selector);
+        reg.deactivateVault(keccak256("nope"));
+    }
+
+    function test_isActive_false_for_unknown() public view {
+        assertFalse(reg.isActive(keccak256("nope")), "unknown vault not active");
+    }
 }
