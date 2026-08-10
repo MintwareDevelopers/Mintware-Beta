@@ -58,4 +58,5 @@ struct VaultRecord {
     VaultSurface surface;
     address provider;
     uint256 createdAt;
+    bool    active;           // false once the owner retires the vault (deactivateVault)
 }

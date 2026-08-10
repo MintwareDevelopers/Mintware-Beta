@@ -102,7 +102,8 @@ contract MintwareVaultFactory is Ownable {
             vRWA:      address(0),
             surface:   cfg.surface,
             provider:  cfg.provider,
-            createdAt: block.timestamp
+            createdAt: block.timestamp,
+            active:    true
         });
         vaultIds.push(vaultId);
 
