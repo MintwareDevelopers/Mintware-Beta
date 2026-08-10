@@ -162,6 +162,11 @@ describe('MintwareDistributor v2', function () {
     // Fund alice with enough tokens to deposit for tests
     await token.mint(alice.address, TOTAL * 10n)
     await token.connect(alice).approve(distributorAddress, TOTAL * 10n)
+
+    // Audit HIGH: campaigns must be REGISTERED (creator/token bound) before funding. The owner is
+    // an implicit authorized registrar. Register the default campaign with alice as creator so the
+    // existing claim/withdraw tests behave as before.
+    await distributor.connect(owner).registerCampaign(CAMPAIGN_ID, await token.getAddress(), alice.address)
   })
 
   // ===========================================================================
@@ -230,23 +235,31 @@ describe('MintwareDistributor v2', function () {
       expect(await token.balanceOf(distributorAddress)).to.equal(beforeContract + ALICE_AMOUNT)
     })
 
-    it('records campaign token on first deposit', async () => {
-      const tokenAddr  = await token.getAddress()
-      const infoBefore = await distributor.campaigns(CAMPAIGN_ID)
-      expect(infoBefore.token).to.equal(ethers.ZeroAddress)
-
-      await distributor.connect(alice).depositCampaign(CAMPAIGN_ID, tokenAddr, ALICE_AMOUNT)
-
-      const infoAfter = await distributor.campaigns(CAMPAIGN_ID)
-      expect(infoAfter.token).to.equal(tokenAddr)
+    it('token + creator are bound at REGISTRATION (not first deposit) — audit HIGH', async () => {
+      const tokenAddr = await token.getAddress()
+      // CAMPAIGN_ID was registered in beforeEach with token=token, creator=alice.
+      const info = await distributor.campaigns(CAMPAIGN_ID)
+      expect(info.token).to.equal(tokenAddr)
+      expect(info.creator).to.equal(alice.address)
     })
 
-    it('records first depositor as campaign creator', async () => {
+    it('a depositor (even the first) does NOT become creator — front-run fixed', async () => {
       const tokenAddr = await token.getAddress()
-      await distributor.connect(alice).depositCampaign(CAMPAIGN_ID, tokenAddr, ALICE_AMOUNT)
+      // A fresh campaign registered with alice as creator; bob funds it first.
+      await distributor.connect(owner).registerCampaign('fresh-c', tokenAddr, alice.address)
+      await token.mint(bob.address, ALICE_AMOUNT)
+      await token.connect(bob).approve(distributorAddress, ALICE_AMOUNT)
+      await distributor.connect(bob).depositCampaign('fresh-c', tokenAddr, ALICE_AMOUNT)
 
-      const info = await distributor.campaigns(CAMPAIGN_ID)
-      expect(info.creator).to.equal(alice.address)
+      const info = await distributor.campaigns('fresh-c')
+      expect(info.creator).to.equal(alice.address) // bob funding it did NOT seize the creator role
+    })
+
+    it('reverts a deposit to an UNREGISTERED campaign', async () => {
+      const tokenAddr = await token.getAddress()
+      await expect(
+        distributor.connect(alice).depositCampaign('never-registered', tokenAddr, ALICE_AMOUNT)
+      ).to.be.revertedWith('MintwareDistributor: not registered')
     })
 
     it('subsequent depositor does NOT overwrite creator', async () => {
@@ -308,11 +321,48 @@ describe('MintwareDistributor v2', function () {
 
     it('campaigns with different IDs are isolated', async () => {
       const tokenAddr = await token.getAddress()
+      await distributor.connect(owner).registerCampaign('campaign-A', tokenAddr, alice.address)
+      await distributor.connect(owner).registerCampaign('campaign-B', tokenAddr, alice.address)
       await distributor.connect(alice).depositCampaign('campaign-A', tokenAddr, ALICE_AMOUNT)
       await distributor.connect(alice).depositCampaign('campaign-B', tokenAddr, BOB_AMOUNT)
 
       expect(await distributor.campaignBalances('campaign-A')).to.equal(ALICE_AMOUNT)
       expect(await distributor.campaignBalances('campaign-B')).to.equal(BOB_AMOUNT)
+    })
+  })
+
+  // ===========================================================================
+  // SECTION 2A — registerCampaign() (audit HIGH: authorized creator/token binding)
+  // ===========================================================================
+
+  describe('registerCampaign()', () => {
+    it('owner (implicit registrar) can register; binds token + creator', async () => {
+      const tokenAddr = await token.getAddress()
+      await distributor.connect(owner).registerCampaign('reg-1', tokenAddr, bob.address)
+      const info = await distributor.campaigns('reg-1')
+      expect(info.token).to.equal(tokenAddr)
+      expect(info.creator).to.equal(bob.address)
+    })
+
+    it('an authorized registrar can register', async () => {
+      const tokenAddr = await token.getAddress()
+      await distributor.connect(owner).setAuthorizedRegistrar(carol.address, true)
+      await distributor.connect(carol).registerCampaign('reg-2', tokenAddr, bob.address)
+      expect((await distributor.campaigns('reg-2')).creator).to.equal(bob.address)
+    })
+
+    it('reverts for an unauthorized caller', async () => {
+      const tokenAddr = await token.getAddress()
+      await expect(
+        distributor.connect(stranger).registerCampaign('reg-3', tokenAddr, stranger.address)
+      ).to.be.revertedWith('MintwareDistributor: not authorized registrar')
+    })
+
+    it('reverts on double registration', async () => {
+      const tokenAddr = await token.getAddress()
+      await expect(
+        distributor.connect(owner).registerCampaign(CAMPAIGN_ID, tokenAddr, bob.address)
+      ).to.be.revertedWith('MintwareDistributor: already registered')
     })
   })
 
@@ -466,6 +516,40 @@ describe('MintwareDistributor v2', function () {
       )
 
       expect(await token.balanceOf(alice.address)).to.equal(before + ALICE_AMOUNT)
+    })
+
+    it('freezes the epoch root — a second, different root for the same epoch is rejected (audit MED)', async () => {
+      // First claim pins epochRoot[campaign][epoch] = tree.root.
+      await distributor.connect(alice).claim(
+        CAMPAIGN_ID, EPOCH_1, tree.root, oracleSig, FAR_FUTURE, ALICE_AMOUNT,
+        getProof(tree, alice.address, ALICE_AMOUNT)
+      )
+
+      // A second (validly oracle-signed) root for the SAME epoch — e.g. an oracle re-sign that
+      // would otherwise let a previously-unclaimed wallet be dropped or re-weighted.
+      const altTree = buildTree([[bob.address, TOTAL]])
+      const altSig  = await oracleSign(oracle, distributorAddress, chainId, CAMPAIGN_ID, EPOCH_1, altTree.root, FAR_FUTURE)
+
+      await expect(
+        distributor.connect(bob).claim(
+          CAMPAIGN_ID, EPOCH_1, altTree.root, altSig, FAR_FUTURE, TOTAL,
+          getProof(altTree, bob.address, TOTAL)
+        )
+      ).to.be.revertedWith('MintwareDistributor: epoch root mismatch')
+    })
+
+    it('same epoch, same pinned root — other claimants still succeed after the freeze', async () => {
+      await distributor.connect(alice).claim(
+        CAMPAIGN_ID, EPOCH_1, tree.root, oracleSig, FAR_FUTURE, ALICE_AMOUNT,
+        getProof(tree, alice.address, ALICE_AMOUNT)
+      )
+      // Bob was in the SAME (pinned) tree — the freeze must not block honest co-claimants.
+      const before = await token.balanceOf(bob.address)
+      await distributor.connect(bob).claim(
+        CAMPAIGN_ID, EPOCH_1, tree.root, oracleSig, FAR_FUTURE, BOB_AMOUNT,
+        getProof(tree, bob.address, BOB_AMOUNT)
+      )
+      expect(await token.balanceOf(bob.address)).to.equal(before + BOB_AMOUNT)
     })
 
     it('emits Claimed with correct args (including campaignIdHash)', async () => {
@@ -645,7 +729,9 @@ describe('MintwareDistributor v2', function () {
       const tokenAddr   = await token.getAddress()
       const aliceBefore = await token.balanceOf(alice.address)
 
+      await distributor.connect(owner).registerCampaign('camp-A', tokenAddr, alice.address)
       await distributor.connect(alice).depositCampaign('camp-A', tokenAddr, ALICE_AMOUNT)
+      await distributor.connect(owner).registerCampaign('camp-B', tokenAddr, alice.address)
       await distributor.connect(alice).depositCampaign('camp-B', tokenAddr, BOB_AMOUNT)
 
       const treeA = buildTree([[alice.address, ALICE_AMOUNT]])
@@ -664,6 +750,8 @@ describe('MintwareDistributor v2', function () {
 
     it('campaign A signature cannot be replayed for campaign B', async () => {
       const tokenAddr = await token.getAddress()
+      await distributor.connect(owner).registerCampaign('camp-A', tokenAddr, alice.address)
+      await distributor.connect(owner).registerCampaign('camp-B', tokenAddr, alice.address)
       await distributor.connect(alice).depositCampaign('camp-A', tokenAddr, ALICE_AMOUNT)
       await distributor.connect(alice).depositCampaign('camp-B', tokenAddr, ALICE_AMOUNT)
 
@@ -971,6 +1059,7 @@ describe('MintwareDistributor v2', function () {
       const tokenAddr = await token.getAddress()
       await token.mint(owner.address, ALICE_AMOUNT)
       await token.connect(owner).approve(distributorAddress, ALICE_AMOUNT)
+      await distributor.connect(owner).registerCampaign('camp-close-test', tokenAddr, owner.address)
       await distributor.connect(owner).depositCampaign('camp-close-test', tokenAddr, ALICE_AMOUNT)
 
       const tree = buildTree([[alice.address, ALICE_AMOUNT]])
@@ -995,7 +1084,9 @@ describe('MintwareDistributor v2', function () {
       const tokenAddr   = await token.getAddress()
       const aliceBefore = await token.balanceOf(alice.address)
 
+      await distributor.connect(owner).registerCampaign('batch-A', tokenAddr, alice.address)
       await distributor.connect(alice).depositCampaign('batch-A', tokenAddr, ALICE_AMOUNT)
+      await distributor.connect(owner).registerCampaign('batch-B', tokenAddr, alice.address)
       await distributor.connect(alice).depositCampaign('batch-B', tokenAddr, BOB_AMOUNT)
 
       const treeA = buildTree([[alice.address, ALICE_AMOUNT]])
@@ -1032,7 +1123,9 @@ describe('MintwareDistributor v2', function () {
 
     it('reverts entire batch if any single claim is invalid', async () => {
       const tokenAddr = await token.getAddress()
+      await distributor.connect(owner).registerCampaign('batch-C', tokenAddr, alice.address)
       await distributor.connect(alice).depositCampaign('batch-C', tokenAddr, ALICE_AMOUNT)
+      await distributor.connect(owner).registerCampaign('batch-D', tokenAddr, alice.address)
       await distributor.connect(alice).depositCampaign('batch-D', tokenAddr, BOB_AMOUNT)
 
       const treeC = buildTree([[alice.address, ALICE_AMOUNT]])

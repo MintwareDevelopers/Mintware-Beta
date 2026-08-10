@@ -10,9 +10,12 @@
 // =============================================================================
 
 import type { CreatorFormState } from '@/lib/rewards/creator'
-import { recoverMessageAddress } from 'viem'
+import { createPublicClient, createWalletClient, http, recoverMessageAddress } from 'viem'
+import { baseSepolia } from 'viem/chains'
 import { buildCampaignCreateMessage } from '@/lib/web3/signedActionMessages'
 import { createHandler } from '@/lib/web2/routeHandler'
+import { getOracleSigner } from '@/lib/web3/oracleSigner'
+import { CAMPAIGN_DISTRIBUTOR_ABI } from '@/lib/web3/artifacts/campaignDistributor'
 
 const CHAIN_LABELS: Record<number, string> = {
   8453:  'Base',
@@ -163,5 +166,44 @@ export const POST = createHandler(async (req, ctx) => {
     return ctx.json({ error: error.message }, 500)
   }
 
-  return ctx.json({ campaignId: data.id })
+  // ── On-chain campaign registration (audit HIGH, PR #107) ──────────────────
+  // The redeployed Base Sepolia distributor requires a campaign to be REGISTERED (token + creator
+  // bound by an authorized registrar) BEFORE it can be funded — this is what closes the
+  // first-depositor hijack. The campaign creator (the client) is not an authorized registrar, so the
+  // backend must register on their behalf: the Privy oracle wallet is the contract owner ⇒ an
+  // implicit registrar. Only Base Sepolia runs the fixed contract; legacy chains keep the old
+  // first-depositor deposit flow untouched. If registration fails we roll back the just-inserted row
+  // so the client never tries to fund an unregistered campaign (which would revert).
+  let registration: { ok: true; tx: string } | undefined
+  if (form.chainId === 84532) {
+    try {
+      const account = await getOracleSigner('root')
+      const transport = http(process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org')
+      const walletClient = createWalletClient({ account, chain: baseSepolia, transport })
+      const publicClient = createPublicClient({ chain: baseSepolia, transport })
+      const tx = await walletClient.writeContract({
+        address: distributorAddress as `0x${string}`,
+        abi: CAMPAIGN_DISTRIBUTOR_ABI,
+        functionName: 'registerCampaign',
+        args: [data.id as string, form.token.address as `0x${string}`, wallet as `0x${string}`],
+        account,
+        chain: baseSepolia,
+      })
+      const rcpt = await publicClient.waitForTransactionReceipt({ hash: tx })
+      if (rcpt.status !== 'success') throw new Error('registerCampaign reverted')
+      registration = { ok: true, tx }
+    } catch (err) {
+      await ctx.supabase.from('campaigns').delete().eq('id', data.id)
+      ctx.log.error('campaigns/create', 'on-chain registerCampaign failed — rolled back row', {
+        campaignId: data.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return ctx.json(
+        { error: 'On-chain campaign registration failed — please try again.' },
+        502,
+      )
+    }
+  }
+
+  return ctx.json({ campaignId: data.id, registration })
 }, { auth: 'none' })
