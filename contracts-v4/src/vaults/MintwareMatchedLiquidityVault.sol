@@ -79,7 +79,13 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     uint256 public constant NOTICE_PERIOD     = 7 days;     // community async-redeem notice
     uint256 public constant ACC_PRECISION     = 1e18;       // fee-accumulator scaling
     uint256 public constant MINTWARE_FEE_BPS  = 2_500;      // protocol cut of swap fees
-    uint256 public constant MIN_COMMUNITY_DEPOSITORS = 3;   // basic self-dealing floor
+    /// @dev Minimum distinct community depositors required to activate. This is a BASIC
+    ///      self-dealing floor, NOT sybil resistance: the team is barred from depositing
+    ///      (`depositCommunity` reverts for `team`), but a determined actor can still split funds
+    ///      across ≥3 wallets to clear this floor. Real sybil resistance lives OFF-CHAIN in the
+    ///      Attribution reputation layer that gates who is surfaced/allowed to participate; this
+    ///      constant only stops the most trivial single-wallet self-match. Documented limitation.
+    uint256 public constant MIN_COMMUNITY_DEPOSITORS = 3;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Immutables
@@ -415,6 +421,12 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     /// @notice Each community LP's share of the free (community) liquidity half, pro-rata to
     ///         their quote contribution. Derived (not stored per-LP at activation) so activation
     ///         stays O(1).
+    /// @dev    Rounding is SOLVENCY-SAFE by design: each LP's allocation floors
+    ///         (`totalCommunityShares0 * contribution / communityDeposited`), so the sum of all
+    ///         derived shares is ≤ `totalCommunityShares0`. The unassigned remainder (a few
+    ///         liquidity units of floor-dust) is never over-distributed — it simply stays as
+    ///         un-redeemable community liquidity in the pool, so the vault can always cover every
+    ///         claim and the last redeemer is never short. It is NOT stranded value owed to anyone.
     function communityShareOf(address lp) public view returns (uint256) {
         if (phase != Phase.Active || communityDeposited == 0) return communityShares[lp];
         // If they have already partially redeemed, `communityShares[lp]` holds the live balance;
