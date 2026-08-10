@@ -9,10 +9,9 @@
 
 import { createHandler } from '@/lib/web2/routeHandler'
 import { createWalletClient, http } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
 import { base, baseSepolia } from 'viem/chains'
 import { API } from '@/lib/web2/api'
-import { getOracleSignerKey } from '@/lib/web3/oracleKeys'
+import { getOracleSigner } from '@/lib/web3/oracleSigner'
 
 function attributionMultiplierBps(percentile: number) {
   if (percentile >= 67) return 15000
@@ -89,7 +88,7 @@ export const GET = createHandler(async (req, ctx) => {
   // Weight role (audit C2) — separable from the root/merkle key via WEIGHT_ORACLE_PRIVATE_KEY.
   let account
   try {
-    account = privateKeyToAccount(getOracleSignerKey('weight'))
+    account = await getOracleSigner('weight')
   } catch (e) {
     ctx.log.error('attribution-snapshot', 'weight oracle key not configured', { error: String(e) })
     return ctx.json({ error: 'Oracle not configured' }, 500)

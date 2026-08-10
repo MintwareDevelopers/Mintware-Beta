@@ -21,14 +21,13 @@
 // in, so the weighting + signing are unit-testable without Supabase or a live chain.
 // =============================================================================
 
-import { privateKeyToAccount } from 'viem/accounts'
 import {
   computeWeightedDistribution,
   type WeightedLpInput,
   type TwoTokenAmount,
 } from './weightedDistribution'
 import { buildTwoTokenMerkleTree, type TwoTokenLeaf } from './twoTokenMerkleBuilder'
-import { getOracleSignerKey } from '@/lib/web3/oracleKeys'
+import { getOracleSigner } from '@/lib/web3/oracleSigner'
 
 const EPOCH_ROOT_TYPES = {
   EpochRoot: [
@@ -119,7 +118,7 @@ export async function buildAndSignWeightedEpoch(
   const deadline = BigInt(input.deadline)
 
   // ── oracle-sign the EpochRoot (weight role — audit C2) ──
-  const account = privateKeyToAccount(getOracleSignerKey('weight'))
+  const account = await getOracleSigner('weight')
   const signature = await account.signTypedData({
     domain: {
       name: 'MintwareWeightedDistributor',
