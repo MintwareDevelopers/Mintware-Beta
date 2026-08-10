@@ -110,6 +110,7 @@ contract MintwareWeightedDistributor is EIP712, MWGuardianPausable, MWTimelocked
     event EpochClosed(bytes32 indexed vaultId, uint256 indexed epochNumber, bytes32 merkleRoot, uint256 total0, uint256 total1);
     event Claimed(bytes32 indexed vaultId, uint256 indexed epochNumber, address indexed wallet, uint256 amount0, uint256 amount1);
     event EpochSwept(bytes32 indexed vaultId, uint256 indexed epochNumber, uint256 unclaimed0, uint256 unclaimed1);
+    event RegistrarAuthorized(address indexed registrar, bool authorized);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Errors
@@ -129,6 +130,7 @@ contract MintwareWeightedDistributor is EIP712, MWGuardianPausable, MWTimelocked
     error OverAllocated();          // C5 — signed totals exceed the funded pot
     error InvalidProof();
     error ZeroAmount();
+    error NotAuthorizedRegistrar();  // registerVault front-run guard (audit MED)
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -145,9 +147,22 @@ contract MintwareWeightedDistributor is EIP712, MWGuardianPausable, MWTimelocked
     // Vault registration + fee funding
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// @notice Register a vault's immutable token pair. First caller = funder-of-record.
+    /// @notice Owner-managed allowlist of addresses permitted to call registerVault (the vaults
+    ///         themselves, wired at deploy). Prevents a front-runner from registering a vaultId
+    ///         first to become funder-of-record and later steal swept remainders (audit MED).
+    mapping(address => bool) public authorizedRegistrar;
+
+    function setAuthorizedRegistrar(address registrar, bool ok) external onlyOwner {
+        authorizedRegistrar[registrar] = ok;
+        emit RegistrarAuthorized(registrar, ok);
+    }
+
+    /// @notice Register a vault's immutable token pair. Caller (an authorized registrar or the
+    ///         owner) becomes funder-of-record — the sweep recipient for unclaimed remainders.
     /// @dev    token1 may be address(0) for a single-sided vault (amount1 always 0).
     function registerVault(bytes32 vaultId, address token0, address token1) external {
+        // Gate registration so `funder` (and thus sweep proceeds) can't be hijacked by a front-run.
+        if (!authorizedRegistrar[msg.sender] && msg.sender != owner()) revert NotAuthorizedRegistrar();
         if (vaults[vaultId].registered) revert VaultAlreadyRegistered();
         if (token0 == address(0))       revert ZeroToken0();
 
@@ -257,6 +272,9 @@ contract MintwareWeightedDistributor is EIP712, MWGuardianPausable, MWTimelocked
 
         Epoch storage e = epochs[vaultId][epochNumber];
         if (!e.closed) revert EpochNotClosed();
+        // Audit CRIT: no claims after sweep — the epoch's remainder has been returned to the
+        // funder, so a late claim would pay out of OTHER epochs'/vaults' pooled balance (drain).
+        if (e.swept) revert AlreadySwept();
         if (claimed[vaultId][epochNumber][msg.sender]) revert AlreadyClaimed();
 
         // Leaf encoding matches OZ StandardMerkleTree (two-token generalization):

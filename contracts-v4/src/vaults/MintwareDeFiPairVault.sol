@@ -99,7 +99,13 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
 
     PoolProfile public profile;
 
-    uint128 public totalLiquidity; // == total shares outstanding
+    uint128 public totalLiquidity; // == total shares outstanding (ownership units)
+    /// @notice The ACTUAL V4 liquidity currently deployed in the active range. Diverges from
+    ///         `totalLiquidity` (shares) after a `_rebalance`, which re-derives the raw V4 number
+    ///         for the same tokens at a new range. Redeem removes `positionLiquidity * s / shares`
+    ///         so shares always track a pro-rata claim on the live position — never a raw 1:1 unit
+    ///         (audit HIGH: 1:1 removal after a rebalance locked out late redeemers).
+    uint128 public positionLiquidity;
     mapping(address => uint256) public shares;
     mapping(address => LockInfo) public locks;
     mapping(address => WithdrawalRequest) public withdrawals;
@@ -243,22 +249,30 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         _pendingTier = LockTier.Flex;
 
         if (liquidity == 0) revert ZeroLiquidity();
-        if (liquidity < minShares) revert InsufficientShares();
+
+        // Mint shares as a pro-rata claim on the LIVE position, not the raw V4 liquidity number.
+        // Bootstrap (empty vault) is 1:1; afterwards `sharesMinted = totalShares * liq / position`
+        // so a post-rebalance depositor is credited fairly against the re-derived position size.
+        uint256 minted = (totalLiquidity == 0 || positionLiquidity == 0)
+            ? liquidity
+            : (uint256(totalLiquidity) * liquidity) / positionLiquidity;
+        if (minted == 0 || minted < minShares) revert InsufficientShares();
 
         // Return unused dust.
         if (amount0Desired > used0) token0.safeTransfer(msg.sender, amount0Desired - used0);
         if (amount1Desired > used1) token1.safeTransfer(msg.sender, amount1Desired - used1);
 
-        shares[msg.sender] += liquidity;
-        totalLiquidity     += liquidity;
+        shares[msg.sender] += minted;
+        totalLiquidity     += uint128(minted);
+        positionLiquidity  += liquidity;
         _recordLock(msg.sender, tier);
 
         // Reset fee debt to current accumulator for the new (larger) balance.
         fee0Debt[msg.sender] = (shares[msg.sender] * accFee0PerShare) / ACC_PRECISION;
         fee1Debt[msg.sender] = (shares[msg.sender] * accFee1PerShare) / ACC_PRECISION;
 
-        sharesMinted = liquidity;
-        emit Deposited(msg.sender, used0, used1, liquidity, tier);
+        sharesMinted = minted;
+        emit Deposited(msg.sender, used0, used1, minted, tier);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -293,12 +307,20 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         _realizeFees();
         _claimFees(msg.sender);
 
+        // Pro-rata claim on the live position: `s` shares map to `positionLiquidity * s / shares`
+        // V4 units. Rounds DOWN, so the vault never over-removes — the last redeemer can always
+        // exit and any rounding dust accrues to remaining holders (solvency-preserving).
+        uint128 liqToRemove = totalLiquidity == 0
+            ? 0
+            : uint128((uint256(positionLiquidity) * s) / totalLiquidity);
+
         // Effects
         shares[msg.sender] -= s;
         totalLiquidity     -= uint128(s);
+        positionLiquidity  -= liqToRemove;
 
-        // Remove `s` liquidity units; proceeds come back to the vault so we can net penalties.
-        bytes memory res = poolManager.unlock(abi.encode(Action.Remove, abi.encode(uint128(s))));
+        // Remove the mapped liquidity; proceeds come back to the vault so we can net penalties.
+        bytes memory res = poolManager.unlock(abi.encode(Action.Remove, abi.encode(liqToRemove)));
         (uint256 out0, uint256 out1) = abi.decode(res, (uint256, uint256));
 
         // Early-exit penalty (both tokens), routed to the provider as retained liquidity value.
@@ -453,7 +475,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         profile = p;
         poolManager.unlock(abi.encode(Action.Rebalance, abi.encode(lower, upper)));
         emit ProfileSet(p);
-        emit Rebalanced(lower, upper, totalLiquidity);
+        emit Rebalanced(lower, upper, positionLiquidity);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -528,10 +550,10 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     }
 
     function _rebalance(int24 newLower, int24 newUpper) internal returns (bytes memory) {
-        if (totalLiquidity > 0) {
+        if (positionLiquidity > 0) {
             (BalanceDelta removeDelta,) = poolManager.modifyLiquidity(
                 poolKey,
-                ModifyLiquidityParams({tickLower: tickLower, tickUpper: tickUpper, liquidityDelta: -int256(uint256(totalLiquidity)), salt: bytes32(0)}),
+                ModifyLiquidityParams({tickLower: tickLower, tickUpper: tickUpper, liquidityDelta: -int256(uint256(positionLiquidity)), salt: bytes32(0)}),
                 ""
             );
             _settleDelta(removeDelta);
@@ -556,8 +578,9 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
             );
             _settleDelta(addDelta);
         }
-        // totalLiquidity (share supply) is unchanged by a rebalance — shares track ownership, not
-        // the raw V4 liquidity number, which may shift slightly at a new range.
+        // Shares (totalLiquidity) are unchanged by a rebalance — they track ownership. The RAW V4
+        // number does shift at a new range, so record it: redeem/deposit price against this.
+        positionLiquidity = newLiquidity;
         return "";
     }
 

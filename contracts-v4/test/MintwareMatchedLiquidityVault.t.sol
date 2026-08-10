@@ -25,6 +25,20 @@ import {TestSwapRouter} from "./helpers/TestSwapRouter.sol";
 ///           - community is NEVER locked;
 ///           - activation cannot be self-dealt (team barred + min-depositor floor);
 ///           - on-chain fee redirection: team earns 0% while locked, community absorbs it.
+/// @dev 1% transfer-tax token — the median case for a MEME launch project token.
+contract TaxToken is MockERC20 {
+    constructor(string memory n, string memory s, uint8 d) MockERC20(n, s, d) {}
+    function _update(address from, address to, uint256 value) internal override {
+        if (from != address(0) && to != address(0)) {
+            uint256 fee = value / 100; // 1% tax on real transfers (not mint/burn)
+            super._update(from, to, value - fee);
+            super._update(from, address(0xdEaD), fee);
+        } else {
+            super._update(from, to, value);
+        }
+    }
+}
+
 contract MintwareMatchedLiquidityVaultTest is Test {
     using PoolIdLibrary for PoolKey;
 
@@ -128,6 +142,85 @@ contract MintwareMatchedLiquidityVaultTest is Test {
         assertEq(vault.totalLiquidity(), vault.teamLiquidity() + vault.totalCommunityShares(), "split sums");
         assertEq(vault.lockExpiry(), block.timestamp + LOCK, "lock set");
         assertTrue(vault.isLocked(), "locked");
+    }
+
+    // ── audit: pre-init griefing (HIGH) — pool inited atomically in commitTeam ────
+
+    function test_preinit_at_launch_price_commits_and_activates() public {
+        // Griefer front-runs commitTeam by initializing the pool at OUR launch price (benign).
+        vm.prank(makeAddr("griefer"));
+        pm.initialize(poolKey, INIT_SQRT_PRICE);
+        _commit();          // must adopt the existing pool, not revert
+        _fundThree(CAP);
+        vault.activate();   // must still deploy
+        assertGt(vault.totalLiquidity(), 0, "activated despite benign pre-init");
+    }
+
+    function test_preinit_at_hostile_price_reverts_commit_no_escrow() public {
+        // Griefer initializes the pool at a DIFFERENT price before commit.
+        vm.prank(makeAddr("griefer"));
+        pm.initialize(poolKey, INIT_SQRT_PRICE * 2);
+        vm.startPrank(team);
+        proj.approve(address(vault), T);
+        vm.expectRevert(MintwareMatchedLiquidityVault.PoolPreInitialized.selector);
+        vault.commitTeam(poolKey, INIT_SQRT_PRICE, T, CAP, WINDOW, THRESHOLD, LOCK);
+        vm.stopPrank();
+        assertEq(proj.balanceOf(address(vault)), 0, "no team escrow on revert - team can retry");
+    }
+
+    // ── audit: fee-on-transfer intake credits RECEIVED, not nominal ──────────────
+
+    function test_commitTeam_balance_diff_for_tax_token() public {
+        TaxToken taxProj = new TaxToken("Tax", "TAX", 18);
+        MintwareMatchedLiquidityVault v2 = new MintwareMatchedLiquidityVault(
+            address(pm), address(taxProj), address(quote), team, treasury, address(0),
+            PoolProfile.MEME, deployer
+        );
+        (Currency k0, Currency k1) = address(taxProj) < address(quote)
+            ? (Currency.wrap(address(taxProj)), Currency.wrap(address(quote)))
+            : (Currency.wrap(address(quote)), Currency.wrap(address(taxProj)));
+        PoolKey memory k = PoolKey({currency0: k0, currency1: k1, fee: 3000, tickSpacing: 60, hooks: IHooks(address(0))});
+
+        taxProj.mint(team, 200_000e18);
+        vm.startPrank(team);
+        taxProj.approve(address(v2), T);
+        v2.commitTeam(k, INIT_SQRT_PRICE, T, CAP, WINDOW, THRESHOLD, LOCK);
+        vm.stopPrank();
+
+        // 1% tax → vault received 99% → commitment reflects RECEIVED, not the nominal T.
+        assertLt(v2.teamTokenCommitment(), T, "credits less than nominal");
+        assertApproxEqRel(v2.teamTokenCommitment(), T * 99 / 100, 0.001e18, "credits post-tax received");
+    }
+
+    // ── audit: imbalanced deploy strand is REFUNDED, not stranded (non-1:1 price) ─
+
+    function test_strand_refunded_at_non_1to1_price() public {
+        // Launch away from 1:1 so the range binds on one side and the other strands.
+        uint160 nonOne = uint160(INIT_SQRT_PRICE * 2); // price ~4
+        vm.startPrank(team);
+        proj.approve(address(vault), T);
+        vault.commitTeam(poolKey, nonOne, T, CAP, WINDOW, THRESHOLD, LOCK);
+        vm.stopPrank();
+        _fundThree(CAP);
+
+        uint256 teamProjBefore = proj.balanceOf(team);
+        vault.activate();
+
+        uint256 teamRefunded = proj.balanceOf(team) - teamProjBefore; // undeployed proj back to team
+        uint256 strandedQuote = vault.undeployedQuote();
+        assertTrue(teamRefunded > 0 || strandedQuote > 0, "a side strands at non-1:1 and is accounted");
+
+        // If the quote side stranded, community claims its pro-rata share (deposit-weighted).
+        if (strandedQuote > 0) {
+            uint256 aBefore = quote.balanceOf(a);
+            vm.prank(a);
+            vault.claimUndeployedQuote();
+            assertGt(quote.balanceOf(a) - aBefore, 0, "community claimed its undeployed quote");
+            // No double-claim.
+            vm.prank(a);
+            vm.expectRevert(MintwareMatchedLiquidityVault.AlreadyClaimedUndeployed.selector);
+            vault.claimUndeployedQuote();
+        }
     }
 
     function test_partial_fill_scales_team_and_refunds_unmatched() public {
@@ -269,6 +362,7 @@ contract MintwareMatchedLiquidityVaultTest is Test {
         MintwareWeightedDistributor dist =
             new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
         bytes32 vid = keccak256("matched");
+        dist.setAuthorizedRegistrar(address(vault), true); // front-run guard (audit MED)
         vault.setWeightedDistributor(address(dist), vid);
 
         _genFees();
@@ -292,6 +386,7 @@ contract MintwareMatchedLiquidityVaultTest is Test {
     function test_matched_setWeightedDistributor_is_one_time() public {
         MintwareWeightedDistributor dist =
             new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        dist.setAuthorizedRegistrar(address(vault), true); // front-run guard (audit MED)
         vault.setWeightedDistributor(address(dist), keccak256("v"));
         vm.expectRevert(MintwareMatchedLiquidityVault.WeightedDistributorAlreadySet.selector);
         vault.setWeightedDistributor(address(dist), keccak256("v2"));

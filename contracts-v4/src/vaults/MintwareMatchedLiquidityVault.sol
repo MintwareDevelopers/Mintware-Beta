@@ -139,6 +139,17 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     address public weightedDistributor;
     bytes32 public distributorVaultId;
 
+    /// @notice The canonical MWHookCoordinator this vault's launches must use. Once set, commitTeam
+    ///         requires poolKey.hooks == expectedHook — so a launch can't land in an UNPROTECTED
+    ///         pool (no vault-only-LP gate / oracle guard). Owner-set at deploy, before any commit.
+    address public expectedHook;
+
+    /// @notice Community quote that didn't fit the range at activation (the strand), claimable
+    ///         pro-rata to each depositor's contribution (basis frozen at activation).
+    uint256 public undeployedQuote;
+    uint256 public undeployedQuoteBasis;
+    mapping(address => bool) public undeployedClaimed;
+
     mapping(address => WithdrawalRequest) public withdrawals;
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -155,6 +166,8 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     event TeamWithdrawn(uint256 projOut, uint256 quoteOut);
     event FeesCollected(uint256 projFees, uint256 quoteFees, uint256 mintwareCut, uint256 denom);
     event WeightedDistributorSet(address indexed distributor, bytes32 indexed vaultId);
+    event ExpectedHookSet(address indexed hook);
+    event UndeployedQuoteClaimed(address indexed account, uint256 amount);
     event FeesRoutedToDistributor(bytes32 indexed vaultId, uint256 lpProj, uint256 lpQuote);
     event FeesClaimed(address indexed account, uint256 projOut, uint256 quoteOut);
     event LockExpired();
@@ -168,6 +181,10 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     error BadProfile();
     error BadLockDuration();
     error BadConfig();
+    error PoolPreInitialized();
+    error BadPoolHook();
+    error HookAlreadySet();
+    error AlreadyClaimedUndeployed();
     error AlreadyCommitted();
     error FundingClosed();
     error FundingStillOpen();
@@ -254,14 +271,32 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         launchSqrtPriceX96 = launchSqrt;
         tickLower          = lower;
         tickUpper          = upper;
-        teamTokenCommitment   = teamTokens;
         targetMatchQuote      = targetQuote;
         activationThresholdBps = thresholdBps;
         lockDuration          = lockDur;
         fundingWindowEnd      = block.timestamp + fundingWindow;
 
+        // Initialize the V4 pool NOW — atomic with committing the key — so no griefer can front-run
+        // a hostile pre-init between commit and activate (audit HIGH: pre-init permanently bricks
+        // activate() and freezes team funds). V4 init is permissionless, so tolerate an existing
+        // pool ONLY if it sits at our launch price; a hostile pre-init reverts here, before any
+        // escrow, so the team simply retries (no funds staked).
+        (uint160 liveSqrt,,,) = StateLibrary.getSlot0(poolManager, PoolIdLibrary.toId(poolKey_));
+        if (liveSqrt == 0) {
+            _initializePool(launchSqrt);
+        } else if (liveSqrt == launchSqrt) {
+            poolInitialized = true;
+        } else {
+            revert PoolPreInitialized();
+        }
+
+        // Balance-diff intake — credit what ACTUALLY arrived. This vault is MEME/EMERGING-gated
+        // and those tokens commonly carry a transfer tax; nominal accounting would over-book the
+        // commitment and revert activate() on settlement (audit: FoT intake, confirmed 4x).
+        uint256 balBefore = projectToken.balanceOf(address(this));
         projectToken.safeTransferFrom(msg.sender, address(this), teamTokens);
-        emit TeamCommitted(teamTokens, targetQuote, fundingWindowEnd, lockDur);
+        teamTokenCommitment = projectToken.balanceOf(address(this)) - balBefore;
+        emit TeamCommitted(teamTokenCommitment, targetQuote, fundingWindowEnd, lockDur);
     }
 
     /// @notice Community matches with quote-asset deposits, first-come up to the cap.
@@ -272,14 +307,18 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         if (block.timestamp >= fundingWindowEnd) revert FundingClosed();
         if (quoteAmount == 0) revert ZeroAmount();
         if (msg.sender == team) revert TeamCannotMatch(); // self-dealing guard
-        if (communityDeposited + quoteAmount > targetMatchQuote) revert CapExceeded();
+        if (communityDeposited + quoteAmount > targetMatchQuote) revert CapExceeded(); // nominal upper bound (safe)
+
+        // Balance-diff intake (fee-on-transfer safe): credit what actually arrived.
+        uint256 balBefore = quoteToken.balanceOf(address(this));
+        quoteToken.safeTransferFrom(msg.sender, address(this), quoteAmount);
+        uint256 received = quoteToken.balanceOf(address(this)) - balBefore;
+        if (received == 0) revert ZeroAmount();
 
         if (communityContribution[msg.sender] == 0) communityDepositorCount += 1;
-        communityContribution[msg.sender] += quoteAmount;
-        communityDeposited += quoteAmount;
-
-        quoteToken.safeTransferFrom(msg.sender, address(this), quoteAmount);
-        emit CommunityDeposited(msg.sender, quoteAmount, communityDeposited);
+        communityContribution[msg.sender] += received;
+        communityDeposited += received;
+        emit CommunityDeposited(msg.sender, received, communityDeposited);
     }
 
     /// @notice Community can pull their escrowed deposit back during funding, or reclaim it
@@ -330,12 +369,20 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         bytes memory res = poolManager.unlock(
             abi.encode(Action.DeployMatched, abi.encode(matchedTokens, matched))
         );
-        uint128 liquidity = abi.decode(res, (uint128));
+        (uint128 liquidity, uint256 usedProj, uint256 usedQuote) = abi.decode(res, (uint128, uint256, uint256));
 
         teamLiquidity        = liquidity / 2;
         totalCommunityShares = liquidity - teamLiquidity; // remainder to community (favor community)
         totalCommunityShares0 = totalCommunityShares;      // frozen basis for pro-rata derivation
         totalLiquidity       = liquidity;
+
+        // Refund the undeployed remainder: the team's project side directly (single recipient), and
+        // the community's quote side pro-rata to each depositor's contribution via claimUndeployedQuote.
+        if (matchedTokens > usedProj) projectToken.safeTransfer(team, matchedTokens - usedProj);
+        if (matched > usedQuote) {
+            undeployedQuote      = matched - usedQuote;
+            undeployedQuoteBasis = matched; // == communityDeposited at activation, frozen
+        }
 
         // Community shares are pro-rata to quote contribution, derived lazily from `communityContribution`
         // on first interaction (keeps activation O(1)). The fee accumulators are 0 here, so every
@@ -567,7 +614,12 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
             // Canonical: route the community LP fee pot to the oracle-weighted distributor.
             // Off-chain weighting excludes the team while locked (mirrors the denom rule).
             if (lpProj > 0 || lpQuote > 0) {
+                // JIT exact-amount approvals (audit LOW: no standing max allowance to the distributor).
+                if (lpProj  > 0) projectToken.forceApprove(weightedDistributor, lpProj);
+                if (lpQuote > 0) quoteToken.forceApprove(weightedDistributor, lpQuote);
                 IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, lpProj, lpQuote);
+                if (lpProj  > 0) projectToken.forceApprove(weightedDistributor, 0);
+                if (lpQuote > 0) quoteToken.forceApprove(weightedDistributor, 0);
                 emit FeesRoutedToDistributor(distributorVaultId, lpProj, lpQuote);
             }
         } else {
@@ -586,9 +638,31 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         weightedDistributor = dist;
         distributorVaultId  = vaultId;
         IMWWeightedDistributor(dist).registerVault(vaultId, address(projectToken), address(quoteToken));
-        projectToken.forceApprove(dist, type(uint256).max);
-        quoteToken.forceApprove(dist, type(uint256).max);
+        // No standing max approval (audit LOW): fundFees gets a JIT exact-amount approval instead.
         emit WeightedDistributorSet(dist, vaultId);
+    }
+
+    /// @notice One-time wiring of the canonical MWHookCoordinator. Must be set (to a coordinator
+    ///         whose `vault` is this contract) before any commitTeam so launches use the protected
+    ///         pool. See DeployMatchedVault.s.sol.
+    function setExpectedHook(address hook) external onlyOwner {
+        if (hook == address(0))          revert BadPoolHook();
+        if (expectedHook != address(0))  revert HookAlreadySet();
+        expectedHook = hook;
+        emit ExpectedHookSet(hook);
+    }
+
+    /// @notice Claim your pro-rata share of the community quote that didn't fit the range at
+    ///         activation (refunded by contribution, once). No-op-safe; not gated by pause so
+    ///         community can always recover.
+    function claimUndeployedQuote() external nonReentrant {
+        if (undeployedClaimed[msg.sender]) revert AlreadyClaimedUndeployed();
+        uint256 contrib = communityContribution[msg.sender];
+        if (contrib == 0 || undeployedQuote == 0) revert ZeroAmount();
+        undeployedClaimed[msg.sender] = true;
+        uint256 amt = (undeployedQuote * contrib) / undeployedQuoteBasis;
+        if (amt > 0) quoteToken.safeTransfer(msg.sender, amt);
+        emit UndeployedQuoteClaimed(msg.sender, amt);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -615,9 +689,8 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     }
 
     function _deployMatched(uint256 projAmt, uint256 quoteAmt) internal returns (bytes memory) {
-        if (!poolInitialized) {
-            _initializePool(launchSqrtPriceX96);
-        }
+        // The pool is initialized atomically in commitTeam (front-run-proof), so it is always
+        // initialized by the time activation deploys liquidity here.
         (uint256 amt0, uint256 amt1) = projIsToken0 ? (projAmt, quoteAmt) : (quoteAmt, projAmt);
 
         uint160 sqrtLower = TickMath.getSqrtPriceAtTick(tickLower);
@@ -626,13 +699,20 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
             launchSqrtPriceX96, sqrtLower, sqrtUpper, amt0, amt1
         );
 
+        uint256 b0 = IERC20(Currency.unwrap(poolKey.currency0)).balanceOf(address(this));
+        uint256 b1 = IERC20(Currency.unwrap(poolKey.currency1)).balanceOf(address(this));
         (BalanceDelta delta,) = poolManager.modifyLiquidity(
             poolKey,
             ModifyLiquidityParams({tickLower: tickLower, tickUpper: tickUpper, liquidityDelta: int256(uint256(liquidity)), salt: bytes32(0)}),
             ""
         );
         _settleDelta(delta);
-        return abi.encode(liquidity);
+        // Measure what was ACTUALLY consumed — the range binds on min(L0,L1), so one side is only
+        // partially deployed and its remainder must be refunded (audit: imbalanced-deploy strand).
+        uint256 used0 = b0 - IERC20(Currency.unwrap(poolKey.currency0)).balanceOf(address(this));
+        uint256 used1 = b1 - IERC20(Currency.unwrap(poolKey.currency1)).balanceOf(address(this));
+        (uint256 usedProj, uint256 usedQuote) = projIsToken0 ? (used0, used1) : (used1, used0);
+        return abi.encode(liquidity, usedProj, usedQuote);
     }
 
     function _removeLiquidityTo(uint128 liquidity, address to) internal returns (bytes memory) {
@@ -680,6 +760,9 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
             ? (c0 == address(projectToken) && c1 == address(quoteToken))
             : (c1 == address(projectToken) && c0 == address(quoteToken));
         if (!ok) revert BadConfig();
+        // Bind to the canonical hook once wired — an arbitrary/zero hook would leave the launch
+        // pool without the vault-only-LP gate + oracle guard (audit HIGH: unprotected pool).
+        if (expectedHook != address(0) && address(key.hooks) != expectedHook) revert BadPoolHook();
     }
 
     function _profileHalfWidth() internal view returns (int24) {

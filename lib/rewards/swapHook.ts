@@ -147,8 +147,9 @@ async function verifySwapTx(
       return { ok: false, skip_reason: 'wallet_mismatch' }
     }
 
-    // 2b. tx.to must be a known LI.FI router
-    if (tx.to && !LIFI_ROUTERS.has(tx.to.toLowerCase())) {
+    // 2b. tx.to must be a known LI.FI router. A contract-creation tx has tx.to === null and
+    //     MUST be rejected, not slip past the allowlist (audit HIGH: fabricated-swap reward).
+    if (!tx.to || !LIFI_ROUTERS.has(tx.to.toLowerCase())) {
       console.warn(
         `[swapHook] verifySwapTx: tx.to=${tx.to} is not a known LI.FI router for tx ${txHash} ` +
         `(chain=${chain}) — reward denied (router_mismatch)`
@@ -156,8 +157,16 @@ async function verifySwapTx(
       return { ok: false, skip_reason: 'router_mismatch' }
     }
 
-    // 3. Treasury address must appear in calldata (fee enforcement)
+    // 3. Treasury address must appear in calldata (fee enforcement).
     //    Only enforced when MINTWARE_TREASURY_ADDRESS is configured.
+    //    BEST-EFFORT (audit HIGH #6): this substring match reliably catches an honest client that
+    //    STRIPPED the integrator fee (the common case), but a determined attacker can embed the
+    //    treasury bytes as dead calldata to pass it. It is one of several layers — reward magnitude
+    //    is separately bounded by the $10k single-trade cap + per-campaign daily wallet/pool caps +
+    //    the atomic finite-pool deduction, and tx.to is allowlisted to a known router. The real fix
+    //    for full fee/value integrity is server-recorded quotes (issue+persist the amount_usd/fee at
+    //    /api/swap/quote, then look it up here by tx instead of trusting the client) — tracked as a
+    //    follow-on, not a hot-path patch.
     if (treasuryAddress) {
       const input = (tx.input ?? '').toLowerCase()
       if (!input.includes(treasuryAddress) && !input.includes(treasuryAddressPad)) {

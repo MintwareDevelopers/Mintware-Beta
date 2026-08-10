@@ -10,6 +10,7 @@ import {PoolKey}             from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta}         from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {StateLibrary}         from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 import {FeeVault}                from "../src/FeeVault.sol";
@@ -26,6 +27,7 @@ import {TestSwapRouter} from "./helpers/TestSwapRouter.sol";
 ///         vault-gated LP + the MEV sandwich/cooldown guard blocking a real backrun swap.
 contract MWHookCoordinatorTest is Test {
     using PoolIdLibrary for PoolKey;
+    using StateLibrary  for IPoolManager;
 
     address internal deployer = address(this);
     address internal alice    = makeAddr("alice");
@@ -164,6 +166,54 @@ contract MWHookCoordinatorTest is Test {
         vm.expectRevert(); // PriceDeviationTooHigh, wrapped by PoolManager
         swapRouter.swap(poolKey, sellProjZeroForOne, 100e6);
         vm.stopPrank();
+    }
+
+    /// @notice Audit HIGH: the breaker must not PERMANENTLY brick the pool. The oracle only
+    ///         advances in afterSwap, which a reverting beforeSwap never reaches — so once spot is
+    ///         pushed past the band, every swap reverts and nothing heals the oracle. The
+    ///         permissionless pokeOracle() advances the truncated reference toward spot across
+    ///         blocks (same clamped budget), so the pool recovers on its own.
+    function test_circuit_breaker_self_heals_via_poke() public {
+        // Tight band (trips), but a heal budget that catches up in a bounded number of blocks.
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 2000, 20, 1);
+
+        _swap(sellProjZeroForOne, 100e6);   // seed oracle near current tick
+        vm.roll(block.number + 1);
+        _swap(sellProjZeroForOne, 8_000e6); // push spot far past the 20-tick band
+        vm.roll(block.number + 1);
+
+        // Breaker tripped: swaps revert (the DoS state).
+        vm.startPrank(alice, alice);
+        MockERC20(Currency.unwrap(poolKey.currency0)).approve(address(swapRouter), 100e6);
+        vm.expectRevert(); // PriceDeviationTooHigh, wrapped by PoolManager
+        swapRouter.swap(poolKey, sellProjZeroForOne, 100e6);
+        vm.stopPrank();
+
+        // Heal: ANYONE pokes the oracle across blocks until it re-enters the band. Bounded loop.
+        address anyone = makeAddr("anyone");
+        uint256 bn = block.number;
+        uint256 blocksToHeal;
+        for (; blocksToHeal < 300; blocksToHeal++) {
+            bn += 1;
+            vm.roll(bn);
+            vm.prank(anyone);
+            coord.pokeOracle(poolKey);
+            (, int24 curTick,,) = IPoolManager(address(pm)).getSlot0(poolId);
+            (int24 oTick,) = coord.oracleTick(poolId);
+            int24 dev = curTick >= oTick ? curTick - oTick : oTick - curTick;
+            if (uint256(uint24(dev)) <= 20) break;
+        }
+        assertLt(blocksToHeal, 300, "oracle healed within bound (no permanent brick)");
+
+        // Swaps work again -> pool recovered on its own.
+        _swap(sellProjZeroForOne, 100e6);
+    }
+
+    /// pokeOracle before the oracle is seeded is a harmless no-op (no revert, nothing to heal).
+    function test_poke_before_init_is_noop() public {
+        (, bool init) = coord.oracleTick(poolId);
+        assertFalse(init, "not seeded yet");
+        coord.pokeOracle(poolKey); // must not revert
     }
 
     function test_swap_fee_collection_splits_50_25_25() public {

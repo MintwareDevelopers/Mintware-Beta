@@ -4,6 +4,7 @@ pragma solidity ^0.8.26;
 import {Script, console}      from "forge-std/Script.sol";
 import {MintwareDeFiPairVault} from "../src/vaults/MintwareDeFiPairVault.sol";
 import {MWHookCoordinator}     from "../src/hooks/MWHookCoordinator.sol";
+import {MintwareWeightedDistributor} from "../src/MintwareWeightedDistributor.sol";
 import {HookMiner}             from "../src/lib/HookMiner.sol";
 import {MintwareVaultRegistry} from "../src/vaults/MintwareVaultRegistry.sol";
 import {VaultSurface, PoolProfile} from "../src/vaults/VaultTypes.sol";
@@ -122,6 +123,10 @@ contract DeployPairVault is Script {
         address wdist = vm.envOr("WEIGHTED_DISTRIBUTOR", address(0));
         if (wdist != address(0)) {
             bytes32 dvid = vm.envOr("DISTRIBUTOR_VAULT_ID", bytes32(0));
+            // The distributor gates registerVault to an allowlist (front-run guard). Authorize the
+            // vault first. Requires the deployer to own the distributor (the fresh-deploy path); for
+            // an externally-owned distributor, the operator must authorize the vault separately.
+            MintwareWeightedDistributor(wdist).setAuthorizedRegistrar(address(vault), true);
             vault.setWeightedDistributor(wdist, dvid);
             console.log("WeightedDistributor wired:", wdist);
         }

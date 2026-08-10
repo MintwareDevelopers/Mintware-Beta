@@ -136,8 +136,13 @@ contract MintwareWeightedDistributorInvariant is StdInvariant, Test {
 
         handler = new MLDHandler(dist, token0, token1);
         // handler registers the vault (funder = handler, so sweeps return to it)
+        vm.prank(owner);
+        dist.setAuthorizedRegistrar(address(handler), true);
+        // Read VAULT() into a var first: a nested external getter call would consume the prank,
+        // so registerVault would run as the test contract (unauthorized) instead of the handler.
+        bytes32 handlerVault = handler.VAULT();
         vm.prank(address(handler));
-        dist.registerVault(handler.VAULT(), address(token0), address(token1));
+        dist.registerVault(handlerVault, address(token0), address(token1));
 
         targetContract(address(handler));
         bytes4[] memory sel = new bytes4[](4);
