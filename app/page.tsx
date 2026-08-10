@@ -1,16 +1,21 @@
 'use client'
 
 // =============================================================================
-// Homepage — the vault-forward reframe (promoted from /style/landing).
-// Concept design + the load-bearing production features woven back in with live
-// wiring: wallet search (→ /{address}), Privy email onboarding, WaitlistForm.
+// Homepage — score-first reorganization (ATX). The Attribution score is the
+// hero: paste any wallet (or use a sample) and its live score reveals inline —
+// ring, count-up, six signal meters, tier — before routing anywhere.
+// All prior content is preserved, only reorganized per the design rules:
+// two vault products, three audiences, how-it-works, waitlist, launch band.
+// Live wiring kept: Privy email onboarding, wallet connect, /score fetch,
+// wallet lookup (→ /{address}), WaitlistForm.
 // =============================================================================
 
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { PageHero } from '@/components/web2/PageHero'
+import { getAddress } from 'viem'
+import { API } from '@/lib/web2/api'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
@@ -70,6 +75,15 @@ const ACTIONS = [
   { b: 'Run an agent', fd: 'Machines earn reputation — ERC-8004', pts: 'Agent trust', hot: false },
 ]
 
+const MAX_SCORE = 925
+const RING_C = 2 * Math.PI * 90 // circumference for r=90
+
+interface ScoreSignal { key: string; name: string; max: number; color: string; score: number }
+interface ScoreData {
+  score: number; tier: string; percentile: number
+  walletAge?: string; firstSeen?: string; chains?: number; totalTxCount?: number
+  signals: ScoreSignal[]
+}
 
 function Star({ className = '' }: { className?: string }) {
   return (
@@ -82,14 +96,162 @@ function Star({ className = '' }: { className?: string }) {
   )
 }
 
+const ey = 'font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55'
+
+// ─── Score card — the hero. Live /score fetch, ring + count-up + meters ──────
+function ScoreCard() {
+  const router = useRouter()
+  const [input, setInput] = useState('')
+  const [state, setState] = useState<'idle' | 'loading' | 'reveal' | 'error'>('loading')
+  const [data, setData] = useState<ScoreData | null>(null)
+  const [addr, setAddr] = useState('')
+  const [shown, setShown] = useState(0)
+  const reqId = useRef(0)
+
+  async function load(raw: string, label?: string, isDemo = false) {
+    const q = (raw || '').trim()
+    if (!q) return
+    let a = q
+    try { if (q.startsWith('0x') && q.length === 42) a = getAddress(q) } catch { /* keep raw (ENS) */ }
+    const id = ++reqId.current
+    setState('loading'); setInput(label ?? q)
+    try {
+      const res = await fetch(`${API}/score?address=${a}`)
+      if (!res.ok) throw new Error('not found')
+      const d = (await res.json()) as ScoreData
+      if (id !== reqId.current) return
+      // never show a degraded/empty auto-demo — fall back to the search prompt instead
+      if (isDemo && (!d?.score || d.score <= 0)) { setState('idle'); return }
+      setData(d); setAddr(a); setShown(0); setState('reveal')
+    } catch {
+      if (id !== reqId.current) return
+      setState(isDemo ? 'idle' : 'error')
+    }
+  }
+
+  // demo on load with a real wallet (real data, no fabrication); falls back cleanly if the API is degraded
+  useEffect(() => { load(SAMPLE_ADDRS[0].addr, SAMPLE_ADDRS[0].label, true) }, [])
+
+  // count the hero number up when a reveal lands
+  useEffect(() => {
+    if (state !== 'reveal' || !data) return
+    if (matchMedia('(prefers-reduced-motion:reduce)').matches) { setShown(data.score); return }
+    let raf = 0; const t0 = performance.now(); const target = data.score
+    const tick = (t: number) => {
+      const e = Math.min(1, (t - t0) / 1100); const k = 1 - Math.pow(1 - e, 3)
+      setShown(Math.round(target * k))
+      if (e < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [state, data])
+
+  const frac = data ? Math.min(1, data.score / MAX_SCORE) : 0
+  const topPct = data ? Math.max(1, 100 - data.percentile) : 0
+  const tierTxt = data ? data.tier.charAt(0).toUpperCase() + data.tier.slice(1) : ''
+  const tierCls = data?.tier === 'gold' ? 'text-atx-mesquite border-atx-mesquite'
+    : data?.tier === 'silver' ? 'text-atx-ink/60 border-atx-ink/40'
+    : 'text-atx-blue border-atx-blue'
+
+  return (
+    <div className="w-full max-w-[720px] border border-atx-ink bg-white">
+      {/* SEARCH / IDLE */}
+      {(state === 'idle' || state === 'error') && (
+        <div className="p-[26px] grid gap-4">
+          <div className="font-atx-mono text-[11px] uppercase tracking-[0.1em] text-atx-ink/55 flex items-center gap-2">
+            <span className="w-[7px] h-[7px] bg-atx-mesquite inline-block" /> Live score engine — try any wallet
+          </div>
+          <div className="flex border border-atx-ink">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && load(input)}
+              placeholder="0x… wallet address or ENS name"
+              className="flex-1 py-3 px-4 bg-transparent font-atx-mono text-[14px] text-atx-ink outline-none placeholder:text-atx-ink/40"
+            />
+            <button onClick={() => load(input)} className="px-5 bg-atx-blue text-white font-atx-mono text-[11px] uppercase tracking-[0.08em] cursor-pointer">Check my score</button>
+          </div>
+          {state === 'error' && <div className="font-atx-mono text-[12px] text-atx-clay">Couldn’t score that address — check it and try again.</div>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={ey}>Try</span>
+            {SAMPLE_ADDRS.map((s) => (
+              <button key={s.label} onClick={() => load(s.addr, s.label)} className="font-atx-mono text-[11px] text-atx-ink/70 border border-atx-ink px-2.5 py-1 cursor-pointer hover:bg-atx-ink hover:text-atx-bone">{s.label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* LOADING */}
+      {state === 'loading' && (
+        <div className="p-[26px] min-h-[200px] grid place-items-center font-atx-mono text-[12px] uppercase tracking-[0.1em] text-atx-ink/45">
+          Scoring {input || 'wallet'}…
+        </div>
+      )}
+
+      {/* REVEAL */}
+      {state === 'reveal' && data && (
+        <div className="p-[26px] grid grid-cols-[auto_1fr] gap-8 items-center max-[640px]:grid-cols-1 max-[640px]:justify-items-center max-[640px]:text-center">
+          <div className="grid justify-items-center gap-3">
+            <div className="relative w-[188px] h-[188px]">
+              <svg viewBox="0 0 208 208" className="w-full h-full -rotate-90">
+                <circle cx="104" cy="104" r="90" fill="none" stroke="rgba(17,17,17,0.14)" strokeWidth="13" />
+                <circle cx="104" cy="104" r="90" fill="none" stroke="var(--color-atx-blue)" strokeWidth="13" strokeLinecap="butt"
+                  strokeDasharray={RING_C} strokeDashoffset={RING_C * (1 - frac)}
+                  style={{ transition: 'stroke-dashoffset 1.15s cubic-bezier(.22,1,.36,1)' }} />
+              </svg>
+              <div className="absolute inset-0 grid place-content-center text-center">
+                <div className="font-atx-mono text-[46px] font-bold tracking-[-0.03em] leading-none tabular-nums">{shown}</div>
+                <div className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-ink/45">of {MAX_SCORE} pts</div>
+              </div>
+            </div>
+            <span className={`font-atx-mono text-[11px] uppercase tracking-[0.06em] px-2.5 py-1 border ${tierCls}`}>{tierTxt}</span>
+          </div>
+
+          <div className="grid gap-4 min-w-0 w-full">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="font-atx-mono text-[16px]">{input}</span>
+              <span className="font-atx-mono text-[10px] uppercase tracking-[0.06em] px-2 py-1 border border-atx-blue text-atx-blue">Top {topPct}%</span>
+            </div>
+            <div className="flex gap-4 flex-wrap font-atx-mono text-[12px] text-atx-ink/50">
+              {data.walletAge && <span><b className="text-atx-ink/75">{data.walletAge}</b> old</span>}
+              {data.chains != null && <span><b className="text-atx-ink/75">{data.chains}</b> chains</span>}
+              {data.totalTxCount != null && <span><b className="text-atx-ink/75">{data.totalTxCount.toLocaleString()}</b> txns</span>}
+            </div>
+
+            <div className="grid gap-2">
+              {data.signals?.map((s) => (
+                <div key={s.key} className="grid grid-cols-[80px_1fr_auto] items-center gap-3">
+                  <span className="font-atx-mono text-[11px] uppercase tracking-[0.03em] text-atx-ink/60">{s.name}</span>
+                  <span className="h-2 border border-atx-ink/25 bg-atx-bone">
+                    <span className="block h-full transition-[width] duration-700 ease-out" style={{ width: `${Math.round((s.score / s.max) * 100)}%`, background: s.color }} />
+                  </span>
+                  <span className="font-atx-mono text-[10.5px] text-atx-ink/45 text-right min-w-[52px] tabular-nums">{s.score} / {s.max}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3 border border-atx-blue bg-atx-blue/5 px-3.5 py-3 flex-wrap">
+              <span className="text-[13.5px] text-atx-ink/80 flex-1 min-w-[180px]">Deposit into a <b>V4 Vault</b> — your score multiplies your share of every pool’s fees.</span>
+              <Link href="/vaults" className="font-atx-mono text-[10.5px] uppercase tracking-[0.06em] px-3 py-2 bg-atx-blue text-white no-underline">Deposit →</Link>
+            </div>
+
+            <div className="flex items-center gap-4 font-atx-mono text-[11px] uppercase tracking-[0.05em]">
+              <button onClick={() => router.push(`/${addr}`)} className="text-atx-blue cursor-pointer hover:underline bg-transparent border-0 p-0">See full profile →</button>
+              <button onClick={() => { setState('idle'); setInput('') }} className="text-atx-ink/45 cursor-pointer hover:text-atx-ink/70 bg-transparent border-0 p-0">← Score another wallet</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function HomePage() {
   const { isConnected } = useMintwareIdentity()
   const { openConnectModal } = useConnectModal()
   const privy = useMintwarePrivy()
   const router = useRouter()
-  const [walletInput, setWalletInput] = useState('')
 
-  // Enter the app: connect first if needed, else route into the authenticated surface.
   function launchApp(dest = '/rewards') {
     if (isConnected) router.push(dest)
     else openConnectModal?.()
@@ -99,12 +261,7 @@ export default function HomePage() {
     if (privy.authenticated) { privy.connectOrCreateWallet(); return }
     privy.login({ loginMethods: ['email'], walletChainType: 'ethereum-only' })
   }
-  function handleAnalyze(addr?: string) {
-    const target = (addr ?? walletInput).trim().toLowerCase()
-    if (target) router.push(`/${target}`)
-  }
 
-  const ey = 'font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55'
   const navLink = 'no-underline text-atx-ink/55 hover:text-atx-ink'
 
   return (
@@ -133,48 +290,32 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* HERO 1 — reputation + wallet search */}
-      <PageHero
-        size="compact"
-        eyebrow="On-chain reputation · 100+ chains"
-        title={<>Own your share of the <span className="text-atx-blue">market you make.</span></>}
-        sub="The same position earns more when your on-chain history is stronger — holding, LPing, referring all lift your share of every pool’s fees. Paste any wallet to see what it’s already built."
-      >
-          {/* proof strip — honest, evergreen facts (no TVL/wallet-count stats) */}
-          <div className="font-atx-mono text-[12px] uppercase tracking-[0.1em] text-atx-ink/55 flex items-center gap-2 flex-wrap">
-            <span className="text-atx-ink font-bold">925</span> max score
-            <span className="text-atx-ink/30">·</span>
-            <span className="text-atx-ink font-bold">100+</span> chains scored
-            <span className="text-atx-ink/30">·</span>
-            EAS-attested on Base
+      {/* HERO — score is the hero */}
+      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
+        <div className="mx-auto max-w-[1180px] px-6 pt-[56px] pb-[48px] grid gap-8 justify-items-start">
+          <div className="max-w-[660px] grid gap-4">
+            <div className={ey}>On-chain reputation · 100+ chains</div>
+            <h1 className="font-bold tracking-[-0.03em] leading-[1.03] text-[clamp(38px,5.4vw,60px)]">
+              Your wallet has a <span className="text-atx-blue">reputation.</span>
+            </h1>
+            <p className="text-[clamp(16px,1.6vw,19px)] leading-[1.5] text-atx-ink/70 max-w-[560px]">
+              See your Attribution score across 100+ chains — free, no connection needed.
+            </p>
           </div>
 
-          {/* wallet search */}
-          <div className="mt-8 max-w-[560px]">
-            <div className="flex">
-              <input
-                type="text"
-                placeholder="0x… wallet address or ENS"
-                value={walletInput}
-                onChange={(e) => setWalletInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-                className="flex-1 py-3.5 px-4 bg-transparent border border-atx-ink border-r-0 font-atx-mono text-[14px] text-atx-ink outline-none focus:bg-white placeholder:text-atx-ink/40"
-              />
-              <button onClick={() => handleAnalyze()} title="Analyze" className="px-5 border border-atx-blue bg-atx-blue text-white cursor-pointer">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
-              </button>
-            </div>
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <span className={ey}>Try</span>
-              {SAMPLE_ADDRS.map((s) => (
-                <button key={s.label} onClick={() => { setWalletInput(s.label); handleAnalyze(s.addr) }} className="font-atx-mono text-[11px] text-atx-ink/70 border border-atx-ink px-2.5 py-1 cursor-pointer hover:bg-atx-ink hover:text-atx-bone">
-                  {s.label}
-                </button>
-              ))}
-            </div>
+          <ScoreCard />
+
+          {/* proof strip — honest, evergreen facts */}
+          <div className="border border-atx-ink bg-atx-panel w-full max-w-[720px] grid grid-cols-3 max-[520px]:grid-cols-1">
+            {[['925', 'max score'], ['100+', 'chains scored'], ['EAS', 'attested on Base']].map(([n, k], i) => (
+              <div key={k} className={`px-4 py-4 ${i < 2 ? 'border-r border-atx-ink/20 max-[520px]:border-r-0 max-[520px]:border-b max-[520px]:border-atx-ink/20' : ''}`}>
+                <div className="font-atx-mono text-[22px] font-bold tracking-tight">{n}</div>
+                <div className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-ink/50 mt-0.5">{k}</div>
+              </div>
+            ))}
           </div>
 
-          <div className="flex flex-wrap gap-3 mt-7">
+          <div className="flex flex-wrap gap-3">
             <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-blue bg-atx-blue text-white">
               {isConnected ? 'Go to the app →' : 'Launch app →'}
             </button>
@@ -184,9 +325,10 @@ export default function HomePage() {
               </button>
             )}
           </div>
-      </PageHero>
+        </div>
+      </section>
 
-      {/* HERO 2 — two vault products */}
+      {/* TWO VAULT PRODUCTS */}
       <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
         <div className="mx-auto max-w-[1180px] px-6 py-[44px]">
           <div className="flex items-end justify-between gap-4 flex-wrap">
@@ -246,7 +388,7 @@ export default function HomePage() {
                   <span className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-ink/45">For teams</span>
                 </div>
                 <p className="text-[14px] leading-[1.5] text-atx-ink/70 mt-2.5">
-                  Lock your token liquidity. Your community matches it. No early exit — checkable on-chain, not promised. During the lock, your fees flow to the people who backed you.
+                  Lock your token. Your community matches it in USDC. That&apos;s real depth — tighter spreads, better fills — not a promise. During the lock, the fees it earns go entirely to the people who backed you.
                 </p>
               </div>
               <div className="p-5 bg-atx-panel flex-1">
@@ -373,7 +515,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
 
       {/* WAITLIST */}
       <section className="border-b border-atx-ink">
