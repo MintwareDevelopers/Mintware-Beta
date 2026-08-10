@@ -5,12 +5,20 @@ import { MwNav } from '@/components/web2/MwNav'
 import { PageHero } from '@/components/web2/PageHero'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { VaultCard } from '@/components/web2/vault/VaultCard'
 import { VaultAmplify } from '@/components/vaults/VaultAmplify'
+import { fmtUSD } from '@/lib/web2/api'
 import type { SocialVault, VaultStatus } from '@/lib/web2/vault/types'
 
 type Filter = 'All' | 'Active' | 'Seeding' | 'Closed'
 const FILTERS: Filter[] = ['All', 'Active', 'Seeding', 'Closed']
+
+const CHAIN_NAMES: Record<number, string> = { 1: 'Ethereum', 8453: 'Base', 84532: 'Base Sepolia', 42161: 'Arbitrum', 10: 'Optimism', 137: 'Polygon', 56: 'BNB' }
+const chainName = (id?: number) => (id != null ? CHAIN_NAMES[id] ?? `Chain ${id}` : '—')
+const STATUS_META: Record<string, { label: string; cls: string; live: boolean }> = {
+  active:  { label: 'Active',  cls: 'text-atx-mesquite border-atx-mesquite', live: true },
+  seeding: { label: 'Seeding', cls: 'text-atx-clay border-atx-clay', live: false },
+  closed:  { label: 'Closed',  cls: 'text-atx-ink/45 border-atx-ink/25', live: false },
+}
 
 function Star({ className = '' }: { className?: string }) {
   return (
@@ -178,8 +186,8 @@ function VaultsContent() {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-[680px]:grid-cols-1">
-            {[1, 2, 3].map(i => <div key={i} className="h-[200px] bg-atx-panel border border-atx-ink/20 animate-pulse" />)}
+          <div className="border border-atx-ink bg-atx-bone p-4 flex flex-col gap-2">
+            {[1, 2, 3, 4].map(i => <div key={i} className="h-11 bg-atx-panel border border-atx-ink/15 animate-pulse" />)}
           </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-[60px] px-5 text-atx-ink/55 font-atx-display text-[14px]">
@@ -187,8 +195,52 @@ function VaultsContent() {
             <div>No DeFi {filter !== 'All' ? filter.toLowerCase() + ' ' : ''}vaults yet.</div>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 max-[680px]:grid-cols-1">
-            {filtered.map(v => <VaultCard key={v.id} vault={v} />)}
+          <div className="border border-atx-ink bg-atx-bone overflow-x-auto">
+            <table className="w-full border-collapse text-[13px] min-w-[840px]">
+              <thead>
+                <tr className="border-b border-atx-ink bg-atx-panel">
+                  {([['Vault', 'l'], ['Status', 'l'], ['TVL', 'r'], ['Reward pool', 'r'], ['Epoch', 'r'], ['Example APY', 'r'], ['Chain', 'l'], ['', 'r']] as const).map(([h, al], i) => (
+                    <th key={i} className={`font-atx-mono text-[9.5px] uppercase tracking-[0.09em] text-atx-ink/55 px-4 py-3 whitespace-nowrap ${al === 'r' ? 'text-right' : 'text-left'} ${(i === 4 || i === 5) ? 'max-[820px]:hidden' : ''} ${i === 6 ? 'max-[680px]:hidden' : ''}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(v => {
+                  const st = STATUS_META[v.status ?? ''] ?? STATUS_META.closed
+                  const ep = v.current_epoch
+                  const tok = v.project_token ? `${v.project_token.slice(0, 6)}…${v.project_token.slice(-4)}` : ''
+                  return (
+                    <tr key={v.id} className="border-b border-atx-ink/15 last:border-b-0 hover:bg-atx-panel/60 transition-colors">
+                      <td className="px-4 py-3.5 align-middle">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="w-8 h-8 border border-atx-ink bg-atx-bone grid place-items-center font-atx-mono text-[12px] font-bold shrink-0">{v.name.charAt(0)}</span>
+                          <div className="min-w-0">
+                            <div className="font-bold text-[14px] tracking-tight truncate flex items-center gap-1.5">
+                              {v.name}
+                              {v.is_sample && <span className="font-atx-mono text-[9px] uppercase tracking-[0.06em] text-atx-clay border border-atx-clay/50 px-1 py-0.5">example</span>}
+                            </div>
+                            <div className="font-atx-mono text-[11px] text-atx-ink/45 truncate">{tok}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex items-center gap-1.5 font-atx-mono text-[10px] uppercase tracking-[0.06em] border px-2 py-1 ${st.cls}`}>
+                          {st.live && <span className="w-[6px] h-[6px] bg-atx-acid inline-block animate-pulse" />}{st.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums">{v.tvl_usdc != null ? fmtUSD(v.tvl_usdc) : '—'}</td>
+                      <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-mesquite">{ep?.total_pool != null ? fmtUSD(ep.total_pool) : '—'}</td>
+                      <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-ink/70 max-[820px]:hidden">{ep ? `#${ep.epoch_number}` : '—'}</td>
+                      <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-blue max-[820px]:hidden">{S.base.toFixed(1)}%</td>
+                      <td className="px-4 py-3.5 font-atx-mono text-[12px] text-atx-ink/60 max-[680px]:hidden">{chainName(v.chain_id)}</td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Link href={`/vault/${v.id}`} className="inline-flex font-atx-mono text-[10.5px] uppercase tracking-[0.06em] border border-atx-ink px-3 py-1.5 no-underline text-atx-ink hover:bg-atx-ink hover:text-atx-bone transition-colors whitespace-nowrap">Open →</Link>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
