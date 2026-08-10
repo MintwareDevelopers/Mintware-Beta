@@ -64,6 +64,7 @@ type HandlerOptions = {
   auth?: 'signed-message' | 'bearer-token' | 'none'  // default: 'none'
   bearerSecret?: string                               // default: CRON_SECRET
   rateLimit?: { max: number; windowMs: number }       // Upstash sliding window
+  action?: string                                     // signed-message: bind the signed `action` tag
 }
 ```
 
@@ -74,6 +75,15 @@ type HandlerOptions = {
 | `'none'` | No auth check | `undefined` |
 | `'bearer-token'` | `Authorization: Bearer <secret>` | `undefined` |
 | `'signed-message'` | EIP-191, 15-min window, recovers wallet | `{ address }` |
+
+**Signed-message replay/action binding (audit MED).** The signed `authMessage` is canonical JSON
+(`lib/web3/signedActionMessages.ts`) embedding `action` + `issuedAt`. The factory parses it and
+requires the signed `issuedAt` to equal the freshness-checked body `issuedAt` (so a captured
+signature can't be replayed with a fresh body timestamp) and — when the route passes `action:
+'mintware-…'` — the signed `action` to match (so a signature for one action can't be replayed on
+another). **Always pass `action` on a generic signed-message route.** Routes that do *inline* auth
+(profile, vault deposit/withdraw, vaults/create, agents/mwp, wallet-link) already rebuild the exact
+message server-side and strict-compare — the gold standard; keep doing that for domain-specific fields.
 
 ### Rate Limiting
 
