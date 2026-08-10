@@ -109,6 +109,22 @@ contract MintwareWeightedDistributorTest is Test {
         dist.claim(VAULT, ep, 10e18, 20e6, emptyProof);
     }
 
+    /// Audit LOW: sweep moves value, so the guardian kill-switch must be able to freeze it.
+    function test_sweep_blocked_when_paused() public {
+        _fund(100e18, 200e6);
+        vm.warp(block.timestamp + 7 days);
+        (uint256 ep,) = _closeSingle(alice, 10e18, 20e6);
+        vm.warp(block.timestamp + 91 days);
+        vm.prank(guardian);
+        dist.pause();
+        vm.expectRevert(); // Pausable.EnforcedPause
+        dist.sweep(VAULT, ep);
+        // After unpause, sweep works again.
+        vm.prank(owner);
+        dist.unpause();
+        dist.sweep(VAULT, ep);
+    }
+
     function test_Register_RevertDouble() public {
         vm.expectRevert(MintwareWeightedDistributor.VaultAlreadyRegistered.selector);
         dist.registerVault(VAULT, address(token0), address(token1));

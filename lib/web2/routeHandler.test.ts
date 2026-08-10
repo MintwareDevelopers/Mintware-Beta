@@ -74,3 +74,39 @@ describe('createHandler signed-message binding (audit MED: replay / action)', ()
     expect(res.status).toBe(401) // AUTH_MALFORMED
   })
 })
+
+describe('createHandler bearer-token (audit LOW: constant-time compare)', () => {
+  const SECRET = 'top-secret-cron-token'
+
+  async function callBearer(authHeader: string | undefined) {
+    const handler = createHandler(async (_req, ctx) => ctx.json({ ok: true }), {
+      auth: 'bearer-token',
+      bearerSecret: SECRET,
+    })
+    const headers: Record<string, string> = { 'content-type': 'application/json' }
+    if (authHeader !== undefined) headers['authorization'] = authHeader
+    const req = new Request('https://x.test/api/cron', { method: 'POST', headers, body: '{}' })
+    return handler(req as unknown as Parameters<ReturnType<typeof createHandler>>[0])
+  }
+
+  it('accepts the correct bearer token', async () => {
+    const res = await callBearer(`Bearer ${SECRET}`)
+    expect(res.status).toBe(200)
+  })
+
+  it('rejects a wrong token of the same length', async () => {
+    const wrong = 'x'.repeat(`Bearer ${SECRET}`.length - 'Bearer '.length)
+    const res = await callBearer(`Bearer ${wrong}`)
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects a token of a different length (no timing-safe crash)', async () => {
+    const res = await callBearer('Bearer short')
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects a missing Authorization header', async () => {
+    const res = await callBearer(undefined)
+    expect(res.status).toBe(401)
+  })
+})

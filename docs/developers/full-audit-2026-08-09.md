@@ -62,6 +62,21 @@ configurePool can raise K/rent mid-life · non-constant-time bearer compare · s
 string · cross-campaign idempotency key · CSP shipped Report-Only + `unsafe-inline` · recordManagerFee
 doesn't poke first (stale-manager mis-credit).
 
+**LOW-batch status (2026-08-10):**
+- ✅ **Fixed:** sweep `whenNotPaused` (`MintwareWeightedDistributor.sweep` — guardian can now freeze it,
+  + test); non-constant-time bearer compare (`routeHandler` now uses `timingSafeEqual`, + 4 tests);
+  imbalanced matched-deploy strand (fixed earlier via `claimUndeployedQuote`); contradictory
+  withdraw-to-zero (the misleading `remaining==0` comment was corrected in the setEnabled-escrow fix).
+- ⏳ **Deferred (real but scoped):** FoT bidToken over-credit + `configurePool` mid-life K/rent change
+  (am-AMM hardening — belongs with the Phase-4 am-AMM audit track); signed-auth-in-GET-query + CSP
+  Report-Only→enforce (**risky without nonce/hash rollout** — enforcing CSP + dropping `unsafe-inline`
+  needs a Next.js nonce pipeline + in-browser regression testing, not a blind flip).
+- ℹ️ **False-positive / by-design:** `recordManagerFee` "doesn't poke first" — its ONLY caller
+  (`MWHookCoordinator._beforeSwapAmAmm`) calls `poke(id)` immediately before it in the same tx, so the
+  manager is always fresh; cross-campaign idempotency key is the documented `activity` global-unique
+  design (campaign id embedded in `tx_hash`, see `holdSnapshot.ts`); unmanaged am-AMM fee IS clamped to
+  the cap via `MWAmAuctionLib.effectiveFee`.
+
 ---
 
 ## Triage / fix order — STATUS (branch `fix/audit-findings`)
