@@ -130,8 +130,11 @@ Two architecturally distinct families live here.
 - **Reputation weighting:** this is the vault whose fees route to `FeeVault` and are reputation-weighted.
 - **⚠ Reviewer note (the par-NAV point — read §8.1):** shares are principal-denominated (D5); the internal
   audit assesses this as a first-mover/bank-run risk *when* principal is deployed as single-sided LP that
-  converts to the team token on swaps. The contract itself does **not** label this a flaw, and the vault is
-  **not** marked deprecated in code — but the internal plan is to retire it for the pair vault.
+  converts to the team token on swaps. As of 2026-08-10 the vault + base + `DeployPhase3.s.sol` carry an
+  in-code **DEPRECATED** notice pointing to the pair vault, and the registry can retire it
+  (`deactivateVault`). The par-principal *behavior* is unchanged; the *frontend* cutover to the pair vault is
+  deploy-gated. Reviewers should still judge whether par-principal accounting over single-sided LP is
+  acceptable at all.
 
 ### 3.3 `MintwarePairVault.sol` — abstract dual-sided base
 - **Inheritance:** `MWGuardianPausable`, `ReentrancyGuard`. Holds only the genuinely-shared V4 settlement
@@ -214,8 +217,8 @@ Two architecturally distinct families live here.
   attackers. `checkCircuitBreaker` reverts beyond `maxDeviationTicks`.
 
 ### 4.3 `MWDynamicFee.sol` — fee math (pure)
-- `volatilityFee` (deviation→fee, capped) + `rateLimit` (per-block clamp). **`applyDepthDiscount` is dead
-  code** — never called from `src/` (§8).
+- `volatilityFee` (deviation→fee, capped) + `rateLimit` (per-block clamp). *(The dead `applyDepthDiscount`
+  was removed 2026-08-10.)*
 
 ### 4.4 `MWAmAuction.sol` + `MWAmAuctionLib.sol` — Harberger-lease auction
 - **`MWAmAuction`** (`Ownable`, `ReentrancyGuard`): custody of bid deposits + captured manager fees, the
@@ -223,8 +226,7 @@ Two architecturally distinct families live here.
   **pull-payment ledger** (`owed[account][token]` + `claim`). `poke`/`recordManagerFee` are `onlyCoordinator`.
   Rent economics are **live**: rent flows to LPs, manager fees to the manager.
 - **`MWAmAuctionLib`** (pure): rent/reserve/promotion math, "promotable-only occupancy" anti-squat
-  (`validBid`), no-free-exit (`canWithdraw`). **`AmParams.withdrawFeeBps` is a dead field** (declared, never
-  read).
+  (`validBid`), no-free-exit (`canWithdraw`). *(The dead `AmParams.withdrawFeeBps` field was removed 2026-08-10.)*
 - **Escrow-freeze fix (audit MED):** `withdrawFromBid` waives the K-block continuity reserve **when the pool
   is disabled** (no continuity to protect, so escrow can't be stranded); while enabled the reserve still
   blocks a free cancel.
@@ -342,34 +344,36 @@ one path that could reach other epochs).
   **CRIT #2** judges that because principal is deployed as single-sided USDC LP that converts to the team
   token on swaps, par-principal redemption can leave a **first-mover / bank-run shortfall**. The internal
   plan is to **retire this vault** in favour of the solvent pair vault.
-- **Reality on this branch:** the vault is **not marked deprecated in code or docs**, and the deploy runbook
-  still ships it. So: the behavior is real and by-design; the "flaw" and "deprecate it" are our own audit's
-  position, not yet landed. **We'd value your independent read on whether par-principal accounting over
-  single-sided LP is acceptable or must be retired.**
+- **Update (2026-08-10):** the vault + base + `DeployPhase3.s.sol` now carry an in-code **DEPRECATED** notice
+  pointing to the solvent pair vault, and `MintwareVaultRegistry.deactivateVault` can retire on-chain
+  instances. The **behavior** is still principal-denominated (D5) — the remaining *frontend* cutover
+  (single→pair ABI) is deploy-gated on the pair vault going live and is tracked as its own task. **We'd still
+  value your independent read on whether par-principal accounting over single-sided LP is acceptable at all.**
 
 ### 8.2 Internal audit — status summary
 `docs/developers/full-audit-2026-08-09.md` (35 findings) + `matched-vault-audit-2026-08-09.md` (deep-dive).
 On this branch:
-- **CRIT #1** (distributor claim-after-sweep) — ✅ fixed. **CRIT #2** (par-NAV) — see §8.1 (fix = retire 4626).
+- **CRIT #1** (distributor claim-after-sweep) — ✅ fixed. **CRIT #2** (par-NAV) — ◐ deprecated in-code +
+  registry retirement; frontend cutover deploy-gated (§8.1).
 - **HIGH #3** (breaker deadlock) ✅, **#4** (pair rebalance shares==liq) ✅, **#5** (swap tx.to null) ✅,
   **#8** (frontend XSS) ✅, **#9** (treasury guard) ✅.
-- **HIGH #6/#7** (spoofable fee substring + client-trusted `amount_usd`) — **◐ scope-bounded, not fully
-  closed**: blast radius is capped by a $10k single-trade cap + enforced daily wallet/pool caps + atomic
-  finite-pool deduction + router allowlist; the complete fix (server-recorded quotes) is a tracked follow-on.
+- **HIGH #6/#7** (spoofable fee substring + client-trusted `amount_usd`) — ✅ **fixed (2026-08-10)** via
+  server-recorded quotes: `/api/swap/quote` records the server-computed USD value (LI.FI
+  `estimate.fromAmountUSD`) in `swap_quotes` keyed by a `quote_id`; the reward path uses that wallet-bound,
+  TTL'd value (`lib/rewards/resolveQuote.ts`) instead of the client claim. The prior caps remain as
+  defense-in-depth.
 - **MED go-forward** — ✅ registerVault allowlist, ✅ am-AMM setEnabled escrow escape, ✅ `javascript:` XSS,
-  ✅ pool pre-init; ⏳ signed-message replay binding & ⏳ token-pool deduction idempotency were shipped as
-  separate follow-on PRs after this doc's branch point.
+  ✅ pool pre-init, ✅ signed-message replay binding, ✅ token-pool deduction idempotency (all merged).
 - The audit's own **independence note** recommends one external set of eyes before real value at scale.
 
-### 8.3 Dead code / tooling cruft to clean (low severity, but reviewers will notice)
-- `MWDynamicFee.applyDepthDiscount` — unreachable (no caller).
-- `MWAmAuctionLib.AmParams.withdrawFeeBps` — declared, never read.
-- `MintwareBaseVault4626._calculateDynamicFee` / `_rebalanceIdleCapital` — RESERVED Phase-4 stubs (documented).
-- `foundry.toml` has a `@pyth-network/...` remapping to a **submodule dir that doesn't exist**, and no source
-  imports Pyth (aspirational MEV-oracle hook that was never built).
-- Several `forge:deploy:*` package scripts point at `.s.sol` files that **don't exist** (`Deploy.s.sol`,
-  `DeployRwaVaultDemo.s.sol`, `DeployRwaOraclePoolDemo.s.sol`).
-- `MintwareVaultRegistry` emits `VaultDeactivated` but has no deactivation function.
+### 8.3 Dead code / tooling cruft — **cleaned 2026-08-10**
+- `MWDynamicFee.applyDepthDiscount` & `MWAmAuctionLib.AmParams.withdrawFeeBps` — **removed** (+ `volatilityFee`
+  params renamed to `deviationTicks`/`slopePipsPerTick`).
+- `foundry.toml` Pyth remapping & the phantom `forge:deploy:*` scripts (`Deploy.s.sol`, `DeployRwaVaultDemo`,
+  `DeployRwaOraclePoolDemo`) — **removed**; real `forge:deploy:{pair,matched,weighted}` scripts added.
+- `MintwareVaultRegistry.VaultDeactivated` — **now functional** (`deactivateVault` + `active` flag + `isActive`).
+- Still open (intentional): `MintwareBaseVault4626._calculateDynamicFee` / `_rebalanceIdleCapital` — RESERVED
+  Phase-4 stubs.
 - Param-naming mismatch: `MWDynamicFee.volatilityFee(volatilityBps, slopePipsPerBp)` is actually fed
   *ticks* / *pips-per-tick* by the coordinator (cosmetic, but confusing for spec review).
 
