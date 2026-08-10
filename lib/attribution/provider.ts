@@ -11,13 +11,14 @@
 import type { WalletActivity } from './types'
 import { getWalletActivity as getMockActivity } from './mockProvider'
 import { fetchZerionActivity, zerionConfigured } from './providers/zerion'
+import { fetchEtherscanActivity, etherscanConfigured } from './providers/etherscan'
 import type { ReferralFetcher } from './providers/referrals'
 import type { SanctionsFetcher } from './providers/chainalysis'
 import type { RiskFetcher } from './providers/nansen'
 
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/
 
-export type ActivitySource = 'zerion' | 'mock'
+export type ActivitySource = 'etherscan' | 'zerion' | 'mock'
 
 export interface ResolveOptions {
   // Injected by the route (backed by ctx.supabase). Fills the Network signal +
@@ -38,7 +39,30 @@ export async function resolveWalletActivity(
   let activity: WalletActivity
   let source: ActivitySource
   let degraded: string | undefined
-  if (zerionConfigured() && ADDR_RE.test(address)) {
+  if (etherscanConfigured() && ADDR_RE.test(address)) {
+    // Preferred: free Etherscan V2 multichain backbone.
+    try {
+      activity = await fetchEtherscanActivity(address, nowMs)
+      source = 'etherscan'
+    } catch (err) {
+      const why = err instanceof Error ? err.message : 'etherscan fetch failed'
+      if (zerionConfigured()) {
+        try {
+          activity = await fetchZerionActivity(address, nowMs)
+          source = 'zerion'
+          degraded = `etherscan failed (${why}) — using zerion`
+        } catch (e2) {
+          activity = await getMockActivity(address)
+          source = 'mock'
+          degraded = e2 instanceof Error ? e2.message : 'all providers failed'
+        }
+      } else {
+        activity = await getMockActivity(address)
+        source = 'mock'
+        degraded = why
+      }
+    }
+  } else if (zerionConfigured() && ADDR_RE.test(address)) {
     try {
       activity = await fetchZerionActivity(address, nowMs)
       source = 'zerion'
