@@ -499,11 +499,76 @@ export default function PublicProfile() {
           100% { background-position: -200% 0; }
         }
 
+        /* ── signal breakdown ────────────────────────── */
+        .pp-meters-card {
+          background: var(--color-atx-panel);
+          border: 1px solid var(--color-atx-ink);
+          padding: 20px 24px;
+          margin-bottom: 16px;
+        }
+        .pp-meters { display: flex; flex-direction: column; gap: 10px; }
+        .pp-meter {
+          display: grid;
+          grid-template-columns: 100px 1fr auto;
+          align-items: center;
+          gap: 12px;
+        }
+        .pp-meter-name {
+          font-size: 12px;
+          color: rgba(17,17,17,0.6);
+          font-family: var(--font-jetbrains), monospace;
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+        .pp-meter-track {
+          height: 9px;
+          border: 1px solid var(--color-atx-ink);
+          background: var(--color-atx-bone);
+          overflow: hidden;
+        }
+        .pp-meter-fill { display: block; height: 100%; }
+        .pp-meter-val {
+          font-size: 11px;
+          color: rgba(17,17,17,0.45);
+          font-family: var(--font-jetbrains), monospace;
+          text-align: right;
+          min-width: 56px;
+        }
+
+        /* ── vault handoff ───────────────────────────── */
+        .pp-vault {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+          background: var(--color-atx-blue);
+          border: 1px solid var(--color-atx-ink);
+          padding: 18px 24px;
+          margin-bottom: 16px;
+          text-decoration: none;
+        }
+        .pp-vault-title { font-size: 17px; font-weight: 800; color: white; letter-spacing: -0.02em; }
+        .pp-vault-sub { font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 2px; }
+        .pp-vault-btn {
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-family: var(--font-jetbrains), monospace;
+          background: white;
+          color: var(--color-atx-blue);
+          padding: 10px 18px;
+          border: 1px solid var(--color-atx-ink);
+          white-space: nowrap;
+        }
+
         @media (max-width: 600px) {
           .pp-grid { grid-template-columns: 1fr; }
           .pp-score-num { font-size: 52px; }
           .pp-inner { padding: 24px 16px 60px; }
           .pp-share { flex-direction: column; align-items: flex-start; }
+          .pp-meter { grid-template-columns: 80px 1fr auto; }
         }
       `}</style>
 
@@ -611,6 +676,35 @@ export default function PublicProfile() {
               </div>
             )}
           </div>
+
+          {/* ── Signal breakdown — the six signals that make the score ────── */}
+          {!loading && score?.signals && score.signals.length > 0 && (
+            <div className="pp-meters-card">
+              <div className="pp-section-label">Signal breakdown</div>
+              <div className="pp-meters">
+                {score.signals.map(s => (
+                  <div key={s.key} className="pp-meter">
+                    <span className="pp-meter-name">{s.name}</span>
+                    <span className="pp-meter-track">
+                      <span className="pp-meter-fill" style={{ width: `${Math.max(0, Math.min(100, Math.round((s.score / s.max) * 100)))}%`, background: s.color }} />
+                    </span>
+                    <span className="pp-meter-val">{s.score} / {s.max}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── V4 vault handoff — your score multiplies your returns ──────── */}
+          {!loading && score && (
+            <a href="/vaults" className="pp-vault">
+              <div>
+                <div className="pp-vault-title">Deposit into a V4 Vault.</div>
+                <div className="pp-vault-sub">Your score multiplies your share of every pool&apos;s fees.</div>
+              </div>
+              <span className="pp-vault-btn">Deposit →</span>
+            </a>
+          )}
 
           {/* ── Share strip ──────────────────────────────────────────────── */}
           <div className="pp-share" style={{ marginBottom: 16, flexDirection: 'column', alignItems: 'flex-start', gap: 12 }}>
