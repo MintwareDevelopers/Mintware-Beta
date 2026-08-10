@@ -309,7 +309,7 @@ contract MintwareWeightedDistributor is EIP712, MWGuardianPausable, MWTimelocked
     /// @notice After the 90-day claim window, return the epoch's unclaimed remainder
     ///         (both the un-allocated surplus pot−total and any unclaimed allocation)
     ///         to the funder-of-record. Permissionless.
-    function sweep(bytes32 vaultId, uint256 epochNumber) external nonReentrant {
+    function sweep(bytes32 vaultId, uint256 epochNumber) external nonReentrant whenNotPaused {
         Epoch storage e = epochs[vaultId][epochNumber];
         if (!e.closed)                     revert EpochNotClosed();
         if (block.timestamp <= e.expiry)   revert EpochNotExpired();

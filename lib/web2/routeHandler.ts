@@ -26,12 +26,23 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
+import { timingSafeEqual } from 'node:crypto'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 import { recoverMessageAddress } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
 import { bindLogger, BoundLogger } from '@/lib/logger'
 import { toJsonSafe } from '@/lib/constants'
+
+// Constant-time string compare for bearer secrets — avoids the per-character early-out of `!==`
+// that leaks token bytes via timing (audit LOW). Length mismatch is not the secret's protected
+// property, so an early false there is fine.
+function constantTimeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a)
+  const bb = Buffer.from(b)
+  if (ab.length !== bb.length) return false
+  return timingSafeEqual(ab, bb)
+}
 
 // ---------------------------------------------------------------------------
 // RouteContext — injected into every handler
@@ -211,7 +222,7 @@ export function createHandler(
           return errorResponse('Server misconfigured', 500, 'MISSING_SECRET')
         }
         // In development with no secret set — allow through
-      } else if (header !== `Bearer ${secret}`) {
+      } else if (!constantTimeEqual(header ?? '', `Bearer ${secret}`)) {
         log.warn('auth', 'Bearer token mismatch')
         return errorResponse('Unauthorized', 401, 'UNAUTHORIZED')
       }
