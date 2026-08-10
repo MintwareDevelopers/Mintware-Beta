@@ -246,12 +246,14 @@ function LeaderboardContent() {
           {top3.map((r, i) => {
             const lead = i === 0
             return (
-              <div key={r.wallet} className={`flex flex-col border border-atx-ink ${lead ? 'bg-atx-coral text-atx-ink' : 'bg-atx-bone'}`}>
+              <div key={r.wallet} className={`flex flex-col border border-atx-ink ${lead ? 'bg-atx-acid text-atx-ink' : 'bg-atx-bone'}`}>
                 {!lead && <div className={`h-[6px] ${STRIPE[i]}`} />}
                 <div className="p-[16px_18px] flex flex-col flex-1">
                   <div className="flex items-center justify-between">
                     <span className={`font-bold text-[34px] leading-none tabular-nums ${lead ? 'text-atx-ink' : PODIUM[i]}`}>{String(r.rank).padStart(2, '0')}</span>
-                    <Star className={`w-6 h-6 ${lead ? 'text-atx-ink' : PODIUM[i]}`} />
+                    {lead
+                      ? <span className="font-atx-mono text-[10px] font-bold uppercase tracking-[0.1em] border border-atx-ink px-1.5 py-0.5 flex items-center gap-1.5"><span className="w-[6px] h-[6px] bg-atx-ink inline-block animate-pulse" />Leader</span>
+                      : <Star className={`w-6 h-6 ${PODIUM[i]}`} />}
                   </div>
                   <div className="mt-3 min-w-0">
                     <div className="font-bold text-[16px] tracking-tight truncate">
