@@ -139,6 +139,11 @@ export function useSwap(): SwapState {
       const amountUsd =
         parseFloat((args.quote as LifiQuote).fromAmountUSD ?? '0') || 0.01
 
+      // Pass the server-recorded quote id so the reward path can use the SERVER-computed USD value
+      // (bound to this wallet) instead of trusting `amount_usd` from the client (audit HIGH #6/#7).
+      // `amount_usd` is still sent as a fallback for when no quote was recorded.
+      const quoteId = (args.quote as LifiQuote).quoteId
+
       void fetch('/api/campaigns/swap-event', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,6 +154,7 @@ export function useSwap(): SwapState {
           token_in:    args.sellToken.address,
           token_out:   args.buyToken.address,
           amount_usd:  amountUsd,
+          quote_id:    quoteId,
           timestamp:   new Date().toISOString(),
           campaign_id: args.campaignId  ?? undefined,
           is_bridge:   false,

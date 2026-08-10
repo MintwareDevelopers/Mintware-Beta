@@ -55,6 +55,12 @@ Source of truth: `docs/schema.sql`
   (returns `'ok'|'duplicate'|'insufficient'|'not_found'`). Supersedes the non-idempotent
   `deduct_token_pool_reward()` in the swap-reward hot path (`swapHook.ts` → `processTokenPool`).
 
+**`swap_quotes`** — server-recorded LI.FI quotes (audit HIGH #6/#7)
+- `id` (uuid pk), `wallet`, `chain_id`, `sell_token`, `buy_token`, `sell_amount`, `amount_usd`
+  (server-computed from LI.FI `estimate.fromAmountUSD`), `fee_bps`, `referrer`, `expires_at` (30-min TTL)
+- `/api/swap/quote` persists it + returns `mw_quote_id`; `swap-event` uses the recorded `amount_usd`
+  (wallet-bound) instead of the client value. Migration `20260809000002`.
+
 ## Applied Migrations
 
 - `supabase/migrations/20260317000001_campaign_engine_schema.sql` — pending_rewards, distributions, epoch_state

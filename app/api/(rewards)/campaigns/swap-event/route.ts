@@ -25,6 +25,7 @@ import { getServiceClient } from '@/lib/web2/supabase'
 import { attestSwap } from '@/lib/rewards/eas'
 import type { SwapEvent } from '@/lib/rewards/types'
 import { createHandler } from '@/lib/web2/routeHandler'
+import { resolveQuoteAmountUsd } from '@/lib/rewards/resolveQuote'
 
 // ---------------------------------------------------------------------------
 // Request shape
@@ -37,6 +38,7 @@ interface SwapEventPayload {
   token_in: string
   token_out: string
   amount_usd: number
+  quote_id?: string      // optional — server-recorded quote id; when present the SERVER value wins
   chain?: string         // informational — not part of SwapEvent, accepted for LI.FI compat
   timestamp?: string     // ISO 8601 — defaults to now() if not provided
 }
@@ -59,6 +61,8 @@ function validatePayload(body: unknown): body is SwapEventPayload {
     (b.campaign_id === undefined || (typeof b.campaign_id === 'string' && b.campaign_id.length > 0)) &&
     typeof b.token_in === 'string' &&
     typeof b.token_out === 'string' &&
+    // quote_id optional — validated if present
+    (b.quote_id === undefined || (typeof b.quote_id === 'string' && b.quote_id.length > 0)) &&
     typeof b.amount_usd === 'number' && b.amount_usd > 0 && b.amount_usd <= MAX_SINGLE_TRADE_USD
   )
 }
@@ -92,6 +96,11 @@ export const POST = createHandler(async (req, ctx) => {
     )
   }
 
+  // Trust the server-recorded quote value over the client claim when a quote_id is supplied.
+  const resolvedAmountUsd = await resolveQuoteAmountUsd(ctx.supabase, body, (info) =>
+    ctx.log.warn('swap-event', 'quote_id present but unusable — falling back to client amount_usd', info),
+  )
+
   // ---------------------------------------------------------------------------
   // Route A: campaign_id provided — single attribution (original behaviour)
   // ---------------------------------------------------------------------------
@@ -102,7 +111,7 @@ export const POST = createHandler(async (req, ctx) => {
       campaign_id: body.campaign_id,
       token_in:    body.token_in,
       token_out:   body.token_out,
-      amount_usd:  body.amount_usd,
+      amount_usd:  resolvedAmountUsd,
       timestamp:   body.timestamp ?? new Date().toISOString(),
     }
 
@@ -216,7 +225,7 @@ export const POST = createHandler(async (req, ctx) => {
       campaign_id,
       token_in:    body.token_in,
       token_out:   body.token_out,
-      amount_usd:  body.amount_usd,
+      amount_usd:  resolvedAmountUsd,
       timestamp:   body.timestamp ?? new Date().toISOString(),
     }
 
