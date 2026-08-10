@@ -7,9 +7,15 @@ import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { API, fmtUSD, daysUntil } from '@/lib/web2/api'
 import { AnimatedScore } from '@/components/web2/AnimatedScore'
-import { CampaignCard, Campaign } from '@/components/rewards/campaigns/CampaignCard'
+import { Campaign } from '@/components/rewards/campaigns/CampaignCard'
 import { TokenIcon } from '@/components/web2/TokenIcon'
-import { motion } from 'framer-motion'
+
+const CAMP_ORDER: Record<string, number> = { live: 0, upcoming: 1, ended: 2 }
+const CAMP_STATUS: Record<string, { label: string; cls: string; live: boolean }> = {
+  live:     { label: 'Live',     cls: 'text-atx-mesquite border-atx-mesquite', live: true },
+  upcoming: { label: 'Upcoming', cls: 'text-atx-clay border-atx-clay', live: false },
+  ended:    { label: 'Ended',    cls: 'text-atx-ink/45 border-atx-ink/25', live: false },
+}
 
 // ─── ATX Settlemint tokens ──────────────────────────────────────────────────────
 const GRID_BG =
@@ -282,86 +288,53 @@ function RewardsContent() {
               </div>
             ) : (
               <>
-                {/* Live section */}
-                {filteredLive.length > 0 && (
-                  <>
-                    <div className={`${LABEL} mb-3.5`}>Live now</div>
-                    <div className={`grid grid-cols-2 gap-4 max-[800px]:grid-cols-1 ${filteredUpcoming.length > 0 ? '' : 'mb-6'}`}>
-                      {filteredLive.map((c, i) => (
-                        <motion.div
-                          key={c.id}
-                          initial={{ opacity: 0, y: 16 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.35, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] }}
-                        >
-                          <CampaignCard campaign={c} />
-                        </motion.div>
-                      ))}
-                      {filteredLive.length % 2 !== 0 && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 16 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.35, delay: filteredLive.length * 0.07, ease: [0.22, 1, 0.36, 1] }}
-                          className="p-7 flex flex-col justify-center gap-2 border border-dashed border-atx-ink/25 opacity-70"
-                        >
-                          <div className="text-[13px] font-medium text-atx-ink/70 font-atx-mono uppercase tracking-[0.04em]">More campaigns coming soon</div>
-                          <div className="text-[12px] text-atx-ink/45">New protocol partnerships are being finalized. Check back weekly.</div>
-                        </motion.div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Upcoming section */}
-                {filteredUpcoming.length > 0 && (
-                  <>
-                    <div className={`${LABEL} mb-3.5 ${filteredLive.length > 0 ? 'mt-6' : ''}`}>Upcoming</div>
-                    <div className="flex flex-col gap-2 mb-6">
-                      {filteredUpcoming.map(c => {
-                        const daysToStart = c.start_date ? daysUntil(c.start_date) : null
+                {/* Campaigns — dense database-style table */}
+                <div className="border border-atx-ink bg-atx-bone overflow-x-auto mb-6">
+                  <table className="w-full border-collapse text-[13px] min-w-[880px]">
+                    <thead>
+                      <tr className="border-b border-atx-ink bg-atx-panel">
+                        {([['Campaign', 'l'], ['Status', 'l'], ['Reward pool', 'r'], ['Daily', 'r'], ['Min score', 'r'], ['Top reward', 'r'], ['Ends', 'r'], ['', 'r']] as const).map(([h, al], i) => (
+                          <th key={i} className={`font-atx-mono text-[9.5px] uppercase tracking-[0.09em] text-atx-ink/55 px-4 py-3 whitespace-nowrap ${al === 'r' ? 'text-right' : 'text-left'} ${(i === 3 || i === 4) ? 'max-[900px]:hidden' : ''} ${i === 5 ? 'max-[760px]:hidden' : ''}`}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...filtered].sort((a, b) => (CAMP_ORDER[a.status] ?? 3) - (CAMP_ORDER[b.status] ?? 3)).map(c => {
+                        const st = CAMP_STATUS[c.status] ?? CAMP_STATUS.ended
+                        const firstAction = c.actions ? Object.values(c.actions)[0] : undefined
+                        const reward = firstAction ? `+${firstAction.points}${firstAction.per_day ? '/day' : firstAction.per_referral ? '/ref' : ''}` : '—'
+                        const endsDays = c.status === 'upcoming' ? (c.start_date ? daysUntil(c.start_date) : null) : (c.end_date ? daysUntil(c.end_date) : null)
+                        const endsTxt = c.status === 'ended' ? 'ended' : endsDays != null ? `${c.status === 'upcoming' ? 'in ' : ''}${endsDays}d` : 'live'
                         return (
-                          <div key={c.id} className="border border-atx-ink/25 border-dashed bg-atx-panel flex items-center gap-4 px-5 py-4 cursor-pointer transition-colors duration-150 hover:border-atx-ink">
-                            <TokenIcon
-                              tokenAddress={c.token_contract}
-                              chain={c.chain_id ?? c.chain}
-                              name={c.protocol ?? c.name}
-                              size={44}
-                              borderRadius={0}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[15px] font-semibold text-atx-ink mb-[3px]">{c.name}</div>
-                              <div className="text-[12px] text-atx-ink/55 font-atx-mono">{c.chain}{c.pool_usd != null ? ` · ${fmtUSD(c.pool_usd)} pool` : ''}</div>
-                            </div>
-                            <div className="ml-auto shrink-0">
-                              <span className="inline-flex items-center gap-[5px] border border-atx-ink/40 text-atx-clay px-3 py-[5px] text-[11px] font-semibold font-atx-mono uppercase tracking-[0.06em] whitespace-nowrap">
-                                {daysToStart !== null ? `In ${daysToStart}d` : 'Soon'}
+                          <tr key={c.id} className="border-b border-atx-ink/15 last:border-b-0 hover:bg-atx-panel/60 transition-colors">
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <TokenIcon tokenAddress={c.token_contract} chain={c.chain_id ?? c.chain} name={c.protocol ?? c.name} size={32} borderRadius={0} />
+                                <div className="min-w-0">
+                                  <div className="font-bold text-[14px] tracking-tight truncate">{c.name}</div>
+                                  <div className="font-atx-mono text-[11px] text-atx-ink/45 truncate">{c.protocol ? `${c.protocol} · ` : ''}{c.chain}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className={`inline-flex items-center gap-1.5 font-atx-mono text-[10px] uppercase tracking-[0.06em] border px-2 py-1 ${st.cls}`}>
+                                {st.live && <span className="w-[6px] h-[6px] bg-atx-acid inline-block animate-pulse" />}{st.label}
                               </span>
-                            </div>
-                          </div>
+                            </td>
+                            <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums">{c.pool_usd != null ? fmtUSD(c.pool_usd) : '—'}</td>
+                            <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-coral max-[900px]:hidden">{c.daily_payout_usd != null ? fmtUSD(c.daily_payout_usd) : '—'}</td>
+                            <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-ink/60 max-[900px]:hidden">{c.min_score != null ? c.min_score : '—'}</td>
+                            <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-blue font-bold max-[760px]:hidden">{reward}</td>
+                            <td className={`px-4 py-3.5 text-right font-atx-mono tabular-nums ${c.status === 'ended' ? 'text-atx-ink/40' : endsDays != null && endsDays <= 3 ? 'text-atx-clay font-semibold' : 'text-atx-ink/70'}`}>{endsTxt}</td>
+                            <td className="px-4 py-3.5 text-right">
+                              <Link href={`/campaign/${c.id}`} className="inline-flex font-atx-mono text-[10.5px] uppercase tracking-[0.06em] border border-atx-ink px-3 py-1.5 no-underline text-atx-ink hover:bg-atx-ink hover:text-atx-bone transition-colors whitespace-nowrap">View →</Link>
+                            </td>
+                          </tr>
                         )
                       })}
-                    </div>
-                  </>
-                )}
-
-                {/* Ended section */}
-                {filteredEnded.length > 0 && (
-                  <>
-                    <div className={`${LABEL} mb-3.5 mt-2`}>Ended</div>
-                    <div className="grid grid-cols-2 gap-4 mb-6 max-[800px]:grid-cols-1">
-                      {filteredEnded.map((c, i) => (
-                        <motion.div
-                          key={c.id}
-                          initial={{ opacity: 0, y: 12 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: i * 0.05, ease: [0.22, 1, 0.36, 1] }}
-                        >
-                          <CampaignCard campaign={c} />
-                        </motion.div>
-                      ))}
-                    </div>
-                  </>
-                )}
+                    </tbody>
+                  </table>
+                </div>
 
                 {/* Recent activity */}
                 <div className="mt-7">
