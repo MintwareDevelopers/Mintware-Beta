@@ -10,7 +10,7 @@
 // Bearer-gated (CRON_SECRET). TESTNET ONLY — Base Sepolia hardcoded. Deploys a throwaway mock token
 // and a throwaway campaign each run; nothing production-facing is touched.
 
-import { createPublicClient, createWalletClient, http } from 'viem'
+import { createPublicClient, createWalletClient, http, decodeEventLog, getAddress } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { randomUUID } from 'node:crypto'
 import { StandardMerkleTree } from '@openzeppelin/merkle-tree'
@@ -107,17 +107,30 @@ export const POST = createHandler(async (_req, ctx) => {
       message: { campaignId, epochNumber: EPOCH, merkleRoot, deadline: FAR_FUTURE },
     })
 
-    // 6. Claim + assert the balance moved by exactly CLAIM.
-    const balBefore = (await publicClient.readContract({ address: token, abi: MOCK_ERC20_ABI, functionName: 'balanceOf', args: [account.address] })) as bigint
+    // 6. Claim + assert payout from the claim receipt's own ERC-20 Transfer log. This is the
+    //    authoritative, lag-free proof — reading balanceOf before/after is fooled by public-RPC
+    //    read-after-write lag (a stale pre-deposit balance corrupts the delta).
     txs.claimTx = await walletClient.writeContract({
       address: distributor, abi: CAMPAIGN_DISTRIBUTOR_ABI, functionName: 'claim',
       args: [campaignId, EPOCH, merkleRoot, oracleSignature, FAR_FUTURE, CLAIM, proof], account, chain: baseSepolia, nonce: nonce++,
     })
-    await confirm(txs.claimTx as `0x${string}`, 'claim')
-    const balAfter = (await publicClient.readContract({ address: token, abi: MOCK_ERC20_ABI, functionName: 'balanceOf', args: [account.address] })) as bigint
+    const claimRcpt = await confirm(txs.claimTx as `0x${string}`, 'claim')
 
-    const delta = balAfter - balBefore
-    const claimPaidExactly = delta === CLAIM
+    // Find the Transfer(distributor → claimant) in the claim receipt and check its value == CLAIM.
+    let paidToClaimant = 0n
+    for (const log of claimRcpt.logs) {
+      if (getAddress(log.address) !== getAddress(token)) continue
+      try {
+        const d = decodeEventLog({ abi: MOCK_ERC20_ABI, data: log.data, topics: log.topics })
+        if (
+          d.eventName === 'Transfer' &&
+          getAddress((d.args as { to: string }).to) === getAddress(account.address)
+        ) {
+          paidToClaimant = (d.args as { value: bigint }).value
+        }
+      } catch { /* not an ERC-20 Transfer log */ }
+    }
+    const claimPaidExactly = paidToClaimant === CLAIM
 
     return ctx.json({
       ok: claimPaidExactly,
@@ -127,9 +140,7 @@ export const POST = createHandler(async (_req, ctx) => {
       campaignId,
       claimant: account.address,
       amounts: { minted: MINT.toString(), deposited: DEPOSIT.toString(), claimed: CLAIM.toString() },
-      balanceBefore: balBefore.toString(),
-      balanceAfter: balAfter.toString(),
-      claimDelta: delta.toString(),
+      paidToClaimant: paidToClaimant.toString(),
       claimPaidExactly,
       merkleRoot,
       txs,
