@@ -13,6 +13,7 @@ import type { CreatorFormState } from '@/lib/rewards/creator'
 import { createPublicClient, createWalletClient, http, recoverMessageAddress } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { buildCampaignCreateMessage } from '@/lib/web3/signedActionMessages'
+import { randomUUID } from 'node:crypto'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { CAMPAIGN_DISTRIBUTOR_ABI } from '@/lib/web3/artifacts/campaignDistributor'
@@ -133,9 +134,14 @@ export const POST = createHandler(async (req, ctx) => {
   const typeSuffix = campaignType === 'token_pool' ? 'Token Reward' : 'Points'
   const name = `${form.token.symbol} ${typeSuffix} Campaign`
 
+  // campaigns.id is `text PRIMARY KEY` with NO DB default — the row must carry an id or the insert
+  // fails the not-null constraint. Generate one here; it becomes the on-chain campaignId string.
+  const campaignId = randomUUID()
+
   const { data, error } = await ctx.supabase
     .from('campaigns')
     .insert({
+      id: campaignId,
       name,
       status:               'upcoming',
       campaign_type:        campaignType,

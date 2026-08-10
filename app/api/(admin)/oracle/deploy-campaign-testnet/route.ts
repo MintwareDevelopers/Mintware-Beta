@@ -62,20 +62,36 @@ export const POST = createHandler(async (_req, ctx) => {
   }
 
   // 2. Read the on-chain signer + owner back and confirm they equal the Privy wallet.
-  const [onchainSigner, onchainOwner] = await Promise.all([
-    publicClient.readContract({ address: distributor, abi: CAMPAIGN_DISTRIBUTOR_ABI, functionName: 'oracleSigner' }) as Promise<string>,
-    publicClient.readContract({ address: distributor, abi: CAMPAIGN_DISTRIBUTOR_ABI, functionName: 'owner' }) as Promise<string>,
-  ])
+  //    Public RPCs lag read-after-write, so an immediate readContract can throw "returned no data
+  //    (0x)" even though the deploy succeeded. Poll a few times before giving up — and never fail
+  //    the whole call just because confirmation lagged: the contract is already deployed either way.
+  let onchainSigner: string | null = null
+  let onchainOwner: string | null = null
+  for (let i = 0; i < 8; i++) {
+    try {
+      const [sig, own] = await Promise.all([
+        publicClient.readContract({ address: distributor, abi: CAMPAIGN_DISTRIBUTOR_ABI, functionName: 'oracleSigner' }) as Promise<string>,
+        publicClient.readContract({ address: distributor, abi: CAMPAIGN_DISTRIBUTOR_ABI, functionName: 'owner' }) as Promise<string>,
+      ])
+      onchainSigner = sig
+      onchainOwner = own
+      break
+    } catch {
+      await new Promise((r) => setTimeout(r, 1500))
+    }
+  }
+  const confirmed = onchainSigner !== null && onchainOwner !== null
 
   return ctx.json({
     ok: true,
+    confirmed, // false only means the read-back lagged; the contract is deployed regardless
     chain: 'base_sepolia',
     deployer: account.address,
     distributor,
     onchainOracleSigner: onchainSigner,
     onchainOwner,
-    signerMatchesPrivyWallet: onchainSigner.toLowerCase() === account.address.toLowerCase(),
-    ownerMatchesPrivyWallet: onchainOwner.toLowerCase() === account.address.toLowerCase(),
+    signerMatchesPrivyWallet: onchainSigner ? onchainSigner.toLowerCase() === account.address.toLowerCase() : null,
+    ownerMatchesPrivyWallet: onchainOwner ? onchainOwner.toLowerCase() === account.address.toLowerCase() : null,
     deployTx,
     envToSet: {
       NEXT_PUBLIC_DISTRIBUTOR_ADDRESS_BASE_SEPOLIA: distributor,
