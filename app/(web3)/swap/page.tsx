@@ -210,33 +210,8 @@ function SwapContent() {
           sub="Every swap builds your Attribution score and earns rewards weighted by who you are. Trade tokens across chains here; provide liquidity in the reputation-weighted vaults. One reputation carries across both."
         />
 
-        {/* ── SWAP — front and centre (the one loud thing) ── */}
-        <div className="max-w-[520px] mx-auto w-full px-6 pt-9 pb-2 flex flex-col gap-4 max-[600px]:px-4 max-[600px]:pt-6">
-
-          {/* Active campaign banner */}
-          {activeCampaign && (
-            <div className="bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-coral px-5 py-4 flex items-center gap-[14px]">
-              <Star className="w-5 h-5 text-atx-coral shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-[14px] font-semibold text-atx-ink mb-[2px] truncate">{activeCampaign.name} campaign active</div>
-                <div className="text-[13px] text-atx-ink/55 font-atx-mono truncate">
-                  {actions.slice(0, 2).map(([, a]) => `+${a.points} pts${actionSuffix(a)}`).join(' · ') || 'Swap to earn Attribution'}
-                </div>
-              </div>
-              {actions[0] && (
-                <div className="bg-atx-blue text-white text-[12px] font-bold px-3 py-[6px] border border-atx-ink whitespace-nowrap font-atx-mono shrink-0">
-                  +{actions[0][1].points} pts{actionSuffix(actions[0][1])}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Compact pre-swap guidance — review the route/fee before the wallet
-              opens, mind the chain, keep native token for gas. */}
-          <div className="border border-atx-ink/20 bg-atx-panel px-4 py-3 font-atx-mono text-[11px] text-atx-ink/55 leading-[1.6]">
-            Review the route and fee before confirming · check you’re on the expected chain · keep some native token for the network fee.
-          </div>
-
+        {/* ── SWAP — dominant, front and centre. Nothing above the widget. ── */}
+        <div className="max-w-[760px] mx-auto w-full px-6 pt-8 pb-3 max-[600px]:px-4 max-[600px]:pt-5">
           {/* The real swap widget — money-path. Remounts (key) when the
               selected campaign changes so its token preselect applies. */}
           <div className="bg-atx-panel border border-atx-ink overflow-hidden">
@@ -247,6 +222,11 @@ function SwapContent() {
                 preselectChainId={preselect?.chainId}
               />
             </Suspense>
+          </div>
+
+          {/* Pre-swap guidance — below the widget, not above */}
+          <div className="border border-atx-ink/20 bg-atx-panel px-4 py-3 font-atx-mono text-[11px] text-atx-ink/55 leading-[1.6] mt-3">
+            Review the route and fee before confirming · check you’re on the expected chain · keep some native token for the network fee.
           </div>
         </div>
 
