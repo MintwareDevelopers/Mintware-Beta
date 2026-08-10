@@ -4,9 +4,8 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { AI_ATTRIBUTION_ORACLE_SECRET } from '@/lib/constants'
 import { createPublicClient, http, type Hex } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
 import { base, baseSepolia } from 'viem/chains'
-import { getOracleSignerKey } from '@/lib/web3/oracleKeys'
+import { getOracleSigner } from '@/lib/web3/oracleSigner'
 
 const CHAIN_ID = Number(process.env.AI_ATTRIBUTION_CHAIN_ID ?? 84532)
 const CHAIN    = CHAIN_ID === 8453 ? base : baseSepolia
@@ -34,7 +33,7 @@ export const POST = createHandler(async (req, ctx) => {
   // Agent role (audit C2) — separable from the range key via AGENT_ORACLE_PRIVATE_KEY.
   let agentAccount
   try {
-    agentAccount = privateKeyToAccount(getOracleSignerKey('agent'))
+    agentAccount = await getOracleSigner('agent')
   } catch {
     return ctx.json({ error: 'oracle key not configured' }, 500)
   }

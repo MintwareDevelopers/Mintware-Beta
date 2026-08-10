@@ -39,8 +39,7 @@ import {
   parseAbi,
   type Chain,
 } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { getOracleSignerKey } from './oracleKeys'
+import { getOracleSigner } from './oracleSigner'
 import { base, baseSepolia, bsc } from 'viem/chains'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 
@@ -161,12 +160,12 @@ export async function publishDistribution(params: PublishParams): Promise<Publis
   // Default: 30 days from now. The contract requires block.timestamp <= deadline.
   const deadline = params.deadline ?? Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60
 
-  // ── Oracle wallet setup — per-role signing key (root/merkle family, audit C2).
-  // Resolves ROOT_ORACLE_PRIVATE_KEY, falling back within-family to
-  // DISTRIBUTOR_PRIVATE_KEY (non-breaking); provision a dedicated ROOT key to
-  // complete the split. Throws a clear, env-naming error if none is set.
-  const privateKey = getOracleSignerKey('root')
-  const account    = privateKeyToAccount(privateKey)
+  // ── Oracle wallet setup — per-role signer (root/merkle family, audit C2).
+  // getOracleSigner honors ORACLE_SIGNER_PROVIDER: 'env-key' (default) resolves a
+  // raw key from env (ROOT_ORACLE_PRIVATE_KEY → DISTRIBUTOR_PRIVATE_KEY fallback),
+  // 'privy' uses a Privy server wallet (no raw key in env). Either way it returns a
+  // viem Account, so the signing/broadcast below is unchanged.
+  const account = await getOracleSigner('root')
 
   const chain     = getChain(chainSlug)
   const transport = http(getRpcUrl(chainSlug))

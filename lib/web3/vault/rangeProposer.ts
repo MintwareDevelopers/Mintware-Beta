@@ -25,8 +25,7 @@
 // =============================================================================
 
 import { createWalletClient, http, keccak256, toBytes } from 'viem'
-import { privateKeyToAccount } from 'viem/accounts'
-import { getOracleSignerKey } from '@/lib/web3/oracleKeys'
+import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { base, baseSepolia } from 'viem/chains'
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import type { VolatilityMetrics } from './volatilityMonitor'
@@ -210,7 +209,7 @@ export async function signRangeProposal(params: RangeProposalParams): Promise<Si
     throw new Error('[rangeProposer] NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS is not set.')
   }
 
-  const account    = privateKeyToAccount(getOracleSignerKey('range'))
+  const account    = await getOracleSigner('range')
   const chain      = getChainForSlug(chainSlug)
   const transport  = http(getRpcForSlug(chainSlug))
   const client     = createWalletClient({ account, chain, transport })
