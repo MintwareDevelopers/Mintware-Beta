@@ -138,28 +138,50 @@ export const POST = createHandler(async (req, ctx) => {
   // fails the not-null constraint. Generate one here; it becomes the on-chain campaignId string.
   const campaignId = randomUUID()
 
+  // The live `campaigns` table carries several NOT-NULL columns (with no defaults) that predate this
+  // route — some legacy Attribution-Worker fields (protocol/pool_usd/daily_payout_usd), some from the
+  // campaign-engine migration (start_date, actions, referral_share_pct, min_daily_volume_usd,
+  // max_points_per_wallet_pct, token_symbol, updated_at, closed). They must all be supplied or the
+  // insert fails. Values below are derived from the form; the points-only knobs are inert for a
+  // token_pool campaign but still need non-null values.
+  const poolUsd = Math.round(form.poolUsd)
+  const actions =
+    campaignType === 'token_pool'
+      ? { trade: true, referral_trade: (form.referralRewardPct ?? 0) > 0 }
+      : { trade: true }
+
   const { data, error } = await ctx.supabase
     .from('campaigns')
     .insert({
       id: campaignId,
       name,
+      protocol:             form.token.symbol,
       status:               'upcoming',
       campaign_type:        campaignType,
       token_contract:       form.token.address.toLowerCase(),
+      token_symbol:         form.token.symbol,
       token_decimals:       form.token.decimals,
       chain,
-      token_allocation_usd: form.poolUsd,
-      pool_remaining_usd:   form.poolUsd,
-      pool_usd:             form.poolUsd,
+      token_allocation_usd: poolUsd,
+      pool_remaining_usd:   poolUsd,
+      pool_usd:             poolUsd,
+      daily_payout_usd:     Math.max(0, Math.round(poolUsd / Math.max(1, form.durationDays))),
       buyer_reward_pct:     campaignType === 'token_pool' ? form.buyerRewardPct     : 0,
       referral_reward_pct:  campaignType === 'token_pool' ? form.referralRewardPct  : 0,
+      referral_share_pct:   form.referralRewardPct ?? 0,
+      min_daily_volume_usd: 0,
+      max_points_per_wallet_pct: 100, // check: (0, 100]; inert for token_pool but must be > 0
       platform_fee_pct:     2,
       use_score_multiplier: form.useScoreMultiplier,
       daily_wallet_cap_usd: form.dailyWalletCapUsd ?? 0,
       daily_pool_cap_usd:   form.dailyPoolCapUsd   ?? 0,
       contract_address:     distributorAddress,
       creator:              wallet.toLowerCase(),
+      actions,
+      start_date:           startAt.toISOString(),
       end_date:             endDate.toISOString(),
+      updated_at:           now.toISOString(),
+      closed:               false,
       surface,
       linked_deal_id:       linkedDealId,
       duration_match_days:  durationMatchDays,
