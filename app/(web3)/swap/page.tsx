@@ -210,9 +210,49 @@ function SwapContent() {
           sub="Every swap builds your Attribution score and earns rewards weighted by who you are. Trade tokens across chains here; provide liquidity in the reputation-weighted vaults. One reputation carries across both."
         />
 
-        {/* stat band */}
-        <section className="border-b border-atx-ink">
-          <div className="grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
+        {/* ── SWAP — front and centre (the one loud thing) ── */}
+        <div className="max-w-[520px] mx-auto w-full px-6 pt-9 pb-2 flex flex-col gap-4 max-[600px]:px-4 max-[600px]:pt-6">
+
+          {/* Active campaign banner */}
+          {activeCampaign && (
+            <div className="bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-coral px-5 py-4 flex items-center gap-[14px]">
+              <Star className="w-5 h-5 text-atx-coral shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] font-semibold text-atx-ink mb-[2px] truncate">{activeCampaign.name} campaign active</div>
+                <div className="text-[13px] text-atx-ink/55 font-atx-mono truncate">
+                  {actions.slice(0, 2).map(([, a]) => `+${a.points} pts${actionSuffix(a)}`).join(' · ') || 'Swap to earn Attribution'}
+                </div>
+              </div>
+              {actions[0] && (
+                <div className="bg-atx-blue text-white text-[12px] font-bold px-3 py-[6px] border border-atx-ink whitespace-nowrap font-atx-mono shrink-0">
+                  +{actions[0][1].points} pts{actionSuffix(actions[0][1])}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Compact pre-swap guidance — review the route/fee before the wallet
+              opens, mind the chain, keep native token for gas. */}
+          <div className="border border-atx-ink/20 bg-atx-panel px-4 py-3 font-atx-mono text-[11px] text-atx-ink/55 leading-[1.6]">
+            Review the route and fee before confirming · check you’re on the expected chain · keep some native token for the network fee.
+          </div>
+
+          {/* The real swap widget — money-path. Remounts (key) when the
+              selected campaign changes so its token preselect applies. */}
+          <div className="bg-atx-panel border border-atx-ink overflow-hidden">
+            <Suspense fallback={<SwapSkeleton />}>
+              <SwapWidget
+                key={activeCampaign?.id ?? 'default'}
+                preselectBuy={preselect ?? undefined}
+                preselectChainId={preselect?.chainId}
+              />
+            </Suspense>
+          </div>
+        </div>
+
+        {/* ── Below & framed: reputation stat band (bible — essential above, secondary below) ── */}
+        <section className="border-y border-atx-ink mt-9">
+          <div className="mx-auto max-w-[1180px] grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
             {[
               {
                 l: 'Your score',
@@ -240,46 +280,50 @@ function SwapContent() {
           </div>
         </section>
 
-        {/* ── Widget (left) + suggested campaigns (right) ── */}
-        <div className="px-7 py-8 grid [grid-template-columns:minmax(0,1.3fr)_1fr] gap-[22px] items-start max-[900px]:grid-cols-1 max-[600px]:px-4 max-[600px]:py-6">
+        {/* ── Below & framed: rewards context ── */}
+        <div className="mx-auto max-w-[1180px] px-7 py-8 grid [grid-template-columns:minmax(0,1.4fr)_1fr] gap-[22px] items-start max-[900px]:grid-cols-1 max-[600px]:px-4">
 
-          {/* ── Left: trade core + earn context ── */}
-          <div className="flex flex-col gap-4">
+          {/* Left: where the points are + what you earn */}
+          <div className="flex flex-col gap-6">
 
-            {/* Active campaign banner */}
-            {activeCampaign && (
-              <div className="bg-atx-panel border border-atx-ink border-l-[3px] border-l-atx-coral px-5 py-4 flex items-center gap-[14px]">
-                <Star className="w-5 h-5 text-atx-coral shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[14px] font-semibold text-atx-ink mb-[2px] truncate">{activeCampaign.name} campaign active</div>
-                  <div className="text-[13px] text-atx-ink/55 font-atx-mono truncate">
-                    {actions.slice(0, 2).map(([, a]) => `+${a.points} pts${actionSuffix(a)}`).join(' · ') || 'Swap to earn Attribution'}
-                  </div>
-                </div>
-                {actions[0] && (
-                  <div className="bg-atx-blue text-white text-[12px] font-bold px-3 py-[6px] border border-atx-ink whitespace-nowrap font-atx-mono shrink-0">
-                    +{actions[0][1].points} pts{actionSuffix(actions[0][1])}
-                  </div>
-                )}
+            {/* Suggested · where the points are — tap to load into the widget above */}
+            <div>
+              <div className="flex items-baseline gap-3 mb-3">
+                <span className={LABEL}>Where the points are · tap to load</span>
               </div>
-            )}
-
-            {/* Compact pre-swap guidance — review the route/fee before the wallet
-                opens, mind the chain, keep native token for gas. */}
-            <div className="border border-atx-ink/20 bg-atx-panel px-4 py-3 font-atx-mono text-[11px] text-atx-ink/55 leading-[1.6]">
-              Review the route and fee before confirming · check you’re on the expected chain · keep some native token for the network fee.
-            </div>
-
-            {/* The real swap widget — money-path. Remounts (key) when the
-                selected campaign changes so its token preselect applies. */}
-            <div className="bg-atx-panel border border-atx-ink overflow-hidden">
-              <Suspense fallback={<SwapSkeleton />}>
-                <SwapWidget
-                  key={activeCampaign?.id ?? 'default'}
-                  preselectBuy={preselect ?? undefined}
-                  preselectChainId={preselect?.chainId}
-                />
-              </Suspense>
+              {suggested.length > 0 ? (
+                <div className="flex flex-col border border-atx-ink">
+                  {suggested.map(c => {
+                    const on = c.id === activeId
+                    const firstAction = c.actions ? Object.values(c.actions)[0] : undefined
+                    const reward = firstAction ? `+${firstAction.points} pts${actionSuffix(firstAction)}` : 'earn pts'
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => selectCampaign(c)}
+                        className={`text-left p-[13px_15px] border-b border-atx-ink/20 last:border-b-0 flex items-center gap-3 transition-colors ${
+                          on ? 'bg-atx-blue/[0.08] border-l-2 border-l-atx-blue' : 'bg-atx-bone hover:bg-atx-ink/[0.04]'
+                        }`}
+                      >
+                        <Star className="w-4 h-4 shrink-0 text-atx-blue" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-[14px] tracking-tight truncate">Trade → {c.token_symbol ?? c.name}</div>
+                          <div className="font-atx-mono text-[11px] mt-0.5 truncate text-atx-ink/50">{c.chain ?? 'multi-chain'} · {c.name}</div>
+                        </div>
+                        {on ? (
+                          <span className="shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-blue">loaded</span>
+                        ) : (
+                          <span className="shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.04em] px-1.5 py-1 border leading-tight border-atx-blue text-atx-blue">{reward}</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="border border-atx-ink/25 bg-atx-panel px-4 py-5 font-atx-mono text-[12px] text-atx-ink/55 leading-[1.5]">
+                  No token campaigns live right now. Any swap still builds your Attribution score.
+                </div>
+              )}
             </div>
 
             {/* Earn-by-action detail — real participant progress (preserved) */}
@@ -319,51 +363,8 @@ function SwapContent() {
             )}
           </div>
 
-          {/* ── Right: suggested campaign swaps (tap to load) + vaults cross-link ── */}
+          {/* Right: the other surface + attribution */}
           <aside className="flex flex-col gap-6 max-[900px]:gap-5">
-
-            {/* Suggested · where the points are */}
-            <div>
-              <div className="flex items-baseline gap-3 mb-3">
-                <span className={LABEL}>Suggested · where the points are</span>
-                {suggested.length > 0 && <span className="ml-auto font-atx-mono text-[11px] text-atx-ink/40 max-[900px]:hidden">tap to load ←</span>}
-              </div>
-              {suggested.length > 0 ? (
-                <div className="flex flex-col border border-atx-ink">
-                  {suggested.map(c => {
-                    const on = c.id === activeId
-                    const firstAction = c.actions ? Object.values(c.actions)[0] : undefined
-                    const reward = firstAction ? `+${firstAction.points} pts${actionSuffix(firstAction)}` : 'earn pts'
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => selectCampaign(c)}
-                        className={`text-left p-[13px_15px] border-b border-atx-ink/20 last:border-b-0 flex items-center gap-3 transition-colors ${
-                          on ? 'bg-atx-blue/[0.08] border-l-2 border-l-atx-blue' : 'bg-atx-bone hover:bg-atx-ink/[0.04]'
-                        }`}
-                      >
-                        <Star className="w-4 h-4 shrink-0 text-atx-blue" />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-[14px] tracking-tight truncate">Trade → {c.token_symbol ?? c.name}</div>
-                          <div className="font-atx-mono text-[11px] mt-0.5 truncate text-atx-ink/50">{c.chain ?? 'multi-chain'} · {c.name}</div>
-                        </div>
-                        {on ? (
-                          <span className="shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-blue">loaded</span>
-                        ) : (
-                          <span className="shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.04em] px-1.5 py-1 border leading-tight border-atx-blue text-atx-blue">{reward}</span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="border border-atx-ink/25 bg-atx-panel px-4 py-5 font-atx-mono text-[12px] text-atx-ink/55 leading-[1.5]">
-                  No token campaigns live right now. Any swap still builds your Attribution score.
-                </div>
-              )}
-            </div>
-
-            {/* Cross-link to the reputation-weighted liquidity vaults */}
             <div>
               <div className={`${LABEL} mb-3`}>The other surface</div>
               <Link
