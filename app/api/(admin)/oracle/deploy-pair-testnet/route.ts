@@ -71,13 +71,24 @@ export const POST = createHandler(async (_req, ctx) => {
   const mined = mineHookSalt(initcode)
   if (!mined) return ctx.json({ ok: false, step: 'mine', error: 'no hook salt within MAX_LOOP' }, 500)
 
-  const hookDeployTx = await walletClient.sendTransaction({
-    account, chain: baseSepolia, to: C2_FACTORY, data: concat([mined.salt, initcode]),
-  })
-  await publicClient.waitForTransactionReceipt({ hash: hookDeployTx })
-  const hookCode = await publicClient.getBytecode({ address: mined.hook })
+  // Idempotent: if the hook is already deployed at the mined address (e.g. a prior partial run),
+  // reuse it — re-running the CREATE2 deploy would revert (address occupied). Otherwise deploy.
+  let hookDeployTx: `0x${string}` | 'reused-existing' = 'reused-existing'
+  const preExisting = await publicClient.getBytecode({ address: mined.hook })
+  if (!preExisting || preExisting === '0x') {
+    hookDeployTx = await walletClient.sendTransaction({
+      account, chain: baseSepolia, to: C2_FACTORY, data: concat([mined.salt, initcode]),
+    })
+    await publicClient.waitForTransactionReceipt({ hash: hookDeployTx })
+  }
+  // Poll for code — public RPCs lag read-after-write, so a single check can false-negative.
+  let hookCode = await publicClient.getBytecode({ address: mined.hook })
+  for (let i = 0; i < 8 && (!hookCode || hookCode === '0x'); i++) {
+    await new Promise((r) => setTimeout(r, 1000))
+    hookCode = await publicClient.getBytecode({ address: mined.hook })
+  }
   if (!hookCode || hookCode === '0x') {
-    return ctx.json({ ok: false, step: 'hook-deploy', hook: mined.hook, hookDeployTx, error: 'no code at mined hook address' }, 500)
+    return ctx.json({ ok: false, step: 'hook-deploy', hook: mined.hook, hookDeployTx, error: 'no code at mined hook address after retries' }, 500)
   }
 
   // 2. Deploy the vault with the hook baked into its PoolKey.
