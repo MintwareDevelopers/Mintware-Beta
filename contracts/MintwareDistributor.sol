@@ -168,6 +168,20 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
     ///         Zero means "not a FeeVault-backed campaign".
     mapping(bytes32 => uint256) public feeVaultEpochByCampaignIdHash;
 
+    /// @notice Owner-managed allowlist of addresses permitted to register campaigns.
+    ///         Audit HIGH: without this, the FIRST depositor of an (arbitrary, off-chain)
+    ///         campaignId silently became `creator` + bound the token, letting a front-runner
+    ///         seize the withdraw beneficiary (steal the unclaimed remainder) or lock the wrong
+    ///         token (DoS). Registration is now an authorized action; deposits require it.
+    mapping(address => bool) public authorizedRegistrar;
+
+    /// @notice The canonical Merkle root frozen for a (campaignId, epochNumber) on first claim.
+    ///         Audit MED: the already-claimed guard ignores the root, so if the oracle ever signed
+    ///         two live roots for one epoch (re-issue, or a leaked-then-rotated key), an unclaimed
+    ///         wallet in both could cherry-pick the larger amount. Freezing the root on first claim
+    ///         forces every claim in an epoch to prove against the same tree.
+    mapping(string => mapping(uint256 => bytes32)) public epochRoot;
+
     // ─────────────────────────────────────────────────────────────────────────
     // Events
     // ─────────────────────────────────────────────────────────────────────────
@@ -233,6 +247,16 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
         uint256 indexed epochId,
         bool enabled
     );
+    event RegistrarAuthorized(address indexed registrar, bool authorized);
+    event CampaignRegistered(
+        bytes32 indexed campaignIdHash,
+        string campaignId,
+        address indexed token,
+        address indexed creator
+    );
+    /// @notice Emitted (best-effort) if the FeeVault recorder call reverts during a claim, so a
+    ///         misconfigured recorder can never brick a user's claim (audit LOW).
+    event FeeVaultRecordFailed(bytes32 indexed campaignIdHash, uint256 epochId, address claimant);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Custom errors
@@ -315,22 +339,55 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Campaign deposit — creator pays gas once
+    // Campaign registration — authorized-only (audit HIGH front-run fix)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Allowlist an address to register campaigns (the Mintware backend). Owner-only.
+    function setAuthorizedRegistrar(address registrar, bool ok) external onlyOwner {
+        authorizedRegistrar[registrar] = ok;
+        emit RegistrarAuthorized(registrar, ok);
+    }
+
+    /**
+     * @notice Bind a campaignId to its reward token + creator. MUST be called (by an authorized
+     *         registrar or the owner) before the campaign can be funded — this is what closes the
+     *         first-depositor hijack: a front-runner can no longer set creator/token.
+     * @dev    One-time per campaignId; the token + creator are immutable once set.
+     */
+    function registerCampaign(
+        string  calldata campaignId,
+        address token,
+        address creator
+    ) external {
+        require(
+            authorizedRegistrar[msg.sender] || msg.sender == owner(),
+            "MintwareDistributor: not authorized registrar"
+        );
+        require(token   != address(0), "MintwareDistributor: zero token");
+        require(creator != address(0), "MintwareDistributor: zero creator");
+        CampaignInfo storage info = campaigns[campaignId];
+        require(info.token == address(0), "MintwareDistributor: already registered");
+        info.token   = token;
+        info.creator = creator;
+        emit CampaignRegistered(keccak256(bytes(campaignId)), campaignId, token, creator);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Campaign deposit — permissionless top-up of a registered campaign
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * @notice Deposit tokens to fund a campaign's reward pool.
+     * @notice Deposit tokens to fund a REGISTERED campaign's reward pool.
      *
-     * @dev  - One token per campaign; token address is immutable after first deposit.
-     *       - First depositor is recorded as the campaign creator, entitling them
-     *         to withdraw any remaining balance after the campaign is closed.
-     *       - Anyone may top up an existing campaign (same token, not closed).
+     * @dev  - The campaign MUST be registered first (registerCampaign) — deposits can no longer
+     *         set the creator/token (audit HIGH: first-depositor hijack).
+     *       - Anyone may top up (permissionless), but only with the campaign's registered token
+     *         and only while it is open.
      *       - Uses balance-diff accounting to handle fee-on-transfer tokens correctly.
-     *         campaignBalances reflects tokens actually received, not amount requested.
      *       - Caller must approve this contract for `amount` of `token` before calling.
      *
      * @param campaignId  Off-chain identifier (Supabase UUID string).
-     * @param token       ERC-20 token address to distribute.
+     * @param token       ERC-20 token address to distribute (must equal the registered token).
      * @param amount      Number of tokens to deposit (in token base units).
      */
     function depositCampaign(
@@ -342,15 +399,9 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
         require(amount  > 0,          "MintwareDistributor: zero amount");
 
         CampaignInfo storage info = campaigns[campaignId];
-
-        if (info.token == address(0)) {
-            // First deposit — register token and creator
-            info.token   = token;
-            info.creator = msg.sender;
-        } else {
-            require(!info.closed,         "MintwareDistributor: campaign closed");
-            require(info.token == token,  "MintwareDistributor: token mismatch for campaign");
-        }
+        require(info.token != address(0), "MintwareDistributor: not registered");
+        require(!info.closed,             "MintwareDistributor: campaign closed");
+        require(info.token == token,      "MintwareDistributor: token mismatch for campaign");
 
         // Balance-diff: records tokens actually received, not amount parameter.
         // Protects against fee-on-transfer tokens overstating campaignBalances.
@@ -715,6 +766,17 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
             "MintwareDistributor: invalid oracle signature"
         );
 
+        // ── 3b. Freeze the epoch's canonical root on first claim ─────────────
+        // Audit MED: the already-claimed guard ignores the root. If the oracle ever signs two live
+        // roots for one epoch, an unclaimed wallet in both trees could pick the larger amount. The
+        // first claim pins the root; every later claim in the epoch must prove against the SAME one.
+        bytes32 pinned = epochRoot[campaignId][epochNumber];
+        if (pinned == bytes32(0)) {
+            epochRoot[campaignId][epochNumber] = merkleRoot;
+        } else {
+            require(merkleRoot == pinned, "MintwareDistributor: epoch root mismatch");
+        }
+
         // ── 4. Verify Merkle proof ───────────────────────────────────────────
         // Leaf encoding matches OZ StandardMerkleTree:
         //   keccak256(bytes.concat(keccak256(abi.encode(address, uint256))))
@@ -740,11 +802,15 @@ contract MintwareDistributor is EIP712, Ownable, Pausable, ReentrancyGuard {
 
         uint256 feeVaultEpoch = feeVaultEpochByCampaignIdHash[keccak256(bytes(campaignId))];
         if (feeVaultClaimRecorder != address(0) && feeVaultEpoch != 0) {
-            IFeeVaultClaimRecorder(feeVaultClaimRecorder).recordClaim(
+            // Best-effort: a reverting/misconfigured recorder must NEVER brick a user's claim
+            // (audit LOW). The user already has their tokens; recorder accounting is secondary.
+            try IFeeVaultClaimRecorder(feeVaultClaimRecorder).recordClaim(
                 feeVaultEpoch,
                 msg.sender,
                 amount
-            );
+            ) {} catch {
+                emit FeeVaultRecordFailed(keccak256(bytes(campaignId)), feeVaultEpoch, msg.sender);
+            }
         }
 
         emit Claimed(
