@@ -102,49 +102,55 @@ const ey = 'font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/5
 function ScoreCard() {
   const router = useRouter()
   const [input, setInput] = useState('')
-  const [state, setState] = useState<'idle' | 'loading' | 'reveal' | 'error'>('loading')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [data, setData] = useState<ScoreData | null>(null)
   const [addr, setAddr] = useState('')
+  const [open, setOpen] = useState(false)
   const [shown, setShown] = useState(0)
   const reqId = useRef(0)
 
-  async function load(raw: string, label?: string, isDemo = false) {
+  async function load(raw: string, label?: string) {
     const q = (raw || '').trim()
     if (!q) return
     let a = q
     try { if (q.startsWith('0x') && q.length === 42) a = getAddress(q) } catch { /* keep raw (ENS) */ }
     const id = ++reqId.current
-    setState('loading'); setInput(label ?? q)
+    setStatus('loading'); setInput(label ?? q)
     try {
       const res = await fetch(`${API}/score?address=${a}`)
       if (!res.ok) throw new Error('not found')
       const d = (await res.json()) as ScoreData
       if (id !== reqId.current) return
-      // never show a degraded/empty auto-demo — fall back to the search prompt instead
-      if (isDemo && (!d?.score || d.score <= 0)) { setState('idle'); return }
-      setData(d); setAddr(a); setShown(0); setState('reveal')
+      setData(d); setAddr(a); setShown(0); setStatus('idle'); setOpen(true)
     } catch {
       if (id !== reqId.current) return
-      setState(isDemo ? 'idle' : 'error')
+      setStatus('error')
     }
   }
 
-  // demo on load with a real wallet (real data, no fabrication); falls back cleanly if the API is degraded
-  useEffect(() => { load(SAMPLE_ADDRS[0].addr, SAMPLE_ADDRS[0].label, true) }, [])
-
-  // count the hero number up when a reveal lands
+  // count the score up when the modal opens
   useEffect(() => {
-    if (state !== 'reveal' || !data) return
+    if (!open || !data) return
     if (matchMedia('(prefers-reduced-motion:reduce)').matches) { setShown(data.score); return }
     let raf = 0; const t0 = performance.now(); const target = data.score
     const tick = (t: number) => {
-      const e = Math.min(1, (t - t0) / 1100); const k = 1 - Math.pow(1 - e, 3)
-      setShown(Math.round(target * k))
+      const e = Math.min(1, (t - t0) / 1100)
+      setShown(Math.round(target * (1 - Math.pow(1 - e, 3))))
       if (e < 1) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [state, data])
+  }, [open, data])
+
+  // esc-to-close + lock body scroll while the modal is open
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [open])
 
   const frac = data ? Math.min(1, data.score / MAX_SCORE) : 0
   const topPct = data ? Math.max(1, 100 - data.percentile) : 0
@@ -154,95 +160,101 @@ function ScoreCard() {
     : 'text-atx-blue border-atx-blue'
 
   return (
-    <div className="w-full max-w-[720px] border border-atx-ink bg-white">
-      {/* SEARCH / IDLE */}
-      {(state === 'idle' || state === 'error') && (
-        <div className="p-[26px] grid gap-4">
-          <div className="font-atx-mono text-[11px] uppercase tracking-[0.1em] text-atx-ink/55 flex items-center gap-2">
-            <span className="w-[7px] h-[7px] bg-atx-mesquite inline-block" /> Live score engine — try any wallet
-          </div>
-          <div className="flex border border-atx-ink">
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && load(input)}
-              placeholder="0x… wallet address or ENS name"
-              className="flex-1 py-3 px-4 bg-transparent font-atx-mono text-[14px] text-atx-ink outline-none placeholder:text-atx-ink/40"
-            />
-            <button onClick={() => load(input)} className="px-5 bg-atx-blue text-white font-atx-mono text-[11px] uppercase tracking-[0.08em] cursor-pointer">Check my score</button>
-          </div>
-          {state === 'error' && <div className="font-atx-mono text-[12px] text-atx-clay">Couldn’t score that address — check it and try again.</div>}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={ey}>Try</span>
-            {SAMPLE_ADDRS.map((s) => (
-              <button key={s.label} onClick={() => load(s.addr, s.label)} className="font-atx-mono text-[11px] text-atx-ink/70 border border-atx-ink px-2.5 py-1 cursor-pointer hover:bg-atx-ink hover:text-atx-bone">{s.label}</button>
-            ))}
-          </div>
+    <>
+      {/* SEARCH CARD (always) */}
+      <div className="w-full max-w-[720px] border border-atx-ink bg-white p-[26px] grid gap-4">
+        <div className="font-atx-mono text-[11px] uppercase tracking-[0.1em] text-atx-ink/55 flex items-center gap-2">
+          <span className="w-[7px] h-[7px] bg-atx-mesquite inline-block" /> Live score engine — try any wallet
         </div>
-      )}
-
-      {/* LOADING */}
-      {state === 'loading' && (
-        <div className="p-[26px] min-h-[200px] grid place-items-center font-atx-mono text-[12px] uppercase tracking-[0.1em] text-atx-ink/45">
-          Scoring {input || 'wallet'}…
+        <div className="flex border border-atx-ink">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && load(input)}
+            placeholder="0x… wallet address or ENS name"
+            className="flex-1 py-3 px-4 bg-transparent font-atx-mono text-[14px] text-atx-ink outline-none placeholder:text-atx-ink/40"
+          />
+          <button onClick={() => load(input)} disabled={status === 'loading'} className="px-5 bg-atx-blue text-white font-atx-mono text-[11px] uppercase tracking-[0.08em] cursor-pointer disabled:opacity-70 whitespace-nowrap">
+            {status === 'loading' ? 'Scoring…' : 'Check my score'}
+          </button>
         </div>
-      )}
+        {status === 'error' && <div className="font-atx-mono text-[12px] text-atx-clay">Couldn’t score that address — check it and try again.</div>}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={ey}>Try</span>
+          {SAMPLE_ADDRS.map((s) => (
+            <button key={s.label} onClick={() => load(s.addr, s.label)} className="font-atx-mono text-[11px] text-atx-ink/70 border border-atx-ink px-2.5 py-1 cursor-pointer hover:bg-atx-ink hover:text-atx-bone">{s.label}</button>
+          ))}
+        </div>
+      </div>
 
-      {/* REVEAL */}
-      {state === 'reveal' && data && (
-        <div className="p-[26px] grid grid-cols-[auto_1fr] gap-8 items-center max-[640px]:grid-cols-1 max-[640px]:justify-items-center max-[640px]:text-center">
-          <div className="grid justify-items-center gap-3">
-            <div className="relative w-[188px] h-[188px]">
-              <svg viewBox="0 0 208 208" className="w-full h-full -rotate-90">
-                <circle cx="104" cy="104" r="90" fill="none" stroke="rgba(17,17,17,0.14)" strokeWidth="13" />
-                <circle cx="104" cy="104" r="90" fill="none" stroke="var(--color-atx-blue)" strokeWidth="13" strokeLinecap="butt"
-                  strokeDasharray={RING_C} strokeDashoffset={RING_C * (1 - frac)}
-                  style={{ transition: 'stroke-dashoffset 1.15s cubic-bezier(.22,1,.36,1)' }} />
-              </svg>
-              <div className="absolute inset-0 grid place-content-center text-center">
-                <div className="font-atx-mono text-[46px] font-bold tracking-[-0.03em] leading-none tabular-nums">{shown}</div>
-                <div className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-ink/45">of {MAX_SCORE} pts</div>
+      {/* TRANSLUCENT MODAL — the reveal */}
+      {open && data && (
+        <div className="fixed inset-0 z-[60] grid place-items-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-atx-ink/45 backdrop-blur-[2px]" onClick={() => setOpen(false)} />
+          <div className="relative w-full max-w-[680px] max-h-[92vh] overflow-auto border border-atx-ink bg-atx-bone/92 backdrop-blur-md shadow-[10px_10px_0_0_rgba(17,17,17,0.16)]">
+            <div className="flex items-center justify-between px-6 py-3 border-b border-atx-ink">
+              <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55">Attribution score</span>
+              <button onClick={() => setOpen(false)} aria-label="Close" className="font-atx-mono text-[13px] text-atx-ink/55 hover:text-atx-ink cursor-pointer bg-transparent border-0">✕</button>
+            </div>
+
+            <div className="p-6 grid grid-cols-[auto_1fr] gap-7 items-center max-[560px]:grid-cols-1 max-[560px]:justify-items-center max-[560px]:text-center">
+              <div className="grid justify-items-center gap-3">
+                <div className="relative w-[172px] h-[172px]">
+                  <svg viewBox="0 0 208 208" className="w-full h-full -rotate-90">
+                    <circle cx="104" cy="104" r="90" fill="none" stroke="rgba(17,17,17,0.14)" strokeWidth="13" />
+                    <circle cx="104" cy="104" r="90" fill="none" stroke="var(--color-atx-blue)" strokeWidth="13" strokeLinecap="butt"
+                      strokeDasharray={RING_C} strokeDashoffset={RING_C * (1 - frac)}
+                      style={{ transition: 'stroke-dashoffset 1.15s cubic-bezier(.22,1,.36,1)' }} />
+                  </svg>
+                  <div className="absolute inset-0 grid place-content-center text-center">
+                    <div className="font-atx-mono text-[42px] font-bold tracking-[-0.03em] leading-none tabular-nums">{shown}</div>
+                    <div className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-ink/45">of {MAX_SCORE} pts</div>
+                  </div>
+                </div>
+                <span className={`font-atx-mono text-[11px] uppercase tracking-[0.06em] px-2.5 py-1 border ${tierCls}`}>{tierTxt}</span>
+              </div>
+
+              <div className="grid gap-3 min-w-0 w-full">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="font-atx-mono text-[16px]">{input}</span>
+                  <span className="font-atx-mono text-[10px] uppercase tracking-[0.06em] px-2 py-1 border border-atx-blue text-atx-blue">Top {topPct}%</span>
+                </div>
+                <div className="flex gap-4 flex-wrap font-atx-mono text-[12px] text-atx-ink/50">
+                  {data.walletAge && <span><b className="text-atx-ink/75">{data.walletAge}</b> old</span>}
+                  {data.chains != null && <span><b className="text-atx-ink/75">{data.chains}</b> chains</span>}
+                  {data.totalTxCount != null && <span><b className="text-atx-ink/75">{data.totalTxCount.toLocaleString()}</b> txns</span>}
+                </div>
+                <div className="grid gap-2">
+                  {data.signals?.map((s) => (
+                    <div key={s.key} className="grid grid-cols-[80px_1fr_auto] items-center gap-3">
+                      <span className="font-atx-mono text-[11px] uppercase tracking-[0.03em] text-atx-ink/60">{s.name}</span>
+                      <span className="h-2 border border-atx-ink/25 bg-atx-bone">
+                        <span className="block h-full transition-[width] duration-700 ease-out" style={{ width: `${Math.round((s.score / s.max) * 100)}%`, background: s.color }} />
+                      </span>
+                      <span className="font-atx-mono text-[10.5px] text-atx-ink/45 text-right min-w-[52px] tabular-nums">{s.score} / {s.max}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-            <span className={`font-atx-mono text-[11px] uppercase tracking-[0.06em] px-2.5 py-1 border ${tierCls}`}>{tierTxt}</span>
-          </div>
 
-          <div className="grid gap-4 min-w-0 w-full">
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className="font-atx-mono text-[16px]">{input}</span>
-              <span className="font-atx-mono text-[10px] uppercase tracking-[0.06em] px-2 py-1 border border-atx-blue text-atx-blue">Top {topPct}%</span>
-            </div>
-            <div className="flex gap-4 flex-wrap font-atx-mono text-[12px] text-atx-ink/50">
-              {data.walletAge && <span><b className="text-atx-ink/75">{data.walletAge}</b> old</span>}
-              {data.chains != null && <span><b className="text-atx-ink/75">{data.chains}</b> chains</span>}
-              {data.totalTxCount != null && <span><b className="text-atx-ink/75">{data.totalTxCount.toLocaleString()}</b> txns</span>}
+            {/* DOMINANT vault CTA inside the modal */}
+            <div className="border-t border-atx-ink bg-atx-blue text-white px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+              <div className="max-w-[440px]">
+                <div className="font-bold text-[17px] tracking-[-0.01em] leading-tight">Deposit into a V4 Vault.</div>
+                <div className="text-[13px] text-white/80">Your score multiplies your returns.</div>
+              </div>
+              <Link href="/vaults" className="font-atx-mono text-[12px] uppercase tracking-[0.08em] px-5 py-3 bg-white text-atx-blue no-underline whitespace-nowrap">Deposit →</Link>
             </div>
 
-            <div className="grid gap-2">
-              {data.signals?.map((s) => (
-                <div key={s.key} className="grid grid-cols-[80px_1fr_auto] items-center gap-3">
-                  <span className="font-atx-mono text-[11px] uppercase tracking-[0.03em] text-atx-ink/60">{s.name}</span>
-                  <span className="h-2 border border-atx-ink/25 bg-atx-bone">
-                    <span className="block h-full transition-[width] duration-700 ease-out" style={{ width: `${Math.round((s.score / s.max) * 100)}%`, background: s.color }} />
-                  </span>
-                  <span className="font-atx-mono text-[10.5px] text-atx-ink/45 text-right min-w-[52px] tabular-nums">{s.score} / {s.max}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-3 border border-atx-blue bg-atx-blue/5 px-3.5 py-3 flex-wrap">
-              <span className="text-[13.5px] text-atx-ink/80 flex-1 min-w-[180px]">Deposit into a <b>V4 Vault</b> — your score multiplies your share of every pool’s fees.</span>
-              <Link href="/vaults" className="font-atx-mono text-[10.5px] uppercase tracking-[0.06em] px-3 py-2 bg-atx-blue text-white no-underline">Deposit →</Link>
-            </div>
-
-            <div className="flex items-center gap-4 font-atx-mono text-[11px] uppercase tracking-[0.05em]">
-              <button onClick={() => router.push(`/${addr}`)} className="text-atx-blue cursor-pointer hover:underline bg-transparent border-0 p-0">See full profile →</button>
-              <button onClick={() => { setState('idle'); setInput('') }} className="text-atx-ink/45 cursor-pointer hover:text-atx-ink/70 bg-transparent border-0 p-0">← Score another wallet</button>
+            <div className="px-6 py-3 flex items-center gap-4 font-atx-mono text-[11px] uppercase tracking-[0.05em] border-t border-atx-ink/15">
+              <button onClick={() => router.push(`/${addr}`)} className="text-atx-blue hover:underline cursor-pointer bg-transparent border-0 p-0">See full profile →</button>
+              <button onClick={() => setOpen(false)} className="text-atx-ink/45 hover:text-atx-ink/70 cursor-pointer bg-transparent border-0 p-0">Close</button>
             </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }
 
@@ -325,6 +337,21 @@ export default function HomePage() {
               </button>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* DOMINANT — the flagship vault CTA (always visible, not gated behind a score) */}
+      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
+        <div className="mx-auto max-w-[1180px] px-6 py-14 flex items-center justify-between gap-8 flex-wrap max-[720px]:py-10">
+          <div className="max-w-[720px]">
+            <div className={ey}>✴ The flagship — reputation-weighted V4 vaults</div>
+            <h2 className="font-bold tracking-[-0.03em] leading-[1.02] text-[clamp(30px,4.6vw,52px)] mt-3.5">
+              Deposit into a V4 Vault. <span className="text-atx-blue">Your score multiplies your returns.</span>
+            </h2>
+          </div>
+          <button onClick={() => launchApp('/vaults')} className="cursor-pointer font-atx-mono text-[13px] uppercase tracking-[0.09em] px-7 py-4 border border-atx-blue bg-atx-blue text-white whitespace-nowrap shrink-0">
+            Deposit →
+          </button>
         </div>
       </section>
 
