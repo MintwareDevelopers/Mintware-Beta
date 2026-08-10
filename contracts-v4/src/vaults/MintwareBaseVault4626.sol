@@ -32,9 +32,15 @@ interface IFeeVaultNotifier {
 ///         unlock/settlement plumbing. Surfaces (DeFi / RWA) override the liquidity
 ///         hooks. See docs/developers/phase3-track0-foundation-design.md (D5–D9).
 ///
-/// @dev    Share semantics (D5): a share is a claim on USDC *principal*.
+/// @dev    DEPRECATED base for the single-sided `MintwareDeFiVault4626` — see that contract's
+///         deprecation note. The go-forward DeFi design is the dual-sided `MintwarePairVault`
+///         family, whose shares are real V4 liquidity units (no par-principal NAV risk).
+///
+///         Share semantics (D5): a share is a claim on USDC *principal*.
 ///         totalAssets() returns tracked principal, NOT live LP NAV — yield flows
-///         through the FeeVault epoch system, not share price.
+///         through the FeeVault epoch system, not share price. This principal-denominated
+///         accounting over single-sided LP is exactly the par-NAV limitation (internal audit
+///         CRIT #2) that the pair vault resolves.
 ///
 ///         Redemption (D6): async only. Standard withdraw()/redeem() revert and
 ///         maxWithdraw/maxRedeem == 0; use requestRedeem() → notice → executeRedeem().
