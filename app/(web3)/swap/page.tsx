@@ -23,7 +23,7 @@ import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { MwNav } from '@/components/web2/MwNav'
 import { PageHero } from '@/components/web2/PageHero'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
-import { API } from '@/lib/web2/api'
+import { API, scoreApiUrl } from '@/lib/web2/api'
 
 // ─── ATX Settlemint tokens ──────────────────────────────────────────────────────
 const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
@@ -144,7 +144,7 @@ function SwapContent() {
   // Attribution score for the reputation rail
   useEffect(() => {
     if (!wallet) { setSwapScore(null); setSwapTier(null); setSwapPct(null); return }
-    fetch(`${API}/score?address=${wallet}`)
+    fetch(scoreApiUrl(wallet))
       .then(r => r.json())
       .then(d => {
         setSwapScore(d.score ?? 0)

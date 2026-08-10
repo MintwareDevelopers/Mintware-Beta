@@ -5,7 +5,7 @@ import { MwNav } from '@/components/web2/MwNav'
 import { PageHero } from '@/components/web2/PageHero'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
-import { API } from '@/lib/web2/api'
+import { scoreApiUrl } from '@/lib/web2/api'
 import { computeBadges } from '@/lib/rewards/badges'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
@@ -55,7 +55,7 @@ function ProfileContent() {
   useEffect(() => {
     if (!wallet) return
     setLoading(true)
-    fetch(`${API}/score?address=${wallet}`)
+    fetch(scoreApiUrl(wallet))
       .then(r => r.json())
       .then(d => setData(d))
       .catch(() => {})

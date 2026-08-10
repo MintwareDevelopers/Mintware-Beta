@@ -1,5 +1,14 @@
 export const API = 'https://attribution-scorer.ceo-1f9.workers.dev'
 
+// Attribution score endpoint (cutover seam). The app now reads the in-repo
+// Attribution Engine v2 — Etherscan-backed (ETHERSCAN_API_KEY set server-side),
+// non-degraded — via the internal route in legacy `/score` shape, a drop-in for
+// the old external worker. Relative URL → CLIENT-SIDE ONLY (browser fetch).
+// Server-side callers (cron/epoch/attest) still hit `${API}/score` (absolute).
+export function scoreApiUrl(address: string): string {
+  return `/api/attribution/score-v2?legacy=1&address=${encodeURIComponent(address)}`
+}
+
 export function fmtUSD(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return '—'
   if (n >= 1_000_000) return '$' + (n / 1_000_000).toFixed(1) + 'M'
