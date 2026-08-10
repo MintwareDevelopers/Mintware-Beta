@@ -39,7 +39,6 @@ struct AmParams {
     uint128 minRent;          // rent floor
     uint32  K;                // notice / continuity window, in blocks
     uint16  minBidMultBps;    // MIN_BID_MULTIPLIER in bps (11_000 == 1.1x)
-    uint16  withdrawFeeBps;   // LP-withdrawal fee to the manager (anti-exit-race)
 }
 
 library MWAmAuctionLib {

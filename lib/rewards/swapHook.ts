@@ -202,7 +202,7 @@ const MAX_SINGLE_TRADE_USD = 10_000
 // Computes buyer, referrer, and platform fee rewards in USD.
 // Fees are deducted from the pool at the percentages set at campaign creation —
 // they come out of the pool, not on top of it.
-// Atomically deducts total from pool via deduct_token_pool_reward() RPC.
+// Atomically + idempotently deducts total from pool via deduct_token_pool_reward_idempotent() RPC.
 // Writes up to three rows to pending_rewards (buyer, referrer if exists, fee).
 // Platform fee row goes to MINTWARE_TREASURY_ADDRESS, not the buyer wallet.
 // amount_wei is 0 — resolved by price oracle / claim contract step (TBD).
@@ -295,16 +295,23 @@ async function processTokenPool(
     }
   }
 
-  // Atomic pool check-and-decrement (Postgres row lock)
-  const { data: deducted, error: deductErr } = await supabase.rpc(
-    'deduct_token_pool_reward',
-    { p_campaign_id: campaign.id, p_required_usd: total_deduction }
+  // Atomic + idempotent pool check-and-decrement, keyed on this swap's tx_hash so two concurrent
+  // requests for the same tx can't drain the pool twice (audit MED: pool-deduction race). The
+  // guard-insert + decrement happen in one Postgres transaction; a replay conflicts on the guard.
+  const { data: deductResult, error: deductErr } = await supabase.rpc(
+    'deduct_token_pool_reward_idempotent',
+    { p_campaign_id: campaign.id, p_tx_hash: event.tx_hash, p_required_usd: total_deduction }
   )
   if (deductErr) {
-    console.error('[swapHook] deduct_token_pool_reward error:', deductErr)
+    console.error('[swapHook] deduct_token_pool_reward_idempotent error:', deductErr)
     return { credited: false, skip_reason: 'db_error' }
   }
-  if (!deducted) {
+  if (deductResult === 'duplicate') {
+    // This tx already drew from the pool — idempotent no-op (no second decrement).
+    return { credited: false, skip_reason: 'tx_already_credited', campaign_type: 'token_pool' }
+  }
+  if (deductResult !== 'ok') {
+    // 'insufficient' or 'not_found' — the guard was rolled back, so a later retry can proceed.
     return { credited: false, skip_reason: 'pool_insufficient', campaign_type: 'token_pool' }
   }
 

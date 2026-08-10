@@ -24,7 +24,18 @@ import {IYieldAdapter} from "./IYieldAdapter.sol";
 ///         team-seeded PROJECT token. This is the ERC-4626 evolution of the
 ///         Phase-2 SocialVault (behavior preserved; now a tokenized share vault).
 ///
-/// @dev    Implements the base's liquidity hooks (_deployLiquidity / _removeLiquidity
+/// @dev    DEPRECATED — DO NOT DEPLOY WITH REAL VALUE. The go-forward DeFi vault is the solvent
+///         dual-sided `MintwareDeFiPairVault` (a share is a real V4 liquidity unit; redemption
+///         returns both tokens at true value). This vault's shares are PRINCIPAL-denominated
+///         (`totalAssets() == totalPrincipal`, "D5" in the base) while principal is deployed as
+///         single-sided USDC LP that converts to the team token on swaps — so par-principal
+///         redemption can leave a first-mover / bank-run shortfall (internal audit CRIT #2). The
+///         source is retained for provenance and testnet history; new deployments must use
+///         `DeployPairVault.s.sol`, and the on-chain registry marks retired vaults via
+///         `MintwareVaultRegistry.deactivateVault`. The frontend cutover (single→pair ABI) is the
+///         Phase-3B migration and is deploy-gated on the pair vault going live.
+///
+///         Implements the base's liquidity hooks (_deployLiquidity / _removeLiquidity
 ///         / _rebalanceLiquidity). Volatility/depth dynamic fees, pool profiles, and
 ///         idle-capital routing arrive in Track A.
 contract MintwareDeFiVault4626 is MintwareBaseVault4626 {

@@ -38,6 +38,7 @@ export interface LifiQuote {
   buyAmount:            string   // wei (estimate.toAmount from LI.FI)
   price:                string   // always '0' — price impact not available from aggregator
   estimatedGas:         string   // decimal string
+  quoteId?:             string   // server-recorded quote id (mw_quote_id) — thread into swap-event
   fromAmountUSD?:       string   // USD value of sell side (estimate.fromAmountUSD from LI.FI)
   gasCostUSD?:          string   // USD cost of network fee (estimate.gasCosts[0].amountUSD)
   nativeTokenPriceUSD?: string   // native token spot price (estimate.gasCosts[0].price)
@@ -96,6 +97,7 @@ export async function getQuote(params: LifiQuoteParams): Promise<LifiQuote> {
 
   return {
     buyAmount:           estimate.toAmount                        as string,
+    quoteId:             data.mw_quote_id                         as string | undefined,
     fromAmountUSD:       estimate.fromAmountUSD                   as string | undefined,
     gasCostUSD:          estimate.gasCosts?.[0]?.amountUSD        as string | undefined,
     nativeTokenPriceUSD: estimate.gasCosts?.[0]?.token?.priceUSD  as string | undefined,

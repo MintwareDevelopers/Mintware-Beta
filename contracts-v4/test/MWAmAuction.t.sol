@@ -53,8 +53,7 @@ contract MWAmAuctionTest is Test {
     function _params() internal view returns (AmParams memory) {
         return AmParams({
             enabled: true, bidToken: address(bidToken), feeMaxPips: 3000,
-            defaultFeePips: 500, minRent: 100, K: 10, minBidMultBps: 11_000, withdrawFeeBps: 2
-        });
+            defaultFeePips: 500, minRent: 100, K: 10, minBidMultBps: 11_000        });
     }
 
     function setUp() public {

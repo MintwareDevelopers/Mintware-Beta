@@ -12,6 +12,13 @@ import {IPoolManager}            from "@uniswap/v4-core/src/interfaces/IPoolMana
 
 /// @notice Phase-3 Track 0 deploy — ERC-4626 DeFi vault stack + on-chain registry.
 ///
+/// ⚠ DEPRECATED STACK — DO NOT DEPLOY WITH REAL VALUE. This script ships the single-sided
+///   `MintwareDeFiVault4626` + legacy `FeeVault`, which carry the par-NAV solvency risk (audit
+///   CRIT #2) + the dead FeeVault attestation (C1). The canonical go-forward DeFi deploy is
+///   **`DeployPairVault.s.sol`** (solvent dual-sided pair vault + `MintwareWeightedDistributor`
+///   Rail-B rewards). Kept only for testnet parity / provenance; retire registered instances via
+///   `MintwareVaultRegistry.deactivateVault`.
+///
 /// ─── Deploy order (mirrors the Phase-2 script; avoids circular deps) ─────────
 ///   1. Deploy  FeeVault(usdc, distributor, oracle, treasury)
 ///   2. Mine    CREATE2 salt for MWHookCoordinator (flags 0xAC8)

@@ -100,7 +100,13 @@ function makeMockSupabase(tableMap: TableMap = {}) {
 
   return {
     from: vi.fn((table: string) => makeChainedQuery(getResult(table))),
-    rpc: vi.fn((_fn: string) => Promise.resolve({ data: true, error: null })),
+    // Idempotent pool-deduct RPC returns text ('ok' | 'duplicate' | ...); others return true.
+    rpc: vi.fn((fn: string) =>
+      Promise.resolve({
+        data: fn === 'deduct_token_pool_reward_idempotent' ? 'ok' : true,
+        error: null,
+      })
+    ),
   }
 }
 
@@ -416,7 +422,9 @@ describe('processSwapEvent', () => {
         }
         return makeChainedQuery({ data: null, error: null })
       }),
-      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+      rpc: vi.fn().mockImplementation((fn: string) =>
+        Promise.resolve({ data: fn === 'deduct_token_pool_reward_idempotent' ? 'ok' : true, error: null })
+      ),
     }
     vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
@@ -426,6 +434,69 @@ describe('processSwapEvent', () => {
     expect(result.skip_reason).not.toBe('score_below_minimum')
     expect(result.credited).toBe(true)
     expect(result.campaign_type).toBe('token_pool')
+  })
+
+  // -------------------------------------------------------------------------
+  // Idempotent pool deduction — a concurrent/replay request for the same tx that
+  // conflicts on the (campaign, tx) guard must NOT credit or decrement again.
+  // -------------------------------------------------------------------------
+  it('should not double-credit when the idempotent deduct RPC returns duplicate', async () => {
+    const tokenPoolCampaign = {
+      ...baseCampaign,
+      campaign_type: 'token_pool',
+      daily_wallet_cap_usd: null,
+      daily_pool_cap_usd: null,
+    }
+    const mock = {
+      from: vi.fn((table: string) => {
+        if (table === 'activity') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            gte: vi.fn().mockReturnThis(),
+            lte: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            insert: vi.fn().mockResolvedValue({ error: null }),
+          }
+        }
+        if (table === 'campaigns') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            single: vi.fn().mockResolvedValue({ data: tokenPoolCampaign, error: null }),
+          }
+        }
+        if (table === 'participants') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: baseParticipant, error: null }),
+          }
+        }
+        if (table === 'referral_records') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }
+        }
+        return makeChainedQuery({ data: null, error: null })
+      }),
+      // The guard row already exists for this tx → the RPC reports 'duplicate'.
+      rpc: vi.fn().mockImplementation((fn: string) =>
+        Promise.resolve({
+          data: fn === 'deduct_token_pool_reward_idempotent' ? 'duplicate' : true,
+          error: null,
+        })
+      ),
+    }
+    vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
+
+    const result = await processSwapEvent(baseEvent)
+
+    expect(result.credited).toBe(false)
+    expect(result.skip_reason).toBe('tx_already_credited')
   })
 
   // -------------------------------------------------------------------------
@@ -473,7 +544,9 @@ describe('processSwapEvent', () => {
         }
         return makeChainedQuery({ data: null, error: null })
       }),
-      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+      rpc: vi.fn().mockImplementation((fn: string) =>
+        Promise.resolve({ data: fn === 'deduct_token_pool_reward_idempotent' ? 'ok' : true, error: null })
+      ),
     }
     vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
@@ -554,7 +627,9 @@ describe('processSwapEvent', () => {
         }
         return makeChainedQuery({ data: null, error: null })
       }),
-      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+      rpc: vi.fn().mockImplementation((fn: string) =>
+        Promise.resolve({ data: fn === 'deduct_token_pool_reward_idempotent' ? 'ok' : true, error: null })
+      ),
     }
     vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 
@@ -630,7 +705,9 @@ describe('processSwapEvent', () => {
         }
         return makeChainedQuery({ data: null, error: null })
       }),
-      rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
+      rpc: vi.fn().mockImplementation((fn: string) =>
+        Promise.resolve({ data: fn === 'deduct_token_pool_reward_idempotent' ? 'ok' : true, error: null })
+      ),
     }
     vi.mocked(createSupabaseServiceClient).mockReturnValue(asServiceClient(mock))
 

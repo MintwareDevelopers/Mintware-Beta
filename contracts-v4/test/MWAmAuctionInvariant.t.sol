@@ -120,8 +120,7 @@ contract MWAmAuctionInvariantTest is StdInvariant, Test {
         auction.setCoordinator(coord);
         auction.configurePool(id, address(sink), AmParams({
             enabled: true, bidToken: address(bidToken), feeMaxPips: FEE_MAX,
-            defaultFeePips: 500, minRent: MIN_RENT, K: K, minBidMultBps: 11_000, withdrawFeeBps: 2
-        }));
+            defaultFeePips: 500, minRent: MIN_RENT, K: K, minBidMultBps: 11_000        }));
         vm.stopPrank();
 
         handler = new AmAmmHandler(auction, bidToken, coord, id, K, MIN_RENT);

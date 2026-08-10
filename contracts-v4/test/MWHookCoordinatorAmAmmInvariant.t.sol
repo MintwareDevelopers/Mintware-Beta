@@ -146,8 +146,7 @@ contract MWHookCoordinatorAmAmmInvariantTest is StdInvariant, Test {
         coord.setAmAmmEnabled(poolId, true);
         auction.configurePool(poolId, address(sink), AmParams({
             enabled: true, bidToken: c0, feeMaxPips: 30_000, defaultFeePips: 3000,
-            minRent: 100, K: 10, minBidMultBps: 11_000, withdrawFeeBps: 2
-        }));
+            minRent: 100, K: 10, minBidMultBps: 11_000        }));
         vm.roll(1000);
 
         handler = new AmAmmSwapHandler(coord, auction, router, poolKey, MockERC20(c0), MockERC20(c1));
