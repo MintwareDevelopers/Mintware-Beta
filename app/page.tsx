@@ -15,7 +15,7 @@ import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getAddress } from 'viem'
-import { API } from '@/lib/web2/api'
+import { scoreApiUrl } from '@/lib/web2/api'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
@@ -117,7 +117,7 @@ function ScoreCard() {
     const id = ++reqId.current
     setStatus('loading'); setInput(label ?? q)
     try {
-      const res = await fetch(`${API}/score?address=${a}`)
+      const res = await fetch(scoreApiUrl(a))
       if (!res.ok) throw new Error('not found')
       const d = (await res.json()) as ScoreData
       if (id !== reqId.current) return

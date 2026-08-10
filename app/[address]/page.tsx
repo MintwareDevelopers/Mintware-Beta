@@ -12,7 +12,7 @@ import { WalletDisplay }         from '@/components/web3/WalletDisplay'
 import { Sparkline }             from '@/components/web2/Sparkline'
 import { computeBadges, topBadgeLabel } from '@/lib/rewards/badges'
 import { getAddress, isAddress }  from 'viem'
-import { API, shortAddr }   from '@/lib/web2/api'
+import { scoreApiUrl, shortAddr }   from '@/lib/web2/api'
 import { AnimatedScore }    from '@/components/web2/AnimatedScore'
 import { useEffect, useState }   from 'react'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
@@ -94,7 +94,7 @@ export default function PublicProfile() {
     // referral_stats / referral_records directly.
     const scoreAddr = isAddress(address) ? getAddress(address) : address
     Promise.all([
-      fetch(`${API}/score?address=${scoreAddr}`).then(r => r.json()).catch(() => null),
+      fetch(scoreApiUrl(scoreAddr)).then(r => r.json()).catch(() => null),
       fetch(`/api/referral?address=${address}`).then(r => (r.ok ? r.json() : null)).catch(() => null),
     ]).then(([scoreData, ref]) => {
       setScore(scoreData)

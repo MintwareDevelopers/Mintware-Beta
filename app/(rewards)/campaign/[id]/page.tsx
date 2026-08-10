@@ -17,7 +17,7 @@ import type { ActionDef } from '@/components/rewards/campaigns/ActionsPanel'
 import { useEffect, useState, useCallback } from 'react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
-import { API } from '@/lib/web2/api'
+import { API, scoreApiUrl } from '@/lib/web2/api'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 
 import { CampaignHeader }   from '@/components/rewards/campaigns/CampaignHeader'
@@ -152,7 +152,7 @@ function CampaignDetailContent() {
   // ── Fetch user score if not joined ─────────────────────────────────────────
   useEffect(() => {
     if (!address || participant !== null) return
-    fetch(`${API}/score?address=${encodeURIComponent(address)}`)
+    fetch(scoreApiUrl(address))
       .then(r => r.json())
       .then(data => {
         setUserScore(data.score ?? 0)

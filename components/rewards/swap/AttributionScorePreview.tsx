@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { API } from '@/lib/web2/api'
+import { scoreApiUrl } from '@/lib/web2/api'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 interface ScoreData {
@@ -21,7 +21,7 @@ export function AttributionScorePreview({ estimatedScoreGain }: AttributionScore
   useEffect(() => {
     if (!address || !isConnected) { setData(null); return }
     setIsLoading(true)
-    fetch(`${API}/score?address=${address}`)
+    fetch(scoreApiUrl(address))
       .then(r => r.json())
       .then(d => {
         setData({ score: d.score ?? 0, tier: d.tier ?? '' })
