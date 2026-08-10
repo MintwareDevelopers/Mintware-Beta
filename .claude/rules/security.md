@@ -40,6 +40,12 @@ Representative declared limits (advisory until Upstash is set):
 - Client → `POST /api/swap/quote` (NOT `li.quest` directly)
 - Server injects `fee: 0.005` + `referrer: MINTWARE_TREASURY_ADDRESS`
 - If user strips fee before `executeRoute()`, calldata check in `swap-event` denies reward: `skip_reason: 'fee_not_paid'`
+- **Server-recorded quotes (audit HIGH #6/#7):** the proxy persists the SERVER-computed USD value
+  (LI.FI `estimate.fromAmountUSD`) to `swap_quotes` keyed by a `quote_id` (30-min TTL) and returns
+  `mw_quote_id`. The client threads it into `POST /api/campaigns/swap-event` as `quote_id`;
+  `resolveQuoteAmountUsd` (`lib/rewards/resolveQuote.ts`) uses the recorded amount (wallet-bound,
+  not expired) instead of the client-supplied `amount_usd`, closing the reward-magnitude spoof.
+  Backward compatible: no/unknown/expired `quote_id` falls back to the capped client value.
 
 ## `verifySwapTx()` Checks
 
