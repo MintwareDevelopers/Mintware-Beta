@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { allocateUniversalEpoch, attributionBandFromPercentile, epochEndFromStart, floorToEpochStart, makeUniversalEpochKey, type TradeSignalLedgerRow } from '@/lib/rewards/universal/epochAllocator'
 import type { UniversalAllocationPolicy } from '@/lib/rewards/universal/types'
+import { getServerLegacyScore } from '@/lib/attribution/serverScore'
+
+// The allocator now reads the canonical in-repo Engine v2 score; mock it at the
+// helper seam (not global fetch) and return a high percentile for the referral
+// swapper, low for everyone else — driving the band-classification assertions.
+vi.mock('@/lib/attribution/serverScore', () => ({
+  getServerLegacyScore: vi.fn(),
+}))
 
 const POLICY: UniversalAllocationPolicy = {
   lp_share_bps: 7000,
@@ -36,24 +44,15 @@ function makeSignal(overrides: Partial<TradeSignalLedgerRow> = {}): TradeSignalL
 
 describe('universal epoch allocator helpers', () => {
   beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
-      const url = String(input)
-      if (url.includes('0xaaaa000000000000000000000000000000000001')) {
-        return {
-          ok: true,
-          json: async () => ({ percentile: 80 }),
-        }
-      }
-
-      return {
-        ok: true,
-        json: async () => ({ percentile: 20 }),
-      }
-    }))
+    vi.mocked(getServerLegacyScore).mockImplementation(async (address: string) => {
+      const percentile = address.toLowerCase().includes('0xaaaa000000000000000000000000000000000001') ? 80 : 20
+      // Only `percentile` is read by the allocator; cast the partial to the return type.
+      return { percentile } as Awaited<ReturnType<typeof getServerLegacyScore>>
+    })
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
+    vi.clearAllMocks()
   })
 
   it('derives stable epoch window helpers deterministically', () => {
