@@ -5,8 +5,12 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import type { LockTier } from '@/lib/web2/vault/types'
 import { buildVaultDepositMessage } from '@/lib/web3/signedActionMessages'
-import { LOCK_TIER_INDEX, SOCIAL_VAULT_ABI } from '@/lib/web3/vault/socialVaultAbi'
+import { LOCK_TIER_INDEX, PAIR_VAULT_ABI } from '@/lib/web3/vault/pairVaultAbi'
 import { createPublicClient, decodeFunctionData, http, parseUnits, recoverMessageAddress } from 'viem'
+
+// token0 (USDC) decimals — the `usdc_amount` field records the USDC side of the pair deposit.
+const TOKEN0_DECIMALS = Number(process.env.NEXT_PUBLIC_VAULT_TOKEN0_DECIMALS ?? 6)
+const TOKEN1_DECIMALS = Number(process.env.NEXT_PUBLIC_VAULT_TOKEN1_DECIMALS ?? 18)
 import { base, baseSepolia } from 'viem/chains'
 
 const LOCK_TIERS: LockTier[] = ['flex', 'committed', 'aligned', 'core']
@@ -72,13 +76,16 @@ export const POST = createHandler(async (req, ctx) => {
   if ((receipt.from ?? '').toLowerCase() !== walletLower) return ctx.json({ error: 'Deposit transaction wallet mismatch' }, 403)
   if ((tx.to ?? '').toLowerCase() !== vaultAddress) return ctx.json({ error: 'Deposit transaction target mismatch' }, 403)
 
-  const decoded = decodeFunctionData({ abi: SOCIAL_VAULT_ABI, data: tx.input })
-  if (decoded.functionName !== 'depositWithLock') return ctx.json({ error: 'Deposit transaction calldata mismatch' }, 403)
+  const decoded = decodeFunctionData({ abi: PAIR_VAULT_ABI, data: tx.input })
+  if (decoded.functionName !== 'deposit') return ctx.json({ error: 'Deposit transaction calldata mismatch' }, 403)
 
-  // depositWithLock(assets, receiver, tier) — skip the receiver arg
-  const [amountWei, , tierIndex] = decoded.args
-  if (amountWei !== parseUnits(String(usdc_amount), 6)) return ctx.json({ error: 'Deposit amount mismatch' }, 403)
+  // deposit(amount0Desired, amount1Desired, minShares, tier) — token0 = USDC, token1 = WETH.
+  // `usdc_amount` is bound to the USDC (token0) side; amount1 is read from calldata for the record/log.
+  const [amount0Wei, amount1Wei, , tierIndex] = decoded.args
+  if (amount0Wei !== parseUnits(String(usdc_amount), TOKEN0_DECIMALS)) return ctx.json({ error: 'Deposit amount mismatch' }, 403)
   if (Number(tierIndex) !== LOCK_TIER_INDEX[lock_tier]) return ctx.json({ error: 'Deposit tier mismatch' }, 403)
+  const token1Amount = Number(amount1Wei) / 10 ** TOKEN1_DECIMALS
+  ctx.log.info('vault/deposit', 'pair deposit verified', { tx_hash, usdc_amount, token1Amount })
 
   const lockDays    = LOCK_DAYS[lock_tier]
   const lockedUntil = lockDays ? new Date(Date.now() + lockDays * 86_400_000).toISOString() : null
