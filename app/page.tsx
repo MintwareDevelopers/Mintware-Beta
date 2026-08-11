@@ -570,18 +570,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* LAUNCH BAND */}
-      <section className="border-b border-atx-ink">
-        <div className="mx-auto max-w-[1180px] px-6 py-[18px] flex items-center justify-between flex-wrap gap-4">
-          <div className="text-[16px] font-bold tracking-[-0.01em] max-w-[30ch]">
-            Your wallet already has a history. Come get paid for it.
-          </div>
-          <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white">
-            {isConnected ? 'Go to the app →' : 'Launch app →'}
-          </button>
-        </div>
-      </section>
-
     </div>
   )
 }
