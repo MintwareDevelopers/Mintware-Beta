@@ -9,7 +9,7 @@ import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
 import type { SocialVault, LpDeposit, WithdrawalQueueEntry, LockTier } from '@/lib/web2/vault/types'
 import { LOCK_TIERS } from '@/lib/web2/vault/types'
-import { useVaultDeposit, useVaultWithdraw, useVaultExecuteRedeem, useVaultOnchain } from '@/lib/web3/vault/useSocialVault'
+import { useVaultDeposit, useVaultWithdraw, useVaultExecuteRedeem, useVaultOnchain, TOKEN0_SYMBOL, TOKEN1_SYMBOL } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultDepositMessage, buildVaultWithdrawMessage } from '@/lib/web3/signedActionMessages'
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -86,13 +86,14 @@ function LockTierSelector({ value, onChange }: { value: LockTier; onChange: (t: 
 function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited: () => void }) {
   const { address } = useAccount()
   const { signMessageAsync } = useSignMessage()
-  const [amount, setAmount]   = useState('')
+  const [amount, setAmount]   = useState('')   // token0 = USDC (6dp)
+  const [amount1, setAmount1] = useState('')   // token1 = WETH (18dp)
   const [tier, setTier]       = useState<LockTier>('flex')
   const [success, setSuccess] = useState(false)
 
   const { deposit, stage, isPending, isSuccess, txHash, error, reset } = useVaultDeposit()
 
-  // After on-chain confirm → record in DB
+  // After on-chain confirm → record in DB. `usdc_amount` records the USDC (token0) side.
   useEffect(() => {
     if (!isSuccess || !address || !txHash) return
     const amountNum = parseFloat(amount)
@@ -126,6 +127,7 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
     syncDeposit().then(() => {
       setSuccess(true)
       setAmount('')
+      setAmount1('')
       onDeposited()
     }).catch(() => {
       setSuccess(true)
@@ -133,18 +135,20 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
     })
   }, [isSuccess]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const amt0 = parseFloat(amount) || 0
+  const amt1 = parseFloat(amount1) || 0
+
   async function handleDeposit() {
-    if (!address || !amount || parseFloat(amount) <= 0) return
+    if (!address || (amt0 <= 0 && amt1 <= 0)) return
     reset()
-    await deposit(parseFloat(amount), tier, address)
+    await deposit(amt0, amt1, tier, address)
   }
 
   const stageLabel: Record<typeof stage, string> = {
-    idle:       'Deposit USDC',
+    idle:       'Deposit liquidity',
     switching_chain: 'Switch to Base Sepolia…',
-    resetting_approval: 'Resetting token permission…',
-    approving:  'Approving USDC…',
-    approved:   'Approval confirmed',
+    approving:  `Approving ${TOKEN0_SYMBOL} + ${TOKEN1_SYMBOL}…`,
+    approved:   'Approvals confirmed',
     depositing: 'Depositing…',
     success:    'Deposited!',
     error:      'Retry deposit',
@@ -172,21 +176,39 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
 
   return (
     <div className="flex flex-col gap-[14px]">
-      {/* Amount input */}
+      {/* Dual-token amount inputs — the pair vault takes BOTH sides */}
       <div>
         <label className={`${LABEL} block mb-1.5`}>
-          USDC amount
+          {TOKEN0_SYMBOL} amount (token0)
         </label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-atx-ink/55 font-atx-mono">$</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-atx-ink/55 font-atx-mono">{TOKEN0_SYMBOL}</span>
           <input
             type="number"
             placeholder="0.00"
             value={amount}
             onChange={e => setAmount(e.target.value)}
-            className="w-full pl-6 pr-3 py-2.5 border border-atx-ink/30 bg-atx-panel font-atx-mono text-[15px] text-atx-ink outline-none focus:border-atx-blue box-border"
+            className="w-full pl-16 pr-3 py-2.5 border border-atx-ink/30 bg-atx-panel font-atx-mono text-[15px] text-atx-ink outline-none focus:border-atx-blue box-border"
           />
         </div>
+      </div>
+      <div>
+        <label className={`${LABEL} block mb-1.5`}>
+          {TOKEN1_SYMBOL} amount (token1)
+        </label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-atx-ink/55 font-atx-mono">{TOKEN1_SYMBOL}</span>
+          <input
+            type="number"
+            placeholder="0.00"
+            value={amount1}
+            onChange={e => setAmount1(e.target.value)}
+            className="w-full pl-16 pr-3 py-2.5 border border-atx-ink/30 bg-atx-panel font-atx-mono text-[15px] text-atx-ink outline-none focus:border-atx-blue box-border"
+          />
+        </div>
+        <span className="block mt-1 text-[11px] text-atx-ink/45 font-atx-display">
+          Provide both tokens in roughly the pool ratio. Unused dust is refunded on-chain.
+        </span>
       </div>
 
       {/* Lock tier */}
@@ -210,8 +232,8 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
           What will happen
         </div>
         <div className="flex flex-col gap-1 text-[12px] text-atx-ink/60 font-atx-display leading-[1.55]">
-          <div>1. Your wallet may ask for permission to let SocialVault use your USDC. That step does not move funds.</div>
-          <div>2. Mintware checks the deposit call before your wallet signs the final transaction.</div>
+          <div>1. Your wallet approves the vault to use your {TOKEN0_SYMBOL} and {TOKEN1_SYMBOL}. Those steps do not move funds.</div>
+          <div>2. Mintware simulates the deposit call before your wallet signs the final transaction.</div>
           <div>3. Your wallet then confirms the deposit and your LP position appears after the chain confirms it.</div>
         </div>
       </div>
@@ -238,7 +260,7 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
 
       <button
         onClick={handleDeposit}
-        disabled={isPending || !amount || parseFloat(amount) <= 0 || vault.status === 'closed'}
+        disabled={isPending || (amt0 <= 0 && amt1 <= 0) || vault.status === 'closed'}
         className="p-3 bg-atx-blue text-white border border-atx-ink font-atx-mono text-[14px] font-bold disabled:opacity-50 transition-opacity"
       >
         {stageLabel[stage]}
@@ -335,10 +357,18 @@ function VaultDetailContent() {
   async function handleWithdraw(depositId: string) {
     const dep = deposits.find(d => d.id === depositId)
     if (!dep || !address) return
+    // The pair vault tracks ONE share balance per wallet (shares = V4 liquidity units),
+    // so a redeem request operates on the wallet's whole on-chain position, not a single
+    // DB deposit row. Require a live position before requesting.
+    const shares = onchain.position?.shares
+    if (!shares || shares <= 0n) {
+      setWithErr('No on-chain position to withdraw yet. Give the deposit a moment to confirm.')
+      return
+    }
     setWith(depositId); setWithErr('')
     try {
-      // Step 1: on-chain requestWithdrawal
-      vaultWithdraw.withdraw(dep.usdc_amount)
+      // Step 1: on-chain requestRedeem(shares) — queues the 7-day notice.
+      vaultWithdraw.withdraw(shares)
       // Wait for tx — useEffect below picks up isSuccess
     } catch (e: unknown) {
       setWithErr(e instanceof Error ? e.message : 'Withdrawal failed')
@@ -519,8 +549,8 @@ function VaultDetailContent() {
                         ) : onchain.position?.hasPosition ? (
                           <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
                             <div>
-                              <div className="text-[18px] font-bold font-atx-mono text-atx-blue leading-none">{fmtUSD(onchain.position.usdcDeposited)}</div>
-                              <div className={`${LABEL} mt-1`}>Deposited (USDC)</div>
+                              <div className="text-[18px] font-bold font-atx-mono text-atx-blue leading-none">{onchain.position.shares.toString()}</div>
+                              <div className={`${LABEL} mt-1`}>Shares (liquidity units)</div>
                             </div>
                             <div>
                               <div className="text-[14px] font-bold font-atx-mono text-atx-ink leading-none capitalize">{onchain.position.tier}</div>
@@ -535,8 +565,12 @@ function VaultDetailContent() {
                               <div className={`${LABEL} mt-1`}>Lock status</div>
                             </div>
                             <div>
-                              <div className="text-[13px] font-atx-mono text-atx-ink leading-none">{onchain.position.compoundEnabled ? 'On' : 'Off'}</div>
-                              <div className={`${LABEL} mt-1`}>Auto-compound</div>
+                              <div className="text-[13px] font-atx-mono text-atx-ink leading-none">
+                                {onchain.position.depositedAt > 0
+                                  ? new Date(onchain.position.depositedAt * 1000).toLocaleDateString()
+                                  : '—'}
+                              </div>
+                              <div className={`${LABEL} mt-1`}>Deposited</div>
                             </div>
                           </div>
                         ) : (

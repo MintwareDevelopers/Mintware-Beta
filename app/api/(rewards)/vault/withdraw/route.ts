@@ -4,8 +4,8 @@
 
 import { createHandler } from '@/lib/web2/routeHandler'
 import { buildVaultWithdrawMessage } from '@/lib/web3/signedActionMessages'
-import { SOCIAL_VAULT_ABI } from '@/lib/web3/vault/socialVaultAbi'
-import { createPublicClient, decodeFunctionData, http, parseUnits, recoverMessageAddress } from 'viem'
+import { PAIR_VAULT_ABI } from '@/lib/web3/vault/pairVaultAbi'
+import { createPublicClient, decodeFunctionData, http, recoverMessageAddress } from 'viem'
 import { base, baseSepolia } from 'viem/chains'
 
 interface WithdrawPayload {
@@ -80,10 +80,13 @@ export const POST = createHandler(async (req, ctx) => {
   if ((receipt.from ?? '').toLowerCase() !== walletLower) return ctx.json({ error: 'Withdrawal transaction wallet mismatch' }, 403)
   if ((tx.to ?? '').toLowerCase() !== vaultAddress) return ctx.json({ error: 'Withdrawal transaction target mismatch' }, 403)
 
-  const decoded = decodeFunctionData({ abi: SOCIAL_VAULT_ABI, data: tx.input })
+  const decoded = decodeFunctionData({ abi: PAIR_VAULT_ABI, data: tx.input })
   if (decoded.functionName !== 'requestRedeem') return ctx.json({ error: 'Withdrawal transaction calldata mismatch' }, 403)
-  const [amountWei] = decoded.args // requestRedeem(shares); shares ~1:1 with USDC (6-dp)
-  if (amountWei !== parseUnits(String(requested_amount), 6)) return ctx.json({ error: 'Withdrawal amount mismatch' }, 403)
+  // requestRedeem(shares). On the pair vault `shares` are V4 liquidity units, NOT a USDC
+  // amount — so there is no 1:1 USDC equality to assert here. `requested_amount` remains the
+  // wallet-signed USDC display figure recorded for the queue; on-chain shares govern the funds.
+  const [sharesWei] = decoded.args
+  if (sharesWei <= 0n) return ctx.json({ error: 'Withdrawal shares must be positive' }, 403)
 
   const { pct: penalty_pct, amount: penalty_amount } = calcPenalty(deposit, requested_amount)
   const now = new Date()

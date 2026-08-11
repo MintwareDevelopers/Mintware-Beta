@@ -6,7 +6,7 @@
 // Step 1: Project details (name, token address, chain)
 // Step 2: Pool configuration (fee tier, tick spacing, seed amount)
 // Step 3: Lock tier defaults + fee split preview
-// Step 4: Review + deploy (calls SocialVault.seedTeamTokens — T3.5 wire)
+// Step 4: Review + register the vault against the live MintwareDeFiPairVault (DB record)
 // =============================================================================
 
 import { useAccount, useSignMessage } from 'wagmi'
@@ -17,7 +17,6 @@ import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
 import { createPublicClient, http, erc20Abi, isAddress, type Chain } from 'viem'
 import { base, baseSepolia } from 'viem/chains'
-import { useVaultSeed } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultCreateMessage } from '@/lib/web3/signedActionMessages'
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -327,7 +326,7 @@ function Step4({
 
       <div className="bg-atx-panel border border-atx-ink/25 border-l-[3px] border-l-atx-clay px-3.5 py-2.5 text-[12px] text-atx-clay font-atx-display leading-[1.5] flex items-start gap-2">
         <Star className="w-3.5 h-3.5 shrink-0 mt-0.5 text-atx-clay" />
-        <span>This will call <code className="font-atx-mono">SocialVault.seedTeamTokens()</code> on-chain. Make sure your wallet has sufficient project tokens approved for transfer.</span>
+        <span>This registers your vault against the live Mintware pair vault. On-chain pool creation and initial liquidity are handled by the Mintware provider.</span>
       </div>
 
       <div className="bg-atx-panel border border-atx-ink/20 px-3.5 py-2.5">
@@ -335,9 +334,9 @@ function Step4({
           What will happen
         </div>
         <div className="flex flex-col gap-1 text-[12px] text-atx-ink/60 font-atx-display leading-[1.55]">
-          <div>1. Mintware creates the vault record so the on-chain seed can point at the right vault ID.</div>
-          <div>2. Your wallet may ask for token permission first. That step is not a transfer.</div>
-          <div>3. Mintware simulates the seed call, then your wallet confirms the final on-chain seed transaction.</div>
+          <div>1. Your wallet signs a message authorizing the vault record — no funds move.</div>
+          <div>2. Mintware creates the vault entry pointing at the deployed pair contract.</div>
+          <div>3. It appears in the vault list, ready for dual-token LP deposits.</div>
         </div>
       </div>
 
@@ -372,7 +371,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
   const [step, setStep]         = useState(0)
   const [error, setError]       = useState('')
   const [deployed, setDeployed] = useState<string | null>(null)
-  const vaultSeed = useVaultSeed()
+  const [submitting, setSubmitting] = useState(false)
 
   const [draft, setDraft] = useState<VaultDraft>({
     name:         '',
@@ -392,15 +391,18 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
     return true
   }
 
-  // Step 1: create DB record → get vault ID → seed on-chain
+  // Create the vault DB record pointing at the LIVE pair vault. On-chain pool creation +
+  // seeding is a provider/owner operation (the pair vault has no self-serve seed entrypoint),
+  // so the self-serve flow records the vault against the deployed pair contract for listing.
   async function handleDeploy() {
     if (!address) return
     setError('')
+    setSubmitting(true)
     try {
       const issuedAt = Date.now()
       const poolKey = {
         currency0:   draft.tokenAddress.toLowerCase(),
-        currency1:   '0x036cbd53842c5426634e7929541ec2318f3dcf7e',
+        currency1:   (process.env.NEXT_PUBLIC_VAULT_TOKEN1_ADDRESS ?? '0x4200000000000000000000000000000000000006').toLowerCase(),
         fee:         draft.feeTier,
         tickSpacing: draft.tickSpacing,
         hooks:       process.env.NEXT_PUBLIC_MW_SOCIAL_HOOK_ADDRESS ?? '',
@@ -416,7 +418,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
       })
       const authSignature = await signMessageAsync({ message: authMessage })
 
-      // 1a. Create vault record in DB to get the UUID
+      // Create vault record in DB to get the UUID.
       const res = await fetch('/api/vaults/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -439,48 +441,15 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
         throw new Error(d.error ?? `HTTP ${res.status}`)
       }
       const { id: vaultId } = await res.json()
-
-      // 1b. Seed on-chain — approve token + seedTeamTokens()
-      // sqrtPriceX96 = 1:1 price (token ≈ USDC) = 2^96 ≈ 79228162514264337593543950336
-      const sqrtPriceX96 = BigInt('79228162514264337593543950336')
-      // Seed amount: convert USDC dollar value → 6-decimal token units (approx 1:1)
-      const amountTokens = BigInt(Math.round(draft.seedAmount * 1e6))
-
-      await vaultSeed.seed({
-        vaultDbId:    vaultId,
-        projectToken: draft.tokenAddress as `0x${string}`,
-        amountTokens,
-        poolKey: {
-          currency0:   draft.tokenAddress.toLowerCase() as `0x${string}`,
-          currency1:   '0x036cbd53842c5426634e7929541ec2318f3dcf7e' as `0x${string}`,
-          fee:         draft.feeTier,
-          tickSpacing: draft.tickSpacing,
-          hooks:       (process.env.NEXT_PUBLIC_MW_SOCIAL_HOOK_ADDRESS ?? '') as `0x${string}`,
-        },
-        sqrtPriceX96,
-      })
-      // Success picked up by useEffect below
       setDeployed(vaultId)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Deploy failed')
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  // Propagate vault seed hook errors
-  useEffect(() => {
-    if (vaultSeed.error) setError(vaultSeed.error)
-  }, [vaultSeed.error])
-
   const STEPS = ['Project', 'Pool', 'Defaults', 'Review']
-  const seedStageLabel: Record<typeof vaultSeed.stage, string> = {
-    idle: 'Deploy vault →',
-    resetting_approval: 'Resetting token permission…',
-    approving: 'Check wallet for token permission…',
-    approved: 'Permission confirmed',
-    seeding: 'Seeding vault on-chain…',
-    success: 'Vault ready',
-    error: 'Retry deploy',
-  }
 
   if (deployed) return (
     <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
@@ -491,7 +460,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
           Vault created
         </div>
         <div className="text-[14px] text-atx-ink/55 font-atx-display mb-7 leading-[1.6]">
-          <strong>{draft.name}</strong> is now seeded on-chain and ready for LP deposits as soon as the network confirms the transaction.
+          <strong>{draft.name}</strong> is registered against the live Mintware pair vault and now appears in the vault list for dual-token LP deposits.
         </div>
         <div className="flex gap-2.5 justify-center">
           <Link href="/vaults" className="px-5 py-2.5 bg-atx-blue text-white border border-atx-ink text-[14px] font-semibold font-atx-mono no-underline">
@@ -542,7 +511,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
           {step === 0 && <Step1 draft={draft} onChange={patch} />}
           {step === 1 && <Step2 draft={draft} onChange={patch} />}
           {step === 2 && <Step3 draft={draft} onChange={patch} />}
-          {step === 3 && <Step4 draft={draft} submitting={vaultSeed.isPending} submitLabel={seedStageLabel[vaultSeed.stage]} error={error} onDeploy={handleDeploy} />}
+          {step === 3 && <Step4 draft={draft} submitting={submitting} submitLabel="Creating vault…" error={error} onDeploy={handleDeploy} />}
 
           {/* Nav buttons (hidden on step 3 which has its own deploy button) */}
           {step < 3 && (

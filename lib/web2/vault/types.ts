@@ -43,7 +43,10 @@ export interface LpDeposit {
   id:                string
   vault_id:          string
   wallet:            string
+  // Dual-sided pair vault: `usdc_amount` records the token0 (USDC, 6dp) side of the deposit.
+  // The token1 (WETH, 18dp) side is optional and read from on-chain calldata when present.
   usdc_amount:       number
+  token1_amount?:    number
   lock_tier:         LockTier
   locked_until:      string | null
   deposited_at:      string

@@ -6,6 +6,8 @@ import type { SocialVault } from '@/lib/web2/vault/types'
 const LABEL = 'font-atx-mono uppercase tracking-[0.1em] text-[10px] text-atx-ink/55'
 const LINE = 'border-atx-ink/20'
 
+const short = (a: string) => (a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '—')
+
 function Star({ className = '' }: { className?: string }) {
   return (
     <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
@@ -80,7 +82,9 @@ export function VaultCard({ vault }: { vault: SocialVault }) {
           <div>
             <div className="text-[15px] font-semibold text-atx-ink font-atx-display leading-[1.3]">{vault.name}</div>
             <div className="text-[11px] text-atx-ink/55 font-atx-mono mt-[2px]">
-              {vault.project_token ? `${vault.project_token.slice(0, 6)}…${vault.project_token.slice(-4)}` : '—'}
+              {vault.pool_key?.token0 && vault.pool_key?.token1
+                ? `${short(vault.pool_key.token0)} / ${short(vault.pool_key.token1)}`
+                : vault.project_token ? short(vault.project_token) : '—'}
             </div>
           </div>
         </div>

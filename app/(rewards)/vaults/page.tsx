@@ -34,12 +34,13 @@ const LABEL = 'font-atx-mono uppercase tracking-[0.08em] text-[10px]'
 const MOCK_VAULTS: SocialVault[] = [
   {
     id:               'mock-vault-1',
-    name:             'PROJ/USDC Vault',
+    name:             'WETH/USDC Pair Vault',
     team_wallet:      '0xcf2EA99639C038a475B710b2Be82b974D777C306',
-    project_token:    '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+    project_token:    '0x4200000000000000000000000000000000000006',
     seed_amount:      100000,
-    pool_key:         { token0: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', token1: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', fee: 3000, tickSpacing: 60, hooks: '0x8e7e05f5b6ed07acAa7Ac41D74a0d86a50AA8aC4' },
-    contract_address: '0xb9FB965Caa7197932b52631e0121Ea54586e2B88',
+    // token0 = USDC (6dp), token1 = WETH (18dp) — the live MintwareDeFiPairVault pool on Base Sepolia.
+    pool_key:         { token0: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', token1: '0x4200000000000000000000000000000000000006', fee: 3000, tickSpacing: 60, hooks: '0xe752305538189D2A56A067106373CD6d36dC8aC8' },
+    contract_address: '0x983c11b4afb39766ada3a69c66addbc73b456f6e',
     status:           'active',
     chain_id:         84532,
     tick_lower:       -60000,
