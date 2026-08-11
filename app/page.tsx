@@ -428,7 +428,7 @@ export default function HomePage() {
                   <span className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-ink/45">For teams</span>
                 </div>
                 <p className="text-[14px] leading-[1.5] text-atx-ink/70 mt-2.5">
-                  Lock your token. Your community matches it in USDC. That&apos;s real depth — tighter spreads, better fills — not a promise. During the lock, the fees it earns go entirely to the people who backed you.
+                  Teams lock their token. The community matches in USDC. That&apos;s real depth — tighter spreads, better fills. During the lock, the fees earned go entirely to the community.
                 </p>
               </div>
               <div className="p-5 bg-atx-panel flex-1">
