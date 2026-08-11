@@ -32,9 +32,10 @@ interface IFeeVaultNotifier {
 ///         unlock/settlement plumbing. Surfaces (DeFi / RWA) override the liquidity
 ///         hooks. See docs/developers/phase3-track0-foundation-design.md (D5–D9).
 ///
-/// @dev    DEPRECATED base for the single-sided `MintwareDeFiVault4626` — see that contract's
-///         deprecation note. The go-forward DeFi design is the dual-sided `MintwarePairVault`
-///         family, whose shares are real V4 liquidity units (no par-principal NAV risk).
+/// @dev    ⚠ TEST-ONLY base (NOT FOR DEPLOYMENT) for the single-sided `MintwareDeFiVault4626` — see
+///         that contract's note (retained only as a hook-test LP fixture; deployment vectors removed).
+///         The go-forward DeFi design is the dual-sided `MintwarePairVault` family, whose shares are
+///         real V4 liquidity units (no par-principal NAV risk).
 ///
 ///         Share semantics (D5): a share is a claim on USDC *principal*.
 ///         totalAssets() returns tracked principal, NOT live LP NAV — yield flows

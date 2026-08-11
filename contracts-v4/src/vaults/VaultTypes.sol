@@ -33,7 +33,7 @@ enum LockTier {
     Core
 }
 
-/// @dev Config passed to MintwareVaultFactory.createVault().
+/// @dev Config for the (test-only) single-sided MintwareDeFiVault4626 constructor.
 struct VaultConfig {
     VaultSurface surface;
     address provider;         // strategy manager (DeFi) / issuer (RWA)
