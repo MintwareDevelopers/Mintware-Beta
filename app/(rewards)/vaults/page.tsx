@@ -148,7 +148,7 @@ function VaultsContent() {
         <div className={`${ey} mt-8 mb-2.5`}>Example vaults · illustrative</div>
         <div className="grid grid-cols-2 gap-3 max-w-[760px] max-[560px]:grid-cols-1">
           {S.featured.map(([name, pair, apy]) => (
-            <div key={name} className="border border-atx-ink bg-atx-panel p-[18px] border-t-4 border-t-atx-blue">
+            <div key={name} className="border border-atx-ink bg-atx-panel p-[18px] border-t-4 border-t-atx-blue mw-lift">
               <div className="text-[17px] font-bold">{name}</div>
               <div className="font-atx-mono text-[11px] text-atx-ink/55 mt-1">{pair}</div>
               <div className="flex items-center justify-between mt-3.5 border-t border-atx-ink/15 pt-3">
@@ -164,7 +164,7 @@ function VaultsContent() {
       </PageHero>
 
       {/* ── vault list — the main event, straight after the hero ── */}
-      <div className="max-w-[1100px] mx-auto px-7 pt-8 pb-[52px] max-[800px]:px-4">
+      <div className="max-w-[1100px] mx-auto px-7 pt-8 pb-[52px] max-[800px]:px-4 mw-reveal">
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
           <div className="flex border border-atx-ink">
             {FILTERS.map(f => (
