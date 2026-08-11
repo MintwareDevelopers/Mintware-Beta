@@ -265,7 +265,7 @@ export default function HomePage() {
   const privy = useMintwarePrivy()
   const router = useRouter()
 
-  function launchApp(dest = '/rewards') {
+  function launchApp(dest = '/vaults') {
     if (isConnected) router.push(dest)
     else openConnectModal?.()
   }
