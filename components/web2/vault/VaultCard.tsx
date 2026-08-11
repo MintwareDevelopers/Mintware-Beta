@@ -71,7 +71,7 @@ export function VaultCard({ vault }: { vault: SocialVault }) {
   const sample = vault.is_sample !== false
   return (
     <Link
-      href={`/vault/${vault.id}`}
+      href={`/app/vault/${vault.id}`}
       className={`font-atx-display bg-atx-panel border border-atx-ink border-l-[3px] flex flex-col gap-[14px] p-5 no-underline text-inherit transition-shadow duration-200 hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] [&_*]:rounded-none ${sample ? 'border-l-atx-mesquite' : 'border-l-atx-blue'}`}
     >
       <div className="flex items-start justify-between gap-[10px]">

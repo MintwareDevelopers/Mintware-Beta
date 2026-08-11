@@ -107,7 +107,7 @@ export function LiquidityTab({ wallet }: Props) {
         return (
           <a
             key={d.id}
-            href={`/vault/${d.vault?.id ?? d.vault_id}`}
+            href={`/app/vault/${d.vault?.id ?? d.vault_id}`}
             className="bg-atx-panel border border-atx-ink/25 no-underline transition-shadow duration-150 hover:shadow-[4px_4px_0_0_rgba(17,17,17,0.12)]"
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px', cursor: 'pointer', textDecoration: 'none' }}
           >

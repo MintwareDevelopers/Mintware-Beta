@@ -461,7 +461,7 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
               </>
             )
             return clickable
-              ? <Link key={v.id} href={`/vault/${v.id}`} className={rowClass}>{inner}</Link>
+              ? <Link key={v.id} href={`/app/vault/${v.id}`} className={rowClass}>{inner}</Link>
               : <div key={v.id} className={rowClass}>{inner}</div>
           })
         )}

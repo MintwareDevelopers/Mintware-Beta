@@ -467,7 +467,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
             View all vaults
           </Link>
           {deployed !== 'new' && (
-            <Link href={`/vault/${deployed}`} className="px-5 py-2.5 border border-atx-ink/30 bg-atx-panel text-atx-ink text-[14px] font-semibold font-atx-mono no-underline">
+            <Link href={`/app/vault/${deployed}`} className="px-5 py-2.5 border border-atx-ink/30 bg-atx-panel text-atx-ink text-[14px] font-semibold font-atx-mono no-underline">
               View vault →
             </Link>
           )}
