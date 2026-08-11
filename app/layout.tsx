@@ -5,6 +5,7 @@ import { Providers } from '@/components/web2/providers'
 import { Toaster } from 'sonner'
 import { CommandPalette } from '@/components/web2/CommandPalette'
 import { MwFooter } from '@/components/web2/MwFooter'
+import { ScrollProgress, RevealObserver } from '@/components/web2/motion'
 import '@rainbow-me/rainbowkit/styles.css'
 import './globals.css'
 
@@ -71,6 +72,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${jakarta.variable} ${dmMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased`}>
+        {/* Enable motion before paint so scroll-reveal never flashes hidden and
+            degrades to fully-visible content when JS is off. */}
+        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js-motion')" }} />
+        <ScrollProgress />
+        <RevealObserver />
         <Providers>
           {children}
           <MwFooter />

@@ -211,7 +211,7 @@ function SwapContent() {
         />
 
         {/* ── SWAP — dominant, front and centre. Nothing above the widget. ── */}
-        <div className="max-w-[760px] mx-auto w-full px-6 pt-8 pb-3 max-[600px]:px-4 max-[600px]:pt-5">
+        <div className="max-w-[760px] mx-auto w-full px-6 pt-8 pb-3 max-[600px]:px-4 max-[600px]:pt-5 mw-reveal">
           {/* The real swap widget — money-path. Remounts (key) when the
               selected campaign changes so its token preselect applies. */}
           <div className="bg-atx-panel border border-atx-ink overflow-hidden">
@@ -232,7 +232,7 @@ function SwapContent() {
 
         {/* ── Below & framed: reputation stat band (bible — essential above, secondary below) ── */}
         <section className="border-y border-atx-ink mt-9">
-          <div className="mx-auto max-w-[1180px] grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
+          <div className="mx-auto max-w-[1180px] grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr] mw-reveal">
             {[
               {
                 l: 'Your score',

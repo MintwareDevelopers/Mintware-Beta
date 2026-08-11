@@ -182,7 +182,7 @@ function LeaderboardContent() {
 
       {/* stat band */}
       <section className="border-b border-atx-ink">
-        <div className="grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr]">
+        <div className="grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr] mw-reveal">
           {[
             ['Ranked wallets', loading ? '—' : String(total).padStart(3, '0'), 'this campaign'],
             ['Top score', loading ? '—' : String(topScore), 'attribution'],
@@ -273,7 +273,7 @@ function LeaderboardContent() {
       )}
 
       {/* Board */}
-      <section className="bg-atx-panel border-t border-atx-ink mt-7">
+      <section className="bg-atx-panel border-t border-atx-ink mt-7 mw-reveal">
         {/* Metric tabs */}
         <div className="px-7 pt-7 flex items-center gap-3.5 flex-wrap max-[560px]:px-4">
           <span className="font-atx-mono text-[14px] border border-atx-ink px-3 py-2 bg-atx-bone">{String(total).padStart(2, '0')}</span>

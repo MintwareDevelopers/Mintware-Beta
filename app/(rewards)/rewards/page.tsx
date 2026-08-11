@@ -353,7 +353,7 @@ function RewardsContent() {
 
           {/* ── How earning works — the "why", below the campaigns ── */}
           <section className="border-t border-atx-ink">
-            <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
+            <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
               <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-acid" />Every action, rewarded</div>
               <h2 className={H2}>Four ways to earn. <span className="text-atx-blue">One multiplier.</span></h2>
               <p className={LEAD}>Every action is scored, then multiplied by your reputation.</p>
@@ -446,7 +446,7 @@ function TeamsView() {
 
       {/* Problem */}
       <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
+        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
           <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />An emission is the easy part</div>
           <h2 className={H2}>The capital an emission buys is <span className="text-atx-blue">where programs die.</span></h2>
           <p className={LEAD}>A rewards program is only as good as the capital it attracts. Three problems sink most of them — and paying a bigger APY makes all three worse.</p>
@@ -460,7 +460,7 @@ function TeamsView() {
 
       {/* Why reputation beats raw APY */}
       <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
+        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
           <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />Why reputation beats raw APY</div>
           <h2 className={H2}>Every rewards program fights its own users. <span className="text-atx-blue">Reputation flips it.</span></h2>
           <p className={LEAD}>A pool doesn&apos;t want the most dollars — it wants capital that&apos;s <i>sticky, qualified, and stays</i>. That&apos;s a filter no program can buy with a bigger emission.</p>
@@ -485,7 +485,7 @@ function TeamsView() {
 
       {/* Two surfaces */}
       <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
+        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
           <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-coral" />One reputation engine, every pool</div>
           <h2 className={H2}>Reward the right capital. <span className="text-atx-blue">Not the mercenaries.</span></h2>
           <p className={LEAD}>The same reputation filter pays the users who actually build — and upgrades any rewards program you run. Point a campaign at any pool.</p>
@@ -502,7 +502,7 @@ function TeamsView() {
 
       {/* Outcomes */}
       <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
+        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
           <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />What it drives</div>
           <h2 className={H2}>Retention. Conversion. <span className="text-atx-blue">And capital that actually stays.</span></h2>
           <div className="grid grid-cols-3 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
@@ -515,7 +515,7 @@ function TeamsView() {
 
       {/* Lifecycle */}
       <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4">
+        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
           <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />One engine, whole lifecycle</div>
           <h2 className={H2}>Attract the capital <span className="text-atx-blue">and</span> keep it.</h2>
           <p className={LEAD}>The same campaign types cover the whole lifecycle — the reputation filter brings quality flow in, and the lock + multiplier mechanics keep it.</p>

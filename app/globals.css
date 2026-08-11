@@ -300,6 +300,31 @@
   .lb-separator .lb-td { text-align: center; color: var(--color-atx-grey); font-size: 11px; letter-spacing: 3px; padding: 8px; border-bottom: 1px solid rgba(17,17,17,0.10); }
   @media (max-width: 820px) { .lb-pts-col { display: none; } }
 
+  /* ── Motion / liveness system ───────────────────────────────── */
+  .mw-marquee { overflow: hidden; position: relative; }
+  .mw-marquee-track { display: flex; width: max-content; animation: mw-marquee-scroll linear infinite; will-change: transform; }
+  .mw-marquee:hover .mw-marquee-track { animation-play-state: paused; }
+  .mw-marquee-static { animation: none; }
+  .mw-marquee-item { display: inline-flex; align-items: center; white-space: nowrap; }
+  @keyframes mw-marquee-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  /* reactive hover lift — cards / table rows / stat tiles */
+  .mw-lift { transition: transform .18s cubic-bezier(.22,1,.36,1), box-shadow .18s ease, border-color .18s ease; }
+  .mw-lift:hover { transform: translateY(-2px); }
+
+  /* scroll-reveal — class-driven, toggled by RevealObserver. Gated on `.js-motion`
+     (set before paint in layout) so content is fully visible with no JS and never
+     flashes hidden. */
+  .js-motion .mw-reveal { opacity: 0; transform: translateY(16px);
+    transition: opacity .55s cubic-bezier(.22,1,.36,1), transform .55s cubic-bezier(.22,1,.36,1); }
+  .js-motion .mw-reveal.mw-in { opacity: 1; transform: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mw-marquee-track { animation: none !important; }
+    .mw-lift, .mw-lift:hover { transition: none; transform: none; }
+    .js-motion .mw-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+  }
+
   /* ── CampaignHeader animations ──────────────────────────────── */
   @keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 

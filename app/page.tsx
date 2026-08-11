@@ -16,6 +16,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getAddress } from 'viem'
 import { scoreApiUrl } from '@/lib/web2/api'
+import { CountUp, Marquee } from '@/components/web2/motion'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
@@ -305,13 +306,13 @@ export default function HomePage() {
       {/* HERO — score is the hero */}
       <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
         <div className="mx-auto max-w-[1180px] px-6 pt-[56px] pb-[48px] grid gap-8 justify-items-start">
-          <div className="max-w-[660px] grid gap-4">
-            <div className={ey}>On-chain reputation · 100+ chains</div>
-            <h1 className="font-bold tracking-[-0.03em] leading-[1.03] text-[clamp(38px,5.4vw,60px)]">
-              Your wallet has a <span className="text-atx-blue">reputation.</span>
+          <div className="max-w-[680px] grid gap-4">
+            <div className={ey}>Onchain contribution should mean something</div>
+            <h1 className="font-bold tracking-[-0.03em] leading-[1.02] text-[clamp(40px,5.8vw,64px)]">
+              Liquidity as a <span className="text-atx-blue">public good.</span>
             </h1>
-            <p className="text-[clamp(16px,1.6vw,19px)] leading-[1.5] text-atx-ink/70 max-w-[560px]">
-              See your Attribution score across 100+ chains — free, no connection needed.
+            <p className="text-[clamp(17px,1.8vw,21px)] leading-[1.4] text-atx-ink/60 italic max-w-[560px]">
+              Built on Uniswap v4.
             </p>
           </div>
 
@@ -342,7 +343,7 @@ export default function HomePage() {
 
       {/* DOMINANT — the flagship vault CTA (always visible, not gated behind a score) */}
       <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className="mx-auto max-w-[1180px] px-6 py-14 flex items-center justify-between gap-8 flex-wrap max-[720px]:py-10">
+        <div className="mx-auto max-w-[1180px] px-6 py-14 flex items-center justify-between gap-8 flex-wrap max-[720px]:py-10 mw-reveal">
           <div className="max-w-[720px]">
             <div className={ey}>✴ The flagship — reputation-weighted V4 vaults</div>
             <h2 className="font-bold tracking-[-0.03em] leading-[1.02] text-[clamp(30px,4.6vw,52px)] mt-3.5">
@@ -355,9 +356,21 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* AMBIENT TICKER — evergreen facts, in motion */}
+      <div className="border-b border-atx-ink bg-atx-panel">
+        <Marquee className="py-2.5" speed={38} items={
+          ['100+ chains scored', 'EAS-attested on Base', 'MEV-protected Uniswap V4', 'Reputation-weighted fee share', 'Up to 1.95× multiplier', 'Free — no connection needed']
+            .map((t) => (
+              <span className="font-atx-mono text-[11px] uppercase tracking-[0.16em] text-atx-ink/75 px-5">
+                <span className="text-atx-blue mr-5">◆</span>{t}
+              </span>
+            ))
+        } />
+      </div>
+
       {/* TWO VAULT PRODUCTS */}
       <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className="mx-auto max-w-[1180px] px-6 py-[44px]">
+        <div className="mx-auto max-w-[1180px] px-6 py-[44px] mw-reveal">
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div>
               <div className={ey}>✴ Two ways to earn</div>
@@ -370,7 +383,7 @@ export default function HomePage() {
 
           <div className="grid grid-cols-2 gap-4 mt-8 max-[820px]:grid-cols-1">
             {/* Card 1 — Growth Vaults */}
-            <div className="border border-atx-ink bg-atx-bone flex flex-col" style={{ borderTop: '4px solid var(--color-atx-blue)' }}>
+            <div className="border border-atx-ink bg-atx-bone flex flex-col mw-lift" style={{ borderTop: '4px solid var(--color-atx-blue)' }}>
               <div className="p-5 border-b border-atx-ink/15">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-[19px] font-bold">Growth Vaults</span>
@@ -399,7 +412,7 @@ export default function HomePage() {
                 </div>
                 <div className="flex items-center justify-between pt-3">
                   <span className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/55">Example APY</span>
-                  <span className="font-atx-mono font-bold text-[24px] tracking-tight text-atx-mesquite">10.4%</span>
+                  <span className="font-atx-mono font-bold text-[24px] tracking-tight text-atx-mesquite"><CountUp value={10.4} decimals={1} suffix="%" /></span>
                 </div>
               </div>
               <button onClick={() => launchApp('/vaults')} className="mt-auto w-full py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-blue text-white border-t border-atx-ink cursor-pointer">
@@ -408,7 +421,7 @@ export default function HomePage() {
             </div>
 
             {/* Card 2 — Matched Liquidity */}
-            <div className="border border-atx-ink bg-atx-bone flex flex-col" style={{ borderTop: '4px solid var(--color-atx-coral)' }}>
+            <div className="border border-atx-ink bg-atx-bone flex flex-col mw-lift" style={{ borderTop: '4px solid var(--color-atx-coral)' }}>
               <div className="p-5 border-b border-atx-ink/15">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-[19px] font-bold">Matched Liquidity</span>
@@ -440,9 +453,9 @@ export default function HomePage() {
       </section>
 
       {/* STATS */}
-      <section className="border-b border-atx-ink grid grid-cols-4 max-[720px]:grid-cols-2">
+      <section className="border-b border-atx-ink grid grid-cols-4 max-[720px]:grid-cols-2 mw-reveal">
         {STATS.map((s, i) => (
-          <div key={s.k} className={`px-5 py-6 ${i < 3 ? 'border-r border-atx-ink' : ''} max-[720px]:border-b max-[720px]:border-atx-ink`}>
+          <div key={s.k} className={`px-5 py-6 mw-lift ${i < 3 ? 'border-r border-atx-ink' : ''} max-[720px]:border-b max-[720px]:border-atx-ink`}>
             <div className="font-atx-mono text-[28px] font-bold tracking-[-0.03em]">{s.n}</div>
             <div className="font-atx-mono text-[9px] uppercase tracking-[0.14em] text-atx-ink/55 mt-1.5">{s.k}</div>
           </div>
@@ -451,7 +464,7 @@ export default function HomePage() {
 
       {/* 01 — THREE AUDIENCES */}
       <section className="border-b border-atx-ink">
-        <div className="mx-auto max-w-[1180px] px-6 py-[52px]">
+        <div className="mx-auto max-w-[1180px] px-6 py-[52px] mw-reveal">
           <div className="flex items-baseline gap-3.5">
             <span className="font-atx-mono text-[12px] text-atx-blue">01</span>
             <span className={ey}>Built for everyone</span>
@@ -461,7 +474,7 @@ export default function HomePage() {
             {AUDIENCES.map((a, i) => (
               <div
                 key={a.tag}
-                className={`p-[22px] ${i < 2 ? 'border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink' : ''}`}
+                className={`p-[22px] mw-lift ${i < 2 ? 'border-r border-atx-ink max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink' : ''}`}
               >
                 <div className="flex items-center justify-between mb-[18px]">
                   <Star className={`w-5 h-5 ${a.star}`} />
@@ -487,7 +500,7 @@ export default function HomePage() {
 
       {/* 02 — HOW IT WORKS */}
       <section className="border-b border-atx-ink">
-        <div className="mx-auto max-w-[1180px] px-6 py-[52px]">
+        <div className="mx-auto max-w-[1180px] px-6 py-[52px] mw-reveal">
           <div className="flex items-baseline gap-3.5">
             <span className="font-atx-mono text-[12px] text-atx-blue">02</span>
             <span className={ey}>How it works</span>
@@ -545,7 +558,7 @@ export default function HomePage() {
 
       {/* WAITLIST */}
       <section className="border-b border-atx-ink">
-        <div className="mx-auto max-w-[1180px] px-6 py-[44px] grid [grid-template-columns:1fr_0.9fr] gap-10 items-center max-[720px]:grid-cols-1 max-[720px]:gap-6">
+        <div className="mx-auto max-w-[1180px] px-6 py-[44px] grid [grid-template-columns:1fr_0.9fr] gap-10 items-center max-[720px]:grid-cols-1 max-[720px]:gap-6 mw-reveal">
           <div>
             <div className={ey}>✴ Stay in the loop</div>
             <h2 className="font-bold tracking-[-0.02em] text-[clamp(22px,2.6vw,32px)] leading-[1.1] mt-3">
