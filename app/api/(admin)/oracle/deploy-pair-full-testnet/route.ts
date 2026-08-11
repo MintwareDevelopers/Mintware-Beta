@@ -32,7 +32,6 @@ import { createHandler } from '@/lib/web2/routeHandler'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { HOOK_COORDINATOR_ABI, HOOK_COORDINATOR_BYTECODE } from '@/lib/web3/artifacts/hookCoordinator'
 import { PAIR_VAULT_ABI, PAIR_VAULT_BYTECODE } from '@/lib/web3/artifacts/pairVault'
-import { WEIGHTED_DISTRIBUTOR_ABI } from '@/lib/web3/artifacts/weightedDistributor'
 import { AM_AUCTION_ABI, AM_AUCTION_BYTECODE } from '@/lib/web3/artifacts/amAuction'
 
 export const dynamic = 'force-dynamic'
@@ -162,13 +161,11 @@ export const POST = createHandler(async (_req, ctx) => {
   })
   await publicClient.waitForTransactionReceipt({ hash: initTx })
 
-  // 4. Rail B rewards — register the pair DUAL-sided on the reused distributor + wire the vault.
+  // 4. Rail B rewards. NOTE: vault.setWeightedDistributor ITSELF calls dist.registerVault(vaultId,
+  //    token0, token1) dual-sided (MintwareDeFiPairVault.sol:393) — so do NOT pre-register here, or
+  //    the internal call reverts VaultAlreadyRegistered (0x49d8266e). We only authorize the vault as
+  //    a registrar first so its internal registerVault passes the distributor's allowlist.
   const dvid = keccak256(toBytes(`mw-pair-${vault}`))
-  const registerTx = await walletClient.writeContract({
-    address: weightedDist, abi: WEIGHTED_DISTRIBUTOR_ABI, functionName: 'registerVault',
-    args: [dvid, currency0, currency1], account, chain: baseSepolia,
-  })
-  await publicClient.waitForTransactionReceipt({ hash: registerTx })
   const authTx = await walletClient.writeContract({
     address: weightedDist, abi: EXTRA_ABI, functionName: 'setAuthorizedRegistrar', args: [vault, true], account, chain: baseSepolia,
   })
@@ -229,7 +226,7 @@ export const POST = createHandler(async (_req, ctx) => {
     poolManager: POOL_MANAGER,
     currency0, currency1, fee: 'DYNAMIC', tickSpacing: TICK_SPACING,
     amAmm: AMAMM,
-    txs: { hookDeployTx, vaultDeployTx, setVaultTx, initTx, registerTx, authTx, setWDistTx,
+    txs: { hookDeployTx, vaultDeployTx, setVaultTx, initTx, authTx, setWDistTx,
            auctionDeployTx, setCoordTx, setAuctionTx, setRentFunderTx, configTx, setEnabledTx },
     basescanVault: `https://sepolia.basescan.org/address/${vault}`,
     note: 'Fork-simulate deposit→swap→skim→fundRent before trusting MEV. Set NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS = vault.',

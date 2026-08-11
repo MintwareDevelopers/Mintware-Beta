@@ -16,6 +16,7 @@ import {MWHookCoordinator}       from "../src/hooks/MWHookCoordinator.sol";
 import {MWAmAuction}             from "../src/hooks/MWAmAuction.sol";
 import {AmParams}                from "../src/hooks/MWAmAuctionLib.sol";
 import {MintwareDeFiPairVault}   from "../src/vaults/MintwareDeFiPairVault.sol";
+import {MintwareWeightedDistributor} from "../src/MintwareWeightedDistributor.sol";
 import {PoolProfile, LockTier}   from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20}      from "./mocks/MockERC20.sol";
@@ -168,5 +169,31 @@ contract MWPairVaultAmAmmForkTest is Test {
         vm.prank(mgr);
         auction.claim(t0);
         assertEq(IERC20(t0).balanceOf(mgr) - mgrBefore, owed, "manager claimed the skim");
+    }
+
+    // ── Rail B rewards wiring — the exact sequence the deploy route runs (regression for the
+    //    double-register bug that broke the first live fire: 0x49d8266e VaultAlreadyRegistered). ──
+
+    function test_rewards_wiring_corrected() public {
+        if (!forked) { vm.skip(true); return; }
+        // MintwareWeightedDistributor(oracleSigner, owner)
+        MintwareWeightedDistributor dist = new MintwareWeightedDistributor(deployer, deployer);
+        // Authorize the vault as a registrar, then wire — setWeightedDistributor registers the pair
+        // DUAL-sided ITSELF. Correct route does NOT pre-register.
+        dist.setAuthorizedRegistrar(address(vault), true);
+        vault.setWeightedDistributor(address(dist), keccak256("rewards"));
+        assertEq(vault.weightedDistributor(), address(dist), "distributor wired without double-register");
+    }
+
+    function test_rewards_double_register_reverts() public {
+        if (!forked) { vm.skip(true); return; }
+        MintwareWeightedDistributor dist = new MintwareWeightedDistributor(deployer, deployer);
+        bytes32 dvid = keccak256("rewards");
+        // The OLD (buggy) route pre-registered here → setWeightedDistributor's internal registerVault
+        // then reverts VaultAlreadyRegistered. Prove that failure mode so it can't regress.
+        dist.registerVault(dvid, Currency.unwrap(poolKey.currency0), Currency.unwrap(poolKey.currency1));
+        dist.setAuthorizedRegistrar(address(vault), true);
+        vm.expectRevert();
+        vault.setWeightedDistributor(address(dist), dvid);
     }
 }
