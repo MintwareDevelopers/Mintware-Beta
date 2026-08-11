@@ -34,7 +34,7 @@ export function MarketingNav({ active }: { active?: 'attribution' | 'defi' | 'te
   const router = useRouter()
 
   function launchApp() {
-    if (isConnected) router.push('/rewards')
+    if (isConnected) router.push('/vaults')
     else openConnectModal?.()
   }
 
