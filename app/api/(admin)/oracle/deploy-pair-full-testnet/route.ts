@@ -74,11 +74,15 @@ const EXTRA_ABI = [
   { type: 'function', name: 'setAuthorizedRegistrar', stateMutability: 'nonpayable', inputs: [{ name: 'registrar', type: 'address' }, { name: 'ok', type: 'bool' }], outputs: [] },
 ] as const
 
-/** Mirror HookMiner.find: mine salt so the CREATE2 hook address matches the permission bits. */
+/** Mirror HookMiner.find: mine salt so the CREATE2 hook address matches the permission bits.
+ *  Starts from a RANDOM offset so each deploy mines a DISTINCT hook address → distinct PoolId.
+ *  A fixed start yields the same hook every run, so a re-run collides with an already-initialized
+ *  pool (PoolAlreadyInitialized, 0x7983c051). Testnet: a fresh, independent stack per call. */
 function mineHookSalt(initcode: `0x${string}`): { salt: `0x${string}`; hook: `0x${string}` } | null {
   const initcodeHash = keccak256(initcode)
-  for (let nonce = 0; nonce < MAX_LOOP; nonce++) {
-    const salt = toHex(BigInt(nonce), { size: 32 })
+  const start = Math.floor(Math.random() * 1_000_000_000)
+  for (let i = 0; i < MAX_LOOP; i++) {
+    const salt = toHex(BigInt(start + i), { size: 32 })
     const addr = getAddress(slice(keccak256(concat(['0xff', C2_FACTORY, salt, initcodeHash])), 12))
     if ((BigInt(addr) & HOOK_MASK) === HOOK_FLAGS) return { salt, hook: addr }
   }
