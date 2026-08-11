@@ -38,7 +38,13 @@ const nextConfig = {
   bundlePagesRouterDependencies: true,
 
   async redirects() {
-    return [{ source: '/dashboard', destination: '/rewards', permanent: true }]
+    return [
+      { source: '/dashboard', destination: '/rewards', permanent: true },
+      // Vault action pages moved into the gated /app tier (IA Phase 1). `create`
+      // must precede `:id` so it isn't captured as an id.
+      { source: '/vault/create', destination: '/app/vault/create', permanent: true },
+      { source: '/vault/:id', destination: '/app/vault/:id', permanent: true },
+    ]
   },
 
   images: {

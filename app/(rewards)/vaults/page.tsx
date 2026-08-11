@@ -174,7 +174,7 @@ function VaultsContent() {
               </button>
             ))}
           </div>
-          <Link href="/vault/create" className="inline-flex items-center gap-1.5 px-4 py-2 bg-atx-blue text-white border border-atx-ink font-atx-mono text-[13px] font-semibold uppercase tracking-[0.04em] no-underline">
+          <Link href="/app/vault/create" className="inline-flex items-center gap-1.5 px-4 py-2 bg-atx-blue text-white border border-atx-ink font-atx-mono text-[13px] font-semibold uppercase tracking-[0.04em] no-underline">
             + Create vault
           </Link>
         </div>
@@ -235,7 +235,7 @@ function VaultsContent() {
                       <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-blue max-[820px]:hidden">{S.base.toFixed(1)}%</td>
                       <td className="px-4 py-3.5 font-atx-mono text-[12px] text-atx-ink/60 max-[680px]:hidden">{chainName(v.chain_id)}</td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link href={`/vault/${v.id}`} className="inline-flex font-atx-mono text-[10.5px] uppercase tracking-[0.06em] border border-atx-ink px-3 py-1.5 no-underline text-atx-ink hover:bg-atx-ink hover:text-atx-bone transition-colors whitespace-nowrap">Open →</Link>
+                        <Link href={`/app/vault/${v.id}`} className="inline-flex font-atx-mono text-[10.5px] uppercase tracking-[0.06em] border border-atx-ink px-3 py-1.5 no-underline text-atx-ink hover:bg-atx-ink hover:text-atx-bone transition-colors whitespace-nowrap">Open →</Link>
                       </td>
                     </tr>
                   )
