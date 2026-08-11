@@ -173,9 +173,23 @@ Agents can link an ERC-8004 token ID to their wallet via `linkErc8004()`. This c
 
 ---
 
-## Phase 2 — Social Vault Contracts
+## Phase 2 — Social Vault Contracts (⚠ RETIRED — historical)
 
-> **Network: Base Sepolia testnet only.** Social Vaults have not yet been deployed to mainnet — this will happen as a separate step at Phase 2 public launch.
+> **⚠ RETIRED (2026-08-11). Do NOT use the addresses in this section.** The single-sided
+> `SocialVault` (`0xb9FB965…`) + `MWSocialHook` (`0x8e7e05f5…`) + the signed-range
+> `rebalanceWithProposal` pipeline are all superseded and removed from the repo. The **live** DeFi
+> stack is the dual-sided **MintwareDeFiPairVault** + **MWHookCoordinator** + **MWAmAuction**
+> (am-AMM MEV recapture) + **MintwareWeightedDistributor**, deployed on Base Sepolia via
+> `POST /api/oracle/deploy-pair-full-testnet`. Current live addresses:
+>
+> | Contract | Base Sepolia (84532) |
+> |---|---|
+> | `MintwareDeFiPairVault` | `0x983c11b4afb39766ada3a69c66addbc73b456f6e` |
+> | `MWHookCoordinator` (hook) | `0xe752305538189D2A56A067106373CD6d36dC8aC8` |
+> | `MWAmAuction` (MEV recapture) | `0xcea883efd3a66fc11e3ee53dc83e50a2896773bc` |
+> | `MintwareWeightedDistributor` | `0x8cb41291b336e0ee6a4703c5cf18fbda04fa9ed2` |
+>
+> The section below documents the retired design for historical reference only.
 
 Three contracts power the Social Vault system:
 
