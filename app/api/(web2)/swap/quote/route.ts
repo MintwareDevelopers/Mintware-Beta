@@ -40,6 +40,9 @@ export const POST = createHandler(async (req, ctx) => {
 
   const treasury = TREASURY_ADDRESS || process.env.NEXT_PUBLIC_MINTWARE_TREASURY
 
+  // Same-chain swap: fromChain === toChain, so LI.FI never bridges — no bridge
+  // param is needed. (A prior `allowBridges: 'false'` was invalid: LI.FI parses
+  // it as the array ['false'], which is not a valid bridge name → 400 code 1011.)
   const qp = new URLSearchParams({
     fromChain:    String(body.chainId),
     toChain:      String(body.chainId),
@@ -48,7 +51,6 @@ export const POST = createHandler(async (req, ctx) => {
     fromAmount:   body.sellAmount,
     fromAddress:  body.taker,
     integrator:   INTEGRATOR,
-    allowBridges: 'false',   // same-chain only
   })
 
   // Fee is injected here, server-side, and CANNOT be removed by the client.
