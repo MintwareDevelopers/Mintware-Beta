@@ -7,23 +7,16 @@
 // kept so its callers — campaigns/join, campaigns/refresh-score — are untouched.)
 // =============================================================================
 
-import { API } from '@/lib/web2/api'
+import { getServerLegacyScore } from '@/lib/attribution/serverScore'
 
 const EVM_RE = /^0x[0-9a-fA-F]{40}$/
 
-// fetchScore — Attribution score for one wallet; fails gracefully to 0.
-async function fetchScore(address: string, timeoutMs = 4000): Promise<number> {
+// fetchScore — canonical Attribution score for one wallet (in-repo Engine v2,
+// same as the UI); fails gracefully to 0.
+async function fetchScore(address: string): Promise<number> {
   try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-    try {
-      const res = await fetch(`${API}/score?address=${encodeURIComponent(address)}`, { signal: controller.signal })
-      if (!res.ok) return 0
-      const d = await res.json()
-      return typeof d.score === 'number' ? d.score : 0
-    } finally {
-      clearTimeout(timer)
-    }
+    const d = await getServerLegacyScore(address)
+    return typeof d.score === 'number' ? d.score : 0
   } catch {
     return 0
   }

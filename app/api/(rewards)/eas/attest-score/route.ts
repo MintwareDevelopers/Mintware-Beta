@@ -16,7 +16,7 @@
 // =============================================================================
 
 import { attestScore }  from '@/lib/rewards/eas'
-import { API }          from '@/lib/web2/api'
+import { getServerLegacyScore } from '@/lib/attribution/serverScore'
 import { createHandler } from '@/lib/web2/routeHandler'
 
 // ── Stale threshold ───────────────────────────────────────────────────────────
@@ -69,13 +69,11 @@ export const GET = createHandler(async (req, ctx) => {
   // ── Fetch score from Attribution API ───────────────────────────────────────
   let scoreData: Parameters<typeof attestScore>[1]
   try {
-    const res = await fetch(`${API}/score?address=${address}`, { cache: 'no-store' })
-    if (!res.ok) {
-      return ctx.json({ error: 'score API unavailable' }, 502)
-    }
-    const json = await res.json() as Record<string, unknown>
+    // Canonical in-repo Engine v2 score (same number the UI shows), enriched
+    // with our referral-DB Network signal via ctx.supabase.
+    const json = await getServerLegacyScore(address, { supabase: ctx.supabase })
 
-    // Map API response to attestation shape
+    // Map score response to attestation shape
     const signals = (json.signals as { key: string; score: number }[]) ?? []
     scoreData = {
       score:        (json.score        as number)  ?? 0,

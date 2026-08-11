@@ -10,7 +10,7 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { createWalletClient, http } from 'viem'
 import { base, baseSepolia } from 'viem/chains'
-import { API } from '@/lib/web2/api'
+import { getServerLegacyScore } from '@/lib/attribution/serverScore'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 
 function attributionMultiplierBps(percentile: number) {
@@ -59,8 +59,7 @@ export const GET = createHandler(async (req, ctx) => {
 
   let percentile = 0
   try {
-    const scoreRes = await fetch(`${API}/score?address=${walletAddr}`)
-    if (scoreRes.ok) percentile = (await scoreRes.json()).percentile ?? 0
+    percentile = (await getServerLegacyScore(walletAddr, { supabase: ctx.supabase })).percentile ?? 0
   } catch { /* non-fatal */ }
 
   let durationBps = 10000

@@ -57,6 +57,10 @@ async function withConcurrency<T, R>(items: T[], limit: number, fn: (item: T) =>
   return results
 }
 
+// ⚠ Batch percentile loader — stays on the external worker on purpose. Pointing
+// it at the in-repo Engine v2 would fan out 6 chains × 2 calls per wallet across
+// an unbounded wallet loop and blow Etherscan's ~5 req/sec free tier; cut over
+// only with a throttled batch reader.
 async function fetchAttributionPercentile(wallet: string): Promise<number> {
   try {
     const res = await fetch(`${API}/score?address=${wallet}`, {

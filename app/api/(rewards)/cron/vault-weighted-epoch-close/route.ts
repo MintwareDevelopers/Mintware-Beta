@@ -38,7 +38,10 @@ export const dynamic = 'force-dynamic'
 const SIG_WINDOW_SECS = 60 * 60 // keeper must submit within an hour of signing
 
 /** Best-effort Attribution percentile fetch for a set of wallets. Returns null (→ fail-closed)
- *  if the score source errors wholesale; a per-wallet miss is simply absent from the map. */
+ *  if the score source errors wholesale; a per-wallet miss is simply absent from the map.
+ *  ⚠ Batch loop — stays on the external worker on purpose; the in-repo Engine v2 fans out
+ *  6 chains × 2 calls per wallet and would blow Etherscan's free tier here (needs a throttled
+ *  batch reader before cutover). */
 async function loadPercentiles(wallets: string[]): Promise<Map<string, number> | null> {
   try {
     const map = new Map<string, number>()

@@ -95,6 +95,11 @@ export function computeMultipliers(
 // Calls GET /score?address= for each participant.
 // Concurrency limited to 5 simultaneous requests — avoids hammering the worker.
 // Wallets that fail score fetch fall back to the cached score in participants table.
+//
+// ⚠ Intentionally still on the external worker (NOT the in-repo Engine v2). This
+// is a BATCH loop over many wallets; the engine fans out 6 chains × 2 calls per
+// wallet, so at concurrency 5 it would blow Etherscan's ~5 req/sec free tier and
+// re-degrade scores. Cut this over only alongside a throttled batch reader.
 // ---------------------------------------------------------------------------
 const SCORE_FETCH_CONCURRENCY = 5
 
