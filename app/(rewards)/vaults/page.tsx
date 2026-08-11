@@ -6,6 +6,7 @@ import { PageHero } from '@/components/web2/PageHero'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { VaultAmplify } from '@/components/vaults/VaultAmplify'
+import { ULVMechanics } from '@/components/vaults/ULVMechanics'
 import { fmtUSD } from '@/lib/web2/api'
 import type { SocialVault, VaultStatus } from '@/lib/web2/vault/types'
 
@@ -162,6 +163,9 @@ function VaultsContent() {
           ))}
         </div>
       </PageHero>
+
+      {/* ── how the ULV works — the flagship mechanism ── */}
+      <ULVMechanics />
 
       {/* ── vault list — the main event, straight after the hero ── */}
       <div className="max-w-[1100px] mx-auto px-7 pt-8 pb-[52px] max-[800px]:px-4 mw-reveal">
