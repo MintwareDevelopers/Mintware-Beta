@@ -72,6 +72,7 @@ const EXTRA_ABI = [
   { type: 'function', name: 'setRentFunder', stateMutability: 'nonpayable', inputs: [{ name: '_funder', type: 'address' }], outputs: [] },
   { type: 'function', name: 'setWeightedDistributor', stateMutability: 'nonpayable', inputs: [{ name: 'dist', type: 'address' }, { name: 'vaultId', type: 'bytes32' }], outputs: [] },
   { type: 'function', name: 'setAuthorizedRegistrar', stateMutability: 'nonpayable', inputs: [{ name: 'registrar', type: 'address' }, { name: 'ok', type: 'bool' }], outputs: [] },
+  { type: 'function', name: 'authorizedRegistrar', stateMutability: 'view', inputs: [{ name: '', type: 'address' }], outputs: [{ name: '', type: 'bool' }] },
 ] as const
 
 /** Mirror HookMiner.find: mine salt so the CREATE2 hook address matches the permission bits.
@@ -174,8 +175,21 @@ export const POST = createHandler(async (_req, ctx) => {
     address: weightedDist, abi: EXTRA_ABI, functionName: 'setAuthorizedRegistrar', args: [vault, true], account, chain: baseSepolia,
   })
   await publicClient.waitForTransactionReceipt({ hash: authTx })
+  // Base Sepolia's public RPC lags read-after-write and load-balances across nodes with differing
+  // lag. setWeightedDistributor's gas-estimation SIMULATES the vault's internal registerVault, which
+  // reads authorizedRegistrar[vault] just set above — a stale read reverts NotAuthorizedRegistrar
+  // (0x946d7b84). Poll until the authorize is visible, then send with EXPLICIT gas so viem skips
+  // estimateGas entirely (the tx executes on-chain in nonce order, where the state is correct).
+  for (let i = 0; i < 20; i++) {
+    const seen = await publicClient
+      .readContract({ address: weightedDist, abi: EXTRA_ABI, functionName: 'authorizedRegistrar', args: [vault] })
+      .catch(() => false)
+    if (seen) break
+    await new Promise((r) => setTimeout(r, 1500))
+  }
   const setWDistTx = await walletClient.writeContract({
-    address: vault, abi: EXTRA_ABI, functionName: 'setWeightedDistributor', args: [weightedDist, dvid], account, chain: baseSepolia,
+    address: vault, abi: EXTRA_ABI, functionName: 'setWeightedDistributor', args: [weightedDist, dvid],
+    account, chain: baseSepolia, gas: 600_000n,
   })
   await publicClient.waitForTransactionReceipt({ hash: setWDistTx })
 
@@ -187,6 +201,13 @@ export const POST = createHandler(async (_req, ctx) => {
   const auction = auctionRcpt.contractAddress
   if (auctionRcpt.status !== 'success' || !auction) {
     return ctx.json({ ok: false, step: 'auction-deploy', auctionDeployTx, error: 'auction deploy reverted' }, 500)
+  }
+  // Wait for the fresh auction's code to be visible on the (lagging) RPC before wiring it, so the
+  // next writes' gas-estimation doesn't simulate against a node that doesn't have the contract yet.
+  let auctionCode = await publicClient.getBytecode({ address: auction })
+  for (let i = 0; i < 8 && (!auctionCode || auctionCode === '0x'); i++) {
+    await new Promise((r) => setTimeout(r, 1000))
+    auctionCode = await publicClient.getBytecode({ address: auction })
   }
   const poolId = computePoolId(currency0, currency1, mined.hook)
 
