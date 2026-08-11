@@ -22,6 +22,34 @@ import type { WalletActivity, HoldingPosition } from '../types'
 const V2_BASE = 'https://api.etherscan.io/v2/api'
 const DAY_MS = 86_400_000
 
+// ── Global rate limiter ─────────────────────────────────────────────────────
+// The Etherscan free tier limits by KEY (~5 req/sec), shared across every chain
+// — so one process-wide token bucket makes ALL callers safe: a single interactive
+// score (12 calls) or a cron looping over hundreds of wallets both queue here and
+// stay under the ceiling instead of getting 429'd (which would silently degrade
+// the score). Bucket: capacity 5, refills 5 tokens/sec.
+const RL_CAPACITY = 5
+const RL_REFILL_PER_SEC = 5
+let rlTokens = RL_CAPACITY
+let rlLast = 0
+async function acquireEtherscanSlot(): Promise<void> {
+  for (;;) {
+    const now = Date.now()
+    if (rlLast === 0) rlLast = now
+    const elapsed = (now - rlLast) / 1000
+    if (elapsed > 0) {
+      rlTokens = Math.min(RL_CAPACITY, rlTokens + elapsed * RL_REFILL_PER_SEC)
+      rlLast = now
+    }
+    if (rlTokens >= 1) {
+      rlTokens -= 1
+      return
+    }
+    const waitMs = Math.max(20, Math.ceil(((1 - rlTokens) / RL_REFILL_PER_SEC) * 1000))
+    await new Promise((r) => setTimeout(r, waitMs))
+  }
+}
+
 // Chains to scan. `native` is the CoinGecko id used to price the gas token so
 // native transfer volume + balance can be expressed in USD.
 export const ETHERSCAN_CHAINS: { id: number; name: string; native: string }[] = [
@@ -151,6 +179,7 @@ export function mapEtherscanToActivity(input: {
 
 // ── Network fetcher ─────────────────────────────────────────────────────────
 async function esCall(chainId: number, params: Record<string, string>, key: string): Promise<unknown> {
+  await acquireEtherscanSlot() // free-tier ceiling: keep every caller under ~5 req/sec
   const qs = new URLSearchParams({ chainid: String(chainId), apikey: key, ...params })
   const res = await fetch(`${V2_BASE}?${qs.toString()}`, { headers: { accept: 'application/json' } })
   if (!res.ok) throw new Error(`etherscan ${chainId} HTTP ${res.status}`)

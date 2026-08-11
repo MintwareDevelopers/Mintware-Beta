@@ -1,4 +1,4 @@
-import { API } from '@/lib/web2/api'
+import { getServerLegacyScore } from '@/lib/attribution/serverScore'
 import { classifyTradeSignal } from './classifier'
 import { aggregateTradeSignalAllocations } from './allocator'
 import type {
@@ -57,19 +57,13 @@ async function withConcurrency<T, R>(items: T[], limit: number, fn: (item: T) =>
   return results
 }
 
-// ⚠ Batch percentile loader — stays on the external worker on purpose. Pointing
-// it at the in-repo Engine v2 would fan out 6 chains × 2 calls per wallet across
-// an unbounded wallet loop and blow Etherscan's ~5 req/sec free tier; cut over
-// only with a throttled batch reader.
+// Attribution percentile via the in-repo Engine v2 (getServerLegacyScore) — the
+// same canonical score the UI shows. The engine's global token-bucket limiter
+// (providers/etherscan.ts) keeps this batch under Etherscan's ~5 req/sec free tier.
 async function fetchAttributionPercentile(wallet: string): Promise<number> {
   try {
-    const res = await fetch(`${API}/score?address=${wallet}`, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!res.ok) return 0
-    const data = await res.json() as { percentile?: number }
-    return data.percentile ?? 0
+    const d = await getServerLegacyScore(wallet)
+    return d.percentile ?? 0
   } catch {
     return 0
   }

@@ -18,7 +18,7 @@
 // Writing is handled by the epoch-end cron after merkleBuilder completes.
 // =============================================================================
 
-import { API } from '@/lib/web2/api'
+import { getServerLegacyScore } from '@/lib/attribution/serverScore'
 import type { Campaign, Participant, ScoreMultipliers } from '@/lib/rewards/types'
 
 // ---------------------------------------------------------------------------
@@ -92,14 +92,11 @@ export function computeMultipliers(
 // ---------------------------------------------------------------------------
 // Attribution API score fetching
 //
-// Calls GET /score?address= for each participant.
-// Concurrency limited to 5 simultaneous requests — avoids hammering the worker.
-// Wallets that fail score fetch fall back to the cached score in participants table.
-//
-// ⚠ Intentionally still on the external worker (NOT the in-repo Engine v2). This
-// is a BATCH loop over many wallets; the engine fans out 6 chains × 2 calls per
-// wallet, so at concurrency 5 it would blow Etherscan's ~5 req/sec free tier and
-// re-degrade scores. Cut this over only alongside a throttled batch reader.
+// Scores each participant via the in-repo Engine v2 (getServerLegacyScore) — the
+// same canonical score the UI shows. Wallet-level concurrency stays at 5; the
+// engine's global token-bucket limiter (providers/etherscan.ts) keeps the whole
+// batch under Etherscan's ~5 req/sec free tier. Wallets that fail fall back to the
+// cached score in the participants table.
 // ---------------------------------------------------------------------------
 const SCORE_FETCH_CONCURRENCY = 5
 
@@ -111,12 +108,8 @@ interface ApiScoreResponse {
 
 async function fetchScoreProfile(wallet: string): Promise<ApiScoreResponse | null> {
   try {
-    const res = await fetch(`${API}/score?address=${wallet}`, {
-      cache: 'no-store',
-      signal: AbortSignal.timeout(8000),  // 8s timeout per wallet
-    })
-    if (!res.ok) return null
-    return await res.json() as ApiScoreResponse
+    const d = await getServerLegacyScore(wallet)
+    return { score: d.score, percentile: d.percentile, signals: d.signals }
   } catch {
     return null
   }

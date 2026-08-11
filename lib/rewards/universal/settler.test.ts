@@ -4,8 +4,16 @@ vi.mock('@/lib/web2/supabase', () => ({
   createSupabaseServiceClient: vi.fn(),
 }))
 
+// The allocator (reached via settleUniversalEpochs) now reads the canonical
+// in-repo Engine v2 score; mock it at the helper seam and return a uniform high
+// percentile (matches the previous global-fetch stub).
+vi.mock('@/lib/attribution/serverScore', () => ({
+  getServerLegacyScore: vi.fn(),
+}))
+
 import { createSupabaseServiceClient } from '@/lib/web2/supabase'
 import { settleUniversalEpochs } from '@/lib/rewards/universal/settler'
+import { getServerLegacyScore } from '@/lib/attribution/serverScore'
 
 function makeSupabaseMock(signalRows: object[]) {
   const insertEpochSingle = vi.fn().mockResolvedValue({ data: { id: 'epoch-1' }, error: null })
@@ -67,6 +75,9 @@ function makeSupabaseMock(signalRows: object[]) {
 describe('universal epoch settler', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    vi.mocked(getServerLegacyScore).mockImplementation(
+      async () => ({ percentile: 80 }) as Awaited<ReturnType<typeof getServerLegacyScore>>,
+    )
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
       json: async () => ({ percentile: 80 }),
