@@ -56,7 +56,7 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
   const [showSellSelector, setShowSellSelector] = useState(false)
   const [showBuySelector, setShowBuySelector] = useState(false)
 
-  // ── Campaign preselect (SwapModal): switch to the campaign chain, then
+  // ── Optional buy-token preselect: switch to the target chain, then
   //    pre-fill the buy token so the user lands ready to trade it. ──
   const { switchChain } = useSwitchChain()
   const preselectApplied = useRef(false)
