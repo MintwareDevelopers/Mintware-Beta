@@ -39,7 +39,7 @@ import { MW_IDLE_LIB_ABI, MW_IDLE_LIB_BYTECODE } from '@/lib/web3/artifacts/mwId
 import { MW_POSITION_LIB_ABI, MW_POSITION_LIB_BYTECODE } from '@/lib/web3/artifacts/mwPositionLib'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 120
+export const maxDuration = 300
 
 const POOL_MANAGER = '0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408' as const // Base Sepolia V4 PoolManager
 const C2_FACTORY   = '0x4e59b44847b379578588920cA78FbF26c0B4956C' as const // canonical CREATE2 factory
