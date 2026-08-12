@@ -33,15 +33,24 @@ import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { HOOK_COORDINATOR_ABI, HOOK_COORDINATOR_BYTECODE } from '@/lib/web3/artifacts/hookCoordinator'
 import { PAIR_VAULT_ABI, PAIR_VAULT_BYTECODE } from '@/lib/web3/artifacts/pairVault'
 import { AM_AUCTION_ABI, AM_AUCTION_BYTECODE } from '@/lib/web3/artifacts/amAuction'
+import { AAVE_ADAPTER_ABI, AAVE_ADAPTER_BYTECODE } from '@/lib/web3/artifacts/aaveAdapter'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
 
 const POOL_MANAGER = '0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408' as const // Base Sepolia V4 PoolManager
 const C2_FACTORY   = '0x4e59b44847b379578588920cA78FbF26c0B4956C' as const // canonical CREATE2 factory
-const USDC = '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as const
-const WETH = '0x4200000000000000000000000000000000000006' as const         // Base WETH9 predeploy
+// USDC + WETH must be the AAVE-MARKET tokens on Base Sepolia so the yield adapters can supply them.
+// (Was Circle's 0x036C… USDC — that token has no Aave reserve, so the adapter ctor's aToken check
+//  would revert. The Aave-market USDC below has aUSDC 0x10F1…; WETH is the Base predeploy and is
+//  ALSO the Aave-market WETH, so it is unchanged.)
+const USDC = '0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f' as const         // Aave v3 Base-Sepolia USDC
+const WETH = '0x4200000000000000000000000000000000000006' as const         // Base WETH9 predeploy == Aave WETH
 const ZERO = '0x0000000000000000000000000000000000000000' as const
+// Aave v3 Base-Sepolia — VERIFIED addresses for the ULV idle-in-Aave engine.
+const AAVE_PROVIDER = '0xE4C23309117Aa30342BFaae6c95c6478e0A4Ad00' as const // PoolAddressesProvider
+const AUSDC = '0x10F1A9D11CDf50041f3f8cB7191CBE2f31750ACC' as const         // aToken for USDC
+const AWETH = '0x73a5bB60b0B0fc35710DDc0ea9c407031E31Bdbb' as const         // aToken for WETH
 // Reuse the weighted distributor deployed 2026-08-10 (owner == this Privy wallet, so registerVault
 // bypasses the registrar allowlist). Override with WEIGHTED_DIST_ADDRESS to deploy/point elsewhere.
 const DEFAULT_WEIGHTED_DIST = '0x8cb41291b336e0ee6a4703c5cf18fbda04fa9ed2' as const
@@ -63,6 +72,33 @@ const AMAMM = {
   minRent:        1_000_000n, // 1 USDC/block floor (6-decimals) — TUNE
   K:              7_200,
   minBidMultBps:  11_000,    // 1.1x
+} as const
+
+// ULV engine params (testnet defaults — TUNE for mainnet).
+const ULV = {
+  // Hot buffer kept in the live V4 position; remainder idles in Aave. bps of managed liquidity.
+  bufferRatioBps: 2_000n,            // 20%
+  // Vault-level JIT ceilings in OUTPUT-TOKEN units. NOTE: the pool's two tokens have different
+  // decimals (WETH 18, USDC 6), so a single scalar cap can't be tight for both — it is a finite
+  // belt-and-suspenders ceiling. Sized generous for the 18-dec (WETH) side; on the 6-dec (USDC)
+  // side these raw values are effectively unbounded, and real bounding there comes from the
+  // adapter's Aave headroom (maxWithdrawable) + the hot buffer. Adapter per-block withdraw caps
+  // are left at 0 (unlimited) as instructed.
+  jitMaxPerSwap:  50_000_000_000_000_000_000n,   // 50e18 (~50 WETH-equiv/swap)
+  jitMaxPerBlock: 200_000_000_000_000_000_000n,  // 200e18
+  // Global size gate: |amountSpecified| >= threshold triggers a JIT open. Low so testnet swaps fire.
+  jitThreshold:   1_000_000n,        // 1e6 (any real WETH swap or >=1 USDC swap)
+  // Deviation-priced dynamic (surge) fee — the unmanaged-block LVR recapture lever.
+  baseFeePips:        3_000,         // 0.30% floor
+  maxFeePips:         30_000,        // 3% ceiling
+  slopePipsPerTick:   100n,          // +0.01%/tick of oracle deviation → hits 3% cap at 270 ticks
+  maxFeeStepPerBlock: 0,             // no per-block fee rate-limit on testnet
+  // Oracle circuit breaker left OFF: a fresh oracle at extreme deviation would revert swaps and
+  // brick the testnet pool. These guard params are inert while guardEnabled=false.
+  guardEnabled:         false,
+  maxTickMovePerBlock:  500,
+  maxDeviationTicks:    2_000,
+  maxCatchupBlocks:     10,
 } as const
 
 // Inline ABI fragments for setters the minimal artifacts don't include (leaves proven artifacts untouched).
@@ -166,6 +202,94 @@ export const POST = createHandler(async (_req, ctx) => {
   })
   await publicClient.waitForTransactionReceipt({ hash: initTx })
 
+  const poolId = computePoolId(currency0, currency1, mined.hook)
+
+  // 3.5 ULV ENGINE — idle-in-Aave + size-gated JIT + deviation-priced surge fee.
+  //     Deploy one Aave v3 yield adapter per token, authorize the vault on each, wire both into the
+  //     vault (by currency slot), point the vault at the hook (JIT bridge), set the hot buffer + JIT
+  //     caps, turn on the dynamic (surge) fee, and enroll the pool for size-gated JIT. Adapter ctor:
+  //     (provider, asset, aToken, vault=0, owner) — no per-block-cap ctor arg (that is a separate
+  //     setPerBlockWithdrawCap; left at 0 = unlimited here).
+  const deployAdapter = async (asset: `0x${string}`, aToken: `0x${string}`) => {
+    const tx = await walletClient.deployContract({
+      abi: AAVE_ADAPTER_ABI, bytecode: AAVE_ADAPTER_BYTECODE, account, chain: baseSepolia,
+      args: [AAVE_PROVIDER, asset, aToken, ZERO, account.address],
+    })
+    const rcpt = await publicClient.waitForTransactionReceipt({ hash: tx })
+    if (rcpt.status !== 'success' || !rcpt.contractAddress) return { tx, addr: null as `0x${string}` | null }
+    // Wait for the fresh adapter's code to be visible on the lagging RPC before wiring (so the next
+    // writes' gas-estimation doesn't simulate against a node that doesn't have it yet).
+    let code = await publicClient.getBytecode({ address: rcpt.contractAddress })
+    for (let i = 0; i < 8 && (!code || code === '0x'); i++) {
+      await new Promise((r) => setTimeout(r, 1000))
+      code = await publicClient.getBytecode({ address: rcpt.contractAddress })
+    }
+    return { tx, addr: rcpt.contractAddress }
+  }
+
+  const usdcAd = await deployAdapter(USDC, AUSDC)
+  if (!usdcAd.addr) return ctx.json({ ok: false, step: 'usdc-adapter-deploy', usdcAdapterDeployTx: usdcAd.tx, error: 'USDC adapter deploy reverted' }, 500)
+  const wethAd = await deployAdapter(WETH, AWETH)
+  if (!wethAd.addr) return ctx.json({ ok: false, step: 'weth-adapter-deploy', wethAdapterDeployTx: wethAd.tx, error: 'WETH adapter deploy reverted' }, 500)
+
+  // Authorize the vault as the sole supply/withdraw caller on each adapter.
+  const usdcSetVaultTx = await walletClient.writeContract({
+    address: usdcAd.addr, abi: AAVE_ADAPTER_ABI, functionName: 'setVault', args: [vault], account, chain: baseSepolia,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: usdcSetVaultTx })
+  const wethSetVaultTx = await walletClient.writeContract({
+    address: wethAd.addr, abi: AAVE_ADAPTER_ABI, functionName: 'setVault', args: [vault], account, chain: baseSepolia,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: wethSetVaultTx })
+
+  // Map adapters to the pool's currency0/currency1 slots. The vault sets token0=currency0,
+  // token1=currency1 and setAdapters(a0,a1) verifies a0.asset()==token0, a1.asset()==token1.
+  // (On Base Sepolia, WETH 0x4200… < USDC 0xba50… ⇒ currency0=WETH, currency1=USDC — but map by
+  //  address so a re-ordering can never mis-wire the slots.)
+  const adapter0 = getAddress(currency0) === getAddress(USDC) ? usdcAd.addr : wethAd.addr
+  const adapter1 = getAddress(currency1) === getAddress(USDC) ? usdcAd.addr : wethAd.addr
+  const setAdaptersTx = await walletClient.writeContract({
+    address: vault, abi: PAIR_VAULT_ABI, functionName: 'setAdapters', args: [adapter0, adapter1], account, chain: baseSepolia,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: setAdaptersTx })
+
+  // Point the vault at the hook (the sole onlyHook caller of jitOpen).
+  const setHookTx = await walletClient.writeContract({
+    address: vault, abi: PAIR_VAULT_ABI, functionName: 'setHook', args: [mined.hook], account, chain: baseSepolia,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: setHookTx })
+
+  // Hot buffer + JIT ceilings.
+  const setBufferTx = await walletClient.writeContract({
+    address: vault, abi: PAIR_VAULT_ABI, functionName: 'setBufferRatio', args: [ULV.bufferRatioBps], account, chain: baseSepolia,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: setBufferTx })
+  const setJitCapsTx = await walletClient.writeContract({
+    address: vault, abi: PAIR_VAULT_ABI, functionName: 'setJitCaps', args: [ULV.jitMaxPerSwap, ULV.jitMaxPerBlock], account, chain: baseSepolia,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: setJitCapsTx })
+
+  // Deviation-priced dynamic (surge) fee — makes the unmanaged-block LVR recapture active.
+  // configurePool(poolId, baseFeePips, maxFeePips, slopePipsPerTick, maxFeeStepPerBlock,
+  //               dynamicFeeEnabled, guardEnabled, maxTickMovePerBlock, maxDeviationTicks, maxCatchupBlocks)
+  const configPoolTx = await walletClient.writeContract({
+    address: mined.hook, abi: HOOK_COORDINATOR_ABI, functionName: 'configurePool',
+    args: [poolId, ULV.baseFeePips, ULV.maxFeePips, ULV.slopePipsPerTick, ULV.maxFeeStepPerBlock,
+           true, ULV.guardEnabled, ULV.maxTickMovePerBlock, ULV.maxDeviationTicks, ULV.maxCatchupBlocks],
+    account, chain: baseSepolia,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: configPoolTx })
+
+  // Size gate + per-pool JIT enrollment (JIT never fires until this pool is explicitly allowlisted).
+  const setJitThresholdTx = await walletClient.writeContract({
+    address: mined.hook, abi: HOOK_COORDINATOR_ABI, functionName: 'setJitThreshold', args: [ULV.jitThreshold], account, chain: baseSepolia,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: setJitThresholdTx })
+  const setJitEnabledTx = await walletClient.writeContract({
+    address: mined.hook, abi: HOOK_COORDINATOR_ABI, functionName: 'setJitEnabled', args: [poolId, true], account, chain: baseSepolia,
+  })
+  await publicClient.waitForTransactionReceipt({ hash: setJitEnabledTx })
+
   // 4. Rail B rewards. NOTE: vault.setWeightedDistributor ITSELF calls dist.registerVault(vaultId,
   //    token0, token1) dual-sided (MintwareDeFiPairVault.sol:393) — so do NOT pre-register here, or
   //    the internal call reverts VaultAlreadyRegistered (0x49d8266e). We only authorize the vault as
@@ -209,7 +333,6 @@ export const POST = createHandler(async (_req, ctx) => {
     await new Promise((r) => setTimeout(r, 1000))
     auctionCode = await publicClient.getBytecode({ address: auction })
   }
-  const poolId = computePoolId(currency0, currency1, mined.hook)
 
   const setCoordTx = await walletClient.writeContract({
     address: auction, abi: AM_AUCTION_ABI, functionName: 'setCoordinator', args: [mined.hook], account, chain: baseSepolia,
@@ -251,9 +374,22 @@ export const POST = createHandler(async (_req, ctx) => {
     poolManager: POOL_MANAGER,
     currency0, currency1, fee: 'DYNAMIC', tickSpacing: TICK_SPACING,
     amAmm: AMAMM,
-    txs: { hookDeployTx, vaultDeployTx, setVaultTx, initTx, authTx, setWDistTx,
+    ulvEngine: {
+      aaveProvider: AAVE_PROVIDER,
+      usdcAdapter: usdcAd.addr, wethAdapter: wethAd.addr,
+      adapter0, adapter1,             // aligned to currency0 / currency1
+      usdc: USDC, aUsdc: AUSDC, weth: WETH, aWeth: AWETH,
+      bufferRatioBps: ULV.bufferRatioBps,
+      jitMaxPerSwap: ULV.jitMaxPerSwap, jitMaxPerBlock: ULV.jitMaxPerBlock, jitThreshold: ULV.jitThreshold,
+      dynamicFee: { baseFeePips: ULV.baseFeePips, maxFeePips: ULV.maxFeePips, slopePipsPerTick: ULV.slopePipsPerTick,
+                    guardEnabled: ULV.guardEnabled },
+    },
+    txs: { hookDeployTx, vaultDeployTx, setVaultTx, initTx,
+           usdcAdapterDeployTx: usdcAd.tx, wethAdapterDeployTx: wethAd.tx, usdcSetVaultTx, wethSetVaultTx,
+           setAdaptersTx, setHookTx, setBufferTx, setJitCapsTx, configPoolTx, setJitThresholdTx, setJitEnabledTx,
+           authTx, setWDistTx,
            auctionDeployTx, setCoordTx, setAuctionTx, setRentFunderTx, configTx, setEnabledTx },
     basescanVault: `https://sepolia.basescan.org/address/${vault}`,
-    note: 'Fork-simulate deposit→swap→skim→fundRent before trusting MEV. Set NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS = vault.',
+    note: 'Fork-simulate deposit→swap→skim→fundRent + idle→Aave→JIT before trusting MEV. Set NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS = vault.',
   })
 }, { auth: 'bearer-token' })
