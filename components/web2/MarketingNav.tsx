@@ -61,7 +61,7 @@ export function MarketingNav({ active }: { active?: 'vaults' | 'attribution' | '
           onClick={launchApp}
           className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white"
         >
-          {isConnected ? 'Dashboard →' : 'Launch app →'}
+          Launch app →
         </button>
       </div>
     </header>
