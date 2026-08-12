@@ -25,8 +25,6 @@ interface UseQuoteParams {
   taker: string
   feeRecipient?: string
   feeBps?: number
-  campaignId?: string | null
-  referrer?: string | null
   enabled?: boolean
 }
 
@@ -46,7 +44,7 @@ export function useQuote(params: UseQuoteParams): QuoteState {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
-  const { sellToken, buyToken, sellAmount, taker, feeRecipient, feeBps, campaignId, referrer, enabled = true } = params
+  const { sellToken, buyToken, sellAmount, taker, feeRecipient, feeBps, enabled = true } = params
 
   useEffect(() => {
     // Clear previous timer
@@ -96,8 +94,6 @@ export function useQuote(params: UseQuoteParams): QuoteState {
           sellAmount: sellAmountWei,
           taker,
           feeBps:     feeBps ?? chainConfig.feeBps,
-          campaignId: campaignId ?? undefined,
-          referrer:   referrer   ?? undefined,
         })
 
         const buyAmountDecimal = fromWei(quote.buyAmount, buyToken.decimals)
@@ -133,7 +129,7 @@ export function useQuote(params: UseQuoteParams): QuoteState {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current)
     }
-  }, [chainId, sellToken?.address, buyToken?.address, sellAmount, taker, enabled, feeRecipient, feeBps, campaignId, referrer]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [chainId, sellToken?.address, buyToken?.address, sellAmount, taker, enabled, feeRecipient, feeBps]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return state
 }

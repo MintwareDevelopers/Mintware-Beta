@@ -134,7 +134,7 @@ export interface PublishParams {
 }
 
 export interface PublishResult {
-  /** EIP-712 signature — returned to /api/claim, submitted by users in claim() */
+  /** EIP-712 signature — used by the universal distribution bridge for on-chain claims */
   oracle_signature: string
   /** Treasury auto-claim tx hash, if it ran and succeeded */
   treasury_claim_tx?: string
