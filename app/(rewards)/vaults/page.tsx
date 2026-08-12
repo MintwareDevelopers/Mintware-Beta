@@ -1,7 +1,7 @@
 'use client'
 
 import { useAccount } from 'wagmi'
-import { MwNav } from '@/components/web2/MwNav'
+import { MarketingNav } from '@/components/web2/MarketingNav'
 import { PageHero } from '@/components/web2/PageHero'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -108,7 +108,7 @@ function VaultsContent() {
 
   return (
     <div className="font-atx-display bg-atx-bone min-h-screen text-atx-ink [&_*]:rounded-none">
-      <MwNav />
+      <MarketingNav active="vaults" />
 
       {/* ── Testnet-beta notice — keeps the preview data honest ── */}
       <div className="border-b border-atx-ink bg-atx-ink text-white">
