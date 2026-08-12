@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { VaultAmplify } from '@/components/vaults/VaultAmplify'
 import { ULVMechanics } from '@/components/vaults/ULVMechanics'
 import { SwapWalkthrough } from '@/components/vaults/SwapWalkthrough'
+import { TrustPosture } from '@/components/vaults/TrustPosture'
 
 const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 const GRID_BG =
@@ -158,6 +159,9 @@ export default function VaultsPage() {
 
       {/* ── reputation = yield deep-dive ── */}
       <VaultAmplify />
+
+      {/* ── trust · honest current state ── */}
+      <TrustPosture />
 
       {/* ── closing CTA ── */}
       <section className="border-b border-atx-ink">
