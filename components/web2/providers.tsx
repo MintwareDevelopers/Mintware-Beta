@@ -9,6 +9,7 @@ import { wagmiConfig } from '@/lib/web3/wagmi'
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
+import { LaunchModalProvider } from './LaunchModal'
 
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim() ?? ''
 const PRIVY_ENABLED = PRIVY_APP_ID.length > 0
@@ -92,7 +93,9 @@ function AppWalletProviders({ children }: { children: ReactNode }) {
       })}
       modalSize="compact"
     >
-      {children}
+      <LaunchModalProvider>
+        {children}
+      </LaunchModalProvider>
       <GlobalReferralGate />
     </RainbowKitProvider>
   )

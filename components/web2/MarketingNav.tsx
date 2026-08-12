@@ -8,9 +8,8 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
+import { useLaunch } from '@/components/web2/LaunchModal'
 
 const FEATURES = [
   { key: 'vaults', href: '/vaults', label: 'Vaults' },
@@ -32,13 +31,11 @@ function Star({ className = '' }: { className?: string }) {
 
 export function MarketingNav({ active }: { active?: 'vaults' | 'attribution' | 'agents' | 'teams' | 'defi' }) {
   const { isConnected } = useMintwareIdentity()
-  const { openConnectModal } = useConnectModal()
-  const router = useRouter()
+  const { launch } = useLaunch()
   const [menuOpen, setMenuOpen] = useState(false)
 
   function launchApp() {
-    if (isConnected) router.push('/app')
-    else openConnectModal?.()
+    launch('/app')
   }
 
   return (
@@ -65,7 +62,7 @@ export function MarketingNav({ active }: { active?: 'vaults' | 'attribution' | '
             onClick={launchApp}
             className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white"
           >
-            Launch app →
+            {isConnected ? 'Go to the app →' : 'Launch app →'}
           </button>
         </div>
       </div>
@@ -74,7 +71,7 @@ export function MarketingNav({ active }: { active?: 'vaults' | 'attribution' | '
           {FEATURES.map((f) => (
             <Link key={f.key} href={f.href} onClick={() => setMenuOpen(false)} className={`px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink/10 no-underline ${active === f.key ? 'text-atx-ink' : 'text-atx-ink/70'}`}>{f.label}</Link>
           ))}
-          <button onClick={() => { setMenuOpen(false); launchApp() }} className="text-left px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink/10 text-atx-blue">Launch app →</button>
+          <button onClick={() => { setMenuOpen(false); launchApp() }} className="text-left px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink bg-atx-blue text-white">{isConnected ? 'Go to the app →' : 'Launch app →'}</button>
         </div>
       )}
     </header>
