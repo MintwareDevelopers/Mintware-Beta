@@ -14,6 +14,13 @@ type ConnectResult = {
 
 const connectInFlight = new Map<string, Promise<ConnectResult>>()
 
+// Supabase Realtime live-updates the referral tree, but it requires Realtime to be
+// enabled on the project AND `referral_records` added to the publication. It's off
+// server-side today, so opening the socket just fails and spams the browser console
+// (the WS error can't be caught/suppressed in JS). Gated off by default — set
+// NEXT_PUBLIC_SUPABASE_REALTIME=1 once Realtime is enabled to restore live updates.
+const REALTIME_ENABLED = process.env.NEXT_PUBLIC_SUPABASE_REALTIME === '1'
+
 function connectSessionKey(address: string) {
   return `mw_connect_verified_${address.toLowerCase()}`
 }
@@ -220,7 +227,11 @@ export function useReferral(address: string | undefined): UseReferralReturn {
     initialized.current = true
     init(address)
 
-    // Realtime subscription — refetch when referral_records changes for this referrer
+    // Realtime subscription — refetch when referral_records changes for this referrer.
+    // Skipped unless explicitly enabled (see REALTIME_ENABLED) so we don't open a
+    // WebSocket that fails and spams the console when Realtime is off server-side.
+    if (!REALTIME_ENABLED) return
+
     const channel = supabase
       .channel(`referrals:${address}`)
       .on(
