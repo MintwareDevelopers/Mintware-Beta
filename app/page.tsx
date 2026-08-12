@@ -173,7 +173,7 @@ function ScoreCard() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && load(input)}
             placeholder="0x… wallet address or ENS name"
-            className="flex-1 py-3 px-4 bg-transparent font-atx-mono text-[14px] text-atx-ink outline-none placeholder:text-atx-ink/40"
+            className="flex-1 min-w-0 py-3 px-4 bg-transparent font-atx-mono text-[14px] text-atx-ink outline-none placeholder:text-atx-ink/40"
           />
           <button onClick={() => load(input)} disabled={status === 'loading'} className="px-5 bg-atx-blue text-white font-atx-mono text-[11px] uppercase tracking-[0.08em] cursor-pointer disabled:opacity-70 whitespace-nowrap">
             {status === 'loading' ? 'Scoring…' : 'Check my score'}
