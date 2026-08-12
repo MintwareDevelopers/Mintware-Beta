@@ -1,8 +1,5 @@
 'use client'
 
-import { shortAddr } from '@/lib/web2/api'
-import { calcBuyerReward, calcReferrerReward } from '@/lib/rewards/calc'
-import type { CampaignReward } from '@/lib/rewards/calc'
 import type { Token } from '@/config/tokens'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
@@ -11,8 +8,6 @@ interface PostSwapSummaryProps {
   buyAmount: string
   buyToken: Token | null
   sellAmountUSD: number | null
-  campaign: CampaignReward | null
-  referrer: string | null
   estimatedScoreGain: number
   currentScore: number
   onDismiss: () => void
@@ -22,22 +17,11 @@ export function PostSwapSummary({
   txHash,
   buyAmount,
   buyToken,
-  sellAmountUSD,
-  campaign,
-  referrer,
   estimatedScoreGain,
   currentScore,
   onDismiss,
 }: PostSwapSummaryProps) {
   const { address } = useMintwareIdentity()
-
-  const buyerReward = campaign && sellAmountUSD
-    ? calcBuyerReward(sellAmountUSD, campaign.buyerRewardPct)
-    : null
-
-  const referrerReward = campaign && sellAmountUSD
-    ? calcReferrerReward(sellAmountUSD, campaign.referrerRewardPct)
-    : null
 
   const newScore = currentScore + estimatedScoreGain
 
@@ -68,18 +52,6 @@ export function PostSwapSummary({
         </div>
 
         <div className="px-[24px] py-[20px]">
-          {buyerReward !== null && campaign && (
-            <div className="flex items-start gap-[12px] py-[10px] border-b border-atx-ink/10">
-              <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block mt-[5px] shrink-0" />
-              <div className="flex-1">
-                <div className="font-atx-display text-[13px] font-semibold text-atx-ink">
-                  <span className="font-atx-mono text-[13px] font-semibold text-atx-mesquite">${buyerReward.toFixed(2)} {campaign.rewardToken}</span> buyer reward queued
-                </div>
-                <div className="font-atx-display text-[12px] text-atx-ink/55 mt-[1px]">Settles when reward pool contract deploys</div>
-              </div>
-            </div>
-          )}
-
           {estimatedScoreGain > 0 && (
             <div className="flex items-start gap-[12px] py-[10px] border-b border-atx-ink/10">
               <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block mt-[5px] shrink-0" />
@@ -92,19 +64,6 @@ export function PostSwapSummary({
             </div>
           )}
 
-          {referrerReward !== null && referrer && campaign && (
-            <div className="flex items-start gap-[12px] py-[10px]">
-              <span className="text-[16px] mt-[1px] shrink-0 text-atx-ink/45">↗</span>
-              <div className="flex-1">
-                <div className="font-atx-display text-[13px] font-semibold text-atx-ink/60">
-                  <strong className="font-atx-mono text-[12px]">
-                    {shortAddr(referrer)}
-                  </strong>{' '}
-                  earned <span className="font-atx-mono text-[13px] font-semibold text-atx-mesquite">${referrerReward.toFixed(2)}</span> from this swap
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="px-[24px] pb-[24px] flex flex-col gap-[8px]">

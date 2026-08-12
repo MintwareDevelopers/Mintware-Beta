@@ -40,11 +40,9 @@ export function MwNav() {
     router.push('/')
   }
 
-  const isActive = (path: string) =>
-    pathname === path || (path === '/app/rewards' && pathname.startsWith('/campaign'))
+  const isActive = (path: string) => pathname === path
 
   const NAV_LINKS = [
-    { href: '/app/rewards', label: 'Rewards' },
     { href: '/app/swap', label: 'Swap' },
     { href: '/app/vaults', label: 'Vaults' },
     { href: '/app/leaderboard', label: 'Leaderboard' },
