@@ -37,11 +37,13 @@ contract MockAavePool {
     mapping(address => MockAToken) public aTokenOf;
     mapping(address => uint256)    internal _config;
     bool public revertOnWithdraw; // simulate a hostile/broken pool (exercises the adapter try/catch)
+    bool public revertOnSupply;   // simulate a supply-cap / hostile reserve (exercises _reIdle try/catch)
 
     function getPool() external view returns (address) { return address(this); }
 
     function setAToken(address asset, MockAToken a) external { aTokenOf[asset] = a; }
     function setRevertOnWithdraw(bool v) external { revertOnWithdraw = v; }
+    function setRevertOnSupply(bool v) external { revertOnSupply = v; }
     function setConfig(address asset, bool active, bool frozen, bool paused) external {
         uint256 d;
         if (active) d |= (1 << 56);
@@ -54,6 +56,7 @@ contract MockAavePool {
     }
 
     function supply(address asset, uint256 amount, address onBehalfOf, uint16) external {
+        require(!revertOnSupply, "pool: supply disabled");
         MockAToken a = aTokenOf[asset];
         IERC20(asset).safeTransferFrom(msg.sender, address(a), amount); // underlying → aToken
         a.mint(onBehalfOf, amount);
