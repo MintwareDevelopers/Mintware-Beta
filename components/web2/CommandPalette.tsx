@@ -54,15 +54,15 @@ export function CommandPalette() {
               <div className="cmdk-icon"><LayoutDashboard size={14} /></div>
               Dashboard
             </Command.Item>
-            <Command.Item onSelect={() => go('/swap')}>
+            <Command.Item onSelect={() => go('/app/swap')}>
               <div className="cmdk-icon"><ArrowLeftRight size={14} /></div>
               Swap
             </Command.Item>
-            <Command.Item onSelect={() => go('/leaderboard')}>
+            <Command.Item onSelect={() => go('/app/leaderboard')}>
               <div className="cmdk-icon"><Trophy size={14} /></div>
               Leaderboard
             </Command.Item>
-            <Command.Item onSelect={() => go('/profile')}>
+            <Command.Item onSelect={() => go('/app/profile')}>
               <div className="cmdk-icon"><User size={14} /></div>
               Profile
             </Command.Item>

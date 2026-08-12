@@ -580,7 +580,7 @@ export default function PublicProfile() {
           {walletSettled && isOwner && (
             <div className="pp-owner-banner">
               <span>This is your public profile — shareable without login.</span>
-              <a href="/profile" style={{ color: 'var(--color-atx-blue)', fontWeight: 700, textDecoration: 'none', fontSize: 12, fontFamily: 'var(--font-jetbrains), monospace', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <a href="/app/profile" style={{ color: 'var(--color-atx-blue)', fontWeight: 700, textDecoration: 'none', fontSize: 12, fontFamily: 'var(--font-jetbrains), monospace', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 View full dashboard →
               </a>
             </div>

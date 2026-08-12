@@ -288,7 +288,7 @@ export default function HomePage() {
           </Link>
           <nav className="hidden md:flex gap-6 font-atx-mono text-[11px] uppercase tracking-[0.14em]">
             <Link href="/vaults" className={navLink}>Vaults</Link>
-            <Link href="/swap" className={navLink}>Swap</Link>
+            <Link href="/app/swap" className={navLink}>Swap</Link>
             <Link href="/attribution" className={navLink}>Attribution</Link>
             <Link href="/agents" className={navLink}>Agents</Link>
           </nav>

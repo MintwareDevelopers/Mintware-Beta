@@ -44,6 +44,11 @@ const nextConfig = {
       // must precede `:id` so it isn't captured as an id.
       { source: '/vault/create', destination: '/app/vault/create', permanent: true },
       { source: '/vault/:id', destination: '/app/vault/:id', permanent: true },
+      // Functional app pages moved into the /app tier (IA Phase 1). Query params
+      // (e.g. /swap?cid=, ?ref=) are preserved through Next redirects.
+      { source: '/swap', destination: '/app/swap', permanent: true },
+      { source: '/leaderboard', destination: '/app/leaderboard', permanent: true },
+      { source: '/profile', destination: '/app/profile', permanent: true },
     ]
   },
 

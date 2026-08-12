@@ -88,7 +88,7 @@ export default function AttributionLandingPage() {
       >
         <div className="flex flex-wrap gap-3">
           <Link href="/explorer" className={btnAcc}>Explore scores →</Link>
-          <Link href="/profile" className={btnGhost}>See your score →</Link>
+          <Link href="/app/profile" className={btnGhost}>See your score →</Link>
         </div>
       </PageHero>
 
