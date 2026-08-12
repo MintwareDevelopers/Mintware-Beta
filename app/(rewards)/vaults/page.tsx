@@ -9,6 +9,7 @@ import { PageHero } from '@/components/web2/PageHero'
 import Link from 'next/link'
 import { VaultAmplify } from '@/components/vaults/VaultAmplify'
 import { ULVMechanics } from '@/components/vaults/ULVMechanics'
+import { SwapWalkthrough } from '@/components/vaults/SwapWalkthrough'
 
 const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 const GRID_BG =
@@ -115,6 +116,9 @@ export default function VaultsPage() {
 
       {/* ── the mechanism (tech · ULV · idle-capital yield) ── */}
       <div id="how"><ULVMechanics /></div>
+
+      {/* ── worked example — one swap in numbers ── */}
+      <SwapWalkthrough />
 
       {/* ── the two ways to LP ── */}
       <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
