@@ -161,14 +161,14 @@ export function MwNav() {
             <div className="flex items-center gap-2">
               <Link
                 href="/explorer"
-                className="px-[13px] py-[8px] text-[12px] uppercase tracking-[0.06em] text-atx-ink/55 no-underline font-atx-mono transition-colors duration-150 hover:text-atx-ink"
+                className="px-[13px] py-[8px] text-[12px] uppercase tracking-[0.06em] text-atx-ink/55 no-underline font-atx-mono transition-colors duration-150 hover:text-atx-ink max-[560px]:hidden"
               >
                 Explorer
               </Link>
               {privy.enabled && (
                 <button
                   onClick={openPrivyOnboarding}
-                  className="px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.05em] cursor-pointer font-atx-mono border border-atx-ink text-atx-ink bg-transparent transition-colors duration-150 hover:bg-atx-coral"
+                  className="px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.05em] cursor-pointer font-atx-mono border border-atx-ink text-atx-ink bg-transparent transition-colors duration-150 hover:bg-atx-coral max-[420px]:hidden"
                 >
                   Continue with Email
                 </button>

@@ -244,12 +244,12 @@ function ProfileContent() {
 
       {/* ── TABS + CONTENT ── */}
       <div className={WRAP}>
-        <div className="flex gap-7 border-b border-atx-ink mt-1">
+        <div className="flex gap-6 max-sm:gap-3 border-b border-atx-ink mt-1 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none]">
           {TABS.map(t => (
             <button
               key={t.id}
               onClick={() => setActiveTab(t.id)}
-              className={`flex items-center gap-[6px] py-4 -mb-px border-b-2 font-atx-mono text-[13px] tracking-[0.04em] cursor-pointer transition-colors ${activeTab === t.id ? 'text-atx-blue font-semibold border-atx-blue' : 'text-atx-ink/55 border-transparent hover:text-atx-ink'}`}
+              className={`shrink-0 whitespace-nowrap flex items-center gap-[6px] py-4 -mb-px border-b-2 font-atx-mono text-[13px] tracking-[0.04em] cursor-pointer transition-colors ${activeTab === t.id ? 'text-atx-blue font-semibold border-atx-blue' : 'text-atx-ink/55 border-transparent hover:text-atx-ink'}`}
             >
               {t.icon}{t.label}
             </button>
