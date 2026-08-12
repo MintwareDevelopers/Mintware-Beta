@@ -20,11 +20,22 @@ contract MockYieldAdapter is IYieldAdapter {
         underlying.safeTransferFrom(msg.sender, address(this), amount);
     }
 
-    function withdraw(uint256 amount) external override {
-        underlying.safeTransfer(msg.sender, amount);
+    function withdraw(uint256 amount) external override returns (uint256) {
+        uint256 bal = underlying.balanceOf(address(this));
+        uint256 got = amount < bal ? amount : bal; // best-effort
+        if (got > 0) underlying.safeTransfer(msg.sender, got);
+        return got;
     }
 
     function totalAssets() external view override returns (uint256) {
         return underlying.balanceOf(address(this));
+    }
+
+    function maxWithdrawable() external view override returns (uint256) {
+        return underlying.balanceOf(address(this));
+    }
+
+    function maxSuppliable() external pure override returns (uint256) {
+        return type(uint256).max;
     }
 }

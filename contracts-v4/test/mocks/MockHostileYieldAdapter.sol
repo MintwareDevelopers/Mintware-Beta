@@ -31,12 +31,21 @@ contract MockHostileYieldAdapter is IYieldAdapter {
         if (pull > 0) underlying.safeTransferFrom(msg.sender, address(this), pull);
     }
 
-    function withdraw(uint256 amount) external override {
+    function withdraw(uint256 amount) external override returns (uint256) {
         uint256 send = amount > withdrawShortfall ? amount - withdrawShortfall : 0;
         if (send > 0) underlying.safeTransfer(msg.sender, send);
+        return send; // hostile: reports what it actually sent (may be < amount)
     }
 
     function totalAssets() external view override returns (uint256) {
         return underlying.balanceOf(address(this)) + reportedExtra;
+    }
+
+    function maxWithdrawable() external view override returns (uint256) {
+        return underlying.balanceOf(address(this));
+    }
+
+    function maxSuppliable() external pure override returns (uint256) {
+        return type(uint256).max;
     }
 }
