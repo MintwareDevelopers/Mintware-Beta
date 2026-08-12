@@ -67,6 +67,13 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
 
     uint160 public constant HOOK_FLAGS = 0xAC8;
 
+    /// @notice Fallback surge ceiling for the UNMANAGED am-AMM fee path (Inc-1c). If a dynamic-fee
+    ///         pool is misconfigured with `maxFeePips == 0`, MWDynamicFee.volatilityFee would be free
+    ///         to reach 100% (1e6) — a fee that bricks swaps. On the unmanaged fallback we clamp the
+    ///         surge to this ceiling (10%) instead, so a config slip can never DoS the pool. Pools
+    ///         that set `maxFeePips` explicitly are bounded by THAT value, not this one.
+    uint24 internal constant FALLBACK_MAX_FEE_PIPS = 100_000; // 10%
+
     struct FeeParams {
         uint24  baseFeePips;        // floor fee (3000 = 0.30%)
         uint24  maxFeePips;         // ceiling (0 → 100%)
@@ -250,7 +257,7 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         BeforeSwapDelta bsd;
         uint24          feeOverride;
         if (amAmmEnabled[id] && auction != address(0)) {
-            (selector, bsd, feeOverride) = _beforeSwapAmAmm(id, key, params);
+            (selector, bsd, feeOverride) = _beforeSwapAmAmm(id, key, params, currentTick, fp);
         } else {
             selector    = IHooks.beforeSwap.selector;
             bsd         = toBeforeSwapDelta(0, 0);
@@ -286,14 +293,39 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     ///      reaches the pool, and `POOL_MANAGER.take(spec, auction, fee)` books the offsetting
     ///      `-fee`, so the hook nets ZERO across the unlock (no residual delta → swap settles).
     ///      The trader covers `fee`; LPs earn nothing on managed swaps (the manager bought the flow).
-    function _beforeSwapAmAmm(PoolId id, PoolKey calldata key, SwapParams calldata params)
+    function _beforeSwapAmAmm(
+        PoolId id,
+        PoolKey calldata key,
+        SwapParams calldata params,
+        int24 currentTick,
+        FeeParams storage fp
+    )
         internal returns (bytes4, BeforeSwapDelta, uint24)
     {
         (address mgr, uint24 feePips) = IMWAmAuction(auction).poke(id);
 
-        // Unmanaged: LPs keep the auction's default fee; no skim.
+        // Unmanaged (Inc-1c): with NO manager, an arbitrageur would otherwise swap at the auction's
+        // calm-market default and pocket the volatility value (LVR) that belongs to LPs. So we price
+        // the swap by its deviation from the truncated oracle exactly like the non-auction path —
+        // deviation-priced, rate-limited surge — and return max(default, surge) as the LP fee. Calm
+        // markets keep at least the auction default; volatile markets surge above it, recapturing LVR
+        // as LP fee. No skim, no delta. The oracle read is deviation-only (read-only circuit breaker),
+        // so the money path still reads no price. If the pool does NOT run the dynamic fee we keep the
+        // flat default (backward compatible).
         if (mgr == address(0)) {
-            return (IHooks.beforeSwap.selector, toBeforeSwapDelta(0, 0), feePips | LPFeeLibrary.OVERRIDE_FEE_FLAG);
+            uint24 lpFee = feePips;
+            if (fp.dynamicFeeEnabled) {
+                uint256 dev = oracle[id].deviationTicks(currentTick);
+                // Never pass a 0 ceiling into volatilityFee on this fallback: a misconfigured
+                // maxFeePips==0 would let it reach 100% and brick swaps. Clamp to the pool's
+                // configured max when set, else to FALLBACK_MAX_FEE_PIPS.
+                uint24 feeCeil = fp.maxFeePips == 0 ? FALLBACK_MAX_FEE_PIPS : fp.maxFeePips;
+                uint24 target  = MWDynamicFee.volatilityFee(fp.baseFeePips, feeCeil, dev, fp.slopePipsPerTick);
+                uint24 surge   = _rateLimitedFee(id, target, fp.maxFeeStepPerBlock);
+                if (surge > lpFee) lpFee = surge;      // max(auction default, surge)
+                if (lpFee > feeCeil) lpFee = feeCeil;  // bounded: <= maxFeePips (or FALLBACK) < 1e6
+            }
+            return (IHooks.beforeSwap.selector, toBeforeSwapDelta(0, 0), lpFee | LPFeeLibrary.OVERRIDE_FEE_FLAG);
         }
 
         // Managed: LP fee 0, manager skims. Guard against a fee that could zero/flip the swap.
