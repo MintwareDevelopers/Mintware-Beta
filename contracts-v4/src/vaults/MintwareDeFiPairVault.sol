@@ -85,7 +85,16 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     uint256 public constant NOTICE_PERIOD   = 7 days;
     uint256 public constant MIN_HOLD_PERIOD = 24 hours;
     uint256 public constant ACC_PRECISION   = 1e18;
-    uint256 public constant MINTWARE_FEE_BPS = 2_500; // protocol cut of swap fees
+    /// @notice Flat protocol cut (bps) of the Aave yield-harvest surplus ONLY. The realized swap-fee
+    ///         cut is NO LONGER governed by this constant — `_realizeFees` uses the configurable
+    ///         three-way value-capture split (`treasuryFeeBps` / `buybackFeeBps`; ULV increment 3).
+    ///         Left unchanged for `harvestYield`/`_harvestOne` (the idle-leg proceeds path), which is
+    ///         deliberately out of scope for the splitter.
+    uint256 public constant MINTWARE_FEE_BPS = 2_500;
+
+    /// @notice Upper bound (bps) on the COMBINED non-LP cut (treasury + buyback) of realized position
+    ///         fees. `setFeeSplit` reverts above this, so LPs ALWAYS keep at least `BPS - 4000` = 60%.
+    uint256 public constant MAX_NON_LP_FEE_BPS = 4_000;
 
     uint256 public constant LOCK_COMMITTED = 30 days;
     uint256 public constant LOCK_ALIGNED   = 90 days;
@@ -152,6 +161,21 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     // "attribution/lock-weighted reward layering" the header anticipates.
     address public weightedDistributor;
     bytes32 public distributorVaultId;
+
+    // ── Configurable value-capture split (ULV increment 3) ───────────────────
+    // The single treasury cut of realized swap fees is generalized into a three-way template:
+    // LP / treasury / buyback+burn. Only the two NON-LP legs are stored; the LP share is always the
+    // implied remainder (`BPS - treasuryFeeBps - buybackFeeBps`) so no wei is stranded. Defaults set
+    // in the constructor to the canonical 60% LP / 30% treasury / 10% buyback.
+    /// @notice Treasury cut of realized position (swap) fees, in bps. Default 3000 (30%).
+    uint16 public treasuryFeeBps;
+    /// @notice Buyback+burn cut of realized position (swap) fees, in bps. Default 1000 (10%). Routed
+    ///         to `buybackSink`; if that is unset (address(0)) the buyback cut FOLDS into the treasury
+    ///         transfer (never stranded, never sent to address(0)).
+    uint16 public buybackFeeBps;
+    /// @notice Sink for the buyback+burn cut (e.g. a buyback/burner). Owner-settable; when unset the
+    ///         buyback cut folds into the treasury transfer.
+    address public buybackSink;
 
     /// @notice The am-AMM auction — the ONLY address allowed to push rent via fundRent().
     address public rentFunder;
@@ -234,7 +258,17 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     event Deposited(address indexed lp, uint256 amount0, uint256 amount1, uint256 sharesMinted, LockTier tier);
     event RedeemRequested(address indexed lp, uint256 shares, uint256 noticeExpiry);
     event Redeemed(address indexed lp, uint256 shares, uint256 amount0, uint256 amount1, uint256 penalty0, uint256 penalty1);
-    event FeesCollected(uint256 fee0, uint256 fee1, uint256 mintware0, uint256 mintware1);
+    /// @notice Emitted on every realize. `treasuryN`/`buybackN` are the SPLIT-MATH entitlements
+    ///         (treasuryN + buybackN + lpN == feeN). When `buybackSink == address(0)` the buyback
+    ///         entitlement is physically folded into the treasury transfer, but is still reported
+    ///         separately here so the conservation invariant reads off the event directly.
+    event FeesCollected(
+        uint256 fee0, uint256 fee1,
+        uint256 treasury0, uint256 treasury1,
+        uint256 buyback0, uint256 buyback1
+    );
+    event FeeSplitSet(uint16 treasuryBps, uint16 buybackBps, uint16 lpBps);
+    event BuybackSinkSet(address indexed sink);
     event FeesClaimed(address indexed lp, uint256 amount0, uint256 amount1);
     event WeightedDistributorSet(address indexed distributor, bytes32 indexed vaultId);
     event FeesRoutedToDistributor(bytes32 indexed vaultId, uint256 lp0, uint256 lp1);
@@ -270,6 +304,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     error OnlyProvider();
     error ZeroDistributor();
     error WeightedDistributorAlreadySet();
+    error BadFeeSplit();
     error OnlyRentFunder();
     error ZeroAddress();
     error AdaptersAlreadySet();
@@ -303,6 +338,13 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         token1      = IERC20(c1);
         profile     = _profile;
         provider    = _provider;
+
+        // Canonical value-capture template: 60% LP / 30% treasury / 10% buyback+burn.
+        // (Behavior change vs the retired flat MINTWARE_FEE_BPS=2500 swap-fee cut: treasury 25%→30%,
+        //  LP 75%→60%, plus a new 10% buyback leg.) `buybackSink` starts unset, so until it is wired
+        // the buyback cut folds into the treasury transfer.
+        treasuryFeeBps = 3_000;
+        buybackFeeBps  = 1_000;
     }
 
     modifier onlyProvider() {
@@ -512,6 +554,29 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         return _realizeFees();
     }
 
+    /// @dev Split a realized fee into (treasuryCut, buybackCut, lpAmt) under the configurable
+    ///      three-way template. BOTH protocol cuts round DOWN; the LP takes the EXACT remainder, so
+    ///      (treasuryCut + buybackCut + lpAmt == fee) always holds (zero dust stranded) and any
+    ///      rounding loss accrues to the LPs, never the protocol.
+    function _splitFee(uint256 fee)
+        internal
+        view
+        returns (uint256 treasuryCut, uint256 buybackCut, uint256 lpAmt)
+    {
+        treasuryCut = (fee * treasuryFeeBps) / BPS;
+        buybackCut  = (fee * buybackFeeBps) / BPS;
+        lpAmt       = fee - treasuryCut - buybackCut; // remainder → LP (favors LPs)
+    }
+
+    /// @dev Realize accrued swap fees on the live V4 position and split them via the configurable
+    ///      three-way value-capture template (LP / treasury / buyback+burn; ULV increment 3). SCOPE:
+    ///      this covers ONLY realized position fees — regular trading fees plus the increment-1c
+    ///      unmanaged surge/LVR, both of which land as position fees here. It deliberately does NOT
+    ///      touch the JIT idle-leg proceeds (no price-free way to separate JIT principal from fee →
+    ///      LP-only by prior design), the am-AMM manager skim (the manager's, by design), am-AMM rent
+    ///      (`fundRent`, routed 100% to LPs), or the Aave yield harvest (`harvestYield`, still the flat
+    ///      MINTWARE_FEE_BPS cut). The LP leg's downstream routing (weighted distributor vs pro-rata
+    ///      accumulator) is UNCHANGED.
     function _realizeFees() internal returns (uint256 fee0, uint256 fee1) {
         // `positionLiquidity == 0` (all capital idled in Aave) means there is no live V4 position to
         // collect from — a `modifyLiquidity(0)` on an empty position reverts `CannotUpdateEmptyPosition`.
@@ -520,13 +585,25 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         (fee0, fee1) = abi.decode(res, (uint256, uint256));
         if (fee0 == 0 && fee1 == 0) return (0, 0);
 
-        uint256 mint0 = (fee0 * MINTWARE_FEE_BPS) / BPS;
-        uint256 mint1 = (fee1 * MINTWARE_FEE_BPS) / BPS;
-        if (mint0 > 0) token0.safeTransfer(treasury, mint0);
-        if (mint1 > 0) token1.safeTransfer(treasury, mint1);
+        (uint256 treasury0, uint256 buyback0, uint256 lp0) = _splitFee(fee0);
+        (uint256 treasury1, uint256 buyback1, uint256 lp1) = _splitFee(fee1);
 
-        uint256 lp0 = fee0 - mint0;
-        uint256 lp1 = fee1 - mint1;
+        // Route the two NON-LP legs. If no buyback sink is wired, fold the buyback cut into the
+        // treasury transfer — never strand it, never transfer to address(0).
+        address sink = buybackSink;
+        if (sink == address(0)) {
+            uint256 t0 = treasury0 + buyback0;
+            uint256 t1 = treasury1 + buyback1;
+            if (t0 > 0) token0.safeTransfer(treasury, t0);
+            if (t1 > 0) token1.safeTransfer(treasury, t1);
+        } else {
+            if (treasury0 > 0) token0.safeTransfer(treasury, treasury0);
+            if (treasury1 > 0) token1.safeTransfer(treasury, treasury1);
+            if (buyback0 > 0)  token0.safeTransfer(sink, buyback0);
+            if (buyback1 > 0)  token1.safeTransfer(sink, buyback1);
+        }
+
+        // LP leg → the EXISTING routing, unchanged.
         if (weightedDistributor != address(0)) {
             // Canonical path: route LP fees to the oracle-weighted distributor. LPs claim
             // their reputation + referral weighted share there, not from the accumulator.
@@ -541,7 +618,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
             feeReserve0 += lp0; // these tokens stay in the vault to back claims — segregate them
             feeReserve1 += lp1;
         }
-        emit FeesCollected(fee0, fee1, mint0, mint1);
+        emit FeesCollected(fee0, fee1, treasury0, treasury1, buyback0, buyback1);
     }
 
     /// @notice One-time wiring of the reputation + referral weighted distributor. Once set,
@@ -557,6 +634,24 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         token0.forceApprove(dist, type(uint256).max);
         token1.forceApprove(dist, type(uint256).max);
         emit WeightedDistributorSet(dist, vaultId);
+    }
+
+    /// @notice Reconfigure the three-way value-capture split of realized swap fees. `treasuryBps`
+    ///         and `buybackBps` are the two NON-LP legs; the LP share is the implied remainder
+    ///         (`BPS - treasuryBps - buybackBps`). Reverts if the combined non-LP cut exceeds
+    ///         `MAX_NON_LP_FEE_BPS` (4000) — LPs always keep at least 60%.
+    function setFeeSplit(uint16 treasuryBps, uint16 buybackBps) external onlyOwner {
+        if (uint256(treasuryBps) + uint256(buybackBps) > MAX_NON_LP_FEE_BPS) revert BadFeeSplit();
+        treasuryFeeBps = treasuryBps;
+        buybackFeeBps  = buybackBps;
+        emit FeeSplitSet(treasuryBps, buybackBps, uint16(BPS) - treasuryBps - buybackBps);
+    }
+
+    /// @notice Set (or clear) the buyback+burn sink. When unset (address(0)), the buyback leg folds
+    ///         into the treasury transfer in `_realizeFees`.
+    function setBuybackSink(address sink) external onlyOwner {
+        buybackSink = sink;
+        emit BuybackSinkSet(sink);
     }
 
     /// @notice One-time-ish wiring of the am-AMM auction allowed to push rent. Owner-set.
