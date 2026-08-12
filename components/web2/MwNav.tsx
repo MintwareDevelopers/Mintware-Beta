@@ -51,11 +51,11 @@ export function MwNav() {
 
   const NAV_LINKS = [
     { href: '/rewards', label: 'Rewards' },
-    { href: '/swap', label: 'Swap' },
+    { href: '/app/swap', label: 'Swap' },
     { href: '/vaults', label: 'Vaults' },
-    { href: '/leaderboard', label: 'Leaderboard' },
+    { href: '/app/leaderboard', label: 'Leaderboard' },
     { href: '/agents', label: 'Agents' },
-    { href: '/profile', label: 'Profile' },
+    { href: '/app/profile', label: 'Profile' },
   ]
 
   return (

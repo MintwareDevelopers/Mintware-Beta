@@ -42,7 +42,7 @@ export function PostSwapSummary({
   const newScore = currentScore + estimatedScoreGain
 
   const referralUrl = address
-    ? `${window.location.origin}/swap?ref=${address}`
+    ? `${window.location.origin}/app/swap?ref=${address}`
     : null
 
   function copyReferralLink() {

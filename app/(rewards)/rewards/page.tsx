@@ -169,7 +169,7 @@ function RewardsContent() {
                 </p>
                 <div className="flex gap-2.5 mt-7 flex-wrap">
                   <a href="#campaigns" className={BTN_ACC}>Browse campaigns ↓</a>
-                  <Link href="/profile" className={BTN}>See your score</Link>
+                  <Link href="/app/profile" className={BTN}>See your score</Link>
                 </div>
               </div>
 
