@@ -44,4 +44,4 @@ export interface ScoreResponse {
   timeline?: { date: string; score: number; events: unknown[] }[]
 }
 
-export type Tab = 'portfolio' | 'score' | 'badge' | 'invite' | 'rewards' | 'liquidity'
+export type Tab = 'portfolio' | 'score' | 'badge' | 'invite' | 'liquidity'

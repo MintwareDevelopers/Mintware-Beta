@@ -15,11 +15,10 @@ import { AttestationBadge } from '@/components/rewards/profile/AttestationBadge'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { ReferralSheet } from '@/components/rewards/referral/ReferralSheet'
 import { InviteTab } from '@/components/rewards/referral/InviteTab'
-import { ClaimCard } from '@/components/rewards/campaigns/ClaimCard'
 import { AnimatedScore } from '@/components/web2/AnimatedScore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
-import { Copy, Check, ChevronRight, BarChart2, Coins, Droplets, Share2 } from 'lucide-react'
+import { Copy, Check, ChevronRight, BarChart2, Droplets, Share2 } from 'lucide-react'
 import { ResponsiveContainer, AreaChart, Area, Tooltip as RechartsTooltip } from 'recharts'
 import { PortfolioTab } from './tabs/PortfolioTab'
 import { LiquidityTab } from './tabs/LiquidityTab'
@@ -84,7 +83,6 @@ function ProfileContent() {
 
   const TABS: { id: Tab; icon: React.ReactNode; label: string }[] = [
     { id: 'portfolio', icon: <BarChart2 size={13} />, label: 'Portfolio' },
-    { id: 'rewards',   icon: <Coins size={13} />,     label: 'Rewards' },
     { id: 'liquidity', icon: <Droplets size={13} />,  label: 'Liquidity' },
     { id: 'invite',    icon: <Share2 size={13} />,    label: 'Invite' },
   ]
@@ -260,7 +258,6 @@ function ProfileContent() {
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}>
               {activeTab === 'portfolio' && <PortfolioTab data={data} loading={loading} hasWallet={!!wallet} />}
-              {activeTab === 'rewards'   && <ClaimCard wallet={wallet} />}
               {activeTab === 'liquidity' && <LiquidityTab wallet={wallet} />}
               {activeTab === 'invite'    && (
                 <InviteTab wallet={wallet} refCode={refCode} stats={refStats} referralRecords={referralRecords} isLoading={refLoading} />

@@ -7,7 +7,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Command } from 'cmdk'
 import { useRouter } from 'next/navigation'
 import { useDisconnect } from 'wagmi'
-import { LayoutDashboard, ArrowLeftRight, Trophy, User, Plus, ExternalLink, LogOut, Search } from 'lucide-react'
+import { LayoutDashboard, ArrowLeftRight, Trophy, User, ExternalLink, LogOut, Search } from 'lucide-react'
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
@@ -50,9 +50,9 @@ export function CommandPalette() {
           <Command.Empty>No results.</Command.Empty>
 
           <Command.Group heading="Navigate">
-            <Command.Item onSelect={() => go('/app/rewards')}>
+            <Command.Item onSelect={() => go('/app/vaults')}>
               <div className="cmdk-icon"><LayoutDashboard size={14} /></div>
-              Dashboard
+              Vaults
             </Command.Item>
             <Command.Item onSelect={() => go('/app/swap')}>
               <div className="cmdk-icon"><ArrowLeftRight size={14} /></div>
@@ -69,10 +69,6 @@ export function CommandPalette() {
           </Command.Group>
 
           <Command.Group heading="Actions">
-            <Command.Item onSelect={() => go('/app/create-campaign')}>
-              <div className="cmdk-icon"><Plus size={14} /></div>
-              Create Campaign
-            </Command.Item>
             <Command.Item onSelect={() => {
               setOpen(false)
               disconnect()

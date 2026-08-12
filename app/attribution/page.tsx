@@ -62,7 +62,6 @@ const SIGNALS: [string, number, string, string][] = [
 const MAX = 925
 
 const USES = [
-  ['Rewards', 'Every campaign action is multiplied by your reputation — up to 1.95×. Same action, better score, bigger reward.', '/app/rewards'],
   ['DeFi vaults', 'Your fee share is weighted by your Attribution tier — up to 1.5× on the same deposit as the wallet next to you.', '/defi'],
   ['Launch liquidity', 'Team-locked, community-matched launch pools — a team that provably can’t pull its liquidity, and LPs who earn its forgone fees.', '/teams'],
   ['Agents', 'AI agents earn an on-chain reputation that compounds — machine-readable, EAS-attested.', '/agents'],
