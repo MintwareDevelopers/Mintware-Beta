@@ -264,6 +264,7 @@ export default function HomePage() {
   const { openConnectModal } = useConnectModal()
   const privy = useMintwarePrivy()
   const router = useRouter()
+  const [menuOpen, setMenuOpen] = useState(false)
 
   function launchApp(dest = '/app') {
     if (isConnected) router.push(dest)
@@ -280,7 +281,7 @@ export default function HomePage() {
   return (
     <div className="font-atx-display bg-atx-bone text-atx-ink min-h-screen [&_*]:rounded-none">
       {/* NAV */}
-      <header className="sticky top-0 z-20 bg-atx-bone border-b border-atx-ink">
+      <header className="relative sticky top-0 z-20 bg-atx-bone border-b border-atx-ink">
         <div className="mx-auto max-w-[1220px] px-6 h-[56px] flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5 no-underline text-atx-ink">
             <Star className="w-5 h-5 text-atx-blue" />
@@ -292,7 +293,8 @@ export default function HomePage() {
             <Link href="/agents" className={navLink}>Agents</Link>
             <Link href="/teams" className={navLink}>Teams</Link>
           </nav>
-          <div className="flex gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu" aria-expanded={menuOpen} className="md:hidden flex items-center justify-center w-9 h-9 border border-atx-ink/25 bg-atx-panel text-atx-ink font-atx-mono text-[15px] cursor-pointer">{menuOpen ? '✕' : '☰'}</button>
             {privy.enabled && !isConnected && (
               <button onClick={handlePrivyOnboarding} className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-ink bg-atx-bone max-md:hidden">Email</button>
             )}
@@ -301,6 +303,16 @@ export default function HomePage() {
             </button>
           </div>
         </div>
+        {menuOpen && (
+          <div className="md:hidden flex flex-col absolute top-[56px] left-0 right-0 bg-atx-bone border-b border-atx-ink z-20">
+            {([['Vaults', '/vaults'], ['Attribution', '/attribution'], ['Agents', '/agents'], ['Teams', '/teams']] as const).map(([label, href]) => (
+              <Link key={href} href={href} onClick={() => setMenuOpen(false)} className="px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink/10 no-underline text-atx-ink/70">{label}</Link>
+            ))}
+            {privy.enabled && !isConnected && (
+              <button onClick={() => { setMenuOpen(false); handlePrivyOnboarding() }} className="text-left px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink/10 text-atx-ink/70">Email</button>
+            )}
+          </div>
+        )}
       </header>
 
       {/* HERO — score is the hero */}

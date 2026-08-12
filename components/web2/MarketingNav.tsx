@@ -7,6 +7,7 @@
 // =============================================================================
 
 import Link from 'next/link'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
@@ -33,6 +34,7 @@ export function MarketingNav({ active }: { active?: 'vaults' | 'attribution' | '
   const { isConnected } = useMintwareIdentity()
   const { openConnectModal } = useConnectModal()
   const router = useRouter()
+  const [menuOpen, setMenuOpen] = useState(false)
 
   function launchApp() {
     if (isConnected) router.push('/app')
@@ -40,7 +42,7 @@ export function MarketingNav({ active }: { active?: 'vaults' | 'attribution' | '
   }
 
   return (
-    <header className="sticky top-0 z-20 bg-atx-bone border-b border-atx-ink">
+    <header className="relative sticky top-0 z-20 bg-atx-bone border-b border-atx-ink">
       <div className="mx-auto max-w-[1220px] px-6 h-[56px] flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 no-underline text-atx-ink">
           <Star className="w-5 h-5 text-atx-blue" />
@@ -57,13 +59,24 @@ export function MarketingNav({ active }: { active?: 'vaults' | 'attribution' | '
             </Link>
           ))}
         </nav>
-        <button
-          onClick={launchApp}
-          className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white"
-        >
-          Launch app →
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu" aria-expanded={menuOpen} className="md:hidden flex items-center justify-center w-9 h-9 border border-atx-ink/25 bg-atx-panel text-atx-ink font-atx-mono text-[15px] cursor-pointer">{menuOpen ? '✕' : '☰'}</button>
+          <button
+            onClick={launchApp}
+            className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white"
+          >
+            Launch app →
+          </button>
+        </div>
       </div>
+      {menuOpen && (
+        <div className="md:hidden flex flex-col absolute top-[56px] left-0 right-0 bg-atx-bone border-b border-atx-ink z-20">
+          {FEATURES.map((f) => (
+            <Link key={f.key} href={f.href} onClick={() => setMenuOpen(false)} className={`px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink/10 no-underline ${active === f.key ? 'text-atx-ink' : 'text-atx-ink/70'}`}>{f.label}</Link>
+          ))}
+          <button onClick={() => { setMenuOpen(false); launchApp() }} className="text-left px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink/10 text-atx-blue">Launch app →</button>
+        </div>
+      )}
     </header>
   )
 }
