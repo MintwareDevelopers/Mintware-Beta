@@ -838,14 +838,17 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
             if (exp0 == 0 && exp1 == 0) return;
         }
 
+        // CEI hardening: apply the data-INDEPENDENT position effects (deltaL is fixed) BEFORE the
+        // pool interaction; record the pool-DERIVED idle counters (out0/out1) immediately after, and
+        // all effects land BEFORE the adapter supply below. Entrypoints (supplyIdle/rebalanceBuffer)
+        // are nonReentrant, so no external interleaving is possible regardless.
+        positionLiquidity -= deltaL;
+        idleLiquidity += deltaL;
+
         bytes memory res = poolManager.unlock(abi.encode(Action.Remove, abi.encode(deltaL)));
         (uint256 out0, uint256 out1) = abi.decode(res, (uint256, uint256));
-
-        // Effects: pooled → idle. Settled counters move by exactly the principal that left the pool.
-        positionLiquidity -= deltaL;
         idle0 += out0;
         idle1 += out1;
-        idleLiquidity += deltaL;
 
         // Supply to Aave. Exact-amount approvals; the adapter pulls from the vault.
         if (out0 > 0) { token0.forceApprove(address(adapter0), out0); adapter0.deposit(out0); }
@@ -879,6 +882,9 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         // Net idle change = principal that actually left Aave for the pool (`used`). The
         // ratio-mismatch leftover (`got - used`) is re-supplied to Aave, so `idleN` only ever
         // moves by the deployed amount and no tokens strand in the vault.
+        // CEI note: `addedL`/`used*` are POOL-DERIVED (known only after the unlock), so these effects
+        // cannot precede the pool interaction; they land BEFORE the leftover adapter supply, and the
+        // nonReentrant entrypoints are the reentrancy mitigation (as in _supplyIdleCore).
         idle0 -= used0;
         idle1 -= used1;
         positionLiquidity += addedL;
