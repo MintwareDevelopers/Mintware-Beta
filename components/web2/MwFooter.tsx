@@ -9,7 +9,7 @@ const FOOTER_LINKS = [
   { href: '/defi', label: 'DeFi' },
   { href: '/teams', label: 'For Teams' },
   { href: '/vaults', label: 'Vaults' },
-  { href: '/rewards', label: 'Rewards' },
+  { href: '/app/rewards', label: 'Rewards' },
   { href: '/app/swap', label: 'Swap' },
   { href: '/agents', label: 'Agents' },
   { href: '/docs', label: 'Docs' },

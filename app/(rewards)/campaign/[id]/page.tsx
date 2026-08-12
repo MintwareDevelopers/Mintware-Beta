@@ -184,7 +184,7 @@ function CampaignDetailContent() {
 
           {/* ── Back link ── */}
           <Link
-            href="/rewards"
+            href="/app/rewards"
             className="inline-flex items-center gap-[6px] font-atx-mono text-[12px] font-semibold uppercase tracking-[0.06em] text-atx-ink/55 no-underline mb-5 transition-colors duration-150 hover:text-atx-blue"
           >
             ← Campaigns

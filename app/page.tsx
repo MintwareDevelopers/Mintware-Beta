@@ -270,7 +270,7 @@ export default function HomePage() {
     else openConnectModal?.()
   }
   function handlePrivyOnboarding() {
-    if (isConnected) { router.push('/rewards'); return }
+    if (isConnected) { router.push('/app/rewards'); return }
     if (privy.authenticated) { privy.connectOrCreateWallet(); return }
     privy.login({ loginMethods: ['email'], walletChainType: 'ethereum-only' })
   }
