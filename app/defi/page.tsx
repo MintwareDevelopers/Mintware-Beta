@@ -28,7 +28,7 @@ function Star({ className = '' }: { className?: string }) {
 }
 
 const ey = 'font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55'
-const wrap = 'mx-auto max-w-[1100px] px-6 max-[800px]:px-4'
+const wrap = 'mx-auto max-w-[1100px] px-6 max-[800px]:px-4 mw-reveal'
 const h2 = 'font-bold tracking-[-0.03em] leading-[1.03] text-[clamp(26px,3.6vw,44px)] mt-3.5'
 const lead = 'text-[16px] leading-[1.55] text-atx-ink/70 max-w-[60ch] mt-4'
 const btnAcc = 'font-atx-mono text-[12px] uppercase tracking-[0.08em] px-5 py-3 border border-atx-blue bg-atx-blue text-white no-underline inline-block cursor-pointer'
