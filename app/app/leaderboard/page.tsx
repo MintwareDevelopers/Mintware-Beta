@@ -2,7 +2,6 @@
 
 import { MwNav } from '@/components/web2/MwNav'
 import { PageHero } from '@/components/web2/PageHero'
-import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { API, shortAddr, daysUntil, fmtUSD } from '@/lib/web2/api'
 import { generateRefCode } from '@/lib/rewards/referral/utils'
@@ -425,12 +424,13 @@ function Row({ r, metric, isMe }: { r: Entry & { rank: number; tier: string }; m
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function LeaderboardPage() {
+  // View-public: rankings are social proof and shareable. LeaderboardContent
+  // handles the disconnected state ("your rank" prompts connect); no wallet
+  // needed to browse the standings.
   return (
     <>
       <MwNav />
-      <MwAuthGuard>
-        <LeaderboardContent />
-      </MwAuthGuard>
+      <LeaderboardContent />
     </>
   )
 }
