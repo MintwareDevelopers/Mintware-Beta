@@ -107,10 +107,46 @@ export default function TeamsLandingPage() {
         </div>
       </section>
 
-      {/* ── 02 · How it works ── */}
+      {/* ── 02 · Two models ── */}
+      <section className="border-b border-atx-ink">
+        <div className={`${wrap} py-[52px]`}>
+          <Head n="02" label="Two ways to bring liquidity" />
+          <h2 className={h2}>Matched, or a <span style={{ color: BLUE }}>traditional LP.</span></h2>
+          <p className={lead}>
+            Not every team wants a locked, community-matched launch. Mintware runs the same reputation engine
+            under two vault models — pick the one that fits.
+          </p>
+          <div className="grid grid-cols-2 border border-atx-ink mt-8 bg-atx-bone max-[820px]:grid-cols-1">
+            <div className="p-6 border-r border-atx-ink max-[820px]:border-r-0 max-[820px]:border-b max-[820px]:border-atx-ink" style={{ borderTop: '4px solid var(--color-atx-coral)' }}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[19px] font-bold">Matched Liquidity</span>
+                <span className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-coral border border-atx-coral/50 px-1.5 py-0.5">You’re reading this ↓</span>
+              </div>
+              <p className="text-[13.5px] text-atx-ink/70 leading-[1.5] mt-3">
+                Your team locks its token; the community matches it in USDC. A hard ≥ 90-day cliff, no early exit,
+                and during the lock the fees flow to your backers. Built for launches where <b className="text-atx-ink">trust is the bottleneck</b>.
+              </p>
+            </div>
+            <div className="p-6" style={{ borderTop: `4px solid ${BLUE}` }}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[19px] font-bold">Growth Vault</span>
+                <span className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-ink/45">Traditional LP</span>
+              </div>
+              <p className="text-[13.5px] text-atx-ink/70 leading-[1.5] mt-3">
+                A standard LP position — provide one or both sides yourself, no locking, no matching. MEV-protected,
+                auto-managed range, and your Attribution score lifts your fee share up to 1.95×. Built for
+                <b className="text-atx-ink"> ongoing or treasury liquidity</b>.
+              </p>
+              <Link href="/vaults" className="inline-block mt-4 font-atx-mono text-[12px] uppercase tracking-[0.06em] text-atx-blue no-underline hover:underline">See the LP side →</Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 03 · How it works ── */}
       <section id="how" className="border-b border-atx-ink bg-atx-blue/[0.05] scroll-mt-[56px]">
         <div className={`${wrap} py-[52px]`}>
-          <Head n="02" label="How matched liquidity works" />
+          <Head n="03" label="How matched liquidity works" />
           <h2 className={h2}>You lock. Your community matches. <span style={{ color: BLUE }}>The contract holds both.</span></h2>
           <p className={lead}>A dual-sided pair vault — your token on one side, the community’s stable or ETH on the other. Both go in once; the contract does the rest.</p>
           <div className="grid grid-cols-5 border border-atx-ink bg-atx-bone mt-8 max-[900px]:grid-cols-1">
@@ -128,10 +164,10 @@ export default function TeamsLandingPage() {
         </div>
       </section>
 
-      {/* ── 03 · The lock ── */}
+      {/* ── 04 · The lock ── */}
       <section className="border-b border-atx-ink">
         <div className={`${wrap} py-[52px]`}>
-          <Head n="03" label="The lock · the proof" />
+          <Head n="04" label="The lock · the proof" />
           <h2 className={h2}>A restriction on withdrawal, <span style={{ color: BLUE }}>not a transfer of ownership.</span></h2>
           <p className={lead}>
             Your liquidity stays yours. What changes is that you provably can’t withdraw it before the cliff. The term is
@@ -148,10 +184,10 @@ export default function TeamsLandingPage() {
         </div>
       </section>
 
-      {/* ── 04 · What backers earn ── */}
+      {/* ── 05 · What backers earn ── */}
       <section className="border-b border-atx-ink bg-atx-panel">
         <div className={`${wrap} py-[52px]`}>
-          <Head n="04" label="What backers earn" />
+          <Head n="05" label="What backers earn" />
           <h2 className={h2}>During the lock, <span style={{ color: BLUE }}>your fees are theirs.</span></h2>
           <p className={lead}>
             While your side is locked, every swap fee it would have earned — net of the Mintware protocol cut — flows to
@@ -164,10 +200,37 @@ export default function TeamsLandingPage() {
         </div>
       </section>
 
-      {/* ── 05 · Trust ── */}
+      {/* ── 06 · Referrals ── */}
       <section className="border-b border-atx-ink">
         <div className={`${wrap} py-[52px]`}>
-          <Head n="05" label="Trust · enforced by code" />
+          <Head n="06" label="Referrals · grow the pool" />
+          <h2 className={h2}>Let your backers <span style={{ color: BLUE }}>bring their backers.</span></h2>
+          <p className={lead}>
+            Matched liquidity is only as deep as the community you can rally — and your community has a community.
+            Referrals turn every backer into a channel for more.
+          </p>
+          <div className="grid grid-cols-3 border border-atx-ink mt-8 bg-atx-bone max-[760px]:grid-cols-1">
+            {[
+              ['Every backer gets a link', 'A referral link is deterministic from any wallet — no signup. Share it, and the liquidity it brings is attributed to you.'],
+              ['It builds Sharing — the heaviest signal', 'Referrals feed your Sharing score: up to 400 of 925 Attribution points, the single most-weighted signal. A real network is the hardest thing to fake.'],
+              ['A bigger score pays everywhere', 'That higher score lifts your reputation multiplier across the platform — up to 1.95× on the fees you earn. Widen the pool, earn more on your own position.'],
+            ].map(([k, d], i) => (
+              <div key={k} className={`p-6 ${i < 2 ? 'border-r border-atx-ink max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:border-atx-ink' : ''}`}>
+                <div className="text-[15px] font-bold leading-tight">{k}</div>
+                <p className="text-[13px] text-atx-ink/60 leading-[1.5] mt-2.5">{d}</p>
+              </div>
+            ))}
+          </div>
+          <p className="font-atx-mono text-[12px] text-atx-mesquite mt-4">
+            <b className="text-atx-blue">↳</b> Teams can layer a points campaign on top, paying a referral reward for every backer brought in — so widening the pool pays twice. A 24-hour anti-abuse gate keeps referrals real, not farmed.
+          </p>
+        </div>
+      </section>
+
+      {/* ── 07 · Trust ── */}
+      <section className="border-b border-atx-ink">
+        <div className={`${wrap} py-[52px]`}>
+          <Head n="07" label="Trust · enforced by code" />
           <h2 className={h2}>You don’t have to trust us. <span style={{ color: BLUE }}>Neither does your community.</span></h2>
           <div className="border border-atx-ink mt-8">
             {TRUST.map(([k, d], i) => (
