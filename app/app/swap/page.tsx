@@ -19,7 +19,6 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAccount } from 'wagmi'
-import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { MwNav } from '@/components/web2/MwNav'
 import { PageHero } from '@/components/web2/PageHero'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
@@ -373,13 +372,16 @@ function SwapContent() {
 }
 
 export default function SwapPage() {
+  // View-public: the swap widget renders for everyone; connecting is prompted at
+  // trade time (connect-on-action), consistent with the public vault browse.
+  // SwapContent handles the disconnected state (wallet-dependent stats show '—').
   return (
-    <MwAuthGuard>
+    <>
       <MwNav />
       <Suspense fallback={<PageFallback />}>
         <SwapContent />
       </Suspense>
-    </MwAuthGuard>
+    </>
   )
 }
 
