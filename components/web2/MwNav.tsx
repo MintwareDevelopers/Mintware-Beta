@@ -6,6 +6,7 @@ import Link                   from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState }           from 'react'
 import { useMintwarePrivy }   from '@/components/web2/providers'
+import { useLaunch }          from '@/components/web2/LaunchModal'
 
 function Star({ className = '' }: { className?: string }) {
   return (
@@ -25,6 +26,7 @@ export function MwNav() {
 
   const { disconnect: evmDisconnect } = useDisconnect()
   const privy = useMintwarePrivy()
+  const { launch } = useLaunch()
 
   async function disconnectEvmSession() {
     evmDisconnect()
@@ -32,18 +34,6 @@ export function MwNav() {
       await privy.logout()
     }
     router.push('/')
-  }
-
-  function openPrivyOnboarding() {
-    if (privy.authenticated) {
-      privy.connectOrCreateWallet()
-      return
-    }
-
-    privy.login({
-      loginMethods: ['email'],
-      walletChainType: 'ethereum-only',
-    })
   }
 
   const isActive = (path: string) =>
@@ -68,7 +58,7 @@ export function MwNav() {
       </Link>
 
       <ConnectButton.Custom>
-        {({ account, chain, openConnectModal, mounted }) => {
+        {({ account, chain, mounted }) => {
           const evmConnected = mounted && !!account && !!chain
           const isConnected = evmConnected
 
@@ -165,19 +155,11 @@ export function MwNav() {
               >
                 Explorer
               </Link>
-              {privy.enabled && (
-                <button
-                  onClick={openPrivyOnboarding}
-                  className="px-4 py-2 text-[12px] font-semibold uppercase tracking-[0.05em] cursor-pointer font-atx-mono border border-atx-ink text-atx-ink bg-transparent transition-colors duration-150 hover:bg-atx-coral max-[420px]:hidden"
-                >
-                  Continue with Email
-                </button>
-              )}
               <button
-                onClick={openConnectModal}
+                onClick={() => launch()}
                 className="px-5 py-2 bg-atx-blue text-white border border-atx-ink text-[12px] font-semibold uppercase tracking-[0.05em] cursor-pointer font-atx-mono transition-opacity duration-150 hover:opacity-90"
               >
-                Connect Wallet
+                Launch app →
               </button>
             </div>
           )

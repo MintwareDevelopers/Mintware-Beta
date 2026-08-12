@@ -11,14 +11,13 @@
 // =============================================================================
 
 import React, { useEffect, useRef, useState } from 'react'
-import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getAddress } from 'viem'
 import { scoreApiUrl } from '@/lib/web2/api'
 import { CountUp, Marquee } from '@/components/web2/motion'
-import { useMintwarePrivy } from '@/components/web2/providers'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
+import { useLaunch } from '@/components/web2/LaunchModal'
 
 const GRID_BG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
@@ -261,20 +260,8 @@ function ScoreCard() {
 
 export default function HomePage() {
   const { isConnected } = useMintwareIdentity()
-  const { openConnectModal } = useConnectModal()
-  const privy = useMintwarePrivy()
-  const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
-
-  function launchApp(dest = '/app') {
-    if (isConnected) router.push(dest)
-    else openConnectModal?.()
-  }
-  function handlePrivyOnboarding() {
-    if (isConnected) { router.push('/app/rewards'); return }
-    if (privy.authenticated) { privy.connectOrCreateWallet(); return }
-    privy.login({ loginMethods: ['email'], walletChainType: 'ethereum-only' })
-  }
+  const { launch: launchApp } = useLaunch()
 
   const navLink = 'no-underline text-atx-ink/55 hover:text-atx-ink'
 
@@ -295,11 +282,8 @@ export default function HomePage() {
           </nav>
           <div className="flex items-center gap-2.5">
             <button onClick={() => setMenuOpen(o => !o)} aria-label="Menu" aria-expanded={menuOpen} className="md:hidden flex items-center justify-center w-9 h-9 border border-atx-ink/25 bg-atx-panel text-atx-ink font-atx-mono text-[15px] cursor-pointer">{menuOpen ? '✕' : '☰'}</button>
-            {privy.enabled && !isConnected && (
-              <button onClick={handlePrivyOnboarding} className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-ink bg-atx-bone max-md:hidden">Email</button>
-            )}
             <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[11px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue bg-atx-blue text-white">
-              Launch app →
+              {isConnected ? 'Go to the app →' : 'Launch app →'}
             </button>
           </div>
         </div>
@@ -308,9 +292,9 @@ export default function HomePage() {
             {([['Vaults', '/vaults'], ['Attribution', '/attribution'], ['Agents', '/agents'], ['Teams', '/teams']] as const).map(([label, href]) => (
               <Link key={href} href={href} onClick={() => setMenuOpen(false)} className="px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink/10 no-underline text-atx-ink/70">{label}</Link>
             ))}
-            {privy.enabled && !isConnected && (
-              <button onClick={() => { setMenuOpen(false); handlePrivyOnboarding() }} className="text-left px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink/10 text-atx-ink/70">Email</button>
-            )}
+            <button onClick={() => { setMenuOpen(false); launchApp() }} className="text-left px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink bg-atx-blue text-white">
+              {isConnected ? 'Go to the app →' : 'Launch app →'}
+            </button>
           </div>
         )}
       </header>
@@ -344,11 +328,6 @@ export default function HomePage() {
             <button onClick={() => launchApp()} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-blue bg-atx-blue text-white">
               {isConnected ? 'Go to the app →' : 'Launch app →'}
             </button>
-            {privy.enabled && !isConnected && (
-              <button onClick={handlePrivyOnboarding} className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-4 py-3 border border-atx-ink bg-atx-coral text-atx-ink">
-                Continue with email
-              </button>
-            )}
           </div>
         </div>
       </section>
