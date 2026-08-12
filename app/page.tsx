@@ -182,7 +182,7 @@ function ScoreCard() {
         <div className="flex items-center gap-2 flex-wrap">
           <span className={ey}>Try</span>
           {SAMPLE_ADDRS.map((s) => (
-            <button key={s.label} onClick={() => load(s.addr, s.label)} className="font-atx-mono text-[11px] text-atx-ink/70 border border-atx-ink px-2.5 py-1 cursor-pointer hover:bg-atx-ink hover:text-atx-bone">{s.label}</button>
+            <button key={s.label} onClick={() => load(s.addr, s.label)} className="font-atx-mono text-[11px] text-atx-ink/70 border border-atx-ink px-3 py-2 min-h-[36px] inline-flex items-center cursor-pointer hover:bg-atx-ink hover:text-atx-bone">{s.label}</button>
           ))}
         </div>
       </div>
