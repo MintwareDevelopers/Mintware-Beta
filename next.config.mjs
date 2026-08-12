@@ -39,7 +39,7 @@ const nextConfig = {
 
   async redirects() {
     return [
-      { source: '/dashboard', destination: '/rewards', permanent: true },
+      { source: '/dashboard', destination: '/app/rewards', permanent: true },
       // Vault action pages moved into the gated /app tier (IA Phase 1). `create`
       // must precede `:id` so it isn't captured as an id.
       { source: '/vault/create', destination: '/app/vault/create', permanent: true },
@@ -51,6 +51,7 @@ const nextConfig = {
       { source: '/profile', destination: '/app/profile', permanent: true },
       { source: '/create-campaign', destination: '/app/create-campaign', permanent: true },
       { source: '/manage/:campaign_id', destination: '/app/manage/:campaign_id', permanent: true },
+      { source: '/rewards', destination: '/app/rewards', permanent: true },
     ]
   },
 

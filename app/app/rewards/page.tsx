@@ -33,7 +33,6 @@ function RewardsContent() {
   const wallet = address?.toLowerCase() ?? ''
   const searchParams = useSearchParams()
 
-  const [view, setView] = useState<'users' | 'teams'>('users')
   const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([])
   const [activeTab, setActiveTab] = useState<'explore' | 'mine'>('explore')
   const [currentFilter, setCurrentFilter] = useState('All')
@@ -131,31 +130,7 @@ function RewardsContent() {
   return (
     <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
 
-      {/* ── Audience toggle ── */}
-      <div className="border-b border-atx-ink bg-atx-panel">
-        <div className="max-w-[1100px] mx-auto px-7 py-3.5 flex items-center justify-between gap-4 flex-wrap max-[800px]:px-4">
-          <div className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-grey">
-            {view === 'users' ? '✴ For earners' : '✴ For protocols & teams'}
-          </div>
-          <div className="inline-flex border border-atx-ink">
-            {(['users', 'teams'] as const).map((v, i) => (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                className={`font-atx-mono text-[12px] uppercase tracking-[0.12em] px-7 py-2.5 cursor-pointer leading-tight ${i === 0 ? 'border-r border-atx-ink' : ''} ${view === v ? 'bg-atx-blue text-white' : 'bg-atx-bone text-atx-ink/55'}`}
-              >
-                {v === 'users' ? 'Users' : 'Teams'}
-                <span className="block text-[9px] tracking-[0.06em] opacity-70 mt-0.5 normal-case">
-                  {v === 'users' ? 'I want to earn' : 'I run a protocol'}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {view === 'users' ? (
-        <>
+      <>
           {/* ── Users hero ── */}
           <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
             <div className="max-w-[1100px] mx-auto px-7 grid grid-cols-[1.5fr_1fr] max-[820px]:grid-cols-1 max-[800px]:px-4">
@@ -380,185 +355,13 @@ function RewardsContent() {
             </div>
           </section>
         </>
-      ) : (
-        <TeamsView />
-      )}
     </div>
-  )
-}
-
-// ─── Teams view (issuer / protocol pitch) ────────────────────────────────────────
-function Cell({ k, h, p, shine = false }: { k: string; h: string; p: ReactNode; shine?: boolean }) {
-  return (
-    <div className={`p-6 border-r border-atx-ink last:border-r-0 max-[800px]:border-r-0 max-[800px]:border-b max-[800px]:last:border-b-0 ${shine ? 'bg-atx-panel shadow-[inset_0_3px_0_var(--color-atx-coral)]' : ''}`}>
-      <div className={`font-atx-mono text-[11px] uppercase tracking-[0.14em] ${shine ? 'text-atx-mesquite' : 'text-atx-grey'}`}>{k}</div>
-      <div className={`text-[20px] font-bold mt-2 ${shine ? 'text-atx-ink' : ''}`}>{h}</div>
-      <div className="text-[13.5px] text-atx-ink/70 leading-[1.5] mt-2.5">{p}</div>
-    </div>
-  )
-}
-
-function Row({ good, children }: { good: boolean; children: ReactNode }) {
-  return (
-    <div className="flex gap-3 items-start py-[11px] border-b border-atx-ink/10 last:border-b-0 text-[14px] leading-[1.45]">
-      <span className={`font-atx-mono font-bold shrink-0 ${good ? 'text-atx-blue' : 'text-atx-ink/35'}`}>{good ? '✓' : '✕'}</span>
-      <span>{children}</span>
-    </div>
-  )
-}
-
-function TeamsView() {
-  return (
-    <>
-      {/* Hero */}
-      <section className="border-b border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-        <div className="max-w-[1100px] mx-auto px-7 grid grid-cols-[1.5fr_1fr] max-[820px]:grid-cols-1 max-[800px]:px-4">
-          <div className="py-11 pr-9 max-[820px]:pr-0">
-            <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />For teams · Issuers &amp; protocols</div>
-            <h1 className="font-bold tracking-[-0.02em] leading-[0.99] text-[clamp(32px,4.6vw,54px)] mt-5 max-w-[17ch] text-wrap-balance">
-              We measure Contribution and <span className="text-atx-blue">reward it.</span>
-            </h1>
-            <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-atx-ink/70 max-w-[54ch] mt-5">
-              Emissions attract mercenary capital that farms and leaves. What&apos;s hard is your <b className="text-atx-ink">cold-start</b>, your <b className="text-atx-ink">distribution</b>, and keeping liquidity that <b className="text-atx-ink">stays</b>. Mintware brings you sticky, relationship-sourced LPs — rewarded by the quality of their contribution rather than the size of their wallet.
-            </p>
-            <div className="flex gap-2.5 mt-7 flex-wrap">
-              <Link href="/app/create-campaign" className={BTN_ACC}>Launch a campaign →</Link>
-              <a href="mailto:nic.robinson17@gmail.com?subject=Mintware%20for%20teams" className={BTN}>Talk to us</a>
-            </div>
-          </div>
-          <div className="border-l border-atx-ink/20 pl-10 py-10 flex flex-col justify-center max-[820px]:border-l-0 max-[820px]:border-t max-[820px]:border-atx-ink/20 max-[820px]:pl-0 max-[820px]:pt-8">
-            <div className={`${EY} mb-3.5`}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />The wedge</div>
-            <div className="border border-atx-ink bg-atx-panel">
-              {[
-                ['Quality', 'rewarded, not quantity'],
-                ['Duration-matched', 'capital that stays to maturity'],
-                ['Permissionless', 'open by design — no gatekeeper decides who earns'],
-              ].map(([n, l]) => (
-                <div key={n} className="px-[18px] py-4 border-b border-atx-ink/10 last:border-b-0">
-                  <div className="font-atx-mono text-[24px] font-bold text-atx-blue tracking-[-1px] leading-none">{n}</div>
-                  <div className="font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-grey mt-1.5">{l}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Problem */}
-      <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
-          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />An emission is the easy part</div>
-          <h2 className={H2}>The capital an emission buys is <span className="text-atx-blue">where programs die.</span></h2>
-          <p className={LEAD}>A rewards program is only as good as the capital it attracts. Three problems sink most of them — and paying a bigger APY makes all three worse.</p>
-          <div className="grid grid-cols-3 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
-            <Cell k="01 · Cold-start" h="No liquidity on day one" p="A new pool launches to an empty book. You need qualified capital in the door before the economics work." />
-            <Cell k="02 · Distribution" h="Reaching real users" p="Finding high-reputation, relationship-sourced demand — not paid mercenaries — is the acquisition problem every program faces." />
-            <Cell shine k="03 · Retention" h="TVL rented, never owned" p="The moment an emission tapers, mercenary capital races for the door and the pool goes thin. You rented the liquidity; you never owned it." />
-          </div>
-        </div>
-      </section>
-
-      {/* Why reputation beats raw APY */}
-      <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
-          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />Why reputation beats raw APY</div>
-          <h2 className={H2}>Every rewards program fights its own users. <span className="text-atx-blue">Reputation flips it.</span></h2>
-          <p className={LEAD}>A pool doesn&apos;t want the most dollars — it wants capital that&apos;s <i>sticky, qualified, and stays</i>. That&apos;s a filter no program can buy with a bigger emission.</p>
-          <div className="grid grid-cols-2 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
-            <div className="p-6 border-r border-atx-ink bg-atx-panel max-[800px]:border-r-0 max-[800px]:border-b">
-              <div className="font-atx-mono text-[12px] uppercase tracking-[0.14em] text-atx-ink/45">✕ Raw emissions</div>
-              <div className="text-[12.5px] text-atx-grey mb-4 mt-1.5">The old way — mercenary by design</div>
-              <Row good={false}><b>Attracts the capital you least want.</b> Farms the emission, dumps, leaves.</Row>
-              <Row good={false}><b>Pays for noise.</b> Wash-traded volume you subsidise for a metric.</Row>
-              <Row good={false}><b>Rewards size, not stickiness.</b> The biggest wallet wins, then exits first.</Row>
-            </div>
-            <div className="p-6">
-              <div className="font-atx-mono text-[12px] uppercase tracking-[0.14em] text-atx-blue">✴ Mintware rewards</div>
-              <div className="text-[12.5px] text-atx-grey mb-4 mt-1.5">Quality by design</div>
-              <Row good><b>Duration-committed.</b> Capital locks by tier — longer commitment, higher multiplier.</Row>
-              <Row good><b>Reputation-weighted.</b> Attribution score, lock, and referral quality — not dollar count.</Row>
-              <Row good><b>Keeps pools deep.</b> Attribution-weighted fees + LP rewards attract liquidity that stays.</Row>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Two surfaces */}
-      <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
-          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-coral" />One reputation engine, every pool</div>
-          <h2 className={H2}>Reward the right capital. <span className="text-atx-blue">Not the mercenaries.</span></h2>
-          <p className={LEAD}>The same reputation filter pays the users who actually build — and upgrades any rewards program you run. Point a campaign at any pool.</p>
-          <div className="grid grid-cols-2 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
-            <Cell shine k="For users · lead" h="Your reputation is paid" p={<>The identical action out-earns a cold wallet&apos;s — up to <i>1.95×</i>. Trade, provide liquidity, hold, refer: each builds a portable score that pays a bigger share of every reward you earn.</>} />
-            <div className="p-6">
-              <div className="font-atx-mono text-[11px] uppercase tracking-[0.14em] text-atx-blue">For teams</div>
-              <div className="text-[20px] font-bold mt-2 text-atx-blue">Reward the right users</div>
-              <div className="text-[13.5px] text-atx-ink/70 leading-[1.5] mt-2.5">Point a campaign at any DeFi pool and reward loyal, high-reputation users instead of mercenary farmers. The same quality filter drives the retention and conversion raw emissions never could — your best users earn more, and stay.</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Outcomes */}
-      <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
-          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />What it drives</div>
-          <h2 className={H2}>Retention. Conversion. <span className="text-atx-blue">And capital that actually stays.</span></h2>
-          <div className="grid grid-cols-3 border border-atx-ink mt-7 max-[800px]:grid-cols-1">
-            <Cell k="Retention" h="Capital that stays" p="Lock tiers reward commitment — longer locks earn a higher multiplier, so the capital stays instead of fleeing the moment an emission tapers." />
-            <Cell k="Conversion" h="Qualified demand" p="Relationship-sourced referrals with a 24h anti-sybil gate. Placement, not spam — users who convert and stay." />
-            <Cell shine k="Liquidity" h="Deeper, stickier pools" p="Attribution-weighted fees plus lock tiers attract LPs who stay, so pools stay deep — the opposite of mercenary TVL that races its own users to the door." />
-          </div>
-        </div>
-      </section>
-
-      {/* Lifecycle */}
-      <section className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-[52px] max-[800px]:px-4 mw-reveal">
-          <div className={EY}><span className="w-[9px] h-[9px] border border-atx-ink inline-block bg-atx-blue" />One engine, whole lifecycle</div>
-          <h2 className={H2}>Attract the capital <span className="text-atx-blue">and</span> keep it.</h2>
-          <p className={LEAD}>The same campaign types cover the whole lifecycle — the reputation filter brings quality flow in, and the lock + multiplier mechanics keep it.</p>
-          <div className="overflow-x-auto mt-7">
-            <table className="w-full border-collapse border border-atx-ink text-[13px] min-w-[600px]">
-              <thead>
-                <tr>
-                  {['Campaign', 'Attract', 'Retain'].map(h => (
-                    <th key={h} className="border border-atx-ink/20 bg-atx-panel px-3.5 py-3 text-left font-atx-mono text-[10px] uppercase tracking-[0.1em] text-atx-grey">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {[
-                  ['Token Reward Pool', 'Per-swap rewards bring first flow', 'Reputation-weighting keeps quality wallets trading'],
-                  ['Points Campaign', 'Score-gated epochs draw qualified users', 'Multipliers compound for the users who stay'],
-                  ['LP / vault', 'Seed a reputation-weighted pool — in testing', 'Attribution-weighted fees + lock tiers keep LPs deep'],
-                  ['Referral', 'Relationship-sourced distribution', '24h anti-sybil gate — real users, not bots'],
-                ].map(([v, pr, se]) => (
-                  <tr key={v}>
-                    <td className="border border-atx-ink/20 px-3.5 py-3 font-atx-mono text-[12px] font-bold whitespace-nowrap align-top">{v}</td>
-                    <td className={`border border-atx-ink/20 px-3.5 py-3 align-top leading-[1.4] ${pr === '—' ? 'text-atx-ink/30' : 'text-atx-ink/80'}`}>{pr}</td>
-                    <td className="border border-atx-ink/20 px-3.5 py-3 align-top leading-[1.4] text-atx-ink/80">{se}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="text-[clamp(19px,2.5vw,28px)] font-bold tracking-[-0.5px] leading-[1.25] max-w-[30ch] mt-9">
-            We don&apos;t pay the biggest wallet. <span className="text-atx-blue">We pay the best one.</span>
-          </div>
-          <div className="mt-7">
-            <Link href="/app/create-campaign" className={BTN_ACC}>Launch a campaign →</Link>
-          </div>
-        </div>
-      </section>
-    </>
   )
 }
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
-// Public front door — no wallet required to browse rewards + the teams pitch.
-// Join / create / swap still require a wallet on their own flows.
+// Public front door — no wallet required to browse rewards / campaigns.
+// The teams pitch lives on /teams; join / create / swap require a wallet.
 export default function RewardsPage() {
   return (
     <>

@@ -46,7 +46,7 @@ function Head({ n, label }: { n: string; label: string }) {
 // ── data ─────────────────────────────────────────────────────────────────────
 const PILLARS: [string, string, string, string][] = [
   ['Measure', 'Attribution', 'On-chain reputation across 100+ chains — six signals, one score, EAS-attested on Base. Live today.', '/attribution'],
-  ['Reward', 'The engine', 'Campaigns and rewards weighted by reputation, commitment, and referral quality — never by raw dollars.', '/rewards'],
+  ['Reward', 'The engine', 'Campaigns and rewards weighted by reputation, commitment, and referral quality — never by raw dollars.', '/app/rewards'],
   ['Hold', 'The vaults', 'Reputation-weighted Uniswap V4 liquidity — dual-sided pairs, built security-first. In testing ahead of launch.', '/defi'],
 ]
 
