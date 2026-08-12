@@ -65,7 +65,7 @@ export function LiquidityTab({ wallet }: Props) {
       <div className="text-center py-12 text-atx-ink/60 text-[13px]">
         No active LP positions.{' '}
         {process.env.NEXT_PUBLIC_VAULTS_LOCKED !== 'true' ? (
-          <a href="/vaults" className="text-atx-blue font-semibold no-underline font-atx-mono uppercase tracking-[0.06em]">Browse vaults →</a>
+          <a href="/app/vaults" className="text-atx-blue font-semibold no-underline font-atx-mono uppercase tracking-[0.06em]">Browse vaults →</a>
         ) : (
           <span className="text-atx-ink/55 font-semibold">Vaults coming soon</span>
         )}
@@ -168,7 +168,7 @@ export function LiquidityTab({ wallet }: Props) {
 
       {process.env.NEXT_PUBLIC_VAULTS_LOCKED !== 'true' ? (
         <a
-          href="/vaults"
+          href="/app/vaults"
           className="text-[13px] text-atx-blue font-semibold no-underline text-center block mt-2 font-atx-mono uppercase tracking-[0.06em]"
         >
           Browse more vaults →
