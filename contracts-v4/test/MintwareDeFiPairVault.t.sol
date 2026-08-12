@@ -216,12 +216,12 @@ contract MintwareDeFiPairVaultTest is Test {
         (uint256 f0, uint256 f1) = vault.collectFees();
         assertTrue(f0 > 0 || f1 > 0, "fees realized");
 
-        // LP portion (fee minus the Mintware cut) landed in the distributor's epoch pot.
-        uint256 mint0 = (f0 * vault.MINTWARE_FEE_BPS()) / vault.BPS();
-        uint256 mint1 = (f1 * vault.MINTWARE_FEE_BPS()) / vault.BPS();
+        // LP portion (fee minus the combined non-LP three-way cut) landed in the distributor's pot.
+        uint256 lp0 = f0 - (f0 * vault.treasuryFeeBps()) / vault.BPS() - (f0 * vault.buybackFeeBps()) / vault.BPS();
+        uint256 lp1 = f1 - (f1 * vault.treasuryFeeBps()) / vault.BPS() - (f1 * vault.buybackFeeBps()) / vault.BPS();
         MintwareWeightedDistributor.Epoch memory e = dist.getEpoch(vid, 1);
-        assertEq(e.pot0, f0 - mint0, "t0 LP fees routed to distributor");
-        assertEq(e.pot1, f1 - mint1, "t1 LP fees routed to distributor");
+        assertEq(e.pot0, lp0, "t0 LP fees routed to distributor");
+        assertEq(e.pot1, lp1, "t1 LP fees routed to distributor");
 
         // Accumulator untouched — LPs claim their weighted share from the distributor.
         assertEq(vault.accFee0PerShare(), 0, "accumulator not credited");
@@ -245,6 +245,182 @@ contract MintwareDeFiPairVaultTest is Test {
         vm.prank(alice);
         vm.expectRevert(); // Ownable: caller is not the owner
         vault.setWeightedDistributor(address(dist), keccak256("v"));
+    }
+
+    // ── ULV increment 3: configurable three-way value-capture split ──────────
+
+    function test_default_split_is_60_30_10() public view {
+        assertEq(vault.treasuryFeeBps(), 3_000, "default treasury 30%");
+        assertEq(vault.buybackFeeBps(),  1_000, "default buyback 10%");
+        assertEq(vault.MAX_NON_LP_FEE_BPS(), 4_000, "max non-LP 40%");
+        assertEq(vault.buybackSink(), address(0), "buyback sink unset by default");
+    }
+
+    // (a) known fee splits exactly 60/30/10 and cuts + lp == fee (conservation), both tokens.
+    function test_realizeFees_splits_60_30_10_and_conserves() public {
+        _init();
+        _deposit(alice, 200_000e18, 200_000e18, LockTier.Flex);
+        _genFees();
+
+        uint256 tre0Before = _t0().balanceOf(treasury);
+        uint256 tre1Before = _t1().balanceOf(treasury);
+        uint256 res0Before = vault.feeReserve0();
+        uint256 res1Before = vault.feeReserve1();
+
+        (uint256 f0, uint256 f1) = vault.collectFees();
+        assertTrue(f0 > 0 && f1 > 0, "both tokens earned fees");
+
+        // No sink wired → treasury receives treasury+buyback (40%), LP takes the remainder (60%).
+        uint256 tre0 = (f0 * 3_000) / 10_000;
+        uint256 buy0 = (f0 * 1_000) / 10_000;
+        uint256 lp0  = f0 - tre0 - buy0;
+        uint256 tre1 = (f1 * 3_000) / 10_000;
+        uint256 buy1 = (f1 * 1_000) / 10_000;
+        uint256 lp1  = f1 - tre1 - buy1;
+
+        // conservation: every wei of realized fee is accounted for (both tokens).
+        assertEq(tre0 + buy0 + lp0, f0, "t0 conservation");
+        assertEq(tre1 + buy1 + lp1, f1, "t1 conservation");
+
+        // routing: treasury got exactly 40% (folded); LP reserve got exactly the 60% remainder.
+        assertEq(_t0().balanceOf(treasury) - tre0Before, tre0 + buy0, "t0 treasury 40%");
+        assertEq(_t1().balanceOf(treasury) - tre1Before, tre1 + buy1, "t1 treasury 40%");
+        assertEq(vault.feeReserve0() - res0Before, lp0, "t0 LP reserve 60%");
+        assertEq(vault.feeReserve1() - res1Before, lp1, "t1 LP reserve 60%");
+    }
+
+    // (b) buybackSink set → the buyback portion lands there (treasury gets only its 30%).
+    function test_buyback_cut_lands_at_sink_when_set() public {
+        address sink = makeAddr("buybackSink");
+        vault.setBuybackSink(sink);
+
+        _init();
+        _deposit(alice, 200_000e18, 200_000e18, LockTier.Flex);
+        _genFees();
+
+        uint256 tre0Before  = _t0().balanceOf(treasury);
+        uint256 sink0Before = _t0().balanceOf(sink);
+        (uint256 f0,) = vault.collectFees();
+
+        uint256 tre0 = (f0 * 3_000) / 10_000;
+        uint256 buy0 = (f0 * 1_000) / 10_000;
+        assertEq(_t0().balanceOf(treasury) - tre0Before, tre0, "treasury exactly 30%");
+        assertEq(_t0().balanceOf(sink) - sink0Before, buy0, "sink exactly 10%");
+    }
+
+    // (c) buybackSink == 0 → buyback folds into treasury (40%); nothing stranded.
+    function test_buyback_folds_into_treasury_when_sink_unset() public {
+        _init();
+        _deposit(alice, 200_000e18, 200_000e18, LockTier.Flex);
+        _genFees();
+
+        uint256 tre0Before = _t0().balanceOf(treasury);
+        uint256 res0Before = vault.feeReserve0();
+        (uint256 f0,) = vault.collectFees();
+
+        uint256 nonLp0 = (f0 * 3_000) / 10_000 + (f0 * 1_000) / 10_000; // 40% folded
+        uint256 lp0    = f0 - nonLp0;
+        uint256 treDelta = _t0().balanceOf(treasury) - tre0Before;
+        uint256 resDelta = vault.feeReserve0() - res0Before;
+
+        assertEq(treDelta, nonLp0, "treasury gets folded 40%");
+        assertEq(resDelta, lp0, "LP gets 60% remainder");
+        assertEq(treDelta + resDelta, f0, "conservation: nothing stranded");
+    }
+
+    // (d) setFeeSplit reverts above the bound; boundary is allowed.
+    function test_setFeeSplit_reverts_above_bound() public {
+        vm.expectRevert(MintwareDeFiPairVault.BadFeeSplit.selector);
+        vault.setFeeSplit(3_000, 1_001); // 4001 > 4000
+
+        vault.setFeeSplit(4_000, 0); // exactly at the bound → LP = 60%
+        assertEq(vault.treasuryFeeBps(), 4_000);
+        assertEq(vault.buybackFeeBps(), 0);
+    }
+
+    function test_setFeeSplit_only_owner() public {
+        vm.prank(alice);
+        vm.expectRevert(); // Ownable
+        vault.setFeeSplit(1_000, 1_000);
+    }
+
+    function test_setBuybackSink_only_owner() public {
+        vm.prank(alice);
+        vm.expectRevert(); // Ownable
+        vault.setBuybackSink(makeAddr("x"));
+    }
+
+    // (e) a custom split (20% treasury / 10% buyback / 70% LP) routes correctly to sink + reserve.
+    function test_custom_split_routes_correctly() public {
+        vault.setFeeSplit(2_000, 1_000);
+        address sink = makeAddr("sink2");
+        vault.setBuybackSink(sink);
+
+        _init();
+        _deposit(alice, 200_000e18, 200_000e18, LockTier.Flex);
+        _genFees();
+
+        uint256 treBefore  = _t0().balanceOf(treasury);
+        uint256 sinkBefore = _t0().balanceOf(sink);
+        uint256 resBefore  = vault.feeReserve0();
+        (uint256 f0,) = vault.collectFees();
+
+        uint256 tre = (f0 * 2_000) / 10_000;
+        uint256 buy = (f0 * 1_000) / 10_000;
+        uint256 lp  = f0 - tre - buy;
+        assertEq(_t0().balanceOf(treasury) - treBefore, tre, "20% treasury");
+        assertEq(_t0().balanceOf(sink) - sinkBefore, buy, "10% buyback");
+        assertEq(vault.feeReserve0() - resBefore, lp, "70% LP");
+        assertEq(tre + buy + lp, f0, "conservation");
+    }
+
+    // (f) LP portion routes to the weighted distributor when wired (with a custom split).
+    function test_lp_leg_routes_to_distributor_under_custom_split() public {
+        _init();
+        _deposit(alice, 200_000e18, 200_000e18, LockTier.Flex);
+
+        MintwareWeightedDistributor dist =
+            new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        bytes32 vid = keccak256("defi-pair-custom");
+        dist.setAuthorizedRegistrar(address(vault), true);
+        vault.setWeightedDistributor(address(dist), vid);
+        vault.setFeeSplit(2_500, 500); // 25% / 5% / 70% LP
+
+        _genFees();
+        (uint256 f0, uint256 f1) = vault.collectFees();
+
+        uint256 lp0 = f0 - (f0 * 2_500) / 10_000 - (f0 * 500) / 10_000;
+        uint256 lp1 = f1 - (f1 * 2_500) / 10_000 - (f1 * 500) / 10_000;
+        MintwareWeightedDistributor.Epoch memory e = dist.getEpoch(vid, 1);
+        assertEq(e.pot0, lp0, "t0 LP remainder routed to distributor");
+        assertEq(e.pot1, lp1, "t1 LP remainder routed to distributor");
+        // accumulator untouched on the distributor path
+        assertEq(vault.accFee0PerShare(), 0, "accumulator not credited when distributor wired");
+    }
+
+    // (g) rounding: a non-round split leaves the exact remainder to LPs; protocol cuts never exceed
+    //     their nominal bps share (rounding always favors LPs).
+    function test_rounding_leaves_remainder_to_lp() public {
+        vault.setFeeSplit(2_777, 1_111); // deliberately non-round bps (non-LP = 3888, LP = 6112, within the 4000 bound)
+        _init();
+        _deposit(alice, 200_000e18, 200_000e18, LockTier.Flex);
+        _genFees();
+
+        uint256 treBefore = _t0().balanceOf(treasury);
+        uint256 resBefore = vault.feeReserve0();
+        (uint256 f0,) = vault.collectFees();
+
+        uint256 tre = (f0 * 2_777) / 10_000;
+        uint256 buy = (f0 * 1_111) / 10_000;
+        uint256 lp  = f0 - tre - buy;
+
+        // actual routing == floor-cuts + exact remainder (no sink → non-LP folded to treasury).
+        assertEq(_t0().balanceOf(treasury) - treBefore, tre + buy, "non-LP = floored cuts");
+        assertEq(vault.feeReserve0() - resBefore, lp, "LP = exact remainder");
+        // rounding favors LP: LP >= nominal LP share; combined protocol cut <= nominal non-LP share.
+        assertGe(lp, (f0 * (10_000 - 2_777 - 1_111)) / 10_000, "LP >= nominal 61.12% share");
+        assertLe(tre + buy, (f0 * (2_777 + 1_111)) / 10_000, "non-LP <= nominal 38.88% share");
+        assertEq(tre + buy + lp, f0, "conservation");
     }
 
     // ── rebalance ────────────────────────────────────────────────────────────
