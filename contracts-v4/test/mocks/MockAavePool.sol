@@ -26,6 +26,9 @@ contract MockAToken {
     function simulateBorrow(uint256 amt) external { underlying.safeTransfer(address(0xdead), amt); }
     /// @dev test: simulate accrued yield (extra aTokens, backed by pre-funded underlying).
     function accrue(address to, uint256 amt) external onlyPool { balanceOf[to] += amt; totalSupply += amt; }
+    /// @dev test-only, permissionless: bump an aToken balance to simulate supply yield. Caller MUST
+    ///      pre-fund the aToken with the matching underlying so withdrawals stay backed.
+    function simulateYield(address to, uint256 amt) external { balanceOf[to] += amt; totalSupply += amt; }
 }
 
 /// @dev Minimal Aave v3 Pool + PoolAddressesProvider stand-in for adapter unit tests.
