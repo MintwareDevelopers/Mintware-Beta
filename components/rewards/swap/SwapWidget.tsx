@@ -16,13 +16,10 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { useAccount, useBalance, useReadContract, useChainId, useSwitchChain } from 'wagmi'
 import { useQuote } from '@/hooks/useQuote'
 import { useSwap } from '@/hooks/useSwap'
-import { useCampaign } from '@/hooks/useCampaign'
 import { useTokenList } from '@/hooks/useTokenList'
 import { getChainConfig } from '@/config/chains'
 import { getNativeToken } from '@/config/tokens'
 import { TokenSelector } from './TokenSelector'
-import { CampaignBanner } from './CampaignBanner'
-import { RewardPreview } from './RewardPreview'
 import { AttributionScorePreview } from './AttributionScorePreview'
 import { PostSwapSummary } from './PostSwapSummary'
 import { ChainSelector } from './ChainSelector'
@@ -46,7 +43,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
   const chainId = useChainId()
   const chainConfig = getChainConfig(chainId)
 
-  const { campaignId, referrer, campaign } = useCampaign()
   const { status, txHash, error: swapError, isLoading: isSwapping, executeSwap, reset } = useSwap()
 
   // Token state
@@ -122,8 +118,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
     taker: address ?? '',
     feeRecipient: chainConfig?.feeRecipient || undefined,
     feeBps: chainConfig?.feeBps ?? 50,
-    campaignId,
-    referrer,
     enabled: isConnected && !!sellToken && !!buyToken && !!sellAmount,
   })
 
@@ -238,8 +232,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
       sellToken,
       buyToken,
       sellAmount: toWei(sellAmount, sellToken.decimals),
-      campaignId,
-      referrer,
     })
     // Sheet stays visible (showing "Waiting for wallet…") until success or error
   }
@@ -307,8 +299,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
   return (
     <>
       <div className="w-full">
-        <CampaignBanner campaignId={campaignId} referrer={referrer} campaign={campaign} />
-
         {/* ── Header strip ── */}
         <div className="px-[22px] py-[18px] flex items-center justify-between bg-atx-panel border-x border-t border-atx-ink">
           <div>
@@ -502,16 +492,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
             </div>
           )}
 
-          {/* Reward preview */}
-          <RewardPreview
-            campaign={campaign}
-            sellAmountUSD={sellAmountUSD}
-            feeBps={chainConfig?.feeBps ?? 50}
-            feeTokenSymbol={buyToken?.symbol ?? ''}
-            feeAmountUSD={feeAmountUSD}
-            isLoading={isQuoting}
-          />
-
           {/* Attribution score preview */}
           <AttributionScorePreview estimatedScoreGain={estimatedScoreGain} />
 
@@ -551,10 +531,9 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
           </button>
 
           {/* Score gain live preview */}
-          {sellAmount && parseFloat(sellAmount) > 0 && campaign?.isActive && (
+          {sellAmount && parseFloat(sellAmount) > 0 && (
             <div className="flex items-center justify-center gap-[5px] text-[12px] font-atx-mono -mt-[2px]">
-              <span className="font-bold text-atx-blue">+8 pts</span>
-              <span className="text-atx-ink/55">per trading day · builds your Attribution score</span>
+              <span className="text-atx-ink/55">Every swap builds your Attribution score</span>
             </div>
           )}
         </div>
@@ -611,8 +590,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
           buyAmount={buyAmount}
           buyToken={buyToken}
           sellAmountUSD={sellAmountUSD}
-          campaign={campaign}
-          referrer={referrer}
           estimatedScoreGain={estimatedScoreGain}
           currentScore={0}
           onDismiss={() => {

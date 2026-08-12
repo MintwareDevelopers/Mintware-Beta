@@ -1,32 +1,26 @@
 'use client'
 
 // =============================================================================
-// /swap — promoted from the /style/swap concept (2026-07-29).
+// /swap — cross-chain LI.FI swap, front and centre.
 //
-// Faithful port of the editorial "two-surface reputation entry point" concept
-// onto the REAL data + money-path:
-//   • The trade core is the real <SwapWidget/> (LI.FI fee-injection). Untouched.
+//   • The trade core is the real <SwapWidget/> (LI.FI fee-injection).
 //   • Editorial hero + reputation stat band wired to the live /score API.
-//   • "Suggested · where the points are" strip = REAL live campaigns; one tap
-//     sets the campaign context (sessionStorage mw_campaign_id, exactly like
-//     SwapModal) and remounts the widget with the campaign's token preselected.
-//   • Earn-by-action detail (real participant progress) is preserved, not dropped.
-//   • The "other surface" panel cross-links to the real /vaults product (reputation-
-//     weighted DeFi liquidity vaults). The RWA surface was shelved; no RWA copy here.
+//   • Cross-links to the reputation-weighted /vaults product.
+//
+// Campaigns were shelved (2026-08-12) — this is a plain swap that still builds
+// your Attribution score. No campaign context, points, or reward crediting.
 // =============================================================================
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/web2/MwNav'
 import { PageHero } from '@/components/web2/PageHero'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
-import { API, scoreApiUrl } from '@/lib/web2/api'
+import { scoreApiUrl } from '@/lib/web2/api'
 
 // ─── ATX Settlemint tokens ──────────────────────────────────────────────────────
 const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
-const LINE = 'border-atx-ink/20'
 
 function Star({ className = '' }: { className?: string }) {
   return (
@@ -36,109 +30,14 @@ function Star({ className = '' }: { className?: string }) {
   )
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-type ActionValue = {
-  label: string
-  points: number
-  per_day?: boolean
-  per_referral?: boolean
-  per_referred_trade?: boolean
-  one_time?: boolean
-}
-interface Campaign {
-  id: string
-  name: string
-  chain?: string
-  chain_id?: number
-  status: string
-  token_contract?: string
-  token_symbol?: string
-  actions?: Record<string, ActionValue>
-}
-interface Participant {
-  trading_points?:         number
-  referral_trade_points?:  number
-  total_points?:           number
-  active_trading_days?:    number
-}
-
-const ACTION_FIELD_MAP: Record<string, keyof Participant> = {
-  trade:           'trading_points',
-  referral_trade:  'referral_trade_points',
-}
-
-// Resolve a campaign's numeric chain id the same way CampaignCard does.
-const CHAIN_NAME_TO_ID: Record<string, number> = {
-  base: 8453, arbitrum: 42161, ethereum: 1, eth: 1, mainnet: 1,
-  bsc: 56, bnb: 56, polygon: 137, optimism: 10,
-}
-const chainIdOf = (c: Campaign) => c.chain_id ?? CHAIN_NAME_TO_ID[c.chain?.toLowerCase() ?? ''] ?? 0
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-function actionSuffix(a: ActionValue): string {
-  if (a.per_day)            return '/day'
-  if (a.per_referral)       return '/ref'
-  if (a.per_referred_trade) return '/trade'
-  return ''
-}
-function actionDesc(key: string, campaignName: string): string {
-  if (key === 'trade')                                      return `Swap any token on ${campaignName} to earn daily points`
-  if (key.startsWith('referral') && key.includes('trade'))  return `Earn points for every wallet that trades via your invite link`
-  if (key.startsWith('referral'))                          return `One-time bonus when a referred wallet completes a full trade`
-  return `Complete this action on ${campaignName}`
-}
-// Attribution reward multiplier for points campaigns — documented table (rewards.md).
-function multForPct(pct: number | null): number | null {
-  if (pct === null) return null
-  return pct >= 67 ? 1.5 : pct >= 34 ? 1.25 : 1.0
-}
-
 // ─── Swap Page ─────────────────────────────────────────────────────────────────
 function SwapContent() {
   const { address } = useAccount()
   const wallet = address?.toLowerCase() ?? ''
-  const router = useRouter()
-  const searchParams = useSearchParams()
 
-  const [campaigns, setCampaigns]       = useState<Campaign[]>([])
-  const [participant, setParticipant]   = useState<Participant | null>(null)
-  const [swapScore, setSwapScore]       = useState<number | null>(null)
-  const [swapTier,  setSwapTier]        = useState<string | null>(null)
-  const [swapPct,   setSwapPct]         = useState<number | null>(null)
-
-  // ── The URL's ?cid= is the SINGLE source of truth for the active/credited
-  //    campaign. SwapWidget's useCampaign() reads ?cid= first, so driving
-  //    selection through the URL guarantees the credited campaign always equals
-  //    the visibly-active one (no sessionStorage write-timing race vs the widget
-  //    remount). We never write mw_campaign_id ourselves — useCampaign owns it. ──
-  const urlCid = searchParams.get('cid')
-  const activeId = urlCid && campaigns.some(c => c.id === urlCid) ? urlCid : null
-
-  // Live campaigns
-  useEffect(() => {
-    fetch(`${API}/campaigns`)
-      .then(r => r.json())
-      .then(data => {
-        if (!Array.isArray(data)) return
-        setCampaigns((data as Campaign[]).filter(c => c.status === 'live'))
-      })
-      .catch(() => {})
-  }, [])
-
-  // Once campaigns load, ensure a valid ?cid= is present — default to the first
-  // live campaign — so the displayed/preselected campaign is also the credited
-  // one. Runs once; explicit taps thereafter set ?cid= directly.
-  const didSeed = useRef(false)
-  useEffect(() => {
-    if (didSeed.current || !campaigns.length) return
-    if (activeId) { didSeed.current = true; return }  // URL already carries a live cid
-    const first = campaigns[0]?.id
-    if (!first) return
-    didSeed.current = true
-    const p = new URLSearchParams(Array.from(searchParams.entries()))
-    p.set('cid', first)
-    router.replace(`/swap?${p.toString()}`, { scroll: false })
-  }, [campaigns, activeId, router, searchParams])
+  const [swapScore, setSwapScore] = useState<number | null>(null)
+  const [swapTier,  setSwapTier]  = useState<string | null>(null)
+  const [swapPct,   setSwapPct]   = useState<number | null>(null)
 
   // Attribution score for the reputation rail
   useEffect(() => {
@@ -153,73 +52,22 @@ function SwapContent() {
       .catch(() => {})
   }, [wallet])
 
-  const activeCampaign = useMemo(() => campaigns.find(c => c.id === activeId) ?? null, [campaigns, activeId])
-
-  // Participant data for the active campaign
-  useEffect(() => {
-    if (!activeCampaign || !wallet) { setParticipant(null); return }
-    fetch(`${API}/campaign?id=${encodeURIComponent(activeCampaign.id)}&address=${wallet}`)
-      .then(r => r.json())
-      .then((d: { participant?: Participant }) => setParticipant(d.participant ?? null))
-      .catch(() => setParticipant(null))
-  }, [activeCampaign, wallet])
-
-  // Selecting a suggested campaign = navigate to its ?cid=. useCampaign (URL-first,
-  // reactive to searchParams) then credits it; the widget remounts (key) so its
-  // token preselect re-applies. Displayed and credited stay in lockstep.
-  function selectCampaign(c: Campaign) {
-    const p = new URLSearchParams(Array.from(searchParams.entries()))
-    p.set('cid', c.id)
-    router.replace(`/swap?${p.toString()}`, { scroll: false })
-  }
-
-  // Preselect for the active campaign (only when it has a tradable token).
-  const preselect = useMemo(() => {
-    if (!activeCampaign?.token_contract) return null
-    const cid = chainIdOf(activeCampaign)
-    if (!cid) return null
-    return { address: activeCampaign.token_contract, chainId: cid, symbol: activeCampaign.token_symbol }
-  }, [activeCampaign])
-
-  function actionPts(key: string): number {
-    const field = ACTION_FIELD_MAP[key]
-    return field ? (participant?.[field] ?? 0) : 0
-  }
-  function actionBarPct(key: string, action: ActionValue): number {
-    const earned = actionPts(key)
-    if (earned === 0) return 0
-    if (action.one_time) return 100
-    const cap = action.per_referral || action.per_referred_trade ? action.points * 10 : action.points * 30
-    return Math.min(Math.round((earned / cap) * 100), 100)
-  }
-
-  const actions = activeCampaign?.actions ? Object.entries(activeCampaign.actions) : []
-  const mult = multForPct(swapPct)
-  // Campaigns that can be one-tap loaded into the widget (have a tradable token).
-  const suggested = campaigns.filter(c => c.token_contract && chainIdOf(c))
-
   return (
     <div className="page-swap bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
 
         {/* ── Editorial hero ── */}
         <PageHero
           size="compact"
-          eyebrow="On-chain reputation · rewards · 100+ chains"
+          eyebrow="On-chain reputation · 100+ chains"
           title={<>TRADE LIKE IT <span className="text-atx-blue">COUNTS.</span></>}
-          sub="Every swap builds your Attribution score and earns rewards weighted by who you are. Trade tokens across chains here; provide liquidity in the reputation-weighted vaults. One reputation carries across both."
+          sub="Every swap builds your Attribution score. Trade tokens across chains here; provide liquidity in the reputation-weighted vaults. One reputation carries across both."
         />
 
         {/* ── SWAP — dominant, front and centre. Nothing above the widget. ── */}
         <div className="max-w-[760px] mx-auto w-full px-6 pt-8 pb-3 max-[600px]:px-4 max-[600px]:pt-5 mw-reveal">
-          {/* The real swap widget — money-path. Remounts (key) when the
-              selected campaign changes so its token preselect applies. */}
           <div className="bg-atx-panel border border-atx-ink overflow-hidden">
             <Suspense fallback={<SwapSkeleton />}>
-              <SwapWidget
-                key={activeCampaign?.id ?? 'default'}
-                preselectBuy={preselect ?? undefined}
-                preselectChainId={preselect?.chainId}
-              />
+              <SwapWidget />
             </Suspense>
           </div>
 
@@ -229,7 +77,7 @@ function SwapContent() {
           </div>
         </div>
 
-        {/* ── Below & framed: reputation stat band (bible — essential above, secondary below) ── */}
+        {/* ── Below & framed: reputation stat band ── */}
         <section className="border-y border-atx-ink mt-9">
           <div className="mx-auto max-w-[1180px] grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr] mw-reveal">
             {[
@@ -239,14 +87,14 @@ function SwapContent() {
                 sub: wallet ? (swapTier ?? 'attribution') : 'connect wallet',
               },
               {
-                l: 'Reward multiplier',
-                v: mult !== null ? `${mult.toFixed(2)}×` : '—',
-                sub: swapPct !== null ? `percentile ${swapPct}` : 'points campaigns',
+                l: 'Tier',
+                v: wallet ? (swapTier ?? '…') : '—',
+                sub: 'attribution',
               },
               {
-                l: 'Live campaigns',
-                v: String(campaigns.length).padStart(2, '0'),
-                sub: campaigns.length ? 'earning now' : 'none active',
+                l: 'Percentile',
+                v: swapPct !== null ? `top ${Math.max(1, 100 - swapPct)}%` : '—',
+                sub: wallet ? 'across all wallets' : 'connect wallet',
               },
               { l: 'Routing', v: 'Aggregated', sub: '0x · LI.FI' },
             ].map((s, i) => (
@@ -259,113 +107,28 @@ function SwapContent() {
           </div>
         </section>
 
-        {/* ── Below & framed: rewards context ── */}
-        <div className="mx-auto max-w-[1180px] px-7 py-8 grid [grid-template-columns:minmax(0,1.4fr)_1fr] gap-[22px] items-start max-[900px]:grid-cols-1 max-[600px]:px-4">
-
-          {/* Left: where the points are + what you earn */}
-          <div className="flex flex-col gap-6">
-
-            {/* Suggested · where the points are — tap to load into the widget above */}
-            <div>
-              <div className="flex items-baseline gap-3 mb-3">
-                <span className={LABEL}>Where the points are · tap to load</span>
+        {/* ── Below & framed: the other surface + attribution ── */}
+        <div className="mx-auto max-w-[1180px] px-7 py-8 max-[600px]:px-4">
+          <div className="max-w-[520px]">
+            <div className={`${LABEL} mb-3`}>The other surface</div>
+            <Link
+              href="/app/vaults"
+              className="block border border-atx-ink border-l-[3px] border-l-atx-coral bg-atx-panel px-5 py-4 transition-colors hover:bg-atx-coral/[0.06]"
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <Star className="w-4 h-4 text-atx-coral" />
+                <span className="font-bold text-[15px] tracking-tight">Liquidity vaults</span>
+                <span className="ml-auto font-atx-mono text-[16px] text-atx-coral">→</span>
               </div>
-              {suggested.length > 0 ? (
-                <div className="flex flex-col border border-atx-ink">
-                  {suggested.map(c => {
-                    const on = c.id === activeId
-                    const firstAction = c.actions ? Object.values(c.actions)[0] : undefined
-                    const reward = firstAction ? `+${firstAction.points} pts${actionSuffix(firstAction)}` : 'earn pts'
-                    return (
-                      <button
-                        key={c.id}
-                        onClick={() => selectCampaign(c)}
-                        className={`text-left p-[13px_15px] border-b border-atx-ink/20 last:border-b-0 flex items-center gap-3 transition-colors ${
-                          on ? 'bg-atx-blue/[0.08] border-l-2 border-l-atx-blue' : 'bg-atx-bone hover:bg-atx-ink/[0.04]'
-                        }`}
-                      >
-                        <Star className="w-4 h-4 shrink-0 text-atx-blue" />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-bold text-[14px] tracking-tight truncate">Trade → {c.token_symbol ?? c.name}</div>
-                          <div className="font-atx-mono text-[11px] mt-0.5 truncate text-atx-ink/50">{c.chain ?? 'multi-chain'} · {c.name}</div>
-                        </div>
-                        {on ? (
-                          <span className="shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-blue">loaded</span>
-                        ) : (
-                          <span className="shrink-0 font-atx-mono text-[9px] uppercase tracking-[0.04em] px-1.5 py-1 border leading-tight border-atx-blue text-atx-blue">{reward}</span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="border border-atx-ink/25 bg-atx-panel px-4 py-5 font-atx-mono text-[12px] text-atx-ink/55 leading-[1.5]">
-                  No token campaigns live right now. Any swap still builds your Attribution score.
-                </div>
-              )}
-            </div>
-
-            {/* Earn-by-action detail — real participant progress (preserved) */}
-            {actions.length > 0 && (
-              <div>
-                <div className={`${LABEL} mb-[14px]`}>What you earn on {activeCampaign?.name}</div>
-                <div className="flex flex-col gap-[10px]">
-                  {actions.map(([key, action]) => {
-                    const earned = actionPts(key)
-                    const pct    = actionBarPct(key, action)
-                    const countLabel = action.one_time
-                      ? (earned > 0 ? 'completed' : 'not completed')
-                      : action.per_day
-                      ? `${earned > 0 ? Math.floor(earned / action.points) : 0} day${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
-                      : `${earned > 0 ? Math.floor(earned / action.points) : 0} referral${Math.floor(earned / action.points) !== 1 ? 's' : ''}`
-                    return (
-                      <div key={key} className="border border-atx-ink/25 bg-atx-panel px-4 py-[14px] transition-colors duration-150 hover:border-atx-ink">
-                        <div className="flex items-start justify-between gap-2 mb-[6px]">
-                          <div className="text-[14px] font-semibold text-atx-ink">{action.label}</div>
-                          <div className="text-[15px] font-bold text-atx-blue whitespace-nowrap font-atx-mono">+{action.points}{actionSuffix(action)}</div>
-                        </div>
-                        <div className="text-[13px] text-atx-ink/55 leading-[1.4]">{actionDesc(key, activeCampaign?.name ?? '')}</div>
-                        <div className="mt-[10px]">
-                          <div className="flex justify-between text-[10px] text-atx-ink/45 mb-[5px] font-atx-mono uppercase tracking-[0.06em]">
-                            <span>{countLabel}</span>
-                            <span>{earned > 0 ? `${earned} pts earned` : '0 pts earned'}</span>
-                          </div>
-                          <div className="h-[6px] border border-atx-ink overflow-hidden relative">
-                            <div className="h-full bg-atx-blue absolute inset-y-0 left-0" style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Right: the other surface + attribution */}
-          <aside className="flex flex-col gap-6 max-[900px]:gap-5">
-            <div>
-              <div className={`${LABEL} mb-3`}>The other surface</div>
-              <Link
-                href="/app/vaults"
-                className="block border border-atx-ink border-l-[3px] border-l-atx-coral bg-atx-panel px-5 py-4 transition-colors hover:bg-atx-coral/[0.06]"
-              >
-                <div className="flex items-center gap-2 mb-1.5">
-                  <Star className="w-4 h-4 text-atx-coral" />
-                  <span className="font-bold text-[15px] tracking-tight">Liquidity vaults</span>
-                  <span className="ml-auto font-atx-mono text-[16px] text-atx-coral">→</span>
-                </div>
-                <p className="text-[13px] text-atx-ink/55 leading-[1.5]">
-                  Reputation-weighted Uniswap V4 vaults — the same position earns more when your
-                  Attribution score is stronger. In testing on Base — explore the vaults.
-                </p>
-              </Link>
-            </div>
-
-            <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/40 flex items-center gap-1.5 px-1">
+              <p className="text-[13px] text-atx-ink/55 leading-[1.5]">
+                Reputation-weighted Uniswap V4 vaults — the same position earns more when your
+                Attribution score is stronger. In testing on Base — explore the vaults.
+              </p>
+            </Link>
+            <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/40 flex items-center gap-1.5 px-1 mt-6">
               <Star className="w-3 h-3" /> Powered by Attribution
             </div>
-          </aside>
+          </div>
         </div>
       </div>
   )
@@ -374,7 +137,6 @@ function SwapContent() {
 export default function SwapPage() {
   // View-public: the swap widget renders for everyone; connecting is prompted at
   // trade time (connect-on-action), consistent with the public vault browse.
-  // SwapContent handles the disconnected state (wallet-dependent stats show '—').
   return (
     <>
       <MwNav />
