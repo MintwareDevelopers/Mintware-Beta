@@ -1,12 +1,12 @@
 'use client'
 
-import { PrivyProvider, type PrivyInterface, type PrivyProviderProps, usePrivy, useWallets } from '@privy-io/react-auth'
+import { PrivyProvider, type PrivyInterface, type PrivyProviderProps, usePrivy, useWallets, useCreateWallet } from '@privy-io/react-auth'
 import { WagmiProvider as PrivyWagmiProvider } from '@privy-io/wagmi'
 import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit'
 import { WagmiProvider, useAccount, type State } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from '@/lib/web3/wagmi'
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
 import { LaunchModalProvider } from './LaunchModal'
@@ -26,7 +26,13 @@ const PRIVY_CONFIG: PrivyProviderProps['config'] = {
   },
   loginMethods: ['wallet', 'email'],
   embeddedWallets: {
-    ethereum: { createOnLogin: 'users-without-wallets' },
+    // createOnLogin is 'off' on purpose. Privy 3.18's AUTOMATIC create-on-login
+    // flow throws "Cannot destructure property 'onSuccess' of createWallet" — its
+    // internal creation modal renders before its own callback store is populated,
+    // which crashes the whole app right after a wallet-less (email) user logs in.
+    // We provision the embedded wallet MANUALLY in PrivySessionBridge instead
+    // (headless useCreateWallet), which populates that store and is crash-free.
+    ethereum: { createOnLogin: 'off' },
     showWalletUIs: true,
   },
 }
@@ -112,8 +118,25 @@ function PrivySessionBridge({ children }: { children: ReactNode }) {
     logout,
   } = usePrivy()
   const { wallets, ready: walletsReady } = useWallets()
+  const { createWallet } = useCreateWallet()
 
   const embeddedWallet = wallets.find((wallet) => wallet.walletClientType?.startsWith('privy'))
+
+  // Manually provision an embedded wallet for wallet-less (email/social) users.
+  // We do this instead of Privy's automatic `createOnLogin` because that flow is
+  // broken in 3.18 (see PRIVY_CONFIG). `createWallet()` is headless and no-ops for
+  // users who already have a wallet. Guard: only when authenticated with zero
+  // wallets, and only once (createWallet() throws if a wallet already exists).
+  const provisioningRef = useRef(false)
+  useEffect(() => {
+    if (!ready || !walletsReady || !authenticated) return
+    if (wallets.length > 0 || provisioningRef.current) return
+    provisioningRef.current = true
+    createWallet().catch((err) => {
+      // "user already has an embedded wallet" is benign; anything else is logged.
+      console.warn('[privy] embedded wallet provisioning skipped:', err)
+    })
+  }, [ready, walletsReady, authenticated, wallets.length, createWallet])
   const evmWalletAddresses = wallets
     .map((wallet) => wallet.address)
     .filter((address): address is string => /^0x[0-9a-fA-F]{40}$/.test(address))
