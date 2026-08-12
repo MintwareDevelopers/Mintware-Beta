@@ -10,7 +10,6 @@ import {BalanceDelta}          from "@uniswap/v4-core/src/types/BalanceDelta.sol
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
-import {SqrtPriceMath}         from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
 import {LiquidityAmounts}      from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 
 import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -19,6 +18,9 @@ import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC
 import {MintwarePairVault} from "./MintwarePairVault.sol";
 import {PoolProfile, LockTier} from "./VaultTypes.sol";
 import {IYieldAdapter} from "./IYieldAdapter.sol";
+import {MWJitLib} from "./lib/MWJitLib.sol";
+import {MWIdleLib} from "./lib/MWIdleLib.sol";
+import {MWPositionLib} from "./lib/MWPositionLib.sol";
 
 /// @dev Minimal view of MintwareWeightedDistributor used for oracle-weighted fee routing.
 interface IMWWeightedDistributor {
@@ -823,79 +825,55 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
 
     /// @dev Remove `deltaL` pooled liquidity and supply the resulting principal to Aave. Fees must
     ///      already be realized (caller does this) so `out0/out1` are clean principal, not owed fees.
+    ///      The move math lives in `MWIdleLib.supplyIdle` (extracted for EIP-170 size); this wrapper
+    ///      loads the idle counters, delegates, and writes every field back. Adapters are guaranteed
+    ///      non-zero by the callers' `AdaptersNotSet` guard.
     function _supplyIdleCore(uint128 deltaL) internal {
-        if (deltaL == 0 || positionLiquidity == 0) return;
-        if (deltaL > positionLiquidity) deltaL = positionLiquidity;
-        // Graceful gate: only idle if BOTH reserves can currently accept supply (else no-op, no
-        // stranded tokens — we never remove liquidity we can't fully re-home in Aave).
-        if (adapter0.maxSuppliable() == 0 || adapter1.maxSuppliable() == 0) return;
-        // Skip a dust removal that would free zero tokens on both sides: it would still burn pooled
-        // liquidity (pool keeps the sub-wei dust) and could over time bleed the position into a
-        // phantom `idleLiquidity` counter backed by no principal. Pricing the move first (a pure
-        // view calc, no state) keeps the idle bookkeeping and the position honest.
-        {
-            (uint256 exp0, uint256 exp1) = _amountsForLiquidity(deltaL);
-            if (exp0 == 0 && exp1 == 0) return;
-        }
-
-        // CEI hardening: apply the data-INDEPENDENT position effects (deltaL is fixed) BEFORE the
-        // pool interaction; record the pool-DERIVED idle counters (out0/out1) immediately after, and
-        // all effects land BEFORE the adapter supply below. Entrypoints (supplyIdle/rebalanceBuffer)
-        // are nonReentrant, so no external interleaving is possible regardless.
-        positionLiquidity -= deltaL;
-        idleLiquidity += deltaL;
-
-        bytes memory res = poolManager.unlock(abi.encode(Action.Remove, abi.encode(deltaL)));
-        (uint256 out0, uint256 out1) = abi.decode(res, (uint256, uint256));
-        idle0 += out0;
-        idle1 += out1;
-
-        // Supply to Aave. Exact-amount approvals; the adapter pulls from the vault.
-        if (out0 > 0) { token0.forceApprove(address(adapter0), out0); adapter0.deposit(out0); }
-        if (out1 > 0) { token1.forceApprove(address(adapter1), out1); adapter1.deposit(out1); }
-        emit Idled(deltaL, out0, out1);
+        MWIdleLib.IdleState memory s = _loadIdle();
+        s = MWIdleLib.supplyIdle(_idleCtx(), s, deltaL);
+        _storeIdle(s);
     }
 
     /// @dev Withdraw a pro-rata slice of idle principal from Aave and redeploy it into the active
     ///      range. Any ratio-mismatch leftover is re-idled so no tokens are stranded in the vault.
+    ///      Math lives in `MWIdleLib.refillIdle`; this wrapper does the full-field load/store.
     function _refillIdleCore(uint128 deltaL) internal {
-        if (deltaL == 0 || idleLiquidity == 0) return;
-        if (deltaL > idleLiquidity) deltaL = idleLiquidity;
+        MWIdleLib.IdleState memory s = _loadIdle();
+        s = MWIdleLib.refillIdle(_idleCtx(), s, deltaL);
+        _storeIdle(s);
+    }
 
-        // Token amounts backing this liquidity-equiv slice (round DOWN — vault-favoring).
-        uint256 want0 = (idle0 * deltaL) / idleLiquidity;
-        uint256 want1 = (idle1 * deltaL) / idleLiquidity;
+    // ── Idle library plumbing (Ctx build + full-field load/store) ────────────
+    // Same stateless pattern as the JIT plumbing above. The library cannot read the vault's immutables
+    // or storage under delegatecall, so `_idleCtx` hands it the immutables + live range and
+    // `_loadIdle`/`_storeIdle` mirror the COMPLETE set of idle-core-mutable storage in and back out.
+    // Load/store completeness is load-bearing — the four fields are the exact set the library touches.
 
-        // Best-effort withdraw from Aave (tokens land in the vault).
-        uint256 got0 = want0 > 0 ? adapter0.withdraw(want0) : 0;
-        uint256 got1 = want1 > 0 ? adapter1.withdraw(want1) : 0;
+    function _idleCtx() internal view returns (MWIdleLib.Ctx memory) {
+        return MWIdleLib.Ctx({
+            pm:        poolManager,
+            key:       poolKey,
+            t0:        token0,
+            t1:        token1,
+            a0:        adapter0,
+            a1:        adapter1,
+            tickLower: tickLower,
+            tickUpper: tickUpper
+        });
+    }
 
-        // Redeploy what we pulled into the active range.
-        uint128 addedL;
-        uint256 used0;
-        uint256 used1;
-        if (got0 > 0 || got1 > 0) {
-            bytes memory res = poolManager.unlock(abi.encode(Action.Deploy, abi.encode(got0, got1)));
-            (addedL, used0, used1) = abi.decode(res, (uint128, uint256, uint256));
-        }
+    function _loadIdle() internal view returns (MWIdleLib.IdleState memory s) {
+        s.positionLiquidity = positionLiquidity;
+        s.idleLiquidity     = idleLiquidity;
+        s.idle0             = idle0;
+        s.idle1             = idle1;
+    }
 
-        // Net idle change = principal that actually left Aave for the pool (`used`). The
-        // ratio-mismatch leftover (`got - used`) is re-supplied to Aave, so `idleN` only ever
-        // moves by the deployed amount and no tokens strand in the vault.
-        // CEI note: `addedL`/`used*` are POOL-DERIVED (known only after the unlock), so these effects
-        // cannot precede the pool interaction; they land BEFORE the leftover adapter supply, and the
-        // nonReentrant entrypoints are the reentrancy mitigation (as in _supplyIdleCore).
-        idle0 -= used0;
-        idle1 -= used1;
-        positionLiquidity += addedL;
-        // managed-liquidity conserving: pool gained `addedL`, so idle-equiv drops by `addedL`.
-        idleLiquidity -= addedL <= idleLiquidity ? addedL : idleLiquidity;
-
-        uint256 left0 = got0 - used0;
-        uint256 left1 = got1 - used1;
-        if (left0 > 0) { token0.forceApprove(address(adapter0), left0); adapter0.deposit(left0); }
-        if (left1 > 0) { token1.forceApprove(address(adapter1), left1); adapter1.deposit(left1); }
-        emit Refilled(addedL, used0, used1);
+    function _storeIdle(MWIdleLib.IdleState memory s) internal {
+        positionLiquidity = s.positionLiquidity;
+        idleLiquidity     = s.idleLiquidity;
+        idle0             = s.idle0;
+        idle1             = s.idle1;
     }
 
     /// @notice Harvest Aave supply yield (the surplus of `adapter.totalAssets()` over the settled
@@ -907,46 +885,42 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         returns (uint256 lp0, uint256 lp1)
     {
         if (address(adapter0) == address(0)) revert AdaptersNotSet();
-        (uint256 g0, uint256 mint0) = _harvestOne(adapter0, token0, idle0, true);
-        (uint256 g1, uint256 mint1) = _harvestOne(adapter1, token1, idle1, false);
-        lp0 = g0;
-        lp1 = g1;
-        if (g0 > 0 || g1 > 0) emit YieldHarvested(g0, g1, mint0, mint1);
+        // Body lives in MWIdleLib.harvest (extracted for EIP-170 size). It mutates ONLY the fee
+        // accumulators + reserve (idleN is read-only — yield is not principal), so this wrapper loads
+        // those four fields, delegates, and writes every one back.
+        MWIdleLib.HarvestState memory s = _loadHarvest();
+        (s, lp0, lp1) = MWIdleLib.harvest(_harvestCtx(), s);
+        _storeHarvest(s);
     }
 
-    /// @dev Realize one token's yield surplus into distributable fees. Returns (lpPortion, mintwareCut).
-    function _harvestOne(IYieldAdapter adapter, IERC20 token, uint256 idleN, bool isToken0)
-        internal
-        returns (uint256 lpAmt, uint256 mintwareAmt)
-    {
-        uint256 assets = adapter.totalAssets();
-        if (assets <= idleN) return (0, 0);
-        uint256 surplus = assets - idleN;
-        // Pull yield only — principal (`idleN`) stays supplied, so the settled counter is unchanged.
-        uint256 got = adapter.withdraw(surplus);
-        if (got == 0) return (0, 0);
+    // ── Harvest library plumbing (Ctx build + full-field load/store) ─────────
+    function _harvestCtx() internal view returns (MWIdleLib.HarvestCtx memory) {
+        return MWIdleLib.HarvestCtx({
+            t0:                  token0,
+            t1:                  token1,
+            a0:                  adapter0,
+            a1:                  adapter1,
+            treasury:            treasury,
+            weightedDistributor: weightedDistributor,
+            distributorVaultId:  distributorVaultId,
+            idle0:               idle0,
+            idle1:               idle1,
+            totalLiquidity:      totalLiquidity
+        });
+    }
 
-        mintwareAmt = (got * MINTWARE_FEE_BPS) / BPS;
-        if (mintwareAmt > 0) token.safeTransfer(treasury, mintwareAmt);
-        lpAmt = got - mintwareAmt;
-        if (lpAmt == 0) return (0, mintwareAmt);
+    function _loadHarvest() internal view returns (MWIdleLib.HarvestState memory s) {
+        s.accFee0PerShare = accFee0PerShare;
+        s.accFee1PerShare = accFee1PerShare;
+        s.feeReserve0     = feeReserve0;
+        s.feeReserve1     = feeReserve1;
+    }
 
-        if (weightedDistributor != address(0)) {
-            (uint256 r0, uint256 r1) = isToken0 ? (lpAmt, uint256(0)) : (uint256(0), lpAmt);
-            IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, r0, r1);
-            emit FeesRoutedToDistributor(distributorVaultId, r0, r1);
-        } else if (totalLiquidity == 0) {
-            // No LPs to credit — forward to treasury rather than strand it or divide by zero.
-            token.safeTransfer(treasury, lpAmt);
-            mintwareAmt += lpAmt;
-            lpAmt = 0;
-        } else if (isToken0) {
-            accFee0PerShare += (lpAmt * ACC_PRECISION) / totalLiquidity;
-            feeReserve0 += lpAmt;
-        } else {
-            accFee1PerShare += (lpAmt * ACC_PRECISION) / totalLiquidity;
-            feeReserve1 += lpAmt;
-        }
+    function _storeHarvest(MWIdleLib.HarvestState memory s) internal {
+        accFee0PerShare = s.accFee0PerShare;
+        accFee1PerShare = s.accFee1PerShare;
+        feeReserve0     = s.feeReserve0;
+        feeReserve1     = s.feeReserve1;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -971,73 +945,20 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         if (jitActive) return 0;             // already open (defensive; hook opens once per swap)
         if (!poolInitialized) return 0;
 
-        // (1) Output-side adapter only — never touch the input adapter in jitOpen.
-        IYieldAdapter adapter = zeroForOne ? adapter1 : adapter0;
-        if (address(adapter) == address(0)) return 0;
-
-        // (2) Size the pull: budget ∩ adapter live headroom ∩ settled idle basis ∩ per-swap/-block caps.
-        //     Clamping to the idle counter guarantees we only ever deploy SETTLED principal (never
-        //     accrued Aave yield), so the counter decrement below is exact and can't underflow.
-        uint256 basis = zeroForOne ? idle1 : idle0;
-        uint256 want = outputBudget;
-        uint256 maxW = adapter.maxWithdrawable();
-        if (maxW  < want) want = maxW;
-        if (basis < want) want = basis;
-        want = _jitCap(want);
-        if (want == 0) return 0;
-
-        // (3) Best-effort withdraw (got <= want). Settle the idle counter IMMEDIATELY: the money has
-        //     left Aave. adapterN.totalAssets() and idleN both drop by `got`, so `aave_backs_idle`
-        //     (totalAssets >= idleN) is preserved at every step, including the undo path below.
-        uint256 got = adapter.withdraw(want);
-        if (got == 0) return 0;
-        _recordJitWithdraw(got);
-        if (zeroForOne) idle1 -= got; else idle0 -= got;
-
-        // (4) Tight single-sided range aligned to tickSpacing, strictly to one side of the live tick.
-        (, int24 tick,,) = poolManager.getSlot0(poolKey.toId());
-        int24 spacing = poolKey.tickSpacing;
-        int24 width   = spacing * JIT_WIDTH_SPACINGS;
-        int24 lo;
-        int24 hi;
-        if (zeroForOne) {
-            // token1 side: range at/below the current tick ⇒ pure token1 (price >= sqrtUpper).
-            hi = _alignTick(tick, spacing);
-            lo = hi - width;
-        } else {
-            // token0 side: range strictly ABOVE the current tick ⇒ pure token0 (price <= sqrtLower).
-            lo = _alignTick(tick, spacing) + spacing;
-            hi = lo + width;
-        }
-        uint160 sLo = TickMath.getSqrtPriceAtTick(lo);
-        uint160 sHi = TickMath.getSqrtPriceAtTick(hi);
-
-        // (5) Liquidity from the single-sided principal. If it rounds to zero, undo the withdraw
-        //     (re-idle `got`, restoring the counter) and fall back.
-        L = zeroForOne
-            ? LiquidityAmounts.getLiquidityForAmount1(sLo, sHi, got)
-            : LiquidityAmounts.getLiquidityForAmount0(sLo, sHi, got);
-        if (L == 0) {
-            _reIdle(zeroForOne, got);
-            return 0;
-        }
-
-        // (6) Add JIT liquidity at the DEDICATED salt (a separate pool position from `salt = 0`).
-        //     `_settleDelta` pays the single-sided principal into the pool. Any sub-wei rounding dust
-        //     (got minus the exact amount the mint consumed) stays in the vault balance as extra,
-        //     unattributed backing — vault-favoring, never distributed to redeemers.
-        (BalanceDelta delta,) = poolManager.modifyLiquidity(
-            poolKey,
-            ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: int256(uint256(L)), salt: JIT_SALT}),
-            ""
+        // Per-block cap stays in the vault (it owns `_jitBlock`/`_jitWithdrawnThisBlock`). Passing
+        // `cap = _jitCap(type(uint256).max)` = min(per-swap, remaining per-block) reproduces the exact
+        // `_jitCap(want)` clamp inside the library (`min(want, cap)`). The library returns the amount
+        // actually withdrawn (`got`) so we record it against the per-block counter — even on the L==0
+        // undo path (the withdraw physically happened), matching the pre-extraction ordering.
+        uint256 cap = _jitCap(type(uint256).max);
+        MWJitLib.JitState memory s = _loadJit();
+        uint256 got;
+        (s, L, got) = MWJitLib.open(
+            _jitCtx(), s, zeroForOne, outputBudget, poolKey.tickSpacing, JIT_WIDTH_SPACINGS, JIT_SALT, cap
         );
-        _settleDelta(delta);
-
-        jitTickLower = lo;
-        jitTickUpper = hi;
-        jitLiquidity = L;
-        jitActive    = true;
-        emit JitOpened(zeroForOne, got, L, lo, hi);
+        if (got > 0) _recordJitWithdraw(got);
+        _storeJit(s);
+        if (L > 0) emit JitOpened(zeroForOne, got, L, s.jitTickLower, s.jitTickUpper);
     }
 
     /// @notice Close the JIT position: remove it, take both sides back, re-idle EVERYTHING returned to
@@ -1069,52 +990,16 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     function jitClose() external onlyHook nonReentrant {
         if (!jitActive) return; // idempotent — hook always calls; JIT may not have opened.
 
-        uint128 L  = jitLiquidity;
-        int24   lo = jitTickLower;
-        int24   hi = jitTickUpper;
-
-        (BalanceDelta delta,) = poolManager.modifyLiquidity(
-            poolKey,
-            ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: -int256(uint256(L)), salt: JIT_SALT}),
-            ""
-        );
-
-        // Removal yields a non-negative delta per side (principal converted by the swap + JIT LP fees).
-        // Defensively pay any negative side (should not occur on a pure removal).
-        int128 d0 = delta.amount0();
-        int128 d1 = delta.amount1();
-        if (d0 < 0) _pay(poolKey.currency0, uint256(uint128(-d0)));
-        if (d1 < 0) _pay(poolKey.currency1, uint256(uint128(-d1)));
-
-        (uint256 taken0, uint256 claimed0) = d0 > 0 ? _takeOrClaim(false, uint256(uint128(d0))) : (0, 0);
-        (uint256 taken1, uint256 claimed1) = d1 > 0 ? _takeOrClaim(true,  uint256(uint128(d1))) : (0, 0);
-
-        // Re-idle only the PHYSICALLY-taken proceeds. Counters clear LAST so a mid-close reentrancy
-        // still observes `jitActive` and is blocked by `notDuringJit`.
-        _reIdle(false, taken0);
-        _reIdle(true,  taken1);
-
-        // NB: leave jitTickLower/jitTickUpper at the last-used range (not zeroed) so
+        // NB: the library leaves jitTickLower/jitTickUpper at the last-used range (not zeroed) so
         //     `jitPositionLiquidity()` reads the REAL position and can prove it holds 0 units at rest.
-        jitLiquidity = 0;
-        jitActive    = false;
+        MWJitLib.JitState memory s = _loadJit();
+        uint256 taken0;
+        uint256 taken1;
+        uint256 claimed0;
+        uint256 claimed1;
+        (s, taken0, taken1, claimed0, claimed1) = MWJitLib.close(_jitCtx(), s, JIT_SALT);
+        _storeJit(s);
         emit JitClosed(taken0, taken1, claimed0, claimed1);
-    }
-
-    /// @dev Settle one side of the JIT removal's positive delta: `take` physical up to the manager's
-    ///      current reserves, `mint` an ERC-6909 claim for the remainder (needs no reserves). Returns
-    ///      (physicalTaken, claimMinted). Never reverts for an availability reason ⇒ jitClose can't brick.
-    function _takeOrClaim(bool side1, uint256 owed) internal returns (uint256 taken, uint256 claimed) {
-        Currency cur = side1 ? poolKey.currency1 : poolKey.currency0;
-        IERC20  token = side1 ? token1 : token0;
-        uint256 avail = token.balanceOf(address(poolManager));
-        taken = owed < avail ? owed : avail;
-        if (taken > 0) poolManager.take(cur, address(this), taken);
-        claimed = owed - taken;
-        if (claimed > 0) {
-            poolManager.mint(address(this), cur.toId(), claimed);
-            if (side1) jitClaim1 += claimed; else jitClaim0 += claimed;
-        }
     }
 
     /// @notice Redeem outstanding JIT ERC-6909 claims to physical tokens and re-supply them to Aave
@@ -1122,6 +1007,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     ///         the manager was short the input token (a thin-buffer swap); at rest the manager holds the
     ///         underlying, so the burn+take always succeeds up to the claim amount. Best-effort: if Aave
     ///         cannot accept the supply, the redeemed physical stays in the vault balance (extra backing).
+    ///         The redeem math itself lives in `MWJitLib.sweep` (extracted for EIP-170 size).
     function sweepJitClaims() external nonReentrant whenNotPaused notDuringJit returns (uint256 r0, uint256 r1) {
         if (jitClaim0 == 0 && jitClaim1 == 0) return (0, 0);
         bytes memory res = poolManager.unlock(abi.encode(Action.SweepClaims, bytes("")));
@@ -1129,57 +1015,54 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         emit JitClaimsSwept(r0, r1);
     }
 
+    /// @dev Unlock dispatch target for `sweepJitClaims`. Runs INSIDE the PoolManager unlock; loads JIT
+    ///      state, delegates the burn/take/re-supply to the library, and writes every field back.
     function _sweepClaims() internal returns (bytes memory) {
-        uint256 r0 = _redeemClaim(false);
-        uint256 r1 = _redeemClaim(true);
+        MWJitLib.JitState memory s = _loadJit();
+        uint256 r0;
+        uint256 r1;
+        (s, r0, r1) = MWJitLib.sweep(_jitCtx(), s);
+        _storeJit(s);
         return abi.encode(r0, r1);
     }
 
-    /// @dev Burn up to `jitClaimN` ERC-6909 claims (capped at the manager's reserves), take the physical
-    ///      underlying, and supply it to Aave (idle += supplied). Best-effort on the Aave leg.
-    function _redeemClaim(bool side1) internal returns (uint256 redeemed) {
-        uint256 claim = side1 ? jitClaim1 : jitClaim0;
-        if (claim == 0) return 0;
-        Currency cur = side1 ? poolKey.currency1 : poolKey.currency0;
-        IERC20  token = side1 ? token1 : token0;
-        IYieldAdapter adapter = side1 ? adapter1 : adapter0;
+    // ── JIT library plumbing (Ctx build + full-field load/store) ─────────────
+    // The library is STATELESS: it cannot read the vault's immutables or storage under delegatecall.
+    // `_jitCtx` hands it the immutables; `_loadJit`/`_storeJit` mirror the COMPLETE set of JIT-mutable
+    // storage in and back out. Load/store completeness is load-bearing — a missed field is silent
+    // state corruption. The eight fields are the exact set the library reads or writes.
 
-        uint256 avail = token.balanceOf(address(poolManager));
-        redeemed = claim < avail ? claim : avail;
-        if (redeemed == 0) return 0;
-
-        poolManager.burn(address(this), cur.toId(), redeemed); // +redeemed delta to the vault
-        poolManager.take(cur, address(this), redeemed);        // physical to the vault; delta → 0
-        if (side1) jitClaim1 -= redeemed; else jitClaim0 -= redeemed;
-
-        if (address(adapter) != address(0) && adapter.maxSuppliable() > 0) {
-            token.forceApprove(address(adapter), redeemed);
-            try adapter.deposit(redeemed) {
-                if (side1) idle1 += redeemed; else idle0 += redeemed;
-            } catch {
-                token.forceApprove(address(adapter), 0); // leave physical in the vault (extra backing)
-            }
-        }
-        // else: reserve unavailable — physical stays in the vault balance (still full backing).
+    function _jitCtx() internal view returns (MWJitLib.Ctx memory) {
+        return MWJitLib.Ctx({
+            pm:  poolManager,
+            key: poolKey,
+            t0:  token0,
+            t1:  token1,
+            a0:  adapter0,
+            a1:  adapter1
+        });
     }
 
-    /// @dev Re-supply `amt` of the given side back to its adapter as settled principal, incrementing
-    ///      the idle counter by EXACTLY what the adapter accepts. If the adapter is unset, its reserve
-    ///      cannot accept supply (`maxSuppliable()==0`), or the supply reverts, the tokens are left in
-    ///      the vault balance (unattributed extra backing) and the counter is NOT bumped — so idleN can
-    ///      never exceed adapter principal. `side1 == true` ⇒ token1/adapter1.
-    function _reIdle(bool side1, uint256 amt) internal {
-        if (amt == 0) return;
-        IYieldAdapter adapter = side1 ? adapter1 : adapter0;
-        IERC20 token = side1 ? token1 : token0;
-        if (address(adapter) == address(0)) return;   // leave in vault balance
-        if (adapter.maxSuppliable() == 0) return;      // reserve full/paused/frozen — leave in vault
-        token.forceApprove(address(adapter), amt);
-        try adapter.deposit(amt) {
-            if (side1) idle1 += amt; else idle0 += amt;
-        } catch {
-            token.forceApprove(address(adapter), 0);   // reset dangling approval; leave in vault
-        }
+    function _loadJit() internal view returns (MWJitLib.JitState memory s) {
+        s.jitLiquidity = jitLiquidity;
+        s.jitActive    = jitActive;
+        s.jitTickLower = jitTickLower;
+        s.jitTickUpper = jitTickUpper;
+        s.jitClaim0    = jitClaim0;
+        s.jitClaim1    = jitClaim1;
+        s.idle0        = idle0;
+        s.idle1        = idle1;
+    }
+
+    function _storeJit(MWJitLib.JitState memory s) internal {
+        jitLiquidity = s.jitLiquidity;
+        jitActive    = s.jitActive;
+        jitTickLower = s.jitTickLower;
+        jitTickUpper = s.jitTickUpper;
+        jitClaim0    = s.jitClaim0;
+        jitClaim1    = s.jitClaim1;
+        idle0        = s.idle0;
+        idle1        = s.idle1;
     }
 
     /// @dev Clamp a JIT pull to the per-swap ceiling and the remaining per-block budget (0 = unbounded).
@@ -1216,23 +1099,6 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         return uint256(positionLiquidity) + uint256(idleLiquidity);
     }
 
-    /// @dev Token amounts that removing `liquidity` from the active range would free at the current
-    ///      price (round DOWN, matching V4's own removal rounding). Pure view — used to skip a
-    ///      no-yield dust idle before mutating state.
-    function _amountsForLiquidity(uint128 liquidity) internal view returns (uint256 amount0, uint256 amount1) {
-        (uint160 sqrtP,,,) = poolManager.getSlot0(poolKey.toId());
-        uint160 sqrtLower = TickMath.getSqrtPriceAtTick(tickLower);
-        uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(tickUpper);
-        if (sqrtP <= sqrtLower) {
-            amount0 = SqrtPriceMath.getAmount0Delta(sqrtLower, sqrtUpper, liquidity, false);
-        } else if (sqrtP < sqrtUpper) {
-            amount0 = SqrtPriceMath.getAmount0Delta(sqrtP, sqrtUpper, liquidity, false);
-            amount1 = SqrtPriceMath.getAmount1Delta(sqrtLower, sqrtP, liquidity, false);
-        } else {
-            amount1 = SqrtPriceMath.getAmount1Delta(sqrtLower, sqrtUpper, liquidity, false);
-        }
-    }
-
     // ─────────────────────────────────────────────────────────────────────────
     // IUnlockCallback
     // ─────────────────────────────────────────────────────────────────────────
@@ -1259,87 +1125,45 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         return _rebalance(lo, hi);
     }
 
+    // The four main-position V4 handlers below run inside this vault's PoolManager unlock; their bodies
+    // live in `MWPositionLib` (extracted for EIP-170 size, carrying TickMath/LiquidityAmounts out of the
+    // vault). `_deploy`/`_remove`/`_collect` are pure pool interactions returning ABI-encoded amounts;
+    // the vault's callers still do every state write. `_rebalance` alone mutates state — the library
+    // performs the remove(old)+add(new) and returns the new liquidity; this wrapper persists the three
+    // fields AFTER (unobservable ordering: the pool hook never reads the vault's ticks, and
+    // rebalanceToProfile is nonReentrant — see MWPositionLib).
+
     function _deploy(uint256 a0, uint256 a1) internal returns (bytes memory) {
-        (uint160 sqrtP,,,) = poolManager.getSlot0(poolKey.toId());
-        uint160 sqrtLower = TickMath.getSqrtPriceAtTick(tickLower);
-        uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(tickUpper);
-        uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(sqrtP, sqrtLower, sqrtUpper, a0, a1);
-        if (liquidity == 0) return abi.encode(uint128(0), uint256(0), uint256(0));
-
-        uint256 bal0Before = token0.balanceOf(address(this));
-        uint256 bal1Before = token1.balanceOf(address(this));
-
-        (BalanceDelta delta,) = poolManager.modifyLiquidity(
-            poolKey,
-            ModifyLiquidityParams({tickLower: tickLower, tickUpper: tickUpper, liquidityDelta: int256(uint256(liquidity)), salt: bytes32(0)}),
-            ""
-        );
-        _settleDelta(delta);
-
-        uint256 used0 = bal0Before - token0.balanceOf(address(this));
-        uint256 used1 = bal1Before - token1.balanceOf(address(this));
-        return abi.encode(liquidity, used0, used1);
+        return MWPositionLib.deploy(_posCtx(), a0, a1);
     }
 
     function _remove(uint128 liquidity) internal returns (bytes memory) {
-        uint256 bal0Before = token0.balanceOf(address(this));
-        uint256 bal1Before = token1.balanceOf(address(this));
-        (BalanceDelta delta,) = poolManager.modifyLiquidity(
-            poolKey,
-            ModifyLiquidityParams({tickLower: tickLower, tickUpper: tickUpper, liquidityDelta: -int256(uint256(liquidity)), salt: bytes32(0)}),
-            ""
-        );
-        _settleDelta(delta);
-        uint256 out0 = token0.balanceOf(address(this)) - bal0Before;
-        uint256 out1 = token1.balanceOf(address(this)) - bal1Before;
-        return abi.encode(out0, out1);
+        return MWPositionLib.remove(_posCtx(), liquidity);
     }
 
     function _collect() internal returns (bytes memory) {
-        (BalanceDelta delta,) = poolManager.modifyLiquidity(
-            poolKey,
-            ModifyLiquidityParams({tickLower: tickLower, tickUpper: tickUpper, liquidityDelta: 0, salt: bytes32(0)}),
-            ""
-        );
-        _settleDelta(delta);
-        uint256 fee0 = delta.amount0() > 0 ? uint256(uint128(delta.amount0())) : 0;
-        uint256 fee1 = delta.amount1() > 0 ? uint256(uint128(delta.amount1())) : 0;
-        return abi.encode(fee0, fee1);
+        return MWPositionLib.collect(_posCtx());
     }
 
     function _rebalance(int24 newLower, int24 newUpper) internal returns (bytes memory) {
-        if (positionLiquidity > 0) {
-            (BalanceDelta removeDelta,) = poolManager.modifyLiquidity(
-                poolKey,
-                ModifyLiquidityParams({tickLower: tickLower, tickUpper: tickUpper, liquidityDelta: -int256(uint256(positionLiquidity)), salt: bytes32(0)}),
-                ""
-            );
-            _settleDelta(removeDelta);
-        }
-
+        uint128 newLiquidity = MWPositionLib.rebalance(_posCtx(), positionLiquidity, feeReserve0, feeReserve1, newLower, newUpper);
         tickLower = newLower;
         tickUpper = newUpper;
-
-        // Re-add the maximal balanced liquidity from the tokens now held by the vault, MINUS the
-        // segregated fee/rent reserve — that balance backs LP claims and must never be deployed.
-        uint256 a0 = token0.balanceOf(address(this)) - feeReserve0;
-        uint256 a1 = token1.balanceOf(address(this)) - feeReserve1;
-        (uint160 sqrtP,,,) = poolManager.getSlot0(poolKey.toId());
-        uint160 sqrtLower = TickMath.getSqrtPriceAtTick(newLower);
-        uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(newUpper);
-        uint128 newLiquidity = LiquidityAmounts.getLiquidityForAmounts(sqrtP, sqrtLower, sqrtUpper, a0, a1);
-        if (newLiquidity > 0) {
-            (BalanceDelta addDelta,) = poolManager.modifyLiquidity(
-                poolKey,
-                ModifyLiquidityParams({tickLower: newLower, tickUpper: newUpper, liquidityDelta: int256(uint256(newLiquidity)), salt: bytes32(0)}),
-                ""
-            );
-            _settleDelta(addDelta);
-        }
         // Shares (totalLiquidity) are unchanged by a rebalance — they track ownership. The RAW V4
         // number does shift at a new range, so record it: redeem/deposit price against this.
         positionLiquidity = newLiquidity;
         return "";
+    }
+
+    function _posCtx() internal view returns (MWPositionLib.Ctx memory) {
+        return MWPositionLib.Ctx({
+            pm:        poolManager,
+            key:       poolKey,
+            t0:        token0,
+            t1:        token1,
+            tickLower: tickLower,
+            tickUpper: tickUpper
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
