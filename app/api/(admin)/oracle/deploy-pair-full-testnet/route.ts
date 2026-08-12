@@ -31,9 +31,12 @@ import { baseSepolia } from 'viem/chains'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { HOOK_COORDINATOR_ABI, HOOK_COORDINATOR_BYTECODE } from '@/lib/web3/artifacts/hookCoordinator'
-import { PAIR_VAULT_ABI, PAIR_VAULT_BYTECODE } from '@/lib/web3/artifacts/pairVault'
+import { PAIR_VAULT_ABI, PAIR_VAULT_BYTECODE, PAIR_VAULT_LINK_REFS } from '@/lib/web3/artifacts/pairVault'
 import { AM_AUCTION_ABI, AM_AUCTION_BYTECODE } from '@/lib/web3/artifacts/amAuction'
 import { AAVE_ADAPTER_ABI, AAVE_ADAPTER_BYTECODE } from '@/lib/web3/artifacts/aaveAdapter'
+import { MW_JIT_LIB_ABI, MW_JIT_LIB_BYTECODE } from '@/lib/web3/artifacts/mwJitLib'
+import { MW_IDLE_LIB_ABI, MW_IDLE_LIB_BYTECODE } from '@/lib/web3/artifacts/mwIdleLib'
+import { MW_POSITION_LIB_ABI, MW_POSITION_LIB_BYTECODE } from '@/lib/web3/artifacts/mwPositionLib'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -137,6 +140,54 @@ function computePoolId(currency0: `0x${string}`, currency1: `0x${string}`, hook:
   ))
 }
 
+/** Solidity library link-reference shape: sourcePath → { LibName → [{start,length}] } (byte offsets). */
+type LinkRefs = Record<string, Record<string, ReadonlyArray<{ start: number; length: number }>>>
+const HEX40 = /^[0-9a-fA-F]{40}$/
+const PLACEHOLDER_RE = /__\$[0-9a-fA-F]{34}\$__/
+
+/**
+ * Splice each deployed library address into the vault's creation bytecode at every offset the compiler
+ * recorded in `linkReferences`. Solidity leaves a 20-byte `__$<34-hex>$__` placeholder per call-site;
+ * we overwrite exactly those 40 hex chars with the library address (lowercase, no `0x`, 40 chars).
+ *  - `bytecode`  the raw `0x…` creation bytecode WITH placeholders.
+ *  - `linkRefs`  the artifact's `.bytecode.linkReferences` (byte offsets — hex index = 2 + start*2).
+ *  - `libAddrs`  LibName → deployed 0x-address.
+ * Asserts every target slice is a placeholder (or already-linked 40-hex), that the address is known,
+ * and that NO `__$…$__` placeholder survives. Throws on any mismatch — a bad splice bricks the vault.
+ */
+function linkBytecode(
+  bytecode: `0x${string}`,
+  linkRefs: LinkRefs,
+  libAddrs: Record<string, `0x${string}`>,
+): `0x${string}` {
+  const origLen = bytecode.length
+  let hex = bytecode.slice(2) // drop 0x; work in raw-hex index space (byte b → char 2*b)
+  for (const [sourcePath, libs] of Object.entries(linkRefs)) {
+    for (const [libName, occurrences] of Object.entries(libs)) {
+      const addr = libAddrs[libName]
+      if (!addr) throw new Error(`linkBytecode: no deployed address for library ${libName} (${sourcePath})`)
+      const addrHex = addr.replace(/^0x/, '').toLowerCase()
+      if (!HEX40.test(addrHex)) throw new Error(`linkBytecode: bad address for ${libName}: ${addr}`)
+      for (const { start, length } of occurrences) {
+        if (length !== 20) throw new Error(`linkBytecode: unexpected link length ${length} for ${libName} (want 20)`)
+        const cs = start * 2            // char index of slice start within raw hex (no 0x)
+        const ce = cs + length * 2      // 40 hex chars
+        const slice = hex.slice(cs, ce)
+        const isPlaceholder = slice.startsWith('__$') && slice.endsWith('$__')
+        if (!isPlaceholder && !HEX40.test(slice)) {
+          throw new Error(`linkBytecode: slice at byte ${start} for ${libName} is neither a __$ placeholder nor 40-hex: "${slice}"`)
+        }
+        hex = hex.slice(0, cs) + addrHex + hex.slice(ce)
+      }
+    }
+  }
+  const linked = (`0x${hex}`) as `0x${string}`
+  const leftover = linked.match(PLACEHOLDER_RE)
+  if (leftover) throw new Error(`linkBytecode: unresolved library placeholder remains after linking: ${leftover[0]}`)
+  if (linked.length !== origLen) throw new Error(`linkBytecode: length changed ${origLen} → ${linked.length} (splice must be in-place)`)
+  return linked
+}
+
 export const POST = createHandler(async (_req, ctx) => {
   const account = await getOracleSigner('root') // the Privy wallet
   const transport = http(process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org')
@@ -180,10 +231,60 @@ export const POST = createHandler(async (_req, ctx) => {
     return ctx.json({ ok: false, step: 'hook-deploy', hook: mined.hook, hookDeployTx, error: 'no code at mined hook' }, 500)
   }
 
-  // 2. Deploy the vault with a DYNAMIC-FEE PoolKey (delta #1 — required for the hook fee override).
+  // 1.5 Deploy the vault's THREE delegatecall libraries, then LINK their addresses into the vault's
+  //     creation bytecode. The vault was refactored (EIP-170) so MWJitLib / MWIdleLib / MWPositionLib
+  //     live in external libraries — its creation bytecode now carries unresolved `__$<hash>$__`
+  //     placeholders, one per call-site. Deploying it raw would revert; we must splice the deployed
+  //     library addresses into every offset first. Libraries take no constructor args.
+  const deployLib = async (
+    name: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    abi: any, bytecode: `0x${string}`,
+  ): Promise<{ tx: `0x${string}`; addr: `0x${string}` | null }> => {
+    const tx = await walletClient.deployContract({ abi, bytecode, account, chain: baseSepolia })
+    const rcpt = await publicClient.waitForTransactionReceipt({ hash: tx })
+    if (rcpt.status !== 'success' || !rcpt.contractAddress) return { tx, addr: null }
+    // Poll for code visibility on the lagging RPC before the linked vault deploy simulates against it.
+    let code = await publicClient.getBytecode({ address: rcpt.contractAddress })
+    for (let i = 0; i < 8 && (!code || code === '0x'); i++) {
+      await new Promise((r) => setTimeout(r, 1000))
+      code = await publicClient.getBytecode({ address: rcpt.contractAddress })
+    }
+    ctx.log.info('deploy-pair-full', `${name} deployed`, { addr: rcpt.contractAddress, tx })
+    return { tx, addr: rcpt.contractAddress }
+  }
+
+  const jitLib = await deployLib('MWJitLib', MW_JIT_LIB_ABI, MW_JIT_LIB_BYTECODE)
+  if (!jitLib.addr) return ctx.json({ ok: false, step: 'jit-lib-deploy', jitLibDeployTx: jitLib.tx, error: 'MWJitLib deploy reverted' }, 500)
+  const idleLib = await deployLib('MWIdleLib', MW_IDLE_LIB_ABI, MW_IDLE_LIB_BYTECODE)
+  if (!idleLib.addr) return ctx.json({ ok: false, step: 'idle-lib-deploy', idleLibDeployTx: idleLib.tx, error: 'MWIdleLib deploy reverted' }, 500)
+  const posLib = await deployLib('MWPositionLib', MW_POSITION_LIB_ABI, MW_POSITION_LIB_BYTECODE)
+  if (!posLib.addr) return ctx.json({ ok: false, step: 'position-lib-deploy', posLibDeployTx: posLib.tx, error: 'MWPositionLib deploy reverted' }, 500)
+
+  const jitLibAddr = jitLib.addr, idleLibAddr = idleLib.addr, posLibAddr = posLib.addr
+
+  // Link (or, if an old placeholder-free artifact ever ships, skip and deploy raw).
+  const placeholdersBefore = (PAIR_VAULT_BYTECODE.match(/__\$[0-9a-fA-F]{34}\$__/g) || []).length
+  let linkedVaultBytecode: `0x${string}`
+  if (placeholdersBefore === 0) {
+    linkedVaultBytecode = PAIR_VAULT_BYTECODE
+    ctx.log.info('deploy-pair-full', 'vault bytecode has no library placeholders — deploying raw (unlinked path)')
+  } else {
+    try {
+      linkedVaultBytecode = linkBytecode(PAIR_VAULT_BYTECODE, PAIR_VAULT_LINK_REFS, {
+        MWJitLib: jitLibAddr, MWIdleLib: idleLibAddr, MWPositionLib: posLibAddr,
+      })
+    } catch (e) {
+      return ctx.json({ ok: false, step: 'vault-link', jitLib: jitLibAddr, idleLib: idleLibAddr, posLib: posLibAddr,
+        error: e instanceof Error ? e.message : String(e) }, 500)
+    }
+    ctx.log.info('deploy-pair-full', 'linked vault bytecode', { placeholdersBefore, jitLib: jitLibAddr, idleLib: idleLibAddr, posLib: posLibAddr })
+  }
+
+  // 2. Deploy the vault (LINKED bytecode) with a DYNAMIC-FEE PoolKey (delta #1 — hook fee override).
   const poolKey = { currency0, currency1, fee: DYNAMIC_FEE, tickSpacing: TICK_SPACING, hooks: mined.hook }
   const vaultDeployTx = await walletClient.deployContract({
-    abi: PAIR_VAULT_ABI, bytecode: PAIR_VAULT_BYTECODE, account, chain: baseSepolia,
+    abi: PAIR_VAULT_ABI, bytecode: linkedVaultBytecode, account, chain: baseSepolia,
     args: [POOL_MANAGER, poolKey, PROFILE_EMERGING, account.address, account.address, account.address],
   })
   const vaultRcpt = await publicClient.waitForTransactionReceipt({ hash: vaultDeployTx })
@@ -373,6 +474,12 @@ export const POST = createHandler(async (_req, ctx) => {
     poolId,
     poolManager: POOL_MANAGER,
     currency0, currency1, fee: 'DYNAMIC', tickSpacing: TICK_SPACING,
+    // Delegatecall libraries linked into the vault's creation bytecode before deploy.
+    libraries: {
+      linked: placeholdersBefore > 0,
+      placeholdersLinked: placeholdersBefore,
+      MWJitLib: jitLibAddr, MWIdleLib: idleLibAddr, MWPositionLib: posLibAddr,
+    },
     amAmm: AMAMM,
     ulvEngine: {
       aaveProvider: AAVE_PROVIDER,
@@ -384,7 +491,9 @@ export const POST = createHandler(async (_req, ctx) => {
       dynamicFee: { baseFeePips: ULV.baseFeePips, maxFeePips: ULV.maxFeePips, slopePipsPerTick: ULV.slopePipsPerTick,
                     guardEnabled: ULV.guardEnabled },
     },
-    txs: { hookDeployTx, vaultDeployTx, setVaultTx, initTx,
+    txs: { hookDeployTx,
+           jitLibDeployTx: jitLib.tx, idleLibDeployTx: idleLib.tx, posLibDeployTx: posLib.tx,
+           vaultDeployTx, setVaultTx, initTx,
            usdcAdapterDeployTx: usdcAd.tx, wethAdapterDeployTx: wethAd.tx, usdcSetVaultTx, wethSetVaultTx,
            setAdaptersTx, setHookTx, setBufferTx, setJitCapsTx, configPoolTx, setJitThresholdTx, setJitEnabledTx,
            authTx, setWDistTx,
