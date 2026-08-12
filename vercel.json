@@ -6,14 +6,6 @@
       "schedule": "30 4 * * *"
     },
     {
-      "path": "/api/cron/epoch-end",
-      "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/cron/pool-settle",
-      "schedule": "0 2 * * *"
-    },
-    {
       "path": "/api/treasury/normalize-mev",
       "schedule": "0 3 * * *"
     },

@@ -68,43 +68,6 @@ export const POST = createHandler(async (req, ctx) => {
       signal: AbortSignal.timeout(15_000),
     })
     const data = await upstream.json()
-
-    // Record the SERVER-computed quote so the reward path can trust the USD value later instead of
-    // the client (audit HIGH #6/#7). We persist LI.FI's estimate.fromAmountUSD keyed by a quote_id
-    // and hand the id back to the client, which threads it into /api/campaigns/swap-event. Best
-    // effort: a persistence failure never blocks the swap — the reward path just falls back to the
-    // capped client value + existing caps.
-    if (upstream.ok) {
-      const fromAmountUsd = Number((data as { estimate?: { fromAmountUSD?: string } })?.estimate?.fromAmountUSD)
-      if (Number.isFinite(fromAmountUsd) && fromAmountUsd > 0) {
-        try {
-          const { data: row, error } = await ctx.supabase
-            .from('swap_quotes')
-            .insert({
-              wallet:      body.taker.toLowerCase(),
-              chain_id:    body.chainId,
-              sell_token:  body.sellToken,
-              buy_token:   body.buyToken,
-              sell_amount: body.sellAmount,
-              amount_usd:  fromAmountUsd,
-              fee_bps:     LIFI_FEE * 10_000, // 0.005 → 50 bps
-              referrer:    treasury ?? null,
-              expires_at:  new Date(Date.now() + 30 * 60_000).toISOString(), // 30-min TTL
-            })
-            .select('id')
-            .single()
-          if (error) {
-            ctx.log.warn('swap/quote', 'quote persist failed (non-fatal)', { error: error.message })
-          } else if (row?.id) {
-            // Attach the id to the returned JSON WITHOUT disturbing LI.FI's shape.
-            ;(data as Record<string, unknown>).mw_quote_id = row.id
-          }
-        } catch (persistErr) {
-          ctx.log.warn('swap/quote', 'quote persist threw (non-fatal)', { error: String(persistErr) })
-        }
-      }
-    }
-
     return ctx.json(data, upstream.status)
   } catch (err) {
     ctx.log.error('swap/quote', 'upstream error', { error: String(err) })

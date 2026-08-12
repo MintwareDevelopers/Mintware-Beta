@@ -38,8 +38,6 @@ interface ExecuteArgs {
   sellToken:   Token
   buyToken:    Token
   sellAmount:  string
-  campaignId?: string | null
-  referrer?:   string | null
 }
 
 export function useSwap(): SwapState {
@@ -132,34 +130,6 @@ export function useSwap(): SwapState {
       setTxHash(hash)
       setStatus('success')
       tx.success(hash)
-
-      // ── Credit campaign points (fire-and-forget, non-fatal) ───────────────
-      // Only after on-chain confirmation. Parse USD value from the LI.FI quote;
-      // falls back to 0.01 if the field is absent so the webhook never rejects.
-      const amountUsd =
-        parseFloat((args.quote as LifiQuote).fromAmountUSD ?? '0') || 0.01
-
-      // Pass the server-recorded quote id so the reward path can use the SERVER-computed USD value
-      // (bound to this wallet) instead of trusting `amount_usd` from the client (audit HIGH #6/#7).
-      // `amount_usd` is still sent as a fallback for when no quote was recorded.
-      const quoteId = (args.quote as LifiQuote).quoteId
-
-      void fetch('/api/campaigns/swap-event', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          wallet:      walletClient.account.address.toLowerCase(),
-          tx_hash:     hash,
-          chain:       chainConfig.name.toLowerCase(),
-          token_in:    args.sellToken.address,
-          token_out:   args.buyToken.address,
-          amount_usd:  amountUsd,
-          quote_id:    quoteId,
-          timestamp:   new Date().toISOString(),
-          campaign_id: args.campaignId  ?? undefined,
-          is_bridge:   false,
-        }),
-      }).catch(() => { /* non-fatal — swap succeeded even if points don't credit */ })
 
     } catch (err: unknown) {
       const raw = err instanceof Error ? err.message : 'Swap failed'
