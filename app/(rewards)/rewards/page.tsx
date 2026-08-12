@@ -226,7 +226,7 @@ function RewardsContent() {
                 >My Campaigns</button>
               </div>
               <Link
-                href="/create-campaign"
+                href="/app/create-campaign"
                 className="inline-flex items-center gap-1.5 bg-atx-blue text-white text-[12px] font-semibold font-atx-mono uppercase tracking-[0.05em] py-2 px-4 border border-atx-ink no-underline shrink-0 transition-opacity duration-150 hover:opacity-90"
               >
                 + Create campaign
@@ -422,7 +422,7 @@ function TeamsView() {
               Emissions attract mercenary capital that farms and leaves. What&apos;s hard is your <b className="text-atx-ink">cold-start</b>, your <b className="text-atx-ink">distribution</b>, and keeping liquidity that <b className="text-atx-ink">stays</b>. Mintware brings you sticky, relationship-sourced LPs — rewarded by the quality of their contribution rather than the size of their wallet.
             </p>
             <div className="flex gap-2.5 mt-7 flex-wrap">
-              <Link href="/create-campaign" className={BTN_ACC}>Launch a campaign →</Link>
+              <Link href="/app/create-campaign" className={BTN_ACC}>Launch a campaign →</Link>
               <a href="mailto:nic.robinson17@gmail.com?subject=Mintware%20for%20teams" className={BTN}>Talk to us</a>
             </div>
           </div>
@@ -548,7 +548,7 @@ function TeamsView() {
             We don&apos;t pay the biggest wallet. <span className="text-atx-blue">We pay the best one.</span>
           </div>
           <div className="mt-7">
-            <Link href="/create-campaign" className={BTN_ACC}>Launch a campaign →</Link>
+            <Link href="/app/create-campaign" className={BTN_ACC}>Launch a campaign →</Link>
           </div>
         </div>
       </section>

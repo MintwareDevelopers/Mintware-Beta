@@ -212,7 +212,7 @@ function CampaignDetailContent() {
                   address.toLowerCase() && (
                 <div className="flex justify-end -mt-2 mb-4">
                   <Link
-                    href={`/manage/${campaignId}`}
+                    href={`/app/manage/${campaignId}`}
                     className="inline-block border border-atx-blue text-atx-blue px-4 py-2 text-[12px] font-atx-mono font-semibold uppercase tracking-[0.05em] no-underline transition-colors duration-150 hover:bg-atx-blue hover:text-white"
                   >
                     Manage Campaign →
