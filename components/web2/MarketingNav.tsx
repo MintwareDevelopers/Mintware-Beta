@@ -12,8 +12,9 @@ import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
 const FEATURES = [
+  { key: 'vaults', href: '/vaults', label: 'Vaults' },
   { key: 'attribution', href: '/attribution', label: 'Attribution' },
-  { key: 'defi', href: '/defi', label: 'DeFi' },
+  { key: 'agents', href: '/agents', label: 'Agents' },
   { key: 'teams', href: '/teams', label: 'For Teams' },
 ] as const
 
@@ -28,7 +29,7 @@ function Star({ className = '' }: { className?: string }) {
   )
 }
 
-export function MarketingNav({ active }: { active?: 'attribution' | 'defi' | 'teams' }) {
+export function MarketingNav({ active }: { active?: 'vaults' | 'attribution' | 'agents' | 'teams' | 'defi' }) {
   const { isConnected } = useMintwareIdentity()
   const { openConnectModal } = useConnectModal()
   const router = useRouter()
