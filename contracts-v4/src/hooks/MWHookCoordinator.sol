@@ -23,6 +23,14 @@ interface IMWAmAuction {
     function recordManagerFee(PoolId id, address token, uint256 amount) external;
 }
 
+/// @dev Minimal view of the pair vault's size-gated JIT bridge (Lever B). The hook calls jitOpen in
+///      beforeSwap and jitClose in afterSwap; both run inside the swapper's existing unlock and settle
+///      on the VAULT's own delta account (disjoint from this hook's am-AMM fee delta).
+interface IMWJitVault {
+    function jitOpen(bool zeroForOne, uint256 outputBudget) external returns (uint128 liquidity);
+    function jitClose() external;
+}
+
 /// @title  MWHookCoordinator
 /// @notice Phase-3 DeFi V4 hook. Composes modular protection:
 ///           beforeSwap  — deviation circuit breaker + deviation-priced, rate-limited dynamic fee
@@ -85,6 +93,13 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     mapping(PoolId => FeeParams) public feeParams;
     mapping(PoolId => MWOracleGuard.State) internal oracle;
 
+    /// @notice Size gate for JIT: only swaps with |amountSpecified| >= this trigger a JIT open.
+    ///         Global (per-pool enrollment via `jitEnabled` narrows it further). Owner-set.
+    uint256 public jitThreshold;
+    /// @notice Per-pool JIT allowlist (threat model §1.5 — exact pools only). Owner-set, and only for
+    ///         pools whose `vault` really is the JIT bridge. Default false ⇒ JIT never fires.
+    mapping(PoolId => bool) public jitEnabled;
+
     // Fee rate-limit state (per pool).
     mapping(PoolId => uint24) public lastFee;
     mapping(PoolId => uint32) public lastFeeBlock;
@@ -92,6 +107,8 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     event VaultUpdated(address indexed vault);
     event PoolConfigured(PoolId indexed poolId, bool dynamicFee, bool guard);
     event OraclePoked(PoolId indexed poolId, int24 oracleTick, int24 currentTick);
+    event JitThresholdSet(uint256 threshold);
+    event JitEnabledSet(PoolId indexed poolId, bool enabled);
 
     error OnlyPoolManager();
     error OnlyVaultCanModifyLiquidity();
@@ -154,6 +171,19 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         allowExactOutput[poolId] = allowed;
     }
 
+    /// @notice Set the global size gate for JIT (|amountSpecified| >= threshold to trigger).
+    function setJitThreshold(uint256 threshold) external onlyOwner {
+        jitThreshold = threshold;
+        emit JitThresholdSet(threshold);
+    }
+
+    /// @notice Enroll/unenroll a pool for size-gated JIT. Only enable for pools whose configured
+    ///         `vault` is the JIT bridge for that exact pool.
+    function setJitEnabled(PoolId poolId, bool enabled) external onlyOwner {
+        jitEnabled[poolId] = enabled;
+        emit JitEnabledSet(poolId, enabled);
+    }
+
     /// @notice Configure a pool's dynamic-fee + oracle-guard parameters.
     function configurePool(
         PoolId poolId,
@@ -214,21 +244,40 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
             oracle[id].checkCircuitBreaker(currentTick);
         }
 
-        // ── am-AMM enrolled pools: the manager sets the fee and receives it; LP fee is zeroed ──
-        // (Non-enrolled pools fall through to the deviation-priced dynamic fee below.)
+        // ── Fee path (UNCHANGED). am-AMM enrolled pools: the manager sets the fee and receives it;
+        //    LP fee is zeroed. Non-enrolled pools fall through to the deviation-priced dynamic fee. ──
+        bytes4          selector;
+        BeforeSwapDelta bsd;
+        uint24          feeOverride;
         if (amAmmEnabled[id] && auction != address(0)) {
-            return _beforeSwapAmAmm(id, key, params);
+            (selector, bsd, feeOverride) = _beforeSwapAmAmm(id, key, params);
+        } else {
+            selector    = IHooks.beforeSwap.selector;
+            bsd         = toBeforeSwapDelta(0, 0);
+            feeOverride = 0;
+            if (fp.dynamicFeeEnabled) {
+                uint256 dev = oracle[id].deviationTicks(currentTick);
+                uint24 target = MWDynamicFee.volatilityFee(fp.baseFeePips, fp.maxFeePips, dev, fp.slopePipsPerTick);
+                uint24 fee = _rateLimitedFee(id, target, fp.maxFeeStepPerBlock);
+                feeOverride = fee | LPFeeLibrary.OVERRIDE_FEE_FLAG;
+            }
         }
 
-        uint24 feeOverride = 0;
-        if (fp.dynamicFeeEnabled) {
-            uint256 dev = oracle[id].deviationTicks(currentTick);
-            uint24 target = MWDynamicFee.volatilityFee(fp.baseFeePips, fp.maxFeePips, dev, fp.slopePipsPerTick);
-            uint24 fee = _rateLimitedFee(id, target, fp.maxFeeStepPerBlock);
-            feeOverride = fee | LPFeeLibrary.OVERRIDE_FEE_FLAG;
+        // ── Size-gated JIT (Lever B) — composes ALONGSIDE the fee path above. The vault's jitOpen adds
+        //    real single-sided liquidity via modifyLiquidity and self-settles on the VAULT's delta
+        //    account (disjoint from this hook's am-AMM fee delta `bsd`), so both net to zero by unlock
+        //    end. A revert or 0-return is a silent fallback: the swap proceeds on resting liquidity.
+        //    NO price is read — the output budget is derived only from |amountSpecified|.
+        if (jitEnabled[id] && vault != address(0)) {
+            uint256 outputBudget = params.amountSpecified < 0
+                ? uint256(-params.amountSpecified)
+                : uint256(params.amountSpecified);
+            if (outputBudget >= jitThreshold) {
+                try IMWJitVault(vault).jitOpen(params.zeroForOne, outputBudget) returns (uint128) {} catch {}
+            }
         }
 
-        return (IHooks.beforeSwap.selector, toBeforeSwapDelta(0, 0), feeOverride);
+        return (selector, bsd, feeOverride);
     }
 
     /// @dev The am-AMM manager-fee skim. Grounded in the v4-core delta accounting (see
@@ -299,6 +348,12 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         if (feeParams[id].dynamicFeeEnabled || feeParams[id].guardEnabled) {
             (, int24 currentTick,,) = POOL_MANAGER.getSlot0(id);
             oracle[id].update(currentTick);
+        }
+        // Close any JIT position opened in beforeSwap. Best-effort — jitClose is itself best-effort on
+        // re-supply, so it cannot revert for a recoverable reason; a revert here would (safely) unwind
+        // the whole swap rather than leave a half-open position.
+        if (jitEnabled[id] && vault != address(0)) {
+            try IMWJitVault(vault).jitClose() {} catch {}
         }
         return (IHooks.afterSwap.selector, 0);
     }

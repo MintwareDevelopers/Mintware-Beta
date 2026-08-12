@@ -5,7 +5,7 @@ import {IPoolManager}          from "@uniswap/v4-core/src/interfaces/IPoolManage
 import {IUnlockCallback}       from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
-import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
+import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta}          from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -53,15 +53,16 @@ interface IAdapterAsset {
 ///         MatchedLiquidityVault once both are proven; attribution/lock-weighted reward
 ///         layering on top of the raw per-share accrual.
 contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
-    using SafeERC20     for IERC20;
-    using PoolIdLibrary for PoolKey;
-    using StateLibrary  for IPoolManager;
+    using SafeERC20      for IERC20;
+    using PoolIdLibrary  for PoolKey;
+    using StateLibrary   for IPoolManager;
+    using CurrencyLibrary for Currency;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Types
     // ─────────────────────────────────────────────────────────────────────────
 
-    enum Action { Deploy, Remove, Rebalance, Collect }
+    enum Action { Deploy, Remove, Rebalance, Collect, SweepClaims }
 
     struct LockInfo {
         uint256  depositedAt;
@@ -103,6 +104,16 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     ///         token balance — the classic ERC-4626 donation vector does not apply. This offset closes
     ///         the residual tiny-supply rounding grief.
     uint256 public constant VIRTUAL_LIQUIDITY = 1e3;
+
+    /// @notice Dedicated pool-position salt for JIT liquidity. NEVER the main position's `salt = 0`,
+    ///         so mid-swap JIT liquidity is a physically separate V4 position that can never be
+    ///         co-mingled with (or double-counted against) `positionLiquidity`.
+    bytes32 public constant JIT_SALT = keccak256("MW_JIT");
+
+    /// @notice Width of the tight single-sided JIT band, in units of `tickSpacing`. The band sits
+    ///         strictly to ONE side of the live tick so the add is genuinely single-asset (no
+    ///         counter-token required). A tuning knob for fill depth, not a correctness parameter.
+    int24 public constant JIT_WIDTH_SPACINGS = 5;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Immutables
@@ -179,6 +190,43 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
 
     LockTier private _pendingTier; // consumed within a deposit
 
+    // ── Size-gated true JIT (ULV Phase 1a increment 1b, Lever B) ─────────────
+    // The hook coordinator is the ONLY caller allowed to open/close JIT liquidity. It is hard-wired
+    // once (never caller-supplied at swap time — a Bunni-class vector). During a size-gated swap the
+    // hook calls `jitOpen` in beforeSwap and `jitClose` in afterSwap; both run INSIDE the swapper's
+    // existing PoolManager unlock, so they call `modifyLiquidity`/`_settleDelta`/the adapter DIRECTLY
+    // (never `poolManager.unlock`, which would be a nested-unlock revert).
+    address public hook; // set-once; the MWHookCoordinator
+
+    /// @notice Open JIT liquidity units currently in the pool at [jitTickLower, jitTickUpper] under
+    ///         JIT_SALT. MUST be zero at rest (between txs). NEVER part of share/redeem/deposit math.
+    uint128 public jitLiquidity;
+    int24   public jitTickLower;
+    int24   public jitTickUpper;
+    /// @notice True only WITHIN a size-gated swap tx (between jitOpen and jitClose). The single guard
+    ///         spanning hook↔vault↔JIT: while true every unlock-based vault entrypoint reverts.
+    bool    public jitActive;
+
+    /// @notice Per-swap ceiling on the output-token principal a single jitOpen may pull from Aave
+    ///         (0 = unbounded — the adapter headroom + idle basis still clamp). Capital cap #1.
+    uint256 public jitMaxPerSwap;
+    /// @notice Per-BLOCK cumulative ceiling on JIT principal pulled from Aave across all swaps in the
+    ///         block (0 = unbounded). Capital cap #2 — bounds toxic one-sided drain within a block.
+    uint256 public jitMaxPerBlock;
+    uint256 private _jitBlock;               // block of the last JIT withdraw
+    uint256 private _jitWithdrawnThisBlock;  // running per-block JIT principal pulled
+
+    /// @notice ERC-6909 claim balances the vault holds against the PoolManager for JIT proceeds that
+    ///         could NOT be physically taken at close time. During `afterSwap` the swapper has not yet
+    ///         settled its input token, so the manager may lack the physical reserves to pay the JIT
+    ///         removal's INPUT-side delta. Rather than revert (which would brick the swap), `jitClose`
+    ///         mints ERC-6909 claims for the shortfall (a pure-accounting credit needing no reserves).
+    ///         A claim is 1:1 redeemable for the underlying once the manager holds it (always true at
+    ///         rest, after the swapper settles). `sweepJitClaims()` redeems them → Aave. These claims
+    ///         are real backing (counted in solvency) but are NOT `idleN` until redeemed+re-supplied.
+    uint256 public jitClaim0;
+    uint256 public jitClaim1;
+
     // ─────────────────────────────────────────────────────────────────────────
     // Events
     // ─────────────────────────────────────────────────────────────────────────
@@ -199,6 +247,11 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     event Idled(uint128 liquidity, uint256 amount0, uint256 amount1);
     event Refilled(uint128 liquidity, uint256 amount0, uint256 amount1);
     event YieldHarvested(uint256 lp0, uint256 lp1, uint256 mintware0, uint256 mintware1);
+    event HookSet(address indexed hook);
+    event JitCapsSet(uint256 perSwap, uint256 perBlock);
+    event JitOpened(bool zeroForOne, uint256 principal, uint128 liquidity, int24 tickLower, int24 tickUpper);
+    event JitClosed(uint256 taken0, uint256 taken1, uint256 claimed0, uint256 claimed1);
+    event JitClaimsSwept(uint256 redeemed0, uint256 redeemed1);
 
     // ─────────────────────────────────────────────────────────────────────────
     // Errors
@@ -224,6 +277,9 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     error AdaptersNotSet();
     error BadBufferRatio();
     error AaveTemporarilyIlliquid();
+    error OnlyHook();
+    error HookAlreadySet();
+    error JitInProgress();
 
     // ─────────────────────────────────────────────────────────────────────────
     // Constructor
@@ -251,6 +307,20 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
 
     modifier onlyProvider() {
         if (msg.sender != provider && msg.sender != owner()) revert OnlyProvider();
+        _;
+    }
+
+    modifier onlyHook() {
+        if (msg.sender != hook) revert OnlyHook();
+        _;
+    }
+
+    /// @dev The single guard spanning hook↔vault↔JIT. Every unlock-based / balance-moving vault
+    ///      entrypoint carries it, so nothing can interleave while a JIT position is open mid-swap
+    ///      (defends the hostile-token / hostile-adapter callback path). Between txs `jitActive` is
+    ///      always false, so this is a no-op for ordinary calls.
+    modifier notDuringJit() {
+        if (jitActive) revert JitInProgress();
         _;
     }
 
@@ -284,6 +354,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         external
         nonReentrant
         whenNotPaused
+        notDuringJit
         returns (uint256 sharesMinted)
     {
         if (!poolInitialized) revert PoolNotInitialized();
@@ -338,7 +409,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     // Redemption — async (notice period) + lock penalty
     // ─────────────────────────────────────────────────────────────────────────
 
-    function requestRedeem(uint256 shares_) external nonReentrant {
+    function requestRedeem(uint256 shares_) external nonReentrant notDuringJit {
         if (block.timestamp < locks[msg.sender].depositedAt + MIN_HOLD_PERIOD) revert MinHoldNotMet();
         if (shares_ == 0 || shares_ > shares[msg.sender]) revert InsufficientShares();
         uint256 expiry = block.timestamp + NOTICE_PERIOD;
@@ -350,6 +421,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         external
         nonReentrant
         whenNotPaused
+        notDuringJit
         returns (uint256 amount0, uint256 amount1)
     {
         WithdrawalRequest storage req = withdrawals[msg.sender];
@@ -436,7 +508,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     // ─────────────────────────────────────────────────────────────────────────
 
     /// @notice Realize accrued swap fees on the position and distribute (permissionless keeper).
-    function collectFees() external nonReentrant whenNotPaused returns (uint256 fee0, uint256 fee1) {
+    function collectFees() external nonReentrant whenNotPaused notDuringJit returns (uint256 fee0, uint256 fee1) {
         return _realizeFees();
     }
 
@@ -499,7 +571,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     ///         pro-rata per-share accumulator. Balance-diff intake makes it safe for
     ///         fee-on-transfer tokens; a carried remainder means sub-threshold rent is
     ///         never stranded. This is the IAmAmmRentSink entrypoint MWAmAuction calls.
-    function fundRent(address token, uint256 amount) external nonReentrant whenNotPaused {
+    function fundRent(address token, uint256 amount) external nonReentrant whenNotPaused notDuringJit {
         if (msg.sender != rentFunder) revert OnlyRentFunder();
         if (amount == 0) return;
         bool isToken0 = token == address(token0);
@@ -533,7 +605,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         emit RentFunded(token, received);
     }
 
-    function claimFees() external nonReentrant {
+    function claimFees() external nonReentrant notDuringJit {
         _claimFees(msg.sender);
     }
 
@@ -556,7 +628,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     // ─────────────────────────────────────────────────────────────────────────
 
     /// @notice Move the whole position to the range implied by `p` around the current tick.
-    function rebalanceToProfile(PoolProfile p) external onlyProvider nonReentrant whenNotPaused {
+    function rebalanceToProfile(PoolProfile p) external onlyProvider nonReentrant whenNotPaused notDuringJit {
         if (!poolInitialized) revert PoolNotInitialized();
         (, int24 currentTick,,) = poolManager.getSlot0(poolKey.toId());
         (int24 lower, int24 upper) = _profileRangeFor(p, currentTick);
@@ -586,6 +658,23 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         emit AdaptersSet(address(a0), address(a1));
     }
 
+    /// @notice Hard-wire the hook coordinator allowed to open/close JIT liquidity, ONCE. Owner-only;
+    ///         never caller-supplied at swap time. The hook is the sole `onlyHook` caller.
+    function setHook(address h) external onlyOwner {
+        if (hook != address(0)) revert HookAlreadySet();
+        if (h == address(0)) revert ZeroAddress();
+        hook = h;
+        emit HookSet(h);
+    }
+
+    /// @notice Set the per-swap and per-block JIT capital ceilings (output-token units; 0 = unbounded).
+    ///         Belt-and-suspenders over the adapter's own per-block withdraw cap.
+    function setJitCaps(uint256 perSwap, uint256 perBlock) external onlyOwner {
+        jitMaxPerSwap  = perSwap;
+        jitMaxPerBlock = perBlock;
+        emit JitCapsSet(perSwap, perBlock);
+    }
+
     /// @notice Set the target fraction (bps) of managed liquidity to keep hot in the V4 position.
     function setBufferRatio(uint256 bps) external onlyOwner {
         if (bps > BPS) revert BadBufferRatio();
@@ -604,7 +693,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     ///         only; safe to call whenever drift crosses the target. Reverts are acceptable here (this
     ///         is NOT the swap hot path); the underlying adapter is nonetheless best-effort so the
     ///         function degrades gracefully rather than bricking.
-    function rebalanceBuffer() external onlyProvider nonReentrant whenNotPaused {
+    function rebalanceBuffer() external onlyProvider nonReentrant whenNotPaused notDuringJit {
         if (address(adapter0) == address(0)) revert AdaptersNotSet();
         _realizeFees(); // clean principal before moving any liquidity
         uint256 managed = uint256(positionLiquidity) + uint256(idleLiquidity);
@@ -624,14 +713,14 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
 
     /// @notice Explicitly idle `deltaL` V4 liquidity units into Aave (provider/keeper). Exposed
     ///         alongside `rebalanceBuffer` for precise operator control + invariant coverage.
-    function supplyIdle(uint128 deltaL) external onlyProvider nonReentrant whenNotPaused {
+    function supplyIdle(uint128 deltaL) external onlyProvider nonReentrant whenNotPaused notDuringJit {
         if (address(adapter0) == address(0)) revert AdaptersNotSet();
         _realizeFees();
         _supplyIdleCore(deltaL);
     }
 
     /// @notice Explicitly refill `deltaL` V4 liquidity units from Aave back into the position.
-    function recallIdle(uint128 deltaL) external onlyProvider nonReentrant whenNotPaused {
+    function recallIdle(uint128 deltaL) external onlyProvider nonReentrant whenNotPaused notDuringJit {
         if (address(adapter0) == address(0)) revert AdaptersNotSet();
         _realizeFees();
         _refillIdleCore(deltaL);
@@ -713,7 +802,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     ///         distributor if wired, else the pro-rata per-share accumulator + segregated reserve.
     ///         `idleN` is untouched (yield is not principal), so the live aToken balance never enters
     ///         the share/redeem math (Bunni-safe). Provider/keeper only.
-    function harvestYield() external onlyProvider nonReentrant whenNotPaused
+    function harvestYield() external onlyProvider nonReentrant whenNotPaused notDuringJit
         returns (uint256 lp0, uint256 lp1)
     {
         if (address(adapter0) == address(0)) revert AdaptersNotSet();
@@ -759,6 +848,268 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Size-gated true JIT bridge (Lever B) — hook-only, runs INSIDE the swap unlock
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// @notice Open a tight SINGLE-SIDED JIT position funded from the OUTPUT-side Aave adapter.
+    ///         Called by the hook in `beforeSwap`, INSIDE the swapper's PoolManager unlock — so it
+    ///         calls `modifyLiquidity`/`_settleDelta`/the adapter DIRECTLY (never `poolManager.unlock`).
+    ///         Every early `return 0` is a clean no-op fallback: no JIT liquidity, `jitActive` stays
+    ///         false, and the swap fills against the resting `positionLiquidity` buffer. NO price or
+    ///         oracle is read — sizing is purely `outputBudget` ∩ adapter headroom ∩ idle basis ∩ caps.
+    /// @param  zeroForOne   swap direction (trader sells token0 ⇒ pool pays token1 ⇒ add token1 side).
+    /// @param  outputBudget hook-derived output-token budget (from `amountSpecified`, never a price).
+    /// @return L            JIT liquidity actually opened (0 ⇒ hook falls back to resting liquidity).
+    function jitOpen(bool zeroForOne, uint256 outputBudget)
+        external
+        onlyHook
+        nonReentrant
+        returns (uint128 L)
+    {
+        if (jitActive) return 0;             // already open (defensive; hook opens once per swap)
+        if (!poolInitialized) return 0;
+
+        // (1) Output-side adapter only — never touch the input adapter in jitOpen.
+        IYieldAdapter adapter = zeroForOne ? adapter1 : adapter0;
+        if (address(adapter) == address(0)) return 0;
+
+        // (2) Size the pull: budget ∩ adapter live headroom ∩ settled idle basis ∩ per-swap/-block caps.
+        //     Clamping to the idle counter guarantees we only ever deploy SETTLED principal (never
+        //     accrued Aave yield), so the counter decrement below is exact and can't underflow.
+        uint256 basis = zeroForOne ? idle1 : idle0;
+        uint256 want = outputBudget;
+        uint256 maxW = adapter.maxWithdrawable();
+        if (maxW  < want) want = maxW;
+        if (basis < want) want = basis;
+        want = _jitCap(want);
+        if (want == 0) return 0;
+
+        // (3) Best-effort withdraw (got <= want). Settle the idle counter IMMEDIATELY: the money has
+        //     left Aave. adapterN.totalAssets() and idleN both drop by `got`, so `aave_backs_idle`
+        //     (totalAssets >= idleN) is preserved at every step, including the undo path below.
+        uint256 got = adapter.withdraw(want);
+        if (got == 0) return 0;
+        _recordJitWithdraw(got);
+        if (zeroForOne) idle1 -= got; else idle0 -= got;
+
+        // (4) Tight single-sided range aligned to tickSpacing, strictly to one side of the live tick.
+        (, int24 tick,,) = poolManager.getSlot0(poolKey.toId());
+        int24 spacing = poolKey.tickSpacing;
+        int24 width   = spacing * JIT_WIDTH_SPACINGS;
+        int24 lo;
+        int24 hi;
+        if (zeroForOne) {
+            // token1 side: range at/below the current tick ⇒ pure token1 (price >= sqrtUpper).
+            hi = _alignTick(tick, spacing);
+            lo = hi - width;
+        } else {
+            // token0 side: range strictly ABOVE the current tick ⇒ pure token0 (price <= sqrtLower).
+            lo = _alignTick(tick, spacing) + spacing;
+            hi = lo + width;
+        }
+        uint160 sLo = TickMath.getSqrtPriceAtTick(lo);
+        uint160 sHi = TickMath.getSqrtPriceAtTick(hi);
+
+        // (5) Liquidity from the single-sided principal. If it rounds to zero, undo the withdraw
+        //     (re-idle `got`, restoring the counter) and fall back.
+        L = zeroForOne
+            ? LiquidityAmounts.getLiquidityForAmount1(sLo, sHi, got)
+            : LiquidityAmounts.getLiquidityForAmount0(sLo, sHi, got);
+        if (L == 0) {
+            _reIdle(zeroForOne, got);
+            return 0;
+        }
+
+        // (6) Add JIT liquidity at the DEDICATED salt (a separate pool position from `salt = 0`).
+        //     `_settleDelta` pays the single-sided principal into the pool. Any sub-wei rounding dust
+        //     (got minus the exact amount the mint consumed) stays in the vault balance as extra,
+        //     unattributed backing — vault-favoring, never distributed to redeemers.
+        (BalanceDelta delta,) = poolManager.modifyLiquidity(
+            poolKey,
+            ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: int256(uint256(L)), salt: JIT_SALT}),
+            ""
+        );
+        _settleDelta(delta);
+
+        jitTickLower = lo;
+        jitTickUpper = hi;
+        jitLiquidity = L;
+        jitActive    = true;
+        emit JitOpened(zeroForOne, got, L, lo, hi);
+    }
+
+    /// @notice Close the JIT position: remove it, take both sides back, re-idle EVERYTHING returned to
+    ///         the adapters as settled principal, and clear JIT state. Called by the hook in
+    ///         `afterSwap`, INSIDE the swap unlock. Best-effort re-supply — a capped/frozen reserve
+    ///         leaves the tokens as vault balance rather than reverting (a revert here would unwind the
+    ///         entire swap, which is safe but undesirable).
+    ///
+    /// @dev    SETTLEMENT (the one hard V4 fact). During `afterSwap` the swapper has NOT yet settled its
+    ///         input token, so the PoolManager can be SHORT the JIT removal's input-side delta. Physical
+    ///         `take` of an amount the manager lacks would revert → the swap would brick. So we take
+    ///         PHYSICAL up to the manager's current reserves and mint ERC-6909 CLAIMS for any shortfall
+    ///         (`mint` needs no reserves — it just books the offsetting delta). The swap therefore always
+    ///         settles. Claims are redeemed to Aave later by `sweepJitClaims()`.
+    ///
+    /// @dev    FEE ATTRIBUTION (documented rule). The JIT opens single-sided with `got` of ONE token and,
+    ///         after the swap, returns a MIX whose value equals the principal plus the LP fee it earned.
+    ///         With NO price/oracle there is no price-free way to split that mix into "principal" vs
+    ///         "fee". We therefore book EVERYTHING returned back as principal: the physically-taken part
+    ///         is re-idled (`idleN += taken`) and the claimed part is tracked in `jitClaimN` until swept
+    ///         (then `idleN += redeemed`). This is exactly-conserving per token, never credits a counter
+    ///         beyond real backing (idle rises only by adapter-accepted physical; claims are 1:1 manager-
+    ///         backed), and rounds toward the vault. The captured fee/LVR reaches LPs via the pro-rata
+    ///         idle leg, not the per-share accumulator. Trade-off (honest): (a) value present during the
+    ///         swap accrues to whoever holds shares at redeem time — a late depositor can dilute it; and
+    ///         (b) proceeds parked as claims reach the idle leg only after a `sweepJitClaims()` keeper
+    ///         call, so a redeem before a sweep forfeits the tiny unswept share to remaining LPs. Both
+    ///         are fairness nuances, NOT solvency ones; no counter is ever over-credited.
+    function jitClose() external onlyHook nonReentrant {
+        if (!jitActive) return; // idempotent — hook always calls; JIT may not have opened.
+
+        uint128 L  = jitLiquidity;
+        int24   lo = jitTickLower;
+        int24   hi = jitTickUpper;
+
+        (BalanceDelta delta,) = poolManager.modifyLiquidity(
+            poolKey,
+            ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: -int256(uint256(L)), salt: JIT_SALT}),
+            ""
+        );
+
+        // Removal yields a non-negative delta per side (principal converted by the swap + JIT LP fees).
+        // Defensively pay any negative side (should not occur on a pure removal).
+        int128 d0 = delta.amount0();
+        int128 d1 = delta.amount1();
+        if (d0 < 0) _pay(poolKey.currency0, uint256(uint128(-d0)));
+        if (d1 < 0) _pay(poolKey.currency1, uint256(uint128(-d1)));
+
+        (uint256 taken0, uint256 claimed0) = d0 > 0 ? _takeOrClaim(false, uint256(uint128(d0))) : (0, 0);
+        (uint256 taken1, uint256 claimed1) = d1 > 0 ? _takeOrClaim(true,  uint256(uint128(d1))) : (0, 0);
+
+        // Re-idle only the PHYSICALLY-taken proceeds. Counters clear LAST so a mid-close reentrancy
+        // still observes `jitActive` and is blocked by `notDuringJit`.
+        _reIdle(false, taken0);
+        _reIdle(true,  taken1);
+
+        // NB: leave jitTickLower/jitTickUpper at the last-used range (not zeroed) so
+        //     `jitPositionLiquidity()` reads the REAL position and can prove it holds 0 units at rest.
+        jitLiquidity = 0;
+        jitActive    = false;
+        emit JitClosed(taken0, taken1, claimed0, claimed1);
+    }
+
+    /// @dev Settle one side of the JIT removal's positive delta: `take` physical up to the manager's
+    ///      current reserves, `mint` an ERC-6909 claim for the remainder (needs no reserves). Returns
+    ///      (physicalTaken, claimMinted). Never reverts for an availability reason ⇒ jitClose can't brick.
+    function _takeOrClaim(bool side1, uint256 owed) internal returns (uint256 taken, uint256 claimed) {
+        Currency cur = side1 ? poolKey.currency1 : poolKey.currency0;
+        IERC20  token = side1 ? token1 : token0;
+        uint256 avail = token.balanceOf(address(poolManager));
+        taken = owed < avail ? owed : avail;
+        if (taken > 0) poolManager.take(cur, address(this), taken);
+        claimed = owed - taken;
+        if (claimed > 0) {
+            poolManager.mint(address(this), cur.toId(), claimed);
+            if (side1) jitClaim1 += claimed; else jitClaim0 += claimed;
+        }
+    }
+
+    /// @notice Redeem outstanding JIT ERC-6909 claims to physical tokens and re-supply them to Aave
+    ///         (`idleN += redeemed`). Permissionless keeper — claims accrue only when a JIT closed while
+    ///         the manager was short the input token (a thin-buffer swap); at rest the manager holds the
+    ///         underlying, so the burn+take always succeeds up to the claim amount. Best-effort: if Aave
+    ///         cannot accept the supply, the redeemed physical stays in the vault balance (extra backing).
+    function sweepJitClaims() external nonReentrant whenNotPaused notDuringJit returns (uint256 r0, uint256 r1) {
+        if (jitClaim0 == 0 && jitClaim1 == 0) return (0, 0);
+        bytes memory res = poolManager.unlock(abi.encode(Action.SweepClaims, bytes("")));
+        (r0, r1) = abi.decode(res, (uint256, uint256));
+        emit JitClaimsSwept(r0, r1);
+    }
+
+    function _sweepClaims() internal returns (bytes memory) {
+        uint256 r0 = _redeemClaim(false);
+        uint256 r1 = _redeemClaim(true);
+        return abi.encode(r0, r1);
+    }
+
+    /// @dev Burn up to `jitClaimN` ERC-6909 claims (capped at the manager's reserves), take the physical
+    ///      underlying, and supply it to Aave (idle += supplied). Best-effort on the Aave leg.
+    function _redeemClaim(bool side1) internal returns (uint256 redeemed) {
+        uint256 claim = side1 ? jitClaim1 : jitClaim0;
+        if (claim == 0) return 0;
+        Currency cur = side1 ? poolKey.currency1 : poolKey.currency0;
+        IERC20  token = side1 ? token1 : token0;
+        IYieldAdapter adapter = side1 ? adapter1 : adapter0;
+
+        uint256 avail = token.balanceOf(address(poolManager));
+        redeemed = claim < avail ? claim : avail;
+        if (redeemed == 0) return 0;
+
+        poolManager.burn(address(this), cur.toId(), redeemed); // +redeemed delta to the vault
+        poolManager.take(cur, address(this), redeemed);        // physical to the vault; delta → 0
+        if (side1) jitClaim1 -= redeemed; else jitClaim0 -= redeemed;
+
+        if (address(adapter) != address(0) && adapter.maxSuppliable() > 0) {
+            token.forceApprove(address(adapter), redeemed);
+            try adapter.deposit(redeemed) {
+                if (side1) idle1 += redeemed; else idle0 += redeemed;
+            } catch {
+                token.forceApprove(address(adapter), 0); // leave physical in the vault (extra backing)
+            }
+        }
+        // else: reserve unavailable — physical stays in the vault balance (still full backing).
+    }
+
+    /// @dev Re-supply `amt` of the given side back to its adapter as settled principal, incrementing
+    ///      the idle counter by EXACTLY what the adapter accepts. If the adapter is unset, its reserve
+    ///      cannot accept supply (`maxSuppliable()==0`), or the supply reverts, the tokens are left in
+    ///      the vault balance (unattributed extra backing) and the counter is NOT bumped — so idleN can
+    ///      never exceed adapter principal. `side1 == true` ⇒ token1/adapter1.
+    function _reIdle(bool side1, uint256 amt) internal {
+        if (amt == 0) return;
+        IYieldAdapter adapter = side1 ? adapter1 : adapter0;
+        IERC20 token = side1 ? token1 : token0;
+        if (address(adapter) == address(0)) return;   // leave in vault balance
+        if (adapter.maxSuppliable() == 0) return;      // reserve full/paused/frozen — leave in vault
+        token.forceApprove(address(adapter), amt);
+        try adapter.deposit(amt) {
+            if (side1) idle1 += amt; else idle0 += amt;
+        } catch {
+            token.forceApprove(address(adapter), 0);   // reset dangling approval; leave in vault
+        }
+    }
+
+    /// @dev Clamp a JIT pull to the per-swap ceiling and the remaining per-block budget (0 = unbounded).
+    function _jitCap(uint256 want) internal view returns (uint256) {
+        uint256 perSwap = jitMaxPerSwap;
+        if (perSwap != 0 && want > perSwap) want = perSwap;
+        uint256 rem = _jitBlockRemaining();
+        return want < rem ? want : rem;
+    }
+
+    function _jitBlockRemaining() internal view returns (uint256) {
+        if (jitMaxPerBlock == 0) return type(uint256).max;
+        if (block.number != _jitBlock) return jitMaxPerBlock;
+        return jitMaxPerBlock > _jitWithdrawnThisBlock ? jitMaxPerBlock - _jitWithdrawnThisBlock : 0;
+    }
+
+    function _recordJitWithdraw(uint256 got) internal {
+        if (block.number != _jitBlock) {
+            _jitBlock = block.number;
+            _jitWithdrawnThisBlock = 0;
+        }
+        _jitWithdrawnThisBlock += got;
+    }
+
+    /// @notice Live on-chain liquidity of the JIT position (JIT_SALT). Zero at rest — used by the
+    ///         invariant suite to prove no orphaned JIT liquidity ever persists between txs.
+    function jitPositionLiquidity() external view returns (uint128 liq) {
+        if (!poolInitialized) return 0;
+        (liq,,) = poolManager.getPositionInfo(poolKey.toId(), address(this), jitTickLower, jitTickUpper, JIT_SALT);
+    }
+
     /// @notice Price-free total liquidity under management: pooled + idle-equivalent.
     function totalManagedLiquidity() external view returns (uint256) {
         return uint256(positionLiquidity) + uint256(idleLiquidity);
@@ -799,6 +1150,9 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         }
         if (action == Action.Collect) {
             return _collect();
+        }
+        if (action == Action.SweepClaims) {
+            return _sweepClaims();
         }
         (int24 lo, int24 hi) = abi.decode(params, (int24, int24));
         return _rebalance(lo, hi);
