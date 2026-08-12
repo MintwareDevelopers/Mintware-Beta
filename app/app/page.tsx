@@ -5,5 +5,5 @@ import { redirect } from 'next/navigation'
 // gated actions live under /app/vault/*. Revisit when an aggregated positions
 // dashboard exists (IA §05 open decision).
 export default function AppHome() {
-  redirect('/vaults')
+  redirect('/app/vaults')
 }

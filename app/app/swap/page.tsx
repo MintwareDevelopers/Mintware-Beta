@@ -347,7 +347,7 @@ function SwapContent() {
             <div>
               <div className={`${LABEL} mb-3`}>The other surface</div>
               <Link
-                href="/vaults"
+                href="/app/vaults"
                 className="block border border-atx-ink border-l-[3px] border-l-atx-coral bg-atx-panel px-5 py-4 transition-colors hover:bg-atx-coral/[0.06]"
               >
                 <div className="flex items-center gap-2 mb-1.5">

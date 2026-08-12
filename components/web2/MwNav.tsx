@@ -52,7 +52,7 @@ export function MwNav() {
   const NAV_LINKS = [
     { href: '/app/rewards', label: 'Rewards' },
     { href: '/app/swap', label: 'Swap' },
-    { href: '/vaults', label: 'Vaults' },
+    { href: '/app/vaults', label: 'Vaults' },
     { href: '/app/leaderboard', label: 'Leaderboard' },
     { href: '/agents', label: 'Agents' },
     { href: '/app/profile', label: 'Profile' },

@@ -463,7 +463,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
           <strong>{draft.name}</strong> is registered against the live Mintware pair vault and now appears in the vault list for dual-token LP deposits.
         </div>
         <div className="flex gap-2.5 justify-center">
-          <Link href="/vaults" className="px-5 py-2.5 bg-atx-blue text-white border border-atx-ink text-[14px] font-semibold font-atx-mono no-underline">
+          <Link href="/app/vaults" className="px-5 py-2.5 bg-atx-blue text-white border border-atx-ink text-[14px] font-semibold font-atx-mono no-underline">
             View all vaults
           </Link>
           {deployed !== 'new' && (
@@ -549,7 +549,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
 
 // ─── single-surface (DeFi) — the RWA surface was shelved ────────────────────────
 function CreateVaultContentInner() {
-  return <DefiCreateFlow onBack={() => { window.location.href = '/vaults' }} />
+  return <DefiCreateFlow onBack={() => { window.location.href = '/app/vaults' }} />
 }
 
 function CreateVaultContent() {

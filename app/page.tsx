@@ -245,7 +245,7 @@ function ScoreCard() {
                 <div className="font-bold text-[17px] tracking-[-0.01em] leading-tight">Deposit into a V4 Vault.</div>
                 <div className="text-[13px] text-white/80">Your score multiplies your returns.</div>
               </div>
-              <Link href="/vaults" className="font-atx-mono text-[12px] uppercase tracking-[0.08em] px-5 py-3 bg-white text-atx-blue no-underline whitespace-nowrap">Deposit →</Link>
+              <Link href="/app/vaults" className="font-atx-mono text-[12px] uppercase tracking-[0.08em] px-5 py-3 bg-white text-atx-blue no-underline whitespace-nowrap">Deposit →</Link>
             </div>
 
             <div className="px-6 py-3 flex items-center gap-4 font-atx-mono text-[11px] uppercase tracking-[0.05em] border-t border-atx-ink/15">
@@ -350,7 +350,7 @@ export default function HomePage() {
               Deposit into a V4 Vault. <span className="text-atx-blue">Your score multiplies your returns.</span>
             </h2>
           </div>
-          <button onClick={() => launchApp('/vaults')} className="cursor-pointer font-atx-mono text-[13px] uppercase tracking-[0.09em] px-7 py-4 border border-atx-blue bg-atx-blue text-white whitespace-nowrap shrink-0">
+          <button onClick={() => launchApp('/app/vaults')} className="cursor-pointer font-atx-mono text-[13px] uppercase tracking-[0.09em] px-7 py-4 border border-atx-blue bg-atx-blue text-white whitespace-nowrap shrink-0">
             Deposit →
           </button>
         </div>
@@ -415,7 +415,7 @@ export default function HomePage() {
                   <span className="font-atx-mono font-bold text-[24px] tracking-tight text-atx-mesquite"><CountUp value={10.4} decimals={1} suffix="%" /></span>
                 </div>
               </div>
-              <button onClick={() => launchApp('/vaults')} className="mt-auto w-full py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-blue text-white border-t border-atx-ink cursor-pointer">
+              <button onClick={() => launchApp('/app/vaults')} className="mt-auto w-full py-3 font-atx-mono text-[11px] uppercase tracking-[0.12em] bg-atx-blue text-white border-t border-atx-ink cursor-pointer">
                 Browse Growth vaults →
               </button>
             </div>

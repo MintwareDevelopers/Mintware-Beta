@@ -435,7 +435,7 @@ function VaultDetailContent() {
 
   if (!vault) return (
     <div className="px-7 py-[60px] text-center text-atx-ink/55 font-atx-display">
-      Vault not found. <Link href="/vaults" className="text-atx-blue">← Back to vaults</Link>
+      Vault not found. <Link href="/app/vaults" className="text-atx-blue">← Back to vaults</Link>
     </div>
   )
 
@@ -451,7 +451,7 @@ function VaultDetailContent() {
 
         {/* ── Breadcrumb ── */}
         <div className="mb-4 flex items-center gap-2">
-          <Link href="/vaults" className="text-[13px] text-atx-ink/55 font-atx-display no-underline hover:text-atx-ink">
+          <Link href="/app/vaults" className="text-[13px] text-atx-ink/55 font-atx-display no-underline hover:text-atx-ink">
             ← Vaults
           </Link>
           <span className="text-atx-ink/30">/</span>
