@@ -288,9 +288,9 @@ export default function HomePage() {
           </Link>
           <nav className="hidden md:flex gap-6 font-atx-mono text-[11px] uppercase tracking-[0.14em]">
             <Link href="/vaults" className={navLink}>Vaults</Link>
-            <Link href="/app/swap" className={navLink}>Swap</Link>
             <Link href="/attribution" className={navLink}>Attribution</Link>
             <Link href="/agents" className={navLink}>Agents</Link>
+            <Link href="/teams" className={navLink}>Teams</Link>
           </nav>
           <div className="flex gap-2.5">
             {privy.enabled && !isConnected && (
