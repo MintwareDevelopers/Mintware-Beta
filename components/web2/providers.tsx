@@ -2,7 +2,6 @@
 
 import { PrivyProvider, type PrivyInterface, type PrivyProviderProps, usePrivy, useWallets, useCreateWallet } from '@privy-io/react-auth'
 import { WagmiProvider as PrivyWagmiProvider } from '@privy-io/wagmi'
-import { RainbowKitProvider, lightTheme } from '@rainbow-me/rainbowkit'
 import { WagmiProvider, useAccount, type State } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from '@/lib/web3/wagmi'
@@ -89,21 +88,16 @@ function GlobalReferralGate() {
 }
 
 function AppWalletProviders({ children }: { children: ReactNode }) {
+  // Privy is the single wallet/connect layer — no RainbowKitProvider. Privy's own
+  // modal (via LaunchModal → privy.login/connectWallet) handles external wallets
+  // and email/embedded onboarding.
   return (
-    <RainbowKitProvider
-      theme={lightTheme({
-        accentColor: '#006FCC',       // ATX blue — match the app accent
-        accentColorForeground: 'white',
-        borderRadius: 'none',         // square system — no rounded wallet modal
-        fontStack: 'system',
-      })}
-      modalSize="compact"
-    >
+    <>
       <LaunchModalProvider>
         {children}
       </LaunchModalProvider>
       <GlobalReferralGate />
-    </RainbowKitProvider>
+    </>
   )
 }
 

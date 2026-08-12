@@ -1,15 +1,19 @@
-import { getDefaultConfig } from '@rainbow-me/rainbowkit'
+import { createConfig } from '@privy-io/wagmi'
 import { mainnet, base, arbitrum, baseSepolia } from 'wagmi/chains'
 import { cookieStorage, createStorage, http } from 'wagmi'
 
-export const wagmiConfig = getDefaultConfig({
-  appName: 'Mintware',
-  projectId: '580f461c981a43d53fc25fe59b64306b',
+// Privy is the single wallet/auth layer. It manages connectors (external wallets
+// + embedded) itself, so we build the wagmi config with Privy's createConfig —
+// no RainbowKit getDefaultConfig, no manually-declared connectors. The WalletConnect
+// project id lives in the Privy dashboard, not here.
+export const wagmiConfig = createConfig({
   chains: [mainnet, base, arbitrum, baseSepolia],
-  // Pin the public RPC per chain so the browser's connect-src hosts are
-  // deterministic + match the CSP allowlist (these are the current viem defaults).
+  // Pinned public RPCs — browser-reachable (CORS-enabled) and matched to the CSP
+  // connect-src allowlist. Mainnet uses publicnode: eth.merkle.io sends no CORS
+  // header and cloudflare-eth.com is deprecated (both broke browser mainnet reads,
+  // e.g. ENS/basename resolution).
   transports: {
-    [mainnet.id]:     http('https://eth.merkle.io'),
+    [mainnet.id]:     http('https://ethereum-rpc.publicnode.com'),
     [base.id]:        http('https://mainnet.base.org'),
     [arbitrum.id]:    http('https://arb1.arbitrum.io/rpc'),
     [baseSepolia.id]: http('https://sepolia.base.org'),

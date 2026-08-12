@@ -3,11 +3,10 @@
 // LaunchModal — one onboarding flow for the whole app. Every "Launch app" entry
 // point calls useLaunch().launch(dest); if the user is already connected it routes
 // straight in, otherwise it opens ONE modal offering both paths: connect an
-// existing wallet (RainbowKit) or start with just an email (Privy creates a wallet).
+// existing wallet (Privy's wallet picker) or start with just an email (Privy creates a wallet).
 // This replaces the confusing "Launch app" + separate "Email" button pair.
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
-import { useConnectModal } from '@rainbow-me/rainbowkit'
 import { useRouter } from 'next/navigation'
 import { useAccount } from 'wagmi'
 import { useMintwarePrivy } from './providers'
@@ -23,7 +22,6 @@ export function useLaunch() {
 export function LaunchModalProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const { isConnected } = useAccount()
-  const { openConnectModal } = useConnectModal()
   const privy = useMintwarePrivy()
   const router = useRouter()
 
@@ -32,9 +30,13 @@ export function LaunchModalProvider({ children }: { children: ReactNode }) {
     setOpen(true)
   }, [isConnected, router])
 
+  // Both paths go through Privy (the single wallet layer). Wallet users get Privy's
+  // external-wallet picker; email users get the email → embedded-wallet flow. If a
+  // Privy session already exists, connect/link an external wallet instead of re-login.
   function chooseWallet() {
     setOpen(false)
-    openConnectModal?.()
+    if (privy.authenticated) { privy.connectWallet(); return }
+    privy.login({ loginMethods: ['wallet'], walletChainType: 'ethereum-only' })
   }
   function chooseEmail() {
     setOpen(false)

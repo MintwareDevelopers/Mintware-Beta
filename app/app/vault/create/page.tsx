@@ -51,7 +51,7 @@ const CHAINS = [
   { id: 84532, label: 'Base Sepolia' },
 ]
 
-// Resolve an ERC-20 symbol directly (bypasses the RainbowKit config, which omits
+// Resolve an ERC-20 symbol directly (bypasses the wagmi config, which omits
 // Base Sepolia) so the auto-generated vault name resolves on both offered chains.
 const CHAIN_FOR: Record<number, Chain> = { 8453: base, 84532: baseSepolia }
 

@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename)
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
   "connect-src 'self' blob: data: https://attribution-scorer.ceo-1f9.workers.dev " +
-    'https://mainnet.base.org https://sepolia.base.org https://arb1.arbitrum.io https://eth.merkle.io https://cloudflare-eth.com ' +
+    'https://mainnet.base.org https://sepolia.base.org https://arb1.arbitrum.io https://ethereum-rpc.publicnode.com ' +
     'https://*.supabase.co wss://*.supabase.co https://*.privy.io https://*.privy.systems ' +
     'wss://relay.walletconnect.org wss://relay.walletconnect.com https://relay.walletconnect.com ' +
     'https://explorer-api.walletconnect.com https://api.web3modal.org https://pulse.walletconnect.org ' +

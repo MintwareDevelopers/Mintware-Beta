@@ -6,7 +6,6 @@ import { Toaster } from 'sonner'
 import { CommandPalette } from '@/components/web2/CommandPalette'
 import { MwFooter } from '@/components/web2/MwFooter'
 import { ScrollProgress, RevealObserver } from '@/components/web2/motion'
-import '@rainbow-me/rainbowkit/styles.css'
 import './globals.css'
 
 const jakarta = Plus_Jakarta_Sans({

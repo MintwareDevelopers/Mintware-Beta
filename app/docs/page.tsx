@@ -178,7 +178,7 @@ function Wallets({ nav }: { nav: Nav }) {
       <p className={SUB}>Two ways in, one guarantee: Mintware is non-custodial end to end. It never holds your keys or your deposits.</p>
       <h2>Two ways in</h2>
       <ul>
-        <li><b>Connect a wallet.</b> MetaMask, Rainbow, Coinbase, WalletConnect — via RainbowKit + wagmi, for anyone who already has one.</li>
+        <li><b>Connect a wallet.</b> MetaMask, Rainbow, Coinbase, WalletConnect — via Privy + wagmi, for anyone who already has one.</li>
         <li><b>Continue with email.</b> Privy spins up an <b>embedded wallet</b> from an email address — no seed phrase, no extension, no prior crypto experience required.</li>
       </ul>
       <h2>New users, institutional-grade key security</h2>
