@@ -69,7 +69,7 @@ export function CommandPalette() {
           </Command.Group>
 
           <Command.Group heading="Actions">
-            <Command.Item onSelect={() => go('/create-campaign')}>
+            <Command.Item onSelect={() => go('/app/create-campaign')}>
               <div className="cmdk-icon"><Plus size={14} /></div>
               Create Campaign
             </Command.Item>

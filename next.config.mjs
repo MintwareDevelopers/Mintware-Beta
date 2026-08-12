@@ -49,6 +49,8 @@ const nextConfig = {
       { source: '/swap', destination: '/app/swap', permanent: true },
       { source: '/leaderboard', destination: '/app/leaderboard', permanent: true },
       { source: '/profile', destination: '/app/profile', permanent: true },
+      { source: '/create-campaign', destination: '/app/create-campaign', permanent: true },
+      { source: '/manage/:campaign_id', destination: '/app/manage/:campaign_id', permanent: true },
     ]
   },
 
