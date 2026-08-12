@@ -36,12 +36,12 @@ export function MwFooter() {
           <Star className="w-5 h-5 text-atx-acid" />
           <b className="text-[15px] tracking-[0.06em]">MINTWARE</b>
         </Link>
-        <div className="flex gap-5 font-atx-mono text-[10px] uppercase tracking-[0.1em] flex-wrap">
+        <div className="flex gap-x-5 gap-y-0 font-atx-mono text-[10px] uppercase tracking-[0.1em] flex-wrap">
           {FOOTER_LINKS.map((l) => (
             <a
               key={l.label}
               href={l.href}
-              className="text-atx-bone/60 no-underline hover:text-atx-bone"
+              className="text-atx-bone/60 no-underline hover:text-atx-bone inline-flex items-center min-h-[40px]"
               {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
             >
               {l.label}

@@ -44,7 +44,7 @@ export function PageHero({
           </div>
         )}
         <h1
-          className={`font-atx-display font-bold mt-4 ${compact ? 'tracking-[-0.02em] leading-[0.99] text-[clamp(32px,4.6vw,54px)] max-w-[17ch] text-wrap-balance' : 'tracking-[-0.03em] leading-[0.98] text-[clamp(38px,6.4vw,86px)] max-w-[16ch]'} ${center ? 'mx-auto' : ''}`}
+          className={`font-atx-display font-bold mt-4 break-words [overflow-wrap:anywhere] ${compact ? 'tracking-[-0.02em] leading-[0.99] text-[clamp(26px,4.6vw,54px)] max-w-[17ch] text-wrap-balance' : 'tracking-[-0.03em] leading-[0.98] text-[clamp(30px,6.4vw,86px)] max-w-[16ch]'} ${center ? 'mx-auto' : ''}`}
         >
           {title}
         </h1>
