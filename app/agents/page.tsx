@@ -155,7 +155,7 @@ export default function AgentsPage() {
               <div className="text-[12px] text-atx-ink/60 leading-relaxed flex-1">{p.desc}</div>
               <div className="bg-atx-bone border border-atx-ink/20 px-[10px] py-[7px] text-[11px] font-atx-mono text-atx-ink/70 whitespace-nowrap overflow-hidden text-ellipsis">{p.install}</div>
               <div className="flex items-center justify-between gap-2">
-                <a href={p.docs} target="_blank" rel="noopener noreferrer" className="text-[12px] font-semibold font-atx-mono uppercase tracking-[0.04em] text-atx-blue no-underline hover:underline">
+                <a href={p.docs} target="_blank" rel="noopener noreferrer" className="text-[12px] font-semibold font-atx-mono uppercase tracking-[0.04em] text-atx-blue no-underline hover:underline inline-flex items-center min-h-[40px]">
                   View docs →
                 </a>
               </div>
@@ -176,7 +176,7 @@ export default function AgentsPage() {
                 Live reputation rankings for registered agents, powered by the Attribution oracle.
               </div>
             </div>
-            <a href="/agents/leaderboard" className="text-[12px] font-semibold font-atx-mono uppercase tracking-[0.04em] text-atx-blue no-underline whitespace-nowrap hover:underline">
+            <a href="/agents/leaderboard" className="text-[12px] font-semibold font-atx-mono uppercase tracking-[0.04em] text-atx-blue no-underline whitespace-nowrap hover:underline inline-flex items-center min-h-[40px]">
               Open full leaderboard →
             </a>
           </div>
@@ -249,7 +249,13 @@ export default function AgentsPage() {
           </div>
           {ACTIONS.map(a => (
             <div key={a.name} className="grid grid-cols-[1fr_1fr_1fr_2fr_auto] gap-3 px-5 py-[14px] items-center border-b border-atx-ink/20 last:border-b-0 max-[700px]:grid-cols-[1fr_2fr_auto]">
-              <span className="font-atx-mono text-[12px] font-semibold text-atx-ink">{a.name}</span>
+              <span className="font-atx-mono text-[12px] font-semibold text-atx-ink">
+                {a.name}
+                <span className="hidden max-[700px]:flex flex-col gap-0.5 mt-1 font-normal tracking-normal text-[10px] text-atx-ink/50">
+                  <span>Eliza · {a.eliza}</span>
+                  <span>MCP · {a.mcp}</span>
+                </span>
+              </span>
               <span className="font-atx-mono text-[11px] text-atx-ink/60 max-[700px]:hidden">{a.eliza}</span>
               <span className="font-atx-mono text-[11px] text-atx-ink/60 max-[700px]:hidden">{a.mcp}</span>
               <span className="text-[12px] text-atx-ink/60 leading-snug">{a.desc}</span>
@@ -286,8 +292,8 @@ export default function AgentsPage() {
             { key: 'CDP_API_KEY_NAME',           desc: 'Coinbase Developer Platform API key name (AgentKit only)', req: true },
             { key: 'CDP_API_KEY_PRIVATE_KEY',    desc: 'Coinbase Developer Platform API key secret (AgentKit only)', req: true },
           ].map(e => (
-            <div key={e.key} className="flex items-center gap-4 px-5 py-3 border-b border-atx-ink/20 last:border-b-0">
-              <span className="font-atx-mono text-[12px] font-semibold text-atx-ink min-w-[220px] shrink-0">{e.key}</span>
+            <div key={e.key} className="flex items-center gap-4 px-5 py-3 border-b border-atx-ink/20 last:border-b-0 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1.5">
+              <span className="font-atx-mono text-[12px] font-semibold text-atx-ink min-w-[220px] shrink-0 max-[560px]:min-w-0 max-[560px]:break-all">{e.key}</span>
               <span className="text-[12px] text-atx-ink/60 flex-1">{e.desc}</span>
               <span className={`font-atx-mono text-[10px] font-bold uppercase tracking-[0.06em] px-[7px] py-[2px] border shrink-0 ${e.req ? 'border-atx-ink/25 text-atx-clay' : 'border-atx-ink/25 text-atx-blue'}`}>
                 {e.req ? 'required' : 'optional'}
