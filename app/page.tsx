@@ -279,7 +279,7 @@ export default function HomePage() {
   const navLink = 'no-underline text-atx-ink/55 hover:text-atx-ink'
 
   return (
-    <div className="font-atx-display bg-atx-bone text-atx-ink min-h-screen [&_*]:rounded-none">
+    <div className="font-atx-display bg-atx-bone text-atx-ink min-h-screen overflow-x-clip [&_*]:rounded-none">
       {/* NAV */}
       <header className="relative sticky top-0 z-20 bg-atx-bone border-b border-atx-ink">
         <div className="mx-auto max-w-[1220px] px-6 h-[56px] flex items-center justify-between">
@@ -320,7 +320,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-[1180px] px-6 pt-[56px] pb-[48px] grid gap-8 justify-items-start">
           <div className="max-w-[680px] grid gap-4">
             <div className={ey}>Onchain contribution should mean something</div>
-            <h1 className="font-bold tracking-[-0.03em] leading-[1.02] text-[clamp(40px,5.8vw,64px)]">
+            <h1 className="font-bold tracking-[-0.03em] leading-[1.02] text-[clamp(30px,7vw,64px)] break-words [overflow-wrap:anywhere]">
               Liquidity as a <span className="text-atx-blue">public good.</span>
             </h1>
             <p className="text-[clamp(17px,1.8vw,21px)] leading-[1.4] text-atx-ink/60 italic max-w-[560px]">
