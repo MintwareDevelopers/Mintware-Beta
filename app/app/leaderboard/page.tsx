@@ -1,24 +1,14 @@
 'use client'
 
 import { MwNav } from '@/components/web2/MwNav'
-import { PageHero } from '@/components/web2/PageHero'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { API, shortAddr } from '@/lib/web2/api'
 import { generateRefCode } from '@/lib/rewards/referral/utils'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 
-// ─── ATX Settlemint tokens ──────────────────────────────────────────────────────
-const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
-const LINE = 'border-atx-ink/20'
-
-function Star({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
-      <path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z" />
-    </svg>
-  )
-}
+// Global reputation leaderboard — design v2 (Privy-esque).
+const LABEL = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Entry {
@@ -37,16 +27,13 @@ const metricVal = (e: Entry, m: Metric) =>
 
 const tierFor = (score = 0) => score >= 800 ? 'Oracle' : score >= 500 ? 'Builder' : score >= 250 ? 'Signal' : 'Ghost'
 const TIER_CHIP: Record<string, string> = {
-  Oracle: 'bg-atx-coral text-atx-ink border-atx-ink',
-  Builder: 'bg-atx-blue text-white border-atx-blue',
-  Signal: 'bg-atx-mesquite text-white border-atx-mesquite',
-  Ghost: 'bg-transparent text-atx-ink/50 border-atx-ink/25',
+  Oracle: 'bg-coral2 text-white border-transparent',
+  Builder: 'bg-peri text-white border-transparent',
+  Signal: 'bg-[rgba(108,108,240,0.12)] text-peri-deep border-[rgba(108,108,240,0.3)]',
+  Ghost: 'bg-transparent text-ink-soft border-hair',
 }
-const TIER_ACCENT: Record<string, string> = {
-  Oracle: 'text-atx-coral', Builder: 'text-atx-blue', Signal: 'text-atx-mesquite', Ghost: 'text-atx-ink/45',
-}
-const PODIUM = ['text-atx-coral', 'text-atx-mesquite', 'text-atx-clay']
-const STRIPE = ['bg-atx-coral', 'bg-atx-mesquite', 'bg-atx-clay']
+const PODIUM = ['text-coral2-deep', 'text-peri-deep', 'text-ink-soft']
+const STRIPE = ['bg-coral2', 'bg-peri', 'bg-ink-soft']
 const fmt = (n: number) => n.toLocaleString()
 
 // The sample board is shown ONLY in preview/dev — real users must never see fabricated rows.
@@ -55,8 +42,6 @@ const SHOW_SAMPLE =
   process.env.NODE_ENV === 'development'
 
 // ─── Demo fallback ─────────────────────────────────────────────────────────────
-// Preview-only sample so the page is populated for demos. Any real board data
-// always takes precedence; a "preview data" marker shows whenever these are in use.
 const DEMO_ENTRIES: Entry[] = [
   { wallet: '0x8a1f4c9b2d3e5a6f7089c1b2d3e4f5a6b7c8d9e0', attribution_score: 892, referral_trade_points: 264 },
   { wallet: '0x2b7d9e0f1a3c4b5d6e7f8091a2b3c4d5e6f70819', attribution_score: 861, referral_trade_points: 96 },
@@ -101,11 +86,6 @@ function LeaderboardContent() {
     setTimeout(() => setLinkCopied(false), 2000)
   }
 
-  // Global reputation board. NOTE: the Attribution worker does not yet expose a
-  // global "top wallets by score" endpoint (its /leaderboard is campaign-scoped,
-  // and campaigns were shelved). Until that endpoint ships, real users see a clean
-  // empty state; preview/dev shows the sample board. Wire the real global endpoint
-  // here when it exists.
   const loadBoard = useCallback(async () => {
     setLoading(true); setEntries([]); setError(false); setSample(false)
     try {
@@ -136,28 +116,33 @@ function LeaderboardContent() {
   const unit = metric === 'score' ? '' : ' refs'
 
   return (
-    <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
+    <div className="bg-white min-h-screen font-atx-display text-ink overflow-x-clip">
       {/* Hero */}
-      <PageHero
-        size="compact"
-        eyebrow={`Attribution · global rankings · ${sample ? 'preview data' : 'live'}`}
-        title={<>REPUTATION, <span className="text-atx-blue">RANKED.</span></>}
-        sub="Every wallet has a history. This is the board — ranked by Attribution score and referral network."
-      />
+      <section className="bg-ground-cool border-b border-hair-soft">
+        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px] text-center">
+          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Attribution · global rankings · {sample ? 'preview data' : 'live'}</div>
+          <h1 className="font-atx-display font-medium text-ink mt-5 tracking-[-0.04em] leading-[1.02] text-[clamp(2rem,5vw,3.4rem)] max-w-[16ch] mx-auto [text-wrap:balance]">
+            Reputation, <span className="text-peri">ranked.</span>
+          </h1>
+          <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.5] mt-5 max-w-[58ch] mx-auto">
+            Every wallet has a history. This is the board — ranked by Attribution score and referral network.
+          </p>
+        </div>
+      </section>
 
       {/* stat band */}
-      <section className="border-b border-atx-ink">
-        <div className="grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr] mw-reveal">
+      <section className="border-b border-hair-soft bg-white">
+        <div className="mx-auto max-w-[1180px] grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr] mw-reveal">
           {[
             ['Ranked wallets', loading ? '—' : String(total).padStart(3, '0'), 'by reputation'],
             ['Top score', loading ? '—' : String(topScore), 'attribution'],
             ['Your rank', me ? `#${me.rank}` : '—', me ? `${me.tier} · ${me.attribution_score || 0}` : loading ? 'loading…' : wallet ? 'not ranked yet' : 'connect'],
             ['Ranked by', metric === 'score' ? 'Attribution' : 'Referrals', 'switch below'],
           ].map(([l, v, sub], i) => (
-            <div key={i} className={`px-7 py-3 max-[560px]:px-4 ${i < 3 ? 'border-r border-atx-ink/20' : ''}`}>
+            <div key={i} className={`px-7 py-4 max-[560px]:px-4 ${i < 3 ? 'border-r border-hair-soft' : ''}`}>
               <div className={`${LABEL} text-[9px] mb-1.5`}>{l}</div>
-              <div className={`font-bold text-[15px] tabular-nums ${i === 1 ? 'text-atx-coral' : i === 2 ? 'text-atx-blue' : ''}`}>{v}</div>
-              <div className="font-atx-mono text-[10px] text-atx-ink/45 mt-0.5 truncate">{sub}</div>
+              <div className={`font-atx-display font-medium text-[15px] tabular-nums ${i === 1 ? 'text-coral2-deep' : i === 2 ? 'text-peri-deep' : 'text-ink'}`}>{v}</div>
+              <div className="text-[10px] text-ink-soft mt-0.5 truncate">{sub}</div>
             </div>
           ))}
         </div>
@@ -165,28 +150,26 @@ function LeaderboardContent() {
 
       {/* Podium */}
       {!loading && top3.length > 0 && (
-        <div className="px-7 pt-7 grid grid-cols-3 gap-[22px] max-[720px]:grid-cols-1 max-[560px]:px-4">
+        <div className="max-w-[1180px] mx-auto px-7 pt-7 grid grid-cols-3 gap-[22px] max-[720px]:grid-cols-1 max-[560px]:px-4">
           {top3.map((r, i) => {
             const lead = i === 0
             return (
-              <div key={r.wallet} className={`flex flex-col border border-atx-ink ${lead ? 'bg-atx-acid text-atx-ink' : 'bg-atx-bone'}`}>
+              <div key={r.wallet} className={`flex flex-col rounded-2xl overflow-hidden border ${lead ? 'border-[rgba(108,108,240,0.3)] bg-[rgba(108,108,240,0.08)]' : 'border-hair bg-white'}`}>
                 {!lead && <div className={`h-[6px] ${STRIPE[i]}`} />}
                 <div className="p-[16px_18px] flex flex-col flex-1">
                   <div className="flex items-center justify-between">
-                    <span className={`font-bold text-[34px] leading-none tabular-nums ${lead ? 'text-atx-ink' : PODIUM[i]}`}>{String(r.rank).padStart(2, '0')}</span>
-                    {lead
-                      ? <span className="font-atx-mono text-[10px] font-bold uppercase tracking-[0.1em] border border-atx-ink px-1.5 py-0.5 flex items-center gap-1.5"><span className="w-[6px] h-[6px] bg-atx-ink inline-block animate-pulse" />Leader</span>
-                      : <Star className={`w-6 h-6 ${PODIUM[i]}`} />}
+                    <span className={`font-atx-display font-medium text-[34px] leading-none tabular-nums ${lead ? 'text-peri-deep' : PODIUM[i]}`}>{String(r.rank).padStart(2, '0')}</span>
+                    {lead && <span className="text-[10px] font-semibold uppercase tracking-[0.1em] rounded-full border border-[rgba(108,108,240,0.3)] text-peri-deep px-2 py-0.5 flex items-center gap-1.5"><span className="w-[6px] h-[6px] rounded-full bg-peri inline-block animate-pulse" />Leader</span>}
                   </div>
                   <div className="mt-3 min-w-0">
-                    <div className="font-bold text-[16px] tracking-tight truncate">
-                      <WalletDisplay address={r.wallet} mono style={{ fontSize: 16, fontWeight: 700 }} />
+                    <div className="font-atx-display font-medium text-[16px] tracking-tight truncate text-ink">
+                      <WalletDisplay address={r.wallet} mono style={{ fontSize: 16, fontWeight: 600 }} />
                     </div>
-                    <div className={`font-atx-mono text-[11px] mt-0.5 ${lead ? 'text-atx-ink/60' : 'text-atx-ink/50'}`}>{shortAddr(r.wallet)} · {r.tier}</div>
+                    <div className="text-[11px] mt-0.5 text-ink-soft">{shortAddr(r.wallet)} · {r.tier}</div>
                   </div>
-                  <div className={`mt-3 pt-3 border-t ${lead ? 'border-atx-ink/25' : LINE} flex items-baseline gap-2`}>
-                    <span className="font-atx-mono text-[26px] font-bold tabular-nums">{fmt(metricVal(r, metric))}</span>
-                    <span className={`font-atx-mono text-[11px] ${lead ? 'text-atx-ink/55' : 'text-atx-ink/45'}`}>{unit.trim() || 'Attribution'}</span>
+                  <div className="mt-3 pt-3 border-t border-hair-soft flex items-baseline gap-2">
+                    <span className="font-atx-display text-[26px] font-medium tabular-nums text-ink">{fmt(metricVal(r, metric))}</span>
+                    <span className="text-[11px] text-ink-soft">{unit.trim() || 'Attribution'}</span>
                   </div>
                 </div>
               </div>
@@ -196,28 +179,28 @@ function LeaderboardContent() {
       )}
 
       {/* Board */}
-      <section className="bg-atx-panel border-t border-atx-ink mt-7 mw-reveal">
+      <section className="bg-ground-cool border-t border-hair-soft mt-7 mw-reveal">
         {/* Metric tabs */}
-        <div className="px-7 pt-7 flex items-center gap-3.5 flex-wrap max-[560px]:px-4">
-          <span className="font-atx-mono text-[14px] border border-atx-ink px-3 py-2 bg-atx-bone">{String(total).padStart(2, '0')}</span>
-          <div className="flex border border-atx-ink bg-atx-bone">
+        <div className="max-w-[1180px] mx-auto px-7 pt-7 flex items-center gap-3.5 flex-wrap max-[560px]:px-4">
+          <span className="font-atx-display text-[14px] font-medium rounded-full border border-hair px-3 py-2 bg-white text-ink tabular-nums">{String(total).padStart(2, '0')}</span>
+          <div className="flex gap-1 rounded-full bg-white border border-hair p-1">
             {TABS.map((t) => (
               <button
                 key={t.k}
                 onClick={() => setMetric(t.k)}
-                className={`font-atx-mono text-[12px] uppercase tracking-[0.1em] px-4 py-2 border-r border-atx-ink last:border-r-0 ${metric === t.k ? 'bg-atx-blue text-white' : 'bg-transparent text-atx-ink'} max-[560px]:px-3`}
+                className={`text-[12px] uppercase tracking-[0.08em] font-semibold rounded-full px-3.5 py-1.5 transition-colors ${metric === t.k ? 'bg-peri text-white' : 'bg-transparent text-ink-mid hover:text-ink'} max-[560px]:px-3`}
               >
                 {t.label}
               </button>
             ))}
           </div>
-          <span className="ml-auto font-atx-mono text-[11px] text-atx-ink/45 max-[560px]:hidden">updates every 5 min</span>
+          <span className="ml-auto text-[11px] text-ink-soft max-[560px]:hidden">updates every 5 min</span>
         </div>
 
         {/* Table */}
-        <div className="px-7 py-7 max-[560px]:px-4">
-          <div className="border border-atx-ink bg-atx-bone">
-            <div className="grid [grid-template-columns:60px_1fr_104px_repeat(2,110px)] max-[820px]:[grid-template-columns:52px_1fr] border-b border-atx-ink bg-atx-panel">
+        <div className="max-w-[1180px] mx-auto px-7 py-7 max-[560px]:px-4">
+          <div className="soft-card overflow-hidden">
+            <div className="grid [grid-template-columns:60px_1fr_104px_repeat(2,110px)] max-[820px]:[grid-template-columns:52px_1fr] border-b border-hair-soft bg-ground-cool">
               {['Rank', 'Wallet', 'Tier', 'Attribution', 'Tree'].map((h, i) => (
                 <div key={h} className={`${LABEL} text-[9px] px-[16px] py-3 ${i >= 3 ? 'text-right max-[820px]:hidden' : ''} ${i === 2 ? 'max-[820px]:hidden' : ''}`}>{h}</div>
               ))}
@@ -225,25 +208,25 @@ function LeaderboardContent() {
 
             {loading ? (
               <div className="p-4 flex flex-col gap-2">
-                {[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-11 border border-atx-ink/15 bg-atx-panel" />)}
+                {[0, 1, 2, 3, 4].map((i) => <div key={i} className="h-11 rounded-xl bg-ground-cool mw-shimmer" />)}
               </div>
             ) : error ? (
-              <div className="px-5 py-14 text-center font-atx-mono text-[14px] text-atx-ink/55">
+              <div className="px-5 py-14 text-center text-[14px] text-ink-mid">
                 Couldn’t load the rankings.
-                <span className="block mt-1.5 text-[12px] text-atx-ink/45">The Attribution service didn’t respond.</span>
-                <button onClick={loadBoard} className="mt-3 font-atx-mono text-[12px] uppercase tracking-[0.08em] px-3.5 py-2 border border-atx-blue text-atx-blue hover:bg-atx-blue hover:text-white transition-colors">Retry</button>
+                <span className="block mt-1.5 text-[12px] text-ink-soft">The Attribution service didn’t respond.</span>
+                <button onClick={loadBoard} className="mt-3 glass-pill glass-pill-sm">Retry</button>
               </div>
             ) : ranked.length === 0 ? (
-              <div className="px-5 py-14 text-center font-atx-mono text-[14px] text-atx-ink/55">
+              <div className="px-5 py-14 text-center text-[14px] text-ink-mid">
                 The global reputation board is coming soon.
-                <span className="block mt-1.5 text-[12px] text-atx-ink/45">Build your Attribution score and referral tree — you’ll be ranked the moment it’s live.</span>
+                <span className="block mt-1.5 text-[12px] text-ink-soft">Build your Attribution score and referral tree — you’ll be ranked the moment it’s live.</span>
               </div>
             ) : (
               <>
                 {top10.map((r) => <Row key={r.wallet} r={r} metric={metric} isMe={!!(wallet && r.wallet === wallet)} />)}
                 {showUser && me && (
                   <>
-                    <div className="text-center font-atx-mono text-[11px] tracking-[0.3em] text-atx-ink/35 py-2 border-b border-atx-ink/10">· · ·</div>
+                    <div className="text-center text-[11px] tracking-[0.3em] text-ink-soft py-2 border-b border-hair-soft">· · ·</div>
                     <Row r={me} metric={metric} isMe />
                   </>
                 )}
@@ -253,17 +236,17 @@ function LeaderboardContent() {
 
           {/* Your rank + invite */}
           {me && (
-            <div className="mt-[22px] border border-atx-blue bg-atx-blue/[0.06] p-[14px_18px] flex items-center gap-4 flex-wrap">
-              <span className="font-bold text-[26px] tabular-nums text-atx-blue">#{me.rank}</span>
+            <div className="mt-[22px] rounded-2xl border border-[rgba(108,108,240,0.3)] bg-[rgba(108,108,240,0.07)] p-[14px_18px] flex items-center gap-4 flex-wrap">
+              <span className="font-atx-display font-medium text-[26px] tabular-nums text-peri-deep">#{me.rank}</span>
               <div className="min-w-0">
-                <div className="font-bold text-[15px] truncate"><WalletDisplay address={me.wallet} mono style={{ fontSize: 15, fontWeight: 700 }} /> <span className="font-atx-mono text-[11px] text-atx-ink/50">· {me.tier}</span></div>
-                <div className="font-atx-mono text-[11px] text-atx-ink/55">
+                <div className="font-atx-display font-medium text-[15px] truncate text-ink"><WalletDisplay address={me.wallet} mono style={{ fontSize: 15, fontWeight: 600 }} /> <span className="text-[11px] text-ink-soft">· {me.tier}</span></div>
+                <div className="text-[11px] text-ink-mid">
                   {fmt(metricVal(me, metric))}{unit}
                   {ranked[me.rank - 2] && ` · ${fmt(metricVal(ranked[me.rank - 2], metric) - metricVal(me, metric))}${unit} to rank #${me.rank - 1}`}
                 </div>
               </div>
               {refLink && (
-                <button onClick={copyLink} className="ml-auto font-semibold text-[13px] font-atx-mono px-4 py-2.5 border border-atx-blue bg-atx-blue text-white uppercase tracking-[0.04em]">
+                <button onClick={copyLink} className="ml-auto glass-pill glass-pill-sm">
                   {linkCopied ? 'Copied ✓' : 'Copy invite link'}
                 </button>
               )}
@@ -272,42 +255,40 @@ function LeaderboardContent() {
 
           {/* Not connected / not ranked CTA */}
           {!loading && !me && (
-            <div className="mt-[22px] border border-atx-ink bg-atx-bone p-[14px_18px] flex items-center gap-4 flex-wrap">
-              <Star className="w-5 h-5 text-atx-coral shrink-0" />
+            <div className="mt-[22px] soft-card p-[14px_18px] flex items-center gap-4 flex-wrap">
               <div className="min-w-0">
-                <div className="font-bold text-[15px]">{wallet ? 'You’re not on the board yet.' : 'Connect to see your rank.'}</div>
-                <div className="font-atx-mono text-[11px] text-atx-ink/55">Your Attribution score and referral tree earn your place.</div>
+                <div className="font-atx-display font-medium text-[15px] text-ink">{wallet ? 'You’re not on the board yet.' : 'Connect to see your rank.'}</div>
+                <div className="text-[11px] text-ink-mid">Your Attribution score and referral tree earn your place.</div>
               </div>
               {refLink && (
-                <button onClick={copyLink} className="ml-auto font-semibold text-[13px] font-atx-mono px-4 py-2.5 border border-atx-blue bg-atx-blue text-white uppercase tracking-[0.04em]">
+                <button onClick={copyLink} className="ml-auto glass-pill glass-pill-sm">
                   {linkCopied ? 'Copied ✓' : 'Copy invite link'}
                 </button>
               )}
             </div>
           )}
 
-          <div className="font-atx-mono text-[10px] uppercase tracking-[0.14em] text-atx-ink/40 flex items-center gap-1.5 px-1 mt-6">
-            <Star className="w-3 h-3" /> Powered by Attribution
+          <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-ink-soft flex items-center gap-1.5 px-1 mt-6">
+            ✴ Powered by Attribution
           </div>
         </div>
       </section>
 
       {/* How you climb — the "why", below the board */}
-      <section className="border-t border-atx-ink bg-atx-blue/[0.05] px-7 py-7 max-[560px]:px-4">
-        <span className={`${LABEL} block mb-4`}>How you climb — ranks are earned by contribution</span>
-        <div className="grid grid-cols-2 border border-atx-ink max-[720px]:grid-cols-1">
-          {[
-            { a: 'text-atx-blue', t: 'Attribution', d: 'Your whole on-chain history, scored across six signals — volume, trading, holding, liquidity, governance, sharing. It carries across 100+ chains.' },
-            { a: 'text-atx-mesquite', t: 'Referral tree', d: 'The wallets you bring on-chain, weighted by how real and active they are. Quality over quantity.' },
-          ].map((c, i) => (
-            <div key={i} className={`p-[16px_18px] ${i < 1 ? 'border-r border-atx-ink/20 max-[720px]:border-r-0 max-[720px]:border-b max-[720px]:border-atx-ink/20' : ''}`}>
-              <div className="flex items-center gap-2 mb-2">
-                <Star className={`w-4 h-4 ${c.a}`} />
-                <span className="font-bold text-[15px] tracking-tight">{c.t}</span>
+      <section className="border-t border-hair-soft bg-white">
+        <div className="max-w-[1180px] mx-auto px-7 py-[52px] max-[560px]:px-4">
+          <span className={`${LABEL} block mb-4`}>How you climb — ranks are earned by contribution</span>
+          <div className="grid grid-cols-2 gap-3 max-[720px]:grid-cols-1">
+            {[
+              { t: 'Attribution', d: 'Your whole on-chain history, scored across six signals — volume, trading, holding, liquidity, governance, sharing. It carries across 100+ chains.' },
+              { t: 'Referral tree', d: 'The wallets you bring on-chain, weighted by how real and active they are. Quality over quantity.' },
+            ].map((c) => (
+              <div key={c.t} className="soft-card p-[16px_18px]">
+                <span className="font-atx-display font-medium text-[15px] tracking-tight text-ink">{c.t}</span>
+                <p className="text-ink-mid text-[13px] leading-[1.5] mt-2">{c.d}</p>
               </div>
-              <p className="text-atx-ink/60 text-[13px] leading-[1.5]">{c.d}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
     </div>
@@ -316,35 +297,33 @@ function LeaderboardContent() {
 
 function Row({ r, metric, isMe }: { r: Entry & { rank: number; tier: string }; metric: Metric; isMe: boolean }) {
   const isTop = r.rank <= 3
-  const rankCls = r.rank === 1 ? 'text-atx-coral' : r.rank === 2 ? 'text-atx-mesquite' : r.rank === 3 ? 'text-atx-clay' : 'text-atx-ink/45'
-  const col = (k: Metric) => (metric === k ? 'font-bold' : 'text-atx-ink/70')
+  const rankCls = r.rank === 1 ? 'text-coral2-deep' : r.rank === 2 ? 'text-peri-deep' : r.rank === 3 ? 'text-ink-soft' : 'text-ink-soft'
+  const col = (k: Metric) => (metric === k ? 'font-medium text-ink' : 'text-ink-mid')
   const tree = (r.referral_trade_points || 0)
   return (
-    <div className={`grid [grid-template-columns:60px_1fr_104px_repeat(2,110px)] max-[820px]:[grid-template-columns:52px_1fr] items-center border-b border-atx-ink/20 last:border-b-0 ${isMe ? 'bg-atx-blue/[0.07] border-l-2 border-l-atx-blue' : ''}`}>
-      <div className={`px-[16px] py-3.5 font-atx-mono tabular-nums ${isTop ? `text-[18px] font-bold ${rankCls}` : `text-[15px] ${rankCls}`}`}>{String(r.rank).padStart(2, '0')}</div>
+    <div className={`grid [grid-template-columns:60px_1fr_104px_repeat(2,110px)] max-[820px]:[grid-template-columns:52px_1fr] items-center border-b border-hair-soft last:border-b-0 ${isMe ? 'bg-[rgba(108,108,240,0.07)]' : ''}`} style={isMe ? { borderLeft: '2px solid var(--color-peri)' } : undefined}>
+      <div className={`px-[16px] py-3.5 tabular-nums ${isTop ? `text-[18px] font-atx-display font-medium ${rankCls}` : `text-[15px] ${rankCls}`}`}>{String(r.rank).padStart(2, '0')}</div>
       <div className="px-[16px] py-3.5 min-w-0 flex items-center gap-2.5">
-        <Star className={`w-4 h-4 shrink-0 ${TIER_ACCENT[r.tier]}`} />
+        <span className={`w-[7px] h-[7px] rounded-full shrink-0 inline-block ${r.tier === 'Ghost' ? 'bg-ink-soft' : 'bg-peri'}`} />
         <div className="min-w-0">
-          <div className="font-bold text-[14px] tracking-tight truncate flex items-center gap-2">
-            <WalletDisplay address={r.wallet} mono style={{ fontSize: 14, fontWeight: 700 }} />
-            {isMe && <span className="font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-blue border border-atx-blue px-1.5 py-0.5">you</span>}
+          <div className="font-atx-display font-medium text-[14px] tracking-tight truncate flex items-center gap-2 text-ink">
+            <WalletDisplay address={r.wallet} mono style={{ fontSize: 14, fontWeight: 600 }} />
+            {isMe && <span className="text-[9px] uppercase tracking-[0.1em] font-semibold text-peri-deep rounded-full border border-[rgba(108,108,240,0.3)] px-1.5 py-0.5">you</span>}
           </div>
-          <div className="font-atx-mono text-[11px] text-atx-ink/45 truncate">{shortAddr(r.wallet)}</div>
+          <div className="font-mono text-[11px] text-ink-soft truncate">{shortAddr(r.wallet)}</div>
         </div>
       </div>
       <div className="px-[16px] py-3.5 max-[820px]:hidden">
-        <span className={`font-atx-mono text-[10px] uppercase tracking-[0.06em] px-2 py-1 border ${TIER_CHIP[r.tier]}`}>{r.tier}</span>
+        <span className={`text-[10px] uppercase tracking-[0.06em] font-semibold px-2 py-1 rounded-full border ${TIER_CHIP[r.tier]}`}>{r.tier}</span>
       </div>
-      <div className={`px-[16px] py-3.5 text-right font-atx-mono text-[15px] tabular-nums max-[820px]:hidden ${col('score')}`}>{r.attribution_score || 0}</div>
-      <div className={`px-[16px] py-3.5 text-right font-atx-mono text-[15px] tabular-nums max-[820px]:hidden ${col('tree')}`}>{tree}</div>
+      <div className={`px-[16px] py-3.5 text-right text-[15px] tabular-nums max-[820px]:hidden ${col('score')}`}>{r.attribution_score || 0}</div>
+      <div className={`px-[16px] py-3.5 text-right text-[15px] tabular-nums max-[820px]:hidden ${col('tree')}`}>{tree}</div>
     </div>
   )
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function LeaderboardPage() {
-  // View-public: rankings are social proof and shareable. LeaderboardContent
-  // handles the disconnected state ("your rank" prompts connect).
   return (
     <>
       <MwNav />
