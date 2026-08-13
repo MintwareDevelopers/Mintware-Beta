@@ -41,10 +41,12 @@ async fn authorize(State(store): State<AppState>, Json(req): Json<AuthorizeReque
         Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "invalid_amount" }))).into_response(),
     };
     let now = now_secs();
+    // Canonicalize the user key to lowercase 0x-hex so it matches what the refresher writes (addr_key).
+    let user = req.user.trim().to_lowercase();
     // Rain normally supplies the hold/auth id; mint a deterministic fallback if absent.
-    let hold_id = req.hold_id.clone().unwrap_or_else(|| format!("edge:{}:{}:{}", req.user, amount, now));
+    let hold_id = req.hold_id.clone().unwrap_or_else(|| format!("edge:{}:{}:{}", user, amount, now));
 
-    let out = store.try_authorize(&hold_id, &req.user, amount, now);
+    let out = store.try_authorize(&hold_id, &user, amount, now);
     (StatusCode::OK, Json(AuthorizeResponse::from_decision(out.decision, out.hold_id))).into_response()
 }
 

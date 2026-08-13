@@ -18,9 +18,14 @@ path = "src/main.rs"
 [dependencies]
 # The decision core (nav/ledger/store) stays dependency-free; the server layer adds only the essentials.
 axum = "0.7"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "time"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Chain reader (increment 4): ABI encode/decode via alloy-sol-types; plain JSON-RPC over reqwest
+# (rustls, no OpenSSL) — the light path, no full provider stack.
+alloy-sol-types = "0.8"
+alloy-primitives = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [dev-dependencies]
 # Exercise the axum router in-process (no socket) for the server wiring tests.

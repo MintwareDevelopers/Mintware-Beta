@@ -8,8 +8,10 @@
 //! The core never moves funds; it only reserves spending capacity (a hold). Settlement is the live
 //! on-chain `MintwarePaymentGateway`, driven later by the relayer.
 
+pub mod chain;
 pub mod ledger;
 pub mod nav;
+pub mod refresher;
 pub mod server;
 pub mod store;
 pub mod types;

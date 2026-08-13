@@ -4,9 +4,12 @@
 
 use std::env;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use alloy_primitives::Address;
+use edge_auth::chain::EthReader;
 use edge_auth::nav::NavSnapshot;
+use edge_auth::refresher::run_refresher;
 use edge_auth::server::app;
 use edge_auth::store::MemStore;
 
@@ -32,6 +35,26 @@ async fn main() {
         observed_at_secs: now,
     };
     let store = Arc::new(MemStore::new(nav, max_nav_age, hold_ttl));
+
+    // Increment 4: spawn the on-chain NAV/shares refresher when configured. Without it, the store
+    // stays empty-but-fresh and every charge declines (insufficient equity) — the service is up, just
+    // not fed. EDGE_USERS is a comma-separated allowlist of addresses to track shares for.
+    match (env::var("EDGE_RPC_URL"), env::var("EDGE_VAULT_ADDRESS")) {
+        (Ok(rpc), Ok(vault_str)) => match vault_str.parse::<Address>() {
+            Ok(vault) => {
+                let users: Vec<Address> = env::var("EDGE_USERS")
+                    .unwrap_or_default()
+                    .split(',')
+                    .filter_map(|s| s.trim().parse().ok())
+                    .collect();
+                let interval = Duration::from_secs(env_u64("EDGE_NAV_REFRESH_SECS", 15));
+                eprintln!("edge-auth: NAV refresher polling {vault} every {}s, tracking {} user(s)", interval.as_secs(), users.len());
+                tokio::spawn(run_refresher(store.clone(), EthReader::new(rpc, vault), users, interval));
+            }
+            Err(_) => eprintln!("edge-auth: EDGE_VAULT_ADDRESS is not a valid address — refresher DISABLED"),
+        },
+        _ => eprintln!("edge-auth: NAV refresher DISABLED (set EDGE_RPC_URL + EDGE_VAULT_ADDRESS to enable)"),
+    }
 
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await.expect("bind");
