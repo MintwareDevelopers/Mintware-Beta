@@ -46,10 +46,11 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
           style={{
             position: 'fixed',
             bottom: 0, left: 0, right: 0,
-            background: 'var(--color-atx-panel)',
-            borderRadius: 0,
-            border: '1px solid var(--color-atx-ink)',
+            background: '#fff',
+            borderRadius: 'var(--radius-panel) var(--radius-panel) 0 0',
+            border: '1px solid var(--color-hair)',
             borderBottom: 'none',
+            boxShadow: 'var(--shadow-lift)',
             zIndex: 1000,
             padding: '28px 24px 40px',
             maxWidth: 520,
@@ -60,16 +61,16 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
         >
           {/* Drag handle */}
           <div style={{
-            width: 36, height: 4,
-            background: 'var(--color-atx-ink)',
-            opacity: 0.2,
-            borderRadius: 0,
+            width: 40, height: 4,
+            background: 'var(--color-hair)',
+            borderRadius: 999,
             margin: '0 auto 22px',
           }} />
 
           <Drawer.Title style={{
-            fontSize: 18, fontWeight: 700,
-            color: 'var(--color-atx-ink)',
+            fontSize: 18, fontWeight: 500,
+            color: 'var(--color-ink)',
+            letterSpacing: '-0.02em',
             marginBottom: 6,
             textAlign: 'center',
             fontFamily: 'var(--font-space-grotesk), sans-serif',
@@ -79,7 +80,7 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
 
           <Drawer.Description style={{
             fontSize: 13,
-            color: 'rgba(17,17,17,0.55)',
+            color: 'var(--color-ink-mid)',
             textAlign: 'center',
             marginBottom: 20,
             fontFamily: 'var(--font-space-grotesk), sans-serif',
@@ -90,19 +91,19 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
           {/* Score badge */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            background: 'var(--color-atx-bone)',
-            border: '1px solid var(--color-atx-ink)',
-            borderRadius: 0, padding: '14px 20px', marginBottom: 20,
+            background: 'var(--color-ground-cool)',
+            border: '1px solid var(--color-hair)',
+            borderRadius: 16, padding: '14px 20px', marginBottom: 20,
           }}>
             <div>
-              <div style={{ fontSize: 10, color: 'rgba(17,17,17,0.55)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', fontFamily: 'var(--font-jetbrains), monospace' }}>Sharing score</div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-atx-coral)', fontFamily: 'var(--font-jetbrains), monospace', lineHeight: 1 }}>
+              <div style={{ fontSize: 10, color: 'var(--color-ink-soft)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Sharing score</div>
+              <div style={{ fontSize: 28, fontWeight: 500, color: 'var(--color-coral2-deep)', fontFamily: 'var(--font-space-grotesk), sans-serif', lineHeight: 1 }}>
                 {stats.sharing_score}<span style={{ fontSize: 14, opacity: 0.5 }}>/125</span>
               </div>
             </div>
-            <div style={{ flex: 1, height: 8, background: 'transparent', border: '1px solid var(--color-atx-ink)', borderRadius: 0, overflow: 'hidden', position: 'relative' }}>
+            <div style={{ flex: 1, height: 8, background: '#fff', border: '1px solid var(--color-hair)', borderRadius: 999, overflow: 'hidden', position: 'relative' }}>
               <div style={{
-                height: '100%', background: 'var(--color-atx-coral)', borderRadius: 0,
+                height: '100%', background: 'var(--color-coral2)', borderRadius: 999,
                 width: pct + '%', transition: 'width 0.6s ease',
               }} />
             </div>
@@ -119,9 +120,9 @@ export function ReferralSheet({ stats, trigger }: ReferralSheetProps) {
             onClick={dismiss}
             style={{
               width: '100%', padding: 10, background: 'transparent',
-              color: 'rgba(17,17,17,0.55)', border: 'none',
-              fontSize: 12, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em',
-              fontFamily: 'var(--font-jetbrains), monospace',
+              color: 'var(--color-ink-soft)', border: 'none',
+              fontSize: 12, cursor: 'pointer', fontWeight: 500,
+              fontFamily: 'var(--font-space-grotesk), sans-serif',
             }}
           >
             Maybe Later
