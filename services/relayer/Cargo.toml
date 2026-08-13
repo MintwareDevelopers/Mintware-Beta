@@ -1,0 +1,20 @@
+# Standalone workspace (same reason as services/edge-auth): the repo-root Cargo.toml `programs/*`
+# Anchor members were removed, so this crate builds independently.
+[workspace]
+
+[package]
+name = "relayer"
+version = "0.1.0"
+edition = "2021"
+description = "YPN settlement relayer — encodes the Gateway settleSpend call the edge's holds settle under. Increment 6a: the settlement calldata core (offline-provable). On-chain submission + Rain webhooks are the deploy-gated follow-up."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# ABI encode/decode of settleSpend + its nested structs. Submission (tx build/sign/send) is 6b.
+alloy-sol-types = "0.8"
+alloy-primitives = "0.8"
+
+[lints.rust]
+unsafe_code = "forbid"
