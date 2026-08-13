@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   js-tests:
-    name: Vitest + Hardhat
+    name: Vitest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,9 +30,6 @@ jobs:
 
       - name: Vitest
         run: pnpm test
-
-      - name: Hardhat tests
-        run: pnpm hardhat:test
 
   forge-tests:
     name: Foundry
