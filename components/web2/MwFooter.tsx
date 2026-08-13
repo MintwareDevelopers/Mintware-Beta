@@ -17,38 +17,27 @@ const FOOTER_LINKS = [
   { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
 ]
 
-function Star({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
-      />
-    </svg>
-  )
-}
-
 export function MwFooter() {
   return (
-    <footer className="bg-atx-ink text-atx-bone font-atx-display [&_*]:rounded-none">
-      <div className="mx-auto max-w-[1180px] px-6 py-[30px] flex items-center justify-between flex-wrap gap-4">
-        <Link href="/" className="flex items-center gap-2.5 no-underline text-atx-bone">
-          <Star className="w-5 h-5 text-atx-acid" />
-          <b className="text-[15px] tracking-[0.06em]">MINTWARE</b>
+    <footer className="bg-ground-cool border-t border-hair-soft">
+      <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-9 flex items-center justify-between flex-wrap gap-5">
+        <Link href="/" className="flex items-center gap-2.5 no-underline text-ink">
+          <span className="w-[22px] h-[22px] rounded-[7px] grid place-items-center text-white text-[12px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 3px 10px rgba(108,108,240,0.35)' }}>✴</span>
+          <b className="font-atx-display text-[16px] font-bold tracking-[-0.02em]">Mintware</b>
         </Link>
-        <div className="flex gap-x-5 gap-y-0 font-atx-mono text-[10px] uppercase tracking-[0.1em] flex-wrap">
+        <div className="flex gap-x-6 gap-y-1 text-[13px] font-medium flex-wrap">
           {FOOTER_LINKS.map((l) => (
             <a
               key={l.label}
               href={l.href}
-              className="text-atx-bone/60 no-underline hover:text-atx-bone inline-flex items-center min-h-[40px]"
+              className="text-ink-mid no-underline hover:text-ink inline-flex items-center min-h-[36px]"
               {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
             >
               {l.label}
             </a>
           ))}
         </div>
-        <div className="font-atx-mono text-[10px] text-atx-bone/45">© 2026 Mintware ✴ Liquidity should be a public good</div>
+        <div className="text-[12px] text-ink-soft">© 2026 Mintware · Liquidity should be a public good</div>
       </div>
     </footer>
   )
