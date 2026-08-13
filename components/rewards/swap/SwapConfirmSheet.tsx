@@ -38,8 +38,8 @@ interface SwapConfirmSheetProps {
 function Row({ label, value, valueClass = '' }: { label: string; value: React.ReactNode; valueClass?: string }) {
   return (
     <div className="flex items-center justify-between py-[5px]">
-      <span className="text-[12px] text-atx-ink/60 font-atx-display">{label}</span>
-      <span className={`text-[12px] font-semibold text-atx-ink font-atx-mono ${valueClass}`}>{value}</span>
+      <span className="text-[12px] text-ink-mid">{label}</span>
+      <span className={`text-[12px] font-semibold text-ink font-mono ${valueClass}`}>{value}</span>
     </div>
   )
 }
@@ -65,22 +65,22 @@ export function SwapConfirmSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[1000] bg-atx-ink/40 backdrop-blur-[6px] flex items-center justify-center p-[16px]"
+      className="fixed inset-0 z-[1000] bg-ink/40 backdrop-blur-[6px] flex items-center justify-center p-[16px]"
       onClick={(e) => { if (e.target === e.currentTarget && !isSwapping) onCancel() }}
     >
-      <div className="bg-atx-panel border border-atx-ink w-full max-w-[380px] shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] overflow-hidden">
+      <div className="bg-white border border-hair rounded-[var(--radius-panel)] w-full max-w-[380px] shadow-lift overflow-hidden">
 
         {/* Header */}
-        <div className="px-[24px] pt-[24px] pb-[18px] border-b border-atx-ink/25">
-          <div className="text-[17px] font-bold text-atx-ink font-atx-display leading-none mb-[4px]">Review swap</div>
-          <div className="text-[12px] text-atx-ink/60 font-atx-display">Check the details before your wallet opens</div>
+        <div className="px-[24px] pt-[24px] pb-[18px] border-b border-hair-soft">
+          <div className="text-[17px] font-medium text-ink font-atx-display leading-none mb-[4px] tracking-[-0.01em]">Review swap</div>
+          <div className="text-[12px] text-ink-mid">Check the details before your wallet opens</div>
         </div>
 
         {/* Token flow */}
         <div className="px-[24px] pt-[20px] pb-[4px]">
 
           {/* Sell row */}
-          <div className="flex items-center justify-between bg-atx-bone border border-atx-ink/25 px-[14px] py-[12px] mb-[8px]">
+          <div className="flex items-center justify-between rounded-xl bg-ground-cool border border-hair px-[14px] py-[12px] mb-[8px]">
             <div className="flex items-center gap-[8px]">
               {sellToken.logoURI && (
                 <img
@@ -91,20 +91,20 @@ export function SwapConfirmSheet({
                 />
               )}
               <div>
-                <div className="text-[11px] text-atx-ink/55 font-atx-mono uppercase tracking-[0.08em] leading-none mb-[2px]">You send</div>
-                <div className="text-[15px] font-bold text-atx-ink font-atx-mono leading-none">{sellDisplay} {sellToken.symbol}</div>
+                <div className="text-[11px] text-ink-soft uppercase tracking-[0.08em] leading-none mb-[2px]">You send</div>
+                <div className="text-[15px] font-semibold text-ink font-mono leading-none">{sellDisplay} {sellToken.symbol}</div>
               </div>
             </div>
             {sellAmountUSD && (
-              <span className="text-[12px] text-atx-ink/60 font-atx-mono">${parseFloat(sellAmountUSD).toFixed(2)}</span>
+              <span className="text-[12px] text-ink-mid font-mono">${parseFloat(sellAmountUSD).toFixed(2)}</span>
             )}
           </div>
 
           {/* Arrow */}
-          <div className="flex justify-center text-atx-ink/45 text-[16px] my-[2px]">↓</div>
+          <div className="flex justify-center text-ink-soft text-[16px] my-[2px]">↓</div>
 
           {/* Buy row */}
-          <div className="flex items-center justify-between bg-atx-bone border border-atx-ink/25 px-[14px] py-[12px] mt-[8px]">
+          <div className="flex items-center justify-between rounded-xl bg-ground-cool border border-hair px-[14px] py-[12px] mt-[8px]">
             <div className="flex items-center gap-[8px]">
               {buyToken.logoURI && (
                 <img
@@ -115,8 +115,8 @@ export function SwapConfirmSheet({
                 />
               )}
               <div>
-                <div className="text-[11px] text-atx-ink/55 font-atx-mono uppercase tracking-[0.08em] leading-none mb-[2px]">You receive (estimate)</div>
-                <div className="text-[15px] font-bold text-atx-mesquite font-atx-mono leading-none">~{buyDisplay} {buyToken.symbol}</div>
+                <div className="text-[11px] text-ink-soft uppercase tracking-[0.08em] leading-none mb-[2px]">You receive (estimate)</div>
+                <div className="text-[15px] font-semibold text-coral2-deep font-mono leading-none">~{buyDisplay} {buyToken.symbol}</div>
               </div>
             </div>
           </div>
@@ -124,8 +124,8 @@ export function SwapConfirmSheet({
 
         {/* Detail rows */}
         <div className="px-[24px] pt-[16px] pb-[4px] flex flex-col">
-          <div className="border-t border-atx-ink/25 pt-[12px]">
-            {chainName && <Row label="Network" value={chainName} valueClass="font-atx-mono" />}
+          <div className="border-t border-hair-soft pt-[12px]">
+            {chainName && <Row label="Network" value={chainName} valueClass="font-mono" />}
             <Row
               label="Network fee (estimate)"
               value={
@@ -144,33 +144,33 @@ export function SwapConfirmSheet({
               <Row
                 label="Price impact"
                 value={`${priceImpact.toFixed(2)}%`}
-                valueClass={priceImpact > 2 ? 'text-atx-clay' : ''}
+                valueClass={priceImpact > 2 ? 'text-[#D14343]' : ''}
               />
             )}
-            <Row label="Route" value="LI.FI aggregator" valueClass="font-atx-mono text-atx-ink/60 font-medium" />
+            <Row label="Route" value="LI.FI aggregator" valueClass="font-mono text-ink-mid font-medium" />
           </div>
         </div>
 
         {/* Warnings */}
         {highImpact && (
-          <div className="mx-[24px] mt-[12px] px-[12px] py-[10px] bg-atx-bone border border-atx-clay">
-            <p className="font-atx-display text-[12px] text-atx-clay m-0 leading-[1.45]">
+          <div className="mx-[24px] mt-[12px] px-[12px] py-[10px] rounded-xl bg-[rgba(209,67,67,0.05)] border border-[rgba(209,67,67,0.3)]">
+            <p className="text-[12px] text-[#D14343] m-0 leading-[1.45]">
               High price impact ({priceImpact?.toFixed(1)}%) — you may receive significantly less than expected.
             </p>
           </div>
         )}
 
         {/* Plain-language explanation */}
-        <div className="mx-[24px] mt-[12px] px-[12px] py-[10px] bg-atx-bone border border-atx-ink/20">
-          <p className="font-atx-display text-[11px] text-atx-ink/60 leading-[1.55] m-0">
+        <div className="mx-[24px] mt-[12px] px-[12px] py-[10px] rounded-xl bg-ground-cool border border-hair">
+          <p className="text-[11px] text-ink-mid leading-[1.55] m-0">
             Your wallet will open to confirm this swap. The amounts shown are estimates —
             final amounts may differ slightly due to market movement. You can cancel at any time.
           </p>
         </div>
 
         {showWalletHint && (
-          <div className="mx-[24px] mt-[12px] px-[12px] py-[10px] bg-atx-bone border border-atx-clay">
-            <p className="font-atx-display text-[11px] text-atx-clay leading-[1.55] m-0">
+          <div className="mx-[24px] mt-[12px] px-[12px] py-[10px] rounded-xl bg-[rgba(209,67,67,0.05)] border border-[rgba(209,67,67,0.3)]">
+            <p className="text-[11px] text-[#D14343] leading-[1.55] m-0">
               Still waiting? Check your wallet app or browser extension. If you do not see a prompt,
               open your wallet manually and look for a pending confirmation request.
             </p>
@@ -182,17 +182,17 @@ export function SwapConfirmSheet({
           <button
             onClick={onConfirm}
             disabled={isSwapping}
-            className={`w-full py-[14px] border font-atx-mono text-[15px] font-bold uppercase tracking-[0.05em] cursor-pointer disabled:cursor-not-allowed transition-all duration-150 ${
+            className={`w-full py-[14px] rounded-full text-[15px] font-semibold cursor-pointer disabled:cursor-not-allowed transition-all duration-150 ${
               isSwapping
-                ? 'bg-atx-bone border-atx-ink/20 text-atx-ink/40'
-                : 'bg-atx-blue border-atx-ink text-white hover:opacity-90'
+                ? 'bg-ground-cool text-ink-soft'
+                : 'bg-peri text-white hover:bg-peri-deep'
             }`}
           >
             {isSwapping ? 'Waiting for wallet…' : 'Open wallet to confirm →'}
           </button>
           <button
             onClick={onCancel}
-            className="w-full py-[10px] border border-atx-ink bg-transparent font-atx-mono text-[13px] uppercase tracking-[0.05em] text-atx-ink cursor-pointer hover:bg-atx-bone transition-all duration-150"
+            className="w-full py-[10px] rounded-full border border-hair bg-white text-[13px] font-medium text-ink-mid cursor-pointer hover:text-ink hover:border-[rgba(108,108,240,0.4)] transition-all duration-150"
           >
             {isSwapping ? 'Close this panel' : 'Cancel'}
           </button>
