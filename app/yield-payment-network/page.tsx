@@ -8,7 +8,7 @@ import { YieldCalculatorWidget } from '@/components/marketing/ypn/YieldCalculato
 import { CircleTechBadge } from '@/components/marketing/ypn/CircleTechBadge'
 import { CoreMechanismSection } from '@/components/marketing/ypn/CoreMechanismSection'
 import { AppConversionCTA } from '@/components/marketing/ypn/AppConversionCTA'
-import { YPN_INTRO, YPN_ETHOS } from '@/constants/ypn-landing'
+import { YPN_ETHOS } from '@/constants/ypn-landing'
 
 // =============================================================================
 // /yield-payment-network — PUBLIC marketing surface for the Mintware Yield
@@ -25,28 +25,11 @@ export const metadata: Metadata = {
     'Fund growth with yield, not your treasury. Park single-sided USDC in a Unified Liquidity Vault, keep your principal intact, and route the yield into attributed user acquisition and campaign payouts. In testing ahead of launch.',
 }
 
-const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
-
 export default function YieldPaymentNetworkPage() {
   return (
     <div className="min-h-screen font-atx-display bg-atx-bone text-atx-ink overflow-x-clip [&_*]:rounded-none">
       <MarketingNav active="ypn" />
       <YpnHero />
-
-      {/* Intro */}
-      <section className="border-b border-atx-ink">
-        <div className="mx-auto max-w-[1180px] px-6 py-[54px] max-[800px]:px-4 max-[800px]:py-[40px]">
-          <div className={LABEL}>{YPN_INTRO.eyebrow}</div>
-          <h2 className="font-atx-display font-bold tracking-[-0.02em] leading-[1.05] text-[clamp(24px,3.6vw,40px)] mt-3 max-w-[22ch]">
-            {YPN_INTRO.title}
-          </h2>
-          <div className="mt-5 grid gap-4 max-w-[70ch]">
-            {YPN_INTRO.body.map((p, i) => (
-              <p key={i} className="text-atx-ink/70 text-[16px] leading-[1.55]">{p}</p>
-            ))}
-          </div>
-        </div>
-      </section>
 
       <CoreMechanismSection />
       <PillarArchitectureDiagram />

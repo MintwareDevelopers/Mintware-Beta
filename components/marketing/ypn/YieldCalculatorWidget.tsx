@@ -89,7 +89,7 @@ export function YieldCalculatorWidget() {
               {fmtUSDFull(monthly)}
             </div>
             <div className="font-atx-mono text-[12px] text-atx-bone/55 mt-2">
-              ≈ {fmtUSDFull(annual)} / year in campaign yield
+              ≈ {fmtUSDFull(annual)} {YPN_CALCULATOR.yearSuffix}
             </div>
             <div className="mt-5 pt-5 border-t border-atx-bone/15 flex items-center gap-2.5">
               <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-bone shrink-0" />

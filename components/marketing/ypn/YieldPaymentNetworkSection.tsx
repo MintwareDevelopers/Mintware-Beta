@@ -20,7 +20,7 @@ export function YieldPaymentNetworkSection() {
               {YPN_TEASER.body}
             </p>
             <p className="font-atx-mono text-[12px] text-atx-bone/50 leading-[1.5] mt-4 max-w-[52ch]">
-              ✴ Liquidity should be a public good — pooled once, kept whole, its yield paying forward to the whole ecosystem.
+              ✴ Liquidity as a public good — never idle, never locked away, and its yield instantly yours to spend.
             </p>
             <Link
               href={YPN_TEASER.href}
