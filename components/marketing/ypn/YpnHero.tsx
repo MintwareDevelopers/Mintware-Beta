@@ -1,42 +1,36 @@
-// YpnHero — public header for the Liquid Sovereign Account. COMING SOON: no
-// "Launch app" CTA. Server component (no interactivity — anchor scroll only).
+// YpnHero — Liquid Sovereign Account hero (v2 Privy-esque). COMING SOON: no
+// "Launch app" CTA. Server component (anchor scroll only).
 
 import { YPN_HERO, YPN_STATUS } from '@/constants/ypn-landing'
 
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
-
 export function YpnHero() {
   return (
-    <section className="border-b border-atx-ink [&_*]:rounded-none" style={{ backgroundImage: GRID_BG }}>
-      <div className="mx-auto max-w-[1180px] px-6 py-[64px] max-[800px]:px-4 max-[800px]:py-[44px]">
+    <section className="bg-ground-cool border-b border-hair-soft">
+      <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[104px] max-[800px]:py-[64px]">
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55">✴ {YPN_HERO.eyebrow}</span>
-          <span className="font-atx-mono text-[9.5px] uppercase tracking-[0.1em] font-bold px-2 py-1 border border-atx-ink bg-atx-acid text-atx-ink">{YPN_STATUS.label}</span>
+          <span className="text-[12px] font-semibold uppercase tracking-[0.14em] text-peri-deep">✴ {YPN_HERO.eyebrow}</span>
+          <span className="text-[11px] font-semibold px-3 py-1 rounded-full text-peri-deep bg-white border border-[rgba(108,108,240,0.22)] inline-flex items-center gap-2">
+            <span className="w-[6px] h-[6px] rounded-full bg-peri inline-block" /> {YPN_STATUS.label}
+          </span>
         </div>
 
-        <h1 className="font-atx-display font-bold mt-4 tracking-[-0.03em] leading-[0.98] text-[clamp(30px,6.4vw,74px)] max-w-[15ch] break-words [overflow-wrap:anywhere]">
-          {YPN_HERO.title} <span className="text-atx-blue">{YPN_HERO.titleAccent}</span>
+        <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.045em] leading-[1.0] text-[clamp(2.5rem,6.4vw,4.6rem)] max-w-[15ch] [text-wrap:balance]">
+          {YPN_HERO.title} <span className="text-peri">{YPN_HERO.titleAccent}</span>
         </h1>
 
-        <p className="text-atx-ink/70 text-[clamp(15px,1.9vw,20px)] leading-[1.5] mt-6 max-w-[62ch]">
+        <p className="text-ink-mid text-[clamp(1.05rem,1.7vw,1.3rem)] leading-[1.5] mt-7 max-w-[62ch]">
           {YPN_HERO.sub}
         </p>
 
-        <div className="flex flex-wrap items-center gap-3 mt-8">
-          <a
-            href={YPN_HERO.secondaryHref}
-            className="cursor-pointer font-atx-mono text-[12px] uppercase tracking-[0.08em] px-5 py-3.5 border border-atx-ink bg-atx-ink text-atx-bone no-underline min-h-[48px] inline-flex items-center"
-          >
-            {YPN_HERO.secondaryCta} ↓
-          </a>
+        <div className="mt-9">
+          <a href={YPN_HERO.secondaryHref} className="glass-pill">{YPN_HERO.secondaryCta} ↓</a>
         </div>
 
-        {/* Honest status — coming soon / in development */}
-        <div className="mt-7 inline-flex items-start gap-2.5 border border-atx-ink/25 bg-atx-panel px-3.5 py-2.5 max-w-[680px]">
-          <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink shrink-0 mt-[3px]" />
-          <span className="font-atx-mono text-[11px] leading-[1.5] text-atx-ink/60">
-            <b className="text-atx-ink/80 uppercase tracking-[0.08em]">{YPN_STATUS.label}.</b> {YPN_STATUS.note}
+        {/* Honest status — coming soon */}
+        <div className="mt-8 inline-flex items-start gap-2.5 rounded-2xl bg-white/70 backdrop-blur-[10px] border border-hair px-4 py-3 max-w-[700px]">
+          <span className="w-[7px] h-[7px] rounded-full bg-peri shrink-0 mt-[5px]" />
+          <span className="text-[12px] leading-[1.55] text-ink-mid">
+            <b className="text-ink font-semibold uppercase tracking-[0.06em]">{YPN_STATUS.label}.</b> {YPN_STATUS.note}
           </span>
         </div>
       </div>

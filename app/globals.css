@@ -414,24 +414,27 @@
     -webkit-appearance: none;
     appearance: none;
     height: 6px;
-    background: rgba(17, 17, 17, 0.12);
+    background: rgba(23, 23, 31, 0.10);
     outline: none;
     cursor: pointer;
-    border: 1px solid rgba(17, 17, 17, 0.25);
+    border-radius: 999px;
   }
   .ypn-range::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 20px; height: 20px;
-    background: var(--color-atx-blue, #006FCC);
-    border: 2px solid #111;
+    border-radius: 50%;
+    background: var(--color-peri, #6C6CF0);
+    border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(108, 108, 240, 0.35);
     cursor: pointer;
   }
   .ypn-range::-moz-range-thumb {
     width: 20px; height: 20px;
-    background: var(--color-atx-blue, #006FCC);
-    border: 2px solid #111;
+    border-radius: 50%;
+    background: var(--color-peri, #6C6CF0);
+    border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(108, 108, 240, 0.35);
     cursor: pointer;
-    border-radius: 0;
   }
 
   /* ── CommandPalette (cmdk) ───────────────────────────────────── */
