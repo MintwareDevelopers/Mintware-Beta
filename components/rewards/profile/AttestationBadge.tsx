@@ -34,7 +34,7 @@ export function AttestationBadge({
     return (
       <span
         title="This Attribution score is cryptographically attested by the Mintware oracle — a gasless EAS (offchain) signature."
-        className="inline-flex items-center gap-[5px] px-2.5 py-[3px] text-[11px] font-semibold border border-atx-mesquite text-atx-mesquite bg-atx-mesquite/[0.06] font-atx-mono"
+        className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-semibold border border-[rgba(232,138,103,0.4)] text-coral2-deep bg-[rgba(244,161,131,0.1)]"
       >
         ✦ Score attested
       </span>
@@ -60,7 +60,7 @@ export function AttestationBadge({
       onClick={attest}
       disabled={busy}
       title="Sign a gasless EAS attestation of your Attribution score — no transaction, no gas."
-      className="inline-flex items-center gap-[5px] px-2.5 py-[3px] text-[11px] font-semibold border border-atx-blue text-atx-blue bg-atx-blue/[0.06] font-atx-mono cursor-pointer hover:bg-atx-blue/[0.12] transition-colors disabled:opacity-60"
+      className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-semibold border border-[rgba(108,108,240,0.4)] text-peri-deep bg-[rgba(108,108,240,0.06)] cursor-pointer hover:bg-[rgba(108,108,240,0.12)] transition-colors disabled:opacity-60"
     >
       {busy ? 'Attesting…' : err ? 'Retry' : '✦ Attest my score'}
     </button>
