@@ -35,25 +35,25 @@ export function AttributionScorePreview({ estimatedScoreGain }: AttributionScore
   const projected = data ? data.score + estimatedScoreGain : null
 
   return (
-    <div className="flex items-center gap-[10px] px-[14px] py-[9px] border border-atx-ink/25 bg-atx-bone my-[6px] font-atx-display text-[13px] text-atx-ink/60">
-      <span className="w-[10px] h-[10px] bg-atx-acid border border-atx-ink shrink-0" />
+    <div className="flex items-center gap-[10px] px-[14px] py-[9px] rounded-xl border border-[rgba(108,108,240,0.2)] bg-[rgba(108,108,240,0.06)] my-[6px] text-[13px] text-ink-mid">
+      <span className="w-[8px] h-[8px] rounded-full bg-peri shrink-0" />
       <div>
-        <div className="flex items-center gap-[6px] font-atx-mono text-[13px] font-semibold text-atx-ink">
+        <div className="flex items-center gap-[6px] font-mono text-[13px] font-semibold text-ink">
           {isLoading ? (
-            <span className="inline-block w-[32px] h-[13px] bg-[#e2e8f0]" />
+            <span className="inline-block w-[32px] h-[13px] rounded bg-ground-cool mw-shimmer" />
           ) : (
             <>
               <span>{data?.score ?? 0}</span>
               {estimatedScoreGain > 0 && (
                 <>
-                  <span className="text-atx-blue">→</span>
-                  <span className="text-atx-mesquite">{projected}</span>
+                  <span className="text-peri-deep">→</span>
+                  <span className="text-coral2-deep">{projected}</span>
                 </>
               )}
             </>
           )}
         </div>
-        <div className="text-atx-ink/55 text-[12px] font-atx-mono">
+        <div className="text-ink-soft text-[12px] font-mono">
           Attribution score{estimatedScoreGain > 0 ? ` · +${estimatedScoreGain} pts after this swap` : ''}
           {data?.tier ? ` · ${data.tier}` : ''}
         </div>
