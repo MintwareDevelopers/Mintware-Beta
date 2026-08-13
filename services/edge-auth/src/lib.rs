@@ -8,11 +8,15 @@
 //! The core never moves funds; it only reserves spending capacity (a hold). Settlement is the live
 //! on-chain `MintwarePaymentGateway`, driven later by the relayer.
 
-pub mod nav;
 pub mod ledger;
+pub mod nav;
+pub mod server;
+pub mod store;
+pub mod types;
 
 pub use ledger::{authorize, available, Account, Decision, Decline, Global};
 pub use nav::NavSnapshot;
+pub use store::{AuthOutcome, Hold, HoldStatus, MemStore};
 
 /// USDC amount, 6 decimals (matches the on-chain settlement asset).
 pub type Usdc = u128;

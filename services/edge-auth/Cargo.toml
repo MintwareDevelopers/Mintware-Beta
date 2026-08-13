@@ -6,14 +6,26 @@
 name = "edge-auth"
 version = "0.1.0"
 edition = "2021"
-description = "YPN edge-auth engine — sub-150ms card authorization off a cached vault NAV. Increment 1: the pure authorization decision core (no I/O)."
+description = "YPN edge-auth engine — sub-150ms card authorization off a cached vault NAV. Increments 1-2: the decision core + an axum server over an in-memory hold store."
 
 [lib]
 path = "src/lib.rs"
 
-# Increment 1 is intentionally dependency-free: the risk/decision core is pure logic so it compiles
-# fast and is trivially testable. axum / redis / an eth provider / serde arrive in later increments.
+[[bin]]
+name = "edge-auth-server"
+path = "src/main.rs"
+
 [dependencies]
+# The decision core (nav/ledger/store) stays dependency-free; the server layer adds only the essentials.
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+# Exercise the axum router in-process (no socket) for the server wiring tests.
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
 
 [lints.rust]
 unsafe_code = "forbid"

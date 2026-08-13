@@ -58,7 +58,13 @@ pub enum Decision {
 pub fn available(nav: &NavSnapshot, acct: &Account, global: &Global) -> Usdc {
     let equity = nav.equity(acct.shares);
     let per_user = equity.saturating_sub(acct.active_holds_usdc);
-    let cap_room = acct.daily_cap_usdc.saturating_sub(acct.daily_spent_usdc);
+    // Pending holds count against the daily cap too: a hold is spend-in-flight, so `spent + reserved`
+    // must stay under the cap or several holds could settle past it. Holds are short-lived (TTL << 1d)
+    // so `active_holds_usdc` is effectively "reserved today". At settle, holds↓ and daily_spent↑ by the
+    // same amount, so this bound is continuous across the transition.
+    let cap_room = acct
+        .daily_cap_usdc
+        .saturating_sub(acct.daily_spent_usdc.saturating_add(acct.active_holds_usdc));
     let liquidity = nav.idle_buffer.saturating_sub(global.total_active_holds_usdc);
     per_user.min(cap_room).min(liquidity)
 }
@@ -84,7 +90,11 @@ pub fn authorize(
     if amount > equity.saturating_sub(acct.active_holds_usdc) {
         return Decision::Decline(Decline::InsufficientEquity);
     }
-    if amount > acct.daily_cap_usdc.saturating_sub(acct.daily_spent_usdc) {
+    if amount
+        > acct
+            .daily_cap_usdc
+            .saturating_sub(acct.daily_spent_usdc.saturating_add(acct.active_holds_usdc))
+    {
         return Decision::Decline(Decline::DailyCapExceeded);
     }
     if amount > nav.idle_buffer.saturating_sub(global.total_active_holds_usdc) {
@@ -156,6 +166,17 @@ mod tests {
         // Equity ($1000) and liquidity are ample; the $500 cap binds.
         assert_eq!(auth(&acct(), &global(), 500_000_001), Decision::Decline(Decline::DailyCapExceeded));
         assert_eq!(auth(&acct(), &global(), 500_000_000), Decision::Approve { hold_usdc: 500_000_000 });
+    }
+
+    #[test]
+    fn active_holds_count_against_daily_cap() {
+        // Ample equity, but $450 already reserved in holds against a $500 cap → only $50 of cap left,
+        // even though nothing has SETTLED yet. Prevents concurrent holds from settling past the cap.
+        let mut a = acct();
+        a.shares = 10_000_000_000; // $10k equity so equity never binds
+        a.active_holds_usdc = 450_000_000;
+        assert_eq!(auth(&a, &global(), 50_000_000), Decision::Approve { hold_usdc: 50_000_000 });
+        assert_eq!(auth(&a, &global(), 50_000_001), Decision::Decline(Decline::DailyCapExceeded));
     }
 
     #[test]
