@@ -1,6 +1,6 @@
 'use client'
 
-// Profile 2.0 · Slice 3 — social links row. ATX square hairline icons.
+// Profile 2.0 · Slice 3 — social links row. Design v2 (soft rounded chips).
 // Renders nothing if no socials are set. Handles are stored bare; URLs full.
 
 import type { ProfileSocials as Socials } from '@/lib/rewards/useProfileMeta'
@@ -25,7 +25,7 @@ export function ProfileSocials({ socials, className = '' }: { socials?: Socials 
           target="_blank"
           rel="noopener noreferrer"
           title={i.label}
-          className="w-7 h-7 border border-atx-ink/25 bg-atx-bone flex items-center justify-center text-[12px] text-atx-ink/60 no-underline hover:border-atx-ink hover:text-atx-ink transition-colors"
+          className="w-7 h-7 rounded-full border border-hair bg-white flex items-center justify-center text-[12px] text-ink-mid no-underline hover:border-[rgba(108,108,240,0.4)] hover:text-peri-deep transition-colors"
         >
           {i.icon}
         </a>
