@@ -23,11 +23,14 @@ export const YPN_STATUS = {
 
 export const YPN_HERO = {
   eyebrow: 'Mintware · Liquid Sovereign Account',
-  title: 'Your money should earn while you',
-  titleAccent: 'spend it.',
-  sub: 'The first Uniswap v4 Unified Liquidity Vault that generates institutional market-making yield — designed to deploy natively on Arc and turn every dollar of Aave + v4 liquidity into an instant, sub-350ms real-world spendable balance via Circle’s payments network, with native USDC for gas. Principal keeps compounding; only the yield moves.',
-  secondaryCta: 'See how it works',
-  secondaryHref: '#how-it-works',
+  title: 'Spend while you',
+  titleAccent: 'earn.',
+  bullets: [
+    { title: 'Institutional Yield', body: 'Combines Uniswap v4 market-making with Aave lending to continuously compound your principal.' },
+    { title: 'Instant Real-World Spending', body: 'Pays out instant card purchases.' },
+    { title: 'Yield-Only Spending', body: 'Card swipes use accrued yield while leaving your underlying principal untouched.' },
+    { title: 'Native USDC Gas', body: 'Frictionless transactions powered by USDC.' },
+  ],
 } as const
 
 // ─── The thesis: ending the idle cash tax (CoreMechanismSection) ────────────
@@ -39,7 +42,7 @@ export const YPN_THESIS = {
     { product: 'Traditional checking', liquidity: '100% liquid', yield: '~0% yield', verdict: 'Purchasing power rots to inflation.', us: false },
     { product: 'Savings & CDs', liquidity: 'Locked', yield: 'Yield-bearing', verdict: 'Capital trapped behind withdrawal windows.', us: false },
     { product: 'Traditional DeFi LPs', liquidity: 'Friction-heavy', yield: 'High yield', verdict: 'Manual unwinding, DEX swaps, gas, tax events.', us: false },
-    { product: 'Liquid Sovereign Account', liquidity: '100% liquid', yield: 'Institutional yield', verdict: 'Aave v3 + v4 MEV recapture, spendable at 100M+ Visa terminals in sub-400ms.', us: true },
+    { product: 'Liquid Sovereign Account', liquidity: '100% liquid', yield: 'Institutional yield', verdict: 'Aave v3 + v4 MEV recapture — earnings instantly spendable in the real world.', us: true },
   ],
 } as const
 
@@ -51,29 +54,29 @@ export const YPN_FLOW = {
     {
       key: 'deposit',
       label: 'Deposit USDC',
-      sub: 'Single-sided · native gas',
-      desc: 'Deposit single-sided USDC into the Unified Liquidity Vault — designed for native-USDC gas on Arc, no native token to manage.',
+      sub: 'Zero extra tokens',
+      desc: 'Put USDC into the vault with zero extra tokens or complicated setups.',
       accent: 'text-atx-blue',
     },
     {
-      key: 'vault',
-      label: 'Unified Liquidity Vault',
-      sub: 'Aave v3 buffer + v4 JIT',
-      desc: '~80%+ sits in an idle Aave v3 buffer earning 4–8% base APY; the rest powers a Uniswap v4 JIT engine that recaptures MEV/LVR and swap fees.',
+      key: 'grow',
+      label: 'Grow Your Balance',
+      sub: 'Interest + trading fees',
+      desc: 'Your money earns automated interest and trading fees around the clock.',
       accent: 'text-atx-coral',
     },
     {
-      key: 'intent',
-      label: 'Privy Delegated Card Intent',
-      sub: 'Real-time NAV hold',
-      desc: 'A swipe triggers a delegated card intent: a real-time NAV hold designed to settle atomically against the idle Aave buffer — no unwind of active liquidity.',
+      key: 'tap',
+      label: 'Tap to Pay',
+      sub: 'No account lockup',
+      desc: 'Swipe your card anywhere. The system holds the exact amount needed without locking up your account.',
       accent: 'text-atx-mesquite',
     },
     {
       key: 'spend',
-      label: 'Instant real-world spend',
-      sub: 'Visa · Apple Pay · sub-400ms',
-      desc: 'Yield becomes spendable at 100M+ Visa terminals — designed for sub-400ms authorization, settled over Circle’s payments network.',
+      label: 'Instant Real-World Spend',
+      sub: '100M+ Visa · under ½ sec',
+      desc: 'Spend your earnings at over 100M Visa merchants worldwide in under half a second.',
       accent: 'text-atx-blue',
     },
   ],
@@ -91,8 +94,8 @@ export const YPN_PILLARS = {
       accent: 'text-atx-blue',
       title: 'JIT liquidity isolation',
       subtitle: 'Spend without disrupting depth',
-      how: 'Roughly 80%+ of vault capital sits in the idle Aave v3 buffer. Card authorizations are designed to settle natively against that buffer.',
-      why: 'Spend never pulls liquidity out of active Uniswap v4 JIT pools or disrupts market-making depth — the yield engine keeps running while you transact.',
+      how: 'Your money is split: most sits safely earning interest, while a smaller portion powers active trading. When you swipe your card, payment comes directly from the interest buffer.',
+      why: 'You can spend cash in the real world without pulling money out of active trades — your yield engine never stops running.',
     },
     {
       key: 'loop',
@@ -101,8 +104,8 @@ export const YPN_PILLARS = {
       accent: 'text-atx-coral',
       title: 'The spent-yield loop',
       subtitle: 'Principal compounds forever',
-      how: 'A point-of-sale transaction is designed to settle against accrued yield and MEV first, before ever touching deposited capital.',
-      why: 'Principal stays 100% intact and keeps compounding indefinitely — you are spending the interest, not the balance. Zero opportunity cost.',
+      how: 'Card purchases automatically burn accrued yield first before touching your initial deposit.',
+      why: 'Your core balance stays untouched and compounds forever, funding perpetual daily spending.',
     },
     {
       key: 'identity',
@@ -111,8 +114,8 @@ export const YPN_PILLARS = {
       accent: 'text-atx-mesquite',
       title: 'Identity-layer embedded',
       subtitle: 'No custodian, no off-ramp',
-      how: 'Privy binds the EVM wallet, vault shares, and card authorization to a single passkey — one identity across on-chain and card.',
-      why: 'Unlike generic crypto cards that off-ramp USDC to a centralized custodian with slippage and tax drag, there is no middleman exchange. You keep custody.',
+      how: 'Your passkey links your wallet, vault balance, and card permissions into one secure identity.',
+      why: 'No middleman exchanges or centralized custodians hold your money. You retain total control of your funds with zero off-ramp fees or hidden conversion costs.',
     },
   ],
 } as const
@@ -154,17 +157,17 @@ export const YPN_MATRIX = {
 export const YPN_CIRCLE = {
   eyebrow: 'Settlement stack',
   title: 'Native on Arc. Settled by Circle. Spent on Visa.',
-  body: 'The account is designed to deploy natively on Arc with native-USDC gas, settle over Circle’s payments network in sub-350ms, authorize card intents through Privy, and clear at 100M+ Visa / Apple Pay terminals — no centralized off-ramp, no native-token juggling.',
+  body: 'Built on Arc using USDC for gas, payments authorize via Privy and settle in sub-350ms through Circle for instant spending at 100M+ Visa and Apple Pay terminals — with zero off-ramp fees or extra tokens.',
   stack: [
-    { name: 'Arc', role: 'Native deployment · USDC gas' },
-    { name: 'Circle', role: 'Payments network · sub-350ms settlement' },
-    { name: 'Privy', role: 'Delegated card intent · identity' },
-    { name: 'Visa', role: '100M+ terminals · Apple Pay' },
+    { name: 'Arc', role: 'Native chain using USDC for gas.' },
+    { name: 'Circle', role: 'Payment network with sub-350ms settlement.' },
+    { name: 'Privy', role: 'Passkey identity for card spending power.' },
+    { name: 'Visa', role: 'Accepted at 100M+ terminals globally.' },
   ],
   points: [
-    'Single-sided USDC in — native-USDC gas, no native token',
-    'Vault-level settlement against the idle Aave buffer',
-    'Sub-400ms authorization at real-world point of sale',
+    'Single-sided USDC deposit',
+    'Settlement paid directly from interest buffer',
+    'Sub-400ms point-of-sale approval',
   ],
 } as const
 
@@ -208,9 +211,9 @@ export const YPN_CTA = {
 // ─── Ethos — liquidity as a public good (page band + home teaser) ───────────
 export const YPN_ETHOS = {
   eyebrow: '✴ Liquidity as a public good',
-  title: 'Liquidity that stays productive — and stays yours',
-  body: 'Mintware exists to make liquidity a public good: capital that never sits idle and is never locked away. The Liquid Sovereign Account is that idea in your pocket — your deposit works as institutional market-making liquidity for the whole ecosystem, and its yield is instantly yours to spend in the real world. Never idle, never trapped, never surrendered.',
-  quote: 'Liquidity should be a public good.',
+  title: 'Money That Earns 24/7, Ready When You Are',
+  body: 'Mintware turns locked capital into a spendable asset. Your deposit continuously generates institutional yield for you while strengthening market liquidity for everyone — and your earnings are instantly available to spend at point-of-sale.',
+  quote: 'Never idle, never locked, always yours.',
 } as const
 
 // ─── Home-embed teaser (YieldPaymentNetworkSection) ─────────────────────────

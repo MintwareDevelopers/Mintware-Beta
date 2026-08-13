@@ -21,17 +21,6 @@ const GRID_BG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
 
-function Star({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
-      />
-    </svg>
-  )
-}
-
 function fmtUsd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
   if (n >= 1_000) return `$${(n / 1_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K`
@@ -247,44 +236,7 @@ function ReputationYield() {
   )
 }
 
-// ─── 02 · How your deposit works ─────────────────────────────────────────────
-const FLOW = [
-  { k: 'MEV Protection', d: 'TWAP verify · sandwich guard blocks value leaking to bots' },
-  { k: 'Dynamic Fee', d: 'Fee auto-tunes to volatility + depth so LPs capture more' },
-  { k: 'Idle Capital', d: 'Un-ranged liquidity routed to yield instead of sitting idle' },
-  { k: 'Attribution Split', d: 'Fees split 70/15/10/5, your LP share weighted by reputation' },
-  { k: 'FeeVault', d: 'Accrues per-epoch, claimable — no manual compounding' },
-]
-
-function HowItWorks() {
-  return (
-    <div>
-      <SectionHead
-        n="02"
-        label="Deposit once · the vault does the rest"
-        title="One deposit. A five-stage V4 hook engine."
-        sub="Provide liquidity once. Every swap runs it through a hook stack that protects, optimizes, and pays you — automatically."
-      />
-      <div className="grid grid-cols-5 max-[900px]:grid-cols-1 border border-atx-ink">
-        {FLOW.map((s, i) => (
-          <div
-            key={s.k}
-            className={`p-5 flex flex-col gap-3 ${i < FLOW.length - 1 ? 'border-r border-atx-ink/20 max-[900px]:border-r-0 max-[900px]:border-b' : ''}`}
-          >
-            <div className="flex items-center gap-2">
-              <Star className="w-4 h-4 text-atx-coral shrink-0" />
-              <span className="font-atx-mono text-[11px] text-atx-ink/45">0{i + 1}</span>
-            </div>
-            <div className="text-[15px] font-bold font-atx-display leading-tight">{s.k}</div>
-            <div className="text-[12px] text-atx-ink/55 leading-[1.45]">{s.d}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-// ─── 03 · Lock tiers (real LockLib numbers) ──────────────────────────────────
+// ─── 02 · Lock tiers (real LockLib numbers) ──────────────────────────────────
 const LOCK_TIERS = [
   { name: 'Flex', dur: 'No lock', days: 0, mult: 1.0, accent: 'var(--color-atx-grey)' },
   { name: 'Committed', dur: '30 days', days: 30, mult: 1.15, accent: 'var(--color-atx-blue)' },
@@ -297,7 +249,7 @@ function LockTiers() {
   return (
     <div>
       <SectionHead
-        n="03"
+        n="02"
         label="The second lever · commitment"
         title="Reputation is who you are. Lock tier is how long you commit."
         sub="The second lever on your fee share: longer locks earn a higher multiplier, and the early-exit penalty tapers to zero as you near unlock."
@@ -331,7 +283,7 @@ function LockTiers() {
   )
 }
 
-// ─── 04 · Trust, enforced on-chain ───────────────────────────────────────────
+// ─── 03 · Trust, enforced on-chain ───────────────────────────────────────────
 const TRUST = [
   { k: 'Non-custodial', d: 'You hold ERC-4626 shares. No one — not the team — can move your principal.' },
   { k: 'Fee split on-chain', d: 'The 70/15/10/5 LP/referrer/protocol/bonus split lives in the FeeVault — any change emits a public event, never a silent tweak.' },
@@ -344,7 +296,7 @@ function TrustOnChain() {
   return (
     <div>
       <SectionHead
-        n="04"
+        n="03"
         label="Trust · enforced by code, not promises"
         title="You don't have to trust us. Trust the contract."
         sub="The rules that protect your deposit live in the contract — verifiable, and impossible to quietly change."
@@ -378,7 +330,7 @@ function ReferralLoop() {
     <div className="border border-atx-ink bg-atx-ink text-white">
       <div className="p-8 max-[640px]:p-6 border-b border-white/15">
         <div className="flex items-center gap-3.5 mb-4">
-          <span className="font-atx-mono text-[13px] border border-white/40 px-3 py-1.5">05</span>
+          <span className="font-atx-mono text-[13px] border border-white/40 px-3 py-1.5">04</span>
           <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/55">Referrals · the compounding loop</span>
         </div>
         <h2 className="font-atx-display font-bold tracking-[-0.03em] leading-[0.95] text-[clamp(28px,4.5vw,52px)]">
@@ -413,7 +365,7 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
   return (
     <div>
       <SectionHead
-        n="06"
+        n="05"
         label="The ecosystem · ranked by TVL"
         title="The vaults, ranked. Reputation rises to the top."
         sub="Every vault is public and ranked by liquidity. Live vaults climb automatically as capital flows in — examples are shown until real vaults seed."
@@ -493,7 +445,6 @@ export function VaultAmplify() {
       <div className="max-w-[1100px] mx-auto px-7 py-16 max-[800px]:px-4 max-[800px]:py-10 flex flex-col gap-16 max-[800px]:gap-12">
         <LiveStatsBand />
         <ReputationYield />
-        <HowItWorks />
         <LockTiers />
         <TrustOnChain />
         <ReferralLoop />

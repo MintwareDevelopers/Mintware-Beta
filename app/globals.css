@@ -437,6 +437,21 @@
     cursor: pointer;
   }
 
+  /* ── Animated flow connectors (Aave-style marching dashes) ────────── */
+  @keyframes mw-flow-march   { to { background-position: 0 12px; } }
+  @keyframes mw-flow-march-h { to { background-position: 12px 0; } }
+  .flow-dash-v {
+    background-image: repeating-linear-gradient(180deg, var(--color-peri, #6C6CF0), var(--color-peri, #6C6CF0) 4px, transparent 4px, transparent 12px);
+    background-size: 100% 12px;
+    animation: mw-flow-march 0.55s linear infinite;
+  }
+  .flow-dash-h {
+    background-image: repeating-linear-gradient(90deg, var(--color-peri, #6C6CF0), var(--color-peri, #6C6CF0) 4px, transparent 4px, transparent 12px);
+    background-size: 12px 100%;
+    animation: mw-flow-march-h 0.55s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) { .flow-dash-v, .flow-dash-h { animation: none; } }
+
   /* ── CommandPalette (cmdk) ───────────────────────────────────── */
   .cmdk-overlay {
     position: fixed; inset: 0;

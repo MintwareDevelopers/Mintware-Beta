@@ -10,7 +10,6 @@ import Link from 'next/link'
 import { VaultAmplify } from '@/components/vaults/VaultAmplify'
 import { ULVMechanics } from '@/components/vaults/ULVMechanics'
 import { SwapWalkthrough } from '@/components/vaults/SwapWalkthrough'
-import { TrustPosture } from '@/components/vaults/TrustPosture'
 
 const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 const GRID_BG =
@@ -18,7 +17,7 @@ const GRID_BG =
 
 const EY = 'font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55'
 
-const HEAD = ['Same deposit. Your reputation. ', 'More yield.'] as const
+const HEAD = ['Liquidity that ', 'never sits idle.'] as const
 const SUB = 'MEV-protected, auto-managed LP on Uniswap V4. Your Attribution score and lock tier lift your fee share — so the exact same position earns you more than the wallet next to you.'
 const BULLETS = ['MEV protection — V4 hooks route bot value back to LPs', 'Auto-managed range — no rebalancing', 'Idle capital routed to yield', 'Reputation fee share, up to 1.95×']
 const FEATURED: [string, string, string][] = [['Social Blue-Chip', 'ETH / USDC', '11.0%'], ['Degen Emerging', 'ARB / USDC', '18.4%']]
@@ -79,7 +78,6 @@ export default function VaultsPage() {
       {/* ── HERO ── */}
       <PageHero
         size="compact"
-        eyebrow="DeFi surface · reputation-weighted yield"
         title={<>{HEAD[0]}<span className="text-atx-blue">{HEAD[1]}</span></>}
         sub={SUB}
       >
@@ -159,9 +157,6 @@ export default function VaultsPage() {
 
       {/* ── reputation = yield deep-dive ── */}
       <VaultAmplify />
-
-      {/* ── trust · honest current state ── */}
-      <TrustPosture />
 
       {/* ── closing CTA ── */}
       <section className="border-b border-atx-ink">
