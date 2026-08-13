@@ -1,0 +1,19 @@
+# Standalone workspace: detached from the repo-root Cargo.toml (whose `programs/*` Anchor members
+# were removed), so this crate builds independently with plain `cargo` and its own lockfile.
+[workspace]
+
+[package]
+name = "edge-auth"
+version = "0.1.0"
+edition = "2021"
+description = "YPN edge-auth engine — sub-150ms card authorization off a cached vault NAV. Increment 1: the pure authorization decision core (no I/O)."
+
+[lib]
+path = "src/lib.rs"
+
+# Increment 1 is intentionally dependency-free: the risk/decision core is pure logic so it compiles
+# fast and is trivially testable. axum / redis / an eth provider / serde arrive in later increments.
+[dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
