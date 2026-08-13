@@ -42,7 +42,7 @@ export function YieldPaymentNetworkSection() {
                     </div>
                   </div>
                   {i < YPN_FLOW.steps.length - 1 && (
-                    <span className="text-[13px] text-ink-soft pl-5 py-0.5">↓</span>
+                    <span aria-hidden className="flow-dash-v w-[2px] h-4 ml-5 my-0.5 rounded-full opacity-70" />
                   )}
                 </div>
               ))}

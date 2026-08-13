@@ -261,18 +261,18 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* FLAGSHIP — reputation-weighted V4 vaults */}
-      <section className="bg-white border-b border-hair-soft">
-        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
-          <GradientPanel tone="periwinkle" className="p-10 max-[800px]:p-6 flex items-center justify-between gap-8 flex-wrap">
-            <div className="max-w-[720px]">
-              <div className={ey}>✴ The flagship — reputation-weighted V4 vaults</div>
-              <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.9rem,4.2vw,3rem)] mt-3.5 [text-wrap:balance]">
-                Deposit into a V4 Vault. <span className="text-peri">Your score multiplies your returns.</span>
-              </h2>
-            </div>
-            <button onClick={() => launchApp('/app/vaults')} className="glass-pill whitespace-nowrap shrink-0">Deposit →</button>
-          </GradientPanel>
+      {/* FLAGSHIP — reputation-weighted V4 vaults · dark pop band */}
+      <section className="relative overflow-hidden bg-ink text-white border-b border-hair-soft">
+        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(58% 120% at 12% 0%, rgba(108,108,240,0.38), transparent 60%), radial-gradient(52% 130% at 100% 100%, rgba(244,161,131,0.16), transparent 62%)' }} />
+        <div className="grain absolute inset-0 opacity-40" aria-hidden />
+        <div className="relative mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[104px] max-[800px]:py-[64px] flex items-center justify-between gap-8 flex-wrap">
+          <div className="max-w-[760px]">
+            <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-pas-peri">✴ The flagship — reputation-weighted V4 vaults</div>
+            <h2 className="font-atx-display font-medium tracking-[-0.04em] leading-[1.03] text-[clamp(2rem,4.6vw,3.4rem)] mt-4 text-white [text-wrap:balance]">
+              Deposit into a V4 Vault. <span className="text-pas-peri">Your score multiplies your returns.</span>
+            </h2>
+          </div>
+          <button onClick={() => launchApp('/app/vaults')} className="glass-pill whitespace-nowrap shrink-0">Deposit →</button>
         </div>
       </section>
 
