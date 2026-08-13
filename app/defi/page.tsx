@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { FlowDiagram } from '@/components/ui2/FlowDiagram'
+import { FeeSplitDonut } from '@/components/ui2/FeeSplitDonut'
 
 // =============================================================================
 // /defi — marketing landing for the DeFi vault surface. Design v2 (Privy-esque).
@@ -126,15 +128,7 @@ export default function DefiLandingPage() {
           <Head n="02" label="Deposit once · the vault does the rest" />
           <h2 className={h2}>One deposit. <span className="text-peri">A five-stage V4 hook engine.</span></h2>
           <p className={lead}>You provide liquidity once. Every swap that touches the pool runs your capital through a hook stack that protects it, optimizes it, and pays you — automatically.</p>
-          <div className="grid grid-cols-5 gap-3 mt-8 max-[900px]:grid-cols-1">
-            {HOOK.map(([k, d], i) => (
-              <div key={k} className="rounded-2xl bg-white border border-hair p-5 flex flex-col gap-2.5">
-                <span className="text-[11px] text-peri-deep font-semibold tabular-nums">0{i + 1}</span>
-                <div className="font-atx-display text-[15px] font-medium leading-tight text-ink">{k}</div>
-                <div className="text-[12px] text-ink-mid leading-[1.45]">{d}</div>
-              </div>
-            ))}
-          </div>
+          <FlowDiagram className="mt-8" steps={HOOK.map(([k, d]) => ({ label: k, sub: d }))} />
         </div>
       </section>
 
@@ -166,14 +160,21 @@ export default function DefiLandingPage() {
           <Head n="04" label="Where the fees go" />
           <h2 className={h2}>Every swap fee, <span className="text-peri">split on-chain.</span></h2>
           <p className={lead}>No black box. The split lives in the FeeVault contract, and any change to it emits a public event.</p>
-          <div className="grid grid-cols-4 gap-3 mt-8 max-[720px]:grid-cols-2">
-            {SPLIT.map(([pct, who, d]) => (
-              <div key={who} className="rounded-2xl bg-white border border-hair p-5">
-                <div className="font-atx-display text-[30px] font-medium tracking-[-1px] text-coral2-deep tabular-nums">{pct}</div>
-                <div className="font-atx-display text-[14px] font-medium mt-1 text-ink">{who}</div>
-                <div className="text-[12px] text-ink-mid leading-[1.45] mt-1.5">{d}</div>
-              </div>
-            ))}
+          <div className="grid grid-cols-[auto_1fr] gap-8 items-center mt-8 max-[640px]:grid-cols-1 max-[640px]:gap-5">
+            <div className="soft-card p-7 max-[640px]:justify-self-start">
+              <FeeSplitDonut />
+            </div>
+            <div className="flex flex-col gap-3">
+              {SPLIT.map(([pct, who, d]) => (
+                <div key={who} className="flex gap-3">
+                  <span className="font-atx-display text-[18px] font-medium text-coral2-deep tabular-nums w-[52px] shrink-0">{pct}</span>
+                  <div>
+                    <div className="font-atx-display text-[14px] font-medium text-ink">{who}</div>
+                    <div className="text-[12px] text-ink-mid leading-[1.45]">{d}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
