@@ -195,7 +195,7 @@ export default function AttributionLandingPage() {
               </div>
             ))}
           </div>
-          <p className="font-atx-mono text-[11px] text-atx-bone/45 mt-5">Four live schemas on Base: AttributionScore · SwapActivity · ReferralLink · CampaignReward.</p>
+          <p className="font-atx-mono text-[11px] text-atx-bone/45 mt-5">Three live schemas on Base: AttributionScore · SwapActivity · ReferralLink.</p>
         </div>
       </section>
 

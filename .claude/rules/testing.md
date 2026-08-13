@@ -4,9 +4,14 @@
 
 | Suite | Runner | Count | Command |
 |---|---|---|---|
-| Unit tests | Vitest | 256 (27 files) | `pnpm test` |
-| Contract tests | Hardhat/Mocha | ~74 | `pnpm hardhat:test` |
+| Unit tests | Vitest | ~230 | `pnpm test` |
 | Contract tests (Phase 2/3) | Forge | 175 | `pnpm forge:test` |
+
+> **⛔ Hardhat suite removed (2026-08-12):** the Hardhat/Mocha `MintwareDistributor` tests + the whole
+> Hardhat toolchain were deleted with the shelved campaign stack (see [[campaigns_shelved]] /
+> `.claude/rules/smart-contracts.md`). `test:all` is now `pnpm test && pnpm forge:test`. Ignore any
+> `hardhat:*` / `.cjs` Mocha references below — historical. Vitest campaign suites (calc, epochProcessor,
+> swapHook, merkleBuilder, resolveQuote) were removed too; the count dropped accordingly.
 
 > Counts verified 2026-08-08 (`pnpm test` = 256 green; Forge = 175/175). The old
 > "147/72/36" figures were stale by a wide margin. New suites now covered:

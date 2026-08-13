@@ -57,10 +57,13 @@ behavior.
 | Surface | What it does | Status — say exactly this |
 |---|---|---|
 | **Attribution** | On-chain reputation score (max **925**), 100+ chains, EAS-attested | **Live.** The scoring API and explorer are real today. |
-| **Reward campaigns** | Token-reward pools + points campaigns, score-multiplied | **Live** (Base). |
 | **DeFi liquidity vaults** | Reputation-weighted Uniswap V4 LP — single-sided + dual-sided pair vaults | **Built & tested, not yet deployed.** Say "coming" / "in testing" — never "live" or "deposit now." |
 | **AI agents** | ERC-8004 identity + AIAttribution scoring, agent leaderboard | **Live** (Base). |
-| **Swap** | Best-execution routing with campaign rewards | Live UI on real data. |
+| **Swap** | Best-execution cross-chain routing (LI.FI) | Live UI on real data. |
+
+> **Campaigns were shelved (2026-08-12)** — removed from the platform, preserved on
+> `archive/campaigns-surface`. Do not describe reward campaigns / token-reward pools / points
+> campaigns as a live product.
 
 **Never** imply the vaults hold real deposits today. They are feature-flagged off, undeployed,
 and (when deployed) start on **Base Sepolia testnet**. See `phase3-golive-runbook.md`.

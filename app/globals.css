@@ -65,7 +65,7 @@
   --color-mw-dark-sub:    rgba(255, 255, 255, 0.38);
   --color-mw-dark-border: rgba(255, 255, 255, 0.06);
 
-  /* ── Brand deep (referral / campaign UI — distinct from nav blue) ── */
+  /* ── Brand deep (referral UI — distinct from nav blue) ── */
   --color-mw-brand-deep:      #3A5CE8;
   --color-mw-brand-deep-glow: rgba(58, 92, 232, 0.12);
 
@@ -74,7 +74,7 @@
   --color-mw-ink-5: #9ca3af;   /* extra light — dashboard/leaderboard */
 
   /* ── Surfaces ── */
-  --color-mw-surface-purple: #F7F6FF;   /* referral/campaign light bg */
+  --color-mw-surface-purple: #F7F6FF;   /* referral light bg */
   --color-mw-surface-card:   #f9f9fb;   /* dashboard/leaderboard cards */
 
   /* ── Semantic colors ── */
@@ -323,53 +323,6 @@
     .mw-marquee-track { animation: none !important; }
     .mw-lift, .mw-lift:hover { transition: none; transform: none; }
     .js-motion .mw-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
-  }
-
-  /* ── CampaignHeader animations ──────────────────────────────── */
-  @keyframes dot-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-  /* ── StepIndicator connector lines ─────────────────────────── */
-  .si-item:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    top: 14px;
-    left: calc(50% + 14px);
-    right: calc(-50% + 14px);
-    height: 2px;
-    background: #E0DFFF;
-    z-index: 0;
-  }
-  .si-item:not(:last-child).complete::after { background: #2A9E8A; }
-  @media (max-width: 500px) { .si-label { display: none; } }
-
-  /* ── Step5Review spinner ────────────────────────────────────── */
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── RewardSlider (range input) ─────────────────────────────── */
-  .reward-slider {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 6px;
-    border-radius: 3px;
-    outline: none;
-    cursor: pointer;
-  }
-  .reward-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    width: 18px; height: 18px;
-    border-radius: 50%;
-    background: #fff;
-    border: 2px solid #3A5CE8;
-    cursor: pointer;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-  }
-  .reward-slider::-moz-range-thumb {
-    width: 18px; height: 18px;
-    border-radius: 50%;
-    background: #fff;
-    border: 2px solid #3A5CE8;
-    cursor: pointer;
   }
 
   /* ── CommandPalette (cmdk) ───────────────────────────────────── */

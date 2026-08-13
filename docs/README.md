@@ -2,7 +2,7 @@
 
 Mintware is a DeFi reputation and rewards platform built for EVM chains.
 
-We turn your on-chain history into a verifiable score — then use that score to determine how much you earn from campaigns, liquidity pools, and protocol incentives. The better your on-chain track record, the more your activity is worth.
+We turn your on-chain history into a verifiable score — then use that score to determine how much you earn from liquidity pools and protocol incentives. The better your on-chain track record, the more your activity is worth.
 
 Mintware is also designed to make on-chain actions easier to understand before you commit. Swaps, claims, and funding actions now surface clearer confirmation context, stronger chain guidance, and better fee visibility before your wallet opens.
 
@@ -12,11 +12,6 @@ Mintware is also designed to make on-chain actions easier to understand before y
 
 ### Attribution — On-Chain Reputation
 A live scoring engine that analyses your full wallet history across 100+ chains and produces a single composite reputation score. Your score reflects the depth, consistency, and quality of your on-chain behaviour — not just your balance.
-
-### Campaigns — Earn from Your Activity
-A rewards engine where protocols deposit tokens or points budgets, and Attribution score determines how large a share you earn. Three campaign types: Token Reward Pools, Points Campaigns, and AI Agent Campaigns.
-
-Campaign and claim flows are designed to be clearer and safer, with better step guidance, fewer unnecessary approval prompts, and stronger transaction checks before submission.
 
 ### Mintware Swap — Clearer Before You Confirm
 Mintware Swap is built to reduce confusion before the wallet popup appears.
@@ -41,10 +36,6 @@ The reputation-yield experience and the full RWA deal pipeline (register → ver
 ## Quick Links
 
 * [What is Attribution?](overview/attribution.md)
-* [How campaigns work](campaigns/overview.md)
-* [Token Reward Pools](campaigns/token-reward-pools.md)
-* [Points Campaigns](campaigns/points-campaigns.md)
-* [AI Agent Campaigns](campaigns/ai-campaigns.md)
 * [Two-Surface Vaults](vaults/overview.md)
 * [RWA Deals — Lifecycle & Trust](vaults/rwa-deals.md)
 * [Connect your wallet](getting-started/connect-wallet.md)
@@ -58,12 +49,7 @@ The reputation-yield experience and the full RWA deal pipeline (register → ver
 | Product | Status |
 |---|---|
 | Attribution scoring | ✅ Live — 100+ chains |
-| Token Reward Pools | ✅ Live |
-| Points Campaigns | ✅ Live |
 | Mintware Swap | ✅ Live |
 | Referral system | ✅ Live |
-| Arbitrum campaigns | ✅ Live |
-| AI Agent Campaigns | ✅ Live — Base mainnet |
-| Two-Surface Vaults (DeFi + RWA) | ✅ Live — reputation-yield + RWA deal pipeline in production |
-| RWA on-chain settlement | 🟡 Testnet — gated on the legal track before mainnet |
-| Self-serve campaign creation | 🔜 Coming soon |
+| AI Agent reputation | ✅ Live — Base mainnet |
+| Reputation-weighted Vaults | 🟡 Testnet — in testing ahead of launch |

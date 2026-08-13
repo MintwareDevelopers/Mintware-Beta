@@ -125,7 +125,7 @@ function AgentProfileContent() {
               <div>
                 {[
                   { key: 'behavior',         label: 'Volume',          desc: 'Verified swap volume (÷ 1e18)',    sign: 'positive' },
-                  { key: 'contribution',      label: 'Contribution',    desc: 'Referral & campaign quality',     sign: 'positive' },
+                  { key: 'contribution',      label: 'Contribution',    desc: 'Referral & contribution quality', sign: 'positive' },
                   { key: 'interpretability',  label: 'Interpretability', desc: `MWP transparency — ${agent.mwp_submissions} hash${agent.mwp_submissions !== 1 ? 'es' : ''} submitted`, sign: 'positive' },
                   { key: 'risk',              label: 'Risk Penalty',    desc: 'Deducted from total score',       sign: 'negative' },
                 ].map(sig => {
