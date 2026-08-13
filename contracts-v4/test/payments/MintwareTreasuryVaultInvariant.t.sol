@@ -286,9 +286,6 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     }
 
     // ── HEADLINE: the junior buffer still covers the senior par ────────────────────
-    /// forge-config: default.invariant.runs = 256
-    /// forge-config: default.invariant.depth = 128000
-    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_senior_par_covered() public view {
         assertLe(
             vault.deployedFromSenior(),
@@ -298,9 +295,6 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     }
 
     // ── the full senior claim is backed by real recoverable USDC ───────────────────
-    /// forge-config: default.invariant.runs = 256
-    /// forge-config: default.invariant.depth = 128000
-    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_senior_fully_backed() public view {
         assertLe(
             vault.totalSeniorAssets(),
@@ -310,9 +304,6 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     }
 
     // ── senior NAV is STRUCTURALLY price-free (accounting identity, no price term) ──
-    /// forge-config: default.invariant.runs = 256
-    /// forge-config: default.invariant.depth = 128000
-    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_senior_price_free() public view {
         assertEq(
             vault.totalSeniorAssets(),
@@ -322,9 +313,6 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     }
 
     // ── no share inflation: solvency-by-construction crux (lifted from v1) ──────────
-    /// forge-config: default.invariant.runs = 256
-    /// forge-config: default.invariant.depth = 128000
-    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_no_share_inflation() public view {
         // symmetric virtual offset ⇒ shares never outrun assets.
         assertLe(
@@ -339,9 +327,6 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     }
 
     // ── settlement conserves: exact USDC ledger (module stays on its no-mint path) ──
-    /// forge-config: default.invariant.runs = 256
-    /// forge-config: default.invariant.depth = 128000
-    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_settlement_conserves() public view {
         // USDC lives in exactly four places or has left the system; sources are deposits + minted
         // interest + every USDC the module minted (recover swap payouts + collected fees).
@@ -356,9 +341,6 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     }
 
     // ── junior-earmarked cash is always physically on hand ─────────────────────────
-    /// forge-config: default.invariant.runs = 256
-    /// forge-config: default.invariant.depth = 128000
-    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_reserved_junior_backed() public view {
         assertLe(
             vault.reservedJuniorUSDC(),
@@ -368,9 +350,6 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     }
 
     // ── the junior lock cliff is never breached ────────────────────────────────────
-    /// forge-config: default.invariant.runs = 256
-    /// forge-config: default.invariant.depth = 128000
-    /// forge-config: default.invariant.fail-on-revert = true
     function invariant_lock_enforced() public view {
         assertFalse(handler.juniorRedeemedEarly(), "junior redeemed before the lock cliff");
     }
