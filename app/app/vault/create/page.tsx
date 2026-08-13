@@ -1,7 +1,7 @@
 'use client'
 
 // =============================================================================
-// /vault/create — Team onboarding 4-step vault creation flow
+// /vault/create — Team onboarding 4-step vault creation flow. Design v2.
 //
 // Step 1: Project details (name, token address, chain)
 // Step 2: Pool configuration (fee tier, tick spacing, seed amount)
@@ -68,28 +68,16 @@ async function readTokenSymbol(address: string, chainId: number): Promise<string
 }
 
 const FEE_SPLIT = [
-  { label: 'LPs (community)',   pct: 70, bar: 'bg-atx-blue',  txt: 'text-atx-blue' },
-  { label: 'Referrers',         pct: 15, bar: 'bg-atx-coral', txt: 'text-atx-coral' },
-  { label: 'Protocol treasury', pct: 10, bar: 'bg-atx-grey',  txt: 'text-atx-ink/55' },
-  { label: 'Attribution bonus', pct: 5,  bar: 'bg-atx-clay',  txt: 'text-atx-clay' },
+  { label: 'LPs (community)',   pct: 70, bar: 'bg-peri',      txt: 'text-peri-deep' },
+  { label: 'Referrers',         pct: 15, bar: 'bg-coral2',    txt: 'text-coral2-deep' },
+  { label: 'Protocol treasury', pct: 10, bar: 'bg-ink-soft',  txt: 'text-ink-soft' },
+  { label: 'Attribution bonus', pct: 5,  bar: 'bg-[#D14343]', txt: 'text-[#D14343]' },
 ]
 
 // ─── shared input / label classes ─────────────────────────────────────────────
-const INPUT = 'w-full px-3 py-2.5 border border-atx-ink/30 bg-atx-panel font-atx-mono text-[14px] text-atx-ink outline-none focus:border-atx-blue box-border'
-const LABEL = 'block mb-1.5 font-atx-mono uppercase tracking-[0.08em] text-[10px] text-atx-ink/55'
-const HINT  = 'block mt-1 text-[11px] text-atx-ink/45 font-atx-display'
-
-// ─── star glyph ───────────────────────────────────────────────────────────────
-function Star({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
-      />
-    </svg>
-  )
-}
+const INPUT = 'w-full px-3 py-2.5 rounded-xl border border-hair bg-white font-mono text-[14px] text-ink outline-none focus:border-[rgba(108,108,240,0.5)] box-border placeholder:text-ink-soft'
+const LABEL = 'block mb-1.5 uppercase tracking-[0.08em] text-[10px] font-semibold text-ink-soft'
+const HINT  = 'block mt-1 text-[11px] text-ink-soft'
 
 // ─── step indicator ───────────────────────────────────────────────────────────
 function StepDots({ current, total }: { current: number; total: number }) {
@@ -98,8 +86,8 @@ function StepDots({ current, total }: { current: number; total: number }) {
       {Array.from({ length: total }, (_, i) => (
         <div
           key={i}
-          className={`h-[7px] border border-atx-ink transition-all duration-200 ${
-            i === current ? 'w-5 bg-atx-blue' : i < current ? 'w-[7px] bg-atx-mesquite' : 'w-[7px] bg-transparent'
+          className={`h-[7px] rounded-full transition-all duration-200 ${
+            i === current ? 'w-5 bg-peri' : i < current ? 'w-[7px] bg-peri-deep' : 'w-[7px] bg-hair'
           }`}
         />
       ))}
@@ -158,11 +146,11 @@ function Step1({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
       <div>
         <label className={LABEL}>Vault name</label>
         <div
-          className={`${INPUT} flex items-center justify-between ${symStatus === 'ok' ? 'text-atx-ink' : 'text-atx-ink/40'}`}
+          className={`${INPUT} flex items-center justify-between ${symStatus === 'ok' ? 'text-ink' : 'text-ink-soft'}`}
           aria-readonly="true"
         >
           <span>{nameDisplay}</span>
-          <span className="font-atx-mono text-[9px] uppercase tracking-[0.12em] text-atx-ink/40 border border-atx-ink/20 px-1.5 py-0.5 shrink-0 ml-2">Auto</span>
+          <span className="text-[9px] uppercase tracking-[0.12em] font-semibold text-ink-soft rounded-full border border-hair px-1.5 py-0.5 shrink-0 ml-2">Auto</span>
         </div>
         <span className={HINT}>
           Generated from the pair as <b>{'{TOKEN}'}/USDC Vault</b> — so the name always matches the pool. Not editable.
@@ -175,8 +163,8 @@ function Step1({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
             <button
               key={c.id}
               onClick={() => onChange({ chainId: c.id })}
-              className={`px-5 py-2 border font-atx-mono text-[13px] font-semibold ${
-                draft.chainId === c.id ? 'border-atx-blue bg-atx-bone text-atx-blue' : 'border-atx-ink/30 bg-atx-panel text-atx-ink/60'
+              className={`px-5 py-2 rounded-full text-[13px] font-semibold border ${
+                draft.chainId === c.id ? 'border-[rgba(108,108,240,0.4)] bg-[rgba(108,108,240,0.08)] text-peri-deep' : 'border-hair bg-white text-ink-mid'
               }`}
             >
               {c.label}
@@ -199,19 +187,19 @@ function Step2({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
             <button
               key={f.bps}
               onClick={() => onChange({ feeTier: f.bps, tickSpacing: f.spacing })}
-              className={`flex items-center justify-between px-4 py-3 border text-left ${
-                draft.feeTier === f.bps ? 'border-atx-blue bg-atx-bone' : 'border-atx-ink/30 bg-atx-panel'
+              className={`flex items-center justify-between px-4 py-3 rounded-xl border text-left ${
+                draft.feeTier === f.bps ? 'border-[rgba(108,108,240,0.4)] bg-[rgba(108,108,240,0.06)]' : 'border-hair bg-white'
               }`}
             >
               <div>
-                <span className={`text-[15px] font-bold font-atx-mono ${draft.feeTier === f.bps ? 'text-atx-blue' : 'text-atx-ink'}`}>
+                <span className={`text-[15px] font-semibold font-atx-display ${draft.feeTier === f.bps ? 'text-peri-deep' : 'text-ink'}`}>
                   {f.label}
                 </span>
-                <span className="text-[12px] text-atx-ink/55 font-atx-display ml-2.5">
+                <span className="text-[12px] text-ink-mid ml-2.5">
                   {f.desc}
                 </span>
               </div>
-              <span className="text-[11px] text-atx-ink/45 font-atx-mono">
+              <span className="text-[11px] text-ink-soft font-mono">
                 tick ±{f.spacing}
               </span>
             </button>
@@ -221,7 +209,7 @@ function Step2({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
       <div>
         <label className={LABEL}>Seed amount (USDC value of tokens)</label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-atx-ink/55 font-atx-mono">$</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-ink-soft font-mono">$</span>
           <input
             type="number"
             className={`${INPUT} pl-6`}
@@ -244,7 +232,7 @@ function Step3({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
     <div className="flex flex-col gap-5">
       <div>
         <label className={LABEL}>Suggested lock tier for LPs</label>
-        <span className="block mb-2.5 text-[12px] text-atx-ink/45 font-atx-display">
+        <span className="block mb-2.5 text-[12px] text-ink-soft">
           LPs can always choose any tier — this is the pre-selected default shown on your vault page.
         </span>
         <div className="flex flex-col gap-2">
@@ -252,14 +240,14 @@ function Step3({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
             <button
               key={l.value}
               onClick={() => onChange({ defaultTier: l.value })}
-              className={`flex items-center gap-3 px-4 py-3 text-left border ${
-                draft.defaultTier === l.value ? 'border-atx-mesquite bg-atx-bone' : 'border-atx-ink/30 bg-atx-panel'
+              className={`flex items-center gap-3 px-4 py-3 text-left rounded-xl border ${
+                draft.defaultTier === l.value ? 'border-[rgba(108,108,240,0.4)] bg-[rgba(108,108,240,0.06)]' : 'border-hair bg-white'
               }`}
             >
-              <div className={`w-2 h-2 shrink-0 border border-atx-ink ${draft.defaultTier === l.value ? 'bg-atx-mesquite' : 'bg-transparent'}`} />
+              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${draft.defaultTier === l.value ? 'bg-peri' : 'bg-hair'}`} />
               <div>
-                <div className="text-[13px] font-bold text-atx-ink font-atx-display">{l.label}</div>
-                <div className="text-[11px] text-atx-ink/55 font-atx-display">{l.desc}</div>
+                <div className="text-[13px] font-semibold text-ink font-atx-display">{l.label}</div>
+                <div className="text-[11px] text-ink-mid">{l.desc}</div>
               </div>
             </button>
           ))}
@@ -267,18 +255,18 @@ function Step3({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
       </div>
 
       {/* Fee split preview */}
-      <div className="bg-atx-panel border border-atx-ink p-4">
-        <div className="mb-3 font-atx-mono uppercase tracking-[0.1em] text-[11px] text-atx-ink/60">
+      <div className="soft-card p-4">
+        <div className="mb-3 uppercase tracking-[0.1em] text-[11px] font-semibold text-ink-soft">
           Fee split (fixed by protocol)
         </div>
         {FEE_SPLIT.map(({ label, pct, bar, txt }) => (
           <div key={label} className="mb-2.5">
             <div className="flex justify-between mb-1">
-              <span className="text-[12px] text-atx-ink/55 font-atx-display">{label}</span>
-              <span className={`text-[13px] font-bold font-atx-mono ${txt}`}>{pct}%</span>
+              <span className="text-[12px] text-ink-mid">{label}</span>
+              <span className={`text-[13px] font-semibold tabular-nums ${txt}`}>{pct}%</span>
             </div>
-            <div className="h-[8px] border border-atx-ink overflow-hidden relative">
-              <div className={`absolute inset-y-0 left-0 ${bar}`} style={{ width: `${pct}%` }} />
+            <div className="h-[8px] rounded-full bg-ground-cool overflow-hidden relative">
+              <div className={`absolute inset-y-0 left-0 rounded-full ${bar}`} style={{ width: `${pct}%` }} />
             </div>
           </div>
         ))}
@@ -312,28 +300,27 @@ function Step4({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="bg-atx-panel border border-atx-ink overflow-hidden">
+      <div className="soft-card overflow-hidden">
         {rows.map(({ label, value, mono }, i) => (
           <div
             key={label}
-            className={`flex justify-between items-center px-4 py-[11px] ${i < rows.length - 1 ? 'border-b border-atx-ink/20' : ''}`}
+            className={`flex justify-between items-center px-4 py-[11px] ${i < rows.length - 1 ? 'border-b border-hair-soft' : ''}`}
           >
-            <span className="text-[12px] text-atx-ink/55 font-atx-display">{label}</span>
-            <span className={`text-[13px] font-semibold text-atx-ink ${mono ? 'font-atx-mono' : 'font-atx-display'}`}>{value}</span>
+            <span className="text-[12px] text-ink-mid">{label}</span>
+            <span className={`text-[13px] font-semibold text-ink ${mono ? 'font-mono' : 'font-atx-display'}`}>{value}</span>
           </div>
         ))}
       </div>
 
-      <div className="bg-atx-panel border border-atx-ink/25 border-l-[3px] border-l-atx-clay px-3.5 py-2.5 text-[12px] text-atx-clay font-atx-display leading-[1.5] flex items-start gap-2">
-        <Star className="w-3.5 h-3.5 shrink-0 mt-0.5 text-atx-clay" />
+      <div className="rounded-xl bg-white border border-hair px-3.5 py-2.5 text-[12px] text-ink-mid leading-[1.5]" style={{ borderLeft: '3px solid var(--color-peri)' }}>
         <span>This registers your vault against the live Mintware pair vault. On-chain pool creation and initial liquidity are handled by the Mintware provider.</span>
       </div>
 
-      <div className="bg-atx-panel border border-atx-ink/20 px-3.5 py-2.5">
-        <div className="mb-1.5 font-atx-mono uppercase tracking-[0.08em] text-[10px] text-atx-ink/55">
+      <div className="soft-card px-3.5 py-2.5">
+        <div className="mb-1.5 uppercase tracking-[0.08em] text-[10px] font-semibold text-ink-soft">
           What will happen
         </div>
-        <div className="flex flex-col gap-1 text-[12px] text-atx-ink/60 font-atx-display leading-[1.55]">
+        <div className="flex flex-col gap-1 text-[12px] text-ink-mid leading-[1.55]">
           <div>1. Your wallet signs a message authorizing the vault record — no funds move.</div>
           <div>2. Mintware creates the vault entry pointing at the deployed pair contract.</div>
           <div>3. It appears in the vault list, ready for dual-token LP deposits.</div>
@@ -341,7 +328,7 @@ function Step4({
       </div>
 
       {error && (
-        <div className="text-[12px] text-atx-clay bg-atx-panel border border-atx-clay/40 px-3.5 py-2.5 font-atx-display">
+        <div className="text-[12px] text-[#D14343] rounded-xl bg-[rgba(209,67,67,0.05)] border border-[rgba(209,67,67,0.3)] px-3.5 py-2.5">
           {error}
         </div>
       )}
@@ -349,13 +336,13 @@ function Step4({
       <button
         onClick={onDeploy}
         disabled={submitting}
-        className="p-[13px] bg-atx-blue text-white border border-atx-ink font-atx-mono text-[15px] font-bold disabled:opacity-60 disabled:cursor-not-allowed transition-opacity"
+        className="glass-pill w-full justify-center !py-[13px] text-[15px] disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {submitting ? submitLabel : 'Deploy vault →'}
       </button>
 
       {submitting && (
-        <div className="text-[11px] text-atx-ink/55 font-atx-display bg-atx-panel border border-atx-ink/20 px-3 py-2 leading-[1.5]">
+        <div className="text-[11px] text-ink-mid rounded-xl bg-ground-cool border border-hair px-3 py-2 leading-[1.5]">
           If your wallet does not appear right away, open your wallet app or extension and look for a pending request.
         </div>
       )}
@@ -452,24 +439,22 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
   const STEPS = ['Project', 'Pool', 'Defaults', 'Review']
 
   if (deployed) return (
-    <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
+    <div className="bg-white min-h-screen font-atx-display text-ink">
       <MwNav />
-      <div className="max-w-[560px] mx-auto my-20 px-7 text-center [&_*]:rounded-none">
-        <div className="flex justify-center mb-4"><Star className="w-12 h-12 text-atx-coral" /></div>
-        <div className="text-[22px] font-extrabold text-atx-ink font-atx-display mb-2">
+      <div className="max-w-[560px] mx-auto my-20 px-7 text-center">
+        <div className="flex justify-center mb-4">
+          <span className="w-12 h-12 rounded-2xl grid place-items-center text-white text-[22px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 6px 18px rgba(108,108,240,0.35)' }}>✴</span>
+        </div>
+        <div className="text-[22px] font-medium text-ink font-atx-display mb-2 tracking-[-0.02em]">
           Vault created
         </div>
-        <div className="text-[14px] text-atx-ink/55 font-atx-display mb-7 leading-[1.6]">
-          <strong>{draft.name}</strong> is registered against the live Mintware pair vault and now appears in the vault list for dual-token LP deposits.
+        <div className="text-[14px] text-ink-mid mb-7 leading-[1.6]">
+          <strong className="text-ink">{draft.name}</strong> is registered against the live Mintware pair vault and now appears in the vault list for dual-token LP deposits.
         </div>
         <div className="flex gap-2.5 justify-center">
-          <Link href="/app/vaults" className="px-5 py-2.5 bg-atx-blue text-white border border-atx-ink text-[14px] font-semibold font-atx-mono no-underline">
-            View all vaults
-          </Link>
+          <Link href="/app/vaults" className="glass-pill">View all vaults</Link>
           {deployed !== 'new' && (
-            <Link href={`/app/vault/${deployed}`} className="px-5 py-2.5 border border-atx-ink/30 bg-atx-panel text-atx-ink text-[14px] font-semibold font-atx-mono no-underline">
-              View vault →
-            </Link>
+            <Link href={`/app/vault/${deployed}`} className="glass-pill">View vault →</Link>
           )}
         </div>
       </div>
@@ -477,28 +462,28 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
   )
 
   return (
-    <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
+    <div className="bg-white min-h-screen font-atx-display text-ink">
       <MwNav />
-      <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px] max-[640px]:px-4 max-[640px]:pt-5 [&_*]:rounded-none">
+      <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px] max-[640px]:px-4 max-[640px]:pt-5">
 
         {/* Breadcrumb */}
         <div className="mb-5 flex items-center gap-2">
-          <button onClick={onBack} className="text-[13px] text-atx-ink/55 font-atx-display no-underline hover:text-atx-ink bg-transparent border-0 cursor-pointer p-0">
+          <button onClick={onBack} className="text-[13px] text-ink-mid no-underline hover:text-ink bg-transparent border-0 cursor-pointer p-0">
             ← Change surface
           </button>
-          <span className="text-atx-ink/30">/</span>
-          <span className="text-[13px] text-atx-ink font-atx-display font-semibold">Create DeFi vault</span>
+          <span className="text-ink-soft">/</span>
+          <span className="text-[13px] text-ink font-semibold">Create DeFi vault</span>
         </div>
 
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-[22px] font-extrabold text-atx-ink font-atx-display m-0">
+            <h1 className="text-[22px] font-medium text-ink font-atx-display m-0 tracking-[-0.02em]">
               {STEPS[step]}
             </h1>
             <StepDots current={step} total={STEPS.length} />
           </div>
-          <div className="text-[13px] text-atx-ink/55 font-atx-display">
+          <div className="text-[13px] text-ink-mid">
             {step === 0 && 'Tell us about your project and the token you\'re seeding.'}
             {step === 1 && 'Configure the V4 pool parameters for your vault.'}
             {step === 2 && 'Set LP defaults and review the fee distribution.'}
@@ -507,7 +492,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
         </div>
 
         {/* Step card */}
-        <div className="bg-atx-panel border border-atx-ink p-7">
+        <div className="soft-card p-7">
           {step === 0 && <Step1 draft={draft} onChange={patch} />}
           {step === 1 && <Step2 draft={draft} onChange={patch} />}
           {step === 2 && <Step3 draft={draft} onChange={patch} />}
@@ -517,14 +502,14 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
           {step < 3 && (
             <div className="flex items-center justify-between mt-6">
               <button
-                className="px-[22px] py-2.5 bg-transparent border border-atx-ink/30 text-atx-ink/60 font-atx-mono text-[14px] font-semibold hover:border-atx-ink"
+                className="glass-pill glass-pill-sm"
                 onClick={() => step > 0 ? setStep(s => s - 1) : undefined}
                 style={{ visibility: step === 0 ? 'hidden' : 'visible' }}
               >
                 Back
               </button>
               <button
-                className="px-[22px] py-2.5 bg-atx-blue text-white border border-atx-ink font-atx-mono text-[14px] font-semibold disabled:opacity-45 disabled:cursor-not-allowed"
+                className="glass-pill glass-pill-sm disabled:opacity-45 disabled:cursor-not-allowed"
                 onClick={() => setStep(s => s + 1)}
                 disabled={!canAdvance()}
               >
@@ -534,7 +519,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
           )}
           {step === 3 && (
             <button
-              className="mt-2.5 w-full px-[22px] py-2.5 bg-transparent border border-atx-ink/30 text-atx-ink/60 font-atx-mono text-[14px] font-semibold hover:border-atx-ink"
+              className="mt-2.5 w-full glass-pill glass-pill-sm justify-center"
               onClick={() => setStep(2)}
             >
               ← Back to edit
@@ -561,11 +546,11 @@ function CreateVaultContent() {
 
   if (!mounted) {
     return (
-      <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
+      <div className="bg-white min-h-screen font-atx-display text-ink">
         <MwNav />
-        <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px] [&_*]:rounded-none">
-          <div className="bg-atx-panel border border-atx-ink p-7">
-            <div className="text-[13px] text-atx-ink/55 font-atx-display">
+        <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px]">
+          <div className="soft-card p-7">
+            <div className="text-[13px] text-ink-mid">
               Loading vault creator…
             </div>
           </div>
