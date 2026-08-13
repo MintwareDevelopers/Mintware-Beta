@@ -34,6 +34,9 @@ k256 = { version = "0.13", features = ["ecdsa"] }
 # Exercise the axum router in-process (no socket) for the server wiring tests.
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+# Prove the Redis atomic-reserve Lua script with an EMBEDDED Lua interpreter + a mock Redis, so the
+# race-safety logic is verified without a Redis server (which we don't have here).
+mlua = { version = "0.9", features = ["lua54", "vendored"] }
 
 [lints.rust]
 unsafe_code = "forbid"

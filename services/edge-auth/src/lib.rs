@@ -11,6 +11,7 @@
 pub mod chain;
 pub mod ledger;
 pub mod nav;
+pub mod redis_lua;
 pub mod refresher;
 pub mod server;
 pub mod signer;
