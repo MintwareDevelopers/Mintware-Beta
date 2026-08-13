@@ -114,37 +114,37 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
 
   return (
     <div
-      className={`fixed inset-0 bg-atx-ink/40 z-[1099] flex items-center justify-center p-6 transition-opacity duration-[250ms] ease-out ${animIn ? 'opacity-100' : 'opacity-0'}`}
+      className={`fixed inset-0 bg-ink/40 backdrop-blur-[2px] z-[1099] flex items-center justify-center p-6 transition-opacity duration-[250ms] ease-out ${animIn ? 'opacity-100' : 'opacity-0'}`}
       onClick={() => dismiss(true)}
     >
       <div
-        className={`bg-atx-panel border border-atx-ink shadow-[4px_4px_0_0_rgba(17,17,17,0.12)] z-[1100] p-[36px_28px_28px] w-full max-w-[400px] transition-[transform,opacity] duration-[250ms] ease-out font-atx-display relative [&_*]:rounded-none ${animIn ? 'scale-100 translate-y-0 opacity-100' : 'scale-[0.94] translate-y-2 opacity-0'}`}
+        className={`rounded-[var(--radius-panel)] bg-white border border-hair shadow-lift z-[1100] p-[36px_28px_28px] w-full max-w-[400px] transition-[transform,opacity] duration-[250ms] ease-out font-atx-display relative ${animIn ? 'scale-100 translate-y-0 opacity-100' : 'scale-[0.94] translate-y-2 opacity-0'}`}
         onClick={e => e.stopPropagation()}
       >
-        <div className="w-[36px] h-[4px] bg-atx-ink/20 mx-auto mb-6" />
+        <div className="w-[40px] h-[4px] rounded-full bg-hair mx-auto mb-6" />
 
         {promptState === 'success' ? (
           /* Success state */
           <div className="text-center py-3">
-            <div className="w-[52px] h-[52px] border border-atx-ink flex items-center justify-center mx-auto mb-4">
-              <span className="w-[14px] h-[14px] bg-atx-acid border border-atx-ink inline-block" />
+            <div className="w-[52px] h-[52px] rounded-2xl grid place-items-center mx-auto mb-4 text-white text-[20px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 4px 14px rgba(108,108,240,0.35)' }}>
+              ✓
             </div>
-            <div className="text-[18px] font-bold text-atx-mesquite">
+            <div className="text-[18px] font-medium text-coral2-deep">
               Referral applied
             </div>
           </div>
         ) : (
           /* Input state */
           <>
-            <div className="text-[20px] font-bold text-atx-ink mb-[6px] text-center tracking-[-0.02em]">
+            <div className="text-[20px] font-medium text-ink mb-[6px] text-center tracking-[-0.02em]">
               Do you have a referral code?
             </div>
-            <div className="text-[13px] text-atx-ink/55 text-center mb-6 font-atx-mono">
+            <div className="text-[13px] text-ink-mid text-center mb-6">
               Enter a code to credit your referrer
             </div>
 
             <input
-              className="w-full box-border bg-atx-bone border border-atx-ink/30 p-[14px_16px] font-atx-mono text-[18px] text-atx-ink outline-none transition-[border-color] duration-150 tracking-[0.5px] placeholder:text-atx-ink/30 focus:border-atx-blue"
+              className="w-full box-border rounded-xl bg-ground-cool border border-hair p-[14px_16px] font-mono text-[18px] text-ink outline-none transition-[border-color] duration-150 tracking-[0.5px] placeholder:text-ink-soft focus:border-[rgba(108,108,240,0.5)]"
               type="text"
               placeholder="mw_xxxxxx or jake"
               value={code}
@@ -161,13 +161,13 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
 
             {/* Error message */}
             {errorMsg && (
-              <div className="text-[12px] text-atx-clay mt-2 pl-[2px] font-atx-mono">
+              <div className="text-[12px] text-[#D14343] mt-2 pl-[2px]">
                 {errorMsg}
               </div>
             )}
 
             <button
-              className="w-full p-[14px] bg-atx-blue text-white border border-atx-ink font-atx-mono text-[14px] font-semibold uppercase tracking-[0.05em] cursor-pointer transition-opacity duration-150 mt-3 disabled:opacity-50 disabled:cursor-not-allowed hover:not-disabled:opacity-90"
+              className="w-full p-[14px] rounded-full bg-peri text-white text-[14px] font-semibold cursor-pointer transition-colors duration-150 mt-3 disabled:opacity-50 disabled:cursor-not-allowed hover:not-disabled:bg-peri-deep"
               disabled={!isValid || promptState === 'submitting'}
               onClick={handleApply}
             >
@@ -175,7 +175,7 @@ export function RefCodePrompt({ wallet, onDismiss }: RefCodePromptProps) {
             </button>
 
             <button
-              className="w-full p-3 bg-transparent border-none text-atx-ink/55 font-atx-mono text-[12px] uppercase tracking-[0.05em] cursor-pointer mt-[6px] hover:text-atx-ink"
+              className="w-full p-3 bg-transparent border-none text-ink-soft text-[12px] cursor-pointer mt-[6px] hover:text-ink"
               onClick={() => dismiss(true)}
             >
               Skip
