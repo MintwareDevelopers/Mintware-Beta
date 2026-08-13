@@ -1,5 +1,5 @@
 // YpnHero — Liquid Sovereign Account hero (v2 Privy-esque). COMING SOON: no
-// "Launch app" CTA. Server component (anchor scroll only).
+// "Launch app" CTA. Server component. Headline + four capability bullets.
 
 import { YPN_HERO, YPN_STATUS } from '@/constants/ypn-landing'
 
@@ -18,20 +18,17 @@ export function YpnHero() {
           {YPN_HERO.title} <span className="text-peri">{YPN_HERO.titleAccent}</span>
         </h1>
 
-        <p className="text-ink-mid text-[clamp(1.05rem,1.7vw,1.3rem)] leading-[1.5] mt-7 max-w-[62ch]">
-          {YPN_HERO.sub}
-        </p>
-
-        <div className="mt-9">
-          <a href={YPN_HERO.secondaryHref} className="glass-pill">{YPN_HERO.secondaryCta} ↓</a>
-        </div>
-
-        {/* Honest status — coming soon */}
-        <div className="mt-8 inline-flex items-start gap-2.5 rounded-2xl bg-white/70 backdrop-blur-[10px] border border-hair px-4 py-3 max-w-[700px]">
-          <span className="w-[7px] h-[7px] rounded-full bg-peri shrink-0 mt-[5px]" />
-          <span className="text-[12px] leading-[1.55] text-ink-mid">
-            <b className="text-ink font-semibold uppercase tracking-[0.06em]">{YPN_STATUS.label}.</b> {YPN_STATUS.note}
-          </span>
+        {/* Four capabilities */}
+        <div className="mt-10 grid grid-cols-2 gap-3 max-w-[860px] max-[680px]:grid-cols-1">
+          {YPN_HERO.bullets.map((b) => (
+            <div key={b.title} className="rounded-2xl bg-white/70 backdrop-blur-[10px] border border-hair px-5 py-4">
+              <div className="flex items-center gap-2.5">
+                <span className="w-[7px] h-[7px] rounded-full bg-peri shrink-0" />
+                <span className="font-atx-display font-medium text-[15px] tracking-[-0.01em] text-ink">{b.title}</span>
+              </div>
+              <p className="text-[13px] leading-[1.5] text-ink-mid mt-1.5 pl-[17px]">{b.body}</p>
+            </div>
+          ))}
         </div>
       </div>
     </section>
