@@ -15,6 +15,8 @@ import {IERC20}                from "@openzeppelin/contracts/token/ERC20/IERC20.
 import {MintwareDeFiPairVault} from "../../src/vaults/MintwareDeFiPairVault.sol";
 import {IYieldAdapter}         from "../../src/vaults/IYieldAdapter.sol";
 import {LockTier}              from "../../src/vaults/VaultTypes.sol";
+import {AaveV3YieldAdapter}    from "../../src/vaults/AaveV3YieldAdapter.sol";
+import {IPoolAddressesProvider} from "../../src/vaults/aave/IAaveV3.sol";
 
 import {TestSwapRouter}        from "../helpers/TestSwapRouter.sol";
 
@@ -49,6 +51,8 @@ contract ULVDeploymentForkTest is Test {
     address internal constant VAULT_ADDR    = 0x6c0D6460b7Eb094864F6b557506f5519B0c75132;
     address internal constant HOOK_ADDR     = 0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8;
     address internal constant ADAPTER0_WETH = 0xf95144636de6bf6c6Aa6C28006Cc6AB6f1d21Da2; // WETH sink
+    address internal constant AAVE_PROVIDER  = 0xE4C23309117Aa30342BFaae6c95c6478e0A4Ad00; // Aave v3 PoolAddressesProvider
+    address internal constant AWETH          = 0x73a5bB60b0B0fc35710DDc0ea9c407031E31Bdbb; // aToken for WETH
     address internal constant ADAPTER1_USDC = 0xBE7F9727521B2d013c0520c0303391Fa576b9Ddd; // USDC sink
     address internal constant WETH          = 0x4200000000000000000000000000000000000006; // currency0
     address internal constant USDC          = 0xba50Cd2A20f6DA35D788639E581bca8d0B5d4D5f; // currency1 (Aave)
@@ -156,10 +160,20 @@ contract ULVDeploymentForkTest is Test {
         // STEP 3 — IDLE IN AAVE: supplyIdle moves pooled principal into REAL Aave v3.
         //          The load-bearing real-Aave proof: adapter.totalAssets() must INCREASE.
         // ─────────────────────────────────────────────────────────────────────────────────────
+        // FIX PROOF (maxSuppliable now models Aave's supply cap): the DEPLOYED live adapter predates
+        // this fix, so deploy a FRESH adapter for the REAL WETH market. With a supply cap set it must
+        // return FINITE headroom (not type(uint256).max) — i.e. the cap is modeled — so that once the
+        // market is at cap the vault's `maxSuppliable()==0` idle guard no-ops instead of reverting
+        // SupplyCapExceeded. (Pre-fix, maxSuppliable returned type(uint256).max regardless of the cap.)
+        AaveV3YieldAdapter freshWeth =
+            new AaveV3YieldAdapter(IPoolAddressesProvider(AAVE_PROVIDER), WETH, AWETH, address(0), address(this));
+        assertLt(freshWeth.maxSuppliable(), type(uint256).max, "capped WETH market => FINITE headroom (cap modeled, not max)");
         // Lift the FULL testnet Aave supply caps (documented workaround — see _liftAaveSupplyCap) so
         // the deployed adapter's REAL Aave `supply()` isn't blocked by a caps-full testnet market.
         _liftAaveSupplyCap(WETH);
         _liftAaveSupplyCap(USDC);
+        // Cap lifted (getSupplyCap==0) ⇒ the fixed adapter reports the uncapped sentinel again.
+        assertEq(freshWeth.maxSuppliable(), type(uint256).max, "uncapped WETH market => max (cap lifted)");
 
         uint256 a0Before = IYieldAdapter(ADAPTER0_WETH).totalAssets();
         uint256 a1Before = IYieldAdapter(ADAPTER1_USDC).totalAssets();

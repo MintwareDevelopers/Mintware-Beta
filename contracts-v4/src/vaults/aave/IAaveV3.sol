@@ -27,6 +27,9 @@ interface IPool {
 
 interface IAToken {
     function balanceOf(address) external view returns (uint256);
+    /// @notice Index-applied total aToken supply — the reserve's current supplied amount, used to
+    ///         model Aave's supply-cap headroom in `maxSuppliable()`.
+    function totalSupply() external view returns (uint256);
     /// @notice The underlying this aToken represents — used to VERIFY the adapter was wired to the
     ///         correct aToken for its asset (guards against a mis-configured / attacker-swapped aToken).
     function UNDERLYING_ASSET_ADDRESS() external view returns (address);
@@ -43,5 +46,14 @@ library ReserveFlags {
     }
     function isPaused(ReserveConfigurationMap memory c) internal pure returns (bool) {
         return (c.data >> 60) & 1 == 1;
+    }
+    /// @dev Reserve decimals — bits 48-55 of the packed config.
+    function getDecimals(ReserveConfigurationMap memory c) internal pure returns (uint256) {
+        return (c.data >> 48) & 0xFF;
+    }
+    /// @dev Supply cap in WHOLE tokens — bits 116-151 (36-bit). 0 = uncapped. Aave enforces
+    ///      `currentSupply + amount <= supplyCap * 10**decimals`, so this bounds `maxSuppliable`.
+    function getSupplyCap(ReserveConfigurationMap memory c) internal pure returns (uint256) {
+        return (c.data >> 116) & 0xFFFFFFFFF;
     }
 }
