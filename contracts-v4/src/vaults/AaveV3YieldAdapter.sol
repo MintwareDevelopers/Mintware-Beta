@@ -159,7 +159,14 @@ contract AaveV3YieldAdapter is IYieldAdapter, Ownable, ReentrancyGuard {
     function maxSuppliable() external view override returns (uint256) {
         ReserveConfigurationMap memory cfg = IPool(ADDRESSES_PROVIDER.getPool()).getConfiguration(address(asset));
         if (!cfg.isActive() || cfg.isPaused() || cfg.isFrozen()) return 0;
-        return type(uint256).max;
+        // Model Aave's supply cap so the vault's `maxSuppliable()==0` idle guard degrades gracefully
+        // (no-op) against a caps-full reserve instead of reverting `SupplyCapExceeded` (found by the
+        // live Base-Sepolia fork test — the WETH market was at cap). `getSupplyCap()==0` ⇒ uncapped.
+        uint256 cap = cfg.getSupplyCap();
+        if (cap == 0) return type(uint256).max;
+        uint256 capScaled = cap * (10 ** cfg.getDecimals());
+        uint256 current = aToken.totalSupply(); // index-applied ≈ Aave's counted current supply
+        return current >= capScaled ? 0 : capScaled - current;
     }
 
     function _blockRemaining() internal view returns (uint256) {
