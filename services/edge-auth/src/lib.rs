@@ -18,7 +18,7 @@ pub mod store;
 pub mod types;
 
 pub use ledger::{authorize, available, Account, Decision, Decline, Global};
-pub use nav::NavSnapshot;
+pub use nav::{NavSnapshot, VaultCollateral};
 pub use store::{AuthOutcome, Hold, HoldStatus, MemStore};
 
 /// USDC amount, 6 decimals (matches the on-chain settlement asset).
@@ -26,26 +26,19 @@ pub type Usdc = u128;
 /// Vault share amount.
 pub type Shares = u128;
 
-/// `a * b / c`, rounding DOWN, without overflowing on the intermediate product.
+/// `a * b / c`, rounding DOWN, computed in 256-bit so the intermediate product never overflows.
 ///
-/// Mirrors the vault's `mulDiv(..., Rounding.Floor)`. Realistic values (shares/assets ≤ ~1e15) fit in
-/// a single `u128` product, but we fall back to a reduced-remainder computation if `a * b` would
-/// overflow — so the core is correct for any input, never panicking.
+/// Mirrors the vault's `mulDiv(..., Rounding.Floor)`. The ETH-collateral path multiplies a whale's
+/// asset amount (`~1e22`) by a virtual-offset ratio and a price, whose product exceeds `u128`; a
+/// `U256` intermediate is exact for any input. Never panics: `c == 0` degrades to 0 (a payment path
+/// must not panic), and the result clamps to `u128::MAX` if it somehow wouldn't fit.
 pub(crate) fn mul_div_floor(a: u128, b: u128, c: u128) -> u128 {
-    // c is always `total_shares + virtual_offset` (>= 1e3) in real use, so it is never 0; guard
-    // defensively anyway — a payment path must never panic, so degrade to 0 rather than divide by zero.
     if c == 0 {
         return 0;
     }
-    match a.checked_mul(b) {
-        Some(p) => p / c,
-        None => {
-            // a*b/c  =  (a/c)*b + ((a%c)*b)/c, recursing only on the remainder term (a%c < c).
-            let hi = (a / c).saturating_mul(b);
-            let lo = mul_div_floor(a % c, b, c);
-            hi.saturating_add(lo)
-        }
-    }
+    let prod = alloy_primitives::U256::from(a) * alloy_primitives::U256::from(b);
+    let quot = prod / alloy_primitives::U256::from(c);
+    u128::try_from(quot).unwrap_or(u128::MAX)
 }
 
 #[cfg(test)]

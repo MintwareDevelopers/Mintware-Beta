@@ -9,7 +9,7 @@ use alloy_primitives::{hex, Address, U256};
 use alloy_sol_types::{sol, SolCall};
 use serde_json::json;
 
-use crate::nav::NavSnapshot;
+use crate::nav::{NavSnapshot, VaultCollateral};
 
 sol! {
     function totalAssets() external view returns (uint256);
@@ -109,6 +109,8 @@ impl EthReader {
             virtual_offset: VAULT_VIRTUAL_OFFSET,
             idle_buffer,
             observed_at_secs,
+            // The v1 vault is single-asset USDC → price-free. Multi-collateral is a dark seam.
+            collateral: VaultCollateral::Usdc,
         })
     }
 

@@ -34,6 +34,8 @@ pub struct Global {
 pub enum Decline {
     /// The cached NAV is older than the allowed age — fail safe rather than authorize stale.
     StaleNav,
+    /// The collateral push price is stale (ETH-collateral vaults only) — fail safe.
+    StalePrice,
     /// Zero (or dust-to-zero) amount.
     ZeroAmount,
     /// Amount exceeds the user's equity net of their own active holds.
@@ -83,6 +85,10 @@ pub fn authorize(
     if !nav.is_fresh(now_secs, max_nav_age_secs) {
         return Decision::Decline(Decline::StaleNav);
     }
+    // For ETH-collateral vaults, the push price has its own staleness guard (no-op for USDC).
+    if !nav.price_is_fresh(now_secs, max_nav_age_secs) {
+        return Decision::Decline(Decline::StalePrice);
+    }
     if amount == 0 {
         return Decision::Decline(Decline::ZeroAmount);
     }
@@ -115,6 +121,7 @@ mod tests {
             virtual_offset: 1_000,
             idle_buffer: 10_000_000_000,    // fully liquid
             observed_at_secs: 1_000,
+            collateral: crate::nav::VaultCollateral::Usdc,
         }
     }
     // $1,000 equity, no holds, $500 daily cap unused.
@@ -205,6 +212,18 @@ mod tests {
         assert_eq!(
             authorize(&stale, &acct(), &global(), 1_000_000, NOW, MAX_AGE),
             Decision::Decline(Decline::StaleNav)
+        );
+    }
+
+    #[test]
+    fn declines_stale_price_on_eth_collateral() {
+        // Fresh NAV but a STALE ETH push price → decline stale_price (fail safe). USDC is unaffected.
+        let mut nav = fresh_nav();
+        nav.collateral = crate::nav::VaultCollateral::Eth { price_usd_6dp: 2_000_000_000, haircut_bps: 7_000, price_observed_at_secs: 800 };
+        // now=1010, price age 210 > 30 → stale.
+        assert_eq!(
+            authorize(&nav, &acct(), &global(), 1_000_000, NOW, MAX_AGE),
+            Decision::Decline(Decline::StalePrice)
         );
     }
 

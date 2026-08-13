@@ -1,15 +1,31 @@
 //! Cached vault NAV — the O(1) read the hot path values a user's equity against.
 //!
-//! Price-free by construction (single-asset USDC vault), so equity is computed with the *same*
-//! symmetric virtual-offset math as `MintwareYieldVault.convertToAssets` (round DOWN). A staleness
-//! guard lets the caller fail safe (decline) rather than authorize against an old snapshot.
+//! Single-asset USDC vaults are **price-free**: equity is `convertToAssets(shares)` (the vault's own
+//! virtual-offset math, round DOWN) with no oracle in the money path. The `VaultCollateral` seam lets
+//! a non-stable vault (ETH/WETH/LST) apply a push price + LTV haircut — but that arm is **dark** until
+//! the multi-collateral risk work lands (see the spec). USDC stays the exact price-free identity, so
+//! turning the seam on for USDC changes nothing.
 
 use crate::{mul_div_floor, Shares, Usdc};
 
-/// A point-in-time view of the vault, refreshed from chain on an interval (later increment).
+const WAD: u128 = 1_000_000_000_000_000_000; // 1e18 — asset-native scale for ETH-like collateral
+const BPS: u128 = 10_000;
+
+/// What a vault holds behind its shares — decides how shares convert to *spendable USD*.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultCollateral {
+    /// Price-free stablecoin: γ = 1, P = $1. The ONLY variant enabled in production.
+    Usdc,
+    /// SEAM ONLY — dark until multi-collateral ships (oracle + staleness, settlement ETH→USDC swap,
+    /// γ VaR-modeled to cover intra-hold drawdown + settlement slippage). Carries its own push price
+    /// (USD, 6dp), LTV haircut (bps), and the price's own observation time for a staleness guard.
+    Eth { price_usd_6dp: u128, haircut_bps: u16, price_observed_at_secs: u64 },
+}
+
+/// A point-in-time view of the vault, refreshed from chain on an interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NavSnapshot {
-    /// `adapter.totalAssets() + usdc.balanceOf(vault)` — the vault's total USDC backing.
+    /// `adapter.totalAssets() + usdc.balanceOf(vault)` — the vault's total backing (asset-native units).
     pub total_assets: Usdc,
     /// `vault.totalShares()`.
     pub total_shares: Shares,
@@ -19,12 +35,14 @@ pub struct NavSnapshot {
     pub idle_buffer: Usdc,
     /// Unix seconds when this snapshot was read from chain.
     pub observed_at_secs: u64,
+    /// What backs the shares (drives share→USD conversion). Defaults to the price-free USDC identity.
+    pub collateral: VaultCollateral,
 }
 
 impl NavSnapshot {
-    /// USDC redeemable for `shares` at this NAV — `shares · (ta + V) / (ts + V)`, rounded DOWN.
-    /// Identical to the vault's `convertToAssets`, so the edge never over-credits a user.
-    pub fn equity(&self, shares: Shares) -> Usdc {
+    /// Raw vault asset amount for `shares` (asset-native units) — `shares·(ta+V)/(ts+V)`, round DOWN.
+    /// Identical to the vault's `convertToAssets`.
+    pub fn asset_amount(&self, shares: Shares) -> u128 {
         mul_div_floor(
             shares,
             self.total_assets.saturating_add(self.virtual_offset),
@@ -32,10 +50,35 @@ impl NavSnapshot {
         )
     }
 
-    /// True if the snapshot is no older than `max_age_secs` at `now_secs`. A monotonic-clock skew
-    /// (now < observed) is treated as fresh (age 0) rather than panicking.
+    /// SPENDABLE USD (6dp) for `shares`, collateral-aware — the number authorizations are sized against.
+    /// USDC = identity (price-free). ETH applies push price + haircut, overflow-safe, rounding DOWN so
+    /// the edge never over-credits.
+    pub fn equity(&self, shares: Shares) -> Usdc {
+        let base = self.asset_amount(shares);
+        match self.collateral {
+            VaultCollateral::Usdc => base, // already USD (6dp), γ=1
+            VaultCollateral::Eth { price_usd_6dp, haircut_bps, .. } => {
+                // base is ETH-native (1e18). base(1e18) * P(6dp) / 1e18 => USD(6dp); then apply γ.
+                let gross_usd = mul_div_floor(base, price_usd_6dp, WAD);
+                mul_div_floor(gross_usd, haircut_bps as u128, BPS)
+            }
+        }
+    }
+
+    /// True if the snapshot is no older than `max_age_secs`. Clock skew (now < observed) → fresh.
     pub fn is_fresh(&self, now_secs: u64, max_age_secs: u64) -> bool {
         now_secs.saturating_sub(self.observed_at_secs) <= max_age_secs
+    }
+
+    /// For ETH collateral, whether the push PRICE is fresh (its own staleness guard). Always true for
+    /// USDC — there is no price to go stale.
+    pub fn price_is_fresh(&self, now_secs: u64, max_price_age_secs: u64) -> bool {
+        match self.collateral {
+            VaultCollateral::Usdc => true,
+            VaultCollateral::Eth { price_observed_at_secs, .. } => {
+                now_secs.saturating_sub(price_observed_at_secs) <= max_price_age_secs
+            }
+        }
     }
 }
 
@@ -43,40 +86,76 @@ impl NavSnapshot {
 mod tests {
     use super::*;
 
-    fn nav(total_assets: Usdc, total_shares: Shares) -> NavSnapshot {
-        NavSnapshot { total_assets, total_shares, virtual_offset: 1_000, idle_buffer: total_assets, observed_at_secs: 1_000 }
+    fn usdc_nav(total_assets: Usdc, total_shares: Shares) -> NavSnapshot {
+        NavSnapshot {
+            total_assets,
+            total_shares,
+            virtual_offset: 1_000,
+            idle_buffer: total_assets,
+            observed_at_secs: 1_000,
+            collateral: VaultCollateral::Usdc,
+        }
     }
 
     #[test]
-    fn equity_at_genesis_parity_is_one_to_one_minus_offset_dust() {
-        // Fresh vault, one depositor of $1,000 → shares ~= assets; equity round-trips within dust.
-        let n = nav(1_000_000_000, 1_000_000_000);
+    fn usdc_equity_is_price_free_identity() {
+        let n = usdc_nav(1_000_000_000, 1_000_000_000);
         let e = n.equity(1_000_000_000);
-        assert!(e <= 1_000_000_000, "equity must never exceed contributed (round down)");
-        assert!(1_000_000_000 - e <= 2, "round-trip lost more than dust");
+        assert_eq!(e, n.asset_amount(1_000_000_000)); // identity — γ=1, P=1
+        assert!(e <= 1_000_000_000 && 1_000_000_000 - e <= 2);
     }
 
     #[test]
-    fn equity_rises_with_yield() {
-        // Same shares, more assets (Aave interest) → more equity. Price-free NAV only goes up.
-        let before = nav(1_000_000_000, 1_000_000_000).equity(500_000_000);
-        let after = nav(1_100_000_000, 1_000_000_000).equity(500_000_000);
-        assert!(after > before, "equity should rise as total_assets grows");
+    fn usdc_equity_rises_with_yield() {
+        let before = usdc_nav(1_000_000_000, 1_000_000_000).equity(500_000_000);
+        let after = usdc_nav(1_100_000_000, 1_000_000_000).equity(500_000_000);
+        assert!(after > before);
     }
 
     #[test]
-    fn equity_rounds_down_never_over_credits() {
-        // 1 share of a pool where ta/ts is fractional must floor.
-        let n = nav(3, 2); // (3+1000)/(2+1000) < 1.001
-        assert_eq!(n.equity(1), mul_div_floor(1, 1003, 1002));
+    fn eth_equity_applies_price_and_haircut_rounding_down() {
+        // 2 ETH of shares (1:1 vault, 18dp), ETH=$2,000 (6dp), γ=0.70 → 2 * 2000 * 0.70 = $2,800.
+        let two_eth = 2_000_000_000_000_000_000u128; // 2e18
+        let n = NavSnapshot {
+            total_assets: two_eth,
+            total_shares: two_eth,
+            virtual_offset: 1_000,
+            idle_buffer: 0,
+            observed_at_secs: 1_000,
+            collateral: VaultCollateral::Eth { price_usd_6dp: 2_000_000_000, haircut_bps: 7_000, price_observed_at_secs: 1_000 },
+        };
+        let usd = n.equity(two_eth);
+        assert!((2_799_000_000..=2_800_000_000).contains(&usd), "got {usd}");
+        // haircut strictly reduces vs no-haircut gross ($4,000).
+        assert!(usd < 4_000_000_000);
     }
 
     #[test]
-    fn freshness_guard() {
-        let n = nav(1, 1);
-        assert!(n.is_fresh(1_000, 30)); // exactly observed
-        assert!(n.is_fresh(1_030, 30)); // at the boundary
-        assert!(!n.is_fresh(1_031, 30)); // one second stale
-        assert!(n.is_fresh(900, 30)); // clock skew (now < observed) treated as fresh
+    fn eth_equity_no_overflow_for_a_whale() {
+        // 10,000 ETH shares × $3,000 — the naive `shares * ratio` would blow past u128; must not panic.
+        let ten_k_eth = 10_000u128 * WAD; // 1e22
+        let n = NavSnapshot {
+            total_assets: ten_k_eth,
+            total_shares: ten_k_eth,
+            virtual_offset: 1_000,
+            idle_buffer: 0,
+            observed_at_secs: 1_000,
+            collateral: VaultCollateral::Eth { price_usd_6dp: 3_000_000_000, haircut_bps: 7_000, price_observed_at_secs: 1_000 },
+        };
+        // 10_000 * 3_000 * 0.7 = $21,000,000 → 21e12 (6dp).
+        assert_eq!(n.equity(ten_k_eth), 21_000_000_000_000);
+    }
+
+    #[test]
+    fn freshness_guards() {
+        let n = usdc_nav(1, 1);
+        assert!(n.is_fresh(1_030, 30));
+        assert!(!n.is_fresh(1_031, 30));
+        // USDC has no price → price_is_fresh always true.
+        assert!(n.price_is_fresh(999_999, 30));
+        // ETH price staleness is independent of the NAV.
+        let eth = NavSnapshot { collateral: VaultCollateral::Eth { price_usd_6dp: 1, haircut_bps: 7_000, price_observed_at_secs: 1_000 }, ..n };
+        assert!(eth.price_is_fresh(1_030, 30));
+        assert!(!eth.price_is_fresh(1_031, 30));
     }
 }

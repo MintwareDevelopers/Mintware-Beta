@@ -219,7 +219,7 @@ mod tests {
     use crate::ledger::Decline;
 
     fn nav() -> NavSnapshot {
-        NavSnapshot { total_assets: 10_000_000_000, total_shares: 10_000_000_000, virtual_offset: 1_000, idle_buffer: 10_000_000_000, observed_at_secs: 1_000 }
+        NavSnapshot { total_assets: 10_000_000_000, total_shares: 10_000_000_000, virtual_offset: 1_000, idle_buffer: 10_000_000_000, observed_at_secs: 1_000, collateral: crate::nav::VaultCollateral::Usdc }
     }
     // store with a $10k-liquid vault, 30s NAV age, 600s hold TTL; one user with $1,000 equity.
     fn store() -> MemStore {

@@ -73,6 +73,7 @@ impl AuthorizeResponse {
 pub fn decline_code(reason: Decline) -> &'static str {
     match reason {
         Decline::StaleNav => "stale_nav",
+        Decline::StalePrice => "stale_price",
         Decline::ZeroAmount => "zero_amount",
         Decline::InsufficientEquity => "insufficient_equity",
         Decline::DailyCapExceeded => "daily_cap_exceeded",

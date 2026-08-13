@@ -59,6 +59,7 @@ async fn main() {
         virtual_offset: 1_000,
         idle_buffer: 0,
         observed_at_secs: now,
+        collateral: edge_auth::nav::VaultCollateral::Usdc,
     };
     let store = Arc::new(MemStore::new(nav, max_nav_age, hold_ttl));
 

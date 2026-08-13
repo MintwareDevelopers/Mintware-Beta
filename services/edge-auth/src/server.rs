@@ -141,7 +141,7 @@ mod tests {
     const ALICE: &str = "0x00000000000000000000000000000000a11ce000";
 
     fn base_store() -> MemStore {
-        let nav = NavSnapshot { total_assets: 10_000_000_000, total_shares: 10_000_000_000, virtual_offset: 1_000, idle_buffer: 10_000_000_000, observed_at_secs: 0 };
+        let nav = NavSnapshot { total_assets: 10_000_000_000, total_shares: 10_000_000_000, virtual_offset: 1_000, idle_buffer: 10_000_000_000, observed_at_secs: 0, collateral: crate::nav::VaultCollateral::Usdc };
         let s = MemStore::new(nav, u64::MAX, 600);
         s.set_shares(ALICE, 1_000_000_000); // $1,000 equity
         s.set_daily_cap(ALICE, 100_000_000_000);
