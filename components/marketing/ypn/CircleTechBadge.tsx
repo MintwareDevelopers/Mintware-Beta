@@ -19,9 +19,14 @@ export function CircleTechBadge() {
         </div>
 
         <div className="border border-atx-bone/25 bg-atx-bone/[0.04] p-6 flex flex-col gap-3">
-          <div className="flex items-center gap-2.5 pb-3 border-b border-atx-bone/15">
-            <span className="w-[10px] h-[10px] bg-atx-acid border border-atx-bone shrink-0" />
-            <span className="font-atx-mono text-[12px] uppercase tracking-[0.1em] font-bold">Circle · Programmable USDC · CCTP</span>
+          <div className="flex flex-col gap-2.5 pb-4 border-b border-atx-bone/15">
+            {YPN_CIRCLE.stack.map((s) => (
+              <div key={s.name} className="flex items-center gap-2.5">
+                <span className="w-[10px] h-[10px] bg-atx-acid border border-atx-bone shrink-0" />
+                <span className="font-atx-mono text-[13px] uppercase tracking-[0.1em] font-bold shrink-0">{s.name}</span>
+                <span className="font-atx-mono text-[10px] text-atx-bone/50 truncate">{s.role}</span>
+              </div>
+            ))}
           </div>
           {YPN_CIRCLE.points.map((p) => (
             <div key={p} className="flex items-start gap-2.5">

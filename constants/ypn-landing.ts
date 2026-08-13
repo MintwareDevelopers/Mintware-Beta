@@ -24,7 +24,7 @@ export const YPN_HERO = {
   // Kept punchy but the sub-head grounds it honestly.
   title: 'Liquidity Vault Payment Magic',
   titleAccent: 'Turn passive yield into growth runway.',
-  sub: 'Stop burning treasury reserves or inflating your native token on short-term marketing. Park single-sided USDC in a Unified Liquidity Vault, keep your principal intact, and route the yield it earns into user acquisition, referral rewards, and campaign payouts — attributed on-chain.',
+  sub: 'Locked capital shouldn’t be dead capital. Park single-sided USDC in a Unified Liquidity Vault, keep your principal intact, and turn the yield it earns into a real-time, spendable payment stream — routed by on-chain attribution into user acquisition, referral payouts, and campaigns. No un-staking, no treasury burn, no token dumping.',
   primaryCta: 'Launch app',
   secondaryCta: 'See how it works',
   secondaryHref: '#how-it-works',
@@ -49,6 +49,50 @@ export const YPN_ETHOS = {
   quote: 'Liquidity should be a public good.',
 } as const
 
+// ─── The core mechanism (CoreMechanismSection) ──────────────────────────────
+// "Making locked liquidity liquid." NOTE (honesty): vault-level immediate
+// settlement to virtual/physical CARDS via Circle + issuer rails is the DESIGNED
+// network mechanism, not a shipped capability — verbs stay "designed to"/"built
+// to", under the in-testing status.
+export const YPN_MECHANISM = {
+  eyebrow: 'The core mechanism',
+  title: 'Making locked liquidity liquid',
+  problem: {
+    label: 'The problem — trapped capital',
+    body: 'Treasuries, LPs, and protocols park millions in single-sided USDC or yield vaults (like Aave), but that liquidity is static. To spend it on user acquisition, affiliate payouts, or growth, teams have historically had to manually un-stake, withdraw, burn treasury cash, or dump their native token.',
+  },
+  solution: {
+    label: 'The fix — a programmable payment rail',
+    body: 'YPN is designed to fix the underlying rail: it turns locked vault capital into a real-time, programmable payment stream — without ever breaking the underlying position. Principal keeps earning; only the yield moves.',
+  },
+  steps: [
+    {
+      key: 'preserve',
+      n: '01',
+      title: 'Vault-level capital preservation',
+      desc: 'Deposit single-sided USDC into Unified Liquidity Vaults backed by institutional strategies (Aave, RWAs). Principal is strictly protected and never spent.',
+    },
+    {
+      key: 'attribute',
+      n: '02',
+      title: 'Precision AI attribution',
+      desc: 'The attribution layer maps campaign conversions, referrals, and user actions on- and off-chain — proving exact ROI per dollar before anything settles.',
+    },
+    {
+      key: 'settle',
+      n: '03',
+      title: 'Vault-level immediate settlement',
+      desc: 'The moment a conversion triggers, the engine is designed to settle at the vault level — yield converts through Circle USDC rails to cover the balance, without unwinding the position.',
+    },
+    {
+      key: 'access',
+      n: '04',
+      title: 'Instant liquidity access',
+      desc: 'Users, affiliates, and campaign creators are designed to get frictionless access to spendable yield via Rain virtual and physical cards — no manual withdrawals, no 30-day payout delays, no native-token dumping.',
+    },
+  ],
+} as const
+
 // ─── Architecture flow (PillarArchitectureDiagram) ──────────────────────────
 export const YPN_FLOW = {
   eyebrow: 'The flow',
@@ -64,22 +108,22 @@ export const YPN_FLOW = {
     {
       key: 'vault',
       label: 'Unified Liquidity Vault',
-      sub: 'Principal preserved',
-      desc: 'Capital pools into the ULV and generates system yield across multi-surface DeFi strategies.',
+      sub: 'Aave-backed · principal intact',
+      desc: 'Capital pools into the ULV, backed by institutional strategies (Aave, RWAs), and generates system yield. The position is never unwound.',
       accent: 'text-atx-coral',
     },
     {
       key: 'attribution',
       label: 'AI Attribution Engine',
       sub: 'Conversions verified',
-      desc: 'Attribution maps user activity, referrals, and on-chain conversions back to their source.',
+      desc: 'Attribution maps user activity, referrals, and on-/off-chain conversions back to their source — proving ROI before anything settles.',
       accent: 'text-atx-mesquite',
     },
     {
       key: 'payout',
-      label: 'Programmatic Yield Payouts',
-      sub: 'Users · Affiliates · Builders',
-      desc: 'The vault skims generated yield and streams it to verified actions — never touching principal.',
+      label: 'Immediate Card Settlement',
+      sub: 'Circle USDC · Rain cards',
+      desc: 'On a verified conversion, yield is designed to settle at the vault level and become spendable — instantly, via Rain virtual/physical cards.',
       accent: 'text-atx-blue',
     },
   ],
@@ -158,13 +202,17 @@ export const YPN_MATRIX = {
 
 // ─── Circle callout (CircleTechBadge) ───────────────────────────────────────
 export const YPN_CIRCLE = {
-  eyebrow: 'Settlement rail',
-  title: 'Designed for Circle’s programmable USDC',
-  body: 'The network is built to settle on Circle Programmable Wallets and CCTP (Cross-Chain Transfer Protocol) — friction-free, gas-abstracted USDC deposits and liquidity routing across EVM environments, so treasuries and users interact without managing native gas tokens.',
+  eyebrow: 'Settlement stack',
+  title: 'Circle USDC settlement + Rain card rails',
+  body: 'The network is designed to settle on Circle Programmable Wallets and CCTP (Cross-Chain Transfer Protocol) for friction-free, gas-abstracted USDC deposits and cross-chain routing — then issue to virtual and physical cards over Rain, so verified yield becomes spendable at point-of-sale without a manual withdrawal.',
+  stack: [
+    { name: 'Circle', role: 'Programmable USDC · CCTP settlement' },
+    { name: 'Rain', role: 'Virtual & physical card issuance' },
+  ],
   points: [
     'Single-sided USDC in, cross-chain via CCTP',
-    'Gas-abstracted flows — no native token juggling',
-    'Programmable payout streams to verified recipients',
+    'Gas-abstracted flows — no native-token juggling',
+    'Vault-level yield → spendable Rain cards at point-of-sale',
   ],
 } as const
 
@@ -207,8 +255,8 @@ export const YPN_CTA = {
 // ─── Home-embed teaser (YieldPaymentNetworkSection) ─────────────────────────
 export const YPN_TEASER = {
   eyebrow: '✴ Mintware Yield Payment Network',
-  title: 'Fund growth with yield — not your treasury',
-  body: 'Park single-sided USDC in a Unified Liquidity Vault, keep your principal intact, and route the yield into attributed user acquisition and campaign payouts.',
+  title: 'Make locked liquidity liquid',
+  body: 'Park single-sided USDC in a Unified Liquidity Vault, keep your principal intact, and turn its yield into a spendable, attributed growth budget — designed to settle to Rain cards without ever unwinding the position.',
   cta: 'Explore the Yield Payment Network',
   href: '/yield-payment-network',
 } as const

@@ -6,6 +6,7 @@ import { PillarCardGrid } from '@/components/marketing/ypn/PillarCardGrid'
 import { ValuePropMatrixTable } from '@/components/marketing/ypn/ValuePropMatrixTable'
 import { YieldCalculatorWidget } from '@/components/marketing/ypn/YieldCalculatorWidget'
 import { CircleTechBadge } from '@/components/marketing/ypn/CircleTechBadge'
+import { CoreMechanismSection } from '@/components/marketing/ypn/CoreMechanismSection'
 import { AppConversionCTA } from '@/components/marketing/ypn/AppConversionCTA'
 import { YPN_INTRO, YPN_ETHOS } from '@/constants/ypn-landing'
 
@@ -47,6 +48,7 @@ export default function YieldPaymentNetworkPage() {
         </div>
       </section>
 
+      <CoreMechanismSection />
       <PillarArchitectureDiagram />
       <PillarCardGrid />
 
