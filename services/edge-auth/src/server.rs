@@ -7,8 +7,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use alloy_primitives::{hex, keccak256, Address};
 use axum::{
+    body::Bytes,
     extract::{Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -18,12 +19,14 @@ use serde_json::json;
 use crate::signer::{EdgeSigner, DEFAULT_EDGE_WINDOW_SECS, HIGH_VALUE_THRESHOLD};
 use crate::store::{Hold, HoldStatus, MemStore};
 use crate::types::{AuthorizeRequest, AuthorizeResponse, EdgeAuthView, HoldView};
+use crate::webhook;
 
-/// Shared handler state: the hold store plus (optionally) the edge signer for high-value charges.
+/// Shared handler state: the hold store, the optional edge signer, and the optional Rain webhook secret.
 #[derive(Clone)]
 pub struct AppCtx {
     pub store: Arc<MemStore>,
     pub edge: Option<Arc<EdgeSigner>>,
+    pub rain_secret: Option<Arc<Vec<u8>>>,
 }
 
 /// Wall-clock seconds. Isolated so the hot path has a single time source.
@@ -36,11 +39,20 @@ pub fn app(ctx: AppCtx) -> Router {
         .route("/health", get(health))
         .route("/authorize", post(authorize))
         .route("/holds/:id", get(get_hold))
+        .route("/webhooks/rain", post(rain_webhook))
         .with_state(ctx)
 }
 
 async fn health() -> &'static str {
     "ok"
+}
+
+/// Rain webhook ingest: HMAC-verify the raw body, then apply the mapped hold action.
+async fn rain_webhook(State(ctx): State<AppCtx>, headers: HeaderMap, body: Bytes) -> impl IntoResponse {
+    let sig = headers.get(webhook::SIGNATURE_HEADER).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let secret = ctx.rain_secret.as_deref().map(|v| v.as_slice());
+    let (code, json) = webhook::process(secret, &ctx.store, sig, &body, now_secs());
+    (code, Json(json))
 }
 
 fn declined(reason: &'static str) -> AuthorizeResponse {
@@ -148,12 +160,13 @@ mod tests {
         s
     }
     fn ctx_no_signer() -> AppCtx {
-        AppCtx { store: Arc::new(base_store()), edge: None }
+        AppCtx { store: Arc::new(base_store()), edge: None, rain_secret: None }
     }
     fn ctx_with_signer() -> AppCtx {
         AppCtx {
             store: Arc::new(base_store()),
             edge: Some(Arc::new(EdgeSigner::from_hex_key(KEY, GATEWAY.parse().unwrap(), 84532).unwrap())),
+            rain_secret: None,
         }
     }
 

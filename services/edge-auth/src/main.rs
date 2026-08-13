@@ -83,7 +83,11 @@ async fn main() {
         _ => eprintln!("edge-auth: NAV refresher DISABLED (set EDGE_RPC_URL + EDGE_VAULT_ADDRESS to enable)"),
     }
 
-    let ctx = AppCtx { store: store.clone(), edge: build_edge_signer() };
+    let rain_secret = env::var("EDGE_RAIN_WEBHOOK_SECRET").ok().map(|s| Arc::new(s.into_bytes()));
+    if rain_secret.is_none() {
+        eprintln!("edge-auth: Rain webhooks DISABLED (set EDGE_RAIN_WEBHOOK_SECRET to enable /webhooks/rain)");
+    }
+    let ctx = AppCtx { store: store.clone(), edge: build_edge_signer(), rain_secret };
 
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await.expect("bind");

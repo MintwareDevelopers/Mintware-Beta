@@ -29,6 +29,9 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 # EDGE_SIGNER (increment 5): secp256k1 EIP-712 signing over the ShortLivedHoldAuth the Gateway checks.
 # k256 for recoverable ECDSA; keccak/eip712 come from alloy-primitives / alloy-sol-types above.
 k256 = { version = "0.13", features = ["ecdsa"] }
+# Rain webhook signature verification (increment 6): HMAC-SHA256 over the raw body, constant-time.
+hmac = "0.12"
+sha2 = "0.10"
 
 [dev-dependencies]
 # Exercise the axum router in-process (no socket) for the server wiring tests.

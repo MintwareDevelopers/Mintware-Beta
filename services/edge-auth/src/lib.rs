@@ -17,6 +17,7 @@ pub mod server;
 pub mod signer;
 pub mod store;
 pub mod types;
+pub mod webhook;
 
 pub use ledger::{authorize, available, Account, Decision, Decline, Global};
 pub use nav::{NavSnapshot, VaultCollateral};
