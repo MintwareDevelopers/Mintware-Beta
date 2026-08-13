@@ -1,8 +1,8 @@
 'use client'
 
-// V2Nav — the Privy-esque v2 marketing nav. Reused across converted pages; will
-// replace MarketingNav once the rollout completes. Translucent, soft, glass-pill
-// CTA, grotesque wordmark. CTA goes through the shared launch modal.
+// V2Nav — the Privy-esque v2 marketing nav, reused across all marketing pages
+// (it replaced the retired MarketingNav). Translucent, soft, glass-pill CTA,
+// grotesque wordmark. CTA goes through the shared launch modal.
 
 import Link from 'next/link'
 import { useState } from 'react'
