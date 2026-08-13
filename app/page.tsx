@@ -233,24 +233,23 @@ export default function HomePage() {
     <div className="font-atx-display bg-white text-ink min-h-screen overflow-x-clip">
       <V2Nav />
 
-      {/* HERO — liquidity is a public good */}
+      {/* HERO — liquidity is a public good (centered) */}
       <section className="bg-ground-cool border-b border-hair-soft">
-        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 pt-[104px] pb-[80px] max-[800px]:pt-[64px] max-[800px]:pb-[56px]">
-          <div className={ey}>Liquidity as a public good</div>
-          <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.045em] leading-[1.0] text-[clamp(2.5rem,6.4vw,4.6rem)] max-w-[15ch] [text-wrap:balance]">
+        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 pt-[104px] pb-[80px] max-[800px]:pt-[64px] max-[800px]:pb-[56px] flex flex-col items-center text-center">
+          <h1 className="font-atx-display font-medium text-ink tracking-[-0.045em] leading-[1.0] text-[clamp(2.5rem,6.4vw,4.6rem)] max-w-[16ch] [text-wrap:balance]">
             Liquidity <span className="text-peri">IS</span> a public good.
           </h1>
-          <p className="text-ink-mid text-[clamp(1.05rem,1.7vw,1.3rem)] leading-[1.5] mt-7 max-w-[56ch]">
+          <p className="text-ink-mid text-[clamp(1.05rem,1.7vw,1.3rem)] leading-[1.5] mt-6 max-w-[52ch]">
             Never idle, never locked away, and its yield instantly yours to spend.
           </p>
 
-          <div className="mt-9 flex flex-wrap gap-3 items-center">
+          <div className="mt-9 flex flex-wrap gap-3 items-center justify-center">
             <button onClick={() => launchApp()} className="glass-pill">{launchLabel}</button>
             <a href="#how-it-works" className="text-[14px] font-medium text-ink-mid hover:text-ink no-underline inline-flex items-center min-h-[44px]">Check your score ↓</a>
           </div>
 
           {/* proof strip — honest, evergreen facts */}
-          <div className="soft-card w-full max-w-[720px] grid grid-cols-3 max-[520px]:grid-cols-1 mt-10 overflow-hidden">
+          <div className="soft-card w-full max-w-[720px] grid grid-cols-3 max-[520px]:grid-cols-1 mt-10 overflow-hidden text-center">
             {[['925', 'max score'], ['100+', 'chains scored'], ['EAS', 'attested on Base']].map(([n, k], i) => (
               <div key={k} className={`px-5 py-5 ${i < 2 ? 'border-r border-hair-soft max-[520px]:border-r-0 max-[520px]:border-b max-[520px]:border-hair-soft' : ''}`}>
                 <div className="font-atx-display text-[22px] font-medium tracking-tight text-ink">{n}</div>
