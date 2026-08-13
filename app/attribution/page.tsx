@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
 import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
+import { SignalRadar } from '@/components/ui2/SignalRadar'
 
 // =============================================================================
 // /attribution — marketing landing for the Attribution reputation layer.
@@ -101,7 +102,13 @@ export default function AttributionLandingPage() {
           <Head n="01" label="What the score is made of" />
           <h2 className={h2}>Six signals. <span className="text-peri">One score, out of 925.</span></h2>
           <p className={lead}>Everything you already do on-chain feeds one of six signals. Sharing is weighted heaviest — a real referral network is the hardest thing to fake.</p>
-          <div className="soft-card mt-8 overflow-hidden">
+          <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-4 mt-8 items-center max-[820px]:grid-cols-1">
+          <div className="soft-card p-5">
+            <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mb-1">The 925-point anatomy</div>
+            <SignalRadar />
+            <div className="text-[11px] text-ink-soft text-center mt-1">Each axis is a signal’s maximum point contribution.</div>
+          </div>
+          <div className="soft-card overflow-hidden">
             {SIGNALS.map(([name, max, desc, color], i) => (
               <div key={name} className={`flex items-center gap-5 px-6 py-4 max-[640px]:flex-col max-[640px]:items-start max-[640px]:gap-2 ${i < SIGNALS.length - 1 ? 'border-b border-hair-soft' : ''}`}>
                 <div className="w-[130px] shrink-0">
@@ -117,6 +124,7 @@ export default function AttributionLandingPage() {
                 <div className="text-[13px] text-ink-soft w-[64px] text-right shrink-0 tabular-nums max-[640px]:hidden">{Math.round((max / MAX) * 100)}% cap</div>
               </div>
             ))}
+          </div>
           </div>
           <p className="text-[11px] text-ink-soft mt-4"><b className="text-peri-deep">↳</b> Bars scaled to Sharing’s 400-pt ceiling. Total possible score: 925.</p>
         </div>

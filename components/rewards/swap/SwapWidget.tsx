@@ -300,31 +300,31 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
     <>
       <div className="w-full">
         {/* ── Header strip ── */}
-        <div className="px-[22px] py-[18px] flex items-center justify-between bg-atx-panel border-x border-t border-atx-ink">
+        <div className="px-[22px] py-[18px] flex items-center justify-between bg-white border-b border-hair-soft">
           <div>
-            <div className="text-[18px] font-bold text-atx-ink font-atx-display leading-none mb-[3px]">Swap</div>
-            <div className="text-[11px] text-atx-ink/55 font-atx-mono uppercase tracking-[0.08em]">Best price across chains</div>
+            <div className="text-[18px] font-medium text-ink font-atx-display leading-none mb-[3px] tracking-[-0.01em]">Swap</div>
+            <div className="text-[11px] text-ink-soft uppercase tracking-[0.08em]">Best price across chains</div>
           </div>
           <ChainSelector />
         </div>
 
         {/* ── Content area ── */}
-        <div className="bg-atx-panel border-x border-b border-atx-ink p-[20px] flex flex-col gap-[10px]">
+        <div className="bg-white p-[20px] flex flex-col gap-[10px]">
 
           {/* Slippage bar */}
-          <div className="flex items-center gap-[6px] px-[12px] py-[8px] bg-atx-bone border border-atx-ink/25">
-            <span className="text-[11px] text-atx-ink/60 font-atx-mono uppercase tracking-[0.06em] shrink-0">Slippage</span>
+          <div className="flex items-center gap-[6px] px-[12px] py-[8px] rounded-xl bg-ground-cool border border-hair">
+            <span className="text-[11px] text-ink-mid uppercase tracking-[0.06em] font-semibold shrink-0">Slippage</span>
             {SLIPPAGE_PRESETS.map(p => (
               <button
                 key={p}
-                className={`px-[10px] py-[4px] border font-atx-mono text-[12px] font-semibold cursor-pointer transition-colors duration-[120ms] ${!customSlippage && slippage === p ? 'bg-atx-blue border-atx-ink text-white' : 'bg-transparent border-atx-ink/25 text-atx-ink/60 hover:border-atx-ink hover:text-atx-ink'}`}
+                className={`px-[10px] py-[4px] rounded-full text-[12px] font-semibold cursor-pointer transition-colors duration-[120ms] ${!customSlippage && slippage === p ? 'bg-peri text-white' : 'bg-white border border-hair text-ink-mid hover:text-ink'}`}
                 onClick={() => { setSlippage(p); setCustomSlippage('') }}
               >
                 {p}%
               </button>
             ))}
             <input
-              className="w-[56px] px-[6px] py-[4px] border border-atx-ink/25 bg-atx-panel font-atx-mono text-[12px] text-atx-ink text-center outline-none focus:border-atx-blue"
+              className="w-[56px] px-[6px] py-[4px] rounded-lg border border-hair bg-white font-mono text-[12px] text-ink text-center outline-none focus:border-[rgba(108,108,240,0.5)]"
               type="number"
               min="0.01"
               max="50"
@@ -336,11 +336,11 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
           </div>
 
           {/* You pay */}
-          <div className="bg-atx-panel border border-atx-ink p-[14px] transition-colors duration-150 focus-within:border-atx-blue">
+          <div className="rounded-xl bg-ground-cool border border-hair p-[14px] transition-colors duration-150 focus-within:border-[rgba(108,108,240,0.5)]">
             <div className="flex items-center justify-between mb-[8px]">
-              <span className="text-[11px] text-atx-ink/55 font-atx-mono uppercase tracking-[0.08em]">You pay</span>
+              <span className="text-[11px] text-ink-soft uppercase tracking-[0.08em] font-semibold">You pay</span>
               {balanceFormatted && sellToken && (
-                <span className="text-[12px] text-atx-ink/55 font-atx-mono">
+                <span className="text-[12px] text-ink-soft font-mono">
                   Balance: {balanceFormatted} {sellToken.symbol}
                 </span>
               )}
@@ -348,7 +348,7 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
             <div className="flex items-center gap-[10px]">
               <div className="flex-1 min-w-0">
                 <input
-                  className="w-full bg-transparent border-0 outline-none font-atx-mono text-[22px] font-semibold text-atx-ink placeholder:text-atx-ink/25"
+                  className="w-full bg-transparent border-0 outline-none font-mono text-[22px] font-semibold text-ink placeholder:text-ink-soft"
                   type="number"
                   min="0"
                   step="any"
@@ -358,13 +358,13 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
                 />
                 {/* USD value sub-label */}
                 {sellAmountUSD !== null && (
-                  <div className="text-[11px] text-atx-ink/45 font-atx-mono mt-[2px]">
+                  <div className="text-[11px] text-ink-soft font-mono mt-[2px]">
                     ≈ ${sellAmountUSD.toFixed(2)}
                   </div>
                 )}
               </div>
               <button
-                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] border cursor-pointer font-atx-mono text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${sellToken ? ' bg-atx-bone border-atx-ink/30 text-atx-ink hover:border-atx-ink' : ' bg-atx-blue border-atx-ink text-white hover:opacity-90'}`}
+                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] rounded-full cursor-pointer text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${sellToken ? ' bg-white border border-hair text-ink hover:border-[rgba(108,108,240,0.4)]' : ' bg-peri text-white border border-transparent hover:bg-peri-deep'}`}
                 onClick={() => setShowSellSelector(true)}
               >
                 {sellToken?.logoURI && (
@@ -384,7 +384,7 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
                 {[['25%', 0.25], ['50%', 0.5], ['75%', 0.75], ['MAX', 1]].map(([label, pct]) => (
                   <button
                     key={label as string}
-                    className="px-[8px] py-[3px] bg-transparent border border-atx-ink/25 font-atx-mono text-[11px] font-semibold text-atx-ink/55 cursor-pointer transition-colors duration-[120ms] hover:border-atx-ink hover:text-atx-ink"
+                    className="px-[8px] py-[3px] rounded-full bg-white border border-hair font-mono text-[11px] font-semibold text-ink-mid cursor-pointer transition-colors duration-[120ms] hover:text-ink"
                     onClick={() => setPercent(pct as number)}
                   >
                     {label}
@@ -397,7 +397,7 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
           {/* Flip */}
           <div className="flex items-center justify-center">
             <button
-              className="w-[36px] h-[36px] bg-atx-panel border border-atx-ink text-[18px] cursor-pointer flex items-center justify-center transition-all duration-150 text-atx-blue hover:bg-atx-blue hover:text-white hover:rotate-180"
+              className="w-[36px] h-[36px] rounded-full bg-white border border-hair text-[18px] cursor-pointer flex items-center justify-center transition-all duration-150 text-peri-deep hover:bg-peri hover:text-white hover:border-transparent hover:rotate-180"
               onClick={flip}
               title="Flip tokens"
             >
@@ -406,16 +406,16 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
           </div>
 
           {/* You receive */}
-          <div className="bg-atx-panel border border-atx-ink p-[14px] transition-colors duration-150">
+          <div className="rounded-xl bg-ground-cool border border-hair p-[14px] transition-colors duration-150">
             <div className="flex items-center justify-between mb-[8px]">
-              <span className="text-[11px] text-atx-ink/55 font-atx-mono uppercase tracking-[0.08em]">You receive (estimate)</span>
+              <span className="text-[11px] text-ink-soft uppercase tracking-[0.08em] font-semibold">You receive (estimate)</span>
             </div>
             <div className="flex items-center gap-[10px]">
-              <span className={`flex-1 font-atx-mono text-[22px] font-semibold text-atx-ink overflow-hidden text-ellipsis whitespace-nowrap${isQuoting ? ' text-atx-ink/25 animate-[blink_1s_step-end_infinite]' : ''}`}>
-                {isQuoting ? '…' : buyAmount ? fmt(buyAmount) : <span className="text-atx-ink/25">0</span>}
+              <span className={`flex-1 font-mono text-[22px] font-semibold text-ink overflow-hidden text-ellipsis whitespace-nowrap${isQuoting ? ' text-ink-soft animate-[blink_1s_step-end_infinite]' : ''}`}>
+                {isQuoting ? '…' : buyAmount ? fmt(buyAmount) : <span className="text-ink-soft">0</span>}
               </span>
               <button
-                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] border cursor-pointer font-atx-mono text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${buyToken ? ' bg-atx-bone border-atx-ink/30 text-atx-ink hover:border-atx-ink' : ' bg-atx-blue border-atx-ink text-white hover:opacity-90'}`}
+                className={`inline-flex items-center gap-[6px] px-[12px] py-[7px] rounded-full cursor-pointer text-[13px] font-semibold transition-colors duration-150 whitespace-nowrap shrink-0${buyToken ? ' bg-white border border-hair text-ink hover:border-[rgba(108,108,240,0.4)]' : ' bg-peri text-white border border-transparent hover:bg-peri-deep'}`}
                 onClick={() => setShowBuySelector(true)}
               >
                 {buyToken?.logoURI && (
@@ -434,13 +434,13 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
 
           {/* Route info strip — includes estimated network fee */}
           {quote && sellToken && buyToken && !isQuoting && (
-            <div className="flex items-center justify-between px-[12px] py-[8px] bg-atx-bone border border-atx-ink/25">
+            <div className="flex items-center justify-between px-[12px] py-[8px] rounded-xl bg-ground-cool border border-hair">
               <div className="flex items-center gap-[6px]">
-                <span className="text-[10px] font-bold text-atx-blue font-atx-mono uppercase tracking-[0.08em]">Best route</span>
-                <span className="text-[11px] text-atx-ink/45 font-atx-mono">via LI.FI</span>
+                <span className="text-[10px] font-semibold text-peri-deep uppercase tracking-[0.08em]">Best route</span>
+                <span className="text-[11px] text-ink-soft">via LI.FI</span>
               </div>
               <div className="flex items-center gap-[8px]">
-                <span className="font-atx-mono text-[12px] text-atx-ink/60">
+                <span className="font-mono text-[12px] text-ink-mid">
                   1 {sellToken.symbol} ≈ {parseFloat(quote.price || '0') > 0
                     ? parseFloat(quote.price).toFixed(4)
                     : buyAmount && sellAmount
@@ -449,13 +449,13 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
                   } {buyToken.symbol}
                 </span>
                 {priceImpact !== null && (
-                  <span className={`font-atx-mono text-[12px] px-[6px] py-[2px] border ${priceImpact > 2 ? 'border-atx-clay text-atx-clay' : 'border-atx-ink/30 text-atx-mesquite'}`}>
+                  <span className={`font-mono text-[12px] px-[6px] py-[2px] rounded-full border ${priceImpact > 2 ? 'border-[rgba(209,67,67,0.4)] text-[#D14343]' : 'border-hair text-coral2-deep'}`}>
                     {priceImpact > 0 ? '-' : ''}{Math.abs(priceImpact).toFixed(2)}%
                   </span>
                 )}
                 {/* Network fee preview — fiat-first when available */}
                 {(gasCostUSD || gasCostEth) && (
-                  <span className="font-atx-mono text-[11px] text-atx-ink/45" title="Estimated network fee">
+                  <span className="font-mono text-[11px] text-ink-soft" title="Estimated network fee">
                     {gasCostUSD
                       ? `~$${gasCostUSD} fee`
                       : `~${parseFloat(gasCostEth!).toFixed(5)} ${nativeSymbol} fee`}
@@ -467,7 +467,7 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
 
           {/* Gas insufficiency warning */}
           {isGasInsufficient && quote && (
-            <div className="px-[12px] py-[10px] border border-atx-clay font-atx-mono text-[12px] text-atx-clay">
+            <div className="px-[12px] py-[10px] rounded-xl border border-[rgba(209,67,67,0.3)] bg-[rgba(209,67,67,0.05)] text-[12px] text-[#D14343]">
               Your {nativeSymbol} balance may be too low to cover the network fee for this swap.
               Add some {nativeSymbol} before proceeding.
             </div>
@@ -475,19 +475,19 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
 
           {/* Errors */}
           {quoteError && (
-            <div className="px-[14px] py-[10px] border border-atx-clay font-atx-mono text-[13px] text-atx-clay">
+            <div className="px-[14px] py-[10px] rounded-xl border border-[rgba(209,67,67,0.3)] bg-[rgba(209,67,67,0.05)] text-[13px] text-[#D14343]">
               {quoteError}
             </div>
           )}
           {swapError && !isSwapping && status === 'error' && (
-            <div className="px-[14px] py-[10px] border border-atx-clay font-atx-mono text-[13px] text-atx-clay">
+            <div className="px-[14px] py-[10px] rounded-xl border border-[rgba(209,67,67,0.3)] bg-[rgba(209,67,67,0.05)] text-[13px] text-[#D14343]">
               {swapError}
             </div>
           )}
 
           {/* High price impact warning */}
           {highImpactWarning && (
-            <div className="px-[12px] py-[8px] border border-atx-clay font-atx-mono text-[12px] text-atx-clay">
+            <div className="px-[12px] py-[8px] rounded-xl border border-[rgba(209,67,67,0.3)] bg-[rgba(209,67,67,0.05)] text-[12px] text-[#D14343]">
               High price impact ({priceImpact?.toFixed(1)}%) — consider a smaller trade
             </div>
           )}
@@ -496,20 +496,20 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
           <AttributionScorePreview estimatedScoreGain={estimatedScoreGain} />
 
           {quoteSummary && (
-            <div className="px-[12px] py-[10px] bg-atx-bone border border-atx-ink/20 font-atx-display text-[12px] text-atx-ink/60 leading-[1.55]">
+            <div className="px-[12px] py-[10px] rounded-xl bg-ground-cool border border-hair text-[12px] text-ink-mid leading-[1.55]">
               {quoteSummary}
             </div>
           )}
 
           {readinessItems.length > 0 && (
-            <div className="px-[12px] py-[12px] bg-atx-bone border border-atx-ink/20">
-              <div className="text-[10px] font-bold uppercase tracking-[0.1em] text-atx-ink/55 font-atx-mono mb-[8px]">
+            <div className="px-[12px] py-[12px] rounded-xl bg-ground-cool border border-hair">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-soft mb-[8px]">
                 Before you trade
               </div>
               <div className="flex flex-col gap-[6px]">
                 {readinessItems.map((item) => (
-                  <div key={item} className="flex items-start gap-[8px] text-[12px] text-atx-ink/60 font-atx-display leading-[1.5]">
-                    <span className="w-[6px] h-[6px] bg-atx-blue border border-atx-ink inline-block mt-[5px] shrink-0" />
+                  <div key={item} className="flex items-start gap-[8px] text-[12px] text-ink-mid leading-[1.5]">
+                    <span className="w-[6px] h-[6px] rounded-full bg-peri inline-block mt-[6px] shrink-0" />
                     <span>{item}</span>
                   </div>
                 ))}
@@ -519,10 +519,10 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
 
           {/* Action button — "Review Swap" opens the confirmation sheet */}
           <button
-            className={`w-full py-[14px] border cursor-pointer font-atx-mono text-[14px] font-bold uppercase tracking-[0.06em] transition-all duration-150 mt-[2px] disabled:cursor-not-allowed${
+            className={`w-full py-[14px] rounded-full cursor-pointer text-[14px] font-semibold transition-all duration-150 mt-[2px] disabled:cursor-not-allowed${
               isActionDisabled()
-                ? ' bg-atx-bone border-atx-ink/20 text-atx-ink/40'
-                : ' bg-atx-blue border-atx-ink text-white hover:opacity-90'
+                ? ' bg-ground-cool text-ink-soft'
+                : ' bg-peri text-white hover:bg-peri-deep'
             }`}
             disabled={isActionDisabled()}
             onClick={handleReviewSwap}
@@ -532,8 +532,8 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
 
           {/* Score gain live preview */}
           {sellAmount && parseFloat(sellAmount) > 0 && (
-            <div className="flex items-center justify-center gap-[5px] text-[12px] font-atx-mono -mt-[2px]">
-              <span className="text-atx-ink/55">Every swap builds your Attribution score</span>
+            <div className="flex items-center justify-center gap-[5px] text-[12px] -mt-[2px]">
+              <span className="text-ink-soft">Every swap builds your Attribution score</span>
             </div>
           )}
         </div>
