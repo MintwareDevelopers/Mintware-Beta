@@ -18,6 +18,20 @@ pub struct AuthorizeRequest {
     pub hold_id: Option<String>,
 }
 
+/// The signed high-value edge authorization the relayer threads into `settleSpend` (present only for
+/// approved charges >= $250). All integers are decimal strings; `hold_id`/`signature` are 0x-hex.
+#[derive(Debug, Clone, Serialize)]
+pub struct EdgeAuthView {
+    /// bytes32 the Gateway settles under (= keccak256 of the store hold id).
+    pub hold_id: String,
+    pub user: String,
+    pub amount_usdc: String,
+    pub nonce: String,
+    pub expiry: String,
+    /// 65-byte r‖s‖v signature, 0x-hex.
+    pub signature: String,
+}
+
 /// `POST /authorize` response.
 #[derive(Debug, Clone, Serialize)]
 pub struct AuthorizeResponse {
@@ -29,6 +43,9 @@ pub struct AuthorizeResponse {
     /// Machine-readable decline reason (snake_case), present iff `!approved`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub decline_reason: Option<&'static str>,
+    /// Signed edge authorization — present only for approved charges >= the high-value threshold.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub edge_auth: Option<EdgeAuthView>,
 }
 
 impl AuthorizeResponse {
@@ -39,12 +56,14 @@ impl AuthorizeResponse {
                 hold_id,
                 hold_usdc: Some(hold_usdc.to_string()),
                 decline_reason: None,
+                edge_auth: None, // set by the handler for high-value charges
             },
             Decision::Decline(reason) => AuthorizeResponse {
                 approved: false,
                 hold_id: None,
                 hold_usdc: None,
                 decline_reason: Some(decline_code(reason)),
+                edge_auth: None,
             },
         }
     }

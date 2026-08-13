@@ -10,11 +10,37 @@ use alloy_primitives::Address;
 use edge_auth::chain::EthReader;
 use edge_auth::nav::NavSnapshot;
 use edge_auth::refresher::run_refresher;
-use edge_auth::server::app;
+use edge_auth::server::{app, AppCtx};
+use edge_auth::signer::EdgeSigner;
 use edge_auth::store::MemStore;
 
 fn env_u64(key: &str, default: u64) -> u64 {
     env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+}
+
+/// Build the EDGE_SIGNER from env, if configured. Without it, charges >= $250 decline
+/// (`edge_unavailable`) — the low-value permit-only path still works.
+fn build_edge_signer() -> Option<Arc<EdgeSigner>> {
+    let key = env::var("EDGE_SIGNER_KEY").ok()?;
+    let gateway_str = match env::var("EDGE_GATEWAY_ADDRESS") {
+        Ok(g) => g,
+        Err(_) => {
+            eprintln!("edge-auth: EDGE_SIGNER_KEY set but EDGE_GATEWAY_ADDRESS missing — high-value signing DISABLED");
+            return None;
+        }
+    };
+    let gateway: Address = gateway_str.parse().ok()?;
+    let chain_id = env_u64("EDGE_CHAIN_ID", 84532);
+    match EdgeSigner::from_hex_key(&key, gateway, chain_id) {
+        Ok(s) => {
+            eprintln!("edge-auth: EDGE_SIGNER {} (gateway {gateway}, chain {chain_id}) — must hold EDGE_SIGNER_ROLE", s.address());
+            Some(Arc::new(s))
+        }
+        Err(e) => {
+            eprintln!("edge-auth: bad EDGE_SIGNER_KEY ({e}) — high-value signing DISABLED");
+            None
+        }
+    }
 }
 
 #[tokio::main]
@@ -56,11 +82,13 @@ async fn main() {
         _ => eprintln!("edge-auth: NAV refresher DISABLED (set EDGE_RPC_URL + EDGE_VAULT_ADDRESS to enable)"),
     }
 
+    let ctx = AppCtx { store: store.clone(), edge: build_edge_signer() };
+
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await.expect("bind");
     eprintln!("edge-auth listening on {addr} (max_nav_age={max_nav_age}s, hold_ttl={hold_ttl}s)");
 
-    axum::serve(listener, app(store))
+    axum::serve(listener, app(ctx))
         .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("server");

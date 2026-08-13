@@ -13,6 +13,7 @@ pub mod ledger;
 pub mod nav;
 pub mod refresher;
 pub mod server;
+pub mod signer;
 pub mod store;
 pub mod types;
 
