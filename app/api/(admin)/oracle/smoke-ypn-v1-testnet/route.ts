@@ -87,7 +87,7 @@ export const POST = createHandler(async (_req, ctx) => {
 
   // 4. Relayer settles a sub-$250 charge (edge-signer branch skipped) → burnForPayment → receiver.
   const holdId = keccak256(encodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], [user, nonce]))
-  const emptyEdge = { holdId: toHex(0, { size: 32 }), user: '0x0000000000000000000000000000000000000000', amountUSDC: 0n, nonce: 0n, expiry: 0n }
+  const emptyEdge = { holdId: toHex(0, { size: 32 }), user: '0x0000000000000000000000000000000000000000' as `0x${string}`, amountUSDC: 0n, nonce: 0n, expiry: 0n }
   const rcvBefore = await pub.readContract({ address: USDC, abi: ERC20_ABI, functionName: 'balanceOf', args: [RECEIVER] }) as bigint
   await send('settleSpend', await wallet.writeContract({
     address: GATEWAY, abi: PAYMENT_GATEWAY_ABI, functionName: 'settleSpend',
