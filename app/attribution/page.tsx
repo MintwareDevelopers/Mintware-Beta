@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
 
 // =============================================================================
 // /attribution — marketing landing for the Attribution reputation layer.
@@ -67,8 +68,9 @@ export default function AttributionLandingPage() {
       <V2Nav active="attribution" />
 
       {/* ── HERO ── */}
-      <section className="bg-ground-cool border-b border-hair-soft">
-        <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
+      <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">
+        <AirbrushSplash tone="peri" />
+        <div className="relative mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
           <div className={ey}>On-chain reputation · 100+ chains</div>
           <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[18ch] [text-wrap:balance]">
             See what your wallet is worth. <span className="text-peri">Then put it to work.</span>

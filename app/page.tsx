@@ -21,6 +21,7 @@ import { useLaunch } from '@/components/web2/LaunchModal'
 import { YieldPaymentNetworkSection } from '@/components/marketing/ypn/YieldPaymentNetworkSection'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
 import { V2Nav } from '@/components/ui2/V2Nav'
+import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
 
 const SAMPLE_ADDRS = [
   { label: 'vitalik.eth', addr: '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045' },
@@ -234,8 +235,9 @@ export default function HomePage() {
       <V2Nav />
 
       {/* HERO — liquidity is a public good (centered) */}
-      <section className="bg-ground-cool border-b border-hair-soft">
-        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 pt-[104px] pb-[80px] max-[800px]:pt-[64px] max-[800px]:pb-[56px] flex flex-col items-center text-center">
+      <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">
+        <AirbrushSplash tone="mix" />
+        <div className="relative mx-auto max-w-[1180px] px-6 max-[800px]:px-4 pt-[104px] pb-[80px] max-[800px]:pt-[64px] max-[800px]:pb-[56px] flex flex-col items-center text-center">
           <h1 className="font-atx-display font-medium text-ink tracking-[-0.045em] leading-[1.0] text-[clamp(2.5rem,6.4vw,4.6rem)] max-w-[16ch] [text-wrap:balance]">
             Liquidity <span className="text-peri">IS</span> a public good.
           </h1>
