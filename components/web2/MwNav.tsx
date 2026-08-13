@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useMintwarePrivy }   from '@/components/web2/providers'
 import { useLaunch }          from '@/components/web2/LaunchModal'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
+import { MintwareMark }        from '@/components/ui2/MintwareMark'
 
 // MwNav — the authenticated in-app nav. Design v2 (Privy-esque): translucent
 // white/blur bar, periwinkle logo mark, glass-pill actions. All wallet/Privy
@@ -45,7 +46,7 @@ export function MwNav() {
   return (
     <nav className="sticky top-0 z-[200] flex items-center justify-between px-6 max-[800px]:px-4 h-[60px] bg-white/70 backdrop-blur-[16px] border-b border-hair-soft font-atx-display">
       <Link href="/" className="flex items-center gap-2.5 no-underline text-ink shrink-0">
-        <span className="w-[22px] h-[22px] rounded-[7px] grid place-items-center text-white text-[12px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 3px 10px rgba(108,108,240,0.35)' }}>✴</span>
+        <MintwareMark size={24} />
         <span className="font-atx-display text-[17px] font-bold tracking-[-0.02em]">Mintware</span>
       </Link>
 
