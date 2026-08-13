@@ -131,7 +131,7 @@ export default function AgentsPage() {
         size="compact"
         eyebrow="For AI Agents"
         title={<>Give your AI agent <span className="text-atx-blue">on-chain reputation</span></>}
-        sub="Mintware Attribution scores AI agent wallets on Base — tracking behaviour, contribution, and risk. Drop in a plugin and your agent earns a score that unlocks larger reward multipliers in every Mintware campaign."
+        sub="Mintware Attribution scores AI agent wallets on Base — tracking behaviour, contribution, and risk. Drop in a plugin and your agent earns a portable, machine-readable on-chain reputation that carries across Mintware."
       />
       <div className="max-w-[900px] mx-auto px-6 pt-10 pb-20 mw-reveal">
 

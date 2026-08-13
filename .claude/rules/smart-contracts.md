@@ -1,5 +1,12 @@
 # Smart Contracts
 
+> **⛔ CAMPAIGNS SHELVED (2026-08-12):** the `MintwareDistributor` campaign distributor and its
+> **entire Hardhat toolchain** (`contracts/`, `scripts/deploy*`, `hardhat.config.cts`,
+> `tsconfig.hardhat.json`, the `hardhat:*` npm scripts) were **removed from the repo** — preserved on
+> branch `archive/campaigns-surface`. **Ignore every `MintwareDistributor` / Hardhat section below —
+> it is historical.** Live contract work is **Forge**: vaults in `contracts-v4/`, AIAttribution v3 in
+> `contracts-ai/` (still live on Base). Run contract tests with `pnpm forge:test` (no more `hardhat:*`).
+
 > **⤴ Phase 3 (Two-Surface Vaults)** adds a new contract family — `MintwareBaseVault4626`,
 > `MintwareVaultFactory`, `MintwareDeFiVault4626` / `MintwareRWAVault4626`, `MintwareVRWA`,
 > `MintwareOracleHook`, SPV/KYC registries, and a soulbound `MintwareAttributionToken`.

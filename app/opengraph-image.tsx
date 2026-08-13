@@ -52,7 +52,7 @@ export default async function OgImage() {
               <span style={{ display: 'flex', color: BLUE }}>mean something.</span>
             </div>
             <div style={{ display: 'flex', fontSize: 24, lineHeight: 1.45, color: 'rgba(17,17,17,0.6)', marginTop: 26, maxWidth: 780 }}>
-              One reputation score across every chain — powering reward campaigns and reputation-weighted DeFi liquidity vaults.
+              One reputation score across every chain — powering reputation-weighted DeFi liquidity vaults and rewards.
             </div>
           </div>
 

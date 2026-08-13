@@ -222,7 +222,7 @@ export default function TeamsLandingPage() {
             ))}
           </div>
           <p className="font-atx-mono text-[12px] text-atx-mesquite mt-4">
-            <b className="text-atx-blue">↳</b> Teams can layer a points campaign on top, paying a referral reward for every backer brought in — so widening the pool pays twice. A 24-hour anti-abuse gate keeps referrals real, not farmed.
+            <b className="text-atx-blue">↳</b> Teams can reward backers through referrals — every wallet brought in pays a referral reward, so widening the pool pays twice. A 24-hour anti-abuse gate keeps referrals real, not farmed.
           </p>
         </div>
       </section>

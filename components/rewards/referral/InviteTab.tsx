@@ -77,7 +77,7 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
           <svg viewBox="0 0 100 100" className="w-[18px] h-[18px] text-atx-coral mt-[1px] shrink-0" aria-hidden="true"><path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"/></svg>
           <div>
             <div className="text-[12px] font-bold text-atx-ink mb-[2px]">Earn rewards</div>
-            <div className="text-[11px] text-atx-ink/55 leading-[1.4]">Score multipliers increase your campaign reward allocation</div>
+            <div className="text-[11px] text-atx-ink/55 leading-[1.4]">A stronger Attribution score grows your reward share</div>
           </div>
         </div>
       </div>

@@ -60,7 +60,7 @@ function Overview({ nav }: { nav: Nav }) {
       <Pipe items={[
         ['Measure', 'Attribution', 'On-chain reputation across 100+ chains — six signals, one score.'],
         ['Hold', 'Vaults', 'Reputation-weighted Uniswap V4 liquidity — dual-sided pairs, built security-first.'],
-        ['Reward', 'Engine', 'Campaigns that pay reputation × commitment × referral quality.'],
+        ['Reward', 'Engine', 'Vault fees and referrals that pay reputation × commitment × referral quality.'],
       ]} />
       <Note k="✴ Start here">If you run a <b>DeFi protocol</b> or provide liquidity, read <Ln to="defi" nav={nav}>Where the value is</Ln> next. If you want the mechanism, read <Ln to="model" nav={nav}>The model in one page</Ln>.</Note>
     </>
@@ -75,7 +75,7 @@ function Model() {
       <h3>1 · Reputation is the unit</h3>
       <p>Attribution scores any wallet from its on-chain history — volume, trading, holding, liquidity, governance, and the people it brings in. That score is the multiplier on every reward, up to <b>1.95×</b>. We reward who you are on-chain, not how much you deposited.</p>
       <h3>2 · One engine over managed liquidity</h3>
-      <p>The same reward engine runs over <b>reputation-weighted Uniswap V4 liquidity</b> and over reward campaigns pointed at any pool. The engine is surface-agnostic: a pool is just a pool to point a campaign at, and every reward carries the reputation multiplier.</p>
+      <p>The same reward engine runs over <b>reputation-weighted Uniswap V4 liquidity</b> and over referral rewards — every reward carries the reputation multiplier, so value routes to who you are on-chain rather than the size of your deposit.</p>
       <h3>3 · Quality of capital, proven on-chain</h3>
       <p>Every reward-credited action is verified on-chain before a point is written, and rewards are weighted to attract sticky, duration-committed, relationship-sourced capital — the opposite of mercenary TVL.</p>
       <h3>4 · Built security-first</h3>
@@ -112,22 +112,16 @@ function Rewards() {
   return (
     <>
       <div className={EY}>✴ How it works · Rewards engine</div>
-      <h1>Rewards — how we track &amp; pay</h1>
-      <p className={SUB}>An engine that verifies every action on-chain, credits reputation-weighted points, and settles to gas-free Merkle claims.</p>
+      <h1>Rewards — how we weight &amp; pay</h1>
+      <p className={SUB}>Value routes by reputation, not wallet size — vault fees and referral rewards, weighted by your Attribution score and settled to gas-free Merkle claims.</p>
       <h2>The formula</h2>
       <Spec><span className="text-atx-blue font-bold">reward</span> = attribution_score × lock_duration × referral_quality   <span className="g">// never: how many dollars</span></Spec>
-      <h2>How we track — verification, not trust</h2>
-      <p>A reward is never credited on a claim. Every reward-bearing swap is checked against its on-chain receipt before a single point is written:</p>
-      <ul>
-        <li>The transaction <b>exists and succeeded</b> (<code>status === 0x1</code>).</li>
-        <li>The <b>sender matches</b> the rewarded wallet — no spoofing another address&apos;s trade.</li>
-        <li>The router is in the <b>known LI.FI router set</b> — not an arbitrary contract.</li>
-        <li>The <b>Mintware fee is present in the calldata</b> — strip the fee, forfeit the reward.</li>
-      </ul>
+      <h2>Reputation-weighted, not dollar-weighted</h2>
+      <p>Every reward carries your Attribution multiplier (up to <b>1.95×</b>), applied when it is credited. The identical vault position out-earns the cold wallet beside it; the same referral is worth more when the wallets you bring are real and active. Reputation is computed independently on-chain, so it can&apos;t be bought at deposit time.</p>
       <h2>How we pay — epochs → Merkle → claim</h2>
-      <Spec><span className="g">action</span> → <span className="text-atx-blue font-bold">verify on-chain</span> → credit to epoch_state → settle → <span className="text-atx-blue font-bold">Merkle root</span> → user claims leaf</Spec>
-      <p>At epoch close, points settle into a Merkle distribution. The oracle signs the root off-chain via EIP-712, so distributions cost <b>zero oracle gas</b> and the oracle never holds custody. Users claim their own leaf directly on <code>MintwareDistributor v2</code>. A <b>duration-match</b> bonus rewards locking to (or through) a campaign&apos;s window.</p>
-      <Gap k="✕ The gap it closes">Emissions pay the biggest wallet, which farms and exits first — every program races its own users to the door. Weighting by reputation and lock duration, and proving each action on-chain, rewards the capital a protocol actually wants: sticky, qualified, and relationship-sourced.</Gap>
+      <Spec><span className="g">accrue</span> → <span className="text-atx-blue font-bold">reputation-weight</span> → settle at epoch close → <span className="text-atx-blue font-bold">Merkle root</span> → user claims leaf</Spec>
+      <p>At epoch close, weighted rewards settle into a Merkle distribution. The oracle signs the root off-chain via EIP-712, so distributions cost <b>zero oracle gas</b> and the oracle never holds custody — users claim their own leaf directly on-chain. A <b>duration-match</b> bonus rewards locking to (or through) a vault&apos;s window.</p>
+      <Gap k="✕ The gap it closes">Emissions pay the biggest wallet, which farms and exits first — every program races its own users to the door. Weighting by reputation and lock duration rewards the capital a protocol actually wants: sticky, qualified, and relationship-sourced.</Gap>
     </>
   )
 }
@@ -143,7 +137,7 @@ function Vaults({ nav }: { nav: Nav }) {
       <p>Deposits pick a lock tier (<b>Flex → Committed → Aligned → Core</b>); longer locks earn a higher multiplier, and early exit pays a penalty that flows to the LPs who stayed. Unlocked and Flex positions redeem instantly; locked positions exit on a notice window.</p>
       <h3>Team-locked launch liquidity</h3>
       <p>A launch variant lets a team lock its token liquidity while the community matches it 1:1. The team&apos;s side is provably locked on-chain for a fixed cliff and cannot be pulled early — and the community earns the team&apos;s forgone fees for the duration of the lock. Precisely: <i>team liquidity is locked and matched by community capital under transparent on-chain rules</i> — a claim you can verify yourself, not a promise.</p>
-      <Note k="✴ Status">The reputation-weighted vault family is <b>built and tested, in testing ahead of launch</b> — feature-flagged off, and it starts on testnet. Attribution, campaigns, and agents are live today. See <Ln to="security" nav={nav}>Security</Ln> for what&apos;s hardened and what&apos;s pending.</Note>
+      <Note k="✴ Status">The reputation-weighted vault family is <b>built and tested, in testing ahead of launch</b> — feature-flagged off, and it starts on testnet. Attribution and agents are live today. See <Ln to="security" nav={nav}>Security</Ln> for what&apos;s hardened and what&apos;s pending.</Note>
     </>
   )
 }
@@ -162,11 +156,11 @@ function DeFi({ nav }: { nav: Nav }) {
       </ul>
       <h2>For teams</h2>
       <ul>
-        <li><b>Reward the right users.</b> Point a campaign at any pool and pay loyal, high-reputation wallets instead of mercenary farmers.</li>
+        <li><b>Reward the right users.</b> Reputation-weighted vault fees pay loyal, high-reputation wallets instead of mercenary farmers.</li>
         <li><b>Retention &amp; conversion.</b> The reputation filter drives the stickiness raw emissions never could — your best users earn more, and stay.</li>
-        <li><b>Two campaign types.</b> A <b>Token Reward Pool</b> (per-swap, self-serve, depletes) or a <b>Points Campaign</b> (epoch-distributed, score-gated, multiplier-weighted).</li>
+        <li><b>Provable launch liquidity.</b> Team-locked, community-matched pools — the team&apos;s side is locked on-chain for a fixed cliff, and LPs earn its forgone fees for the duration.</li>
       </ul>
-      <Note k="✴ Integrity you can point to">Because every credited swap is verified against its on-chain receipt (see <Ln to="rewards" nav={nav}>how we track</Ln>), your emissions can&apos;t be drained by wash-traded volume. You pay for real flow by real wallets with real reputation.</Note>
+      <Note k="✴ Integrity you can point to">Reputation is computed independently on-chain (see <Ln to="rewards" nav={nav}>how we weight</Ln>), so your fee share can&apos;t be bought — you pay real reputation, not wash-traded volume.</Note>
     </>
   )
 }
@@ -206,7 +200,7 @@ function Security() {
       </ul>
       <h2>Verified, not asserted</h2>
       <p>The vaults&apos; core invariants are <b>fuzz-tested</b> — stateful invariant runs over 100k+ call sequences prove properties like &ldquo;locked team liquidity can never be withdrawn before its cliff, under any path.&rdquo; The hook&apos;s per-swap cost is <b>gas-benchmarked</b> well under the routing budget, so pools stay discoverable by aggregators.</p>
-      <Note k="✴ Honest status">An <b>independent third-party audit is pending</b> — we do not claim &ldquo;audited&rdquo; until a Uniswap-whitelisted auditor has signed off. Attribution and <code>MintwareDistributor v2</code> are live and verified on Base; the reputation-weighted vault family is in testing ahead of launch. Non-custodial throughout.</Note>
+      <Note k="✴ Honest status">An <b>independent third-party audit is pending</b> — we do not claim &ldquo;audited&rdquo; until a Uniswap-whitelisted auditor has signed off. Attribution is live and verified on Base; the reputation-weighted vault family is in testing ahead of launch. Non-custodial throughout.</Note>
     </>
   )
 }
