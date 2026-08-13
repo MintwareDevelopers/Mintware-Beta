@@ -121,6 +121,8 @@ function Rewards() {
       <h2>How we pay — epochs → Merkle → claim</h2>
       <Spec><span className="g">accrue</span> → <span className="text-atx-blue font-bold">reputation-weight</span> → settle at epoch close → <span className="text-atx-blue font-bold">Merkle root</span> → user claims leaf</Spec>
       <p>At epoch close, weighted rewards settle into a Merkle distribution. The oracle signs the root off-chain via EIP-712, so distributions cost <b>zero oracle gas</b> and the oracle never holds custody — users claim their own leaf directly on-chain. A <b>duration-match</b> bonus rewards locking to (or through) a vault&apos;s window.</p>
+      <h2>Yield Payment Network</h2>
+      <p>The same mechanism powers the <a href="/yield-payment-network" className="text-atx-blue font-semibold no-underline hover:underline">Yield Payment Network</a> — the expression of Mintware&apos;s founding idea that <b>liquidity should be a public good</b>. A treasury parks single-sided USDC in the Unified Liquidity Vault, keeps its principal whole, and routes the <i>yield</i> into attributed user acquisition and campaign payouts. Provide liquidity once; its yield pays growth forward, permanently and non-dilutively. <span className="text-atx-ink/50">(In testing ahead of launch.)</span></p>
       <Gap k="✕ The gap it closes">Emissions pay the biggest wallet, which farms and exits first — every program races its own users to the door. Weighting by reputation and lock duration rewards the capital a protocol actually wants: sticky, qualified, and relationship-sourced.</Gap>
     </>
   )
