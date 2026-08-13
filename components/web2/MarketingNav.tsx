@@ -13,6 +13,7 @@ import { useLaunch } from '@/components/web2/LaunchModal'
 
 const FEATURES = [
   { key: 'vaults', href: '/vaults', label: 'Vaults' },
+  { key: 'ypn', href: '/yield-payment-network', label: 'Yield Network' },
   { key: 'attribution', href: '/attribution', label: 'Attribution' },
   { key: 'agents', href: '/agents', label: 'Agents' },
   { key: 'teams', href: '/teams', label: 'For Teams' },
@@ -29,7 +30,7 @@ function Star({ className = '' }: { className?: string }) {
   )
 }
 
-export function MarketingNav({ active }: { active?: 'vaults' | 'attribution' | 'agents' | 'teams' | 'defi' }) {
+export function MarketingNav({ active }: { active?: 'vaults' | 'ypn' | 'attribution' | 'agents' | 'teams' | 'defi' }) {
   const { isConnected } = useMintwareIdentity()
   const { launch } = useLaunch()
   const [menuOpen, setMenuOpen] = useState(false)

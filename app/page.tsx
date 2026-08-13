@@ -18,6 +18,7 @@ import { scoreApiUrl } from '@/lib/web2/api'
 import { CountUp, Marquee } from '@/components/web2/motion'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useLaunch } from '@/components/web2/LaunchModal'
+import { YieldPaymentNetworkSection } from '@/components/marketing/ypn/YieldPaymentNetworkSection'
 
 const GRID_BG =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
@@ -276,6 +277,7 @@ export default function HomePage() {
           </Link>
           <nav className="hidden md:flex gap-6 font-atx-mono text-[11px] uppercase tracking-[0.14em]">
             <Link href="/vaults" className={navLink}>Vaults</Link>
+            <Link href="/yield-payment-network" className={navLink}>Yield Network</Link>
             <Link href="/attribution" className={navLink}>Attribution</Link>
             <Link href="/agents" className={navLink}>Agents</Link>
             <Link href="/teams" className={navLink}>Teams</Link>
@@ -289,7 +291,7 @@ export default function HomePage() {
         </div>
         {menuOpen && (
           <div className="md:hidden flex flex-col absolute top-[56px] left-0 right-0 bg-atx-bone border-b border-atx-ink z-20">
-            {([['Vaults', '/vaults'], ['Attribution', '/attribution'], ['Agents', '/agents'], ['Teams', '/teams']] as const).map(([label, href]) => (
+            {([['Vaults', '/vaults'], ['Yield Network', '/yield-payment-network'], ['Attribution', '/attribution'], ['Agents', '/agents'], ['Teams', '/teams']] as const).map(([label, href]) => (
               <Link key={href} href={href} onClick={() => setMenuOpen(false)} className="px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink/10 no-underline text-atx-ink/70">{label}</Link>
             ))}
             <button onClick={() => { setMenuOpen(false); launchApp() }} className="text-left px-6 py-3.5 text-[13px] uppercase tracking-[0.14em] font-atx-mono border-t border-atx-ink bg-atx-blue text-white">
@@ -346,6 +348,9 @@ export default function HomePage() {
           </button>
         </div>
       </section>
+
+      {/* YIELD PAYMENT NETWORK — liquidity as a public good */}
+      <YieldPaymentNetworkSection />
 
       {/* AMBIENT TICKER — evergreen facts, in motion */}
       <div className="border-b border-atx-ink bg-atx-panel">
