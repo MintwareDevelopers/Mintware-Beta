@@ -1,10 +1,8 @@
 'use client'
 
-// SwapWalkthrough — "one swap, in numbers." Makes the ULV mechanism concrete by
-// walking a single trade through the vault: capital resting in Aave, JIT pull,
-// fee + MEV capture, return. Illustrative figures under the testnet framing.
-
-const EY = 'font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55'
+// SwapWalkthrough — "one swap, in numbers." Design v2. Makes the ULV mechanism
+// concrete by walking a single trade through the vault: capital resting in Aave,
+// JIT pull, fee + MEV capture, return. Illustrative figures (testnet framing).
 
 const STEPS: { n: string; h: string; body: string; stat: string; statLabel: string; hot?: boolean }[] = [
   {
@@ -31,48 +29,43 @@ const STEPS: { n: string; h: string; body: string; stat: string; statLabel: stri
 
 export function SwapWalkthrough() {
   return (
-    <section className="border-b border-atx-ink bg-atx-bone">
-      <div className="max-w-[1100px] mx-auto px-7 py-[56px] max-[800px]:px-4 mw-reveal">
+    <section className="bg-ground-cool border-b border-hair-soft">
+      <div className="max-w-[1100px] mx-auto px-6 py-[72px] max-[800px]:px-4 max-[800px]:py-[52px] mw-reveal">
         <div className="flex items-baseline gap-3.5 flex-wrap">
-          <span className={EY}>Worked example · illustrative</span>
-          <span className="font-atx-mono text-[10px] uppercase tracking-[0.12em] text-atx-ink/50 border border-atx-ink/20 px-2 py-1">Numbers illustrate the mechanism</span>
+          <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Worked example · illustrative</span>
+          <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft rounded-full border border-hair px-2.5 py-1">Numbers illustrate the mechanism</span>
         </div>
-        <h2 className="font-bold tracking-[-0.02em] leading-[1.03] text-[clamp(28px,3.6vw,46px)] mt-4 max-w-[16ch]">
-          One swap, <span className="text-atx-blue">in numbers.</span>
+        <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.03] text-[clamp(1.8rem,3.6vw,2.9rem)] mt-4 max-w-[16ch] [text-wrap:balance]">
+          One swap, <span className="text-peri">in numbers.</span>
         </h2>
-        <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-atx-ink/70 max-w-[62ch] mt-4">
+        <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-ink-mid max-w-[62ch] mt-4">
           Here’s a single $50k trade moving through a vault that holds $2M — and why the capital
           behind it earns in two places at once.
         </p>
 
-        <div className="grid grid-cols-4 border border-atx-ink mt-9 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
-          {STEPS.map((s, i) => (
-            <div
-              key={s.n}
-              className={`p-5 flex flex-col mw-lift ${s.hot ? 'bg-atx-panel' : 'bg-atx-bone'} border-atx-ink
-                ${i < 3 ? 'border-r max-[900px]:[&:nth-child(2)]:border-r-0 max-[520px]:border-r-0' : ''}
-                ${i < 2 ? 'max-[900px]:border-b' : ''} ${i < 3 ? 'max-[520px]:border-b' : ''}`}
-            >
+        <div className="grid grid-cols-4 gap-3 mt-9 max-[900px]:grid-cols-2 max-[520px]:grid-cols-1">
+          {STEPS.map((s) => (
+            <div key={s.n} className={`rounded-2xl border p-5 flex flex-col ${s.hot ? 'bg-[rgba(108,108,240,0.06)] border-[rgba(108,108,240,0.28)]' : 'bg-white border-hair'}`}>
               <div className="flex items-center justify-between mb-3">
-                <span className={`font-atx-mono text-[12px] font-bold ${s.hot ? 'text-atx-blue' : 'text-atx-ink/45'}`}>{s.n}</span>
-                {s.hot && <span className="font-atx-mono text-[9px] uppercase tracking-[0.08em] bg-atx-acid border border-atx-ink px-1.5 py-0.5">JIT</span>}
+                <span className={`text-[12px] font-semibold tabular-nums ${s.hot ? 'text-peri-deep' : 'text-ink-soft'}`}>{s.n}</span>
+                {s.hot && <span className="text-[9px] uppercase tracking-[0.08em] font-semibold rounded-full bg-[rgba(108,108,240,0.14)] text-peri-deep px-2 py-0.5">JIT</span>}
               </div>
-              <div className="text-[15px] font-bold tracking-[-0.01em] leading-[1.2]">{s.h}</div>
+              <div className="font-atx-display text-[15px] font-medium tracking-[-0.01em] leading-[1.2] text-ink">{s.h}</div>
               <div className="mt-3 mb-0.5">
-                <span className={`font-atx-mono font-bold tracking-tight ${s.hot ? 'text-atx-blue' : 'text-atx-ink'} text-[clamp(18px,2vw,22px)]`}>{s.stat}</span>
+                <span className={`font-atx-display font-medium tracking-tight tabular-nums ${s.hot ? 'text-peri-deep' : 'text-ink'} text-[clamp(18px,2vw,22px)]`}>{s.stat}</span>
               </div>
-              <div className="font-atx-mono text-[9.5px] uppercase tracking-[0.1em] text-atx-ink/45">{s.statLabel}</div>
-              <p className="text-[12.5px] leading-[1.5] text-atx-ink/60 mt-3">{s.body}</p>
+              <div className="text-[9.5px] uppercase tracking-[0.1em] text-ink-soft">{s.statLabel}</div>
+              <p className="text-[12.5px] leading-[1.5] text-ink-mid mt-3">{s.body}</p>
             </div>
           ))}
         </div>
 
         {/* the payoff */}
-        <div className="border border-atx-ink border-t-0 bg-atx-panel px-5 py-4 flex items-center gap-3 flex-wrap max-[900px]:border-t">
-          <span className="font-atx-mono text-[11px] uppercase tracking-[0.12em] text-atx-mesquite">The payoff</span>
-          <span className="text-[13.5px] text-atx-ink/75 leading-[1.5]">
-            A normal pool would have left that <b className="text-atx-ink">$1.9M idle</b> between trades. Here it earned Aave
-            yield the <i>whole time</i> — <b className="text-atx-ink">and</b> the swap fees + MEV on top. Two earning layers from one deposit.
+        <div className="rounded-2xl bg-white border border-hair px-5 py-4 flex items-center gap-3 flex-wrap mt-3">
+          <span className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">The payoff</span>
+          <span className="text-[13.5px] text-ink-mid leading-[1.5]">
+            A normal pool would have left that <b className="text-ink">$1.9M idle</b> between trades. Here it earned Aave
+            yield the <i>whole time</i> — <b className="text-ink">and</b> the swap fees + MEV on top. Two earning layers from one deposit.
           </span>
         </div>
       </div>

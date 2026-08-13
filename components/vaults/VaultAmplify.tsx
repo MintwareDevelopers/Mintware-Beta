@@ -2,24 +2,21 @@
 
 // =============================================================================
 // VaultAmplify — the value-communication layer beneath vault discovery.
-// Sells the wedge: reputation = yield. Shared by /vaults (production) and the
-// /style/vaults preview. ATX Settlemint.
+// Design v2 (Privy-esque). Sells the wedge: reputation = yield.
 //
-//  · Live stats band (real subgraph aggregates, honest empty state)
+//  · Live stats band (evergreen economics, GradientPanel)
 //  01 Reputation = Yield (interactive: deposit × tier × base-APY sliders)
-//  02 How LPing works (five-stage hook engine)
-//  03 Lock tiers (the second lever — commitment; real LockLib numbers)
-//  04 Trust, enforced on-chain
-//  05 Referral compounding loop
-//  06 Vault reputation leaderboard (ranked by TVL, real vs example)
+//  02 Lock tiers (the second lever — commitment; real LockLib numbers)
+//  03 Trust, enforced on-chain
+//  04 Referral compounding loop (dark 'pop' band + animated flow)
+//  05 Vault reputation leaderboard (ranked by TVL, real vs example)
 // =============================================================================
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { GradientPanel } from '@/components/ui2/GradientPanel'
 
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
-const LABEL = 'font-atx-mono uppercase tracking-[0.14em] text-[11px] text-atx-ink/55'
+const LABEL = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
 
 function fmtUsd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
@@ -27,18 +24,12 @@ function fmtUsd(n: number): string {
   return `$${Math.round(n).toLocaleString()}`
 }
 
-const RANGE_CLASS =
-  'w-full appearance-none h-[8px] border border-atx-ink bg-atx-bone cursor-pointer ' +
-  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:h-[18px] ' +
-  '[&::-webkit-slider-thumb]:bg-atx-blue [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-atx-ink ' +
-  '[&::-webkit-slider-thumb]:rounded-none [&::-webkit-slider-thumb]:cursor-pointer'
-
-// Attribution tiers → fee-share multiplier (matches the rewards multiplier model:
-// 0–33 → 1.0×, 34–66 → 1.25×, 67–100 → 1.5×). These are the REAL multipliers.
+// Attribution tiers → fee-share multiplier (0–33 → 1.0×, 34–66 → 1.25×,
+// 67–100 → 1.5×). These are the REAL multipliers.
 const TIERS = [
-  { key: 'Bronze', mult: 1.0, pct: '0–33 percentile', color: 'var(--color-atx-grey)' },
-  { key: 'Silver', mult: 1.25, pct: '34–66 percentile', color: 'var(--color-atx-blue)' },
-  { key: 'Gold', mult: 1.5, pct: '67–100 percentile', color: 'var(--color-atx-coral)' },
+  { key: 'Bronze', mult: 1.0, pct: '0–33 percentile', color: 'var(--color-ink-soft)' },
+  { key: 'Silver', mult: 1.25, pct: '34–66 percentile', color: 'var(--color-peri)' },
+  { key: 'Gold', mult: 1.5, pct: '67–100 percentile', color: 'var(--color-coral2)' },
 ] as const
 
 // ── amplify-data shape (from /api/vaults/amplify-data) ───────────────────────
@@ -57,29 +48,24 @@ type AmplifyData = {
   leaderboard: LbVault[]
 }
 const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-// Real = an on-chain vault (address) or an approved vault (UUID). UUID entries
-// resolve at /vault/[id]; slug ids are illustrative examples.
 const isRealId = (id: string) => /^0x[0-9a-fA-F]{40}$/.test(id) || isUuid(id)
 
-function SectionHead({ n, label, title, sub }: { n: string; label: string; title: string; sub?: string }) {
+function SectionHead({ n, label, title, sub, onDark }: { n: string; label: string; title: string; sub?: string; onDark?: boolean }) {
   return (
     <div className="mb-8 max-w-[70ch]">
-      <div className="flex items-center gap-3.5 mb-4">
-        <span className="font-atx-mono text-[13px] border border-atx-ink px-3 py-1.5">{n}</span>
-        <span className={LABEL}>{label}</span>
+      <div className="flex items-center gap-3 mb-4">
+        <span className={`text-[12px] font-semibold tabular-nums ${onDark ? 'text-pas-peri' : 'text-peri-deep'}`}>{n}</span>
+        <span className={`text-[11px] uppercase tracking-[0.14em] font-semibold ${onDark ? 'text-white/55' : 'text-ink-soft'}`}>{label}</span>
       </div>
-      <h2 className="font-atx-display font-bold tracking-[-0.03em] leading-[0.95] text-[clamp(28px,4.5vw,52px)]">
+      <h2 className={`font-atx-display font-medium tracking-[-0.035em] leading-[1.02] text-[clamp(1.7rem,4vw,3rem)] ${onDark ? 'text-white' : 'text-ink'} [text-wrap:balance]`}>
         {title}
       </h2>
-      {sub && <p className="text-atx-ink/55 text-[15px] leading-[1.6] mt-4">{sub}</p>}
+      {sub && <p className={`text-[15px] leading-[1.6] mt-4 ${onDark ? 'text-white/60' : 'text-ink-mid'}`}>{sub}</p>}
     </div>
   )
 }
 
-// ─── Stats band — evergreen vault economics ──────────────────────────────────
-// Deliberately NOT live TVL / vault-count: vaults are pre-launch (testnet-first),
-// and per the framing doc we never publish specific TVL/count stats. These three
-// facts are true before and after launch.
+// ─── Stats band — evergreen vault economics (GradientPanel) ──────────────────
 function LiveStatsBand() {
   const cells = [
     { v: '70%', k: 'Fees to LPs' },
@@ -88,25 +74,22 @@ function LiveStatsBand() {
   ]
 
   return (
-    <div className="border border-atx-ink bg-atx-ink text-white">
-      <div className="flex items-center gap-2 px-5 py-2.5 border-b border-white/15">
-        <span className="w-[9px] h-[9px] border border-white/40 inline-block bg-white/25" />
-        <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/70">
+    <GradientPanel tone="periwinkle" className="p-6 max-[800px]:p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="w-[7px] h-[7px] rounded-full bg-peri inline-block" />
+        <span className="text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-mid">
           In testing · Base — the economics, live at launch
         </span>
       </div>
-      <div className="grid grid-cols-3 max-[640px]:grid-cols-1">
-        {cells.map((c, i) => (
-          <div
-            key={c.k}
-            className={`px-5 py-5 ${i < cells.length - 1 ? 'border-r border-white/15 max-[640px]:border-r-0 max-[640px]:border-b max-[640px]:border-white/15' : ''}`}
-          >
-            <div className="font-atx-mono text-[26px] font-bold leading-none">{c.v}</div>
-            <div className="font-atx-mono uppercase tracking-[0.1em] text-[10px] text-white/50 mt-2">{c.k}</div>
+      <div className="grid grid-cols-3 gap-4 max-[640px]:grid-cols-1">
+        {cells.map((c) => (
+          <div key={c.k}>
+            <div className="font-atx-display text-[26px] font-medium leading-none text-ink tabular-nums">{c.v}</div>
+            <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft mt-2">{c.k}</div>
           </div>
         ))}
       </div>
-    </div>
+    </GradientPanel>
   )
 }
 
@@ -122,8 +105,8 @@ function ReputationYield() {
   const maxEarn = Math.max(...earnings, 1)
 
   return (
-    <div className="border border-atx-ink" style={{ backgroundImage: GRID_BG }}>
-      <div className="p-8 max-[640px]:p-6 border-b border-atx-ink/20">
+    <div className="soft-card overflow-hidden">
+      <div className="p-8 max-[640px]:p-6 border-b border-hair-soft">
         <SectionHead
           n="01"
           label="The wedge · reputation = yield"
@@ -134,22 +117,14 @@ function ReputationYield() {
 
       <div className="grid grid-cols-[1fr_1.15fr] max-[820px]:grid-cols-1">
         {/* controls */}
-        <div className="p-8 max-[640px]:p-6 border-r border-atx-ink/20 max-[820px]:border-r-0 max-[820px]:border-b flex flex-col gap-7">
+        <div className="p-8 max-[640px]:p-6 border-r border-hair-soft max-[820px]:border-r-0 max-[820px]:border-b flex flex-col gap-7">
           <div>
             <div className="flex items-baseline justify-between mb-3">
               <span className={LABEL}>Your deposit</span>
-              <span className="font-atx-mono text-[22px] font-bold text-atx-ink">{fmtUsd(deposit)}</span>
+              <span className="font-atx-display text-[22px] font-medium text-ink tabular-nums">{fmtUsd(deposit)}</span>
             </div>
-            <input
-              type="range"
-              min={1000}
-              max={500_000}
-              step={1000}
-              value={deposit}
-              onChange={(e) => setDeposit(Number(e.target.value))}
-              className={RANGE_CLASS}
-            />
-            <div className="flex justify-between mt-1.5 font-atx-mono text-[10px] text-atx-ink/45">
+            <input type="range" min={1000} max={500_000} step={1000} value={deposit} onChange={(e) => setDeposit(Number(e.target.value))} className="ypn-range w-full" aria-label="Your deposit" />
+            <div className="flex justify-between mt-1.5 text-[10px] text-ink-soft">
               <span>$1K</span><span>$500K</span>
             </div>
           </div>
@@ -157,49 +132,39 @@ function ReputationYield() {
           <div>
             <div className="flex items-baseline justify-between mb-3">
               <span className={LABEL}>Base swap-fee APY</span>
-              <span className="font-atx-mono text-[22px] font-bold text-atx-ink">{baseApy}%</span>
+              <span className="font-atx-display text-[22px] font-medium text-ink tabular-nums">{baseApy}%</span>
             </div>
-            <input
-              type="range"
-              min={1}
-              max={20}
-              step={1}
-              value={baseApy}
-              onChange={(e) => setBaseApy(Number(e.target.value))}
-              className={RANGE_CLASS}
-            />
-            <div className="flex justify-between mt-1.5 font-atx-mono text-[10px] text-atx-ink/45">
+            <input type="range" min={1} max={20} step={1} value={baseApy} onChange={(e) => setBaseApy(Number(e.target.value))} className="ypn-range w-full" aria-label="Base swap-fee APY" />
+            <div className="flex justify-between mt-1.5 text-[10px] text-ink-soft">
               <span>1%</span><span>model your own · 20%</span>
             </div>
           </div>
 
           <div>
             <span className={`${LABEL} block mb-2.5`}>Your Attribution tier</span>
-            <div className="flex border border-atx-ink">
+            <div className="flex gap-1.5 rounded-full bg-ground-cool border border-hair p-1">
               {TIERS.map((t, i) => (
                 <button
                   key={t.key}
                   onClick={() => setTierIdx(i)}
-                  className={`flex-1 py-2.5 text-[12px] font-atx-mono uppercase tracking-[0.06em] transition-colors duration-150 ${
-                    i > 0 ? 'border-l border-atx-ink' : ''
-                  } ${tierIdx === i ? 'bg-atx-ink text-white font-semibold' : 'bg-transparent text-atx-ink/60 hover:text-atx-ink'}`}
+                  className={`flex-1 py-2 rounded-full text-[12px] uppercase tracking-[0.06em] font-semibold transition-colors duration-150 ${tierIdx === i ? 'bg-peri text-white' : 'bg-transparent text-ink-soft hover:text-ink'}`}
                 >
                   {t.key}
                 </button>
               ))}
             </div>
-            <div className="mt-2 font-atx-mono text-[11px] text-atx-ink/45">{active.pct} · {active.mult.toFixed(2)}× fee-share multiplier</div>
+            <div className="mt-2 text-[11px] text-ink-soft">{active.pct} · {active.mult.toFixed(2)}× fee-share multiplier</div>
           </div>
 
-          <div className="border border-atx-ink bg-atx-panel p-5">
+          <GradientPanel tone="lavender" className="p-5">
             <div className={`${LABEL} mb-1`}>Your projected fee share / yr</div>
-            <div className="font-atx-mono text-[34px] font-bold text-atx-blue leading-none">
+            <div className="font-atx-display text-[34px] font-medium text-peri-deep leading-none tabular-nums">
               {fmtUsd(baseAnnual * active.mult)}
             </div>
-            <div className="font-atx-mono text-[12px] text-atx-mesquite mt-1.5">
+            <div className="text-[12px] text-coral2-deep mt-1.5 font-medium">
               +{fmtUsd(baseAnnual * active.mult - baseAnnual)} vs base — from reputation alone
             </div>
-          </div>
+          </GradientPanel>
         </div>
 
         {/* comparison bars */}
@@ -211,23 +176,20 @@ function ReputationYield() {
             return (
               <div key={t.key}>
                 <div className="flex items-baseline justify-between mb-1.5">
-                  <span className={`font-atx-mono text-[13px] uppercase tracking-[0.06em] ${tierIdx === i ? 'text-atx-ink font-bold' : 'text-atx-ink/55'}`}>
+                  <span className={`text-[13px] uppercase tracking-[0.06em] font-semibold ${tierIdx === i ? 'text-ink' : 'text-ink-soft'}`}>
                     {t.key} · {t.mult.toFixed(2)}×
                   </span>
-                  <span className={`font-atx-mono text-[15px] font-bold ${tierIdx === i ? 'text-atx-ink' : 'text-atx-ink/60'}`}>
+                  <span className={`font-atx-display text-[15px] font-medium tabular-nums ${tierIdx === i ? 'text-ink' : 'text-ink-mid'}`}>
                     {fmtUsd(val)}
                   </span>
                 </div>
-                <div className="h-[26px] border border-atx-ink relative overflow-hidden">
-                  <div
-                    className="h-full absolute inset-y-0 left-0 transition-[width] duration-300"
-                    style={{ width: `${w}%`, background: t.color, opacity: tierIdx === i ? 1 : 0.5 }}
-                  />
+                <div className="h-[26px] rounded-full bg-ground-cool relative overflow-hidden">
+                  <div className="h-full absolute inset-y-0 left-0 rounded-full transition-[width] duration-300" style={{ width: `${w}%`, background: t.color, opacity: tierIdx === i ? 1 : 0.5 }} />
                 </div>
               </div>
             )
           })}
-          <p className="font-atx-mono text-[10px] text-atx-ink/40 mt-1 leading-[1.5]">
+          <p className="text-[10px] text-ink-soft mt-1 leading-[1.5]">
             Illustrative model · base APY is your input, not a Mintware projection. Actual yield varies by pool activity.
           </p>
         </div>
@@ -238,10 +200,10 @@ function ReputationYield() {
 
 // ─── 02 · Lock tiers (real LockLib numbers) ──────────────────────────────────
 const LOCK_TIERS = [
-  { name: 'Flex', dur: 'No lock', days: 0, mult: 1.0, accent: 'var(--color-atx-grey)' },
-  { name: 'Committed', dur: '30 days', days: 30, mult: 1.15, accent: 'var(--color-atx-blue)' },
-  { name: 'Aligned', dur: '90 days', days: 90, mult: 1.3, accent: 'var(--color-atx-mesquite)' },
-  { name: 'Core', dur: '180 days', days: 180, mult: 1.5, accent: 'var(--color-atx-coral)' },
+  { name: 'Flex', dur: 'No lock', days: 0, mult: 1.0, accent: 'var(--color-ink-soft)' },
+  { name: 'Committed', dur: '30 days', days: 30, mult: 1.15, accent: 'var(--color-peri)' },
+  { name: 'Aligned', dur: '90 days', days: 90, mult: 1.3, accent: 'var(--color-peri-deep)' },
+  { name: 'Core', dur: '180 days', days: 180, mult: 1.5, accent: 'var(--color-coral2)' },
 ]
 
 function LockTiers() {
@@ -254,26 +216,22 @@ function LockTiers() {
         title="Reputation is who you are. Lock tier is how long you commit."
         sub="The second lever on your fee share: longer locks earn a higher multiplier, and the early-exit penalty tapers to zero as you near unlock."
       />
-      <div className="grid grid-cols-4 max-[720px]:grid-cols-2 border border-atx-ink">
-        {LOCK_TIERS.map((t, i) => (
-          <div
-            key={t.name}
-            className={`p-5 flex flex-col gap-4 bg-atx-panel ${i < LOCK_TIERS.length - 1 ? 'border-r border-atx-ink/20 max-[720px]:[&:nth-child(2)]:border-r-0' : ''} ${i < 2 ? 'max-[720px]:border-b max-[720px]:border-atx-ink/20' : ''}`}
-            style={{ borderTop: `3px solid ${t.accent}` }}
-          >
+      <div className="grid grid-cols-4 gap-3 max-[720px]:grid-cols-2">
+        {LOCK_TIERS.map((t) => (
+          <div key={t.name} className="rounded-2xl bg-ground-cool border border-hair p-5 flex flex-col gap-4" style={{ borderTop: `3px solid ${t.accent}` }}>
             <div>
-              <div className="font-atx-display text-[17px] font-bold">{t.name}</div>
-              <div className="font-atx-mono text-[11px] text-atx-ink/50 mt-0.5">{t.dur}</div>
+              <div className="font-atx-display text-[17px] font-medium text-ink">{t.name}</div>
+              <div className="text-[11px] text-ink-soft mt-0.5">{t.dur}</div>
             </div>
             <div>
-              <div className="font-atx-mono text-[30px] font-bold leading-none" style={{ color: t.accent }}>
+              <div className="font-atx-display text-[30px] font-medium leading-none tabular-nums" style={{ color: t.accent }}>
                 {t.mult.toFixed(2)}×
               </div>
-              <div className="h-[8px] border border-atx-ink mt-2.5 relative overflow-hidden">
-                <div className="h-full absolute inset-y-0 left-0" style={{ width: `${(t.mult / maxMult) * 100}%`, background: t.accent }} />
+              <div className="h-[8px] rounded-full bg-white border border-hair mt-2.5 relative overflow-hidden">
+                <div className="h-full absolute inset-y-0 left-0 rounded-full" style={{ width: `${(t.mult / maxMult) * 100}%`, background: t.accent }} />
               </div>
             </div>
-            <div className="font-atx-mono text-[10px] text-atx-ink/45 leading-[1.5] mt-auto">
+            <div className="text-[10px] text-ink-soft leading-[1.5] mt-auto">
               {t.days === 0 ? 'Withdraw anytime · 7-day queue · no penalty' : 'Early exit ≤2.0%, tapering to 0% near unlock'}
             </div>
           </div>
@@ -301,13 +259,13 @@ function TrustOnChain() {
         title="You don't have to trust us. Trust the contract."
         sub="The rules that protect your deposit live in the contract — verifiable, and impossible to quietly change."
       />
-      <div className="border border-atx-ink">
+      <div className="soft-card overflow-hidden">
         {TRUST.map((t, i) => (
-          <div key={t.k} className={`flex items-start gap-4 px-6 py-4 ${i < TRUST.length - 1 ? 'border-b border-atx-ink/15' : ''}`}>
-            <span className="w-[10px] h-[10px] bg-atx-acid border border-atx-ink inline-block mt-1.5 shrink-0" />
+          <div key={t.k} className={`flex items-start gap-4 px-6 py-4 ${i < TRUST.length - 1 ? 'border-b border-hair-soft' : ''}`}>
+            <span className="w-[8px] h-[8px] rounded-full bg-peri inline-block mt-1.5 shrink-0" />
             <div className="flex-1 min-w-0 flex gap-4 max-[640px]:flex-col max-[640px]:gap-1">
-              <div className="text-[15px] font-bold font-atx-display w-[180px] shrink-0 max-[640px]:w-auto">{t.k}</div>
-              <div className="text-[13px] text-atx-ink/60 leading-[1.5]">{t.d}</div>
+              <div className="font-atx-display text-[15px] font-medium w-[180px] shrink-0 max-[640px]:w-auto text-ink">{t.k}</div>
+              <div className="text-[13px] text-ink-mid leading-[1.5]">{t.d}</div>
             </div>
           </div>
         ))}
@@ -316,7 +274,7 @@ function TrustOnChain() {
   )
 }
 
-// ─── 05 · Referral compounding loop ──────────────────────────────────────────
+// ─── 04 · Referral compounding loop · dark pop ───────────────────────────────
 const LOOP = [
   { k: 'Refer an LP', d: 'Share your link — they deposit into any vault' },
   { k: 'Their TVL sticks', d: 'You earn on their sustained liquidity, not a one-time bounty' },
@@ -327,29 +285,28 @@ const LOOP = [
 
 function ReferralLoop() {
   return (
-    <div className="border border-atx-ink bg-atx-ink text-white">
-      <div className="p-8 max-[640px]:p-6 border-b border-white/15">
-        <div className="flex items-center gap-3.5 mb-4">
-          <span className="font-atx-mono text-[13px] border border-white/40 px-3 py-1.5">04</span>
-          <span className="font-atx-mono uppercase tracking-[0.14em] text-[11px] text-white/55">Referrals · the compounding loop</span>
+    <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-ink text-white">
+      <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 120% at 8% 0%, rgba(108,108,240,0.34), transparent 60%), radial-gradient(50% 130% at 100% 100%, rgba(244,161,131,0.14), transparent 62%)' }} />
+      <div className="grain absolute inset-0 opacity-40" aria-hidden />
+      <div className="relative p-8 max-[640px]:p-6 border-b border-white/12">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-[12px] font-semibold text-pas-peri tabular-nums">04</span>
+          <span className="text-[11px] uppercase tracking-[0.14em] font-semibold text-white/55">Referrals · the compounding loop</span>
         </div>
-        <h2 className="font-atx-display font-bold tracking-[-0.03em] leading-[0.95] text-[clamp(28px,4.5vw,52px)]">
-          Refer liquidity. Build reputation. Earn more forever.
+        <h2 className="font-atx-display font-medium tracking-[-0.035em] leading-[1.02] text-[clamp(1.7rem,4vw,3rem)] text-white [text-wrap:balance]">
+          Refer liquidity. Build reputation. <span className="text-pas-peri">Earn more forever.</span>
         </h2>
         <p className="text-white/60 text-[15px] leading-[1.6] mt-4 max-w-[70ch]">
           Other protocols pay a flat bounty. Here, referring an LP feeds your reputation — so you're paid twice: in fees now, and in a higher multiplier on every future deposit.
         </p>
       </div>
-      <div className="grid grid-cols-5 max-[900px]:grid-cols-1">
+      <div className="relative grid grid-cols-5 gap-3 p-6 max-[900px]:grid-cols-1">
         {LOOP.map((s, i) => (
-          <div
-            key={s.k}
-            className={`p-5 flex flex-col gap-2.5 ${i < LOOP.length - 1 ? 'border-r border-white/15 max-[900px]:border-r-0 max-[900px]:border-b' : ''}`}
-          >
-            <span className="w-[9px] h-[9px] bg-atx-acid border border-atx-ink inline-block" />
-            <div className="text-[14px] font-bold font-atx-display leading-tight">{s.k}</div>
+          <div key={s.k} className="rounded-2xl bg-white/[0.06] border border-white/15 p-5 flex flex-col gap-2.5">
+            <span className="w-[8px] h-[8px] rounded-full bg-pas-peri inline-block" />
+            <div className="font-atx-display text-[14px] font-medium leading-tight text-white">{s.k}</div>
             <div className="text-[12px] text-white/55 leading-[1.45]">{s.d}</div>
-            {i < LOOP.length - 1 && <span className="font-atx-mono text-white/35 text-[16px] mt-auto max-[900px]:hidden">→</span>}
+            {i < LOOP.length - 1 && <span aria-hidden className="flow-dash-h h-[2px] w-8 mt-auto rounded-full opacity-70 max-[900px]:hidden" />}
           </div>
         ))}
       </div>
@@ -357,7 +314,7 @@ function ReferralLoop() {
   )
 }
 
-// ─── 07 · Vault reputation leaderboard ───────────────────────────────────────
+// ─── 05 · Vault reputation leaderboard ───────────────────────────────────────
 function Leaderboard({ data }: { data: AmplifyData | null }) {
   const rows = (data?.leaderboard ?? []).slice(0, 6)
   const anyExample = rows.some((v) => !isRealId(v.id))
@@ -370,9 +327,9 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
         title="The vaults, ranked. Reputation rises to the top."
         sub="Every vault is public and ranked by liquidity. Live vaults climb automatically as capital flows in — examples are shown until real vaults seed."
       />
-      <div className="border border-atx-ink">
+      <div className="soft-card overflow-hidden">
         {/* header row */}
-        <div className="grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-2.5 border-b border-atx-ink bg-atx-panel">
+        <div className="grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-2.5 border-b border-hair-soft bg-ground-cool">
           <div className={`${LABEL} text-[10px]`}>#</div>
           <div className={`${LABEL} text-[10px]`}>Vault</div>
           <div className={`${LABEL} text-[10px] max-[720px]:hidden`}>Surface</div>
@@ -380,35 +337,32 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
           <div className={`${LABEL} text-[10px] text-right`}>TVL</div>
         </div>
         {rows.length === 0 ? (
-          <div className="px-6 py-8 text-center font-atx-mono text-[12px] text-atx-ink/45">Loading vaults…</div>
+          <div className="px-6 py-8 text-center text-[12px] text-ink-soft">Loading vaults…</div>
         ) : (
           rows.map((v, i) => {
             const real = isRealId(v.id)
             const clickable = isUuid(v.id) // approved vaults resolve at /vault/[id]
-            const rowClass = `grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-3.5 ${i < rows.length - 1 ? 'border-b border-atx-ink/12' : ''}${clickable ? ' hover:bg-atx-panel no-underline text-inherit' : ''}`
+            const rowClass = `grid grid-cols-[40px_1fr_120px_100px_90px] max-[720px]:grid-cols-[32px_1fr_90px] items-center px-4 py-3.5 ${i < rows.length - 1 ? 'border-b border-hair-soft' : ''}${clickable ? ' hover:bg-ground-cool no-underline text-inherit' : ''}`
             const inner = (
               <>
-                <div className="font-atx-mono text-[15px] font-bold text-atx-ink/40">{i + 1}</div>
+                <div className="text-[15px] font-semibold text-ink-soft tabular-nums">{i + 1}</div>
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span
-                    className="w-[8px] h-[8px] border border-atx-ink inline-block shrink-0"
-                    style={{ background: real ? 'var(--color-atx-acid)' : 'transparent' }}
-                  />
-                  <span className="font-atx-display text-[14px] font-semibold truncate">{v.name}</span>
-                  <span className={`font-atx-mono text-[9px] uppercase tracking-[0.1em] px-1.5 py-0.5 border shrink-0 ${real ? 'border-atx-ink text-atx-mesquite' : 'border-atx-ink/25 text-atx-ink/40'}`}>
+                  <span className="w-[7px] h-[7px] rounded-full inline-block shrink-0" style={{ background: real ? 'var(--color-peri)' : 'var(--color-hair)' }} />
+                  <span className="font-atx-display text-[14px] font-medium truncate text-ink">{v.name}</span>
+                  <span className={`text-[9px] uppercase tracking-[0.1em] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${real ? 'border-[rgba(108,108,240,0.3)] text-peri-deep' : 'border-hair text-ink-soft'}`}>
                     {real ? 'Live' : 'Example'}
                   </span>
-                  {clickable && <span className="font-atx-mono text-[11px] text-atx-ink/40 max-[720px]:hidden">↗</span>}
+                  {clickable && <span className="text-[11px] text-ink-soft max-[720px]:hidden">↗</span>}
                 </div>
-                <div className="max-[720px]:hidden font-atx-mono text-[12px]" style={{ color: 'var(--color-atx-blue)' }}>
+                <div className="max-[720px]:hidden text-[12px] text-peri-deep font-medium">
                   {v.surface}
                 </div>
-                <div className="max-[720px]:hidden font-atx-mono text-[13px] text-right text-atx-ink/70">
+                <div className="max-[720px]:hidden text-[13px] text-right text-ink-mid tabular-nums">
                   {v.netApyPct > 0 ? `${v.netApyPct.toFixed(1)}%` : '—'}
                 </div>
                 {/* Real vaults show real TVL; example rows never render a fabricated $ figure. */}
-                <div className="font-atx-mono text-[13px] font-bold text-right">
-                  {real ? fmtUsd(v.tvlUsd) : <span className="text-atx-ink/35 font-normal">—</span>}
+                <div className="text-[13px] font-medium text-right text-ink tabular-nums">
+                  {real ? fmtUsd(v.tvlUsd) : <span className="text-ink-soft font-normal">—</span>}
                 </div>
               </>
             )
@@ -419,8 +373,8 @@ function Leaderboard({ data }: { data: AmplifyData | null }) {
         )}
       </div>
       {anyExample && (
-        <p className="font-atx-mono text-[10px] text-atx-ink/40 mt-2.5 leading-[1.5]">
-          Rows marked <span className="text-atx-ink/60">Example</span> illustrate vault types on each surface · APY figures on example rows are illustrative, not projections.
+        <p className="text-[10px] text-ink-soft mt-2.5 leading-[1.5]">
+          Rows marked <span className="text-ink-mid">Example</span> illustrate vault types on each surface · APY figures on example rows are illustrative, not projections.
         </p>
       )}
     </div>
@@ -441,8 +395,8 @@ export function VaultAmplify() {
   }, [])
 
   return (
-    <section className="bg-atx-bone text-atx-ink font-atx-display [&_*]:rounded-none border-t border-atx-ink">
-      <div className="max-w-[1100px] mx-auto px-7 py-16 max-[800px]:px-4 max-[800px]:py-10 flex flex-col gap-16 max-[800px]:gap-12">
+    <section className="bg-white text-ink font-atx-display border-t border-hair-soft">
+      <div className="max-w-[1100px] mx-auto px-6 py-16 max-[800px]:px-4 max-[800px]:py-12 flex flex-col gap-16 max-[800px]:gap-12">
         <LiveStatsBand />
         <ReputationYield />
         <LockTiers />
