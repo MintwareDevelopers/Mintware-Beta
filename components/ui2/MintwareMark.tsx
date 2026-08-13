@@ -9,13 +9,13 @@
 
 type Tone = 'tile' | 'periwinkle' | 'inverse'
 
-// Shared glyph geometry — dome + wider base ellipse. Base is faintly translucent so
-// the dome reads as foreground (adds a little depth to the flat original).
+// Shared glyph geometry — a flying saucer: a flat disc + a shallow cockpit dome,
+// both the SAME solid fill so they merge into one clean silhouette.
 function Glyph({ fill }: { fill: string }) {
   return (
     <>
-      <ellipse cx="50" cy="62" rx="33" ry="9" fill={fill} fillOpacity="0.55" />
-      <path d="M35 62C35 43 42 30 50 30C58 30 65 43 65 62Z" fill={fill} />
+      <ellipse cx="50" cy="54" rx="36" ry="8.5" fill={fill} />
+      <path d="M33 54C33 45.4 40.6 38 50 38C59.4 38 67 45.4 67 54Z" fill={fill} />
     </>
   )
 }
