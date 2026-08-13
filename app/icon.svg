@@ -1,4 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-  <rect width="100" height="100" fill="#006FCC"/>
-  <path fill="#ffffff" transform="translate(15 15) scale(0.7)" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"/>
+  <defs>
+    <linearGradient id="mw" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8A82F4"/>
+      <stop offset="1" stop-color="#6C6CF0"/>
+    </linearGradient>
+  </defs>
+  <rect width="100" height="100" rx="22" fill="url(#mw)"/>
+  <ellipse cx="50" cy="62" rx="33" ry="9" fill="#ffffff" fill-opacity="0.55"/>
+  <path d="M35 62C35 43 42 30 50 30C58 30 65 43 65 62Z" fill="#ffffff"/>
 </svg>

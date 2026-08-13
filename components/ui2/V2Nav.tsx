@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { useLaunch } from '@/components/web2/LaunchModal'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
+import { MintwareMark } from '@/components/ui2/MintwareMark'
 
 const FEATURES = [
   { key: 'vaults', href: '/vaults', label: 'Vaults' },
@@ -29,7 +30,7 @@ export function V2Nav({ active }: { active?: V2NavActive }) {
     <header className="sticky top-0 z-30 bg-white/70 backdrop-blur-[16px] border-b border-hair-soft">
       <div className="mx-auto max-w-[1220px] px-6 max-[820px]:px-4 h-[62px] flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 no-underline text-ink shrink-0">
-          <span className="w-[22px] h-[22px] rounded-[7px] grid place-items-center text-white text-[12px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 3px 10px rgba(108,108,240,0.35)' }}>✴</span>
+          <MintwareMark size={24} />
           <b className="font-atx-display text-[17px] font-bold tracking-[-0.02em]">Mintware</b>
         </Link>
 
