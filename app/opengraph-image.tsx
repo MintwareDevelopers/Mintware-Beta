@@ -40,8 +40,8 @@ export default async function OgImage() {
               background: `linear-gradient(135deg, ${PERI_MID}, ${PERI})`,
             }}>
               <svg width="52" height="52" viewBox="0 0 100 100">
-                <ellipse cx="50" cy="62" rx="33" ry="9" fill="#ffffff" fillOpacity="0.55" />
-                <path d="M35 62C35 43 42 30 50 30C58 30 65 43 65 62Z" fill="#ffffff" />
+                <ellipse cx="50" cy="54" rx="36" ry="8.5" fill="#ffffff" />
+                <path d="M33 54C33 45.4 40.6 38 50 38C59.4 38 67 45.4 67 54Z" fill="#ffffff" />
               </svg>
             </div>
             <span style={{ fontSize: 27, fontWeight: 800, letterSpacing: 2, color: INK }}>MINTWARE</span>
