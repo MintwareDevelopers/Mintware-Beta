@@ -1,8 +1,8 @@
 'use client'
 
-// /app/vaults — the functional vault browse (app tier). Public to view; deposit/
-// create actions live on their own guarded pages (/app/vault/[id], /app/vault/create).
-// The educational Vaults page lives at /vaults (marketing tier).
+// /app/vaults — the functional vault browse (app tier). Design v2. Public to view;
+// deposit/create actions live on their own guarded pages. Educational Vaults page
+// lives at /vaults (marketing tier).
 
 import { MwNav } from '@/components/web2/MwNav'
 import { useEffect, useState } from 'react'
@@ -17,17 +17,9 @@ const BASE_APY = 8.5
 const CHAIN_NAMES: Record<number, string> = { 1: 'Ethereum', 8453: 'Base', 84532: 'Base Sepolia', 42161: 'Arbitrum', 10: 'Optimism', 137: 'Polygon', 56: 'BNB' }
 const chainName = (id?: number) => (id != null ? CHAIN_NAMES[id] ?? `Chain ${id}` : '—')
 const STATUS_META: Record<string, { label: string; cls: string; live: boolean }> = {
-  active:  { label: 'Active',  cls: 'text-atx-mesquite border-atx-mesquite', live: true },
-  seeding: { label: 'Seeding', cls: 'text-atx-clay border-atx-clay', live: false },
-  closed:  { label: 'Closed',  cls: 'text-atx-ink/45 border-atx-ink/25', live: false },
-}
-
-function Star({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
-      <path fill="currentColor" d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z" />
-    </svg>
-  )
+  active:  { label: 'Active',  cls: 'text-peri-deep border-[rgba(108,108,240,0.4)]', live: true },
+  seeding: { label: 'Seeding', cls: 'text-[#D14343] border-[rgba(209,67,67,0.35)]', live: false },
+  closed:  { label: 'Closed',  cls: 'text-ink-soft border-hair', live: false },
 }
 
 const MOCK_VAULTS: SocialVault[] = [
@@ -79,73 +71,69 @@ export default function AppVaultsPage() {
     .filter(v => filter === 'All' || v.status === statusFromFilter(filter))
 
   return (
-    <div className="font-atx-display bg-atx-bone min-h-screen text-atx-ink [&_*]:rounded-none">
+    <div className="font-atx-display bg-white min-h-screen text-ink overflow-x-clip">
       <MwNav />
 
       {/* ── Testnet-beta notice ── */}
-      <div className="border-b border-atx-ink bg-atx-ink text-white">
-        <div className="max-w-[1100px] mx-auto px-7 py-2.5 max-[800px]:px-4 flex items-center gap-3 flex-wrap font-atx-mono text-[11px]">
-          <span className="w-[8px] h-[8px] bg-atx-acid border border-white/40 inline-block shrink-0" />
-          <span className="uppercase tracking-[0.14em] text-white/70">Base Sepolia · testnet beta</span>
-          <span className="text-white/55 normal-case tracking-normal">
+      <div className="border-b border-hair-soft bg-[rgba(108,108,240,0.06)]">
+        <div className="max-w-[1100px] mx-auto px-6 py-2.5 max-[800px]:px-4 flex items-center gap-3 flex-wrap text-[11px]">
+          <span className="w-[7px] h-[7px] rounded-full bg-peri inline-block shrink-0" />
+          <span className="uppercase tracking-[0.14em] font-semibold text-peri-deep">Base Sepolia · testnet beta</span>
+          <span className="text-ink-mid">
             Vaults run on a testnet contract — deposit test USDC to try the full flow. Figures shown are illustrative, not live TVL.
           </span>
-          <a href="https://faucet.circle.com/" target="_blank" rel="noopener noreferrer" className="ml-auto underline underline-offset-2 text-atx-acid hover:text-white normal-case tracking-normal">
+          <a href="https://faucet.circle.com/" target="_blank" rel="noopener noreferrer" className="ml-auto underline underline-offset-2 text-peri-deep hover:text-ink font-medium">
             Get test USDC →
           </a>
         </div>
       </div>
 
       {/* ── header ── */}
-      <div className="border-b border-atx-ink">
-        <div className="max-w-[1100px] mx-auto px-7 py-7 max-[800px]:px-4 flex items-end justify-between gap-4 flex-wrap">
+      <div className="border-b border-hair-soft bg-ground-cool">
+        <div className="max-w-[1100px] mx-auto px-6 py-8 max-[800px]:px-4 flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <div className="font-atx-mono uppercase tracking-[0.16em] text-[11px] text-atx-ink/55">DeFi surface · reputation-weighted yield</div>
-            <h1 className="font-bold tracking-[-0.02em] text-[clamp(26px,3.4vw,38px)] mt-2">Vaults</h1>
+            <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-peri-deep">DeFi surface · reputation-weighted yield</div>
+            <h1 className="font-atx-display font-medium tracking-[-0.03em] text-[clamp(26px,3.4vw,38px)] mt-2 text-ink">Vaults</h1>
           </div>
-          <Link href="/vaults" className="font-atx-mono text-[11px] uppercase tracking-[0.08em] text-atx-blue no-underline hover:underline">How vaults work →</Link>
+          <Link href="/vaults" className="text-[12px] font-semibold text-peri-deep no-underline hover:underline">How vaults work →</Link>
         </div>
       </div>
 
       {/* ── vault list ── */}
-      <div className="max-w-[1100px] mx-auto px-7 pt-8 pb-[52px] max-[800px]:px-4">
+      <div className="max-w-[1100px] mx-auto px-6 pt-8 pb-[52px] max-[800px]:px-4">
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
-          <div className="flex border border-atx-ink">
+          <div className="flex gap-1 rounded-full bg-ground-cool border border-hair p-1">
             {FILTERS.map(f => (
               <button key={f} onClick={() => setFilter(f)}
-                className={`font-atx-mono text-[12px] uppercase tracking-[0.1em] px-4 py-2 border-r border-atx-ink last:border-r-0 ${filter === f ? 'bg-atx-blue text-white' : 'bg-transparent text-atx-ink'}`}>
+                className={`text-[12px] uppercase tracking-[0.08em] font-semibold rounded-full px-3.5 py-1.5 transition-colors ${filter === f ? 'bg-peri text-white' : 'bg-transparent text-ink-mid hover:text-ink'}`}>
                 {f}
               </button>
             ))}
           </div>
-          <Link href="/app/vault/create" className="inline-flex items-center gap-1.5 px-4 py-2 bg-atx-blue text-white border border-atx-ink font-atx-mono text-[13px] font-semibold uppercase tracking-[0.04em] no-underline">
-            + Create vault
-          </Link>
+          <Link href="/app/vault/create" className="glass-pill glass-pill-sm">+ Create vault</Link>
         </div>
 
         {useMock && (
-          <div className="bg-atx-panel border border-atx-ink/25 border-l-[3px] border-l-atx-clay px-3.5 py-2.5 text-[12px] text-atx-clay font-atx-mono mb-4 flex items-center gap-2">
-            <Star className="w-3.5 h-3.5 shrink-0 text-atx-clay" />
+          <div className="rounded-2xl bg-white border border-hair px-3.5 py-2.5 text-[12px] text-[#D14343] mb-4 flex items-center gap-2" style={{ borderLeft: '3px solid #D14343' }}>
             Showing example vault — no vaults have been seeded yet. Deploy a pool via the create flow to get started.
           </div>
         )}
 
         {loading ? (
-          <div className="border border-atx-ink bg-atx-bone p-4 flex flex-col gap-2">
-            {[1, 2, 3, 4].map(i => <div key={i} className="h-11 bg-atx-panel border border-atx-ink/15 animate-pulse" />)}
+          <div className="soft-card p-4 flex flex-col gap-2">
+            {[1, 2, 3, 4].map(i => <div key={i} className="h-11 rounded-xl bg-ground-cool mw-shimmer" />)}
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-[60px] px-5 text-atx-ink/55 font-atx-display text-[14px]">
-            <div className="flex justify-center mb-3"><Star className="w-8 h-8 text-atx-coral" /></div>
+          <div className="text-center py-[60px] px-5 text-ink-mid text-[14px]">
             <div>No DeFi {filter !== 'All' ? filter.toLowerCase() + ' ' : ''}vaults yet.</div>
           </div>
         ) : (
-          <div className="border border-atx-ink bg-atx-bone overflow-x-auto">
+          <div className="soft-card overflow-x-auto">
             <table className="w-full border-collapse text-[13px] min-w-[840px]">
               <thead>
-                <tr className="border-b border-atx-ink bg-atx-panel">
+                <tr className="border-b border-hair-soft bg-ground-cool">
                   {([['Vault', 'l'], ['Status', 'l'], ['TVL', 'r'], ['Reward pool', 'r'], ['Epoch', 'r'], ['Example APY', 'r'], ['Chain', 'l'], ['', 'r']] as const).map(([h, al], i) => (
-                    <th key={i} className={`font-atx-mono text-[9.5px] uppercase tracking-[0.09em] text-atx-ink/55 px-4 py-3 whitespace-nowrap ${al === 'r' ? 'text-right' : 'text-left'} ${(i === 4 || i === 5) ? 'max-[820px]:hidden' : ''} ${i === 6 ? 'max-[680px]:hidden' : ''}`}>{h}</th>
+                    <th key={i} className={`text-[9.5px] uppercase tracking-[0.09em] font-semibold text-ink-soft px-4 py-3 whitespace-nowrap ${al === 'r' ? 'text-right' : 'text-left'} ${(i === 4 || i === 5) ? 'max-[820px]:hidden' : ''} ${i === 6 ? 'max-[680px]:hidden' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -155,31 +143,31 @@ export default function AppVaultsPage() {
                   const ep = v.current_epoch
                   const tok = v.project_token ? `${v.project_token.slice(0, 6)}…${v.project_token.slice(-4)}` : ''
                   return (
-                    <tr key={v.id} className="border-b border-atx-ink/15 last:border-b-0 hover:bg-atx-panel/60 transition-colors">
+                    <tr key={v.id} className="border-b border-hair-soft last:border-b-0 hover:bg-ground-cool transition-colors">
                       <td className="px-4 py-3.5 align-middle">
                         <div className="flex items-center gap-3 min-w-0">
-                          <span className="w-8 h-8 border border-atx-ink bg-atx-bone grid place-items-center font-atx-mono text-[12px] font-bold shrink-0">{v.name.charAt(0)}</span>
+                          <span className="w-8 h-8 rounded-lg border border-hair bg-ground-cool grid place-items-center font-atx-display text-[12px] font-medium shrink-0 text-ink">{v.name.charAt(0)}</span>
                           <div className="min-w-0">
-                            <div className="font-bold text-[14px] tracking-tight truncate flex items-center gap-1.5">
+                            <div className="font-atx-display font-medium text-[14px] tracking-tight truncate flex items-center gap-1.5 text-ink">
                               {v.name}
-                              {v.is_sample && <span className="font-atx-mono text-[9px] uppercase tracking-[0.06em] text-atx-clay border border-atx-clay/50 px-1 py-0.5">example</span>}
+                              {v.is_sample && <span className="text-[9px] uppercase tracking-[0.06em] font-semibold text-[#D14343] rounded-full border border-[rgba(209,67,67,0.35)] px-1.5 py-0.5">example</span>}
                             </div>
-                            <div className="font-atx-mono text-[11px] text-atx-ink/45 truncate">{tok}</div>
+                            <div className="font-mono text-[11px] text-ink-soft truncate">{tok}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3.5">
-                        <span className={`inline-flex items-center gap-1.5 font-atx-mono text-[10px] uppercase tracking-[0.06em] border px-2 py-1 ${st.cls}`}>
-                          {st.live && <span className="w-[6px] h-[6px] bg-atx-acid inline-block animate-pulse" />}{st.label}
+                        <span className={`inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.06em] font-semibold rounded-full border px-2 py-1 ${st.cls}`}>
+                          {st.live && <span className="w-[6px] h-[6px] rounded-full bg-peri inline-block animate-pulse" />}{st.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums">{v.tvl_usdc != null ? fmtUSD(v.tvl_usdc) : '—'}</td>
-                      <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-mesquite">{ep?.total_pool != null ? fmtUSD(ep.total_pool) : '—'}</td>
-                      <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-ink/70 max-[820px]:hidden">{ep ? `#${ep.epoch_number}` : '—'}</td>
-                      <td className="px-4 py-3.5 text-right font-atx-mono tabular-nums text-atx-blue max-[820px]:hidden">{BASE_APY.toFixed(1)}%</td>
-                      <td className="px-4 py-3.5 font-atx-mono text-[12px] text-atx-ink/60 max-[680px]:hidden">{chainName(v.chain_id)}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-ink">{v.tvl_usdc != null ? fmtUSD(v.tvl_usdc) : '—'}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-coral2-deep">{ep?.total_pool != null ? fmtUSD(ep.total_pool) : '—'}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-ink-mid max-[820px]:hidden">{ep ? `#${ep.epoch_number}` : '—'}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-peri-deep max-[820px]:hidden">{BASE_APY.toFixed(1)}%</td>
+                      <td className="px-4 py-3.5 text-[12px] text-ink-mid max-[680px]:hidden">{chainName(v.chain_id)}</td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link href={`/app/vault/${v.id}`} className="inline-flex font-atx-mono text-[10.5px] uppercase tracking-[0.06em] border border-atx-ink px-3 py-1.5 no-underline text-atx-ink hover:bg-atx-ink hover:text-atx-bone transition-colors whitespace-nowrap">Open →</Link>
+                        <Link href={`/app/vault/${v.id}`} className="glass-pill glass-pill-sm whitespace-nowrap">Open →</Link>
                       </td>
                     </tr>
                   )
