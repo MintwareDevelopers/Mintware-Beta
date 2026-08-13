@@ -52,20 +52,37 @@ contract MockLiquidityModule is ILiquidityModule {
 
     // ── ILiquidityModule ──────────────────────────────────────────────────────────
 
-    function deploy(uint256 usdcAmount, uint256 maxTeamToken) external onlyVault returns (uint256 teamTokenUsed) {
-        // pull both legs from the vault (real transfers; reserves are accounting).
-        IERC20(address(usdc)).safeTransferFrom(msg.sender, address(this), usdcAmount);
-
-        // balanced team at the current mark (bootstrap to the mark if the pool is empty).
-        uint256 balanced = resUsdc == 0
+    function deploy(uint256 usdcAmount, uint256 maxTeamToken)
+        external onlyVault returns (uint256 usdcUsed, uint256 teamTokenUsed)
+    {
+        // team needed to BALANCE the requested USDC at the current pool ratio (bootstrap at `price`).
+        uint256 balancedTeam = resUsdc == 0
             ? (price == 0 ? 0 : (usdcAmount * ONE) / price)
             : (usdcAmount * resTeam) / resUsdc;
-        teamTokenUsed = balanced < maxTeamToken ? balanced : maxTeamToken;
-        if (teamTokenUsed > 0) {
-            IERC20(address(teamToken)).safeTransferFrom(msg.sender, address(this), teamTokenUsed);
+
+        // Never add USDC that no team can pair (would unbalance the pool → diverge its intrinsic price).
+        if (balancedTeam == 0) return (0, 0);
+
+        if (balancedTeam <= maxTeamToken) {
+            // junior can fully pair the requested USDC → deploy all of it.
+            usdcUsed = usdcAmount;
+            teamTokenUsed = balancedTeam;
+        } else {
+            // junior-capped → deploy only the USDC that `maxTeamToken` balances, keeping the pool at its
+            // current ratio (so its intrinsic price never diverges from the mark). The rest is left with
+            // the vault as idle buffer → senior deployed to the LP stays junior-covered.
+            teamTokenUsed = maxTeamToken;
+            usdcUsed = resUsdc == 0
+                ? (price == 0 ? 0 : (maxTeamToken * price) / ONE)
+                : (maxTeamToken * resUsdc) / resTeam;
+            if (usdcUsed > usdcAmount) usdcUsed = usdcAmount; // never pull more than requested
         }
 
-        resUsdc += usdcAmount;
+        // pull only what is used (real transfers; reserves are accounting).
+        if (usdcUsed > 0) IERC20(address(usdc)).safeTransferFrom(msg.sender, address(this), usdcUsed);
+        if (teamTokenUsed > 0) IERC20(address(teamToken)).safeTransferFrom(msg.sender, address(this), teamTokenUsed);
+
+        resUsdc += usdcUsed;
         resTeam += teamTokenUsed;
         _repriceMark();
     }

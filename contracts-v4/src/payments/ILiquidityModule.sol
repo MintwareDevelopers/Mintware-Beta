@@ -18,9 +18,13 @@ pragma solidity ^0.8.26;
 /// @dev    All USDC amounts are 6dp. `recover`/`recoverableUSDC` are MTM (price-dependent) — this is
 ///         the ONLY place a price enters the system; the senior NAV never reads it.
 interface ILiquidityModule {
-    /// @notice Deploy `usdcAmount` senior USDC (pulled from the vault) plus up to `maxTeamToken` junior
-    ///         token as two-sided liquidity. Returns the team token actually consumed.
-    function deploy(uint256 usdcAmount, uint256 maxTeamToken) external returns (uint256 teamTokenUsed);
+    /// @notice Deploy UP TO `usdcAmount` senior USDC plus up to `maxTeamToken` junior token as BALANCED
+    ///         two-sided liquidity, pulling only what it uses from the vault. When `maxTeamToken` can't
+    ///         pair the full `usdcAmount`, the module deploys only the USDC the junior balances and
+    ///         leaves the rest with the vault — so the senior deployed to the LP is ALWAYS junior-
+    ///         covered and the pool never goes unbalanced. Returns the USDC and team token actually used.
+    function deploy(uint256 usdcAmount, uint256 maxTeamToken)
+        external returns (uint256 usdcUsed, uint256 teamTokenUsed);
 
     /// @notice Recover liquidity to return AS CLOSE TO `usdcWanted` USDC as the position allows, sending
     ///         the USDC to the vault. Junior token is spent first (seniority). Returns the USDC actually

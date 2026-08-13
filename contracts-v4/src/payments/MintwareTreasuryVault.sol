@@ -342,16 +342,18 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         usdc.forceApprove(address(liquidityModule), usdcAmount);
         if (maxTeamToken > 0) teamToken.forceApprove(address(liquidityModule), maxTeamToken);
 
-        uint256 teamUsed = liquidityModule.deploy(usdcAmount, maxTeamToken);
+        (uint256 usdcUsed, uint256 teamUsed) = liquidityModule.deploy(usdcAmount, maxTeamToken);
 
         usdc.forceApprove(address(liquidityModule), 0);
         if (maxTeamToken > 0) teamToken.forceApprove(address(liquidityModule), 0);
 
-        // EFFECTS: senior par now sits in the LP; junior token consumed from the reserve.
-        deployedFromSenior += usdcAmount;
+        // EFFECTS: only the BALANCED senior USDC is now in the LP (junior-covered). The module leaves
+        // any USDC it couldn't pair with the vault as free senior buffer, so `deployedFromSenior` never
+        // exceeds what the junior backs. Junior token consumed from the reserve.
+        deployedFromSenior += usdcUsed;
         juniorTokens -= teamUsed;
 
-        emit DeployedToLP(usdcAmount, teamUsed);
+        emit DeployedToLP(usdcUsed, teamUsed);
     }
 
     /// @notice Recover senior USDC from the LP back to Aave/buffer (e.g. to rebuild the idle target).
