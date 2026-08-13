@@ -40,12 +40,12 @@ interface RefStats {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-// ATX duotone tiers: gold→coral, silver→grey, bronze→blue.
+// v2 duotone tiers: gold→coral2-deep, silver→ink-soft, bronze→peri.
 function tierColor(tier: string): string {
   const t = tier.toLowerCase()
-  if (t === 'gold')   return '#C95E43' // clay
-  if (t === 'silver') return '#8A8A84' // grey
-  return '#006FCC'   // bronze → texas-blue
+  if (t === 'gold')   return '#E88A67' // coral2-deep
+  if (t === 'silver') return '#9A9AA8' // ink-soft
+  return '#6C6CF0'   // bronze → peri
 }
 
 function fmtTier(tier: string): string {
@@ -60,9 +60,6 @@ function Star({ className = '' }: { className?: string }) {
     </svg>
   )
 }
-
-const GRID_BG =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='46' height='46'%3E%3Cpath d='M46 0H0V46' fill='none' stroke='%23111111' stroke-opacity='0.07'/%3E%3C/svg%3E\")"
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const EVM_RE    = /^0x[0-9a-f]{40}$/i
@@ -139,16 +136,16 @@ export default function PublicProfile() {
   // ── Invalid address ───────────────────────────────────────────────────────
   if (!isValid && !loading) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--color-atx-bone)', fontFamily: 'var(--font-space-grotesk), sans-serif' }}>
+      <div style={{ minHeight: '100vh', background: '#FFFFFF', fontFamily: 'var(--font-space-grotesk), sans-serif' }}>
         <MwNav />
         <div style={{ maxWidth: 600, margin: '0 auto', padding: '80px 24px', textAlign: 'center' }}>
-          <Star className="w-8 h-8 text-atx-coral mx-auto mb-4" />
-          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-atx-ink)', marginBottom: 8 }}>Invalid address</div>
-          <div style={{ fontSize: 14, color: 'rgba(17,17,17,0.55)', marginBottom: 24 }}>
+          <Star className="w-8 h-8 text-coral2 mx-auto mb-4" />
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', marginBottom: 8 }}>Invalid address</div>
+          <div style={{ fontSize: 14, color: 'var(--color-ink-mid)', marginBottom: 24 }}>
             That doesn&apos;t look like a valid wallet address.
           </div>
           <button onClick={() => router.push('/')}
-            style={{ background: 'var(--color-atx-blue)', color: 'white', border: '1px solid var(--color-atx-ink)', borderRadius: 0, padding: '10px 20px', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', fontFamily: 'var(--font-jetbrains), monospace' }}>
+            style={{ background: 'var(--color-peri)', color: 'white', borderRadius: 'var(--radius-pill)', padding: '10px 20px', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', fontFamily: 'var(--font-jetbrains), monospace' }}>
             Go home
           </button>
         </div>
@@ -161,11 +158,10 @@ export default function PublicProfile() {
       <style>{`
         .pp-page {
           min-height: 100vh;
-          background: var(--color-atx-bone);
+          background: #FFFFFF;
           font-family: var(--font-space-grotesk), sans-serif;
-          color: var(--color-atx-ink);
+          color: var(--color-ink);
         }
-        .pp-page *, .pp-page *::before, .pp-page *::after { border-radius: 0 !important; }
         .pp-inner {
           max-width: 840px;
           margin: 0 auto;
@@ -174,9 +170,10 @@ export default function PublicProfile() {
 
         /* ── hero card ───────────────────────────────── */
         .pp-hero {
-          background-color: var(--color-atx-panel);
-          background-image: ${GRID_BG};
-          border: 1px solid var(--color-atx-ink);
+          background-color: var(--color-ground-cool);
+          border: 1px solid var(--color-hair);
+          border-radius: var(--radius-card);
+          box-shadow: var(--shadow-lift);
           padding: 32px;
           margin-bottom: 16px;
           position: relative;
@@ -192,15 +189,16 @@ export default function PublicProfile() {
         .pp-avatar {
           width: 72px;
           height: 72px;
-          background: var(--color-atx-bone);
-          border: 1px solid var(--color-atx-ink);
+          background: #FFFFFF;
+          border: 1px solid var(--color-hair);
+          border-radius: var(--radius-card);
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 28px;
           font-weight: 800;
           font-family: var(--font-jetbrains), monospace;
-          color: var(--color-atx-ink);
+          color: var(--color-ink);
           flex-shrink: 0;
           position: relative;
         }
@@ -208,13 +206,13 @@ export default function PublicProfile() {
           position: absolute;
           bottom: -1px;
           right: -1px;
-          background: var(--color-atx-blue);
+          background: var(--color-peri);
           color: white;
           font-size: 10px;
           font-weight: 700;
           font-family: var(--font-jetbrains), monospace;
           padding: 2px 6px;
-          border: 1px solid var(--color-atx-ink);
+          border-radius: var(--radius-pill);
         }
         .pp-hero-info { flex: 1; min-width: 0; }
         .pp-address-row {
@@ -227,7 +225,7 @@ export default function PublicProfile() {
         .pp-address {
           font-size: 20px;
           font-weight: 700;
-          color: var(--color-atx-ink);
+          color: var(--color-ink);
           letter-spacing: -0.3px;
           font-family: var(--font-jetbrains), monospace;
         }
@@ -241,10 +239,11 @@ export default function PublicProfile() {
           text-transform: uppercase;
           font-family: var(--font-jetbrains), monospace;
           border: 1px solid;
+          border-radius: var(--radius-pill);
         }
         .pp-full-addr {
           font-size: 11px;
-          color: rgba(17,17,17,0.5);
+          color: var(--color-ink-mid);
           font-family: var(--font-jetbrains), monospace;
           margin-bottom: 10px;
           word-break: break-all;
@@ -254,18 +253,18 @@ export default function PublicProfile() {
           align-items: center;
           gap: 5px;
           font-size: 11px;
-          color: rgba(17,17,17,0.5);
+          color: var(--color-ink-mid);
           margin-bottom: 12px;
           font-family: var(--font-jetbrains), monospace;
         }
         .pp-referred-link {
-          color: var(--color-atx-blue);
+          color: var(--color-peri);
           font-weight: 600;
           cursor: pointer;
           text-decoration: none;
           transition: color 0.15s;
         }
-        .pp-referred-link:hover { color: var(--color-atx-ink); }
+        .pp-referred-link:hover { color: var(--color-ink); }
         .pp-chips {
           display: flex;
           gap: 6px;
@@ -276,10 +275,11 @@ export default function PublicProfile() {
           align-items: center;
           gap: 6px;
           background: transparent;
-          border: 1px solid rgba(17,17,17,0.25);
+          border: 1px solid var(--color-hair);
+          border-radius: var(--radius-pill);
           padding: 3px 10px;
           font-size: 11px;
-          color: rgba(17,17,17,0.6);
+          color: var(--color-ink-mid);
           font-family: var(--font-jetbrains), monospace;
         }
 
@@ -294,20 +294,20 @@ export default function PublicProfile() {
           font-size: 72px;
           font-weight: 900;
           font-family: var(--font-jetbrains), monospace;
-          color: var(--color-atx-blue);
+          color: var(--color-peri);
           line-height: 1;
           letter-spacing: -3px;
         }
         .pp-score-meta { padding-bottom: 8px; }
         .pp-score-of {
           font-size: 13px;
-          color: rgba(17,17,17,0.45);
+          color: var(--color-ink-mid);
           font-family: var(--font-jetbrains), monospace;
           margin-bottom: 6px;
         }
         .pp-rank {
           font-size: 12px;
-          color: rgba(17,17,17,0.55);
+          color: var(--color-ink-mid);
           margin-bottom: 6px;
           font-family: var(--font-jetbrains), monospace;
         }
@@ -328,8 +328,10 @@ export default function PublicProfile() {
 
         /* ── badges ──────────────────────────────────── */
         .pp-badges-card {
-          background: var(--color-atx-panel);
-          border: 1px solid var(--color-atx-ink);
+          background: var(--color-ground-cool);
+          border: 1px solid var(--color-hair);
+          border-radius: var(--radius-card);
+          box-shadow: var(--shadow-lift);
           padding: 20px 24px;
           margin-bottom: 16px;
         }
@@ -338,7 +340,7 @@ export default function PublicProfile() {
           font-weight: 700;
           letter-spacing: 0.1em;
           text-transform: uppercase;
-          color: rgba(17,17,17,0.55);
+          color: var(--color-ink-mid);
           margin-bottom: 14px;
           font-family: var(--font-jetbrains), monospace;
         }
@@ -355,6 +357,7 @@ export default function PublicProfile() {
           font-size: 12px;
           font-weight: 700;
           border: 1px solid;
+          border-radius: var(--radius-pill);
           transition: transform 0.15s;
           position: relative;
           font-family: var(--font-jetbrains), monospace;
@@ -371,7 +374,8 @@ export default function PublicProfile() {
           bottom: calc(100% + 6px);
           left: 50%;
           transform: translateX(-50%);
-          background: var(--color-atx-ink);
+          background: var(--color-ink);
+          border-radius: var(--radius-pill);
           color: white;
           font-size: 10px;
           font-weight: 500;
@@ -392,8 +396,10 @@ export default function PublicProfile() {
           margin-bottom: 16px;
         }
         .pp-stat-card {
-          background: var(--color-atx-panel);
-          border: 1px solid var(--color-atx-ink);
+          background: var(--color-ground-cool);
+          border: 1px solid var(--color-hair);
+          border-radius: var(--radius-card);
+          box-shadow: var(--shadow-lift);
           padding: 20px 24px;
         }
         .pp-stat-row {
@@ -401,12 +407,12 @@ export default function PublicProfile() {
           align-items: center;
           justify-content: space-between;
           padding: 8px 0;
-          border-bottom: 1px solid rgba(17,17,17,0.12);
+          border-bottom: 1px solid var(--color-hair);
         }
         .pp-stat-row:last-child { border-bottom: none; }
         .pp-stat-key {
           font-size: 12px;
-          color: rgba(17,17,17,0.55);
+          color: var(--color-ink-mid);
           display: flex;
           align-items: center;
           gap: 6px;
@@ -414,17 +420,19 @@ export default function PublicProfile() {
         .pp-stat-val {
           font-size: 13px;
           font-weight: 700;
-          color: var(--color-atx-ink);
+          color: var(--color-ink);
           font-family: var(--font-jetbrains), monospace;
         }
-        .pp-stat-val.brand { color: var(--color-atx-blue); }
-        .pp-stat-val.teal  { color: var(--color-atx-mesquite);  }
-        .pp-stat-val.pink  { color: var(--color-atx-coral);  }
+        .pp-stat-val.brand { color: var(--color-peri); }
+        .pp-stat-val.teal  { color: var(--color-peri-deep);  }
+        .pp-stat-val.pink  { color: var(--color-coral2);  }
 
         /* ── share strip ─────────────────────────────── */
         .pp-share {
-          background: var(--color-atx-panel);
-          border: 1px solid var(--color-atx-ink);
+          background: var(--color-ground-cool);
+          border: 1px solid var(--color-hair);
+          border-radius: var(--radius-card);
+          box-shadow: var(--shadow-lift);
           padding: 20px 24px;
           display: flex;
           align-items: center;
@@ -442,26 +450,27 @@ export default function PublicProfile() {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.05em;
-          border: 1px solid var(--color-atx-ink);
+          border: 1px solid var(--color-hair);
+          border-radius: var(--radius-pill);
           cursor: pointer;
           transition: opacity 0.15s;
           font-family: var(--font-jetbrains), monospace;
         }
         .pp-btn:hover { opacity: 0.85; }
-        .pp-btn.primary { background: var(--color-atx-blue); color: white; }
+        .pp-btn.primary { background: var(--color-peri); color: white; border-color: transparent; }
         .pp-btn.outline {
           background: transparent;
-          color: var(--color-atx-ink);
+          color: var(--color-ink);
         }
         .pp-claim-cta {
           font-size: 13px;
-          color: rgba(17,17,17,0.55);
+          color: var(--color-ink-mid);
           display: flex;
           align-items: center;
           gap: 8px;
         }
         .pp-claim-link {
-          color: var(--color-atx-blue);
+          color: var(--color-peri);
           font-weight: 600;
           cursor: pointer;
           text-decoration: none;
@@ -476,13 +485,15 @@ export default function PublicProfile() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          background: var(--color-atx-panel);
-          border: 1px solid var(--color-atx-ink);
-          border-left: 3px solid var(--color-atx-coral);
+          background: var(--color-ground-cool);
+          border: 1px solid var(--color-hair);
+          border-left: 3px solid var(--color-coral2);
+          border-radius: var(--radius-card);
+          box-shadow: var(--shadow-lift);
           padding: 12px 18px;
           margin-bottom: 16px;
           font-size: 13px;
-          color: var(--color-atx-ink);
+          color: var(--color-ink);
           font-weight: 500;
           gap: 12px;
           flex-wrap: wrap;
@@ -501,8 +512,10 @@ export default function PublicProfile() {
 
         /* ── signal breakdown ────────────────────────── */
         .pp-meters-card {
-          background: var(--color-atx-panel);
-          border: 1px solid var(--color-atx-ink);
+          background: var(--color-ground-cool);
+          border: 1px solid var(--color-hair);
+          border-radius: var(--radius-card);
+          box-shadow: var(--shadow-lift);
           padding: 20px 24px;
           margin-bottom: 16px;
         }
@@ -515,21 +528,22 @@ export default function PublicProfile() {
         }
         .pp-meter-name {
           font-size: 12px;
-          color: rgba(17,17,17,0.6);
+          color: var(--color-ink-mid);
           font-family: var(--font-jetbrains), monospace;
           text-transform: uppercase;
           letter-spacing: 0.03em;
         }
         .pp-meter-track {
           height: 9px;
-          border: 1px solid var(--color-atx-ink);
-          background: var(--color-atx-bone);
+          border: 1px solid var(--color-hair);
+          background: #FFFFFF;
+          border-radius: var(--radius-pill);
           overflow: hidden;
         }
         .pp-meter-fill { display: block; height: 100%; }
         .pp-meter-val {
           font-size: 11px;
-          color: rgba(17,17,17,0.45);
+          color: var(--color-ink-mid);
           font-family: var(--font-jetbrains), monospace;
           text-align: right;
           min-width: 56px;
@@ -542,8 +556,9 @@ export default function PublicProfile() {
           justify-content: space-between;
           gap: 16px;
           flex-wrap: wrap;
-          background: var(--color-atx-blue);
-          border: 1px solid var(--color-atx-ink);
+          background: var(--color-peri);
+          border: 1px solid var(--color-hair);
+          border-radius: var(--radius-panel);
           padding: 18px 24px;
           margin-bottom: 16px;
           text-decoration: none;
@@ -557,9 +572,9 @@ export default function PublicProfile() {
           letter-spacing: 0.08em;
           font-family: var(--font-jetbrains), monospace;
           background: white;
-          color: var(--color-atx-blue);
+          color: var(--color-peri);
           padding: 10px 18px;
-          border: 1px solid var(--color-atx-ink);
+          border-radius: var(--radius-pill);
           white-space: nowrap;
         }
 
@@ -580,7 +595,7 @@ export default function PublicProfile() {
           {walletSettled && isOwner && (
             <div className="pp-owner-banner">
               <span>This is your public profile — shareable without login.</span>
-              <a href="/app/profile" style={{ color: 'var(--color-atx-blue)', fontWeight: 700, textDecoration: 'none', fontSize: 12, fontFamily: 'var(--font-jetbrains), monospace', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <a href="/app/profile" style={{ color: 'var(--color-peri)', fontWeight: 700, textDecoration: 'none', fontSize: 12, fontFamily: 'var(--font-jetbrains), monospace', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 View full dashboard →
               </a>
             </div>
@@ -614,7 +629,7 @@ export default function PublicProfile() {
                   )}
                 </div>
                 <div className="pp-full-addr">{shortAddr(address)}</div>
-                {meta?.bio && <div style={{ fontSize: 13, color: 'rgba(17,17,17,0.7)', margin: '2px 0 10px', maxWidth: '52ch', lineHeight: 1.45 }}>{meta.bio}</div>}
+                {meta?.bio && <div style={{ fontSize: 13, color: 'var(--color-ink-mid)', margin: '2px 0 10px', maxWidth: '52ch', lineHeight: 1.45 }}>{meta.bio}</div>}
 
                 {referredBy && (
                   <div className="pp-referred-by">
@@ -658,7 +673,7 @@ export default function PublicProfile() {
                   {trendDelta !== null && (
                     <div
                       className="pp-trend"
-                      style={{ color: trendDelta >= 0 ? 'var(--color-atx-mesquite)' : 'var(--color-atx-clay)' }}
+                      style={{ color: trendDelta >= 0 ? 'var(--color-peri-deep)' : '#D14343' }}
                     >
                       {trendDelta >= 0 ? '↑' : '↓'} {Math.abs(trendDelta)} pts last 3 months
                     </div>
@@ -671,7 +686,7 @@ export default function PublicProfile() {
                 )}
               </div>
             ) : (
-              <div style={{ color: 'rgba(17,17,17,0.45)', fontSize: 14 }}>
+              <div style={{ color: 'var(--color-ink-mid)', fontSize: 14 }}>
                 No score data available for this address.
               </div>
             )}
@@ -712,10 +727,10 @@ export default function PublicProfile() {
               <div>
                 {isOwner ? (
                   <>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-atx-ink)', marginBottom: 3 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-ink)', marginBottom: 3 }}>
                       Invite friends &amp; grow your network
                     </div>
-                    <div style={{ fontSize: 12, color: 'rgba(17,17,17,0.55)', lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 12, color: 'var(--color-ink-mid)', lineHeight: 1.5 }}>
                       Friends who connect via your link count toward your sharing score
                     </div>
                   </>
@@ -751,8 +766,8 @@ export default function PublicProfile() {
                     key={b.id}
                     className={`pp-badge ${b.earned ? 'earned' : 'unearned'}`}
                     style={{
-                      color:       b.earned ? b.color : 'rgba(17,17,17,0.55)',
-                      borderColor: b.earned ? b.color : 'rgba(17,17,17,0.2)',
+                      color:       b.earned ? b.color : 'var(--color-ink-mid)',
+                      borderColor: b.earned ? b.color : 'var(--color-ink-soft)',
                     }}
                   >
                     <span className="pp-badge-icon">{b.icon}</span>
@@ -827,7 +842,7 @@ export default function PublicProfile() {
                   <div className="pp-stat-row">
                     <span className="pp-stat-key">Referred by</span>
                     <a href={`/${referredBy}`} style={{ textDecoration: 'none' }}>
-                      <span className="pp-stat-val" style={{ color: 'var(--color-atx-blue)', fontSize: 11 }}>
+                      <span className="pp-stat-val" style={{ color: 'var(--color-peri)', fontSize: 11 }}>
                         <WalletDisplay address={referredBy} mono />
                       </span>
                     </a>

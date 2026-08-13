@@ -5,48 +5,53 @@ import { MwNav } from '@/components/web2/MwNav'
 
 // ── shared bits ──────────────────────────────────────────────────────────────
 type Nav = (id: string) => void
-const EY  = 'font-atx-mono uppercase tracking-[0.18em] text-[11px] text-atx-blue'
-const SUB = 'text-[17px] text-atx-ink/80 mb-6 leading-[1.5]'
+const EY  = 'font-mono uppercase tracking-[0.18em] text-[11px] text-peri'
+const SUB = 'text-[17px] text-ink-mid mb-6 leading-[1.5]'
 
 function Ln({ to, nav, children }: { to: string; nav: Nav; children: ReactNode }) {
-  return <button onClick={() => nav(to)} className="text-atx-blue underline-offset-2 hover:underline cursor-pointer">{children}</button>
+  return <button onClick={() => nav(to)} className="text-peri font-medium underline-offset-2 hover:underline cursor-pointer">{children}</button>
 }
 function Gap({ k, children }: { k: string; children: ReactNode }) {
   return (
-    <div className="border border-atx-ink border-l-4 border-l-atx-coral bg-atx-panel px-[18px] py-4 my-5">
-      <div className="font-atx-mono text-[10px] tracking-[0.15em] uppercase text-atx-clay mb-1.5">{k}</div>
-      <div className="text-[14.5px] leading-[1.5]">{children}</div>
+    <div className="rounded-2xl border border-hair border-l-[3px] border-l-coral2-deep bg-ground-cool px-[18px] py-4 my-5">
+      <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-coral2-deep mb-1.5">{k}</div>
+      <div className="text-[14.5px] leading-[1.5] text-ink-mid">{children}</div>
     </div>
   )
 }
 function Note({ k, children }: { k: string; children: ReactNode }) {
   return (
-    <div className="border border-atx-ink border-l-4 border-l-atx-blue bg-atx-panel px-[18px] py-4 my-5">
-      <div className="font-atx-mono text-[10px] tracking-[0.15em] uppercase text-atx-blue mb-1.5">{k}</div>
-      <div className="text-[14.5px] leading-[1.5]">{children}</div>
+    <div className="rounded-2xl border border-hair border-l-[3px] border-l-peri bg-ground-cool px-[18px] py-4 my-5">
+      <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-peri mb-1.5">{k}</div>
+      <div className="text-[14.5px] leading-[1.5] text-ink-mid">{children}</div>
     </div>
   )
 }
 function Claim({ children }: { children: ReactNode }) {
-  return <div className="border border-atx-ink bg-atx-ink text-atx-bone px-[22px] py-5 my-6 text-[19px] font-bold tracking-[-0.01em] leading-[1.3] [&_b]:text-atx-acid">{children}</div>
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-ink text-white px-[24px] py-6 my-6 text-[19px] font-medium tracking-[-0.01em] leading-[1.3] [&_b]:text-pas-peri [&_b]:font-semibold">
+      <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full" style={{ background: 'radial-gradient(circle, rgba(108,108,240,0.45), transparent 70%)' }} />
+      <div className="relative">{children}</div>
+    </div>
+  )
 }
 function Spec({ children }: { children: ReactNode }) {
-  return <div className="border border-atx-ink bg-atx-panel font-atx-mono text-[12.5px] px-4 py-3.5 my-4 whitespace-pre-wrap leading-[1.7] overflow-x-auto [&_b]:text-atx-blue [&_.g]:text-atx-grey">{children}</div>
+  return <div className="rounded-xl border border-hair bg-ground-cool font-mono text-[12.5px] px-4 py-3.5 my-4 whitespace-pre-wrap leading-[1.7] overflow-x-auto [&_b]:text-peri [&_.g]:text-ink-soft">{children}</div>
 }
 function Pipe({ items }: { items: [string, string, string][] }) {
   return (
-    <div className="flex my-4.5 border border-atx-ink flex-wrap">
+    <div className="flex my-4.5 rounded-2xl border border-hair overflow-hidden flex-wrap">
       {items.map(([n, h, p], i) => (
-        <div key={i} className="flex-1 min-w-[130px] px-3.5 py-3 border-r border-atx-ink last:border-r-0 text-[12.5px] max-[560px]:border-r-0 max-[560px]:border-b max-[560px]:last:border-b-0">
-          <div className="font-atx-mono text-[10px] tracking-[0.1em] uppercase text-atx-grey">{n}</div>
-          <div className="font-bold mt-0.5">{h}</div>
-          <div className="mt-0.5">{p}</div>
+        <div key={i} className="flex-1 min-w-[130px] px-3.5 py-3 border-r border-hair last:border-r-0 text-[12.5px] max-[560px]:border-r-0 max-[560px]:border-b max-[560px]:last:border-b-0">
+          <div className="font-mono text-[10px] tracking-[0.1em] uppercase text-ink-soft">{n}</div>
+          <div className="font-semibold mt-0.5">{h}</div>
+          <div className="mt-0.5 text-ink-mid">{p}</div>
         </div>
       ))}
     </div>
   )
 }
-const TABLE = 'w-full border-collapse text-[13px] my-4 [&_th]:border [&_th]:border-atx-ink/15 [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-top [&_th]:bg-atx-panel [&_th]:font-atx-mono [&_th]:text-[10px] [&_th]:uppercase [&_th]:tracking-[0.06em] [&_th]:text-atx-grey [&_td]:border [&_td]:border-atx-ink/15 [&_td]:px-3 [&_td]:py-2.5 [&_td]:text-left [&_td]:align-top [&_td]:leading-[1.45]'
+const TABLE = 'w-full border-collapse text-[13px] my-4 overflow-hidden [&_th]:border [&_th]:border-hair [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:align-top [&_th]:bg-ground-cool [&_th]:font-mono [&_th]:text-[10px] [&_th]:uppercase [&_th]:tracking-[0.06em] [&_th]:text-ink-soft [&_td]:border [&_td]:border-hair [&_td]:px-3 [&_td]:py-2.5 [&_td]:text-left [&_td]:align-top [&_td]:leading-[1.45]'
 
 // ── content sections ─────────────────────────────────────────────────────────
 function Overview({ nav }: { nav: Nav }) {
@@ -103,7 +108,7 @@ function Attribution() {
         </tbody>
       </table>
       <p>Scores map to <b>Bronze / Silver / Gold</b> tiers and a percentile. Two multipliers derive from the score, applied at the moment a point is credited (never re-applied at payout):</p>
-      <Spec><span className="text-atx-blue font-bold">combined</span> = attribution_multiplier × sharing_multiplier   <span className="g">// capped at 1.95×</span></Spec>
+      <Spec><span className="text-peri font-bold">combined</span> = attribution_multiplier × sharing_multiplier   <span className="g">// capped at 1.95×</span></Spec>
       <Note k="✴ Why it matters">Reputation in DeFi is invisible and unportable — every protocol re-underwrites you from zero. Attribution turns your history into a portable, earned asset that pays you a bigger share of every pool you enter.</Note>
     </>
   )
@@ -115,14 +120,14 @@ function Rewards() {
       <h1>Rewards — how we weight &amp; pay</h1>
       <p className={SUB}>Value routes by reputation, not wallet size — vault fees and referral rewards, weighted by your Attribution score and settled to gas-free Merkle claims.</p>
       <h2>The formula</h2>
-      <Spec><span className="text-atx-blue font-bold">reward</span> = attribution_score × lock_duration × referral_quality   <span className="g">// never: how many dollars</span></Spec>
+      <Spec><span className="text-peri font-bold">reward</span> = attribution_score × lock_duration × referral_quality   <span className="g">// never: how many dollars</span></Spec>
       <h2>Reputation-weighted, not dollar-weighted</h2>
       <p>Every reward carries your Attribution multiplier (up to <b>1.95×</b>), applied when it is credited. The identical vault position out-earns the cold wallet beside it; the same referral is worth more when the wallets you bring are real and active. Reputation is computed independently on-chain, so it can&apos;t be bought at deposit time.</p>
       <h2>How we pay — epochs → Merkle → claim</h2>
-      <Spec><span className="g">accrue</span> → <span className="text-atx-blue font-bold">reputation-weight</span> → settle at epoch close → <span className="text-atx-blue font-bold">Merkle root</span> → user claims leaf</Spec>
+      <Spec><span className="g">accrue</span> → <span className="text-peri font-bold">reputation-weight</span> → settle at epoch close → <span className="text-peri font-bold">Merkle root</span> → user claims leaf</Spec>
       <p>At epoch close, weighted rewards settle into a Merkle distribution. The oracle signs the root off-chain via EIP-712, so distributions cost <b>zero oracle gas</b> and the oracle never holds custody — users claim their own leaf directly on-chain. A <b>duration-match</b> bonus rewards locking to (or through) a vault&apos;s window.</p>
       <h2>The Liquid Sovereign Account</h2>
-      <p>The vault also underpins the <a href="/yield-payment-network" className="text-atx-blue font-semibold no-underline hover:underline">Liquid Sovereign Account</a> — a zero-opportunity-cost cash primitive. USDC in the Unified Liquidity Vault earns institutional yield (Aave v3 buffer + Uniswap v4 MEV recapture) while staying <b>100% spendable</b> at Visa terminals in sub-400ms — settlement is designed to clear against the idle Aave buffer without unwinding active liquidity, so principal never moves. <span className="text-atx-ink/50">(Coming soon.)</span></p>
+      <p>The vault also underpins the <a href="/yield-payment-network" className="text-peri font-semibold no-underline hover:underline">Liquid Sovereign Account</a> — a zero-opportunity-cost cash primitive. USDC in the Unified Liquidity Vault earns institutional yield (Aave v3 buffer + Uniswap v4 MEV recapture) while staying <b>100% spendable</b> at Visa terminals in sub-400ms — settlement is designed to clear against the idle Aave buffer without unwinding active liquidity, so principal never moves. <span className="text-ink-soft">(Coming soon.)</span></p>
       <Gap k="✕ The gap it closes">Emissions pay the biggest wallet, which farms and exits first — every program races its own users to the door. Weighting by reputation and lock duration rewards the capital a protocol actually wants: sticky, qualified, and relationship-sourced.</Gap>
     </>
   )
@@ -234,12 +239,12 @@ const CONTENT: Record<string, (p: { nav: Nav }) => ReactNode> = {
 
 const PROSE = 'max-w-[840px] px-14 pt-11 pb-24 max-[880px]:px-5 max-[880px]:pt-8 ' +
   '[&_h1]:text-[clamp(28px,3.4vw,40px)] [&_h1]:font-bold [&_h1]:tracking-[-0.03em] [&_h1]:leading-[1.05] [&_h1]:mt-2.5 [&_h1]:mb-1.5 [&_h1]:text-wrap-balance ' +
-  '[&_h2]:text-[21px] [&_h2]:font-bold [&_h2]:tracking-[-0.01em] [&_h2]:mt-8 [&_h2]:mb-2.5 [&_h2]:pt-5 [&_h2]:border-t [&_h2]:border-atx-ink/10 ' +
-  '[&_h3]:text-[15.5px] [&_h3]:font-bold [&_h3]:mt-5 [&_h3]:mb-1 ' +
-  '[&_p]:my-2.5 [&_p]:leading-[1.62] ' +
-  '[&_code]:font-atx-mono [&_code]:text-[0.85em] [&_code]:bg-atx-panel [&_code]:border [&_code]:border-atx-ink/15 [&_code]:px-1.5 [&_code]:py-px ' +
-  '[&_ul]:my-2.5 [&_li]:relative [&_li]:pl-5 [&_li]:py-1 [&_li]:leading-[1.5] ' +
-  "[&_li]:before:content-['✦'] [&_li]:before:absolute [&_li]:before:left-0 [&_li]:before:top-2 [&_li]:before:text-atx-blue [&_li]:before:text-[11px]"
+  '[&_h2]:text-[21px] [&_h2]:font-semibold [&_h2]:tracking-[-0.01em] [&_h2]:mt-8 [&_h2]:mb-2.5 [&_h2]:pt-5 [&_h2]:border-t [&_h2]:border-hair ' +
+  '[&_h3]:text-[15.5px] [&_h3]:font-semibold [&_h3]:mt-5 [&_h3]:mb-1 ' +
+  '[&_p]:my-2.5 [&_p]:leading-[1.62] [&_p]:text-ink-mid ' +
+  '[&_code]:font-mono [&_code]:text-[0.85em] [&_code]:bg-ground-cool [&_code]:border [&_code]:border-hair [&_code]:rounded-md [&_code]:px-1.5 [&_code]:py-px ' +
+  '[&_ul]:my-2.5 [&_li]:relative [&_li]:pl-5 [&_li]:py-1 [&_li]:leading-[1.5] [&_li]:text-ink-mid ' +
+  "[&_li]:before:content-['✦'] [&_li]:before:absolute [&_li]:before:left-0 [&_li]:before:top-2 [&_li]:before:text-peri [&_li]:before:text-[11px]"
 
 export default function DocsPage() {
   const [active, setActive] = useState('overview')
@@ -247,20 +252,20 @@ export default function DocsPage() {
   const Section = CONTENT[active] ?? Overview
 
   return (
-    <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink [&_*]:rounded-none">
+    <div className="bg-white min-h-screen font-atx-display text-ink">
       <MwNav />
       <div className="grid grid-cols-[262px_1fr] max-w-[1280px] mx-auto max-[880px]:grid-cols-1">
-        <aside className="border-r border-atx-ink px-4 pt-6 pb-16 sticky top-[58px] self-start h-[calc(100vh-58px)] overflow-y-auto max-[880px]:static max-[880px]:h-auto max-[880px]:overflow-visible max-[880px]:border-r-0 max-[880px]:border-b max-[880px]:border-atx-ink">
+        <aside className="border-r border-hair px-4 pt-6 pb-16 sticky top-[58px] self-start h-[calc(100vh-58px)] overflow-y-auto max-[880px]:static max-[880px]:h-auto max-[880px]:overflow-visible max-[880px]:border-r-0 max-[880px]:border-b max-[880px]:border-hair">
           {GROUPS.map((g) => (
             <div key={g.group}>
-              <div className="font-atx-mono text-[10px] tracking-[0.15em] uppercase text-atx-grey mx-2 mt-5 mb-2 first:mt-0">{g.group}</div>
+              <div className="font-mono text-[10px] tracking-[0.15em] uppercase text-ink-soft mx-2 mt-5 mb-2 first:mt-0">{g.group}</div>
               {g.items.map((it) => (
                 <button
                   key={it.id}
                   onClick={() => nav(it.id)}
-                  className={`block w-full text-left text-[13px] px-2 py-[5px] border-l-2 leading-[1.35] cursor-pointer ${active === it.id ? 'text-atx-blue font-semibold border-atx-blue bg-atx-panel' : 'text-atx-ink/80 border-transparent hover:text-atx-blue'}`}
+                  className={`block w-full text-left text-[13px] px-3 py-[6px] rounded-lg leading-[1.35] cursor-pointer transition-colors ${active === it.id ? 'text-peri font-semibold bg-ground-cool' : 'text-ink-mid hover:text-peri hover:bg-ground-cool/60'}`}
                 >
-                  {it.label}{it.star && <span className="text-atx-coral text-[9px] align-[1px]"> ★</span>}
+                  {it.label}{it.star && <span className="text-coral2-deep text-[9px] align-[1px]"> ★</span>}
                 </button>
               ))}
             </div>
