@@ -161,10 +161,12 @@ export default function AttributionLandingPage() {
       </section>
 
       {/* ── 04 · Verifiable on-chain · dark pop ── */}
-      <section className="relative overflow-hidden bg-ink text-white border-b border-hair-soft">
-        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 120% at 10% 0%, rgba(108,108,240,0.34), transparent 60%), radial-gradient(50% 130% at 100% 100%, rgba(244,161,131,0.14), transparent 62%)' }} />
-        <div className="grain absolute inset-0 opacity-40" aria-hidden />
-        <div className={`${wrap} relative py-[72px] max-[800px]:py-[52px]`}>
+      <section className="bg-white border-b border-hair-soft">
+        <div className={`${wrap} py-[48px] max-[800px]:py-[36px]`}>
+          <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-ink text-white">
+            <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 120% at 10% 0%, rgba(108,108,240,0.34), transparent 60%), radial-gradient(50% 130% at 100% 100%, rgba(244,161,131,0.14), transparent 62%)' }} />
+            <div className="grain absolute inset-0 opacity-40" aria-hidden />
+            <div className="relative px-10 max-[800px]:px-6 py-[64px] max-[800px]:py-[48px]">
           <div className="flex items-baseline gap-3">
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">04</span>
             <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">Verifiable · EAS on Base</span>
@@ -189,6 +191,8 @@ export default function AttributionLandingPage() {
             ))}
           </div>
           <p className="text-[11px] text-white/45 mt-5">Three live schemas on Base: AttributionScore · SwapActivity · ReferralLink.</p>
+            </div>
+          </div>
         </div>
       </section>
 

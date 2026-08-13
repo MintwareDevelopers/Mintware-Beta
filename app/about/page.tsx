@@ -103,10 +103,12 @@ export default function AboutPage() {
       </section>
 
       {/* ── 04 · The principle · dark pop ── */}
-      <section className="relative overflow-hidden bg-ink text-white border-b border-hair-soft">
-        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(58% 120% at 12% 0%, rgba(108,108,240,0.38), transparent 60%), radial-gradient(52% 130% at 100% 100%, rgba(244,161,131,0.16), transparent 62%)' }} />
-        <div className="grain absolute inset-0 opacity-40" aria-hidden />
-        <div className={`${wrap} relative py-[88px] max-[800px]:py-[60px]`}>
+      <section className="bg-white border-b border-hair-soft">
+        <div className={`${wrap} py-[48px] max-[800px]:py-[36px]`}>
+          <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-ink text-white">
+            <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(58% 120% at 12% 0%, rgba(108,108,240,0.38), transparent 60%), radial-gradient(52% 130% at 100% 100%, rgba(244,161,131,0.16), transparent 62%)' }} />
+            <div className="grain absolute inset-0 opacity-40" aria-hidden />
+            <div className="relative px-10 max-[800px]:px-6 py-[80px] max-[800px]:py-[56px]">
           <div className="flex items-baseline gap-3">
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">04</span>
             <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">The principle</span>
@@ -119,6 +121,8 @@ export default function AboutPage() {
             up yesterday with more money. Reputation is portable, earned, and non-custodial — you hold your keys and your
             assets throughout. We’re building the rail that pays people for the markets they actually help build.
           </p>
+            </div>
+          </div>
         </div>
       </section>
 
