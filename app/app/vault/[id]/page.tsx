@@ -12,6 +12,8 @@ import { LOCK_TIERS } from '@/lib/web2/vault/types'
 import { useVaultDeposit, useVaultWithdraw, useVaultExecuteRedeem, useVaultOnchain, TOKEN0_SYMBOL, TOKEN1_SYMBOL } from '@/lib/web3/vault/useSocialVault'
 import { buildVaultDepositMessage, buildVaultWithdrawMessage } from '@/lib/web3/signedActionMessages'
 
+// Design v2 (Privy-esque). Styling only — all on-chain deposit/withdraw logic unchanged.
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 function shortAddr(a: string) { return `${a.slice(0, 6)}…${a.slice(-4)}` }
 
@@ -30,31 +32,21 @@ function penaltyPct(deposit: LpDeposit): number {
   return 0
 }
 
-const LABEL = 'font-atx-mono uppercase tracking-[0.08em] text-[10px] text-atx-ink/55'
-
-function Star({ className = '' }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 100 100" className={className} aria-hidden="true">
-      <path
-        fill="currentColor"
-        d="M50,2 L57.46,31.98 L83.94,16.06 L68.02,42.54 L98,50 L68.02,57.46 L83.94,83.94 L57.46,68.02 L50,98 L42.54,68.02 L16.06,83.94 L31.98,57.46 L2,50 L31.98,42.54 L16.06,16.06 L42.54,31.98 Z"
-      />
-    </svg>
-  )
-}
+const LABEL = 'uppercase tracking-[0.08em] text-[10px] font-semibold text-ink-soft'
+const INPUT = 'w-full pl-16 pr-3 py-2.5 rounded-xl border border-hair bg-white font-mono text-[15px] text-ink outline-none focus:border-[rgba(108,108,240,0.5)] box-border placeholder:text-ink-soft'
 
 // ─── Status pill ─────────────────────────────────────────────────────────────
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, { label: string; dot: string }> = {
-    active:  { label: 'Active',  dot: 'bg-atx-acid' },
-    seeding: { label: 'Seeding', dot: 'bg-atx-coral' },
-    paused:  { label: 'Paused',  dot: 'bg-atx-grey' },
-    closed:  { label: 'Closed',  dot: 'bg-atx-grey' },
+    active:  { label: 'Active',  dot: 'bg-peri' },
+    seeding: { label: 'Seeding', dot: 'bg-coral2' },
+    paused:  { label: 'Paused',  dot: 'bg-ink-soft' },
+    closed:  { label: 'Closed',  dot: 'bg-ink-soft' },
   }
-  const { label, dot } = map[status] ?? { label: status, dot: 'bg-atx-grey' }
+  const { label, dot } = map[status] ?? { label: status, dot: 'bg-ink-soft' }
   return (
-    <span className="shrink-0 flex items-center gap-1.5 border border-atx-ink px-[7px] py-[2px] font-atx-mono text-[10px] uppercase tracking-[0.08em]">
-      <span className={`w-[7px] h-[7px] border border-atx-ink inline-block ${dot}`} />
+    <span className="shrink-0 flex items-center gap-1.5 rounded-full border border-hair px-2.5 py-[3px] text-[10px] uppercase tracking-[0.08em] font-semibold text-ink-mid">
+      <span className={`w-[7px] h-[7px] rounded-full inline-block ${dot}`} />
       {label}
     </span>
   )
@@ -68,12 +60,12 @@ function LockTierSelector({ value, onChange }: { value: LockTier; onChange: (t: 
         <button
           key={tier}
           onClick={() => onChange(tier)}
-          className={`text-left px-3 py-2.5 border ${value === tier ? 'border-atx-blue bg-atx-bone' : 'border-atx-ink/30 bg-atx-panel'}`}
+          className={`text-left px-3 py-2.5 rounded-xl border ${value === tier ? 'border-[rgba(108,108,240,0.4)] bg-[rgba(108,108,240,0.06)]' : 'border-hair bg-white'}`}
         >
-          <div className={`text-[13px] font-bold font-atx-display mb-0.5 ${value === tier ? 'text-atx-blue' : 'text-atx-ink'}`}>
+          <div className={`text-[13px] font-semibold font-atx-display mb-0.5 ${value === tier ? 'text-peri-deep' : 'text-ink'}`}>
             {meta.label}
           </div>
-          <div className="text-[11px] text-atx-ink/55 font-atx-mono">
+          <div className="text-[11px] text-ink-soft">
             {meta.period} · {meta.multiplier} · {meta.notice} notice
           </div>
         </button>
@@ -157,17 +149,17 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
   if (success) return (
     <div className="text-center py-6">
       <div className="flex justify-center mb-2">
-        <span className="w-4 h-4 bg-atx-acid border border-atx-ink inline-block" />
+        <span className="w-4 h-4 rounded-full bg-peri inline-block" />
       </div>
-      <div className="text-[15px] font-bold text-atx-mesquite font-atx-display">
+      <div className="text-[15px] font-semibold text-peri-deep font-atx-display">
         Deposit recorded
       </div>
-      <div className="text-[13px] text-atx-ink/55 mt-1 font-atx-display">
+      <div className="text-[13px] text-ink-mid mt-1">
         Your position will appear below once confirmed on-chain.
       </div>
       <button
         onClick={() => setSuccess(false)}
-        className="mt-4 text-[13px] text-atx-blue font-atx-display font-semibold"
+        className="mt-4 text-[13px] text-peri-deep font-semibold"
       >
         Deposit more →
       </button>
@@ -182,13 +174,13 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
           {TOKEN0_SYMBOL} amount (token0)
         </label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-atx-ink/55 font-atx-mono">{TOKEN0_SYMBOL}</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-ink-soft font-mono">{TOKEN0_SYMBOL}</span>
           <input
             type="number"
             placeholder="0.00"
             value={amount}
             onChange={e => setAmount(e.target.value)}
-            className="w-full pl-16 pr-3 py-2.5 border border-atx-ink/30 bg-atx-panel font-atx-mono text-[15px] text-atx-ink outline-none focus:border-atx-blue box-border"
+            className={INPUT}
           />
         </div>
       </div>
@@ -197,16 +189,16 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
           {TOKEN1_SYMBOL} amount (token1)
         </label>
         <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-atx-ink/55 font-atx-mono">{TOKEN1_SYMBOL}</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-ink-soft font-mono">{TOKEN1_SYMBOL}</span>
           <input
             type="number"
             placeholder="0.00"
             value={amount1}
             onChange={e => setAmount1(e.target.value)}
-            className="w-full pl-16 pr-3 py-2.5 border border-atx-ink/30 bg-atx-panel font-atx-mono text-[15px] text-atx-ink outline-none focus:border-atx-blue box-border"
+            className={INPUT}
           />
         </div>
-        <span className="block mt-1 text-[11px] text-atx-ink/45 font-atx-display">
+        <span className="block mt-1 text-[11px] text-ink-soft">
           Provide both tokens in roughly the pool ratio. Unused dust is refunded on-chain.
         </span>
       </div>
@@ -220,18 +212,18 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
       </div>
 
       {/* Multiplier preview */}
-      <div className="bg-atx-bone border border-atx-ink/25 px-3.5 py-2.5 flex justify-between items-center">
-        <span className="text-[12px] text-atx-ink/55 font-atx-display">Your fee multiplier</span>
-        <span className="text-[16px] font-bold text-atx-blue font-atx-mono">
+      <div className="rounded-xl bg-[rgba(108,108,240,0.06)] border border-[rgba(108,108,240,0.2)] px-3.5 py-2.5 flex justify-between items-center">
+        <span className="text-[12px] text-ink-mid">Your fee multiplier</span>
+        <span className="text-[16px] font-semibold text-peri-deep font-atx-display tabular-nums">
           {LOCK_TIERS[tier].multiplier}
         </span>
       </div>
 
-      <div className="bg-atx-panel border border-atx-ink/20 px-3.5 py-2.5">
+      <div className="soft-card px-3.5 py-2.5">
         <div className={`${LABEL} mb-1.5`}>
           What will happen
         </div>
-        <div className="flex flex-col gap-1 text-[12px] text-atx-ink/60 font-atx-display leading-[1.55]">
+        <div className="flex flex-col gap-1 text-[12px] text-ink-mid leading-[1.55]">
           <div>1. Your wallet approves the vault to use your {TOKEN0_SYMBOL} and {TOKEN1_SYMBOL}. Those steps do not move funds.</div>
           <div>2. Mintware simulates the deposit call before your wallet signs the final transaction.</div>
           <div>3. Your wallet then confirms the deposit and your LP position appears after the chain confirms it.</div>
@@ -239,21 +231,21 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
       </div>
 
       {error && (
-        <div className="text-[12px] text-atx-clay font-atx-display bg-atx-panel border border-atx-clay/40 px-3 py-2">
+        <div className="text-[12px] text-[#D14343] rounded-xl bg-[rgba(209,67,67,0.05)] border border-[rgba(209,67,67,0.3)] px-3 py-2">
           {error}
         </div>
       )}
 
       {/* Stage progress */}
       {isPending && (
-        <div className="text-[12px] text-atx-blue font-atx-display bg-atx-bone border border-atx-ink/25 px-3 py-2 flex items-center gap-1.5">
-          <span className="w-[8px] h-[8px] bg-atx-acid border border-atx-ink inline-block" />
+        <div className="text-[12px] text-peri-deep rounded-xl bg-[rgba(108,108,240,0.06)] border border-[rgba(108,108,240,0.2)] px-3 py-2 flex items-center gap-1.5">
+          <span className="w-[8px] h-[8px] rounded-full bg-peri inline-block animate-pulse" />
           {stageLabel[stage]}
         </div>
       )}
 
       {isPending && (
-        <div className="text-[11px] text-atx-ink/55 font-atx-display bg-atx-panel border border-atx-ink/20 px-3 py-2 leading-[1.5]">
+        <div className="text-[11px] text-ink-mid rounded-xl bg-ground-cool border border-hair px-3 py-2 leading-[1.5]">
           If your wallet prompt is slow, open your wallet app or extension and look for a pending request.
         </div>
       )}
@@ -261,11 +253,11 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
       <button
         onClick={handleDeposit}
         disabled={isPending || (amt0 <= 0 && amt1 <= 0) || vault.status === 'closed'}
-        className="p-3 bg-atx-blue text-white border border-atx-ink font-atx-mono text-[14px] font-bold disabled:opacity-50 transition-opacity"
+        className="glass-pill w-full justify-center !py-3 disabled:opacity-50"
       >
         {stageLabel[stage]}
       </button>
-      <p className="text-[11px] text-atx-ink/45 font-atx-display text-center m-0">
+      <p className="text-[11px] text-ink-soft text-center m-0">
         7-day notice period required for all withdrawals
       </p>
     </div>
@@ -279,22 +271,22 @@ function PositionRow({ deposit, onWithdraw }: { deposit: LpDeposit; onWithdraw: 
   const daysLeft = deposit.locked_until ? daysUntil(deposit.locked_until) : 0
 
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-atx-ink/20">
+    <div className="flex items-center gap-3 py-3 border-b border-hair-soft">
       <div className="flex-1">
         <div className="flex items-center gap-2 mb-[3px]">
-          <span className="text-[15px] font-bold font-atx-mono text-atx-ink">
+          <span className="text-[15px] font-atx-display font-medium text-ink tabular-nums">
             {fmtUSD(deposit.usdc_amount)}
           </span>
-          <span className="text-[11px] font-semibold text-atx-ink/60 font-atx-mono border border-atx-ink/25 px-[7px] py-[2px] uppercase tracking-[0.06em]">
+          <span className="text-[11px] font-semibold text-ink-mid rounded-full border border-hair px-2 py-[2px] uppercase tracking-[0.06em]">
             {tier.label}
           </span>
           {deposit.status === 'withdrawal_pending' && (
-            <span className="text-[11px] text-atx-clay font-atx-mono font-semibold">
+            <span className="text-[11px] text-[#D14343] font-semibold">
               Withdrawing
             </span>
           )}
         </div>
-        <div className="text-[11px] text-atx-ink/45 font-atx-display">
+        <div className="text-[11px] text-ink-soft">
           {deposit.lock_tier !== 'flex' && daysLeft > 0
             ? `${daysLeft}d remaining · ${penalty > 0 ? `${penalty}% early exit` : 'no penalty'}`
             : 'No lock · can withdraw anytime'}
@@ -304,7 +296,7 @@ function PositionRow({ deposit, onWithdraw }: { deposit: LpDeposit; onWithdraw: 
       {deposit.status === 'active' && (
         <button
           onClick={() => onWithdraw(deposit.id)}
-          className="text-[12px] font-semibold text-atx-ink/60 border border-atx-ink/25 px-3 py-[5px] font-atx-mono uppercase tracking-[0.06em] hover:border-atx-ink hover:text-atx-ink"
+          className="glass-pill glass-pill-sm"
         >
           Withdraw
         </button>
@@ -428,14 +420,14 @@ function VaultDetailContent() {
   if (loading) return (
     <div className="px-7 py-10 max-w-[900px] mx-auto">
       {[1, 2, 3].map(i => (
-        <div key={i} className="h-20 bg-atx-panel border border-atx-ink/20 animate-pulse mb-3" />
+        <div key={i} className="h-20 rounded-2xl bg-ground-cool mw-shimmer mb-3" />
       ))}
     </div>
   )
 
   if (!vault) return (
-    <div className="px-7 py-[60px] text-center text-atx-ink/55 font-atx-display">
-      Vault not found. <Link href="/app/vaults" className="text-atx-blue">← Back to vaults</Link>
+    <div className="px-7 py-[60px] text-center text-ink-mid">
+      Vault not found. <Link href="/app/vaults" className="text-peri-deep">← Back to vaults</Link>
     </div>
   )
 
@@ -445,17 +437,17 @@ function VaultDetailContent() {
   const totalDeposited = deposits.reduce((s, d) => s + d.usdc_amount, 0)
 
   return (
-    <div className="bg-atx-bone min-h-screen font-atx-display text-atx-ink">
+    <div className="bg-white min-h-screen font-atx-display text-ink">
       <MwNav />
-      <div className="max-w-[960px] mx-auto px-7 pt-7 pb-[60px] max-[800px]:px-4 max-[800px]:pt-5 [&_*]:rounded-none">
+      <div className="max-w-[960px] mx-auto px-7 pt-7 pb-[60px] max-[800px]:px-4 max-[800px]:pt-5">
 
         {/* ── Breadcrumb ── */}
         <div className="mb-4 flex items-center gap-2">
-          <Link href="/app/vaults" className="text-[13px] text-atx-ink/55 font-atx-display no-underline hover:text-atx-ink">
+          <Link href="/app/vaults" className="text-[13px] text-ink-mid no-underline hover:text-ink">
             ← Vaults
           </Link>
-          <span className="text-atx-ink/30">/</span>
-          <span className="text-[13px] text-atx-ink font-atx-display font-semibold">{vault.name}</span>
+          <span className="text-ink-soft">/</span>
+          <span className="text-[13px] text-ink font-semibold">{vault.name}</span>
         </div>
 
         <div className="grid grid-cols-[1fr_360px] gap-5 items-start max-[760px]:grid-cols-1">
@@ -464,15 +456,15 @@ function VaultDetailContent() {
           <div className="flex flex-col gap-4">
 
             {/* Vault header card */}
-            <div className="bg-atx-panel border border-atx-ink p-6">
+            <div className="soft-card p-6">
               <div className="flex items-start justify-between gap-3 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 border border-atx-ink bg-atx-bone flex items-center justify-center shrink-0">
-                    <Star className="w-6 h-6 text-atx-coral" />
+                  <div className="w-12 h-12 rounded-2xl grid place-items-center text-white text-[18px] shrink-0" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 4px 14px rgba(108,108,240,0.35)' }}>
+                    {vault.name.charAt(0)}
                   </div>
                   <div>
-                    <div className="text-[18px] font-extrabold text-atx-ink font-atx-display leading-[1.2]">{vault.name}</div>
-                    <div className="text-[11px] text-atx-ink/45 font-atx-mono mt-0.5">
+                    <div className="text-[18px] font-medium text-ink font-atx-display leading-[1.2] tracking-[-0.01em]">{vault.name}</div>
+                    <div className="text-[11px] text-ink-soft font-mono mt-0.5">
                       {shortAddr(vault.project_token)} · chain {vault.chain_id}
                     </div>
                   </div>
@@ -482,20 +474,20 @@ function VaultDetailContent() {
 
               <div className="flex gap-5 flex-wrap mb-5">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[22px] font-bold font-atx-mono text-atx-blue">{vault.tvl_usdc > 0 ? fmtUSD(vault.tvl_usdc) : '—'}</span>
+                  <span className="text-[22px] font-atx-display font-medium text-peri-deep tabular-nums">{vault.tvl_usdc > 0 ? fmtUSD(vault.tvl_usdc) : '—'}</span>
                   <span className={LABEL}>TVL</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[22px] font-bold font-atx-mono text-atx-mesquite">{epoch?.total_pool ? fmtUSD(epoch.total_pool) : '—'}</span>
+                  <span className="text-[22px] font-atx-display font-medium text-coral2-deep tabular-nums">{epoch?.total_pool ? fmtUSD(epoch.total_pool) : '—'}</span>
                   <span className={LABEL}>Epoch pool</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-[22px] font-bold font-atx-mono text-atx-ink">{epoch?.epoch_number ?? '—'}</span>
+                  <span className="text-[22px] font-atx-display font-medium text-ink tabular-nums">{epoch?.epoch_number ?? '—'}</span>
                   <span className={LABEL}>Epoch</span>
                 </div>
                 {vault.tick_lower != null && (
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[14px] font-bold font-atx-mono text-atx-ink">
+                    <span className="text-[14px] font-mono font-medium text-ink">
                       [{vault.tick_lower}, {vault.tick_upper}]
                     </span>
                     <span className={LABEL}>Tick range</span>
@@ -504,19 +496,19 @@ function VaultDetailContent() {
               </div>
 
               {/* Hook address */}
-              <div className="text-[11px] text-atx-ink/45 font-atx-mono px-3 py-2 bg-atx-bone border border-atx-ink/20">
+              <div className="text-[11px] text-ink-soft font-mono px-3 py-2 rounded-xl bg-ground-cool border border-hair">
                 Hook: {shortAddr(vault.pool_key?.hooks ?? '0x0000')}
                 {vault.contract_address && ` · Vault: ${shortAddr(vault.contract_address)}`}
               </div>
             </div>
 
             {/* Tabs: Position / Epoch */}
-            <div className="bg-atx-panel border border-atx-ink">
-              <div className="flex border-b border-atx-ink/20 px-5">
+            <div className="soft-card">
+              <div className="flex border-b border-hair-soft px-5">
                 {(['deposit', 'position', 'epoch'] as const).map(t => (
                   <button
                     key={t}
-                    className={`px-4 py-2.5 text-[13px] font-semibold font-atx-display -mb-px border-b-2 ${tab === t ? 'text-atx-blue border-atx-blue' : 'text-atx-ink/55 border-transparent'}`}
+                    className={`px-4 py-2.5 text-[13px] font-medium font-atx-display -mb-px border-b-2 ${tab === t ? 'text-peri-deep border-peri' : 'text-ink-mid border-transparent hover:text-ink'}`}
                     onClick={() => setTab(t)}
                   >
                     {t === 'deposit' ? 'Deposit' : t === 'position' ? `Position${deposits.length > 0 ? ` (${deposits.length})` : ''}` : 'Epoch'}
@@ -524,7 +516,7 @@ function VaultDetailContent() {
                 ))}
               </div>
 
-              <div className="px-5 pb-5">
+              <div className="px-5 pb-5 pt-4">
 
                 {/* ── Deposit tab ── */}
                 {tab === 'deposit' && (
@@ -536,28 +528,28 @@ function VaultDetailContent() {
                   <div>
                     {/* Live on-chain position — read straight from the vault contract */}
                     {address && onchain.enabled && (
-                      <div className="border border-atx-ink bg-atx-bone px-4 py-3.5 mb-3">
+                      <div className="rounded-2xl border border-hair bg-ground-cool px-4 py-3.5 mb-3">
                         <div className="flex items-center justify-between mb-2.5">
                           <span className={LABEL}>On-chain position</span>
-                          <span className="flex items-center gap-1.5 font-atx-mono text-[9px] uppercase tracking-[0.1em] text-atx-ink/55">
-                            <span className="w-[7px] h-[7px] bg-atx-acid border border-atx-ink inline-block" />
+                          <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.1em] font-semibold text-ink-soft">
+                            <span className="w-[7px] h-[7px] rounded-full bg-peri inline-block animate-pulse" />
                             Live
                           </span>
                         </div>
                         {onchain.isLoading && !onchain.position ? (
-                          <div className="text-[12px] text-atx-ink/45 font-atx-mono">Reading chain…</div>
+                          <div className="text-[12px] text-ink-soft font-mono">Reading chain…</div>
                         ) : onchain.position?.hasPosition ? (
                           <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
                             <div>
-                              <div className="text-[18px] font-bold font-atx-mono text-atx-blue leading-none">{onchain.position.shares.toString()}</div>
+                              <div className="text-[18px] font-medium font-atx-display text-peri-deep leading-none tabular-nums">{onchain.position.shares.toString()}</div>
                               <div className={`${LABEL} mt-1`}>Shares (liquidity units)</div>
                             </div>
                             <div>
-                              <div className="text-[14px] font-bold font-atx-mono text-atx-ink leading-none capitalize">{onchain.position.tier}</div>
+                              <div className="text-[14px] font-medium font-atx-display text-ink leading-none capitalize">{onchain.position.tier}</div>
                               <div className={`${LABEL} mt-1`}>Lock tier</div>
                             </div>
                             <div>
-                              <div className="text-[13px] font-atx-mono text-atx-ink leading-none">
+                              <div className="text-[13px] font-mono text-ink leading-none">
                                 {onchain.position.lockedUntil * 1000 > Date.now()
                                   ? `${Math.ceil((onchain.position.lockedUntil * 1000 - Date.now()) / 86_400_000)}d left`
                                   : 'Unlocked'}
@@ -565,7 +557,7 @@ function VaultDetailContent() {
                               <div className={`${LABEL} mt-1`}>Lock status</div>
                             </div>
                             <div>
-                              <div className="text-[13px] font-atx-mono text-atx-ink leading-none">
+                              <div className="text-[13px] font-mono text-ink leading-none">
                                 {onchain.position.depositedAt > 0
                                   ? new Date(onchain.position.depositedAt * 1000).toLocaleDateString()
                                   : '—'}
@@ -574,32 +566,32 @@ function VaultDetailContent() {
                             </div>
                           </div>
                         ) : (
-                          <div className="text-[12px] text-atx-ink/45 font-atx-mono">No position for this wallet on-chain yet.</div>
+                          <div className="text-[12px] text-ink-soft font-mono">No position for this wallet on-chain yet.</div>
                         )}
                       </div>
                     )}
 
                     {deposits.length === 0 && queue.length === 0 ? (
                       onchain.position?.hasPosition ? null : (
-                      <div className="py-8 text-center text-atx-ink/55 font-atx-display text-[13px]">
+                      <div className="py-8 text-center text-ink-mid text-[13px]">
                         No active deposits.{' '}
-                        <button onClick={() => setTab('deposit')} className="text-atx-blue font-semibold text-[13px] font-atx-display">
+                        <button onClick={() => setTab('deposit')} className="text-peri-deep font-semibold text-[13px]">
                           Deposit now →
                         </button>
                       </div>
                       )
                     ) : (
                       <>
-                        <div className="py-3 border-b border-atx-ink/20 mb-1 flex justify-between">
+                        <div className="py-3 border-b border-hair-soft mb-1 flex justify-between">
                           <span className={LABEL}>
                             Total deposited
                           </span>
-                          <span className="text-[14px] font-bold font-atx-mono text-atx-blue">
+                          <span className="text-[14px] font-atx-display font-medium text-peri-deep tabular-nums">
                             {fmtUSD(totalDeposited)}
                           </span>
                         </div>
                         {withErr && (
-                          <div className="text-[12px] text-atx-clay bg-atx-panel border border-atx-clay/40 px-3 py-2 mb-2 font-atx-display">
+                          <div className="text-[12px] text-[#D14343] rounded-xl bg-[rgba(209,67,67,0.05)] border border-[rgba(209,67,67,0.3)] px-3 py-2 mb-2">
                             {withErr}
                           </div>
                         )}
@@ -616,13 +608,13 @@ function VaultDetailContent() {
                               Pending withdrawals
                             </div>
                             {queue.map(q => (
-                              <div key={q.id} className="flex justify-between items-center py-2.5 border-b border-atx-ink/20">
+                              <div key={q.id} className="flex justify-between items-center py-2.5 border-b border-hair-soft">
                                 <div>
-                                  <div className="text-[14px] font-bold font-atx-mono text-atx-ink">
+                                  <div className="text-[14px] font-atx-display font-medium text-ink tabular-nums">
                                     {fmtUSD(q.requested_amount)}
-                                    {q.penalty_pct > 0 && <span className="text-[11px] text-atx-clay ml-1.5">−{q.penalty_pct}%</span>}
+                                    {q.penalty_pct > 0 && <span className="text-[11px] text-[#D14343] ml-1.5">−{q.penalty_pct}%</span>}
                                   </div>
-                                  <div className="text-[11px] text-atx-ink/45 font-atx-display">
+                                  <div className="text-[11px] text-ink-soft">
                                     Executable {daysUntil(q.executable_at) === 0 ? 'today' : `in ${daysUntil(q.executable_at)}d`}
                                   </div>
                                 </div>
@@ -630,26 +622,26 @@ function VaultDetailContent() {
                                   <button
                                     onClick={handleComplete}
                                     disabled={vaultExecute.isPending}
-                                    className="shrink-0 text-[11px] font-semibold text-atx-ink border border-atx-ink px-3 py-[4px] font-atx-mono uppercase tracking-[0.06em] hover:bg-atx-ink hover:text-atx-bone disabled:opacity-50"
+                                    className="shrink-0 glass-pill glass-pill-sm disabled:opacity-50"
                                   >
                                     {vaultExecute.isPending ? 'Completing…' : 'Complete withdrawal'}
                                   </button>
                                 ) : (
-                                  <span className="shrink-0 flex items-center gap-1.5 border border-atx-ink px-[7px] py-[2px] font-atx-mono text-[10px] uppercase tracking-[0.08em]">
-                                    <span className="w-[7px] h-[7px] border border-atx-ink inline-block bg-atx-coral" />
+                                  <span className="shrink-0 flex items-center gap-1.5 rounded-full border border-hair px-2.5 py-[3px] text-[10px] uppercase tracking-[0.08em] font-semibold text-ink-mid">
+                                    <span className="w-[7px] h-[7px] rounded-full inline-block bg-coral2" />
                                     Pending
                                   </span>
                                 )}
                               </div>
                             ))}
                             {vaultExecute.error && (
-                              <div className="text-[11px] text-atx-clay font-atx-display mt-2">{vaultExecute.error}</div>
+                              <div className="text-[11px] text-[#D14343] mt-2">{vaultExecute.error}</div>
                             )}
                           </div>
                         )}
                       </>
                     )}
-                    {withdrawing && <div className="text-[12px] text-atx-ink/55 mt-2 font-atx-display">Processing withdrawal…</div>}
+                    {withdrawing && <div className="text-[12px] text-ink-mid mt-2">Processing withdrawal…</div>}
                   </div>
                 )}
 
@@ -657,7 +649,7 @@ function VaultDetailContent() {
                 {tab === 'epoch' && (
                   <div className="flex flex-col gap-3">
                     {!epoch ? (
-                      <div className="py-8 text-center text-atx-ink/55 font-atx-display text-[13px]">
+                      <div className="py-8 text-center text-ink-mid text-[13px]">
                         No active epoch yet.
                       </div>
                     ) : (
@@ -671,13 +663,13 @@ function VaultDetailContent() {
                           { label: 'Opened',       value: new Date(epoch.opened_at).toLocaleDateString() },
                           { label: 'Deadline',     value: epoch.deadline ? `${daysUntil(epoch.deadline)}d remaining` : 'Active' },
                         ].map(({ label, value }) => (
-                          <div key={label} className="flex justify-between py-2 border-b border-atx-ink/20">
-                            <span className="text-[12px] text-atx-ink/55 font-atx-display">{label}</span>
-                            <span className="text-[13px] font-semibold font-atx-mono text-atx-ink">{value}</span>
+                          <div key={label} className="flex justify-between py-2 border-b border-hair-soft">
+                            <span className="text-[12px] text-ink-mid">{label}</span>
+                            <span className="text-[13px] font-medium font-mono text-ink">{value}</span>
                           </div>
                         ))}
                         {epoch.merkle_root && (
-                          <div className="text-[11px] text-atx-ink/45 font-atx-mono break-all px-3 py-2 bg-atx-bone border border-atx-ink/20">
+                          <div className="text-[11px] text-ink-soft font-mono break-all px-3 py-2 rounded-xl bg-ground-cool border border-hair">
                             Root: {epoch.merkle_root.slice(0, 16)}…
                           </div>
                         )}
@@ -694,43 +686,43 @@ function VaultDetailContent() {
           <div className="flex flex-col gap-4">
 
             {/* Fee split */}
-            <div className="bg-atx-panel border border-atx-ink p-6">
-              <div className="font-atx-mono uppercase tracking-[0.1em] text-[12px] text-atx-ink/60 mb-3.5">
+            <div className="soft-card p-6">
+              <div className="uppercase tracking-[0.1em] text-[12px] font-semibold text-ink-soft mb-3.5">
                 Fee split
               </div>
               {[
-                { label: 'LPs (you)',              pct: 70, bar: 'bg-atx-blue',     txt: 'text-atx-blue' },
-                { label: 'Referrers',              pct: 15, bar: 'bg-atx-coral',    txt: 'text-atx-coral' },
-                { label: 'Protocol treasury',      pct: 10, bar: 'bg-atx-grey',     txt: 'text-atx-ink/55' },
-                { label: 'Attribution bonus pool', pct: 5,  bar: 'bg-atx-clay',     txt: 'text-atx-clay' },
+                { label: 'LPs (you)',              pct: 70, bar: 'bg-peri',      txt: 'text-peri-deep' },
+                { label: 'Referrers',              pct: 15, bar: 'bg-coral2',    txt: 'text-coral2-deep' },
+                { label: 'Protocol treasury',      pct: 10, bar: 'bg-ink-soft',  txt: 'text-ink-soft' },
+                { label: 'Attribution bonus pool', pct: 5,  bar: 'bg-[#D14343]', txt: 'text-[#D14343]' },
               ].map(({ label, pct, bar, txt }) => (
                 <div key={label} className="mb-2.5">
                   <div className="flex justify-between mb-1">
-                    <span className="text-[12px] text-atx-ink/55 font-atx-display">{label}</span>
-                    <span className={`text-[13px] font-bold font-atx-mono ${txt}`}>{pct}%</span>
+                    <span className="text-[12px] text-ink-mid">{label}</span>
+                    <span className={`text-[13px] font-semibold tabular-nums ${txt}`}>{pct}%</span>
                   </div>
-                  <div className="h-[8px] border border-atx-ink overflow-hidden relative">
-                    <div className={`absolute inset-y-0 left-0 ${bar}`} style={{ width: `${pct}%` }} />
+                  <div className="h-[8px] rounded-full bg-ground-cool overflow-hidden relative">
+                    <div className={`absolute inset-y-0 left-0 rounded-full ${bar}`} style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               ))}
             </div>
 
             {/* Multiplier table */}
-            <div className="bg-atx-panel border border-atx-ink p-6">
-              <div className="font-atx-mono uppercase tracking-[0.1em] text-[12px] text-atx-ink/60 mb-3.5">
+            <div className="soft-card p-6">
+              <div className="uppercase tracking-[0.1em] text-[12px] font-semibold text-ink-soft mb-3.5">
                 Lock tier multipliers
               </div>
               {(Object.entries(LOCK_TIERS) as [LockTier, typeof LOCK_TIERS[LockTier]][]).map(([tier, meta]) => (
-                <div key={tier} className="flex justify-between items-center py-[7px] border-b border-atx-ink/20">
+                <div key={tier} className="flex justify-between items-center py-[7px] border-b border-hair-soft">
                   <div>
-                    <div className="text-[13px] font-semibold text-atx-ink font-atx-display">{meta.label}</div>
-                    <div className="text-[11px] text-atx-ink/45 font-atx-display">{meta.period}</div>
+                    <div className="text-[13px] font-semibold text-ink font-atx-display">{meta.label}</div>
+                    <div className="text-[11px] text-ink-soft">{meta.period}</div>
                   </div>
-                  <span className="text-[15px] font-bold font-atx-mono text-atx-blue">{meta.multiplier}</span>
+                  <span className="text-[15px] font-atx-display font-medium text-peri-deep tabular-nums">{meta.multiplier}</span>
                 </div>
               ))}
-              <p className="text-[11px] text-atx-ink/45 font-atx-display mt-3">
+              <p className="text-[11px] text-ink-soft mt-3">
                 Combined with your Attribution score percentile for final payout.
               </p>
             </div>
