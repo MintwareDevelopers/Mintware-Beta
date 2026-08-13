@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
 import { SignalRadar } from '@/components/ui2/SignalRadar'
 
 // =============================================================================
@@ -68,8 +69,9 @@ export default function AttributionLandingPage() {
       <V2Nav active="attribution" />
 
       {/* ── HERO ── */}
-      <section className="bg-ground-cool border-b border-hair-soft">
-        <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
+      <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">
+        <AirbrushSplash tone="peri" />
+        <div className="relative mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
           <div className={ey}>On-chain reputation · 100+ chains</div>
           <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[18ch] [text-wrap:balance]">
             See what your wallet is worth. <span className="text-peri">Then put it to work.</span>
@@ -169,10 +171,12 @@ export default function AttributionLandingPage() {
       </section>
 
       {/* ── 04 · Verifiable on-chain · dark pop ── */}
-      <section className="relative overflow-hidden bg-ink text-white border-b border-hair-soft">
-        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 120% at 10% 0%, rgba(108,108,240,0.34), transparent 60%), radial-gradient(50% 130% at 100% 100%, rgba(244,161,131,0.14), transparent 62%)' }} />
-        <div className="grain absolute inset-0 opacity-40" aria-hidden />
-        <div className={`${wrap} relative py-[72px] max-[800px]:py-[52px]`}>
+      <section className="bg-white border-b border-hair-soft">
+        <div className={`${wrap} py-[48px] max-[800px]:py-[36px]`}>
+          <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-ink text-white">
+            <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 120% at 10% 0%, rgba(108,108,240,0.34), transparent 60%), radial-gradient(50% 130% at 100% 100%, rgba(244,161,131,0.14), transparent 62%)' }} />
+            <div className="grain absolute inset-0 opacity-40" aria-hidden />
+            <div className="relative px-10 max-[800px]:px-6 py-[64px] max-[800px]:py-[48px]">
           <div className="flex items-baseline gap-3">
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">04</span>
             <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">Verifiable · EAS on Base</span>
@@ -197,6 +201,8 @@ export default function AttributionLandingPage() {
             ))}
           </div>
           <p className="text-[11px] text-white/45 mt-5">Three live schemas on Base: AttributionScore · SwapActivity · ReferralLink.</p>
+            </div>
+          </div>
         </div>
       </section>
 

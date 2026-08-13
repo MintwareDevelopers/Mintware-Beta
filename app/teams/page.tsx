@@ -136,10 +136,12 @@ export default function TeamsLandingPage() {
       </section>
 
       {/* ── 03 · How it works · dark pop + animated flow ── */}
-      <section id="how" className="relative overflow-hidden bg-ink text-white border-b border-hair-soft scroll-mt-[62px]">
-        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 120% at 10% 0%, rgba(108,108,240,0.34), transparent 60%), radial-gradient(50% 130% at 100% 100%, rgba(244,161,131,0.14), transparent 62%)' }} />
-        <div className="grain absolute inset-0 opacity-40" aria-hidden />
-        <div className={`${wrap} relative py-[72px] max-[800px]:py-[52px]`}>
+      <section id="how" className="bg-white border-b border-hair-soft scroll-mt-[62px]">
+        <div className={`${wrap} py-[48px] max-[800px]:py-[36px]`}>
+          <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-ink text-white">
+            <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 120% at 10% 0%, rgba(108,108,240,0.34), transparent 60%), radial-gradient(50% 130% at 100% 100%, rgba(244,161,131,0.14), transparent 62%)' }} />
+            <div className="grain absolute inset-0 opacity-40" aria-hidden />
+            <div className="relative px-10 max-[800px]:px-6 py-[64px] max-[800px]:py-[48px]">
           <div className="flex items-baseline gap-3">
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">03</span>
             <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">How matched liquidity works</span>
@@ -157,6 +159,8 @@ export default function TeamsLandingPage() {
                 {i < FLOW.length - 1 && <span aria-hidden className="flow-dash-h h-[2px] w-8 mt-auto rounded-full opacity-70 max-[900px]:hidden" />}
               </div>
             ))}
+          </div>
+            </div>
           </div>
         </div>
       </section>
