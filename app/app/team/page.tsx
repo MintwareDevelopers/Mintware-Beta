@@ -1,7 +1,16 @@
-// Team · Treasury Overview — the terminal's home. Design-forward preview: NAV hero,
-// KPI row (available-to-spend / yield / allocation), a live-authorization feed
-// (our edge-auth differentiator, framed "preview"), and allocation breakdown.
-// All figures ILLUSTRATIVE — the ULV/cards stack is in testing, nothing here is live.
+'use client'
+
+// Team · Treasury Overview — the terminal's home. NAV hero + KPI row, then the
+// ACTIVITY the treasury cares about front-and-centre: pool activity (LP / swaps /
+// referrals routed through the pool) and a LIVE contributor leaderboard wired to
+// the real Attribution `/leaderboard` endpoint. Then the edge-auth authorization
+// feed + allocation. Treasury/cards figures are ILLUSTRATIVE (ULV in testing);
+// the contributor board reads live Attribution data (demo rows only in dev/preview).
+
+import Link from 'next/link'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { API, shortAddr } from '@/lib/web2/api'
+import { WalletDisplay } from '@/components/web3/WalletDisplay'
 
 const KPIS = [
   { k: 'Available to spend', v: '$2.41M', s: 'credit against NAV' },
@@ -10,7 +19,7 @@ const KPIS = [
   { k: 'Unencumbered', v: '$1.14M', s: 'free of card holds' },
 ]
 
-const FEED = [
+const AUTH_FEED = [
   { who: 'AWS · us-east-1', amt: '$4,182.00', t: '2s ago', ms: '118 ms', ok: true },
   { who: 'Meta Ads', amt: '$12,500.00', t: '1m ago', ms: '104 ms', ok: true },
   { who: 'Delta Air Lines', amt: '$2,340.55', t: '4m ago', ms: '131 ms', ok: true },
@@ -24,7 +33,61 @@ const ALLOC = [
   { name: 'Reserve (unallocated)', pct: 7, color: 'var(--color-ink-soft)' },
 ]
 
+// ── Pool activity (illustrative) ──
+type Kind = 'lp' | 'swap' | 'referral'
+const KIND_META: Record<Kind, { label: string; cls: string; dot: string }> = {
+  lp:       { label: 'LP committed', cls: 'text-peri-deep bg-[rgba(108,108,240,0.08)]', dot: 'var(--color-peri)' },
+  swap:     { label: 'Swap routed',  cls: 'text-mw-green bg-mw-green-muted',            dot: 'var(--color-mw-green)' },
+  referral: { label: 'Referral',     cls: 'text-coral2-deep bg-[rgba(240,120,110,0.1)]', dot: 'var(--color-coral2)' },
+}
+const POOL: { kind: Kind; wallet: string; detail: string; amt: string; when: string }[] = [
+  { kind: 'lp',       wallet: '0x8a1f…d9e0', detail: 'into Growth ULV',     amt: '+$42,000', when: '2m ago' },
+  { kind: 'swap',     wallet: '0x2b7d…0819', detail: 'ETH → USDC via pool', amt: '$12,400',  when: '9m ago' },
+  { kind: 'referral', wallet: '0x5c6d…3c4d', detail: 'brought 0x9f0e…b7c6', amt: '+1 wallet', when: '21m ago' },
+  { kind: 'lp',       wallet: '0x1a2b…3c4d', detail: 'into ETH / USDC pair', amt: '+$8,900',  when: '34m ago' },
+  { kind: 'swap',     wallet: '0x6e7f…8091', detail: 'USDC → ETH via pool', amt: '$3,120',   when: '1h ago' },
+]
+
+// ── Contributors leaderboard (LIVE) ──
+interface Entry { wallet: string; attribution_score?: number; referral_trade_points?: number }
+type Metric = 'score' | 'referrals'
+const metricVal = (e: Entry, m: Metric) => (m === 'score' ? e.attribution_score || 0 : e.referral_trade_points || 0)
+const tierFor = (s = 0) => (s >= 800 ? 'Oracle' : s >= 500 ? 'Builder' : s >= 250 ? 'Signal' : 'Ghost')
+const SHOW_SAMPLE = process.env.NEXT_PUBLIC_ATX_PREVIEW === 'true' || process.env.NODE_ENV === 'development'
+const DEMO: Entry[] = [
+  { wallet: '0x8a1f4c9b2d3e5a6f7089c1b2d3e4f5a6b7c8d9e0', attribution_score: 892, referral_trade_points: 264 },
+  { wallet: '0x9f0e1d2c3b4a5968778695a4b3c2d1e0f9a8b7c6', attribution_score: 830, referral_trade_points: 408 },
+  { wallet: '0x2b7d9e0f1a3c4b5d6e7f8091a2b3c4d5e6f70819', attribution_score: 861, referral_trade_points: 96 },
+  { wallet: '0x1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d', attribution_score: 754, referral_trade_points: 72 },
+  { wallet: '0x6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f8091', attribution_score: 712, referral_trade_points: 144 },
+  { wallet: '0x3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f', attribution_score: 690, referral_trade_points: 216 },
+]
+
 export default function TreasuryOverview() {
+  const [entries, setEntries] = useState<Entry[]>([])
+  const [metric, setMetric] = useState<Metric>('score')
+  const [loading, setLoading] = useState(true)
+  const [live, setLive] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`${API}/leaderboard?limit=100`)
+      const data = res.ok ? await res.json() : null
+      const rows = Array.isArray(data) ? (data as Entry[]) : []
+      if (rows.length > 0) { setEntries(rows); setLive(true) }
+      else { setEntries(SHOW_SAMPLE ? DEMO : []); setLive(false) }
+    } catch {
+      setEntries(SHOW_SAMPLE ? DEMO : []); setLive(false)
+    } finally { setLoading(false) }
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const ranked = useMemo(
+    () => [...entries].sort((a, b) => metricVal(b, metric) - metricVal(a, metric)).slice(0, 6).map((e, i) => ({ ...e, rank: i + 1, tier: tierFor(e.attribution_score) })),
+    [entries, metric],
+  )
+
   return (
     <>
       <div className="flex items-center gap-3 flex-wrap">
@@ -46,7 +109,6 @@ export default function TreasuryOverview() {
             ))}
           </div>
         </div>
-        {/* sparkline placeholder */}
         <div className="mt-5 h-[64px] rounded-xl bg-gradient-to-b from-peri/[0.08] to-transparent border border-hair-soft flex items-end overflow-hidden">
           <svg viewBox="0 0 400 64" preserveAspectRatio="none" className="w-full h-full">
             <polyline points="0,48 40,44 80,46 120,38 160,40 200,30 240,33 280,24 320,26 360,16 400,18" fill="none" stroke="var(--color-peri)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
@@ -65,14 +127,78 @@ export default function TreasuryOverview() {
         ))}
       </div>
 
-      {/* Feed + allocation */}
+      {/* ── Activity: pool feed + contributor board (the reputation layer) ── */}
+      <div className="grid grid-cols-[1fr_1.1fr] max-[880px]:grid-cols-1 gap-4 mt-4">
+        {/* Pool activity */}
+        <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-hair-soft">
+            <span className="font-atx-display font-semibold text-[14px] text-ink">Pool activity</span>
+            <span className="inline-flex items-center gap-1.5 text-[9px] uppercase tracking-[0.08em] font-semibold text-peri-deep"><span className="w-[5px] h-[5px] rounded-full bg-peri" />Preview</span>
+          </div>
+          {POOL.map((f, i) => {
+            const m = KIND_META[f.kind]
+            return (
+              <div key={i} className="flex items-center gap-3 px-5 py-3 border-b border-hair-soft last:border-0">
+                <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: m.dot }} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] text-ink truncate"><span className="font-mono">{f.wallet}</span> <span className="text-ink-mid">{f.detail}</span></div>
+                  <div className="mt-0.5"><span className={`text-[9px] uppercase tracking-[0.06em] font-semibold rounded-full px-1.5 py-0.5 ${m.cls}`}>{m.label}</span> <span className="text-[10.5px] text-ink-soft">· {f.when}</span></div>
+                </div>
+                <span className="text-[13px] tabular-nums text-ink shrink-0">{f.amt}</span>
+              </div>
+            )
+          })}
+          <div className="px-5 py-2.5 text-[10.5px] text-ink-soft">Illustrative — per-pool routed activity populates once your vault is live.</div>
+        </div>
+
+        {/* Top contributors (LIVE) */}
+        <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-hair-soft flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <span className="font-atx-display font-semibold text-[14px] text-ink">Top contributors</span>
+              <span className={`inline-flex items-center gap-1.5 text-[9px] uppercase tracking-[0.08em] font-semibold ${live ? 'text-mw-green' : 'text-ink-soft'}`}><span className={`w-[5px] h-[5px] rounded-full ${live ? 'bg-mw-green' : 'bg-ink-soft'}`} />{live ? 'Live' : 'Preview data'}</span>
+            </div>
+            <div className="flex gap-1 rounded-full bg-ground-cool p-0.5">
+              {([['score', 'Attribution'], ['referrals', 'Referrals']] as const).map(([k, label]) => (
+                <button key={k} onClick={() => setMetric(k)} className={`text-[11px] uppercase tracking-[0.06em] font-semibold rounded-full px-2.5 py-1 transition-colors ${metric === k ? 'bg-white text-ink shadow-card' : 'text-ink-soft'}`}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="p-4 flex flex-col gap-2">{[0, 1, 2, 3].map((i) => <div key={i} className="h-10 rounded-lg bg-ground-cool mw-shimmer" />)}</div>
+          ) : ranked.length === 0 ? (
+            <div className="px-5 py-10 text-center text-[13px] text-ink-mid">The contributor board populates from live Attribution data.<span className="block mt-1 text-[12px] text-ink-soft">Wallets rank the moment the service returns rows.</span></div>
+          ) : (
+            ranked.map((r) => (
+              <div key={r.wallet} className="grid grid-cols-[32px_1fr_auto] items-center gap-2 px-5 py-2.5 border-b border-hair-soft last:border-0">
+                <span className={`font-atx-display font-medium tabular-nums text-[14px] ${r.rank === 1 ? 'text-coral2-deep' : r.rank <= 3 ? 'text-peri-deep' : 'text-ink-soft'}`}>{String(r.rank).padStart(2, '0')}</span>
+                <div className="min-w-0 flex items-center gap-2">
+                  <span className={`w-[7px] h-[7px] rounded-full shrink-0 ${r.tier === 'Ghost' ? 'bg-ink-soft' : 'bg-peri'}`} />
+                  <div className="min-w-0">
+                    <div className="text-[13px] font-medium text-ink truncate"><WalletDisplay address={r.wallet} mono style={{ fontSize: 13, fontWeight: 600 }} /></div>
+                    <div className="font-mono text-[10.5px] text-ink-soft truncate">{shortAddr(r.wallet)} · {r.tier}</div>
+                  </div>
+                </div>
+                <span className="text-[14px] tabular-nums font-medium text-ink shrink-0">{metricVal(r, metric).toLocaleString()}<span className="text-[10px] text-ink-soft font-normal ml-1">{metric === 'score' ? 'pts' : 'refs'}</span></span>
+              </div>
+            ))
+          )}
+          <div className="px-5 py-2.5 text-[10.5px] text-ink-soft flex items-center gap-1.5 flex-wrap">
+            <span>✴ Powered by Attribution — {live ? 'live data' : 'preview'}.</span>
+            <Link href="/app/leaderboard" className="text-peri-deep font-medium no-underline">Global board →</Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Authorization feed + allocation */}
       <div className="grid grid-cols-[1.3fr_1fr] max-[880px]:grid-cols-1 gap-4 mt-4">
         <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-hair-soft">
             <span className="font-atx-display font-semibold text-[14px] text-ink">Live authorization feed</span>
             <span className="text-[10px] uppercase tracking-[0.08em] text-ink-soft">sub-150ms edge-auth</span>
           </div>
-          {FEED.map((f) => (
+          {AUTH_FEED.map((f) => (
             <div key={f.who} className="flex items-center gap-3 px-5 py-3 border-b border-hair-soft last:border-0">
               <span className={`w-[7px] h-[7px] rounded-full shrink-0 ${f.ok ? 'bg-mw-green' : 'bg-[#D14343]'}`} />
               <div className="min-w-0 flex-1">
@@ -104,7 +230,7 @@ export default function TreasuryOverview() {
         </div>
       </div>
 
-      <p className="text-[11px] text-ink-soft mt-5">Figures are illustrative. The ULV vault engine is in testing on Base Sepolia; corporate cards and on-chain settlement are in development — nothing here is live or an offer.</p>
+      <p className="text-[11px] text-ink-soft mt-5">Treasury, cards, and pool figures are illustrative (the ULV engine is in testing on Base Sepolia). The contributor board reads live Attribution data — demo rows appear only in preview, never in production.</p>
     </>
   )
 }
