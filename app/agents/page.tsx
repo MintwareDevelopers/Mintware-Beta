@@ -91,6 +91,34 @@ for (const action of mintwareActions) agentkit.use(action)
 
 // Your agent can now answer: "What is my Attribution score?"`
 
+// ── Roadmap: the JIT 402 payment engine (NOT BUILT — the direction we're building
+// toward). Composes pieces that already exist in testing: the ULV engine, a live
+// V4 JIT hook, and the edge-auth settlement engine. Framed unmistakably as vision.
+const PAY_FLOW = [
+  { n: '01', t: 'Challenge', d: 'The agent hits a paid endpoint — an API, a compute node, a merchant POS — and gets back HTTP 402 Payment Required: the price, and the rails it accepts.' },
+  { n: '02', t: 'Pick a rail', d: 'The agent reads the 402 payload and chooses — a native machine rail (x402, on-chain) or a legacy card rail (Visa / Mastercard).' },
+  { n: '03', t: 'Settle', d: 'Native: sign an EIP-712 session permit, stream USDC on-chain, retry with a proof header. Legacy: mint a just-in-time card.' },
+  { n: '04', t: 'Resume & burn', d: 'The resource unlocks and the task resumes — while the single-use card or token auto-burns. Nothing reusable is left behind.' },
+]
+
+const RAILS = [
+  { tag: 'Native machine rail', ex: 'x402 · on-chain', tone: 'var(--color-peri)', steps: ['Sign a sub-second EIP-712 session permit', 'Stream USDC directly on-chain', 'Attach the tx proof header and retry the request'] },
+  { tag: 'Legacy card rail', ex: 'Visa / Mastercard · Rain · Bridge', tone: 'var(--color-coral2)', steps: ['Debit the exact price in USDC from the yield vault', 'Mint a single-use PAN, hard-capped to the price, 10-min expiry', 'Autofill the merchant — the card burns on settlement'] },
+]
+
+const WHY = [
+  { t: 'Zero idle float', d: '100% of the agent’s capital stays in yield-bearing vaults. Money only moves to a rail at the millisecond a 402 asks for it.' },
+  { t: 'No standing attack surface', d: 'Compromise the agent and you find no valid card. Every PAN auto-destructs after one charge and can’t be re-billed.' },
+  { t: 'Guardrails on the vault', d: 'Set policy once — “$50/day on infra, $5 per tx.” The JIT hook enforces the bounds before it ever issues a token.' },
+  { t: 'One stack, every merchant', d: 'The same agent navigates on-chain x402 micro-payments and real-world Visa / Mastercard POS — one financial stack.' },
+]
+
+const ULV_ROLES = [
+  { role: 'Liquidity Supplier', action: 'Auto-deposits idle treasury USDC into single-sided ULV pools — one clean call, depositUSDC(amount), no two-asset rebalancing.', prim: 'ERC-7579 session keys' },
+  { role: 'Yield Arbitrageur', action: 'Shifts capital across Uniswap v4 fee tiers by pool volume, around the clock, with no human signature prompts.', prim: 'v4 dynamic hooks · EIP-712 permits' },
+  { role: 'JIT Liquidation Node', action: 'Withdraws the exact USDC needed to fund a JIT card the instant a 402 challenge lands.', prim: 'HTTP 402 interceptor · flash settlement' },
+]
+
 function shortAddr(addr: string) {
   return addr.slice(0, 6) + '…' + addr.slice(-4)
 }
@@ -297,6 +325,93 @@ export default function AgentsPage() {
         </div>
 
       </div>
+
+      {/* ── ROADMAP · the JIT 402 payment engine (blueprint, not built) ── */}
+      <section className="border-t border-hair-soft bg-ground-cool">
+        <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[76px] max-[800px]:py-[52px]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Blueprint · not yet built</span>
+          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mt-4">The road ahead · agent payments</div>
+          <h2 className="font-atx-display font-medium text-ink mt-4 tracking-[-0.04em] leading-[1.05] text-[clamp(1.7rem,4vw,2.8rem)] max-w-[20ch] [text-wrap:balance]">
+            Agents that pay for themselves — and <span className="text-peri">never sit idle.</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.55] mt-5 max-w-[64ch]">
+            Reputation is step one. Where we’re headed: an agent that keeps its whole treasury earning in a vault, then pays any endpoint the instant it asks — crypto-native or legacy — over one standard, HTTP 402.
+          </p>
+
+          {/* The 402 flow */}
+          <div className="flex items-center gap-3 mt-12 mb-4">
+            <span className={NUM}>→</span>
+            <span className={LABEL}>The JIT 402 payment engine</span>
+          </div>
+          <div className="grid grid-cols-4 max-[860px]:grid-cols-2 max-[520px]:grid-cols-1 gap-3">
+            {PAY_FLOW.map((s) => (
+              <div key={s.n} className="soft-card p-4">
+                <div className="font-atx-display font-medium text-[15px] text-peri-deep tabular-nums">{s.n}</div>
+                <div className="font-atx-display font-semibold text-[14px] text-ink mt-1">{s.t}</div>
+                <p className="text-[12px] text-ink-mid leading-[1.5] mt-1.5">{s.d}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Rail fork */}
+          <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-3 mt-3">
+            {RAILS.map((r) => (
+              <div key={r.tag} className="soft-card p-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-[9px] h-[9px] rounded-full shrink-0" style={{ background: r.tone }} />
+                  <span className="font-atx-display font-semibold text-[14.5px] text-ink">{r.tag}</span>
+                </div>
+                <div className="font-mono text-[11px] text-ink-soft mt-1 ml-[19px]">{r.ex}</div>
+                <ol className="mt-3.5 flex flex-col gap-2">
+                  {r.steps.map((st, i) => (
+                    <li key={i} className="flex gap-2.5 text-[12.5px] text-ink-mid leading-[1.45]">
+                      <span className="font-mono text-[11px] text-peri-deep shrink-0 mt-[1px]">{i + 1}</span>{st}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+
+          {/* Why */}
+          <div className="flex items-center gap-3 mt-12 mb-4">
+            <span className={NUM}>→</span>
+            <span className={LABEL}>Why it changes the math</span>
+          </div>
+          <div className="grid grid-cols-4 max-[860px]:grid-cols-2 max-[520px]:grid-cols-1 gap-3">
+            {WHY.map((w) => (
+              <div key={w.t} className="soft-card p-4">
+                <div className="font-atx-display font-semibold text-[13.5px] text-ink leading-tight">{w.t}</div>
+                <p className="text-[12px] text-ink-mid leading-[1.5] mt-2">{w.d}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Agentic ULV */}
+          <div className="flex items-center gap-3 mt-12 mb-4">
+            <span className={NUM}>→</span>
+            <span className={LABEL}>The vault is the rail · agentic ULV</span>
+          </div>
+          <p className="text-[13.5px] text-ink-mid leading-[1.55] max-w-[68ch] -mt-1 mb-4">
+            Single-sided ULV pools let an agent supply liquidity with one call — <span className="font-mono text-[12.5px] text-ink">depositUSDC(amount)</span> — no two-token inventory, no impermanent-loss math. Capital earns right up to the exact second it’s spent.
+          </p>
+          <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3">
+            {ULV_ROLES.map((r) => (
+              <div key={r.role} className="soft-card p-5 flex flex-col">
+                <div className="font-atx-display font-semibold text-[14.5px] text-ink">{r.role}</div>
+                <p className="text-[12.5px] text-ink-mid leading-[1.5] mt-2 flex-1">{r.action}</p>
+                <span className="mt-3.5 inline-block self-start rounded-full bg-white border border-hair px-2.5 py-1 font-mono text-[10.5px] text-peri-deep">{r.prim}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Honesty footer */}
+          <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-5 mt-8 flex items-start gap-3 max-w-[860px]">
+            <span className="w-[7px] h-[7px] rounded-full bg-peri mt-1.5 shrink-0" />
+            <p className="text-[13px] text-ink-mid leading-[1.55]">This is the architecture we’re building toward — <span className="font-semibold text-ink">not a live product</span>. It composes pieces Mintware has already built and is testing: the ULV engine, a V4 JIT liquidity hook, and the edge-auth settlement engine. Nothing here is deployed, audited, or an offer.</p>
+          </div>
+        </div>
+      </section>
     </div>
   )
 }
