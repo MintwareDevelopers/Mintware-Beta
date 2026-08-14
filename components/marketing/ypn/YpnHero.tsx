@@ -10,7 +10,7 @@ export function YpnHero() {
       <AirbrushSplash tone="peri" />
       <div className="relative mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[104px] max-[800px]:py-[64px]">
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-[12px] font-semibold uppercase tracking-[0.14em] text-peri-deep">✴ {YPN_HERO.eyebrow}</span>
+          <span className="text-[12px] font-semibold uppercase tracking-[0.14em] text-peri-deep">{YPN_HERO.eyebrow}</span>
           <span className="text-[11px] font-semibold px-3 py-1 rounded-full text-peri-deep bg-white border border-[rgba(108,108,240,0.22)] inline-flex items-center gap-2">
             <span className="w-[6px] h-[6px] rounded-full bg-peri inline-block" /> {YPN_STATUS.label}
           </span>

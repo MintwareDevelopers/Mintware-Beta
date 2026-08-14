@@ -210,7 +210,7 @@ export const YPN_CTA = {
 
 // ─── Ethos — liquidity as a public good (page band + home teaser) ───────────
 export const YPN_ETHOS = {
-  eyebrow: '✴ Liquidity as a public good',
+  eyebrow: 'Liquidity as a public good',
   title: 'Money That Earns 24/7, Ready When You Are',
   body: 'Mintware turns locked capital into a spendable asset. Your deposit continuously generates institutional yield for you while strengthening market liquidity for everyone — and your earnings are instantly available to spend at point-of-sale.',
   quote: 'Never idle, never locked, always yours.',
