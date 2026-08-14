@@ -26,7 +26,7 @@ import {IYieldAdapter}    from "../vaults/IYieldAdapter.sol";
 /// @dev    THE CRUX — the senior claim counts its deployed USDC at PAR, never mark-to-market:
 ///
 ///           seniorAssets = adapter.totalAssets()          // idle in Aave (principal + interest)
-///                        + (usdcBalance - reservedJuniorUSDC) // free senior buffer
+///                        + (usdcBalance - reservedJuniorUSDC - juniorUsdcBuffer) // free SENIOR buffer
 ///                        + deployedFromSenior              // senior USDC out in the LP, at PAR
 ///
 ///         No pool price appears anywhere in the senior NAV. The LP's IL/MTM lands entirely on the
@@ -34,11 +34,23 @@ import {IYieldAdapter}    from "../vaults/IYieldAdapter.sol";
 ///         offset (`VIRTUAL = 1e3`) inflation defense; mint rounds DOWN, `previewWithdraw` rounds UP,
 ///         redeem asset-math rounds DOWN — every division toward the vault.
 ///
+/// @dev    JUNIOR COMPOSITION — the junior first-loss reserve is `team ETH + OPTIONAL junior USDC`:
+///           • `juniorTokens`     = the team's committed native token (volatile; the LP's junior leg).
+///           • `juniorUsdcBuffer` = the team's OPTIONAL committed USDC — rock-solid first-loss coverage
+///                                  that does NOT move with the mark (strictly stronger than ETH-alone,
+///                                  which is weakest exactly when IL hits). It is EXCLUDED from every
+///                                  senior view (like `reservedJuniorUSDC`), so it never inflates the
+///                                  senior claim, and it is DRAWN in `_pullUSDC` as the last resort
+///                                  before revert — genuinely absorbing a senior shortfall. Whatever it
+///                                  never had to absorb is returned to the team at `redeemJunior`. Set
+///                                  `juniorUSDC = 0` at commit for the pure-ETH tranche.
+///
 /// @dev    THE SOLVENCY INVARIANT (fuzzed 256×128k):
-///           deployedFromSenior <= liquidityModule.recoverableUSDC()
+///           deployedFromSenior <= liquidityModule.recoverableUSDC() + juniorUsdcBuffer
 ///         The `ILiquidityModule` values its position by spending the junior token to make senior USDC
-///         whole FIRST (seniority is enforced at the seam). So the RHS is the USDC actually behind the
-///         deployed senior par; the inequality is exactly "the junior buffer still covers the senior."
+///         whole FIRST (seniority is enforced at the seam); `juniorUsdcBuffer` is stable coverage on top.
+///         So the RHS is the USDC actually behind the deployed senior par; the inequality is exactly
+///         "the junior stack (LP-recoverable + stable buffer) still covers the senior."
 ///         Redemptions NEVER underpay the senior: `_pullUSDC` reverts rather than pay < par, trading
 ///         liveness (not principal) in the tail where the junior is fully wiped.
 ///
@@ -86,6 +98,11 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     // ── junior (team) ─────────────────────────────────────────────────────────────
     address public team;
     uint256 public juniorTokens;       // team token in the reserve (locked)
+    /// @notice The team's OPTIONAL committed USDC — idle, stable first-loss coverage. Excluded from every
+    ///         senior view (never inflates the senior claim), drawn in `_pullUSDC` as the last resort
+    ///         before revert (genuine loss absorption), remainder returned to the team at `redeemJunior`.
+    ///         Held ON HAND (never supplied to Aave / deployed to the LP), like `reservedJuniorUSDC`.
+    uint256 public juniorUsdcBuffer;
     uint256 public lockExpiry;         // junior hard cliff
     uint256 public idleBufferTargetBps = 8_000; // governable per-vault, [MIN,MAX]
     bool    public activated;
@@ -95,7 +112,8 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
 
     event GatewaySet(address indexed gateway);
     event LiquidityModuleSet(address indexed module);
-    event TeamCommitted(address indexed team, uint256 teamTokens, uint256 lockExpiry);
+    event TeamCommitted(address indexed team, uint256 teamTokens, uint256 juniorUsdc, uint256 lockExpiry);
+    event JuniorUsdcAbsorbed(uint256 amount);
     event SeniorDeposit(address indexed caller, address indexed to, uint256 assets, uint256 shares);
     event SeniorRedeem(address indexed owner, uint256 shares, uint256 assets);
     event PaymentBurn(address indexed user, address indexed receiver, uint256 shares, uint256 assets);
@@ -163,9 +181,16 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
 
     // ── junior (team) lifecycle ───────────────────────────────────────────────────
 
-    /// @notice The team/treasury commits its native token as the junior first-loss reserve and locks
-    ///         it for `lockDur` (hard cliff, >= 90 days). Opens the vault for community deposits.
-    function commitTeam(uint256 teamTokens, uint256 lockDur) external nonReentrant whenNotPaused {
+    /// @notice The team/treasury commits its native token — plus, optionally, a slug of USDC — as the
+    ///         junior first-loss reserve, and locks it for `lockDur` (hard cliff, >= 90 days). Opens the
+    ///         vault for community deposits.
+    /// @param  teamTokens the team's native token (the LP's volatile junior leg). Required.
+    /// @param  juniorUSDC OPTIONAL stable first-loss coverage (0 for the pure-ETH tranche). Held on hand,
+    ///                    excluded from the senior view, drawn only to absorb a senior shortfall.
+    /// @param  lockDur    junior hard cliff (>= 90 days).
+    function commitTeam(uint256 teamTokens, uint256 juniorUSDC, uint256 lockDur)
+        external nonReentrant whenNotPaused
+    {
         if (activated) revert AlreadyActivated();
         if (teamTokens == 0) revert ZeroAmount();
         if (lockDur < MIN_LOCK_DURATION || lockDur > MAX_LOCK_DURATION) revert BadParam();
@@ -178,7 +203,13 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         teamToken.safeTransferFrom(msg.sender, address(this), teamTokens);
         juniorTokens += teamTokens;
 
-        emit TeamCommitted(msg.sender, teamTokens, lockExpiry);
+        // Optional junior USDC: pulled in and held on hand as first-loss coverage (not idled to Aave).
+        if (juniorUSDC > 0) {
+            usdc.safeTransferFrom(msg.sender, address(this), juniorUSDC);
+            juniorUsdcBuffer += juniorUSDC;
+        }
+
+        emit TeamCommitted(msg.sender, teamTokens, juniorUSDC, lockExpiry);
     }
 
     /// @notice Post-cliff, the team redeems the junior: its remaining token reserve plus any junior
@@ -191,9 +222,12 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         teamFeesRedirected = false;
 
         uint256 tok = juniorTokens;
-        uint256 cash = reservedJuniorUSDC;
+        // The junior's residual USDC = its fee earmark (reservedJuniorUSDC) + whatever first-loss
+        // coverage went unused (juniorUsdcBuffer). Both are held on hand; hand them back.
+        uint256 cash = reservedJuniorUSDC + juniorUsdcBuffer;
         juniorTokens = 0;
         reservedJuniorUSDC = 0;
+        juniorUsdcBuffer = 0;
 
         if (tok > 0)  teamToken.safeTransfer(team, tok);
         if (cash > 0) { _pullUSDC(cash); usdc.safeTransfer(team, cash); }
@@ -203,12 +237,19 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
 
     // ── senior views / conversions (price-free) ───────────────────────────────────
 
+    /// @dev USDC on hand that belongs to the SENIOR — the vault balance minus BOTH junior earmarks
+    ///      (`reservedJuniorUSDC` post-lock fee cut + `juniorUsdcBuffer` first-loss coverage). Never
+    ///      negative. The SINGLE definition of "free senior buffer" used by the NAV, the liquidity gate,
+    ///      and the payment waterfall — so the junior's USDC can never leak into a senior view.
+    function _freeSeniorBuffer() internal view returns (uint256) {
+        uint256 bal = usdc.balanceOf(address(this));
+        uint256 reserved = reservedJuniorUSDC + juniorUsdcBuffer;
+        return bal > reserved ? bal - reserved : 0;
+    }
+
     /// @notice The senior claim in USDC — Aave idle + free senior buffer + deployed senior par. NO price.
     function totalSeniorAssets() public view returns (uint256) {
-        uint256 buffer = usdc.balanceOf(address(this));
-        // free senior buffer excludes junior-reserved cash; guard against transient underflow.
-        uint256 freeBuffer = buffer > reservedJuniorUSDC ? buffer - reservedJuniorUSDC : 0;
-        return adapter.totalAssets() + freeBuffer + deployedFromSenior;
+        return adapter.totalAssets() + _freeSeniorBuffer() + deployedFromSenior;
     }
 
     function previewDeposit(uint256 assets) public view returns (uint256) {
@@ -231,10 +272,8 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     ///      reporting only makes a settlement safely reject; it never risks funds. (The LP is a
     ///      deeper, slower fallback used inside `_pullUSDC`, not advertised here.)
     function idleBuffer() external view returns (uint256) {
-        uint256 buffer = usdc.balanceOf(address(this));
-        uint256 freeBuffer = buffer > reservedJuniorUSDC ? buffer - reservedJuniorUSDC : 0;
         uint256 fromAave = Math.min(adapter.totalAssets(), adapter.maxWithdrawable());
-        return freeBuffer + fromAave;
+        return _freeSeniorBuffer() + fromAave;
     }
 
     function _toShares(uint256 assets, uint256 ta, Math.Rounding r) internal view returns (uint256) {
@@ -386,9 +425,10 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
             }
         }
         // The remainder (100% during lock; 60% community after) stays as senior buffer → lifts NAV.
+        // Supply only the FREE senior buffer to Aave — both junior earmarks (fee cut + first-loss USDC
+        // buffer) stay physically on hand.
         uint256 toSenior = collected - toJunior - toProtocol;
-        _supplyToAdapter(usdc.balanceOf(address(this)) > reservedJuniorUSDC
-            ? usdc.balanceOf(address(this)) - reservedJuniorUSDC : 0);
+        _supplyToAdapter(_freeSeniorBuffer());
 
         emit FeesAccrued(collected, toSenior, toJunior, toProtocol);
     }
@@ -423,23 +463,32 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         catch { usdc.forceApprove(address(adapter), 0); }
     }
 
-    /// @dev Ensure the vault holds >= `need` USDC on hand to pay the senior. Waterfall: free buffer →
-    ///      Aave → LP (junior-backed). Reverts `InsufficientIdleLiquidity` rather than underpay — the
-    ///      senior is never settled below par (liveness, not principal, is sacrificed in the tail).
+    /// @dev Ensure the vault holds >= `need` USDC on hand to pay the senior. Waterfall: free senior
+    ///      buffer → Aave → LP (junior team leg) → junior USDC buffer (first-loss). Reverts
+    ///      `InsufficientIdleLiquidity` rather than underpay — the senior is never settled below par
+    ///      (liveness, not principal, is sacrificed only once the WHOLE junior stack is exhausted).
     function _pullUSDC(uint256 need) internal {
-        // "on hand for the senior" excludes junior-reserved cash.
-        uint256 bal = usdc.balanceOf(address(this));
-        uint256 freeOnHand = bal > reservedJuniorUSDC ? bal - reservedJuniorUSDC : 0;
+        uint256 freeOnHand = _freeSeniorBuffer();
         if (freeOnHand >= need) return;
 
         uint256 short = need - freeOnHand;
         uint256 got = adapter.withdraw(short);               // best-effort
         if (got < short && address(liquidityModule) != address(0)) {
-            _recoverFromLP(short - got);                      // deeper fallback: unwind LP (junior-backed)
+            _recoverFromLP(short - got);                      // deeper fallback: unwind LP (junior team leg)
         }
 
-        bal = usdc.balanceOf(address(this));
-        freeOnHand = bal > reservedJuniorUSDC ? bal - reservedJuniorUSDC : 0;
+        freeOnHand = _freeSeniorBuffer();
+        if (freeOnHand < need && juniorUsdcBuffer > 0) {
+            // LAST RESORT: the junior USDC buffer absorbs the residual senior shortfall (first-loss).
+            // Decrementing the earmark makes exactly that much held USDC senior-spendable; the amount
+            // absorbed is a permanent loss to the junior, never to the senior.
+            uint256 stillShort = need - freeOnHand;
+            uint256 draw = stillShort < juniorUsdcBuffer ? stillShort : juniorUsdcBuffer;
+            juniorUsdcBuffer -= draw;
+            emit JuniorUsdcAbsorbed(draw);
+            freeOnHand = _freeSeniorBuffer();
+        }
+
         if (freeOnHand < need) revert InsufficientIdleLiquidity();
     }
 }

@@ -208,6 +208,7 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
 
     uint256 internal constant INIT_PRICE = 1_000_000;    // 1 USDC (6dp) per 1e18 team token
     uint256 internal constant LOCK_DUR   = 365 days;
+    uint256 internal constant JUNIOR_USDC_SEED = 50_000_000_000; // $50k stable first-loss coverage
 
     /// @dev The two coverage invariants compare the vault's EXACT senior par (integer USDC) against the
     ///      MOCK's constant-product MTM view (`recoverableUSDC` = resUsdc + resTeam·price/1e18), whose
@@ -234,11 +235,14 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         vault.setProtocolTreasury(protocol);
         vm.stopPrank();
 
-        // team commits the junior first-loss reserve and opens the vault.
+        // team commits the junior first-loss reserve — team ETH + a stable junior USDC buffer — and
+        // opens the vault.
         team.mint(teamAddr, 5_000_000 ether);
+        usdc.mint(teamAddr, JUNIOR_USDC_SEED);
         vm.startPrank(teamAddr);
         team.approve(address(vault), type(uint256).max);
-        vault.commitTeam(5_000_000 ether, LOCK_DUR);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.commitTeam(5_000_000 ether, JUNIOR_USDC_SEED, LOCK_DUR);
         vm.stopPrank();
 
         // four community actors, each funded + approved.
@@ -281,10 +285,11 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         targetContract(address(handler));
     }
 
-    // free senior buffer = vault USDC on hand minus junior-reserved cash (never negative).
+    // free SENIOR buffer = vault USDC on hand minus BOTH junior earmarks (fee cut + first-loss USDC
+    // buffer), never negative — mirrors the contract's `_freeSeniorBuffer()`.
     function _freeBuffer() internal view returns (uint256) {
         uint256 bal = usdc.balanceOf(address(vault));
-        uint256 r = vault.reservedJuniorUSDC();
+        uint256 r = vault.reservedJuniorUSDC() + vault.juniorUsdcBuffer();
         return bal > r ? bal - r : 0;
     }
 
@@ -298,13 +303,13 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         assertLt(module.minPriceSeen(), INIT_PRICE, "price never dropped below par");
     }
 
-    // ── HEADLINE: the junior buffer still covers the senior par ────────────────────
+    // ── HEADLINE: the junior STACK (LP-recoverable + stable USDC buffer) covers the senior par ──────
     //    (+MOCK_CP_DUST absorbs the mock's constant-product integer-rounding — see its NatSpec.)
     function invariant_senior_par_covered() public view {
         assertLe(
             vault.deployedFromSenior(),
-            module.recoverableUSDC() + MOCK_CP_DUST,
-            "deployed senior par exceeds recoverable LP USDC (junior no longer covers senior)"
+            module.recoverableUSDC() + vault.juniorUsdcBuffer() + MOCK_CP_DUST,
+            "deployed senior par exceeds the junior stack (recoverable LP USDC + first-loss buffer)"
         );
     }
 
@@ -312,7 +317,7 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     function invariant_senior_fully_backed() public view {
         assertLe(
             vault.totalSeniorAssets(),
-            adapter.totalAssets() + _freeBuffer() + module.recoverableUSDC() + MOCK_CP_DUST,
+            adapter.totalAssets() + _freeBuffer() + module.recoverableUSDC() + vault.juniorUsdcBuffer() + MOCK_CP_DUST,
             "senior claim exceeds recoverable backing"
         );
     }
@@ -350,16 +355,17 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
             + handler.totalUsdcOut();
         uint256 sources = handler.totalDeposited()
             + handler.totalYieldMinted()
-            + module.totalMintedUsdc();
+            + module.totalMintedUsdc()
+            + JUNIOR_USDC_SEED; // the team's committed junior USDC entered the vault at commit
         assertEq(inSystem, sources, "USDC conservation broke (value created or destroyed)");
     }
 
-    // ── junior-earmarked cash is always physically on hand ─────────────────────────
+    // ── junior-earmarked cash (fee cut + first-loss buffer) is always physically on hand ───────────
     function invariant_reserved_junior_backed() public view {
         assertLe(
-            vault.reservedJuniorUSDC(),
+            vault.reservedJuniorUSDC() + vault.juniorUsdcBuffer(),
             usdc.balanceOf(address(vault)),
-            "reserved junior cash exceeds vault USDC on hand"
+            "junior earmarks (reserved + first-loss buffer) exceed vault USDC on hand"
         );
     }
 
