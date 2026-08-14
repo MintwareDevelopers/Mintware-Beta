@@ -65,6 +65,9 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     uint256 public jitThreshold;
     /// @notice JIT range width, in tickSpacings, to one side of the live tick.
     int24 public jitWidthSpacings = 3;
+    /// @notice Swaps initiated by this address never fire JIT — set to the LP module, whose own
+    ///         recover/collect swaps must NOT recursively borrow + open a JIT position.
+    address public jitSkipSender;
 
     // ── per-swap open state (0 between swaps) ──────────────────────────────────
     uint128 private jitLiquidity;
@@ -125,12 +128,14 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     // ── admin ──────────────────────────────────────────────────────────────────
     function setJitThreshold(uint256 t) external onlyOwner { jitThreshold = t; emit JitThresholdSet(t); }
     function setJitWidth(int24 s) external onlyOwner { require(s > 0, "width"); jitWidthSpacings = s; emit JitWidthSet(s); }
+    /// @notice Exempt an initiator (the LP module) from firing JIT on its own swaps.
+    function setJitSkipSender(address s) external onlyOwner { jitSkipSender = s; }
 
     // ── IHooks: the two active callbacks ────────────────────────────────────────
 
     /// @notice On a team→USDC swap (output = USDC), borrow a bounded slice + open a tight single-sided
     ///         USDC position. Never reverts the swap path (a revert would brick the pool).
-    function beforeSwap(address, PoolKey calldata key, SwapParams calldata params, bytes calldata)
+    function beforeSwap(address sender, PoolKey calldata key, SwapParams calldata params, bytes calldata)
         external override onlyPoolManager returns (bytes4, BeforeSwapDelta, uint24)
     {
         bool usdcIsOutput = params.zeroForOne ? !usdcIsCurrency0 : usdcIsCurrency0;
@@ -138,7 +143,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
             ? uint256(-params.amountSpecified)
             : uint256(params.amountSpecified);
 
-        if (usdcIsOutput && mag >= jitThreshold) {
+        if (usdcIsOutput && mag >= jitThreshold && sender != jitSkipSender) {
             _open(key, params.zeroForOne, mag);
         }
         return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);

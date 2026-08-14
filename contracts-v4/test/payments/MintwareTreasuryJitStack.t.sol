@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
+
+import {Test} from "forge-std/Test.sol";
+
+import {PoolManager}           from "@uniswap/v4-core/src/PoolManager.sol";
+import {IPoolManager}          from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks}                from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
+import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
+
+import {HookMiner}                 from "../../src/lib/HookMiner.sol";
+import {MintwareTreasuryVault}     from "../../src/payments/MintwareTreasuryVault.sol";
+import {MintwareV4LiquidityModule} from "../../src/payments/MintwareV4LiquidityModule.sol";
+import {MintwareTreasuryJitHook}   from "../../src/payments/MintwareTreasuryJitHook.sol";
+
+import {MockERC20}        from "../mocks/MockERC20.sol";
+import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
+
+/// @notice Increment 3 of #5: the JIT hook composed IN FRONT of the passive module on one pool (the
+///         DeployTreasuryV2 hooked assembly). Proves the two coexist — the module deploys/recovers
+///         liquidity on the hooked pool — and, critically, that the module's OWN recover swap does NOT
+///         fire JIT (the skip-sender exemption), while a real trader's team→USDC swap does.
+contract MintwareTreasuryJitStackTest is Test {
+    PoolManager             internal pm;
+    TestSwapRouter          internal swapRouter;
+    PoolModifyLiquidityTest internal lpRouter;
+
+    MockERC20                internal usdc; // 6dp
+    MockERC20                internal team; // 6dp
+    MockYieldAdapter         internal adapter;
+    MintwareTreasuryVault    internal vault;
+    MintwareV4LiquidityModule internal module;
+    MintwareTreasuryJitHook  internal hook;
+    PoolKey                  internal key;
+
+    address internal teamAddr = makeAddr("team");
+    address internal user     = makeAddr("user");
+    address internal trader   = makeAddr("trader");
+
+    uint160 internal constant INIT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
+    int24   internal constant SPACING = 60;
+    uint256 internal constant ONE = 1e6;
+
+    function setUp() public {
+        pm         = new PoolManager(address(this));
+        swapRouter = new TestSwapRouter(IPoolManager(address(pm)));
+        lpRouter   = new PoolModifyLiquidityTest(IPoolManager(address(pm)));
+
+        usdc = new MockERC20("USD Coin", "USDC", 6);
+        team = new MockERC20("Team Token", "TEAM", 6);
+        adapter = new MockYieldAdapter(address(usdc));
+        vault = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), address(this));
+
+        (Currency c0, Currency c1) = address(usdc) < address(team)
+            ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
+            : (Currency.wrap(address(team)), Currency.wrap(address(usdc)));
+
+        // Mirror DeployTreasuryV2: mine the hook, open the pool WITH it, wire the module + skip-sender.
+        PoolKey memory ctorKey = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
+        bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), address(vault), address(this));
+        (address hookAddr, bytes32 salt) =
+            HookMiner.find(address(this), uint160(0xC0), type(MintwareTreasuryJitHook).creationCode, args);
+        hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), address(vault), address(this));
+        require(address(hook) == hookAddr, "hook addr");
+
+        key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(hookAddr)});
+        pm.initialize(key, INIT_SQRT_PRICE);
+
+        module = new MintwareV4LiquidityModule(address(pm), key, address(usdc), address(vault), address(this));
+        vault.setLiquidityModule(address(module));
+        vault.setJitHook(address(hook));
+        hook.setJitSkipSender(address(module));
+
+        // Team + community.
+        team.mint(teamAddr, 1_000_000 * ONE);
+        usdc.mint(teamAddr, 5_000 * ONE);
+        vm.startPrank(teamAddr);
+        team.approve(address(vault), type(uint256).max);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.commitTeam(1_000_000 * ONE, 5_000 * ONE, 365 days);
+        vm.stopPrank();
+        usdc.mint(user, 10_000 * ONE);
+        vm.startPrank(user);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.depositUSDC(10_000 * ONE, 0, user);
+        vm.stopPrank();
+
+        // Deep baseline liquidity on the hooked pool (hook has no liquidity-callback → adds freely).
+        usdc.mint(address(this), 50_000_000 * ONE);
+        team.mint(address(this), 50_000_000 * ONE);
+        usdc.approve(address(lpRouter), type(uint256).max);
+        team.approve(address(lpRouter), type(uint256).max);
+        int24 lo = (TickMath.MIN_TICK / SPACING) * SPACING;
+        int24 hi = (TickMath.MAX_TICK / SPACING) * SPACING;
+        lpRouter.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: 5_000_000 * int256(uint256(ONE)), salt: bytes32(0)}),
+            ""
+        );
+    }
+
+    function _sellTeamZeroForOne() internal view returns (bool) {
+        return address(team) < address(usdc);
+    }
+
+    function test_module_deploys_on_hooked_pool_and_skips_jit_on_its_own_swaps() public {
+        // 1. The module deploys senior LP on the HOOKED pool — coexists with the hook.
+        uint256 jt = vault.juniorTokens();
+        vault.deployToLP(200 * ONE, jt);
+        assertGt(vault.deployedFromSenior(), 0, "module could not deploy on the hooked pool");
+        assertLe(vault.deployedFromSenior(), module.recoverableUSDC() + vault.juniorUsdcBuffer(), "invariant");
+
+        // 2. A real trader's team→USDC swap FIRES JIT.
+        team.mint(trader, 1_000_000 * ONE);
+        vm.startPrank(trader);
+        team.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, _sellTeamZeroForOne(), 3_000 * ONE);
+        vm.stopPrank();
+        assertGt(vault.jitBorrowed(), 0, "trader swap did not fire JIT");
+        hook.sweepJit();
+        assertEq(vault.jitBorrowed(), 0, "sweep did not clear JIT");
+
+        // 3. The MODULE's OWN recover swap (team→USDC) must NOT fire JIT — the skip-sender exemption.
+        uint256 deployedBefore = vault.deployedFromSenior();
+        vault.recoverFromLP(50 * ONE); // owner → module.recover → team→USDC swap, sender = module
+        assertEq(vault.jitBorrowed(), 0, "module's own recover swap must not fire JIT");
+        assertLt(vault.deployedFromSenior(), deployedBefore, "recover did not unwind LP");
+    }
+
+    function test_skipSender_is_owner_gated_and_settable() public {
+        assertEq(hook.jitSkipSender(), address(module));
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        hook.setJitSkipSender(address(0xdead));
+    }
+}
