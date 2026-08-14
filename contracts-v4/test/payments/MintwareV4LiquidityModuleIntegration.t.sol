@@ -79,7 +79,7 @@ contract MintwareV4LiquidityModuleIntegrationTest is Test {
         team.mint(teamAddr, TEAM_COMMIT);
         vm.startPrank(teamAddr);
         team.approve(address(vault), type(uint256).max);
-        vault.commitTeam(TEAM_COMMIT, 365 days);
+        vault.commitTeam(TEAM_COMMIT, 0, 365 days);
         vm.stopPrank();
 
         // Deep baseline pool liquidity so the module's seniority swaps have realistic depth.
