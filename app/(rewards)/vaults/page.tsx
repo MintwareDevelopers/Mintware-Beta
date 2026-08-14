@@ -16,8 +16,8 @@ const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
 
 const HEAD = ['Liquidity that ', 'never sits idle.'] as const
-const SUB = 'MEV-protected, auto-managed LP on Uniswap V4. Your Attribution score and lock tier lift your fee share — so the exact same position earns you more than the wallet next to you.'
-const BULLETS = ['MEV protection — V4 hooks route bot value back to LPs', 'Auto-managed range — no rebalancing', 'Idle capital routed to yield', 'Reputation fee share, up to 1.95×']
+const SUB = 'Managed liquidity on Uniswap v4 where one balance earns three ways at once — Aave lending, swap fees, and recaptured MEV — with an auto-managed range and no rebalancing. And the LPs who bring real, committed liquidity earn the biggest share.'
+const BULLETS = ['Three income streams — Aave lending + swap fees + recaptured MEV', 'Auto-managed range — no rebalancing', 'MEV-protected — bot value routed back to LPs', 'The best LPs earn more — reputation + lock tier, up to 1.95×']
 const FEATURED: [string, string, string][] = [['Social Blue-Chip', 'ETH / USDC', '11.0%'], ['Degen Emerging', 'ARB / USDC', '18.4%']]
 
 // The two ways to LP.
