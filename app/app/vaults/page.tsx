@@ -110,12 +110,11 @@ export default function AppVaultsPage() {
               </button>
             ))}
           </div>
-          <Link href="/app/vault/create" className="glass-pill glass-pill-sm">+ Create vault</Link>
         </div>
 
         {useMock && (
           <div className="rounded-2xl bg-white border border-hair px-3.5 py-2.5 text-[12px] text-[#D14343] mb-4 flex items-center gap-2" style={{ borderLeft: '3px solid #D14343' }}>
-            Showing example vault — no vaults have been seeded yet. Deploy a pool via the create flow to get started.
+            Showing an example vault — real pools appear here once curators seed them.
           </div>
         )}
 
