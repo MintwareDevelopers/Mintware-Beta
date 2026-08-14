@@ -86,12 +86,12 @@ export default function DefiLandingPage() {
       {/* ── HERO ── */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
-          <div className={ey}>DeFi surface · reputation-weighted yield</div>
+          <div className={ey}>The vault engine · never idle</div>
           <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[16ch] [text-wrap:balance]">
-            Same deposit. <span className="text-peri">More yield.</span>
+            One deposit. <span className="text-peri">Three income streams.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            MEV-protected, auto-managed liquidity on Uniswap V4 — where your Attribution score lifts your fee share. Two wallets deposit the same amount into the same vault; the one with the stronger on-chain history earns more. Something no capital-only vault can offer.
+            MEV-protected, auto-managed liquidity on Uniswap v4 — one balance earning three ways at once: Aave lending, swap fees, and recaptured MEV, with no rebalancing. And your Attribution score lifts your fee share, so two wallets deposit the same and the stronger on-chain history earns more — something no capital-only vault can offer.
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
             <Link href="/vaults" className="glass-pill">Open the vaults →</Link>
