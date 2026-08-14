@@ -75,8 +75,10 @@ async fn main() {
                     .filter_map(|s| s.trim().parse().ok())
                     .collect();
                 let interval = Duration::from_secs(env_u64("EDGE_NAV_REFRESH_SECS", 15));
-                eprintln!("edge-auth: NAV refresher polling {vault} every {}s, tracking {} user(s)", interval.as_secs(), users.len());
-                tokio::spawn(run_refresher(store.clone(), EthReader::new(rpc, vault), users, interval));
+                // EDGE_VAULT_KIND=v2 reads the treasury vault's senior tranche; default (unset) = v1.
+                let kind = edge_auth::chain::VaultKind::from_env_str(&env::var("EDGE_VAULT_KIND").unwrap_or_default());
+                eprintln!("edge-auth: NAV refresher polling {vault} ({kind:?}) every {}s, tracking {} user(s)", interval.as_secs(), users.len());
+                tokio::spawn(run_refresher(store.clone(), EthReader::with_kind(rpc, vault, kind), users, interval));
             }
             Err(_) => eprintln!("edge-auth: EDGE_VAULT_ADDRESS is not a valid address — refresher DISABLED"),
         },
