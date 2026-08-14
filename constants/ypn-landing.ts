@@ -216,6 +216,31 @@ export const YPN_ETHOS = {
   quote: 'Never idle, never locked, always yours.',
 } as const
 
+// ─── Built & proven (BuiltProofSection) — the mechanism + real testnet status ──
+// HONESTY: every claim below is literally true on Base Sepolia today. What is NOT
+// yet done stays explicit: no audit, no mainnet, card rail (Circle · Visa) in
+// integration. "Coming soon" = the launch, not the technology.
+export const YPN_PROOF = {
+  eyebrow: 'Built in the open',
+  title: 'Not a pitch deck. A working stack.',
+  intro:
+    'Here is exactly how a swipe works — and where each piece already stands. The on-chain payment core is deployed, on-chain-verified, and invariant-proven on Base Sepolia. “Coming soon” is the mainnet launch and the card rail — not the technology.',
+  steps: [
+    { n: '01', k: 'Earn', d: 'Your USDC idles in Aave near par, compounding lending yield plus its share of vault fees — always working.' },
+    { n: '02', k: 'Authorize', d: 'A swipe is decided in sub-150ms off a cached vault NAV — no chain call in the hot path. A hold reserves the exact amount.' },
+    { n: '03', k: 'Settle', d: 'Asynchronously, just enough shares burn against the idle buffer and USDC pays the rail. Nothing is custodied off-chain.' },
+  ],
+  priceFree:
+    'Because a share is a clean USDC claim — no oracle, no drift — authorization is price-free and exact.',
+  proof: [
+    { k: 'Payment core — deployed + verified', d: 'Yield vault, gateway, and Aave adapter live and on-chain-verified on Base Sepolia.' },
+    { k: 'Solvency — invariant-proven', d: 'The vault’s solvency property fuzzed to 256×128k calls, zero failures.' },
+    { k: 'Settlement — proven end-to-end', d: 'Deposit → EIP-712 permit → settle → burn-for-payment, exercised on-chain.' },
+    { k: 'Non-custodial by construction', d: 'Funds only ever move vault → rail; the auth engine reserves capacity, it never holds money.' },
+  ],
+  note: 'In testing on Base Sepolia — not audited, not mainnet, not an offer to deposit. The card rail (Circle · Visa) is in integration.',
+} as const
+
 // ─── Home-embed teaser (YieldPaymentNetworkSection) ─────────────────────────
 export const YPN_TEASER = {
   eyebrow: '✴ Mintware Liquid Sovereign Account',

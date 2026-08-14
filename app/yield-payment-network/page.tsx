@@ -7,6 +7,7 @@ import { ValuePropMatrixTable } from '@/components/marketing/ypn/ValuePropMatrix
 import { YieldCalculatorWidget } from '@/components/marketing/ypn/YieldCalculatorWidget'
 import { CircleTechBadge } from '@/components/marketing/ypn/CircleTechBadge'
 import { CoreMechanismSection } from '@/components/marketing/ypn/CoreMechanismSection'
+import { BuiltProofSection } from '@/components/marketing/ypn/BuiltProofSection'
 import { AppConversionCTA } from '@/components/marketing/ypn/AppConversionCTA'
 import { YPN_ETHOS } from '@/constants/ypn-landing'
 
@@ -34,6 +35,7 @@ export default function YieldPaymentNetworkPage() {
       <CoreMechanismSection />
       <PillarArchitectureDiagram />
       <PillarCardGrid />
+      <BuiltProofSection />
 
       {/* Ethos — liquidity as a public good */}
       <section className="bg-ground-cool border-b border-hair-soft">
