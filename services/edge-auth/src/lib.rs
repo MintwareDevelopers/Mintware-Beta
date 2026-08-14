@@ -1,0 +1,71 @@
+//! YPN edge-auth engine — the head of the off-chain payment pipeline.
+//!
+//! Answers a card authorization in sub-150ms off a *cached* vault NAV, without touching the chain in
+//! the hot path. This crate is increment 1: the **authorization decision core** — pure risk logic that
+//! decides APPROVE/DECLINE and sizes a hold. HTTP (axum), Redis-backed holds, on-chain NAV refresh, and
+//! the EDGE_SIGNER are later increments (see `docs/developers/ypn-edge-auth-spec.md`).
+//!
+//! The core never moves funds; it only reserves spending capacity (a hold). Settlement is the live
+//! on-chain `MintwarePaymentGateway`, driven later by the relayer.
+
+pub mod chain;
+pub mod ledger;
+pub mod nav;
+pub mod redis_lua;
+pub mod refresher;
+pub mod server;
+pub mod signer;
+pub mod store;
+pub mod types;
+pub mod webhook;
+
+pub use ledger::{authorize, available, Account, Decision, Decline, Global};
+pub use nav::{NavSnapshot, VaultCollateral};
+pub use store::{AuthOutcome, Hold, HoldStatus, MemStore};
+
+/// USDC amount, 6 decimals (matches the on-chain settlement asset).
+pub type Usdc = u128;
+/// Vault share amount.
+pub type Shares = u128;
+
+/// `a * b / c`, rounding DOWN, computed in 256-bit so the intermediate product never overflows.
+///
+/// Mirrors the vault's `mulDiv(..., Rounding.Floor)`. The ETH-collateral path multiplies a whale's
+/// asset amount (`~1e22`) by a virtual-offset ratio and a price, whose product exceeds `u128`; a
+/// `U256` intermediate is exact for any input. Never panics: `c == 0` degrades to 0 (a payment path
+/// must not panic), and the result clamps to `u128::MAX` if it somehow wouldn't fit.
+pub(crate) fn mul_div_floor(a: u128, b: u128, c: u128) -> u128 {
+    if c == 0 {
+        return 0;
+    }
+    let prod = alloy_primitives::U256::from(a) * alloy_primitives::U256::from(b);
+    let quot = prod / alloy_primitives::U256::from(c);
+    u128::try_from(quot).unwrap_or(u128::MAX)
+}
+
+#[cfg(test)]
+mod mul_div_tests {
+    use super::mul_div_floor;
+
+    #[test]
+    fn basic_floor() {
+        assert_eq!(mul_div_floor(10, 3, 4), 7); // 30/4 = 7.5 -> 7
+        assert_eq!(mul_div_floor(0, 5, 7), 0);
+        assert_eq!(mul_div_floor(1_000_000, 1, 1), 1_000_000);
+    }
+
+    #[test]
+    fn no_overflow_on_huge_product() {
+        // a*b overflows u128 (both ~1.8e38); the reduced path must still give a*b/c exactly.
+        let a = u128::MAX / 2;
+        let b = 4u128;
+        let c = 8u128;
+        // (MAX/2 * 4) / 8 == MAX/2 / 2 == MAX/4
+        assert_eq!(mul_div_floor(a, b, c), a / 2);
+    }
+
+    #[test]
+    fn div_by_zero_is_zero_not_panic() {
+        assert_eq!(mul_div_floor(5, 5, 0), 0);
+    }
+}
