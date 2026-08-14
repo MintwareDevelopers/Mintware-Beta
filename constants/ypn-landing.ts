@@ -218,9 +218,9 @@ export const YPN_ETHOS = {
 
 // ─── Home-embed teaser (YieldPaymentNetworkSection) ─────────────────────────
 export const YPN_TEASER = {
-  eyebrow: '✴ Mintware Liquid Sovereign Account',
+  eyebrow: 'Mintware Liquid Sovereign Account',
   title: 'Earn while you spend',
-  body: 'Institutional yield on your idle USDC — Aave v3 + Uniswap v4 MEV recapture — designed to stay instantly spendable at Visa terminals in sub-400ms. Principal never touched.',
+  body: 'That’s the other half: the yield your balance earns is spendable at the point of sale. Tap to pay while your capital keeps working — no unwinding, no cashing out, principal never touched.',
   cta: 'Explore the Liquid Sovereign Account',
   href: '/yield-payment-network',
 } as const

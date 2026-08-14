@@ -249,16 +249,6 @@ export default function HomePage() {
             <button onClick={() => launchApp()} className="glass-pill">{launchLabel}</button>
             <a href="#how-it-works" className="text-[14px] font-medium text-ink-mid hover:text-ink no-underline inline-flex items-center min-h-[44px]">Check your score ↓</a>
           </div>
-
-          {/* proof strip — honest, evergreen facts */}
-          <div className="soft-card w-full max-w-[720px] grid grid-cols-3 max-[520px]:grid-cols-1 mt-10 overflow-hidden text-center">
-            {[['925', 'max score'], ['100+', 'chains scored'], ['EAS', 'attested on Base']].map(([n, k], i) => (
-              <div key={k} className={`px-5 py-5 ${i < 2 ? 'border-r border-hair-soft max-[520px]:border-r-0 max-[520px]:border-b max-[520px]:border-hair-soft' : ''}`}>
-                <div className="font-atx-display text-[22px] font-medium tracking-tight text-ink">{n}</div>
-                <div className="text-[10px] uppercase tracking-[0.1em] text-ink-soft mt-1">{k}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
