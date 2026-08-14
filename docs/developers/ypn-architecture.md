@@ -192,6 +192,8 @@ settlement slippage, per-asset and governance-tunable. Seam now, ship later.
   with `cargo` inside each. Not in the JS/Forge CI yet — add a `cargo test` job when wiring ops.
 - **Deploy routes (Privy server wallet, bearer/`CRON_SECRET`):**
   `POST /api/oracle/deploy-ypn-v1-testnet`, `POST /api/oracle/smoke-ypn-v1-testnet`.
-- **Key env:** `EDGE_RPC_URL`, `EDGE_VAULT_ADDRESS`, `EDGE_USERS`, `EDGE_MAX_NAV_AGE_SECS`,
-  `EDGE_HOLD_TTL_SECS`, `EDGE_SIGNER_KEY`, `EDGE_GATEWAY_ADDRESS`, `EDGE_CHAIN_ID`,
-  `EDGE_RAIN_WEBHOOK_SECRET`; relayer `RELAYER_RPC_URL`, `RELAYER_KEY`.
+- **Key env:** `EDGE_RPC_URL`, `EDGE_VAULT_ADDRESS`, `EDGE_VAULT_KIND` (`v1` default | `v2` for the
+  treasury vault — reads its senior tranche `totalSeniorAssets`/`totalSeniorShares`/`seniorShares`),
+  `EDGE_USERS`, `EDGE_MAX_NAV_AGE_SECS`, `EDGE_HOLD_TTL_SECS`, `EDGE_SIGNER_KEY`,
+  `EDGE_GATEWAY_ADDRESS`, `EDGE_CHAIN_ID`, `EDGE_RAIN_WEBHOOK_SECRET`; relayer `RELAYER_RPC_URL`,
+  `RELAYER_KEY`.

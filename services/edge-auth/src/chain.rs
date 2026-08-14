@@ -12,14 +12,40 @@ use serde_json::json;
 use crate::nav::{NavSnapshot, VaultCollateral};
 
 sol! {
+    // v1 — MintwareYieldVault (single-asset USDC over Aave).
     function totalAssets() external view returns (uint256);
     function totalShares() external view returns (uint256);
-    function idleBuffer() external view returns (uint256);
     function shares(address account) external view returns (uint256);
+    // v2 — MintwareTreasuryVault. The SENIOR tranche is the card-spendable side; its NAV is what the
+    // edge values a charge against (the junior/team leg never backs a senior spend).
+    function totalSeniorAssets() external view returns (uint256);
+    function totalSeniorShares() external view returns (uint256);
+    function seniorShares(address account) external view returns (uint256);
+    // shared (IYieldVault) — same selector on both vaults.
+    function idleBuffer() external view returns (uint256);
 }
 
-/// `MintwareYieldVault.VIRTUAL` — a public constant (1e3), so we don't spend an RPC call reading it.
+/// The `VIRTUAL` inflation offset — a public constant `1e3` on BOTH vaults (v1 `MintwareYieldVault` and
+/// v2 `MintwareTreasuryVault` lift the senior share math verbatim), so we never spend an RPC call on it.
 const VAULT_VIRTUAL_OFFSET: u128 = 1_000;
+
+/// Which vault ABI the reader speaks. v1 exposes `totalAssets`/`totalShares`/`shares`; v2's payment side
+/// is the senior tranche (`totalSeniorAssets`/`totalSeniorShares`/`seniorShares`). `idleBuffer` is common.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultKind {
+    V1,
+    V2,
+}
+
+impl VaultKind {
+    /// Parse `EDGE_VAULT_KIND` — `v2`/`treasury` → V2, anything else (incl. unset) → V1 (back-compat).
+    pub fn from_env_str(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "v2" | "treasury" => VaultKind::V2,
+            _ => VaultKind::V1,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum ChainError {
@@ -46,15 +72,21 @@ pub struct EthReader {
     http: reqwest::Client,
     rpc_url: String,
     vault: Address,
+    kind: VaultKind,
 }
 
 impl EthReader {
+    /// v1 reader (back-compat default). Use `with_kind` for the v2 treasury vault.
     pub fn new(rpc_url: impl Into<String>, vault: Address) -> Self {
+        Self::with_kind(rpc_url, vault, VaultKind::V1)
+    }
+
+    pub fn with_kind(rpc_url: impl Into<String>, vault: Address, kind: VaultKind) -> Self {
         let http = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
             .expect("reqwest client");
-        Self { http, rpc_url: rpc_url.into(), vault }
+        Self { http, rpc_url: rpc_url.into(), vault, kind }
     }
 
     /// `eth_call` the vault with ABI-encoded `data`, returning the raw 32-byte-aligned result.
@@ -100,8 +132,12 @@ impl EthReader {
     /// Snapshot the vault's NAV. `observed_at_secs` is stamped by the caller (wall clock at fetch), so
     /// the store's freshness guard measures "time since we refreshed", not block time.
     pub async fn fetch_nav(&self, observed_at_secs: u64) -> Result<NavSnapshot, ChainError> {
-        let total_assets = self.read_u256(totalAssetsCall {}.abi_encode()).await?;
-        let total_shares = self.read_u256(totalSharesCall {}.abi_encode()).await?;
+        let (assets_call, shares_call) = match self.kind {
+            VaultKind::V1 => (totalAssetsCall {}.abi_encode(), totalSharesCall {}.abi_encode()),
+            VaultKind::V2 => (totalSeniorAssetsCall {}.abi_encode(), totalSeniorSharesCall {}.abi_encode()),
+        };
+        let total_assets = self.read_u256(assets_call).await?;
+        let total_shares = self.read_u256(shares_call).await?;
         let idle_buffer = self.read_u256(idleBufferCall {}.abi_encode()).await?;
         Ok(NavSnapshot {
             total_assets,
@@ -109,14 +145,19 @@ impl EthReader {
             virtual_offset: VAULT_VIRTUAL_OFFSET,
             idle_buffer,
             observed_at_secs,
-            // The v1 vault is single-asset USDC → price-free. Multi-collateral is a dark seam.
+            // Both vaults settle single-asset USDC → the senior claim is price-free. Multi-collateral
+            // (ETH/WETH with a haircut) is the dark seam in `nav.rs`, off until its gates are met.
             collateral: VaultCollateral::Usdc,
         })
     }
 
-    /// A user's current vault share balance.
+    /// A user's current senior share balance (the card-spendable claim).
     pub async fn fetch_shares(&self, user: Address) -> Result<u128, ChainError> {
-        self.read_u256(sharesCall { account: user }.abi_encode()).await
+        let call = match self.kind {
+            VaultKind::V1 => sharesCall { account: user }.abi_encode(),
+            VaultKind::V2 => seniorSharesCall { account: user }.abi_encode(),
+        };
+        self.read_u256(call).await
     }
 
     pub fn vault(&self) -> Address {
@@ -135,14 +176,32 @@ mod tests {
 
     #[test]
     fn call_encoding_has_the_right_selectors() {
-        // keccak256("totalAssets()")[..4] = 0x01e1d114, etc. — proves the ABI wiring without a node.
+        // keccak256(sig)[..4] — proves the ABI wiring (and each signature string) without a node.
+        // v1
         assert_eq!(hex::encode(&totalAssetsCall {}.abi_encode()[..4]), "01e1d114");
         assert_eq!(hex::encode(&totalSharesCall {}.abi_encode()[..4]), "3a98ef39");
-        // shares(address) encodes selector + 32-byte-padded address.
+        // v2 (MintwareTreasuryVault senior tranche)
+        assert_eq!(hex::encode(&totalSeniorAssetsCall {}.abi_encode()[..4]), "df43a90f");
+        assert_eq!(hex::encode(&totalSeniorSharesCall {}.abi_encode()[..4]), "5499afe2");
+        // shared
+        assert_eq!(hex::encode(&idleBufferCall {}.abi_encode()[..4]), "671d3e00");
+        // per-user share getters encode selector + 32-byte-padded address.
         let a: Address = "0x000000000000000000000000000000000000dEaD".parse().unwrap();
         let enc = sharesCall { account: a }.abi_encode();
         assert_eq!(enc.len(), 4 + 32);
         assert!(hex::encode(&enc).ends_with("000000000000000000000000000000000000dead"));
+        let enc2 = seniorSharesCall { account: a }.abi_encode();
+        assert_eq!(hex::encode(&enc2[..4]), "6e4a7e08"); // seniorShares(address)
+        assert!(hex::encode(&enc2).ends_with("000000000000000000000000000000000000dead"));
+    }
+
+    #[test]
+    fn vault_kind_parses_from_env() {
+        assert_eq!(VaultKind::from_env_str("v2"), VaultKind::V2);
+        assert_eq!(VaultKind::from_env_str("TREASURY"), VaultKind::V2);
+        assert_eq!(VaultKind::from_env_str("v1"), VaultKind::V1);
+        assert_eq!(VaultKind::from_env_str(""), VaultKind::V1); // unset → v1 back-compat
+        assert_eq!(VaultKind::from_env_str("garbage"), VaultKind::V1);
     }
 
     #[test]
@@ -161,8 +220,14 @@ mod tests {
                 return;
             }
         };
-        let vault: Address = "0x7d92083dc80627d89a2ced1d911ac2bc1eb2b4df".parse().unwrap();
-        let reader = EthReader::new(rpc, vault);
+        // Defaults to the live v1 vault; override with EDGE_VAULT_ADDRESS + EDGE_VAULT_KIND=v2 to
+        // validate against a deployed v2 treasury vault.
+        let vault: Address = std::env::var("EDGE_VAULT_ADDRESS")
+            .unwrap_or_else(|_| "0x7d92083dc80627d89a2ced1d911ac2bc1eb2b4df".into())
+            .parse()
+            .expect("EDGE_VAULT_ADDRESS");
+        let kind = VaultKind::from_env_str(&std::env::var("EDGE_VAULT_KIND").unwrap_or_default());
+        let reader = EthReader::with_kind(rpc, vault, kind);
         let nav = reader.fetch_nav(1_234_567).await.expect("fetch_nav");
         assert_eq!(nav.virtual_offset, 1_000);
         assert_eq!(nav.observed_at_secs, 1_234_567);
