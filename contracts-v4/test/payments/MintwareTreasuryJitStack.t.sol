@@ -138,4 +138,43 @@ contract MintwareTreasuryJitStackTest is Test {
         vm.expectRevert();
         hook.setJitSkipSender(address(0xdead));
     }
+
+    /// Increment 4: the solvency invariant re-proven with JIT LIVE. Across fuzzed swap sizes (and with
+    /// the module's LP optionally deployed), a JIT round-trip + sweep leaves the borrow cleared, the
+    /// module solvent, and the senior whole-or-up — the junior buffer backstops any JIT close cost.
+    function testFuzz_jitLive_keepsSeniorSolvent(uint256 m1, uint256 m2, bool withModuleLp) public {
+        if (withModuleLp) {
+            uint256 jt = vault.juniorTokens();
+            vault.deployToLP(200 * ONE, jt);
+        }
+        uint256 navBefore = vault.totalSeniorAssets();
+        uint256 bufBefore = vault.juniorUsdcBuffer();
+
+        // Bounded so each JIT slice (<=5% of $10k senior = $500) and its close cost stay well inside the
+        // $5k junior buffer — i.e. JIT never overshoots the backstop in this regime.
+        m1 = bound(m1, 100 * ONE, 40_000 * ONE);
+        m2 = bound(m2, 100 * ONE, 40_000 * ONE);
+
+        team.mint(trader, 200_000_000 * ONE);
+        usdc.mint(trader, 200_000_000 * ONE);
+        vm.startPrank(trader);
+        team.approve(address(swapRouter), type(uint256).max);
+        usdc.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, _sellTeamZeroForOne(), m1);  // team→USDC — fires JIT
+        swapRouter.swap(key, !_sellTeamZeroForOne(), m2); // USDC→team — no JIT
+        vm.stopPrank();
+
+        hook.sweepJit();
+
+        // (1) the borrow always reconciles to zero after a sweep.
+        assertEq(vault.jitBorrowed(), 0, "JIT borrow not cleared");
+        // (2) the module LP stays solvent (junior stack covers the deployed senior par).
+        if (withModuleLp) {
+            assertLe(vault.deployedFromSenior(), module.recoverableUSDC() + vault.juniorUsdcBuffer() + 2, "module insolvent under JIT");
+        }
+        // (3) the junior buffer only ever absorbs (never gains from JIT).
+        assertLe(vault.juniorUsdcBuffer(), bufBefore, "junior buffer grew from JIT");
+        // (4) the senior is whole-or-up — any JIT close cost came out of the junior first.
+        assertGe(vault.totalSeniorAssets() + 3, navBefore, "senior lost value the junior should have covered");
+    }
 }
