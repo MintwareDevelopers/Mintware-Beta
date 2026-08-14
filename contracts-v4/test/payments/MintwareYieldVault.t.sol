@@ -246,9 +246,9 @@ contract MintwareYieldVaultTest is Test {
         MintwarePaymentGateway.ShortLivedHoldAuth memory e = _edge(holdId, amount, 1, block.timestamp + 4 minutes);
         bytes memory esig = _signEdge(edgeKey, e);
 
-        uint256 before = usdc.balanceOf(receiver);
+        uint256 before = usdc.balanceOf(treasury); // AUDIT C1: settlement always lands at the treasury
         gateway.settleSpend(holdId, alice, amount, receiver, p, psig, e, esig);
-        assertEq(usdc.balanceOf(receiver) - before, amount, "high-value settle underpaid");
+        assertEq(usdc.balanceOf(treasury) - before, amount, "high-value settle underpaid");
     }
 
     function test_high_value_rejects_missing_edge_sig() public {
@@ -291,7 +291,7 @@ contract MintwareYieldVaultTest is Test {
         // SAME permit + nonce, different holdId → MUST succeed (nonce is revocation-only).
         gateway.settleSpend(keccak256("second"), alice, amount, receiver, p, sig, EMPTY_EDGE, "");
 
-        assertEq(usdc.balanceOf(receiver), 2 * amount, "second settle did not pay");
+        assertEq(usdc.balanceOf(treasury), 2 * amount, "second settle did not pay"); // AUDIT C1: treasury
         assertFalse(gateway.usedNonces(alice, 42), "nonce was consumed (regression!)");
     }
 
@@ -334,12 +334,13 @@ contract MintwareYieldVaultTest is Test {
     }
 
     function test_permit_daily_cap_enforced() public {
-        // permit cap $300 < protocol → permit binds.
-        MintwarePaymentGateway.DelegatedSpendPermit memory p = _permit(300 * ONE_USDC, 1, block.timestamp + 365 days);
+        // permit cap $150 < protocol → permit binds. Amounts kept < $250 CUMULATIVE so the edge-sig gate
+        // (AUDIT M2: now cumulative, not per-charge) does not shadow the daily-cap revert we're testing.
+        MintwarePaymentGateway.DelegatedSpendPermit memory p = _permit(150 * ONE_USDC, 1, block.timestamp + 365 days);
         bytes memory sig = _signPermit(aliceKey, p);
-        gateway.settleSpend(keccak256("p1"), alice, 200 * ONE_USDC, receiver, p, sig, EMPTY_EDGE, "");
+        gateway.settleSpend(keccak256("p1"), alice, 100 * ONE_USDC, receiver, p, sig, EMPTY_EDGE, "");
         vm.expectRevert(MintwarePaymentGateway.ExceedsDailySpendLimit.selector);
-        gateway.settleSpend(keccak256("p2"), alice, 200 * ONE_USDC, receiver, p, sig, EMPTY_EDGE, ""); // 400 > 300
+        gateway.settleSpend(keccak256("p2"), alice, 100 * ONE_USDC, receiver, p, sig, EMPTY_EDGE, ""); // 200 > 150 cap, 200 < 250 edge
     }
 
     function test_daily_cap_resets_next_day() public {
@@ -359,7 +360,7 @@ contract MintwareYieldVaultTest is Test {
         bytes32 r2 = keccak256("r2");
         MintwarePaymentGateway.ShortLivedHoldAuth memory e2 = _edge(r2, 900 * ONE_USDC, 2, nowTs + 4 minutes);
         gateway.settleSpend(r2, alice, 900 * ONE_USDC, receiver, p, sig, e2, _signEdge(edgeKey, e2));
-        assertEq(usdc.balanceOf(receiver), 1_800 * ONE_USDC, "cap did not reset next day");
+        assertEq(usdc.balanceOf(treasury), 1_800 * ONE_USDC, "cap did not reset next day"); // AUDIT C1: treasury
     }
 
     // ── idleBuffer gating ─────────────────────────────────────────────────────────

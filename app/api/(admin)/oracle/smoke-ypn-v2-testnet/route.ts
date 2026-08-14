@@ -73,6 +73,12 @@ export const POST = createHandler(async (req, ctx) => {
   const settleUsdc  = num(body.settleUsdc, 1_000_000n)   // $1
   const deployUsdc  = num(body.deployUsdc, 0n)           // skip by default
 
+  // AUDIT M7: bound the amounts (this route mints/approves against a caller-supplied vault; keep the
+  // testnet blast radius trivial) and settle must stay below the edge-sig threshold.
+  const MAX_AMT = 1_000_000_000n // $1k (6dp)
+  if (depositUsdc > MAX_AMT || deployUsdc > MAX_AMT || settleUsdc > MAX_AMT) {
+    return ctx.json({ ok: false, step: 'preflight', error: `amounts exceed testnet cap ${MAX_AMT} (6dp)` }, 400)
+  }
   if (settleUsdc >= HIGH_VALUE_THRESHOLD) {
     return ctx.json({ ok: false, step: 'preflight', error: 'settleUsdc must be < $250 (no edge-sig leg in the smoke)' }, 400)
   }
@@ -88,9 +94,9 @@ export const POST = createHandler(async (req, ctx) => {
     if (!activated) return ctx.json({ ok: false, step: 'preflight', error: 'vault not activated — run commit-team first' }, 409)
 
     const usdc = getAddress(await readV<`0x${string}`>('usdc'))
-    const gateway = typeof body.gateway === 'string' && isAddress(body.gateway)
-      ? getAddress(body.gateway)
-      : getAddress(await readV<`0x${string}`>('gateway'))
+    // AUDIT M7: always use the vault's own gateway. The prior `body.gateway` override let a caller point
+    // the self-signed DelegatedSpendPermit at an arbitrary verifyingContract.
+    const gateway = getAddress(await readV<`0x${string}`>('gateway'))
 
     // ── funding: on a MockERC20 (public mint) the route mints its own test USDC — fully self-contained.
     //    On a real onlyOwner USDC the mint reverts; we fall through to a 412 spelling out the top-up. ──

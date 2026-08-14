@@ -119,14 +119,17 @@ contract MintwareGatewayTreasuryV2Test is Test {
         MintwarePaymentGateway.DelegatedSpendPermit memory p = _permit(500 * ONE, 1, block.timestamp + 1 days);
         bytes memory sig = _signPermit(userPk, p);
 
+        uint256 cpnBefore = usdc.balanceOf(circleCpn);
         uint256 rcvBefore = usdc.balanceOf(receiver);
         uint256 shBefore  = vault.seniorShares(user);
 
         uint256 burned = gateway.settleSpend(holdId, user, assets, receiver, p, sig, _emptyEdge(), "");
 
         assertGt(burned, 0, "no shares burned");
-        assertGe(usdc.balanceOf(receiver) - rcvBefore, assets, "rail underpaid vs the charge");
-        assertApproxEqAbs(usdc.balanceOf(receiver) - rcvBefore, assets, 2, "rail overpaid beyond dust");
+        // AUDIT C1: the passed `receiver` is IGNORED — settlement always lands at the circle treasury.
+        assertEq(usdc.balanceOf(receiver), rcvBefore, "receiver arg must be ignored, not paid");
+        assertGe(usdc.balanceOf(circleCpn) - cpnBefore, assets, "treasury underpaid vs the charge");
+        assertApproxEqAbs(usdc.balanceOf(circleCpn) - cpnBefore, assets, 2, "treasury overpaid beyond dust");
         assertLt(vault.seniorShares(user), shBefore, "user shares not burned");
         ( , , , bool settled, ) = gateway.holds(holdId);
         assertTrue(settled, "hold not marked settled");
@@ -140,9 +143,10 @@ contract MintwareGatewayTreasuryV2Test is Test {
         MintwarePaymentGateway.ShortLivedHoldAuth memory e = _edgeAuth(holdId, assets, block.timestamp + 240);
         bytes memory eSig = _signEdge(edgePk, e);
 
-        uint256 rcvBefore = usdc.balanceOf(receiver);
+        uint256 cpnBefore = usdc.balanceOf(circleCpn);
         gateway.settleSpend(holdId, user, assets, receiver, p, pSig, e, eSig);
-        assertGe(usdc.balanceOf(receiver) - rcvBefore, assets, "high-value rail underpaid");
+        assertGe(usdc.balanceOf(circleCpn) - cpnBefore, assets, "high-value treasury underpaid");
+        assertEq(usdc.balanceOf(receiver), 0, "receiver arg must be ignored (C1)");
     }
 
     function test_zeroReceiver_routesToCircleTreasury() public {
@@ -217,6 +221,47 @@ contract MintwareGatewayTreasuryV2Test is Test {
         bytes memory sig = _signPermit(userPk, p);
         vm.expectRevert(MintwarePaymentGateway.ExceedsDailySpendLimit.selector);
         gateway.settleSpend(holdId, user, assets, receiver, p, sig, _emptyEdge(), "");
+    }
+
+    // ── audit-fix coverage ────────────────────────────────────────────────────
+
+    /// AUDIT C1: a rogue relayer cannot redirect settlement to an attacker `receiver` — it is ignored.
+    function test_rogueReceiver_isIgnored_treasuryPaid() public {
+        address attacker = makeAddr("attacker");
+        uint256 assets = 100 * ONE;
+        bytes32 holdId = keccak256("hold-rogue-receiver");
+        MintwarePaymentGateway.DelegatedSpendPermit memory p = _permit(500 * ONE, 11, block.timestamp + 1 days);
+        bytes memory sig = _signPermit(userPk, p);
+
+        uint256 cpnBefore = usdc.balanceOf(circleCpn);
+        gateway.settleSpend(holdId, user, assets, attacker, p, sig, _emptyEdge(), "");
+        assertEq(usdc.balanceOf(attacker), 0, "attacker receiver must get nothing");
+        assertGe(usdc.balanceOf(circleCpn) - cpnBefore, assets, "treasury must be paid");
+    }
+
+    /// AUDIT M2: the edge signature is required once CUMULATIVE daily spend crosses $250, so a relayer
+    /// cannot bypass the second-signer gate by splitting a large charge into sub-$250 pieces.
+    function test_cumulativeThreshold_requiresEdge() public {
+        // First $200 charge — cumulative $200 < $250 → permit-only, no edge needed.
+        MintwarePaymentGateway.DelegatedSpendPermit memory p1 = _permit(1_000 * ONE, 12, block.timestamp + 1 days);
+        gateway.settleSpend(keccak256("split-1"), user, 200 * ONE, receiver, p1, _signPermit(userPk, p1), _emptyEdge(), "");
+
+        // Second $100 charge — cumulative $300 > $250 → edge sig now REQUIRED even though the charge is < $250.
+        MintwarePaymentGateway.DelegatedSpendPermit memory p2 = _permit(1_000 * ONE, 13, block.timestamp + 1 days);
+        bytes memory sig2 = _signPermit(userPk, p2);
+        vm.expectRevert(MintwarePaymentGateway.EdgeSignatureRequired.selector);
+        gateway.settleSpend(keccak256("split-2"), user, 100 * ONE, receiver, p2, sig2, _emptyEdge(), "");
+
+        // With a valid edge auth it goes through.
+        bytes32 holdId = keccak256("split-2");
+        MintwarePaymentGateway.ShortLivedHoldAuth memory e = _edgeAuth(holdId, 100 * ONE, block.timestamp + 240);
+        gateway.settleSpend(holdId, user, 100 * ONE, receiver, p2, sig2, e, _signEdge(edgePk, e));
+    }
+
+    /// AUDIT (low): cancelling a never-created hold reverts instead of poisoning that holdId forever.
+    function test_cancelUnknownHold_reverts() public {
+        vm.expectRevert(MintwarePaymentGateway.UnknownHold.selector);
+        gateway.cancelHold(keccak256("never-created"));
     }
 
     function test_nonRelayer_reverts() public {

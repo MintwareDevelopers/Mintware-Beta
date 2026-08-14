@@ -93,6 +93,7 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     error HoldAlreadySettled();
     error HoldCancelledError();
     error ZeroAddress();
+    error UnknownHold();
 
     constructor(address vault_, address usdc_, address treasury_, address admin_)
         EIP712("Mintware Payment Gateway", "2.0")
@@ -144,7 +145,11 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         bytes calldata edgeSig
     ) external onlyRole(RELAYER_ROLE) nonReentrant whenNotPaused returns (uint256 sharesBurned) {
         if (assets == 0) revert InvalidAmount();
-        if (receiver == address(0)) receiver = circleCpnTreasury;
+        // AUDIT C1: the settlement destination is ALWAYS the Circle treasury. `receiver` was previously
+        // relayer-chosen and bound by NEITHER signed struct, so a rogue/compromised relayer could burn a
+        // permit-signer's senior shares and redirect the USDC to an arbitrary address (up to the daily
+        // cap). Pin it. The `receiver` param is retained for ABI stability but is deliberately ignored.
+        receiver = circleCpnTreasury;
 
         // ── long-lived delegated permit ──
         if (block.timestamp > permit.deadline) revert PermitExpired();
@@ -156,8 +161,12 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         // Nonce is REVOCATION-ONLY — checked, never consumed (see contract NatSpec).
         if (usedNonces[user][permit.nonce]) revert NonceRevokedError();
 
-        // ── high-value edge authorization (>= $250) ──
-        if (assets >= HIGH_VALUE_THRESHOLD) {
+        // ── high-value edge authorization ──
+        // AUDIT M2: the edge signature is required once CUMULATIVE daily spend crosses the threshold, not
+        // per-charge — otherwise a relayer trivially bypasses the second-signer control by splitting a
+        // large settlement into sub-$250 charges. Uses the pre-update daily tally (updated below).
+        uint256 spentTodayForGate = dailySpendUSDC[user][block.timestamp / 1 days];
+        if (spentTodayForGate + assets > HIGH_VALUE_THRESHOLD) {
             if (edgeSig.length == 0) revert EdgeSignatureRequired();
             if (edgeAuth.holdId != holdId || edgeAuth.user != user || edgeAuth.amountUSDC != assets) {
                 revert InvalidEdgeSignature();
@@ -190,6 +199,10 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
 
     function cancelHold(bytes32 holdId) external onlyRole(RELAYER_ROLE) {
         Hold storage h = holds[holdId];
+        // AUDIT (low): require the hold to actually exist. Cancelling a never-created holdId wrote
+        // cancelled=true onto an all-zero Hold — permanently blocking that id from ever settling and
+        // emitting a misleading HoldCancelled(_, address(0)).
+        if (h.user == address(0)) revert UnknownHold();
         if (h.settled) revert HoldAlreadySettled();
         h.cancelled = true;
         emit HoldCancelled(holdId, h.user);

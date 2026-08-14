@@ -89,7 +89,13 @@ async fn main() {
     if rain_secret.is_none() {
         eprintln!("edge-auth: Rain webhooks DISABLED (set EDGE_RAIN_WEBHOOK_SECRET to enable /webhooks/rain)");
     }
-    let ctx = AppCtx { store: store.clone(), edge: build_edge_signer(), rain_secret };
+    // AUDIT C1: bearer secret for /authorize + /holds. FAIL CLOSED — if unset, those endpoints reject
+    // every request (they mint EDGE_SIGNER signatures and reserve user equity; they must never be open).
+    let api_secret = env::var("EDGE_API_SECRET").ok().map(|s| Arc::new(s.into_bytes()));
+    if api_secret.is_none() {
+        eprintln!("edge-auth: ⚠ EDGE_API_SECRET UNSET — /authorize and /holds will reject ALL requests (fail-closed). Set it to enable the service.");
+    }
+    let ctx = AppCtx { store: store.clone(), edge: build_edge_signer(), rain_secret, api_secret };
 
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await.expect("bind");

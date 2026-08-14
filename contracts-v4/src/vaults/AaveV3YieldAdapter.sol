@@ -55,6 +55,7 @@ contract AaveV3YieldAdapter is IYieldAdapter, Ownable, ReentrancyGuard {
     error OnlyVault();
     error ZeroAddress();
     error ATokenMismatch();
+    error VaultAlreadySet();
 
     modifier onlyVault() {
         if (msg.sender != vault) revert OnlyVault();
@@ -91,6 +92,9 @@ contract AaveV3YieldAdapter is IYieldAdapter, Ownable, ReentrancyGuard {
     // ── admin ────────────────────────────────────────────────────────────────
     function setVault(address _vault) external onlyOwner {
         if (_vault == address(0)) revert ZeroAddress();
+        // AUDIT M3: one-time. `withdraw` sends redeemed aUSDC to `vault`; a re-settable `vault` let a
+        // compromised owner point it at an attacker and drain the idle reserve. Set exactly once.
+        if (vault != address(0)) revert VaultAlreadySet();
         vault = _vault;
         emit VaultSet(_vault);
     }
