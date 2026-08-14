@@ -67,7 +67,10 @@ export const POST = createHandler(async (req, ctx) => {
   }
 
   const wait = (hash: `0x${string}`) => publicClient.waitForTransactionReceipt({ hash })
-  const readV = <T,>(fn: string, args: readonly unknown[] = []) => publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: fn, args }) as Promise<T>
+  // viem's readContract demands a literal functionName from the ABI union; this is a dynamic convenience
+  // over the vault reads, so cast the dynamic args past the strict typing (values are typed by <T>).
+  const readV = <T,>(fn: string, args: readonly unknown[] = []) =>
+    publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: fn as never, args: args as never }) as Promise<T>
 
   try {
     const activated = await readV<boolean>('activated')
