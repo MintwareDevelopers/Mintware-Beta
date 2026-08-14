@@ -77,25 +77,8 @@ export default function YieldPaymentNetworkPage() {
         </div>
       </section>
 
-      {/* Ethos — liquidity as a public good */}
-      <section className="bg-ground-cool border-b border-hair-soft">
-        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
-          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">{YPN_ETHOS.eyebrow}</div>
-          <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3.5 max-w-[20ch] [text-wrap:balance]">
-            {YPN_ETHOS.title}
-          </h2>
-          <p className="text-ink-mid text-[clamp(15px,1.7vw,18px)] leading-[1.55] mt-5 max-w-[64ch]">{YPN_ETHOS.body}</p>
-          <p className="font-atx-display font-medium text-[clamp(18px,2.2vw,26px)] tracking-[-0.02em] text-peri mt-6">
-            “{YPN_ETHOS.quote}”
-          </p>
-        </div>
-      </section>
-
-      <ValuePropMatrixTable />
-      <YieldCalculatorWidget />
-      <CircleTechBadge />
-
-      {/* The epic tech — dark-pop climax before the CTA (also breaks the two adjacent pastel panels) */}
+      {/* The epic tech — a single bold dark moment, proof of the model above.
+          Flanked by light sections so no two colored panels ever stack. */}
       <section className="bg-white border-b border-hair-soft">
         <div className="mx-auto max-w-[1080px] px-6 max-[800px]:px-4 py-[40px]">
           <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-ink text-white">
@@ -121,6 +104,23 @@ export default function YieldPaymentNetworkPage() {
         </div>
       </section>
 
+      {/* Ethos — liquidity as a public good */}
+      <section className="bg-ground-cool border-b border-hair-soft">
+        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
+          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">{YPN_ETHOS.eyebrow}</div>
+          <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3.5 max-w-[20ch] [text-wrap:balance]">
+            {YPN_ETHOS.title}
+          </h2>
+          <p className="text-ink-mid text-[clamp(15px,1.7vw,18px)] leading-[1.55] mt-5 max-w-[64ch]">{YPN_ETHOS.body}</p>
+          <p className="font-atx-display font-medium text-[clamp(18px,2.2vw,26px)] tracking-[-0.02em] text-peri mt-6">
+            “{YPN_ETHOS.quote}”
+          </p>
+        </div>
+      </section>
+
+      <ValuePropMatrixTable />
+      <YieldCalculatorWidget />
+      <CircleTechBadge />
       <AppConversionCTA />
     </div>
   )
