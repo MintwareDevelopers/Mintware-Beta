@@ -476,6 +476,14 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
         tickSpacing: draft.tickSpacing,
         hooks:       process.env.NEXT_PUBLIC_MW_SOCIAL_HOOK_ADDRESS ?? '',
       }
+      // The treasury-vault tranche choices — authenticated in the signed message + persisted as
+      // launch intent the provisioning step reads (see lib/web3/vault/treasuryProvisioning.ts).
+      const tranche = {
+        juniorCommitUsdc: draft.commitAmount,
+        lockDays:         draft.lockDays,
+        teamUsdc:         draft.teamUsdc,
+        subordinateUsdc:  draft.subordinateUsdc,
+      }
       const authMessage = buildVaultCreateMessage({
         teamWallet: address,
         issuedAt,
@@ -484,6 +492,7 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
         seedAmount: draft.commitAmount, // the junior commit is the vault's launch seed value
         chainId: draft.chainId,
         poolKey,
+        tranche,
       })
       const authSignature = await signMessageAsync({ message: authMessage })
 
@@ -502,6 +511,7 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
           issuedAt,
           authMessage,
           authSignature,
+          tranche,
         }),
       })
       if (!res.ok) {

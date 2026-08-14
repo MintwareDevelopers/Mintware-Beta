@@ -50,6 +50,16 @@ export function buildAgentRegisterMessage(input: {
   )
 }
 
+/** The team's treasury-vault (YPN v2) tranche choices — authenticated so a provisioning step can
+ *  trust them. Omit entirely for the legacy DeFi pair vault (the message is then byte-identical to
+ *  before, preserving back-compat). */
+export interface VaultTrancheIntent {
+  juniorCommitUsdc: number // USDC value of the team's junior token cushion at launch
+  lockDays: number // junior hard-lock (>= 90)
+  teamUsdc: number // optional senior USDC the team also seeds (0 if none)
+  subordinateUsdc: boolean // subordinate the team's USDC below the community's (first-loss)
+}
+
 export function buildVaultCreateMessage(input: {
   teamWallet: string
   issuedAt: number
@@ -64,27 +74,34 @@ export function buildVaultCreateMessage(input: {
     tickSpacing: number
     hooks: string
   }
+  tranche?: VaultTrancheIntent
 }): string {
-  return JSON.stringify(
-    {
-      action: 'mintware-vault-create',
-      teamWallet: normalizeAddress(input.teamWallet),
-      issuedAt: input.issuedAt,
-      name: input.name,
-      projectToken: normalizeAddress(input.projectToken),
-      seedAmount: input.seedAmount,
-      chainId: input.chainId,
-      poolKey: {
-        currency0: normalizeAddress(input.poolKey.currency0),
-        currency1: normalizeAddress(input.poolKey.currency1),
-        fee: input.poolKey.fee,
-        tickSpacing: input.poolKey.tickSpacing,
-        hooks: normalizeAddress(input.poolKey.hooks),
-      },
+  const payload: Record<string, unknown> = {
+    action: 'mintware-vault-create',
+    teamWallet: normalizeAddress(input.teamWallet),
+    issuedAt: input.issuedAt,
+    name: input.name,
+    projectToken: normalizeAddress(input.projectToken),
+    seedAmount: input.seedAmount,
+    chainId: input.chainId,
+    poolKey: {
+      currency0: normalizeAddress(input.poolKey.currency0),
+      currency1: normalizeAddress(input.poolKey.currency1),
+      fee: input.poolKey.fee,
+      tickSpacing: input.poolKey.tickSpacing,
+      hooks: normalizeAddress(input.poolKey.hooks),
     },
-    null,
-    2,
-  )
+  }
+  // Only attach `tranche` when provided → legacy pair-vault messages are unchanged (back-compat).
+  if (input.tranche) {
+    payload.tranche = {
+      juniorCommitUsdc: input.tranche.juniorCommitUsdc,
+      lockDays: input.tranche.lockDays,
+      teamUsdc: input.tranche.teamUsdc,
+      subordinateUsdc: input.tranche.subordinateUsdc,
+    }
+  }
+  return JSON.stringify(payload, null, 2)
 }
 
 export function buildAdminMessage(input: {
