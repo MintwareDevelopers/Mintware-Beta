@@ -477,8 +477,12 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     ///         (beforeSwap→afterSwap atomic), so the senior is exposed only intra-swap. `jitBorrowed`
     ///         counts the lent USDC at PAR, so `totalSeniorAssets` is unchanged by the loan.
     function borrowIdleForJit(uint256 want)
-        external onlyJitHook nonReentrant whenNotPaused returns (uint256 lent)
+        external onlyJitHook nonReentrant returns (uint256 lent)
     {
+        // AUDIT M6: return 0 (JIT no-ops) rather than revert when paused. This path runs inside the
+        // hook's beforeSwap, which MUST NOT revert — a `whenNotPaused` revert here would brick every
+        // qualifying swap on the shared Uniswap pool for all third parties whenever the owner pauses.
+        if (paused()) return 0;
         if (block.number != jitBlock) { jitBlock = block.number; jitBorrowedThisBlock = 0; }
 
         uint256 perBlockCap = totalSeniorAssets().mulDiv(jitMaxPerBlockBps, BPS, Math.Rounding.Floor);

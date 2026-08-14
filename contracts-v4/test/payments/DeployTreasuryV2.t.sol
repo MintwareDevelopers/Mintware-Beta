@@ -154,11 +154,11 @@ contract DeployTreasuryV2SmokeTest is Test {
         bytes memory sig = _signPermit(p);
         MintwarePaymentGateway.ShortLivedHoldAuth memory noEdge;
 
-        uint256 railBefore = usdc.balanceOf(rail);
+        uint256 railBefore = usdc.balanceOf(circleCpn); // AUDIT C1: settlement lands at the treasury, not a passed rail
         uint256 sharesBefore = vault.seniorShares(user);
         gateway.settleSpend(holdId, user, assets, rail, p, sig, noEdge, "");
 
-        assertGe(usdc.balanceOf(rail) - railBefore, assets, "rail underpaid the charge");
+        assertGe(usdc.balanceOf(circleCpn) - railBefore, assets, "treasury underpaid the charge");
         assertLt(vault.seniorShares(user), sharesBefore, "user shares not burned");
         ( , , , bool settled, ) = gateway.holds(holdId);
         assertTrue(settled, "hold not settled");

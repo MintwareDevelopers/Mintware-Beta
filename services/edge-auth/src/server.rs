@@ -21,12 +21,42 @@ use crate::store::{Hold, HoldStatus, MemStore};
 use crate::types::{AuthorizeRequest, AuthorizeResponse, EdgeAuthView, HoldView};
 use crate::webhook;
 
-/// Shared handler state: the hold store, the optional edge signer, and the optional Rain webhook secret.
+/// Shared handler state: the hold store, the optional edge signer, the optional Rain webhook secret,
+/// and the bearer secret guarding the sensitive endpoints (/authorize, /holds).
 #[derive(Clone)]
 pub struct AppCtx {
     pub store: Arc<MemStore>,
     pub edge: Option<Arc<EdgeSigner>>,
     pub rain_secret: Option<Arc<Vec<u8>>>,
+    /// AUDIT C1: bearer secret for /authorize + /holds. `None` = FAIL CLOSED (all requests rejected) —
+    /// these endpoints mint EDGE_SIGNER signatures and reserve user equity, so they must never be open.
+    pub api_secret: Option<Arc<Vec<u8>>>,
+}
+
+/// Constant-time byte compare (avoids leaking the secret via early-exit timing).
+fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+/// AUDIT C1: authenticate a request to a sensitive endpoint. Requires `Authorization: Bearer <secret>`.
+/// Fails closed when no secret is configured.
+fn auth_ok(ctx: &AppCtx, headers: &HeaderMap) -> bool {
+    let Some(secret) = ctx.api_secret.as_deref() else {
+        return false; // no secret configured → reject everything
+    };
+    let provided = headers
+        .get("authorization")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .unwrap_or("");
+    ct_eq(provided.as_bytes(), secret)
 }
 
 /// Wall-clock seconds. Isolated so the hot path has a single time source.
@@ -59,7 +89,10 @@ fn declined(reason: &'static str) -> AuthorizeResponse {
     AuthorizeResponse { approved: false, hold_id: None, hold_usdc: None, decline_reason: Some(reason), edge_auth: None }
 }
 
-async fn authorize(State(ctx): State<AppCtx>, Json(req): Json<AuthorizeRequest>) -> impl IntoResponse {
+async fn authorize(State(ctx): State<AppCtx>, headers: HeaderMap, Json(req): Json<AuthorizeRequest>) -> impl IntoResponse {
+    if !auth_ok(&ctx, &headers) {
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "unauthorized" }))).into_response();
+    }
     let amount = match req.amount_usdc.parse::<u128>() {
         Ok(a) => a,
         Err(_) => return (StatusCode::BAD_REQUEST, Json(json!({ "error": "invalid_amount" }))).into_response(),
@@ -111,7 +144,10 @@ async fn authorize(State(ctx): State<AppCtx>, Json(req): Json<AuthorizeRequest>)
     (StatusCode::OK, Json(resp)).into_response()
 }
 
-async fn get_hold(State(ctx): State<AppCtx>, Path(id): Path<String>) -> impl IntoResponse {
+async fn get_hold(State(ctx): State<AppCtx>, headers: HeaderMap, Path(id): Path<String>) -> impl IntoResponse {
+    if !auth_ok(&ctx, &headers) {
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "unauthorized" }))).into_response();
+    }
     match ctx.store.get_hold(&id) {
         Some(h) => (StatusCode::OK, Json(hold_view(&id, &h))).into_response(),
         None => (StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" }))).into_response(),
@@ -159,25 +195,50 @@ mod tests {
         s.set_daily_cap(ALICE, 100_000_000_000);
         s
     }
+    const API_SECRET: &str = "test-api-secret";
     fn ctx_no_signer() -> AppCtx {
-        AppCtx { store: Arc::new(base_store()), edge: None, rain_secret: None }
+        AppCtx { store: Arc::new(base_store()), edge: None, rain_secret: None, api_secret: Some(Arc::new(API_SECRET.as_bytes().to_vec())) }
     }
     fn ctx_with_signer() -> AppCtx {
         AppCtx {
             store: Arc::new(base_store()),
             edge: Some(Arc::new(EdgeSigner::from_hex_key(KEY, GATEWAY.parse().unwrap(), 84532).unwrap())),
             rain_secret: None,
+            api_secret: Some(Arc::new(API_SECRET.as_bytes().to_vec())),
         }
     }
 
     async fn post_authorize(ctx: AppCtx, body: &str) -> (StatusCode, serde_json::Value) {
         let resp = app(ctx)
-            .oneshot(Request::builder().method("POST").uri("/authorize").header("content-type", "application/json").body(Body::from(body.to_string())).unwrap())
+            .oneshot(Request::builder().method("POST").uri("/authorize")
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {API_SECRET}"))
+                .body(Body::from(body.to_string())).unwrap())
             .await
             .unwrap();
         let status = resp.status();
         let bytes = resp.into_body().collect().await.unwrap().to_bytes();
         (status, serde_json::from_slice(&bytes).unwrap())
+    }
+
+    #[tokio::test]
+    async fn authorize_rejects_without_bearer() {
+        // AUDIT C1: no Authorization header → 401 (the endpoint mints edge sigs + reserves equity).
+        let resp = app(ctx_with_signer())
+            .oneshot(Request::builder().method("POST").uri("/authorize").header("content-type", "application/json")
+                .body(Body::from(format!(r#"{{"user":"{ALICE}","amount_usdc":"100000000","hold_id":"noauth"}}"#))).unwrap())
+            .await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn authorize_rejects_wrong_bearer() {
+        let resp = app(ctx_with_signer())
+            .oneshot(Request::builder().method("POST").uri("/authorize").header("content-type", "application/json")
+                .header("authorization", "Bearer wrong-secret")
+                .body(Body::from(format!(r#"{{"user":"{ALICE}","amount_usdc":"100000000","hold_id":"badauth"}}"#))).unwrap())
+            .await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]
@@ -239,9 +300,10 @@ mod tests {
     async fn get_hold_roundtrips_then_404() {
         let ctx = ctx_no_signer();
         let _ = post_authorize(ctx.clone(), &format!(r#"{{"user":"{ALICE}","amount_usdc":"100000000","hold_id":"hX"}}"#)).await;
-        let ok = app(ctx.clone()).oneshot(Request::builder().uri("/holds/hX").body(Body::empty()).unwrap()).await.unwrap();
+        let bearer = format!("Bearer {API_SECRET}");
+        let ok = app(ctx.clone()).oneshot(Request::builder().uri("/holds/hX").header("authorization", &bearer).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(ok.status(), StatusCode::OK);
-        let miss = app(ctx).oneshot(Request::builder().uri("/holds/nope").body(Body::empty()).unwrap()).await.unwrap();
+        let miss = app(ctx).oneshot(Request::builder().uri("/holds/nope").header("authorization", &bearer).body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(miss.status(), StatusCode::NOT_FOUND);
     }
 }

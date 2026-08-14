@@ -53,6 +53,13 @@ export const POST = createHandler(async (req, ctx) => {
   const juniorUsdc = typeof body.juniorUsdc === 'string' && /^\d+$/.test(body.juniorUsdc) ? BigInt(body.juniorUsdc) : 0n
   const lockDays = typeof body.lockDays === 'number' && body.lockDays >= MIN_LOCK_DAYS ? Math.floor(body.lockDays) : MIN_LOCK_DAYS
   if (teamTokens === 0n) return ctx.json({ ok: false, step: 'preflight', error: 'teamTokens must be > 0' }, 400)
+  // AUDIT M7: bound the amounts. This route reads teamToken/usdc from the CALLER-SUPPLIED `vault` and
+  // grants it an allowance, so an unbounded amount against a malicious `vault` is an approve-to-drain
+  // primitive (blast radius is already capped to Base Sepolia by the hardcoded chain, but keep it tiny).
+  const MAX_TEAM_TOKENS = 2_000_000_000_000_000_000n // 2e18
+  const MAX_JUNIOR_USDC = 10_000_000_000n            // $10k (6dp)
+  if (teamTokens > MAX_TEAM_TOKENS) return ctx.json({ ok: false, step: 'preflight', error: `teamTokens exceeds testnet cap ${MAX_TEAM_TOKENS}` }, 400)
+  if (juniorUsdc > MAX_JUNIOR_USDC) return ctx.json({ ok: false, step: 'preflight', error: `juniorUsdc exceeds testnet cap ${MAX_JUNIOR_USDC}` }, 400)
 
   const wait = (hash: `0x${string}`) => publicClient.waitForTransactionReceipt({ hash })
 

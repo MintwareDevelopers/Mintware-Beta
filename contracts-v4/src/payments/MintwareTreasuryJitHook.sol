@@ -214,22 +214,26 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         int24 width = spacing * jitWidthSpacings;
         int24 lo;
         int24 hi;
-        uint128 L;
         if (zeroForOne) {
             // output = currency1 (USDC); tight range just BELOW the tick, single-sided currency1.
             hi = _alignTick(tick, spacing);
             lo = hi - width;
-            L = LiquidityAmounts.getLiquidityForAmount1(
-                TickMath.getSqrtPriceAtTick(lo), TickMath.getSqrtPriceAtTick(hi), lent
-            );
         } else {
             // output = currency0 (USDC); tight range just ABOVE the tick, single-sided currency0.
             lo = _alignTick(tick, spacing) + spacing;
             hi = lo + width;
-            L = LiquidityAmounts.getLiquidityForAmount0(
-                TickMath.getSqrtPriceAtTick(lo), TickMath.getSqrtPriceAtTick(hi), lent
-            );
         }
+        // AUDIT M6: clamp to usable ticks. Near a tick extreme, lo/hi can fall outside [MIN,MAX] and
+        // TickMath.getSqrtPriceAtTick would revert INSIDE beforeSwap — bricking the pool. If the range
+        // is unusable, no-op the JIT (return the borrow) rather than let the swap revert.
+        if (lo < TickMath.minUsableTick(spacing) || hi > TickMath.maxUsableTick(spacing) || lo >= hi) {
+            usdc.safeTransfer(address(vault), lent);
+            vault.settleJitReturn(lent);
+            return;
+        }
+        uint128 L = zeroForOne
+            ? LiquidityAmounts.getLiquidityForAmount1(TickMath.getSqrtPriceAtTick(lo), TickMath.getSqrtPriceAtTick(hi), lent)
+            : LiquidityAmounts.getLiquidityForAmount0(TickMath.getSqrtPriceAtTick(lo), TickMath.getSqrtPriceAtTick(hi), lent);
         if (L == 0) {
             // couldn't form a position — return the USDC to the vault (settles the borrow immediately).
             usdc.safeTransfer(address(vault), lent);
