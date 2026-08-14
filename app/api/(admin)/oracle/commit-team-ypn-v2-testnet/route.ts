@@ -31,7 +31,11 @@ const MIN_LOCK_DAYS = 90
 const ERC20_ABI = [
   { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] },
   { type: 'function', name: 'deposit', stateMutability: 'payable', inputs: [], outputs: [] }, // WETH wrap
+  { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
+  { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
 ] as const
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export const POST = createHandler(async (req, ctx) => {
   const account = await getOracleSigner('root')
@@ -59,24 +63,50 @@ export const POST = createHandler(async (req, ctx) => {
     const teamToken = getAddress(await publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'teamToken' }) as `0x${string}`)
     const usdc = getAddress(await publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'usdc' }) as `0x${string}`)
 
-    // 1. If the junior token is WETH, wrap the ETH so a fresh wallet needs only native gas.
+    // 1. If the junior token is WETH, wrap only the SHORTFALL so a re-fire doesn't burn ETH it doesn't
+    //    need (idempotent — a prior fire may have already wrapped). A fresh wallet needs only ETH.
     let wrapTx: `0x${string}` | null = null
     if (getAddress(teamToken) === getAddress(WETH)) {
-      wrapTx = await walletClient.writeContract({ address: teamToken, abi: ERC20_ABI, functionName: 'deposit', args: [], value: teamTokens, account, chain: baseSepolia })
-      await wait(wrapTx)
+      const held = await publicClient.readContract({ address: teamToken, abi: ERC20_ABI, functionName: 'balanceOf', args: [account.address] }) as bigint
+      if (held < teamTokens) {
+        wrapTx = await walletClient.writeContract({ address: teamToken, abi: ERC20_ABI, functionName: 'deposit', args: [], value: teamTokens - held, account, chain: baseSepolia })
+        await wait(wrapTx)
+      }
     }
 
-    // 2. Approve the junior legs to the vault.
-    await wait(await walletClient.writeContract({ address: teamToken, abi: ERC20_ABI, functionName: 'approve', args: [vault, teamTokens], account, chain: baseSepolia }))
+    // 2. Approve the junior legs to the vault — idempotent (skip when allowance already covers it).
+    const teamAllowance = await publicClient.readContract({ address: teamToken, abi: ERC20_ABI, functionName: 'allowance', args: [account.address, vault] }) as bigint
+    if (teamAllowance < teamTokens) {
+      await wait(await walletClient.writeContract({ address: teamToken, abi: ERC20_ABI, functionName: 'approve', args: [vault, teamTokens], account, chain: baseSepolia }))
+    }
     if (juniorUsdc > 0n) {
-      await wait(await walletClient.writeContract({ address: usdc, abi: ERC20_ABI, functionName: 'approve', args: [vault, juniorUsdc], account, chain: baseSepolia }))
+      const usdcAllowance = await publicClient.readContract({ address: usdc, abi: ERC20_ABI, functionName: 'allowance', args: [account.address, vault] }) as bigint
+      if (usdcAllowance < juniorUsdc) {
+        await wait(await walletClient.writeContract({ address: usdc, abi: ERC20_ABI, functionName: 'approve', args: [vault, juniorUsdc], account, chain: baseSepolia }))
+      }
     }
 
-    // 3. Commit — activates the vault; the Privy wallet becomes `team`.
-    const commitTx = await walletClient.writeContract({
-      address: vault, abi: VAULT_ABI, functionName: 'commitTeam',
-      args: [teamTokens, juniorUsdc, BigInt(lockDays) * 86_400n], account, chain: baseSepolia,
-    })
+    // 3. Commit — activates the vault; the Privy wallet becomes `team`. We pass an EXPLICIT gas limit so
+    //    viem skips its eth_estimateGas preflight: on public Base Sepolia the preflight can hit a
+    //    load-balancer node that hasn't yet indexed the approve tx (read-after-write lag) and revert in
+    //    *simulation* before the tx is ever sent. The real tx executes against consistent on-chain state.
+    //    A short retry absorbs any transient RPC nonce/propagation hiccup.
+    let commitTx: `0x${string}` | undefined
+    let lastErr: unknown
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        commitTx = await walletClient.writeContract({
+          address: vault, abi: VAULT_ABI, functionName: 'commitTeam',
+          args: [teamTokens, juniorUsdc, BigInt(lockDays) * 86_400n], account, chain: baseSepolia,
+          gas: 500_000n,
+        })
+        break
+      } catch (err) {
+        lastErr = err
+        await sleep(2500)
+      }
+    }
+    if (!commitTx) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr))
     await wait(commitTx)
 
     const [activated, team, lockExpiry] = await Promise.all([
