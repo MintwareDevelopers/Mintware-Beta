@@ -71,6 +71,7 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     uint16 public constant MAX_IDLE_TARGET_BPS = 9_500;  // <=95%, else no LP depth
     uint256 public constant MIN_LOCK_DURATION  = 90 days; // hard junior cliff
     uint256 public constant MAX_LOCK_DURATION  = 1460 days;
+    uint16  public constant MAX_JIT_PER_BLOCK_BPS = 2_000; // <=20% of senior lendable to JIT per block
 
     // fee split post-lock (community / team / protocol) in bps — 60/30/10
     uint16 public constant FEE_COMMUNITY_BPS = 6_000;
@@ -110,6 +111,18 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     ///         (supercharged launch yield). Flips false once the cliff passes.
     bool    public teamFeesRedirected;
 
+    // ── JIT (bounded senior slice lent to the JIT hook per-swap; junior backstops residual) ─────────
+    /// @notice The sole caller of `borrowIdleForJit`/`settleJitReturn` — a V4 hook that opens+closes a
+    ///         tight single-sided position for ONE swap (atomic beforeSwap→afterSwap). Set once.
+    address public jitHook;
+    /// @notice Senior USDC currently out in a JIT position, valued at PAR — 0 between swaps (borrow +
+    ///         settle are atomic). Counted in `totalSeniorAssets` so the mid-swap NAV stays whole.
+    uint256 public jitBorrowed;
+    /// @notice The bounded senior slice lendable to JIT per block, in bps of the senior base (<= MAX).
+    uint16  public jitMaxPerBlockBps = 500; // 5% default
+    uint256 private jitBlock;               // block of the current per-block accumulator
+    uint256 private jitBorrowedThisBlock;   // senior USDC lent to JIT so far this block
+
     event GatewaySet(address indexed gateway);
     event LiquidityModuleSet(address indexed module);
     event TeamCommitted(address indexed team, uint256 teamTokens, uint256 juniorUsdc, uint256 lockExpiry);
@@ -122,6 +135,10 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     event FeesAccrued(uint256 total, uint256 toSenior, uint256 toJunior, uint256 toProtocol);
     event JuniorRedeemed(address indexed team, uint256 teamTokens, uint256 usdc);
     event IdleTargetSet(uint16 bps);
+    event JitHookSet(address indexed hook);
+    event JitCapSet(uint16 bps);
+    event JitBorrowed(uint256 lent);
+    event JitSettled(uint256 borrowed, uint256 returned, uint256 shortfall);
 
     error ZeroAddress();
     error ZeroAmount();
@@ -135,8 +152,10 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     error StillLocked();
     error BadParam();
     error NoModule();
+    error OnlyJitHook();
 
     modifier onlyGateway() { if (msg.sender != gateway) revert OnlyGateway(); _; }
+    modifier onlyJitHook() { if (msg.sender != jitHook) revert OnlyJitHook(); _; }
 
     /// @param usdc_      senior settlement asset (USDC).
     /// @param teamToken_ junior reserve asset (the team/treasury native token).
@@ -174,6 +193,22 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         if (bps < MIN_IDLE_TARGET_BPS || bps > MAX_IDLE_TARGET_BPS) revert BadParam();
         idleBufferTargetBps = bps;
         emit IdleTargetSet(bps);
+    }
+
+    /// @notice Wire the JIT hook (set-once). It becomes the sole caller of `borrowIdleForJit`/
+    ///         `settleJitReturn`. The pool must be created with this hook baked into its PoolKey.
+    function setJitHook(address hook_) external onlyOwner {
+        if (jitHook != address(0)) revert AlreadySet();
+        if (hook_ == address(0)) revert ZeroAddress();
+        jitHook = hook_;
+        emit JitHookSet(hook_);
+    }
+
+    /// @notice Governs the bounded senior slice lendable to JIT per block (0 disables JIT lending).
+    function setJitCap(uint16 bps) external onlyOwner {
+        if (bps > MAX_JIT_PER_BLOCK_BPS) revert BadParam();
+        jitMaxPerBlockBps = bps;
+        emit JitCapSet(bps);
     }
 
     function pause() external onlyOwner { _pause(); }
@@ -247,9 +282,10 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         return bal > reserved ? bal - reserved : 0;
     }
 
-    /// @notice The senior claim in USDC — Aave idle + free senior buffer + deployed senior par. NO price.
+    /// @notice The senior claim in USDC — Aave idle + free senior buffer + deployed senior par + any
+    ///         USDC currently out in a JIT position (par). NO price. `jitBorrowed` is 0 between swaps.
     function totalSeniorAssets() public view returns (uint256) {
-        return adapter.totalAssets() + _freeSeniorBuffer() + deployedFromSenior;
+        return adapter.totalAssets() + _freeSeniorBuffer() + deployedFromSenior + jitBorrowed;
     }
 
     function previewDeposit(uint256 assets) public view returns (uint256) {
@@ -431,6 +467,53 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         _supplyToAdapter(_freeSeniorBuffer());
 
         emit FeesAccrued(collected, toSenior, toJunior, toProtocol);
+    }
+
+    // ── engine: JIT borrow-seam (hook-only, atomic within one swap) ─────────────────
+
+    /// @notice Lend the JIT hook a BOUNDED slice of senior idle USDC for ONE swap. The slice is capped
+    ///         per block (`jitMaxPerBlockBps` × senior base) and by Aave headroom; the hook opens a tight
+    ///         single-sided position with it and MUST return it via `settleJitReturn` in the SAME swap
+    ///         (beforeSwap→afterSwap atomic), so the senior is exposed only intra-swap. `jitBorrowed`
+    ///         counts the lent USDC at PAR, so `totalSeniorAssets` is unchanged by the loan.
+    function borrowIdleForJit(uint256 want)
+        external onlyJitHook nonReentrant whenNotPaused returns (uint256 lent)
+    {
+        if (block.number != jitBlock) { jitBlock = block.number; jitBorrowedThisBlock = 0; }
+
+        uint256 perBlockCap = totalSeniorAssets().mulDiv(jitMaxPerBlockBps, BPS, Math.Rounding.Floor);
+        uint256 remaining = perBlockCap > jitBorrowedThisBlock ? perBlockCap - jitBorrowedThisBlock : 0;
+        uint256 cap = want < remaining ? want : remaining;
+        uint256 headroom = Math.min(adapter.totalAssets(), adapter.maxWithdrawable());
+        if (headroom < cap) cap = headroom;
+        if (cap == 0) return 0;
+
+        lent = adapter.withdraw(cap); // best-effort; comes from senior Aave idle, never a junior earmark
+        if (lent == 0) return 0;
+        jitBorrowed += lent;
+        jitBorrowedThisBlock += lent;
+        usdc.safeTransfer(jitHook, lent);
+        emit JitBorrowed(lent);
+    }
+
+    /// @notice The hook returns the borrowed senior USDC (+ any captured fee, net of its close cost) after
+    ///         closing its JIT position in the SAME swap — it MUST have transferred `usdcReturned` to this
+    ///         vault first. Profit lifts the senior (re-idled); a shortfall is absorbed by the junior USDC
+    ///         buffer so the senior stays whole at par. NEVER reverts (afterSwap must not DoS the pool);
+    ///         if the buffer is exhausted the residual is a bounded senior dip (capped by the per-block bps).
+    function settleJitReturn(uint256 usdcReturned) external onlyJitHook nonReentrant {
+        uint256 outstanding = jitBorrowed;
+        jitBorrowed = 0;
+
+        uint256 shortfall = usdcReturned < outstanding ? outstanding - usdcReturned : 0;
+        uint256 draw;
+        if (shortfall > 0) {
+            draw = shortfall < juniorUsdcBuffer ? shortfall : juniorUsdcBuffer;
+            if (draw > 0) { juniorUsdcBuffer -= draw; emit JuniorUsdcAbsorbed(draw); }
+        }
+        // Re-idle the returned USDC plus any freed junior buffer (both are now free senior USDC on hand).
+        _supplyToAdapter(usdcReturned + draw);
+        emit JitSettled(outstanding, usdcReturned, shortfall);
     }
 
     // ── internals ─────────────────────────────────────────────────────────────────
