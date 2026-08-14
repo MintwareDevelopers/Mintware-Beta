@@ -45,7 +45,16 @@ contract MintwareTreasuryVaultTest is Test {
     }
 
     /// @dev Spin up a fully-wired, team-committed vault (shared usdc/team tokens across instances).
+    ///      Pure-ETH junior (juniorUSDC = 0) — the pre-extension behavior.
     function _newVault(uint256 price)
+        internal
+        returns (MintwareTreasuryVault v, MockLiquidityModule m, MockYieldAdapter a)
+    {
+        return _newVault(price, 0);
+    }
+
+    /// @dev Same, but the team also commits `juniorUsdc` of stable first-loss coverage.
+    function _newVault(uint256 price, uint256 juniorUsdc)
         internal
         returns (MintwareTreasuryVault v, MockLiquidityModule m, MockYieldAdapter a)
     {
@@ -63,9 +72,11 @@ contract MintwareTreasuryVaultTest is Test {
         vm.stopPrank();
 
         team.mint(teamAddr, TEAM_COMMIT);
+        if (juniorUsdc > 0) usdc.mint(teamAddr, juniorUsdc);
         vm.startPrank(teamAddr);
         team.approve(address(v), type(uint256).max);
-        v.commitTeam(TEAM_COMMIT, LOCK_DUR);
+        usdc.approve(address(v), type(uint256).max);
+        v.commitTeam(TEAM_COMMIT, juniorUsdc, LOCK_DUR);
         vm.stopPrank();
     }
 
@@ -207,6 +218,108 @@ contract MintwareTreasuryVaultTest is Test {
         vm.expectRevert();
         v.burnForPayment(u, shares, receiver);
         assertEq(usdc.balanceOf(receiver), rcvBefore, "receiver was paid despite exhausted backing");
+    }
+
+    // ── junior USDC buffer (Case B): stable first-loss coverage ─────────────────────
+
+    /// The junior USDC buffer is EXCLUDED from the senior claim — committing it never inflates the
+    /// senior NAV, and a senior can never redeem it.
+    function test_junior_usdc_excluded_from_senior_nav() public {
+        (MintwareTreasuryVault v,,) = _newVault(INIT_PRICE, 40_000 * ONE_USDC);
+        address u = makeAddr("junU1");
+        usdc.mint(u, 100_000 * ONE_USDC);
+        vm.startPrank(u);
+        usdc.approve(address(v), type(uint256).max);
+        uint256 sh = v.depositUSDC(100_000 * ONE_USDC, 0, u);
+        vm.stopPrank();
+
+        assertEq(v.juniorUsdcBuffer(), 40_000 * ONE_USDC, "buffer not held");
+        assertEq(v.totalSeniorAssets(), 100_000 * ONE_USDC, "buffer leaked into senior NAV");
+
+        vm.prank(u);
+        uint256 out = v.redeemSenior(sh, 0);
+        assertApproxEqAbs(out, 100_000 * ONE_USDC, 2, "senior redeemed more/less than par");
+        assertEq(v.juniorUsdcBuffer(), 40_000 * ONE_USDC, "senior touched the junior buffer");
+    }
+
+    /// The buffer ABSORBS a senior shortfall: after IL leaves Aave + LP short, the stable buffer tops
+    /// up so the senior is paid full par, and the buffer decrements by the loss it covered.
+    function test_junior_usdc_absorbs_senior_shortfall() public {
+        (MintwareTreasuryVault v, MockLiquidityModule m,) = _newVault(INIT_PRICE, 30_000 * ONE_USDC);
+        address u = makeAddr("junU2");
+        usdc.mint(u, 100_000 * ONE_USDC);
+        vm.startPrank(u);
+        usdc.approve(address(v), type(uint256).max);
+        v.depositUSDC(100_000 * ONE_USDC, 0, u);
+        vm.stopPrank();
+
+        // Deploy a 50% LP slice, then crash the mark to 10% — deep enough that the LP's recoverable
+        // value falls BELOW the deployed par (a ~100k position marks to ~2·sqrt(0.1)·50k ≈ 31.6k),
+        // so Aave + LP-unwind genuinely can't make the senior whole and the buffer must cover the gap.
+        vm.prank(owner);
+        v.setIdleBufferTarget(5_000);
+        uint256 jt = v.juniorTokens();
+        vm.prank(owner);
+        v.deployToLP(50_000 * ONE_USDC, jt);
+        m.setPrice(INIT_PRICE / 10);
+
+        uint256 bufBefore = v.juniorUsdcBuffer();
+        uint256 shares = v.seniorShares(u);
+
+        // Aave (50k) + IL-reduced LP unwind fall short of full par; the buffer covers the gap.
+        vm.prank(u);
+        uint256 out = v.redeemSenior(shares, 0);
+
+        assertApproxEqAbs(out, 100_000 * ONE_USDC, 5, "senior not made whole at par");
+        assertLt(v.juniorUsdcBuffer(), bufBefore, "buffer did not absorb the shortfall");
+        assertLe(
+            v.deployedFromSenior(),
+            m.recoverableUSDC() + v.juniorUsdcBuffer() + 1_000,
+            "solvency invariant broke after the draw"
+        );
+    }
+
+    /// Past the WHOLE junior stack (LP + USDC buffer) the senior is STILL never underpaid — it reverts.
+    function test_senior_reverts_when_buffer_also_exhausted() public {
+        (MintwareTreasuryVault v, MockLiquidityModule m, MockYieldAdapter a) =
+            _newVault(INIT_PRICE, 1_000 * ONE_USDC);
+        address u = makeAddr("junU3");
+        usdc.mint(u, 100_000 * ONE_USDC);
+        vm.startPrank(u);
+        usdc.approve(address(v), type(uint256).max);
+        v.depositUSDC(100_000 * ONE_USDC, 0, u);
+        vm.stopPrank();
+
+        vm.prank(owner);
+        v.setIdleBufferTarget(5_000);
+        uint256 jt = v.juniorTokens();
+        vm.prank(owner);
+        v.deployToLP(50_000 * ONE_USDC, jt);
+        m.setPrice(1); // wipe the LP
+
+        // Drain Aave so nothing but the tiny $1k buffer is left — still not enough for full par.
+        uint256 adapterBal = usdc.balanceOf(address(a));
+        vm.prank(address(a));
+        usdc.transfer(address(0xdead), adapterBal);
+
+        uint256 shares = v.seniorShares(u);
+        uint256 rcvBefore = usdc.balanceOf(receiver);
+        vm.prank(gateway);
+        vm.expectRevert();
+        v.burnForPayment(u, shares, receiver);
+        assertEq(usdc.balanceOf(receiver), rcvBefore, "receiver paid despite exhausted junior stack");
+        assertEq(v.juniorUsdcBuffer(), 1_000 * ONE_USDC, "buffer not restored on revert");
+    }
+
+    /// Unused buffer is returned to the team at unlock (first-loss payoff: team keeps what it didn't lose).
+    function test_junior_usdc_returned_at_unlock_if_unused() public {
+        (MintwareTreasuryVault v,,) = _newVault(INIT_PRICE, 25_000 * ONE_USDC);
+        vm.warp(vm.getBlockTimestamp() + LOCK_DUR + 1);
+        uint256 teamUsdcBefore = usdc.balanceOf(teamAddr);
+        vm.prank(teamAddr);
+        v.redeemJunior();
+        assertEq(usdc.balanceOf(teamAddr) - teamUsdcBefore, 25_000 * ONE_USDC, "unused buffer not returned");
+        assertEq(v.juniorUsdcBuffer(), 0, "buffer not cleared");
     }
 
     // ── access control ─────────────────────────────────────────────────────────────
