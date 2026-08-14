@@ -12,7 +12,7 @@ import { usePathname, useRouter } from 'next/navigation'
 export type AppMode = 'user' | 'team'
 
 export const APP_MODE_COOKIE = 'mw_app_mode'
-const USER_HOME = '/app/vaults'
+const USER_HOME = '/app/account'
 const TEAM_HOME = '/app/team'
 
 export function persistAppMode(mode: AppMode) {
