@@ -22,9 +22,6 @@ export function YieldPaymentNetworkSection() {
               <p className="text-ink-mid text-[clamp(14px,1.6vw,17px)] leading-[1.55] mt-5 max-w-[52ch]">
                 {YPN_TEASER.body}
               </p>
-              <p className="text-[12px] text-ink-soft leading-[1.5] mt-4 max-w-[52ch]">
-                ✴ Liquidity as a public good — never idle, never locked away, and its yield instantly yours to spend.
-              </p>
               <Link href={YPN_TEASER.href} className="glass-pill mt-7">
                 {YPN_TEASER.cta} →
               </Link>
