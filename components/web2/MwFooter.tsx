@@ -31,7 +31,7 @@ export function MwFooter() {
             <a
               key={l.label}
               href={l.href}
-              className="text-ink-mid no-underline hover:text-ink inline-flex items-center min-h-[36px]"
+              className="text-ink-mid no-underline hover:text-ink inline-flex items-center min-h-[44px]"
               {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
             >
               {l.label}

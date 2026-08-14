@@ -129,11 +129,11 @@ export default function AppVaultsPage() {
           </div>
         ) : (
           <div className="soft-card overflow-x-auto">
-            <table className="w-full border-collapse text-[13px] min-w-[840px]">
+            <table className="w-full border-collapse text-[13px] min-w-[840px] max-[820px]:min-w-0">
               <thead>
                 <tr className="border-b border-hair-soft bg-ground-cool">
                   {([['Vault', 'l'], ['Status', 'l'], ['TVL', 'r'], ['Reward pool', 'r'], ['Epoch', 'r'], ['Example APY', 'r'], ['Chain', 'l'], ['', 'r']] as const).map(([h, al], i) => (
-                    <th key={i} className={`text-[9.5px] uppercase tracking-[0.09em] font-semibold text-ink-soft px-4 py-3 whitespace-nowrap ${al === 'r' ? 'text-right' : 'text-left'} ${(i === 4 || i === 5) ? 'max-[820px]:hidden' : ''} ${i === 6 ? 'max-[680px]:hidden' : ''}`}>{h}</th>
+                    <th key={i} className={`text-[9.5px] uppercase tracking-[0.09em] font-semibold text-ink-soft px-4 max-[560px]:px-3 py-3 whitespace-nowrap ${al === 'r' ? 'text-right' : 'text-left'} ${(i === 4 || i === 5) ? 'max-[820px]:hidden' : ''} ${i === 6 ? 'max-[680px]:hidden' : ''} ${i === 3 ? 'max-[560px]:hidden' : ''}`}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -162,7 +162,7 @@ export default function AppVaultsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right tabular-nums text-ink">{v.tvl_usdc != null ? fmtUSD(v.tvl_usdc) : '—'}</td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-coral2-deep">{ep?.total_pool != null ? fmtUSD(ep.total_pool) : '—'}</td>
+                      <td className="px-4 max-[560px]:px-3 py-3.5 text-right tabular-nums text-coral2-deep max-[560px]:hidden">{ep?.total_pool != null ? fmtUSD(ep.total_pool) : '—'}</td>
                       <td className="px-4 py-3.5 text-right tabular-nums text-ink-mid max-[820px]:hidden">{ep ? `#${ep.epoch_number}` : '—'}</td>
                       <td className="px-4 py-3.5 text-right tabular-nums text-peri-deep max-[820px]:hidden">{BASE_APY.toFixed(1)}%</td>
                       <td className="px-4 py-3.5 text-[12px] text-ink-mid max-[680px]:hidden">{chainName(v.chain_id)}</td>

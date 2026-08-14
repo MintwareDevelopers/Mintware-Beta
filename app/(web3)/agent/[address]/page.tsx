@@ -217,7 +217,7 @@ function AgentProfileContent() {
                       {pnlUsd >= 0 ? '+' : ''}${Math.abs(pnlUsd).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-3 max-[400px]:grid-cols-1">
                     <div className="rounded-xl bg-ground-cool border border-hair p-3">
                       <div className={STAT_LABEL}>Trades</div>
                       <div className="font-mono text-[13px] font-semibold text-ink">{pnl.total_trades.toLocaleString()}</div>

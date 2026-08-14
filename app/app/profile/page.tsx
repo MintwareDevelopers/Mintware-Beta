@@ -200,7 +200,7 @@ function ProfileContent() {
       {/* ── BAND 2 · REPUTATION ── */}
       <div className="border-b border-hair-soft bg-ground-cool">
         <div className={`${WRAP} py-8`}>
-          <div className="flex gap-0 flex-wrap mb-7">
+          <div className="grid grid-cols-6 max-[900px]:grid-cols-3 max-[420px]:grid-cols-2 gap-x-6 gap-y-4 mb-7">
             {[
               { l: 'Reward multiplier', v: mult, hl: true },
               { l: 'Percentile', v: percentile ? `top ${100 - percentile}%` : '—' },
@@ -208,8 +208,8 @@ function ProfileContent() {
               { l: 'Txns', v: data?.totalTxCount != null ? String(data.totalTxCount) : '—' },
               { l: 'Network', v: `${data?.treeSize ?? 0} wallets` },
               { l: 'First seen', v: data?.firstSeen ?? '—' },
-            ].map((s, i, arr) => (
-              <div key={s.l} className={`flex flex-col gap-[3px] pr-6 mr-6 ${i < arr.length - 1 ? 'border-r border-hair-soft' : ''}`}>
+            ].map((s) => (
+              <div key={s.l} className="flex flex-col gap-[3px] min-w-0">
                 <span className="text-[10px] uppercase tracking-[0.08em] text-ink-soft whitespace-nowrap">{s.l}</span>
                 <span className={`font-atx-display text-[17px] font-medium whitespace-nowrap tabular-nums ${s.hl ? 'text-peri-deep' : 'text-ink'}`}>{s.v}</span>
               </div>

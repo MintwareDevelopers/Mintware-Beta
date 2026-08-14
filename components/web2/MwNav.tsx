@@ -100,7 +100,7 @@ export function MwNav() {
           <button
             onClick={() => setMenuOpen(o => !o)}
             aria-label="Menu"
-            className="hidden max-[880px]:flex glass-pill glass-pill-sm w-9 h-9 ml-1 !px-0"
+            className="hidden max-[880px]:flex glass-pill glass-pill-sm w-11 h-11 ml-1 !px-0"
           >
             {menuOpen ? '✕' : '☰'}
           </button>

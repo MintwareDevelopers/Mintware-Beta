@@ -48,7 +48,7 @@ export function V2Nav({ active }: { active?: V2NavActive }) {
 
         <div className="flex items-center gap-3.5">
           <Link href="/docs" className="hidden md:inline text-[14px] font-medium text-ink-mid hover:text-ink no-underline">Docs</Link>
-          <button onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} className="md:hidden glass-pill glass-pill-sm w-9 h-9 !px-0">{open ? '✕' : '☰'}</button>
+          <button onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} className="md:hidden glass-pill glass-pill-sm w-11 h-11 !px-0">{open ? '✕' : '☰'}</button>
           <button onClick={() => launch('/app')} className="glass-pill glass-pill-sm">{launchLabel} →</button>
         </div>
       </div>

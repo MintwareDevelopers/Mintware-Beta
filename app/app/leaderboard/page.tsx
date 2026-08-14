@@ -200,10 +200,12 @@ function LeaderboardContent() {
         {/* Table */}
         <div className="max-w-[1180px] mx-auto px-7 py-7 max-[560px]:px-4">
           <div className="soft-card overflow-hidden">
-            <div className="grid [grid-template-columns:60px_1fr_104px_repeat(2,110px)] max-[820px]:[grid-template-columns:52px_1fr] border-b border-hair-soft bg-ground-cool">
+            <div className="grid [grid-template-columns:60px_1fr_104px_repeat(2,110px)] max-[820px]:[grid-template-columns:52px_1fr_auto] border-b border-hair-soft bg-ground-cool">
               {['Rank', 'Wallet', 'Tier', 'Attribution', 'Tree'].map((h, i) => (
                 <div key={h} className={`${LABEL} text-[9px] px-[16px] py-3 ${i >= 3 ? 'text-right max-[820px]:hidden' : ''} ${i === 2 ? 'max-[820px]:hidden' : ''}`}>{h}</div>
               ))}
+              {/* mobile-only header for the currently selected metric */}
+              <div className={`${LABEL} text-[9px] px-[16px] py-3 text-right hidden max-[820px]:block`}>{metric === 'tree' ? 'Tree' : 'Attribution'}</div>
             </div>
 
             {loading ? (
@@ -301,7 +303,7 @@ function Row({ r, metric, isMe }: { r: Entry & { rank: number; tier: string }; m
   const col = (k: Metric) => (metric === k ? 'font-medium text-ink' : 'text-ink-mid')
   const tree = (r.referral_trade_points || 0)
   return (
-    <div className={`grid [grid-template-columns:60px_1fr_104px_repeat(2,110px)] max-[820px]:[grid-template-columns:52px_1fr] items-center border-b border-hair-soft last:border-b-0 ${isMe ? 'bg-[rgba(108,108,240,0.07)]' : ''}`} style={isMe ? { borderLeft: '2px solid var(--color-peri)' } : undefined}>
+    <div className={`grid [grid-template-columns:60px_1fr_104px_repeat(2,110px)] max-[820px]:[grid-template-columns:52px_1fr_auto] items-center border-b border-hair-soft last:border-b-0 ${isMe ? 'bg-[rgba(108,108,240,0.07)]' : ''}`} style={isMe ? { borderLeft: '2px solid var(--color-peri)' } : undefined}>
       <div className={`px-[16px] py-3.5 tabular-nums ${isTop ? `text-[18px] font-atx-display font-medium ${rankCls}` : `text-[15px] ${rankCls}`}`}>{String(r.rank).padStart(2, '0')}</div>
       <div className="px-[16px] py-3.5 min-w-0 flex items-center gap-2.5">
         <span className={`w-[7px] h-[7px] rounded-full shrink-0 inline-block ${r.tier === 'Ghost' ? 'bg-ink-soft' : 'bg-peri'}`} />
@@ -318,6 +320,8 @@ function Row({ r, metric, isMe }: { r: Entry & { rank: number; tier: string }; m
       </div>
       <div className={`px-[16px] py-3.5 text-right text-[15px] tabular-nums max-[820px]:hidden ${col('score')}`}>{r.attribution_score || 0}</div>
       <div className={`px-[16px] py-3.5 text-right text-[15px] tabular-nums max-[820px]:hidden ${col('tree')}`}>{tree}</div>
+      {/* mobile-only: the currently selected metric's value */}
+      <div className="px-[16px] py-3.5 text-right text-[15px] tabular-nums font-medium text-ink hidden max-[820px]:block">{metric === 'tree' ? tree : (r.attribution_score || 0)}</div>
     </div>
   )
 }
