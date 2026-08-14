@@ -4,7 +4,9 @@ pragma solidity ^0.8.26;
 import {Script, console}          from "forge-std/Script.sol";
 import {MintwareTreasuryVault}    from "../src/payments/MintwareTreasuryVault.sol";
 import {MintwareV4LiquidityModule} from "../src/payments/MintwareV4LiquidityModule.sol";
+import {MintwareTreasuryJitHook}  from "../src/payments/MintwareTreasuryJitHook.sol";
 import {MintwarePaymentGateway}   from "../src/payments/MintwarePaymentGateway.sol";
+import {HookMiner}                from "../src/lib/HookMiner.sol";
 import {IPoolManager}             from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks}                   from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}                  from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -41,6 +43,8 @@ import {Currency}                 from "@uniswap/v4-core/src/types/Currency.sol"
 ///   (Teams commit their junior via vault.commitTeam(...) afterwards — that is not a deployer action.)
 contract DeployTreasuryV2 is Script {
     uint160 constant DEFAULT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
+    address constant C2_FACTORY = 0x4e59b44847b379578588920cA78FbF26c0B4956C; // deterministic CREATE2 factory
+    uint160 constant JIT_HOOK_FLAGS = 0xC0; // beforeSwap | afterSwap
 
     function run() external {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -61,12 +65,13 @@ contract DeployTreasuryV2 is Script {
         require(usdc != teamToken, "identical tokens");
         (address c0, address c1) = usdc < teamToken ? (usdc, teamToken) : (teamToken, usdc);
 
-        PoolKey memory key = PoolKey({
+        // Placeholder-hooks key for the hook ctor + mining (the hook ctor ignores key.hooks).
+        PoolKey memory ctorKey = PoolKey({
             currency0: Currency.wrap(c0),
             currency1: Currency.wrap(c1),
             fee:       poolFee,
             tickSpacing: tickSpacing,
-            hooks:     IHooks(address(0)) // passive full-range module — no hook
+            hooks:     IHooks(address(0))
         });
 
         console.log("=== YPN v2 Treasury Vault Deploy ===");
@@ -77,17 +82,35 @@ contract DeployTreasuryV2 is Script {
 
         vm.startBroadcast(deployerKey);
 
-        // 2. Open the V4 pool (the module reads slot0).
-        IPoolManager(poolMgr).initialize(key, initPrice);
-
-        // 3. Treasury vault (senior = community USDC; junior = team token).
+        // 1. Treasury vault (senior = community USDC; junior = team token).
         MintwareTreasuryVault vault = new MintwareTreasuryVault(usdc, teamToken, adapter, deployer);
         console.log("TreasuryVault:", address(vault));
 
-        // 4. Real V4 liquidity module behind the ILiquidityModule seam.
+        // 2. Mine + deploy the JIT hook (flags 0xC0 = beforeSwap|afterSwap). Deployed via the CREATE2
+        //    factory so the mined permission bits hold. JIT is gated by the vault's jitMaxPerBlockBps.
+        bytes memory hookArgs = abi.encode(poolMgr, ctorKey, usdc, address(vault), deployer);
+        (address hookAddr, bytes32 hookSalt) =
+            HookMiner.find(C2_FACTORY, JIT_HOOK_FLAGS, type(MintwareTreasuryJitHook).creationCode, hookArgs);
+        MintwareTreasuryJitHook hook =
+            new MintwareTreasuryJitHook{salt: hookSalt}(poolMgr, ctorKey, usdc, address(vault), deployer);
+        require(address(hook) == hookAddr, "hook address mismatch");
+        console.log("JitHook:      ", address(hook));
+
+        // 3. Open the V4 pool WITH the hook (the module reads slot0; the hook JITs team->USDC swaps).
+        PoolKey memory key = PoolKey({
+            currency0: Currency.wrap(c0), currency1: Currency.wrap(c1),
+            fee: poolFee, tickSpacing: tickSpacing, hooks: IHooks(hookAddr)
+        });
+        IPoolManager(poolMgr).initialize(key, initPrice);
+
+        // 4. Real V4 liquidity module behind the ILiquidityModule seam (on the hooked pool).
         MintwareV4LiquidityModule module = new MintwareV4LiquidityModule(poolMgr, key, usdc, address(vault), deployer);
         vault.setLiquidityModule(address(module));
         console.log("V4Module:     ", address(module));
+
+        // 5. Wire the JIT seam: vault <-> hook, and exempt the module's own recover/collect swaps.
+        vault.setJitHook(address(hook));
+        hook.setJitSkipSender(address(module));
 
         // 5. Payment Gateway (settles card charges against the senior side).
         MintwarePaymentGateway gateway = new MintwarePaymentGateway(address(vault), usdc, treasury, admin);
