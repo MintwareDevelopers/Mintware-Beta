@@ -6,20 +6,29 @@
 name = "relayer"
 version = "0.1.0"
 edition = "2021"
-description = "YPN settlement relayer — encodes the Gateway settleSpend call the edge's holds settle under. Increment 6a: the settlement calldata core (offline-provable). On-chain submission + Rain webhooks are the deploy-gated follow-up."
+description = "YPN settlement relayer — encodes + submits the Gateway settleSpend call the edge's holds settle under. Increment 6a: the settlement calldata core (offline-provable). Increment 6b: EIP-1559 tx build/sign/send + live-Gateway dry-run (signing offline-provable; funded broadcast + Rain webhooks deploy-gated)."
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
-# ABI encode/decode of settleSpend + its nested structs. Submission (tx build/sign/send) is 6b.
+# ABI encode/decode of settleSpend + its nested structs.
 alloy-sol-types = "0.8"
-alloy-primitives = "0.8"
-
-[dev-dependencies]
-# For the gated on-chain dry-run test: eth_call our calldata against the LIVE Gateway.
+alloy-primitives = { version = "0.8", features = ["k256"] }
+# Increment 6b — tx submission. Canonical EIP-1559 tx build + RLP/2718 encoding (never hand-rolled),
+# k256 for the recoverable ECDSA signature over the tx signing hash, blocking JSON-RPC for send/read.
+# The `k256` feature enables signer recovery (TxEnvelope::recover_signer) used in the signing proofs.
+alloy-consensus = { version = "0.8", features = ["k256"] }
+alloy-eips = "0.8"
+k256 = { version = "0.13", features = ["ecdsa"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 serde_json = "1"
+# Feature-unification fix: alloy-eip7702 (pulled by alloy-consensus/eips) uses derive_more's `display`
+# derive, which is non-default in derive_more 1.0 — declare it directly so the feature is enabled.
+derive_more = { version = "1", features = ["display", "from"] }
+
+[dev-dependencies]
+# The gated on-chain dry-run test also uses reqwest/serde_json (now regular deps above).
 
 [lints.rust]
 unsafe_code = "forbid"
