@@ -225,6 +225,42 @@ export const YPN_TEASER = {
   href: '/yield-payment-network',
 } as const
 
+// ─── The blended liquidity model + dual doors (in-page section) ─────────────
+// Accurate model: a market-maker anchors a BLENDED position; the public makes up
+// the difference; the vault runs it as active v4 liquidity + an Aave buffer, so
+// one balance earns twice and stays spendable. Two audiences (depositor + MM).
+export const YPN_LIQUIDITY = {
+  eyebrow: 'How it works',
+  title: 'Liquidity,',
+  titleAccent: 'finally accessible.',
+  body: 'A market-maker anchors the pool with a blended position — say 200 ETH + 300,000 USDC. The public makes up the difference. Every dollar then runs as active Uniswap v4 liquidity with an Aave buffer underneath, so one balance earns twice — lending yield stacked with trading capture (fees + recaptured MEV/LVR) — while staying spendable at the point of sale.',
+  flow: [
+    { label: 'Broker anchors', sub: 'blended liquidity — e.g. 200 ETH + 300k USDC' },
+    { label: 'Public fills',    sub: 'the community makes up the difference' },
+    { label: 'One vault',       sub: 'active Uniswap v4 + an Aave buffer' },
+    { label: 'Stacked yield',   sub: 'earned twice — and spendable' },
+  ],
+  doors: [
+    { kicker: 'For you', tone: 'peri', title: 'Deposit, earn, spend', body: 'Put in USDC, earn the stacked yield, and spend it straight from your card — no unwinding, bridging, or cashing out first.' },
+    { kicker: 'For market-makers', tone: 'coral', title: 'Seed liquidity, reward your community', body: 'Anchor blended liquidity for your launched token, earn the same stacked yield, and hand your community a spendable-yield account on top of it.' },
+  ],
+} as const
+
+// ─── The epic tech (in-page dark-pop band) ──────────────────────────────────
+export const YPN_TECH = {
+  eyebrow: 'Under the hood',
+  title: 'The hard part,',
+  titleAccent: 'done right.',
+  intro: 'None of this works without the engineering. Here’s the part we’re proud of.',
+  items: [
+    { k: 'Arc smart contracts', v: 'Native USDC gas and card authorization in sub-150ms.' },
+    { k: 'The ULV engine',      v: 'Just-in-time liquidity on every swap — capital is never idle.' },
+    { k: 'MEV / LVR recapture', v: 'Value that normally leaks to arbitrageurs, returned to depositors.' },
+    { k: 'Proven',              v: 'Invariant-fuzzed to 256×128k; payment core deployed and on-chain-verified on Base Sepolia.' },
+  ],
+  note: 'On testnet — deployed ≠ audited. An external audit precedes mainnet or real value.',
+} as const
+
 export type YpnPillar = (typeof YPN_PILLARS.cards)[number]
 export type YpnMatrixRow = (typeof YPN_MATRIX.rows)[number]
 export type YpnFlowStep = (typeof YPN_FLOW.steps)[number]
