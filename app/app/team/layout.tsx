@@ -12,7 +12,6 @@ import { ScopeSwitcher } from '@/components/web2/ScopeSwitcher'
 
 const NAV = [
   { href: '/app/team',            label: 'Overview' },
-  { href: '/app/team/activity',   label: 'Activity' },
   { href: '/app/team/vaults',     label: 'Vaults' },
   { href: '/app/team/swap',       label: 'Swap' },
   { href: '/app/team/cards',      label: 'Cards & Spend' },
