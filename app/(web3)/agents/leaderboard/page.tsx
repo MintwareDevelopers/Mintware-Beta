@@ -100,7 +100,7 @@ function AgentsLeaderboardContent() {
           Ranked by Attribution Score
         </div>
 
-        <div className="soft-card overflow-hidden mb-5">
+        <div className="soft-card overflow-x-auto mb-5">
           {loading && <div className="text-center py-14 text-ink-mid text-[14px]">Loading agents…</div>}
           {error && <div className="text-center py-14 text-[#D14343] text-[14px]">{error}</div>}
           {!loading && !error && rows.length === 0 && (
