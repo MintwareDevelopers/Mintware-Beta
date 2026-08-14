@@ -16,10 +16,12 @@
 // After this: the TEAM commits its junior via vault.commitTeam(...); point edge-auth at the vault
 // (EDGE_VAULT_KIND=v2, EDGE_VAULT_ADDRESS, EDGE_GATEWAY_ADDRESS) + the relayer at the new gateway.
 //
-// Body (JSON, optional): { teamToken, circleTreasury?, initSqrtPrice?, jitCapBps? }
+// Body (JSON, optional): { teamToken, circleTreasury?, initSqrtPrice?, mockUsdc? }
 //   teamToken     — the project token (defaults to WETH predeploy if unset; use an 18-dp test token).
 //   circleTreasury — the card rail / protocol treasury (defaults to the Privy wallet).
 //   initSqrtPrice — override the pool's start price (else computed for 1 whole team = 1 whole USDC).
+//   mockUsdc      — true → deploy a fresh public-mint MockERC20 as USDC + a no-op MockYieldAdapter
+//                   (self-contained: the smoke route mints its own test USDC, no faucet/Aave needed).
 //
 // ⚠ Bearer-gated (CRON_SECRET). TESTNET ONLY (Base Sepolia hardcoded). Requires ORACLE_SIGNER_PROVIDER
 //   =privy + a funded wallet. JIT is on by default (jitMaxPerBlockBps=5%); setJitCap(0) disables.
@@ -34,6 +36,7 @@ import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import {
   ADAPTER_ABI, ADAPTER_BYTECODE, VAULT_ABI, VAULT_BYTECODE, HOOK_ABI, HOOK_BYTECODE,
   MODULE_ABI, MODULE_BYTECODE, GATEWAY_ABI, GATEWAY_BYTECODE,
+  MOCK_ERC20_ABI, MOCK_ERC20_BYTECODE, MOCK_ADAPTER_ABI, MOCK_ADAPTER_BYTECODE,
 } from '@/lib/web3/artifacts/treasuryV2'
 
 export const dynamic = 'force-dynamic'
@@ -108,7 +111,10 @@ export const POST = createHandler(async (req, ctx) => {
   const teamToken = (typeof body.teamToken === 'string' && isAddress(body.teamToken)) ? getAddress(body.teamToken) : WETH
   const circleTreasury = (typeof body.circleTreasury === 'string' && isAddress(body.circleTreasury))
     ? getAddress(body.circleTreasury) : account.address
-  if (getAddress(teamToken) === getAddress(USDC)) {
+  // mockUsdc: deploy a fresh public-mint MockERC20 as USDC + a no-op MockYieldAdapter, so the whole
+  // stack is self-contained — the smoke route can mint its own test USDC (no faucet, no Aave dependency).
+  const mockUsdc = body.mockUsdc === true
+  if (!mockUsdc && getAddress(teamToken) === getAddress(USDC)) {
     return ctx.json({ ok: false, step: 'preflight', error: 'teamToken must differ from USDC' }, 400)
   }
 
@@ -119,27 +125,44 @@ export const POST = createHandler(async (req, ctx) => {
   }
 
   try {
-    // 1. Aave adapter (vault = 0; authorized after the vault exists).
-    const adapter = deployed(await wait(await walletClient.deployContract({
-      abi: ADAPTER_ABI, bytecode: ADAPTER_BYTECODE,
-      args: [AAVE_PROVIDER, USDC, AUSDC, ZERO, account.address], account, chain: baseSepolia,
-    })))
+    // 0. Resolve the USDC + yield adapter — either the live Aave market, or a self-contained mock pair.
+    let usdc: `0x${string}` = USDC
+    let adapter: `0x${string}`
+    if (mockUsdc) {
+      usdc = deployed(await wait(await walletClient.deployContract({
+        abi: MOCK_ERC20_ABI, bytecode: MOCK_ERC20_BYTECODE,
+        args: ['USD Coin', 'USDC', 6], account, chain: baseSepolia,
+      })))
+      adapter = deployed(await wait(await walletClient.deployContract({
+        abi: MOCK_ADAPTER_ABI, bytecode: MOCK_ADAPTER_BYTECODE,
+        args: [usdc], account, chain: baseSepolia,
+      })))
+      // The mock adapter is ungated (no setVault) — nothing to authorize.
+    } else {
+      // 1. Aave adapter (vault = 0; authorized after the vault exists).
+      adapter = deployed(await wait(await walletClient.deployContract({
+        abi: ADAPTER_ABI, bytecode: ADAPTER_BYTECODE,
+        args: [AAVE_PROVIDER, USDC, AUSDC, ZERO, account.address], account, chain: baseSepolia,
+      })))
+    }
 
     // 2. Treasury vault.
     const vault = deployed(await wait(await walletClient.deployContract({
       abi: VAULT_ABI, bytecode: VAULT_BYTECODE,
-      args: [USDC, teamToken, adapter, account.address], account, chain: baseSepolia,
+      args: [usdc, teamToken, adapter, account.address], account, chain: baseSepolia,
     })))
-    await wait(await walletClient.writeContract({
-      address: adapter, abi: ADAPTER_ABI, functionName: 'setVault', args: [vault], account, chain: baseSepolia,
-    }))
+    if (!mockUsdc) {
+      await wait(await walletClient.writeContract({
+        address: adapter, abi: ADAPTER_ABI, functionName: 'setVault', args: [vault], account, chain: baseSepolia,
+      }))
+    }
 
     // 3. Sort currencies, mine + CREATE2-deploy the JIT hook (ctor ignores key.hooks → ZERO placeholder).
-    const [c0, c1] = BigInt(USDC) < BigInt(teamToken) ? [USDC, teamToken] : [teamToken, USDC]
+    const [c0, c1] = BigInt(usdc) < BigInt(teamToken) ? [usdc, teamToken] : [teamToken, usdc]
     const ctorKey = { currency0: c0, currency1: c1, fee: FEE, tickSpacing: TICK_SPACING, hooks: ZERO }
     const hookArgs = encodeAbiParameters(
       [{ type: 'address' }, POOL_KEY_TUPLE, { type: 'address' }, { type: 'address' }, { type: 'address' }],
-      [POOL_MANAGER, ctorKey, USDC, vault, account.address],
+      [POOL_MANAGER, ctorKey, usdc, vault, account.address],
     )
     const initcode = concat([HOOK_BYTECODE, hookArgs])
     const mined = mineHookSalt(initcode)
@@ -162,7 +185,7 @@ export const POST = createHandler(async (req, ctx) => {
     // 5. Module on the hooked pool.
     const module = deployed(await wait(await walletClient.deployContract({
       abi: MODULE_ABI, bytecode: MODULE_BYTECODE,
-      args: [POOL_MANAGER, realKey, USDC, vault, account.address], account, chain: baseSepolia,
+      args: [POOL_MANAGER, realKey, usdc, vault, account.address], account, chain: baseSepolia,
     })))
 
     // 6. Wire the vault ↔ module ↔ hook (skip JIT on the module's own recover/collect swaps).
@@ -173,17 +196,19 @@ export const POST = createHandler(async (req, ctx) => {
     // 7. Gateway.
     const gateway = deployed(await wait(await walletClient.deployContract({
       abi: GATEWAY_ABI, bytecode: GATEWAY_BYTECODE,
-      args: [vault, USDC, circleTreasury, account.address], account, chain: baseSepolia,
+      args: [vault, usdc, circleTreasury, account.address], account, chain: baseSepolia,
     })))
     await wait(await walletClient.writeContract({ address: vault, abi: VAULT_ABI, functionName: 'setGateway', args: [gateway], account, chain: baseSepolia }))
     await wait(await walletClient.writeContract({ address: vault, abi: VAULT_ABI, functionName: 'setProtocolTreasury', args: [circleTreasury], account, chain: baseSepolia }))
 
     return ctx.json({
-      ok: true, chain: 'base-sepolia', deployer: account.address,
-      addresses: { adapter, vault, jitHook: hook, module, gateway, usdc: USDC, teamToken, poolManager: POOL_MANAGER },
+      ok: true, chain: 'base-sepolia', deployer: account.address, mockUsdc,
+      addresses: { adapter, vault, jitHook: hook, module, gateway, usdc, teamToken, poolManager: POOL_MANAGER },
       pool: { fee: FEE, tickSpacing: TICK_SPACING, sqrtPriceX96: sqrtPrice.toString(), dec0, dec1 },
       basescanVault: `https://sepolia.basescan.org/address/${vault}`,
-      next: 'Team calls vault.commitTeam(teamTokens, juniorUSDC, lockDur>=90d). Point edge-auth: EDGE_VAULT_KIND=v2, EDGE_VAULT_ADDRESS=vault, EDGE_GATEWAY_ADDRESS=gateway. Relayer → gateway.',
+      next: mockUsdc
+        ? 'Self-contained mock stack. Team commitTeam(...) then POST /api/oracle/smoke-ypn-v2-testnet {vault} — it mints its own USDC (no faucet).'
+        : 'Team calls vault.commitTeam(teamTokens, juniorUSDC, lockDur>=90d). Point edge-auth: EDGE_VAULT_KIND=v2, EDGE_VAULT_ADDRESS=vault, EDGE_GATEWAY_ADDRESS=gateway. Relayer → gateway.',
     })
   } catch (e) {
     return ctx.json({ ok: false, step: 'deploy', error: e instanceof Error ? e.message : String(e) }, 500)

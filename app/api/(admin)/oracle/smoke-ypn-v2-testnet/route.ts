@@ -18,9 +18,10 @@
 //
 // Body (JSON): { vault, gateway?, depositUsdc?, settleUsdc?, deployUsdc? }
 //   gateway     — defaults to vault.gateway().
-//   depositUsdc — 6dp USDC to deposit as senior (default 10_000000 = $10). The Privy wallet must already
-//                 hold this much of the vault's USDC — the route does NOT source it (mock USDC minter is
-//                 not the deployer). Top up 0x7fD88…7E06 with test USDC + gas first.
+//   depositUsdc — 6dp USDC to deposit as senior (default 10_000000 = $10). If the vault's USDC is a
+//                 public-mint MockERC20 (deploy with {mockUsdc:true}) the route MINTS the shortfall
+//                 itself — fully self-contained, no faucet. On a real onlyOwner USDC it returns a 412
+//                 telling you to top up 0x7fD88…7E06. Either way the wallet still needs ETH for gas.
 //   settleUsdc  — 6dp card charge to settle (default 1_000000 = $1; must be < $250 and <= idle).
 //   deployUsdc  — 6dp senior USDC to deploy to LP after settle (default 0 = skip).
 //
@@ -39,6 +40,7 @@ const ERC20_ABI = [
   { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ name: '', type: 'bool' }] },
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
   { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
+  { type: 'function', name: 'mint', stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [] }, // MockERC20 public mint
 ] as const
 
 const HIGH_VALUE_THRESHOLD = 250_000_000n // $250 (6dp) — at/above this settleSpend needs an edge sig.
@@ -76,12 +78,25 @@ export const POST = createHandler(async (req, ctx) => {
       ? getAddress(body.gateway)
       : getAddress(await readV<`0x${string}`>('gateway'))
 
-    // ── funding preflight (the route does not mint — the mock USDC minter is not the deployer) ──
-    const usdcHeld = await publicClient.readContract({ address: usdc, abi: ERC20_ABI, functionName: 'balanceOf', args: [me] }) as bigint
+    // ── funding: on a MockERC20 (public mint) the route mints its own test USDC — fully self-contained.
+    //    On a real onlyOwner USDC the mint reverts; we fall through to a 412 spelling out the top-up. ──
+    let usdcHeld = await publicClient.readContract({ address: usdc, abi: ERC20_ABI, functionName: 'balanceOf', args: [me] }) as bigint
+    let mintTx: `0x${string}` | null = null
+    if (usdcHeld < depositUsdc) {
+      try {
+        mintTx = await walletClient.writeContract({
+          address: usdc, abi: ERC20_ABI, functionName: 'mint', args: [me, depositUsdc - usdcHeld], account, chain: baseSepolia, gas: 120_000n,
+        })
+        await wait(mintTx)
+        usdcHeld = await publicClient.readContract({ address: usdc, abi: ERC20_ABI, functionName: 'balanceOf', args: [me] }) as bigint
+      } catch {
+        mintTx = null // not a public-mint mock — fall through to the funding response
+      }
+    }
     if (usdcHeld < depositUsdc) {
       return ctx.json({
         ok: false, step: 'funding',
-        error: `Privy wallet holds ${usdcHeld} USDC (6dp) but needs ${depositUsdc}. Top up ${me} with the vault's test USDC (${usdc}) + Base Sepolia ETH for gas.`,
+        error: `Privy wallet holds ${usdcHeld} USDC (6dp) but needs ${depositUsdc}, and this USDC (${usdc}) is not a public-mint mock. Top up ${me} with it + Base Sepolia ETH, or redeploy v2 with {mockUsdc:true}.`,
         wallet: me, usdc, held: usdcHeld.toString(), needed: depositUsdc.toString(),
       }, 412)
     }
@@ -149,7 +164,7 @@ export const POST = createHandler(async (req, ctx) => {
 
     return ctx.json({
       ok: true, chain: 'base-sepolia', vault, gateway, usdc, wallet: me,
-      deposit: { usdc: depositUsdc.toString(), sharesMinted: sharesAfter.toString(), idleAfter: idleAfterDeposit.toString(), approveTx, depositTx },
+      deposit: { usdc: depositUsdc.toString(), sharesMinted: sharesAfter.toString(), idleAfter: idleAfterDeposit.toString(), mintTx, approveTx, depositTx },
       settle:  { usdc: settleUsdc.toString(), holdId, sharesBurned: (sharesAfter - sharesAfterSettle).toString(), sharesRemaining: sharesAfterSettle.toString(), settleTx },
       deploy:  deployUsdc > 0n ? { usdc: deployUsdc.toString(), deployedFromSenior: deployedFromSenior.toString(), deployTx } : 'skipped',
       note: 'Core LSA loop proven live: senior USDC deposit → card charge burned shares + redeemed USDC to treasury. JIT swap leg is covered by the fork-fuzz suite.',
