@@ -45,6 +45,17 @@ const ERC20_ABI = [
 
 const HIGH_VALUE_THRESHOLD = 250_000_000n // $250 (6dp) — at/above this settleSpend needs an edge sig.
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** Poll a view until `ok(value)` holds (or attempts run out) — absorbs the public Base Sepolia RPC's
+ *  read-after-write lag, where a read right after a mined tx can hit a load-balancer node that hasn't
+ *  indexed it yet and returns a stale value. Returns the last value read either way. */
+async function waitFor<T>(read: () => Promise<T>, ok: (v: T) => boolean, tries = 8, delayMs = 1500): Promise<T> {
+  let v = await read()
+  for (let i = 0; i < tries && !ok(v); i++) { await sleep(delayMs); v = await read() }
+  return v
+}
+
 export const POST = createHandler(async (req, ctx) => {
   const account = await getOracleSigner('root')
   const transport = http(process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org')
@@ -91,7 +102,11 @@ export const POST = createHandler(async (req, ctx) => {
           address: usdc, abi: ERC20_ABI, functionName: 'mint', args: [me, depositUsdc - usdcHeld], account, chain: baseSepolia, gas: 120_000n,
         })
         await wait(mintTx)
-        usdcHeld = await publicClient.readContract({ address: usdc, abi: ERC20_ABI, functionName: 'balanceOf', args: [me] }) as bigint
+        // poll the balance until the mint is visible (read-after-write lag), don't read once
+        usdcHeld = await waitFor(
+          () => publicClient.readContract({ address: usdc, abi: ERC20_ABI, functionName: 'balanceOf', args: [me] }) as Promise<bigint>,
+          (v) => v >= depositUsdc,
+        )
       } catch {
         mintTx = null // not a public-mint mock — fall through to the funding response
       }
@@ -116,12 +131,13 @@ export const POST = createHandler(async (req, ctx) => {
       account, chain: baseSepolia, gas: 600_000n,
     })
     await wait(depositTx)
-    const sharesAfter = await readV<bigint>('seniorShares', [me])
-    const idleAfterDeposit = await readV<bigint>('idleBuffer')
+    // poll the post-deposit views until they reflect the deposit (read-after-write lag)
+    const sharesAfter = await waitFor(() => readV<bigint>('seniorShares', [me]), (v) => v > 0n)
+    const idleAfterDeposit = await waitFor(() => readV<bigint>('idleBuffer'), (v) => v >= settleUsdc)
 
     // ── 2. SETTLE — self-signed EIP-712 permit + self-relayer settleSpend ──
     if (idleAfterDeposit < settleUsdc) {
-      return ctx.json({ ok: false, step: 'settle', error: `idle buffer ${idleAfterDeposit} < settleUsdc ${settleUsdc}` }, 409)
+      return ctx.json({ ok: false, step: 'settle', error: `idle buffer ${idleAfterDeposit} < settleUsdc ${settleUsdc} (after polling)` }, 409)
     }
     const nowSec = BigInt(Math.floor(Date.now() / 1000))
     const deadline = nowSec + 3600n
@@ -150,7 +166,7 @@ export const POST = createHandler(async (req, ctx) => {
       account, chain: baseSepolia, gas: 700_000n,
     })
     await wait(settleTx)
-    const sharesAfterSettle = await readV<bigint>('seniorShares', [me])
+    const sharesAfterSettle = await waitFor(() => readV<bigint>('seniorShares', [me]), (v) => v < sharesAfter)
 
     // ── 3. DEPLOY TO LP (optional) — proves the real V4 module on the live hooked pool ──
     let deployTx: `0x${string}` | null = null
