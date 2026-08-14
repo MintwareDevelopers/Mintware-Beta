@@ -27,6 +27,19 @@ import type { ScoreResponse, Tab } from './types'
 const WRAP = 'max-w-[1040px] mx-auto px-6 max-sm:px-4'
 const EY = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft flex items-center gap-2.5'
 
+// ── "Your capital" — ILLUSTRATIVE. Vaults are in testing on Base Sepolia; there
+// is no live retail position data to read yet, so this whole surface is a framed
+// "Preview" demo of the funded state. The Attribution score below it is REAL.
+const CAP_METRICS: { l: string; v: string; sub?: string; hl?: boolean }[] = [
+  { l: 'Blended APY',    v: '7.4%',    sub: '30-day net', hl: true },
+  { l: 'Accrued yield',  v: '$312.40', sub: 'claimable' },
+  { l: 'Position share', v: '0.8%',    sub: 'of active TVL' },
+]
+const POSITIONS: { name: string; pair: string; deposited: string; apy: string; earned: string; lock: string; tint: string }[] = [
+  { name: 'Growth Vault',      pair: 'ETH / USDC', deposited: '$32,000', apy: '8.1%', earned: '+$1,204.10', lock: 'Flexible',      tint: 'var(--color-pas-peri)' },
+  { name: 'Matched Liquidity', pair: 'MW / ETH',   deposited: '$16,200', apy: '6.2%', earned: '+$638.30',   lock: '90-day cliff',  tint: 'var(--color-pas-peach)' },
+]
+
 // ─── Profile content ────────────────────────────────────────────────────────────
 function ProfileContent() {
   const { address: evmAddress } = useMintwareIdentity()
@@ -90,16 +103,64 @@ function ProfileContent() {
         <ProfileEditPanel wallet={wallet} meta={meta} onClose={() => setEditOpen(false)} onSaved={refetchMeta} />
       )}
 
-      {/* ── Hero band ── */}
+      {/* ── YOUR CAPITAL · illustrative preview ── */}
       <section className="bg-ground-cool border-b border-hair-soft">
-        <div className="mx-auto max-w-[1040px] px-6 max-sm:px-4 py-[64px] max-sm:py-[44px]">
-          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">On-chain reputation · your profile</div>
-          <h1 className="font-atx-display font-medium text-ink mt-5 tracking-[-0.04em] leading-[1.02] text-[clamp(1.9rem,4.6vw,3.2rem)] max-w-[18ch] [text-wrap:balance]">
-            Your reputation, <span className="text-peri">on-chain.</span>
-          </h1>
-          <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.5] mt-5 max-w-[60ch]">
-            Everything your wallet has done — holding, LPing, referring — scored into one number. This is your Attribution profile.
-          </p>
+        <div className="mx-auto max-w-[1040px] px-6 max-sm:px-4 py-[52px] max-sm:py-[40px]">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Your capital</div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Preview · illustrative</span>
+          </div>
+
+          <div className="flex justify-between items-end gap-8 mt-5 flex-wrap">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-soft">Total deposited</div>
+              <div className="font-atx-display font-medium text-ink tracking-[-0.03em] leading-[0.9] text-[clamp(2.6rem,7vw,4rem)] mt-2.5 tabular-nums">$48,200</div>
+              <div className="text-[13px] text-ink-mid mt-3">Across 2 vault positions · <span className="text-mw-green font-semibold">+$1,842</span> earned all-time</div>
+            </div>
+            <div className="flex gap-9 max-sm:gap-6 flex-wrap">
+              {CAP_METRICS.map((m) => (
+                <div key={m.l} className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft whitespace-nowrap">{m.l}</div>
+                  <div className={`font-atx-display font-medium text-[26px] tracking-[-0.02em] mt-1.5 tabular-nums ${m.hl ? 'text-peri-deep' : 'text-ink'}`}>{m.v}</div>
+                  {m.sub && <div className="text-[11px] text-ink-soft mt-0.5">{m.sub}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* positions */}
+          <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-3 mt-7">
+            {POSITIONS.map((p) => (
+              <div key={p.name} className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-[38px] h-[38px] rounded-xl shrink-0 border border-hair" style={{ background: p.tint }} />
+                    <div className="min-w-0">
+                      <div className="font-atx-display font-semibold text-[15px] text-ink truncate">{p.name}</div>
+                      <div className="text-[11px] text-ink-soft mt-0.5 font-mono">{p.pair}</div>
+                    </div>
+                  </div>
+                  <span className="text-[9px] uppercase tracking-[0.08em] font-semibold rounded-full bg-ground-cool text-ink-soft px-2 py-1 shrink-0">{p.lock}</span>
+                </div>
+                <div className="flex items-end justify-between gap-4 mt-4">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.1em] text-ink-soft">Deposited</div>
+                    <div className="font-atx-display font-medium text-[19px] text-ink tabular-nums mt-0.5">{p.deposited}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[10px] uppercase tracking-[0.1em] text-ink-soft">APY · earned</div>
+                    <div className="text-[13px] mt-0.5"><span className="text-peri-deep font-semibold tabular-nums">{p.apy}</span> <span className="text-mw-green font-semibold tabular-nums">{p.earned}</span></div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-4 mt-6 flex-wrap">
+            <Link href="/app/vaults" className="glass-pill glass-pill-sm">Browse vaults →</Link>
+            <button disabled title="Coming soon" className="text-[11px] font-semibold text-ink-soft uppercase tracking-[0.06em] inline-flex items-center gap-1.5">Claim yield · coming</button>
+          </div>
+          <p className="text-[11px] text-ink-soft mt-5">Illustrative preview. Vaults are in testing on Base Sepolia — these positions and figures are a mockup of the funded state, not live balances or an offer. Your Attribution score below is real.</p>
         </div>
       </section>
 
