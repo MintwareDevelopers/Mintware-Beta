@@ -166,7 +166,7 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         // per-charge — otherwise a relayer trivially bypasses the second-signer control by splitting a
         // large settlement into sub-$250 charges. Uses the pre-update daily tally (updated below).
         uint256 spentTodayForGate = dailySpendUSDC[user][block.timestamp / 1 days];
-        if (spentTodayForGate + assets > HIGH_VALUE_THRESHOLD) {
+        if (spentTodayForGate + assets >= HIGH_VALUE_THRESHOLD) {
             if (edgeSig.length == 0) revert EdgeSignatureRequired();
             if (edgeAuth.holdId != holdId || edgeAuth.user != user || edgeAuth.amountUSDC != assets) {
                 revert InvalidEdgeSignature();

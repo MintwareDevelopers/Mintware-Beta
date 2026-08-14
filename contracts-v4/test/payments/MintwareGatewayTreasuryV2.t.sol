@@ -258,6 +258,16 @@ contract MintwareGatewayTreasuryV2Test is Test {
         gateway.settleSpend(holdId, user, 100 * ONE, receiver, p2, sig2, e, _signEdge(edgePk, e));
     }
 
+    /// AUDIT M2 boundary: a charge of EXACTLY $250 requires the edge signature (>= threshold, not >).
+    function test_exactThreshold_requiresEdge() public {
+        uint256 assets = 250 * ONE; // == HIGH_VALUE_THRESHOLD
+        bytes32 holdId = keccak256("hold-exact-250");
+        MintwarePaymentGateway.DelegatedSpendPermit memory p = _permit(1_000 * ONE, 14, block.timestamp + 1 days);
+        bytes memory sig = _signPermit(userPk, p);
+        vm.expectRevert(MintwarePaymentGateway.EdgeSignatureRequired.selector);
+        gateway.settleSpend(holdId, user, assets, receiver, p, sig, _emptyEdge(), "");
+    }
+
     /// AUDIT (low): cancelling a never-created hold reverts instead of poisoning that holdId forever.
     function test_cancelUnknownHold_reverts() public {
         vm.expectRevert(MintwarePaymentGateway.UnknownHold.selector);
