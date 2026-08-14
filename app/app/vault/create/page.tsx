@@ -1,12 +1,20 @@
 'use client'
 
 // =============================================================================
-// /vault/create — Team onboarding 4-step vault creation flow. Design v2.
+// /vault/create — Team onboarding for a YPN treasury vault. Design v2.
 //
-// Step 1: Project details (name, token address, chain)
-// Step 2: Pool configuration (fee tier, tick spacing, seed amount)
-// Step 3: Lock tier defaults + fee split preview
-// Step 4: Review + register the vault against the live MintwareDeFiPairVault (DB record)
+// Standard model (see docs/developers/ypn-architecture.md §8):
+//   • The team's TOKEN is the junior, loss-absorbing leg — locked ≥90 days.
+//   • ALL USDC — the community's and the team's — is SENIOR and equal: protected,
+//     spendable, earning, pari passu. The stable side is fungible; there is no
+//     "junior USDC" in the pool. Team USDC as senior is the standard.
+//   • OPTIONAL: a team may subordinate its OWN USDC below the community's as extra
+//     first-loss armor (off by default).
+//
+// Step 1: Project token (the volatile junior leg)
+// Step 2: Pool configuration (fee tier)
+// Step 3: Structure & commit — junior token + lock, senior USDC (standard), optional subordination
+// Step 4: Review + register (signed record; on-chain provisioning by the Mintware provider)
 // =============================================================================
 
 import { useAccount, useSignMessage } from 'wagmi'
@@ -28,9 +36,11 @@ interface VaultDraft {
   // Step 2
   feeTier:      number   // 500 | 3000 | 10000
   tickSpacing:  number
-  seedAmount:   number   // USDC value of project tokens being seeded
-  // Step 3
-  defaultTier:  'flex' | 'committed' | 'aligned' | 'core'
+  // Step 3 — the tranche
+  commitAmount:    number   // USDC value of the team's junior token committed at launch (the cushion)
+  lockDays:        number   // junior hard cliff (>= 90)
+  teamUsdc:        number   // OPTIONAL senior USDC the team also seeds (equal, standard)
+  subordinateUsdc: boolean  // OPTIONAL: subordinate that USDC below the community's (first-loss armor)
 }
 
 const FEE_TIERS = [
@@ -39,11 +49,11 @@ const FEE_TIERS = [
   { bps: 10000, label: '1.00%', desc: 'Exotic / low-liq', spacing: 200 },
 ]
 
-const LOCK_DEFAULTS = [
-  { value: 'flex',      label: 'Flex',      desc: 'No lock — maximum accessibility' },
-  { value: 'committed', label: 'Committed', desc: '30-day default — balanced' },
-  { value: 'aligned',   label: 'Aligned',   desc: '90-day default — deeper liquidity' },
-  { value: 'core',      label: 'Core',      desc: '180-day default — maximum TVL stability' },
+// Junior lock presets — the contract floor is 90 days (MIN_LOCK_DURATION).
+const LOCK_OPTIONS = [
+  { days: 90,  label: 'Standard', desc: '90-day cliff — the minimum' },
+  { days: 180, label: 'Deeper',   desc: '180-day cliff — stronger signal' },
+  { days: 365, label: 'Core',     desc: '365-day cliff — maximum alignment' },
 ] as const
 
 const CHAINS = [
@@ -67,13 +77,6 @@ async function readTokenSymbol(address: string, chainId: number): Promise<string
   }
 }
 
-const FEE_SPLIT = [
-  { label: 'LPs (community)',   pct: 70, bar: 'bg-peri',      txt: 'text-peri-deep' },
-  { label: 'Referrers',         pct: 15, bar: 'bg-coral2',    txt: 'text-coral2-deep' },
-  { label: 'Protocol treasury', pct: 10, bar: 'bg-ink-soft',  txt: 'text-ink-soft' },
-  { label: 'Attribution bonus', pct: 5,  bar: 'bg-[#D14343]', txt: 'text-[#D14343]' },
-]
-
 // ─── shared input / label classes ─────────────────────────────────────────────
 const INPUT = 'w-full px-3 py-2.5 rounded-xl border border-hair bg-white font-mono text-[14px] text-ink outline-none focus:border-[rgba(108,108,240,0.5)] box-border placeholder:text-ink-soft'
 const LABEL = 'block mb-1.5 uppercase tracking-[0.08em] text-[10px] font-semibold text-ink-soft'
@@ -95,7 +98,55 @@ function StepDots({ current, total }: { current: number; total: number }) {
   )
 }
 
-// ─── step 1: project details ──────────────────────────────────────────────────
+// ─── the tranche explainer — the standard model, shown as the structure ─────────
+function TrancheDiagram({ subordinated }: { subordinated: boolean }) {
+  return (
+    <div className="soft-card p-4">
+      <div className="mb-3 uppercase tracking-[0.1em] text-[11px] font-semibold text-ink-soft">
+        How the vault is structured
+      </div>
+
+      {/* Senior — all USDC, equal */}
+      <div className="rounded-xl border border-[rgba(108,108,240,0.28)] bg-[rgba(108,108,240,0.06)] px-3.5 py-3 mb-2">
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-[13px] font-semibold text-peri-deep font-atx-display">Senior — all USDC</span>
+          <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-peri-deep rounded-full border border-[rgba(108,108,240,0.3)] px-1.5 py-0.5">Protected</span>
+        </div>
+        <div className="text-[12px] text-ink-mid leading-[1.5]">
+          The community's USDC{subordinated ? '' : ' and yours'} — one equal claim. Spendable, earning, par.
+          The pool's stable side is fungible; there is no “whose dollar.”
+        </div>
+      </div>
+
+      {/* Optional: team USDC subordinated (only when toggled) */}
+      {subordinated && (
+        <div className="rounded-xl border border-[rgba(244,161,131,0.5)] bg-[rgba(244,161,131,0.08)] px-3.5 py-3 mb-2">
+          <div className="flex items-center justify-between mb-0.5">
+            <span className="text-[13px] font-semibold text-coral2-deep font-atx-display">Your USDC — subordinated</span>
+            <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-coral2-deep rounded-full border border-[rgba(244,161,131,0.5)] px-1.5 py-0.5">First-loss</span>
+          </div>
+          <div className="text-[12px] text-ink-mid leading-[1.5]">
+            Optional armor: your dollars absorb losses <b>before</b> the community's.
+          </div>
+        </div>
+      )}
+
+      {/* Junior — team token */}
+      <div className="rounded-xl border border-hair bg-white px-3.5 py-3">
+        <div className="flex items-center justify-between mb-0.5">
+          <span className="text-[13px] font-semibold text-ink font-atx-display">Junior — your token</span>
+          <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft rounded-full border border-hair px-1.5 py-0.5">Locked</span>
+        </div>
+        <div className="text-[12px] text-ink-mid leading-[1.5]">
+          The volatile leg — first-loss cushion, locked ≥90 days. It absorbs the swings / impermanent
+          loss so the senior stays whole.
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── step 1: project token ─────────────────────────────────────────────────────
 function Step1({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<VaultDraft>) => void }) {
   const addr = draft.tokenAddress.trim()
   const validAddr = isAddress(addr)
@@ -140,7 +191,8 @@ function Step1({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
           onChange={e => onChange({ tokenAddress: e.target.value })}
         />
         <span className={HINT}>
-          The ERC-20 token your team will seed into the pool. It’s paired with USDC.
+          Your token — the <b>volatile junior leg</b> that absorbs the risk. It pairs with USDC, and the
+          community deposits USDC as senior.
         </span>
       </div>
       <div>
@@ -205,46 +257,49 @@ function Step2({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
             </button>
           ))}
         </div>
+        <span className={HINT}>The V4 pool your token trades against USDC in.</span>
       </div>
+    </div>
+  )
+}
+
+// ─── step 3: tranche structure + the team's commit ─────────────────────────────
+function Step3({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<VaultDraft>) => void }) {
+  return (
+    <div className="flex flex-col gap-5">
+      <TrancheDiagram subordinated={draft.subordinateUsdc} />
+
+      {/* Junior commit — the team's token cushion */}
       <div>
-        <label className={LABEL}>Seed amount (USDC value of tokens)</label>
+        <label className={LABEL}>Your junior commit (USDC value of token)</label>
         <div className="relative">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-ink-soft font-mono">$</span>
           <input
             type="number"
             className={`${INPUT} pl-6`}
             placeholder="100000"
-            value={draft.seedAmount || ''}
-            onChange={e => onChange({ seedAmount: parseFloat(e.target.value) || 0 })}
+            value={draft.commitAmount || ''}
+            onChange={e => onChange({ commitAmount: parseFloat(e.target.value) || 0 })}
           />
         </div>
         <span className={HINT}>
-          Minimum recommended: $50,000 to establish meaningful liquidity depth.
+          The first-loss cushion. Bigger cushion → safely deeper LP. Minimum recommended: $50,000.
         </span>
       </div>
-    </div>
-  )
-}
 
-// ─── step 3: defaults + fee preview ──────────────────────────────────────────
-function Step3({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<VaultDraft>) => void }) {
-  return (
-    <div className="flex flex-col gap-5">
+      {/* Lock */}
       <div>
-        <label className={LABEL}>Suggested lock tier for LPs</label>
-        <span className="block mb-2.5 text-[12px] text-ink-soft">
-          LPs can always choose any tier — this is the pre-selected default shown on your vault page.
-        </span>
+        <label className={LABEL}>Junior lock</label>
         <div className="flex flex-col gap-2">
-          {LOCK_DEFAULTS.map(l => (
+          {LOCK_OPTIONS.map(l => (
             <button
-              key={l.value}
-              onClick={() => onChange({ defaultTier: l.value })}
+              key={l.days}
+              onClick={() => onChange({ lockDays: l.days })}
               className={`flex items-center gap-3 px-4 py-3 text-left rounded-xl border ${
-                draft.defaultTier === l.value ? 'border-[rgba(108,108,240,0.4)] bg-[rgba(108,108,240,0.06)]' : 'border-hair bg-white'
+                draft.lockDays === l.days ? 'border-[rgba(108,108,240,0.4)] bg-[rgba(108,108,240,0.06)]' : 'border-hair bg-white'
               }`}
             >
-              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${draft.defaultTier === l.value ? 'bg-peri' : 'bg-hair'}`} />
+              <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${draft.lockDays === l.days ? 'bg-peri' : 'bg-hair'}`} />
               <div>
                 <div className="text-[13px] font-semibold text-ink font-atx-display">{l.label}</div>
                 <div className="text-[11px] text-ink-mid">{l.desc}</div>
@@ -254,28 +309,48 @@ function Step3({ draft, onChange }: { draft: VaultDraft; onChange: (d: Partial<V
         </div>
       </div>
 
-      {/* Fee split preview */}
-      <div className="soft-card p-4">
-        <div className="mb-3 uppercase tracking-[0.1em] text-[11px] font-semibold text-ink-soft">
-          Fee split (fixed by protocol)
+      {/* Optional senior USDC from the team */}
+      <div>
+        <label className={LABEL}>Your USDC (optional, senior — equal to the community)</label>
+        <div className="relative">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[14px] text-ink-soft font-mono">$</span>
+          <input
+            type="number"
+            className={`${INPUT} pl-6`}
+            placeholder="0"
+            value={draft.teamUsdc || ''}
+            onChange={e => onChange({ teamUsdc: parseFloat(e.target.value) || 0 })}
+          />
         </div>
-        {FEE_SPLIT.map(({ label, pct, bar, txt }) => (
-          <div key={label} className="mb-2.5">
-            <div className="flex justify-between mb-1">
-              <span className="text-[12px] text-ink-mid">{label}</span>
-              <span className={`text-[13px] font-semibold tabular-nums ${txt}`}>{pct}%</span>
-            </div>
-            <div className="h-[8px] rounded-full bg-ground-cool overflow-hidden relative">
-              <div className={`absolute inset-y-0 left-0 rounded-full ${bar}`} style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-        ))}
+        <span className={HINT}>
+          Standard: your USDC is senior — protected and equal, just like the community's. Leave 0 if none.
+        </span>
       </div>
+
+      {/* Optional subordination toggle (#227) */}
+      <button
+        onClick={() => onChange({ subordinateUsdc: !draft.subordinateUsdc })}
+        className={`flex items-start gap-3 px-4 py-3 text-left rounded-xl border ${
+          draft.subordinateUsdc ? 'border-[rgba(244,161,131,0.55)] bg-[rgba(244,161,131,0.07)]' : 'border-hair bg-white'
+        } ${draft.teamUsdc > 0 ? '' : 'opacity-55 cursor-not-allowed'}`}
+        disabled={draft.teamUsdc <= 0}
+      >
+        <div className={`mt-0.5 w-9 h-5 rounded-full shrink-0 relative transition-colors ${draft.subordinateUsdc ? 'bg-coral2' : 'bg-hair'}`}>
+          <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${draft.subordinateUsdc ? 'left-[18px]' : 'left-0.5'}`} />
+        </div>
+        <div>
+          <div className="text-[13px] font-semibold text-ink font-atx-display">Subordinate my USDC as first-loss armor</div>
+          <div className="text-[11px] text-ink-mid leading-[1.5] mt-0.5">
+            Optional. Your USDC takes losses <b>before</b> the community's — extra protection on top of the
+            token cushion. Off by default; needs a USDC amount above.
+          </div>
+        </div>
+      </button>
     </div>
   )
 }
 
-// ─── step 4: review + deploy ──────────────────────────────────────────────────
+// ─── step 4: review + register ─────────────────────────────────────────────────
 function Step4({
   draft, submitting, submitLabel, error, onDeploy,
 }: {
@@ -293,13 +368,15 @@ function Step4({
     { label: 'Token address', value: draft.tokenAddress ? `${draft.tokenAddress.slice(0, 10)}…${draft.tokenAddress.slice(-6)}` : '—', mono: true },
     { label: 'Chain',         value: chain?.label ?? '—' },
     { label: 'Fee tier',      value: feeTier?.label ?? '—' },
-    { label: 'Tick spacing',  value: `±${draft.tickSpacing}` },
-    { label: 'Seed amount',   value: draft.seedAmount > 0 ? fmtUSD(draft.seedAmount) : '—' },
-    { label: 'Default tier',  value: draft.defaultTier.charAt(0).toUpperCase() + draft.defaultTier.slice(1) },
+    { label: 'Junior commit', value: draft.commitAmount > 0 ? fmtUSD(draft.commitAmount) : '—' },
+    { label: 'Junior lock',   value: `${draft.lockDays} days` },
+    { label: 'Your USDC',     value: draft.teamUsdc > 0 ? `${fmtUSD(draft.teamUsdc)} · ${draft.subordinateUsdc ? 'subordinated (first-loss)' : 'senior (equal)'}` : 'None' },
   ]
 
   return (
     <div className="flex flex-col gap-4">
+      <TrancheDiagram subordinated={draft.subordinateUsdc} />
+
       <div className="soft-card overflow-hidden">
         {rows.map(({ label, value, mono }, i) => (
           <div
@@ -313,7 +390,7 @@ function Step4({
       </div>
 
       <div className="rounded-xl bg-white border border-hair px-3.5 py-2.5 text-[12px] text-ink-mid leading-[1.5]" style={{ borderLeft: '3px solid var(--color-peri)' }}>
-        <span>This registers your vault against the live Mintware pair vault. On-chain pool creation and initial liquidity are handled by the Mintware provider.</span>
+        <span>This registers your vault. The junior commit, lock, and any USDC subordination are provisioned on-chain at launch by the Mintware provider from these choices — no funds move now.</span>
       </div>
 
       <div className="soft-card px-3.5 py-2.5">
@@ -322,8 +399,8 @@ function Step4({
         </div>
         <div className="flex flex-col gap-1 text-[12px] text-ink-mid leading-[1.55]">
           <div>1. Your wallet signs a message authorizing the vault record — no funds move.</div>
-          <div>2. Mintware creates the vault entry pointing at the deployed pair contract.</div>
-          <div>3. It appears in the vault list, ready for dual-token LP deposits.</div>
+          <div>2. Mintware provisions the treasury vault + pool and commits your junior at launch.</div>
+          <div>3. It appears in the vault list, open for community USDC deposits.</div>
         </div>
       </div>
 
@@ -338,7 +415,7 @@ function Step4({
         disabled={submitting}
         className="glass-pill w-full justify-center !py-[13px] text-[15px] disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        {submitting ? submitLabel : 'Deploy vault →'}
+        {submitting ? submitLabel : 'Create vault →'}
       </button>
 
       {submitting && (
@@ -350,8 +427,8 @@ function Step4({
   )
 }
 
-// ─── DeFi create flow (the original 4-step wizard) ────────────────────────────
-function DefiCreateFlow({ onBack }: { onBack: () => void }) {
+// ─── treasury-vault create flow (4-step wizard) ────────────────────────────────
+function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
   const { address } = useAccount()
   const { signMessageAsync } = useSignMessage()
 
@@ -361,26 +438,31 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
   const [submitting, setSubmitting] = useState(false)
 
   const [draft, setDraft] = useState<VaultDraft>({
-    name:         '',
-    tokenAddress: '',
-    chainId:      84532,
-    feeTier:      3000,
-    tickSpacing:  60,
-    seedAmount:   0,
-    defaultTier:  'committed',
+    name:            '',
+    tokenAddress:    '',
+    chainId:         84532,
+    feeTier:         3000,
+    tickSpacing:     60,
+    commitAmount:    0,
+    lockDays:        90,
+    teamUsdc:        0,
+    subordinateUsdc: false,
   })
 
   function patch(d: Partial<VaultDraft>) { setDraft(prev => ({ ...prev, ...d })) }
 
   function canAdvance() {
     if (step === 0) return draft.name.trim().length > 0 && draft.tokenAddress.startsWith('0x') && draft.tokenAddress.length === 42
-    if (step === 1) return draft.feeTier > 0 && draft.seedAmount > 0
+    if (step === 1) return draft.feeTier > 0
+    if (step === 2) return draft.commitAmount > 0 && draft.lockDays >= 90
     return true
   }
 
-  // Create the vault DB record pointing at the LIVE pair vault. On-chain pool creation +
-  // seeding is a provider/owner operation (the pair vault has no self-serve seed entrypoint),
-  // so the self-serve flow records the vault against the deployed pair contract for listing.
+  // Register the treasury-vault record with a signed intent. On-chain provisioning (pool creation,
+  // the team's junior commit + lock, any USDC subordination) is a provider/owner operation — the
+  // vault has no self-serve commit entrypoint — so the self-serve flow records the team's choices.
+  // The signed message keeps the original vault-create shape (backend unchanged); the tranche fields
+  // are captured as launch intent.
   async function handleDeploy() {
     if (!address) return
     setError('')
@@ -399,13 +481,12 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
         issuedAt,
         name: draft.name,
         projectToken: draft.tokenAddress,
-        seedAmount: draft.seedAmount,
+        seedAmount: draft.commitAmount, // the junior commit is the vault's launch seed value
         chainId: draft.chainId,
         poolKey,
       })
       const authSignature = await signMessageAsync({ message: authMessage })
 
-      // Create vault record in DB to get the UUID.
       const res = await fetch('/api/vaults/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -413,7 +494,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
           name:          draft.name,
           team_wallet:   address,
           project_token: draft.tokenAddress,
-          seed_amount:   draft.seedAmount,
+          seed_amount:   draft.commitAmount,
           chain_id:      draft.chainId,
           pool_key: poolKey,
           contract_address: process.env.NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS ?? null,
@@ -430,13 +511,13 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
       const { id: vaultId } = await res.json()
       setDeployed(vaultId)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Deploy failed')
+      setError(e instanceof Error ? e.message : 'Create failed')
     } finally {
       setSubmitting(false)
     }
   }
 
-  const STEPS = ['Project', 'Pool', 'Defaults', 'Review']
+  const STEPS = ['Token', 'Pool', 'Structure', 'Review']
 
   if (deployed) return (
     <div className="bg-white min-h-screen font-atx-display text-ink">
@@ -449,7 +530,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
           Vault created
         </div>
         <div className="text-[14px] text-ink-mid mb-7 leading-[1.6]">
-          <strong className="text-ink">{draft.name}</strong> is registered against the live Mintware pair vault and now appears in the vault list for dual-token LP deposits.
+          <strong className="text-ink">{draft.name}</strong> is registered and now appears in the vault list, open for community USDC deposits once the provider provisions it on-chain.
         </div>
         <div className="flex gap-2.5 justify-center">
           <Link href="/app/vaults" className="glass-pill">View all vaults</Link>
@@ -469,10 +550,10 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
         {/* Breadcrumb */}
         <div className="mb-5 flex items-center gap-2">
           <button onClick={onBack} className="text-[13px] text-ink-mid no-underline hover:text-ink bg-transparent border-0 cursor-pointer p-0">
-            ← Change surface
+            ← All vaults
           </button>
           <span className="text-ink-soft">/</span>
-          <span className="text-[13px] text-ink font-semibold">Create DeFi vault</span>
+          <span className="text-[13px] text-ink font-semibold">Create vault</span>
         </div>
 
         {/* Header */}
@@ -484,10 +565,10 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
             <StepDots current={step} total={STEPS.length} />
           </div>
           <div className="text-[13px] text-ink-mid">
-            {step === 0 && 'Tell us about your project and the token you\'re seeding.'}
-            {step === 1 && 'Configure the V4 pool parameters for your vault.'}
-            {step === 2 && 'Set LP defaults and review the fee distribution.'}
-            {step === 3 && 'Review everything before deploying on-chain.'}
+            {step === 0 && 'Your token is the junior cushion — the volatile leg that absorbs the risk.'}
+            {step === 1 && 'Configure the V4 pool your token trades against USDC in.'}
+            {step === 2 && 'Commit your junior cushion. All USDC is senior and equal — subordinating yours is optional.'}
+            {step === 3 && 'Review the tranche structure before registering.'}
           </div>
         </div>
 
@@ -498,7 +579,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
           {step === 2 && <Step3 draft={draft} onChange={patch} />}
           {step === 3 && <Step4 draft={draft} submitting={submitting} submitLabel="Creating vault…" error={error} onDeploy={handleDeploy} />}
 
-          {/* Nav buttons (hidden on step 3 which has its own deploy button) */}
+          {/* Nav buttons (hidden on step 3 which has its own register button) */}
           {step < 3 && (
             <div className="flex items-center justify-between mt-6">
               <button
@@ -532,11 +613,7 @@ function DefiCreateFlow({ onBack }: { onBack: () => void }) {
   )
 }
 
-// ─── single-surface (DeFi) — the RWA surface was shelved ────────────────────────
-function CreateVaultContentInner() {
-  return <DefiCreateFlow onBack={() => { window.location.href = '/app/vaults' }} />
-}
-
+// ─── mounted guard (avoids SSR/wallet hydration flash) ─────────────────────────
 function CreateVaultContent() {
   const [mounted, setMounted] = useState(false)
 
@@ -559,7 +636,7 @@ function CreateVaultContent() {
     )
   }
 
-  return <CreateVaultContentInner />
+  return <TreasuryCreateFlow onBack={() => { window.location.href = '/app/vaults' }} />
 }
 
 // ─── page ─────────────────────────────────────────────────────────────────────
