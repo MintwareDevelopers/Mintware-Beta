@@ -47,7 +47,6 @@ export function V2Nav({ active }: { active?: V2NavActive }) {
         </nav>
 
         <div className="flex items-center gap-3.5">
-          <Link href="/docs" className="hidden md:inline text-[14px] font-medium text-ink-mid hover:text-ink no-underline">Docs</Link>
           <button onClick={() => setOpen((o) => !o)} aria-label="Menu" aria-expanded={open} className="md:hidden glass-pill glass-pill-sm w-11 h-11 !px-0">{open ? '✕' : '☰'}</button>
           <button onClick={() => launch('/app')} className="glass-pill glass-pill-sm">{launchLabel} →</button>
         </div>
@@ -58,7 +57,6 @@ export function V2Nav({ active }: { active?: V2NavActive }) {
           {FEATURES.map((f) => (
             <Link key={f.key} href={f.href} onClick={() => setOpen(false)} className={`px-6 py-3.5 text-[15px] font-medium no-underline border-t border-hair-soft ${active === f.key ? 'text-ink' : 'text-ink-mid'}`}>{f.label}</Link>
           ))}
-          <Link href="/docs" onClick={() => setOpen(false)} className="px-6 py-3.5 text-[15px] font-medium no-underline border-t border-hair-soft text-ink-mid">Docs</Link>
         </div>
       )}
     </header>
