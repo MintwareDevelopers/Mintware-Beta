@@ -44,3 +44,24 @@ jobs:
 
       - name: Forge tests
         run: forge test -vv
+
+  rust-tests:
+    name: Rust (YPN off-chain)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ubuntu-latest ships a stable Rust toolchain + cc (mlua vendored builds Lua from source).
+      # The edge-auth + relayer crates are detached workspaces, so test each in its own dir.
+      # Live-network tests (EDGE_RPC_URL / RELAYER_RPC_URL) self-skip when the env is unset.
+      - name: edge-auth — test + clippy
+        working-directory: services/edge-auth
+        run: |
+          cargo test --locked
+          cargo clippy --all-targets -- -D warnings
+
+      - name: relayer — test + clippy
+        working-directory: services/relayer
+        run: |
+          cargo test --locked
+          cargo clippy --all-targets -- -D warnings
