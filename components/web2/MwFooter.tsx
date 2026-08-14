@@ -1,8 +1,12 @@
+'use client'
+
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
 
-// Shared platform footer (ATX Settlemint). Mounted once in the root layout so it
-// renders on every page. Extracted verbatim from the homepage footer.
+// Shared platform footer. Mounted once in the root layout so it renders on every
+// page — EXCEPT the Team treasury terminal, which is a full sidebar app shell with
+// its own chrome (a marketing footer there reads wrong).
 // Current live app sections only — legacy static mockups (/explorer, /for-protocols.html)
 // dropped. Add { href: '/docs', label: 'Docs' } once the docs section ships.
 const FOOTER_LINKS = [
@@ -19,6 +23,8 @@ const FOOTER_LINKS = [
 ]
 
 export function MwFooter() {
+  const pathname = usePathname()
+  if (pathname?.startsWith('/app/team')) return null   // treasury terminal has its own shell
   return (
     <footer className="bg-ground-cool border-t border-hair-soft">
       <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-9 flex items-center justify-between flex-wrap gap-5">

@@ -9,6 +9,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
 import { LaunchModalProvider } from './LaunchModal'
+import { AppModeProvider } from './AppMode'
 
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim() ?? ''
 const PRIVY_ENABLED = PRIVY_APP_ID.length > 0
@@ -93,9 +94,11 @@ function AppWalletProviders({ children }: { children: ReactNode }) {
   // and email/embedded onboarding.
   return (
     <>
-      <LaunchModalProvider>
-        {children}
-      </LaunchModalProvider>
+      <AppModeProvider>
+        <LaunchModalProvider>
+          {children}
+        </LaunchModalProvider>
+      </AppModeProvider>
       <GlobalReferralGate />
     </>
   )

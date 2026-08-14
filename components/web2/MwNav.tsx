@@ -7,6 +7,7 @@ import { useMintwarePrivy }   from '@/components/web2/providers'
 import { useLaunch }          from '@/components/web2/LaunchModal'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { MintwareMark }        from '@/components/ui2/MintwareMark'
+import { ScopeSwitcher }        from '@/components/web2/ScopeSwitcher'
 
 // MwNav — the authenticated in-app nav. Design v2 (Privy-esque): translucent
 // white/blur bar, periwinkle logo mark, glass-pill actions. All wallet/Privy
@@ -45,10 +46,13 @@ export function MwNav() {
 
   return (
     <nav className="sticky top-0 z-[200] flex items-center justify-between px-6 max-[800px]:px-4 h-[60px] bg-white/70 backdrop-blur-[16px] border-b border-hair-soft font-atx-display">
-      <Link href="/" className="flex items-center gap-2.5 no-underline text-ink shrink-0">
-        <MintwareMark size={24} />
-        <span className="font-atx-display text-[17px] font-bold tracking-[-0.02em]">Mintware</span>
-      </Link>
+      <div className="flex items-center gap-3 shrink-0 min-w-0">
+        <Link href="/" className="flex items-center gap-2.5 no-underline text-ink shrink-0">
+          <MintwareMark size={24} />
+          <span className="font-atx-display text-[17px] font-bold tracking-[-0.02em] max-[640px]:hidden">Mintware</span>
+        </Link>
+        <ScopeSwitcher />
+      </div>
 
       {!mounted ? (
         <div className="h-9 w-[200px]" />
