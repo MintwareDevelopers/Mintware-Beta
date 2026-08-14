@@ -5,17 +5,34 @@ import { createHandler } from '@/lib/web2/routeHandler'
 import { recoverMessageAddress } from 'viem'
 import { buildVaultCreateMessage } from '@/lib/web3/signedActionMessages'
 
+interface VaultTranchePayload {
+  juniorCommitUsdc: number; lockDays: number; teamUsdc: number; subordinateUsdc: boolean
+}
+
 interface CreateVaultPayload {
   name: string; team_wallet: string; project_token: string; seed_amount: number
   pool_key: Record<string, unknown>; chain_id: number; contract_address: string | null
   status: string; issuedAt?: number; authMessage?: string; authSignature?: `0x${string}`
+  tranche?: VaultTranchePayload // present for YPN v2 treasury vaults; omitted for the legacy pair vault
 }
 
 const MAX_AUTH_AGE_MS = 15 * 60 * 1000
 
+function validTranche(t: unknown): t is VaultTranchePayload {
+  if (!t || typeof t !== 'object') return false
+  const x = t as Record<string, unknown>
+  return (
+    typeof x.juniorCommitUsdc === 'number' && x.juniorCommitUsdc > 0 &&
+    typeof x.lockDays === 'number' && x.lockDays >= 90 &&
+    typeof x.teamUsdc === 'number' && x.teamUsdc >= 0 &&
+    typeof x.subordinateUsdc === 'boolean'
+  )
+}
+
 function validate(b: unknown): b is CreateVaultPayload {
   if (!b || typeof b !== 'object') return false
   const p = b as Record<string, unknown>
+  if (p.tranche !== undefined && !validTranche(p.tranche)) return false
   return (
     typeof p.name === 'string' && p.name.length > 0 &&
     typeof p.team_wallet === 'string' && (p.team_wallet as string).startsWith('0x') &&
@@ -44,6 +61,7 @@ export const POST = createHandler(async (req, ctx) => {
       fee: Number(body.pool_key.fee ?? 0), tickSpacing: Number(body.pool_key.tickSpacing ?? 0),
       hooks: String(body.pool_key.hooks ?? ''),
     },
+    tranche: body.tranche, // authenticated — the signed message must include the exact tranche choices
   })
   if (body.authMessage !== expectedMessage) return ctx.json({ error: 'Authorization payload mismatch' }, 401)
 
@@ -56,6 +74,12 @@ export const POST = createHandler(async (req, ctx) => {
       name: body.name, team_wallet: body.team_wallet.toLowerCase(), project_token: body.project_token.toLowerCase(),
       seed_amount: body.seed_amount, pool_key: body.pool_key, chain_id: body.chain_id,
       contract_address: body.contract_address ?? null, status: body.status ?? 'seeding', tvl_usdc: 0,
+      // Treasury-vault tranche intent (null/defaults for the legacy pair vault).
+      vault_kind: body.tranche ? 'treasury' : 'defi',
+      junior_commit_usdc: body.tranche?.juniorCommitUsdc ?? null,
+      lock_days: body.tranche?.lockDays ?? null,
+      team_usdc: body.tranche?.teamUsdc ?? 0,
+      subordinate_usdc: body.tranche?.subordinateUsdc ?? false,
     })
     .select('id, name, status').single()
 
