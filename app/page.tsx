@@ -234,15 +234,15 @@ export default function HomePage() {
     <div className="font-atx-display bg-white text-ink min-h-screen overflow-x-clip">
       <V2Nav />
 
-      {/* HERO — liquidity is a public good (centered) */}
+      {/* HERO — the tagline: never idle / never locked / always yours (the three proofs) */}
       <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">
         <AirbrushSplash tone="mix" />
         <div className="relative mx-auto max-w-[1180px] px-6 max-[800px]:px-4 pt-[104px] pb-[80px] max-[800px]:pt-[64px] max-[800px]:pb-[56px] flex flex-col items-center text-center">
-          <h1 className="font-atx-display font-medium text-ink tracking-[-0.045em] leading-[1.0] text-[clamp(2.5rem,6.4vw,4.6rem)] max-w-[16ch] [text-wrap:balance]">
-            Liquidity <span className="text-peri">IS</span> a public good.
+          <h1 className="font-atx-display font-medium text-ink tracking-[-0.045em] leading-[1.02] text-[clamp(2.5rem,6.4vw,4.6rem)] max-w-[18ch] [text-wrap:balance]">
+            Never idle.<br />Never locked.<br /><span className="text-peri">Always yours.</span>
           </h1>
-          <p className="text-ink-mid text-[clamp(1.05rem,1.7vw,1.3rem)] leading-[1.5] mt-6 max-w-[52ch]">
-            Never idle, never locked away, and its yield instantly yours to spend.
+          <p className="text-ink-mid text-[clamp(1.05rem,1.7vw,1.3rem)] leading-[1.5] mt-6 max-w-[54ch]">
+            Your liquidity, made whole — earning around the clock, and its yield instantly yours to spend.
           </p>
 
           <div className="mt-9 flex flex-wrap gap-3 items-center justify-center">
@@ -270,12 +270,15 @@ export default function HomePage() {
             <div className="grain absolute inset-0 opacity-40" aria-hidden />
             <div className="relative px-10 max-[800px]:px-6 py-[72px] max-[800px]:py-[52px] flex items-center justify-between gap-8 flex-wrap">
               <div className="max-w-[760px]">
-                <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-pas-peri">✴ The flagship — reputation-weighted V4 vaults</div>
+                <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-pas-peri">The vault engine · never idle</div>
                 <h2 className="font-atx-display font-medium tracking-[-0.04em] leading-[1.03] text-[clamp(2rem,4.6vw,3.4rem)] mt-4 text-white [text-wrap:balance]">
-                  Deposit into a V4 Vault. <span className="text-pas-peri">Your score multiplies your returns.</span>
+                  Your capital earns <span className="text-pas-peri">three ways at once.</span>
                 </h2>
+                <p className="text-[15px] leading-[1.55] mt-4 max-w-[54ch]" style={{ color: '#C7C7DC' }}>
+                  Aave lending, Uniswap v4 market-making, and recaptured MEV — one balance, always working. In testing on Base Sepolia.
+                </p>
               </div>
-              <button onClick={() => launchApp('/app/vaults')} className="glass-pill whitespace-nowrap shrink-0">Deposit →</button>
+              <button onClick={() => launchApp('/app/vaults')} className="glass-pill whitespace-nowrap shrink-0">Explore the vaults →</button>
             </div>
           </div>
         </div>
@@ -301,7 +304,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div>
-              <div className={ey}>✴ Two ways to earn</div>
+              <div className={ey}>Two ways to earn</div>
               <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.7rem,3.2vw,2.6rem)] mt-3 [text-wrap:balance]">
                 The same liquidity, <span className="text-peri">two different jobs.</span>
               </h2>
@@ -457,7 +460,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
           <GradientPanel tone="coral" className="p-10 max-[800px]:p-6 grid [grid-template-columns:1fr_0.9fr] gap-10 items-center max-[720px]:grid-cols-1 max-[720px]:gap-6">
             <div>
-              <div className={ey}>✴ Stay in the loop</div>
+              <div className={ey}>Stay in the loop</div>
               <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.1] text-[clamp(1.5rem,2.6vw,2.1rem)] mt-3 [text-wrap:balance]">
                 New vaults, drops, and score boosts — first.
               </h2>

@@ -36,8 +36,8 @@ const jetbrainsMono = JetBrains_Mono({
 const BASE_URL = 'https://mintware.finance'
 
 export const metadata: Metadata = {
-  title:       'Mintware — The reputation economy of DeFi',
-  description: 'Attribution measures every on-chain contribution. Mintware is where those contributions earn rewards.',
+  title:       'Mintware — Your liquidity, made whole',
+  description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
   metadataBase: new URL(BASE_URL),
   icons: {
     icon: [
@@ -53,16 +53,16 @@ export const metadata: Metadata = {
     type:        'website',
     url:         BASE_URL,
     siteName:    'Mintware',
-    title:       'Mintware — The reputation economy of DeFi',
-    description: 'Attribution measures every on-chain contribution. Mintware is where those contributions earn rewards.',
+    title:       'Mintware — Your liquidity, made whole',
+    description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
     images: [{ url: '/opengraph-image', width: 1200, height: 630 }],
   },
   twitter: {
     card:        'summary_large_image',
     site:        '@Mintware_org',
     creator:     '@Mintware_org',
-    title:       'Mintware — The reputation economy of DeFi',
-    description: 'Attribution measures every on-chain contribution. Mintware is where those contributions earn rewards.',
+    title:       'Mintware — Your liquidity, made whole',
+    description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
     images:      ['/opengraph-image'],
   },
 }
