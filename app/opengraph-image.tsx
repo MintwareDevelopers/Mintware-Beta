@@ -52,21 +52,21 @@ export default async function OgImage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
               <div style={{ width: 11, height: 11, borderRadius: 6, background: CORAL, display: 'flex' }} />
               <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: 3, color: INK_SOFT, textTransform: 'uppercase' }}>
-                On-chain reputation · 100+ chains
+                Your liquidity, made whole
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', fontSize: 78, fontWeight: 800, letterSpacing: -3, lineHeight: 1.02, color: INK }}>
-              <span style={{ display: 'flex' }}>Your contribution should</span>
-              <span style={{ display: 'flex', color: PERI }}>mean something.</span>
+              <span style={{ display: 'flex' }}>Never idle. Never locked.</span>
+              <span style={{ display: 'flex', color: PERI }}>Always yours.</span>
             </div>
-            <div style={{ display: 'flex', fontSize: 24, lineHeight: 1.45, color: INK_MID, marginTop: 26, maxWidth: 800 }}>
-              One reputation score across every chain — powering reputation-weighted DeFi liquidity vaults and rewards.
+            <div style={{ display: 'flex', fontSize: 24, lineHeight: 1.45, color: INK_MID, marginTop: 26, maxWidth: 820 }}>
+              USDC that earns three ways at once — and stays liquid and spendable. The LPs who bring real, committed liquidity earn the most.
             </div>
           </div>
 
           {/* rounded pill chips */}
           <div style={{ display: 'flex', gap: 12 }}>
-            {['Attribution', 'DeFi Vaults', 'Rewards', 'AI Agents'].map((l) => (
+            {['Vaults', 'Liquid Sovereign Account', 'Attribution', 'Agents'].map((l) => (
               <div key={l} style={{
                 display: 'flex', padding: '11px 20px', borderRadius: 999,
                 border: `1px solid ${HAIR}`, fontSize: 16, fontWeight: 600,
