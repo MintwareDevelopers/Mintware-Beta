@@ -53,15 +53,19 @@ contract MintwareTreasuryJitHookTest is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         team = new MockERC20("Team Token", "TEAM", 6);
         adapter = new MockYieldAdapter(address(usdc));
-        vault = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), address(this), teamAddr); // owner=this
 
         (Currency c0, Currency c1) = address(usdc) < address(team)
             ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
             : (Currency.wrap(address(team)), Currency.wrap(address(usdc)));
 
+        // This suite exercises only the JIT borrow-seam (Aave) + hook sweep — the vault never LPs, so
+        // its poolKey needs no hook. Construct it against the hookless key (the vault holds the position
+        // itself post-convergence, but here it's dormant).
+        PoolKey memory ctorKey = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
+        vault = new MintwareTreasuryVault(address(pm), ctorKey, address(usdc), address(adapter), address(this), teamAddr); // owner=this
+
         // Mine the hook address (beforeSwap|afterSwap = 0xC0). The ctor ignores key.hooks, so a
         // placeholder-hooks key is fine for the initcode; the pool + hook agree on the real address.
-        PoolKey memory ctorKey = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), address(vault), address(this));
         (address hookAddr, bytes32 salt) =
             HookMiner.find(address(this), uint160(0xC0), type(MintwareTreasuryJitHook).creationCode, args);

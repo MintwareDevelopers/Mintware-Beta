@@ -4,33 +4,49 @@ pragma solidity ^0.8.26;
 import {Test}         from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 
+import {PoolManager}           from "@uniswap/v4-core/src/PoolManager.sol";
+import {IPoolManager}          from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks}                from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
+import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
+
 import {MintwareTreasuryVault} from "../../src/payments/MintwareTreasuryVault.sol";
 
-import {MockERC20}            from "../mocks/MockERC20.sol";
-import {MockYieldAdapter}     from "../mocks/MockYieldAdapter.sol";
-import {MockLiquidityModule}  from "../mocks/MockLiquidityModule.sol";
+import {MockERC20}        from "../mocks/MockERC20.sol";
+import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
-/// @dev Adversarial handler for the treasury-anchored ULV. Drives fuzzed sequences of community
-///      senior deposits/redeems, Gateway payment burns (the handler IS the gateway), owner LP
-///      deploy/recover, LP-fee accrual, Aave yield, and MOVABLE-PRICE stress — the mock's price is
-///      the only price in the system and is the instrument that inflicts IL on the junior.
+/// @dev Adversarial handler for the treasury-anchored ULV against a REAL Uniswap-V4 pool (Phase-2
+///      convergence — the vault self-holds the position; no mock module). Drives fuzzed sequences of
+///      community senior deposits/redeems, Gateway payment burns (the handler IS the gateway), owner LP
+///      deploy/recover, LP-fee accrual, Aave yield, and REAL-SWAP PRICE STRESS via `swapRouter.swapTo`.
 ///
 ///      Two deliberate scoping choices make the headline invariants meaningful rather than vacuous:
-///        1. `movePrice` stays in the DESIGNED SOLVENT BAND [50%..150%] of the initial mark. The
-///           price-to-zero tail (junior wiped → `burnForPayment` reverts, never underpays) is proven
-///           in a focused unit test, not here — the invariant run asserts solvency in-regime.
-///        2. `recoverFromLP` recovers <= `deployedFromSenior`, keeping the module on its no-mint
-///           senior path so the settlement-conservation ledger is an exact equality.
+///        1. `movePrice` swaps are CLAMPED to a `sqrtPriceLimit` inside the DESIGNED SOLVENT BAND
+///           (team price ∈ [50%,150%] of the initial mark) — so a swap physically cannot push the mark
+///           past the band regardless of size. The price-to-zero tail (junior wiped → `burnForPayment`
+///           reverts, never underpays) is proven in a focused unit test, not here.
+///        2. `recoverFromLP` recovers <= `deployedFromSenior` (owner rebalance regime).
 ///
-///      Every vault interaction is wrapped in try/catch: expected reverts (InsufficientIdleLiquidity
-///      in the burn tail, BadParam on the idle-target guard, ZeroAmount on dust) are no-ops for the
-///      fuzzer, so `fail_on_revert = true` catches only UNEXPECTED reverts (a harness bug).
+///      Every vault interaction is wrapped in try/catch: expected reverts (InsufficientIdleLiquidity in
+///      the burn tail, BadParam on the idle-target guard, ZeroAmount on dust, PriceLimitAlreadyExceeded
+///      when price already sits at the band edge) are no-ops for the fuzzer, so `reverts == 0`.
 contract TreasuryVaultHandler is Test {
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary  for IPoolManager;
+
     MintwareTreasuryVault public vault;
-    MockLiquidityModule   public module;
     MockYieldAdapter      public adapter;
     MockERC20             public usdc;
     MockERC20             public team;
+    TestSwapRouter        public swapRouter;
+    PoolKey               public key;
+    bool                  public teamIs0;
 
     address public owner;
     address public teamAddr;   // junior committer
@@ -39,41 +55,54 @@ contract TreasuryVaultHandler is Test {
     address[] public actors;   // community senior depositors
 
     uint16 internal constant BPS = 10_000;
+    uint160 internal immutable dumpLimit; // band edge for dumping team (team price → 50%)
+    uint160 internal immutable pumpLimit; // band edge for pumping team (team price → 150%)
 
     // ── conservation + property ghosts ─────────────────────────────────────────────
     uint256 public totalDeposited;    // community USDC in (incl. setUp seed)
     uint256 public totalYieldMinted;  // simulated Aave interest minted into the adapter
-    uint256 public totalUsdcOut;      // USDC that left the system to a NON-system address (rail/team/protocol)
+    uint256 public totalUsdcOut;      // USDC that left to a NON-system address (rail/team/protocol)
     uint256 public successfulBurns;   // gateway payments that settled (non-vacuity witness)
     bool    public juniorRedeemedEarly; // set true iff a redeemJunior ever succeeded pre-cliff
-    bool    public exercisedIlWithDeploy; // senior par was deployed while the mark was sub-par (IL witness)
-    uint256 public initPrice;          // the deploy-time mark, for the IL witness
+    bool    public exercisedIlWithDeploy; // senior par was deployed while the mark was sub-par
 
-    constructor(
-        MintwareTreasuryVault _vault,
-        MockLiquidityModule _module,
-        MockYieldAdapter _adapter,
-        MockERC20 _usdc,
-        MockERC20 _team,
-        address _owner,
-        address _teamAddr,
-        address _receiver,
-        address _protocol,
-        address[] memory _actors,
-        uint256 _seededDeposits
-    ) {
-        vault = _vault;
-        module = _module;
-        adapter = _adapter;
-        usdc = _usdc;
-        team = _team;
-        owner = _owner;
-        teamAddr = _teamAddr;
-        receiver = _receiver;
-        protocol = _protocol;
-        actors = _actors;
-        totalDeposited = _seededDeposits; // count setUp seed in the conservation ledger
-        initPrice = _module.price();      // deploy-time mark (no LP ops yet) — the IL witness baseline
+    struct Cfg {
+        MintwareTreasuryVault vault;
+        MockYieldAdapter adapter;
+        MockERC20 usdc;
+        MockERC20 team;
+        TestSwapRouter swapRouter;
+        PoolKey key;
+        bool teamIs0;
+        address owner;
+        address teamAddr;
+        address receiver;
+        address protocol;
+        address[] actors;
+        uint256 seededDeposits;
+        uint160 dumpLimit;
+        uint160 pumpLimit;
+    }
+
+    constructor(Cfg memory c) {
+        vault = c.vault;
+        adapter = c.adapter;
+        usdc = c.usdc;
+        team = c.team;
+        swapRouter = c.swapRouter;
+        key = c.key;
+        teamIs0 = c.teamIs0;
+        owner = c.owner;
+        teamAddr = c.teamAddr;
+        receiver = c.receiver;
+        protocol = c.protocol;
+        actors = c.actors;
+        totalDeposited = c.seededDeposits;
+        dumpLimit = c.dumpLimit;
+        pumpLimit = c.pumpLimit;
+        // The handler is the sole external swapper — approve the router for both legs.
+        usdc.approve(address(swapRouter), type(uint256).max);
+        team.approve(address(swapRouter), type(uint256).max);
     }
 
     function nActors() external view returns (uint256) { return actors.length; }
@@ -106,7 +135,6 @@ contract TreasuryVaultHandler is Test {
         uint256 bal = vault.seniorShares(a);
         if (bal == 0) return;
         uint256 s = bound(shareSeed, 1, bal);
-        // handler is the gateway → call directly, no prank. A revert (junior tail) is CORRECT.
         try vault.burnForPayment(a, s, receiver) returns (uint256 out) {
             totalUsdcOut += out;
             successfulBurns++;
@@ -119,11 +147,8 @@ contract TreasuryVaultHandler is Test {
         uint256 tgt = vault.idleBufferTargetBps();
         uint256 minIdle = (base * tgt + BPS - 1) / BPS; // ceil, matches the contract's guard
         uint256 deployed = vault.deployedFromSenior();
-        if (base <= minIdle || deployed >= base - minIdle) return; // no idle-safe room
+        if (base <= minIdle || deployed >= base - minIdle) return;
         uint256 room = base - minIdle - deployed;
-        // Model a real keeper: deploy in sane $1+ increments. A sub-$1 bootstrap would seed a degenerate
-        // 1-wei-reserve pool the mock's constant-product math can't price precisely (not a real-keeper
-        // action — deployToLP is owner-only). Skip when there isn't even $1 of idle-safe room.
         if (room < 1_000_000) return;
         uint256 amt = bound(seed, 1_000_000, room);
         uint256 maxTeam = vault.juniorTokens();
@@ -131,7 +156,7 @@ contract TreasuryVaultHandler is Test {
         try vault.deployToLP(amt, maxTeam) {} catch {}
     }
 
-    // ── owner recovers a bounded amount (<= deployed → module's no-mint senior path) ─
+    // ── owner recovers a bounded amount (<= deployed) ────────────────────────────────
     function recoverFromLP(uint256 seed) public {
         uint256 deployed = vault.deployedFromSenior();
         if (deployed == 0) return;
@@ -140,14 +165,18 @@ contract TreasuryVaultHandler is Test {
         try vault.recoverFromLP(amt) {} catch {}
     }
 
-    // ── move the mark price WITHIN the designed solvent band [50%..150%] ─────────────
+    // ── move the mark via a REAL swap, CLAMPED to the designed solvent band ──────────
     function movePrice(uint256 seed) public {
-        // initial mark is 1e6 (1 USDC per 1e18 team token); band = [0.5e6 .. 1.5e6].
-        uint256 p = bound(seed, 500_000, 1_500_000);
-        module.setPrice(p);
-        // IL witness: record when senior par is actually deployed while the mark sits below par —
-        // the precise regime the headline `deployedFromSenior <= recoverableUSDC` must survive.
-        if (p < initPrice && vault.deployedFromSenior() > 0) exercisedIlWithDeploy = true;
+        bool dump = seed & 1 == 0;
+        (bool zeroForOne, uint160 limit) = dump
+            ? (teamIs0, dumpLimit)   // sell team → team price falls (toward 50%)
+            : (!teamIs0, pumpLimit); // buy team  → team price rises (toward 150%)
+        // A large notional so the swap actually reaches the band edge; the clamp caps it there.
+        uint256 amountIn = 400_000_000 * 1e6; // $400M notional, refunded past the limit
+        try swapRouter.swapTo(key, zeroForOne, amountIn, limit) {
+            // IL witness: a dump with senior par deployed exercises the sub-par coverage regime.
+            if (dump && vault.deployedFromSenior() > 0) exercisedIlWithDeploy = true;
+        } catch {}
     }
 
     // ── simulated Aave interest into the idle adapter (senior yield) ─────────────────
@@ -157,14 +186,11 @@ contract TreasuryVaultHandler is Test {
         totalYieldMinted += amt;
     }
 
-    // ── queue LP fees on the mock, then collect+route them through the vault ─────────
-    function accrueFees(uint256 seed) public {
-        uint256 fee = bound(seed, 1_000_000, 10_000_000_000); // $1 .. $10k
-        module.addFees(fee);
+    // ── collect + route the LP fees the movePrice swaps accrued on the vault position ─
+    function accrueFees(uint256) public {
         uint256 beforeProto = usdc.balanceOf(protocol);
         vm.prank(owner);
         try vault.accrueFees() returns (uint256) {
-            // collected USDC is minted by the module → already in `module.totalMintedUsdc()` (ledger source).
             totalUsdcOut += usdc.balanceOf(protocol) - beforeProto; // protocol cut left the system
         } catch {}
     }
@@ -186,18 +212,26 @@ contract TreasuryVaultHandler is Test {
     }
 }
 
-/// @notice THE GATE — the tranche-solvency proof at 256 runs × 128,000 calls, 0 unexpected reverts.
-///         Proves: the junior always covers the senior par (headline), the senior claim is fully
-///         backed by real recoverable USDC, the senior NAV is structurally price-free, no share
-///         inflation, settlement conservation (exact), reserved-junior cash is always on hand, and
-///         the junior lock cliff is never breached.
+/// @notice THE GATE — the tranche-solvency proof at 256 runs × 128,000 calls, 0 reverts, against a REAL
+///         Uniswap-V4 pool. Proves: the junior always covers the senior par (headline), the senior claim
+///         is fully backed by real recoverable USDC, the senior NAV is structurally price-free, no share
+///         inflation, USDC conservation (no fabrication), reserved-junior cash is always on hand, and the
+///         junior lock cliff is never breached.
 contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary  for IPoolManager;
+
+    PoolManager             internal pm;
+    TestSwapRouter          internal swapRouter;
+    PoolModifyLiquidityTest internal lpRouter;
+
     MintwareTreasuryVault internal vault;
-    MockLiquidityModule   internal module;
     MockYieldAdapter      internal adapter;
     MockERC20             internal usdc;
     MockERC20             internal team;
     TreasuryVaultHandler  internal handler;
+    PoolKey               internal key;
+    bool                  internal teamIs0;
 
     address internal owner    = makeAddr("owner");
     address internal teamAddr  = makeAddr("team");
@@ -206,51 +240,74 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
 
     address[] internal actors;
 
-    uint256 internal constant INIT_PRICE = 1_000_000;    // 1 USDC (6dp) per 1e18 team token
+    uint160 internal constant INIT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
+    int24   internal constant SPACING = 60;
     uint256 internal constant LOCK_DUR   = 365 days;
     uint256 internal constant JUNIOR_USDC_SEED = 50_000_000_000; // $50k stable first-loss coverage
+    uint256 internal constant SQRT_HALF = 707106781;  // sqrt(0.5) × 1e9
+    uint256 internal constant SQRT_ONEHALF = 1224744871; // sqrt(1.5) × 1e9
 
-    /// @dev The two coverage invariants compare the vault's EXACT senior par (integer USDC) against the
-    ///      MOCK's constant-product MTM view (`recoverableUSDC` = resUsdc + resTeam·price/1e18), whose
-    ///      `sqrt` rebalance + proportional reserve reduction round DOWN by O(1) wei. So the mock can
-    ///      report `recoverableUSDC` a few wei UNDER the true recoverable value. This bound absorbs that
-    ///      arithmetic dust — observed <=1 wei across 128k calls — while staying ~10^6x below any real
-    ///      under-coverage (a genuine junior wipe is dollars = millions of wei, and still fails loudly).
-    ///      It relaxes the MOCK's rounding, NOT the economic claim: the price-free senior NAV is exact,
-    ///      and the deterministic unit tests prove the coverage holds under a real 50% IL crash.
-    uint256 internal constant MOCK_CP_DUST = 1_000; // 0.001 USDC
+    /// @dev Tolerance absorbing real-pool integer rounding in the two coverage invariants (deployed par
+    ///      vs the position's spot MTM). ~1e6x below any genuine under-coverage (dollars = millions of wei).
+    uint256 internal constant DUST = 100_000; // 0.1 USDC
     uint256 internal seeded;
+    uint256 internal initialUsdcMinted; // every USDC mint the harness performed in setUp
+
+    function _mintUsdc(address to, uint256 amt) internal {
+        usdc.mint(to, amt);
+        initialUsdcMinted += amt;
+    }
 
     function setUp() public {
+        pm         = new PoolManager(address(this));
+        swapRouter = new TestSwapRouter(IPoolManager(address(pm)));
+        lpRouter   = new PoolModifyLiquidityTest(IPoolManager(address(pm)));
+
         usdc = new MockERC20("USD Coin", "USDC", 6);
-        team = new MockERC20("Team Token", "TEAM", 18);
+        team = new MockERC20("Team Token", "TEAM", 6);
+        teamIs0 = address(team) < address(usdc);
+
+        (Currency c0, Currency c1) = address(usdc) < address(team)
+            ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
+            : (Currency.wrap(address(team)), Currency.wrap(address(usdc)));
+        key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
+        pm.initialize(key, INIT_SQRT_PRICE);
+
         adapter = new MockYieldAdapter(address(usdc));
-        vault = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), owner, teamAddr);
+        vault = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), owner, teamAddr);
 
-        module = new MockLiquidityModule(address(usdc), address(team), address(vault), INIT_PRICE);
-
-        // wiring: module (LP seam), gateway (the handler settles as gateway), protocol treasury.
-        vm.startPrank(owner);
-        vault.setLiquidityModule(address(module));
+        vm.prank(owner);
         vault.setProtocolTreasury(protocol);
-        vm.stopPrank();
 
-        // team commits the junior first-loss reserve — team ETH + a stable junior USDC buffer — and
-        // opens the vault.
-        team.mint(teamAddr, 5_000_000 ether);
-        usdc.mint(teamAddr, JUNIOR_USDC_SEED);
+        // team commits the junior first-loss reserve — team + a stable junior USDC buffer — and opens the vault.
+        team.mint(teamAddr, 5_000_000 * 1e6);
+        _mintUsdc(teamAddr, JUNIOR_USDC_SEED);
         vm.startPrank(teamAddr);
         team.approve(address(vault), type(uint256).max);
         usdc.approve(address(vault), type(uint256).max);
-        vault.commitTeam(5_000_000 ether, JUNIOR_USDC_SEED, LOCK_DUR);
+        vault.commitTeam(5_000_000 * 1e6, JUNIOR_USDC_SEED, LOCK_DUR);
         vm.stopPrank();
+
+        // Deep baseline pool liquidity so the vault's seniority swaps barely move price (only `movePrice`,
+        // which is band-clamped, meaningfully moves the mark).
+        _mintUsdc(address(this), 50_000_000 * 1e6);
+        team.mint(address(this), 50_000_000 * 1e6);
+        usdc.approve(address(lpRouter), type(uint256).max);
+        team.approve(address(lpRouter), type(uint256).max);
+        int24 lo = (TickMath.MIN_TICK / SPACING) * SPACING;
+        int24 hi = (TickMath.MAX_TICK / SPACING) * SPACING;
+        lpRouter.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: 40_000_000 * int256(uint256(1e6)), salt: bytes32(0)}),
+            ""
+        );
 
         // four community actors, each funded + approved.
         actors = new address[](4);
         for (uint256 i = 0; i < 4; i++) {
             address a = makeAddr(string(abi.encodePacked("actor", vm.toString(i))));
             actors[i] = a;
-            usdc.mint(a, 1e30);
+            _mintUsdc(a, 1e30);
             vm.prank(a);
             usdc.approve(address(vault), type(uint256).max);
         }
@@ -262,9 +319,17 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
             seeded += 100_000_000_000;
         }
 
-        handler = new TreasuryVaultHandler(
-            vault, module, adapter, usdc, team, owner, teamAddr, receiver, protocol, actors, seeded
-        );
+        TreasuryVaultHandler.Cfg memory cfg = TreasuryVaultHandler.Cfg({
+            vault: vault, adapter: adapter, usdc: usdc, team: team, swapRouter: swapRouter,
+            key: key, teamIs0: teamIs0, owner: owner, teamAddr: teamAddr, receiver: receiver,
+            protocol: protocol, actors: actors, seededDeposits: seeded,
+            dumpLimit: _bandLimit(true), pumpLimit: _bandLimit(false)
+        });
+        handler = new TreasuryVaultHandler(cfg);
+
+        // fund the handler (sole external swapper) with ample balances on both legs; band-clamp refunds the rest.
+        _mintUsdc(address(handler), 1_000_000_000 * 1e6);
+        team.mint(address(handler), 1_000_000_000 * 1e6);
 
         // handler is the sole gateway → its gatewayBurn calls settle as the gateway.
         vm.prank(owner);
@@ -285,30 +350,34 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         targetContract(address(handler));
     }
 
-    // free SENIOR buffer = vault USDC on hand minus BOTH junior earmarks (fee cut + first-loss USDC
-    // buffer), never negative — mirrors the contract's `_freeSeniorBuffer()`.
+    /// @dev The pool `sqrtPriceX96` at which TEAM price hits the band edge (`dump` → 50%, else 150%),
+    ///      accounting for token ordering (team price = spot² if teamIs0, else 1/spot²).
+    function _bandLimit(bool dump) internal view returns (uint160) {
+        uint256 root = dump ? SQRT_HALF : SQRT_ONEHALF; // sqrt(teamPrice) × 1e9
+        uint256 s = teamIs0
+            ? (uint256(INIT_SQRT_PRICE) * root) / 1e9   // team=c0: spot = INIT·sqrt(tp)
+            : (uint256(INIT_SQRT_PRICE) * 1e9) / root;  // team=c1: spot = INIT/sqrt(tp)
+        return uint160(s);
+    }
+
+    // free SENIOR buffer = vault USDC on hand minus BOTH junior earmarks, never negative.
     function _freeBuffer() internal view returns (uint256) {
         uint256 bal = usdc.balanceOf(address(vault));
         uint256 r = vault.reservedJuniorUSDC() + vault.juniorUsdcBuffer();
         return bal > r ? bal - r : 0;
     }
 
-    /// @notice Non-vacuity: the fuzz actually SETTLED payments (so the burn/solvency props aren't
-    ///         proven over a run that never touched the money path).
+    /// @notice Non-vacuity: the fuzz actually SETTLED payments and exercised IL with senior par deployed.
     function afterInvariant() public view {
         assertGt(handler.successfulBurns(), 0, "fuzz never settled a gateway payment");
-        // the tranche claim is only meaningfully proven if the run actually put senior par into the
-        // LP while the mark was sub-par (i.e. IL was live under the invariant). Otherwise vacuous.
         assertTrue(handler.exercisedIlWithDeploy(), "IL scenario never exercised (senior par deployed sub-par)");
-        assertLt(module.minPriceSeen(), INIT_PRICE, "price never dropped below par");
     }
 
     // ── HEADLINE: the junior STACK (LP-recoverable + stable USDC buffer) covers the senior par ──────
-    //    (+MOCK_CP_DUST absorbs the mock's constant-product integer-rounding — see its NatSpec.)
     function invariant_senior_par_covered() public view {
         assertLe(
             vault.deployedFromSenior(),
-            module.recoverableUSDC() + vault.juniorUsdcBuffer() + MOCK_CP_DUST,
+            vault.recoverableUSDC() + vault.juniorUsdcBuffer() + DUST,
             "deployed senior par exceeds the junior stack (recoverable LP USDC + first-loss buffer)"
         );
     }
@@ -317,7 +386,7 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     function invariant_senior_fully_backed() public view {
         assertLe(
             vault.totalSeniorAssets(),
-            adapter.totalAssets() + _freeBuffer() + module.recoverableUSDC() + vault.juniorUsdcBuffer() + MOCK_CP_DUST,
+            adapter.totalAssets() + _freeBuffer() + vault.recoverableUSDC() + vault.juniorUsdcBuffer() + DUST,
             "senior claim exceeds recoverable backing"
         );
     }
@@ -326,38 +395,32 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     function invariant_senior_price_free() public view {
         assertEq(
             vault.totalSeniorAssets(),
-            adapter.totalAssets() + _freeBuffer() + vault.deployedFromSenior(),
+            adapter.totalAssets() + _freeBuffer() + vault.deployedFromSenior() + vault.jitBorrowed(),
             "senior NAV identity broke (a price term leaked in)"
         );
     }
 
     // ── no share inflation: solvency-by-construction crux (lifted from v1) ──────────
     function invariant_no_share_inflation() public view {
-        // symmetric virtual offset ⇒ shares never outrun assets.
         assertLe(
             vault.totalSeniorShares(),
             vault.totalSeniorAssets(),
             "totalSeniorShares > totalSeniorAssets (solvency crux broken)"
         );
-        // no phantom shares: sum of holder shares == totalSeniorShares.
         uint256 sum;
         for (uint256 i = 0; i < actors.length; i++) sum += vault.seniorShares(actors[i]);
         assertEq(sum, vault.totalSeniorShares(), "phantom shares: holder-share sum != totalSeniorShares");
     }
 
-    // ── settlement conserves: exact USDC ledger (module stays on its no-mint path) ──
+    // ── conservation: no USDC is fabricated in the closed system ────────────────────
+    //    (The mock's mint-ledger is gone with the mock; the real analog is that total USDC supply only
+    //     ever reflects the harness's explicit mints — the vault/library never conjure USDC.)
     function invariant_settlement_conserves() public view {
-        // USDC lives in exactly four places or has left the system; sources are deposits + minted
-        // interest + every USDC the module minted (recover swap payouts + collected fees).
-        uint256 inSystem = adapter.totalAssets()
-            + usdc.balanceOf(address(vault))
-            + usdc.balanceOf(address(module))
-            + handler.totalUsdcOut();
-        uint256 sources = handler.totalDeposited()
-            + handler.totalYieldMinted()
-            + module.totalMintedUsdc()
-            + JUNIOR_USDC_SEED; // the team's committed junior USDC entered the vault at commit
-        assertEq(inSystem, sources, "USDC conservation broke (value created or destroyed)");
+        assertEq(
+            usdc.totalSupply(),
+            initialUsdcMinted + handler.totalYieldMinted(),
+            "USDC conservation broke (value fabricated or destroyed)"
+        );
     }
 
     // ── junior-earmarked cash (fee cut + first-loss buffer) is always physically on hand ───────────

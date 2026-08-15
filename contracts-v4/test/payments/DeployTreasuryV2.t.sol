@@ -13,7 +13,6 @@ import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
 import {MintwareTreasuryVault}     from "../../src/payments/MintwareTreasuryVault.sol";
-import {MintwareV4LiquidityModule} from "../../src/payments/MintwareV4LiquidityModule.sol";
 import {MintwarePaymentGateway}    from "../../src/payments/MintwarePaymentGateway.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
@@ -38,7 +37,6 @@ contract DeployTreasuryV2SmokeTest is Test {
     MockERC20                internal team; // 6dp (mock; real is 18dp)
     MockYieldAdapter         internal adapter;
     MintwareTreasuryVault    internal vault;
-    MintwareV4LiquidityModule internal module;
     MintwarePaymentGateway   internal gateway;
     PoolKey                  internal key;
 
@@ -71,9 +69,8 @@ contract DeployTreasuryV2SmokeTest is Test {
         key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
         pm.initialize(key, INIT_SQRT_PRICE);
 
-        vault  = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), deployer, teamAddr);
-        module = new MintwareV4LiquidityModule(address(pm), key, address(usdc), address(vault), deployer);
-        vault.setLiquidityModule(address(module));
+        // Phase-2 convergence: the vault HOLDS the V4 position itself (no separate liquidity module).
+        vault  = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), deployer, teamAddr);
         gateway = new MintwarePaymentGateway(address(vault), address(usdc), circleCpn, deployer);
         vault.setGateway(address(gateway));
         vault.setProtocolTreasury(circleCpn);
@@ -123,7 +120,7 @@ contract DeployTreasuryV2SmokeTest is Test {
         uint256 jt = vault.juniorTokens();
         vault.deployToLP(200 * ONE, jt);
         assertGt(vault.deployedFromSenior(), 0, "nothing deployed to LP");
-        assertLe(vault.deployedFromSenior(), module.recoverableUSDC() + vault.juniorUsdcBuffer(), "solvency invariant");
+        assertLe(vault.deployedFromSenior(), vault.recoverableUSDC() + vault.juniorUsdcBuffer(), "solvency invariant");
 
         // 4. Trading generates fees; accrue them to the senior (100% during lock).
         usdc.mint(trader, 5_000_000 * ONE);
@@ -143,7 +140,7 @@ contract DeployTreasuryV2SmokeTest is Test {
 
         // 5. Owner rebalance: recover some senior USDC from the LP back to Aave.
         vault.recoverFromLP(50 * ONE);
-        assertLe(vault.deployedFromSenior(), module.recoverableUSDC() + vault.juniorUsdcBuffer(), "invariant after recover");
+        assertLe(vault.deployedFromSenior(), vault.recoverableUSDC() + vault.juniorUsdcBuffer(), "invariant after recover");
 
         // 6. A card charge settles through the REAL Gateway → USDC at the rail.
         uint256 assets = 100 * ONE; // $100 < $250 → permit-only

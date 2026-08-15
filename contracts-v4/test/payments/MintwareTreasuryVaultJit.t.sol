@@ -3,6 +3,12 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 
+import {PoolManager}  from "@uniswap/v4-core/src/PoolManager.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks}       from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {PoolKey}      from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency}     from "@uniswap/v4-core/src/types/Currency.sol";
+
 import {MintwareTreasuryVault} from "../../src/payments/MintwareTreasuryVault.sol";
 import {IERC20}                from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -52,6 +58,8 @@ contract MintwareTreasuryVaultJitTest is Test {
     MintwareTreasuryVault internal vault;
     MockJitHook           internal hook;
 
+    PoolManager internal pm;
+
     address internal teamAddr = makeAddr("team");
     address internal user     = makeAddr("user");
 
@@ -59,9 +67,19 @@ contract MintwareTreasuryVaultJitTest is Test {
     uint256 internal constant JUNIOR_BUFFER = 5_000 * ONE;
 
     function setUp() public {
+        pm   = new PoolManager(address(this));
         usdc = new MockERC20("USD Coin", "USDC", 6);
         team = new MockERC20("Team Token", "TEAM", 6);
         (vault, adapter, hook) = _newVault(JUNIOR_BUFFER);
+    }
+
+    /// @dev Build the USDC/team PoolKey (hookless — this suite exercises only the borrow-seam accounting;
+    ///      no LP is ever deployed, so the pool need not even be initialized).
+    function _key() internal view returns (PoolKey memory) {
+        (Currency c0, Currency c1) = address(usdc) < address(team)
+            ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
+            : (Currency.wrap(address(team)), Currency.wrap(address(usdc)));
+        return PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: 60, hooks: IHooks(address(0))});
     }
 
     /// Spin up a fresh wired vault (owner = this) with `$10k` senior + a `juniorBuffer` first-loss buffer.
@@ -70,7 +88,7 @@ contract MintwareTreasuryVaultJitTest is Test {
         returns (MintwareTreasuryVault v, MockYieldAdapter a, MockJitHook h)
     {
         a = new MockYieldAdapter(address(usdc));
-        v = new MintwareTreasuryVault(address(usdc), address(team), address(a), address(this), teamAddr); // owner=this
+        v = new MintwareTreasuryVault(address(pm), _key(), address(usdc), address(a), address(this), teamAddr); // owner=this
 
         team.mint(teamAddr, 1_000_000 * ONE);
         usdc.mint(teamAddr, juniorBuffer);

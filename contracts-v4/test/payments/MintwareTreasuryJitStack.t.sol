@@ -16,7 +16,6 @@ import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiqui
 
 import {HookMiner}                 from "../../src/lib/HookMiner.sol";
 import {MintwareTreasuryVault}     from "../../src/payments/MintwareTreasuryVault.sol";
-import {MintwareV4LiquidityModule} from "../../src/payments/MintwareV4LiquidityModule.sol";
 import {MintwareTreasuryJitHook}   from "../../src/payments/MintwareTreasuryJitHook.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
@@ -39,7 +38,6 @@ contract MintwareTreasuryJitStackTest is Test {
     MockERC20                internal team; // 6dp
     MockYieldAdapter         internal adapter;
     MintwareTreasuryVault    internal vault;
-    MintwareV4LiquidityModule internal module;
     MintwareTreasuryJitHook  internal hook;
     PoolKey                  internal key;
 
@@ -59,27 +57,33 @@ contract MintwareTreasuryJitStackTest is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         team = new MockERC20("Team Token", "TEAM", 6);
         adapter = new MockYieldAdapter(address(usdc));
-        vault = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), address(this), teamAddr);
 
         (Currency c0, Currency c1) = address(usdc) < address(team)
             ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
             : (Currency.wrap(address(team)), Currency.wrap(address(usdc)));
 
-        // Mirror DeployTreasuryV2: mine the hook, open the pool WITH it, wire the module + skip-sender.
+        // Mirror DeployTreasuryV2: the vault HOLDS the position itself (no module) and LPs into the
+        // HOOKED pool, so its poolKey must carry the JIT hook. That is circular — the hook ctor takes the
+        // vault address, and the vault's key needs the (mined) hook address. Break it by PREDICTING the
+        // vault's CREATE address: the hook is deployed first (CREATE2, bumping our nonce by 1), so the
+        // vault lands at computeCreateAddress(this, currentNonce + 1).
         PoolKey memory ctorKey = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
-        bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), address(vault), address(this));
+        address predictedVault = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
+        bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         (address hookAddr, bytes32 salt) =
             HookMiner.find(address(this), uint160(0xC0), type(MintwareTreasuryJitHook).creationCode, args);
-        hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), address(vault), address(this));
+        hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         require(address(hook) == hookAddr, "hook addr");
 
         key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(hookAddr)});
+        vault = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), address(this), teamAddr);
+        require(address(vault) == predictedVault, "vault addr prediction");
+
         pm.initialize(key, INIT_SQRT_PRICE);
 
-        module = new MintwareV4LiquidityModule(address(pm), key, address(usdc), address(vault), address(this));
-        vault.setLiquidityModule(address(module));
         vault.setJitHook(address(hook));
-        hook.setJitSkipSender(address(module));
+        // Exempt the vault's OWN recover/collect swaps (sender = vault) from firing JIT.
+        hook.setJitSkipSender(address(vault));
 
         // Team + community.
         team.mint(teamAddr, 1_000_000 * ONE);
@@ -118,7 +122,7 @@ contract MintwareTreasuryJitStackTest is Test {
         uint256 jt = vault.juniorTokens();
         vault.deployToLP(200 * ONE, jt);
         assertGt(vault.deployedFromSenior(), 0, "module could not deploy on the hooked pool");
-        assertLe(vault.deployedFromSenior(), module.recoverableUSDC() + vault.juniorUsdcBuffer(), "invariant");
+        assertLe(vault.deployedFromSenior(), vault.recoverableUSDC() + vault.juniorUsdcBuffer(), "invariant");
 
         // 2. A real trader's team→USDC swap FIRES JIT.
         team.mint(trader, 1_000_000 * ONE);
@@ -187,7 +191,7 @@ contract MintwareTreasuryJitStackTest is Test {
         (int24 oTick0, bool ready) = hook.oracleTick();
         assertTrue(ready, "oracle not ready after warmup");
         (, int24 spotBefore,,) = pm.getSlot0(key.toId());
-        uint256 rec0 = module.recoverableUSDC();
+        uint256 rec0 = vault.recoverableUSDC();
 
         // SAME block: a massive spot push (buy team hard) — a flash manipulation.
         vm.prank(trader);
@@ -195,7 +199,7 @@ contract MintwareTreasuryJitStackTest is Test {
 
         (int24 oTick1,) = hook.oracleTick();
         (, int24 spotAfter,,) = pm.getSlot0(key.toId());
-        uint256 rec1 = module.recoverableUSDC();
+        uint256 rec1 = vault.recoverableUSDC();
 
         // Sanity: the manipulation really moved spot a lot (either direction)...
         int256 spotMove = int256(spotAfter) - int256(spotBefore);
@@ -208,7 +212,7 @@ contract MintwareTreasuryJitStackTest is Test {
     }
 
     function test_skipSender_is_owner_gated_and_settable() public {
-        assertEq(hook.jitSkipSender(), address(module));
+        assertEq(hook.jitSkipSender(), address(vault));
         vm.prank(makeAddr("stranger"));
         vm.expectRevert();
         hook.setJitSkipSender(address(0xdead));
@@ -245,7 +249,7 @@ contract MintwareTreasuryJitStackTest is Test {
         assertEq(vault.jitBorrowed(), 0, "JIT borrow not cleared");
         // (2) the module LP stays solvent (junior stack covers the deployed senior par).
         if (withModuleLp) {
-            assertLe(vault.deployedFromSenior(), module.recoverableUSDC() + vault.juniorUsdcBuffer() + 2, "module insolvent under JIT");
+            assertLe(vault.deployedFromSenior(), vault.recoverableUSDC() + vault.juniorUsdcBuffer() + 2, "module insolvent under JIT");
         }
         // (3) the junior buffer only ever absorbs (never gains from JIT).
         assertLe(vault.juniorUsdcBuffer(), bufBefore, "junior buffer grew from JIT");

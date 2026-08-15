@@ -13,27 +13,27 @@ import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
 import {MintwareTreasuryVault}     from "../../src/payments/MintwareTreasuryVault.sol";
-import {MintwareV4LiquidityModule} from "../../src/payments/MintwareV4LiquidityModule.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
-/// @notice END-TO-END proof that the REAL Uniswap-V4 module drops into the ACTUAL `MintwareTreasuryVault`
-///         behind the `ILiquidityModule` seam (replacing `MockLiquidityModule`) with zero vault change,
-///         and that the vault's core solvency invariant — `deployedFromSenior <= recoverableUSDC()` —
-///         holds against a genuine V4 pool. This is what makes the v2 tranche vault deployable.
+/// @notice END-TO-END proof that the SELF-HELD V4 position (Phase-2 convergence — the retired external
+///         `MintwareV4LiquidityModule` folded into the vault via `MWTreasuryPositionLib`) drives the
+///         `MintwareTreasuryVault` against an ACTUAL V4 pool, and that the core solvency invariant —
+///         `deployedFromSenior <= recoverableUSDC()` — holds against a genuine V4 pool. This is what
+///         makes the v2 tranche vault deployable, re-proven after the module was absorbed.
 ///
-/// @dev    USDC is modeled 18dp here (the vault is decimal-agnostic — it tracks USDC units, not a fixed
-///         scale) so the pool inits cleanly at 1:1 (tick 0); production wires a 6dp/18dp pool at the
-///         decimal-adjusted price. The idle-first guard caps the deployable slice at (1 - 80%) of base.
-contract MintwareV4LiquidityModuleIntegrationTest is Test {
+/// @dev    Both tokens are 18dp here so the pool inits cleanly at 1:1 (tick 0); the vault is
+///         decimal-agnostic (it tracks USDC units, not a fixed scale). The idle-first guard caps the
+///         deployable slice at (1 - 80%) of base. Hookless pool → the vault's `recoverableUSDC()` falls
+///         back to spot (no JIT oracle), which is the correct MTM here.
+contract MintwareTreasuryVaultRealPoolTest is Test {
     PoolManager             internal pm;
     PoolModifyLiquidityTest internal lpRouter;
     TestSwapRouter          internal swapRouter;
 
     MintwareTreasuryVault     internal vault;
-    MintwareV4LiquidityModule internal module;
     MockYieldAdapter          internal adapter;
 
     MockERC20 internal usdc;
@@ -66,11 +66,10 @@ contract MintwareV4LiquidityModuleIntegrationTest is Test {
         pm.initialize(key, INIT_SQRT_PRICE);
 
         adapter = new MockYieldAdapter(address(usdc));
-        vault   = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), owner, teamAddr);
-        module  = new MintwareV4LiquidityModule(address(pm), key, address(usdc), address(vault), owner);
+        // Phase-2 convergence: the vault holds the V4 position itself (no separate module).
+        vault   = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), owner, teamAddr);
 
         vm.startPrank(owner);
-        vault.setLiquidityModule(address(module)); // ← the REAL V4 module behind the seam
         vault.setGateway(gateway);
         vault.setProtocolTreasury(protocol);
         vm.stopPrank();
@@ -82,7 +81,7 @@ contract MintwareV4LiquidityModuleIntegrationTest is Test {
         vault.commitTeam(TEAM_COMMIT, 0, 365 days);
         vm.stopPrank();
 
-        // Deep baseline pool liquidity so the module's seniority swaps have realistic depth.
+        // Deep baseline pool liquidity so the vault's seniority swaps have realistic depth.
         usdc.mint(address(this), 20_000_000e18);
         team.mint(address(this), 20_000_000e18);
         usdc.approve(address(lpRouter), type(uint256).max);
@@ -123,12 +122,12 @@ contract MintwareV4LiquidityModuleIntegrationTest is Test {
     }
 
     /// THE INVARIANT: the deployed senior par is always covered by the LP's recoverable USDC.
-    function test_SolvencyInvariantHoldsWithRealModule() public {
+    function test_SolvencyInvariantHoldsSelfHeld() public {
         uint256 deployed = _deployMax();
         assertGt(deployed, 0, "some senior deployed");
-        assertLe(deployed, module.recoverableUSDC(), "deployedFromSenior <= recoverableUSDC");
+        assertLe(deployed, vault.recoverableUSDC(), "deployedFromSenior <= recoverableUSDC");
         // At 1:1 the junior doubles the recoverable value vs the senior par.
-        assertApproxEqRel(module.recoverableUSDC(), 2 * deployed, 0.02e18, "junior-covered ~2x");
+        assertApproxEqRel(vault.recoverableUSDC(), 2 * deployed, 0.02e18, "junior-covered ~2x");
     }
 
     /// The senior NAV is price-free: deploying to the LP does not change totalSeniorAssets (par accounting).
@@ -138,7 +137,7 @@ contract MintwareV4LiquidityModuleIntegrationTest is Test {
         assertApproxEqRel(vault.totalSeniorAssets(), navBefore, 0.001e18, "NAV unchanged by deploy");
     }
 
-    /// Fees collected through the real module lift the senior NAV (100% to senior during the lock).
+    /// Fees collected through the self-held position lift the senior NAV (100% to senior during the lock).
     function test_AccrueFeesLiftsSeniorNav() public {
         _deployMax();
         _genFees();
@@ -159,11 +158,10 @@ contract MintwareV4LiquidityModuleIntegrationTest is Test {
 
         assertLt(vault.deployedFromSenior(), deployedBefore, "deployed par reduced");
         assertGt(adapter.totalAssets(), adapterBefore, "recovered USDC re-idled to Aave");
-        // Invariant still holds on the residual position.
-        assertLe(vault.deployedFromSenior(), module.recoverableUSDC(), "invariant after unwind");
+        assertLe(vault.deployedFromSenior(), vault.recoverableUSDC(), "invariant after unwind");
     }
 
-    /// A normal senior redeem (served from the Aave buffer) round-trips through the wired vault.
+    /// A normal senior redeem (served from the Aave buffer) round-trips through the vault.
     function test_SeniorRedeemRoundTrips() public {
         _deployMax();
         uint256 shares = vault.seniorShares(alice);
@@ -186,6 +184,24 @@ contract MintwareV4LiquidityModuleIntegrationTest is Test {
         vm.stopPrank();
 
         // Even with IL realized on the mark, the junior buffer keeps the senior par covered.
-        assertLe(vault.deployedFromSenior(), module.recoverableUSDC(), "junior still covers senior");
+        assertLe(vault.deployedFromSenior(), vault.recoverableUSDC(), "junior still covers senior");
+    }
+
+    /// The seniority swap sells ONLY the recovered team leg — NEVER the resting junior reserve. A recover
+    /// must not drain `juniorTokens` beyond the tokens that were actually in the removed LP slice.
+    function test_RecoverDoesNotTouchJuniorReserve() public {
+        uint256 teamUsed = TEAM_COMMIT - _juniorAfterDeploy();
+        uint256 reserveBefore = vault.juniorTokens();
+        // Recover the whole deployed par; the seniority swap sells the removed team leg (<= teamUsed).
+        vm.prank(owner);
+        vault.recoverFromLP(20_000e18);
+        // The reserve can only GROW (dust returned), never shrink — the resting reserve was untouched.
+        assertGe(vault.juniorTokens(), reserveBefore, "recover consumed the resting junior reserve");
+        assertLt(teamUsed, TEAM_COMMIT, "sanity: some team was deployed");
+    }
+
+    function _juniorAfterDeploy() internal returns (uint256) {
+        _deployMax();
+        return vault.juniorTokens();
     }
 }
