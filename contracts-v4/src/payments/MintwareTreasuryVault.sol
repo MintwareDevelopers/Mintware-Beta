@@ -115,13 +115,27 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     /// @notice The sole caller of `borrowIdleForJit`/`settleJitReturn` — a V4 hook that opens+closes a
     ///         tight single-sided position for ONE swap (atomic beforeSwap→afterSwap). Set once.
     address public jitHook;
-    /// @notice Senior USDC currently out in a JIT position, valued at PAR — 0 between swaps (borrow +
-    ///         settle are atomic). Counted in `totalSeniorAssets` so the mid-swap NAV stays whole.
+    /// @notice Senior USDC currently out in a JIT position, valued at PAR. NON-ZERO between a JIT open
+    ///         and the keeper `sweepJit` that settles it — the close mints ERC-6909 claims in afterSwap
+    ///         and the vault is repaid on the sweep, so this is NOT zero within a single swap. Bounded to
+    ///         ONE outstanding slice at a time (see `borrowIdleForJit`), so the NAV window is a single
+    ///         capped slice; realized PnL across the window is tracked in `jitNetPnl`.
     uint256 public jitBorrowed;
     /// @notice The bounded senior slice lendable to JIT per block, in bps of the senior base (<= MAX).
     uint16  public jitMaxPerBlockBps = 500; // 5% default
     uint256 private jitBlock;               // block of the current per-block accumulator
     uint256 private jitBorrowedThisBlock;   // senior USDC lent to JIT so far this block
+
+    /// @notice AUDIT H4: cumulative REALIZED JIT PnL in USDC (signed) — profit lifts the senior, a
+    ///         shortfall is a loss the junior buffer / senior absorbed. A monitoring + circuit-breaker
+    ///         signal (JIT is price-free, so this is reactive: it learns from realized losses, it does
+    ///         not predict LVR).
+    int256  public jitNetPnl;
+    /// @notice Owner-set: if cumulative net JIT loss breaches this (USDC), the breaker trips and further
+    ///         JIT borrows are disabled until `resetJitBreaker`. 0 = breaker off (no auto-disable).
+    uint256 public jitMaxCumulativeLoss;
+    /// @notice True once the loss breaker has tripped — `borrowIdleForJit` no-ops until reset.
+    bool    public jitAutoDisabled;
 
     event GatewaySet(address indexed gateway);
     event LiquidityModuleSet(address indexed module);
@@ -139,6 +153,9 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     event JitCapSet(uint16 bps);
     event JitBorrowed(uint256 lent);
     event JitSettled(uint256 borrowed, uint256 returned, uint256 shortfall);
+    event JitBreakerTripped(int256 netPnl);
+    event JitBreakerReset(int256 netPnl);
+    event JitMaxCumulativeLossSet(uint256 maxLoss);
 
     error ZeroAddress();
     error ZeroAmount();
@@ -215,6 +232,21 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         if (bps > MAX_JIT_PER_BLOCK_BPS) revert BadParam();
         jitMaxPerBlockBps = bps;
         emit JitCapSet(bps);
+    }
+
+    /// @notice AUDIT H4: set the cumulative realized-JIT-loss threshold that trips the breaker (USDC).
+    ///         0 = breaker off. When tripped, `borrowIdleForJit` no-ops until `resetJitBreaker`.
+    function setJitMaxCumulativeLoss(uint256 maxLoss) external onlyOwner {
+        jitMaxCumulativeLoss = maxLoss;
+        emit JitMaxCumulativeLossSet(maxLoss);
+    }
+
+    /// @notice AUDIT H4: clear a tripped JIT breaker (owner review) and reset the PnL accumulator so the
+    ///         threshold measures loss afresh from here.
+    function resetJitBreaker() external onlyOwner {
+        emit JitBreakerReset(jitNetPnl);
+        jitAutoDisabled = false;
+        jitNetPnl = 0;
     }
 
     function pause() external onlyOwner { _pause(); }
@@ -310,7 +342,8 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     }
 
     /// @notice The senior claim in USDC — Aave idle + free senior buffer + deployed senior par + any
-    ///         USDC currently out in a JIT position (par). NO price. `jitBorrowed` is 0 between swaps.
+    ///         USDC currently out in a JIT position (par). NO price. `jitBorrowed` is the single
+    ///         outstanding JIT slice (0 when none), bounded + monitored (see `jitBorrowed`/`jitNetPnl`).
     function totalSeniorAssets() public view returns (uint256) {
         return adapter.totalAssets() + _freeSeniorBuffer() + deployedFromSenior + jitBorrowed;
     }
@@ -510,6 +543,11 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         // hook's beforeSwap, which MUST NOT revert — a `whenNotPaused` revert here would brick every
         // qualifying swap on the shared Uniswap pool for all third parties whenever the owner pauses.
         if (paused()) return 0;
+        // AUDIT H4: the loss breaker has tripped — stop lending until the owner reviews + resets.
+        if (jitAutoDisabled) return 0;
+        // AUDIT H2: only ONE JIT position outstanding at a time. Bounds the swap→sweep NAV window to a
+        // single slice (a keeper sweeps between swaps); a new borrow waits until the prior one settles.
+        if (jitBorrowed != 0) return 0;
         if (block.number != jitBlock) { jitBlock = block.number; jitBorrowedThisBlock = 0; }
 
         uint256 perBlockCap = totalSeniorAssets().mulDiv(jitMaxPerBlockBps, BPS, Math.Rounding.Floor);
@@ -544,6 +582,16 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
         }
         // Re-idle the returned USDC plus any freed junior buffer (both are now free senior USDC on hand).
         _supplyToAdapter(usdcReturned + draw);
+
+        // AUDIT H4: fold the realized PnL of this JIT round into the running total, and trip the breaker
+        // if cumulative net loss breaches the owner threshold. Reactive (price-free): a profit lifts the
+        // senior, a shortfall bled the junior buffer (or, past it, dipped the senior) — either way we
+        // learn it here and can auto-disable a bleeding JIT.
+        jitNetPnl += int256(usdcReturned) - int256(outstanding);
+        if (jitMaxCumulativeLoss != 0 && !jitAutoDisabled && jitNetPnl < -int256(jitMaxCumulativeLoss)) {
+            jitAutoDisabled = true;
+            emit JitBreakerTripped(jitNetPnl);
+        }
         emit JitSettled(outstanding, usdcReturned, shortfall);
     }
 
