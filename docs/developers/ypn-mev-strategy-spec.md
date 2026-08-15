@@ -89,6 +89,46 @@ Two implementation tiers:
 ## Measurement first
 
 `jitNetPnl` (shipped) is the instrument: run the safe rail on testnet, watch realized JIT PnL, and let the
-data justify each phase. If the guarded rail already clears meaningful profit, Phase 1 is the obvious next
-build; if it's marginal, the selective-firing keeper is exactly what turns it positive. Either way we ship
-on evidence, not vibes — and none of it throws away the hook.
+data justify each phase. We did exactly that — **see "Status & evidence" below**: the measurement came back
+*marginal* (naive JIT ≈ break-even), which refines the plan — a selective-firing keeper stops the bleed but
+does **not** turn it positive; that takes Phase 2 (dynamic fees) / Phase 3 (LVR recapture). Either way we
+ship on evidence, not vibes — and none of it throws away the hook.
+
+## Status & evidence — PARKED (2026-08-15)
+
+MEV/JIT work is **paused at a clean stop** (user decision). Nothing is half-finished or broken.
+
+**Built + shipped**
+- **Phase 0 — safe JIT rail + guards** (merged in the audit-hardening PRs): one-slice NAV-window bound (H2),
+  reactive PnL circuit-breaker (H4) — `jitNetPnl`, owner `jitMaxCumulativeLoss` → `jitAutoDisabled`,
+  `resetJitBreaker`. All in the deployed, invariant-fuzzed vault bytecode.
+- **Swap harness** (PRs #258/#259) — `deploy {mockUsdc,mockTeam}` → `commit-team` → `jit-smoke`: fires a real
+  V4 swap so the JIT hook triggers, sweeps, and reports `roundPnl`. **Fired live on Base Sepolia.**
+
+**The evidence (JIT size-sweep, live)**
+
+| swap size | JIT fired | borrowed | `roundPnl` |
+|---|---|---|---|
+| $0.50 | ✓ | $0.50 | −1 |
+| $2 | ✓ | $1.00 (5% slice) | −1 |
+| $10 | ✓ | $1.00 | −1 |
+| $50 | ✓ | $1.00 | −1 |
+| $200 | ✓ | $1.00 | −1 |
+
+**Flat −1 micro-USDC across every size.** Naive JIT fee-capture is **structurally ~break-even** against
+realistic pool depth — it captures roughly what its round-trip close cost pays; swap size doesn't move it.
+
+**Implication (reprioritizes the phasing above):** the selective-firing keeper (Phase 1) is worth it as the
+**safety/control** layer (keep JIT out of losing regimes, sweep, auto-disable) but its **yield upside is
+capped** (turns a small loss into ~zero). The real money is **Phase 2 (dynamic fees)** and **Phase 3 (LVR
+recapture)**.
+
+**Resume decision** (pick a lever, evidence in hand):
+1. **Min safety + Phase 2 (dynamic fees)** — *recommended*: cap JIT's downside, then charge informed flow
+   more so capture > close cost (first net-positive lever; port `MWDynamicFee.sol`).
+2. **Full Phase-1 keeper** — safety-complete but ~zero yield upside per the data; deploy-gated.
+3. **Phase 3 (LVR recapture)** — the moat; biggest build; port `MWAmAuction.sol`.
+
+**Live testnet artifacts:** audited fixed-stack vault `0xbf14c877…65c77`; JIT-fired mock/mock stack vault
+`0x90f0849e…342227` (swapRouter `0xE9EC…D0cA`, lpRouter `0x2d4C…C1e0`). Re-fire via the bearer-gated
+(`CRON_SECRET`) ops routes: `deploy {mockUsdc,mockTeam}` → `commit-team` → `jit-smoke`.
