@@ -236,3 +236,46 @@ The levers already exist on-chain (`idleBufferTargetBps`, `jitMaxPerBlockBps`, `
 **tier preset** (or an on-chain junior-liquidity read) would set them at vault creation. The card rail is not
 one-size either — spend/settlement generosity scales with how safely the junior backs the senior. Treat
 blue-chip and community vaults as **different products.**
+
+## Mechanism ranking — for the goal "capture MEV + slippage," JIT is NOT the best
+
+Decision (2026-08-15). Ranked best → worst for **our** goal on **our** thin community pools:
+
+| Rank | Mechanism | Captures | Fit |
+|---|---|---|---|
+| 1 | **MEV-tax / top-of-block auction = LVR recapture** (`MWAmAuction.sol`) | the arb/sandwich value that leaks from the pool | **Best / the moat.** Redirects to treasury the value bots take today. |
+| 2 | **Dynamic / surge fee** (`MWDynamicFee.sol`) | price-impact, as a fee on high-impact flow | **Best pragmatic first lever.** No capital, no adverse inventory; strong on thin pools. Single-venue fallback. |
+| 3 | **JIT liquidity** (our `MintwareTreasuryJitHook`) | the swap fee, via provision | **Weak here** — the safe *scaffold* we built, not the capture engine. Round-trips inventory through the same thin pool → break-even to negative. |
+
+Direction: **build the auction/dynamic-fee engine; treat naive JIT as a retired experiment.** The infra we
+already shipped (tranche vault, safe hook seam, guards H2/H4, settlement gateway) is exactly what an
+auction/dynamic-fee hook plugs into — not throwaway, it's the foundation. Both blocks (`MWDynamicFee`,
+`MWAmAuction`) already exist in the repo.
+
+## How much of a trader's slippage can we actually capture?
+
+Quantified answer to "on a low cap I trade with 4–7% slippage — can we capture that?" — via
+[`sims/lvr_capture_sim.py`](sims/lvr_capture_sim.py) (constant-product pool, 0.3% fee; run `python3
+docs/developers/sims/lvr_capture_sim.py`).
+
+A trader's slippage splits into **permanent impact** (the market genuinely repriced — *nobody* captures it)
+and **temporary impact / LVR** (reverts — captured by an MEV bot today; a hook can redirect it to treasury).
+The capture ratio is set by the temporary fraction **β** (unknowable per-token → we sweep it), **not** by pool
+size — pool size only scales the dollars.
+
+$200k pool, trader buys ~$4.7k and eats 5% (loses ~$235 vs mid):
+
+| Temporary fraction β | We capture | = % of the trader's slippage |
+|---|---|---|
+| 0.3 (informed flow) | $14 | 6% |
+| 0.5 (typical retail) | $45 | **~19%** |
+| 0.7 (pure ape/impact) | $92 | 39% |
+| single-venue: 1% surge fee | $47 | 20% (a fee, not reclaimed leakage) |
+
+Absolute $ scales linearly with pool size (same ratios): $50k pool → ~$11 (β0.5); $1M pool → ~$223 (β0.5).
+
+**Bottom line: yes, partly — realistically ~15–40% of the slippage (≈0.8–2% of trade notional), the piece
+already leaking to bots.** Honest caveats: β is assumed not measured; the permanent part is gone for everyone;
+these are **upper bounds** on the LVR piece (ignore gas, latency, competing arbs) — our structural edge is that
+*as the pool's own hook we go first* (top-of-block right); clean LVR needs a second venue, else fall back to
+the surge-fee row. **Naive JIT captures none of this** — the mechanisms that do are ranks 1–2 above.
