@@ -10,6 +10,8 @@ import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
 import {HookMiner}                 from "../../src/lib/HookMiner.sol";
@@ -26,6 +28,9 @@ import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 ///         liquidity on the hooked pool — and, critically, that the module's OWN recover swap does NOT
 ///         fire JIT (the skip-sender exemption), while a real trader's team→USDC swap does.
 contract MintwareTreasuryJitStackTest is Test {
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary  for PoolManager;
+
     PoolManager             internal pm;
     TestSwapRouter          internal swapRouter;
     PoolModifyLiquidityTest internal lpRouter;
@@ -130,6 +135,76 @@ contract MintwareTreasuryJitStackTest is Test {
         vault.recoverFromLP(50 * ONE); // owner → module.recover → team→USDC swap, sender = module
         assertEq(vault.jitBorrowed(), 0, "module's own recover swap must not fire JIT");
         assertLt(vault.deployedFromSenior(), deployedBefore, "recover did not unwind LP");
+    }
+
+    /// AUDIT #1 (Cork class): a swap on ANY pool that names this hook but is NOT the canonical pool must
+    /// no-op — the hook must never borrow senior USDC to deploy into an attacker-controlled pool. Here the
+    /// attacker opens a second pool with the same hook + tokens but a different fee (→ different PoolId).
+    function test_nonCanonicalPool_doesNotFireJit() public {
+        PoolKey memory evil = PoolKey({
+            currency0: key.currency0, currency1: key.currency1, fee: 500, tickSpacing: SPACING, hooks: key.hooks
+        });
+        pm.initialize(evil, INIT_SQRT_PRICE);
+
+        usdc.mint(address(this), 1_000_000 * ONE);
+        team.mint(address(this), 1_000_000 * ONE);
+        int24 lo = (TickMath.MIN_TICK / SPACING) * SPACING;
+        int24 hi = (TickMath.MAX_TICK / SPACING) * SPACING;
+        lpRouter.modifyLiquidity(
+            evil,
+            ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: 200_000 * int256(uint256(ONE)), salt: bytes32(0)}),
+            ""
+        );
+
+        // A team→USDC swap on the evil pool: must succeed (no revert = no pool brick) and NOT fire JIT.
+        team.mint(trader, 1_000_000 * ONE);
+        vm.startPrank(trader);
+        team.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(evil, _sellTeamZeroForOne(), 3_000 * ONE);
+        vm.stopPrank();
+
+        assertEq(vault.jitBorrowed(), 0, "hook fired JIT on a NON-canonical pool (Cork-class hole)");
+    }
+
+    /// AUDIT #7: an intra-block spot push must NOT inflate `recoverableUSDC()` (the solvency-invariant
+    /// RHS). The truncated oracle is frozen within a block, and valuation is `min(spot, oracle)`, so a
+    /// flash manipulation is ignored. Proves the fix at the exact exploit shape.
+    function test_spotManipulation_doesNotInflateRecoverable() public {
+        uint256 jt = vault.juniorTokens();
+        vault.deployToLP(2_000 * ONE, jt);
+
+        // Warm the oracle in a fresh block with a small USDC→team swap (buys team, no JIT). After this the
+        // oracle is ready and its lastBlock == the current block, so the manipulation below can't move it.
+        vm.roll(block.number + 1);
+        team.mint(trader, 500_000_000 * ONE);
+        usdc.mint(trader, 500_000_000 * ONE);
+        vm.startPrank(trader);
+        team.approve(address(swapRouter), type(uint256).max);
+        usdc.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, !_sellTeamZeroForOne(), 100 * ONE);
+        vm.stopPrank();
+
+        (int24 oTick0, bool ready) = hook.oracleTick();
+        assertTrue(ready, "oracle not ready after warmup");
+        (, int24 spotBefore,,) = pm.getSlot0(key.toId());
+        uint256 rec0 = module.recoverableUSDC();
+
+        // SAME block: a massive spot push (buy team hard) — a flash manipulation.
+        vm.prank(trader);
+        swapRouter.swap(key, !_sellTeamZeroForOne(), 2_000_000 * ONE);
+
+        (int24 oTick1,) = hook.oracleTick();
+        (, int24 spotAfter,,) = pm.getSlot0(key.toId());
+        uint256 rec1 = module.recoverableUSDC();
+
+        // Sanity: the manipulation really moved spot a lot (either direction)...
+        int256 spotMove = int256(spotAfter) - int256(spotBefore);
+        uint256 spotMoveMag = spotMove < 0 ? uint256(-spotMove) : uint256(spotMove);
+        assertGt(spotMoveMag, 200, "manipulation did not move spot (vacuous test)");
+        // ...but the oracle stayed frozen intra-block...
+        assertEq(oTick1, oTick0, "oracle moved within the block (freeze broken)");
+        // ...so the invariant RHS did NOT inflate.
+        assertLe(rec1, rec0 + ONE, "recoverableUSDC inflated by an intra-block spot push (#7 hole)");
     }
 
     function test_skipSender_is_owner_gated_and_settable() public {
