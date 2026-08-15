@@ -132,3 +132,34 @@ recapture)**.
 **Live testnet artifacts:** audited fixed-stack vault `0xbf14c877…65c77`; JIT-fired mock/mock stack vault
 `0x90f0849e…342227` (swapRouter `0xE9EC…D0cA`, lpRouter `0x2d4C…C1e0`). Re-fire via the bearer-gated
 (`CRON_SECRET`) ops routes: `deploy {mockUsdc,mockTeam}` → `commit-team` → `jit-smoke`.
+
+## Considered idea: "Internalized Slippage Capture" hook (assessment, 2026-08-15)
+
+A blueprint (`MWSlippageCaptureHook`) proposed measuring a swap's price impact in the hook (beforeSwap
+snapshots slot0 sqrtPrice, afterSwap reads it) and, for impact above a 0.30% threshold, skimming the excess
+via `afterSwapReturnDelta` + `targetCurrency.take()` → 100% to the treasury as "reclaimed slippage / MEV."
+
+**Assessment — the v4 mechanism is valid; the framing is not.** A hook *can* skim swap output with
+`afterSwapReturnDelta` + `take` (that part works). But:
+
+1. **"Slippage" is not a capturable pot.** It's the trader's worse average price walking up the curve —
+   already in the pool reserves, accruing to LPs (then bled to arbitrageurs = LVR). `capturedFee =
+   rawOutput × excessBps` is a **new deduction from the trader's output**, i.e. a fee sourced from the
+   *trader*, not reclaimed leakage. Not "100% gross margin from nowhere."
+2. **It does not capture MEV.** Sandwich/arb profit comes from front/back-running *around* the trade —
+   untouched here. Capturing that is LVR-recapture (Phase 3), a different mechanism.
+3. **"Zero aggregator friction" inverts under load.** Aggregators quote the **net output including hook
+   deltas**, so on exactly the high-impact trades this targets they see the skim → route *away* (or the
+   trader gets a bad-execution surprise and the pool gets deprioritized). Friction concentrates on the
+   large trades, it doesn't disappear.
+
+*Technical nits if ever built:* `slot0SqrtPriceX96Start` is declared regular storage, not `transient` (the
+comment claims EIP-1153); `_calculatePriceImpact` uses the sqrtPrice ratio, ~2× off from true price impact
+(price = sqrtPrice²); it imports `v4-periphery/BaseHook` whereas our stack implements `IHooks` directly.
+
+**Salvageable core → this IS Phase 2 (dynamic fees).** Stripped of the framing, it's a **surge/dynamic fee
+on high-impact trades routed to the treasury** — the exact lever the size-sweep evidence pointed to, built
+on `MWDynamicFee.sol`. Honest reframe: *"on flow where Mintware has the best liquidity (so it routes here
+despite a surge fee), charge a size/impact-scaled treasury fee."* Real incremental revenue on
+price-insensitive large flow — a **surge fee** (incidence on traders), not slippage reclamation. Good
+instinct (capture large-flow value for the treasury), corrected mechanism-story, right lever underneath.
