@@ -256,18 +256,38 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
 
         teamFeesRedirected = false;
 
-        uint256 tok = juniorTokens;
-        // The junior's residual USDC = its fee earmark (reservedJuniorUSDC) + whatever first-loss
-        // coverage went unused (juniorUsdcBuffer). Both are held on hand; hand them back.
-        uint256 cash = reservedJuniorUSDC + juniorUsdcBuffer;
-        juniorTokens = 0;
+        // AUDIT H3: the team's accrued fee cut (reservedJuniorUSDC) is PROTECTED earned income —
+        // always returnable. But the FIRST-LOSS capital (the ETH stake held on hand + the optional
+        // junior USDC buffer) is subordinate to the senior: only release it once the senior is fully
+        // covered WITHOUT it (the LP alone recovers the deployed senior par and no JIT loan is in
+        // flight). Otherwise hold it back to backstop the senior — the team can redeem it in a later
+        // call once the senior is whole again. This enforces "junior absorbs first" at the exit.
+        uint256 fees = reservedJuniorUSDC;
         reservedJuniorUSDC = 0;
-        juniorUsdcBuffer = 0;
 
+        uint256 tok;
+        uint256 firstLossUsdc;
+        if (_seniorFullyCovered()) {
+            tok           = juniorTokens;
+            firstLossUsdc = juniorUsdcBuffer;
+            juniorTokens     = 0;
+            juniorUsdcBuffer = 0;
+        }
+
+        uint256 cash = fees + firstLossUsdc;
         if (tok > 0)  teamToken.safeTransfer(team, tok);
         if (cash > 0) { _pullUSDC(cash); usdc.safeTransfer(team, cash); }
 
         emit JuniorRedeemed(team, tok, cash);
+    }
+
+    /// @dev The senior tranche is fully covered WITHOUT drawing the junior first-loss capital: the LP
+    ///      position alone recovers the deployed senior par and no JIT loan is outstanding. When true,
+    ///      releasing the junior's first-loss ETH + USDC buffer cannot strand a senior redeemer.
+    function _seniorFullyCovered() internal view returns (bool) {
+        if (jitBorrowed != 0) return false;
+        if (address(liquidityModule) == address(0)) return true;
+        return liquidityModule.recoverableUSDC() >= deployedFromSenior;
     }
 
     // ── senior views / conversions (price-free) ───────────────────────────────────

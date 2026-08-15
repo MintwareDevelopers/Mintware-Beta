@@ -176,6 +176,43 @@ contract MintwareTreasuryVaultTest is Test {
         assertGt(teamInLp, 0, "test did not actually deploy junior tokens into the LP");
     }
 
+    // ── AUDIT H3: while the senior is underwater (LP can't cover the deployed par and no senior has
+    //    redeemed to unwind it), redeemJunior HOLDS BACK the first-loss capital (ETH stake + junior USDC
+    //    buffer) to backstop the senior. The team cannot pull its first-loss out from under a stranded
+    //    senior. (Protected fees still flow; here none have accrued.)
+    function test_redeemJunior_holds_firstLoss_while_senior_underwater() public {
+        uint256 buffer = 5_000 * ONE_USDC;
+        (MintwareTreasuryVault v, MockLiquidityModule m,) = _newVault(INIT_PRICE, buffer);
+        address u = makeAddr("h3user");
+        usdc.mint(u, 100_000 * ONE_USDC);
+        vm.startPrank(u);
+        usdc.approve(address(v), type(uint256).max);
+        v.depositUSDC(100_000 * ONE_USDC, 0, u);
+        vm.stopPrank();
+
+        // Deploy a slice, then crash the pool to ~0 so recoverableUSDC() << deployedFromSenior —
+        // senior underwater, and crucially NO senior redemption has unwound the LP yet.
+        vm.prank(owner);
+        v.setIdleBufferTarget(5_000);
+        uint256 jt = v.juniorTokens();
+        vm.prank(owner);
+        v.deployToLP(50_000 * ONE_USDC, jt);
+        m.setPrice(1);
+        assertLt(m.recoverableUSDC(), v.deployedFromSenior(), "test did not put the senior underwater");
+
+        vm.warp(vm.getBlockTimestamp() + LOCK_DUR + 1);
+
+        uint256 bufBefore  = v.juniorUsdcBuffer();
+        uint256 tokBefore  = v.juniorTokens();
+        uint256 teamTokBefore = team.balanceOf(teamAddr);
+        vm.prank(teamAddr);
+        v.redeemJunior();
+
+        assertEq(v.juniorUsdcBuffer(), bufBefore, "junior USDC buffer released while senior underwater");
+        assertEq(v.juniorTokens(), tokBefore, "junior ETH released while senior underwater");
+        assertEq(team.balanceOf(teamAddr), teamTokBefore, "team pulled first-loss ETH while senior underwater");
+    }
+
     // ── the senior is NEVER settled below par: burnForPayment reverts rather than underpay ─
     //    when the junior is wiped (the tail the invariant run deliberately excludes from its band).
     //    The constant-product mock makes this REAL: crashing the mark to ~0 rotates the LP position
