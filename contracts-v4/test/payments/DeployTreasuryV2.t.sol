@@ -71,7 +71,7 @@ contract DeployTreasuryV2SmokeTest is Test {
         key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
         pm.initialize(key, INIT_SQRT_PRICE);
 
-        vault  = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), deployer);
+        vault  = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), deployer, teamAddr);
         module = new MintwareV4LiquidityModule(address(pm), key, address(usdc), address(vault), deployer);
         vault.setLiquidityModule(address(module));
         gateway = new MintwarePaymentGateway(address(vault), address(usdc), circleCpn, deployer);

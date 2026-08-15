@@ -82,8 +82,10 @@ contract DeployTreasuryV2 is Script {
 
         vm.startBroadcast(deployerKey);
 
-        // 1. Treasury vault (senior = community USDC; junior = team token).
-        MintwareTreasuryVault vault = new MintwareTreasuryVault(usdc, teamToken, adapter, deployer);
+        // 1. Treasury vault (senior = community USDC; junior = team token). AUDIT M1: the team address
+        //    is bound at creation (TEAM_ADDRESS, default deployer) — only it may commitTeam.
+        address team = vm.envOr("TEAM_ADDRESS", deployer);
+        MintwareTreasuryVault vault = new MintwareTreasuryVault(usdc, teamToken, adapter, deployer, team);
         console.log("TreasuryVault:", address(vault));
 
         // 2. Mine + deploy the JIT hook (flags 0xC0 = beforeSwap|afterSwap). Deployed via the CREATE2

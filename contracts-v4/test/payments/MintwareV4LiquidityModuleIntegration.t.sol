@@ -66,7 +66,7 @@ contract MintwareV4LiquidityModuleIntegrationTest is Test {
         pm.initialize(key, INIT_SQRT_PRICE);
 
         adapter = new MockYieldAdapter(address(usdc));
-        vault   = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), owner);
+        vault   = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), owner, teamAddr);
         module  = new MintwareV4LiquidityModule(address(pm), key, address(usdc), address(vault), owner);
 
         vm.startPrank(owner);

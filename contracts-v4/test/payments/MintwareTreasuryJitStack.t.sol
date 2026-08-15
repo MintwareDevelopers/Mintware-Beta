@@ -54,7 +54,7 @@ contract MintwareTreasuryJitStackTest is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         team = new MockERC20("Team Token", "TEAM", 6);
         adapter = new MockYieldAdapter(address(usdc));
-        vault = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), address(this));
+        vault = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), address(this), teamAddr);
 
         (Currency c0, Currency c1) = address(usdc) < address(team)
             ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
