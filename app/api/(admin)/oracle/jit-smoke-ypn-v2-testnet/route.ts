@@ -60,6 +60,13 @@ export const POST = createHandler(async (req, ctx) => {
   const wait = (hash: `0x${string}`) => publicClient.waitForTransactionReceipt({ hash })
   const readV = <T,>(fn: string, args: readonly unknown[] = []) =>
     publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: fn as never, args: args as never }) as Promise<T>
+  // poll a read past the public-RPC read-after-write lag (the harness reads state right after mined txs)
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+  const waitFor = async <T,>(read: () => Promise<T>, ok: (v: T) => boolean, tries = 8, delayMs = 1500): Promise<T> => {
+    let v = await read()
+    for (let i = 0; i < tries && !ok(v); i++) { await sleep(delayMs); v = await read() }
+    return v
+  }
   const mint = (tok: `0x${string}`, amt: bigint) =>
     walletClient.writeContract({ address: tok, abi: ERC20_ABI, functionName: 'mint', args: [me, amt], account, chain: baseSepolia, gas: 120_000n }).then(wait)
   const approve = (tok: `0x${string}`, spender: `0x${string}`, amt: bigint) =>
@@ -77,27 +84,35 @@ export const POST = createHandler(async (req, ctx) => {
     const [c0, c1] = BigInt(usdc) < BigInt(team) ? [usdc, team] : [team, usdc]
     const key = { currency0: c0, currency1: c1, fee: FEE, tickSpacing: TICK_SPACING, hooks: hook }
 
-    // 1. Deposit senior USDC — the JIT borrows from the vault's idle senior, so it must exist first.
-    await mint(usdc, depositUsdc)
-    await approve(usdc, vault, depositUsdc)
-    await walletClient.writeContract({ address: vault, abi: VAULT_ABI, functionName: 'depositUSDC', args: [depositUsdc, 0n, me], account, chain: baseSepolia, gas: 600_000n }).then(wait)
+    // 1. Deposit senior USDC — the JIT borrows from the vault's idle senior. depositUsdc=0 SKIPS this,
+    //    so a size-sweep can fire swap-only runs on a FIXED pool state (deposit + liquidity once, then
+    //    vary swapTeam) instead of re-growing the senior base each run.
+    if (depositUsdc > 0n) {
+      await mint(usdc, depositUsdc)
+      await approve(usdc, vault, depositUsdc)
+      await walletClient.writeContract({ address: vault, abi: VAULT_ABI, functionName: 'depositUSDC', args: [depositUsdc, 0n, me], account, chain: baseSepolia, gas: 600_000n }).then(wait)
+    }
     const seniorBefore = await readV<bigint>('totalSeniorAssets')
 
     // 2. Routers (reuse if provided — routers are stateless, safe to share across runs).
     const swapRouter = (typeof body.swapRouter === 'string' && isAddress(body.swapRouter)) ? getAddress(body.swapRouter) : await deploy(SWAP_ROUTER_ABI, SWAP_ROUTER_BYTECODE, [POOL_MANAGER])
     const lpRouter   = (typeof body.lpRouter === 'string' && isAddress(body.lpRouter)) ? getAddress(body.lpRouter) : await deploy(LP_ROUTER_ABI, LP_ROUTER_BYTECODE, [POOL_MANAGER])
 
-    // 3. Baseline liquidity so a trade can execute (both legs public-mint).
-    await mint(usdc, BIG_MINT); await mint(team, BIG_MINT)
-    await approve(usdc, lpRouter, BIG_MINT); await approve(team, lpRouter, BIG_MINT)
-    await walletClient.writeContract({
-      address: lpRouter, abi: LP_ROUTER_ABI, functionName: 'modifyLiquidity',
-      args: [key, { tickLower: TICK_LO, tickUpper: TICK_HI, liquidityDelta: liqUnits, salt: SALT32 }, '0x'],
-      account, chain: baseSepolia, gas: 4_000_000n,
-    }).then(wait)
+    // 3. Baseline liquidity so a trade can execute (both legs public-mint). liqUnits=0 SKIPS this (reuse
+    //    the depth from a prior run).
+    if (liqUnits > 0n) {
+      await mint(usdc, BIG_MINT); await mint(team, BIG_MINT)
+      await approve(usdc, lpRouter, BIG_MINT); await approve(team, lpRouter, BIG_MINT)
+      await walletClient.writeContract({
+        address: lpRouter, abi: LP_ROUTER_ABI, functionName: 'modifyLiquidity',
+        args: [key, { tickLower: TICK_LO, tickUpper: TICK_HI, liquidityDelta: liqUnits, salt: SALT32 }, '0x'],
+        account, chain: baseSepolia, gas: 4_000_000n,
+      }).then(wait)
+    }
 
     // 4. Swap team→USDC — this makes USDC the OUTPUT, so the hook fires JIT (jitThreshold=0). zeroForOne
-    //    = the team token is currency0.
+    //    = the team token is currency0. Snapshot cumulative PnL first so we can report THIS round's delta.
+    const pnlBefore = await readV<bigint>('jitNetPnl')
     const zeroForOne = getAddress(team) === getAddress(c0)
     await mint(team, swapTeam); await approve(team, swapRouter, swapTeam)
     const swapTx = await walletClient.writeContract({
@@ -107,11 +122,14 @@ export const POST = createHandler(async (req, ctx) => {
     await wait(swapTx)
 
     // 5. The JIT position is open (claims minted); jitBorrowed is non-zero until the keeper sweeps.
-    const jitBorrowedOpen = await readV<bigint>('jitBorrowed')
+    //    Poll past the RPC read-after-write lag so the response is trustworthy (not just the on-chain trace).
+    const jitBorrowedOpen = await waitFor(() => readV<bigint>('jitBorrowed'), (v) => v > 0n)
     const sweepTx = await walletClient.writeContract({ address: hook, abi: HOOK_ABI, functionName: 'sweepJit', args: [], account, chain: baseSepolia, gas: 2_500_000n })
     await wait(sweepTx)
-    const jitBorrowedAfterSweep = await readV<bigint>('jitBorrowed')
-    const jitNetPnl = await readV<bigint>('jitNetPnl')
+    const jitBorrowedAfterSweep = await waitFor(() => readV<bigint>('jitBorrowed'), (v) => v === 0n)
+    // the round's realized PnL moved jitNetPnl off its pre-swap value (unless exactly 0) — poll for it
+    const jitNetPnl = await waitFor(() => readV<bigint>('jitNetPnl'), (v) => v !== pnlBefore)
+    const roundPnl = jitNetPnl - pnlBefore
     const seniorAfter = await readV<bigint>('totalSeniorAssets')
 
     return ctx.json({
@@ -121,13 +139,15 @@ export const POST = createHandler(async (req, ctx) => {
         fired: jitBorrowedOpen > 0n,
         borrowedWhileOpen: jitBorrowedOpen.toString(),
         borrowedAfterSweep: jitBorrowedAfterSweep.toString(),
-        jitNetPnl: (jitNetPnl as bigint).toString(),
+        roundPnl: roundPnl.toString(),          // THIS swap's realized JIT PnL (6dp USDC, signed)
+        jitNetPnlBefore: pnlBefore.toString(),
+        jitNetPnl: (jitNetPnl as bigint).toString(), // cumulative after this round
         seniorBefore: seniorBefore.toString(),
         seniorAfter: seniorAfter.toString(),
       },
       swap: { teamSold: swapTeam.toString(), zeroForOne },
       txs: { swapTx, sweepTx },
-      note: 'JIT fired on a live swap and settled on the sweep. jitNetPnl is the round\'s realized PnL — reuse {swapRouter,lpRouter} to fire more swaps and accumulate it.',
+      note: 'roundPnl = this swap\'s realized JIT PnL. Size-sweep: one full run (deposit+liquidity), then swap-only runs {vault, swapRouter, lpRouter, depositUsdc:"0", liqUnits:"0", swapTeam:<size>} to map roundPnl vs swap size.',
     })
   } catch (e) {
     return ctx.json({ ok: false, step: 'jit-smoke', error: e instanceof Error ? e.message : String(e) }, 500)
