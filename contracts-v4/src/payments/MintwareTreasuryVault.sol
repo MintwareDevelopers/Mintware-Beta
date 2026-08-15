@@ -600,14 +600,25 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     function _recoverFromLP(uint256 usdcWanted) internal returns (uint256 usdcReturned) {
         if (address(liquidityModule) == address(0)) revert NoModule();
         if (usdcWanted == 0) revert ZeroAmount();
-        uint256 par = usdcWanted > deployedFromSenior ? deployedFromSenior : usdcWanted;
 
         uint256 teamBack;
         (usdcReturned, teamBack) = liquidityModule.recover(usdcWanted);
-
-        // Senior par leaves the LP at PAR (junior eats the MTM gap); returned junior token re-reserves.
-        deployedFromSenior -= par;
         juniorTokens += teamBack;
+
+        // AUDIT M4: charge the seniority-swap slippage to the JUNIOR, not senior NAV. Drop
+        // `deployedFromSenior` by the USDC ACTUALLY recovered (not the requested par), so senior NAV is
+        // flat on a routine rebalance (−deployed +free) and the LP's MTM cushion over par absorbs the
+        // (par − usdcReturned) gap. Only when the LP alone no longer covers the deployed par (`recoverable
+        // < deployed`) do we write down more — down to the LP's live value — so the senior takes only the
+        // unavoidable tail loss, never the routine slippage. We measure the floor against `recoverableUSDC`
+        // ALONE (not the junior USDC buffer) because `_pullUSDC` consumes that buffer immediately after
+        // this call; excluding it keeps `deployedFromSenior <= recoverableUSDC() + juniorUsdcBuffer` intact
+        // even once the buffer is drawn.
+        uint256 recoverable = liquidityModule.recoverableUSDC();
+        uint256 minDec = deployedFromSenior > recoverable ? deployedFromSenior - recoverable : 0;
+        uint256 dec = usdcReturned > minDec ? usdcReturned : minDec;
+        if (dec > deployedFromSenior) dec = deployedFromSenior; // clamp (never underflow)
+        deployedFromSenior -= dec;
 
         // NOTE: recovered USDC is left ON HAND. Callers on the payment waterfall (`_pullUSDC`) need it
         // there to serve the senior; the owner rebalance (`recoverFromLP`) re-idles it into Aave.

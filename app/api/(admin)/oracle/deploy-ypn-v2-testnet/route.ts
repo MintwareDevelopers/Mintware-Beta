@@ -149,7 +149,9 @@ export const POST = createHandler(async (req, ctx) => {
     // 2. Treasury vault.
     const vault = deployed(await wait(await walletClient.deployContract({
       abi: VAULT_ABI, bytecode: VAULT_BYTECODE,
-      args: [usdc, teamToken, adapter, account.address], account, chain: baseSepolia,
+      // AUDIT M1: 5th arg is the constructor-bound team (the address allowed to commitTeam). On testnet
+      // the Privy deployer is both owner and team, so it can activate the vault via the commit route.
+      args: [usdc, teamToken, adapter, account.address, account.address], account, chain: baseSepolia,
     })))
     if (!mockUsdc) {
       await wait(await walletClient.writeContract({
