@@ -36,8 +36,16 @@ contract and its duplicated settlement.
 
 ## Phased plan (top-down, low-risk first)
 
-### Phase 0 — delete dead weight
-> ⚠ **NOT a drive-by delete — it's a focused test-migration PR (fully traced 2026-08-15).** Findings:
+### Phase 0 — delete dead weight ✅ DONE (2026-08-15)
+> **COMPLETE.** Migrated the 4 `MWHookCoordinator*.t.sol` suites (25 tests incl. 2 am-AMM invariants)
+> onto `MintwareDeFiPairVault` — no assertion dropped (commit `622a6eaf`). Then deleted the deprecated
+> single-sided stack + its 4626-bound factory: `MintwareDeFiVault4626`, `MintwareBaseVault4626`,
+> `MintwareVaultFactory`, their two tests, and the orphaned `VaultConfig` struct (commit `fda07a61`,
+> −1,971 lines). **Vault contracts 9 → 7.** Factory retired per decision (it only deployed the deprecated
+> vault; the real multi-tenant factory is Phase 3). Registry kept (independent). Full suite green: 38 suites,
+> 400 passed / 0 failed / 4 skipped. The historical record below is kept for context.
+
+> ⚠ **NOT a drive-by delete — it was a focused test-migration (fully traced 2026-08-15).** Findings:
 > - `MintwareDeFiVault4626` (DO-NOT-DEPLOY) is the concrete vault fixture for the 4 `MWHookCoordinator*.t.sol`
 >   tests **and** `MintwareVaultFactory.t.sol` (`createVault` with `type(MintwareDeFiVault4626).creationCode`).
 > - GOOD: `MWHookCoordinator` is **canonical + vault-agnostic** (`IMWJitVault`), and `MintwareDeFiPairVault`
