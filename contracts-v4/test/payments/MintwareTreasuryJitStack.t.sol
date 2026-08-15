@@ -218,6 +218,25 @@ contract MintwareTreasuryJitStackTest is Test {
         hook.setJitSkipSender(address(0xdead));
     }
 
+    /// AUDIT (pre-audit review): `deployToLP` must fund ONLY from senior sources and NEVER draw the junior
+    /// USDC buffer. Simulate Aave illiquidity (aTokens exist → `totalAssets` full so the idle-first check
+    /// passes, but nothing is withdrawable): the deploy must REVERT rather than convert junior first-loss
+    /// capital into senior-counted `deployedFromSenior`. (Pre-fix, `deployToLP` reused the redemption
+    /// `_pullUSDC` waterfall and would have silently drawn the junior buffer to fund the deploy.)
+    function test_deployToLP_neverDrawsJuniorBuffer_whenAaveIlliquid() public {
+        uint256 jt        = vault.juniorTokens();
+        uint256 bufBefore = vault.juniorUsdcBuffer();
+        assertGt(bufBefore, 0, "precondition: junior USDC buffer funded");
+
+        adapter.setWithdrawableCap(0); // Aave illiquid: totalAssets full, maxWithdrawable/withdraw = 0
+
+        vm.expectRevert(MintwareTreasuryVault.InsufficientIdleLiquidity.selector);
+        vault.deployToLP(200 * ONE, jt);
+
+        assertEq(vault.juniorUsdcBuffer(), bufBefore, "junior buffer must be untouched by a reverted deploy");
+        assertEq(vault.deployedFromSenior(), 0, "no senior deployed on a reverted deploy");
+    }
+
     /// Increment 4: the solvency invariant re-proven with JIT LIVE. Across fuzzed swap sizes (and with
     /// the module's LP optionally deployed), a JIT round-trip + sweep leaves the borrow cleared, the
     /// module solvent, and the senior whole-or-up — the junior buffer backstops any JIT close cost.

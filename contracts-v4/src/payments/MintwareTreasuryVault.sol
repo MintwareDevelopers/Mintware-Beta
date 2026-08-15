@@ -493,9 +493,13 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         uint256 minIdle = base.mulDiv(idleBufferTargetBps, BPS, Math.Rounding.Ceil);
         if (deployedFromSenior + usdcAmount > base - minIdle) revert BadParam();
 
-        // Ensure the USDC is on hand (from buffer, topping up from Aave); the team leg is already held as
-        // the junior reserve. The V4 position is settled from the vault's own balance inside the unlock.
-        _pullUSDC(usdcAmount);
+        // Ensure the USDC is on hand from SENIOR sources only (free senior buffer + Aave). The team leg is
+        // already held as the junior reserve; the V4 position is settled from the vault's own balance
+        // inside the unlock. AUDIT (pre-audit review): a DEPLOY must NEVER draw the junior USDC buffer or
+        // unwind the LP (the redemption `_pullUSDC` does both as last resorts) — else, under Aave
+        // illiquidity, junior first-loss capital would be converted into senior-counted `deployedFromSenior`
+        // with no loss event. `_pullSeniorForDeploy` reverts rather than spend junior capital.
+        _pullSeniorForDeploy(usdcAmount);
 
         bytes memory out = poolManager.unlock(abi.encode(Op.DEPLOY, usdcAmount, maxTeamToken, int24(0), false));
         (uint256 usdcUsed, uint256 teamUsed, uint128 liqAdded) = abi.decode(out, (uint256, uint256, uint128));
@@ -702,5 +706,16 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         }
 
         if (freeOnHand < need) revert InsufficientIdleLiquidity();
+    }
+
+    /// @dev Fund a DEPLOY from SENIOR sources ONLY — free senior buffer + Aave withdrawable. Unlike the
+    ///      redemption `_pullUSDC`, this NEVER draws the junior USDC buffer and NEVER unwinds the LP: a
+    ///      deploy only moves senior idle into the position. If senior idle can't cover `need` (e.g. Aave
+    ///      illiquid), it REVERTS `InsufficientIdleLiquidity` rather than spend junior first-loss capital.
+    function _pullSeniorForDeploy(uint256 need) internal {
+        uint256 freeOnHand = _freeSeniorBuffer();
+        if (freeOnHand >= need) return;
+        adapter.withdraw(need - freeOnHand); // best-effort; senior Aave idle only, never a junior earmark
+        if (_freeSeniorBuffer() < need) revert InsufficientIdleLiquidity();
     }
 }
