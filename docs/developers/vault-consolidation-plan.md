@@ -36,11 +36,18 @@ contract and its duplicated settlement.
 
 ## Phased plan (top-down, low-risk first)
 
-### Phase 0 — delete dead weight (no behavior change, do immediately)
-- Delete `MintwareBaseVault4626` + `MintwareDeFiVault4626` (both marked DEPRECATED / DO-NOT-DEPLOY in-code).
-- Delete the dead `FeeLib` / `LockLib` / `IPyth` / dead FeeVault attestation (per the oracle-audit memory).
-- Drop the retired instances from `MintwareVaultRegistry`.
-- **9 vault contracts → 7.** Pure audit-surface reduction; existing tests are the guard.
+### Phase 0 — delete dead weight
+> ⚠ **BLOCKED — not the clean deletion this plan assumed (found 2026-08-15 during Phase-1 execution).**
+> `MintwareDeFiVault4626` is marked DO-NOT-DEPLOY but is still **load-bearing in tests**: it's the test
+> vault instantiated by the whole **MWHookCoordinator am-AMM / surge suite** (`test/MWHookCoordinator*.t.sol`
+> — the cutting-edge MEV hook tests) **and** the factory test (`test/MintwareVaultFactory.t.sol`). Deleting
+> the contract breaks all of those. So Phase 0 requires **first migrating those ~5 test files off the 4626
+> onto `MintwareDeFiPairVault`** (different constructor + deposit API — real work, and it risks the frontier
+> hook suite). Do this deliberately with the pair-vault test migration, NOT as a drive-by delete.
+> `FeeLib`/`FeeVault` were also too entangled to touch safely (44–109 file matches, mostly dependency noise).
+- **Revised Phase 0**: migrate the MWHookCoordinator + factory tests to `MintwareDeFiPairVault`, THEN delete
+  `MintwareBaseVault4626` + `MintwareDeFiVault4626` + their own test, drop retired instances from the
+  registry. **9 → 7.** Guarded by the migrated hook/factory suites staying green.
 
 ### Phase 1 — extract shared bases (refactor, existing tests guard)
 - **`SeniorShares` base:** `MintwareTreasuryVault` "lifts the senior share math verbatim" from

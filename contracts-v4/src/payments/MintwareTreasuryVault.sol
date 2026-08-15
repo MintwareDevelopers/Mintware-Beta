@@ -11,6 +11,7 @@ import {Math}            from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IYieldVault}      from "./IYieldVault.sol";
 import {ILiquidityModule} from "./ILiquidityModule.sol";
 import {IYieldAdapter}    from "../vaults/IYieldAdapter.sol";
+import {SeniorSharesMath} from "../lib/SeniorSharesMath.sol";
 
 /// @title  MintwareTreasuryVault
 /// @notice YPN v2 — the treasury-anchored ULV behind `IYieldVault`. A STRUCTURED TRANCHE vault:
@@ -379,11 +380,11 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     }
 
     function _toShares(uint256 assets, uint256 ta, Math.Rounding r) internal view returns (uint256) {
-        return assets.mulDiv(totalSeniorShares + VIRTUAL, ta + VIRTUAL, r);
+        return SeniorSharesMath.toShares(assets, totalSeniorShares, ta, VIRTUAL, r);
     }
 
     function _toAssets(uint256 shares_, uint256 ta, uint256 ts, Math.Rounding r) internal pure returns (uint256) {
-        return shares_.mulDiv(ta + VIRTUAL, ts + VIRTUAL, r);
+        return SeniorSharesMath.toAssets(shares_, ta, ts, VIRTUAL, r);
     }
 
     // ── senior deposit ────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ import {Math}            from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IYieldVault}   from "./IYieldVault.sol";
 import {IYieldAdapter} from "../vaults/IYieldAdapter.sol";
+import {SeniorSharesMath} from "../lib/SeniorSharesMath.sol";
 
 /// @title  MintwareYieldVault
 /// @notice YPN v1 settlement vault: a single-asset (USDC) ERC-4626-style vault whose idle capital sits
@@ -129,13 +130,11 @@ contract MintwareYieldVault is IYieldVault, Ownable, Pausable, ReentrancyGuard {
     }
 
     function _convertToShares(uint256 assets, uint256 ta, Math.Rounding rounding) internal view returns (uint256) {
-        // shares = assets * (totalShares + V) / (totalAssets + V)
-        return assets.mulDiv(totalShares + VIRTUAL, ta + VIRTUAL, rounding);
+        return SeniorSharesMath.toShares(assets, totalShares, ta, VIRTUAL, rounding);
     }
 
     function _convertToAssets(uint256 shares_, uint256 ta, uint256 ts, Math.Rounding rounding) internal pure returns (uint256) {
-        // assets = shares * (totalAssets + V) / (totalShares + V)
-        return shares_.mulDiv(ta + VIRTUAL, ts + VIRTUAL, rounding);
+        return SeniorSharesMath.toAssets(shares_, ta, ts, VIRTUAL, rounding);
     }
 
     // ── deposit ────────────────────────────────────────────────────────────────────
