@@ -1,5 +1,13 @@
 # Rewards & Campaign Engine
 
+> **⛔ CAMPAIGNS SHELVED (2026-08-12).** The Campaign Engine described in most of this file —
+> Token Reward Pools, Points Campaigns, epoch distribution, `pending_rewards`, `distributions`,
+> the claim flow, and the campaign crons — was **removed from the platform** (archived to
+> `docs/archive/campaigns/` + branch `archive/campaigns-surface`; Supabase tables retained but
+> unwritten). **Treat every "Campaign" section below as historical.** The still-live rewards path
+> is the **universal pipeline** (`lib/rewards/universal/*` + the vault-weighted epoch rails) —
+> see the final section and `.claude/STATE.md`. Live crons: [`deployments.md`](deployments.md).
+
 ## Two Campaign Types
 
 | | Token Reward Pool | Points Campaign |

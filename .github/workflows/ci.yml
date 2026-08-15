@@ -12,6 +12,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  context-drift:
+    name: Context drift (AUTO blocks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # No install needed — the generator uses only Node builtins.
+      - name: Check .claude AUTO blocks are in sync with code
+        run: node scripts/context-sync.mjs --check
+
   js-tests:
     name: Vitest
     runs-on: ubuntu-latest

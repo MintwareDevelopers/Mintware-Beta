@@ -36,7 +36,9 @@
     "anchor:build": "anchor build",
     "anchor:test": "anchor test",
     "anchor:deploy:devnet": "anchor deploy --provider.cluster devnet",
-    "anchor:deploy:mainnet": "anchor deploy --provider.cluster mainnet"
+    "anchor:deploy:mainnet": "anchor deploy --provider.cluster mainnet",
+    "context:sync": "node scripts/context-sync.mjs",
+    "context:check": "node scripts/context-sync.mjs --check"
   },
   "dependencies": {
     "@coinbase/wallet-sdk": "^4.3.7",
