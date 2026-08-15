@@ -1,39 +1,49 @@
 # What is Mintware?
 
-Mintware solves a fundamental problem in DeFi incentives: protocols can't tell who their best users actually are.
+Mintware makes on-chain capital do three things at once — stay **productive**, stay **spendable**, and
+be **fairly earned**:
 
-Today, most protocols distribute rewards equally — or proportional to capital. A whale who dumped last cycle gets the same incentives as a genuine long-term user. Sybil farmers get the same as real participants.
+> **Never idle. Never locked. Always yours.**
 
-Mintware fixes this by introducing **reputation as a first-class primitive**.
-
----
-
-## The Core Idea
-
-Your wallet has a history. That history tells a story — when you started, how consistently you've been active, what you've done across chains, and how you've behaved during volatile periods.
-
-Attribution reads that story and turns it into a score. Mintware uses that score to determine your share of protocol incentives.
+It solves a real gap in DeFi incentives: protocols can't tell who their best users actually are. Most
+distribute rewards equally, or proportional to capital — so a whale who dumped last cycle and a sybil
+farmer get the same treatment as a genuine long-term user. Mintware makes **reputation a first-class
+primitive** and lets liquidity route value by it.
 
 ---
 
-## How It Works
+## The core idea
+
+Your wallet has a history — when you started, how consistently you've been active, what you've done
+across chains, how you behaved in volatile periods. **Attribution** reads that story and turns it into
+one score (seven signals plus a risk penalty). Mintware's liquidity products then use that score.
+
+---
+
+## How it fits together
 
 ```
 Your wallet history
        ↓
-Attribution scoring (100+ chains)
+Attribution scoring (many chains)  ← live
        ↓
-Score + tier assigned
+Score + tier
        ↓
-Join campaigns that match your profile
-       ↓
-Earn rewards weighted by your score
+Reputation-weighted liquidity      ← Growth vault (in testing on Base Sepolia)
+Spendable yield-bearing balance    ← Liquid Sovereign Account (coming)
 ```
+
+- **Attribution** is live today.
+- **Vaults** (reputation-weighted in the Growth vault; pro-rata in the matched vault) are **in testing
+  on Base Sepolia**, unaudited.
+- The **Liquid Sovereign Account** (earn while you spend, principal untouched) is **coming**, not live.
 
 ---
 
-## Who Is It For?
+## Who is it for?
 
-**DeFi users** who have been active for years but haven't been rewarded proportionally to their contribution — Attribution gives your history real economic value.
+**DeFi users** who've been active for years but never rewarded for it — Attribution gives your history
+real economic weight.
 
-**Protocols** who want to direct incentives toward genuine users rather than paying equally for sybil wallets and real participants.
+**Protocols and teams** who want to direct incentives (and treasury liquidity) toward genuine,
+reputable participants rather than paying equally for sybils and real users.

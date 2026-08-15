@@ -1,46 +1,27 @@
-# Two-Surface Vaults
+# Vaults — Reputation-Weighted DeFi Liquidity
 
-> **Status:** Live on `mintware.finance/vaults`. The reputation-as-yield model, the two-surface
-> discovery experience, and the full RWA deal pipeline (author → review → publish → redeem) are in
-> production. On-chain RWA settlement runs on testnet and is gated on the legal track before mainnet.
+> **Status: in testing on Base Sepolia, unaudited.** The vault engine is deployed to testnet only —
+> not live for real deposits, not audited, not an offer. (The **RWA surface** referenced in older
+> versions of this page was **shelved** — see [archive/](../archive/).)
 
-Mintware Vaults are a liquidity coordination layer on **Uniswap V4** with one idea at the centre:
+Mintware Vaults are a liquidity coordination layer on **Uniswap V4**. The idea at the centre:
 
-> **Your reputation is yield.** Two wallets deposit the same amount into the same vault. The one with
+> **In the Growth vault, your reputation is yield.** Two wallets deposit the same amount; the one with
 > the stronger on-chain history earns a larger share of the fees — from reputation alone.
 
-Every other vault protocol pays liquidity providers by **size of capital**. Mintware weights each
-depositor's fee share by their on-chain **Attribution score**. That turns your DeFi history from a
-vanity number into an economic asset, and it's something no capital-only vault can offer.
+Most vault protocols pay liquidity providers purely by **size of capital**. The Growth vault weights
+each depositor's fee share by their on-chain **Attribution score**, turning DeFi history into an
+economic asset. (The **matched-liquidity vault** pays **pro-rata**, not reputation-weighted — see
+[reward weighting](#which-vault-weights-by-reputation).)
 
 ---
 
-## Two surfaces, one foundation
+## Why an LP earns more (Growth vault)
 
-Both surfaces are built on a shared **ERC-4626 base + multi-tenant factory**, so the same reputation
-engine, fee accounting, and epoch distribution apply across everything you touch.
-
-| | **DeFi surface** | **RWA surface** |
-|---|---|---|
-| Earn from | On-chain activity (swap fees) | Real-world yield (credit, real-estate, energy) |
-| Yield source | Swap fees + idle-capital routing + MEV capture | Underlying asset + fees |
-| Risk shape | Smart-contract + market volatility | Issuer / counterparty · oracle-banded price |
-| Protection | MEV guard · dynamic fee · range optimization | SPV wrapper · oracle price bands · 40/60 reserve |
-| Access | Permissionless — deposit anytime | KYC at redemption · 30-day settlement window |
-| Instrument | ERC-4626 share | `vRWA` bearer token (1:1 with shares) |
-| Best for | Active on-chain LPs chasing trading yield | Allocators wanting off-chain yield on on-chain rails |
-
-Your Attribution score compounds across both — activity on either surface strengthens the single
-reputation that weights your fee share everywhere.
-
----
-
-## Why an LP earns more here
-
-A depositor's fee share is driven by **two independent levers**, both enforced on-chain:
+Fee share is driven by two independent, on-chain levers:
 
 ### Lever 1 — Reputation (Attribution tier)
-Your Mintware Attribution percentile sets a multiplier on your fee share:
+Your Attribution percentile sets a multiplier on your fee share:
 
 | Attribution percentile | Fee-share multiplier |
 |---|---|
@@ -49,91 +30,41 @@ Your Mintware Attribution percentile sets a multiplier on your fee share:
 | 67–100% (Gold) | 1.50× |
 
 ### Lever 2 — Commitment (Lock tier)
-Committing your liquidity for longer earns a higher multiplier. The early-exit penalty **tapers to
-zero** as you approach unlock, so leaving early is never a cliff.
+Committing liquidity for longer earns a higher multiplier; the early-exit penalty **tapers to zero**
+approaching unlock, so leaving early is never a cliff.
 
-| Lock tier | Duration | Multiplier | Early exit |
-|---|---|---|---|
-| Flex | No lock | 1.00× | None (7-day withdrawal notice) |
-| Committed | 30 days | 1.15× | ≤2.0%, tapering to 0% near unlock |
-| Aligned | 90 days | 1.30× | ≤2.0%, tapering to 0% near unlock |
-| Core | 180 days | 1.50× | ≤2.0%, tapering to 0% near unlock |
+| Lock tier | Duration | Multiplier |
+|---|---|---|
+| Flex | No lock | 1.00× |
+| Committed | 30 days | 1.15× |
+| Aligned | 90 days | 1.30× |
+| Core | 180 days | 1.50× |
 
 ### The referral loop
-Referrals are the third dimension — but they don't pay a flat bounty. Referring an LP feeds your
-**Sharing** signal, which lifts your Attribution score, which raises the multiplier on **every**
-deposit you make. It's the only referral program that pays you twice: once in fees, and again by
-permanently raising your reputation tier.
-
-```
-Refer an LP → their TVL sticks → your Sharing score rises →
-your Attribution rises → your fee-share multiplier rises → repeat
-```
+Referrals are a third dimension — but not a flat bounty. Referring an LP feeds your **Sharing** signal,
+which lifts your Attribution score, which raises the multiplier on **every** deposit you make.
 
 ---
 
-## How a deposit works (DeFi)
+## How a deposit works
 
-One deposit runs your capital through a five-stage Uniswap V4 hook engine on every swap that touches
-the pool — automatically:
-
-```
-01  MEV Protection    — TWAP verify + sandwich guard; value stays with LPs, not bots
-02  Dynamic Fee       — fee auto-tunes to volatility + depth so LPs capture more
-03  Idle Capital      — un-ranged liquidity is routed to yield instead of sitting idle
-04  Attribution Split — fees split 70/15/10/5, your LP share weighted by reputation
-05  FeeVault          — accrues per 7-day epoch, claimable — no manual compounding
-```
-
-**Fee split:** every swap fee is split **70% to LPs · 15% to referrers · 10% to the protocol
-treasury · 5% to a rolling Attribution bonus pool**. The bonus pool seeds the next epoch and
-absorbs any unclaimed rewards, then pays out to the highest-reputation active LPs — so nothing is
-wasted. The split lives on-chain in the FeeVault; any change emits a public event.
+One deposit runs your capital through a Uniswap V4 hook engine on every swap that touches the pool:
+idle capital is routed to yield instead of sitting flat, fees auto-tune to volatility, value captured
+mid-swap stays with LPs, and fees accrue per epoch (claimable — no manual compounding). The exact
+splits and mechanics live on-chain; see [smart contracts](../developers/smart-contracts.md).
 
 ---
 
-## The RWA surface
+## Which vault weights by reputation?
 
-The RWA surface tokenizes real-world assets — private credit, real-estate notes, energy off-take —
-as a `vRWA` bearer instrument on a legal-wrapped foundation:
-
-- **SPV-wrapped** — each deal sits in a bankruptcy-remote special-purpose vehicle.
-- **Oracle-banded price** — on-chain swaps are constrained to ±15% (core) / ±45% (spec) around the
-  published NAV; trades outside the spec band revert.
-- **40 / 60 reserve** — a reserve ratio backs redemptions.
-- **KYC only at redemption** — `vRWA` trades freely as a bearer token; KYC is checked only when you
-  redeem the underlying, not on deposit or transfer.
-- **Async 30-day settlement** — redemption is a request → 30-day window → issuer settlement flow.
-
-Full issuer + redemption detail is in **[RWA Deals — Lifecycle & Trust Model](rwa-deals.md)**.
+- **Growth vault** — reputation-weighted (the multipliers above).
+- **Matched-liquidity vault** — **pro-rata** (dual-sided team-locked / community-matched launch
+  liquidity, ≥90-day cliff). Not reputation-weighted.
 
 ---
 
-## What's live today
+## What's true today
 
-- **On production `/vaults`:** two-surface discovery, the interactive reputation-yield model, live
-  stats, lock-tier and trust explainers, and a vault reputation leaderboard.
-- **RWA deal pipeline (no new contracts required):** issuers register, author a full deal page,
-  Mintware reviews and approves, the deal publishes to `/vault/[id]`, and holders can request
-  redemptions that admins settle. All operable in-app today.
-- **DeFi vaults:** V4 hook + ERC-4626 vault + FeeVault deployed and indexed; the create-and-seed flow
-  is live.
-- **Pending:** on-chain RWA deposits/settlement (contracts on testnet, mainnet gated on the legal
-  track) and a fair-launch **threshold seeding** mechanism (design complete, contract not yet built —
-  see the [build spec](../developers/vaults-rwa-build-spec.md)).
-
----
-
-## Why this is different from standard LP
-
-| | Standard V4 LP | Mintware Vault |
-|---|---|---|
-| Yield source | Swap fees only | Swap fees + idle-capital + MEV capture |
-| Yield distribution | Proportional to capital | Weighted by reputation + lock commitment |
-| Referrals | None | Compound into your reputation tier |
-| Asset types | Crypto only | DeFi **and** RWA on one base |
-| Trust | Trust the operator | Trust the contract — split, queue, and bands are code |
-
-Reputation-weighted yield is the wedge; the two-surface base is the platform. Mintware is the only
-place your on-chain history, your commitment, and your referral network all compound into a single
-number that determines what your liquidity earns.
+- The vault engine (V4 hook + ERC-4626 base + factory) is **deployed to Base Sepolia** and indexed.
+- It is **unaudited** and holds no real value — testnet only, ahead of an external audit before mainnet.
+- Public marketing must say "in testing on Base Sepolia," never "deposit now."

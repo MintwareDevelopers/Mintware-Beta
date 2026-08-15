@@ -1,5 +1,10 @@
 # Referral System
 
+> **⚠ Note.** Referrals **are live**, but referrals no longer tie into **campaigns** (shelved Aug 2026).
+> Referral activity feeds your **Attribution Sharing signal** (and, in the Growth vault, your fee-share
+> multiplier). Ignore any campaign-reward framing below. Current: [README](../README.md) ·
+> [framing & messaging](../product/framing-and-messaging.md).
+
 Mintware has a built-in referral system that rewards you for bringing quality wallets into the platform.
 
 ---
