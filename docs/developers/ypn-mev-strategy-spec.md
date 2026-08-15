@@ -199,6 +199,40 @@ valuable on the flow we *do* have.
   **surge/dynamic fee** captures a fat slice of a fat impact. Addressable MEV is still large; it's
   sandwich-internalization + surge fee rather than pure arb.
 
-**Testable now with the existing harness:** deploy a *thin*-liquidity pool (small `liqUnits` in `jit-smoke`)
-and re-run the size-sweep — expect `roundPnl` to go from the deep-pool flat −1 to meaningfully positive.
-This empirically validates the thin-pool thesis before investing in Phase 2/3.
+**Tested now with the existing harness** (thin ~$20 baseline vs the deep $5M one), and the result flips the
+naive expectation:
+
+| swap | deep-pool `roundPnl` | thin-pool `roundPnl` |
+|---|---|---|
+| $0.50 | −0.000001 | **−0.006** |
+| $1 | — | **−0.025** |
+| $2 | −0.000001 | **−0.125** |
+| $5 | −0.000001 | **−0.274** |
+
+**On thin pools naive JIT doesn't capture value — it *bleeds*, worse with trade size** (up to −27% on the ~$1
+JIT slice). The value is there (that's why the swings are big), but JIT is structurally on the **losing**
+side: it borrows USDC, provides it, accumulates the volatile token as the trade pushes price up, then sells
+it back into the *moved* thin pool at a terrible price — self-sandwiched, and the close cost explodes with
+thinness. **JIT is the wrong MEV tool for thin community pools** (must be off — the H4 breaker auto-disables
+it). The right tools are **dynamic/surge fees** (capture the impact as a fee, no adverse round-trip — the
+"slippage capture" blueprint, correctly reframed) and **LVR recapture** (arb the dislocation). Since Mintware
+runs community-token pools, this is the operative regime.
+
+## Pool tiering — blue-chip vs community is not one-size-fits-all
+
+A vault's whole profile flips with its **junior token's tier** (liquidity × volatility × external-venue depth),
+and every parameter — not just MEV — should follow:
+
+| Axis | Deep / blue-chip junior (e.g. ETH) | Thin / community-meme junior |
+|---|---|---|
+| Slippage per trade | bps | 4–8% |
+| Seniority swap (junior→USDC) | clean, low-slippage | high-slippage / fragile |
+| Senior USDC backing | well-backed | riskier-backed |
+| Card spend / senior-LTV | generous | tighter |
+| `idleBufferTargetBps` | lower (more LP) | **higher** (more USDC safe in Aave) |
+| MEV mechanism | JIT ~break-even (marginal) | **JIT off**; dynamic-fee + LVR (value is large) |
+
+The levers already exist on-chain (`idleBufferTargetBps`, `jitMaxPerBlockBps`, `jitMaxCumulativeLoss`); a
+**tier preset** (or an on-chain junior-liquidity read) would set them at vault creation. The card rail is not
+one-size either — spend/settlement generosity scales with how safely the junior backs the senior. Treat
+blue-chip and community vaults as **different products.**
