@@ -21,6 +21,12 @@ import {Ownable}   from "@openzeppelin/contracts/access/Ownable.sol";
 
 import {ILiquidityModule} from "./ILiquidityModule.sol";
 
+/// @dev The JIT hook's truncated-oracle reference (AUDIT #7/#3). Optional: if the pool's hook doesn't
+///      implement it (or none is set), valuation falls back to spot.
+interface IJitOracle {
+    function oracleTick() external view returns (int24 tick, bool ready);
+}
+
 /// @title  MintwareV4LiquidityModule
 /// @notice The REAL Uniswap-V4 implementation of `ILiquidityModule` — the LP seam behind
 ///         `MintwareTreasuryVault`. Drop-in for `MockLiquidityModule`: same four calls, same seniority
@@ -150,10 +156,26 @@ contract MintwareV4LiquidityModule is ILiquidityModule, IUnlockCallback, Ownable
     }
 
     /// @inheritdoc ILiquidityModule
-    /// @dev MTM value of the whole position in USDC at the current pool price — the invariant's RHS.
+    /// @dev MTM value of the whole position in USDC — the invariant's RHS. AUDIT (#7): this is the ONLY
+    ///      price that enters solvency, so it must be un-gameable. We value at `min(spot, oracle)`: a
+    ///      flash pump of spot is ignored (the truncated oracle lags, so `min` picks the lower oracle
+    ///      value), while a genuine drop is respected (spot is lower). Using the oracle ALONE would be
+    ///      wrong-signed — a lagged oracle during a real drop would over-report recoverable and mask an
+    ///      under-covered senior; the `min` keeps it conservative in both directions. Falls back to spot
+    ///      if the hook exposes no oracle (or it hasn't seen its first swap).
     function recoverableUSDC() public view returns (uint256) {
         if (positionLiquidity == 0) return 0;
-        (uint160 sqrtP,,,) = poolManager.getSlot0(_key().toId());
+        (uint160 spotSqrt,,,) = poolManager.getSlot0(_key().toId());
+        uint256 vSpot = _valueAt(spotSqrt);
+
+        (int24 oTick, bool ready) = _oracleTick();
+        if (!ready) return vSpot;
+        uint256 vOracle = _valueAt(TickMath.getSqrtPriceAtTick(oTick));
+        return vSpot < vOracle ? vSpot : vOracle;
+    }
+
+    /// @dev Value the whole position in USDC at an arbitrary `sqrtP` (USDC leg at par + team leg priced).
+    function _valueAt(uint160 sqrtP) private view returns (uint256) {
         uint160 sL = TickMath.getSqrtPriceAtTick(tickLower);
         uint160 sU = TickMath.getSqrtPriceAtTick(tickUpper);
 
@@ -170,6 +192,18 @@ contract MintwareV4LiquidityModule is ILiquidityModule, IUnlockCallback, Ownable
 
         (uint256 usdcAmt, uint256 teamAmt) = usdcIsCurrency0 ? (amt0, amt1) : (amt1, amt0);
         return usdcAmt + _valueTeamInUsdc(teamAmt, sqrtP);
+    }
+
+    /// @dev Read the hook's truncated-oracle tick; not-ready (→ spot fallback) if the pool has no
+    ///      oracle-exposing hook. try/catch so a plain/mock hook never bricks valuation.
+    function _oracleTick() private view returns (int24 tick, bool ready) {
+        address hook = address(_hooks);
+        if (hook == address(0)) return (0, false);
+        try IJitOracle(hook).oracleTick() returns (int24 t, bool r) {
+            return (t, r);
+        } catch {
+            return (0, false);
+        }
     }
 
     // ── unlock dispatch (PoolManager-only) ─────────────────────────────────────────
@@ -276,21 +310,57 @@ contract MintwareV4LiquidityModule is ILiquidityModule, IUnlockCallback, Ownable
 
     // ── internals ───────────────────────────────────────────────────────────────────
 
-    /// @dev Swap `amountIn` team token → USDC through the pool (exact-input), settling the delta. Full
-    ///      price-range limit: the module accepts whatever USDC the pool returns (it is realizing the
-    ///      junior's value, and price impact is the junior's loss — exactly the seniority contract).
+    /// @notice Band, in ticks, the unwind swap may move price past the truncated oracle before it stops
+    ///         (AUDIT #3). ~5% — enough for a normal junior realization, tight enough that a sandwich
+    ///         that pushed spot far past the oracle only converts to the band, not to the manipulated
+    ///         price. Beyond the band the swap under-converts and the leftover team returns to the junior.
+    int24 private constant SWAP_BAND_TICKS = 500;
+
+    /// @dev Swap `amountIn` team token → USDC (exact-input), settling the delta. AUDIT (#3): the price
+    ///      limit is the truncated-oracle price ± the band, NOT the full range — so a sandwich that moved
+    ///      spot can't force the unwind to realize at the manipulated price. Clamped to the executable
+    ///      side of the current spot so it can NEVER revert (a redemption must not brick): if spot is
+    ///      already past the band, the swap converts ~nothing and the team leg flows back to the junior.
     function _swapTeamToUsdc(PoolKey memory key, uint256 amountIn) private {
         bool zeroForOne = !usdcIsCurrency0; // selling team; team is currency0 iff usdc is currency1
+        (uint160 cur,,,) = poolManager.getSlot0(key.toId());
         BalanceDelta delta = poolManager.swap(
             key,
             SwapParams({
                 zeroForOne: zeroForOne,
                 amountSpecified: -int256(amountIn), // negative = exact input
-                sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+                sqrtPriceLimitX96: _swapLimit(zeroForOne, cur)
             }),
             ""
         );
         _settleDelta(key, delta);
+    }
+
+    /// @dev The oracle-bounded price limit for an unwind swap, clamped to the executable side of `cur`.
+    function _swapLimit(bool zeroForOne, uint160 cur) private view returns (uint160) {
+        (int24 oTick, bool ready) = _oracleTick();
+        if (!ready) return zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
+        if (zeroForOne) {
+            // price decreases; floor at oracle−band, but strictly below cur (else V4 reverts).
+            uint160 band = _sqrtAtClamped(int256(oTick) - SWAP_BAND_TICKS);
+            if (band >= cur) return cur > TickMath.MIN_SQRT_PRICE + 1 ? cur - 1 : cur;
+            return band;
+        } else {
+            // price increases; cap at oracle+band, but strictly above cur.
+            uint160 band = _sqrtAtClamped(int256(oTick) + SWAP_BAND_TICKS);
+            if (band <= cur) return cur < TickMath.MAX_SQRT_PRICE - 1 ? cur + 1 : cur;
+            return band;
+        }
+    }
+
+    /// @dev getSqrtPriceAtTick with the tick + result clamped to the usable range.
+    function _sqrtAtClamped(int256 tick) private pure returns (uint160) {
+        if (tick < TickMath.MIN_TICK) return TickMath.MIN_SQRT_PRICE + 1;
+        if (tick > TickMath.MAX_TICK) return TickMath.MAX_SQRT_PRICE - 1;
+        uint160 s = TickMath.getSqrtPriceAtTick(int24(tick));
+        if (s < TickMath.MIN_SQRT_PRICE + 1) return TickMath.MIN_SQRT_PRICE + 1;
+        if (s > TickMath.MAX_SQRT_PRICE - 1) return TickMath.MAX_SQRT_PRICE - 1;
+        return s;
     }
 
     /// @dev Value `teamAmt` raw team tokens in USDC at the pool price `sqrtP`, staged through `Q96` twice

@@ -13,6 +13,7 @@ import {ModifyLiquidityParams, SwapParams}       from "@uniswap/v4-core/src/type
 import {Hooks}                  from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {TickMath}               from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary}           from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {MWOracleGuard}          from "../hooks/MWOracleGuard.sol";
 import {LiquidityAmounts}       from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 
 import {IERC20}    from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -47,6 +48,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     using SafeERC20     for IERC20;
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
+    using MWOracleGuard for MWOracleGuard.State;
 
     IPoolManager public immutable poolManager;
     IJitVault    public immutable vault;
@@ -75,6 +77,13 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     ///         recover/collect swaps must NOT recursively borrow + open a JIT position.
     address public jitSkipSender;
 
+    /// @notice AUDIT (#7/#3): a truncated tick oracle over the canonical pool. Advanced once per block in
+    ///         `afterSwap` and clamped to `maxTickMovePerBlock` — so a same-tx / single-block spot push
+    ///         (a flash manipulation) can move it by at most that clamp. The LP module values the position
+    ///         at `min(spot, oracle)` (conservative), and the unwind swaps bound `minAmountOut` off it, so
+    ///         neither the solvency floor nor the sweep can be gamed by moving spot within the tx.
+    MWOracleGuard.State private _oracle;
+
     // ── per-swap open state (0 between swaps) ──────────────────────────────────
     uint128 private jitLiquidity;
     int24   private jitLower;
@@ -90,6 +99,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     event JitSwept(uint256 usdcReturned);
     event JitThresholdSet(uint256 threshold);
     event JitWidthSet(int24 spacings);
+    event OracleParamsSet(int24 maxMovePerBlock, uint32 maxCatchupBlocks);
 
     error OnlyPoolManager();
 
@@ -125,6 +135,10 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         usdc      = IERC20(usdc_);
         teamToken = IERC20(isC0 ? c1 : c0);
 
+        // Oracle defaults: ~2% (200 ticks) max per-block move, catching up over <=30 blocks. Owner-tunable.
+        _oracle.maxTickMovePerBlock = 200;
+        _oracle.maxCatchupBlocks    = 30;
+
         // Address must carry exactly the beforeSwap|afterSwap permission bits (mined CREATE2).
         Hooks.validateHookPermissions(
             IHooks(address(this)),
@@ -145,6 +159,14 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     function setJitWidth(int24 s) external onlyOwner { require(s > 0, "width"); jitWidthSpacings = s; emit JitWidthSet(s); }
     /// @notice Exempt an initiator (the LP module) from firing JIT on its own swaps.
     function setJitSkipSender(address s) external onlyOwner { jitSkipSender = s; }
+
+    /// @notice Tune the truncated oracle: max per-block tick move (manipulation clamp) + catch-up cap.
+    function setOracleParams(int24 maxMovePerBlock, uint32 maxCatchupBlocks) external onlyOwner {
+        require(maxMovePerBlock > 0, "move");
+        _oracle.maxTickMovePerBlock = maxMovePerBlock;
+        _oracle.maxCatchupBlocks    = maxCatchupBlocks;
+        emit OracleParamsSet(maxMovePerBlock, maxCatchupBlocks);
+    }
 
     // ── IHooks: the two active callbacks ────────────────────────────────────────
 
@@ -179,7 +201,17 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
             return (IHooks.afterSwap.selector, int128(0));
         }
         if (jitLiquidity > 0) _close(key);
+        // AUDIT (#7/#3): advance the truncated oracle with the post-swap tick (once per block, clamped).
+        (, int24 tick,,) = poolManager.getSlot0(key.toId());
+        _oracle.update(tick);
         return (IHooks.afterSwap.selector, int128(0));
+    }
+
+    /// @notice The truncated-oracle reference tick and whether it has seen its first swap. The LP module
+    ///         reads this to value its position conservatively (`min(spot, oracle)`), immune to a same-tx
+    ///         spot push. `ready == false` before the first swap — callers fall back to spot.
+    function oracleTick() external view returns (int24 tick, bool ready) {
+        return (_oracle.oracleTick, _oracle.initialized);
     }
 
     // ── keeper: convert claims → USDC and settle with the vault ─────────────────
@@ -305,18 +337,50 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         emit JitClosed(usdcOwed, teamOwed);
     }
 
+    /// @notice Band (ticks) the sweep may move price past the oracle before stopping (AUDIT #3, ~5%).
+    int24 private constant SWEEP_BAND_TICKS = 500;
+
     function _swapTeamToUsdc(uint256 amountIn) private {
         bool zeroForOne = !usdcIsCurrency0; // selling team; team is currency0 iff usdc is currency1
+        // AUDIT (#3): bound the sweep to the truncated-oracle price ± band so a sandwich that moved spot
+        // can't force the unwind to realize at the manipulated price. Clamped to the executable side of
+        // spot → never reverts; if spot is already past the band the sweep converts ~nothing (team stays
+        // as claims for a later sweep) rather than dumping at the bad price.
+        (uint160 cur,,,) = poolManager.getSlot0(_key().toId());
         BalanceDelta delta = poolManager.swap(
             _key(),
             SwapParams({
                 zeroForOne: zeroForOne,
                 amountSpecified: -int256(amountIn), // exact input
-                sqrtPriceLimitX96: zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1
+                sqrtPriceLimitX96: _swapLimit(zeroForOne, cur)
             }),
             ""
         );
         _settleDelta(_key(), delta);
+    }
+
+    /// @dev Oracle-bounded price limit for the sweep, clamped to the executable side of `cur` (no revert).
+    function _swapLimit(bool zeroForOne, uint160 cur) private view returns (uint160) {
+        if (!_oracle.initialized) return zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
+        int24 oTick = _oracle.oracleTick;
+        if (zeroForOne) {
+            uint160 band = _sqrtAtClamped(int256(oTick) - SWEEP_BAND_TICKS);
+            if (band >= cur) return cur > TickMath.MIN_SQRT_PRICE + 1 ? cur - 1 : cur;
+            return band;
+        } else {
+            uint160 band = _sqrtAtClamped(int256(oTick) + SWEEP_BAND_TICKS);
+            if (band <= cur) return cur < TickMath.MAX_SQRT_PRICE - 1 ? cur + 1 : cur;
+            return band;
+        }
+    }
+
+    function _sqrtAtClamped(int256 tick) private pure returns (uint160) {
+        if (tick < TickMath.MIN_TICK) return TickMath.MIN_SQRT_PRICE + 1;
+        if (tick > TickMath.MAX_TICK) return TickMath.MAX_SQRT_PRICE - 1;
+        uint160 s = TickMath.getSqrtPriceAtTick(int24(tick));
+        if (s < TickMath.MIN_SQRT_PRICE + 1) return TickMath.MIN_SQRT_PRICE + 1;
+        if (s > TickMath.MAX_SQRT_PRICE - 1) return TickMath.MAX_SQRT_PRICE - 1;
+        return s;
     }
 
     function _settleDelta(PoolKey memory key, BalanceDelta delta) private {
