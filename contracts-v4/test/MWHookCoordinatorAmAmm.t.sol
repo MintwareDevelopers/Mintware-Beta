@@ -12,13 +12,12 @@ import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
 import {LPFeeLibrary}        from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {IERC20}              from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {FeeVault}                from "../src/FeeVault.sol";
 import {HookMiner}               from "../src/lib/HookMiner.sol";
 import {MWHookCoordinator}       from "../src/hooks/MWHookCoordinator.sol";
 import {MWAmAuction, IAmAmmRentSink} from "../src/hooks/MWAmAuction.sol";
 import {AmParams}                from "../src/hooks/MWAmAuctionLib.sol";
-import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
-import {VaultSurface, LockTier, VaultConfig} from "../src/vaults/VaultTypes.sol";
+import {MintwareDeFiPairVault}   from "../src/vaults/MintwareDeFiPairVault.sol";
+import {PoolProfile, LockTier}   from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20}      from "./mocks/MockERC20.sol";
 import {TestSwapRouter} from "./helpers/TestSwapRouter.sol";
@@ -32,10 +31,12 @@ contract SinkStub is IAmAmmRentSink {
 /// @notice Integration proof for the am-AMM manager-fee skim in MWHookCoordinator.beforeSwap
 ///         against a real V4 PoolManager. Proves the delta accounting nets to zero (the swap
 ///         settles), the manager fee reaches the auction, and exact-output is rejected in v1.
+///         Migrated onto the go-forward `MintwareDeFiPairVault` (the coordinator's skim path is
+///         vault-independent; the vault only supplies resting liquidity). Phase 0.
 contract MWHookCoordinatorAmAmmTest is Test {
     using PoolIdLibrary for PoolKey;
 
-    address internal deployer = address(this);
+    address internal deployer = address(this); // owner + provider
     address internal alice    = makeAddr("alice");   // LP + trader
     address internal mgr      = makeAddr("mgr");      // am-AMM manager
     address internal treasury = makeAddr("treasury");
@@ -45,7 +46,7 @@ contract MWHookCoordinatorAmAmmTest is Test {
     MWHookCoordinator internal coord;
     MWAmAuction    internal auction;
     SinkStub       internal sink;
-    MintwareDeFiVault4626 internal vault;
+    MintwareDeFiPairVault internal vault;
 
     MockERC20 internal usdc;
     MockERC20 internal proj;
@@ -54,7 +55,6 @@ contract MWHookCoordinatorAmAmmTest is Test {
     PoolId  internal poolId;
 
     uint160 internal constant INIT_SQRT_PRICE = 79228162514264337593543950336;
-    bytes32 internal constant VAULT_ID = keccak256("amamm-vault");
     uint24  internal constant MGR_FEE_PIPS = 10_000; // 1%
 
     function setUp() public {
@@ -62,24 +62,14 @@ contract MWHookCoordinatorAmAmmTest is Test {
         swapRouter = new TestSwapRouter(IPoolManager(address(pm)));
         sink       = new SinkStub();
 
-        usdc = new MockERC20("USD Coin", "USDC", 6);
-        proj = new MockERC20("Project", "PROJ", 6);
-        FeeVault feeVault = new FeeVault(address(usdc), makeAddr("dist"), makeAddr("oracle"), treasury);
+        usdc = new MockERC20("USD Coin", "USDC", 18);
+        proj = new MockERC20("Project", "PROJ", 18);
 
         bytes memory args = abi.encode(IPoolManager(address(pm)), address(0), deployer);
         (address expected, bytes32 salt) =
             HookMiner.find(deployer, uint160(0xAC8), type(MWHookCoordinator).creationCode, args);
         coord = new MWHookCoordinator{salt: salt}(IPoolManager(address(pm)), address(0), deployer);
         require(address(coord) == expected, "coord addr");
-
-        VaultConfig memory cfg = VaultConfig({
-            surface: VaultSurface.DeFi, provider: deployer, underlyingToken: address(usdc),
-            treasury: treasury, name: "v", symbol: "v", minDeposit: 0, entryFeeBps: 0, exitFeeBps: 0,
-            enableMEVProtection: true, enableIdleCapital: false, idleTargetRatio: 0
-        });
-        vault = new MintwareDeFiVault4626(cfg, address(pm), address(feeVault));
-        coord.setVault(address(vault));
-        feeVault.setSocialVault(address(vault));
 
         // DYNAMIC-FEE pool so the LP-fee override takes effect.
         (Currency c0, Currency c1) = address(usdc) < address(proj)
@@ -88,18 +78,19 @@ contract MWHookCoordinatorAmAmmTest is Test {
         poolKey = PoolKey({currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: 60, hooks: IHooks(address(coord))});
         poolId  = poolKey.toId();
 
-        proj.mint(deployer, 100_000e6);
-        usdc.mint(alice, 500_000e6);
-        proj.mint(alice, 500_000e6);
-        usdc.mint(mgr, 100_000e6);
+        vault = new MintwareDeFiPairVault(address(pm), poolKey, PoolProfile.EMERGING, treasury, deployer, deployer);
+        coord.setVault(address(vault));
+        vault.setHook(address(coord));
+        vault.initializePool(INIT_SQRT_PRICE);
 
-        // Liquidity via the vault.
-        proj.approve(address(vault), 100_000e6);
-        vault.seedTeamTokens(VAULT_ID, address(proj), 100_000e6, poolKey, INIT_SQRT_PRICE);
-        vault.rebalance(-60000, 60000);
+        // Liquidity via the pair vault (balanced dual-sided).
+        usdc.mint(alice, 5_000_000e18);
+        proj.mint(alice, 5_000_000e18);
+        usdc.mint(mgr, 100_000e18);
         vm.startPrank(alice);
-        usdc.approve(address(vault), 50_000e6);
-        vault.depositWithLock(50_000e6, alice, LockTier.Flex);
+        IERC20(Currency.unwrap(c0)).approve(address(vault), type(uint256).max);
+        IERC20(Currency.unwrap(c1)).approve(address(vault), type(uint256).max);
+        vault.deposit(2_000_000e18, 2_000_000e18, 0, LockTier.Flex);
         vm.stopPrank();
 
         // Guard OFF (isolate the skim); the am-AMM branch supplies the fee for enrolled pools.
@@ -138,8 +129,8 @@ contract MWHookCoordinatorAmAmmTest is Test {
     function test_exactInput_zeroForOne_skims_manager_fee() public {
         _seatManager();
         address spec = Currency.unwrap(poolKey.currency0); // exact-in zeroForOne → specified = c0
-        uint256 amountIn = 10_000e6;
-        uint256 expectFee = (amountIn * MGR_FEE_PIPS) / 1_000_000; // 1% = 100e6
+        uint256 amountIn = 10_000e18;
+        uint256 expectFee = (amountIn * MGR_FEE_PIPS) / 1_000_000; // 1% = 100e18
 
         uint256 auctBefore = IERC20(spec).balanceOf(address(auction));
         _swapExactIn(true, amountIn); // must not revert => hook netted zero
@@ -152,7 +143,7 @@ contract MWHookCoordinatorAmAmmTest is Test {
     function test_exactInput_oneForZero_skims_other_token() public {
         _seatManager();
         address spec = Currency.unwrap(poolKey.currency1); // exact-in oneForZero → specified = c1
-        uint256 amountIn = 5_000e6;
+        uint256 amountIn = 5_000e18;
         uint256 expectFee = (amountIn * MGR_FEE_PIPS) / 1_000_000;
 
         uint256 auctBefore = IERC20(spec).balanceOf(address(auction));
@@ -167,7 +158,7 @@ contract MWHookCoordinatorAmAmmTest is Test {
         // No manager seated. Enrolled + auction wired, but poke returns address(0).
         address spec = Currency.unwrap(poolKey.currency0);
         uint256 auctBefore = IERC20(spec).balanceOf(address(auction));
-        _swapExactIn(true, 10_000e6); // must still settle
+        _swapExactIn(true, 10_000e18); // must still settle
         assertEq(IERC20(spec).balanceOf(address(auction)), auctBefore, "no skim without a manager");
     }
 
@@ -176,7 +167,7 @@ contract MWHookCoordinatorAmAmmTest is Test {
     function test_manager_can_claim_skimmed_fees() public {
         _seatManager();
         address spec = Currency.unwrap(poolKey.currency0);
-        _swapExactIn(true, 10_000e6);
+        _swapExactIn(true, 10_000e18);
         uint256 owed = auction.owed(mgr, spec);
         assertGt(owed, 0, "fee accrued");
         uint256 before = IERC20(spec).balanceOf(mgr);

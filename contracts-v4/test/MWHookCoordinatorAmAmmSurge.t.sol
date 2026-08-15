@@ -13,13 +13,12 @@ import {LPFeeLibrary}        from "@uniswap/v4-core/src/libraries/LPFeeLibrary.s
 import {SwapParams}          from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {IERC20}              from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {FeeVault}                from "../src/FeeVault.sol";
 import {HookMiner}               from "../src/lib/HookMiner.sol";
 import {MWHookCoordinator}       from "../src/hooks/MWHookCoordinator.sol";
 import {MWAmAuction, IAmAmmRentSink} from "../src/hooks/MWAmAuction.sol";
 import {AmParams}                from "../src/hooks/MWAmAuctionLib.sol";
-import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
-import {VaultSurface, LockTier, VaultConfig} from "../src/vaults/VaultTypes.sol";
+import {MintwareDeFiPairVault}   from "../src/vaults/MintwareDeFiPairVault.sol";
+import {PoolProfile, LockTier}   from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20}      from "./mocks/MockERC20.sol";
 import {TestSwapRouter} from "./helpers/TestSwapRouter.sol";
@@ -34,11 +33,13 @@ contract SurgeSinkStub is IAmAmmRentSink {
 ///         the hook must price a swap by its deviation from the truncated oracle (same surge the
 ///         non-auction path uses) and return max(auction default, surge) as the LP fee — instead of
 ///         leaking the calm-market default to an arbitrageur. These tests exercise the fee bounds and
-///         prove the MANAGED skim path is unchanged.
+///         prove the MANAGED skim path is unchanged. Migrated onto the go-forward
+///         `MintwareDeFiPairVault` (the surge/rate-limit/clamp logic is coordinator-internal; the
+///         vault only supplies resting liquidity). Phase 0.
 contract MWHookCoordinatorAmAmmSurgeTest is Test {
     using PoolIdLibrary for PoolKey;
 
-    address internal deployer = address(this);
+    address internal deployer = address(this); // owner + provider
     address internal alice    = makeAddr("alice");
     address internal mgr      = makeAddr("mgr");
     address internal treasury = makeAddr("treasury");
@@ -48,7 +49,7 @@ contract MWHookCoordinatorAmAmmSurgeTest is Test {
     MWHookCoordinator internal coord;
     MWAmAuction       internal auction;
     SurgeSinkStub     internal sink;
-    MintwareDeFiVault4626 internal vault;
+    MintwareDeFiPairVault internal vault;
 
     MockERC20 internal usdc;
     MockERC20 internal proj;
@@ -57,7 +58,6 @@ contract MWHookCoordinatorAmAmmSurgeTest is Test {
     PoolId  internal poolId;
 
     uint160 internal constant INIT_SQRT_PRICE = 79228162514264337593543950336;
-    bytes32 internal constant VAULT_ID = keccak256("amamm-surge-vault");
 
     // Auction default fee (the "calm-market" fee that used to leak in the unmanaged block).
     uint24 internal constant AUCTION_DEFAULT = 3000; // 0.30%
@@ -68,9 +68,8 @@ contract MWHookCoordinatorAmAmmSurgeTest is Test {
         swapRouter = new TestSwapRouter(IPoolManager(address(pm)));
         sink       = new SurgeSinkStub();
 
-        usdc = new MockERC20("USD Coin", "USDC", 6);
-        proj = new MockERC20("Project", "PROJ", 6);
-        FeeVault feeVault = new FeeVault(address(usdc), makeAddr("dist"), makeAddr("oracle"), treasury);
+        usdc = new MockERC20("USD Coin", "USDC", 18);
+        proj = new MockERC20("Project", "PROJ", 18);
 
         bytes memory args = abi.encode(IPoolManager(address(pm)), address(0), deployer);
         (address expected, bytes32 salt) =
@@ -78,32 +77,25 @@ contract MWHookCoordinatorAmAmmSurgeTest is Test {
         coord = new MWHookCoordinator{salt: salt}(IPoolManager(address(pm)), address(0), deployer);
         require(address(coord) == expected, "coord addr");
 
-        VaultConfig memory cfg = VaultConfig({
-            surface: VaultSurface.DeFi, provider: deployer, underlyingToken: address(usdc),
-            treasury: treasury, name: "v", symbol: "v", minDeposit: 0, entryFeeBps: 0, exitFeeBps: 0,
-            enableMEVProtection: true, enableIdleCapital: false, idleTargetRatio: 0
-        });
-        vault = new MintwareDeFiVault4626(cfg, address(pm), address(feeVault));
-        coord.setVault(address(vault));
-        feeVault.setSocialVault(address(vault));
-
         (Currency c0, Currency c1) = address(usdc) < address(proj)
             ? (Currency.wrap(address(usdc)), Currency.wrap(address(proj)))
             : (Currency.wrap(address(proj)), Currency.wrap(address(usdc)));
         poolKey = PoolKey({currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: 60, hooks: IHooks(address(coord))});
         poolId  = poolKey.toId();
 
-        proj.mint(deployer, 100_000e6);
-        usdc.mint(alice, 5_000_000e6);
-        proj.mint(alice, 5_000_000e6);
-        usdc.mint(mgr, 100_000e6);
+        vault = new MintwareDeFiPairVault(address(pm), poolKey, PoolProfile.EMERGING, treasury, deployer, deployer);
+        coord.setVault(address(vault));
+        vault.setHook(address(coord));
+        vault.initializePool(INIT_SQRT_PRICE);
 
-        proj.approve(address(vault), 100_000e6);
-        vault.seedTeamTokens(VAULT_ID, address(proj), 100_000e6, poolKey, INIT_SQRT_PRICE);
-        vault.rebalance(-60000, 60000);
+        // Balanced dual-sided liquidity so a large one-sided swap can drive the tick.
+        usdc.mint(alice, 20_000_000e18);
+        proj.mint(alice, 20_000_000e18);
+        usdc.mint(mgr, 100_000e18);
         vm.startPrank(alice);
-        usdc.approve(address(vault), 200_000e6);
-        vault.depositWithLock(200_000e6, alice, LockTier.Flex);
+        IERC20(Currency.unwrap(c0)).approve(address(vault), type(uint256).max);
+        IERC20(Currency.unwrap(c1)).approve(address(vault), type(uint256).max);
+        vault.deposit(2_000_000e18, 2_000_000e18, 0, LockTier.Flex);
         vm.stopPrank();
 
         // Wire auction + enroll the pool (default fee = AUCTION_DEFAULT).
@@ -145,8 +137,7 @@ contract MWHookCoordinatorAmAmmSurgeTest is Test {
         vm.stopPrank();
     }
 
-    /// @dev Determine which direction sells the token that has depth so spot moves a lot; PROJ is the
-    ///      seeded single-sided token → selling USDC into it drives the tick hard.
+    /// @dev Determine which direction sells USDC so spot moves hard against the paired token.
     function _sellUsdc() internal view returns (bool zeroForOne) {
         return Currency.unwrap(poolKey.currency0) == address(usdc);
     }
@@ -154,9 +145,9 @@ contract MWHookCoordinatorAmAmmSurgeTest is Test {
     /// @dev Seed the oracle, then push spot far while the oracle truncates (maxTickMove=1) → large
     ///      standing deviation between currentTick and the oracle reference.
     function _buildLargeDeviation() internal {
-        _swapExactIn(_sellUsdc(), 200e6);     // seed oracle at post-swap tick
+        _swapExactIn(_sellUsdc(), 200e18);     // seed oracle at post-swap tick
         vm.roll(block.number + 1);
-        _swapExactIn(_sellUsdc(), 200_000e6); // push spot far; oracle only advances +1 tick
+        _swapExactIn(_sellUsdc(), 2_000_000e18); // push spot far; oracle only advances +1 tick
         vm.roll(block.number + 1);
     }
 
@@ -213,7 +204,7 @@ contract MWHookCoordinatorAmAmmSurgeTest is Test {
         // And the pool is NOT bricked — a real unmanaged swap still settles at the clamped fee.
         // (Swap the opposite way: the build pushed spot to the range edge, so re-selling the same
         //  side would just hit the price limit — direction here is about the harness, not the fee.)
-        _swapExactIn(!_sellUsdc(), 100e6);
+        _swapExactIn(!_sellUsdc(), 100e18);
     }
 
     // ── (d) rate-limit still clamps a single-block jump ──
@@ -251,7 +242,7 @@ contract MWHookCoordinatorAmAmmSurgeTest is Test {
 
         address spec = Currency.unwrap(poolKey.currency0); // exact-in zeroForOne → specified = c0
         bool zeroForOne = true;
-        uint256 amountIn = 10_000e6;
+        uint256 amountIn = 10_000e18;
         uint256 expectFee = (amountIn * MGR_FEE_PIPS) / 1_000_000; // 1%
 
         uint256 auctBefore = IERC20(spec).balanceOf(address(auction));
