@@ -70,7 +70,7 @@ contract MintwareTreasuryVaultJitTest is Test {
         returns (MintwareTreasuryVault v, MockYieldAdapter a, MockJitHook h)
     {
         a = new MockYieldAdapter(address(usdc));
-        v = new MintwareTreasuryVault(address(usdc), address(team), address(a), address(this)); // owner=this
+        v = new MintwareTreasuryVault(address(usdc), address(team), address(a), address(this), teamAddr); // owner=this
 
         team.mint(teamAddr, 1_000_000 * ONE);
         usdc.mint(teamAddr, juniorBuffer);
@@ -158,5 +158,51 @@ contract MintwareTreasuryVaultJitTest is Test {
     function test_set_jit_hook_is_set_once() public {
         vm.expectRevert(MintwareTreasuryVault.AlreadySet.selector);
         vault.setJitHook(makeAddr("other"));
+    }
+
+    // ── AUDIT H2: only ONE JIT slice outstanding at a time (bounds the swap→sweep NAV window) ──
+    function test_jit_one_slice_at_a_time() public {
+        uint256 lent1 = hook.borrow(500 * ONE);
+        assertGt(lent1, 0, "first borrow failed");
+        assertEq(vault.jitBorrowed(), lent1, "jitBorrowed not set");
+        // A second borrow while one is outstanding returns 0 — even in a NEW block, so this is the
+        // one-slice bound, not the per-block cap.
+        vm.roll(block.number + 1);
+        assertEq(hook.borrow(500 * ONE), 0, "borrowed a 2nd slice while one was outstanding");
+        // Once settled, JIT can borrow again.
+        hook.settle(lent1);
+        assertEq(vault.jitBorrowed(), 0, "not cleared");
+        assertGt(hook.borrow(100 * ONE), 0, "borrow blocked after settle");
+        hook.settle(vault.jitBorrowed());
+    }
+
+    // ── AUDIT H4: the reactive loss breaker disables JIT after cumulative realized loss, owner can reset ──
+    function test_jit_breaker_trips_on_cumulative_loss_then_resets() public {
+        vault.setJitMaxCumulativeLoss(1); // trip on any net loss beyond 1 wei
+        // One lossy round: lend $500, return $495 → -$5 realized (junior buffer absorbs it) → trips.
+        hook.round(500 * ONE, 495 * ONE);
+        assertTrue(vault.jitAutoDisabled(), "breaker did not trip on cumulative loss");
+        assertEq(vault.jitNetPnl(), -int256(5 * ONE), "net pnl not the realized loss");
+
+        // JIT is now disabled — borrow no-ops.
+        vm.roll(block.number + 1);
+        assertEq(hook.borrow(100 * ONE), 0, "borrow not disabled after the breaker tripped");
+
+        // Owner review + reset re-enables JIT and zeroes the accumulator.
+        vault.resetJitBreaker();
+        assertFalse(vault.jitAutoDisabled(), "breaker not cleared");
+        assertEq(vault.jitNetPnl(), 0, "pnl not reset");
+        vm.roll(block.number + 1);
+        assertGt(hook.borrow(100 * ONE), 0, "borrow not re-enabled after reset");
+        hook.settle(vault.jitBorrowed());
+    }
+
+    // A profitable JIT lifts jitNetPnl; the breaker (when set) does not trip on net profit.
+    function test_jit_pnl_positive_on_profit_no_trip() public {
+        vault.setJitMaxCumulativeLoss(10 * ONE);
+        usdc.mint(address(hook), 4 * ONE); // captured fee
+        hook.round(400 * ONE, 404 * ONE);  // return principal + $4 fee
+        assertEq(vault.jitNetPnl(), int256(4 * ONE), "profit not recorded in jitNetPnl");
+        assertFalse(vault.jitAutoDisabled(), "breaker tripped on a profit");
     }
 }
