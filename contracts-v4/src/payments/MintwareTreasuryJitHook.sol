@@ -59,6 +59,12 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     int24    private immutable _tickSpacing;
     bool     public  immutable usdcIsCurrency0;
 
+    /// @notice AUDIT (Cork class): the ONE pool this hook serves. `beforeSwap`/`afterSwap` are gated to
+    ///         it — anyone can initialize a *different* pool that names this hook and swap on it, which
+    ///         would otherwise drive `_open`/`borrowIdleForJit` against an attacker-chosen PoolKey and
+    ///         deploy senior USDC into an attacker pool. Mismatched keys no-op (never revert the swap).
+    PoolId public immutable canonicalPoolId;
+
     bytes32 private constant JIT_SALT = bytes32(uint256(0x314));
 
     /// @notice Minimum |amountSpecified| for JIT to fire (size gate; skip dust swaps).
@@ -101,6 +107,15 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         _c1 = key.currency1;
         _fee = key.fee;
         _tickSpacing = key.tickSpacing;
+        // The canonical pool always names THIS hook (hooks = address(this)); compute its id from that,
+        // not from the passed key.hooks (which is unset/placeholder pre-CREATE2 deploy).
+        canonicalPoolId = PoolKey({
+            currency0: key.currency0,
+            currency1: key.currency1,
+            fee: key.fee,
+            tickSpacing: key.tickSpacing,
+            hooks: IHooks(address(this))
+        }).toId();
 
         address c0 = Currency.unwrap(key.currency0);
         address c1 = Currency.unwrap(key.currency1);
@@ -138,6 +153,11 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     function beforeSwap(address sender, PoolKey calldata key, SwapParams calldata params, bytes calldata)
         external override onlyPoolManager returns (bytes4, BeforeSwapDelta, uint24)
     {
+        // AUDIT (Cork class): only ever act on the canonical pool. A swap on any other pool that names
+        // this hook no-ops (never reverts — a revert would brick that pool for its users).
+        if (PoolId.unwrap(key.toId()) != PoolId.unwrap(canonicalPoolId)) {
+            return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
         bool usdcIsOutput = params.zeroForOne ? !usdcIsCurrency0 : usdcIsCurrency0;
         uint256 mag = params.amountSpecified < 0
             ? uint256(-params.amountSpecified)
@@ -154,6 +174,10 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     function afterSwap(address, PoolKey calldata key, SwapParams calldata, BalanceDelta, bytes calldata)
         external override onlyPoolManager returns (bytes4, int128)
     {
+        // AUDIT (Cork class): mirror the beforeSwap guard — never touch a non-canonical pool.
+        if (PoolId.unwrap(key.toId()) != PoolId.unwrap(canonicalPoolId)) {
+            return (IHooks.afterSwap.selector, int128(0));
+        }
         if (jitLiquidity > 0) _close(key);
         return (IHooks.afterSwap.selector, int128(0));
     }
