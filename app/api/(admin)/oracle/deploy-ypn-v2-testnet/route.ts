@@ -108,13 +108,17 @@ export const POST = createHandler(async (req, ctx) => {
   const walletClient = createWalletClient({ account, chain: baseSepolia, transport })
 
   const body = await req.clone().json().catch(() => ({} as Record<string, unknown>))
-  const teamToken = (typeof body.teamToken === 'string' && isAddress(body.teamToken)) ? getAddress(body.teamToken) : WETH
+  let teamToken = (typeof body.teamToken === 'string' && isAddress(body.teamToken)) ? getAddress(body.teamToken) : WETH
   const circleTreasury = (typeof body.circleTreasury === 'string' && isAddress(body.circleTreasury))
     ? getAddress(body.circleTreasury) : account.address
   // mockUsdc: deploy a fresh public-mint MockERC20 as USDC + a no-op MockYieldAdapter, so the whole
   // stack is self-contained — the smoke route can mint its own test USDC (no faucet, no Aave dependency).
   const mockUsdc = body.mockUsdc === true
-  if (!mockUsdc && getAddress(teamToken) === getAddress(USDC)) {
+  // mockTeam: also deploy a fresh public-mint MockERC20 as the JUNIOR/team token (6dp), so the pool is
+  // mock/mock and the JIT swap harness can mint both legs freely and trade with zero ETH beyond gas
+  // (WETH-team would need real ETH to wrap for liquidity + swaps).
+  const mockTeam = body.mockTeam === true
+  if (!mockUsdc && !mockTeam && getAddress(teamToken) === getAddress(USDC)) {
     return ctx.json({ ok: false, step: 'preflight', error: 'teamToken must differ from USDC' }, 400)
   }
 
@@ -138,6 +142,13 @@ export const POST = createHandler(async (req, ctx) => {
         args: [usdc], account, chain: baseSepolia,
       })))
       // The mock adapter is ungated (no setVault) — nothing to authorize.
+      // Optional mock team token so the whole pool is mock/mock (public-mint both legs).
+      if (mockTeam) {
+        teamToken = deployed(await wait(await walletClient.deployContract({
+          abi: MOCK_ERC20_ABI, bytecode: MOCK_ERC20_BYTECODE,
+          args: ['Team Token', 'TEAM', 6], account, chain: baseSepolia,
+        })))
+      }
     } else {
       // 1. Aave adapter (vault = 0; authorized after the vault exists).
       adapter = deployed(await wait(await walletClient.deployContract({
