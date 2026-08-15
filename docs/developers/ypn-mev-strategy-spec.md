@@ -89,6 +89,150 @@ Two implementation tiers:
 ## Measurement first
 
 `jitNetPnl` (shipped) is the instrument: run the safe rail on testnet, watch realized JIT PnL, and let the
-data justify each phase. If the guarded rail already clears meaningful profit, Phase 1 is the obvious next
-build; if it's marginal, the selective-firing keeper is exactly what turns it positive. Either way we ship
-on evidence, not vibes — and none of it throws away the hook.
+data justify each phase. We did exactly that — **see "Status & evidence" below**: the measurement came back
+*marginal* (naive JIT ≈ break-even), which refines the plan — a selective-firing keeper stops the bleed but
+does **not** turn it positive; that takes Phase 2 (dynamic fees) / Phase 3 (LVR recapture). Either way we
+ship on evidence, not vibes — and none of it throws away the hook.
+
+## Status & evidence — PARKED (2026-08-15)
+
+MEV/JIT work is **paused at a clean stop** (user decision). Nothing is half-finished or broken.
+
+**Built + shipped**
+- **Phase 0 — safe JIT rail + guards** (merged in the audit-hardening PRs): one-slice NAV-window bound (H2),
+  reactive PnL circuit-breaker (H4) — `jitNetPnl`, owner `jitMaxCumulativeLoss` → `jitAutoDisabled`,
+  `resetJitBreaker`. All in the deployed, invariant-fuzzed vault bytecode.
+- **Swap harness** (PRs #258/#259) — `deploy {mockUsdc,mockTeam}` → `commit-team` → `jit-smoke`: fires a real
+  V4 swap so the JIT hook triggers, sweeps, and reports `roundPnl`. **Fired live on Base Sepolia.**
+
+**The evidence (JIT size-sweep, live)**
+
+| swap size | JIT fired | borrowed | `roundPnl` |
+|---|---|---|---|
+| $0.50 | ✓ | $0.50 | −1 |
+| $2 | ✓ | $1.00 (5% slice) | −1 |
+| $10 | ✓ | $1.00 | −1 |
+| $50 | ✓ | $1.00 | −1 |
+| $200 | ✓ | $1.00 | −1 |
+
+**Flat −1 micro-USDC across every size.** Naive JIT fee-capture is **structurally ~break-even** against
+realistic pool depth — it captures roughly what its round-trip close cost pays; swap size doesn't move it.
+
+**Implication (reprioritizes the phasing above):** the selective-firing keeper (Phase 1) is worth it as the
+**safety/control** layer (keep JIT out of losing regimes, sweep, auto-disable) but its **yield upside is
+capped** (turns a small loss into ~zero). The real money is **Phase 2 (dynamic fees)** and **Phase 3 (LVR
+recapture)**.
+
+**Resume decision** (pick a lever, evidence in hand):
+1. **Min safety + Phase 2 (dynamic fees)** — *recommended*: cap JIT's downside, then charge informed flow
+   more so capture > close cost (first net-positive lever; port `MWDynamicFee.sol`).
+2. **Full Phase-1 keeper** — safety-complete but ~zero yield upside per the data; deploy-gated.
+3. **Phase 3 (LVR recapture)** — the moat; biggest build; port `MWAmAuction.sol`.
+
+**Live testnet artifacts:** audited fixed-stack vault `0xbf14c877…65c77`; JIT-fired mock/mock stack vault
+`0x90f0849e…342227` (swapRouter `0xE9EC…D0cA`, lpRouter `0x2d4C…C1e0`). Re-fire via the bearer-gated
+(`CRON_SECRET`) ops routes: `deploy {mockUsdc,mockTeam}` → `commit-team` → `jit-smoke`.
+
+## Considered idea: "Internalized Slippage Capture" hook (assessment, 2026-08-15)
+
+A blueprint (`MWSlippageCaptureHook`) proposed measuring a swap's price impact in the hook (beforeSwap
+snapshots slot0 sqrtPrice, afterSwap reads it) and, for impact above a 0.30% threshold, skimming the excess
+via `afterSwapReturnDelta` + `targetCurrency.take()` → 100% to the treasury as "reclaimed slippage / MEV."
+
+**Assessment — the v4 mechanism is valid; the framing is not.** A hook *can* skim swap output with
+`afterSwapReturnDelta` + `take` (that part works). But:
+
+1. **"Slippage" is not a capturable pot.** It's the trader's worse average price walking up the curve —
+   already in the pool reserves, accruing to LPs (then bled to arbitrageurs = LVR). `capturedFee =
+   rawOutput × excessBps` is a **new deduction from the trader's output**, i.e. a fee sourced from the
+   *trader*, not reclaimed leakage. Not "100% gross margin from nowhere."
+2. **It does not capture MEV.** Sandwich/arb profit comes from front/back-running *around* the trade —
+   untouched here. Capturing that is LVR-recapture (Phase 3), a different mechanism.
+3. **"Zero aggregator friction" inverts under load.** Aggregators quote the **net output including hook
+   deltas**, so on exactly the high-impact trades this targets they see the skim → route *away* (or the
+   trader gets a bad-execution surprise and the pool gets deprioritized). Friction concentrates on the
+   large trades, it doesn't disappear.
+
+*Technical nits if ever built:* `slot0SqrtPriceX96Start` is declared regular storage, not `transient` (the
+comment claims EIP-1153); `_calculatePriceImpact` uses the sqrtPrice ratio, ~2× off from true price impact
+(price = sqrtPrice²); it imports `v4-periphery/BaseHook` whereas our stack implements `IHooks` directly.
+
+**Salvageable core → this IS Phase 2 (dynamic fees).** Stripped of the framing, it's a **surge/dynamic fee
+on high-impact trades routed to the treasury** — the exact lever the size-sweep evidence pointed to, built
+on `MWDynamicFee.sol`. Honest reframe: *"on flow where Mintware has the best liquidity (so it routes here
+despite a surge fee), charge a size/impact-scaled treasury fee."* Real incremental revenue on
+price-insensitive large flow — a **surge fee** (incidence on traders), not slippage reclamation. Good
+instinct (capture large-flow value for the treasury), corrected mechanism-story, right lever underneath.
+
+### Can you actually "capture the slippage"? Yes — but the *dislocation*, not the trader's output
+
+Sharper statement of the above, because it's the crux. Two things get called "slippage":
+
+1. **The trader's slippage = a cost, not a pot.** The worse average price from walking up the curve is the
+   trader's cost of trading. It's not a skimmable amount; trying to skim it (the blueprint) just charges the
+   trader a fee.
+2. **The price *dislocation* the trade creates = very capturable.** Right after a big trade, the *pool* is
+   mispriced vs. the real market (e.g. a whale sells ETH → pool prints $2,950 while the market is $3,000).
+   That gap is free money for whoever trades the pool back to the true price. Today an **arb bot** grabs it
+   in the next block — that's the leak (LVR).
+
+**"Capturing the slippage" = capturing that arbitrage before the bots** — the protocol/hook (or an auction)
+does the rebalancing arb itself and keeps the value. That's **Phase 3 (LVR recapture)**, and it's the real
+thing your instinct is reaching for — *not* skimming the trader (a fee), but taking the arb (the leak).
+
+### Where this actually pays: low-cap / community / meme pools
+
+The capture scales with **slippage per trade**, which is *tiny* on deep blue-chip pools (bps — this is why
+our live sweep on a deep pool was ~break-even) and **fat on thin pools** where a normal trade slips **4–8%**.
+So MEV capture is a rounding error on ETH/USDC but a **real yield line on thin community-token pools**.
+
+**This is a strong fit for Mintware specifically:** the model is *team/community tokens* (teams launch vaults
+with their own token as the junior leg), so the pools we'd actually run **are exactly the thin,
+high-slippage pools where this pays**. MEV capture isn't bolted onto blue-chip flow we don't have — it's most
+valuable on the flow we *do* have.
+
+*How* you capture the fat impact depends on venues:
+- **Multi-venue token** (also on a CEX / another DEX): the pool mispricing is a clean **arb/LVR recapture** —
+  grab the arb back to the reference price.
+- **Single-venue token** (our pool is the only liquidity): no external price to arb, so the impact is "real"
+  — but that's exactly where **sandwiching is rampant** (bots front-run + back-run the mean-reversion), and a
+  **surge/dynamic fee** captures a fat slice of a fat impact. Addressable MEV is still large; it's
+  sandwich-internalization + surge fee rather than pure arb.
+
+**Tested now with the existing harness** (thin ~$20 baseline vs the deep $5M one), and the result flips the
+naive expectation:
+
+| swap | deep-pool `roundPnl` | thin-pool `roundPnl` |
+|---|---|---|
+| $0.50 | −0.000001 | **−0.006** |
+| $1 | — | **−0.025** |
+| $2 | −0.000001 | **−0.125** |
+| $5 | −0.000001 | **−0.274** |
+
+**On thin pools naive JIT doesn't capture value — it *bleeds*, worse with trade size** (up to −27% on the ~$1
+JIT slice). The value is there (that's why the swings are big), but JIT is structurally on the **losing**
+side: it borrows USDC, provides it, accumulates the volatile token as the trade pushes price up, then sells
+it back into the *moved* thin pool at a terrible price — self-sandwiched, and the close cost explodes with
+thinness. **JIT is the wrong MEV tool for thin community pools** (must be off — the H4 breaker auto-disables
+it). The right tools are **dynamic/surge fees** (capture the impact as a fee, no adverse round-trip — the
+"slippage capture" blueprint, correctly reframed) and **LVR recapture** (arb the dislocation). Since Mintware
+runs community-token pools, this is the operative regime.
+
+## Pool tiering — blue-chip vs community is not one-size-fits-all
+
+A vault's whole profile flips with its **junior token's tier** (liquidity × volatility × external-venue depth),
+and every parameter — not just MEV — should follow:
+
+| Axis | Deep / blue-chip junior (e.g. ETH) | Thin / community-meme junior |
+|---|---|---|
+| Slippage per trade | bps | 4–8% |
+| Seniority swap (junior→USDC) | clean, low-slippage | high-slippage / fragile |
+| Senior USDC backing | well-backed | riskier-backed |
+| Card spend / senior-LTV | generous | tighter |
+| `idleBufferTargetBps` | lower (more LP) | **higher** (more USDC safe in Aave) |
+| MEV mechanism | JIT ~break-even (marginal) | **JIT off**; dynamic-fee + LVR (value is large) |
+
+The levers already exist on-chain (`idleBufferTargetBps`, `jitMaxPerBlockBps`, `jitMaxCumulativeLoss`); a
+**tier preset** (or an on-chain junior-liquidity read) would set them at vault creation. The card rail is not
+one-size either — spend/settlement generosity scales with how safely the junior backs the senior. Treat
+blue-chip and community vaults as **different products.**
