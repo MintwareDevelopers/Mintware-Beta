@@ -64,7 +64,13 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
 
     /// @notice Symmetric virtual offset (virtual shares == virtual assets). Inflation defense — see
     ///         `MintwareYieldVault` NatSpec for the full argument; the algebra is identical here.
-    uint256 public constant VIRTUAL = 1e3;
+    /// @dev    AUDIT (NAV donation/inflation): 1e6 (== 1.0 USDC at 6dp) makes the first-depositor donation
+    ///         attack economically absurd — an attacker must donate ~1e6× a victim's deposit to zero out
+    ///         their shares (was 1e3 → ~1000×). Precision cost on a 6dp vault is negligible; a raw USDC
+    ///         donation only ever gifts value to existing senior holders (attacker loses it), it cannot
+    ///         steal, so the offset is the proportionate defense (no separate dead-shares needed — the
+    ///         symmetric virtual offset already keeps totalShares+VIRTUAL > 0).
+    uint256 public constant VIRTUAL = 1e6;
 
     uint16 public constant BPS = 10_000;
     uint16 public constant MIN_IDLE_TARGET_BPS = 5_000;  // >=50% par-safe in Aave, else senior can't be served
