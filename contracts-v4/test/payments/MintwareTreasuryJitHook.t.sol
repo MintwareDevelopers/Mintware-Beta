@@ -68,7 +68,7 @@ contract MintwareTreasuryJitHookTest is Test {
         // placeholder-hooks key is fine for the initcode; the pool + hook agree on the real address.
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), address(vault), address(this));
         (address hookAddr, bytes32 salt) =
-            HookMiner.find(address(this), uint160(0xC0), type(MintwareTreasuryJitHook).creationCode, args);
+            HookMiner.find(address(this), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, args);
         hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), address(vault), address(this));
         require(address(hook) == hookAddr, "hook addr");
 

@@ -102,6 +102,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     event OracleParamsSet(int24 maxMovePerBlock, uint32 maxCatchupBlocks);
 
     error OnlyPoolManager();
+    error UnauthorizedInitializer();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(poolManager)) revert OnlyPoolManager();
@@ -143,7 +144,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         Hooks.validateHookPermissions(
             IHooks(address(this)),
             Hooks.Permissions({
-                beforeInitialize: false, afterInitialize: false,
+                beforeInitialize: true, afterInitialize: false,
                 beforeAddLiquidity: false, afterAddLiquidity: false,
                 beforeRemoveLiquidity: false, afterRemoveLiquidity: false,
                 beforeSwap: true, afterSwap: true,
@@ -413,8 +414,14 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
 
     // ── IHooks: un-permissioned no-ops (never called — address lacks the bits) ──────
 
-    function beforeInitialize(address, PoolKey calldata, uint160) external pure override returns (bytes4) {
-        revert HookNotImplemented();
+    /// @notice AUDIT (pre-audit review): gate pool initialization to the hook's OWNER. The canonical pool
+    ///         is initialized exactly once, by the same actor that deployed the hook (the factory in the
+    ///         multi-tenant path, or the deployer in the standalone script), BEFORE ownership is handed off
+    ///         to the ops owner — so `sender == owner()` is the authorized initializer in every flow. This
+    ///         stops anyone who sees the mined hook/salt from front-running `initialize` to grief the deploy.
+    function beforeInitialize(address sender, PoolKey calldata, uint160) external view override returns (bytes4) {
+        if (sender != owner()) revert UnauthorizedInitializer();
+        return IHooks.beforeInitialize.selector;
     }
     function afterInitialize(address, PoolKey calldata, uint160, int24) external pure override returns (bytes4) {
         revert HookNotImplemented();

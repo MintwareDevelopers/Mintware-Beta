@@ -95,7 +95,7 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         });
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), predicted, address(factory));
         (address minedHook, bytes32 salt) =
-            HookMiner.find(address(hookDeployer), uint160(0xC0), type(MintwareTreasuryJitHook).creationCode, args);
+            HookMiner.find(address(hookDeployer), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, args);
 
         MintwareTreasuryVaultFactory.CreateParams memory p = MintwareTreasuryVaultFactory.CreateParams({
             usdc: address(usdc), teamToken: address(teamTok), adapter: address(adp),
@@ -244,10 +244,14 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         vm.prank(opsOwner);
         c.vault.deployToLP(200 * ONE, jt);
 
-        // Attacker opens a second pool naming the same hook + tokens but a different fee → different PoolId.
+        // `beforeInitialize` now gates pool creation to the hook OWNER, so an attacker can no longer open
+        // ANY pool naming this hook (see test_beforeInitialize_gatesPoolInitToOwner in the JitStack suite).
+        // This verifies the SECOND-layer canonical-binding no-op still holds even for an owner-created
+        // non-canonical pool (defense-in-depth: init-gate + swap no-op).
         PoolKey memory evil = PoolKey({
             currency0: c.key.currency0, currency1: c.key.currency1, fee: 500, tickSpacing: SPACING, hooks: c.key.hooks
         });
+        vm.prank(opsOwner);
         pm.initialize(evil, INIT_SQRT_PRICE);
         usdc.mint(address(this), 1_000_000 * ONE);
         c.team.mint(address(this), 1_000_000 * ONE);

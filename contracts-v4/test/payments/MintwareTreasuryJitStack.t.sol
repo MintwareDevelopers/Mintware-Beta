@@ -71,7 +71,7 @@ contract MintwareTreasuryJitStackTest is Test {
         address predictedVault = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         (address hookAddr, bytes32 salt) =
-            HookMiner.find(address(this), uint160(0xC0), type(MintwareTreasuryJitHook).creationCode, args);
+            HookMiner.find(address(this), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, args);
         hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         require(address(hook) == hookAddr, "hook addr");
 
@@ -223,6 +223,19 @@ contract MintwareTreasuryJitStackTest is Test {
     /// passes, but nothing is withdrawable): the deploy must REVERT rather than convert junior first-loss
     /// capital into senior-counted `deployedFromSenior`. (Pre-fix, `deployToLP` reused the redemption
     /// `_pullUSDC` waterfall and would have silently drawn the junior buffer to fund the deploy.)
+    /// AUDIT (pre-audit review): the hook's `beforeInitialize` gates pool init to the hook owner, so a
+    /// stranger can't front-run `initialize` (with the mined salt/address visible) to grief the deploy.
+    function test_beforeInitialize_gatesPoolInitToOwner() public {
+        // A stranger cannot initialize any pool carrying this hook (the canonical pool is already init'd
+        // in setUp by the owner; try a different-fee pool with the same hook).
+        PoolKey memory other = PoolKey({
+            currency0: key.currency0, currency1: key.currency1, fee: 500, tickSpacing: SPACING, hooks: key.hooks
+        });
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(); // V4 wraps the hook's UnauthorizedInitializer() in WrappedError; any revert = blocked
+        pm.initialize(other, INIT_SQRT_PRICE);
+    }
+
     function test_deployToLP_neverDrawsJuniorBuffer_whenAaveIlliquid() public {
         uint256 jt        = vault.juniorTokens();
         uint256 bufBefore = vault.juniorUsdcBuffer();
