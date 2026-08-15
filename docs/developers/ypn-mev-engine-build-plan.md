@@ -3,8 +3,28 @@
 _Concrete build plan for capturing the MEV/slippage that leaks to bots on YPN's pools. Synthesizes a
 2026-08-15 research pass (build-vs-reuse code audit + am-AMM/MEV-tax + dynamic-fee/LVR deep-dives) with the
 existing design docs. **Builds on — does not replace** [`ypn-mev-strategy-spec.md`](ypn-mev-strategy-spec.md)
-(the mechanism ranking) and [`am-amm-design.md`](am-amm-design.md) / [`am-amm-flagged-decisions.md`](am-amm-flagged-decisions.md)
-(the auction engine). Plan only — nothing built yet._
+(the mechanism ranking + the "Level 2–3 levers" framing), [`am-amm-design.md`](am-amm-design.md) /
+[`am-amm-flagged-decisions.md`](am-amm-flagged-decisions.md) (the auction engine), and
+[`ulv-jit-lever-b-spec.md`](ulv-jit-lever-b-spec.md) (**Lever B** = size-gated true JIT — the existing
+lever spec, its hook↔vault mid-swap bridge, and the invariants bar every money-path change must clear).
+Plan only — nothing built yet._
+
+## Lever framing + the non-negotiable bar (from `ulv-jit-lever-b-spec.md`)
+The engine is a set of **levers** on the one hook, not a new hook family (`#254`). The already-specced
+**Lever B (size-gated true JIT)** sets the standard the new levers below inherit — this is "the exact Bunni
+v2 ($8.4M) surface", so every money-path change is held to it:
+- **Invariants written FIRST, fuzzed at 256×128k with 0 reverts**, exercising REAL swaps through the harness
+  (`jit_zero_at_rest`, `solvency_incl_open_jit`, `jit_roundtrip_conserves`, `delta_settled`,
+  `swap_never_bricks`, `rounding_favors_vault`).
+- **No oracle/price in any money-path math** — the swap itself is the only price; round every division against
+  the vault.
+- **A swap must NEVER revert for a capture-mechanism reason** — every lever is a `try`-safe, silent fallback
+  (fee override / JIT / skim failing → the swap fills on resting liquidity).
+- Dedicated position salts (never co-mingle with the main `salt=0`), per-swap AND per-block capital caps, and
+  a `jitActive`-style guard blocking reentrant unlock-based entrypoints.
+
+(NB: `ulv-jit-lever-b-spec.md` targets the **pair vault** + `MWHookCoordinator`; YPN's JIT is the sibling
+`borrowIdleForJit`/`settleJitReturn` model in `MintwareTreasuryJitHook` — same bar, different bridge.)
 
 ## The decision (tiered by pool, matching YPN's actual market)
 YPN's market is **thin community/meme token pools** (teams launch a vault with their own token). The research
