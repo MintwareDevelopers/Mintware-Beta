@@ -70,7 +70,7 @@ contract MintwareTreasuryVaultJitTest is Test {
         returns (MintwareTreasuryVault v, MockYieldAdapter a, MockJitHook h)
     {
         a = new MockYieldAdapter(address(usdc));
-        v = new MintwareTreasuryVault(address(usdc), address(team), address(a), address(this)); // owner=this
+        v = new MintwareTreasuryVault(address(usdc), address(team), address(a), address(this), teamAddr); // owner=this
 
         team.mint(teamAddr, 1_000_000 * ONE);
         usdc.mint(teamAddr, juniorBuffer);

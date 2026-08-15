@@ -62,7 +62,7 @@ contract MintwareTreasuryVaultTest is Test {
         if (address(team) == address(0)) team = new MockERC20("Team Token", "TEAM", 18);
 
         a = new MockYieldAdapter(address(usdc));
-        v = new MintwareTreasuryVault(address(usdc), address(team), address(a), owner);
+        v = new MintwareTreasuryVault(address(usdc), address(team), address(a), owner, teamAddr);
         m = new MockLiquidityModule(address(usdc), address(team), address(v), price);
 
         vm.startPrank(owner);
@@ -174,6 +174,30 @@ contract MintwareTreasuryVaultTest is Test {
         assertLt(tokensBack, committed, "junior recovered its full commit (did not absorb loss)");
         assertEq(tokensBack, committed - teamInLp, "junior residual != commit minus LP-consumed tokens");
         assertGt(teamInLp, 0, "test did not actually deploy junior tokens into the LP");
+    }
+
+    // ── AUDIT M1: only the constructor-bound team may commit + activate (no front-run hijack) ──
+    function test_commitTeam_onlyBoundTeam() public {
+        MockYieldAdapter a = new MockYieldAdapter(address(usdc));
+        MintwareTreasuryVault v = new MintwareTreasuryVault(address(usdc), address(team), address(a), owner, teamAddr);
+
+        // A stranger front-running commitTeam reverts.
+        address stranger = makeAddr("stranger");
+        team.mint(stranger, TEAM_COMMIT);
+        vm.startPrank(stranger);
+        team.approve(address(v), type(uint256).max);
+        vm.expectRevert(MintwareTreasuryVault.OnlyTeam.selector);
+        v.commitTeam(TEAM_COMMIT, 0, LOCK_DUR);
+        vm.stopPrank();
+
+        // The bound team succeeds.
+        team.mint(teamAddr, TEAM_COMMIT);
+        vm.startPrank(teamAddr);
+        team.approve(address(v), type(uint256).max);
+        v.commitTeam(TEAM_COMMIT, 0, LOCK_DUR);
+        vm.stopPrank();
+        assertTrue(v.activated(), "bound team could not activate");
+        assertEq(v.team(), teamAddr, "team is not the bound address");
     }
 
     // ── AUDIT H3: while the senior is underwater (LP can't cover the deployed par and no senior has

@@ -43,7 +43,7 @@ contract MintwareGatewayTreasuryV2Test is Test {
         usdc    = new MockERC20("USD Coin", "USDC", 6);
         team    = new MockERC20("Team Token", "TEAM", 18);
         adapter = new MockYieldAdapter(address(usdc));
-        vault   = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), owner);
+        vault   = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), owner, teamAddr);
 
         // Gateway admin = this test contract → it holds RELAYER_ROLE + EDGE_SIGNER_ROLE + DEFAULT_ADMIN.
         gateway = new MintwarePaymentGateway(address(vault), address(usdc), circleCpn, address(this));

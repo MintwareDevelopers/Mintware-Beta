@@ -161,11 +161,17 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     /// @param teamToken_ junior reserve asset (the team/treasury native token).
     /// @param adapter_   Aave idle adapter whose underlying is `usdc_`.
     /// @param owner_     vault owner (wiring, governance, pause).
-    constructor(address usdc_, address teamToken_, address adapter_, address owner_) Ownable(owner_) {
-        if (usdc_ == address(0) || teamToken_ == address(0) || adapter_ == address(0)) revert ZeroAddress();
+    /// @param team_      AUDIT M1: the team address bound AT CREATION — the only account that may
+    ///                   `commitTeam` (bring the junior + activate). Binding it here (rather than
+    ///                   `team = msg.sender` on a permissionless commit) prevents an attacker from
+    ///                   front-running activation to hijack the team role with a dust junior. Distinct
+    ///                   from `owner_`: the team is the junior-provider tenant, the owner is governance.
+    constructor(address usdc_, address teamToken_, address adapter_, address owner_, address team_) Ownable(owner_) {
+        if (usdc_ == address(0) || teamToken_ == address(0) || adapter_ == address(0) || team_ == address(0)) revert ZeroAddress();
         usdc      = IERC20(usdc_);
         teamToken = IERC20(teamToken_);
         adapter   = IYieldAdapter(adapter_);
+        team      = team_;
     }
 
     // ── admin / wiring (set-once) ─────────────────────────────────────────────────
@@ -226,11 +232,12 @@ contract MintwareTreasuryVault is IYieldVault, Ownable, Pausable, ReentrancyGuar
     function commitTeam(uint256 teamTokens, uint256 juniorUSDC, uint256 lockDur)
         external nonReentrant whenNotPaused
     {
+        // AUDIT M1: only the constructor-bound team may commit + activate (no front-run hijack).
+        if (msg.sender != team) revert OnlyTeam();
         if (activated) revert AlreadyActivated();
         if (teamTokens == 0) revert ZeroAmount();
         if (lockDur < MIN_LOCK_DURATION || lockDur > MAX_LOCK_DURATION) revert BadParam();
 
-        team               = msg.sender;
         lockExpiry         = block.timestamp + lockDur;
         teamFeesRedirected = true;
         activated          = true;
