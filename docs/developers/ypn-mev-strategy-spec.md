@@ -163,3 +163,42 @@ on `MWDynamicFee.sol`. Honest reframe: *"on flow where Mintware has the best liq
 despite a surge fee), charge a size/impact-scaled treasury fee."* Real incremental revenue on
 price-insensitive large flow — a **surge fee** (incidence on traders), not slippage reclamation. Good
 instinct (capture large-flow value for the treasury), corrected mechanism-story, right lever underneath.
+
+### Can you actually "capture the slippage"? Yes — but the *dislocation*, not the trader's output
+
+Sharper statement of the above, because it's the crux. Two things get called "slippage":
+
+1. **The trader's slippage = a cost, not a pot.** The worse average price from walking up the curve is the
+   trader's cost of trading. It's not a skimmable amount; trying to skim it (the blueprint) just charges the
+   trader a fee.
+2. **The price *dislocation* the trade creates = very capturable.** Right after a big trade, the *pool* is
+   mispriced vs. the real market (e.g. a whale sells ETH → pool prints $2,950 while the market is $3,000).
+   That gap is free money for whoever trades the pool back to the true price. Today an **arb bot** grabs it
+   in the next block — that's the leak (LVR).
+
+**"Capturing the slippage" = capturing that arbitrage before the bots** — the protocol/hook (or an auction)
+does the rebalancing arb itself and keeps the value. That's **Phase 3 (LVR recapture)**, and it's the real
+thing your instinct is reaching for — *not* skimming the trader (a fee), but taking the arb (the leak).
+
+### Where this actually pays: low-cap / community / meme pools
+
+The capture scales with **slippage per trade**, which is *tiny* on deep blue-chip pools (bps — this is why
+our live sweep on a deep pool was ~break-even) and **fat on thin pools** where a normal trade slips **4–8%**.
+So MEV capture is a rounding error on ETH/USDC but a **real yield line on thin community-token pools**.
+
+**This is a strong fit for Mintware specifically:** the model is *team/community tokens* (teams launch vaults
+with their own token as the junior leg), so the pools we'd actually run **are exactly the thin,
+high-slippage pools where this pays**. MEV capture isn't bolted onto blue-chip flow we don't have — it's most
+valuable on the flow we *do* have.
+
+*How* you capture the fat impact depends on venues:
+- **Multi-venue token** (also on a CEX / another DEX): the pool mispricing is a clean **arb/LVR recapture** —
+  grab the arb back to the reference price.
+- **Single-venue token** (our pool is the only liquidity): no external price to arb, so the impact is "real"
+  — but that's exactly where **sandwiching is rampant** (bots front-run + back-run the mean-reversion), and a
+  **surge/dynamic fee** captures a fat slice of a fat impact. Addressable MEV is still large; it's
+  sandwich-internalization + surge fee rather than pure arb.
+
+**Testable now with the existing harness:** deploy a *thin*-liquidity pool (small `liqUnits` in `jit-smoke`)
+and re-run the size-sweep — expect `roundPnl` to go from the deep-pool flat −1 to meaningfully positive.
+This empirically validates the thin-pool thesis before investing in Phase 2/3.
