@@ -33,6 +33,7 @@ const ERC20_ABI = [
   { type: 'function', name: 'deposit', stateMutability: 'payable', inputs: [], outputs: [] }, // WETH wrap
   { type: 'function', name: 'balanceOf', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
   { type: 'function', name: 'allowance', stateMutability: 'view', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ name: '', type: 'uint256' }] },
+  { type: 'function', name: 'mint', stateMutability: 'nonpayable', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [] }, // MockERC20 public mint
 ] as const
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -70,14 +71,24 @@ export const POST = createHandler(async (req, ctx) => {
     const teamToken = getAddress(await publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'teamToken' }) as `0x${string}`)
     const usdc = getAddress(await publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'usdc' }) as `0x${string}`)
 
-    // 1. If the junior token is WETH, wrap only the SHORTFALL so a re-fire doesn't burn ETH it doesn't
-    //    need (idempotent — a prior fire may have already wrapped). A fresh wallet needs only ETH.
+    // 1. Source the junior tokens the wallet needs to commit. If the junior is WETH, wrap the SHORTFALL
+    //    (idempotent — a re-fire won't burn ETH it doesn't need). Otherwise, if it's a public-mint mock
+    //    (mockTeam pool), mint the shortfall — fully self-contained, no ETH beyond gas.
     let wrapTx: `0x${string}` | null = null
-    if (getAddress(teamToken) === getAddress(WETH)) {
-      const held = await publicClient.readContract({ address: teamToken, abi: ERC20_ABI, functionName: 'balanceOf', args: [account.address] }) as bigint
-      if (held < teamTokens) {
-        wrapTx = await walletClient.writeContract({ address: teamToken, abi: ERC20_ABI, functionName: 'deposit', args: [], value: teamTokens - held, account, chain: baseSepolia })
+    const held = await publicClient.readContract({ address: teamToken, abi: ERC20_ABI, functionName: 'balanceOf', args: [account.address] }) as bigint
+    if (held < teamTokens) {
+      const short = teamTokens - held
+      if (getAddress(teamToken) === getAddress(WETH)) {
+        wrapTx = await walletClient.writeContract({ address: teamToken, abi: ERC20_ABI, functionName: 'deposit', args: [], value: short, account, chain: baseSepolia })
         await wait(wrapTx)
+      } else {
+        // public-mint mock team token — mint the shortfall to the wallet
+        try {
+          wrapTx = await walletClient.writeContract({ address: teamToken, abi: ERC20_ABI, functionName: 'mint', args: [account.address, short], account, chain: baseSepolia, gas: 120_000n })
+          await wait(wrapTx)
+        } catch {
+          return ctx.json({ ok: false, step: 'funding', error: `wallet holds ${held} team tokens but needs ${teamTokens}, and ${teamToken} is neither WETH nor a public-mint mock — fund it first`, teamToken, held: held.toString(), needed: teamTokens.toString() }, 412)
+        }
       }
     }
 
