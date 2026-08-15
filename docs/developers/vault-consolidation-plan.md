@@ -37,17 +37,23 @@ contract and its duplicated settlement.
 ## Phased plan (top-down, low-risk first)
 
 ### Phase 0 — delete dead weight
-> ⚠ **BLOCKED — not the clean deletion this plan assumed (found 2026-08-15 during Phase-1 execution).**
-> `MintwareDeFiVault4626` is marked DO-NOT-DEPLOY but is still **load-bearing in tests**: it's the test
-> vault instantiated by the whole **MWHookCoordinator am-AMM / surge suite** (`test/MWHookCoordinator*.t.sol`
-> — the cutting-edge MEV hook tests) **and** the factory test (`test/MintwareVaultFactory.t.sol`). Deleting
-> the contract breaks all of those. So Phase 0 requires **first migrating those ~5 test files off the 4626
-> onto `MintwareDeFiPairVault`** (different constructor + deposit API — real work, and it risks the frontier
-> hook suite). Do this deliberately with the pair-vault test migration, NOT as a drive-by delete.
-> `FeeLib`/`FeeVault` were also too entangled to touch safely (44–109 file matches, mostly dependency noise).
-- **Revised Phase 0**: migrate the MWHookCoordinator + factory tests to `MintwareDeFiPairVault`, THEN delete
-  `MintwareBaseVault4626` + `MintwareDeFiVault4626` + their own test, drop retired instances from the
-  registry. **9 → 7.** Guarded by the migrated hook/factory suites staying green.
+> ⚠ **NOT a drive-by delete — it's a focused test-migration PR (fully traced 2026-08-15).** Findings:
+> - `MintwareDeFiVault4626` (DO-NOT-DEPLOY) is the concrete vault fixture for the 4 `MWHookCoordinator*.t.sol`
+>   tests **and** `MintwareVaultFactory.t.sol` (`createVault` with `type(MintwareDeFiVault4626).creationCode`).
+> - GOOD: `MWHookCoordinator` is **canonical + vault-agnostic** (`IMWJitVault`), and `MintwareDeFiPairVault`
+>   uses it too. The HOOK's am-AMM/surge/JIT behavior is already covered against the canonical vault by
+>   `MintwareDeFiPairVaultJit(.t/Invariant).t.sol`, `MWAmAuction.t.sol`, `MWPairVaultAmAmmFork.t.sol`. So the
+>   *hook* coverage does not depend on the 4626.
+> - BLOCKER: those ~5 tests are bound to the 4626's **single-sided API** (`VaultConfig`/`seedTeamTokens`/
+>   `rebalance`/`depositWithLock`/`entryFeeBps`). Deleting the 4626 needs them **rewritten onto the pair
+>   vault's dual-sided lifecycle** (commit-team → community-match → activate) — a real rewrite that touches
+>   the frontier am-AMM hook tests, and is naturally coupled to the **deploy-gated pair-vault cutover**.
+> - `FeeLib`/`FeeVault` were too entangled to touch (44–109 file matches = mostly v4-core dep noise).
+- **Revised Phase 0 (its own PR, rides with the pair-vault cutover):** (1) rewrite `MWHookCoordinator*.t.sol`
+  + `MintwareVaultFactory.t.sol` onto `MintwareDeFiPairVault`; (2) confirm am-AMM auction + surge + JIT
+  assertions transfer (not just wiring); (3) delete `MintwareBaseVault4626` + `MintwareDeFiVault4626` +
+  `MintwareDeFiVault4626.t.sol`; (4) drop retired instances from `MintwareVaultRegistry`. **9 → 7**, guarded
+  by the migrated suites staying green. Do NOT rush as a bulk edit — it's frontier-hook test surface.
 
 ### Phase 1 — extract shared bases (refactor, existing tests guard)
 - **`SeniorShares` base:** `MintwareTreasuryVault` "lifts the senior share math verbatim" from
