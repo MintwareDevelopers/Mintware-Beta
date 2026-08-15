@@ -36,29 +36,40 @@ internals must call only INTERNAL helpers, never a `nonReentrant` external self-
 module's current pattern — preserve it verbatim when absorbing.
 
 ### 2. EIP-170 bytecode size — the #1 shipping risk
-The module (~20KB src) + vault (~38KB src) merged could exceed the 24,576-byte deployed-contract limit (the
-ULV already hit this — see `ulv_vault_eip170_blocker`, and the pair vault extracts math into `MWPositionLib`).
-**Mitigation, planned up front:** extract the position/valuation math (`_valueAt`, `_valueTeamInUsdc`, the
-liquidity-amount + swap-limit helpers) into a `library` (reuse/extend `MWPositionLib`), so the vault stays
-under 24KB. Measure `forge build --sizes` after each increment; if the merged vault approaches the limit,
-push more into the library. Do NOT discover this at the end.
+The module (~20KB src) + vault (~38KB src) merged would likely exceed the 24,576-byte deployed limit (the
+ULV already hit this — see `ulv_vault_eip170_blocker`). **Key correctness point:** a plain `internal` library
+does NOT help — internal library functions are INLINED into the caller's bytecode. Real EIP-170 relief needs
+a **delegatecall (`external`) library** whose code is deployed separately and linked — exactly how the pair
+vault keeps size down with `MWPositionLib` (a "STATELESS, delegatecall-linked library holding the V4 unlock
+handlers", taking a `Ctx` struct of the vault's immutables + live range because it can't read the vault's
+storage directly).
+**⇒ Absorbing the module is really "convert `MintwareV4LiquidityModule` from a separate CALLED contract into
+a delegatecall LIBRARY the vault links"** (a YPN analog of `MWPositionLib`): the heavy V4 unlock handlers
+(deploy/recover/collect) + valuation move into `library MWTreasuryPositionLib`, the vault holds the position
+STATE and `delegatecall`s the library so `address(this)`/storage context is the vault. Measure `forge build
+--sizes` at every step.
 
 ## Increment plan (each step: `forge build --sizes` + the 256×128k invariants green before the next)
-1. **Library-first:** move the module's pure math (`_valueAt`/`_valueTeamInUsdc`/liquidity + swap-limit
-   helpers) into a shared library. Point the *existing* module at it — no behavior change, tests stay green.
-   (De-risks EIP-170 before the vault grows.)
-2. **Inheritance swap:** re-base `MintwareTreasuryVault` on `MintwarePairVault`; drop its own
-   `Ownable/Pausable/ReentrancyGuard`; wire `poolKey`/ticks from the base; keep delegating to the module for
-   now. Prove the full vault suite still green (pure refactor).
-3. **Absorb the ops:** implement `unlockCallback` + DEPLOY/RECOVER/COLLECT on the vault (using the library +
-   base settlement), replace the `liquidityModule.*` calls with internal `poolManager.unlock(...)`. Keep the
-   module contract in-tree but unused.
-4. **Re-prove:** port the module's unit + manipulation tests into the vault suite; update the invariant handler
-   to deploy just the vault (self-holding the position); all 7 invariants green at 256×128k, plus the
-   pool-key-binding / oracle-manipulation regressions.
-5. **Delete** `MintwareV4LiquidityModule.sol` + `ILiquidityModule.sol` + the wiring; `--sizes` under 24KB;
-   full suite green.
-6. **Gate:** external audit before any deploy. The current split vault is safe + green; convergence buys
+> The increments are more coupled than a clean 1-2-3 (the base-state `poolKey`/ticks are unused until the
+> vault holds the position, so re-basing and absorbing land together). Order chosen to keep a green suite
+> at every commit.
+1. **`MWTreasuryPositionLib` (delegatecall library):** lift the module's V4 unlock handlers
+   (deploy/recover/collect) + valuation (`_valueAt`/`_valueTeamInUsdc`/swap-limit) into a stateless
+   delegatecall library taking a `Ctx` (pool key, ticks, currency order, `usdcIsCurrency0`, live liquidity),
+   mirroring `MWPositionLib`. This is where EIP-170 relief comes from — it must be `external`/delegatecall,
+   not `internal`.
+2. **Re-base + absorb (one commit, since coupled):** `MintwareTreasuryVault is MintwarePairVault,
+   IUnlockCallback, IYieldVault`; drop own `Ownable/Pausable/ReentrancyGuard`; the vault holds
+   `positionLiquidity` + range, sets `poolKey` via the base, and its `unlockCallback` (`_onlyPoolManager`,
+   NOT `nonReentrant`) `delegatecall`s `MWTreasuryPositionLib` for DEPLOY/RECOVER/COLLECT; replace every
+   `liquidityModule.*` call with an internal `poolManager.unlock(...)`. The vault reads `hook.oracleTick()`
+   directly for the `min(spot,oracle)` floor.
+3. **Re-prove:** port the module's unit + manipulation tests into the vault suite; update the invariant
+   handler to deploy just the vault (self-holding the position); all 7 invariants green at 256×128k, plus the
+   pool-key-binding / oracle-manipulation regressions. `--sizes` under 24KB.
+4. **Delete** `MintwareV4LiquidityModule.sol` + `ILiquidityModule.sol` + the `setLiquidityModule`/
+   `liquidityModule` wiring; full suite green.
+5. **Gate:** external audit before any deploy. The current split vault is safe + green; convergence buys
    reduced surface + (with Phase 3) multi-tenancy — it must not regress safety, so a red invariant at any
    step halts the merge.
 
