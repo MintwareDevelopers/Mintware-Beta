@@ -1,5 +1,11 @@
 # Mintware Platform — Earn & Campaigns
 
+> **⛔ Outdated — Campaigns were shelved (Aug 2026).** This "Earn & Campaigns" page describes the
+> removed token-reward-pool / points-campaign product; it's kept for history only. Current "earn" =
+> reputation-weighted **Vaults** (in testing on Base Sepolia) + **Attribution**. See
+> [README](../README.md) and the canonical [framing & messaging](../product/framing-and-messaging.md);
+> archived campaign material is under [archive/campaigns/](../archive/campaigns/).
+
 The Mintware platform is where your Attribution score translates into earnings.
 
 Protocols and teams create campaigns — pools of tokens or points — and Mintware distributes rewards to participants based on their activity and Attribution score.

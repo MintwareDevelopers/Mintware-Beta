@@ -1,5 +1,9 @@
 # Leaderboard
 
+> **⚠ Partly outdated.** The leaderboard is now a **reputation board** — ranked by Attribution score
+> and referral network. Any **per-campaign / points-leaderboard** framing on this page is shelved
+> (campaigns removed Aug 2026). Current: [README](../README.md) · [framing & messaging](../product/framing-and-messaging.md).
+
 The Mintware leaderboard ranks participants within each campaign by points earned. It updates in real time as swaps and actions are credited.
 
 ---

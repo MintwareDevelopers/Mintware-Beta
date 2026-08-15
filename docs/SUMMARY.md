@@ -2,11 +2,11 @@
 
 ## Introduction
 * [Welcome to Mintware](README.md)
+* [Framing & Messaging (canonical narrative)](product/framing-and-messaging.md)
 
 ## Overview
 * [What is Mintware?](overview/what-is-mintware.md)
 * [Attribution — On-Chain Reputation](overview/attribution.md)
-* [Mintware Platform — Earn](overview/mintware-platform.md)
 * [Score Tiers](overview/score-tiers.md)
 
 ## Getting Started
@@ -17,8 +17,7 @@
 * [Your Identity](getting-started/your-identity.md)
 
 ## Vaults
-* [Two-Surface Vaults](vaults/overview.md)
-* [RWA Deals — Lifecycle & Trust](vaults/rwa-deals.md)
+* [Vaults — Reputation-Weighted DeFi Liquidity](vaults/overview.md)
 
 ## Leaderboard
 * [Leaderboard](leaderboard/overview.md)
@@ -39,12 +38,11 @@
 ## Developers
 * [API Reference](developers/api-reference.md)
 * [Smart Contracts](developers/smart-contracts.md)
-* [Vaults & RWA Build Spec](developers/vaults-rwa-build-spec.md)
-* [RWA Incentive Layer](developers/rwa-incentive-layer.md)
 * [EAS Attestations](developers/eas-attestations.md)
 * [Ethereum UX Upgrades](developers/ethereum-ux-upgrades.md)
 * [Platform System Map](developers/platform-system-map.md)
-* [Production Readiness Inspection](developers/production-readiness-inspection.md)
-* [Final Audit Closeout](developers/final-audit-closeout.md)
+* [YPN Architecture](developers/ypn-architecture.md)
 * [Production Operator Checklist](developers/production-operator-checklist.md)
-* [Supabase Migration Reconciliation](developers/supabase-migration-reconciliation.md)
+
+> **Note:** the developer folder also holds current YPN/ULV specs and completed audits/runbooks not
+> listed here. Archived pre-pivot docs (RWA, Campaigns, Solana) live under [archive/](archive/).

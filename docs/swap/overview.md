@@ -1,5 +1,10 @@
 # Mintware Swap
 
+> **⚠ Partly outdated.** Swap **is live** — cross-chain best-execution routing via **LI.FI**, and every
+> swap builds your Attribution score. But this page may reference **campaign rewards**, **Molten**, or
+> **Core chain** — all removed (campaigns shelved Aug 2026; Core removed; swap is plain LI.FI, no
+> reward crediting). Current: [README](../README.md) · [framing & messaging](../product/framing-and-messaging.md).
+
 The Mintware Swap interface lets you swap tokens across chains while qualifying for campaign rewards. You get best-execution routing plus campaign rewards on top — no separate step required.
 
 ---
