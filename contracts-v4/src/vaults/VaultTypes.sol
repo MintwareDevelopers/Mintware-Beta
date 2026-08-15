@@ -21,7 +21,7 @@ enum PoolProfile {
     MEME
 }
 
-/// @dev Lock tiers — shared by both surfaces. Multipliers live in LockLib.
+/// @dev Lock tiers — shared by both surfaces.
 ///        Flex      (0d)   1.00×
 ///        Committed (30d)  1.15×
 ///        Aligned   (90d)  1.30×
