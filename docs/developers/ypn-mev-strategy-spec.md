@@ -279,3 +279,35 @@ already leaking to bots.** Honest caveats: β is assumed not measured; the perma
 these are **upper bounds** on the LVR piece (ignore gas, latency, competing arbs) — our structural edge is that
 *as the pool's own hook we go first* (top-of-block right); clean LVR needs a second venue, else fall back to
 the surge-fee row. **Naive JIT captures none of this** — the mechanisms that do are ranks 1–2 above.
+
+## Prior art: RexHook (adopted mechanisms)
+
+Reviewed the RexHook whitepaper (v1.6/1.7, Feb 2026 — a "Shopify for V4 token launches": launchpad +
+hook marketplace + registry). Most of it (marketplace, $REX token, launchpad economics) is not us. But its
+fee-capture / MEV sections are on our exact problem and independently corroborate the ranking above. Adopt:
+
+1. **Deterrence sizing for MEV, not just capture.** Set the surge/capture rate η* = min{1, (gas + builder
+   bribe)/E} so a sandwich becomes zero-EV → the attacker doesn't attack. Better than racing the bot for the
+   value: it protects our trader *and* stops the leak. Fold into the LVR/auction lever.
+2. **Quote-asset, in-swap fee capture with ZERO token accumulation.** Take the cut in USDC directly from swap
+   output via `afterSwap` delta modification — never hold/dump the volatile token. This is the mechanically
+   correct fix for exactly our JIT's dump-back sin; our dynamic-fee lever must use this pattern (their
+   "zero sell pressure" Thm 3.2). Their whole "death spiral" thesis = accumulate-and-dump crashes price =
+   the lesson our thin-pool JIT test taught us, formalized.
+3. **Elasticity-based fee tiering.** Revenue R=fV(f) is maximized at demand elasticity ε=1 → charge MORE where
+   demand is inelastic (launch / low-cap / FOMO), LESS where arbitrage-sensitive. This is the economic
+   justification for our surge fee on thin pools and maps onto the pool-tiering table. (Their tiers: <$100K up
+   to 30% … >$1M 1–5% — but note 30% would get routed around by aggregators; treat as an upper caricature.)
+4. **TWAP z-score sandwich detection in `beforeSwap`:** flag when `|P_spot − P_twap|/σ > 2.5` AND ≥2
+   opposite-direction swaps in the block. A concrete selective-firing heuristic for the keeper.
+5. **Emit the Uniswap Foundation standard hook events** (`HookSwap`, `HookFee`, `HookModifyLiquidity`,
+   `HookBonus`) → free indexer/explorer interop (v4.xyz, Envio), zero custom adapters.
+6. **`@openzeppelin/uniswap-hooks` `BaseHook` now exists** — our older note "BaseHook doesn't exist, use IHooks
+   directly" is stale; an OZ-audited base is available to inherit. **Verify before relying on it.**
+
+Honest read: it's a fundraising whitepaper ($40M FDV) — "theorems" are dressed-up algebra, empirics are cited
+literature not their own data, and their "MEV capture" is really detect-suspicious-swap-and-charge-a-high-fee
+(incidence can land on a legitimate volatile-market trader) = a volatility surge fee, i.e. our lever #2, NOT
+true LVR recapture. Their `PriceImpactHook` = the `MWSlippageCaptureHook` idea, and they too frame it honestly
+as an *additional fee*, not "reclaimed slippage." Where we're ahead: the treasury/tranche + card-settlement
+layer routing captured value into spendable senior USDC — they just split fees to recipient wallets.
