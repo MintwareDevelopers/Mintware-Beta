@@ -58,9 +58,11 @@ Branch strategy:
 
 ## Feature Flags
 
-All vault pages gated on `NEXT_PUBLIC_PHASE2_ENABLED`:
-- `/vaults`, `/vault/[id]`, `/vault/create` → redirect to `/` if not set
-- All Phase 2 contract reads gated on `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS` being set
+Real gate is **`NEXT_PUBLIC_VAULTS_LOCKED`** (`PHASE2_ENABLED` was removed — see
+[`deployments.md`](deployments.md)). Semantics are **inverted**: set it `true` to **hide** the vault
+pages behind "coming soon"; unset/false shows them.
+- Contract reads gated on `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS` being set.
+- (Canonical public-flag list is generated in [`../STATE.md`](../STATE.md).)
 
 ## Scripts
 

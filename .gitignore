@@ -37,7 +37,10 @@ next-env.d.ts
 /hardhat-cache
 /deployments
 # Private reference files
-WEB3.md
+# Root-anchored: a personal WEB3.md scratch file at repo root. Unanchored "WEB3.md"
+# also swallowed .claude/rules/web3.md on case-insensitive filesystems (macOS) — the
+# reason that rule file silently vanished. Keep this anchored to root only.
+/WEB3.md
 .claude/settings.local.json
 
 # Foundry compiled artifacts
