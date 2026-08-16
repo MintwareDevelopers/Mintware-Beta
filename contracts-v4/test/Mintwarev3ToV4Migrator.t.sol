@@ -269,6 +269,51 @@ contract Mintwarev3ToV4MigratorTest is Test {
         migrator.migrate(_params(id, true, 0, 0));
     }
 
+    /// AUDIT (griefing guard): a third party's depositFor must NOT extend a victim's lock or reset their
+    /// hold/penalty clock. Dave locks into Core; an attacker dust-deposits to Dave in the same tier; Dave's
+    /// depositedAt + lockedUntil are unchanged.
+    function test_depositFor_cannot_grief_recipient_lock() public {
+        address dave = makeAddr("dave");
+        token0.mint(dave, 100_000e18);
+        token1.mint(dave, 100_000e18);
+        vm.startPrank(dave);
+        token0.approve(address(vault), type(uint256).max);
+        token1.approve(address(vault), type(uint256).max);
+        vault.deposit(50_000e18, 50_000e18, 0, LockTier.Core);
+        vm.stopPrank();
+        (uint256 dep0, uint256 until0, , ) = vault.locks(dave);
+
+        vm.warp(block.timestamp + 10 days);
+        address attacker = makeAddr("attacker");
+        token0.mint(attacker, 1_000e18);
+        token1.mint(attacker, 1_000e18);
+        vm.startPrank(attacker);
+        token0.approve(address(vault), type(uint256).max);
+        token1.approve(address(vault), type(uint256).max);
+        vault.depositFor(dave, 100e18, 100e18, 0, LockTier.Core);
+        vm.stopPrank();
+
+        (uint256 dep1, uint256 until1, , ) = vault.locks(dave);
+        assertEq(dep1, dep0, "attacker did NOT reset dave's depositedAt");
+        assertEq(until1, until0, "attacker did NOT extend dave's lockedUntil");
+    }
+
+    /// AUDIT (griefing guard): a third party cannot lock a FRESH recipient's capital — depositFor forces
+    /// Flex, ignoring the caller-supplied locked tier.
+    function test_depositFor_fresh_recipient_forced_flex() public {
+        address carol = makeAddr("carol");
+        token0.mint(address(this), 1_000e18);
+        token1.mint(address(this), 1_000e18);
+        token0.approve(address(vault), type(uint256).max);
+        token1.approve(address(vault), type(uint256).max);
+        vault.depositFor(carol, 500e18, 500e18, 0, LockTier.Core); // caller asks for Core...
+
+        (, uint256 until, LockTier tier, bool init) = vault.locks(carol);
+        assertTrue(init, "lock initialized");
+        assertTrue(tier == LockTier.Flex, "...but a fresh third-party recipient is forced to Flex");
+        assertEq(until, block.timestamp, "Flex => no lock");
+    }
+
     /// depositFor credits the recipient, not the paying router — the core new vault primitive.
     function test_depositFor_credits_recipient_not_payer() public {
         // Router-less direct check: this contract pays, bob receives.

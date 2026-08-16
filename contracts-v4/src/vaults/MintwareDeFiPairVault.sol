@@ -469,7 +469,7 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         shares[recipient] += minted;
         totalLiquidity    += uint128(minted);
         positionLiquidity += liquidity;
-        _recordLock(recipient, tier);
+        _recordLock(recipient, tier, payer == recipient);
 
         // Reset fee debt to current accumulator for the new (larger) balance.
         fee0Debt[recipient] = (shares[recipient] * accFee0PerShare) / ACC_PRECISION;
@@ -1200,19 +1200,29 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     // Lock / penalty
     // ─────────────────────────────────────────────────────────────────────────
 
-    function _recordLock(address owner_, LockTier tier) internal {
+    /// @param selfDeposit true when the payer == recipient (`deposit`). When false (a third-party
+    ///        `depositFor`), the recipient's lock must NOT be mutated adversely: an existing position's
+    ///        lock is left untouched (no extend, no `depositedAt`/hold/penalty-clock reset), and a fresh
+    ///        recipient can only ever be given an UNLOCKED (Flex) position — never locked capital on their
+    ///        behalf. AUDIT (pre-audit review): closes a griefing vector where anyone could re-lock a
+    ///        victim's position (extend to full tier duration) or reset their 24h hold + penalty clock by
+    ///        depositing dust to them.
+    function _recordLock(address owner_, LockTier tier, bool selfDeposit) internal {
         LockInfo storage info = locks[owner_];
-        uint256 lockedUntil = block.timestamp + _lockDuration(tier);
         if (info.initialized && shares[owner_] > 0) {
-            // Same-tier top-ups allowed; tier changes blocked while a balance exists.
+            // Existing position — tier changes are always blocked while a balance exists.
             if (info.tier != tier) revert LockTierChangeNotAllowed();
-            if (info.lockedUntil > lockedUntil) lockedUntil = info.lockedUntil;
+            if (!selfDeposit) return; // third-party top-up: leave the lock exactly as-is (griefing guard)
+            uint256 lockedUntil = block.timestamp + _lockDuration(tier);
+            if (info.lockedUntil > lockedUntil) lockedUntil = info.lockedUntil; // never shorten
             info.lockedUntil = lockedUntil;
             info.depositedAt = block.timestamp;
         } else {
-            info.tier        = tier;
+            // Fresh position — a third party can only create an UNLOCKED (Flex) position for someone else.
+            LockTier eff = selfDeposit ? tier : LockTier.Flex;
+            info.tier        = eff;
             info.depositedAt = block.timestamp;
-            info.lockedUntil = lockedUntil;
+            info.lockedUntil = block.timestamp + _lockDuration(eff);
             info.initialized = true;
         }
     }

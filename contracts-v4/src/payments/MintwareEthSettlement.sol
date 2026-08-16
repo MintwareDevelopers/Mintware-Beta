@@ -78,6 +78,12 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     ///         (pre-first-swap fallback only; a live pool's hook is always ready).
     IOracleTickSource public oracleSource;
 
+    /// @notice AUDIT (pre-audit review): when true (the default), a settlement REVERTS if the oracle isn't
+    ///         ready, rather than falling through to an unbounded (sandwichable) swap that would lean
+    ///         entirely on the relayer's `minUsdcOut`. Production settlement is therefore ALWAYS bounded to
+    ///         the truncated-oracle band. Owner may disable only for a pre-oracle bootstrap/testnet.
+    bool public requireReadyOracle = true;
+
     /// @notice The settlement role — the relayer that batches settling holds and triggers the swap.
     address public relayer;
 
@@ -99,6 +105,7 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     event RelayerSet(address indexed relayer);
     event OracleSourceSet(address indexed source);
     event BandSet(int24 bandTicks);
+    event RequireReadyOracleSet(bool required);
     event JuniorTopUpCapSet(uint256 cap);
     event WethBackingFunded(address indexed from, uint256 amount, uint256 total);
     event WethBackingWithdrawn(address indexed to, uint256 amount, uint256 total);
@@ -113,6 +120,7 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     error OnlyPoolManager();
     error InsufficientWethBacking();
     error SettlementSlippageExceeded(uint256 produced, uint256 required);
+    error OracleNotReady();
 
     modifier onlyRelayer() {
         if (msg.sender != relayer) revert OnlyRelayer();
@@ -173,6 +181,12 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         if (band <= 0) revert ZeroAmount();
         bandTicks = band;
         emit BandSet(band);
+    }
+
+    /// @notice Toggle the fail-closed require-ready-oracle guard. Keep TRUE in production.
+    function setRequireReadyOracle(bool required) external onlyOwner {
+        requireReadyOracle = required;
+        emit RequireReadyOracleSet(required);
     }
 
     function setJuniorTopUpCapPerCall(uint256 cap) external onlyOwner {
@@ -244,6 +258,12 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     {
         if (totalUsdc == 0) revert ZeroAmount();
         if (rail == address(0)) revert ZeroAddress();
+
+        // Fail closed: never fire an UNBOUNDED settlement swap in production — require the oracle band.
+        if (requireReadyOracle) {
+            (, bool ready) = _oracle();
+            if (!ready) revert OracleNotReady();
+        }
 
         uint256 usdcBefore = usdc.balanceOf(address(this));
         uint256 wethBefore = weth.balanceOf(address(this));

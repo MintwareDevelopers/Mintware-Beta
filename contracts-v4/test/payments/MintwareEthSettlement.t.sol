@@ -207,6 +207,23 @@ contract MintwareEthSettlementTest is Test {
         assertEq(usdc.balanceOf(rail), 0, "rail unpaid");
     }
 
+    /// AUDIT: by default a settlement REVERTS when the oracle isn't ready (never an unbounded swap).
+    function test_RevertsWhenOracleNotReady_ThenOwnerCanBootstrap() public {
+        _fundBacking(1_000e18);
+        oracle.set(0, false); // oracle present but NOT ready
+
+        vm.prank(relayer);
+        vm.expectRevert(MintwareEthSettlement.OracleNotReady.selector);
+        settle.batchSettleEth(100e18, 0, rail);
+
+        // Owner may disable the guard for a pre-oracle bootstrap; then it proceeds (min-out bounded).
+        vm.prank(owner);
+        settle.setRequireReadyOracle(false);
+        vm.prank(relayer);
+        settle.batchSettleEth(100e18, 95e18, rail);
+        assertEq(usdc.balanceOf(rail), 100e18, "settles once the guard is disabled");
+    }
+
     /// Only the relayer can settle.
     function test_OnlyRelayer() public {
         _fundBacking(1_000e18);
