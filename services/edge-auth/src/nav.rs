@@ -22,6 +22,24 @@ pub enum VaultCollateral {
     Eth { price_usd_6dp: u128, haircut_bps: u16, price_observed_at_secs: u64 },
 }
 
+impl VaultCollateral {
+    /// Build the ETH variant with a MODEL-derived haircut (`crate::haircut::var_haircut_bps`) rather than
+    /// a magic constant — the risk gate `nav.rs` refers to. `price_usd_6dp` + `price_observed_at_secs`
+    /// come from the oracle push; `params` are the VaR inputs (config). This is how the reader/refresher
+    /// turns a fetched ETH/USD price into a staleness-guarded, VaR-haircut collateral snapshot.
+    pub fn eth_from_model(
+        price_usd_6dp: u128,
+        price_observed_at_secs: u64,
+        params: crate::haircut::HaircutParams,
+    ) -> Self {
+        VaultCollateral::Eth {
+            price_usd_6dp,
+            haircut_bps: crate::haircut::var_haircut_bps(params),
+            price_observed_at_secs,
+        }
+    }
+}
+
 /// A point-in-time view of the vault, refreshed from chain on an interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NavSnapshot {
@@ -110,6 +128,29 @@ mod tests {
         let before = usdc_nav(1_000_000_000, 1_000_000_000).equity(500_000_000);
         let after = usdc_nav(1_100_000_000, 1_000_000_000).equity(500_000_000);
         assert!(after > before);
+    }
+
+    #[test]
+    fn eth_from_model_flows_var_haircut_into_equity() {
+        // The MODEL haircut (~73.68% for the ETH defaults) — not a magic constant — reaches `equity`.
+        let two_eth = 2_000_000_000_000_000_000u128; // 2e18
+        let collateral =
+            VaultCollateral::eth_from_model(2_000_000_000, 1_000, crate::haircut::HaircutParams::ETH_DEFAULT);
+        let VaultCollateral::Eth { haircut_bps, .. } = collateral else { panic!("expected Eth") };
+        assert!((7_300..=7_450).contains(&haircut_bps), "model haircut = {haircut_bps} bps");
+
+        let n = NavSnapshot {
+            total_assets: two_eth,
+            total_shares: two_eth,
+            virtual_offset: 1_000,
+            idle_buffer: 0,
+            observed_at_secs: 1_000,
+            collateral,
+        };
+        // gross = 2 ETH × $2,000 = $4,000 (6dp); equity = gross × γ, rounded down.
+        let usd = n.equity(two_eth);
+        let expected = 4_000_000_000u128 * haircut_bps as u128 / 10_000;
+        assert!(usd.abs_diff(expected) <= 2, "equity {usd} vs expected {expected}");
     }
 
     #[test]

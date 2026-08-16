@@ -9,6 +9,7 @@
 //! on-chain `MintwarePaymentGateway`, driven later by the relayer.
 
 pub mod chain;
+pub mod haircut;
 pub mod ledger;
 pub mod nav;
 pub mod redis_lua;
@@ -21,6 +22,7 @@ pub mod types;
 pub mod webhook;
 
 pub use ledger::{authorize, available, Account, Decision, Decline, Global};
+pub use haircut::{var_haircut_bps, HaircutParams};
 pub use nav::{NavSnapshot, VaultCollateral};
 pub use store::{AuthOutcome, Hold, HoldStatus, MemStore};
 
