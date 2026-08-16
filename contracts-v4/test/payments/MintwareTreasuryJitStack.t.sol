@@ -72,7 +72,7 @@ contract MintwareTreasuryJitStackTest is Test {
         address predictedVault = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         (address hookAddr, bytes32 salt) =
-            HookMiner.find(address(this), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, args);
+            HookMiner.find(address(this), uint160(0x20C8), type(MintwareTreasuryJitHook).creationCode, args);
         hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         require(address(hook) == hookAddr, "hook addr");
 

@@ -20,6 +20,8 @@ import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiqui
 import {HookMiner}                 from "../../src/lib/HookMiner.sol";
 import {MintwareTreasuryVault}     from "../../src/payments/MintwareTreasuryVault.sol";
 import {MintwareTreasuryJitHook}   from "../../src/payments/MintwareTreasuryJitHook.sol";
+import {MWAmAuction}               from "../../src/hooks/MWAmAuction.sol";
+import {AmParams}                  from "../../src/hooks/MWAmAuctionLib.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
@@ -48,6 +50,10 @@ contract MintwareTreasuryJitHookTest is Test {
     address internal teamAddr = makeAddr("team");
     address internal user     = makeAddr("user");
     address internal trader   = makeAddr("trader");
+    address internal mgr      = makeAddr("mgr"); // am-AMM manager (Phase 3)
+
+    MWAmAuction internal auction;
+    uint24 internal constant MGR_FEE_PIPS = 5_000; // 0.5% manager-set fee
 
     uint160 internal constant INIT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
     int24   internal constant SPACING = 60;
@@ -76,7 +82,7 @@ contract MintwareTreasuryJitHookTest is Test {
         // placeholder-hooks key is fine for the initcode; the pool + hook agree on the real address.
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), address(vault), address(this));
         (address hookAddr, bytes32 salt) =
-            HookMiner.find(address(this), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, args);
+            HookMiner.find(address(this), uint160(0x20C8), type(MintwareTreasuryJitHook).creationCode, args);
         hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), address(vault), address(this));
         require(address(hook) == hookAddr, "hook addr");
 
@@ -413,5 +419,83 @@ contract MintwareTreasuryJitHookTest is Test {
         hook.setMevTax(50, 50_000);
         vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
         hook.setMevTax(50, 1_000_001);
+    }
+
+    // ── am-AMM enrollment (YPN MEV engine, Phase 3) ─────────────────────────────────────────────
+
+    /// Deploy + wire the auction (hook = coordinator), enroll the canonical pool with USDC rent, and set
+    /// the vault as the rent sink. Owner is `this` throughout this suite.
+    function _enrollAmAmm() internal {
+        auction = new MWAmAuction(address(this));
+        auction.setCoordinator(address(hook));
+        hook.setAuction(address(auction));
+        hook.setAmAmmEnabled(true);
+        auction.configurePool(key.toId(), address(vault), AmParams({
+            enabled: true, bidToken: address(usdc), feeMaxPips: 30_000, defaultFeePips: 3000,
+            minRent: 100, K: 10, minBidMultBps: 11_000
+        }));
+        vault.setRentFunder(address(auction)); // vault owner = this here
+    }
+
+    /// Seat `mgr` as the auction manager: bid USDC rent (deposit = rent·K), then roll past K so the next
+    /// swap's `poke` promotes them.
+    function _seatManager() internal {
+        usdc.mint(mgr, 1_000_000 * ONE);
+        vm.startPrank(mgr);
+        usdc.approve(address(auction), type(uint256).max);
+        auction.bid(key.toId(), MGR_FEE_PIPS, 100, 1000); // rent 100, deposit 1000 = rent*K
+        vm.stopPrank();
+        vm.roll(block.number + 11); // past K → next poke promotes mgr
+    }
+
+    /// A managed swap: the manager skims the fee, the swap still settles (beforeSwapReturnDelta nets zero),
+    /// and JIT is SKIPPED (am-AMM replaces it on enrolled pools).
+    function test_amAmm_managedSwap_skimsToManager_andSkipsJit() public {
+        _enrollAmAmm();
+        _seatManager();
+
+        uint256 teamOwedBefore = auction.owed(mgr, address(team));
+        uint256 outBefore = usdc.balanceOf(trader);
+
+        // Sell team → USDC (the JIT-triggering direction), exact input.
+        uint256 amtIn = 10_000 * ONE;
+        team.mint(trader, amtIn);
+        vm.startPrank(trader);
+        team.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, _sellTeamZeroForOne(), amtIn);
+        vm.stopPrank();
+
+        assertGt(usdc.balanceOf(trader), outBefore, "managed swap did not settle (delta accounting broke)");
+        assertEq(vault.jitBorrowed(), 0, "JIT fired on an am-AMM-enrolled pool (should be replaced)");
+        assertGt(auction.owed(mgr, address(team)) - teamOwedBefore, 0, "manager did not skim the fee");
+    }
+
+    /// An unmanaged swap on an enrolled pool falls back to the deviation dynamic fee — no skim, still
+    /// settles, JIT still skipped.
+    function test_amAmm_unmanagedSwap_dynamicFeeFallback() public {
+        _enrollAmAmm(); // no manager seated → poke returns mgr == 0
+
+        uint256 amtIn = 10_000 * ONE;
+        usdc.mint(trader, amtIn);
+        uint256 teamBefore = team.balanceOf(trader);
+        vm.startPrank(trader);
+        usdc.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, !_sellTeamZeroForOne(), amtIn); // buy team (usdc in)
+        vm.stopPrank();
+
+        assertGt(team.balanceOf(trader), teamBefore, "unmanaged swap did not settle");
+        assertEq(auction.owed(mgr, address(usdc)), 0, "skim occurred with no manager");
+        assertEq(vault.jitBorrowed(), 0, "JIT fired on enrolled pool (unmanaged)");
+    }
+
+    /// Enrollment is owner-gated.
+    function test_amAmm_enrollment_ownerGated() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        hook.setAmAmmEnabled(true);
+
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        hook.setAuction(address(1));
     }
 }

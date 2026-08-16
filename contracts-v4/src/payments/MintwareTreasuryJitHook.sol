@@ -8,7 +8,7 @@ import {PoolKey}                from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary}  from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency}               from "@uniswap/v4-core/src/types/Currency.sol";
 import {BalanceDelta}           from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
 import {ModifyLiquidityParams, SwapParams}       from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {Hooks}                  from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {TickMath}               from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -28,6 +28,14 @@ interface IJitVault {
     function settleJitReturn(uint256 usdcReturned) external;
 }
 
+/// @dev Minimal view of MWAmAuction the swap hot path needs (Phase 3). The hook is the auction's
+///      coordinator: it pokes the auction each swap (advancing rent/promotion) and records the manager's
+///      skimmed fee. Mirrors `MWHookCoordinator`'s `IMWAmAuction`.
+interface IMWAmAuction {
+    function poke(PoolId id) external returns (address manager, uint24 fee);
+    function recordManagerFee(PoolId id, address token, uint256 amount) external;
+}
+
 /// @title  MintwareTreasuryJitHook
 /// @notice The real Uniswap-V4 JIT hook for the treasury-anchored ULV (#5, option C). On a swap that
 ///         BUYS USDC (team→USDC), it borrows a bounded slice of senior idle USDC from the vault
@@ -42,8 +50,10 @@ interface IJitVault {
 ///         `sweepJit()` (post-settlement) redeems the claims, swaps team→USDC, and settles with the vault.
 ///         Between the two phases the vault's `jitBorrowed` stays outstanding at par (senior NAV held).
 ///
-/// @dev    Single pool / single vault. Only `beforeSwap` + `afterSwap` are permissioned (address flags
-///         0xC0); the module's full-range liquidity (salt 0) and the JIT position (JIT_SALT) coexist in
+/// @dev    Single pool / single vault. Permissioned callbacks: `beforeInitialize` + `beforeSwap` +
+///         `afterSwap` + `beforeSwapReturnDelta` (address flags 0x20C8 — the last bit added in Phase 3 for
+///         the am-AMM manager skim); the module's full-range liquidity (salt 0) and the JIT position
+///         (JIT_SALT) coexist in
 ///         the pool without any liquidity-callback. V4 auto-skips these callbacks for the hook's OWN swap
 ///         (`msg.sender == self`), so the sweep's team→USDC swap needs no reentrancy guard.
 contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
@@ -134,6 +144,15 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     uint256 public mevTaxK;                     // pips of fee per gwei of priority fee (0 ⇒ tax OFF, default)
     uint24  public mevTaxCapPips = 50_000;      // max tax contribution (5%); bounded ≤ MAX_LP_FEE. Cosmetic until k>0.
 
+    // ── am-AMM enrollment (YPN MEV engine — Phase 3, blue-chip/deep pools only) ──────────────────
+    /// @notice When enrolled, the canonical pool runs the am-AMM auction INSTEAD of the JIT + dynamic-fee
+    ///         levers (they don't stack — the auction's manager sets the fee and skims it; unmanaged swaps
+    ///         fall back to the deviation fee to recapture LVR). The hook is the auction's coordinator. This
+    ///         is an owner-gated, blue-chip-only mode (am-AMM's rent market stalls on thin pools). OFF by
+    ///         default; enabled via `setAuction` + `setAmAmmEnabled`. The `MWOracleGuard` breaker stays on.
+    address public auction;        // the MWAmAuction (owner-set); this hook is its coordinator
+    bool    public amAmmEnabled;   // false ⇒ JIT + dynamic fee (Phases 1–2); true ⇒ am-AMM auction
+
     // ── per-swap open state (0 between swaps) ──────────────────────────────────
     uint128 private jitLiquidity;
     int24   private jitLower;
@@ -158,11 +177,15 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     event SurgeParamsSet(uint24 maxSurgeFeePips, uint256 halfLifeSecs);
     event SurgeArmed(uint32 ts);
     event MevTaxSet(uint256 k, uint24 capPips);
+    event AuctionSet(address indexed auction);
+    event AmAmmEnabledSet(bool enabled);
 
     error OnlyPoolManager();
     error UnauthorizedInitializer();
     error FeeParam();
     error NotArmer();
+    error FeeTooHigh();
+    error ExactOutputNotSupported();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(poolManager)) revert OnlyPoolManager();
@@ -200,7 +223,8 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         _oracle.maxTickMovePerBlock = 200;
         _oracle.maxCatchupBlocks    = 30;
 
-        // Address must carry exactly the beforeSwap|afterSwap permission bits (mined CREATE2).
+        // Address must carry exactly the beforeInitialize|beforeSwap|afterSwap|beforeSwapReturnDelta
+        // permission bits (0x20C8, mined CREATE2).
         Hooks.validateHookPermissions(
             IHooks(address(this)),
             Hooks.Permissions({
@@ -209,7 +233,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
                 beforeRemoveLiquidity: false, afterRemoveLiquidity: false,
                 beforeSwap: true, afterSwap: true,
                 beforeDonate: false, afterDonate: false,
-                beforeSwapReturnDelta: false, afterSwapReturnDelta: false,
+                beforeSwapReturnDelta: true, afterSwapReturnDelta: false, // Phase 3: am-AMM manager skim
                 afterAddLiquidityReturnDelta: false, afterRemoveLiquidityReturnDelta: false
             })
         );
@@ -299,6 +323,16 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         emit MevTaxSet(k, capPips);
     }
 
+    // ── am-AMM enrollment (Phase 3, owner-gated) ─────────────────────────────────────────────────
+    /// @notice Wire (or clear) the MWAmAuction this hook coordinates. Set BEFORE enabling am-AMM; the
+    ///         owner must also make this hook the auction's coordinator (`auction.setCoordinator`) and
+    ///         `configurePool` the canonical pool with `bidToken = USDC` (so rent credits the senior at par).
+    function setAuction(address a) external onlyOwner { auction = a; emit AuctionSet(a); }
+    /// @notice Enroll/unenroll the canonical pool in am-AMM. When true the auction REPLACES the JIT +
+    ///         dynamic-fee levers. Blue-chip/deep pools only (owner's responsibility — am-AMM stalls on thin
+    ///         pools). Requires `auction` set; a no-op guard in `beforeSwap` keeps a misconfig from bricking.
+    function setAmAmmEnabled(bool enabled) external onlyOwner { amAmmEnabled = enabled; emit AmAmmEnabledSet(enabled); }
+
     // ── IHooks: the two active callbacks ────────────────────────────────────────
 
     /// @notice On a team→USDC swap (output = USDC), borrow a bounded slice + open a tight single-sided
@@ -310,6 +344,12 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         // this hook no-ops (never reverts — a revert would brick that pool for its users).
         if (PoolId.unwrap(key.toId()) != PoolId.unwrap(canonicalPoolId)) {
             return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        }
+        // Phase 3: on an am-AMM-enrolled pool the auction REPLACES the JIT + dynamic-fee levers — the
+        // manager sets/skims the fee (unmanaged swaps fall back to the deviation fee). Dispatch and return
+        // before any JIT borrow. Guarded on `auction != 0` so a half-configured enable can't brick swaps.
+        if (amAmmEnabled && auction != address(0)) {
+            return _beforeSwapAmAmm(key, params);
         }
         bool usdcIsOutput = params.zeroForOne ? !usdcIsCurrency0 : usdcIsCurrency0;
         uint256 mag = params.amountSpecified < 0
@@ -358,6 +398,43 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
             fee = total > LPFeeLibrary.MAX_LP_FEE ? uint24(LPFeeLibrary.MAX_LP_FEE) : uint24(total);
         }
         return fee | LPFeeLibrary.OVERRIDE_FEE_FLAG;
+    }
+
+    /// @notice am-AMM swap path (Phase 3), mirroring `MWHookCoordinator._beforeSwapAmAmm`. Pokes the auction
+    ///         (advances rent → pushed to the vault's `fundRent`, and manager promotion) then:
+    ///         • UNMANAGED (no manager): no skim; price by the deviation fee (`_dynamicFee`) so a calm
+    ///           market keeps the floor and a volatile one surges — recapturing LVR as LP fee. Zero delta.
+    ///         • MANAGED: LP fee 0; skim `feePips` of the exact input to the auction and credit the manager
+    ///           (`recordManagerFee`), returning `+fee` on the specified delta so the hook nets zero across
+    ///           the unlock (take books `−fee`) — the trader pays the fee, the manager earns it, LPs get rent.
+    ///         v1 is EXACT-INPUT only (the fee basis is only known for the specified amount here).
+    function _beforeSwapAmAmm(PoolKey calldata key, SwapParams calldata params)
+        private returns (bytes4, BeforeSwapDelta, uint24)
+    {
+        PoolId id = key.toId();
+        (address mgr, uint24 feePips) = IMWAmAuction(auction).poke(id);
+
+        if (mgr == address(0)) {
+            // Unmanaged → LVR-recapturing deviation fee (the Phase 1–2 stack), no skim, zero delta.
+            return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, _dynamicFee(key));
+        }
+
+        // Managed → manager skims; LP fee 0. Guard a fee that could zero/flip the swap.
+        if (feePips >= 1_000_000) revert FeeTooHigh();
+        uint24 zeroLp = uint24(0) | LPFeeLibrary.OVERRIDE_FEE_FLAG;
+        if (params.amountSpecified > 0) revert ExactOutputNotSupported(); // exact-input only
+
+        // Specified currency == the token the trader gave the exact input of (v4-core Hooks convention).
+        Currency spec = (params.amountSpecified < 0 == params.zeroForOne) ? key.currency0 : key.currency1;
+        uint256 amt = uint256(-params.amountSpecified);
+        uint256 fee = (amt * uint256(feePips)) / 1_000_000; // floor; feePips < 1e6 ⇒ fee < amt
+        if (fee == 0) return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, zeroLp);
+
+        // (A) take fee to the auction (books −fee to the hook), (B) credit the manager (push-then-record),
+        // (C) return +fee on the specified delta (booked to the hook in afterSwap) → net zero.
+        poolManager.take(spec, auction, fee);
+        IMWAmAuction(auction).recordManagerFee(id, Currency.unwrap(spec), fee);
+        return (IHooks.beforeSwap.selector, toBeforeSwapDelta(int128(int256(fee)), 0), zeroLp);
     }
 
     /// @notice Close the JIT position and MINT ERC-6909 claims for the owed tokens (can't take physical

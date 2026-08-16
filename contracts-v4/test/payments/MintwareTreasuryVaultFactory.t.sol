@@ -96,7 +96,7 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         });
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), predicted, address(factory));
         (address minedHook, bytes32 salt) =
-            HookMiner.find(address(hookDeployer), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, args);
+            HookMiner.find(address(hookDeployer), uint160(0x20C8), type(MintwareTreasuryJitHook).creationCode, args);
 
         MintwareTreasuryVaultFactory.CreateParams memory p = MintwareTreasuryVaultFactory.CreateParams({
             usdc: address(usdc), teamToken: address(teamTok), adapter: address(adp),

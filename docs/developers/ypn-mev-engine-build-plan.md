@@ -75,8 +75,17 @@ needs only the pool initialized with `DYNAMIC_FEE_FLAG` (a pool-init change, not
 >   input (fuzzed); OFF by default (`mevTaxK=0`), per-chain opt-in via `setMevTax`. ⚠ Base-only / soft
 >   sequencer-trust → bonus, not solvency. Invariants re-proven 7/7 at 256×128k/0 with the FULL lever stack
 >   (base+quad+surge+MEV-tax) live on a standing priority gap.
-> - **Next: Phase 3 — am-AMM for blue-chip/deep pools** (reuse the fuzzed `MWAmAuction` + a tranche-aware
->   `fundRent`; needs a CREATE2 re-mine to `0xAC8`). Diamond LVR still deferred. External audit is the gate.
+> - **Phase 3 — am-AMM SHIPPED** (blue-chip/deep pools; reuses the fuzzed `MWAmAuction`):
+>   - **P3-a** — `MintwareTreasuryVault.fundRent` (IAmAmmRentSink): USDC rent routed exactly like fees
+>     (100%-senior during lock, else 60/30/10), revert-minimal on the swap path, price-free senior preserved.
+>     Invariants 7/7 with rent flowing.
+>   - **P3-b** — the JIT hook re-mined `0x20C0 → 0x20C8` (`beforeSwapReturnDelta`); `beforeSwap` gains an
+>     enrolled-pool branch mirroring `MWHookCoordinator._beforeSwapAmAmm` (poke → manager skim `take`+
+>     `recordManagerFee`+`+fee` delta, else deviation-fee fallback), REPLACING JIT + dynamic fee on enrolled
+>     pools. Owner-gated `setAuction`/`setAmAmmEnabled`, off by default, blue-chip only. Factory/scripts/tests
+>     flag ripple done; am-AMM integration tests (managed skim + settle + JIT-skip, unmanaged fallback,
+>     gating) green.
+> - **Diamond-style LVR still deferred.** External audit is the gate before any real value.
 - **Formula (Bunni v2 two-component, verified from source — oracle-free):**
   - Surge (floor): `surge = 1e6 · 2^(−Δt/halfLife)` — starts 100%, halves every `halfLife`; **triggered** on our
     LP rebalance / JIT reposition / backing-NAV move / idle-gap autostart. The anti-sandwich / anti-stale clamp.

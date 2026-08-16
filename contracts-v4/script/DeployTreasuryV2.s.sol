@@ -46,7 +46,7 @@ import {LPFeeLibrary}             from "@uniswap/v4-core/src/libraries/LPFeeLibr
 contract DeployTreasuryV2 is Script {
     uint160 constant DEFAULT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
     address constant C2_FACTORY = 0x4e59b44847b379578588920cA78FbF26c0B4956C; // deterministic CREATE2 factory
-    uint160 constant JIT_HOOK_FLAGS = 0x20C0; // beforeInitialize | beforeSwap | afterSwap
+    uint160 constant JIT_HOOK_FLAGS = 0x20C8; // beforeInitialize | beforeSwap | afterSwap
 
     function run() external {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
