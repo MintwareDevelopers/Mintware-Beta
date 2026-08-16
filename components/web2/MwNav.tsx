@@ -42,7 +42,6 @@ export function MwNav() {
     { href: '/app/swap', label: 'Swap' },
     { href: '/app/vaults', label: 'Vaults' },
     { href: '/app/leaderboard', label: 'Leaderboard' },
-    { href: '/app/profile', label: 'Profile' },
   ]
 
   return (
