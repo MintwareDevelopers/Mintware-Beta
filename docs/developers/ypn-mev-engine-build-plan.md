@@ -57,6 +57,16 @@ YPN-specific is the hook wiring + the senior/junior tranche fee/rent accounting.
 The single highest value-per-risk win. Extend `MintwareTreasuryJitHook.beforeSwap` to return a real LP-fee
 override (it already returns the fee slot as `0`). **No new permission bit** — returning `fee | OVERRIDE_FEE_FLAG`
 needs only the pool initialized with `DYNAMIC_FEE_FLAG` (a pool-init change, not a hook-flag change).
+
+> **Status — increments 1 & 2 SHIPPED** (branch `feat/ypn-vault-convergence`, PR #261):
+> - **inc1 (base/deviation fee)** — `_dynamicFee` returns a deviation-scaled `volatilityFee` override
+>   (linear, oracle-free), pool-init flipped to `DYNAMIC_FEE_FLAG` across factory/scripts, old `poolFee`
+>   repurposed as the hook base via `setBaseFeePips`. Commit `64363f4f`.
+> - **inc2 (surge floor)** — `MWDynamicFee.surgeFee` (halving + linear interp, revert-free, fuzzed) taken as
+>   `max(base, surge)`; armed on JIT reposition + owner/vault `armSurge()`; **OFF by default**
+>   (`surgeHalfLifeSecs = 0`), ops-enabled via `setSurgeParams` (bounded `maxPips ≤ MAX_LP_FEE`,
+>   `halfLife ≤ 365d`). Invariants re-proven 7/7 at 256×128k/0 **with the surge live + decaying**.
+> - **Remaining Phase-1:** inc3 = quadratic base refinement (`delta²`, replacing the current linear slope).
 - **Formula (Bunni v2 two-component, verified from source — oracle-free):**
   - Surge (floor): `surge = 1e6 · 2^(−Δt/halfLife)` — starts 100%, halves every `halfLife`; **triggered** on our
     LP rebalance / JIT reposition / backing-NAV move / idle-gap autostart. The anti-sandwich / anti-stale clamp.

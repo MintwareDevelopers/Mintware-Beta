@@ -28,6 +28,33 @@ library MWDynamicFee {
         return uint24(fee);
     }
 
+    /// @notice Time-decaying surge floor: `maxSurgePips · 2^(−elapsed/halfLife)`, computed as an
+    ///         integer-halving with linear interpolation across the current half-life. Starts at the
+    ///         full `maxSurgePips` (elapsed 0) and halves every `halfLife` seconds. Used as an
+    ///         anti-sandwich / anti-stale clamp — a FLOOR the caller takes `max()` with the base fee
+    ///         right after a liquidity reposition / NAV move, decaying back to nothing.
+    /// @dev    Pure + revert-free by construction, so it can sit on the swap path (the Bunni-class bar):
+    ///         `halfLife == 0` (or `maxSurgePips == 0`) returns 0; `halvings >= 24` returns 0 (2^-24 of a
+    ///         ≤1e6-pip value rounds to 0 — fully decayed); and `hi >= lo`, `frac < halfLife` ⇒ the interp
+    ///         never underflows and stays in `[lo, hi] ⊆ [0, maxSurgePips]`. The caller MUST bound
+    ///         `halfLife` (e.g. ≤ 365 days) so `(hi − lo)·frac` cannot overflow — with `hi ≤ 1e6 < 2^20`
+    ///         and `frac < halfLife`, a bounded `halfLife` keeps the product far under 2^256.
+    /// @param maxSurgePips  surge ceiling in pips (caller bounds ≤ MAX_PIPS)
+    /// @param elapsed       seconds since the surge was armed
+    /// @param halfLife      half-life in seconds (0 ⇒ surge disabled ⇒ 0)
+    function surgeFee(uint24 maxSurgePips, uint256 elapsed, uint256 halfLife) internal pure returns (uint24) {
+        if (halfLife == 0 || maxSurgePips == 0) return 0;
+        if (elapsed == 0) return maxSurgePips;
+        uint256 halvings = elapsed / halfLife;
+        if (halvings >= 24) return 0; // fully decayed
+        uint256 hi = uint256(maxSurgePips) >> halvings;
+        uint256 lo = uint256(maxSurgePips) >> (halvings + 1);
+        uint256 frac = elapsed % halfLife;
+        // linear interpolation hi → lo across [0, halfLife): monotone non-increasing, no underflow.
+        uint256 surge = hi - ((hi - lo) * frac) / halfLife;
+        return uint24(surge);
+    }
+
     /// @notice Rate-limit a fee move: clamp `target` to within `maxStep` of `last` (Stage-1.2).
     /// @dev    Prevents a single-block jump from base fee to max fee, which is what lets an MEV
     ///         searcher cleanly front-run a predictable hike / back-run a predictable drop. The

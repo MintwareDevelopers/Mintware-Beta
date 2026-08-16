@@ -105,6 +105,19 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     uint24  private _lastFeePips;             // last override applied (rate-limit anchor)
     uint32  private _lastFeeBlock;            // block of `_lastFeePips`
 
+    // ── surge-floor lever (YPN MEV engine — Phase 1, increment 2) ────────────────────────────────
+    /// @notice A time-decaying fee FLOOR taken as `max(baseCurve, surge)` in `_dynamicFee`. It is ARMED
+    ///         the instant we reposition liquidity (a JIT open) or ops signals a backing-NAV move
+    ///         (`armSurge`), spikes to `maxSurgeFeePips`, and decays over `surgeHalfLifeSecs`
+    ///         (`MWDynamicFee.surgeFee`, ≈ `2^(−Δt/halfLife)`). It is the explicit anti-sandwich / anti-
+    ///         stale clamp: a sandwich's front+back legs sit in the SAME block as our reposition, so both
+    ///         pay the full surge. It only ever RAISES the fee (→ strictly helps senior/junior backing) and
+    ///         is deliberately NOT rate-limited (the rate limiter is for the predictable base curve).
+    ///         OFF by default (`surgeHalfLifeSecs = 0`) — ships dark; ops enables it via `setSurgeParams`.
+    uint24  public maxSurgeFeePips   = 50_000; // surge ceiling (5%); bounded ≤ MAX_LP_FEE. Cosmetic until armed.
+    uint256 public surgeHalfLifeSecs;          // 0 ⇒ surge OFF (default). Set > 0 (≤ 365d) to enable.
+    uint32  private _lastSurgeTs;              // block.timestamp the surge was last armed (0 ⇒ never)
+
     // ── per-swap open state (0 between swaps) ──────────────────────────────────
     uint128 private jitLiquidity;
     int24   private jitLower;
@@ -125,10 +138,13 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     event MaxFeeSet(uint24 maxFeePips);
     event FeeSlopeSet(uint256 slopePipsPerTick);
     event MaxFeeStepSet(uint256 maxFeeStepPerBlock);
+    event SurgeParamsSet(uint24 maxSurgeFeePips, uint256 halfLifeSecs);
+    event SurgeArmed(uint32 ts);
 
     error OnlyPoolManager();
     error UnauthorizedInitializer();
     error FeeParam();
+    error NotArmer();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(poolManager)) revert OnlyPoolManager();
@@ -220,6 +236,33 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         emit MaxFeeStepSet(v);
     }
 
+    // ── surge-floor tuning + arming ──────────────────────────────────────────────────────────────
+    /// @notice Configure the surge floor. `halfLifeSecs == 0` disables it (the default). Bounded so the
+    ///         fee path can never overflow or exceed V4's cap: `maxPips ≤ MAX_LP_FEE` and
+    ///         `halfLifeSecs ≤ 365 days` (real half-lives are seconds–minutes; the bound only guards the
+    ///         `MWDynamicFee.surgeFee` multiplication).
+    function setSurgeParams(uint24 maxPips, uint256 halfLifeSecs) external onlyOwner {
+        if (maxPips > LPFeeLibrary.MAX_LP_FEE || halfLifeSecs > 365 days) revert FeeParam();
+        maxSurgeFeePips  = maxPips;
+        surgeHalfLifeSecs = halfLifeSecs;
+        emit SurgeParamsSet(maxPips, halfLifeSecs);
+    }
+
+    /// @notice Arm the surge floor NOW (spike to `maxSurgeFeePips`, then decay). Gated to the vault (for a
+    ///         backing-NAV move / main-LP reposition) and the owner (ops/keeper). Not attacker-callable, so
+    ///         it can't be used to grief traders with a stuck-high fee. No-op effect while the surge is
+    ///         disabled (`surgeHalfLifeSecs == 0`), but still records the timestamp so enabling it later
+    ///         starts from a fresh arm.
+    function armSurge() external {
+        if (msg.sender != address(vault) && msg.sender != owner()) revert NotArmer();
+        _armSurge();
+    }
+
+    function _armSurge() private {
+        _lastSurgeTs = uint32(block.timestamp);
+        emit SurgeArmed(_lastSurgeTs);
+    }
+
     // ── IHooks: the two active callbacks ────────────────────────────────────────
 
     /// @notice On a team→USDC swap (output = USDC), borrow a bounded slice + open a tight single-sided
@@ -259,6 +302,16 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
             fee = MWDynamicFee.rateLimit(_lastFeePips, fee, step * elapsed);
             _lastFeePips  = fee;
             _lastFeeBlock = uint32(block.number);
+        }
+        // Surge floor (increment 2): take max() with the decaying anti-sandwich spike. Applied AFTER the
+        // rate limiter so the surge itself is never blunted (it is meant to jump instantly); only ever
+        // raises `fee`. Skipped entirely while disabled (halfLife 0) or unarmed — then `fee` is identical
+        // to increment 1. `surge ≤ maxSurgeFeePips ≤ MAX_LP_FEE`, so the OVERRIDE_FEE_FLAG OR stays clean.
+        uint256 hl = surgeHalfLifeSecs;
+        if (hl != 0 && _lastSurgeTs != 0) {
+            uint256 sEl = block.timestamp > _lastSurgeTs ? block.timestamp - _lastSurgeTs : 0;
+            uint24 surge = MWDynamicFee.surgeFee(maxSurgeFeePips, sEl, hl);
+            if (surge > fee) fee = surge;
         }
         return fee | LPFeeLibrary.OVERRIDE_FEE_FLAG;
     }
@@ -380,6 +433,10 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         jitLower = lo;
         jitUpper = hi;
         emit JitOpened(lent, L);
+        // Increment 2: repositioning liquidity arms the anti-sandwich surge (only when enabled, to avoid a
+        // dead SSTORE while it's off). Fires before `_dynamicFee` runs later in this same `beforeSwap`, so
+        // the surge is live for the rest of the block — including any back-run leg of a sandwich.
+        if (surgeHalfLifeSecs != 0) _armSurge();
         (sqrtP); // silence unused
     }
 

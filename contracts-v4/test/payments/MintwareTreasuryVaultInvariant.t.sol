@@ -295,6 +295,12 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
             new MintwareTreasuryJitHook{salt: hookSalt}(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         require(address(hook) == hookAddr, "hook addr");
         hook.setJitThreshold(type(uint256).max); // JIT off — this gate isolates the fee lever
+        // Increment 2: enable + arm the surge floor so every fuzzed `movePrice` swap routes through a LIVE
+        // surge. The `warp` handler decays it (1h–3d/call), so across 128k calls the swaps sample the whole
+        // surge curve (full 5% → base). Proving the 7 tranche invariants hold at every surge level is the
+        // active-surge counterpart to the monotonicity argument (a higher LP fee only adds to backing).
+        hook.setSurgeParams(50_000, 365 days); // 5% ceiling, slow decay so it stays live deep into the run
+        hook.armSurge();
 
         key = PoolKey({
             currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,

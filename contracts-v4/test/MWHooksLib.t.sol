@@ -30,6 +30,9 @@ contract FeeHarness {
     function rl(uint24 last, uint24 target, uint256 step) external pure returns (uint24) {
         return MWDynamicFee.rateLimit(last, target, step);
     }
+    function surge(uint24 maxPips, uint256 elapsed, uint256 halfLife) external pure returns (uint24) {
+        return MWDynamicFee.surgeFee(maxPips, elapsed, halfLife);
+    }
 }
 
 contract MWHooksLibTest is Test {
@@ -114,5 +117,30 @@ contract MWHooksLibTest is Test {
         assertEq(fees.rl(5000, 3000, 100), 4900, "down-move clamped to last - step");
         assertEq(fees.rl(3000, 3200, 500), 3200, "within budget -> exact target");
         assertEq(fees.rl(50, 3000, 100), 150, "small last, up-clamped");
+    }
+
+    // ── surge floor (increment 2) ────────────────────────────────────────────────
+
+    function test_surge_decays_by_halving() public view {
+        assertEq(fees.surge(40_000, 0, 100), 40_000, "t0 = full surge");
+        assertEq(fees.surge(40_000, 100, 100), 20_000, "one half-life = half");
+        assertEq(fees.surge(40_000, 200, 100), 10_000, "two half-lives = quarter");
+        assertEq(fees.surge(40_000, 50, 100), 30_000, "mid half-life = linear interp (40k->20k at 50%)");
+        assertEq(fees.surge(40_000, 100 * 24, 100), 0, ">=24 half-lives = fully decayed");
+        assertEq(fees.surge(40_000, 5, 0), 0, "halfLife 0 = disabled");
+        assertEq(fees.surge(0, 0, 100), 0, "maxPips 0 = 0");
+    }
+
+    /// Pure + revert-free + bounded for any input within the caller's documented bounds
+    /// (maxPips ≤ MAX_LP_FEE, halfLife ≤ 365 days). Monotone non-increasing in elapsed.
+    function testFuzz_surge_bounded_and_monotone(uint24 maxPips, uint256 elapsed, uint256 halfLife) public view {
+        maxPips  = uint24(bound(maxPips, 0, 1_000_000));
+        halfLife = bound(halfLife, 1, 365 days);
+        elapsed  = bound(elapsed, 0, 4_000 days);
+        uint24 s = fees.surge(maxPips, elapsed, halfLife);
+        assertLe(s, maxPips, "surge exceeded its ceiling");
+        // one second later never increases the surge
+        uint24 s2 = fees.surge(maxPips, elapsed + 1, halfLife);
+        assertLe(s2, s, "surge not monotone non-increasing");
     }
 }

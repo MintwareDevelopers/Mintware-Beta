@@ -251,4 +251,96 @@ contract MintwareTreasuryJitHookTest is Test {
         vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
         hook.setMaxFeePips(1_000_001); // above MAX_LP_FEE
     }
+
+    // ── surge floor (YPN MEV engine, Phase 1 increment 2) ───────────────────────────────────────
+
+    /// @dev Sell team for USDC (output = USDC) — the direction that fires JIT `_open`.
+    function _sellTeam(address who, uint256 amtIn) internal {
+        team.mint(who, amtIn);
+        vm.startPrank(who);
+        team.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, _sellTeamZeroForOne(), amtIn);
+        vm.stopPrank();
+    }
+
+    /// OFF by default: arming has no effect on the fee while `surgeHalfLifeSecs == 0` (ships dark).
+    function test_surge_disabledByDefault() public {
+        assertEq(hook.surgeHalfLifeSecs(), 0, "surge should be off by default");
+        hook.armSurge(); // owner arms, but disabled → ignored
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), hook.baseFeePips(), "disabled surge changed the fee");
+    }
+
+    /// Enabled + armed: the fee floors at `maxSurgeFeePips`, halves after one half-life, decays to base.
+    function test_surge_flooredThenDecays() public {
+        hook.setBaseFeePips(3000);
+        hook.setSurgeParams(40_000, 100); // 4% surge, 100s half-life
+        hook.armSurge();
+
+        // t0: full surge floor (base 3000 is well below → surge wins).
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 40_000, "surge not at full floor when armed");
+
+        // One half-life → exactly half (integer halving, frac 0).
+        vm.warp(block.timestamp + 100);
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 20_000, "surge did not halve after one half-life");
+
+        // Fully decayed (>= 24 half-lives) → back to the base floor.
+        vm.warp(block.timestamp + 100 * 24);
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 3000, "surge did not decay back to base");
+    }
+
+    /// The surge is a FLOOR: `max(base, surge)` — a higher base wins, a higher surge wins.
+    function test_surge_isFloorMaxWithBase() public {
+        hook.setBaseFeePips(30_000); // base above the surge ceiling below
+        hook.setSurgeParams(20_000, 100);
+        hook.armSurge();
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 30_000, "higher base should win over lower surge");
+
+        hook.setSurgeParams(45_000, 100); // now surge above base
+        hook.armSurge();
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 45_000, "higher surge should floor above base");
+    }
+
+    /// Arming is gated to the vault (NAV-move signal) and the owner (ops); nobody else.
+    function test_surge_armGating() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(MintwareTreasuryJitHook.NotArmer.selector);
+        hook.armSurge();
+
+        // vault may arm (its NAV-move / reposition seam)
+        vm.prank(address(vault));
+        hook.armSurge();
+
+        // owner may arm
+        hook.armSurge();
+    }
+
+    /// Params are owner-gated and bounded so the fee path can neither exceed MAX_LP_FEE nor overflow.
+    function test_surgeParams_boundedAndOwnerGated() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        hook.setSurgeParams(40_000, 100);
+
+        vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
+        hook.setSurgeParams(1_000_001, 100); // maxPips above MAX_LP_FEE
+
+        vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
+        hook.setSurgeParams(40_000, 366 days); // half-life above the 365d overflow guard
+    }
+
+    /// A JIT reposition auto-arms the surge (the primary anti-sandwich moment). With the base ceiling
+    /// held low, the post-JIT fee reflects the surge floor — proof the reposition armed it.
+    function test_surge_autoArmsOnJitReposition() public {
+        hook.setMaxFeePips(5_000);      // base can never exceed 0.5% (floor stays 3000 ≤ 5000)
+        hook.setSurgeParams(40_000, 100); // 4% surge
+
+        // Before any reposition the surge is unarmed → fee is the base floor.
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 3000, "surge armed before any JIT");
+
+        // A team→USDC swap fires JIT `_open` → auto-arms the surge in the same block.
+        _sellTeam(trader, 2_000 * ONE);
+        assertGt(vault.jitBorrowed(), 0, "precondition: JIT did not fire");
+
+        // Same timestamp → full surge floors the (≤5000) base at 40_000.
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 40_000, "JIT reposition did not arm the surge");
+    }
 }
