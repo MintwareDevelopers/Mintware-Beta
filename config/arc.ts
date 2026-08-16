@@ -25,6 +25,20 @@ export const ARC_TESTNET = {
   cctpMessageTransmitter: '0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275',
 } as const
 
+/**
+ * YPN spend stack — LIVE on Arc testnet (deployed 2026-08-16, verified on-chain; deposit→earn smoke passed
+ * with real Arc USDC). Yield source is a placeholder mock 4626 until Arc's real yield primitive is wired.
+ * Explorer: https://testnet.arcscan.app/address/<addr>
+ */
+export const ARC_TESTNET_DEPLOYMENT = {
+  vault: '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421',
+  gateway: '0x1D075cB38f5c126D9c23f1f91faC0A9C8d135399',
+  adapter: '0xb9FB965Caa7197932b52631e0121Ea54586e2B88',
+  cctpDepositRouter: '0xDB9DB7008cfFb09bD1D943C237f57327383DFc03',
+  yieldSourceMock: '0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE',
+  deployer: '0x9c646C48a302f4725450669f1218d3FDb3e933AD',
+} as const
+
 export interface ArcSettlementConfig {
   chainId: number
   name: string

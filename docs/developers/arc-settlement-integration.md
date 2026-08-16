@@ -4,6 +4,26 @@
 > testnet access.** This is the canonical map for putting YPN's spend side on Arc. The earn side (Uniswap-v4
 > ETH pools) stays on Base; Arc is the USDC settlement + card layer; CCTP bridges them.
 
+## ✅ LIVE on Arc testnet (2026-08-16)
+
+The YPN spend stack is **deployed and verified on Arc testnet** (chain 5042002), running on **real Arc USDC**
++ **real CCTP** contracts. A deposit→earn smoke passed on-chain: 5 USDC flowed deployer → vault → adapter →
+yield source, shares minted, funds idling. Explorer: `https://testnet.arcscan.app/address/<addr>`.
+
+| Contract | Address |
+|---|---|
+| MintwareYieldVault | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` |
+| MintwarePaymentGateway | `0x1D075cB38f5c126D9c23f1f91faC0A9C8d135399` |
+| MintwareERC4626YieldAdapter | `0xb9FB965Caa7197932b52631e0121Ea54586e2B88` |
+| MintwareCctpDepositRouter | `0xDB9DB7008cfFb09bD1D943C237f57327383DFc03` |
+| Yield source (mock 4626, placeholder) | `0x4Deb74E9D50Ebbf9bD883E0A2dcD0a1b4b9Db9BE` |
+| USDC (real Arc testnet) | `0x3600000000000000000000000000000000000000` |
+| CCTP MessageTransmitter (real) | `0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275` |
+
+Wiring verified on-chain: vault↔adapter↔gateway↔router all cross-reference; vault.usdc = real Arc USDC. The
+only placeholder is the yield source (swap in Arc's real primitive when it's live). **Learned:** on Arc the
+native gas balance and the ERC-20 USDC are the SAME unified balance (USDC *is* the gas token).
+
 ## The topology — one clean separation
 
 ```
