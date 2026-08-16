@@ -12,8 +12,12 @@
 > payments suite 126/126): fresh price → full fill no junior draw; manipulated spot (stale oracle → band
 > binds) → junior first-loss backstop pays the rail in full; shortfall beyond the per-call cap or below the
 > `minUsdcOut` floor → revert + state rollback; rail paid EXACTLY `totalUsdc` or reverts (fuzzed); WETH
-> backing conserved. **Remaining (Phases 2–4): relayer batch path, edge idle-buffer wire, external audit —
-> all deploy-gated.** Written 2026-08-16 alongside the multi-collateral work.
+> backing conserved.
+>
+> **Phase 2 also landed (`services/relayer/src/batch.rs`)** — the relayer's batch-settle path: sum settling
+> holds → `totalUsdc`, derive the `minUsdcOut` slippage floor, encode/sign/send `batchSettleEth`. 18 relayer
+> tests green, clippy clean; live dry-run gated on deployment. **Remaining (Phases 3–4): edge idle-buffer
+> wire, external audit — deploy-gated.** Written 2026-08-16 alongside the multi-collateral work.
 
 ## Where it fits
 ```
@@ -107,8 +111,17 @@ recover. The ETH→USDC settlement swap is the SAME shape:
    Forge tests all green as described in the status banner. **Design choices locked here:** batch (decision
    1), exact-output with junior-buffer fallback (decision 3+4a), `minUsdcOut` catastrophe floor before any
    junior draw (decision 4/5), per-call junior cap (open-question 3 → answered: yes, `juniorTopUpCapPerCall`).
-2. Relayer batch-settle path (`services/relayer`): group holds per ETH vault, compute `totalUsdc` +
-   γ-derived `minUsdcOut`, build/sign/send. Extends the existing `settleSpend` calldata core.
+2. ✅ **DONE (2026-08-16).** Relayer batch-settle path — `services/relayer/src/batch.rs`. `BatchSettleParams`
+   (`settlement` addr, `rail`, `Vec<Hold>`, `settlement_slippage_bps`) sums the holds into `totalUsdc` and
+   derives `minUsdcOut = totalUsdc − totalUsdc·slippage_bps/10_000` — the SAME `settlement_slippage_bps`
+   the haircut's γ reserved (settlement-time slippage, tight — not the multi-day auth haircut). Encodes
+   `batchSettleEth(totalUsdc, minUsdcOut, rail)`; `build_and_sign_batch`/`submit_batch_settlement`/
+   `dry_run_batch` reuse the refactored generic `build_and_sign_call`/`dry_run_call` (shared with the
+   `settleSpend` path). Offline-proven: selector matches the contract, min-out math tested (1% → floor 99%,
+   0bps → total, 100% → 0), calldata round-trips, signed batch tx recovers to the relayer + is type-2 to the
+   settlement contract, validate rejects empty/zero-hold/bad-slippage/zero-rail. Gated live dry-run
+   (`tests/live_settlement.rs`, expects `OnlyRelayer()` from a non-relayer `from`) self-skips until the
+   contract is deployed. relayer suite 18 green, clippy `-D warnings` clean.
 3. Wire the edge: an ETH vault's `idle_buffer` becomes "ETH convertible to USDC at the conservative
    price" once this exists (so the edge's Σ-settleable gate counts it) — reconcile with `haircut.rs` γ.
 4. External audit (same gate as the vault stack) before any real value.

@@ -23,7 +23,7 @@ use crate::settle::{SettleParams, SettlementError};
 /// transfer — comfortably under this.
 pub const DEFAULT_SETTLE_GAS_LIMIT: u64 = 350_000;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SubmitError {
     BadKey(String),
     Settlement(SettlementError),
@@ -106,6 +106,33 @@ impl SignedTx {
     }
 }
 
+/// Build + sign an EIP-1559 call to `to` with pre-encoded `input` — the low-level tx assembler both the
+/// `settleSpend` and `batchSettleEth` paths share. Value is always zero (both calls are non-payable).
+/// Callers validate their own calldata BEFORE signing (never sign a call the contract reverts on).
+pub fn build_and_sign_call(
+    key: &RelayerKey,
+    to: Address,
+    input: Vec<u8>,
+    gas: &GasParams,
+) -> Result<SignedTx, SubmitError> {
+    let tx = TxEip1559 {
+        chain_id: gas.chain_id,
+        nonce: gas.nonce,
+        gas_limit: gas.gas_limit,
+        max_fee_per_gas: gas.max_fee_per_gas,
+        max_priority_fee_per_gas: gas.max_priority_fee_per_gas,
+        to: TxKind::Call(to),
+        value: U256::ZERO,
+        input: Bytes::from(input),
+        access_list: Default::default(),
+    };
+    let sig = key.sign_hash(tx.signature_hash())?;
+    let env = alloy_consensus::TxEnvelope::from(tx.into_signed(sig));
+    let hash = *env.tx_hash();
+    let raw = env.encoded_2718();
+    Ok(SignedTx { raw, hash, from: key.address() })
+}
+
 /// Build + sign the settlement tx. Validates the Gateway invariants first (never sign a call the
 /// contract will revert on structurally), then encodes the canonical EIP-1559 envelope.
 pub fn build_and_sign(
@@ -115,22 +142,7 @@ pub fn build_and_sign(
     gas: &GasParams,
 ) -> Result<SignedTx, SubmitError> {
     params.validate().map_err(SubmitError::Settlement)?;
-    let tx = TxEip1559 {
-        chain_id: gas.chain_id,
-        nonce: gas.nonce,
-        gas_limit: gas.gas_limit,
-        max_fee_per_gas: gas.max_fee_per_gas,
-        max_priority_fee_per_gas: gas.max_priority_fee_per_gas,
-        to: TxKind::Call(gateway),
-        value: U256::ZERO,
-        input: Bytes::from(params.calldata()),
-        access_list: Default::default(),
-    };
-    let sig = key.sign_hash(tx.signature_hash())?;
-    let env = alloy_consensus::TxEnvelope::from(tx.into_signed(sig));
-    let hash = *env.tx_hash();
-    let raw = env.encoded_2718();
-    Ok(SignedTx { raw, hash, from: key.address() })
+    build_and_sign_call(key, gateway, params.calldata(), gas)
 }
 
 /// Minimal blocking JSON-RPC client — just the calls the relayer needs (read nonce/fees, dry-run,
@@ -241,9 +253,21 @@ pub fn dry_run(
     params: &SettleParams,
 ) -> Result<DryRun, SubmitError> {
     params.validate().map_err(SubmitError::Settlement)?;
-    let data = format!("0x{}", hex::encode(params.calldata()));
+    dry_run_call(rpc, gateway, from, params.calldata())
+}
+
+/// `eth_call` pre-encoded `input` against `to` from `from`, classifying revert-vs-success. The
+/// call-agnostic core of `dry_run` — the `batchSettleEth` path reuses it to prove dispatch on the
+/// settlement contract. A KNOWN error selector means the calldata dispatched + decoded on-chain.
+pub fn dry_run_call(
+    rpc: &Rpc,
+    to: Address,
+    from: Address,
+    input: Vec<u8>,
+) -> Result<DryRun, SubmitError> {
+    let data = format!("0x{}", hex::encode(input));
     let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "eth_call",
-        "params": [{ "from": format!("{from:?}"), "to": format!("{gateway:?}"), "data": data }, "latest"] });
+        "params": [{ "from": format!("{from:?}"), "to": format!("{to:?}"), "data": data }, "latest"] });
     let resp: serde_json::Value = rpc
         .client
         .post(&rpc.url)
