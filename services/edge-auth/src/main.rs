@@ -9,13 +9,44 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use alloy_primitives::Address;
 use edge_auth::chain::EthReader;
 use edge_auth::nav::NavSnapshot;
-use edge_auth::refresher::run_refresher;
+use edge_auth::refresher::run_refresher_multi;
 use edge_auth::server::{app, AppCtx};
 use edge_auth::signer::EdgeSigner;
 use edge_auth::store::MemStore;
 
 fn env_u64(key: &str, default: u64) -> u64 {
     env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+}
+
+/// Build the EXTRA collateral vaults (multi-collateral portfolios) from env. Currently supports ONE
+/// extra leg: `EDGE_EXTRA_VAULT_ADDRESS` (+ `EDGE_EXTRA_VAULT_ID` label, `EDGE_EXTRA_VAULT_KIND`, and the
+/// collateral knobs `EDGE_EXTRA_COLLATERAL`/`EDGE_EXTRA_PRICE_FEED`/… — the primary's keys, `EDGE_EXTRA_`
+/// prefixed, reusing `CollateralConfig::from_lookup`). Unset → no extras (primary-only). A bad address or
+/// collateral config SKIPS the extra (fail closed) rather than mis-value it.
+fn build_extra_vaults(rpc: &str) -> Vec<(String, EthReader)> {
+    use edge_auth::chain::{CollateralConfig, VaultKind};
+    let addr_str = match env::var("EDGE_EXTRA_VAULT_ADDRESS") {
+        Ok(a) => a,
+        Err(_) => return Vec::new(),
+    };
+    let addr = match addr_str.parse::<Address>() {
+        Ok(a) => a,
+        Err(_) => {
+            eprintln!("edge-auth: EDGE_EXTRA_VAULT_ADDRESS is not a valid address — extra vault SKIPPED");
+            return Vec::new();
+        }
+    };
+    let id = env::var("EDGE_EXTRA_VAULT_ID").unwrap_or_else(|_| addr_str.clone());
+    let kind = VaultKind::from_env_str(&env::var("EDGE_EXTRA_VAULT_KIND").unwrap_or_default());
+    // Remap EDGE_* → EDGE_EXTRA_* so the extra leg has its OWN collateral config (feed, haircut, …).
+    let collateral = match CollateralConfig::from_lookup(|k| env::var(k.replacen("EDGE_", "EDGE_EXTRA_", 1)).ok()) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("edge-auth: bad EDGE_EXTRA_ collateral config ({e}) — extra vault SKIPPED (fail closed)");
+            return Vec::new();
+        }
+    };
+    vec![(id, EthReader::with_kind(rpc.to_string(), addr, kind).with_collateral(collateral))]
 }
 
 /// Build the EDGE_SIGNER from env, if configured. Without it, charges >= $250 decline
@@ -81,9 +112,11 @@ async fn main() {
                 // CLOSED — a misconfigured ETH arm disables the refresher rather than value ETH as USDC.
                 match edge_auth::chain::CollateralConfig::from_lookup(|k| env::var(k).ok()) {
                     Ok(collateral) => {
-                        eprintln!("edge-auth: NAV refresher polling {vault} ({kind:?}, {collateral:?}) every {}s, tracking {} user(s)", interval.as_secs(), users.len());
-                        let reader = EthReader::with_kind(rpc, vault, kind).with_collateral(collateral);
-                        tokio::spawn(run_refresher(store.clone(), reader, users, interval));
+                        let reader = EthReader::with_kind(rpc.clone(), vault, kind).with_collateral(collateral.clone());
+                        // Multi-collateral: additional legs a user's card limit sums over (EDGE_EXTRA_*).
+                        let extras = build_extra_vaults(&rpc);
+                        eprintln!("edge-auth: NAV refresher polling {vault} ({kind:?}, {collateral:?}) + {} extra leg(s) every {}s, tracking {} user(s)", extras.len(), interval.as_secs(), users.len());
+                        tokio::spawn(run_refresher_multi(store.clone(), reader, extras, users, interval));
                     }
                     Err(e) => eprintln!("edge-auth: bad EDGE_COLLATERAL config ({e}) — NAV refresher DISABLED (fail closed)"),
                 }
