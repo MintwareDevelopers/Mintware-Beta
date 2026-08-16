@@ -1,9 +1,19 @@
-# v3 → v4 ULV Instant Liquidity Migration — SPEC (FUTURE / parked)
+# v3 → v4 ULV Instant Liquidity Migration — SPEC + BUILD
 
-> **Status: parked spec, NOT built.** Captured 2026-08-16 alongside the multi-collateral work.
-> A `Mintwarev3ToV4Migrator` router lets a team pull a dormant Uniswap-v3 position and redeploy it
-> into the Mintware v4 ULV in one transaction. **Read the "Caveats before building" section — the
-> reference Solidity in the brief has real bugs; do not build it verbatim.**
+> **Status: BUILT (2026-08-16, mock-NPM layer) — mainnet-fork harness + external audit deferred.**
+> `Mintwarev3ToV4Migrator` (`contracts-v4/src/vaults/Mintwarev3ToV4Migrator.sol`) lets a user pull a
+> dormant Uniswap-v3 position and redeploy it into the Mintware v4 ULV pair vault in one tx, minting the
+> ULV shares straight to the user. All 7 caveats below are RESOLVED in the build (see the mapping in the
+> contract NatSpec). Proven against a REAL v4 pool + a mock v3 NPM in
+> `contracts-v4/test/Mintwarev3ToV4Migrator.t.sol` (5 tests: single-sided unwind→rebalance→deposit with no
+> stuck dust + NFT returned; balanced no-swap path; swap min-out revert; token-pair mismatch revert;
+> `depositFor` credits recipient-not-payer). The pair vault gained an additive `depositFor(recipient,…)`
+> (existing `deposit` refactored to `_deposit(payer, recipient)` — behavior unchanged, all 75 pair-vault
+> tests pass). **Design decision locked: the rebalance swap is sized OFF-CHAIN (caller passes
+> `swapAmountIn`/`minSwapOut`), the router only ENFORCES the min-out** — same split as the ETH-settlement
+> swap. **Deferred: a mainnet-fork Foundry harness against the REAL v3 NPM (needs an archive RPC) + external
+> audit before real value.** The reference Solidity in the original brief had real bugs — the build below is
+> the corrected version.
 
 ## Concept
 ```
