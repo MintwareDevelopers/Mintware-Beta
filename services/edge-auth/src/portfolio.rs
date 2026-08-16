@@ -30,9 +30,10 @@ impl Leg {
     fn equity(&self) -> Usdc {
         self.nav.equity(self.shares)
     }
-    /// USDC this leg can actually settle right now: its vault's idle buffer net of that vault's holds.
+    /// USDC this leg can actually settle right now: its vault's idle buffer (collateral-valued — USDC
+    /// identity, ETH = idle WETH × price × γ the settlement swap can realize) net of that vault's holds.
     fn settleable(&self) -> Usdc {
-        self.nav.idle_buffer.saturating_sub(self.vault_global_holds_usdc)
+        self.nav.settleable_usd().saturating_sub(self.vault_global_holds_usdc)
     }
 }
 
@@ -195,6 +196,25 @@ mod tests {
         // equity is huge, but liquidity = 300 + 200 = $500. $500 approves, $501 declines InsufficientLiquidity.
         assert_eq!(authorize_portfolio(&[l0, l1], &a, 500_000_000, NOW, MAX_AGE), Decision::Approve { hold_usdc: 500_000_000 });
         assert_eq!(authorize_portfolio(&[l0, l1], &a, 500_000_001, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientLiquidity));
+    }
+
+    #[test]
+    fn eth_leg_settleable_is_haircut_converted_not_raw_weth() {
+        // ETH leg with 1 ETH idle (1e18 WETH-native) + ample equity so LIQUIDITY is the binding gate.
+        // Correct settleable = 1 ETH × $3,000 × γ0.70 = $2,100 — NOT the raw 1e18 mis-read as $1e12 USDC.
+        let one_eth = 1_000_000_000_000_000_000u128;
+        let eth = Leg {
+            nav: eth_nav(1_000_000_000_000_000_000_000, one_eth, 3_000_000_000, true), // idle = 1 ETH
+            shares: 1_000_000_000_000_000_000_000, // 1,000 ETH shares → ~$2.1M equity (never the gate)
+            vault_global_holds_usdc: 0,
+        };
+        let a = acct(0, 0, u128::MAX);
+        let legs = [eth];
+        // $2,100 approves; $2,100.000001 declines on the converted settlement liquidity.
+        assert_eq!(authorize_portfolio(&legs, &a, 2_100_000_000, NOW, MAX_AGE), Decision::Approve { hold_usdc: 2_100_000_000 });
+        assert_eq!(authorize_portfolio(&legs, &a, 2_100_000_001, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientLiquidity));
+        // The raw-WETH bug would have (wrongly) approved a $1,000,000 charge — prove it now DECLINES.
+        assert_eq!(authorize_portfolio(&legs, &a, 1_000_000_000_000, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientLiquidity));
     }
 
     #[test]

@@ -67,7 +67,9 @@ pub fn available(nav: &NavSnapshot, acct: &Account, global: &Global) -> Usdc {
     let cap_room = acct
         .daily_cap_usdc
         .saturating_sub(acct.daily_spent_usdc.saturating_add(acct.active_holds_usdc));
-    let liquidity = nav.idle_buffer.saturating_sub(global.total_active_holds_usdc);
+    // Settlement liquidity valued by the collateral rule: USDC = idle_buffer (identity); ETH = the USDC
+    // the batch settlement swap can realize from the idle WETH (price × γ), NOT the raw WETH balance.
+    let liquidity = nav.settleable_usd().saturating_sub(global.total_active_holds_usdc);
     per_user.min(cap_room).min(liquidity)
 }
 
@@ -103,7 +105,7 @@ pub fn authorize(
     {
         return Decision::Decline(Decline::DailyCapExceeded);
     }
-    if amount > nav.idle_buffer.saturating_sub(global.total_active_holds_usdc) {
+    if amount > nav.settleable_usd().saturating_sub(global.total_active_holds_usdc) {
         return Decision::Decline(Decline::InsufficientLiquidity);
     }
     Decision::Approve { hold_usdc: amount }
@@ -147,6 +149,25 @@ mod tests {
     #[test]
     fn declines_zero() {
         assert_eq!(auth(&acct(), &global(), 0), Decision::Decline(Decline::ZeroAmount));
+    }
+
+    #[test]
+    fn eth_liquidity_gate_uses_converted_idle_not_raw_weth() {
+        // Single ETH vault: 1 ETH idle (WETH-native, 1e18). Converted settleable = 1 ETH × $3,000 × γ0.70
+        // = $2,100. Equity is ~$2.1M (never the gate), cap uncapped → the liquidity gate is what binds.
+        let one_eth = 1_000_000_000_000_000_000u128;
+        let nav = NavSnapshot {
+            total_assets: 1_000_000_000_000_000_000_000, // 1,000 ETH backing
+            total_shares: 1_000_000_000_000_000_000_000,
+            virtual_offset: 1_000,
+            idle_buffer: one_eth, // 1 ETH withdrawable now
+            observed_at_secs: 1_000,
+            collateral: crate::nav::VaultCollateral::Eth { price_usd_6dp: 3_000_000_000, haircut_bps: 7_000, price_observed_at_secs: 1_000 },
+        };
+        let a = Account { shares: 1_000_000_000_000_000_000_000, active_holds_usdc: 0, daily_spent_usdc: 0, daily_cap_usdc: u128::MAX };
+        let g = Global { total_active_holds_usdc: 0 };
+        assert_eq!(authorize(&nav, &a, &g, 2_100_000_000, NOW, MAX_AGE), Decision::Approve { hold_usdc: 2_100_000_000 });
+        assert_eq!(authorize(&nav, &a, &g, 2_100_000_001, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientLiquidity));
     }
 
     #[test]

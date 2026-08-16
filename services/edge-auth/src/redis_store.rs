@@ -100,7 +100,9 @@ impl RedisStore {
         let shares = self.get_u128(format!("ea:shares:{user}"), 0).await?;
         let equity = self.nav.equity(shares); // Rust-side mulDiv (precision-safe)
         let cap = self.get_u128(format!("ea:cap:{user}"), DEFAULT_DAILY_CAP).await?;
-        let idle = self.nav.idle_buffer;
+        // Collateral-valued settlement liquidity (USDC identity; ETH = idle WETH × price × γ), matching
+        // the in-memory ledger — never the raw WETH idle for an ETH vault.
+        let idle = self.nav.settleable_usd();
 
         let (_amt, status): (String, String) = self
             .reserve

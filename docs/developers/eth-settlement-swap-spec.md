@@ -122,8 +122,15 @@ recover. The ETH→USDC settlement swap is the SAME shape:
    settlement contract, validate rejects empty/zero-hold/bad-slippage/zero-rail. Gated live dry-run
    (`tests/live_settlement.rs`, expects `OnlyRelayer()` from a non-relayer `from`) self-skips until the
    contract is deployed. relayer suite 18 green, clippy `-D warnings` clean.
-3. Wire the edge: an ETH vault's `idle_buffer` becomes "ETH convertible to USDC at the conservative
-   price" once this exists (so the edge's Σ-settleable gate counts it) — reconcile with `haircut.rs` γ.
+3. ✅ **DONE (2026-08-16).** Edge idle-buffer wire — `services/edge-auth`. `NavSnapshot::settleable_usd()`
+   values `idle_buffer` by the SAME collateral rule as `equity` (extracted into `native_to_usd`): USDC =
+   identity (every existing gate unchanged — back-compat, 77 prior tests pass untouched); ETH = idle WETH ×
+   price × γ, i.e. the USDC the batch settlement swap can conservatively realize from the idle, NOT the raw
+   WETH balance. Routed through the single-vault ledger (`available` + `authorize`), the multi-leg
+   `portfolio::Leg::settleable`, AND the `redis_store` Lua arg — so every settlement-liquidity gate is
+   collateral-correct. Tests: identity for USDC + haircut-converted for ETH; the raw-WETH bug (a $1e12
+   over-count) now correctly DECLINES; single-vault + portfolio ETH liquidity gates bind at the converted
+   value. edge-auth 80 tests green, clippy clean.
 4. External audit (same gate as the vault stack) before any real value.
 
 ## Open questions
