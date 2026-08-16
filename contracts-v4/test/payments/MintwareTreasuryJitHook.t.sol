@@ -488,6 +488,36 @@ contract MintwareTreasuryJitHookTest is Test {
         assertEq(vault.jitBorrowed(), 0, "JIT fired on enrolled pool (unmanaged)");
     }
 
+    /// AUDIT (P3 review, HIGH) regression: a swap from `jitSkipSender` (which is how the vault's OWN
+    /// recover/collect swaps reach beforeSwap — they run inside the vault's nonReentrant unlock) must be
+    /// EXEMPT from the auction: a plain pass-through with no `poke`. If it poked, poke → auction →
+    /// vault.fundRent (nonReentrant) would deadlock and revert the vault op. Proven by: the auction is
+    /// never touched (manager `owed` unchanged) and the fee slot is a bare 0 (no override/skim).
+    function test_amAmm_jitSkipSender_bypassesAuction() public {
+        _enrollAmAmm();
+        _seatManager();
+        address skip = makeAddr("vaultProxy");
+        hook.setJitSkipSender(skip);
+
+        // Promote the manager + accrue rent via a real (non-exempt) external swap through the router.
+        _buyTeam(user, 1_000 * ONE);
+        vm.roll(block.number + 3); // rent would be due on the next poke
+        uint256 usdcOwed = auction.owed(mgr, address(usdc));
+        uint256 teamOwed = auction.owed(mgr, address(team));
+
+        // beforeSwap FROM the exempt sender: bare pass-through (fee slot 0), auction untouched.
+        SwapParams memory sp = SwapParams({
+            zeroForOne: _sellTeamZeroForOne(),
+            amountSpecified: -int256(1_000 * ONE),
+            sqrtPriceLimitX96: 0
+        });
+        vm.prank(address(pm));
+        (, , uint24 fee) = hook.beforeSwap(skip, key, sp, "");
+        assertEq(fee, 0, "exempt sender did not get a bare pass-through fee slot");
+        assertEq(auction.owed(mgr, address(usdc)), usdcOwed, "exempt sender poked/skimmed the auction (usdc)");
+        assertEq(auction.owed(mgr, address(team)), teamOwed, "exempt sender poked/skimmed the auction (team)");
+    }
+
     /// Enrollment is owner-gated.
     function test_amAmm_enrollment_ownerGated() public {
         vm.prank(makeAddr("stranger"));

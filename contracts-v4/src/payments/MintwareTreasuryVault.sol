@@ -127,6 +127,10 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     /// @notice USDC held by the vault that belongs to the JUNIOR (post-lock team fee cuts), excluded
     ///         from every senior-side view so it can never be redeemed by the senior.
     uint256 public reservedJuniorUSDC;
+    /// @notice USDC earmarked for the PROTOCOL fee cut by `fundRent` (Phase 3). Accumulated on the swap
+    ///         hot path (no external transfer there — a blacklisting treasury must not be able to brick a
+    ///         swap) and paid out OFF-path via `flushProtocol`/`accrueFees`. Excluded from the senior view.
+    uint256 public reservedProtocolUSDC;
 
     // ── junior (team) ─────────────────────────────────────────────────────────────
     address public team;
@@ -187,6 +191,7 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     event JitMaxCumulativeLossSet(uint256 maxLoss);
     event RentFunderSet(address indexed funder);
     event RentFunded(uint256 total, uint256 toSenior, uint256 toJunior, uint256 toProtocol);
+    event ProtocolFlushed(uint256 amount);
 
     error ZeroAddress();
     error ZeroAmount();
@@ -372,7 +377,7 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     /// @dev USDC on hand that belongs to the SENIOR — the vault balance minus BOTH junior earmarks.
     function _freeSeniorBuffer() internal view returns (uint256) {
         uint256 bal = usdc.balanceOf(address(this));
-        uint256 reserved = reservedJuniorUSDC + juniorUsdcBuffer;
+        uint256 reserved = reservedJuniorUSDC + juniorUsdcBuffer + reservedProtocolUSDC;
         return bal > reserved ? bal - reserved : 0;
     }
 
@@ -561,9 +566,25 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         // The remainder (100% during lock; 60% community after) stays as senior buffer → lifts NAV.
         // Supply only the FREE senior buffer to Aave — both junior earmarks stay physically on hand.
         uint256 toSenior = collected - toJunior - toProtocol;
+        _flushProtocol(); // pay out any rent-earmarked protocol cut (fundRent accrues it off the hot path)
         _supplyToAdapter(_freeSeniorBuffer());
 
         emit FeesAccrued(collected, toSenior, toJunior, toProtocol);
+    }
+
+    /// @notice Pay out the protocol fee cut that `fundRent` earmarked off the swap hot path (Phase 3).
+    ///         Permissionless + off-path, so a blacklisting/reverting `protocolTreasury` can never brick a
+    ///         swap — it only ever fails this retryable call. Also folded into `accrueFees`.
+    function flushProtocol() external nonReentrant returns (uint256 paid) {
+        return _flushProtocol();
+    }
+
+    function _flushProtocol() internal returns (uint256 paid) {
+        paid = reservedProtocolUSDC;
+        if (paid == 0 || protocolTreasury == address(0)) return 0;
+        reservedProtocolUSDC = 0;
+        usdc.safeTransfer(protocolTreasury, paid);
+        emit ProtocolFlushed(paid);
     }
 
     /// @notice `IAmAmmRentSink`: receive am-AMM auction rent (USDC) and route it EXACTLY like `accrueFees`
@@ -593,7 +614,10 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
             toProtocol = received.mulDiv(FEE_PROTOCOL_BPS, BPS, Math.Rounding.Floor);
             reservedJuniorUSDC += toJunior;                 // earmark team's cut out of the senior view
             if (toProtocol > 0 && protocolTreasury != address(0)) {
-                usdc.safeTransfer(protocolTreasury, toProtocol);
+                // AUDIT (P3 review, MED): EARMARK the protocol cut — do NOT transfer on the swap hot path.
+                // A USDC-blacklisted/reverting `protocolTreasury` would otherwise brick every swap on the
+                // pool. Paid out off-path via `flushProtocol` / `accrueFees`.
+                reservedProtocolUSDC += toProtocol;
             } else {
                 toProtocol = 0; // no treasury → leave it in the senior buffer
             }

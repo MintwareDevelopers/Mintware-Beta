@@ -530,8 +530,14 @@ contract MintwareTreasuryVaultTest is Test {
         uint256 expTeam  = (rent * 3000) / 10000;
         uint256 expProto = (rent * 1000) / 10000;
         assertEq(S.v.reservedJuniorUSDC() - reservedBefore, expTeam, "team cut != 30%");
-        assertEq(usdc.balanceOf(protocol) - protoBefore, expProto, "protocol cut != 10%");
+        // Protocol cut is EARMARKED off the swap hot path (not transferred during fundRent).
+        assertEq(S.v.reservedProtocolUSDC(), expProto, "protocol cut not earmarked");
+        assertEq(usdc.balanceOf(protocol) - protoBefore, 0, "protocol paid on the hot path (should be earmarked)");
         assertEq(S.v.totalSeniorAssets() - seniorBefore, rent - expTeam - expProto, "community cut != 60%");
+        // flushProtocol pays it out off-path.
+        S.v.flushProtocol();
+        assertEq(usdc.balanceOf(protocol) - protoBefore, expProto, "protocol cut != 10% after flush");
+        assertEq(S.v.reservedProtocolUSDC(), 0, "protocol earmark not cleared after flush");
     }
 
     /// fundRent is funder-gated + USDC-only; setRentFunder is owner-gated.

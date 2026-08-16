@@ -349,7 +349,18 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         // manager sets/skims the fee (unmanaged swaps fall back to the deviation fee). Dispatch and return
         // before any JIT borrow. Guarded on `auction != 0` so a half-configured enable can't brick swaps.
         if (amAmmEnabled && auction != address(0)) {
-            return _beforeSwapAmAmm(key, params);
+            // AUDIT (P3 review, HIGH): the vault's OWN recover/collect swaps (sender == jitSkipSender) are
+            // internal rebalancing, NOT trading flow — exempt them from the auction entirely (no poke /
+            // skim / rent). This is correct (charging the rent-SINK vault self-rent is meaningless) AND
+            // required for safety: those swaps run inside the vault's `nonReentrant` unlock, so
+            // poke → auction → vault.fundRent (nonReentrant) would deadlock and revert the vault op
+            // (senior redemption / card settlement / recover). `poke` catches up the elapsed rent on the
+            // next EXTERNAL swap, so no rent is lost. The hook's own sweep swap is already auto-skipped by
+            // v4 (msg.sender == self).
+            if (sender != jitSkipSender) {
+                return _beforeSwapAmAmm(key, params);
+            }
+            return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
         }
         bool usdcIsOutput = params.zeroForOne ? !usdcIsCurrency0 : usdcIsCurrency0;
         uint256 mag = params.amountSpecified < 0

@@ -421,10 +421,10 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         return uint160(s);
     }
 
-    // free SENIOR buffer = vault USDC on hand minus BOTH junior earmarks, never negative.
+    // free SENIOR buffer = vault USDC on hand minus junior + protocol earmarks, never negative.
     function _freeBuffer() internal view returns (uint256) {
         uint256 bal = usdc.balanceOf(address(vault));
-        uint256 r = vault.reservedJuniorUSDC() + vault.juniorUsdcBuffer();
+        uint256 r = vault.reservedJuniorUSDC() + vault.juniorUsdcBuffer() + vault.reservedProtocolUSDC();
         return bal > r ? bal - r : 0;
     }
 
@@ -484,12 +484,12 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         );
     }
 
-    // ── junior-earmarked cash (fee cut + first-loss buffer) is always physically on hand ───────────
+    // ── earmarked cash (junior fee cut + first-loss buffer + protocol cut) is always physically on hand ─
     function invariant_reserved_junior_backed() public view {
         assertLe(
-            vault.reservedJuniorUSDC() + vault.juniorUsdcBuffer(),
+            vault.reservedJuniorUSDC() + vault.juniorUsdcBuffer() + vault.reservedProtocolUSDC(),
             usdc.balanceOf(address(vault)),
-            "junior earmarks (reserved + first-loss buffer) exceed vault USDC on hand"
+            "earmarks (junior reserved + first-loss buffer + protocol) exceed vault USDC on hand"
         );
     }
 
