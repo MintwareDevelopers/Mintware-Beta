@@ -12,6 +12,7 @@ pub mod chain;
 pub mod haircut;
 pub mod ledger;
 pub mod nav;
+pub mod portfolio;
 pub mod redis_lua;
 pub mod redis_store;
 pub mod refresher;
@@ -24,6 +25,7 @@ pub mod webhook;
 pub use ledger::{authorize, available, Account, Decision, Decline, Global};
 pub use haircut::{var_haircut_bps, HaircutParams};
 pub use nav::{NavSnapshot, VaultCollateral};
+pub use portfolio::{authorize_portfolio, portfolio_available, Leg};
 pub use store::{AuthOutcome, Hold, HoldStatus, MemStore};
 
 /// USDC amount, 6 decimals (matches the on-chain settlement asset).
