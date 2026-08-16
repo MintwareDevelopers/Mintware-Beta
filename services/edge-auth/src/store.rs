@@ -6,8 +6,9 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use crate::ledger::{self, Account, Decision, Global};
+use crate::ledger::{Account, Decision};
 use crate::nav::NavSnapshot;
+use crate::portfolio::{authorize_portfolio, portfolio_available, Leg};
 use crate::Usdc;
 
 /// Default per-user daily cap when none is set — mirrors the Gateway's `DEFAULT_GLOBAL_DAILY_CAP`.
@@ -39,7 +40,10 @@ impl Hold {
 
 #[derive(Debug, Clone, Default)]
 struct AccountData {
-    shares: u128,
+    shares: u128, // shares in the PRIMARY vault (the settlement/USDC leg)
+    /// Multi-collateral: the user's shares in each EXTRA vault (vault_id → shares). Empty for the
+    /// common single-vault user, so their authorization is byte-identical to the pre-portfolio path.
+    extra_shares: HashMap<String, u128>,
     daily_cap_usdc: Usdc, // 0 => use DEFAULT_DAILY_CAP
     spent_epoch_day: u64,
     spent_amount_usdc: Usdc,
@@ -63,7 +67,9 @@ impl AccountData {
 }
 
 struct Inner {
-    nav: NavSnapshot,
+    nav: NavSnapshot, // the PRIMARY vault (settlement leg); carries the aggregate holds gate.
+    /// Multi-collateral: additional vaults (vault_id → NAV). Empty ⇒ pure single-vault behavior.
+    extra_navs: HashMap<String, NavSnapshot>,
     max_nav_age_secs: u64,
     hold_ttl_secs: u64,
     accounts: HashMap<String, AccountData>,
@@ -88,6 +94,7 @@ impl MemStore {
         Self {
             inner: Mutex::new(Inner {
                 nav,
+                extra_navs: HashMap::new(),
                 max_nav_age_secs,
                 hold_ttl_secs,
                 accounts: HashMap::new(),
@@ -106,6 +113,21 @@ impl MemStore {
     pub fn set_daily_cap(&self, user: &str, cap: Usdc) {
         self.inner.lock().unwrap().accounts.entry(user.to_string()).or_default().daily_cap_usdc = cap;
     }
+    /// Multi-collateral feeds: an EXTRA vault's NAV, and a user's shares in it. (The primary vault stays
+    /// `set_nav`/`set_shares`.) A user with no extra shares authorizes exactly as before.
+    pub fn set_nav_for(&self, vault_id: &str, nav: NavSnapshot) {
+        self.inner.lock().unwrap().extra_navs.insert(vault_id.to_string(), nav);
+    }
+    pub fn set_shares_for(&self, user: &str, vault_id: &str, shares: u128) {
+        self.inner
+            .lock()
+            .unwrap()
+            .accounts
+            .entry(user.to_string())
+            .or_default()
+            .extra_shares
+            .insert(vault_id.to_string(), shares);
+    }
 
     // ── the hot path: atomic authorize ─────────────────────────────────────────────
     /// Reserve capacity for `amount` under `hold_id` if — and only if — the charge clears every gate,
@@ -123,8 +145,8 @@ impl MemStore {
         }
 
         let acct = Self::account_view(&g, user, now_secs);
-        let global = Global { total_active_holds_usdc: Self::total_active_holds(&g) };
-        let decision = ledger::authorize(&g.nav, &acct, &global, amount, now_secs, g.max_nav_age_secs);
+        let legs = Self::build_legs(&g, user);
+        let decision = authorize_portfolio(&legs, &acct, amount, now_secs, g.max_nav_age_secs);
 
         if let Decision::Approve { hold_usdc } = decision {
             let ttl = g.hold_ttl_secs;
@@ -180,8 +202,8 @@ impl MemStore {
         let mut g = self.inner.lock().unwrap();
         Self::prune_expired(&mut g, now_secs);
         let acct = Self::account_view(&g, user, now_secs);
-        let global = Global { total_active_holds_usdc: Self::total_active_holds(&g) };
-        ledger::available(&g.nav, &acct, &global)
+        let legs = Self::build_legs(&g, user);
+        portfolio_available(&legs, &acct)
     }
 
     // ── internals ──────────────────────────────────────────────────────────────────
@@ -207,6 +229,24 @@ impl MemStore {
             daily_cap_usdc: d.cap(),
         }
     }
+
+    /// The user's portfolio legs: the PRIMARY vault (carrying the aggregate active holds → the
+    /// settlement-liquidity gate) plus every EXTRA vault they hold shares in. A user with no extras
+    /// yields ONE leg, so `authorize_portfolio` decides IDENTICALLY to the old single-vault
+    /// `ledger::authorize` — the existing single-vault tests are the back-compat proof.
+    fn build_legs(g: &Inner, user: &str) -> Vec<Leg> {
+        let d = g.accounts.get(user).cloned().unwrap_or_default();
+        let total_holds = Self::total_active_holds(g);
+        let mut legs = vec![Leg { nav: g.nav, shares: d.shares, vault_global_holds_usdc: total_holds }];
+        for (vault_id, nav) in &g.extra_navs {
+            if let Some(&shares) = d.extra_shares.get(vault_id) {
+                if shares > 0 {
+                    legs.push(Leg { nav: *nav, shares, vault_global_holds_usdc: 0 });
+                }
+            }
+        }
+        legs
+    }
 }
 
 fn h_decision(h: &Hold) -> Decision {
@@ -229,6 +269,47 @@ mod tests {
         s
     }
     const NOW: u64 = 1_010;
+
+    // A deep ETH-collateral vault @ $3,000, γ=0.70 — an EXTRA leg alongside the primary USDC vault.
+    fn eth_nav() -> NavSnapshot {
+        let one_k_eth = 1_000_000_000_000_000_000_000u128; // 1,000 ETH (18dp)
+        NavSnapshot {
+            total_assets: one_k_eth,
+            total_shares: one_k_eth,
+            virtual_offset: 1_000,
+            idle_buffer: 1_000_000_000_000, // $1M USDC settleable
+            observed_at_secs: 1_000,
+            collateral: crate::nav::VaultCollateral::Eth { price_usd_6dp: 3_000_000_000, haircut_bps: 7_000, price_observed_at_secs: 1_000 },
+        }
+    }
+
+    #[test]
+    fn multi_leg_portfolio_sums_usdc_and_eth_through_the_store() {
+        let s = store(); // alice: $1,000 in the primary USDC vault
+        s.set_nav_for("eth", eth_nav());
+        s.set_shares_for("alice", "eth", 1_000_000_000_000_000_000); // 1 ETH
+
+        // aggregate spendable = $1,000 (USDC) + 1 ETH × $3,000 × 0.70 = $2,100 → $3,100.
+        assert_eq!(s.available("alice", NOW), 3_100_000_000);
+        // a charge the USDC leg ALONE ($1,000 equity) could never cover — the ETH leg unlocks it.
+        assert_eq!(s.try_authorize("m1", "alice", 2_500_000_000, NOW).decision, Decision::Approve { hold_usdc: 2_500_000_000 });
+        // remaining aggregate = $600; just over declines InsufficientEquity.
+        assert_eq!(s.available("alice", NOW), 600_000_000);
+        assert_eq!(s.try_authorize("m2", "alice", 600_000_001, NOW).decision, Decision::Decline(Decline::InsufficientEquity));
+    }
+
+    #[test]
+    fn multi_leg_stale_eth_price_declines_through_the_store() {
+        let s = store();
+        let mut n = eth_nav();
+        if let crate::nav::VaultCollateral::Eth { ref mut price_observed_at_secs, .. } = n.collateral {
+            *price_observed_at_secs = 700; // now 1010 → price age 310 > 30 = stale
+        }
+        s.set_nav_for("eth", n);
+        s.set_shares_for("alice", "eth", 1_000_000_000_000_000_000);
+        // a stale ETH leg fails the WHOLE portfolio safe, even for a trivial $0.10 charge.
+        assert_eq!(s.try_authorize("s1", "alice", 100_000, NOW).decision, Decision::Decline(Decline::StalePrice));
+    }
 
     #[test]
     fn approve_creates_active_hold() {
