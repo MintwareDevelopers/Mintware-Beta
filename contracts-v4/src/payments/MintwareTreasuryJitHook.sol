@@ -13,7 +13,9 @@ import {ModifyLiquidityParams, SwapParams}       from "@uniswap/v4-core/src/type
 import {Hooks}                  from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {TickMath}               from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary}           from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {LPFeeLibrary}           from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {MWOracleGuard}          from "../hooks/MWOracleGuard.sol";
+import {MWDynamicFee}           from "../hooks/MWDynamicFee.sol";
 import {LiquidityAmounts}       from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 
 import {IERC20}    from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -84,6 +86,25 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     ///         neither the solvency floor nor the sweep can be gamed by moving spot within the tx.
     MWOracleGuard.State private _oracle;
 
+    // ── deviation-scaled dynamic-fee lever (YPN MEV engine — Phase 1, increment 1) ──────────────
+    /// @notice The pool is initialized with `LPFeeLibrary.DYNAMIC_FEE_FLAG`, so `beforeSwap` returns a
+    ///         per-swap LP-fee override (`fee | OVERRIDE_FEE_FLAG`). The fee scales with the swap's
+    ///         DEVIATION from the truncated oracle (via `MWDynamicFee.volatilityFee`): mean-reverting
+    ///         retail pays the floor `baseFeePips`, while a toxic/arb-sized print that moves price pays
+    ///         more — capped at `maxFeePips` (≤ `MAX_LP_FEE`). Oracle-free in the sense the plan requires:
+    ///         `deviationTicks` returns 0 before the oracle is ready and `volatilityFee` clamps to the
+    ///         ceiling, so the fee path is pure + clamped and CANNOT revert a swap (the Bunni-class bar).
+    ///         The captured fee accrues to the vault's existing LP position → senior/junior fee split.
+    uint24  public baseFeePips = 3000;       // floor fee (0.30%)
+    uint24  public maxFeePips  = 50_000;     // ceiling fee (5%); always ≤ MAX_LP_FEE
+    uint256 public slopePipsPerTick = 100;   // pips added per tick of |spot − oracle|
+    /// @notice Optional per-block fee-move budget for `MWDynamicFee.rateLimit` (0 ⇒ rate-limit OFF, the
+    ///         default: fee is the pure clamped deviation curve). When set, a single block can move the
+    ///         override by at most `maxFeeStepPerBlock × blocksElapsed` — blunting predictable-hike MEV.
+    uint256 public maxFeeStepPerBlock;
+    uint24  private _lastFeePips;             // last override applied (rate-limit anchor)
+    uint32  private _lastFeeBlock;            // block of `_lastFeePips`
+
     // ── per-swap open state (0 between swaps) ──────────────────────────────────
     uint128 private jitLiquidity;
     int24   private jitLower;
@@ -100,9 +121,14 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     event JitThresholdSet(uint256 threshold);
     event JitWidthSet(int24 spacings);
     event OracleParamsSet(int24 maxMovePerBlock, uint32 maxCatchupBlocks);
+    event BaseFeeSet(uint24 baseFeePips);
+    event MaxFeeSet(uint24 maxFeePips);
+    event FeeSlopeSet(uint256 slopePipsPerTick);
+    event MaxFeeStepSet(uint256 maxFeeStepPerBlock);
 
     error OnlyPoolManager();
     error UnauthorizedInitializer();
+    error FeeParam();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(poolManager)) revert OnlyPoolManager();
@@ -169,6 +195,31 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         emit OracleParamsSet(maxMovePerBlock, maxCatchupBlocks);
     }
 
+    // ── dynamic-fee lever tuning (owner-gated, bounded so the fee path can never exceed MAX_LP_FEE) ──
+    /// @notice Set the floor fee. Must not exceed the ceiling (`maxFeePips`).
+    function setBaseFeePips(uint24 v) external onlyOwner {
+        if (v > maxFeePips) revert FeeParam();
+        baseFeePips = v;
+        emit BaseFeeSet(v);
+    }
+    /// @notice Set the ceiling fee. Must be ≥ the floor and ≤ V4's `MAX_LP_FEE` (100%).
+    function setMaxFeePips(uint24 v) external onlyOwner {
+        if (v < baseFeePips || v > LPFeeLibrary.MAX_LP_FEE) revert FeeParam();
+        maxFeePips = v;
+        emit MaxFeeSet(v);
+    }
+    /// @notice Set the per-tick slope. Bounded to `MAX_LP_FEE` per tick (overflow-safe; the fee is clamped).
+    function setSlopePipsPerTick(uint256 v) external onlyOwner {
+        if (v > LPFeeLibrary.MAX_LP_FEE) revert FeeParam();
+        slopePipsPerTick = v;
+        emit FeeSlopeSet(v);
+    }
+    /// @notice Set the per-block fee-move budget for the rate limiter (0 ⇒ off).
+    function setMaxFeeStepPerBlock(uint256 v) external onlyOwner {
+        maxFeeStepPerBlock = v;
+        emit MaxFeeStepSet(v);
+    }
+
     // ── IHooks: the two active callbacks ────────────────────────────────────────
 
     /// @notice On a team→USDC swap (output = USDC), borrow a bounded slice + open a tight single-sided
@@ -189,7 +240,27 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         if (usdcIsOutput && mag >= jitThreshold && sender != jitSkipSender) {
             _open(key, params.zeroForOne, mag);
         }
-        return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, 0);
+        // Deviation-scaled dynamic-fee override for THIS swap (canonical pool only). Pure + clamped —
+        // never reverts; ignored by V4 unless the pool carries DYNAMIC_FEE_FLAG.
+        return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, _dynamicFee(key));
+    }
+
+    /// @notice The LP-fee override for the canonical pool: `volatilityFee(base, max, deviation, slope)`,
+    ///         optionally rate-limited per block, tagged with `OVERRIDE_FEE_FLAG`. Reads only the live
+    ///         tick + the truncated oracle (both revert-free); the result is clamped to `maxFeePips`, so
+    ///         no input can brick the swap.
+    function _dynamicFee(PoolKey calldata key) private returns (uint24) {
+        (, int24 tick,,) = poolManager.getSlot0(key.toId());
+        uint256 dev = _oracle.deviationTicks(tick);
+        uint24 fee = MWDynamicFee.volatilityFee(baseFeePips, maxFeePips, dev, slopePipsPerTick);
+        uint256 step = maxFeeStepPerBlock;
+        if (step != 0) {
+            uint256 elapsed = block.number > _lastFeeBlock ? block.number - _lastFeeBlock : 0;
+            fee = MWDynamicFee.rateLimit(_lastFeePips, fee, step * elapsed);
+            _lastFeePips  = fee;
+            _lastFeeBlock = uint32(block.number);
+        }
+        return fee | LPFeeLibrary.OVERRIDE_FEE_FLAG;
     }
 
     /// @notice Close the JIT position and MINT ERC-6909 claims for the owed tokens (can't take physical

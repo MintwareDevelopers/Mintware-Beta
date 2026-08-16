@@ -10,6 +10,7 @@ import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {LPFeeLibrary}          from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
@@ -91,7 +92,7 @@ contract MintwareTreasuryVaultFactoryTest is Test {
             ? (address(usdc), address(teamTok)) : (address(teamTok), address(usdc));
         PoolKey memory ctorKey = PoolKey({
             currency0: Currency.wrap(a0), currency1: Currency.wrap(a1),
-            fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))
+            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: SPACING, hooks: IHooks(address(0))
         });
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), predicted, address(factory));
         (address minedHook, bytes32 salt) =
@@ -114,7 +115,7 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         c.adapter = adp;
         c.key     = PoolKey({
             currency0: Currency.wrap(a0), currency1: Currency.wrap(a1),
-            fee: 3000, tickSpacing: SPACING, hooks: IHooks(hookAddr)
+            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: SPACING, hooks: IHooks(hookAddr)
         });
     }
 

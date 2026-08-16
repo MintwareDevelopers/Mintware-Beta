@@ -8,6 +8,7 @@ import {HookMiner}                          from "../src/lib/HookMiner.sol";
 import {IHooks}                             from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}                            from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency}                           from "@uniswap/v4-core/src/types/Currency.sol";
+import {LPFeeLibrary}                        from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 
 /// @notice Launch ONE team's YPN treasury vault through an already-deployed factory
 ///         (`DeployTreasuryFactory.s.sol`). Generalizes the single-shot `DeployTreasuryV2.s.sol`: it reads
@@ -57,12 +58,14 @@ contract CreateTreasuryVault is Script {
         // The address the next createVault will land the vault at.
         address predictedVault = factory.predictNextVault();
 
-        // Sorted, placeholder-hooks key for the hook ctor + mining (matches the factory exactly).
+        // Sorted, placeholder-hooks key for the hook ctor + mining (matches the factory exactly — the
+        // factory mines/deploys the hook against a DYNAMIC_FEE_FLAG key and applies p.poolFee as the
+        // hook's BASE fee, so the salt here must use the same DYNAMIC_FEE_FLAG or it will mismatch).
         (address c0, address c1) = p.usdc < p.teamToken ? (p.usdc, p.teamToken) : (p.teamToken, p.usdc);
         PoolKey memory ctorKey = PoolKey({
             currency0: Currency.wrap(c0),
             currency1: Currency.wrap(c1),
-            fee: p.poolFee,
+            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
             tickSpacing: p.tickSpacing,
             hooks: IHooks(address(0))
         });

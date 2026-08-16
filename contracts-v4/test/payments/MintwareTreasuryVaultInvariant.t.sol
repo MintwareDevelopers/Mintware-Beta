@@ -13,9 +13,12 @@ import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {LPFeeLibrary}          from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
-import {MintwareTreasuryVault} from "../../src/payments/MintwareTreasuryVault.sol";
+import {HookMiner}                from "../../src/lib/HookMiner.sol";
+import {MintwareTreasuryVault}     from "../../src/payments/MintwareTreasuryVault.sol";
+import {MintwareTreasuryJitHook}   from "../../src/payments/MintwareTreasuryJitHook.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
@@ -266,15 +269,42 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         team = new MockERC20("Team Token", "TEAM", 6);
         teamIs0 = address(team) < address(usdc);
+        adapter = new MockYieldAdapter(address(usdc));
 
         (Currency c0, Currency c1) = address(usdc) < address(team)
             ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
             : (Currency.wrap(address(team)), Currency.wrap(address(usdc)));
-        key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
-        pm.initialize(key, INIT_SQRT_PRICE);
 
-        adapter = new MockYieldAdapter(address(usdc));
+        // The pool is a DYNAMIC-FEE pool fronted by the real JIT hook, so every `movePrice` swap routes
+        // through the hook's deviation-scaled fee OVERRIDE (Phase-1 MEV lever) — the fee is what this
+        // upgraded gate now stresses alongside the tranche solvency. We keep the fee lever at its in-code
+        // defaults (base 3000 / max 50_000 / slope 100). JIT is DISABLED here (threshold = max): the JIT
+        // borrow/settle loop has its own dedicated fuzz suite (`MintwareTreasuryJitStackTest`), and turning
+        // it off keeps THIS gate a clean proof that the fee override never perturbs senior/junior solvency.
+        // Circular deploy (hook ctor needs the vault addr; the vault key needs the hook addr) is broken by
+        // predicting the vault's CREATE address — mirrors DeployTreasuryV2 / the JIT-stack harness.
+        PoolKey memory ctorKey = PoolKey({
+            currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
+            tickSpacing: SPACING, hooks: IHooks(address(0))
+        });
+        address predictedVault = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
+        bytes memory hookArgs = abi.encode(address(pm), ctorKey, address(usdc), predictedVault, address(this));
+        (address hookAddr, bytes32 hookSalt) =
+            HookMiner.find(address(this), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, hookArgs);
+        MintwareTreasuryJitHook hook =
+            new MintwareTreasuryJitHook{salt: hookSalt}(address(pm), ctorKey, address(usdc), predictedVault, address(this));
+        require(address(hook) == hookAddr, "hook addr");
+        hook.setJitThreshold(type(uint256).max); // JIT off — this gate isolates the fee lever
+
+        key = PoolKey({
+            currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
+            tickSpacing: SPACING, hooks: IHooks(hookAddr)
+        });
         vault = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), owner, teamAddr);
+        require(address(vault) == predictedVault, "vault addr prediction");
+
+        // Owner-gated init: sender (this) == hook.owner() (this), so beforeInitialize authorizes it.
+        pm.initialize(key, INIT_SQRT_PRICE);
 
         vm.prank(owner);
         vault.setProtocolTreasury(protocol);

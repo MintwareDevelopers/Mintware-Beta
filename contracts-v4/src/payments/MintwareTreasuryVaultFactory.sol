@@ -6,6 +6,7 @@ import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks}       from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}      from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency}     from "@uniswap/v4-core/src/types/Currency.sol";
+import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 
 import {MintwareTreasuryVault}          from "./MintwareTreasuryVault.sol";
 import {MintwareTreasuryJitHook}        from "./MintwareTreasuryJitHook.sol";
@@ -62,7 +63,7 @@ contract MintwareTreasuryVaultFactory is Ownable {
         address team;          // constructor-bound junior tenant
         address owner;         // intended ops owner of the vault + hook after wiring
         address treasury;      // protocol treasury + Gateway card rail
-        uint24  poolFee;
+        uint24  poolFee;       // the hook's BASE (floor) fee in pips — the pool itself is DYNAMIC_FEE_FLAG
         int24   tickSpacing;
         uint160 initSqrtPrice;
         address gatewayAdmin;  // DEFAULT_ADMIN/RELAYER/EDGE holder on the Gateway
@@ -123,10 +124,12 @@ contract MintwareTreasuryVaultFactory is Ownable {
         (address c0, address c1) = p.usdc < p.teamToken ? (p.usdc, p.teamToken) : (p.teamToken, p.usdc);
 
         // Placeholder-hooks key: the hook ctor ignores key.hooks, and the salt was mined against this.
+        // The pool is a DYNAMIC-FEE pool so the hook can override the LP fee per swap (Phase-1 MEV lever);
+        // `p.poolFee` is applied as the hook's BASE fee below, not as the static pool fee.
         PoolKey memory ctorKey = PoolKey({
             currency0: Currency.wrap(c0),
             currency1: Currency.wrap(c1),
-            fee: p.poolFee,
+            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
             tickSpacing: p.tickSpacing,
             hooks: IHooks(address(0))
         });
@@ -136,11 +139,11 @@ contract MintwareTreasuryVaultFactory is Ownable {
         hookAddr = hookDeployer.predictAddress(hookSalt, address(poolManager), ctorKey, p.usdc, predictedVault, address(this));
         if (uint160(hookAddr) & ALL_HOOK_MASK != JIT_HOOK_FLAGS) revert HookFlagsMismatch();
 
-        // The hooked pool key the vault LPs into.
+        // The hooked pool key the vault LPs into (DYNAMIC_FEE_FLAG → the hook drives the per-swap fee).
         PoolKey memory hookedKey = PoolKey({
             currency0: Currency.wrap(c0),
             currency1: Currency.wrap(c1),
-            fee: p.poolFee,
+            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
             tickSpacing: p.tickSpacing,
             hooks: IHooks(hookAddr)
         });
@@ -160,9 +163,11 @@ contract MintwareTreasuryVaultFactory is Ownable {
         // 4. Open the hooked V4 pool.
         poolManager.initialize(hookedKey, p.initSqrtPrice);
 
-        // 5. Wire the JIT seam + gateway (factory is still owner).
+        // 5. Wire the JIT seam + gateway (factory is still owner). Set the dynamic-fee floor to p.poolFee
+        //    (the hook's ceiling/slope keep their in-code defaults; ops can retune post-transfer).
         vault.setJitHook(hookAddr);
         MintwareTreasuryJitHook(hookAddr).setJitSkipSender(vaultAddr);
+        MintwareTreasuryJitHook(hookAddr).setBaseFeePips(p.poolFee);
         gatewayAddr = gatewayDeployer.deploy(vaultAddr, p.usdc, p.treasury, p.gatewayAdmin);
         vault.setGateway(gatewayAddr);
         vault.setProtocolTreasury(p.treasury);

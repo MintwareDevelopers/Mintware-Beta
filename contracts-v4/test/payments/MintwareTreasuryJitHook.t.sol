@@ -10,6 +10,11 @@ import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {LPFeeLibrary}          from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
+import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {SwapParams}            from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {BeforeSwapDelta}       from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
 import {HookMiner}                 from "../../src/lib/HookMiner.sol";
@@ -26,6 +31,9 @@ import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 ///         redeems the claims, swaps team→USDC, and settles with the vault — leaving `jitBorrowed` at 0
 ///         and the senior whole. Both tokens 6dp at a 1:1 pool.
 contract MintwareTreasuryJitHookTest is Test {
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary  for PoolManager;
+
     PoolManager             internal pm;
     TestSwapRouter          internal swapRouter;
     PoolModifyLiquidityTest internal lpRouter;
@@ -61,7 +69,7 @@ contract MintwareTreasuryJitHookTest is Test {
         // This suite exercises only the JIT borrow-seam (Aave) + hook sweep — the vault never LPs, so
         // its poolKey needs no hook. Construct it against the hookless key (the vault holds the position
         // itself post-convergence, but here it's dormant).
-        PoolKey memory ctorKey = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
+        PoolKey memory ctorKey = PoolKey({currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: SPACING, hooks: IHooks(address(0))});
         vault = new MintwareTreasuryVault(address(pm), ctorKey, address(usdc), address(adapter), address(this), teamAddr); // owner=this
 
         // Mine the hook address (beforeSwap|afterSwap = 0xC0). The ctor ignores key.hooks, so a
@@ -72,7 +80,7 @@ contract MintwareTreasuryJitHookTest is Test {
         hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), address(vault), address(this));
         require(address(hook) == hookAddr, "hook addr");
 
-        key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(hookAddr)});
+        key = PoolKey({currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: SPACING, hooks: IHooks(hookAddr)});
         pm.initialize(key, INIT_SQRT_PRICE);
 
         // Team commit + community deposit ($10k senior → Aave idle backs the JIT borrow).
@@ -149,5 +157,98 @@ contract MintwareTreasuryJitHookTest is Test {
 
     function test_sweep_noop_when_nothing_pending() public {
         assertEq(hook.sweepJit(), 0, "sweep returned value with nothing pending");
+    }
+
+    // ── dynamic-fee lever (YPN MEV engine, Phase 1 increment 1) ─────────────────────────────────
+
+    /// buy team (usdc→team): USDC is the INPUT, team the OUTPUT → never fires JIT (no team adapter),
+    /// so it's a clean way to move price / probe the fee override without JIT side effects.
+    function _buyTeamZeroForOne() internal view returns (bool) {
+        return address(usdc) < address(team); // usdc = currency0 → zeroForOne sells usdc (buys team)
+    }
+
+    function _buyTeam(address who, uint256 amtIn) internal {
+        usdc.mint(who, amtIn);
+        vm.startPrank(who);
+        usdc.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, _buyTeamZeroForOne(), amtIn);
+        vm.stopPrank();
+    }
+
+    /// @dev Read the LP-fee override the hook returns for a small (non-JIT) probe swap on the canonical
+    ///      pool, by calling `beforeSwap` directly as the PoolManager. buy-team direction ⇒ no `_open`.
+    function _probeFee() internal returns (uint24) {
+        SwapParams memory sp = SwapParams({
+            zeroForOne: _buyTeamZeroForOne(),
+            amountSpecified: -int256(1 * ONE),
+            sqrtPriceLimitX96: 0
+        });
+        vm.prank(address(pm));
+        (, , uint24 fee) = hook.beforeSwap(address(this), key, sp, "");
+        return fee;
+    }
+
+    function test_dynamicFee_baseAtRest_risesWithDeviation_clampedAtMax() public {
+        hook.setBaseFeePips(3000);
+        hook.setMaxFeePips(50_000);
+        hook.setSlopePipsPerTick(10_000); // ~5 ticks of deviation already clamps to the ceiling
+
+        // At rest (oracle not yet ready) the override is the floor.
+        uint24 f0 = _probeFee();
+        assertTrue(LPFeeLibrary.isOverride(f0), "override flag missing at rest");
+        assertEq(LPFeeLibrary.removeOverrideFlag(f0), 3000, "at-rest fee != base floor");
+
+        // Warm the oracle in one block, then advance to a fresh block.
+        _buyTeam(trader, 1_000 * ONE); // real swap → afterSwap initializes the oracle
+        vm.roll(block.number + 1);
+
+        // A large print pushes spot far from the (clamped, lagging) oracle → big deviation.
+        _buyTeam(trader, 3_000_000 * ONE);
+
+        (int24 oTick, bool ready) = hook.oracleTick();
+        assertTrue(ready, "oracle not ready after warmup");
+        (, int24 spot,,) = pm.getSlot0(key.toId());
+        uint256 dev = uint256(uint24(spot >= oTick ? spot - oTick : oTick - spot));
+        assertGt(dev, 5, "deviation too small to exercise the clamp (vacuous)");
+
+        // The override rose with deviation and sits clamped at the ceiling.
+        uint24 f1 = _probeFee();
+        assertTrue(LPFeeLibrary.isOverride(f1), "override flag missing when deviated");
+        assertGt(LPFeeLibrary.removeOverrideFlag(f1), 3000, "fee did not rise with deviation");
+        assertEq(LPFeeLibrary.removeOverrideFlag(f1), 50_000, "fee not clamped at maxFeePips");
+    }
+
+    /// The Bunni-class bar: a swap must fill even when the deviation-scaled fee is pinned at its ceiling.
+    function test_swapAtMaxDeviation_stillSettles() public {
+        hook.setBaseFeePips(3000);
+        hook.setMaxFeePips(50_000);
+        hook.setSlopePipsPerTick(10_000);
+
+        _buyTeam(trader, 1_000 * ONE);
+        vm.roll(block.number + 1);
+        _buyTeam(trader, 3_000_000 * ONE); // drive spot far from oracle → fee clamped at 5%
+
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 50_000, "precondition: fee at ceiling");
+
+        // A further swap while the fee sits at the 5% ceiling must still settle (no revert / no brick).
+        uint256 teamBefore = team.balanceOf(trader);
+        _buyTeam(trader, 10_000 * ONE);
+        assertGt(team.balanceOf(trader), teamBefore, "swap at max-deviation fee failed to settle");
+    }
+
+    /// Setter guards: fee params are owner-gated and bounded (base ≤ max ≤ MAX_LP_FEE).
+    function test_feeSetters_boundedAndOwnerGated() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        hook.setBaseFeePips(1000);
+
+        vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
+        hook.setMaxFeePips(2999); // below the 3000 floor
+
+        vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
+        hook.setBaseFeePips(60_000); // above the 50_000 ceiling
+
+        vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
+        hook.setMaxFeePips(1_000_001); // above MAX_LP_FEE
     }
 }

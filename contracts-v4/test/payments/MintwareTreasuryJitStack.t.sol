@@ -10,6 +10,7 @@ import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
 import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {LPFeeLibrary}          from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
@@ -67,7 +68,7 @@ contract MintwareTreasuryJitStackTest is Test {
         // vault address, and the vault's key needs the (mined) hook address. Break it by PREDICTING the
         // vault's CREATE address: the hook is deployed first (CREATE2, bumping our nonce by 1), so the
         // vault lands at computeCreateAddress(this, currentNonce + 1).
-        PoolKey memory ctorKey = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
+        PoolKey memory ctorKey = PoolKey({currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: SPACING, hooks: IHooks(address(0))});
         address predictedVault = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         (address hookAddr, bytes32 salt) =
@@ -75,7 +76,7 @@ contract MintwareTreasuryJitStackTest is Test {
         hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         require(address(hook) == hookAddr, "hook addr");
 
-        key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(hookAddr)});
+        key = PoolKey({currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: SPACING, hooks: IHooks(hookAddr)});
         vault = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), address(this), teamAddr);
         require(address(vault) == predictedVault, "vault addr prediction");
 

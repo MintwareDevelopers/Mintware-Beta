@@ -10,6 +10,7 @@ import {IPoolManager}             from "@uniswap/v4-core/src/interfaces/IPoolMan
 import {IHooks}                   from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}                  from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency}                 from "@uniswap/v4-core/src/types/Currency.sol";
+import {LPFeeLibrary}             from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 
 /// @notice Deploy the YPN v2 treasury-vault stack (the "spend-while-you-earn" LSA) — the treasury vault
 ///         (which HOLDS its Uniswap-V4 position itself, Phase-2 convergence), the JIT hook, and the
@@ -66,11 +67,13 @@ contract DeployTreasuryV2 is Script {
         require(usdc != teamToken, "identical tokens");
         (address c0, address c1) = usdc < teamToken ? (usdc, teamToken) : (teamToken, usdc);
 
-        // Placeholder-hooks key for the hook ctor + mining (the hook ctor ignores key.hooks).
+        // Placeholder-hooks key for the hook ctor + mining (the hook ctor ignores key.hooks). The pool is
+        // a DYNAMIC-FEE pool (the hook overrides the LP fee per swap — Phase-1 MEV lever); POOL_FEE is
+        // applied as the hook's BASE (floor) fee after deploy, not as a static pool fee.
         PoolKey memory ctorKey = PoolKey({
             currency0: Currency.wrap(c0),
             currency1: Currency.wrap(c1),
-            fee:       poolFee,
+            fee:       LPFeeLibrary.DYNAMIC_FEE_FLAG,
             tickSpacing: tickSpacing,
             hooks:     IHooks(address(0))
         });
@@ -96,10 +99,11 @@ contract DeployTreasuryV2 is Script {
         (address hookAddr, bytes32 hookSalt) =
             HookMiner.find(C2_FACTORY, JIT_HOOK_FLAGS, type(MintwareTreasuryJitHook).creationCode, hookArgs);
 
-        // 2. The hooked pool key (the vault LPs into this pool; the hook JITs team->USDC swaps).
+        // 2. The hooked pool key (the vault LPs into this pool; the hook JITs team->USDC swaps + drives
+        //    the per-swap dynamic fee).
         PoolKey memory key = PoolKey({
             currency0: Currency.wrap(c0), currency1: Currency.wrap(c1),
-            fee: poolFee, tickSpacing: tickSpacing, hooks: IHooks(hookAddr)
+            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: tickSpacing, hooks: IHooks(hookAddr)
         });
 
         vm.startBroadcast(deployerKey);
@@ -119,9 +123,11 @@ contract DeployTreasuryV2 is Script {
         // 5. Open the V4 pool WITH the hook (the vault reads slot0; the hook JITs team->USDC swaps).
         IPoolManager(poolMgr).initialize(key, initPrice);
 
-        // 6. Wire the JIT seam: vault <-> hook, and exempt the vault's OWN recover/collect swaps.
+        // 6. Wire the JIT seam: vault <-> hook, and exempt the vault's OWN recover/collect swaps. Set the
+        //    dynamic-fee floor to POOL_FEE (ceiling/slope keep in-code defaults; retune post-deploy).
         vault.setJitHook(address(hook));
         hook.setJitSkipSender(address(vault));
+        hook.setBaseFeePips(poolFee);
 
         // 7. Payment Gateway (settles card charges against the senior side).
         MintwarePaymentGateway gateway = new MintwarePaymentGateway(address(vault), usdc, treasury, admin);
