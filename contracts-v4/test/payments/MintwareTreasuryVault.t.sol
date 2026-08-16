@@ -490,6 +490,69 @@ contract MintwareTreasuryVaultTest is Test {
         assertEq(S.v.totalSeniorAssets() - seniorBefore, collected - expTeam - expProto, "community cut != 60%");
     }
 
+    // ── am-AMM rent routing (Phase 3): rent is the LP-fee replacement → same tranche split as fees ──
+
+    /// During the lock, 100% of pushed rent lifts the price-free senior NAV (no junior earmark).
+    function test_fundRent_100pct_senior_during_lock() public {
+        vm.prank(owner);
+        S.v.setRentFunder(address(this));
+        assertTrue(S.v.teamFeesRedirected(), "expected lock active");
+
+        uint256 seniorBefore = S.v.totalSeniorAssets();
+        uint256 rent = 100_000 * ONE_USDC;
+        usdc.mint(address(this), rent);
+        usdc.approve(address(S.v), rent);
+        S.v.fundRent(address(usdc), rent);
+
+        assertEq(S.v.reservedJuniorUSDC(), 0, "junior reserved during lock (should be 0)");
+        assertEq(S.v.totalSeniorAssets() - seniorBefore, rent, "100% of rent did not lift senior NAV during lock");
+    }
+
+    /// Post-cliff, rent splits 60/30/10 senior/junior/protocol — identical to `accrueFees`.
+    function test_fundRent_split_60_30_10_post_lock() public {
+        vm.warp(S.v.lockExpiry() + 1);
+        vm.prank(teamAddr);
+        S.v.redeemJunior();
+        assertFalse(S.v.teamFeesRedirected(), "fees still redirected after junior release");
+
+        vm.prank(owner);
+        S.v.setRentFunder(address(this));
+
+        uint256 seniorBefore   = S.v.totalSeniorAssets();
+        uint256 protoBefore    = usdc.balanceOf(protocol);
+        uint256 reservedBefore = S.v.reservedJuniorUSDC();
+
+        uint256 rent = 100_000 * ONE_USDC;
+        usdc.mint(address(this), rent);
+        usdc.approve(address(S.v), rent);
+        S.v.fundRent(address(usdc), rent);
+
+        uint256 expTeam  = (rent * 3000) / 10000;
+        uint256 expProto = (rent * 1000) / 10000;
+        assertEq(S.v.reservedJuniorUSDC() - reservedBefore, expTeam, "team cut != 30%");
+        assertEq(usdc.balanceOf(protocol) - protoBefore, expProto, "protocol cut != 10%");
+        assertEq(S.v.totalSeniorAssets() - seniorBefore, rent - expTeam - expProto, "community cut != 60%");
+    }
+
+    /// fundRent is funder-gated + USDC-only; setRentFunder is owner-gated.
+    function test_fundRent_access_and_token_guards() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(); // Ownable
+        S.v.setRentFunder(address(this));
+
+        vm.prank(owner);
+        S.v.setRentFunder(address(this));
+
+        vm.prank(makeAddr("notFunder"));
+        vm.expectRevert(MintwareTreasuryVault.OnlyRentFunder.selector);
+        S.v.fundRent(address(usdc), 1);
+
+        usdc.mint(address(this), 1_000 * ONE_USDC);
+        usdc.approve(address(S.v), type(uint256).max);
+        vm.expectRevert(MintwareTreasuryVault.RentTokenMismatch.selector);
+        S.v.fundRent(address(team), 1_000 * ONE_USDC);
+    }
+
     /// @dev Generate swap fees on the vault's position (both directions so both legs accrue fees).
     function _genFees(Stack memory s) internal {
         usdc.mint(trader, 2_000_000 * ONE_USDC);

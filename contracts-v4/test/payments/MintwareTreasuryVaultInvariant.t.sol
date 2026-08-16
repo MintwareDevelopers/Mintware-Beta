@@ -180,6 +180,17 @@ contract TreasuryVaultHandler is Test {
             // IL witness: a dump with senior par deployed exercises the sub-par coverage regime.
             if (dump && vault.deployedFromSenior() > 0) exercisedIlWithDeploy = true;
         } catch {}
+        // Phase 3: each swap ALSO pushes am-AMM rent (as production does inside beforeSwap→poke), routed
+        // like fees. Folded into the swap handler (not a standalone selector) so the fuzz selector
+        // distribution — and the IL-scenario coverage the `afterInvariant` guard checks — is unchanged.
+        uint256 rent = bound(seed, 1_000_000, 50_000_000_000); // $1 .. $50k
+        usdc.mint(address(this), rent);
+        totalYieldMinted += rent;                              // sanctioned-mint conservation ghost
+        usdc.approve(address(vault), rent);
+        uint256 beforeProto = usdc.balanceOf(protocol);
+        try vault.fundRent(address(usdc), rent) {
+            totalUsdcOut += usdc.balanceOf(protocol) - beforeProto; // protocol cut (post-lock) left the system
+        } catch {}
     }
 
     // ── simulated Aave interest into the idle adapter (senior yield) ─────────────────
@@ -381,6 +392,9 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         // handler is the sole gateway → its gatewayBurn calls settle as the gateway.
         vm.prank(owner);
         vault.setGateway(address(handler));
+        // handler is also the am-AMM rent funder → its fundRent pushes rent as the sanctioned funder.
+        vm.prank(owner);
+        vault.setRentFunder(address(handler));
 
         bytes4[] memory sels = new bytes4[](10);
         sels[0] = TreasuryVaultHandler.seniorDeposit.selector;

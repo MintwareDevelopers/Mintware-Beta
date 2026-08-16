@@ -158,6 +158,12 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     /// @notice True once the loss breaker has tripped — `borrowIdleForJit` no-ops until reset.
     bool    public jitAutoDisabled;
 
+    // ── am-AMM rent sink (Phase 3 — enrolled blue-chip pools) ───────────────────────────────────
+    /// @notice The sole address allowed to PUSH auction rent via `fundRent` — the `MWAmAuction` contract
+    ///         (owner-set). On an am-AMM-enrolled pool the auction manager skims the swap fee, so per-block
+    ///         rent replaces the LP swap fee as the vault's yield; it is routed exactly like `accrueFees`.
+    address public rentFunder;
+
     /// @dev Op tag for the vault's own PoolManager unlock (dispatched in `unlockCallback`).
     enum Op { DEPLOY, RECOVER, COLLECT }
 
@@ -179,6 +185,8 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     event JitBreakerTripped(int256 netPnl);
     event JitBreakerReset(int256 netPnl);
     event JitMaxCumulativeLossSet(uint256 maxLoss);
+    event RentFunderSet(address indexed funder);
+    event RentFunded(uint256 total, uint256 toSenior, uint256 toJunior, uint256 toProtocol);
 
     error ZeroAddress();
     error ZeroAmount();
@@ -193,6 +201,8 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     error BadParam();
     error OnlyJitHook();
     error UsdcNotInPool();
+    error OnlyRentFunder();
+    error RentTokenMismatch();
 
     modifier onlyGateway() { if (msg.sender != gateway) revert OnlyGateway(); _; }
     modifier onlyJitHook() { if (msg.sender != jitHook) revert OnlyJitHook(); _; }
@@ -268,6 +278,14 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         if (bps > MAX_JIT_PER_BLOCK_BPS) revert BadParam();
         jitMaxPerBlockBps = bps;
         emit JitCapSet(bps);
+    }
+
+    /// @notice Wire (or clear) the am-AMM auction that may push rent via `fundRent`. Re-settable by the
+    ///         owner (an auction upgrade re-points it); `address(0)` disables rent intake. Only ever lets
+    ///         the funder ADD USDC value to the vault, so it carries no set-once restriction.
+    function setRentFunder(address funder) external onlyOwner {
+        rentFunder = funder;
+        emit RentFunderSet(funder);
     }
 
     /// @notice AUDIT H4: set the cumulative realized-JIT-loss threshold that trips the breaker (USDC).
@@ -546,6 +564,44 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         _supplyToAdapter(_freeSeniorBuffer());
 
         emit FeesAccrued(collected, toSenior, toJunior, toProtocol);
+    }
+
+    /// @notice `IAmAmmRentSink`: receive am-AMM auction rent (USDC) and route it EXACTLY like `accrueFees`
+    ///         — 100% senior while the junior lock is active, else 60/30/10 senior/junior/protocol. On an
+    ///         enrolled pool the auction manager skims the swap fee, so rent IS the vault's yield and gets
+    ///         identical tranche treatment; the senior claim stays PRICE-FREE (rent lands as par USDC).
+    /// @dev    Runs on the SWAP HOT PATH (the auction pushes rent inside `beforeSwap → poke`), so it is kept
+    ///         revert-minimal: an inbound USDC pull + pure split accounting, with NO Aave supply and NO
+    ///         pause gate — a revert here would brick the enrolled pool. The free senior buffer this adds is
+    ///         swept to Aave on the next `accrueFees`/`depositUSDC`/`recoverFromLP`. USDC-only by
+    ///         construction: the pool's am-AMM `bidToken` MUST be USDC, so rent can credit the senior at par
+    ///         (a volatile team-token rent would have to land on the junior side — rejected here instead).
+    function fundRent(address token, uint256 amount) external nonReentrant {
+        if (msg.sender != rentFunder) revert OnlyRentFunder();
+        if (token != address(usdc)) revert RentTokenMismatch();
+        if (amount == 0) return;
+
+        uint256 balBefore = usdc.balanceOf(address(this));
+        usdc.safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = usdc.balanceOf(address(this)) - balBefore; // balance-diff (defensive)
+        if (received == 0) return;
+
+        uint256 toJunior;
+        uint256 toProtocol;
+        if (!teamFeesRedirected) {
+            toJunior   = received.mulDiv(FEE_TEAM_BPS, BPS, Math.Rounding.Floor);
+            toProtocol = received.mulDiv(FEE_PROTOCOL_BPS, BPS, Math.Rounding.Floor);
+            reservedJuniorUSDC += toJunior;                 // earmark team's cut out of the senior view
+            if (toProtocol > 0 && protocolTreasury != address(0)) {
+                usdc.safeTransfer(protocolTreasury, toProtocol);
+            } else {
+                toProtocol = 0; // no treasury → leave it in the senior buffer
+            }
+        }
+        // Remainder (100% during lock; 60% community after) stays as senior buffer → lifts par NAV. No Aave
+        // supply here (hot-path safety) — swept on the next accrueFees/deposit/recover.
+        uint256 toSenior = received - toJunior - toProtocol;
+        emit RentFunded(received, toSenior, toJunior, toProtocol);
     }
 
     // ── engine: JIT borrow-seam (hook-only, atomic within one swap) ─────────────────
