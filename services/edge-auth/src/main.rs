@@ -77,8 +77,16 @@ async fn main() {
                 let interval = Duration::from_secs(env_u64("EDGE_NAV_REFRESH_SECS", 15));
                 // EDGE_VAULT_KIND=v2 reads the treasury vault's senior tranche; default (unset) = v1.
                 let kind = edge_auth::chain::VaultKind::from_env_str(&env::var("EDGE_VAULT_KIND").unwrap_or_default());
-                eprintln!("edge-auth: NAV refresher polling {vault} ({kind:?}) every {}s, tracking {} user(s)", interval.as_secs(), users.len());
-                tokio::spawn(run_refresher(store.clone(), EthReader::with_kind(rpc, vault, kind), users, interval));
+                // EDGE_COLLATERAL=eth (+ EDGE_PRICE_FEED) turns on the multi-collateral arm. Parse FAILS
+                // CLOSED — a misconfigured ETH arm disables the refresher rather than value ETH as USDC.
+                match edge_auth::chain::CollateralConfig::from_lookup(|k| env::var(k).ok()) {
+                    Ok(collateral) => {
+                        eprintln!("edge-auth: NAV refresher polling {vault} ({kind:?}, {collateral:?}) every {}s, tracking {} user(s)", interval.as_secs(), users.len());
+                        let reader = EthReader::with_kind(rpc, vault, kind).with_collateral(collateral);
+                        tokio::spawn(run_refresher(store.clone(), reader, users, interval));
+                    }
+                    Err(e) => eprintln!("edge-auth: bad EDGE_COLLATERAL config ({e}) — NAV refresher DISABLED (fail closed)"),
+                }
             }
             Err(_) => eprintln!("edge-auth: EDGE_VAULT_ADDRESS is not a valid address — refresher DISABLED"),
         },

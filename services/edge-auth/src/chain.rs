@@ -84,6 +84,59 @@ pub enum CollateralConfig {
     },
 }
 
+impl CollateralConfig {
+    /// Parse from a key→value lookup (env in prod, a map in tests). `EDGE_COLLATERAL`: absent/`usdc` →
+    /// `Usdc` (price-free); `eth` REQUIRES a valid `EDGE_PRICE_FEED` (Chainlink) and reads optional
+    /// `EDGE_FEED_DECIMALS` (default 8) + the four haircut knobs (`EDGE_COLLATERAL_{VOL_BPS,
+    /// MAX_HOLD_SECS,Z_MILLI,SLIP_BPS}`, falling back to `HaircutParams::ETH_DEFAULT`). **Fails CLOSED:**
+    /// an `eth` arm with a missing/invalid feed → `Err` — a vault holding ETH must NEVER be valued as
+    /// USDC (that would 1:1 over-credit ~3000×). The caller must disable the refresher on `Err`.
+    pub fn from_lookup(get: impl Fn(&str) -> Option<String>) -> Result<CollateralConfig, String> {
+        let kind = get("EDGE_COLLATERAL").map(|s| s.trim().to_ascii_lowercase());
+        match kind.as_deref() {
+            None | Some("") | Some("usdc") => Ok(CollateralConfig::Usdc),
+            Some("eth") => {
+                let feed_str = get("EDGE_PRICE_FEED")
+                    .ok_or_else(|| "EDGE_COLLATERAL=eth requires EDGE_PRICE_FEED".to_string())?;
+                let price_feed = feed_str
+                    .trim()
+                    .parse::<Address>()
+                    .map_err(|_| format!("EDGE_PRICE_FEED is not a valid address: {feed_str}"))?;
+                let feed_decimals =
+                    get("EDGE_FEED_DECIMALS").and_then(|s| s.trim().parse().ok()).unwrap_or(8u8);
+                let d = crate::haircut::HaircutParams::ETH_DEFAULT;
+                let haircut = crate::haircut::HaircutParams {
+                    vol_annual_bps: get("EDGE_COLLATERAL_VOL_BPS").and_then(|s| s.trim().parse().ok()).unwrap_or(d.vol_annual_bps),
+                    max_hold_secs: get("EDGE_COLLATERAL_MAX_HOLD_SECS").and_then(|s| s.trim().parse().ok()).unwrap_or(d.max_hold_secs),
+                    z_score_milli: get("EDGE_COLLATERAL_Z_MILLI").and_then(|s| s.trim().parse().ok()).unwrap_or(d.z_score_milli),
+                    settlement_slippage_bps: get("EDGE_COLLATERAL_SLIP_BPS").and_then(|s| s.trim().parse().ok()).unwrap_or(d.settlement_slippage_bps),
+                };
+                Ok(CollateralConfig::Eth { price_feed, feed_decimals, haircut })
+            }
+            Some(other) => Err(format!("EDGE_COLLATERAL must be 'usdc' or 'eth', got '{other}'")),
+        }
+    }
+}
+
+/// Decode + VALIDATE a Chainlink `latestRoundData` return (5 × 32-byte words:
+/// `[roundId, answer, startedAt, updatedAt, answeredInRound]`) → `(answer_positive, updatedAt_secs)`.
+/// The standard Chainlink safety checks: a positive answer, a non-zero `updatedAt`, and a COMPLETE round
+/// (`answeredInRound >= roundId`, guarding a carried-over stale answer). Any failure (or short data) →
+/// `(0, 0)` → the caller yields 0 spendable + a stale-price decline (fail safe), never a bad auth. Pure.
+pub fn decode_chainlink_round(bytes: &[u8]) -> (u128, u64) {
+    if bytes.len() < 5 * 32 {
+        return (0, 0);
+    }
+    let round_id = U256::from_be_slice(&bytes[0..32]);
+    let answer = u128::try_from(U256::from_be_slice(&bytes[32..64])).unwrap_or(0); // non-positive int256 → huge U256 → 0
+    let updated_at = u64::try_from(U256::from_be_slice(&bytes[96..128])).unwrap_or(0);
+    let answered_in_round = U256::from_be_slice(&bytes[128..160]);
+    if answer == 0 || updated_at == 0 || answered_in_round < round_id {
+        return (0, 0);
+    }
+    (answer, updated_at)
+}
+
 /// Scale a Chainlink `answer` (feed-native decimals) to USD 6dp. Chainlink ETH/USD is 8dp → ÷100.
 /// A non-positive answer arrives as `0` (the caller already floored negatives) → 0 spendable (fail safe).
 /// Pure.
@@ -207,11 +260,8 @@ impl EthReader {
     /// in `ledger::authorize` via `NavSnapshot::price_is_fresh` (`updatedAt` becomes `price_observed_at_secs`).
     async fn fetch_eth_price(&self, feed: Address, feed_decimals: u8) -> Result<(u128, u64), ChainError> {
         let bytes = self.eth_call_to(feed, latestRoundDataCall {}.abi_encode()).await?;
-        if bytes.len() < 5 * 32 {
-            return Err(ChainError::Decode(format!("short chainlink result: {} bytes", bytes.len())));
-        }
-        let answer = u128::try_from(U256::from_be_slice(&bytes[32..64])).unwrap_or(0); // word 1 = answer
-        let updated_at = u64::try_from(U256::from_be_slice(&bytes[96..128])).unwrap_or(0); // word 3 = updatedAt
+        // Validate the round (positive answer, fresh updatedAt, complete round) — invalid → (0,0) fail safe.
+        let (answer, updated_at) = decode_chainlink_round(&bytes);
         Ok((chainlink_answer_to_usd_6dp(answer, feed_decimals), updated_at))
     }
 
@@ -248,6 +298,62 @@ mod tests {
         assert_eq!(chainlink_answer_to_usd_6dp(200_000, 2), 2_000_000_000);
         // fail-safe: a zeroed (non-positive/oversize) answer → 0.
         assert_eq!(chainlink_answer_to_usd_6dp(0, 8), 0);
+    }
+
+    fn round_bytes(round_id: u128, answer: u128, updated_at: u64, answered_in_round: u128) -> Vec<u8> {
+        let mut b = vec![0u8; 5 * 32];
+        b[16..32].copy_from_slice(&round_id.to_be_bytes()); // word 0 roundId (low 16 bytes)
+        b[48..64].copy_from_slice(&answer.to_be_bytes()); // word 1 answer
+        b[112..128].copy_from_slice(&(updated_at as u128).to_be_bytes()); // word 3 updatedAt
+        b[144..160].copy_from_slice(&answered_in_round.to_be_bytes()); // word 4 answeredInRound
+        b
+    }
+
+    #[test]
+    fn chainlink_round_validation_fails_safe() {
+        // complete round, positive answer, fresh → passes through.
+        assert_eq!(decode_chainlink_round(&round_bytes(10, 200_000_000_000, 1_000, 10)), (200_000_000_000, 1_000));
+        // carried-over stale round (answeredInRound < roundId) → (0,0).
+        assert_eq!(decode_chainlink_round(&round_bytes(10, 200_000_000_000, 1_000, 9)), (0, 0));
+        // zero answer / zero updatedAt (incomplete round) / short data → (0,0).
+        assert_eq!(decode_chainlink_round(&round_bytes(10, 0, 1_000, 10)), (0, 0));
+        assert_eq!(decode_chainlink_round(&round_bytes(10, 200_000_000_000, 0, 10)), (0, 0));
+        assert_eq!(decode_chainlink_round(&[0u8; 100]), (0, 0));
+    }
+
+    #[test]
+    fn collateral_config_from_lookup_fails_closed() {
+        use std::collections::HashMap;
+        let map = |pairs: &[(&str, &str)]| {
+            let m: HashMap<String, String> =
+                pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+            move |k: &str| m.get(k).cloned()
+        };
+        let feed = "0x0000000000000000000000000000000000000abc";
+
+        // default / explicit usdc → Usdc.
+        assert!(matches!(CollateralConfig::from_lookup(map(&[])).unwrap(), CollateralConfig::Usdc));
+        assert!(matches!(CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "usdc")])).unwrap(), CollateralConfig::Usdc));
+
+        // eth + valid feed → Eth with default 8dp + ETH_DEFAULT haircut.
+        match CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "eth"), ("EDGE_PRICE_FEED", feed)])).unwrap() {
+            CollateralConfig::Eth { feed_decimals, haircut, .. } => {
+                assert_eq!(feed_decimals, 8);
+                assert_eq!(haircut, crate::haircut::HaircutParams::ETH_DEFAULT);
+            }
+            _ => panic!("expected Eth"),
+        }
+
+        // eth WITHOUT a feed, or with a bad feed, or an unknown kind → Err (fail closed, never Usdc).
+        assert!(CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "eth")])).is_err());
+        assert!(CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "eth"), ("EDGE_PRICE_FEED", "nope")])).is_err());
+        assert!(CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "btc")])).is_err());
+
+        // a haircut knob override reaches the params.
+        match CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "eth"), ("EDGE_PRICE_FEED", feed), ("EDGE_COLLATERAL_MAX_HOLD_SECS", "2592000")])).unwrap() {
+            CollateralConfig::Eth { haircut, .. } => assert_eq!(haircut.max_hold_secs, 2_592_000),
+            _ => panic!("expected Eth"),
+        }
     }
 
     #[test]

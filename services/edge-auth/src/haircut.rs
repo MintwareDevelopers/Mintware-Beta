@@ -7,9 +7,9 @@
 //! risk model `nav.rs` refers to as the gate before the ETH arm can go live; a static 70% is only a
 //! magic number until it is tied to a hold-duration policy + a volatility assumption.
 //!
-//! Model: `γ = 1 − (z·σ·√T + slippage)`, clamped to `[0, 1]`.
-//!   - `σ` annualized volatility of the collateral, `T` the max hold in years, `z` the one-sided
-//!     confidence z-score (Gaussian drawdown approximation), `slippage` the batch-swap buffer.
+//! Model: `γ = 1 − (z·σ·√T + slippage)`, clamped to `[0, 1]` — where `σ` is the annualized collateral
+//! volatility, `T` the max hold in years, `z` the one-sided confidence z-score (Gaussian drawdown
+//! approximation), and `slippage` the batch-swap buffer.
 //! Computed OFF the hot path (at vault config / refresh time) — so f64 is fine here; the result is
 //! stored as `haircut_bps: u16` and the per-authorization money math stays integer/`U256` (see
 //! `nav.rs::equity`). Rounds DOWN (more haircut) so it never over-credits.
