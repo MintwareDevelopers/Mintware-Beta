@@ -6,8 +6,24 @@
 // compiled into a contract — this is purely deploy/runtime wiring, env-driven, and filled in once Arc
 // testnet access + the spend-stack deploy (`DeployArcSpendStack.s.sol`) land.
 
-/** Documented Arc target chain id (per the YPN foundation spec). */
+/** Arc testnet chain id (public — Circle / Arc docs). */
 export const ARC_CHAIN_ID = 5042002
+
+/**
+ * Public Arc TESTNET constants (source: docs.arc.io + developers.circle.com, 2026-08). All of this is
+ * public developer documentation — no Circle relationship required. Env vars override for prod/rotation.
+ */
+export const ARC_TESTNET = {
+  chainId: ARC_CHAIN_ID,
+  rpcUrl: 'https://rpc.testnet.arc.io',
+  explorer: 'https://testnet.arcscan.app',
+  faucet: 'https://faucet.circle.com',
+  usdc: '0x3600000000000000000000000000000000000000', // Arc testnet USDC (6dp)
+  // CCTP v2 (public — Circle CCTP docs). Arc's CCTP domain id is 26.
+  cctpDomain: 26,
+  cctpTokenMessenger: '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA',
+  cctpMessageTransmitter: '0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275',
+} as const
 
 export interface ArcSettlementConfig {
   chainId: number
@@ -30,23 +46,24 @@ export interface ArcSettlementConfig {
   cctpDepositRouter?: string
 }
 
-/** CCTP domain ids (Circle-assigned). Base is 6; Arc's domain is TBD — confirm with Circle. */
+/** CCTP domain ids (public — Circle CCTP docs). Base is 6; Arc is 26. */
 export const CCTP_DOMAIN = {
   base: 6,
-  arc: Number(process.env.ARC_CCTP_DOMAIN ?? -1), // -1 until Circle assigns/confirms
+  arc: Number(process.env.ARC_CCTP_DOMAIN ?? ARC_TESTNET.cctpDomain),
 } as const
 
 export const ARC: ArcSettlementConfig = {
   chainId: ARC_CHAIN_ID,
   name: 'Arc',
-  rpcUrl: process.env.ARC_RPC_URL,
-  usdc: process.env.ARC_USDC,
-  yieldSource: process.env.ARC_YIELD_SOURCE,
-  gateway: process.env.NEXT_PUBLIC_ARC_GATEWAY_ADDRESS,
+  // Public testnet defaults; env overrides for prod / rotation / provider RPCs.
+  rpcUrl: process.env.ARC_RPC_URL ?? ARC_TESTNET.rpcUrl,
+  usdc: process.env.ARC_USDC ?? ARC_TESTNET.usdc,
+  yieldSource: process.env.ARC_YIELD_SOURCE, // the one value still to confirm (Arc's yield 4626)
+  gateway: process.env.NEXT_PUBLIC_ARC_GATEWAY_ADDRESS, // set after DeployArcSpendStack on Arc
   vault: process.env.NEXT_PUBLIC_ARC_VAULT_ADDRESS,
-  cpnTreasury: process.env.ARC_CPN_TREASURY,
-  cctpMessageTransmitter: process.env.ARC_CCTP_MESSAGE_TRANSMITTER,
-  cctpDepositRouter: process.env.NEXT_PUBLIC_ARC_CCTP_ROUTER,
+  cpnTreasury: process.env.ARC_CPN_TREASURY, // Circle Payments Network — the one relationship-gated piece
+  cctpMessageTransmitter: process.env.ARC_CCTP_MESSAGE_TRANSMITTER ?? ARC_TESTNET.cctpMessageTransmitter,
+  cctpDepositRouter: process.env.NEXT_PUBLIC_ARC_CCTP_ROUTER, // set after deploy
 }
 
 /**

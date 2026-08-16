@@ -64,15 +64,35 @@ Arc's **fee model**: if Arc is EIP-1559-compatible, `services/relayer/src/submit
 uses a non-1559 fee mechanism, the relayer needs a tx-type tweak. (Circle Paymaster / ERC-4337 is a separate,
 user-facing *gasless-UX-on-non-Arc-chains* concern — not on the Arc settlement critical path.)
 
-## Arc-native pieces still to build (each needs Circle input)
+## Arc testnet is PUBLIC + live — verified on-chain (2026-08)
 
-| Piece | What it does | Needs from Circle |
+Almost none of this needs a Circle relationship; it's public developer infra. Verified live via `cast`:
+chain `5042002`, RPC `https://rpc.testnet.arc.io` responding (block ~57.3M), and real bytecode at the USDC
++ both CCTP contracts. All wired into `config/arc.ts` + `foundry.toml` (`--rpc-url arc`) + the deploy script.
+
+| Value | Public address / setting | Status |
 |---|---|---|
-| **Broadcast the spend stack to Arc** | Run `DeployArcSpendStack` + deploy the CCTP router on Arc | Arc testnet RPC + faucet |
-| **Wire the real yield source** | Set `ARC_YIELD_SOURCE` to Arc's 4626 | Which primitive (or a Circle reserve product) |
-| **CCTP wiring** | Set `ARC_CCTP_MESSAGE_TRANSMITTER` + `ARC_CCTP_DOMAIN`; the router is built | CCTP addresses + Arc domain id |
-| **Confirm the relayer fee model** | Verify EIP-1559 on Arc (else a small tx-type tweak) | Arc fee-model docs |
-| **CPN card off-ramp** | `cpnTreasury` settles into the Visa/MC rails | CPN access + issuing relationship |
+| RPC / chain id | `https://rpc.testnet.arc.io` / `5042002` | ✅ verified live |
+| Faucet / explorer | `faucet.circle.com` / `testnet.arcscan.app` | ✅ public |
+| USDC | `0x3600000000000000000000000000000000000000` | ✅ verified (real bytecode) |
+| CCTP domain | `26` | ✅ public |
+| CCTP MessageTransmitter v2 | `0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275` | ✅ verified (real bytecode) |
+| CCTP TokenMessenger v2 | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | ✅ verified (real bytecode) |
+
+The deploy script auto-uses the real Arc USDC + CCTP MessageTransmitter when broadcasting to Arc.
+
+## What actually remains
+
+| Piece | Blocker | Who |
+|---|---|---|
+| **Broadcast the spend stack to Arc** | Fund the deployer via the **public** `faucet.circle.com` (testnet USDC for gas) | trivial — public faucet |
+| **The real yield source** | Confirm Arc's native USDC-yield 4626 (or wrap a Circle reserve product) | public lookup / Circle |
+| **Relayer fee model** | Arc is EVM + <1s finality; confirm EIP-1559 vs. a fee variant | public docs |
+| **CPN card off-ramp** | `cpnTreasury` → Visa/MC settlement | **genuinely Circle** — the card partnership + issuer |
+| **The grant** | — | **Circle relationship** |
+
+Net: the **only genuinely relationship-gated items are the CPN card off-ramp and the grant**. Everything else
+is public and wired; deploying to Arc testnet is one funded `forge script` away.
 
 ## Deploy sequence (when Arc testnet is up)
 

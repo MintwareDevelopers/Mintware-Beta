@@ -29,6 +29,10 @@ import {MockMessageTransmitter} from "../test/mocks/MockMessageTransmitter.sol";
 ///   Broadcast:  forge script contracts-v4/script/DeployArcSpendStack.s.sol --rpc-url arc --broadcast --slow
 contract DeployArcSpendStack is Script {
     uint256 constant ARC_CHAIN_ID = 5042002;
+    // Public Arc TESTNET addresses (docs.arc.io + Circle CCTP docs) — used automatically when broadcasting
+    // to Arc, so the deploy needs no env for the real USDC + CCTP wiring.
+    address constant ARC_USDC_TESTNET = 0x3600000000000000000000000000000000000000;
+    address constant ARC_CCTP_MT_TESTNET = 0xE737e5cEBEEBa77EFE34D4aa090756590b1CE275; // MessageTransmitter v2
 
     function run() external {
         uint256 deployerKey = vm.envOr("DEPLOYER_PRIVATE_KEY", uint256(0xA11CE));
@@ -37,11 +41,16 @@ contract DeployArcSpendStack is Script {
 
         vm.startBroadcast(deployerKey);
 
-        // USDC — real on Arc, else a mock so the script is self-contained.
+        // USDC — env override, else the real Arc testnet USDC when on Arc, else a mock (local dry-run).
         address usdc = vm.envOr("ARC_USDC", address(0));
         if (usdc == address(0)) {
-            usdc = address(new MockERC20("USD Coin", "USDC", 6));
-            console.log("USDC (mock 6dp) deployed");
+            if (block.chainid == ARC_CHAIN_ID) {
+                usdc = ARC_USDC_TESTNET;
+                console.log("USDC = Arc testnet USDC (real)");
+            } else {
+                usdc = address(new MockERC20("USD Coin", "USDC", 6));
+                console.log("USDC (mock 6dp) deployed");
+            }
         }
 
         // Yield source — Arc's yield primitive as a 4626, else a mock over USDC.
@@ -64,8 +73,13 @@ contract DeployArcSpendStack is Script {
         // self-contained. Relayer = deployer for the testnet stack (rotate for a real relayer).
         address transmitter = vm.envOr("ARC_CCTP_MESSAGE_TRANSMITTER", address(0));
         if (transmitter == address(0)) {
-            transmitter = address(new MockMessageTransmitter());
-            console.log("CCTP MessageTransmitter (mock) deployed");
+            if (block.chainid == ARC_CHAIN_ID) {
+                transmitter = ARC_CCTP_MT_TESTNET;
+                console.log("CCTP MessageTransmitter = Arc testnet (real)");
+            } else {
+                transmitter = address(new MockMessageTransmitter());
+                console.log("CCTP MessageTransmitter (mock) deployed");
+            }
         }
         MintwareCctpDepositRouter cctpRouter =
             new MintwareCctpDepositRouter(transmitter, usdc, address(vault), deployer, deployer);
