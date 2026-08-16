@@ -24,6 +24,19 @@ Wiring verified on-chain: vault↔adapter↔gateway↔router all cross-reference
 only placeholder is the yield source (swap in Arc's real primitive when it's live). **Learned:** on Arc the
 native gas balance and the ERC-20 USDC are the SAME unified balance (USDC *is* the gas token).
 
+### 💳 LIVE card charge settled on Arc
+
+A full `settleSpend` ran on-chain (tx `0x41e12fce…1a64c8de`): a user's EIP-712 `DelegatedSpendPermit`
+authorized a **$2 spend**, the relayer submitted `settleSpend`, and the Gateway verified the signature,
+enforced the daily cap + liquidity, **burned 2 USDC of the user's yield-earning vault shares**, and paid the
+merchant/card-rail 2 USDC. Result on-chain: user shares 4 USDC → 2 USDC, merchant +2 USDC, `PaymentSettled`
+emitted. The complete "spend against, not out of" loop, live on Circle's chain.
+
+⚠ **Arc settle gotcha:** forge's local EVM mis-simulates Arc's system-contract USDC and throws a spurious
+`StackUnderflow` on the broadcast pre-sim — settle via `cast send` (real-node gas estimation), not
+`forge script --broadcast`. On-chain redeem + settleSpend both verified working (`LiveSettleArc.s.sol` is the
+reference for building/signing the permit).
+
 ## The topology — one clean separation
 
 ```
