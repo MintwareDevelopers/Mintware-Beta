@@ -42,7 +42,7 @@ Set these env vars in your shell (or a **gitignored** `.env` you `source` — ne
 |---|---|---|
 | `DEPLOYER_PRIVATE_KEY` | **your key** | Funded with Base Sepolia ETH. Never commit. |
 | `USDC_ADDRESS` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | Base Sepolia USDC |
-| `V4_POOL_MANAGER` | `0x05E73354cFDd6745C338b50BcFDfA7E2C1b33b63` | Uniswap V4 PoolManager (Base Sepolia) |
+| `V4_POOL_MANAGER` | `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` | Uniswap V4 PoolManager (Base Sepolia) |
 | `ORACLE_SIGNER` | **your oracle signer address** | Signs fee/rebalance attestations |
 | `TREASURY_ADDRESS` | **your treasury** | Fee recipient |
 | `MINTWARE_DISTRIBUTOR` | **your distributor address** | MintwareDistributor (rewards) |

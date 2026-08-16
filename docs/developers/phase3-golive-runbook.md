@@ -28,7 +28,7 @@ pnpm forge:test --match-contract DeployPhase3Test
 
 | Chain | `V4_POOL_MANAGER` | `USDC_ADDRESS` |
 |---|---|---|
-| Base Sepolia (84532) | `0x05E73354cFDd6745C338b50BcFDfA7E2C1b33b63` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| Base Sepolia (84532) | `0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
 | Base Mainnet (8453) | `0x498581fF9918ee3e5f1fc97e9fa62afc18901efa` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 
 ---
