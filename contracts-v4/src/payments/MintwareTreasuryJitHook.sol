@@ -97,7 +97,11 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     ///         The captured fee accrues to the vault's existing LP position → senior/junior fee split.
     uint24  public baseFeePips = 3000;       // floor fee (0.30%)
     uint24  public maxFeePips  = 50_000;     // ceiling fee (5%); always ≤ MAX_LP_FEE
-    uint256 public slopePipsPerTick = 100;   // pips added per tick of |spot − oracle|
+    uint256 public slopePipsPerTick = 100;   // pips added per tick of |spot − oracle| (linear term)
+    /// @notice Quadratic term (increment 3): pips added per tick² of deviation, so toxic/arb-sized prints
+    ///         pay SUPER-linearly while retail pays ≈ the floor. 0 ⇒ pure linear (the default — inc1/inc2
+    ///         behavior is unchanged until ops raises this). The base fee is `base + slope·dev + quad·dev²`.
+    uint256 public quadMultiplierPipsPerTickSq;
     /// @notice Optional per-block fee-move budget for `MWDynamicFee.rateLimit` (0 ⇒ rate-limit OFF, the
     ///         default: fee is the pure clamped deviation curve). When set, a single block can move the
     ///         override by at most `maxFeeStepPerBlock × blocksElapsed` — blunting predictable-hike MEV.
@@ -137,6 +141,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     event BaseFeeSet(uint24 baseFeePips);
     event MaxFeeSet(uint24 maxFeePips);
     event FeeSlopeSet(uint256 slopePipsPerTick);
+    event QuadMultiplierSet(uint256 quadMultiplierPipsPerTickSq);
     event MaxFeeStepSet(uint256 maxFeeStepPerBlock);
     event SurgeParamsSet(uint24 maxSurgeFeePips, uint256 halfLifeSecs);
     event SurgeArmed(uint32 ts);
@@ -224,11 +229,19 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         maxFeePips = v;
         emit MaxFeeSet(v);
     }
-    /// @notice Set the per-tick slope. Bounded to `MAX_LP_FEE` per tick (overflow-safe; the fee is clamped).
+    /// @notice Set the per-tick slope (linear term). Bounded to `MAX_LP_FEE` per tick (overflow-safe; the
+    ///         fee is clamped).
     function setSlopePipsPerTick(uint256 v) external onlyOwner {
         if (v > LPFeeLibrary.MAX_LP_FEE) revert FeeParam();
         slopePipsPerTick = v;
         emit FeeSlopeSet(v);
+    }
+    /// @notice Set the per-tick² quadratic multiplier (increment 3). Bounded to `MAX_LP_FEE` so
+    ///         `quad·dev²` (dev tick-bounded ≤ ~1.77e6) stays overflow-safe on the fee path. 0 ⇒ pure linear.
+    function setQuadMultiplier(uint256 v) external onlyOwner {
+        if (v > LPFeeLibrary.MAX_LP_FEE) revert FeeParam();
+        quadMultiplierPipsPerTickSq = v;
+        emit QuadMultiplierSet(v);
     }
     /// @notice Set the per-block fee-move budget for the rate limiter (0 ⇒ off).
     function setMaxFeeStepPerBlock(uint256 v) external onlyOwner {
@@ -295,7 +308,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     function _dynamicFee(PoolKey calldata key) private returns (uint24) {
         (, int24 tick,,) = poolManager.getSlot0(key.toId());
         uint256 dev = _oracle.deviationTicks(tick);
-        uint24 fee = MWDynamicFee.volatilityFee(baseFeePips, maxFeePips, dev, slopePipsPerTick);
+        uint24 fee = MWDynamicFee.volatilityFeeQuad(baseFeePips, maxFeePips, dev, slopePipsPerTick, quadMultiplierPipsPerTickSq);
         uint256 step = maxFeeStepPerBlock;
         if (step != 0) {
             uint256 elapsed = block.number > _lastFeeBlock ? block.number - _lastFeeBlock : 0;

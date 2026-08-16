@@ -33,6 +33,9 @@ contract FeeHarness {
     function surge(uint24 maxPips, uint256 elapsed, uint256 halfLife) external pure returns (uint24) {
         return MWDynamicFee.surgeFee(maxPips, elapsed, halfLife);
     }
+    function volFeeQuad(uint24 b, uint24 m, uint256 v, uint256 slope, uint256 quad) external pure returns (uint24) {
+        return MWDynamicFee.volatilityFeeQuad(b, m, v, slope, quad);
+    }
 }
 
 contract MWHooksLibTest is Test {
@@ -56,7 +59,7 @@ contract MWHooksLibTest is Test {
 
     function test_intra_block_updates_are_frozen() public {
         guard.update(1000);
-        guard.update(5000); // same block → no move
+        guard.update(5000); // same block -> no move
         assertEq(guard.oracleTick(), int24(1000), "oracle frozen within a block");
     }
 
@@ -70,10 +73,10 @@ contract MWHooksLibTest is Test {
     function test_move_budget_scales_with_blocks_then_caps() public {
         guard.update(1000);
         vm.roll(block.number + 5);
-        guard.update(9000); // budget 100*5 = 500 → 1500
+        guard.update(9000); // budget 100*5 = 500 -> 1500
         assertEq(guard.oracleTick(), int24(1500), "budget scales with elapsed blocks");
 
-        vm.roll(block.number + 50); // elapsed 50 > catchup 10 → budget 100*10 = 1000
+        vm.roll(block.number + 50); // elapsed 50 > catchup 10 -> budget 100*10 = 1000
         guard.update(99000);
         assertEq(guard.oracleTick(), int24(2500), "budget capped by maxCatchupBlocks");
     }
@@ -89,9 +92,9 @@ contract MWHooksLibTest is Test {
 
     function test_circuit_breaker_reverts_offband() public {
         guard.update(1000); // oracle = 1000, band = 500
-        guard.checkCircuitBreaker(1500); // exactly at band → ok
+        guard.checkCircuitBreaker(1500); // exactly at band -> ok
         vm.expectRevert(MWOracleGuard.PriceDeviationTooHigh.selector);
-        guard.checkCircuitBreaker(1501); // beyond band → revert
+        guard.checkCircuitBreaker(1501); // beyond band -> revert
     }
 
     function test_deviation_ticks() public {
@@ -131,8 +134,42 @@ contract MWHooksLibTest is Test {
         assertEq(fees.surge(0, 0, 100), 0, "maxPips 0 = 0");
     }
 
+    // ── quadratic base fee (increment 3) ─────────────────────────────────────────
+
+    function test_quad_fee_matches_linear_when_zero() public view {
+        // quad = 0 ⇒ EXACTLY volatilityFee (increment 1) for any inputs.
+        assertEq(fees.volFeeQuad(3000, 50_000, 50, 10, 0), fees.volFee(3000, 50_000, 50, 10), "quad 0 != linear");
+        assertEq(fees.volFeeQuad(3000, 50_000, 500, 10, 0), fees.volFee(3000, 50_000, 500, 10), "quad 0 != linear (clamped)");
+    }
+
+    function test_quad_fee_superlinear_and_clamps() public view {
+        // Pure quadratic (slope 0): the fee's variable part scales with dev^2. Doubling dev quadruples it.
+        assertEq(fees.volFeeQuad(3000, 1_000_000, 10, 0, 5), 3000 + 5 * 100, "dev=10 -> base + 5*100");
+        assertEq(fees.volFeeQuad(3000, 1_000_000, 20, 0, 5), 3000 + 5 * 400, "dev=20 -> base + 5*400 (4x the term)");
+        // Convex blend: base + slope*dev + quad*dev^2.
+        assertEq(fees.volFeeQuad(3000, 1_000_000, 10, 10, 5), 3000 + 100 + 500, "blend = base + slope*dev + quad*dev^2");
+        // Clamps to the ceiling.
+        assertEq(fees.volFeeQuad(3000, 50_000, 1000, 0, 5), 50_000, "large dev clamps at maxFeePips");
+    }
+
+    /// Pure + revert-free + bounded + monotone non-decreasing in dev, within the caller-guaranteed bounds
+    /// (slope, quad <= MAX_PIPS; dev tick-bounded <= ~1.77e6).
+    function testFuzz_quad_bounded_and_monotone(uint24 base, uint24 maxPips, uint256 dev, uint256 slope, uint256 quad) public view {
+        maxPips = uint24(bound(maxPips, 1, 1_000_000));
+        base    = uint24(bound(base, 0, maxPips));
+        slope   = bound(slope, 0, 1_000_000);
+        quad    = bound(quad, 0, 1_000_000);
+        dev     = bound(dev, 0, 1_774_544); // TickMath max |tick - tick|
+        uint24 f = fees.volFeeQuad(base, maxPips, dev, slope, quad);
+        assertLe(f, maxPips, "quad fee exceeded ceiling");
+        assertGe(f, base, "quad fee below base floor");
+        if (dev < 1_774_544) {
+            assertGe(fees.volFeeQuad(base, maxPips, dev + 1, slope, quad), f, "quad fee not monotone in dev");
+        }
+    }
+
     /// Pure + revert-free + bounded for any input within the caller's documented bounds
-    /// (maxPips ≤ MAX_LP_FEE, halfLife ≤ 365 days). Monotone non-increasing in elapsed.
+    /// (maxPips <= MAX_LP_FEE, halfLife <= 365 days). Monotone non-increasing in elapsed.
     function testFuzz_surge_bounded_and_monotone(uint24 maxPips, uint256 elapsed, uint256 halfLife) public view {
         maxPips  = uint24(bound(maxPips, 0, 1_000_000));
         halfLife = bound(halfLife, 1, 365 days);

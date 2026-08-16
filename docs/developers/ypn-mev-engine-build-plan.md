@@ -66,7 +66,10 @@ needs only the pool initialized with `DYNAMIC_FEE_FLAG` (a pool-init change, not
 >   `max(base, surge)`; armed on JIT reposition + owner/vault `armSurge()`; **OFF by default**
 >   (`surgeHalfLifeSecs = 0`), ops-enabled via `setSurgeParams` (bounded `maxPips ≤ MAX_LP_FEE`,
 >   `halfLife ≤ 365d`). Invariants re-proven 7/7 at 256×128k/0 **with the surge live + decaying**.
-> - **Remaining Phase-1:** inc3 = quadratic base refinement (`delta²`, replacing the current linear slope).
+> - **inc3 (quadratic base)** — `MWDynamicFee.volatilityFeeQuad` adds a `quadMult·dev²` term (convex blend
+>   `base + slope·dev + quad·dev²`); `quadMult` OFF by default (0 ⇒ exactly inc1 linear), ops-enabled +
+>   bounded (`≤ MAX_LP_FEE`). Invariants re-proven 7/7 at 256×128k/0 with the FULL convex fee + surge live.
+> - **Phase 1 COMPLETE.** Next: **Phase 2 — MEV-tax** (`fee += min(k·priorityFee, cap)`, Base-gated).
 - **Formula (Bunni v2 two-component, verified from source — oracle-free):**
   - Surge (floor): `surge = 1e6 · 2^(−Δt/halfLife)` — starts 100%, halves every `halfLife`; **triggered** on our
     LP rebalance / JIT reposition / backing-NAV move / idle-gap autostart. The anti-sandwich / anti-stale clamp.

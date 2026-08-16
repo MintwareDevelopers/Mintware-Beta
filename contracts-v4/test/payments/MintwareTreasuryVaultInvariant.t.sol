@@ -301,6 +301,10 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         // active-surge counterpart to the monotonicity argument (a higher LP fee only adds to backing).
         hook.setSurgeParams(50_000, 365 days); // 5% ceiling, slow decay so it stays live deep into the run
         hook.armSurge();
+        // Increment 3: also enable the quadratic base term so the fuzzed swaps route through the FULL convex
+        // fee (base + slope·dev + quad·dev² , floored by the surge). Same monotonicity guarantee — a higher
+        // LP fee only adds to backing — proven here rather than argued.
+        hook.setQuadMultiplier(50);
 
         key = PoolKey({
             currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,

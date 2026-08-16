@@ -26,9 +26,9 @@ import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
 /// @notice Increment 2 of #5: the REAL V4 JIT hook against a genuine in-test PoolManager. A trader's
-///         team→USDC swap fires the hook (borrow a bounded slice → open a tight single-sided USDC
-///         position → close → mint ERC-6909 claims for the afterSwap gotcha); then a keeper `sweepJit()`
-///         redeems the claims, swaps team→USDC, and settles with the vault — leaving `jitBorrowed` at 0
+///         team->USDC swap fires the hook (borrow a bounded slice -> open a tight single-sided USDC
+///         position -> close -> mint ERC-6909 claims for the afterSwap gotcha); then a keeper `sweepJit()`
+///         redeems the claims, swaps team->USDC, and settles with the vault — leaving `jitBorrowed` at 0
 ///         and the senior whole. Both tokens 6dp at a 1:1 pool.
 contract MintwareTreasuryJitHookTest is Test {
     using PoolIdLibrary for PoolKey;
@@ -83,7 +83,7 @@ contract MintwareTreasuryJitHookTest is Test {
         key = PoolKey({currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: SPACING, hooks: IHooks(hookAddr)});
         pm.initialize(key, INIT_SQRT_PRICE);
 
-        // Team commit + community deposit ($10k senior → Aave idle backs the JIT borrow).
+        // Team commit + community deposit ($10k senior -> Aave idle backs the JIT borrow).
         team.mint(teamAddr, 1_000_000 * ONE);
         usdc.mint(teamAddr, 5_000 * ONE);
         vm.startPrank(teamAddr);
@@ -113,9 +113,9 @@ contract MintwareTreasuryJitHookTest is Test {
         );
     }
 
-    /// team→USDC = the direction that SELLS the team token (output USDC).
+    /// team->USDC = the direction that SELLS the team token (output USDC).
     function _sellTeamZeroForOne() internal view returns (bool) {
-        return address(team) < address(usdc); // team is currency0 → zeroForOne sells it
+        return address(team) < address(usdc); // team is currency0 -> zeroForOne sells it
     }
 
     function test_traderSwap_firesJit_thenSweepMakesSeniorWhole() public {
@@ -134,7 +134,7 @@ contract MintwareTreasuryJitHookTest is Test {
         // NAV is preserved through the open (jitBorrowed counted at par).
         assertApproxEqAbs(vault.totalSeniorAssets(), navBefore, 2, "senior NAV moved while JIT open");
 
-        // Keeper sweeps: redeem claims → team → USDC → settle. Senior made whole, borrow cleared.
+        // Keeper sweeps: redeem claims -> team -> USDC -> settle. Senior made whole, borrow cleared.
         uint256 returned = hook.sweepJit();
         assertGt(returned, 0, "sweep returned no USDC");
         assertEq(vault.jitBorrowed(), 0, "jitBorrowed not cleared after sweep");
@@ -161,10 +161,10 @@ contract MintwareTreasuryJitHookTest is Test {
 
     // ── dynamic-fee lever (YPN MEV engine, Phase 1 increment 1) ─────────────────────────────────
 
-    /// buy team (usdc→team): USDC is the INPUT, team the OUTPUT → never fires JIT (no team adapter),
+    /// buy team (usdc->team): USDC is the INPUT, team the OUTPUT -> never fires JIT (no team adapter),
     /// so it's a clean way to move price / probe the fee override without JIT side effects.
     function _buyTeamZeroForOne() internal view returns (bool) {
-        return address(usdc) < address(team); // usdc = currency0 → zeroForOne sells usdc (buys team)
+        return address(usdc) < address(team); // usdc = currency0 -> zeroForOne sells usdc (buys team)
     }
 
     function _buyTeam(address who, uint256 amtIn) internal {
@@ -199,10 +199,10 @@ contract MintwareTreasuryJitHookTest is Test {
         assertEq(LPFeeLibrary.removeOverrideFlag(f0), 3000, "at-rest fee != base floor");
 
         // Warm the oracle in one block, then advance to a fresh block.
-        _buyTeam(trader, 1_000 * ONE); // real swap → afterSwap initializes the oracle
+        _buyTeam(trader, 1_000 * ONE); // real swap -> afterSwap initializes the oracle
         vm.roll(block.number + 1);
 
-        // A large print pushes spot far from the (clamped, lagging) oracle → big deviation.
+        // A large print pushes spot far from the (clamped, lagging) oracle -> big deviation.
         _buyTeam(trader, 3_000_000 * ONE);
 
         (int24 oTick, bool ready) = hook.oracleTick();
@@ -226,7 +226,7 @@ contract MintwareTreasuryJitHookTest is Test {
 
         _buyTeam(trader, 1_000 * ONE);
         vm.roll(block.number + 1);
-        _buyTeam(trader, 3_000_000 * ONE); // drive spot far from oracle → fee clamped at 5%
+        _buyTeam(trader, 3_000_000 * ONE); // drive spot far from oracle -> fee clamped at 5%
 
         assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 50_000, "precondition: fee at ceiling");
 
@@ -236,7 +236,7 @@ contract MintwareTreasuryJitHookTest is Test {
         assertGt(team.balanceOf(trader), teamBefore, "swap at max-deviation fee failed to settle");
     }
 
-    /// Setter guards: fee params are owner-gated and bounded (base ≤ max ≤ MAX_LP_FEE).
+    /// Setter guards: fee params are owner-gated and bounded (base <= max <= MAX_LP_FEE).
     function test_feeSetters_boundedAndOwnerGated() public {
         vm.prank(makeAddr("stranger"));
         vm.expectRevert();
@@ -266,7 +266,7 @@ contract MintwareTreasuryJitHookTest is Test {
     /// OFF by default: arming has no effect on the fee while `surgeHalfLifeSecs == 0` (ships dark).
     function test_surge_disabledByDefault() public {
         assertEq(hook.surgeHalfLifeSecs(), 0, "surge should be off by default");
-        hook.armSurge(); // owner arms, but disabled → ignored
+        hook.armSurge(); // owner arms, but disabled -> ignored
         assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), hook.baseFeePips(), "disabled surge changed the fee");
     }
 
@@ -276,14 +276,14 @@ contract MintwareTreasuryJitHookTest is Test {
         hook.setSurgeParams(40_000, 100); // 4% surge, 100s half-life
         hook.armSurge();
 
-        // t0: full surge floor (base 3000 is well below → surge wins).
+        // t0: full surge floor (base 3000 is well below -> surge wins).
         assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 40_000, "surge not at full floor when armed");
 
-        // One half-life → exactly half (integer halving, frac 0).
+        // One half-life -> exactly half (integer halving, frac 0).
         vm.warp(block.timestamp + 100);
         assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 20_000, "surge did not halve after one half-life");
 
-        // Fully decayed (>= 24 half-lives) → back to the base floor.
+        // Fully decayed (>= 24 half-lives) -> back to the base floor.
         vm.warp(block.timestamp + 100 * 24);
         assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 3000, "surge did not decay back to base");
     }
@@ -330,17 +330,52 @@ contract MintwareTreasuryJitHookTest is Test {
     /// A JIT reposition auto-arms the surge (the primary anti-sandwich moment). With the base ceiling
     /// held low, the post-JIT fee reflects the surge floor — proof the reposition armed it.
     function test_surge_autoArmsOnJitReposition() public {
-        hook.setMaxFeePips(5_000);      // base can never exceed 0.5% (floor stays 3000 ≤ 5000)
+        hook.setMaxFeePips(5_000);      // base can never exceed 0.5% (floor stays 3000 <= 5000)
         hook.setSurgeParams(40_000, 100); // 4% surge
 
-        // Before any reposition the surge is unarmed → fee is the base floor.
+        // Before any reposition the surge is unarmed -> fee is the base floor.
         assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 3000, "surge armed before any JIT");
 
-        // A team→USDC swap fires JIT `_open` → auto-arms the surge in the same block.
+        // A team->USDC swap fires JIT `_open` -> auto-arms the surge in the same block.
         _sellTeam(trader, 2_000 * ONE);
         assertGt(vault.jitBorrowed(), 0, "precondition: JIT did not fire");
 
-        // Same timestamp → full surge floors the (≤5000) base at 40_000.
+        // Same timestamp -> full surge floors the (<=5000) base at 40_000.
         assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 40_000, "JIT reposition did not arm the surge");
+    }
+
+    // ── quadratic base fee (YPN MEV engine, Phase 1 increment 3) ────────────────────────────────
+
+    /// The quadratic term is wired into `_dynamicFee`, lifts/clamps the fee at deviation, and its setter
+    /// is owner-gated + bounded. Isolate it by zeroing the linear slope.
+    function test_quadMultiplier_wiredIntoFee_ownerGated() public {
+        hook.setBaseFeePips(3000);
+        hook.setMaxFeePips(50_000);
+        hook.setSlopePipsPerTick(0);  // isolate the quadratic term
+        hook.setQuadMultiplier(0);
+
+        // Warm the oracle, then drive a large deviation.
+        _buyTeam(trader, 1_000 * ONE);
+        vm.roll(block.number + 1);
+        _buyTeam(trader, 3_000_000 * ONE);
+        (int24 oTick, bool ready) = hook.oracleTick();
+        assertTrue(ready, "oracle not ready");
+        (, int24 spot,,) = pm.getSlot0(key.toId());
+        uint256 dev = uint256(uint24(spot >= oTick ? spot - oTick : oTick - spot));
+        assertGt(dev, 5, "deviation too small (vacuous)");
+
+        // slope 0 + quad 0 -> the fee sits at the base floor even at a big deviation.
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 3000, "floor expected with slope+quad off");
+
+        // Enable the quadratic term -> the same deviation now lifts the fee, clamped at the ceiling.
+        hook.setQuadMultiplier(1_000_000); // quad*dev^2 >> ceiling -> clamps
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 50_000, "quad term not wired / not clamped");
+
+        // Setter: owner-gated + bounded to MAX_LP_FEE.
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        hook.setQuadMultiplier(1);
+        vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
+        hook.setQuadMultiplier(1_000_001);
     }
 }

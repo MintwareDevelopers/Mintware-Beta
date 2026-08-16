@@ -28,6 +28,31 @@ library MWDynamicFee {
         return uint24(fee);
     }
 
+    /// @notice Convex volatility fee: `base + slope·dev + quadMult·dev²`, clamped to `maxFeePips`
+    ///         (or 100% if 0). The quadratic term makes toxic / arb-sized prints (large `dev`) pay
+    ///         SUPER-linearly while mean-reverting retail (small `dev`) still pays ≈ the floor —
+    ///         the Bunni-v2 base shape. `quadMult == 0` reduces EXACTLY to `volatilityFee` (increment 1),
+    ///         so a hook can migrate from linear to quadratic by raising one param.
+    /// @dev    Pure + clamped, but NOT self-guarding against overflow — same convention as `volatilityFee`:
+    ///         the CALLER must bound `slope` and `quadMult` (≤ MAX_PIPS) and `dev` is tick-bounded at
+    ///         runtime (≤ ~1.77e6), so `slope·dev` (≤ ~1.8e12) and `quadMult·dev²` (≤ ~3.2e18) stay far
+    ///         under 2^256. Under those bounds it can never revert on the swap path (the Bunni-class bar).
+    /// @param quadMultiplierPipsPerTickSq  pips added per tick² of deviation (0 ⇒ pure linear)
+    function volatilityFeeQuad(
+        uint24 baseFeePips,
+        uint24 maxFeePips,
+        uint256 deviationTicks,
+        uint256 slopePipsPerTick,
+        uint256 quadMultiplierPipsPerTickSq
+    ) internal pure returns (uint24) {
+        uint256 fee = uint256(baseFeePips)
+            + (deviationTicks * slopePipsPerTick)
+            + (quadMultiplierPipsPerTickSq * deviationTicks * deviationTicks);
+        uint256 cap = maxFeePips == 0 ? MAX_PIPS : maxFeePips;
+        if (fee > cap) fee = cap;
+        return uint24(fee);
+    }
+
     /// @notice Time-decaying surge floor: `maxSurgePips · 2^(−elapsed/halfLife)`, computed as an
     ///         integer-halving with linear interpolation across the current half-life. Starts at the
     ///         full `maxSurgePips` (elapsed 0) and halves every `halfLife` seconds. Used as an
