@@ -36,6 +36,9 @@ contract FeeHarness {
     function volFeeQuad(uint24 b, uint24 m, uint256 v, uint256 slope, uint256 quad) external pure returns (uint24) {
         return MWDynamicFee.volatilityFeeQuad(b, m, v, slope, quad);
     }
+    function mevTax(uint256 k, uint256 priorityWei, uint24 capPips) external pure returns (uint24) {
+        return MWDynamicFee.mevTaxPips(k, priorityWei, capPips);
+    }
 }
 
 contract MWHooksLibTest is Test {
@@ -179,5 +182,23 @@ contract MWHooksLibTest is Test {
         // one second later never increases the surge
         uint24 s2 = fees.surge(maxPips, elapsed + 1, halfLife);
         assertLe(s2, s, "surge not monotone non-increasing");
+    }
+
+    // ── MEV-tax (Phase 2) ────────────────────────────────────────────────────────
+
+    function test_mevTax_proportional_and_capped() public view {
+        assertEq(fees.mevTax(0, 100 gwei, 50_000), 0, "k 0 = off");
+        assertEq(fees.mevTax(50, 0, 50_000), 0, "zero priority = 0");
+        assertEq(fees.mevTax(50, 999_999_999, 50_000), 0, "sub-gwei priority floors to 0");
+        assertEq(fees.mevTax(50, 10 gwei, 50_000), 500, "50 pips/gwei * 10 gwei");
+        assertEq(fees.mevTax(50, 100 gwei, 50_000), 5000, "50 * 100");
+        assertEq(fees.mevTax(50, 10_000 gwei, 50_000), 50_000, "clamped at cap");
+        assertEq(fees.mevTax(50, 100 gwei, 0), 0, "cap 0 = off");
+    }
+
+    /// Saturating + revert-free + bounded for ANY inputs (incl. adversarial k / priority) — the tax path
+    /// must never overflow or revert on the swap.
+    function testFuzz_mevTax_bounded_no_overflow(uint256 k, uint256 priorityWei, uint24 capPips) public view {
+        assertLe(fees.mevTax(k, priorityWei, capPips), capPips, "mev-tax exceeded its cap");
     }
 }

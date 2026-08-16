@@ -305,6 +305,13 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         // fee (base + slope·dev + quad·dev² , floored by the surge). Same monotonicity guarantee — a higher
         // LP fee only adds to backing — proven here rather than argued.
         hook.setQuadMultiplier(50);
+        // Phase 2: enable the MEV-tax + a standing priority-fee gap (basefee 1 gwei, gasprice 11 gwei →
+        // 10 gwei priority) so every fuzzed swap ALSO pays the additive tax. Now the swaps route through the
+        // FULL lever stack (base + slope·dev + quad·dev² , floored by surge, + MEV-tax), clamped to MAX_LP_FEE
+        // — the strongest active-fee solvency proof. Additive-only ⇒ backing can only improve.
+        hook.setMevTax(50, 50_000);
+        vm.fee(1 gwei);
+        vm.txGasPrice(11 gwei);
 
         key = PoolKey({
             currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,

@@ -80,6 +80,25 @@ library MWDynamicFee {
         return uint24(surge);
     }
 
+    /// @notice MEV-tax fee component (Phase 2): a fee proportional to the swap's REVEALED priority-fee bid,
+    ///         `min(k · (priorityFeeWei / 1e9), capPips)`. A searcher arbing us must outbid for top-of-block
+    ///         via priority fee under Base's priority ordering, so taxing that bid recaptures its edge to the
+    ///         vault — oracle-free (the searcher's own bid is the value signal). `k == 0` or zero priority
+    ///         ⇒ 0 (tax off / no toxic bid). This is the fee-OVERRIDE approximation of the canonical MEV-tax
+    ///         (which takes a delta) — chosen so no `beforeSwapReturnDelta` bit / CREATE2 re-mine is needed.
+    /// @dev    Saturating + revert-free for ANY inputs (no caller bound needed): if `k·gwei` would meet or
+    ///         exceed `capPips` we return `capPips` BEFORE multiplying, so the product can never overflow.
+    /// @param k               pips of fee per gwei of priority fee (0 ⇒ tax off)
+    /// @param priorityFeeWei  `tx.gasprice − block.basefee`, in wei (caller floors at 0)
+    /// @param capPips         max tax contribution in pips (caller bounds ≤ MAX_PIPS)
+    function mevTaxPips(uint256 k, uint256 priorityFeeWei, uint24 capPips) internal pure returns (uint24) {
+        if (k == 0 || capPips == 0) return 0;
+        uint256 gweiAmt = priorityFeeWei / 1e9;
+        if (gweiAmt == 0) return 0;
+        if (gweiAmt > uint256(capPips) / k) return capPips; // k·gweiAmt ≥ cap → saturate (pre-mult, no overflow)
+        return uint24(k * gweiAmt);                         // guaranteed ≤ capPips ≤ MAX_PIPS
+    }
+
     /// @notice Rate-limit a fee move: clamp `target` to within `maxStep` of `last` (Stage-1.2).
     /// @dev    Prevents a single-block jump from base fee to max fee, which is what lets an MEV
     ///         searcher cleanly front-run a predictable hike / back-run a predictable drop. The

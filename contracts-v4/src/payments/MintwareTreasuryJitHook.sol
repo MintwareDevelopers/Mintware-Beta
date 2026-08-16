@@ -122,6 +122,18 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     uint256 public surgeHalfLifeSecs;          // 0 ⇒ surge OFF (default). Set > 0 (≤ 365d) to enable.
     uint32  private _lastSurgeTs;              // block.timestamp the surge was last armed (0 ⇒ never)
 
+    // ── MEV-tax lever (YPN MEV engine — Phase 2) ────────────────────────────────────────────────
+    /// @notice An ADDITIVE fee component proportional to the swap's revealed priority-fee bid:
+    ///         `min(mevTaxK · priorityFeeGwei, mevTaxCapPips)`, added on top of `max(base, surge)` and
+    ///         clamped to `MAX_LP_FEE`. Under Base's priority ordering a searcher arbing us must reveal its
+    ///         edge through a higher priority fee → we recapture it to the vault. Oracle-free. OFF by default
+    ///         (`mevTaxK = 0`); per-chain opt-in via `setMevTax`.
+    /// @dev    ⚠ BASE-ONLY / SOFT GUARANTEE. This leans on the (centralized Base) sequencer honoring priority
+    ///         ordering — NOT a cryptographic guarantee, and it does NOT hold under L1 builder auctions. Treat
+    ///         captured MEV-tax as BONUS revenue, never core solvency; size `mevTaxK` conservatively.
+    uint256 public mevTaxK;                     // pips of fee per gwei of priority fee (0 ⇒ tax OFF, default)
+    uint24  public mevTaxCapPips = 50_000;      // max tax contribution (5%); bounded ≤ MAX_LP_FEE. Cosmetic until k>0.
+
     // ── per-swap open state (0 between swaps) ──────────────────────────────────
     uint128 private jitLiquidity;
     int24   private jitLower;
@@ -145,6 +157,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     event MaxFeeStepSet(uint256 maxFeeStepPerBlock);
     event SurgeParamsSet(uint24 maxSurgeFeePips, uint256 halfLifeSecs);
     event SurgeArmed(uint32 ts);
+    event MevTaxSet(uint256 k, uint24 capPips);
 
     error OnlyPoolManager();
     error UnauthorizedInitializer();
@@ -276,6 +289,16 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         emit SurgeArmed(_lastSurgeTs);
     }
 
+    /// @notice Configure the MEV-tax (Phase 2). `k == 0` disables it (the default). `capPips ≤ MAX_LP_FEE`;
+    ///         `k` needs no bound (the `mevTaxPips` saturation is overflow-safe for any k). ⚠ Base-only /
+    ///         soft-sequencer-trust — enable per chain, size `k` conservatively (see the field NatSpec).
+    function setMevTax(uint256 k, uint24 capPips) external onlyOwner {
+        if (capPips > LPFeeLibrary.MAX_LP_FEE) revert FeeParam();
+        mevTaxK       = k;
+        mevTaxCapPips = capPips;
+        emit MevTaxSet(k, capPips);
+    }
+
     // ── IHooks: the two active callbacks ────────────────────────────────────────
 
     /// @notice On a team→USDC swap (output = USDC), borrow a bounded slice + open a tight single-sided
@@ -325,6 +348,14 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
             uint256 sEl = block.timestamp > _lastSurgeTs ? block.timestamp - _lastSurgeTs : 0;
             uint24 surge = MWDynamicFee.surgeFee(maxSurgeFeePips, sEl, hl);
             if (surge > fee) fee = surge;
+        }
+        // MEV-tax (Phase 2): ADD the priority-fee-proportional tax on top, then clamp the total to
+        // MAX_LP_FEE. Base-only / bonus-not-solvency (see the field NatSpec); off unless mevTaxK > 0.
+        uint256 k = mevTaxK;
+        if (k != 0) {
+            uint256 priority = tx.gasprice > block.basefee ? tx.gasprice - block.basefee : 0;
+            uint256 total = uint256(fee) + MWDynamicFee.mevTaxPips(k, priority, mevTaxCapPips);
+            fee = total > LPFeeLibrary.MAX_LP_FEE ? uint24(LPFeeLibrary.MAX_LP_FEE) : uint24(total);
         }
         return fee | LPFeeLibrary.OVERRIDE_FEE_FLAG;
     }

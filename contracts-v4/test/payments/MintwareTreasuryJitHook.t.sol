@@ -378,4 +378,40 @@ contract MintwareTreasuryJitHookTest is Test {
         vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
         hook.setQuadMultiplier(1_000_001);
     }
+
+    // ── MEV-tax (YPN MEV engine, Phase 2) ───────────────────────────────────────────────────────
+
+    /// The MEV-tax adds a priority-fee-proportional component on top of the base, off by default,
+    /// capped, owner-gated. Drive `tx.gasprice − block.basefee` via cheatcodes.
+    function test_mevTax_addsWithPriorityFee_cappedAndOwnerGated() public {
+        hook.setBaseFeePips(3000);
+        hook.setMaxFeePips(50_000);
+        hook.setSlopePipsPerTick(0); // isolate base floor + tax (no deviation term)
+
+        // Create a priority gap: basefee 1 gwei, gasprice 11 gwei → priority 10 gwei.
+        vm.fee(1 gwei);
+        vm.txGasPrice(11 gwei);
+
+        // OFF by default → just the base floor, even with a priority fee present.
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 3000, "mev-tax should be off by default");
+
+        // Enable: 50 pips per gwei, cap 5%. 10 gwei priority → +500 pips.
+        hook.setMevTax(50, 50_000);
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 3000 + 500, "mev-tax not added to base");
+
+        // A whale priority bid saturates the tax at its cap → base + cap.
+        vm.txGasPrice(1_000_000 gwei);
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 3000 + 50_000, "mev-tax not capped");
+
+        // No priority fee → tax contributes nothing.
+        vm.txGasPrice(1 gwei); // == basefee → priority 0
+        assertEq(LPFeeLibrary.removeOverrideFlag(_probeFee()), 3000, "tax charged with zero priority");
+
+        // Setter: owner-gated + cap bounded to MAX_LP_FEE.
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        hook.setMevTax(50, 50_000);
+        vm.expectRevert(MintwareTreasuryJitHook.FeeParam.selector);
+        hook.setMevTax(50, 1_000_001);
+    }
 }
