@@ -48,17 +48,30 @@ a pluggable `IYieldAdapter` — Base uses the Aave adapter, Arc uses the 4626 ad
 - **`DeployArcSpendStack.s.sol`** — deploys the whole spend stack (USDC → 4626 source → adapter → vault →
   Gateway, fully wired). Parameterized: real Arc `ARC_USDC` / `ARC_YIELD_SOURCE` / `ARC_CPN_TREASURY` if set,
   else mocks. **Dry-runs clean today**; broadcasts to Arc the moment there's an RPC.
-- **`config/arc.ts`** — the Arc settlement config home: chain id `5042002`, env-driven addresses,
-  `isArcConfigured()` fail-safe gate, and the `EDGE_CHAIN_ID=5042002` wiring note.
+- **`MintwareCctpDepositRouter`** (`contracts-v4/src/payments/`) — Arc-side **bridge-and-deposit**: completes
+  a Circle CCTP transfer (USDC burned on Base) via `MessageTransmitter.receiveMessage` and, in the same tx,
+  deposits the minted USDC into the vault crediting the user. Relayer-gated (safe recipient binding — see the
+  contract NatSpec; a permissionless CCTP-v2-hookData variant can follow). Balance-diff accounting. **6 Forge
+  tests green** against the REAL spend stack (router → vault → 4626 adapter → yield source).
+- **`config/arc.ts`** — the Arc settlement config home: chain id `5042002`, env-driven addresses (incl. CCTP),
+  `CCTP_DOMAIN`, `isArcConfigured()` fail-safe gate, and the `EDGE_CHAIN_ID=5042002` wiring note.
+
+## Gas in USDC on Arc — already native (no paymaster code needed)
+
+On Arc, **USDC is the gas token**, so the relayer's existing EIP-1559 submit path pays gas in USDC *natively*
+— no Circle Paymaster integration is required for settlement on Arc. The only thing to confirm with Circle is
+Arc's **fee model**: if Arc is EIP-1559-compatible, `services/relayer/src/submit.rs` works unchanged; if Arc
+uses a non-1559 fee mechanism, the relayer needs a tx-type tweak. (Circle Paymaster / ERC-4337 is a separate,
+user-facing *gasless-UX-on-non-Arc-chains* concern — not on the Arc settlement critical path.)
 
 ## Arc-native pieces still to build (each needs Circle input)
 
 | Piece | What it does | Needs from Circle |
 |---|---|---|
-| **Broadcast the spend stack to Arc** | Run `DeployArcSpendStack` on Arc | Arc testnet RPC + faucet |
+| **Broadcast the spend stack to Arc** | Run `DeployArcSpendStack` + deploy the CCTP router on Arc | Arc testnet RPC + faucet |
 | **Wire the real yield source** | Set `ARC_YIELD_SOURCE` to Arc's 4626 | Which primitive (or a Circle reserve product) |
-| **CCTP deposit path** | Bring USDC from Base → Arc into the vault (burn-mint) | CCTP contracts on Arc |
-| **Circle Paymaster** | Users pay gas in USDC / relayer sponsors it | Paymaster availability on Arc |
+| **CCTP wiring** | Set `ARC_CCTP_MESSAGE_TRANSMITTER` + `ARC_CCTP_DOMAIN`; the router is built | CCTP addresses + Arc domain id |
+| **Confirm the relayer fee model** | Verify EIP-1559 on Arc (else a small tx-type tweak) | Arc fee-model docs |
 | **CPN card off-ramp** | `cpnTreasury` settles into the Visa/MC rails | CPN access + issuing relationship |
 
 ## Deploy sequence (when Arc testnet is up)

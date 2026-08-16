@@ -24,7 +24,17 @@ export interface ArcSettlementConfig {
   vault?: string
   /** Circle Payments Network settlement address (the card off-ramp recipient). */
   cpnTreasury?: string
+  /** CCTP MessageTransmitter on Arc (destination side — mints bridged USDC). */
+  cctpMessageTransmitter?: string
+  /** Deployed MintwareCctpDepositRouter on Arc (bridge-and-deposit). */
+  cctpDepositRouter?: string
 }
+
+/** CCTP domain ids (Circle-assigned). Base is 6; Arc's domain is TBD — confirm with Circle. */
+export const CCTP_DOMAIN = {
+  base: 6,
+  arc: Number(process.env.ARC_CCTP_DOMAIN ?? -1), // -1 until Circle assigns/confirms
+} as const
 
 export const ARC: ArcSettlementConfig = {
   chainId: ARC_CHAIN_ID,
@@ -35,6 +45,8 @@ export const ARC: ArcSettlementConfig = {
   gateway: process.env.NEXT_PUBLIC_ARC_GATEWAY_ADDRESS,
   vault: process.env.NEXT_PUBLIC_ARC_VAULT_ADDRESS,
   cpnTreasury: process.env.ARC_CPN_TREASURY,
+  cctpMessageTransmitter: process.env.ARC_CCTP_MESSAGE_TRANSMITTER,
+  cctpDepositRouter: process.env.NEXT_PUBLIC_ARC_CCTP_ROUTER,
 }
 
 /**

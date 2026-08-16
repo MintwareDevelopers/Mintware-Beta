@@ -7,8 +7,10 @@ import {IERC20}    from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MintwareYieldVault}           from "../src/payments/MintwareYieldVault.sol";
 import {MintwarePaymentGateway}       from "../src/payments/MintwarePaymentGateway.sol";
 import {MintwareERC4626YieldAdapter}  from "../src/vaults/MintwareERC4626YieldAdapter.sol";
+import {MintwareCctpDepositRouter}    from "../src/payments/MintwareCctpDepositRouter.sol";
 import {MockERC20}   from "../test/mocks/MockERC20.sol";
 import {MockERC4626} from "../test/mocks/MockERC4626.sol";
+import {MockMessageTransmitter} from "../test/mocks/MockMessageTransmitter.sol";
 
 /// @notice Deploy the YPN USDC SPEND STACK — the Arc-native settlement side. Same contracts that run on
 ///         Base, wired for Arc: a single-asset USDC `MintwareYieldVault` idling into an ERC-4626 yield
@@ -58,6 +60,16 @@ contract DeployArcSpendStack is Script {
             new MintwarePaymentGateway(address(vault), usdc, treasury, deployer);
         vault.setGateway(address(gateway));
 
+        // CCTP bridge-and-deposit router. Real MessageTransmitter on Arc, else a mock so the script is
+        // self-contained. Relayer = deployer for the testnet stack (rotate for a real relayer).
+        address transmitter = vm.envOr("ARC_CCTP_MESSAGE_TRANSMITTER", address(0));
+        if (transmitter == address(0)) {
+            transmitter = address(new MockMessageTransmitter());
+            console.log("CCTP MessageTransmitter (mock) deployed");
+        }
+        MintwareCctpDepositRouter cctpRouter =
+            new MintwareCctpDepositRouter(transmitter, usdc, address(vault), deployer, deployer);
+
         vm.stopBroadcast();
 
         console.log("=== YPN Arc spend stack ===");
@@ -68,6 +80,7 @@ contract DeployArcSpendStack is Script {
         console.log("adapter:   ", address(adapter));
         console.log("vault:     ", address(vault));
         console.log("gateway:   ", address(gateway));
+        console.log("cctpRouter:", address(cctpRouter));
         console.log("cpnTreasury:", treasury);
         console.log("");
         console.log("Point the edge at Arc: EDGE_CHAIN_ID=5042002");
