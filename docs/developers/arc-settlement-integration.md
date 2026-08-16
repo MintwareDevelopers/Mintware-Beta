@@ -37,6 +37,16 @@ emitted. The complete "spend against, not out of" loop, live on Circle's chain.
 `forge script --broadcast`. On-chain redeem + settleSpend both verified working (`LiveSettleArc.s.sol` is the
 reference for building/signing the permit).
 
+### 🌉 CCTP cross-chain deposit (Base → Arc) — completed end-to-end
+
+Full CCTP loop proven on live testnet: **burned 1 USDC on Base Sepolia** (`depositForBurn`, dest domain 26,
+mintRecipient = the Arc CCTP router) → **Circle attested** → **relayer called `receiveAndDeposit` on Arc**
+(tx `0x3e7734cf…da853`), which minted the USDC via `MessageTransmitter.receiveMessage` and deposited it into
+the vault. Result on-chain: recipient's Arc vault shares **2 → 3 USDC** (the bridged dollar arrived as
+yield-earning shares). Orchestrated by `services/relayer::cctp` (`IrisClient.fetch` + `submit_receive`).
+Learned: CCTP v2 uses UNIFIED contract addresses across chains; the public TokenMessenger is shared (filter
+your burn by tx, not by scanning); standard finality (`maxFee=0`, threshold 2000) attests in ~15 min.
+
 ## The topology — one clean separation
 
 ```
