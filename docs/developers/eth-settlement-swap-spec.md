@@ -1,10 +1,19 @@
-# Batch ETH→USDC Settlement Swap — SPEC (on-chain, deploy-gated)
+# Batch ETH→USDC Settlement Swap — SPEC (on-chain)
 
-> **Status: design spec, NOT built.** The on-chain half of the multi-collateral card system. The
-> off-chain engine (VaR haircut → Chainlink reader → Σ portfolio aggregation → store/`/authorize` →
-> multi-vault refresher) is built + tested in `services/edge-auth`. This spec is the on-chain piece that
-> makes an ETH-collateral vault's shares actually *card-spendable*: when card charges settle, convert
-> enough ETH→USDC to pay the rail. Written 2026-08-16 alongside the multi-collateral work.
+> **Status: Phase 1 BUILT + Forge-proven (2026-08-16); Phases 2–4 deploy-gated.** The on-chain half of
+> the multi-collateral card system. The off-chain engine (VaR haircut → Chainlink reader → Σ portfolio
+> aggregation → store/`/authorize` → multi-vault refresher) is built + tested in `services/edge-auth`.
+> This spec is the on-chain piece that makes an ETH-collateral vault's shares actually *card-spendable*:
+> when card charges settle, convert enough ETH→USDC to pay the rail.
+>
+> **Phase 1 landed as `contracts-v4/src/payments/MintwareEthSettlement.sol`** (7,260 B « EIP-170) — the
+> `batchSettleEth` swap itself, mirroring the JIT hook's oracle-bounded sweep. Proven against a REAL V4
+> pool in `contracts-v4/test/payments/MintwareEthSettlement.t.sol` (8 tests incl a 256-run fuzz, full
+> payments suite 126/126): fresh price → full fill no junior draw; manipulated spot (stale oracle → band
+> binds) → junior first-loss backstop pays the rail in full; shortfall beyond the per-call cap or below the
+> `minUsdcOut` floor → revert + state rollback; rail paid EXACTLY `totalUsdc` or reverts (fuzzed); WETH
+> backing conserved. **Remaining (Phases 2–4): relayer batch path, edge idle-buffer wire, external audit —
+> all deploy-gated.** Written 2026-08-16 alongside the multi-collateral work.
 
 ## Where it fits
 ```
@@ -88,10 +97,16 @@ recover. The ETH→USDC settlement swap is the SAME shape:
    an LST→USDC route (or LST→ETH→USDC). The edge already carries `feed_decimals` per vault; mirror the
    route here.
 
-## Build phases (when un-gated)
-1. `batchSettleEth` on the ETH-collateral vault, reusing `_swapLimit`/`_sqrtAtClamped` + the take/settle
-   discipline. Forge tests: fresh price → produces ≥ owed; a crash beyond γ → `SettlementSlippageExceeded`
-   or junior-buffer top-up; the senior stays price-free; every settle either pays in full or reverts.
+## Build phases
+1. ✅ **DONE (2026-08-16).** `batchSettleEth` — shipped as the standalone `MintwareEthSettlement.sol`
+   (not folded into the simple `MintwareYieldVault`, which has no V4 seam; a standalone settlement module
+   funded with WETH backing + a junior USDC buffer keeps the swap independently auditable and lets the ETH
+   vault stay the price-free single-asset vault it is). Reuses `_swapLimit`/`_sqrtAtClamped`/`_settleDelta`
+   verbatim from the JIT hook, reading the truncated tick from an injected `IOracleTickSource` (the hook's
+   `oracleTick()` view in prod). Exact-output `totalUsdc`, oracle-bounded → partial-fills at the band.
+   Forge tests all green as described in the status banner. **Design choices locked here:** batch (decision
+   1), exact-output with junior-buffer fallback (decision 3+4a), `minUsdcOut` catastrophe floor before any
+   junior draw (decision 4/5), per-call junior cap (open-question 3 → answered: yes, `juniorTopUpCapPerCall`).
 2. Relayer batch-settle path (`services/relayer`): group holds per ETH vault, compute `totalUsdc` +
    γ-derived `minUsdcOut`, build/sign/send. Extends the existing `settleSpend` calldata core.
 3. Wire the edge: an ETH vault's `idle_buffer` becomes "ETH convertible to USDC at the conservative
