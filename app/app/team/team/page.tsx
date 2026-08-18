@@ -33,8 +33,8 @@ export default function TeamRoles() {
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="font-atx-display font-medium text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Team & Roles</h1>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Preview · illustrative</span>
+          <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Team & Roles</h1>
+          <span className="live-chip"><span className="dot" aria-hidden />Preview · illustrative</span>
         </div>
         <button className="glass-pill glass-pill-sm" disabled title="Coming soon">+ Invite</button>
       </div>

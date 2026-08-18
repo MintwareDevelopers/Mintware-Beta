@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
 const wrap = 'mx-auto max-w-[1100px] px-6 max-[800px]:px-4 mw-reveal'
-const h2 = 'font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 [text-wrap:balance]'
+const h2 = 'font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 [text-wrap:balance]'
 const lead = 'text-[16px] leading-[1.55] text-ink-mid max-w-[62ch] mt-4'
 
 function Head({ n, label }: { n: string; label: string }) {
@@ -46,8 +46,8 @@ export default function AboutPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
           <div className={ey}>Our thesis</div>
-          <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[15ch] [text-wrap:balance]">
-            Liquidity should be a <span className="text-peri">public good.</span>
+          <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[15ch] [text-wrap:balance]">
+            Liquidity should be a <span className="text-gradient-accent">public good.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
             Neutral, shared infrastructure that works for the people who supply the capital — not something one team gatekeeps, and not capital left sitting idle. That belief is why Mintware exists. Everything we build is a way of making it real.
@@ -59,7 +59,7 @@ export default function AboutPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="01" label="Why we exist" />
-          <h2 className={h2}>Today, liquidity belongs to <span className="text-peri">whoever got there first.</span></h2>
+          <h2 className={h2}>Today, liquidity belongs to <span className="text-gradient-accent">whoever got there first.</span></h2>
           <p className={lead}>
             Most tokens launch with liquidity concentrated in a handful of insider wallets. The depth that does show up is
             rented — mercenary capital that farms an emission and leaves the moment it tapers. Retail is left holding a
@@ -73,7 +73,7 @@ export default function AboutPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="02" label="What “public good” means to us" />
-          <h2 className={h2}>A market owned by the people <span className="text-peri">who make it.</span></h2>
+          <h2 className={h2}>A market owned by the people <span className="text-gradient-accent">who make it.</span></h2>
           <p className={lead}>
             When you provide liquidity, that position is yours — you own your share of the market you help create. A pool
             held by thousands of contributors is a fundamentally different thing than one team’s treasury lever. Our job is
@@ -87,7 +87,7 @@ export default function AboutPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="03" label="How we build it" />
-          <h2 className={h2}>Measure it. Reward it. <span className="text-peri">Hold it.</span></h2>
+          <h2 className={h2}>Measure it. Reward it. <span className="text-gradient-accent">Hold it.</span></h2>
           <p className={lead}>Three parts, one idea — contribution, priced and paid. We say plainly what’s live and what’s still in testing.</p>
           <div className="grid grid-cols-3 gap-3 mt-8 max-[720px]:grid-cols-1">
             {PILLARS.map(([verb, name, d, href]) => (
@@ -113,8 +113,8 @@ export default function AboutPage() {
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">04</span>
             <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">The principle</span>
           </div>
-          <h2 className="font-atx-display font-medium tracking-[-0.04em] leading-[1.03] text-[clamp(1.9rem,4.4vw,3.2rem)] mt-4 max-w-[20ch] text-white [text-wrap:balance]">
-            Contribution, not wallet size, <span className="text-pas-peri">decides what you earn.</span>
+          <h2 className="font-atx-display font-semibold tracking-[-0.04em] leading-[1.03] text-[clamp(1.9rem,4.4vw,3.2rem)] mt-4 max-w-[20ch] text-white [text-wrap:balance]">
+            Contribution, not wallet size, <span className="text-gradient-accent">decides what you earn.</span>
           </h2>
           <p className="text-[16px] leading-[1.55] text-white/70 max-w-[60ch] mt-5">
             It’s a single rule, applied everywhere: the wallet that showed up for years should out-earn the one that showed
@@ -134,7 +134,7 @@ export default function AboutPage() {
               Your wallet already has a history. See what it’s built.
             </div>
             <div className="flex gap-3 flex-wrap">
-              <Link href="/attribution" className="glass-pill">Explore Attribution →</Link>
+              <Link href="/attribution" className="glass-pill-primary">Explore Attribution →</Link>
               <Link href="/defi" className="glass-pill">How the vaults work →</Link>
             </div>
           </GradientPanel>

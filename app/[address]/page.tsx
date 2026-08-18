@@ -142,7 +142,7 @@ export default function PublicProfile() {
           <Star className="w-8 h-8 text-coral2 mx-auto mb-4" />
           <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-ink)', marginBottom: 8 }}>Invalid address</div>
           <div style={{ fontSize: 14, color: 'var(--color-ink-mid)', marginBottom: 24 }}>
-            That doesn&apos;t look like a valid wallet address.
+            Not a valid wallet address.
           </div>
           <button onClick={() => router.push('/')}
             style={{ background: 'var(--color-peri)', color: 'white', borderRadius: 'var(--radius-pill)', padding: '10px 20px', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', cursor: 'pointer', fontFamily: 'var(--font-jetbrains), monospace' }}>
@@ -687,7 +687,7 @@ export default function PublicProfile() {
               </div>
             ) : (
               <div style={{ color: 'var(--color-ink-mid)', fontSize: 14 }}>
-                No score data available for this address.
+                No score data for this address.
               </div>
             )}
           </div>
@@ -736,17 +736,17 @@ export default function PublicProfile() {
                   </>
                 ) : walletSettled ? (
                   <div className="pp-claim-cta">
-                    This your wallet?
+                    Is this your wallet?
                     <a href="/" className="pp-claim-link">Connect to claim your profile →</a>
                   </div>
                 ) : null}
               </div>
               <div className="pp-share-btns">
-                <button className="pp-btn outline" onClick={copyUrl}>
+                <button className="glass-pill glass-pill-sm" onClick={copyUrl}>
                   {copied ? 'Copied' : isOwner ? 'Copy invite link' : 'Copy profile URL'}
                 </button>
                 {score && (
-                  <button className="pp-btn primary" onClick={shareOnX}>
+                  <button className="glass-pill-primary glass-pill-sm" onClick={shareOnX}>
                     𝕏 Share on X
                   </button>
                 )}

@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
 const wrap = 'mx-auto max-w-[1100px] px-6 max-[800px]:px-4 mw-reveal'
-const h2 = 'font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 [text-wrap:balance]'
+const h2 = 'font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 [text-wrap:balance]'
 const lead = 'text-[16px] leading-[1.55] text-ink-mid max-w-[60ch] mt-4'
 
 function Head({ n, label }: { n: string; label: string }) {
@@ -87,14 +87,14 @@ export default function DefiLandingPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
           <div className={ey}>The vault engine · never idle</div>
-          <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[16ch] [text-wrap:balance]">
-            One deposit. <span className="text-peri">Three income streams.</span>
+          <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[16ch] [text-wrap:balance]">
+            One deposit. <span className="text-gradient-accent">Three income streams.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            MEV-protected, auto-managed liquidity on Uniswap v4 — one balance earning three ways at once: Aave lending, swap fees, and recaptured MEV, with no rebalancing. And your Attribution score lifts your fee share, so two wallets deposit the same and the stronger on-chain history earns more — something no capital-only vault can offer.
+            MEV-protected, auto-managed liquidity on Uniswap v4 — one balance earning three ways at once: Aave lending, swap fees, and recaptured MEV, with no rebalancing. Your Attribution score lifts your fee share, so two wallets deposit the same amount and the stronger on-chain history earns more — something no capital-only vault can offer.
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
-            <Link href="/vaults" className="glass-pill">Open the vaults →</Link>
+            <Link href="/vaults" className="glass-pill-primary">Open the vaults →</Link>
             <Link href="/attribution" className="glass-pill">How the score works →</Link>
           </div>
         </div>
@@ -104,7 +104,7 @@ export default function DefiLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="01" label="The wedge · reputation = yield" />
-          <h2 className={h2}>Everyone else pays LPs by size. <span className="text-peri">We pay by reputation.</span></h2>
+          <h2 className={h2}>Everyone else pays LPs by size. <span className="text-gradient-accent">We pay by reputation.</span></h2>
           <p className={lead}>Your Attribution tier sets a fee-share multiplier on the exact same position — so the wallet that showed up for years out-earns the one that showed up yesterday.</p>
           <div className="grid grid-cols-3 gap-3 mt-8 max-[560px]:grid-cols-1">
             {REP_TIERS.map(([name, pct, mult], i) => {
@@ -126,7 +126,7 @@ export default function DefiLandingPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="02" label="Deposit once · the vault does the rest" />
-          <h2 className={h2}>One deposit. <span className="text-peri">A five-stage V4 hook engine.</span></h2>
+          <h2 className={h2}>One deposit. <span className="text-gradient-accent">A five-stage V4 hook engine.</span></h2>
           <p className={lead}>You provide liquidity once. Every swap that touches the pool runs your capital through a hook stack that protects it, optimizes it, and pays you — automatically.</p>
           <FlowDiagram className="mt-8" steps={HOOK.map(([k, d]) => ({ label: k, sub: d }))} />
         </div>
@@ -136,7 +136,7 @@ export default function DefiLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="03" label="The second lever · commitment" />
-          <h2 className={h2}>Reputation is who you are. <span className="text-peri">Lock tier is how long you commit.</span></h2>
+          <h2 className={h2}>Reputation is who you are. <span className="text-gradient-accent">Lock tier is how long you commit.</span></h2>
           <p className={lead}>Two independent levers raise the same fee share. Longer locks earn a higher multiplier — and the early-exit penalty tapers to zero as you approach unlock, so leaving early is never a cliff.</p>
           <div className="grid grid-cols-4 gap-3 mt-8 max-[720px]:grid-cols-2">
             {LOCK_TIERS.map(([name, dur, mult, exit]) => (
@@ -158,7 +158,7 @@ export default function DefiLandingPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="04" label="Where the fees go" />
-          <h2 className={h2}>Every swap fee, <span className="text-peri">split on-chain.</span></h2>
+          <h2 className={h2}>Every swap fee, <span className="text-gradient-accent">split on-chain.</span></h2>
           <p className={lead}>No black box. The split lives in the FeeVault contract, and any change to it emits a public event.</p>
           <div className="grid grid-cols-[auto_1fr] gap-8 items-center mt-8 max-[640px]:grid-cols-1 max-[640px]:gap-5">
             <div className="soft-card p-7 max-[640px]:justify-self-start">
@@ -190,8 +190,8 @@ export default function DefiLandingPage() {
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">05</span>
             <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">Referrals · the compounding loop</span>
           </div>
-          <h2 className="font-atx-display font-medium tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
-            Refer liquidity. Build reputation. <span className="text-pas-peri">Earn more forever.</span>
+          <h2 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
+            Refer liquidity. Build reputation. <span className="text-gradient-accent">Earn more forever.</span>
           </h2>
           <p className="text-[16px] leading-[1.55] text-white/70 max-w-[62ch] mt-4">Other protocols pay a flat bounty. Here, referring an LP feeds your reputation — so you’re paid twice: in fees now, and in a higher multiplier on every future deposit.</p>
           <div className="grid grid-cols-5 gap-3 mt-8 max-[900px]:grid-cols-1">
@@ -212,7 +212,7 @@ export default function DefiLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="06" label="Trust · enforced by code" />
-          <h2 className={h2}>You don’t have to trust us. <span className="text-peri">Trust the contract.</span></h2>
+          <h2 className={h2}>You don’t have to trust us. <span className="text-gradient-accent">Trust the contract.</span></h2>
           <div className="soft-card mt-8 overflow-hidden">
             {TRUST.map(([k, d], i) => (
               <div key={k} className={`flex items-start gap-4 px-6 py-4 ${i < TRUST.length - 1 ? 'border-b border-hair-soft' : ''}`}>

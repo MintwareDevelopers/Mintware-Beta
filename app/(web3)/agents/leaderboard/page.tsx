@@ -57,12 +57,9 @@ function AgentsLeaderboardContent() {
         <div className="soft-card mb-7 overflow-hidden">
           <div className="flex items-stretch max-[640px]:flex-col">
             <div className="flex-1 p-8 pb-7">
-              <div className="flex items-center gap-[7px] mb-5">
-                <span className="w-[7px] h-[7px] rounded-full bg-peri inline-block shrink-0 animate-pulse" />
-                <span className={LABEL}>Oracle live on Base</span>
-              </div>
-              <div className="font-atx-display text-[64px] font-medium text-peri-deep tracking-[-3px] leading-none mb-3 tabular-nums">
-                {loading ? <span className="text-ink-soft">—</span> : totalAgents}
+              <span className="live-chip mb-5"><span className="dot" aria-hidden />Oracle live on Base</span>
+              <div className="font-atx-display text-[64px] font-semibold tracking-[-3px] leading-none mb-3 tabular-nums">
+                {loading ? <span className="text-ink-soft">—</span> : <span className="text-gradient-accent">{totalAgents}</span>}
                 <span className="text-[20px] font-medium text-ink-soft ml-[10px] tracking-normal">agents</span>
               </div>
               <div className="inline-flex items-center gap-2 rounded-full bg-[rgba(108,108,240,0.08)] border border-[rgba(108,108,240,0.28)] px-3 py-1 mb-[14px]">
@@ -188,7 +185,7 @@ function AgentsLeaderboardContent() {
         <div className="soft-card p-6 flex items-start justify-between gap-6 flex-wrap">
           <div>
             <div className={`${LABEL} text-peri-deep mb-[6px]`}>For Developers</div>
-            <div className="text-[16px] font-medium text-ink font-atx-display mb-1">Register your agent in 2 lines</div>
+            <div className="text-[16px] font-semibold text-ink font-atx-display mb-1">Register your agent in <span className="text-gradient-accent">2 lines</span></div>
             <div className="text-[13px] text-ink-mid leading-relaxed max-w-[300px]">
               Drop your agent onto the leaderboard and start earning Attribution score on Base.
             </div>

@@ -40,8 +40,8 @@ export default function YieldPaymentNetworkPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className="mx-auto max-w-[1080px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px]">
           <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">{YPN_LIQUIDITY.eyebrow}</div>
-          <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3 max-w-[16ch] [text-wrap:balance]">
-            {YPN_LIQUIDITY.title} <span className="text-ink-soft">{YPN_LIQUIDITY.titleAccent}</span>
+          <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3 max-w-[16ch] [text-wrap:balance]">
+            {YPN_LIQUIDITY.title} <span className="text-gradient-accent">{YPN_LIQUIDITY.titleAccent}</span>
           </h2>
           <p className="text-ink-mid text-[clamp(15px,1.7vw,17px)] leading-[1.6] mt-5 max-w-[68ch]">{YPN_LIQUIDITY.body}</p>
 
@@ -86,8 +86,8 @@ export default function YieldPaymentNetworkPage() {
             <div aria-hidden className="grain pointer-events-none absolute inset-0 opacity-40" />
             <div className="relative px-10 py-11 max-[700px]:px-6 max-[700px]:py-8">
               <div className="font-mono text-[12px] uppercase tracking-[0.14em] text-pas-peri">{YPN_TECH.eyebrow}</div>
-              <h2 className="font-atx-display font-medium text-white tracking-[-0.03em] leading-[1.06] text-[clamp(1.7rem,3.6vw,2.4rem)] mt-3 [text-wrap:balance]">
-                {YPN_TECH.title} <span className="text-pas-peri">{YPN_TECH.titleAccent}</span>
+              <h2 className="font-atx-display font-semibold text-white tracking-[-0.03em] leading-[1.06] text-[clamp(1.7rem,3.6vw,2.4rem)] mt-3 [text-wrap:balance]">
+                {YPN_TECH.title} <span className="text-gradient-accent">{YPN_TECH.titleAccent}</span>
               </h2>
               <p className="text-[15px] leading-[1.6] mt-3.5 max-w-[56ch]" style={{ color: '#C7C7DC' }}>{YPN_TECH.intro}</p>
               <div className="grid grid-cols-2 max-[640px]:grid-cols-1 gap-x-8 gap-y-5 mt-7">
@@ -108,7 +108,7 @@ export default function YieldPaymentNetworkPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
           <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">{YPN_ETHOS.eyebrow}</div>
-          <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3.5 max-w-[20ch] [text-wrap:balance]">
+          <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3.5 max-w-[20ch] [text-wrap:balance]">
             {YPN_ETHOS.title}
           </h2>
           <p className="text-ink-mid text-[clamp(15px,1.7vw,18px)] leading-[1.55] mt-5 max-w-[64ch]">{YPN_ETHOS.body}</p>
