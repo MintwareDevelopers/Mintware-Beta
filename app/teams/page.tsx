@@ -28,7 +28,7 @@ const TWITTER = 'https://x.com/Mintware_org'
 
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
 const wrap = 'mx-auto max-w-[1100px] px-6 max-[800px]:px-4 mw-reveal'
-const h2 = 'font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 [text-wrap:balance]'
+const h2 = 'font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 [text-wrap:balance]'
 const lead = 'text-[16px] leading-[1.55] text-ink-mid max-w-[60ch] mt-4'
 
 function Head({ n, label }: { n: string; label: string }) {
@@ -73,15 +73,15 @@ export default function TeamsLandingPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
           <div className={ey}>For teams · matched liquidity</div>
-          <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[16ch] [text-wrap:balance]">
-            Prove it. <span className="text-peri">Don’t say it.</span>
+          <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[16ch] [text-wrap:balance]">
+            Prove it. <span className="text-gradient-accent">Don’t say it.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
             Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock, your fee share flows to the people who backed you. “Trust us” becomes “check the contract.”
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
             <a href="#how" className="glass-pill">How it works ↓</a>
-            <Link href="/defi" className="glass-pill">The LP side →</Link>
+            <Link href="/defi" className="glass-pill">See the LP side →</Link>
           </div>
         </div>
       </section>
@@ -90,7 +90,7 @@ export default function TeamsLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="01" label="The problem" />
-          <h2 className={h2}>Every launch asks the same thing: <span className="text-peri">trust us.</span></h2>
+          <h2 className={h2}>Every launch asks the same thing: <span className="text-gradient-accent">trust us.</span></h2>
           <p className={lead}>
             Most tokens launch with liquidity concentrated in a few insider wallets, rented mercenary capital that
             leaves within a week, and a team that can pull the floor at any moment. The community is asked to believe it
@@ -103,7 +103,7 @@ export default function TeamsLandingPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="02" label="Two ways to bring liquidity" />
-          <h2 className={h2}>Matched, or a <span className="text-peri">traditional LP.</span></h2>
+          <h2 className={h2}>Matched, or a <span className="text-gradient-accent">traditional LP.</span></h2>
           <p className={lead}>
             Not every team wants a locked, community-matched launch. Mintware runs the same reputation engine
             under two vault models — pick the one that fits.
@@ -146,8 +146,8 @@ export default function TeamsLandingPage() {
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">03</span>
             <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">How matched liquidity works</span>
           </div>
-          <h2 className="font-atx-display font-medium tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
-            You lock. Your community matches. <span className="text-pas-peri">The contract holds both.</span>
+          <h2 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
+            You lock. Your community matches. <span className="text-gradient-accent">The contract holds both.</span>
           </h2>
           <p className="text-[16px] leading-[1.55] text-white/70 max-w-[60ch] mt-4">A dual-sided pair vault — your token on one side, the community’s stable or ETH on the other. Both go in once; the contract does the rest.</p>
           <div className="grid grid-cols-5 gap-3 mt-8 max-[900px]:grid-cols-1">
@@ -169,7 +169,7 @@ export default function TeamsLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="04" label="The lock · the proof" />
-          <h2 className={h2}>A restriction on withdrawal, <span className="text-peri">not a transfer of ownership.</span></h2>
+          <h2 className={h2}>A restriction on withdrawal, <span className="text-gradient-accent">not a transfer of ownership.</span></h2>
           <p className={lead}>
             Your liquidity stays yours. What changes is that you provably can’t withdraw it before the cliff. The term is
             yours to pick — from 90 days up to two years — and once set, there is deliberately no path to unwind it early.
@@ -189,7 +189,7 @@ export default function TeamsLandingPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="05" label="What backers earn" />
-          <h2 className={h2}>During the lock, <span className="text-peri">your fees are theirs.</span></h2>
+          <h2 className={h2}>During the lock, <span className="text-gradient-accent">your fees are theirs.</span></h2>
           <p className={lead}>
             While your side is locked, every swap fee it would have earned — net of the Mintware protocol cut — flows to
             the community instead, accrued on-chain per unit of community liquidity. You give up short-term fees to buy
@@ -205,7 +205,7 @@ export default function TeamsLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="06" label="Referrals · grow the pool" />
-          <h2 className={h2}>Let your backers <span className="text-peri">bring their backers.</span></h2>
+          <h2 className={h2}>Let your backers <span className="text-gradient-accent">bring their backers.</span></h2>
           <p className={lead}>
             Matched liquidity is only as deep as the community you can rally — and your community has a community.
             Referrals turn every backer into a channel for more.
@@ -232,7 +232,7 @@ export default function TeamsLandingPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="07" label="Trust · enforced by code" />
-          <h2 className={h2}>You don’t have to trust us. <span className="text-peri">Neither does your community.</span></h2>
+          <h2 className={h2}>You don’t have to trust us. <span className="text-gradient-accent">Neither does your community.</span></h2>
           <div className="soft-card mt-8 overflow-hidden">
             {TRUST.map(([k, d], i) => (
               <div key={k} className={`flex items-start gap-4 px-6 py-4 ${i < TRUST.length - 1 ? 'border-b border-hair-soft' : ''}`}>
@@ -258,7 +258,7 @@ export default function TeamsLandingPage() {
             <div className="font-atx-display font-medium text-ink text-[clamp(1.4rem,2.4vw,2rem)] tracking-[-0.02em] leading-[1.1] max-w-[28ch] [text-wrap:balance]">
               Launching a token? Prove your commitment from day one.
             </div>
-            <a href={TWITTER} target="_blank" rel="noopener noreferrer" className="glass-pill">Talk to us →</a>
+            <a href={TWITTER} target="_blank" rel="noopener noreferrer" className="glass-pill-primary">Talk to us →</a>
           </GradientPanel>
         </div>
       </section>

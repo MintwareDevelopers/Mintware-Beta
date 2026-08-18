@@ -96,12 +96,13 @@ function AgentProfileContent() {
                     {agent.erc8004_token_id && (
                       <span className={`${META_PILL} text-peri-deep`}>ERC-8004 #{agent.erc8004_token_id}</span>
                     )}
-                    <span className={`${META_PILL} ${agent.operational_status === 'paused' ? 'text-[#D14343]' : agent.operational_status === 'offline' ? 'text-ink-soft' : 'text-peri-deep'}`}>
-                      {agent.operational_status === 'active' || !agent.operational_status
-                        ? <span className="w-[7px] h-[7px] rounded-full bg-peri inline-block" />
-                        : null}
-                      {agent.operational_status === 'paused' ? 'Paused' : agent.operational_status === 'offline' ? 'Offline' : 'Active'}
-                    </span>
+                    {agent.operational_status === 'active' || !agent.operational_status ? (
+                      <span className="live-chip"><span className="dot" aria-hidden />Active</span>
+                    ) : (
+                      <span className={`${META_PILL} ${agent.operational_status === 'paused' ? 'text-[#D14343]' : 'text-ink-soft'}`}>
+                        {agent.operational_status === 'paused' ? 'Paused' : 'Offline'}
+                      </span>
+                    )}
                     {agent.x402_support && (
                       <span className={`${META_PILL} text-peri-deep`}>x402</span>
                     )}
@@ -113,7 +114,7 @@ function AgentProfileContent() {
               </div>
 
               <div className="text-center py-4">
-                <div className="font-atx-display text-[52px] font-medium text-peri-deep leading-none tracking-[-2px] tabular-nums">{agent.total_score.toLocaleString()}</div>
+                <div className="font-atx-display text-[52px] font-semibold text-gradient-accent leading-none tracking-[-2px] tabular-nums">{agent.total_score.toLocaleString()}</div>
                 <div className="text-[12px] text-ink-mid mt-1 tracking-[0.1em] uppercase font-semibold">Attribution Score</div>
                 {agent.rank && (
                   <span className="inline-block mt-2 text-[13px] text-ink-mid">Rank #{agent.rank}</span>
@@ -210,7 +211,7 @@ function AgentProfileContent() {
                 <div className="soft-card px-7 py-6 mb-5">
                   <div className="text-[11px] font-semibold text-ink-soft tracking-[0.1em] uppercase mb-4">WETH P&amp;L</div>
                   <div className="flex items-end gap-2 mb-5">
-                    <div className={`font-atx-display text-[36px] font-medium leading-none tracking-[-1px] tabular-nums ${numColor}`}>
+                    <div className={`font-atx-display text-[36px] font-semibold leading-none tracking-[-1px] tabular-nums ${numColor}`}>
                       {prefix}{pnlEth.toFixed(4)} ETH
                     </div>
                     <div className="text-[14px] text-ink-mid mb-1.5 font-mono">

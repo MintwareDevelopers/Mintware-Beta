@@ -120,12 +120,16 @@ function LeaderboardContent() {
       {/* Hero */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px] text-center">
-          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Attribution · global rankings · {sample ? 'preview data' : 'live'}</div>
-          <h1 className="font-atx-display font-medium text-ink mt-5 tracking-[-0.04em] leading-[1.02] text-[clamp(2rem,5vw,3.4rem)] max-w-[16ch] mx-auto [text-wrap:balance]">
-            Reputation, <span className="text-peri">ranked.</span>
+          {sample ? (
+            <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Attribution · global rankings · preview data</div>
+          ) : (
+            <span className="live-chip"><span className="dot" aria-hidden />Attribution · global rankings · live</span>
+          )}
+          <h1 className="font-atx-display font-semibold text-ink mt-5 tracking-[-0.04em] leading-[1.02] text-[clamp(2rem,5vw,3.4rem)] max-w-[16ch] mx-auto [text-wrap:balance]">
+            Reputation, <span className="text-gradient-accent">ranked.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.5] mt-5 max-w-[58ch] mx-auto">
-            Every wallet has a history. This is the board — ranked by Attribution score and referral network.
+            Every wallet has a history. Ranked by Attribution score and referral network.
           </p>
         </div>
       </section>
@@ -248,7 +252,7 @@ function LeaderboardContent() {
                 </div>
               </div>
               {refLink && (
-                <button onClick={copyLink} className="ml-auto glass-pill glass-pill-sm">
+                <button onClick={copyLink} className="ml-auto glass-pill-primary glass-pill-sm">
                   {linkCopied ? 'Copied ✓' : 'Copy invite link'}
                 </button>
               )}
@@ -263,7 +267,7 @@ function LeaderboardContent() {
                 <div className="text-[11px] text-ink-mid">Your Attribution score and referral tree earn your place.</div>
               </div>
               {refLink && (
-                <button onClick={copyLink} className="ml-auto glass-pill glass-pill-sm">
+                <button onClick={copyLink} className="ml-auto glass-pill-primary glass-pill-sm">
                   {linkCopied ? 'Copied ✓' : 'Copy invite link'}
                 </button>
               )}

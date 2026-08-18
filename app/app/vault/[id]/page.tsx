@@ -253,7 +253,7 @@ function DepositPanel({ vault, onDeposited }: { vault: SocialVault; onDeposited:
       <button
         onClick={handleDeposit}
         disabled={isPending || (amt0 <= 0 && amt1 <= 0) || vault.status === 'closed'}
-        className="glass-pill w-full justify-center !py-3 disabled:opacity-50"
+        className="glass-pill-primary w-full justify-center !py-3 disabled:opacity-50"
       >
         {stageLabel[stage]}
       </button>
@@ -463,7 +463,7 @@ function VaultDetailContent() {
                     {vault.name.charAt(0)}
                   </div>
                   <div>
-                    <div className="text-[18px] font-medium text-ink font-atx-display leading-[1.2] tracking-[-0.01em]">{vault.name}</div>
+                    <div className="text-[18px] font-semibold text-ink font-atx-display leading-[1.2] tracking-[-0.01em]">{vault.name}</div>
                     <div className="text-[11px] text-ink-soft font-mono mt-0.5">
                       {shortAddr(vault.project_token)} · chain {vault.chain_id}
                     </div>
@@ -531,10 +531,7 @@ function VaultDetailContent() {
                       <div className="rounded-2xl border border-hair bg-ground-cool px-4 py-3.5 mb-3">
                         <div className="flex items-center justify-between mb-2.5">
                           <span className={LABEL}>On-chain position</span>
-                          <span className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.1em] font-semibold text-ink-soft">
-                            <span className="w-[7px] h-[7px] rounded-full bg-peri inline-block animate-pulse" />
-                            Live
-                          </span>
+                          <span className="live-chip"><span className="dot" aria-hidden />Live</span>
                         </div>
                         {onchain.isLoading && !onchain.position ? (
                           <div className="text-[12px] text-ink-soft font-mono">Reading chain…</div>

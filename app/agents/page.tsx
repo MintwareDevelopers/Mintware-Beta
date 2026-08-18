@@ -189,8 +189,8 @@ export default function AgentsPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
           <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">For AI Agents</div>
-          <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.04em] leading-[1.03] text-[clamp(2rem,5vw,3.6rem)] max-w-[18ch] [text-wrap:balance]">
-            Give your AI agent a treasury that <span className="text-peri">earns and pays.</span>
+          <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.03] text-[clamp(2rem,5vw,3.6rem)] max-w-[18ch] [text-wrap:balance]">
+            Give your AI agent a treasury that <span className="text-gradient-accent">earns and pays.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
             Park idle USDC in a yield vault where it earns — and spend it per call over x402, from the earning balance, without ever un-parking. Drop in a plugin and your agent has a treasury that never sits idle and never locks.
@@ -337,6 +337,7 @@ export default function AgentsPage() {
         <div id="reputation" className="flex items-center gap-3 mb-4 scroll-mt-20">
           <span className={NUM}>02</span>
           <span className={LABEL}>Reputation · Attribution leaderboard</span>
+          <span className="live-chip"><span className="dot" aria-hidden />Live</span>
         </div>
         <p className="text-[13px] text-ink-mid leading-[1.55] max-w-[68ch] -mt-1 mb-4">
           Alongside the treasury, every agent wallet also earns a portable on-chain reputation. Optional — the parking account and payments work without it.
@@ -349,8 +350,8 @@ export default function AgentsPage() {
                 Live reputation rankings for registered agents, powered by the Attribution oracle.
               </div>
             </div>
-            <a href="/agents/leaderboard" className="text-[12px] font-semibold uppercase tracking-[0.04em] text-peri-deep no-underline whitespace-nowrap hover:underline inline-flex items-center min-h-[40px]">
-              Open full leaderboard →
+            <a href="/agents/leaderboard" className="glass-pill-primary glass-pill-sm whitespace-nowrap">
+              Open leaderboard →
             </a>
           </div>
 

@@ -18,9 +18,8 @@ export const metadata: Metadata = {
     'Attribution reads your complete on-chain history across 100+ chains and produces one composite reputation score from six signals. Not based on wealth — based on contribution. Verifiable on Base via EAS.',
 }
 
-const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
 const wrap = 'mx-auto max-w-[1100px] px-6 max-[800px]:px-4 mw-reveal'
-const h2 = 'font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 [text-wrap:balance]'
+const h2 = 'font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 [text-wrap:balance]'
 const lead = 'text-[16px] leading-[1.55] text-ink-mid max-w-[60ch] mt-4'
 
 function Head({ n, label }: { n: string; label: string }) {
@@ -72,16 +71,16 @@ export default function AttributionLandingPage() {
       <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">
         <AirbrushSplash tone="peri" />
         <div className="relative mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
-          <div className={ey}>On-chain reputation · 100+ chains</div>
-          <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[18ch] [text-wrap:balance]">
-            See what your wallet is worth. <span className="text-peri">Then put it to work.</span>
+          <span className="live-chip mb-5"><span className="dot" aria-hidden />Live · scoring 100+ chains right now</span>
+          <h1 className="font-atx-display font-semibold text-ink mt-1 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[18ch] [text-wrap:balance]">
+            See what your wallet is worth. <span className="text-gradient-accent">Then put it to work.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[60ch]">
             Attribution reads your complete on-chain history — every position, vote, and referral across 100+ chains — and produces one composite reputation score. Not based on wealth. Based on what you’ve actually done.
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
+            <Link href="/app/profile" className="glass-pill-primary">See your score →</Link>
             <Link href="/explorer" className="glass-pill">Explore scores →</Link>
-            <Link href="/app/profile" className="glass-pill">See your score →</Link>
           </div>
         </div>
       </section>
@@ -100,7 +99,7 @@ export default function AttributionLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="01" label="What the score is made of" />
-          <h2 className={h2}>Six signals. <span className="text-peri">One score, out of 925.</span></h2>
+          <h2 className={h2}>Six signals. <span className="text-gradient-accent">One score, out of 925.</span></h2>
           <p className={lead}>Everything you already do on-chain feeds one of six signals. Sharing is weighted heaviest — a real referral network is the hardest thing to fake.</p>
           <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-4 mt-8 items-center max-[820px]:grid-cols-1">
           <div className="soft-card p-5">
@@ -134,7 +133,7 @@ export default function AttributionLandingPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="02" label="Consistency over capital" />
-          <h2 className={h2}>It’s not a leaderboard of <span className="text-peri">who’s richest.</span></h2>
+          <h2 className={h2}>It’s not a leaderboard of <span className="text-gradient-accent">who’s richest.</span></h2>
           <p className={lead}>
             A wallet with decades of consistent, diverse on-chain activity scores higher than a whale who deployed capital
             yesterday. Short-term gaming and manufactured activity are detected and don’t produce proportional score gains —
@@ -157,7 +156,7 @@ export default function AttributionLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="03" label="Tiers & character" />
-          <h2 className={h2}>Bronze, Silver, Gold — <span className="text-peri">relative to everyone.</span></h2>
+          <h2 className={h2}>Bronze, Silver, Gold — <span className="text-gradient-accent">relative to everyone.</span></h2>
           <p className={lead}>Tiers are read against the distribution of all scored wallets, so they shift as the community grows. Alongside the number, a behavioural <i>character</i> describes how you move — a label, not a judgement.</p>
           <div className="grid grid-cols-3 gap-3 mt-8 max-[720px]:grid-cols-1">
             {CHARACTERS.map(([name, desc]) => (
@@ -181,8 +180,8 @@ export default function AttributionLandingPage() {
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">04</span>
             <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">Verifiable · EAS on Base</span>
           </div>
-          <h2 className="font-atx-display font-medium tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
-            Your score isn’t our word for it. <span className="text-pas-peri">It’s on-chain.</span>
+          <h2 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
+            Your score isn’t our word for it. <span className="text-gradient-accent">It’s on-chain.</span>
           </h2>
           <p className="text-[16px] leading-[1.55] text-white/70 max-w-[60ch] mt-4">
             Any score can be published as an Ethereum Attestation Service record on Base — so a third party can verify it
@@ -210,7 +209,7 @@ export default function AttributionLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="05" label="Where your score works" />
-          <h2 className={h2}>One reputation. <span className="text-peri">Every surface.</span></h2>
+          <h2 className={h2}>One reputation. <span className="text-gradient-accent">Every surface.</span></h2>
           <p className={lead}>The score isn’t a vanity badge — it’s the multiplier that follows you across everything Mintware does.</p>
           <div className="grid grid-cols-2 gap-3 mt-8 max-[720px]:grid-cols-1">
             {USES.map(([k, d, href]) => (
@@ -230,7 +229,7 @@ export default function AttributionLandingPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="06" label="For developers" />
-          <h2 className={h2}>One call. <span className="text-peri">Any wallet, any chain.</span></h2>
+          <h2 className={h2}>One call. <span className="text-gradient-accent">Any wallet, any chain.</span></h2>
           <p className={lead}>Read a full reputation profile — score, tier, percentile, per-signal breakdown, and personalised opportunities to climb — from a single endpoint.</p>
           <div className="rounded-2xl bg-ink text-white font-mono text-[13px] px-5 py-4 mt-7 overflow-x-auto">
             <span className="text-white/45">GET</span> <span className="text-pas-peri">https://attribution-scorer…/score</span><span className="text-white/70">?address=0x…</span>

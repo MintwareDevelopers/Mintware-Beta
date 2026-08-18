@@ -77,10 +77,9 @@ export default function AppVaultsPage() {
       {/* ── Testnet-beta notice ── */}
       <div className="border-b border-hair-soft bg-[rgba(108,108,240,0.06)]">
         <div className="max-w-[1100px] mx-auto px-6 py-2.5 max-[800px]:px-4 flex items-center gap-3 flex-wrap text-[11px]">
-          <span className="w-[7px] h-[7px] rounded-full bg-peri inline-block shrink-0" />
-          <span className="uppercase tracking-[0.14em] font-semibold text-peri-deep">Base Sepolia · testnet beta</span>
+          <span className="live-chip"><span className="dot" aria-hidden />Base Sepolia · testnet beta</span>
           <span className="text-ink-mid">
-            Vaults run on a testnet contract — deposit test USDC to try the full flow. Figures shown are illustrative, not live TVL.
+            Deposit test USDC and try the full flow. Figures shown are illustrative, not live TVL.
           </span>
           <a href="https://faucet.circle.com/" target="_blank" rel="noopener noreferrer" className="ml-auto underline underline-offset-2 text-peri-deep hover:text-ink font-medium">
             Get test USDC →
@@ -93,7 +92,7 @@ export default function AppVaultsPage() {
         <div className="max-w-[1100px] mx-auto px-6 py-8 max-[800px]:px-4 flex items-end justify-between gap-4 flex-wrap">
           <div>
             <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-peri-deep">DeFi surface · reputation-weighted yield</div>
-            <h1 className="font-atx-display font-medium tracking-[-0.03em] text-[clamp(26px,3.4vw,38px)] mt-2 text-ink">Vaults</h1>
+            <h1 className="font-atx-display font-semibold tracking-[-0.03em] text-[clamp(26px,3.4vw,38px)] mt-2 text-ink">Vaults</h1>
           </div>
           <Link href="/vaults" className="text-[12px] font-semibold text-peri-deep no-underline hover:underline">How vaults work →</Link>
         </div>

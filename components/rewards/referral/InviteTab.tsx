@@ -43,11 +43,11 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
           <div className="uppercase tracking-[0.1em] text-[10px] font-semibold text-coral2 mb-[10px]">
             Sharing score
           </div>
-          <div className="font-atx-display text-[22px] font-medium text-white leading-[1.25] mb-[6px] tracking-[-0.4px]">
-            Grow your network,<br />earn more rewards.
+          <div className="font-atx-display text-[22px] font-semibold text-white leading-[1.25] mb-[6px] tracking-[-0.4px]">
+            Grow your network,<br /><span className="text-gradient-accent">earn more rewards.</span>
           </div>
           <div className="text-[13px] text-white/60 leading-[1.55] mb-[22px] max-w-[320px]">
-            Every wallet you refer that stays active raises your Sharing score — which multiplies your reward allocation.
+            Every active referral raises your Sharing score — and multiplies your reward allocation.
           </div>
           <div className="flex items-center gap-[14px] rounded-2xl bg-white/[0.06] border border-white/15 p-[14px_18px]">
             <div className="text-[36px] font-atx-display font-medium text-coral2 leading-[1] tracking-[-1px] shrink-0 tabular-nums">

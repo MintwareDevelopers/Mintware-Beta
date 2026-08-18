@@ -58,7 +58,8 @@ function Overview({ nav }: { nav: Nav }) {
   return (
     <>
       <div className={EY}>Start here · Overview</div>
-      <h1>Mintware — the liquidity spine</h1>
+      <span className="live-chip mb-2"><span className="dot" aria-hidden />Live · Attribution, Agents &amp; Swap on Base mainnet</span>
+      <h1>Mintware — <span className="text-gradient-accent">the liquidity spine</span></h1>
       <p className={SUB}>One pool of capital that is never idle, never locked to a single job, and always yours. Attribution measures on-chain contribution; the vault engine puts idle capital to work and hands it back the instant a swap needs it.</p>
       <p>Mintware is built on one idea: a unit of capital should do more than one thing. Deposited liquidity <b>idles in a lending market</b> earning yield, is <b>pulled just-in-time</b> into a Uniswap V4 pool exactly when a swap needs it, and — on the payments surface — stays <b>spendable</b> the whole time. Never idle. Never locked. Always yours (non-custodial throughout).</p>
       <p>Several surfaces sit on that spine, each at a different maturity. We are precise about status because these are developer docs, not a pitch:</p>
