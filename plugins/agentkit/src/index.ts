@@ -376,8 +376,22 @@ const mintwareX402PayAction = {
 // Arc parking vault + USDC (env-overridable). Defaults = the live Arc-testnet YPN yield stack.
 const PARK_VAULT = () => process.env.MINTWARE_PARK_VAULT ?? '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421'
 const PARK_USDC = () => process.env.MINTWARE_PARK_USDC ?? '0x3600000000000000000000000000000000000000'
+const PARK_RPC = () => process.env.MINTWARE_PARK_RPC ?? 'https://rpc.testnet.arc.io'
 const APPROVE_SEL = '0x095ea7b3' //  approve(address,uint256)
 const DEPOSIT_SEL = '0x6e553f65' //  deposit(uint256,address)  (ERC-4626)
+const REDEEM_SEL = '0xdb006a75' //  redeem(uint256)  (burns caller's shares → USDC to caller)
+const PREVIEW_WITHDRAW_SEL = '0x0a28a477' //  previewWithdraw(uint256)  → shares needed
+const SHARES_SEL = '0xce7c2ac2' //  shares(address)
+
+async function arcEthCall(to: string, data: string): Promise<bigint> {
+  const res = await fetch(PARK_RPC(), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }),
+  })
+  const j = (await res.json()) as { result?: string }
+  return j.result && j.result !== '0x' ? BigInt(j.result) : 0n
+}
 
 const mintwareParkAction = {
   name: 'MINTWARE_PARK',
@@ -409,6 +423,37 @@ const mintwareParkAction = {
       `  deposit: ${depositTx}`,
       `It's now earning yield and stays fully spendable in place — spend per call with MINTWARE_X402_PAY.`,
     ].join('\n')
+  },
+}
+
+const mintwareUnparkAction = {
+  name: 'MINTWARE_UNPARK',
+  description:
+    'Un-park USDC from the Mintware yield vault back to the agent wallet by redeeming vault shares. Omit ' +
+    'amountUsd to un-park everything. Capital is always yours — parking never locks. On-chain (agent pays gas).',
+  schema: z.object({
+    amountUsd: z.number().positive().optional().describe('USDC to un-park (e.g. 10 = $10). Omit to un-park all.'),
+  }),
+  invoke: async (wallet: X402Wallet, args: { amountUsd?: number }): Promise<string> => {
+    if (!wallet.sendTransaction) {
+      throw new Error('This wallet provider cannot sendTransaction — required to un-park from the vault.')
+    }
+    const vault = PARK_VAULT()
+    const agent = wallet.getAddress()
+    const balShares = await arcEthCall(vault, SHARES_SEL + pad32(agent))
+    if (balShares === 0n) return 'Nothing parked to un-park.'
+
+    let sharesToBurn = balShares // default: un-park all
+    if (args.amountUsd != null) {
+      const amount = BigInt(Math.round(args.amountUsd * 1_000_000))
+      const need = await arcEthCall(vault, PREVIEW_WITHDRAW_SEL + padUint(amount)) // shares to net `amount`
+      sharesToBurn = need < balShares ? need : balShares
+    }
+    if (sharesToBurn === 0n) return 'Nothing to un-park (amount rounds to zero).'
+
+    const tx = await wallet.sendTransaction({ to: vault, data: REDEEM_SEL + padUint(sharesToBurn) })
+    const which = args.amountUsd != null ? `$${args.amountUsd}` : 'all parked USDC'
+    return `Un-parked ${which} — redeemed ${sharesToBurn} shares. redeem tx: ${tx}. USDC is back in the agent wallet.`
   },
 }
 
@@ -452,6 +497,7 @@ export const mintwareActions = [
   mintwareRegisterAction,
   mintwareClaimPendingAction,
   mintwareParkAction,
+  mintwareUnparkAction,
   mintwareTreasuryAction,
   mintwareX402QuoteAction,
   mintwareX402PayAction,
@@ -462,6 +508,7 @@ export {
   mintwareRegisterAction,
   mintwareClaimPendingAction,
   mintwareParkAction,
+  mintwareUnparkAction,
   mintwareTreasuryAction,
   mintwareX402QuoteAction,
   mintwareX402PayAction,

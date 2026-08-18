@@ -190,18 +190,21 @@ requirement.**
 **The parking account (the core):**
 - `lib/x402/treasury.ts` (park + spend-in-place model) + `vaultReader.ts` (fee-net parked USDC off the Arc
   vault: `convertToAssets(shares(agent))`) + `GET /api/x402/account` (returns `spendableLive`).
-- **Park:** `MINTWARE_PARK` AgentKit action (approve + `deposit` into the vault). **Check:** `MINTWARE_TREASURY`.
+- **Park / un-park:** `MINTWARE_PARK` (approve + `deposit`) and `MINTWARE_UNPARK` (`redeem` shares → USDC
+  back; capital is always yours). **Check:** `MINTWARE_TREASURY`.
 - **Live spendable:** edge-auth `GET /available/:user` (read-only headroom = NAV equity − holds − cap −
   liquidity, reusing `ledger::available`, no hold reserved) → `httpSpendableSource`, wired into the account
   route. Without edge-auth, spendable defaults to the full parked balance — **parking does not lock**.
 - **UI:** `/app/agents` — the clickable parking account (parked / spendable / earning, live off the vault).
 
 **Build state (2026-08-18):** `lib/x402/*` (types, protocol, pricing, facilitator, require402, edgeHttp,
-config, treasury, vaultReader) + 5 routes under `app/api/x402/*` + the `/app/agents` page + 4 new AgentKit
-actions (park, treasury, x402 quote/pay) + edge-auth `GET /available/:user`. **44 Vitest + 82 edge-auth
-(Rust) tests green**, project typecheck + clippy clean. **Runtime-gated** (not code-gated):
-`EDGE_AUTH_URL`/`EDGE_AUTH_SECRET` + `X402_PAY_TO` for the facilitator/seller/live-spendable; an HTTP `settle`
-endpoint on the relayer. Trust-tiering is **optional** and off by default. Same external audit gates real value.
+config, treasury, vaultReader) + 5 routes under `app/api/x402/*` + the `/app/agents` page + 5 new AgentKit
+actions (park, unpark, treasury, x402 quote/pay) + edge-auth `GET /available/:user` + an end-to-end
+seller-flow integration test. **47 Vitest + 82 edge-auth (Rust) tests green**, project typecheck + clippy
+clean. **Runtime-gated** (not code-gated): `EDGE_AUTH_URL`/`EDGE_AUTH_SECRET` + `X402_PAY_TO` for the
+facilitator/seller/live-spendable; **the relayer is a signing/submission library with no HTTP surface, so a
+live `settle` endpoint is a separate server + funded-key task (deploy-gated)** — until then the facilitator
+uses `deferredSettler`. Trust-tiering is **optional** and off by default. Same external audit gates real value.
 
 ## 10. Security & risks
 
