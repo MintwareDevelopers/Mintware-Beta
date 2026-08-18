@@ -31,6 +31,10 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
     LI.FI), `/app/vaults`, `/app/leaderboard`, `/app/profile` (reputation/identity).
   - **Team:** `/app/team/*` treasury terminal (Overview · Vaults · Swap · Cards & Spend ·
     Policy · Team & Roles · Developers). Design-forward, mostly **illustrative** (see below).
+    Phase-2 hard-gate: RBAC (`lib/auth/rbac`), middleware + `verifyPrivySession`, the server
+    boundary `lib/auth/requireTeam` (permission guard), and role-gated NAV — all flag-gated on
+    `TEAM_HARD_GATE` (default off = showcase). Deploy-gated remainder: `@privy-io/server-auth`
+    install + `PRIVY_APP_SECRET` + Privy-dashboard org/metadata setup.
 - **Marketing:** `/`, `/attribution`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
   `/agents`, `/about`, `/docs`.
 
@@ -54,9 +58,11 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 - **Agent parking account + x402 spend** — an agent treasury: park idle USDC that keeps **earning** while
   staying **spendable in place** (spend draws from the yield position via hold→settle; capital never
   un-parks). Mintware is funding rail + x402 facilitator. `lib/x402/*` (incl. `treasury`/`vaultReader`),
-  `app/api/x402/{account,supported,verify,settle,score}`, `/app/agents` UI, 5 AgentKit actions
-  (`MINTWARE_PARK`/`UNPARK`/`TREASURY` + x402 quote/pay), edge-auth `GET /available/:user` (read-only live
-  spendable). **Code-complete, 47 Vitest + 82 edge-auth Rust tests green**; **runtime-gated** (needs
+  `app/api/x402/{account,supported,verify,settle,score}`, `/app/agents` UI, 5 AgentKit + 5 Eliza + 3 MCP
+  actions (`MINTWARE_PARK`/`UNPARK`/`TREASURY` + x402 quote/pay), edge-auth `GET /available/:user` (live
+  spendable), `parkedSizeTrustSource` (optional, `X402_TRUST_TIERING=parked`), `.well-known/x402.json`
+  discovery. Public `/agents` reorganized to lead with yield/spend (Attribution demoted). **Code-complete,
+  52 Vitest + 82 edge-auth Rust tests green**; **runtime-gated** (needs
   `EDGE_AUTH_URL`/`_SECRET` + `X402_PAY_TO`; routes 503 until set). Reputation-gating is **optional**, not a
   dependency. Not live. Spec: [`docs/developers/agentkit-compute-402-spec.md`](../docs/developers/agentkit-compute-402-spec.md).
 
