@@ -26,6 +26,7 @@ fees + MEV are captured and split. The canonical lineage is **`MintwarePairVault
 | `vaults/MintwareMatchedLiquidityVault.sol` | **team-locked / community-matched launch** vault (≥90d cliff) | ✅ canonical launch |
 | `vaults/Mintwarev3ToV4Migrator.sol` | one-tx migrate a dormant Uniswap-v3 LP into the pair vault, mint shares | ✅ |
 | `vaults/AaveV3YieldAdapter.sol` · `MintwareERC4626YieldAdapter.sol` | idle-capital yield seams (Aave rehypothecation; fee-aware Arc `previewRedeem` NAV adapter) | ✅ |
+| `vaults/MintwareMultiVenueYieldAdapter.sol` | **curator multi-venue baseline yield** — one `IYieldAdapter` that fans idle capital across child adapters (Aave + Morpho/Euler via the 4626 adapter) by weight; best-effort never-revert withdraw; `setVenues`/`rebalance`. 12 tests | ✅ |
 | `vaults/lib/MWJitLib.sol` · `MWIdleLib.sol` · `MWPositionLib.sol` | JIT / idle-rebalance / position math | ✅ |
 | `vaults/MintwareVaultRegistry.sol` | multi-tenant registry — `deactivateVault`/`active` to retire instances | ✅ |
 | `lib/SeniorSharesMath.sol` · `MWGuardianPausable.sol` · `MWTimelockedOracleSigner.sol` | shared bases (one audited inflation defense; kill-switch; timelocked signer) | ✅ |
