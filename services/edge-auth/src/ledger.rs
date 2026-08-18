@@ -44,6 +44,15 @@ pub enum Decline {
     DailyCapExceeded,
     /// Amount exceeds the vault's settleable liquidity net of all active holds.
     InsufficientLiquidity,
+    /// Amount would draw settleable liquidity below the always-liquid HOT BUFFER reserve (the cushion
+    /// sized to peak-auth × settlement window that must survive weekend settlement timing + slippage).
+    /// Distinct from `InsufficientLiquidity`: there IS raw liquidity, but spending it would breach the
+    /// reserve floor — decline before par can break. (Pre-audit #6.)
+    ReserveFloorBreached,
+    /// The system-wide spend circuit-breaker is OPEN — ALL new authorizations are halted (e.g. the
+    /// junior cushion / coverage ratio fell below its floor). Tripped by the operator/refresher; the
+    /// decision core just honors the flag. (Pre-audit #6/#7.)
+    CircuitBreakerOpen,
 }
 
 /// The authorization outcome.

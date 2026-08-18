@@ -200,7 +200,7 @@ requirement.**
 **Build state (2026-08-18):** `lib/x402/*` (types, protocol, pricing, facilitator, require402, edgeHttp,
 config, treasury, vaultReader) + 5 routes under `app/api/x402/*` + the `/app/agents` page + 5 new AgentKit
 actions (park, unpark, treasury, x402 quote/pay) + edge-auth `GET /available/:user` + an end-to-end
-seller-flow integration test. **47 Vitest + 82 edge-auth (Rust) tests green**, project typecheck + clippy
+seller-flow integration test. **47 Vitest + 86 edge-auth (Rust) tests green**, project typecheck + clippy
 clean. **Runtime-gated** (not code-gated): `EDGE_AUTH_URL`/`EDGE_AUTH_SECRET` + `X402_PAY_TO` for the
 facilitator/seller/live-spendable; **the relayer is a signing/submission library with no HTTP surface, so a
 live `settle` endpoint is a separate server + funded-key task (deploy-gated)** — until then the facilitator

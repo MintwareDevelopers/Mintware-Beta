@@ -74,10 +74,23 @@ withdraw falls through to "skip JIT, deltas net zero, swap proceeds" — it neve
 ### #6 — Same-dollar-yield **and** par-spendable (no live product does this)
 **Risk.** Card float is T+1–T+3 (incl. weekends); a spendable-while-earning balance needs a segregated
 always-liquid hot buffer, a spend circuit-breaker, a named float facility, and a BIN-sponsor / issuing-bank / KYC gate.
-**Status (Out of contract scope).** These are off-chain / business controls on the settlement + card
-path, not this contract set. Tracked in `.claude/rules/payments-ypn.md` (deploy-gated remainder) and the
-Arc settlement runbook. Named here so the auditor knows par-spendability depends on them being in place
-before real value — the on-chain vault's job is only to never let a spend un-back senior (see #7).
+**Status — split into codeable vs. business:**
+- **Closed (off-chain, `services/edge-auth`):** the codeable spend-safety gates now ship in the
+  authorization decision core (`portfolio::PortfolioGuard`, wired through `MemStore` — the live path):
+  - **Hot-buffer reserve floor** — `min_liquidity_reserve_usdc` keeps an always-liquid cushion untouched;
+    a charge that would draw usable liquidity below it declines `reserve_floor_breached` (distinct from
+    `insufficient_liquidity` — there *is* raw liquidity, spending it would breach the buffer).
+  - **Global circuit-breaker** — `breaker_open` halts ALL new authorizations with `circuit_breaker_open`
+    (the "decline/queue before par breaks" stress trip). Both OFF by default (back-compatible); set via
+    `MemStore::set_liquidity_reserve` / `set_breaker` by the operator / NAV refresher.
+  - Pre-existing in the same core: per-request `insufficient_liquidity` gate, hold reservation, VaR
+    haircut over the auth→settlement window, and the tranche/coverage-gate junior backstop (#4/#7).
+  - Tests: `portfolio.rs` (3) + `store.rs` (1); edge-auth suite **86 green**, clippy clean.
+  - **Parity note:** the dormant Redis increment-3 path (`redis_lua.rs`, not wired to the server) does
+    not yet mirror these two gates — documented inline as a PARITY TODO for when it's switched on.
+- **Business / legal (not codeable by us):** a named float facility (credit line/lender) and the
+  BIN-sponsor / issuing-bank / KYC gate. These gate real value; the on-chain vault + edge-auth only
+  guarantee a spend never un-backs senior (see #7) and never draws below the hot buffer.
 
 ### #7 — Coverage-ratio gate + junior priced at spot
 **Risk.** Without a coverage floor, at-risk senior can outrun the first-loss cushion; valuing junior at

@@ -6,7 +6,7 @@
 |---|---|---|---|
 | Unit tests | Vitest | ~220 | `pnpm test` |
 | Contract tests (Forge) | Forge | 463 pass / 0 fail / 4 skipped | `pnpm forge:test` |
-| Rust — edge-auth | cargo | 82 | `cd services/edge-auth && cargo test` |
+| Rust — edge-auth | cargo | 86 | `cd services/edge-auth && cargo test` |
 | Rust — relayer | cargo | 23 | `cd services/relayer && cargo test` |
 
 > **Forge skips (4):** the mainnet-fork harnesses in `contracts-v4/test/fork/` self-skip when

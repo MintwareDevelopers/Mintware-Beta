@@ -37,18 +37,43 @@ impl Leg {
     }
 }
 
-/// The aggregate SPENDABLE across all legs = tightest of {Σ equity − holds, daily-cap room, Σ settleable}.
-/// Assumes the legs are fresh (freshness is enforced in `authorize_portfolio`). `acct.shares` is IGNORED
-/// here — per-leg shares live on each `Leg`; the account supplies only the user-level holds + daily cap.
-pub fn portfolio_available(legs: &[Leg], acct: &Account) -> Usdc {
+/// System-wide spend-safety guard applied ON TOP of the per-user/liquidity gates (Pre-audit #6).
+/// Both knobs are OFF by default (`OPEN`), so a portfolio with the default guard decides IDENTICALLY
+/// to the pre-guard path — the strict-generalization property is preserved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PortfolioGuard {
+    /// `true` ⇒ halt ALL new authorizations (the global stress circuit-breaker). Tripped upstream
+    /// (operator / NAV refresher) when the junior cushion / coverage ratio falls below its floor.
+    pub breaker_open: bool,
+    /// Aggregate settleable USDC that must stay UNTOUCHED as an always-liquid hot buffer — sized to
+    /// (peak-auth × full settlement window) so weekend timing + settlement slippage never break par.
+    /// A charge that would draw usable liquidity below this floor is declined `ReserveFloorBreached`.
+    pub min_liquidity_reserve_usdc: Usdc,
+}
+
+impl PortfolioGuard {
+    /// Both gates off — behaves exactly like the pre-guard portfolio path.
+    pub const OPEN: PortfolioGuard = PortfolioGuard { breaker_open: false, min_liquidity_reserve_usdc: 0 };
+}
+
+/// The aggregate SPENDABLE across all legs = tightest of {Σ equity − holds, daily-cap room,
+/// Σ settleable − hot-buffer reserve}. Assumes the legs are fresh (freshness is enforced in
+/// `authorize_portfolio`). `acct.shares` is IGNORED here — per-leg shares live on each `Leg`; the
+/// account supplies only the user-level holds + daily cap. A tripped breaker means zero spendable.
+pub fn portfolio_available(legs: &[Leg], acct: &Account, guard: &PortfolioGuard) -> Usdc {
+    if guard.breaker_open {
+        return 0; // system halt — nothing is spendable while the breaker is open
+    }
     let gross_equity = legs.iter().fold(0u128, |a, l| a.saturating_add(l.equity()));
     let liquidity = legs.iter().fold(0u128, |a, l| a.saturating_add(l.settleable()));
+    // Keep the hot buffer intact: only liquidity ABOVE the reserve floor is spendable.
+    let usable_liquidity = liquidity.saturating_sub(guard.min_liquidity_reserve_usdc);
 
     let per_user = gross_equity.saturating_sub(acct.active_holds_usdc);
     let cap_room = acct
         .daily_cap_usdc
         .saturating_sub(acct.daily_spent_usdc.saturating_add(acct.active_holds_usdc));
-    per_user.min(cap_room).min(liquidity)
+    per_user.min(cap_room).min(usable_liquidity)
 }
 
 /// Decide APPROVE/DECLINE for a charge of `amount` against the whole portfolio. Same priority order +
@@ -60,7 +85,13 @@ pub fn authorize_portfolio(
     amount: Usdc,
     now_secs: u64,
     max_nav_age_secs: u64,
+    guard: &PortfolioGuard,
 ) -> Decision {
+    // Pre-audit #6/#7: the system-wide breaker halts EVERYTHING first — a stress trip declines even a
+    // trivially-valid charge, deterministically, regardless of per-user/data state.
+    if guard.breaker_open {
+        return Decision::Decline(Decline::CircuitBreakerOpen);
+    }
     // Rule 1: a single stale/unvaluable leg fails the whole basket safe. NAV staleness before price
     // staleness, matching the single-vault priority order.
     for l in legs {
@@ -86,8 +117,15 @@ pub fn authorize_portfolio(
         return Decision::Decline(Decline::DailyCapExceeded);
     }
     let liquidity = legs.iter().fold(0u128, |a, l| a.saturating_add(l.settleable()));
+    // Absolute floor first: you can never settle more than the raw idle buffer net of holds.
     if amount > liquidity {
         return Decision::Decline(Decline::InsufficientLiquidity);
+    }
+    // Then the hot-buffer floor: there IS raw liquidity, but spending it would breach the always-liquid
+    // reserve → decline before par can break (Pre-audit #6).
+    let usable_liquidity = liquidity.saturating_sub(guard.min_liquidity_reserve_usdc);
+    if amount > usable_liquidity {
+        return Decision::Decline(Decline::ReserveFloorBreached);
     }
     Decision::Approve { hold_usdc: amount }
 }
@@ -142,7 +180,7 @@ mod tests {
 
         for amount in [1u128, 500_000_000, 3_899_000_000, 3_900_000_001, 9_000_000_000] {
             assert_eq!(
-                authorize_portfolio(std::slice::from_ref(&leg), &a, amount, NOW, MAX_AGE),
+                authorize_portfolio(std::slice::from_ref(&leg), &a, amount, NOW, MAX_AGE, &PortfolioGuard::OPEN),
                 authorize(&nav, &a, &g, amount, NOW, MAX_AGE),
                 "portfolio diverged from single-vault at amount {amount}"
             );
@@ -166,12 +204,12 @@ mod tests {
         let a = acct(0, 0, u128::MAX);
 
         // aggregate equity ≈ $2,000 + $2,100 = $4,100.
-        assert_eq!(portfolio_available(&legs, &a), 4_100_000_000);
+        assert_eq!(portfolio_available(&legs, &a, &PortfolioGuard::OPEN), 4_100_000_000);
         // a charge inside the sum approves; just over declines InsufficientEquity.
-        assert_eq!(authorize_portfolio(&legs, &a, 4_100_000_000, NOW, MAX_AGE), Decision::Approve { hold_usdc: 4_100_000_000 });
-        assert_eq!(authorize_portfolio(&legs, &a, 4_100_000_001, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientEquity));
+        assert_eq!(authorize_portfolio(&legs, &a, 4_100_000_000, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Approve { hold_usdc: 4_100_000_000 });
+        assert_eq!(authorize_portfolio(&legs, &a, 4_100_000_001, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Decline(Decline::InsufficientEquity));
         // neither single leg alone could cover $2,100+$2,000 — the SUM is what unlocks it.
-        assert_eq!(authorize_portfolio(std::slice::from_ref(&legs[0]), &a, 2_100_000_000, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientEquity));
+        assert_eq!(authorize_portfolio(std::slice::from_ref(&legs[0]), &a, 2_100_000_000, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Decline(Decline::InsufficientEquity));
     }
 
     #[test]
@@ -184,7 +222,7 @@ mod tests {
             vault_global_holds_usdc: 0,
         };
         let a = acct(0, 0, u128::MAX);
-        assert_eq!(authorize_portfolio(&[good_usdc, stale_eth], &a, 1_000_000, NOW, MAX_AGE), Decision::Decline(Decline::StalePrice));
+        assert_eq!(authorize_portfolio(&[good_usdc, stale_eth], &a, 1_000_000, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Decline(Decline::StalePrice));
     }
 
     #[test]
@@ -194,8 +232,8 @@ mod tests {
         let l1 = Leg { nav: usdc_nav(1_000_000_000_000, 200_000_000), shares: 900_000_000_000, vault_global_holds_usdc: 0 };
         let a = acct(0, 0, u128::MAX);
         // equity is huge, but liquidity = 300 + 200 = $500. $500 approves, $501 declines InsufficientLiquidity.
-        assert_eq!(authorize_portfolio(&[l0, l1], &a, 500_000_000, NOW, MAX_AGE), Decision::Approve { hold_usdc: 500_000_000 });
-        assert_eq!(authorize_portfolio(&[l0, l1], &a, 500_000_001, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientLiquidity));
+        assert_eq!(authorize_portfolio(&[l0, l1], &a, 500_000_000, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Approve { hold_usdc: 500_000_000 });
+        assert_eq!(authorize_portfolio(&[l0, l1], &a, 500_000_001, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Decline(Decline::InsufficientLiquidity));
     }
 
     #[test]
@@ -211,16 +249,58 @@ mod tests {
         let a = acct(0, 0, u128::MAX);
         let legs = [eth];
         // $2,100 approves; $2,100.000001 declines on the converted settlement liquidity.
-        assert_eq!(authorize_portfolio(&legs, &a, 2_100_000_000, NOW, MAX_AGE), Decision::Approve { hold_usdc: 2_100_000_000 });
-        assert_eq!(authorize_portfolio(&legs, &a, 2_100_000_001, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientLiquidity));
+        assert_eq!(authorize_portfolio(&legs, &a, 2_100_000_000, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Approve { hold_usdc: 2_100_000_000 });
+        assert_eq!(authorize_portfolio(&legs, &a, 2_100_000_001, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Decline(Decline::InsufficientLiquidity));
         // The raw-WETH bug would have (wrongly) approved a $1,000,000 charge — prove it now DECLINES.
-        assert_eq!(authorize_portfolio(&legs, &a, 1_000_000_000_000, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientLiquidity));
+        assert_eq!(authorize_portfolio(&legs, &a, 1_000_000_000_000, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Decline(Decline::InsufficientLiquidity));
     }
 
     #[test]
     fn empty_portfolio_has_zero_equity() {
         let a = acct(0, 0, u128::MAX);
-        assert_eq!(portfolio_available(&[], &a), 0);
-        assert_eq!(authorize_portfolio(&[], &a, 1, NOW, MAX_AGE), Decision::Decline(Decline::InsufficientEquity));
+        assert_eq!(portfolio_available(&[], &a, &PortfolioGuard::OPEN), 0);
+        assert_eq!(authorize_portfolio(&[], &a, 1, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Decline(Decline::InsufficientEquity));
+    }
+
+    // ── Pre-audit #6: hot-buffer reserve floor + global circuit-breaker ──────────────
+
+    #[test]
+    fn open_breaker_declines_everything_even_a_valid_dollar() {
+        // A rich, liquid, uncapped portfolio — normally a trivial approve — is halted while the
+        // system-wide stress breaker is open. This is the "stop before par breaks" trip.
+        let leg = Leg { nav: usdc_nav(10_000_000_000, 10_000_000_000), shares: 10_000_000_000, vault_global_holds_usdc: 0 };
+        let a = acct(0, 0, u128::MAX);
+        let tripped = PortfolioGuard { breaker_open: true, min_liquidity_reserve_usdc: 0 };
+        assert_eq!(authorize_portfolio(&[leg], &a, 1_000_000, NOW, MAX_AGE, &tripped), Decision::Decline(Decline::CircuitBreakerOpen));
+        // Nothing is spendable while the breaker is open, regardless of equity/liquidity.
+        assert_eq!(portfolio_available(&[leg], &a, &tripped), 0);
+        // Same portfolio with the breaker closed approves — the breaker is the only difference.
+        assert_eq!(authorize_portfolio(&[leg], &a, 1_000_000, NOW, MAX_AGE, &PortfolioGuard::OPEN), Decision::Approve { hold_usdc: 1_000_000 });
+    }
+
+    #[test]
+    fn reserve_floor_protects_the_hot_buffer_with_a_distinct_reason() {
+        // $500 of idle liquidity, huge equity + uncapped so LIQUIDITY is the binding dimension.
+        let leg = Leg { nav: usdc_nav(1_000_000_000_000, 500_000_000), shares: 900_000_000_000, vault_global_holds_usdc: 0 };
+        let a = acct(0, 0, u128::MAX);
+        // Reserve $200 as an always-liquid hot buffer → only $300 is spendable.
+        let g = PortfolioGuard { breaker_open: false, min_liquidity_reserve_usdc: 200_000_000 };
+        assert_eq!(portfolio_available(&[leg], &a, &g), 300_000_000, "available = liquidity - reserve");
+        // Up to the usable $300 approves.
+        assert_eq!(authorize_portfolio(&[leg], &a, 300_000_000, NOW, MAX_AGE, &g), Decision::Approve { hold_usdc: 300_000_000 });
+        // $300.000001 would eat into the reserve → declined with the DISTINCT reserve-floor reason
+        // (there IS raw liquidity, so it is NOT InsufficientLiquidity).
+        assert_eq!(authorize_portfolio(&[leg], &a, 300_000_001, NOW, MAX_AGE, &g), Decision::Decline(Decline::ReserveFloorBreached));
+        // Above the RAW liquidity ($500) it is the absolute-liquidity reason, not the reserve reason.
+        assert_eq!(authorize_portfolio(&[leg], &a, 500_000_001, NOW, MAX_AGE, &g), Decision::Decline(Decline::InsufficientLiquidity));
+    }
+
+    #[test]
+    fn a_reserve_larger_than_liquidity_zeroes_spendable_but_never_underflows() {
+        let leg = Leg { nav: usdc_nav(1_000_000_000_000, 100_000_000), shares: 900_000_000_000, vault_global_holds_usdc: 0 };
+        let a = acct(0, 0, u128::MAX);
+        let g = PortfolioGuard { breaker_open: false, min_liquidity_reserve_usdc: 10_000_000_000 }; // reserve >> liquidity
+        assert_eq!(portfolio_available(&[leg], &a, &g), 0, "saturating: never underflows");
+        assert_eq!(authorize_portfolio(&[leg], &a, 1, NOW, MAX_AGE, &g), Decision::Decline(Decline::ReserveFloorBreached));
     }
 }

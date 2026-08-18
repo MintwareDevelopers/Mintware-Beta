@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use crate::ledger::{Account, Decision};
 use crate::nav::NavSnapshot;
-use crate::portfolio::{authorize_portfolio, portfolio_available, Leg};
+use crate::portfolio::{authorize_portfolio, portfolio_available, Leg, PortfolioGuard};
 use crate::Usdc;
 
 /// Default per-user daily cap when none is set — mirrors the Gateway's `DEFAULT_GLOBAL_DAILY_CAP`.
@@ -74,6 +74,11 @@ struct Inner {
     hold_ttl_secs: u64,
     accounts: HashMap<String, AccountData>,
     holds: HashMap<String, Hold>,
+    /// Pre-audit #6 spend-safety guard (both OFF by default → back-compatible):
+    /// aggregate settleable USDC kept untouched as an always-liquid hot buffer.
+    min_liquidity_reserve_usdc: Usdc,
+    /// system-wide stress trip — when true, ALL new authorizations are halted.
+    breaker_open: bool,
 }
 
 /// In-memory implementation. `Send + Sync` via the inner `Mutex`; cheap to share behind an `Arc`.
@@ -99,8 +104,23 @@ impl MemStore {
                 hold_ttl_secs,
                 accounts: HashMap::new(),
                 holds: HashMap::new(),
+                min_liquidity_reserve_usdc: 0,
+                breaker_open: false,
             }),
         }
+    }
+
+    // ── Pre-audit #6 spend-safety guard (set by the operator / NAV refresher) ───────
+    /// Size the always-liquid hot buffer (aggregate settleable USDC kept untouchable). 0 = off.
+    pub fn set_liquidity_reserve(&self, reserve_usdc: Usdc) {
+        self.inner.lock().unwrap().min_liquidity_reserve_usdc = reserve_usdc;
+    }
+    /// Trip / reset the system-wide spend circuit-breaker. `true` halts ALL new authorizations.
+    pub fn set_breaker(&self, open: bool) {
+        self.inner.lock().unwrap().breaker_open = open;
+    }
+    fn guard(g: &Inner) -> PortfolioGuard {
+        PortfolioGuard { breaker_open: g.breaker_open, min_liquidity_reserve_usdc: g.min_liquidity_reserve_usdc }
     }
 
     // ── feeds (later: the on-chain indexer / NAV refresher write these) ─────────────
@@ -146,7 +166,7 @@ impl MemStore {
 
         let acct = Self::account_view(&g, user, now_secs);
         let legs = Self::build_legs(&g, user);
-        let decision = authorize_portfolio(&legs, &acct, amount, now_secs, g.max_nav_age_secs);
+        let decision = authorize_portfolio(&legs, &acct, amount, now_secs, g.max_nav_age_secs, &Self::guard(&g));
 
         if let Decision::Approve { hold_usdc } = decision {
             let ttl = g.hold_ttl_secs;
@@ -203,7 +223,7 @@ impl MemStore {
         Self::prune_expired(&mut g, now_secs);
         let acct = Self::account_view(&g, user, now_secs);
         let legs = Self::build_legs(&g, user);
-        portfolio_available(&legs, &acct)
+        portfolio_available(&legs, &acct, &Self::guard(&g))
     }
 
     // ── internals ──────────────────────────────────────────────────────────────────
@@ -296,6 +316,31 @@ mod tests {
         // remaining aggregate = $600; just over declines InsufficientEquity.
         assert_eq!(s.available("alice", NOW), 600_000_000);
         assert_eq!(s.try_authorize("m2", "alice", 600_000_001, NOW).decision, Decision::Decline(Decline::InsufficientEquity));
+    }
+
+    #[test]
+    fn breaker_halts_all_auth_and_reserve_floor_protects_hot_buffer() {
+        // alice: $1,000 equity, $10,000 idle liquidity, effectively uncapped.
+        let s = store();
+
+        // Circuit-breaker: a normally-valid $100 charge is halted while the breaker is open, and live
+        // spendable reads 0 — the system-wide "stop before par breaks."
+        s.set_breaker(true);
+        assert_eq!(s.try_authorize("b1", "alice", 100_000_000, NOW).decision, Decision::Decline(Decline::CircuitBreakerOpen));
+        assert_eq!(s.available("alice", NOW), 0);
+        // Resetting the breaker restores normal behavior (the breaker was the only thing blocking).
+        s.set_breaker(false);
+        assert_eq!(s.try_authorize("b1", "alice", 100_000_000, NOW).decision, Decision::Approve { hold_usdc: 100_000_000 });
+        assert!(s.cancel("b1")); // release the hold so the reserve sub-test starts clean
+
+        // Reserve $9,500 of the $10,000 idle buffer as an always-liquid hot buffer → usable liquidity is
+        // $500, which now binds below alice's $1,000 equity.
+        s.set_liquidity_reserve(9_500_000_000);
+        assert_eq!(s.available("alice", NOW), 500_000_000);
+        // $500 approves; a dollar more would eat the hot buffer → ReserveFloorBreached (raw liquidity is
+        // ample, so it is NOT the generic InsufficientLiquidity).
+        assert_eq!(s.try_authorize("r1", "alice", 500_000_001, NOW).decision, Decision::Decline(Decline::ReserveFloorBreached));
+        assert_eq!(s.try_authorize("r2", "alice", 500_000_000, NOW).decision, Decision::Approve { hold_usdc: 500_000_000 });
     }
 
     #[test]

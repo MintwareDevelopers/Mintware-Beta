@@ -62,7 +62,7 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   actions (`MINTWARE_PARK`/`UNPARK`/`TREASURY` + x402 quote/pay), edge-auth `GET /available/:user` (live
   spendable), `parkedSizeTrustSource` (optional, `X402_TRUST_TIERING=parked`), `.well-known/x402.json`
   discovery. Public `/agents` reorganized to lead with yield/spend (Attribution demoted). **Code-complete,
-  52 Vitest + 82 edge-auth Rust tests green**; **runtime-gated** (needs
+  52 Vitest + 86 edge-auth Rust tests green**; **runtime-gated** (needs
   `EDGE_AUTH_URL`/`_SECRET` + `X402_PAY_TO`; routes 503 until set). Reputation-gating is **optional**, not a
   dependency. Not live. Spec: [`docs/developers/agentkit-compute-402-spec.md`](../docs/developers/agentkit-compute-402-spec.md).
 

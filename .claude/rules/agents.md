@@ -73,7 +73,7 @@ Submitted PR adding Mintware to `### 🪪 Identity & Trust` section of the curat
 # Agent parking account + x402
 
 > **Status: code-complete + testnet, NOT mainnet/audited.** `lib/x402/*` + 5 routes + `/app/agents`
-> UI + 13 plugin actions are built and green (**52 Vitest + 82 edge-auth Rust tests**), but the
+> UI + 13 plugin actions are built and green (**52 Vitest + 86 edge-auth Rust tests**), but the
 > stack is **runtime-gated** (503 until env set) and rides the Arc-**testnet** YPN vault. External
 > audit + a real settlement/card path gate real value. **Not live.** (See `.claude/STATE.md`.)
 
