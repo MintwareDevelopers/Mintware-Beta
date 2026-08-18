@@ -44,6 +44,8 @@ Every other mention must be a *pointer* to the home, never a copy.
 | Contracts + addresses (live = Forge) | [`rules/smart-contracts.md`](rules/smart-contracts.md) |
 | DB schema | [`rules/schema.md`](rules/schema.md) |
 | Vaults / ULV | [`rules/vaults.md`](rules/vaults.md) |
+| Payments — YPN, settlement, edge-auth/relayer, Arc | [`rules/payments-ypn.md`](rules/payments-ypn.md) |
+| AI agents — ERC-8004, Attribution, x402 parking | [`rules/agents.md`](rules/agents.md) |
 | Product framing / copy / honesty guardrails | [`docs/product/framing-and-messaging.md`](../docs/product/framing-and-messaging.md) |
 | Ongoing session work / decisions | session `memory/` |
 
