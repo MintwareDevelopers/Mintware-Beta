@@ -23,6 +23,8 @@ sol! {
     function seniorShares(address account) external view returns (uint256);
     // shared (IYieldVault) — same selector on both vaults.
     function idleBuffer() external view returns (uint256);
+    // Chainlink AggregatorV3 — the ETH/USD push price for volatile-collateral vaults.
+    function latestRoundData() external view returns (uint80 roundId, int256 answer, uint256 startedAt, uint256 updatedAt, uint80 answeredInRound);
 }
 
 /// The `VIRTUAL` inflation offset — a public constant `1e3` on BOTH vaults (v1 `MintwareYieldVault` and
@@ -67,12 +69,92 @@ impl fmt::Display for ChainError {
 }
 impl std::error::Error for ChainError {}
 
+/// What backs a vault's shares, and (for ETH) where to read the push price + the VaR haircut inputs.
+/// Defaults to `Usdc` (the price-free identity); `Eth` flips the multi-collateral seam LIVE for a vault.
+#[derive(Debug, Clone)]
+pub enum CollateralConfig {
+    Usdc,
+    Eth {
+        /// Chainlink AggregatorV3 feed for the collateral/USD price (e.g. ETH/USD on Base).
+        price_feed: Address,
+        /// The feed's own decimals (Chainlink ETH/USD = 8) — used to scale the answer to USD 6dp.
+        feed_decimals: u8,
+        /// VaR haircut inputs (config-tunable; see `crate::haircut`).
+        haircut: crate::haircut::HaircutParams,
+    },
+}
+
+impl CollateralConfig {
+    /// Parse from a key→value lookup (env in prod, a map in tests). `EDGE_COLLATERAL`: absent/`usdc` →
+    /// `Usdc` (price-free); `eth` REQUIRES a valid `EDGE_PRICE_FEED` (Chainlink) and reads optional
+    /// `EDGE_FEED_DECIMALS` (default 8) + the four haircut knobs (`EDGE_COLLATERAL_{VOL_BPS,
+    /// MAX_HOLD_SECS,Z_MILLI,SLIP_BPS}`, falling back to `HaircutParams::ETH_DEFAULT`). **Fails CLOSED:**
+    /// an `eth` arm with a missing/invalid feed → `Err` — a vault holding ETH must NEVER be valued as
+    /// USDC (that would 1:1 over-credit ~3000×). The caller must disable the refresher on `Err`.
+    pub fn from_lookup(get: impl Fn(&str) -> Option<String>) -> Result<CollateralConfig, String> {
+        let kind = get("EDGE_COLLATERAL").map(|s| s.trim().to_ascii_lowercase());
+        match kind.as_deref() {
+            None | Some("") | Some("usdc") => Ok(CollateralConfig::Usdc),
+            Some("eth") => {
+                let feed_str = get("EDGE_PRICE_FEED")
+                    .ok_or_else(|| "EDGE_COLLATERAL=eth requires EDGE_PRICE_FEED".to_string())?;
+                let price_feed = feed_str
+                    .trim()
+                    .parse::<Address>()
+                    .map_err(|_| format!("EDGE_PRICE_FEED is not a valid address: {feed_str}"))?;
+                let feed_decimals =
+                    get("EDGE_FEED_DECIMALS").and_then(|s| s.trim().parse().ok()).unwrap_or(8u8);
+                let d = crate::haircut::HaircutParams::ETH_DEFAULT;
+                let haircut = crate::haircut::HaircutParams {
+                    vol_annual_bps: get("EDGE_COLLATERAL_VOL_BPS").and_then(|s| s.trim().parse().ok()).unwrap_or(d.vol_annual_bps),
+                    max_hold_secs: get("EDGE_COLLATERAL_MAX_HOLD_SECS").and_then(|s| s.trim().parse().ok()).unwrap_or(d.max_hold_secs),
+                    z_score_milli: get("EDGE_COLLATERAL_Z_MILLI").and_then(|s| s.trim().parse().ok()).unwrap_or(d.z_score_milli),
+                    settlement_slippage_bps: get("EDGE_COLLATERAL_SLIP_BPS").and_then(|s| s.trim().parse().ok()).unwrap_or(d.settlement_slippage_bps),
+                };
+                Ok(CollateralConfig::Eth { price_feed, feed_decimals, haircut })
+            }
+            Some(other) => Err(format!("EDGE_COLLATERAL must be 'usdc' or 'eth', got '{other}'")),
+        }
+    }
+}
+
+/// Decode + VALIDATE a Chainlink `latestRoundData` return (5 × 32-byte words:
+/// `[roundId, answer, startedAt, updatedAt, answeredInRound]`) → `(answer_positive, updatedAt_secs)`.
+/// The standard Chainlink safety checks: a positive answer, a non-zero `updatedAt`, and a COMPLETE round
+/// (`answeredInRound >= roundId`, guarding a carried-over stale answer). Any failure (or short data) →
+/// `(0, 0)` → the caller yields 0 spendable + a stale-price decline (fail safe), never a bad auth. Pure.
+pub fn decode_chainlink_round(bytes: &[u8]) -> (u128, u64) {
+    if bytes.len() < 5 * 32 {
+        return (0, 0);
+    }
+    let round_id = U256::from_be_slice(&bytes[0..32]);
+    let answer = u128::try_from(U256::from_be_slice(&bytes[32..64])).unwrap_or(0); // non-positive int256 → huge U256 → 0
+    let updated_at = u64::try_from(U256::from_be_slice(&bytes[96..128])).unwrap_or(0);
+    let answered_in_round = U256::from_be_slice(&bytes[128..160]);
+    if answer == 0 || updated_at == 0 || answered_in_round < round_id {
+        return (0, 0);
+    }
+    (answer, updated_at)
+}
+
+/// Scale a Chainlink `answer` (feed-native decimals) to USD 6dp. Chainlink ETH/USD is 8dp → ÷100.
+/// A non-positive answer arrives as `0` (the caller already floored negatives) → 0 spendable (fail safe).
+/// Pure.
+pub fn chainlink_answer_to_usd_6dp(answer_positive: u128, feed_decimals: u8) -> u128 {
+    if feed_decimals >= 6 {
+        answer_positive / 10u128.pow((feed_decimals - 6) as u32)
+    } else {
+        answer_positive.saturating_mul(10u128.pow((6 - feed_decimals) as u32))
+    }
+}
+
 /// Reads a single vault over JSON-RPC.
 pub struct EthReader {
     http: reqwest::Client,
     rpc_url: String,
     vault: Address,
     kind: VaultKind,
+    collateral: CollateralConfig,
 }
 
 impl EthReader {
@@ -86,15 +168,27 @@ impl EthReader {
             .timeout(Duration::from_secs(10))
             .build()
             .expect("reqwest client");
-        Self { http, rpc_url: rpc_url.into(), vault, kind }
+        Self { http, rpc_url: rpc_url.into(), vault, kind, collateral: CollateralConfig::Usdc }
+    }
+
+    /// Configure this vault as volatile (ETH/LST) collateral — flips the multi-collateral seam live.
+    /// The reader will read the Chainlink price + emit a VaR-haircut, staleness-guarded `Eth` snapshot.
+    pub fn with_collateral(mut self, collateral: CollateralConfig) -> Self {
+        self.collateral = collateral;
+        self
     }
 
     /// `eth_call` the vault with ABI-encoded `data`, returning the raw 32-byte-aligned result.
     async fn eth_call(&self, data: Vec<u8>) -> Result<Vec<u8>, ChainError> {
+        self.eth_call_to(self.vault, data).await
+    }
+
+    /// `eth_call` against an ARBITRARY address (the vault, or a Chainlink feed for the ETH price).
+    async fn eth_call_to(&self, to: Address, data: Vec<u8>) -> Result<Vec<u8>, ChainError> {
         let body = json!({
             "jsonrpc": "2.0", "id": 1, "method": "eth_call",
             "params": [{
-                "to": format!("0x{}", hex::encode(self.vault.as_slice())),
+                "to": format!("0x{}", hex::encode(to.as_slice())),
                 "data": format!("0x{}", hex::encode(&data)),
             }, "latest"],
         });
@@ -139,16 +233,36 @@ impl EthReader {
         let total_assets = self.read_u256(assets_call).await?;
         let total_shares = self.read_u256(shares_call).await?;
         let idle_buffer = self.read_u256(idleBufferCall {}.abi_encode()).await?;
+
+        // Single-asset USDC → price-free identity. An ETH-collateral vault additionally reads its push
+        // price + emits a VaR-haircut, staleness-guarded snapshot (the multi-collateral seam, now wireable).
+        let collateral = match &self.collateral {
+            CollateralConfig::Usdc => VaultCollateral::Usdc,
+            CollateralConfig::Eth { price_feed, feed_decimals, haircut } => {
+                let (price_6dp, updated_at) = self.fetch_eth_price(*price_feed, *feed_decimals).await?;
+                VaultCollateral::eth_from_model(price_6dp, updated_at, *haircut)
+            }
+        };
+
         Ok(NavSnapshot {
             total_assets,
             total_shares,
             virtual_offset: VAULT_VIRTUAL_OFFSET,
             idle_buffer,
             observed_at_secs,
-            // Both vaults settle single-asset USDC → the senior claim is price-free. Multi-collateral
-            // (ETH/WETH with a haircut) is the dark seam in `nav.rs`, off until its gates are met.
-            collateral: VaultCollateral::Usdc,
+            collateral,
         })
+    }
+
+    /// Read the Chainlink push price for an ETH-collateral vault → `(USD 6dp, updatedAt secs)`. The raw
+    /// return is 5 words `[roundId, answer, startedAt, updatedAt, answeredInRound]`; a non-positive or
+    /// oversize `answer` decodes to 0 → 0 spendable (fail safe), and the price's OWN staleness is enforced
+    /// in `ledger::authorize` via `NavSnapshot::price_is_fresh` (`updatedAt` becomes `price_observed_at_secs`).
+    async fn fetch_eth_price(&self, feed: Address, feed_decimals: u8) -> Result<(u128, u64), ChainError> {
+        let bytes = self.eth_call_to(feed, latestRoundDataCall {}.abi_encode()).await?;
+        // Validate the round (positive answer, fresh updatedAt, complete round) — invalid → (0,0) fail safe.
+        let (answer, updated_at) = decode_chainlink_round(&bytes);
+        Ok((chainlink_answer_to_usd_6dp(answer, feed_decimals), updated_at))
     }
 
     /// A user's current senior share balance (the card-spendable claim).
@@ -173,6 +287,74 @@ pub fn addr_key(a: &Address) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn chainlink_price_scales_to_usd_6dp() {
+        // ETH/USD Chainlink is 8dp: $2,000 = 2_000e8 → $2,000 in 6dp = 2_000e6.
+        assert_eq!(chainlink_answer_to_usd_6dp(200_000_000_000, 8), 2_000_000_000);
+        // exact 6dp feed → identity; 18dp → ÷1e12; sub-6dp (2dp) → ×1e4.
+        assert_eq!(chainlink_answer_to_usd_6dp(2_000_000_000, 6), 2_000_000_000);
+        assert_eq!(chainlink_answer_to_usd_6dp(2_000_000_000_000_000_000_000, 18), 2_000_000_000);
+        assert_eq!(chainlink_answer_to_usd_6dp(200_000, 2), 2_000_000_000);
+        // fail-safe: a zeroed (non-positive/oversize) answer → 0.
+        assert_eq!(chainlink_answer_to_usd_6dp(0, 8), 0);
+    }
+
+    fn round_bytes(round_id: u128, answer: u128, updated_at: u64, answered_in_round: u128) -> Vec<u8> {
+        let mut b = vec![0u8; 5 * 32];
+        b[16..32].copy_from_slice(&round_id.to_be_bytes()); // word 0 roundId (low 16 bytes)
+        b[48..64].copy_from_slice(&answer.to_be_bytes()); // word 1 answer
+        b[112..128].copy_from_slice(&(updated_at as u128).to_be_bytes()); // word 3 updatedAt
+        b[144..160].copy_from_slice(&answered_in_round.to_be_bytes()); // word 4 answeredInRound
+        b
+    }
+
+    #[test]
+    fn chainlink_round_validation_fails_safe() {
+        // complete round, positive answer, fresh → passes through.
+        assert_eq!(decode_chainlink_round(&round_bytes(10, 200_000_000_000, 1_000, 10)), (200_000_000_000, 1_000));
+        // carried-over stale round (answeredInRound < roundId) → (0,0).
+        assert_eq!(decode_chainlink_round(&round_bytes(10, 200_000_000_000, 1_000, 9)), (0, 0));
+        // zero answer / zero updatedAt (incomplete round) / short data → (0,0).
+        assert_eq!(decode_chainlink_round(&round_bytes(10, 0, 1_000, 10)), (0, 0));
+        assert_eq!(decode_chainlink_round(&round_bytes(10, 200_000_000_000, 0, 10)), (0, 0));
+        assert_eq!(decode_chainlink_round(&[0u8; 100]), (0, 0));
+    }
+
+    #[test]
+    fn collateral_config_from_lookup_fails_closed() {
+        use std::collections::HashMap;
+        let map = |pairs: &[(&str, &str)]| {
+            let m: HashMap<String, String> =
+                pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+            move |k: &str| m.get(k).cloned()
+        };
+        let feed = "0x0000000000000000000000000000000000000abc";
+
+        // default / explicit usdc → Usdc.
+        assert!(matches!(CollateralConfig::from_lookup(map(&[])).unwrap(), CollateralConfig::Usdc));
+        assert!(matches!(CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "usdc")])).unwrap(), CollateralConfig::Usdc));
+
+        // eth + valid feed → Eth with default 8dp + ETH_DEFAULT haircut.
+        match CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "eth"), ("EDGE_PRICE_FEED", feed)])).unwrap() {
+            CollateralConfig::Eth { feed_decimals, haircut, .. } => {
+                assert_eq!(feed_decimals, 8);
+                assert_eq!(haircut, crate::haircut::HaircutParams::ETH_DEFAULT);
+            }
+            _ => panic!("expected Eth"),
+        }
+
+        // eth WITHOUT a feed, or with a bad feed, or an unknown kind → Err (fail closed, never Usdc).
+        assert!(CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "eth")])).is_err());
+        assert!(CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "eth"), ("EDGE_PRICE_FEED", "nope")])).is_err());
+        assert!(CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "btc")])).is_err());
+
+        // a haircut knob override reaches the params.
+        match CollateralConfig::from_lookup(map(&[("EDGE_COLLATERAL", "eth"), ("EDGE_PRICE_FEED", feed), ("EDGE_COLLATERAL_MAX_HOLD_SECS", "2592000")])).unwrap() {
+            CollateralConfig::Eth { haircut, .. } => assert_eq!(haircut.max_hold_secs, 2_592_000),
+            _ => panic!("expected Eth"),
+        }
+    }
 
     #[test]
     fn call_encoding_has_the_right_selectors() {

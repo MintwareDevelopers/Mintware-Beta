@@ -12,13 +12,12 @@ import {Currency}            from "@uniswap/v4-core/src/types/Currency.sol";
 import {LPFeeLibrary}        from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {IERC20}              from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {FeeVault}                from "../src/FeeVault.sol";
 import {HookMiner}               from "../src/lib/HookMiner.sol";
 import {MWHookCoordinator}       from "../src/hooks/MWHookCoordinator.sol";
 import {MWAmAuction, IAmAmmRentSink} from "../src/hooks/MWAmAuction.sol";
 import {AmParams}                from "../src/hooks/MWAmAuctionLib.sol";
-import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
-import {VaultSurface, LockTier, VaultConfig} from "../src/vaults/VaultTypes.sol";
+import {MintwareDeFiPairVault}   from "../src/vaults/MintwareDeFiPairVault.sol";
+import {PoolProfile, LockTier}   from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20}      from "./mocks/MockERC20.sol";
 import {TestSwapRouter} from "./helpers/TestSwapRouter.sol";
@@ -88,12 +87,15 @@ contract AmAmmSwapHandler is Test {
 /// @notice Swap-path solvency invariants for the live am-AMM hook. The auction's balance of each
 ///         token must always equal the escrowed bids (bidToken only) plus the unclaimed pull
 ///         ledger — i.e. no swap-driven skim, rent charge, or bid churn can conjure or lose funds.
+///         Migrated onto the go-forward `MintwareDeFiPairVault` (the vault only supplies resting
+///         liquidity; the auction solvency invariant is vault-independent). Phase 0.
 contract MWHookCoordinatorAmAmmInvariantTest is StdInvariant, Test {
     using PoolIdLibrary for PoolKey;
 
     MWHookCoordinator internal coord;
     MWAmAuction internal auction;
     AmAmmSwapHandler internal handler;
+    MintwareDeFiPairVault internal vault;
     MockERC20 internal usdc; MockERC20 internal proj;
     PoolKey internal poolKey; PoolId internal poolId;
     address internal c0; address internal c1;
@@ -105,24 +107,14 @@ contract MWHookCoordinatorAmAmmInvariantTest is StdInvariant, Test {
         TestSwapRouter router = new TestSwapRouter(IPoolManager(address(pm)));
         InvSink2 sink = new InvSink2();
 
-        usdc = new MockERC20("USD Coin", "USDC", 6);
-        proj = new MockERC20("Project", "PROJ", 6);
-        FeeVault feeVault = new FeeVault(address(usdc), makeAddr("d"), makeAddr("o"), makeAddr("t"));
+        usdc = new MockERC20("USD Coin", "USDC", 18);
+        proj = new MockERC20("Project", "PROJ", 18);
 
         bytes memory args = abi.encode(IPoolManager(address(pm)), address(0), address(this));
         (address expected, bytes32 salt) =
             HookMiner.find(address(this), uint160(0xAC8), type(MWHookCoordinator).creationCode, args);
         coord = new MWHookCoordinator{salt: salt}(IPoolManager(address(pm)), address(0), address(this));
         require(address(coord) == expected, "addr");
-
-        VaultConfig memory cfg = VaultConfig({
-            surface: VaultSurface.DeFi, provider: address(this), underlyingToken: address(usdc),
-            treasury: makeAddr("t"), name: "v", symbol: "v", minDeposit: 0, entryFeeBps: 0, exitFeeBps: 0,
-            enableMEVProtection: true, enableIdleCapital: false, idleTargetRatio: 0
-        });
-        MintwareDeFiVault4626 vault = new MintwareDeFiVault4626(cfg, address(pm), address(feeVault));
-        coord.setVault(address(vault));
-        feeVault.setSocialVault(address(vault));
 
         (Currency cc0, Currency cc1) = address(usdc) < address(proj)
             ? (Currency.wrap(address(usdc)), Currency.wrap(address(proj)))
@@ -131,13 +123,17 @@ contract MWHookCoordinatorAmAmmInvariantTest is StdInvariant, Test {
         poolId  = poolKey.toId();
         c0 = Currency.unwrap(cc0); c1 = Currency.unwrap(cc1);
 
-        proj.mint(address(this), 500_000e6);
-        proj.approve(address(vault), 500_000e6);
-        vault.seedTeamTokens(keccak256("v"), address(proj), 500_000e6, poolKey, INIT_SQRT_PRICE);
-        vault.rebalance(-120000, 120000);
-        usdc.mint(address(this), 500_000e6);
-        usdc.approve(address(vault), 500_000e6);
-        vault.depositWithLock(500_000e6, address(this), LockTier.Flex);
+        vault = new MintwareDeFiPairVault(address(pm), poolKey, PoolProfile.EMERGING, makeAddr("t"), address(this), address(this));
+        coord.setVault(address(vault));
+        vault.setHook(address(coord));
+        vault.initializePool(INIT_SQRT_PRICE);
+
+        // Balanced dual-sided liquidity so the fuzzed swaps trade.
+        usdc.mint(address(this), 5_000_000e18);
+        proj.mint(address(this), 5_000_000e18);
+        IERC20(c0).approve(address(vault), type(uint256).max);
+        IERC20(c1).approve(address(vault), type(uint256).max);
+        vault.deposit(2_000_000e18, 2_000_000e18, 0, LockTier.Flex);
 
         coord.configurePool(poolId, 3000, 100000, 0, 0, false, false, 60, 6000, 10);
         auction = new MWAmAuction(address(this));

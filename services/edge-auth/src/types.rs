@@ -78,6 +78,8 @@ pub fn decline_code(reason: Decline) -> &'static str {
         Decline::InsufficientEquity => "insufficient_equity",
         Decline::DailyCapExceeded => "daily_cap_exceeded",
         Decline::InsufficientLiquidity => "insufficient_liquidity",
+        Decline::ReserveFloorBreached => "reserve_floor_breached",
+        Decline::CircuitBreakerOpen => "circuit_breaker_open",
     }
 }
 

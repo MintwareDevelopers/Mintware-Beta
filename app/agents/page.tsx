@@ -28,8 +28,8 @@ const PLUGINS = [
   {
     id: 'agentkit',
     name: 'Coinbase AgentKit',
-    badge: 'Base mainnet',
-    desc: 'The three actions below, callable by any AgentKit-powered agent straight from natural language.',
+    badge: 'Base · Arc',
+    desc: 'Park, pay over x402, and check reputation — every action below callable by an AgentKit agent from natural language.',
     install: 'pnpm add @mintware/agentkit-actions @coinbase/agentkit zod',
     docs: '/docs',
   },
@@ -52,6 +52,42 @@ const PLUGINS = [
 ]
 
 const ACTIONS = [
+  // Treasury + payments (the primary capability) first; reputation after.
+  {
+    name: 'PARK',
+    eliza: 'PARK_USDC',
+    mcp: '—',
+    desc: 'Park USDC into the yield vault — it earns while staying spendable in place.',
+    readOnly: false,
+  },
+  {
+    name: 'UNPARK',
+    eliza: 'UNPARK_USDC',
+    mcp: '—',
+    desc: 'Un-park USDC back to the wallet by redeeming vault shares. Always yours.',
+    readOnly: false,
+  },
+  {
+    name: 'TREASURY',
+    eliza: 'SHOW_TREASURY',
+    mcp: 'mintware_parking_account',
+    desc: 'Show the parking account — USDC parked (earning) and spendable in place.',
+    readOnly: true,
+  },
+  {
+    name: 'X402_QUOTE',
+    eliza: 'QUOTE_X402',
+    mcp: 'mintware_x402_quote',
+    desc: 'Preflight an x402-gated compute/API URL — the price, without paying.',
+    readOnly: true,
+  },
+  {
+    name: 'X402_PAY',
+    eliza: 'PAY_X402',
+    mcp: 'mintware_x402_pay',
+    desc: 'Pay for an x402-gated call in USDC (EIP-3009) and get the resource back.',
+    readOnly: false,
+  },
   {
     name: 'GET_SCORE',
     eliza: 'GET_ATTRIBUTION_SCORE',
@@ -86,14 +122,14 @@ const walletProvider = await CdpWalletProvider.configureWithWallet({
 
 const agentkit = await AgentKit.from({ walletProvider, actionProviders: [] })
 
-// Register all three Mintware actions
+// Register all Mintware actions — park/unpark, treasury, x402 pay, + reputation
 for (const action of mintwareActions) agentkit.use(action)
 
-// Your agent can now answer: "What is my Attribution score?"`
+// Your agent can now: "Park $50, then pay https://api.example/compute for me."`
 
-// ── Roadmap: the JIT 402 payment engine (NOT BUILT — the direction we're building
-// toward). Composes pieces that already exist in testing: the ULV engine, a live
-// V4 JIT hook, and the edge-auth settlement engine. Framed unmistakably as vision.
+// ── The agent parking account + 402 payment engine. BUILT and proven on Arc testnet
+// (deposit→earn→CCTP→settle loop on-chain; x402 seller/facilitator/AgentKit/MCP code-
+// complete + tested). NOT yet audited or on mainnet — framed as testnet, audit-gated.
 const PAY_FLOW = [
   { n: '01', t: 'Challenge', d: 'The agent hits a paid endpoint — an API, a compute node, a merchant POS — and gets back HTTP 402 Payment Required: the price, and the rails it accepts.' },
   { n: '02', t: 'Pick a rail', d: 'The agent reads the 402 payload and chooses — a native machine rail (x402, on-chain) or a legacy card rail (Visa / Mastercard).' },
@@ -149,7 +185,7 @@ export default function AgentsPage() {
     <div className="min-h-screen font-atx-display bg-white text-ink overflow-x-clip">
       <V2Nav active="agents" />
 
-      {/* HERO — leads with the treasury/liquidity/payments vision; reputation is a secondary mention */}
+      {/* HERO */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
           <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">For AI Agents</div>
@@ -157,23 +193,47 @@ export default function AgentsPage() {
             Give your AI agent a treasury that <span className="text-gradient-accent">earns and pays.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            Idle capital becomes a real liquidity position in a Mintware vault — earning around the clock — and spends straight from that position the instant an endpoint asks, without ever withdrawing. Drop in a plugin and your agent also earns a portable on-chain reputation, carried across Mintware.
+            Park idle USDC in a yield vault where it earns — and spend it per call over x402, from the earning balance, without ever un-parking. Drop in a plugin and your agent has a treasury that never sits idle and never locks.
           </p>
-          <a href="#reputation" className="text-[14px] font-medium text-ink-mid hover:text-ink no-underline inline-flex items-center min-h-[44px] mt-2">See what's live today ↓</a>
+          <a href="#reputation" className="group mt-7 inline-flex items-center gap-3 rounded-full bg-white border border-[rgba(108,108,240,0.3)] pl-2.5 pr-4 py-2 no-underline hover:border-peri transition-colors">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-peri/10 text-peri-deep px-2 py-[3px] text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Also</span>
+            <span className="text-[13.5px] text-ink font-medium">Portable on-chain reputation — Attribution scores every agent wallet</span>
+            <span className="text-peri-deep text-[15px] group-hover:translate-x-0.5 transition-transform">→</span>
+          </a>
         </div>
       </section>
 
-      {/* ── AGENT TREASURY · the JIT 402 payment engine (blueprint, not built) — the lead story ── */}
-      <section className="border-t border-hair-soft bg-ground-cool">
+      {/* ── The agent parking account + 402 payment engine (built · Arc testnet) — the primary story ── */}
+      <section id="parking" className="border-b border-hair-soft bg-ground-cool scroll-mt-20">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[76px] max-[800px]:py-[52px]">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Blueprint · not yet built</span>
-          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mt-4">Agent treasury · liquidity &amp; payments</div>
-          <h2 className="font-atx-display font-semibold text-ink mt-4 tracking-[-0.04em] leading-[1.05] text-[clamp(1.7rem,4vw,2.8rem)] max-w-[20ch] [text-wrap:balance]">
-            Agents that pay for themselves — and <span className="text-gradient-accent">never sit idle.</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />New · live on Arc testnet</span>
+          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mt-4">Agent treasury · pay for compute</div>
+          <h2 className="font-atx-display font-medium text-ink mt-4 tracking-[-0.04em] leading-[1.05] text-[clamp(1.7rem,4vw,2.8rem)] max-w-[20ch] [text-wrap:balance]">
+            A place to park capital that <span className="text-peri">stays spendable.</span>
           </h2>
           <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.55] mt-5 max-w-[64ch]">
-            The direction we're building toward: an agent whose idle capital becomes real liquidity in a Mintware vault — earning fees and MEV like any LP — and pays any endpoint the instant it asks, crypto-native or legacy, over one standard: HTTP 402. Portable on-chain reputation comes with it, as a second, optional layer.
+            Agents park idle USDC in a yield vault where it earns — and spend it per call over x402 without ever un-parking. Verification is a hold against the earning balance; settlement burns from it. Never idle, never locked, always yours.
           </p>
+
+          {/* Park → earn → spend + the actions */}
+          <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3 mt-10">
+            {[
+              { t: 'Park', d: 'Deposit idle USDC into the yield vault — it starts earning immediately.', tool: 'MINTWARE_PARK' },
+              { t: 'Earn in place', d: 'The parked balance compounds in the yield source; it never moves to a hot wallet.', tool: 'MINTWARE_TREASURY' },
+              { t: 'Spend per call', d: 'Each x402 payment draws from the earning position via a hold → settle. Capital never un-parks.', tool: 'MINTWARE_X402_PAY' },
+            ].map((s) => (
+              <div key={s.t} className="soft-card p-5 flex flex-col">
+                <div className="font-atx-display font-semibold text-[15px] text-ink">{s.t}</div>
+                <p className="text-[12.5px] text-ink-mid leading-[1.5] mt-2 flex-1">{s.d}</p>
+                <span className="mt-3.5 inline-block self-start rounded-full bg-white border border-hair px-2.5 py-1 font-mono text-[10.5px] text-peri-deep">{s.tool}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5">
+            <a href="/app/agents" className="inline-flex items-center min-h-[40px] text-[12.5px] font-semibold uppercase tracking-[0.04em] text-peri-deep no-underline hover:underline">
+              See a live parking account →
+            </a>
+          </div>
 
           {/* The 402 flow */}
           <div className="flex items-center gap-3 mt-12 mb-4">
@@ -224,13 +284,13 @@ export default function AgentsPage() {
             ))}
           </div>
 
-          {/* Agentic ULV — leads with LP participation */}
+          {/* Agentic ULV */}
           <div className="flex items-center gap-3 mt-12 mb-4">
             <span className={NUM}>→</span>
             <span className={LABEL}>The vault is the rail · agentic ULV</span>
           </div>
           <p className="text-[13.5px] text-ink-mid leading-[1.55] max-w-[68ch] -mt-1 mb-4">
-            Single-sided ULV pools let an agent supply liquidity with one call — <span className="font-mono text-[12.5px] text-ink">depositUSDC(amount)</span> — no two-token inventory, no impermanent-loss math. Capital earns right up to the exact second it's spent.
+            Single-sided ULV pools let an agent supply liquidity with one call — <span className="font-mono text-[12.5px] text-ink">depositUSDC(amount)</span> — no two-token inventory, no impermanent-loss math. Capital earns right up to the exact second it’s spent.
           </p>
           <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3">
             {ULV_ROLES.map((r) => (
@@ -245,16 +305,12 @@ export default function AgentsPage() {
           {/* Honesty footer */}
           <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-5 mt-8 flex items-start gap-3 max-w-[860px]">
             <span className="w-[7px] h-[7px] rounded-full bg-peri mt-1.5 shrink-0" />
-            <p className="text-[13px] text-ink-mid leading-[1.55]">This is the architecture we're building toward — <span className="font-semibold text-ink">not a live product</span>. It composes pieces Mintware has already built and is testing: the ULV engine, a V4 JIT liquidity hook, and the edge-auth settlement engine. Nothing here is deployed, audited, or an offer.</p>
+            <p className="text-[13px] text-ink-mid leading-[1.55]">This is <span className="font-semibold text-ink">built and proven on Arc testnet</span> — the deposit→earn→CCTP→settle loop ran on-chain, and the x402 seller, facilitator, AgentKit, and MCP layers are code-complete and tested. It is <span className="font-semibold text-ink">not yet audited or on mainnet</span>, and nothing here is an offer. External audit gates real value.</p>
           </div>
         </div>
       </section>
 
-      <div id="reputation" className="max-w-[900px] mx-auto px-6 pt-14 pb-20 mw-reveal scroll-mt-20">
-
-        <p className="text-[13px] text-ink-mid leading-[1.55] max-w-[68ch] mb-8">
-          Alongside the treasury vision above, every agent wallet also earns a portable on-chain reputation — <span className="font-semibold text-ink">live today</span>, and optional: the integrations below work with or without it.
-        </p>
+      <div className="max-w-[900px] mx-auto px-6 pt-14 pb-20 mw-reveal">
 
         {/* Plugins */}
         <div className="flex items-center gap-3 mb-4">
@@ -277,12 +333,15 @@ export default function AgentsPage() {
           ))}
         </div>
 
-        {/* Leaderboard */}
-        <div className="flex items-center gap-3 mb-4">
+        {/* Leaderboard — reputation (secondary) */}
+        <div id="reputation" className="flex items-center gap-3 mb-4 scroll-mt-20">
           <span className={NUM}>02</span>
-          <span className={LABEL}>Live leaderboard</span>
+          <span className={LABEL}>Reputation · Attribution leaderboard</span>
           <span className="live-chip"><span className="dot" aria-hidden />Live</span>
         </div>
+        <p className="text-[13px] text-ink-mid leading-[1.55] max-w-[68ch] -mt-1 mb-4">
+          Alongside the treasury, every agent wallet also earns a portable on-chain reputation. Optional — the parking account and payments work without it.
+        </p>
         <div className="soft-card overflow-hidden mb-10">
           <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-hair-soft max-[700px]:flex-col max-[700px]:items-start">
             <div>
@@ -406,6 +465,9 @@ export default function AgentsPage() {
             { key: 'AGENT_PRIVATE_KEY',         desc: '0x-prefixed hex private key of the agent wallet', req: true },
             { key: 'CDP_API_KEY_NAME',           desc: 'Coinbase Developer Platform API key name (AgentKit only)', req: true },
             { key: 'CDP_API_KEY_PRIVATE_KEY',    desc: 'Coinbase Developer Platform API key secret (AgentKit only)', req: true },
+            { key: 'MINTWARE_PARK_VAULT',        desc: 'Yield vault address to park into (defaults to the Arc-testnet YPN vault)', req: false },
+            { key: 'MINTWARE_PARK_USDC',         desc: 'USDC token address on the parking network (defaults to Arc USDC)', req: false },
+            { key: 'MINTWARE_PARK_RPC',          desc: 'RPC for park/unpark reads + txs (defaults to Arc testnet)', req: false },
           ].map(e => (
             <div key={e.key} className="flex items-center gap-4 px-5 py-3 border-b border-hair-soft last:border-b-0 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1.5">
               <span className="font-mono text-[12px] font-semibold text-ink min-w-[220px] shrink-0 max-[560px]:min-w-0 max-[560px]:break-all">{e.key}</span>
@@ -418,6 +480,7 @@ export default function AgentsPage() {
         </div>
 
       </div>
+
     </div>
   )
 }

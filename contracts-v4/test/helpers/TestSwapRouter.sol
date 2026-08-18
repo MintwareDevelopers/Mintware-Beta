@@ -64,6 +64,36 @@ contract TestSwapRouter is IUnlockCallback {
         delta = abi.decode(result, (BalanceDelta));
     }
 
+    /// @notice Exact-input swap with an explicit `sqrtPriceLimitX96` — the swap consumes input only until
+    ///         the price limit is reached, then stops. Any unused input is refunded to the caller (so a
+    ///         clamped swap strands nothing). Used by the treasury-vault invariant to move price WITHIN a
+    ///         solvent band regardless of how deep the baseline pool is.
+    function swapTo(
+        PoolKey memory key,
+        bool zeroForOne,
+        uint256 amountIn,
+        uint160 sqrtPriceLimitX96
+    ) external returns (BalanceDelta delta) {
+        Currency tokenIn = zeroForOne ? key.currency0 : key.currency1;
+        IERC20 tin = IERC20(Currency.unwrap(tokenIn));
+        tin.safeTransferFrom(msg.sender, address(this), amountIn);
+
+        SwapParams memory params = SwapParams({
+            zeroForOne:        zeroForOne,
+            amountSpecified:   -int256(amountIn),
+            sqrtPriceLimitX96: sqrtPriceLimitX96
+        });
+
+        bytes memory result = poolManager.unlock(
+            abi.encode(SwapCallbackData({key: key, params: params, caller: msg.sender}))
+        );
+        delta = abi.decode(result, (BalanceDelta));
+
+        // Refund the unused input left in the router after a clamped (partial) swap.
+        uint256 leftover = tin.balanceOf(address(this));
+        if (leftover > 0) tin.safeTransfer(msg.sender, leftover);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // IUnlockCallback
     // ─────────────────────────────────────────────────────────────────────────

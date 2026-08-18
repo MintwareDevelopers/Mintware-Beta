@@ -4,13 +4,10 @@ pragma solidity ^0.8.26;
 import {IPoolManager}          from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IUnlockCallback}       from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
-import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {PoolIdLibrary}         from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency, CurrencyLibrary} from "@uniswap/v4-core/src/types/Currency.sol";
-import {BalanceDelta}          from "@uniswap/v4-core/src/types/BalanceDelta.sol";
-import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
-import {LiquidityAmounts}      from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 
 import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -401,14 +398,47 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         notDuringJit
         returns (uint256 sharesMinted)
     {
+        // Self-deposit: the caller both pays the tokens AND receives the shares/dust (unchanged behavior).
+        return _deposit(msg.sender, msg.sender, amount0Desired, amount1Desired, minShares, tier);
+    }
+
+    /// @notice Deposit on behalf of `recipient`: `msg.sender` PAYS both tokens, `recipient` receives the
+    ///         minted shares + lock + any returned dust. This is what lets a migration router
+    ///         (`Mintwarev3ToV4Migrator`) redeploy a user's unwound v3 liquidity and mint the ULV shares
+    ///         straight to the user — shares are an internal mapping (not transferable), so crediting the
+    ///         recipient at mint time is the ONLY way to hand them over. Purely additive: `deposit` is the
+    ///         `recipient == msg.sender` special case, so existing behavior is unchanged.
+    /// @param  recipient  who receives the shares, lock, and dust (must be non-zero).
+    function depositFor(
+        address recipient,
+        uint256 amount0Desired,
+        uint256 amount1Desired,
+        uint256 minShares,
+        LockTier tier
+    ) external nonReentrant whenNotPaused notDuringJit returns (uint256 sharesMinted) {
+        if (recipient == address(0)) revert ZeroAddress();
+        return _deposit(msg.sender, recipient, amount0Desired, amount1Desired, minShares, tier);
+    }
+
+    /// @dev Shared deposit core. `payer` transfers the tokens in; `recipient` is credited the shares, lock,
+    ///      fee-debt reset, and dust. `deposit`/`depositFor` are the two external entrypoints; every guard
+    ///      (nonReentrant/whenNotPaused/notDuringJit) lives on them.
+    function _deposit(
+        address payer,
+        address recipient,
+        uint256 amount0Desired,
+        uint256 amount1Desired,
+        uint256 minShares,
+        LockTier tier
+    ) internal returns (uint256 sharesMinted) {
         if (!poolInitialized) revert PoolNotInitialized();
 
-        // Settle any accrued fees for the caller on their existing balance BEFORE their share
+        // Settle any accrued fees for the RECIPIENT on their existing balance BEFORE their share
         // count changes (so the accumulator stays correct).
-        _claimFees(msg.sender);
+        _claimFees(recipient);
 
-        token0.safeTransferFrom(msg.sender, address(this), amount0Desired);
-        token1.safeTransferFrom(msg.sender, address(this), amount1Desired);
+        token0.safeTransferFrom(payer, address(this), amount0Desired);
+        token1.safeTransferFrom(payer, address(this), amount1Desired);
 
         _pendingTier = tier;
         bytes memory res = poolManager.unlock(abi.encode(Action.Deploy, abi.encode(amount0Desired, amount1Desired)));
@@ -432,21 +462,21 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         // Shares are tracked in uint128 (totalLiquidity); refuse a mint that would truncate.
         if (minted > type(uint128).max) revert InsufficientShares();
 
-        // Return unused dust.
-        if (amount0Desired > used0) token0.safeTransfer(msg.sender, amount0Desired - used0);
-        if (amount1Desired > used1) token1.safeTransfer(msg.sender, amount1Desired - used1);
+        // Return unused dust to the RECIPIENT (they own the migrated/deposited capital).
+        if (amount0Desired > used0) token0.safeTransfer(recipient, amount0Desired - used0);
+        if (amount1Desired > used1) token1.safeTransfer(recipient, amount1Desired - used1);
 
-        shares[msg.sender] += minted;
-        totalLiquidity     += uint128(minted);
-        positionLiquidity  += liquidity;
-        _recordLock(msg.sender, tier);
+        shares[recipient] += minted;
+        totalLiquidity    += uint128(minted);
+        positionLiquidity += liquidity;
+        _recordLock(recipient, tier, payer == recipient);
 
         // Reset fee debt to current accumulator for the new (larger) balance.
-        fee0Debt[msg.sender] = (shares[msg.sender] * accFee0PerShare) / ACC_PRECISION;
-        fee1Debt[msg.sender] = (shares[msg.sender] * accFee1PerShare) / ACC_PRECISION;
+        fee0Debt[recipient] = (shares[recipient] * accFee0PerShare) / ACC_PRECISION;
+        fee1Debt[recipient] = (shares[recipient] * accFee1PerShare) / ACC_PRECISION;
 
         sharesMinted = minted;
-        emit Deposited(msg.sender, used0, used1, minted, tier);
+        emit Deposited(recipient, used0, used1, minted, tier);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1170,19 +1200,29 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     // Lock / penalty
     // ─────────────────────────────────────────────────────────────────────────
 
-    function _recordLock(address owner_, LockTier tier) internal {
+    /// @param selfDeposit true when the payer == recipient (`deposit`). When false (a third-party
+    ///        `depositFor`), the recipient's lock must NOT be mutated adversely: an existing position's
+    ///        lock is left untouched (no extend, no `depositedAt`/hold/penalty-clock reset), and a fresh
+    ///        recipient can only ever be given an UNLOCKED (Flex) position — never locked capital on their
+    ///        behalf. AUDIT (pre-audit review): closes a griefing vector where anyone could re-lock a
+    ///        victim's position (extend to full tier duration) or reset their 24h hold + penalty clock by
+    ///        depositing dust to them.
+    function _recordLock(address owner_, LockTier tier, bool selfDeposit) internal {
         LockInfo storage info = locks[owner_];
-        uint256 lockedUntil = block.timestamp + _lockDuration(tier);
         if (info.initialized && shares[owner_] > 0) {
-            // Same-tier top-ups allowed; tier changes blocked while a balance exists.
+            // Existing position — tier changes are always blocked while a balance exists.
             if (info.tier != tier) revert LockTierChangeNotAllowed();
-            if (info.lockedUntil > lockedUntil) lockedUntil = info.lockedUntil;
+            if (!selfDeposit) return; // third-party top-up: leave the lock exactly as-is (griefing guard)
+            uint256 lockedUntil = block.timestamp + _lockDuration(tier);
+            if (info.lockedUntil > lockedUntil) lockedUntil = info.lockedUntil; // never shorten
             info.lockedUntil = lockedUntil;
             info.depositedAt = block.timestamp;
         } else {
-            info.tier        = tier;
+            // Fresh position — a third party can only create an UNLOCKED (Flex) position for someone else.
+            LockTier eff = selfDeposit ? tier : LockTier.Flex;
+            info.tier        = eff;
             info.depositedAt = block.timestamp;
-            info.lockedUntil = lockedUntil;
+            info.lockedUntil = block.timestamp + _lockDuration(eff);
             info.initialized = true;
         }
     }

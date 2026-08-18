@@ -1,0 +1,375 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
+
+import {IPoolManager}          from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IUnlockCallback}       from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
+import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta}          from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {SwapParams}            from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {IHooks}                from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+
+import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable}         from "@openzeppelin/contracts/access/Ownable.sol";
+import {Pausable}        from "@openzeppelin/contracts/utils/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+/// @dev The truncated-oracle reference the settlement swap bounds against — the SAME surface the JIT hook
+///      exposes (`MintwareTreasuryJitHook.oracleTick()`). In production the WETH/USDC pool's hook supplies
+///      it; `ready == false` (or a zero source) makes the swap fall back to unbounded (pre-first-swap only).
+interface IOracleTickSource {
+    function oracleTick() external view returns (int24 tick, bool ready);
+}
+
+/// @title  MintwareEthSettlement
+/// @notice The on-chain half of the YPN multi-collateral card system: converts an ETH-collateral vault's
+///         WETH into USDC when a batch of card charges settles, so ETH-backed shares are actually
+///         card-spendable. Mirrors the treasury JIT hook's ORACLE-BOUNDED sweep
+///         (`_swapLimit`/`_sqrtAtClamped`/`_settleDelta`) — a WETH→USDC swap whose price can never be
+///         forced past the truncated-oracle band, so a sandwich that moved spot cannot make settlement
+///         realize at the manipulated price. If the bounded swap can't produce the owed USDC, the junior
+///         first-loss buffer tops it up (up to a per-call cap); beyond that the tx reverts
+///         (`SettlementSlippageExceeded`) and the relayer retries next window — the rail is NEVER underpaid.
+///
+/// @dev    COHERENCE WITH THE OFF-CHAIN EDGE (do NOT lose this): `edge-auth`'s VaR haircut
+///         `γ = 1 − (z·σ·√T + slippage)` already reserved the buffer this swap consumes — the
+///         `settlement_slippage_bps` term IS this conversion's slippage and `z·σ·√T` covers the drift
+///         between auth and settlement. So the swap's realized shortfall is bounded by γ by construction:
+///         if the buffer holds, the swap (± junior top-up) produces the owed USDC; a move beyond γ is the
+///         junior first-loss event the tranche is designed to absorb — never a senior/rail loss. The
+///         relayer passes `minUsdcOut` = the edge's conservative price × γ; a swap under that floor reverts
+///         before any junior draw (catastrophic move → retry, don't spend first-loss on a bad print).
+///
+/// @dev    SENIOR STAYS PRICE-FREE. Settlement pays the rail a FIXED `totalUsdc` or reverts — the ETH-price
+///         exposure lands entirely on how much WETH the swap consumes and whether the junior buffer is
+///         tapped, never on the amount the rail receives. This is the on-chain ↔ off-chain contract.
+///
+/// @dev    The `jitSkipSender` exemption (JIT hook P3 fix) applies for free if the WETH/USDC pool is the
+///         vault's OWN am-AMM pool: this contract swaps as itself, and if set as the hook's `jitSkipSender`
+///         its settlement swaps are exempt from the JIT/am-AMM auction path — no self-skim, no reentrant
+///         `fundRent` deadlock. Settlement and trading flow never collide.
+contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, ReentrancyGuard {
+    using SafeERC20     for IERC20;
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary  for IPoolManager;
+
+    IPoolManager public immutable poolManager;
+    IERC20       public immutable usdc;             // settlement asset (paid to the rail)
+    IERC20       public immutable weth;             // the ETH-collateral token the vault holds
+    bool         public immutable wethIsCurrency0;  // token ordering in the canonical pool
+    PoolId       public immutable canonicalPoolId;
+
+    // Canonical pool key (the ONE WETH/USDC pool this contract settles through).
+    Currency private immutable _c0;
+    Currency private immutable _c1;
+    uint24   private immutable _fee;
+    int24    private immutable _tickSpacing;
+    IHooks   private immutable _hooks;
+
+    /// @notice Band (ticks) the settlement swap may move price past the oracle before stopping. Mirrors the
+    ///         JIT hook's `SWEEP_BAND_TICKS` (~5% at spacing-60). Owner-tunable per pool depth.
+    int24 public bandTicks = 500;
+
+    /// @notice Supplies the truncated reference tick (a pool hook). Zero / not-ready ⇒ unbounded swap
+    ///         (pre-first-swap fallback only; a live pool's hook is always ready).
+    IOracleTickSource public oracleSource;
+
+    /// @notice AUDIT (pre-audit review): when true (the default), a settlement REVERTS if the oracle isn't
+    ///         ready, rather than falling through to an unbounded (sandwichable) swap that would lean
+    ///         entirely on the relayer's `minUsdcOut`. Production settlement is therefore ALWAYS bounded to
+    ///         the truncated-oracle band. Owner may disable only for a pre-oracle bootstrap/testnet.
+    bool public requireReadyOracle = true;
+
+    /// @notice The settlement role — the relayer that batches settling holds and triggers the swap.
+    address public relayer;
+
+    /// @notice Physical WETH held to back settlement (the ETH-collateral the vault deposited here). Decays
+    ///         by exactly the WETH each swap consumes — conservation is asserted by checked arithmetic.
+    uint256 public wethBacking;
+
+    /// @notice First-loss USDC reserve. Tops up a bounded-swap shortfall so the rail is paid in full;
+    ///         drawing it is the junior absorbing the ETH-price move the senior is insulated from.
+    uint256 public juniorUsdcBuffer;
+
+    /// @notice Max junior top-up per settlement (0 ⇒ up to the whole buffer). Caps first-loss bleed on a
+    ///         bad day: a shortfall beyond the cap reverts (retry next window) instead of draining junior.
+    uint256 public juniorTopUpCapPerCall;
+
+    /// @dev Transient exact-output target read inside `unlockCallback` (set→unlock→clear in one call).
+    uint256 private _pendingUsdcOut;
+
+    event RelayerSet(address indexed relayer);
+    event OracleSourceSet(address indexed source);
+    event BandSet(int24 bandTicks);
+    event RequireReadyOracleSet(bool required);
+    event JuniorTopUpCapSet(uint256 cap);
+    event WethBackingFunded(address indexed from, uint256 amount, uint256 total);
+    event WethBackingWithdrawn(address indexed to, uint256 amount, uint256 total);
+    event JuniorBufferFunded(address indexed from, uint256 amount, uint256 total);
+    event JuniorBufferWithdrawn(address indexed to, uint256 amount, uint256 total);
+    event Settled(address indexed rail, uint256 totalUsdc, uint256 usdcFromSwap, uint256 wethSpent, uint256 juniorDrawn);
+
+    error ZeroAddress();
+    error ZeroAmount();
+    error NotWethUsdcPool();
+    error OnlyRelayer();
+    error OnlyPoolManager();
+    error InsufficientWethBacking();
+    error SettlementSlippageExceeded(uint256 produced, uint256 required);
+    error OracleNotReady();
+
+    modifier onlyRelayer() {
+        if (msg.sender != relayer) revert OnlyRelayer();
+        _;
+    }
+
+    /// @param pm       The V4 PoolManager.
+    /// @param key      The canonical WETH/USDC pool key (currencies must be exactly {weth_, usdc_}).
+    /// @param usdc_    Settlement asset.
+    /// @param weth_    ETH-collateral token.
+    /// @param owner_   Admin (roles, band, buffers).
+    /// @param relayer_ Initial settlement role.
+    constructor(
+        IPoolManager pm,
+        PoolKey memory key,
+        address usdc_,
+        address weth_,
+        address owner_,
+        address relayer_
+    ) Ownable(owner_) {
+        if (usdc_ == address(0) || weth_ == address(0) || relayer_ == address(0)) revert ZeroAddress();
+        address c0 = Currency.unwrap(key.currency0);
+        address c1 = Currency.unwrap(key.currency1);
+        // The pool must be exactly the {weth, usdc} pair — either ordering.
+        bool ok = (c0 == weth_ && c1 == usdc_) || (c0 == usdc_ && c1 == weth_);
+        if (!ok) revert NotWethUsdcPool();
+
+        poolManager     = pm;
+        usdc            = IERC20(usdc_);
+        weth            = IERC20(weth_);
+        wethIsCurrency0 = (c0 == weth_);
+        canonicalPoolId = key.toId();
+
+        _c0          = key.currency0;
+        _c1          = key.currency1;
+        _fee         = key.fee;
+        _tickSpacing = key.tickSpacing;
+        _hooks       = key.hooks;
+
+        relayer = relayer_;
+        emit RelayerSet(relayer_);
+    }
+
+    // ── admin ──────────────────────────────────────────────────────────────────────
+
+    function setRelayer(address relayer_) external onlyOwner {
+        if (relayer_ == address(0)) revert ZeroAddress();
+        relayer = relayer_;
+        emit RelayerSet(relayer_);
+    }
+
+    function setOracleSource(address source) external onlyOwner {
+        oracleSource = IOracleTickSource(source);
+        emit OracleSourceSet(source);
+    }
+
+    function setBandTicks(int24 band) external onlyOwner {
+        if (band <= 0) revert ZeroAmount();
+        bandTicks = band;
+        emit BandSet(band);
+    }
+
+    /// @notice Toggle the fail-closed require-ready-oracle guard. Keep TRUE in production.
+    function setRequireReadyOracle(bool required) external onlyOwner {
+        requireReadyOracle = required;
+        emit RequireReadyOracleSet(required);
+    }
+
+    function setJuniorTopUpCapPerCall(uint256 cap) external onlyOwner {
+        juniorTopUpCapPerCall = cap;
+        emit JuniorTopUpCapSet(cap);
+    }
+
+    function pause() external onlyOwner { _pause(); }
+    function unpause() external onlyOwner { _unpause(); }
+
+    // ── funding (models the vault depositing ETH backing + the team funding first-loss) ──────────────
+
+    /// @notice Pull `amount` WETH in as settlement backing (the ETH-collateral vault funds this).
+    function fundWethBacking(uint256 amount) external {
+        if (amount == 0) revert ZeroAmount();
+        weth.safeTransferFrom(msg.sender, address(this), amount);
+        wethBacking += amount;
+        emit WethBackingFunded(msg.sender, amount, wethBacking);
+    }
+
+    /// @notice Owner reclaims unused WETH backing (e.g. wind-down). Cannot touch the junior USDC buffer.
+    function withdrawWethBacking(address to, uint256 amount) external onlyOwner {
+        if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        if (amount > wethBacking) revert InsufficientWethBacking();
+        wethBacking -= amount;
+        weth.safeTransfer(to, amount);
+        emit WethBackingWithdrawn(to, amount, wethBacking);
+    }
+
+    /// @notice Fund the junior first-loss USDC buffer.
+    function fundJuniorBuffer(uint256 amount) external {
+        if (amount == 0) revert ZeroAmount();
+        usdc.safeTransferFrom(msg.sender, address(this), amount);
+        juniorUsdcBuffer += amount;
+        emit JuniorBufferFunded(msg.sender, amount, juniorUsdcBuffer);
+    }
+
+    /// @notice Owner reclaims unused junior USDC buffer.
+    function withdrawJuniorBuffer(address to, uint256 amount) external onlyOwner {
+        if (to == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        if (amount > juniorUsdcBuffer) revert ZeroAmount();
+        juniorUsdcBuffer -= amount;
+        usdc.safeTransfer(to, amount);
+        emit JuniorBufferWithdrawn(to, amount, juniorUsdcBuffer);
+    }
+
+    // ── the settlement swap ──────────────────────────────────────────────────────────
+
+    /// @notice Convert WETH backing → USDC and pay `totalUsdc` to `rail` (the card-network settlement).
+    ///         The swap is exact-output `totalUsdc`, price-bounded to the oracle band. If it comes up short
+    ///         (band binds / thin liquidity) the junior buffer tops up to full, up to the per-call cap;
+    ///         beyond that — or below the `minUsdcOut` catastrophe floor — it reverts and the relayer
+    ///         retries next window. The rail is paid IN FULL or not at all.
+    /// @param totalUsdc   USDC owed to the rail for this batch (Σ hold amounts).
+    /// @param minUsdcOut  Catastrophe floor for the swap output (edge's conservative price × γ). A swap
+    ///                    producing less reverts BEFORE any junior draw.
+    /// @param rail        Recipient of the settled USDC (the Gateway / card-network settlement address).
+    /// @return usdcFromSwap USDC the bounded swap produced.
+    /// @return wethSpent    WETH the swap consumed (backing decreases by exactly this).
+    /// @return juniorDrawn  USDC drawn from the junior buffer to reach `totalUsdc`.
+    function batchSettleEth(uint256 totalUsdc, uint256 minUsdcOut, address rail)
+        external
+        onlyRelayer
+        nonReentrant
+        whenNotPaused
+        returns (uint256 usdcFromSwap, uint256 wethSpent, uint256 juniorDrawn)
+    {
+        if (totalUsdc == 0) revert ZeroAmount();
+        if (rail == address(0)) revert ZeroAddress();
+
+        // Fail closed: never fire an UNBOUNDED settlement swap in production — require the oracle band.
+        if (requireReadyOracle) {
+            (, bool ready) = _oracle();
+            if (!ready) revert OracleNotReady();
+        }
+
+        uint256 usdcBefore = usdc.balanceOf(address(this));
+        uint256 wethBefore = weth.balanceOf(address(this));
+
+        // Swap inside the unlock (see unlockCallback): exact-output `totalUsdc`, oracle-bounded.
+        _pendingUsdcOut = totalUsdc;
+        poolManager.unlock("");
+        _pendingUsdcOut = 0;
+
+        usdcFromSwap = usdc.balanceOf(address(this)) - usdcBefore;
+        wethSpent    = wethBefore - weth.balanceOf(address(this));
+
+        // (1) Catastrophe floor: a swap worse than the edge's modeled minimum → revert, don't burn junior.
+        if (usdcFromSwap < minUsdcOut) revert SettlementSlippageExceeded(usdcFromSwap, minUsdcOut);
+
+        // (2) Top up any shortfall from the junior first-loss buffer, bounded by the per-call cap.
+        if (usdcFromSwap < totalUsdc) {
+            uint256 shortfall = totalUsdc - usdcFromSwap;
+            uint256 cap = juniorTopUpCapPerCall == 0
+                ? juniorUsdcBuffer
+                : (juniorTopUpCapPerCall < juniorUsdcBuffer ? juniorTopUpCapPerCall : juniorUsdcBuffer);
+            if (shortfall > cap) revert SettlementSlippageExceeded(usdcFromSwap, totalUsdc);
+            juniorUsdcBuffer -= shortfall;
+            juniorDrawn = shortfall;
+        }
+
+        // (3) Backing conservation: reduce ETH backing by exactly the WETH consumed (checked → underflow
+        //     reverts if a swap somehow spent more than the tracked backing).
+        wethBacking -= wethSpent;
+
+        // (4) Pay the rail IN FULL (swap proceeds + junior top-up). Zero residual by construction.
+        usdc.safeTransfer(rail, totalUsdc);
+
+        emit Settled(rail, totalUsdc, usdcFromSwap, wethSpent, juniorDrawn);
+    }
+
+    function unlockCallback(bytes calldata) external override returns (bytes memory) {
+        if (msg.sender != address(poolManager)) revert OnlyPoolManager();
+        uint256 want = _pendingUsdcOut;
+        if (want == 0) return "";
+
+        // Selling WETH (input) for USDC (output). zeroForOne iff WETH is currency0.
+        bool zeroForOne = wethIsCurrency0;
+        (uint160 cur,,,) = poolManager.getSlot0(canonicalPoolId);
+
+        BalanceDelta delta = poolManager.swap(
+            _key(),
+            SwapParams({
+                zeroForOne:        zeroForOne,
+                amountSpecified:   int256(want),                 // > 0 ⇒ EXACT OUTPUT of `want` USDC
+                sqrtPriceLimitX96: _swapLimit(zeroForOne, cur)   // oracle-bounded → partial-fills at the band
+            }),
+            ""
+        );
+        _settleDelta(_key(), delta);
+        return "";
+    }
+
+    // ── internals (mirror MintwareTreasuryJitHook's oracle-bounded sweep) ──────────────
+
+    /// @dev Oracle-bounded price limit, clamped to the executable side of `cur` (never reverts). Not-ready
+    ///      oracle ⇒ full range (pre-first-swap fallback). Identical shape to the JIT hook's `_swapLimit`.
+    function _swapLimit(bool zeroForOne, uint160 cur) private view returns (uint160) {
+        (int24 oTick, bool ready) = _oracle();
+        if (!ready) return zeroForOne ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
+        if (zeroForOne) {
+            uint160 band = _sqrtAtClamped(int256(oTick) - bandTicks);
+            if (band >= cur) return cur > TickMath.MIN_SQRT_PRICE + 1 ? cur - 1 : cur;
+            return band;
+        } else {
+            uint160 band = _sqrtAtClamped(int256(oTick) + bandTicks);
+            if (band <= cur) return cur < TickMath.MAX_SQRT_PRICE - 1 ? cur + 1 : cur;
+            return band;
+        }
+    }
+
+    function _oracle() private view returns (int24 tick, bool ready) {
+        if (address(oracleSource) == address(0)) return (int24(0), false);
+        return oracleSource.oracleTick();
+    }
+
+    function _sqrtAtClamped(int256 tick) private pure returns (uint160) {
+        if (tick < TickMath.MIN_TICK) return TickMath.MIN_SQRT_PRICE + 1;
+        if (tick > TickMath.MAX_TICK) return TickMath.MAX_SQRT_PRICE - 1;
+        uint160 s = TickMath.getSqrtPriceAtTick(int24(tick));
+        if (s < TickMath.MIN_SQRT_PRICE + 1) return TickMath.MIN_SQRT_PRICE + 1;
+        if (s > TickMath.MAX_SQRT_PRICE - 1) return TickMath.MAX_SQRT_PRICE - 1;
+        return s;
+    }
+
+    function _settleDelta(PoolKey memory key, BalanceDelta delta) private {
+        int128 d0 = delta.amount0();
+        int128 d1 = delta.amount1();
+        if (d0 < 0)      _pay(key.currency0, uint256(uint128(-d0)));
+        else if (d0 > 0) poolManager.take(key.currency0, address(this), uint256(uint128(d0)));
+        if (d1 < 0)      _pay(key.currency1, uint256(uint128(-d1)));
+        else if (d1 > 0) poolManager.take(key.currency1, address(this), uint256(uint128(d1)));
+    }
+
+    function _pay(Currency currency, uint256 amount) private {
+        poolManager.sync(currency);
+        IERC20(Currency.unwrap(currency)).safeTransfer(address(poolManager), amount);
+        poolManager.settle();
+    }
+
+    function _key() private view returns (PoolKey memory) {
+        return PoolKey({currency0: _c0, currency1: _c1, fee: _fee, tickSpacing: _tickSpacing, hooks: _hooks});
+    }
+}

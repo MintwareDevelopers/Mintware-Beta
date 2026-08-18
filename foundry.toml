@@ -22,6 +22,7 @@ remappings = [
 [profile.default.rpc_endpoints]
 base          = "${BASE_RPC_URL}"
 base_sepolia  = "${BASE_SEPOLIA_RPC_URL}"
+arc           = "https://rpc.testnet.arc.io"  # public Arc testnet RPC (Circle) — chain 5042002, USDC gas
 
 [profile.default.etherscan]
 base = { key = "${BASESCAN_API_KEY}", chain = 8453, url = "https://api.basescan.org/api" }

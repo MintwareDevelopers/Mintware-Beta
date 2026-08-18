@@ -34,6 +34,32 @@
 | `NEXT_PUBLIC_VAULTS_LOCKED` | Public | Set `true` to hide vault pages behind "coming soon" (the real gate; `PHASE2_ENABLED` was removed) |
 | `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS` | Public | Gates V4 contract reads |
 | `NEXT_PUBLIC_MW_TREASURY_ADDRESS` | Public | Set after contract deploy |
+| `TEAM_HARD_GATE` | Server-only | `true` turns ON the Phase-2 User/Team hard gate (`proxy.ts` → `lib/auth/gate.ts`). Unset/`false` = soft-gate showcase, middleware is a pass-through (default). |
+| `PRIVY_APP_SECRET` | Server-only | Privy app secret for server-side session verification (`lib/auth/session.ts#verifyPrivySession`). Required for the hard gate to be a real security boundary; unset → verification fails closed. |
+
+### x402 (agent pay-per-call — `lib/x402/*`)
+
+| Variable | Visibility | Notes |
+|---|---|---|
+| `EDGE_AUTH_URL` / `EDGE_AUTH_SECRET` | Server-only | Base URL + shared secret for the Rust `services/edge-auth` decide/reserve/sign service |
+| `X402_PAY_TO` | Server-only | Receiving address for x402 settlements |
+| `X402_RELAYER_URL` / `X402_RELAYER_SECRET` | Server-only | Rust `services/relayer` endpoint + secret for `settleSpend` |
+| `X402_SUPPORTED_NETWORKS` | Server-only | Comma list of chains the facilitator accepts |
+| `X402_TRUST_TIERING` | Server-only | Opt-in `parked` — enables trust-tiered pricing (default off) |
+| `X402_SCORE_PRICE_ATOMIC` | Server-only | Per-call price (atomic USDC units) for the score endpoint |
+
+### Arc / parking account (idle-USDC-earns-in-place)
+
+| Variable | Visibility | Notes |
+|---|---|---|
+| `ARC_RPC_URL` | Server-only | Circle Arc L1 RPC (chain `5042002`) |
+| `ARC_USDC` | Server-only | USDC token address on Arc |
+| `ARC_YIELD_SOURCE` | Server-only | Arc yield primitive — XyloVault `0x240Eb8…f747` |
+| `NEXT_PUBLIC_ARC_VAULT_ADDRESS` | Public | Deployed Arc spend-stack vault |
+| `NEXT_PUBLIC_ARC_GATEWAY_ADDRESS` | Public | Spend gateway address |
+| `NEXT_PUBLIC_ARC_CCTP_ROUTER` | Public | CCTP router for Base↔Arc USDC bridging |
+| `ARC_CPN_TREASURY` | Server-only | Circle Payments Network treasury |
+| `MINTWARE_PARK_VAULT` / `MINTWARE_PARK_USDC` / `MINTWARE_PARK_RPC` | Server-only | Parking-account vault, USDC, and RPC |
 
 ## Cron Jobs (defined in vercel.json)
 
@@ -64,6 +90,22 @@ Allowlisted: `localhost:3000`, `mintware-beta.vercel.app`
 - Oracle signer key: stored ONLY in the secret manager (Vercel `ORACLE_PRIVATE_KEY` / 1Password) — never commit. ⚠ The value previously committed here was EXPOSED and must be rotated on-chain (see audit 2026-07-31).
 
 If a cron route 404s in production, verify the route file and matching `vercel.json` cron entry are actually merged to `main` before debugging envs. The universal pipeline also depends on the first two schema tables (`trade_signals`, `trade_signal_sync_state`) existing in Supabase; without them the cron cannot create its sync cursor or ingest anything.
+
+## Testnet deployments (this branch — `feat/ypn-vault-convergence`)
+
+**All testnet, empty, unaudited, NOT on `main`.** External audit is the only gate left before real value.
+
+- **Arc testnet** (Circle Arc L1, chain `5042002`) — YPN spend stack (vault + gateway + CCTP router).
+- **Base Sepolia** — ULV engine + ETH-collateral/settlement stack.
+
+Foundry deploy scripts (`contracts-v4/script/`):
+
+| Script | Deploys |
+|---|---|
+| `DeployArcSpendStack.s.sol` | Arc YPN spend stack |
+| `DeployEthCollateralVault.s.sol` | ETH-collateral vault |
+| `DeployEthSettlement.s.sol` | ETH settlement stack |
+| `DeployWeightedDistributor.s.sol` | Vault-weighted epoch reward rail |
 
 ## Build Notes
 

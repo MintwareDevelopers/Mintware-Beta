@@ -22,6 +22,24 @@ pub enum VaultCollateral {
     Eth { price_usd_6dp: u128, haircut_bps: u16, price_observed_at_secs: u64 },
 }
 
+impl VaultCollateral {
+    /// Build the ETH variant with a MODEL-derived haircut (`crate::haircut::var_haircut_bps`) rather than
+    /// a magic constant — the risk gate `nav.rs` refers to. `price_usd_6dp` + `price_observed_at_secs`
+    /// come from the oracle push; `params` are the VaR inputs (config). This is how the reader/refresher
+    /// turns a fetched ETH/USD price into a staleness-guarded, VaR-haircut collateral snapshot.
+    pub fn eth_from_model(
+        price_usd_6dp: u128,
+        price_observed_at_secs: u64,
+        params: crate::haircut::HaircutParams,
+    ) -> Self {
+        VaultCollateral::Eth {
+            price_usd_6dp,
+            haircut_bps: crate::haircut::var_haircut_bps(params),
+            price_observed_at_secs,
+        }
+    }
+}
+
 /// A point-in-time view of the vault, refreshed from chain on an interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NavSnapshot {
@@ -50,19 +68,37 @@ impl NavSnapshot {
         )
     }
 
+    /// Convert an asset-native amount into conservative SPENDABLE USD (6dp) by this vault's collateral
+    /// rule. USDC = identity (price-free, γ=1). ETH applies push price + VaR haircut, overflow-safe,
+    /// rounding DOWN so the edge never over-credits. The one place the collateral math lives — both
+    /// `equity` (on shares) and `settleable_usd` (on idle) go through it, so an ETH leg's spendable AND
+    /// its settlement liquidity are haircut-consistent.
+    pub fn native_to_usd(&self, amount_native: u128) -> Usdc {
+        match self.collateral {
+            VaultCollateral::Usdc => amount_native, // already USD (6dp), γ=1
+            VaultCollateral::Eth { price_usd_6dp, haircut_bps, .. } => {
+                // amount is ETH-native (1e18). amount(1e18) * P(6dp) / 1e18 => USD(6dp); then apply γ.
+                let gross_usd = mul_div_floor(amount_native, price_usd_6dp, WAD);
+                mul_div_floor(gross_usd, haircut_bps as u128, BPS)
+            }
+        }
+    }
+
     /// SPENDABLE USD (6dp) for `shares`, collateral-aware — the number authorizations are sized against.
     /// USDC = identity (price-free). ETH applies push price + haircut, overflow-safe, rounding DOWN so
     /// the edge never over-credits.
     pub fn equity(&self, shares: Shares) -> Usdc {
-        let base = self.asset_amount(shares);
-        match self.collateral {
-            VaultCollateral::Usdc => base, // already USD (6dp), γ=1
-            VaultCollateral::Eth { price_usd_6dp, haircut_bps, .. } => {
-                // base is ETH-native (1e18). base(1e18) * P(6dp) / 1e18 => USD(6dp); then apply γ.
-                let gross_usd = mul_div_floor(base, price_usd_6dp, WAD);
-                mul_div_floor(gross_usd, haircut_bps as u128, BPS)
-            }
-        }
+        self.native_to_usd(self.asset_amount(shares))
+    }
+
+    /// The vault's settlement liquidity as conservative USD (6dp) — `idle_buffer` valued by the SAME
+    /// collateral rule as `equity`. For a USDC vault `idle_buffer` is already USDC, so this is the
+    /// identity (and every existing gate is unchanged). For an ETH vault `idle_buffer` is WETH-native
+    /// (1e18); this is the USDC the batch ETH→USDC settlement swap can conservatively realize from it
+    /// (price × γ) — the number the Σ-settleable gate must use, NOT the raw WETH balance. Reconciles with
+    /// `MintwareEthSettlement.batchSettleEth` (whose bounded swap + junior buffer realize ≥ this).
+    pub fn settleable_usd(&self) -> Usdc {
+        self.native_to_usd(self.idle_buffer)
     }
 
     /// True if the snapshot is no older than `max_age_secs`. Clock skew (now < observed) → fresh.
@@ -113,6 +149,29 @@ mod tests {
     }
 
     #[test]
+    fn eth_from_model_flows_var_haircut_into_equity() {
+        // The MODEL haircut (~73.68% for the ETH defaults) — not a magic constant — reaches `equity`.
+        let two_eth = 2_000_000_000_000_000_000u128; // 2e18
+        let collateral =
+            VaultCollateral::eth_from_model(2_000_000_000, 1_000, crate::haircut::HaircutParams::ETH_DEFAULT);
+        let VaultCollateral::Eth { haircut_bps, .. } = collateral else { panic!("expected Eth") };
+        assert!((7_300..=7_450).contains(&haircut_bps), "model haircut = {haircut_bps} bps");
+
+        let n = NavSnapshot {
+            total_assets: two_eth,
+            total_shares: two_eth,
+            virtual_offset: 1_000,
+            idle_buffer: 0,
+            observed_at_secs: 1_000,
+            collateral,
+        };
+        // gross = 2 ETH × $2,000 = $4,000 (6dp); equity = gross × γ, rounded down.
+        let usd = n.equity(two_eth);
+        let expected = 4_000_000_000u128 * haircut_bps as u128 / 10_000;
+        assert!(usd.abs_diff(expected) <= 2, "equity {usd} vs expected {expected}");
+    }
+
+    #[test]
     fn eth_equity_applies_price_and_haircut_rounding_down() {
         // 2 ETH of shares (1:1 vault, 18dp), ETH=$2,000 (6dp), γ=0.70 → 2 * 2000 * 0.70 = $2,800.
         let two_eth = 2_000_000_000_000_000_000u128; // 2e18
@@ -144,6 +203,37 @@ mod tests {
         };
         // 10_000 * 3_000 * 0.7 = $21,000,000 → 21e12 (6dp).
         assert_eq!(n.equity(ten_k_eth), 21_000_000_000_000);
+    }
+
+    #[test]
+    fn settleable_usd_is_identity_for_usdc_and_haircut_converted_for_eth() {
+        // USDC: settleable == idle_buffer (identity — every existing gate is unchanged, back-compat).
+        let u = NavSnapshot {
+            total_assets: 1_000_000_000,
+            total_shares: 1_000_000_000,
+            virtual_offset: 1_000,
+            idle_buffer: 500_000_000, // distinct from total_assets to prove it reads idle, not assets
+            observed_at_secs: 1_000,
+            collateral: VaultCollateral::Usdc,
+        };
+        assert_eq!(u.settleable_usd(), 500_000_000);
+
+        // ETH: idle_buffer is WETH-native (1e18). 2 ETH idle × $2,000 × γ0.70 = $2,800 (6dp).
+        let two_eth = 2_000_000_000_000_000_000u128;
+        let n = NavSnapshot {
+            total_assets: two_eth,
+            total_shares: two_eth,
+            virtual_offset: 1_000,
+            idle_buffer: two_eth,
+            observed_at_secs: 1_000,
+            collateral: VaultCollateral::Eth { price_usd_6dp: 2_000_000_000, haircut_bps: 7_000, price_observed_at_secs: 1_000 },
+        };
+        let s = n.settleable_usd();
+        assert!((2_799_000_000..=2_800_000_000).contains(&s), "got {s}");
+        // NOT the raw WETH balance (2e18 mis-read as USDC would be astronomically wrong).
+        assert!(s < two_eth);
+        // When all assets are idle, settleable == equity(total_shares) — same collateral rule both sides.
+        assert_eq!(n.settleable_usd(), n.equity(two_eth));
     }
 
     #[test]

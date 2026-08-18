@@ -13,8 +13,17 @@ Built on the [Mintware AI Attribution](https://mintware.finance) protocol on Bas
 | `GET_ATTRIBUTION_SCORE` | "check my attribution score", "get reputation score for 0x..." | Fetches total score, rank, behavior, contribution, interpretability, risk, transparent status, and PnL for any agent address |
 | `REGISTER_MINTWARE` | "register with Mintware", "join Mintware attribution" | Submits a one-time `registerAgent()` tx on Base mainnet and enrolls the wallet with the oracle watcher |
 | `CLAIM_PENDING_ACTIONS` | "claim pending actions", "update my attribution score" | Fetches pre-signed oracle attestations and submits each to the contract — keeps the score current |
+| `PARK_USDC` | "park $25 into the vault", "earn yield on my usdc" | Parks USDC into the Mintware yield vault (ERC-20 `approve` + ERC-4626 `deposit`) so it earns while staying spendable in place — never locks |
+| `UNPARK_USDC` | "un-park all my usdc", "withdraw from the yield vault" | Redeems vault shares back to USDC (reads `shares` + `previewWithdraw`, then `redeem`); omit an amount to un-park everything |
+| `SHOW_TREASURY` | "show my treasury", "how much can I spend" | Read-only — shows how much USDC is parked (earning) and how much is spendable in place right now |
+| `QUOTE_X402` | "quote x402 for https://…", "how much does this cost" | Read-only — preflights an x402-gated URL and reports the advertised price, network, recipient, and scheme without paying |
+| `PAY_X402` | "pay x402 for https://…", "pay for this call" | Pays an x402-gated call in USDC via a signed EIP-3009 `TransferWithAuthorization`, retries with the payment header, and returns the resource |
 
 The oracle watcher runs every 60 seconds, detects on-chain WETH activity from registered agents, and pre-signs EIP-712 attestations. Your agent calls `CLAIM_PENDING_ACTIONS` to pull those signatures and record them on-chain. The agent pays gas; the oracle pays nothing.
+
+### Capital parking + x402
+
+`PARK_USDC` / `UNPARK_USDC` move USDC in and out of the Mintware yield vault — capital earns yield but stays fully spendable in place (it never locks). Once parked, the agent spends it per compute/API call with `PAY_X402`, which signs an EIP-3009 authorization and settles in USDC; use `QUOTE_X402` first to preview cost, and `SHOW_TREASURY` to see parked vs. spendable balances. The vault, USDC token, and RPC default to the live Arc-testnet YPN stack and are overridable via runtime settings (`MINTWARE_PARK_VAULT`, `MINTWARE_PARK_USDC`, `MINTWARE_PARK_RPC`, `MINTWARE_PARK_CHAIN_ID`).
 
 ---
 
@@ -153,8 +162,12 @@ Scores update within ~60 seconds of submitting a `CLAIM_PENDING_ACTIONS` transac
 | Variable | Required | Description |
 |---|---|---|
 | `AGENT_PRIVATE_KEY` | Required for write actions | 0x-prefixed private key for the agent wallet |
+| `MINTWARE_PARK_VAULT` | Optional | ERC-4626 yield vault address (default: Arc-testnet `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421`) |
+| `MINTWARE_PARK_USDC` | Optional | USDC token address on the parking network (default: Arc-testnet `0x3600000000000000000000000000000000000000`) |
+| `MINTWARE_PARK_RPC` | Optional | JSON-RPC endpoint for parking reads/writes (default: `https://rpc.testnet.arc.io`) |
+| `MINTWARE_PARK_CHAIN_ID` | Optional | Chain ID for parking transactions (default: `5042002`, Arc testnet) |
 
-`GET_ATTRIBUTION_SCORE` works without a private key — it reads from the public REST API.
+`GET_ATTRIBUTION_SCORE`, `SHOW_TREASURY`, and `QUOTE_X402` work without a private key — they read from public REST/RPC. `PARK_USDC`, `UNPARK_USDC`, and `PAY_X402` require `AGENT_PRIVATE_KEY`.
 
 ---
 

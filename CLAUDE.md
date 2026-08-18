@@ -26,11 +26,12 @@ Supabase · Foundry · Rust services. pnpm.
 | Rewards: universal pipeline, epochs, crons (campaigns shelved) | `.claude/rules/rewards.md` |
 | Referral system, ref codes, Supabase tables | `.claude/rules/referrals.md` |
 | Contracts — live Forge stack (vaults, AIAttribution v3) | `.claude/rules/smart-contracts.md` |
-| Vaults — DeFi LP / ULV, V4 hook, 4626 base | `.claude/rules/vaults.md` |
+| Vaults — dual-sided pair vault / ULV, V4 hook | `.claude/rules/vaults.md` |
+| Payments — YPN, settlement, edge-auth/relayer, Arc | `.claude/rules/payments-ypn.md` |
+| AI agents — ERC-8004, Attribution, x402 parking account | `.claude/rules/agents.md` |
 | Supabase schema, migrations, constraints | `.claude/rules/schema.md` |
 | Vercel, env vars, build, crons, domains | `.claude/rules/deployments.md` |
 | MintGuard, CSP, rate limits, on-chain verification | `.claude/rules/security.md` |
-| ERC-8004, AIAttribution SDK, agent leaderboard | `.claude/rules/agents.md` |
 | Embeddable campaign widget (concept) | `.claude/rules/ProjectSDK.md` |
 | Vitest + Forge — commands + invariants | `.claude/rules/testing.md` |
 

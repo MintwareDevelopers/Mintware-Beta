@@ -3,6 +3,12 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 
+import {PoolManager}  from "@uniswap/v4-core/src/PoolManager.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks}       from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {PoolKey}      from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency}     from "@uniswap/v4-core/src/types/Currency.sol";
+
 import {MintwarePaymentGateway} from "../../src/payments/MintwarePaymentGateway.sol";
 import {MintwareTreasuryVault}  from "../../src/payments/MintwareTreasuryVault.sol";
 
@@ -43,7 +49,15 @@ contract MintwareGatewayTreasuryV2Test is Test {
         usdc    = new MockERC20("USD Coin", "USDC", 6);
         team    = new MockERC20("Team Token", "TEAM", 18);
         adapter = new MockYieldAdapter(address(usdc));
-        vault   = new MintwareTreasuryVault(address(usdc), address(team), address(adapter), owner, teamAddr);
+
+        // Hookless USDC/team pool — this suite exercises only the payment/burn path; no LP is deployed,
+        // so the pool need not be initialized. The vault holds the position itself (Phase-2 convergence).
+        PoolManager pm = new PoolManager(address(this));
+        (Currency c0, Currency c1) = address(usdc) < address(team)
+            ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
+            : (Currency.wrap(address(team)), Currency.wrap(address(usdc)));
+        PoolKey memory key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: 60, hooks: IHooks(address(0))});
+        vault   = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), owner, teamAddr);
 
         // Gateway admin = this test contract → it holds RELAYER_ROLE + EDGE_SIGNER_ROLE + DEFAULT_ADMIN.
         gateway = new MintwarePaymentGateway(address(vault), address(usdc), circleCpn, address(this));

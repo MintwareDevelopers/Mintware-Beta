@@ -1,5 +1,8 @@
 // =============================================================================
-// proxy.ts — Edge rate limiting for sensitive API endpoints
+// proxy.ts — Edge middleware (Next.js 16 runs ONE `proxy` file). Two disjoint concerns:
+//   1. User/Team hard gate on the `/app/*` surface (flag-gated; default OFF = pass-through).
+//   2. Edge rate limiting for sensitive API endpoints.
+// The two operate on disjoint path sets, so they compose in a single dispatch.
 //
 // Protects:
 //   POST /api/campaigns/swap-event      — 10 req/min per IP
@@ -18,6 +21,9 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
+import { evaluateGate, type GateSession } from '@/lib/auth/gate'
+import { isTeamRole, type TeamRole } from '@/lib/auth/rbac'
+import { PRIVY_TOKEN_COOKIE, MW_ROLE_COOKIE } from '@/lib/auth/cookies'
 
 interface RuleConfig { limit: number; windowMs: number; method?: string }
 
@@ -96,8 +102,38 @@ function checkMemory(key: string, rule: RuleConfig): boolean {
   return entry.count > rule.limit
 }
 
+// User/Team Phase-2 hard gate — a COARSE, cookie-level UX redirect on the /app surface. DEFAULT OFF:
+// behind `TEAM_HARD_GATE`; unset/`false` is a pass-through so the soft-gated showcase is unaffected. The
+// authoritative check is server-side (lib/auth/session.ts#verifyPrivySession re-verifies the Privy token +
+// role before any org data is returned) — never rely on this edge redirect alone.
+function gateAppSurface(req: NextRequest): NextResponse {
+  const hardGateEnabled = process.env.TEAM_HARD_GATE === 'true'
+  if (!hardGateEnabled) return NextResponse.next()
+
+  const pathname = req.nextUrl.pathname
+  const token = req.cookies.get(PRIVY_TOKEN_COOKIE)?.value
+  const roleRaw = req.cookies.get(MW_ROLE_COOKIE)?.value
+  const role: TeamRole | null = isTeamRole(roleRaw) ? roleRaw : null
+
+  const session: GateSession = { authenticated: Boolean(token), role }
+  const result = evaluateGate(pathname, session, { hardGateEnabled })
+
+  if (result.action === 'redirect') {
+    const url = new URL(result.to, req.url)
+    // Preserve where the user was headed so sign-in can bounce them back.
+    if (result.reason === 'unauthenticated') url.searchParams.set('next', pathname)
+    return NextResponse.redirect(url)
+  }
+  return NextResponse.next()
+}
+
 export async function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname
+
+  // 1. User/Team hard gate on the app surface (marketing pages never reach here — see matcher).
+  if (pathname.startsWith('/app/')) return gateAppSurface(req)
+
+  // 2. Edge rate limiting on sensitive API endpoints.
   const rule = RATE_LIMITS[pathname]
 
   if (!rule) return NextResponse.next()
@@ -136,6 +172,9 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
+    // User/Team hard gate (flag-gated) — only the app surface; marketing pages stay public.
+    '/app/:path*',
+    // Edge rate-limited API endpoints.
     '/api/campaigns/swap-event',
     '/api/campaigns/sol-swap-event',
     '/api/campaigns/join',

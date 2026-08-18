@@ -3,7 +3,6 @@ pragma solidity ^0.8.26;
 
 import {Script, console}          from "forge-std/Script.sol";
 import {MintwareTreasuryVault}    from "../src/payments/MintwareTreasuryVault.sol";
-import {MintwareV4LiquidityModule} from "../src/payments/MintwareV4LiquidityModule.sol";
 import {MintwareTreasuryJitHook}  from "../src/payments/MintwareTreasuryJitHook.sol";
 import {MintwarePaymentGateway}   from "../src/payments/MintwarePaymentGateway.sol";
 import {HookMiner}                from "../src/lib/HookMiner.sol";
@@ -11,21 +10,24 @@ import {IPoolManager}             from "@uniswap/v4-core/src/interfaces/IPoolMan
 import {IHooks}                   from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}                  from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency}                 from "@uniswap/v4-core/src/types/Currency.sol";
+import {LPFeeLibrary}             from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 
-/// @notice Deploy the YPN v2 treasury-vault stack (the "spend-while-you-earn" LSA) — the treasury vault,
-///         the REAL Uniswap-V4 liquidity module behind its `ILiquidityModule` seam, and the payment
-///         Gateway — against a live V4 PoolManager. This is the "make v2 real" deploy artifact;
+/// @notice Deploy the YPN v2 treasury-vault stack (the "spend-while-you-earn" LSA) — the treasury vault
+///         (which HOLDS its Uniswap-V4 position itself, Phase-2 convergence), the JIT hook, and the
+///         payment Gateway — against a live V4 PoolManager. This is the "make v2 real" deploy artifact;
 ///         `DeployTreasuryV2.t.sol` proves the exact assembly + a full deposit→deployToLP→swap→recover→
 ///         Gateway-burn lifecycle hermetically.
 ///
-/// ─── Deploy order ─────────────────────────────────────────────────────────
-///   1. Sort (USDC, teamToken) → PoolKey (NO hook — passive full-range module; the JIT/surge hook is a
-///      later layer that composes IN FRONT of this seam)
-///   2. poolManager.initialize(key, INIT_SQRT_PRICE)   ← the module reads slot0, so the pool must exist
-///   3. MintwareTreasuryVault(usdc, teamToken, adapter, owner)
-///   4. MintwareV4LiquidityModule(poolManager, key, usdc, vault, owner) ; vault.setLiquidityModule(module)
-///   5. MintwarePaymentGateway(vault, usdc, circleTreasury, admin) ; vault.setGateway(gateway)
-///   6. Grant EDGE_SIGNER_ROLE / RELAYER_ROLE on the Gateway (edge engine + relayer), if provided
+/// ─── Deploy order (the vault LPs into the HOOKED pool, so its key needs the mined hook address — a
+///     circular dependency broken by PREDICTING the vault's CREATE address) ────────────────────────
+///   1. Sort (USDC, teamToken); predict the vault address; mine the JIT hook against it; build the
+///      HOOKED PoolKey.
+///   2. MintwareTreasuryVault(poolManager, hookedKey, usdc, adapter, owner, team)  ← lands at predicted
+///   3. MintwareTreasuryJitHook{salt}(poolManager, ctorKey, usdc, vault, owner)  (CREATE2 factory)
+///   4. poolManager.initialize(hookedKey, INIT_SQRT_PRICE)
+///   5. vault.setJitHook(hook) ; hook.setJitSkipSender(vault)  (exempt the vault's own recover swaps)
+///   6. MintwarePaymentGateway(vault, usdc, circleTreasury, admin) ; vault.setGateway(gateway)
+///   7. Grant EDGE_SIGNER_ROLE / RELAYER_ROLE on the Gateway (edge engine + relayer), if provided
 ///
 /// ─── Required env vars ──────────────────────────────────────────────────────
 ///   DEPLOYER_PRIVATE_KEY, V4_POOL_MANAGER, USDC_ADDRESS, TEAM_TOKEN_ADDRESS,
@@ -44,7 +46,7 @@ import {Currency}                 from "@uniswap/v4-core/src/types/Currency.sol"
 contract DeployTreasuryV2 is Script {
     uint160 constant DEFAULT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
     address constant C2_FACTORY = 0x4e59b44847b379578588920cA78FbF26c0B4956C; // deterministic CREATE2 factory
-    uint160 constant JIT_HOOK_FLAGS = 0xC0; // beforeSwap | afterSwap
+    uint160 constant JIT_HOOK_FLAGS = 0x20C8; // beforeInitialize | beforeSwap | afterSwap
 
     function run() external {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -65,11 +67,13 @@ contract DeployTreasuryV2 is Script {
         require(usdc != teamToken, "identical tokens");
         (address c0, address c1) = usdc < teamToken ? (usdc, teamToken) : (teamToken, usdc);
 
-        // Placeholder-hooks key for the hook ctor + mining (the hook ctor ignores key.hooks).
+        // Placeholder-hooks key for the hook ctor + mining (the hook ctor ignores key.hooks). The pool is
+        // a DYNAMIC-FEE pool (the hook overrides the LP fee per swap — Phase-1 MEV lever); POOL_FEE is
+        // applied as the hook's BASE (floor) fee after deploy, not as a static pool fee.
         PoolKey memory ctorKey = PoolKey({
             currency0: Currency.wrap(c0),
             currency1: Currency.wrap(c1),
-            fee:       poolFee,
+            fee:       LPFeeLibrary.DYNAMIC_FEE_FLAG,
             tickSpacing: tickSpacing,
             hooks:     IHooks(address(0))
         });
@@ -80,41 +84,52 @@ contract DeployTreasuryV2 is Script {
         console.log("USDC:     ", usdc);
         console.log("TeamToken:", teamToken);
 
-        vm.startBroadcast(deployerKey);
-
-        // 1. Treasury vault (senior = community USDC; junior = team token). AUDIT M1: the team address
-        //    is bound at creation (TEAM_ADDRESS, default deployer) — only it may commitTeam.
+        // Phase-2 convergence: the vault HOLDS the V4 position itself (the `MintwareV4LiquidityModule`
+        // was folded into it via the `MWTreasuryPositionLib` delegatecall library). The vault must LP
+        // into the HOOKED pool, so its poolKey carries the JIT hook — which is circular (the hook ctor
+        // takes the vault address, and the vault's key needs the mined hook address). Break it by
+        // PREDICTING the vault's CREATE address: the vault is the deployer's FIRST broadcast CREATE, and
+        // the hook is deployed via the CREATE2 factory (which does NOT consume the deployer's CREATE
+        // nonce), so the vault lands at computeCreateAddress(deployer, currentNonce).
         address team = vm.envOr("TEAM_ADDRESS", deployer);
-        MintwareTreasuryVault vault = new MintwareTreasuryVault(usdc, teamToken, adapter, deployer, team);
-        console.log("TreasuryVault:", address(vault));
+        address predictedVault = vm.computeCreateAddress(deployer, vm.getNonce(deployer));
 
-        // 2. Mine + deploy the JIT hook (flags 0xC0 = beforeSwap|afterSwap). Deployed via the CREATE2
-        //    factory so the mined permission bits hold. JIT is gated by the vault's jitMaxPerBlockBps.
-        bytes memory hookArgs = abi.encode(poolMgr, ctorKey, usdc, address(vault), deployer);
+        // 1. Mine the JIT hook (flags 0xC0 = beforeSwap|afterSwap) against the PREDICTED vault address.
+        bytes memory hookArgs = abi.encode(poolMgr, ctorKey, usdc, predictedVault, deployer);
         (address hookAddr, bytes32 hookSalt) =
             HookMiner.find(C2_FACTORY, JIT_HOOK_FLAGS, type(MintwareTreasuryJitHook).creationCode, hookArgs);
+
+        // 2. The hooked pool key (the vault LPs into this pool; the hook JITs team->USDC swaps + drives
+        //    the per-swap dynamic fee).
+        PoolKey memory key = PoolKey({
+            currency0: Currency.wrap(c0), currency1: Currency.wrap(c1),
+            fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: tickSpacing, hooks: IHooks(hookAddr)
+        });
+
+        vm.startBroadcast(deployerKey);
+
+        // 3. Treasury vault (senior = community USDC; junior = team token) — the deployer's FIRST CREATE,
+        //    so it lands at `predictedVault`. AUDIT M1: the team address is bound at creation.
+        MintwareTreasuryVault vault = new MintwareTreasuryVault(poolMgr, key, usdc, adapter, deployer, team);
+        require(address(vault) == predictedVault, "vault address mismatch");
+        console.log("TreasuryVault:", address(vault));
+
+        // 4. Deploy the JIT hook via the CREATE2 factory (mined permission bits hold; no CREATE-nonce use).
         MintwareTreasuryJitHook hook =
             new MintwareTreasuryJitHook{salt: hookSalt}(poolMgr, ctorKey, usdc, address(vault), deployer);
         require(address(hook) == hookAddr, "hook address mismatch");
         console.log("JitHook:      ", address(hook));
 
-        // 3. Open the V4 pool WITH the hook (the module reads slot0; the hook JITs team->USDC swaps).
-        PoolKey memory key = PoolKey({
-            currency0: Currency.wrap(c0), currency1: Currency.wrap(c1),
-            fee: poolFee, tickSpacing: tickSpacing, hooks: IHooks(hookAddr)
-        });
+        // 5. Open the V4 pool WITH the hook (the vault reads slot0; the hook JITs team->USDC swaps).
         IPoolManager(poolMgr).initialize(key, initPrice);
 
-        // 4. Real V4 liquidity module behind the ILiquidityModule seam (on the hooked pool).
-        MintwareV4LiquidityModule module = new MintwareV4LiquidityModule(poolMgr, key, usdc, address(vault), deployer);
-        vault.setLiquidityModule(address(module));
-        console.log("V4Module:     ", address(module));
-
-        // 5. Wire the JIT seam: vault <-> hook, and exempt the module's own recover/collect swaps.
+        // 6. Wire the JIT seam: vault <-> hook, and exempt the vault's OWN recover/collect swaps. Set the
+        //    dynamic-fee floor to POOL_FEE (ceiling/slope keep in-code defaults; retune post-deploy).
         vault.setJitHook(address(hook));
-        hook.setJitSkipSender(address(module));
+        hook.setJitSkipSender(address(vault));
+        hook.setBaseFeePips(poolFee);
 
-        // 5. Payment Gateway (settles card charges against the senior side).
+        // 7. Payment Gateway (settles card charges against the senior side).
         MintwarePaymentGateway gateway = new MintwarePaymentGateway(address(vault), usdc, treasury, admin);
         vault.setGateway(address(gateway));
         vault.setProtocolTreasury(treasury);

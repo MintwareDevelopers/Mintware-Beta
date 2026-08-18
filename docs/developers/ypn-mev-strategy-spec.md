@@ -236,3 +236,78 @@ The levers already exist on-chain (`idleBufferTargetBps`, `jitMaxPerBlockBps`, `
 **tier preset** (or an on-chain junior-liquidity read) would set them at vault creation. The card rail is not
 one-size either — spend/settlement generosity scales with how safely the junior backs the senior. Treat
 blue-chip and community vaults as **different products.**
+
+## Mechanism ranking — for the goal "capture MEV + slippage," JIT is NOT the best
+
+Decision (2026-08-15). Ranked best → worst for **our** goal on **our** thin community pools:
+
+| Rank | Mechanism | Captures | Fit |
+|---|---|---|---|
+| 1 | **MEV-tax / top-of-block auction = LVR recapture** (`MWAmAuction.sol`) | the arb/sandwich value that leaks from the pool | **Best / the moat.** Redirects to treasury the value bots take today. |
+| 2 | **Dynamic / surge fee** (`MWDynamicFee.sol`) | price-impact, as a fee on high-impact flow | **Best pragmatic first lever.** No capital, no adverse inventory; strong on thin pools. Single-venue fallback. |
+| 3 | **JIT liquidity** (our `MintwareTreasuryJitHook`) | the swap fee, via provision | **Weak here** — the safe *scaffold* we built, not the capture engine. Round-trips inventory through the same thin pool → break-even to negative. |
+
+Direction: **build the auction/dynamic-fee engine; treat naive JIT as a retired experiment.** The infra we
+already shipped (tranche vault, safe hook seam, guards H2/H4, settlement gateway) is exactly what an
+auction/dynamic-fee hook plugs into — not throwaway, it's the foundation. Both blocks (`MWDynamicFee`,
+`MWAmAuction`) already exist in the repo.
+
+## How much of a trader's slippage can we actually capture?
+
+Quantified answer to "on a low cap I trade with 4–7% slippage — can we capture that?" — via
+[`sims/lvr_capture_sim.py`](sims/lvr_capture_sim.py) (constant-product pool, 0.3% fee; run `python3
+docs/developers/sims/lvr_capture_sim.py`).
+
+A trader's slippage splits into **permanent impact** (the market genuinely repriced — *nobody* captures it)
+and **temporary impact / LVR** (reverts — captured by an MEV bot today; a hook can redirect it to treasury).
+The capture ratio is set by the temporary fraction **β** (unknowable per-token → we sweep it), **not** by pool
+size — pool size only scales the dollars.
+
+$200k pool, trader buys ~$4.7k and eats 5% (loses ~$235 vs mid):
+
+| Temporary fraction β | We capture | = % of the trader's slippage |
+|---|---|---|
+| 0.3 (informed flow) | $14 | 6% |
+| 0.5 (typical retail) | $45 | **~19%** |
+| 0.7 (pure ape/impact) | $92 | 39% |
+| single-venue: 1% surge fee | $47 | 20% (a fee, not reclaimed leakage) |
+
+Absolute $ scales linearly with pool size (same ratios): $50k pool → ~$11 (β0.5); $1M pool → ~$223 (β0.5).
+
+**Bottom line: yes, partly — realistically ~15–40% of the slippage (≈0.8–2% of trade notional), the piece
+already leaking to bots.** Honest caveats: β is assumed not measured; the permanent part is gone for everyone;
+these are **upper bounds** on the LVR piece (ignore gas, latency, competing arbs) — our structural edge is that
+*as the pool's own hook we go first* (top-of-block right); clean LVR needs a second venue, else fall back to
+the surge-fee row. **Naive JIT captures none of this** — the mechanisms that do are ranks 1–2 above.
+
+## Prior art: RexHook (adopted mechanisms)
+
+Reviewed the RexHook whitepaper (v1.6/1.7, Feb 2026 — a "Shopify for V4 token launches": launchpad +
+hook marketplace + registry). Most of it (marketplace, $REX token, launchpad economics) is not us. But its
+fee-capture / MEV sections are on our exact problem and independently corroborate the ranking above. Adopt:
+
+1. **Deterrence sizing for MEV, not just capture.** Set the surge/capture rate η* = min{1, (gas + builder
+   bribe)/E} so a sandwich becomes zero-EV → the attacker doesn't attack. Better than racing the bot for the
+   value: it protects our trader *and* stops the leak. Fold into the LVR/auction lever.
+2. **Quote-asset, in-swap fee capture with ZERO token accumulation.** Take the cut in USDC directly from swap
+   output via `afterSwap` delta modification — never hold/dump the volatile token. This is the mechanically
+   correct fix for exactly our JIT's dump-back sin; our dynamic-fee lever must use this pattern (their
+   "zero sell pressure" Thm 3.2). Their whole "death spiral" thesis = accumulate-and-dump crashes price =
+   the lesson our thin-pool JIT test taught us, formalized.
+3. **Elasticity-based fee tiering.** Revenue R=fV(f) is maximized at demand elasticity ε=1 → charge MORE where
+   demand is inelastic (launch / low-cap / FOMO), LESS where arbitrage-sensitive. This is the economic
+   justification for our surge fee on thin pools and maps onto the pool-tiering table. (Their tiers: <$100K up
+   to 30% … >$1M 1–5% — but note 30% would get routed around by aggregators; treat as an upper caricature.)
+4. **TWAP z-score sandwich detection in `beforeSwap`:** flag when `|P_spot − P_twap|/σ > 2.5` AND ≥2
+   opposite-direction swaps in the block. A concrete selective-firing heuristic for the keeper.
+5. **Emit the Uniswap Foundation standard hook events** (`HookSwap`, `HookFee`, `HookModifyLiquidity`,
+   `HookBonus`) → free indexer/explorer interop (v4.xyz, Envio), zero custom adapters.
+6. **`@openzeppelin/uniswap-hooks` `BaseHook` now exists** — our older note "BaseHook doesn't exist, use IHooks
+   directly" is stale; an OZ-audited base is available to inherit. **Verify before relying on it.**
+
+Honest read: it's a fundraising whitepaper ($40M FDV) — "theorems" are dressed-up algebra, empirics are cited
+literature not their own data, and their "MEV capture" is really detect-suspicious-swap-and-charge-a-high-fee
+(incidence can land on a legitimate volatile-market trader) = a volatility surge fee, i.e. our lever #2, NOT
+true LVR recapture. Their `PriceImpactHook` = the `MWSlippageCaptureHook` idea, and they too frame it honestly
+as an *additional fee*, not "reclaimed slippage." Where we're ahead: the treasury/tranche + card-settlement
+layer routing captured value into spendable senior USDC — they just split fees to recipient wallets.

@@ -21,7 +21,7 @@ enum PoolProfile {
     MEME
 }
 
-/// @dev Lock tiers — shared by both surfaces. Multipliers live in LockLib.
+/// @dev Lock tiers — shared by both surfaces.
 ///        Flex      (0d)   1.00×
 ///        Committed (30d)  1.15×
 ///        Aligned   (90d)  1.30×
@@ -33,23 +33,7 @@ enum LockTier {
     Core
 }
 
-/// @dev Config passed to MintwareVaultFactory.createVault().
-struct VaultConfig {
-    VaultSurface surface;
-    address provider;         // strategy manager (DeFi) / issuer (RWA)
-    address underlyingToken;  // USDC for v1
-    address treasury;         // recipient of entry/exit fees (Mintware treasury)
-    string  name;             // ERC-20 share token name
-    string  symbol;           // ERC-20 share token symbol
-    uint256 minDeposit;
-    uint256 entryFeeBps;      // e.g. 50 = 0.5% (spec fee model)
-    uint256 exitFeeBps;       // e.g. 100 = 1.0%
-    bool    enableMEVProtection;
-    bool    enableIdleCapital;
-    uint256 idleTargetRatio;  // WAD, e.g. 60e18 = 60%
-}
-
-/// @dev Registry record stored by the factory per vaultId.
+/// @dev Registry record stored per vaultId.
 struct VaultRecord {
     address vault;
     address feeVault;

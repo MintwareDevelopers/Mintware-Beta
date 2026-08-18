@@ -3,23 +3,48 @@ pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 
+import {PoolManager}           from "@uniswap/v4-core/src/PoolManager.sol";
+import {IPoolManager}          from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks}                from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {PoolKey}               from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {Currency}              from "@uniswap/v4-core/src/types/Currency.sol";
+import {ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
+
 import {MintwareTreasuryVault} from "../../src/payments/MintwareTreasuryVault.sol";
 
-import {MockERC20}           from "../mocks/MockERC20.sol";
-import {MockYieldAdapter}    from "../mocks/MockYieldAdapter.sol";
-import {MockLiquidityModule} from "../mocks/MockLiquidityModule.sol";
+import {MockERC20}        from "../mocks/MockERC20.sol";
+import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
-/// @title  MintwareTreasuryVault unit tests
-/// @notice Focused (non-fuzz) coverage of the tranche accounting: senior mint-down / redeem round-trip,
-///         inflation defense (lifted from v1), the price-free senior NAV under a 50% crash, junior
-///         first-loss absorption, the "revert-rather-than-underpay" senior guard, access control on the
-///         Gateway + junior redeem, the 90-day cliff, and the locked-vs-post-lock fee routing.
+/// @title  MintwareTreasuryVault unit tests (self-held V4 position)
+/// @notice Focused (non-fuzz) coverage of the tranche accounting after Phase-2 convergence — the vault
+///         HOLDS its V4 position directly (the retired `MintwareV4LiquidityModule` is now the
+///         `MWTreasuryPositionLib` delegatecall library). Price moves are REAL V4 swaps (no settable
+///         mock price): senior mint-down / redeem round-trip, inflation defense, the price-free senior
+///         NAV under a crash, junior first-loss absorption, the "revert-rather-than-underpay" senior
+///         guard, access control, the 90-day cliff, and the locked-vs-post-lock fee routing.
+///
+/// @dev    Both tokens are 6dp so each pool inits cleanly at 1:1 (tick 0). Each `_spawn` builds an
+///         ISOLATED stack (its own PoolManager + pool) so crash tests can move price freely without
+///         touching other tests. Hookless pools → `recoverableUSDC()` uses spot (no JIT oracle) — the
+///         correct conservative MTM here.
 contract MintwareTreasuryVaultTest is Test {
-    MintwareTreasuryVault internal vault;
-    MockLiquidityModule   internal module;
-    MockYieldAdapter      internal adapter;
-    MockERC20             internal usdc;
-    MockERC20             internal team;
+    MockERC20 internal usdc; // 6dp senior asset (shared across stacks for a stable token ordering)
+    MockERC20 internal team; // 6dp junior asset
+
+    struct Stack {
+        PoolManager             pm;
+        TestSwapRouter          sr;
+        PoolModifyLiquidityTest lr;
+        MintwareTreasuryVault   v;
+        MockYieldAdapter        a;
+        PoolKey                 key;
+        bool                    teamIs0;
+    }
+
+    Stack internal S; // the primary stack (alice = $100k senior)
 
     address internal owner    = makeAddr("owner");
     address internal teamAddr  = makeAddr("team");
@@ -27,56 +52,100 @@ contract MintwareTreasuryVaultTest is Test {
     address internal receiver  = makeAddr("cardRail");
     address internal protocol  = makeAddr("protocol");
     address internal alice     = makeAddr("alice");
+    address internal trader    = makeAddr("trader");
 
+    uint160 internal constant INIT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
+    int24   internal constant SPACING = 60;
     uint256 internal constant ONE_USDC   = 1e6;
-    uint256 internal constant INIT_PRICE = 1_000_000; // 1 USDC (6dp) per 1e18 team token
     uint256 internal constant LOCK_DUR   = 365 days;
-    uint256 internal constant TEAM_COMMIT = 5_000_000 ether;
+    uint256 internal constant TEAM_COMMIT = 5_000_000 * 1e6;
 
     function setUp() public {
-        (vault, module, adapter) = _newVault(INIT_PRICE);
+        usdc = new MockERC20("USD Coin", "USDC", 6);
+        team = new MockERC20("Team Token", "TEAM", 6);
 
-        // fund + deposit alice ($100k senior).
-        usdc.mint(alice, 1_000_000 * ONE_USDC);
-        vm.prank(alice);
-        usdc.approve(address(vault), type(uint256).max);
-        vm.prank(alice);
-        vault.depositUSDC(100_000 * ONE_USDC, 0, alice);
+        S = _spawn(0, 2_000_000 * int256(ONE_USDC));
+
+        // fund + deposit alice ($100k senior) on the primary stack.
+        _deposit(S, alice, 100_000 * ONE_USDC);
     }
 
-    /// @dev Spin up a fully-wired, team-committed vault (shared usdc/team tokens across instances).
-    ///      Pure-ETH junior (juniorUSDC = 0) — the pre-extension behavior.
-    function _newVault(uint256 price)
-        internal
-        returns (MintwareTreasuryVault v, MockLiquidityModule m, MockYieldAdapter a)
-    {
-        return _newVault(price, 0);
-    }
+    // ── stack helpers ───────────────────────────────────────────────────────────────
 
-    /// @dev Same, but the team also commits `juniorUsdc` of stable first-loss coverage.
-    function _newVault(uint256 price, uint256 juniorUsdc)
-        internal
-        returns (MintwareTreasuryVault v, MockLiquidityModule m, MockYieldAdapter a)
-    {
-        if (address(usdc) == address(0)) usdc = new MockERC20("USD Coin", "USDC", 6);
-        if (address(team) == address(0)) team = new MockERC20("Team Token", "TEAM", 18);
+    /// @dev Spin up a fully-wired, team-committed vault on its OWN pool, with `baselineLiq` full-range
+    ///      baseline liquidity so the vault's seniority swaps have depth (and price is crashable).
+    function _spawn(uint256 juniorUsdc, int256 baselineLiq) internal returns (Stack memory s) {
+        s.pm = new PoolManager(address(this));
+        s.sr = new TestSwapRouter(IPoolManager(address(s.pm)));
+        s.lr = new PoolModifyLiquidityTest(IPoolManager(address(s.pm)));
 
-        a = new MockYieldAdapter(address(usdc));
-        v = new MintwareTreasuryVault(address(usdc), address(team), address(a), owner, teamAddr);
-        m = new MockLiquidityModule(address(usdc), address(team), address(v), price);
+        (Currency c0, Currency c1) = address(usdc) < address(team)
+            ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
+            : (Currency.wrap(address(team)), Currency.wrap(address(usdc)));
+        s.key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
+        s.teamIs0 = address(team) < address(usdc);
+        s.pm.initialize(s.key, INIT_SQRT_PRICE);
+
+        s.a = new MockYieldAdapter(address(usdc));
+        s.v = new MintwareTreasuryVault(address(s.pm), s.key, address(usdc), address(s.a), owner, teamAddr);
 
         vm.startPrank(owner);
-        v.setLiquidityModule(address(m));
-        v.setGateway(gateway);
-        v.setProtocolTreasury(protocol);
+        s.v.setGateway(gateway);
+        s.v.setProtocolTreasury(protocol);
         vm.stopPrank();
 
         team.mint(teamAddr, TEAM_COMMIT);
         if (juniorUsdc > 0) usdc.mint(teamAddr, juniorUsdc);
         vm.startPrank(teamAddr);
-        team.approve(address(v), type(uint256).max);
-        usdc.approve(address(v), type(uint256).max);
-        v.commitTeam(TEAM_COMMIT, juniorUsdc, LOCK_DUR);
+        team.approve(address(s.v), type(uint256).max);
+        usdc.approve(address(s.v), type(uint256).max);
+        s.v.commitTeam(TEAM_COMMIT, juniorUsdc, LOCK_DUR);
+        vm.stopPrank();
+
+        // Baseline external liquidity so the vault's team→USDC seniority swaps have realistic depth.
+        if (baselineLiq > 0) {
+            usdc.mint(address(this), 50_000_000 * ONE_USDC);
+            team.mint(address(this), 50_000_000 * ONE_USDC);
+            usdc.approve(address(s.lr), type(uint256).max);
+            team.approve(address(s.lr), type(uint256).max);
+            int24 lo = (TickMath.MIN_TICK / SPACING) * SPACING;
+            int24 hi = (TickMath.MAX_TICK / SPACING) * SPACING;
+            s.lr.modifyLiquidity(
+                s.key,
+                ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: baselineLiq, salt: bytes32(0)}),
+                ""
+            );
+        }
+    }
+
+    function _deposit(Stack memory s, address who, uint256 amt) internal returns (uint256 shares) {
+        usdc.mint(who, amt);
+        vm.startPrank(who);
+        usdc.approve(address(s.v), type(uint256).max);
+        shares = s.v.depositUSDC(amt, 0, who);
+        vm.stopPrank();
+    }
+
+    /// @dev Trader dumps `teamIn` team → the pool price of team FALLS (impermanent loss on the vault LP).
+    function _dumpTeam(Stack memory s, uint256 teamIn) internal {
+        team.mint(trader, teamIn);
+        vm.startPrank(trader);
+        team.approve(address(s.sr), type(uint256).max);
+        s.sr.swap(s.key, s.teamIs0, teamIn); // selling team (team is currency0 iff teamIs0)
+        vm.stopPrank();
+    }
+
+    /// @dev Crash the team mark to a CONTROLLED fraction of par: `sqrtFracE9` = sqrt(targetTeamPrice) × 1e9
+    ///      (e.g. 316227766 → team price ~10%). Dumps a huge notional CLAMPED to the target pool sqrtPrice,
+    ///      so the crash lands exactly at the intended mark regardless of baseline depth.
+    function _crashTeamTo(Stack memory s, uint256 sqrtFracE9) internal {
+        uint256 sq = s.teamIs0
+            ? (uint256(INIT_SQRT_PRICE) * sqrtFracE9) / 1e9  // team=c0: spot = INIT·sqrt(tp)
+            : (uint256(INIT_SQRT_PRICE) * 1e9) / sqrtFracE9; // team=c1: spot = INIT/sqrt(tp)
+        team.mint(trader, 100_000_000 * ONE_USDC);
+        vm.startPrank(trader);
+        team.approve(address(s.sr), type(uint256).max);
+        s.sr.swapTo(s.key, s.teamIs0, 100_000_000 * ONE_USDC, uint160(sq));
         vm.stopPrank();
     }
 
@@ -86,11 +155,10 @@ contract MintwareTreasuryVaultTest is Test {
         address bob = makeAddr("bob");
         usdc.mint(bob, 50_000 * ONE_USDC);
         vm.startPrank(bob);
-        usdc.approve(address(vault), type(uint256).max);
-        uint256 minted = vault.depositUSDC(50_000 * ONE_USDC, 0, bob);
-        // mint rounds DOWN → never more shares than assets at genesis-parity NAV.
+        usdc.approve(address(S.v), type(uint256).max);
+        uint256 minted = S.v.depositUSDC(50_000 * ONE_USDC, 0, bob);
         assertLe(minted, 50_000 * ONE_USDC, "mint minted MORE shares than assets");
-        uint256 out = vault.redeemSenior(minted, 0);
+        uint256 out = S.v.redeemSenior(minted, 0);
         vm.stopPrank();
         assertLe(out, 50_000 * ONE_USDC, "round-trip returned MORE than contributed");
         assertApproxEqAbs(out, 50_000 * ONE_USDC, 2, "round-trip lost more than dust");
@@ -99,89 +167,90 @@ contract MintwareTreasuryVaultTest is Test {
     // ── first-depositor inflation attack is resisted (symmetric virtual offset) ─────
 
     function test_inflation_attack_resisted() public {
-        (MintwareTreasuryVault v,,) = _newVault(INIT_PRICE);
+        Stack memory s = _spawn(0, 0);
 
         address attacker = makeAddr("attacker");
         address victim   = makeAddr("victim");
         usdc.mint(attacker, 1_000_000 * ONE_USDC);
         usdc.mint(victim, 10_000 * ONE_USDC);
 
-        // Attacker deposits 1 unit then donates $15k straight into the vault buffer — the classic
-        // first-depositor move that, without a virtual offset, rounds the victim's mint to zero.
         vm.startPrank(attacker);
-        usdc.approve(address(v), type(uint256).max);
-        v.depositUSDC(1, 0, attacker);
+        usdc.approve(address(s.v), type(uint256).max);
+        s.v.depositUSDC(1, 0, attacker);
         vm.stopPrank();
-        usdc.mint(address(v), 15_000 * ONE_USDC); // donation lands in the free senior buffer
+        usdc.mint(address(s.v), 15_000 * ONE_USDC); // donation lands in the free senior buffer
 
         vm.startPrank(victim);
-        usdc.approve(address(v), type(uint256).max);
-        uint256 minted = v.depositUSDC(10_000 * ONE_USDC, 0, victim);
-        uint256 out = v.redeemSenior(minted, 0);
+        usdc.approve(address(s.v), type(uint256).max);
+        uint256 minted = s.v.depositUSDC(10_000 * ONE_USDC, 0, victim);
+        uint256 out = s.v.redeemSenior(minted, 0);
         vm.stopPrank();
 
         assertGt(minted, 0, "victim minted zero shares (inflation succeeded)");
         assertGe(out, 9_500 * ONE_USDC, "victim lost more than dust to inflation");
     }
 
-    // ── THE selling point: senior NAV ignores a 50% pool-price crash ────────────────
+    // ── THE selling point: senior NAV ignores a pool-price crash ────────────────────
 
-    function test_senior_price_free_under_50pct_crash() public {
-        // Deploy the idle-target-permitted slice (20% of $100k = $20k) as 2-sided LP.
-        uint256 jt = vault.juniorTokens(); // read BEFORE prank (arg-call would consume it)
+    function test_senior_price_free_under_crash() public {
+        uint256 jt = S.v.juniorTokens();
         vm.prank(owner);
-        vault.deployToLP(20_000 * ONE_USDC, jt);
+        S.v.deployToLP(20_000 * ONE_USDC, jt);
 
-        uint256 aliceShares = vault.seniorShares(alice);
-        uint256 navBefore = vault.convertToAssets(aliceShares);
-        uint256 pvBefore  = vault.previewWithdraw(1_000 * ONE_USDC);
+        uint256 aliceShares = S.v.seniorShares(alice);
+        uint256 navBefore = S.v.convertToAssets(aliceShares);
+        uint256 pvBefore  = S.v.previewWithdraw(1_000 * ONE_USDC);
 
-        // Crash the ONLY price in the system by 50%.
-        module.setPrice(INIT_PRICE / 2);
+        // Crash the ONLY price in the system with a real team dump.
+        _dumpTeam(S, 600_000 * ONE_USDC);
 
-        assertEq(vault.convertToAssets(aliceShares), navBefore, "senior NAV moved with the pool price");
-        assertEq(vault.previewWithdraw(1_000 * ONE_USDC), pvBefore, "previewWithdraw moved with the price");
-        assertEq(vault.totalSeniorAssets(), 100_000 * ONE_USDC, "senior par not preserved at deposit value");
+        assertEq(S.v.convertToAssets(aliceShares), navBefore, "senior NAV moved with the pool price");
+        assertEq(S.v.previewWithdraw(1_000 * ONE_USDC), pvBefore, "previewWithdraw moved with the price");
+        assertEq(S.v.totalSeniorAssets(), 100_000 * ONE_USDC, "senior par not preserved at deposit value");
     }
 
-    // ── junior is first-loss: after a crash the junior redeems LESS than committed ──
-    //    while the senior redeems full par.
+    // ── junior is first-loss: after a crash the team recovers LESS than committed ────
 
     function test_junior_absorbs_il_first() public {
-        // Deploy 20% to LP (20k USDC + 20k team tokens paired at the initial mark).
-        uint256 committed = vault.juniorTokens();
+        uint256 committed = S.v.juniorTokens();
         vm.prank(owner);
-        vault.deployToLP(20_000 * ONE_USDC, committed);
-        uint256 teamInLp = committed - vault.juniorTokens(); // team tokens now backing the senior
+        S.v.deployToLP(20_000 * ONE_USDC, committed);
+        uint256 teamInLp = committed - S.v.juniorTokens(); // team tokens now backing the senior
+        assertGt(teamInLp, 0, "test did not actually deploy junior tokens into the LP");
 
-        // Crash the pool 50% — impermanent loss on the paired position.
-        module.setPrice(INIT_PRICE / 2);
+        // Crash the pool ~50% — impermanent loss on the paired position.
+        _dumpTeam(S, 600_000 * ONE_USDC);
 
-        // SENIOR is made whole FIRST: alice redeems her full par (idle Aave + LP unwind at PAR).
-        uint256 aliceShares = vault.seniorShares(alice);
-        vm.prank(alice);
-        uint256 seniorOut = vault.redeemSenior(aliceShares, 0);
-        assertApproxEqAbs(seniorOut, 100_000 * ONE_USDC, 5, "senior was not made whole at par");
+        // Owner unwinds the LP: the team leg is SOLD to make the senior whole (seniority). NAV is flat
+        // (M4: deployedFromSenior drops by the USDC recovered), so the senior never lost par.
+        uint256 navBefore = S.v.totalSeniorAssets();
+        uint256 deployedBefore = S.v.deployedFromSenior();
+        vm.prank(owner);
+        S.v.recoverFromLP(20_000 * ONE_USDC);
+        assertLt(S.v.deployedFromSenior(), deployedBefore, "LP not unwound");
+        assertApproxEqRel(S.v.totalSeniorAssets(), navBefore, 0.001e18, "senior NAV moved on unwind");
 
-        // JUNIOR eats it: the LP-committed team tokens are consumed backing the senior, so post-cliff
-        // the team recovers strictly fewer tokens than it committed (first-loss realized).
+        // JUNIOR eats it: post-cliff the team recovers strictly fewer tokens than it committed.
         vm.warp(vm.getBlockTimestamp() + LOCK_DUR + 1);
         uint256 teamBefore = team.balanceOf(teamAddr);
         vm.prank(teamAddr);
-        vault.redeemJunior();
+        S.v.redeemJunior();
         uint256 tokensBack = team.balanceOf(teamAddr) - teamBefore;
-
         assertLt(tokensBack, committed, "junior recovered its full commit (did not absorb loss)");
-        assertEq(tokensBack, committed - teamInLp, "junior residual != commit minus LP-consumed tokens");
-        assertGt(teamInLp, 0, "test did not actually deploy junior tokens into the LP");
     }
 
     // ── AUDIT M1: only the constructor-bound team may commit + activate (no front-run hijack) ──
     function test_commitTeam_onlyBoundTeam() public {
+        Stack memory s;
+        s.pm = new PoolManager(address(this));
+        (Currency c0, Currency c1) = address(usdc) < address(team)
+            ? (Currency.wrap(address(usdc)), Currency.wrap(address(team)))
+            : (Currency.wrap(address(team)), Currency.wrap(address(usdc)));
+        s.key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: SPACING, hooks: IHooks(address(0))});
         MockYieldAdapter a = new MockYieldAdapter(address(usdc));
-        MintwareTreasuryVault v = new MintwareTreasuryVault(address(usdc), address(team), address(a), owner, teamAddr);
+        MintwareTreasuryVault v =
+            new MintwareTreasuryVault(address(s.pm), s.key, address(usdc), address(a), owner, teamAddr);
 
-        // A stranger front-running commitTeam reverts.
         address stranger = makeAddr("stranger");
         team.mint(stranger, TEAM_COMMIT);
         vm.startPrank(stranger);
@@ -190,7 +259,6 @@ contract MintwareTreasuryVaultTest is Test {
         v.commitTeam(TEAM_COMMIT, 0, LOCK_DUR);
         vm.stopPrank();
 
-        // The bound team succeeds.
         team.mint(teamAddr, TEAM_COMMIT);
         vm.startPrank(teamAddr);
         team.approve(address(v), type(uint256).max);
@@ -200,241 +268,194 @@ contract MintwareTreasuryVaultTest is Test {
         assertEq(v.team(), teamAddr, "team is not the bound address");
     }
 
-    // ── AUDIT H3: while the senior is underwater (LP can't cover the deployed par and no senior has
-    //    redeemed to unwind it), redeemJunior HOLDS BACK the first-loss capital (ETH stake + junior USDC
-    //    buffer) to backstop the senior. The team cannot pull its first-loss out from under a stranded
-    //    senior. (Protected fees still flow; here none have accrued.)
+    // ── AUDIT H3: while the senior is underwater, redeemJunior HOLDS BACK the first-loss capital ──
     function test_redeemJunior_holds_firstLoss_while_senior_underwater() public {
         uint256 buffer = 5_000 * ONE_USDC;
-        (MintwareTreasuryVault v, MockLiquidityModule m,) = _newVault(INIT_PRICE, buffer);
-        address u = makeAddr("h3user");
-        usdc.mint(u, 100_000 * ONE_USDC);
-        vm.startPrank(u);
-        usdc.approve(address(v), type(uint256).max);
-        v.depositUSDC(100_000 * ONE_USDC, 0, u);
-        vm.stopPrank();
+        Stack memory s = _spawn(buffer, 200_000 * int256(ONE_USDC));
+        _deposit(s, makeAddr("h3user"), 100_000 * ONE_USDC);
 
-        // Deploy a slice, then crash the pool to ~0 so recoverableUSDC() << deployedFromSenior —
-        // senior underwater, and crucially NO senior redemption has unwound the LP yet.
         vm.prank(owner);
-        v.setIdleBufferTarget(5_000);
-        uint256 jt = v.juniorTokens();
+        s.v.setIdleBufferTarget(5_000);
+        uint256 jt = s.v.juniorTokens();
         vm.prank(owner);
-        v.deployToLP(50_000 * ONE_USDC, jt);
-        m.setPrice(1);
-        assertLt(m.recoverableUSDC(), v.deployedFromSenior(), "test did not put the senior underwater");
+        s.v.deployToLP(50_000 * ONE_USDC, jt);
+
+        // Crash HARD so recoverableUSDC() << deployedFromSenior — senior underwater, LP not yet unwound.
+        _dumpTeam(s, 5_000_000 * ONE_USDC);
+        assertLt(s.v.recoverableUSDC(), s.v.deployedFromSenior(), "test did not put the senior underwater");
 
         vm.warp(vm.getBlockTimestamp() + LOCK_DUR + 1);
 
-        uint256 bufBefore  = v.juniorUsdcBuffer();
-        uint256 tokBefore  = v.juniorTokens();
+        uint256 bufBefore  = s.v.juniorUsdcBuffer();
+        uint256 tokBefore  = s.v.juniorTokens();
         uint256 teamTokBefore = team.balanceOf(teamAddr);
         vm.prank(teamAddr);
-        v.redeemJunior();
+        s.v.redeemJunior();
 
-        assertEq(v.juniorUsdcBuffer(), bufBefore, "junior USDC buffer released while senior underwater");
-        assertEq(v.juniorTokens(), tokBefore, "junior ETH released while senior underwater");
+        assertEq(s.v.juniorUsdcBuffer(), bufBefore, "junior USDC buffer released while senior underwater");
+        assertEq(s.v.juniorTokens(), tokBefore, "junior ETH released while senior underwater");
         assertEq(team.balanceOf(teamAddr), teamTokBefore, "team pulled first-loss ETH while senior underwater");
     }
 
     // ── the senior is NEVER settled below par: burnForPayment reverts rather than underpay ─
-    //    when the junior is wiped (the tail the invariant run deliberately excludes from its band).
-    //    The constant-product mock makes this REAL: crashing the mark to ~0 rotates the LP position
-    //    almost entirely into the worthless team token, so `recoverableUSDC()` collapses far below the
-    //    deployed senior par. We additionally drain the Aave adapter so the senior claim cannot be
-    //    honored from any source; the settlement then reverts (never pays a partial amount below par).
-
     function test_burnForPayment_reverts_not_underpays_when_junior_wiped() public {
-        // Fresh vault so we can exhaust its yield sources in isolation.
-        (MintwareTreasuryVault v, MockLiquidityModule m, MockYieldAdapter a) = _newVault(INIT_PRICE);
+        Stack memory s = _spawn(0, 200_000 * int256(ONE_USDC));
+        _deposit(s, makeAddr("payUser"), 100_000 * ONE_USDC);
         address u = makeAddr("payUser");
-        usdc.mint(u, 100_000 * ONE_USDC);
-        vm.prank(u);
-        usdc.approve(address(v), type(uint256).max);
-        vm.prank(u);
-        v.depositUSDC(100_000 * ONE_USDC, 0, u);
 
-        // Allow a large LP slice, deploy it, then crash the pool to ~0 (junior wiped).
         vm.prank(owner);
-        v.setIdleBufferTarget(5_000); // 50% floor → deploy up to 50%
-        uint256 jt = v.juniorTokens();
+        s.v.setIdleBufferTarget(5_000);
+        uint256 jt = s.v.juniorTokens();
         vm.prank(owner);
-        v.deployToLP(50_000 * ONE_USDC, jt);
-        m.setPrice(1); // pool value ~0
+        s.v.deployToLP(50_000 * ONE_USDC, jt);
+        _dumpTeam(s, 8_000_000 * ONE_USDC); // crash the pool to ~0 (junior wiped)
 
-        // Exhaust BOTH yield sources: drain the Aave adapter AND the LP module of their USDC, so the
-        // senior claim (still backed by `deployedFromSenior` par) cannot be honored on-chain. (Reads
-        // are lifted out of the transfer args — an arg-call would consume the vm.prank.)
-        uint256 adapterBal = usdc.balanceOf(address(a));
-        vm.prank(address(a));
+        // Drain the Aave adapter so the senior claim cannot be honored from any source.
+        uint256 adapterBal = usdc.balanceOf(address(s.a));
+        vm.prank(address(s.a));
         usdc.transfer(address(0xdead), adapterBal);
-        uint256 moduleBal = usdc.balanceOf(address(m));
-        vm.prank(address(m));
-        usdc.transfer(address(0xdead), moduleBal);
 
-        uint256 shares = v.seniorShares(u);
+        uint256 shares = s.v.seniorShares(u);
         uint256 rcvBefore = usdc.balanceOf(receiver);
-        // The Gateway settlement MUST revert — the senior is never paid a partial amount below par.
         vm.prank(gateway);
         vm.expectRevert();
-        v.burnForPayment(u, shares, receiver);
+        s.v.burnForPayment(u, shares, receiver);
         assertEq(usdc.balanceOf(receiver), rcvBefore, "receiver was paid despite exhausted backing");
     }
 
     // ── junior USDC buffer (Case B): stable first-loss coverage ─────────────────────
 
-    /// The junior USDC buffer is EXCLUDED from the senior claim — committing it never inflates the
-    /// senior NAV, and a senior can never redeem it.
     function test_junior_usdc_excluded_from_senior_nav() public {
-        (MintwareTreasuryVault v,,) = _newVault(INIT_PRICE, 40_000 * ONE_USDC);
+        Stack memory s = _spawn(40_000 * ONE_USDC, 0);
         address u = makeAddr("junU1");
-        usdc.mint(u, 100_000 * ONE_USDC);
-        vm.startPrank(u);
-        usdc.approve(address(v), type(uint256).max);
-        uint256 sh = v.depositUSDC(100_000 * ONE_USDC, 0, u);
-        vm.stopPrank();
+        uint256 sh = _deposit(s, u, 100_000 * ONE_USDC);
 
-        assertEq(v.juniorUsdcBuffer(), 40_000 * ONE_USDC, "buffer not held");
-        assertEq(v.totalSeniorAssets(), 100_000 * ONE_USDC, "buffer leaked into senior NAV");
+        assertEq(s.v.juniorUsdcBuffer(), 40_000 * ONE_USDC, "buffer not held");
+        assertEq(s.v.totalSeniorAssets(), 100_000 * ONE_USDC, "buffer leaked into senior NAV");
 
         vm.prank(u);
-        uint256 out = v.redeemSenior(sh, 0);
+        uint256 out = s.v.redeemSenior(sh, 0);
         assertApproxEqAbs(out, 100_000 * ONE_USDC, 2, "senior redeemed more/less than par");
-        assertEq(v.juniorUsdcBuffer(), 40_000 * ONE_USDC, "senior touched the junior buffer");
+        assertEq(s.v.juniorUsdcBuffer(), 40_000 * ONE_USDC, "senior touched the junior buffer");
     }
 
-    /// The buffer ABSORBS a senior shortfall: after IL leaves Aave + LP short, the stable buffer tops
-    /// up so the senior is paid full par, and the buffer decrements by the loss it covered.
+    /// The buffer ABSORBS a senior shortfall: after IL leaves Aave + LP short, the stable buffer tops up.
     function test_junior_usdc_absorbs_senior_shortfall() public {
-        (MintwareTreasuryVault v, MockLiquidityModule m,) = _newVault(INIT_PRICE, 30_000 * ONE_USDC);
+        Stack memory s = _spawn(30_000 * ONE_USDC, 2_000_000 * int256(ONE_USDC));
         address u = makeAddr("junU2");
-        usdc.mint(u, 100_000 * ONE_USDC);
-        vm.startPrank(u);
-        usdc.approve(address(v), type(uint256).max);
-        v.depositUSDC(100_000 * ONE_USDC, 0, u);
-        vm.stopPrank();
+        _deposit(s, u, 100_000 * ONE_USDC);
 
-        // Deploy a 50% LP slice, then crash the mark to 10% — deep enough that the LP's recoverable
-        // value falls BELOW the deployed par (a ~100k position marks to ~2·sqrt(0.1)·50k ≈ 31.6k),
-        // so Aave + LP-unwind genuinely can't make the senior whole and the buffer must cover the gap.
         vm.prank(owner);
-        v.setIdleBufferTarget(5_000);
-        uint256 jt = v.juniorTokens();
+        s.v.setIdleBufferTarget(5_000);
+        uint256 jt = s.v.juniorTokens();
         vm.prank(owner);
-        v.deployToLP(50_000 * ONE_USDC, jt);
-        m.setPrice(INIT_PRICE / 10);
+        s.v.deployToLP(50_000 * ONE_USDC, jt);
+        // Crash to ~10% mark: the LP's recoverable value (~$31.6k) falls BELOW the $50k deployed par, so
+        // Aave ($50k) + the IL-reduced LP unwind fall short of full par and the buffer must cover the gap.
+        _crashTeamTo(s, 316_227_766); // sqrt(0.10) × 1e9
 
-        uint256 bufBefore = v.juniorUsdcBuffer();
-        uint256 shares = v.seniorShares(u);
+        uint256 bufBefore = s.v.juniorUsdcBuffer();
+        uint256 shares = s.v.seniorShares(u);
 
-        // Aave (50k) + IL-reduced LP unwind fall short of full par; the buffer covers the gap.
         vm.prank(u);
-        uint256 out = v.redeemSenior(shares, 0);
+        uint256 out = s.v.redeemSenior(shares, 0);
 
         assertApproxEqAbs(out, 100_000 * ONE_USDC, 5, "senior not made whole at par");
-        assertLt(v.juniorUsdcBuffer(), bufBefore, "buffer did not absorb the shortfall");
+        assertLt(s.v.juniorUsdcBuffer(), bufBefore, "buffer did not absorb the shortfall");
         assertLe(
-            v.deployedFromSenior(),
-            m.recoverableUSDC() + v.juniorUsdcBuffer() + 1_000,
+            s.v.deployedFromSenior(),
+            s.v.recoverableUSDC() + s.v.juniorUsdcBuffer() + 1_000,
             "solvency invariant broke after the draw"
         );
     }
 
     /// Past the WHOLE junior stack (LP + USDC buffer) the senior is STILL never underpaid — it reverts.
     function test_senior_reverts_when_buffer_also_exhausted() public {
-        (MintwareTreasuryVault v, MockLiquidityModule m, MockYieldAdapter a) =
-            _newVault(INIT_PRICE, 1_000 * ONE_USDC);
+        Stack memory s = _spawn(1_000 * ONE_USDC, 200_000 * int256(ONE_USDC));
         address u = makeAddr("junU3");
-        usdc.mint(u, 100_000 * ONE_USDC);
-        vm.startPrank(u);
-        usdc.approve(address(v), type(uint256).max);
-        v.depositUSDC(100_000 * ONE_USDC, 0, u);
-        vm.stopPrank();
+        _deposit(s, u, 100_000 * ONE_USDC);
 
         vm.prank(owner);
-        v.setIdleBufferTarget(5_000);
-        uint256 jt = v.juniorTokens();
+        s.v.setIdleBufferTarget(5_000);
+        uint256 jt = s.v.juniorTokens();
         vm.prank(owner);
-        v.deployToLP(50_000 * ONE_USDC, jt);
-        m.setPrice(1); // wipe the LP
+        s.v.deployToLP(50_000 * ONE_USDC, jt);
+        _dumpTeam(s, 8_000_000 * ONE_USDC); // wipe the LP
 
         // Drain Aave so nothing but the tiny $1k buffer is left — still not enough for full par.
-        uint256 adapterBal = usdc.balanceOf(address(a));
-        vm.prank(address(a));
+        uint256 adapterBal = usdc.balanceOf(address(s.a));
+        vm.prank(address(s.a));
         usdc.transfer(address(0xdead), adapterBal);
 
-        uint256 shares = v.seniorShares(u);
+        uint256 shares = s.v.seniorShares(u);
         uint256 rcvBefore = usdc.balanceOf(receiver);
         vm.prank(gateway);
         vm.expectRevert();
-        v.burnForPayment(u, shares, receiver);
+        s.v.burnForPayment(u, shares, receiver);
         assertEq(usdc.balanceOf(receiver), rcvBefore, "receiver paid despite exhausted junior stack");
-        assertEq(v.juniorUsdcBuffer(), 1_000 * ONE_USDC, "buffer not restored on revert");
+        assertEq(s.v.juniorUsdcBuffer(), 1_000 * ONE_USDC, "buffer not restored on revert");
     }
 
     /// Unused buffer is returned to the team at unlock (first-loss payoff: team keeps what it didn't lose).
     function test_junior_usdc_returned_at_unlock_if_unused() public {
-        (MintwareTreasuryVault v,,) = _newVault(INIT_PRICE, 25_000 * ONE_USDC);
+        Stack memory s = _spawn(25_000 * ONE_USDC, 0);
         vm.warp(vm.getBlockTimestamp() + LOCK_DUR + 1);
         uint256 teamUsdcBefore = usdc.balanceOf(teamAddr);
         vm.prank(teamAddr);
-        v.redeemJunior();
+        s.v.redeemJunior();
         assertEq(usdc.balanceOf(teamAddr) - teamUsdcBefore, 25_000 * ONE_USDC, "unused buffer not returned");
-        assertEq(v.juniorUsdcBuffer(), 0, "buffer not cleared");
+        assertEq(s.v.juniorUsdcBuffer(), 0, "buffer not cleared");
     }
 
     // ── access control ─────────────────────────────────────────────────────────────
 
     function test_only_gateway_burns() public {
         vm.expectRevert(MintwareTreasuryVault.OnlyGateway.selector);
-        vault.burnForPayment(alice, 1, receiver); // caller is the test, not the gateway
+        S.v.burnForPayment(alice, 1, receiver); // caller is the test, not the gateway
     }
 
     function test_only_team_redeems_junior() public {
-        vm.warp(vm.getBlockTimestamp() + LOCK_DUR + 1); // even post-cliff, only the team may redeem
+        vm.warp(vm.getBlockTimestamp() + LOCK_DUR + 1);
         vm.expectRevert(MintwareTreasuryVault.OnlyTeam.selector);
         vm.prank(alice);
-        vault.redeemJunior();
+        S.v.redeemJunior();
     }
 
     function test_lock_cliff_enforced() public {
-        // before the cliff → StillLocked.
         vm.prank(teamAddr);
         vm.expectRevert(MintwareTreasuryVault.StillLocked.selector);
-        vault.redeemJunior();
+        S.v.redeemJunior();
 
-        // one second before expiry → still StillLocked.
-        vm.warp(vault.lockExpiry() - 1);
+        vm.warp(S.v.lockExpiry() - 1);
         vm.prank(teamAddr);
         vm.expectRevert(MintwareTreasuryVault.StillLocked.selector);
-        vault.redeemJunior();
+        S.v.redeemJunior();
 
-        // at exactly expiry the `< lockExpiry` guard clears → succeeds.
-        vm.warp(vault.lockExpiry());
+        vm.warp(S.v.lockExpiry());
         vm.prank(teamAddr);
-        vault.redeemJunior();
+        S.v.redeemJunior();
     }
 
     // ── fee routing: 100% to senior during the lock ────────────────────────────────
 
     function test_fees_100pct_to_senior_during_lock() public {
-        uint256 jt = vault.juniorTokens();
+        uint256 jt = S.v.juniorTokens();
         vm.prank(owner);
-        vault.deployToLP(20_000 * ONE_USDC, jt);
+        S.v.deployToLP(20_000 * ONE_USDC, jt);
 
-        uint256 fee = 1_000 * ONE_USDC;
-        module.addFees(fee);
+        _genFees(S);
 
-        uint256 seniorBefore = vault.totalSeniorAssets();
-        assertTrue(vault.teamFeesRedirected(), "expected fees redirected while locked");
+        uint256 seniorBefore = S.v.totalSeniorAssets();
+        assertTrue(S.v.teamFeesRedirected(), "expected fees redirected while locked");
 
         vm.prank(owner);
-        vault.accrueFees();
+        uint256 collected = S.v.accrueFees();
+        assertGt(collected, 0, "no fees collected");
 
-        assertEq(vault.reservedJuniorUSDC(), 0, "junior reserved cash during lock (should be 0)");
+        assertEq(S.v.reservedJuniorUSDC(), 0, "junior reserved cash during lock (should be 0)");
         assertEq(
-            vault.totalSeniorAssets() - seniorBefore,
-            fee,
+            S.v.totalSeniorAssets() - seniorBefore,
+            collected,
             "100% of fees did not lift the senior NAV during lock"
         );
     }
@@ -442,29 +463,112 @@ contract MintwareTreasuryVaultTest is Test {
     // ── fee routing: 60/30/10 once the junior tranche is released ───────────────────
 
     function test_fees_split_60_30_10_post_lock() public {
-        uint256 jt = vault.juniorTokens();
+        uint256 jt = S.v.juniorTokens();
         vm.prank(owner);
-        vault.deployToLP(20_000 * ONE_USDC, jt);
+        S.v.deployToLP(20_000 * ONE_USDC, jt);
 
         // Release the junior post-cliff → flips `teamFeesRedirected` false, activating the split.
-        vm.warp(vault.lockExpiry() + 1);
+        vm.warp(S.v.lockExpiry() + 1);
         vm.prank(teamAddr);
-        vault.redeemJunior();
-        assertFalse(vault.teamFeesRedirected(), "fees still redirected after junior release");
+        S.v.redeemJunior();
+        assertFalse(S.v.teamFeesRedirected(), "fees still redirected after junior release");
 
-        uint256 fee = 1_000 * ONE_USDC;
-        module.addFees(fee);
+        _genFees(S);
 
-        uint256 seniorBefore  = vault.totalSeniorAssets();
+        uint256 seniorBefore  = S.v.totalSeniorAssets();
         uint256 protoBefore   = usdc.balanceOf(protocol);
-        uint256 reservedBefore = vault.reservedJuniorUSDC();
+        uint256 reservedBefore = S.v.reservedJuniorUSDC();
 
         vm.prank(owner);
-        vault.accrueFees();
+        uint256 collected = S.v.accrueFees();
+        assertGt(collected, 0, "no fees collected");
 
-        assertEq(vault.reservedJuniorUSDC() - reservedBefore, 300 * ONE_USDC, "team cut != 30%");
-        assertEq(usdc.balanceOf(protocol) - protoBefore, 100 * ONE_USDC, "protocol cut != 10%");
-        assertEq(vault.totalSeniorAssets() - seniorBefore, 600 * ONE_USDC, "community cut != 60%");
+        uint256 expTeam  = (collected * 3000) / 10000;
+        uint256 expProto = (collected * 1000) / 10000;
+        assertEq(S.v.reservedJuniorUSDC() - reservedBefore, expTeam, "team cut != 30%");
+        assertEq(usdc.balanceOf(protocol) - protoBefore, expProto, "protocol cut != 10%");
+        assertEq(S.v.totalSeniorAssets() - seniorBefore, collected - expTeam - expProto, "community cut != 60%");
+    }
+
+    // ── am-AMM rent routing (Phase 3): rent is the LP-fee replacement → same tranche split as fees ──
+
+    /// During the lock, 100% of pushed rent lifts the price-free senior NAV (no junior earmark).
+    function test_fundRent_100pct_senior_during_lock() public {
+        vm.prank(owner);
+        S.v.setRentFunder(address(this));
+        assertTrue(S.v.teamFeesRedirected(), "expected lock active");
+
+        uint256 seniorBefore = S.v.totalSeniorAssets();
+        uint256 rent = 100_000 * ONE_USDC;
+        usdc.mint(address(this), rent);
+        usdc.approve(address(S.v), rent);
+        S.v.fundRent(address(usdc), rent);
+
+        assertEq(S.v.reservedJuniorUSDC(), 0, "junior reserved during lock (should be 0)");
+        assertEq(S.v.totalSeniorAssets() - seniorBefore, rent, "100% of rent did not lift senior NAV during lock");
+    }
+
+    /// Post-cliff, rent splits 60/30/10 senior/junior/protocol — identical to `accrueFees`.
+    function test_fundRent_split_60_30_10_post_lock() public {
+        vm.warp(S.v.lockExpiry() + 1);
+        vm.prank(teamAddr);
+        S.v.redeemJunior();
+        assertFalse(S.v.teamFeesRedirected(), "fees still redirected after junior release");
+
+        vm.prank(owner);
+        S.v.setRentFunder(address(this));
+
+        uint256 seniorBefore   = S.v.totalSeniorAssets();
+        uint256 protoBefore    = usdc.balanceOf(protocol);
+        uint256 reservedBefore = S.v.reservedJuniorUSDC();
+
+        uint256 rent = 100_000 * ONE_USDC;
+        usdc.mint(address(this), rent);
+        usdc.approve(address(S.v), rent);
+        S.v.fundRent(address(usdc), rent);
+
+        uint256 expTeam  = (rent * 3000) / 10000;
+        uint256 expProto = (rent * 1000) / 10000;
+        assertEq(S.v.reservedJuniorUSDC() - reservedBefore, expTeam, "team cut != 30%");
+        // Protocol cut is EARMARKED off the swap hot path (not transferred during fundRent).
+        assertEq(S.v.reservedProtocolUSDC(), expProto, "protocol cut not earmarked");
+        assertEq(usdc.balanceOf(protocol) - protoBefore, 0, "protocol paid on the hot path (should be earmarked)");
+        assertEq(S.v.totalSeniorAssets() - seniorBefore, rent - expTeam - expProto, "community cut != 60%");
+        // flushProtocol pays it out off-path.
+        S.v.flushProtocol();
+        assertEq(usdc.balanceOf(protocol) - protoBefore, expProto, "protocol cut != 10% after flush");
+        assertEq(S.v.reservedProtocolUSDC(), 0, "protocol earmark not cleared after flush");
+    }
+
+    /// fundRent is funder-gated + USDC-only; setRentFunder is owner-gated.
+    function test_fundRent_access_and_token_guards() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(); // Ownable
+        S.v.setRentFunder(address(this));
+
+        vm.prank(owner);
+        S.v.setRentFunder(address(this));
+
+        vm.prank(makeAddr("notFunder"));
+        vm.expectRevert(MintwareTreasuryVault.OnlyRentFunder.selector);
+        S.v.fundRent(address(usdc), 1);
+
+        usdc.mint(address(this), 1_000 * ONE_USDC);
+        usdc.approve(address(S.v), type(uint256).max);
+        vm.expectRevert(MintwareTreasuryVault.RentTokenMismatch.selector);
+        S.v.fundRent(address(team), 1_000 * ONE_USDC);
+    }
+
+    /// @dev Generate swap fees on the vault's position (both directions so both legs accrue fees).
+    function _genFees(Stack memory s) internal {
+        usdc.mint(trader, 2_000_000 * ONE_USDC);
+        team.mint(trader, 2_000_000 * ONE_USDC);
+        vm.startPrank(trader);
+        usdc.approve(address(s.sr), type(uint256).max);
+        team.approve(address(s.sr), type(uint256).max);
+        s.sr.swap(s.key, !s.teamIs0, 50_000 * ONE_USDC); // buy team (usdc→team)
+        s.sr.swap(s.key, s.teamIs0, 48_000 * ONE_USDC);  // sell team back (team→usdc)
+        vm.stopPrank();
     }
 
     // ── governance bounds on the idle-buffer target ────────────────────────────────
@@ -473,17 +577,17 @@ contract MintwareTreasuryVaultTest is Test {
         vm.startPrank(owner);
 
         vm.expectRevert(MintwareTreasuryVault.BadParam.selector);
-        vault.setIdleBufferTarget(4_999); // < MIN 5000
+        S.v.setIdleBufferTarget(4_999); // < MIN 5000
 
         vm.expectRevert(MintwareTreasuryVault.BadParam.selector);
-        vault.setIdleBufferTarget(9_501); // > MAX 9500
+        S.v.setIdleBufferTarget(9_501); // > MAX 9500
 
-        vault.setIdleBufferTarget(5_000); // MIN inclusive
-        assertEq(vault.idleBufferTargetBps(), 5_000);
-        vault.setIdleBufferTarget(9_500); // MAX inclusive
-        assertEq(vault.idleBufferTargetBps(), 9_500);
-        vault.setIdleBufferTarget(7_000);
-        assertEq(vault.idleBufferTargetBps(), 7_000);
+        S.v.setIdleBufferTarget(5_000);
+        assertEq(S.v.idleBufferTargetBps(), 5_000);
+        S.v.setIdleBufferTarget(9_500);
+        assertEq(S.v.idleBufferTargetBps(), 9_500);
+        S.v.setIdleBufferTarget(7_000);
+        assertEq(S.v.idleBufferTargetBps(), 7_000);
 
         vm.stopPrank();
     }

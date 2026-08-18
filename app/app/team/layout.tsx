@@ -9,20 +9,31 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
 import { ScopeSwitcher } from '@/components/web2/ScopeSwitcher'
+import { TeamGuard } from '@/components/web2/TeamGuard'
+import { useTeamSession } from '@/components/web2/useTeamSession'
+import { can, type Permission } from '@/lib/auth/rbac'
 
-const NAV = [
+// `perm` gates a section: it's shown only when the caller's role grants it (once the hard gate is ON).
+// With the gate OFF (showcase), everything shows. Overview/Vaults/Swap/Cards need only treasury:view (any
+// role); Policy/Team/Developers are the privileged sections.
+const NAV: { href: string; label: string; perm?: Permission }[] = [
   { href: '/app/team',            label: 'Overview' },
   { href: '/app/team/vaults',     label: 'Vaults' },
   { href: '/app/team/swap',       label: 'Swap' },
   { href: '/app/team/cards',      label: 'Cards & Spend' },
-  { href: '/app/team/policy',     label: 'Policy & Approvals' },
-  { href: '/app/team/team',       label: 'Team & Roles' },
-  { href: '/app/team/developers', label: 'Developers' },
+  { href: '/app/team/policy',     label: 'Policy & Approvals', perm: 'spend:approve' },
+  { href: '/app/team/team',       label: 'Team & Roles',       perm: 'roles:manage' },
+  { href: '/app/team/developers', label: 'Developers',         perm: 'developers:manage' },
 ]
 
 export default function TeamLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const isActive = (href: string) => (href === '/app/team' ? pathname === href : pathname.startsWith(href))
+  const { session } = useTeamSession()
+  // Only hide sections when enforcement is actually ON; otherwise keep the full showcase.
+  const enforced = session?.enforced ?? false
+  const role = session?.role ?? null
+  const nav = NAV.filter((n) => !n.perm || !enforced || can(role, n.perm))
 
   return (
     <div className="min-h-screen flex bg-ground-cool text-ink font-atx-display overflow-x-clip">
@@ -33,7 +44,7 @@ export default function TeamLayout({ children }: { children: React.ReactNode }) 
           <ScopeSwitcher />
         </div>
         <nav className="flex-1 overflow-y-auto px-2.5 py-3 flex flex-col gap-0.5">
-          {NAV.map((n) => {
+          {nav.map((n) => {
             const active = isActive(n.href)
             return (
               <Link
@@ -64,7 +75,7 @@ export default function TeamLayout({ children }: { children: React.ReactNode }) 
             <ScopeSwitcher />
           </div>
           <nav className="flex gap-1 px-3 pb-2 overflow-x-auto">
-            {NAV.map((n) => {
+            {nav.map((n) => {
               const active = isActive(n.href)
               return (
                 <Link key={n.href} href={n.href} className={`shrink-0 rounded-full px-3 py-1.5 text-[12.5px] font-medium whitespace-nowrap transition-colors ${active ? 'bg-peri text-white' : 'text-ink-mid bg-ground-cool'}`}>
@@ -76,7 +87,7 @@ export default function TeamLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         <div className="max-w-[1120px] mx-auto px-6 py-8 max-[800px]:px-4 max-[800px]:py-6">
-          {children}
+          <TeamGuard>{children}</TeamGuard>
         </div>
       </main>
     </div>

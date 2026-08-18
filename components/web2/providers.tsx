@@ -10,6 +10,8 @@ import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { RefCodePrompt } from '@/components/rewards/referral/RefCodePrompt'
 import { LaunchModalProvider } from './LaunchModal'
 import { AppModeProvider } from './AppMode'
+import { activeRole, type MintwareOrgMeta } from '@/lib/auth/rbac'
+import { MW_ROLE_COOKIE } from '@/lib/auth/cookies'
 
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim() ?? ''
 const PRIVY_ENABLED = PRIVY_APP_ID.length > 0
@@ -108,12 +110,26 @@ function PrivySessionBridge({ children }: { children: ReactNode }) {
   const {
     ready,
     authenticated,
+    user,
     login,
     connectWallet,
     connectOrCreateWallet,
     linkWallet,
     logout,
   } = usePrivy()
+
+  // Phase-2 hard gate: mirror the user's active-org role (from Privy custom metadata) into the `mw_role`
+  // cookie so the edge middleware (lib/auth/gate.ts) can do role-based routing WITHOUT a network call. This
+  // is a COARSE routing hint only — the server (/api/team/session, verifyPrivySession) re-derives the role
+  // authoritatively, so a forged cookie can't grant access. Harmless when the gate is off. Short-lived (1h).
+  useEffect(() => {
+    if (typeof document === 'undefined' || !ready) return
+    let role: string | null = null
+    if (authenticated && user) role = activeRole((user.customMetadata ?? {}) as MintwareOrgMeta)
+    document.cookie = role
+      ? `${MW_ROLE_COOKIE}=${role};path=/;max-age=3600;samesite=lax`
+      : `${MW_ROLE_COOKIE}=;path=/;max-age=0;samesite=lax`
+  }, [ready, authenticated, user])
   const { wallets, ready: walletsReady } = useWallets()
   const { createWallet } = useCreateWallet()
 

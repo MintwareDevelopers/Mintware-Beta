@@ -11,6 +11,13 @@
 //! The Rust `RedisStore` that `EVALSHA`s these (via the `redis` crate) is a thin wrapper added when a
 //! Redis instance is available; the RACE-SAFETY LOGIC below is proven here with an embedded Lua
 //! interpreter + a mock Redis (see tests), which is the part that actually needs proving.
+//!
+//! PARITY TODO (Pre-audit #6): the LIVE `MemStore` path enforces two extra spend-safety gates that
+//! this dormant Redis path does NOT yet mirror — the always-liquid hot-buffer reserve floor
+//! (`reserve_floor_breached`) and the system-wide circuit-breaker (`circuit_breaker_open`), both in
+//! `portfolio::PortfolioGuard`. When this Redis increment-3 path is switched on, thread the same two
+//! knobs through ARGV (breaker flag + reserve amount) and add the equivalent early-halt +
+//! `idle_buffer - reserve` clamp here, so the two backends decide identically.
 
 /// Atomic reserve. ARGV: [hold_id, user, amount, equity_usd, daily_cap, idle_buffer, now, ttl].
 /// Returns `{amount, status}` where status ∈ ok | duplicate | zero_amount | insufficient_equity |

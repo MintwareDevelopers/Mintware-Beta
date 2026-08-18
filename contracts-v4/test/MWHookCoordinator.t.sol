@@ -13,53 +13,51 @@ import {BalanceDelta}         from "@uniswap/v4-core/src/types/BalanceDelta.sol"
 import {StateLibrary}         from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
-import {FeeVault}                from "../src/FeeVault.sol";
 import {HookMiner}               from "../src/lib/HookMiner.sol";
-import {MWGuardianPausable}      from "../src/lib/MWGuardianPausable.sol";
 import {MWHookCoordinator}       from "../src/hooks/MWHookCoordinator.sol";
-import {MintwareDeFiVault4626}   from "../src/vaults/MintwareDeFiVault4626.sol";
-import {VaultSurface, LockTier, VaultConfig} from "../src/vaults/VaultTypes.sol";
+import {MintwareDeFiPairVault}   from "../src/vaults/MintwareDeFiPairVault.sol";
+import {PoolProfile, LockTier}   from "../src/vaults/VaultTypes.sol";
 
 import {MockERC20}      from "./mocks/MockERC20.sol";
 import {TestSwapRouter} from "./helpers/TestSwapRouter.sol";
 
-/// @notice Integration tests for MWHookCoordinator against a real V4 PoolManager:
-///         vault-gated LP + the MEV sandwich/cooldown guard blocking a real backrun swap.
+/// @notice Integration tests for MWHookCoordinator against a real V4 PoolManager, using the
+///         go-forward dual-sided `MintwareDeFiPairVault` as the vault behind the (vault-agnostic)
+///         coordinator: vault-gated LP + the MEV sandwich/cooldown guard blocking a real backrun
+///         swap. Migrated off the deprecated single-sided `MintwareDeFiVault4626` (Phase 0).
 contract MWHookCoordinatorTest is Test {
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
 
-    address internal deployer = address(this);
-    address internal alice    = makeAddr("alice");
+    address internal deployer = address(this); // owner + provider
+    address internal alice    = makeAddr("alice");  // LP
+    address internal trader   = makeAddr("trader"); // swapper
     address internal treasury = makeAddr("treasury");
-    address internal oracle   = makeAddr("oracle");
-    address internal dist     = makeAddr("distributor");
 
     PoolManager    internal pm;
     TestSwapRouter internal swapRouter;
-    FeeVault       internal feeVault;
     MWHookCoordinator internal coord;
-    MintwareDeFiVault4626 internal vault;
+    MintwareDeFiPairVault internal vault;
 
-    MockERC20 internal usdc;
-    MockERC20 internal proj;
-    bool      internal sellProjZeroForOne; // selling proj is zeroForOne when proj == currency0
+    MockERC20 internal t0;
+    MockERC20 internal t1;
 
     PoolKey internal poolKey;
     PoolId  internal poolId;
 
-    uint160 internal constant INIT_SQRT_PRICE = 79228162514264337593543950336;
-    bytes32 internal constant VAULT_ID = keccak256("coord-vault");
+    uint160 internal constant INIT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
 
     function setUp() public {
         pm         = new PoolManager(deployer);
         swapRouter = new TestSwapRouter(IPoolManager(address(pm)));
 
-        usdc = new MockERC20("USD Coin", "USDC", 6);
-        proj = new MockERC20("Project Token", "PROJ", 6);
-        sellProjZeroForOne = address(proj) < address(usdc);
-
-        feeVault = new FeeVault(address(usdc), dist, oracle, treasury);
+        MockERC20 tokenA = new MockERC20("USD Coin", "USDC", 18);
+        MockERC20 tokenB = new MockERC20("Project Token", "PROJ", 18);
+        (Currency c0, Currency c1) = address(tokenA) < address(tokenB)
+            ? (Currency.wrap(address(tokenA)), Currency.wrap(address(tokenB)))
+            : (Currency.wrap(address(tokenB)), Currency.wrap(address(tokenA)));
+        t0 = MockERC20(Currency.unwrap(c0));
+        t1 = MockERC20(Currency.unwrap(c1));
 
         // Mine + deploy the coordinator (vault wired after, like the socialVault pattern).
         bytes memory args = abi.encode(IPoolManager(address(pm)), address(0), deployer);
@@ -69,43 +67,23 @@ contract MWHookCoordinatorTest is Test {
         coord = new MWHookCoordinator{salt: salt}(IPoolManager(address(pm)), address(0), deployer);
         require(address(coord) == expected, "coord addr mismatch");
 
-        VaultConfig memory cfg = VaultConfig({
-            surface:             VaultSurface.DeFi,
-            provider:            deployer,
-            underlyingToken:     address(usdc),
-            treasury:            treasury,
-            name:                "MW DeFi Vault Share",
-            symbol:              "mwDEFI",
-            minDeposit:          0,
-            entryFeeBps:         0,
-            exitFeeBps:          0,
-            enableMEVProtection: true,
-            enableIdleCapital:   false,
-            idleTargetRatio:     0
-        });
-        vault = new MintwareDeFiVault4626(cfg, address(pm), address(feeVault));
-        coord.setVault(address(vault));
-        feeVault.setSocialVault(address(vault)); // authorize vault to notify trading-fee receipts
-
-        (Currency c0, Currency c1) = address(usdc) < address(proj)
-            ? (Currency.wrap(address(usdc)), Currency.wrap(address(proj)))
-            : (Currency.wrap(address(proj)), Currency.wrap(address(usdc)));
         poolKey = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: 60, hooks: IHooks(address(coord))});
         poolId  = poolKey.toId();
 
-        proj.mint(deployer, 100_000e6);
-        usdc.mint(alice, 200_000e6);
-        proj.mint(alice, 200_000e6);
+        vault = new MintwareDeFiPairVault(address(pm), poolKey, PoolProfile.EMERGING, treasury, deployer, deployer);
+        coord.setVault(address(vault));
+        vault.setHook(address(coord));
+        vault.initializePool(INIT_SQRT_PRICE);
 
-        // Seed + open a practical LP range, then deposit so the pool has liquidity.
-        proj.approve(address(vault), 100_000e6);
-        vault.seedTeamTokens(VAULT_ID, address(proj), 100_000e6, poolKey, INIT_SQRT_PRICE);
-        vault.rebalance(-60000, 60000);
-
+        // LP seeds balanced dual-sided liquidity so the pool trades.
+        t0.mint(alice, 1e30); t1.mint(alice, 1e30);
         vm.startPrank(alice);
-        usdc.approve(address(vault), 50_000e6);
-        vault.depositWithLock(50_000e6, alice, LockTier.Flex);
+        t0.approve(address(vault), type(uint256).max);
+        t1.approve(address(vault), type(uint256).max);
+        vault.deposit(2_000_000e18, 2_000_000e18, 0, LockTier.Flex);
         vm.stopPrank();
+
+        t0.mint(trader, 1e30); t1.mint(trader, 1e30);
 
         // Generic swap tests: guard ON with a WIDE band (never trips on normal swaps) so the
         // oracle tracks; dynamic fee OFF (pool is static-fee, so the override would be inert).
@@ -116,12 +94,8 @@ contract MWHookCoordinatorTest is Test {
     }
 
     function _swap(bool zeroForOne, uint256 amtIn) internal {
-        vm.startPrank(alice, alice);
-        if (zeroForOne) {
-            MockERC20(Currency.unwrap(poolKey.currency0)).approve(address(swapRouter), amtIn);
-        } else {
-            MockERC20(Currency.unwrap(poolKey.currency1)).approve(address(swapRouter), amtIn);
-        }
+        vm.startPrank(trader, trader);
+        (zeroForOne ? t0 : t1).approve(address(swapRouter), amtIn);
         swapRouter.swap(poolKey, zeroForOne, amtIn);
         vm.stopPrank();
     }
@@ -135,7 +109,60 @@ contract MWHookCoordinatorTest is Test {
     }
 
     function test_swap_succeeds() public {
-        _swap(sellProjZeroForOne, 500e6);
+        _swap(true, 500e18);
+    }
+
+    // ── Diamond-LVR: directional surcharge ───────────────────────────────────
+
+    /// @notice The lever surcharges ONLY the gap-closing (arb) swap direction — the trade that realizes
+    ///         LVR against LPs — and leaves benign, uninformed flow at the symmetric fee. Both compared
+    ///         swaps start from the identical pre-swap tick (snapshot/revert), so only the direction differs.
+    function test_lvr_surcharge_is_directional() public {
+        // dynamic fee ON (modest volatility slope), guard OFF (no breaker), rate-limit OFF.
+        coord.configurePool(poolId, 3000, 100000, 5, 0, true, false, 60, 0, 10);
+
+        // Seed the oracle, then push spot far BELOW it within one block (oracle truncates/lags).
+        _swap(true, 1_000e18);
+        vm.roll(block.number + 1);
+        _swap(true, 300_000e18);
+
+        (, int24 curTick,,) = IPoolManager(address(pm)).getSlot0(poolId);
+        (int24 oTick,) = coord.oracleTick(poolId);
+        assertLt(curTick, oTick, "spot pushed below oracle");
+        // spot < oracle ⇒ ARB (gap-closing) = buy up = !zeroForOne; BENIGN = sell down = zeroForOne.
+
+        // (1) Lever OFF ⇒ both directions price identically.
+        uint256 s0 = vm.snapshotState();
+        _swap(true, 1_000e18);
+        uint24 offBenign = coord.lastFee(poolId);
+        vm.revertToState(s0);
+        _swap(false, 1_000e18);
+        uint24 offArb = coord.lastFee(poolId);
+        assertEq(offArb, offBenign, "lever off: symmetric fee");
+
+        // (2) Lever ON ⇒ arb direction surcharged; benign flow unchanged.
+        vm.revertToState(s0);
+        coord.setLvrParams(poolId, 3000, 0, true); // 3000 pips per captured tick
+        uint256 s1 = vm.snapshotState();
+        _swap(true, 1_000e18);
+        uint24 onBenign = coord.lastFee(poolId);
+        vm.revertToState(s1);
+        _swap(false, 1_000e18);
+        uint24 onArb = coord.lastFee(poolId);
+
+        assertGt(onArb, onBenign, "arb (gap-closing) swap pays the LVR surcharge");
+        assertEq(onBenign, offBenign, "benign flow unchanged by the lever");
+    }
+
+    /// @notice Even an absurd LVR slope can never push the applied fee past the pool's cap.
+    function test_lvr_fee_clamped_to_cap() public {
+        coord.configurePool(poolId, 3000, 10000, 5, 0, true, false, 60, 0, 10); // cap 1%
+        coord.setLvrParams(poolId, 1_000_000, 1_000_000, true);
+        _swap(true, 1_000e18);
+        vm.roll(block.number + 1);
+        _swap(true, 300_000e18);   // spot below oracle
+        _swap(false, 1_000e18);    // arb direction, huge surcharge → must clamp
+        assertLe(coord.lastFee(poolId), uint24(10000), "applied fee clamped to maxFeePips");
     }
 
     // ── Stage-1.2: oracle-based MEV model (no tx.origin) ─────────────────────
@@ -143,7 +170,7 @@ contract MWHookCoordinatorTest is Test {
     function test_oracle_initializes_after_first_swap() public {
         (, bool initBefore) = coord.oracleTick(poolId); // guard on (setUp), so afterSwap tracks
         assertFalse(initBefore, "oracle uninitialized pre-swap");
-        _swap(sellProjZeroForOne, 500e6);
+        _swap(true, 500e18);
         (, bool initAfter) = coord.oracleTick(poolId);
         assertTrue(initAfter, "oracle initialized by afterSwap");
     }
@@ -154,17 +181,16 @@ contract MWHookCoordinatorTest is Test {
         // Tight guard: oracle barely moves (maxTickMove 1, catchup 1), narrow band (20 ticks).
         coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 1, 20, 1);
 
-        _swap(sellProjZeroForOne, 100e6);        // seeds the oracle near the current tick
+        _swap(true, 1_000e18);      // seeds the oracle near the current tick
         vm.roll(block.number + 1);
-        _swap(sellProjZeroForOne, 30_000e6);     // pushes price far; oracle truncates (~stays put)
+        _swap(true, 500_000e18);    // pushes price far; oracle truncates (~stays put)
         vm.roll(block.number + 1);
 
         // Next swap: pre-swap tick is now far from the truncated oracle → breaker reverts.
-        vm.startPrank(alice, alice);
-        MockERC20(Currency.unwrap(poolKey.currency0)).approve(address(swapRouter), 100e6);
-        MockERC20(Currency.unwrap(poolKey.currency1)).approve(address(swapRouter), 100e6);
+        vm.startPrank(trader, trader);
+        t0.approve(address(swapRouter), 1_000e18);
         vm.expectRevert(); // PriceDeviationTooHigh, wrapped by PoolManager
-        swapRouter.swap(poolKey, sellProjZeroForOne, 100e6);
+        swapRouter.swap(poolKey, true, 1_000e18);
         vm.stopPrank();
     }
 
@@ -175,18 +201,22 @@ contract MWHookCoordinatorTest is Test {
     ///         blocks (same clamped budget), so the pool recovers on its own.
     function test_circuit_breaker_self_heals_via_poke() public {
         // Tight band (trips), but a heal budget that catches up in a bounded number of blocks.
-        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 2000, 20, 1);
+        // NB: maxTickMove must stay well BELOW the achievable deviation. The pair vault's EMERGING
+        // profile range (±1200 ticks) caps how far spot can move, so a large maxTickMove would let the
+        // oracle fully catch up in one afterSwap and the breaker would never trip. 100 leaves a large
+        // standing deviation yet still heals in ~a dozen pokes (< 300).
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 100, 20, 1);
 
-        _swap(sellProjZeroForOne, 100e6);   // seed oracle near current tick
+        _swap(true, 1_000e18);      // seed oracle near current tick
         vm.roll(block.number + 1);
-        _swap(sellProjZeroForOne, 8_000e6); // push spot far past the 20-tick band
+        _swap(true, 500_000e18);    // push spot far past the 20-tick band (to the range edge)
         vm.roll(block.number + 1);
 
         // Breaker tripped: swaps revert (the DoS state).
-        vm.startPrank(alice, alice);
-        MockERC20(Currency.unwrap(poolKey.currency0)).approve(address(swapRouter), 100e6);
+        vm.startPrank(trader, trader);
+        t0.approve(address(swapRouter), 1_000e18);
         vm.expectRevert(); // PriceDeviationTooHigh, wrapped by PoolManager
-        swapRouter.swap(poolKey, sellProjZeroForOne, 100e6);
+        swapRouter.swap(poolKey, true, 1_000e18);
         vm.stopPrank();
 
         // Heal: ANYONE pokes the oracle across blocks until it re-enters the band. Bounded loop.
@@ -206,7 +236,7 @@ contract MWHookCoordinatorTest is Test {
         assertLt(blocksToHeal, 300, "oracle healed within bound (no permanent brick)");
 
         // Swaps work again -> pool recovered on its own.
-        _swap(sellProjZeroForOne, 100e6);
+        _swap(true, 1_000e18);
     }
 
     /// pokeOracle before the oracle is seeded is a harmless no-op (no revert, nothing to heal).
@@ -216,24 +246,36 @@ contract MWHookCoordinatorTest is Test {
         coord.pokeOracle(poolKey); // must not revert
     }
 
-    function test_swap_fee_collection_splits_50_25_25() public {
-        // Swap paying USDC in → LP fees accrue in USDC on the vault position.
-        _swap(!sellProjZeroForOne, 5_000e6);
+    /// @notice A swap routed through the coordinator hook accrues realizable LP fees on the vault's
+    ///         V4 position; `collectFees()` realizes them and applies the pair vault's configurable
+    ///         value-capture split (default 30% treasury + 10% buyback — folded into treasury when no
+    ///         buyback sink is wired — and 60% to LPs). This is the pair-vault equivalent of the
+    ///         deprecated 4626 vault's 50/25/25 FeeVault split (whose exact split is unit-tested in
+    ///         MintwareDeFiPairVault.t.sol); here we prove the swap→realize→split path works THROUGH
+    ///         the coordinator hook.
+    function test_swap_fee_collection_splits_through_coordinator() public {
+        // Both directions so fees accrue in both tokens.
+        _swap(true, 50_000e18);
+        _swap(false, 45_000e18);
 
-        uint256 tBefore = usdc.balanceOf(treasury);
-        uint256 pBefore = usdc.balanceOf(address(this));      // provider == deployer
-        uint256 fBefore = usdc.balanceOf(address(feeVault));
+        uint256 tre0Before = t0.balanceOf(treasury);
+        uint256 tre1Before = t1.balanceOf(treasury);
 
-        (uint256 usdcFees,) = vault.collectFees();
-        assertGt(usdcFees, 0, "USDC swap fees collected");
+        (uint256 fee0, uint256 fee1) = vault.collectFees();
+        assertTrue(fee0 > 0 || fee1 > 0, "swap fees realized through the coordinator");
 
-        uint256 expMint = (usdcFees * 2500) / 10_000;
-        uint256 expProv = (usdcFees * 2500) / 10_000;
-        uint256 expDep  = usdcFees - expMint - expProv;
+        // buybackSink unset → buyback leg folds into treasury: treasury takes (treasury + buyback)
+        // cut of each realized fee (each leg floored independently, exactly as `_splitFee`).
+        uint256 expTre0 = (fee0 * vault.treasuryFeeBps()) / vault.BPS()
+                        + (fee0 * vault.buybackFeeBps()) / vault.BPS();
+        uint256 expTre1 = (fee1 * vault.treasuryFeeBps()) / vault.BPS()
+                        + (fee1 * vault.buybackFeeBps()) / vault.BPS();
+        assertEq(t0.balanceOf(treasury) - tre0Before, expTre0, "treasury takes treasury+buyback cut (token0)");
+        assertEq(t1.balanceOf(treasury) - tre1Before, expTre1, "treasury takes treasury+buyback cut (token1)");
 
-        assertEq(usdc.balanceOf(treasury) - tBefore, expMint, "25% Mintware -> treasury");
-        assertEq(usdc.balanceOf(address(this)) - pBefore, expProv, "25% provider");
-        assertEq(usdc.balanceOf(address(feeVault)) - fBefore, expDep, "50% depositors -> FeeVault");
+        // The LP remainder (~60%) accrues to the sole depositor.
+        (uint256 pend0, uint256 pend1) = vault.pendingFees(alice);
+        assertTrue(pend0 > 0 || pend1 > 0, "LP remainder accrues to depositor");
     }
 
     // ── Stage 1.3: callback gating (Trail-of-Bits pattern #1) ────────────────
@@ -269,13 +311,12 @@ contract MWHookCoordinatorTest is Test {
         // New liquidity (via the vault) is blocked at beforeAddLiquidity. V4's PoolManager
         // wraps hook reverts (EnforcedPause bubbles inside a WrappedError), so match on any revert.
         vm.startPrank(alice);
-        usdc.approve(address(vault), 10_000e6);
         vm.expectRevert();
-        vault.depositWithLock(10_000e6, alice, LockTier.Flex);
+        vault.deposit(10_000e18, 10_000e18, 0, LockTier.Flex);
         vm.stopPrank();
 
         // Trading continues — a paused hook must never brick the pool's swap path.
-        _swap(sellProjZeroForOne, 500e6);
+        _swap(true, 500e18);
     }
 
     function test_guardian_can_pause_hook() public {
@@ -307,12 +348,12 @@ contract MWHookCoordinatorTest is Test {
         // Everything on: dynamic fee, oracle guard, rate-limit.
         coord.configurePool(poolId, 3000, 100000, 5, 500, true, true, 60, 6000, 10);
         // Warm oracle + fee/tick state so we measure steady-state (not first-touch) cost.
-        _swap(sellProjZeroForOne, 200e6);
+        _swap(true, 2_000e18);
         vm.roll(block.number + 1);
-        _swap(sellProjZeroForOne, 200e6);
+        _swap(true, 2_000e18);
         vm.roll(block.number + 1);
 
-        SwapParams memory sp = SwapParams(sellProjZeroForOne, -int256(100e6), 0);
+        SwapParams memory sp = SwapParams(true, -int256(1_000e18), 0);
 
         vm.startPrank(address(pm));
         uint256 g0 = gasleft();

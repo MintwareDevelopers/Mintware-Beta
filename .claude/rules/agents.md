@@ -1,4 +1,10 @@
-# AI Agents (ERC-8004 + AIAttribution)
+# AI Agents (ERC-8004 + AIAttribution + x402 parking account)
+
+> **Two agent surfaces live here.** (1) **Attribution / ERC-8004** — on-chain reputation (below,
+> still accurate). (2) **Agent parking account + x402** — the newest and biggest surface: an agent
+> treasury where idle USDC **earns while staying spendable in place**, paid per call over x402.
+> See [Agent parking account + x402](#agent-parking-account--x402) and the 13-action plugin table.
+> Full spec: [`docs/developers/agentkit-compute-402-spec.md`](../../docs/developers/agentkit-compute-402-spec.md).
 
 ## AIAttribution v3 — Base Mainnet
 
@@ -60,11 +66,62 @@ Submitted PR adding Mintware to `### 🪪 Identity & Trust` section of the curat
 - Agent leaderboard lives at `app/(web3)/agents/leaderboard/page.tsx`
 - Agent detail lives at `/agent/{address}` and should link back to `/agents/leaderboard`
 - Do not create another route-group page at `app/(web3)/agents/page.tsx` or Next.js will fail the build due to duplicate `/agents` resolution
-- **Narrative order (2026-08-18):** the page **leads with the agent-treasury vision** (LP
-  participation via the agentic ULV roles + the JIT 402 payment engine — honestly labeled
-  "Blueprint · not yet built," nothing here is deployed/audited/live). On-chain reputation
-  (plugins, live leaderboard, actions table) is the **second**, clearly-optional section — real
-  and live today, just not the lead. Don't reorder this without checking build status hasn't
-  changed. The bigger "agent parking account + x402" build (live treasury demo at `/app/agents`,
-  Arc-testnet-proven) exists on the unmerged, audit-gated `feat/ypn-vault-convergence` branch —
-  do not port claims from it onto `main`'s page until that branch actually ships.
+- Public `/agents` (`app/agents/page.tsx`) was **reorganized to lead with earn + pay** (parking account + x402); Attribution was demoted to a supporting trust signal, not the headline.
+
+---
+
+# Agent parking account + x402
+
+> **Status: code-complete + testnet, NOT mainnet/audited.** `lib/x402/*` + 5 routes + `/app/agents`
+> UI + 13 plugin actions are built and green (**52 Vitest + 86 edge-auth Rust tests**), but the
+> stack is **runtime-gated** (503 until env set) and rides the Arc-**testnet** YPN vault. External
+> audit + a real settlement/card path gate real value. **Not live.** (See `.claude/STATE.md`.)
+
+**Thesis.** An agent parks idle USDC in a yield vault where it **earns**, and spends it per call over
+x402 **without ever un-parking** — a spend is a hold against the earning balance → settle (burn
+shares). "Never idle, never locked, always yours," for agents. Mintware is both the **funding rail**
+and the **x402 facilitator**, so the balance stays productive right up to settlement.
+
+**Facilitator = a rename/adapter over YPN primitives that already ship:**
+- `/verify` → edge-auth NAV-hold (`POST /authorize`, sizes a hold off live vault NAV, ~10 ms).
+- `/settle` → relayer settle (+ CCTP if `payTo` is on another chain).
+- x402 v2 **session token** ↔ edge-auth `hold_id` (idempotent, reservable, expiring).
+
+**Reputation-gating is OPTIONAL, not a dependency.** The default facilitator authorizes purely on
+live NAV. Trust-tiered pricing (`lib/x402/pricing.ts`) is off by default; a pluggable `TrustSource`
+port can tier by **any** signal — parked size / tenure / staking / (optionally) Attribution. Turn it
+on with `X402_TRUST_TIERING=parked` (→ `parkedSizeTrustSource`). Attribution is one possible input,
+never required.
+
+## The 13 actions across 3 runtimes
+
+Each runtime keeps its existing Attribution actions and adds the 5-action parking/x402 set (MCP: 3).
+
+| Runtime (package) | Parking + x402 actions | Pre-existing Attribution actions |
+|---|---|---|
+| **AgentKit** (`@mintware/agentkit-actions`, `plugins/agentkit`) | `MINTWARE_PARK` · `MINTWARE_UNPARK` · `MINTWARE_TREASURY` · `MINTWARE_X402_QUOTE` · `MINTWARE_X402_PAY` | `MINTWARE_GET_SCORE` · `MINTWARE_REGISTER` · `MINTWARE_CLAIM_PENDING` |
+| **ElizaOS** (`@mintware/eliza-plugin`, `plugins/eliza`) | `PARK_USDC` · `UNPARK_USDC` · `SHOW_TREASURY` · `QUOTE_X402` · `PAY_X402` | `GET_ATTRIBUTION_SCORE` · `REGISTER_MINTWARE` · `CLAIM_PENDING_ACTIONS` |
+| **MCP** (`@mintware/mcp-server`, `plugins/mcp` — Claude Desktop / Cursor) | `mintware_parking_account` · `mintware_x402_quote` · `mintware_x402_pay` | `mintware_get_score` · `mintware_leaderboard` · `mintware_register` · `mintware_claim_pending` |
+
+- **Park / unpark** = ERC-4626 `approve`+`deposit` / `redeem` against the Arc yield vault (on-chain,
+  agent pays gas; env-overridable via `MINTWARE_PARK_VAULT`/`_USDC`/`_RPC`).
+- **X402 pay** signs an EIP-3009 `TransferWithAuthorization` (USDC), retries with `PAYMENT-SIGNATURE`,
+  returns the resource. Quote is a read-only 402 preflight (no payment).
+- **Treasury / account** reads `GET /api/x402/account` (parked · spendable · earning).
+
+## Where the code lives
+
+| Area | Location |
+|---|---|
+| Core lib | `lib/x402/*` — `types`, `protocol`, `pricing`, `facilitator`, `require402`, `edgeHttp`, `config`, `treasury` (park + spend-in-place), `vaultReader` (fee-net parked USDC off the Arc vault) |
+| Routes | `app/api/x402/{account,supported,verify,settle,score}` — `verify`→edge-auth, `settle`→relayer, `score` is a dogfood 402 paywall over Attribution |
+| Discovery | `public/.well-known/x402.json` (facilitator/schemes/networks) |
+| Live spendable | edge-auth `GET /available/:user` (read-only headroom = NAV − holds − cap − liquidity; without it, spendable defaults to full parked balance — parking never locks) |
+| UI | public `/agents` (reorged to lead with earn + pay) · `/app/agents` (live clickable parking account: parked / spendable / earning) |
+| Spec (full) | [`docs/developers/agentkit-compute-402-spec.md`](../../docs/developers/agentkit-compute-402-spec.md) |
+
+**Runtime gates:** the facilitator/seller/live-spendable need `EDGE_AUTH_URL` / `EDGE_AUTH_SECRET`
++ `X402_PAY_TO`; routes **503** until set. The relayer is a signing/submission library with no HTTP
+surface, so a live `settle` endpoint is a separate funded-key task — until then the facilitator uses
+`deferredSettler` (authorize-now, settle-later). Fail-closed: edge-auth rejects when its secret is
+unset (audit C1), and the facilitator inherits that.

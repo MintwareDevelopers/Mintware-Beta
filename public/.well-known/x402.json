@@ -1,0 +1,32 @@
+{
+  "x402Version": 2,
+  "name": "Mintware",
+  "description": "x402 facilitator + funding rail for agents — a place to park USDC that earns while it stays spendable, and spend it per call over x402.",
+  "status": "testnet",
+  "facilitator": {
+    "verify": "https://mintware.finance/api/x402/verify",
+    "settle": "https://mintware.finance/api/x402/settle",
+    "supported": "https://mintware.finance/api/x402/supported"
+  },
+  "schemes": ["exact", "deferred"],
+  "networks": ["base", "base-sepolia", "arc"],
+  "account": {
+    "view": "https://mintware.finance/api/x402/account",
+    "description": "Agent parking account — USDC parked (earning) and spendable in place. Verification is a hold against the earning balance; settlement burns from it, so capital never un-parks."
+  },
+  "resources": [
+    {
+      "url": "https://mintware.finance/api/x402/score",
+      "description": "Mintware Attribution score lookup for a wallet (per-request compute).",
+      "scheme": "exact",
+      "asset": "USDC"
+    }
+  ],
+  "clients": {
+    "agentkit": "@mintware/agentkit-actions",
+    "mcp": "@mintware/mcp-server",
+    "eliza": "@mintware/eliza-plugin"
+  },
+  "spec": "https://mintware.finance/docs",
+  "notes": "Testnet + unaudited; external audit gates real value. Reputation-gating is optional, not required — the facilitator authorizes on live NAV by default."
+}
