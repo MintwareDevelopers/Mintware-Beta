@@ -87,3 +87,22 @@ Point the running edge-auth + relayer at Arc with `services/edge-auth/.env.arc.e
 `services/relayer/.env.arc.example` (`EDGE_CHAIN_ID=5042002` makes the edge signer's EIP-712 domain
 Arc-correct; the relayer RPC → Arc). Then the service pipeline does authorize→settle and the CCTP
 orchestration end-to-end.
+
+**Proven live:** the edge-auth service run against Arc (`EDGE_VAULT_ADDRESS`=the live vault, refresher
+polling the Arc NAV) authorized a real card charge in **~10 ms** — `POST /authorize` returned
+`{"approved":true,"hold_id":…,"hold_usdc":"2000000"}` for a $2 spend, correctly **declined** `$300`
+(`insufficient_equity` vs the ~3 USDC live equity), and enforced hold accounting across repeats. The
+sub-150ms authorization decision, computed from the live Arc vault NAV, by the actual service.
+
+## Arc's yield primitive
+
+The current deployment idles into a placeholder mock 4626. Arc's real primitive is **XyloNet's XyloVault**
+(auto-compounding ERC-4626 USDC vault, live on Arc testnet, xylonet.xyz). Since
+`MintwareERC4626YieldAdapter` wraps any 4626, wiring real yield is: set `ARC_YIELD_SOURCE=<XyloVault addr>`
+and redeploy the adapter + vault. Arc public mainnet: **Sept 16, 2026**.
+
+## In-app surface
+
+`app/app/arc/page.tsx` (`/app/arc`) — the clickable demo: the live contract addresses (explorer-linked),
+the three proven loop legs, and the vault's **total assets read live off the Arc RPC** (client-side
+`eth_call`). Design uses the Mintware `mw-*` tokens.

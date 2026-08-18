@@ -46,7 +46,10 @@ export interface ArcSettlementConfig {
   rpcUrl?: string
   /** Real USDC on Arc. */
   usdc?: string
-  /** Arc's yield primitive as an ERC-4626 over USDC (slots into MintwareERC4626YieldAdapter). */
+  /** Arc's yield primitive as an ERC-4626 over USDC (slots into MintwareERC4626YieldAdapter).
+   *  Target: XyloNet's **XyloVault** — an auto-compounding ERC-4626 USDC vault live on Arc testnet
+   *  (xylonet.xyz). Set ARC_YIELD_SOURCE to its address + redeploy the adapter to earn real Arc yield
+   *  (the current deployment uses a placeholder mock 4626). Arc public mainnet: Sept 16, 2026. */
   yieldSource?: string
   /** Deployed MintwarePaymentGateway (the settleSpend entrypoint). */
   gateway?: string
