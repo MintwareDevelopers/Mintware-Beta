@@ -1,0 +1,197 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.26;
+
+import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable}         from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+import {IYieldAdapter} from "./IYieldAdapter.sol";
+
+/// @title  MintwareMultiVenueYieldAdapter
+/// @notice A curator-managed `IYieldAdapter` that fans idle capital across MANY child adapters by weight —
+///         the "become a curator, not just an Aave depositor" baseline-yield lever. The vault treats this as
+///         a single adapter; underneath, the owner (curator) allocates across e.g. `AaveV3YieldAdapter` +
+///         `MintwareERC4626YieldAdapter` wrapping a Morpho MetaMorpho / Euler v2 vault. Same architecture,
+///         a new allocation. No new custody category — every child is an already-audited-adjacent adapter.
+///
+/// @dev    Composition: `setVault(realVault)` here, and EACH CHILD's `setVault(address(this))` — so the vault
+///         funds this router, this router funds the children, and withdrawals flow child → router → vault.
+///         Children MUST share this router's `asset` (the interface has no `asset()` to verify, so it is a
+///         deploy-wiring invariant — document + check off-chain).
+///
+///         Discipline inherited from the child adapters:
+///           • **withdraw is BEST-EFFORT and never reverts** — it is on the vault's swap/settlement hot path.
+///             Each child pull is try/caught; a stalled venue contributes 0 and the router serves the rest
+///             from the other venues + its own idle balance. A partial return is normal; the vault falls back
+///             to its reserves.
+///           • **deposit is try/caught per venue** — a full/paused source can't brick the allocation; its
+///             share simply stays idle in the router (still counted in `totalAssets`, still withdrawable).
+///           • `onlyVault` on the money paths, `onlyOwner` (curator) on allocation. `rebalance` is off-path.
+contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
+    uint16 internal constant BPS = 10_000;
+
+    IERC20 public immutable asset;
+
+    /// @notice The only address allowed to supply/withdraw. Owner-settable ONCE (deploy chicken-and-egg).
+    address public vault;
+
+    struct Venue {
+        IYieldAdapter adapter;
+        uint16        weightBps; // target share of new deposits; Σ weights ≤ 10_000 (remainder = idle buffer)
+    }
+
+    Venue[] private _venues;
+
+    event VaultSet(address indexed vault);
+    event VenuesSet(uint256 count, uint16 totalWeightBps);
+    event Rebalanced(uint256 pulled, uint256 redeployed);
+    event Supplied(uint256 amount, uint256 deployed);
+    event Withdrawn(uint256 requested, uint256 withdrawn);
+
+    error OnlyVault();
+    error ZeroAddress();
+    error VaultAlreadySet();
+    error WeightOverflow();
+    error EmptyVenues();
+
+    modifier onlyVault() {
+        if (msg.sender != vault) revert OnlyVault();
+        _;
+    }
+
+    /// @param asset_  The underlying token every venue must share (e.g. USDC).
+    /// @param vault_  Initial authorized vault (may be zero, set later via `setVault`).
+    /// @param owner_  Curator (allocation + rebalance).
+    constructor(address asset_, address vault_, address owner_) Ownable(owner_) {
+        if (asset_ == address(0)) revert ZeroAddress();
+        asset = IERC20(asset_);
+        vault = vault_;
+    }
+
+    // ── admin / curation ─────────────────────────────────────────────────────────
+    function setVault(address vault_) external onlyOwner {
+        if (vault_ == address(0)) revert ZeroAddress();
+        if (vault != address(0)) revert VaultAlreadySet();
+        vault = vault_;
+        emit VaultSet(vault_);
+    }
+
+    /// @notice Set the venue set + target weights (curator's allocation call). `Σ weightBps ≤ 10_000`; any
+    ///         shortfall is deliberately held idle in the router as an instant-withdraw buffer. Replacing the
+    ///         set does NOT move funds — call `rebalance()` after to align holdings to the new weights.
+    function setVenues(IYieldAdapter[] calldata adapters, uint16[] calldata weightsBps) external onlyOwner {
+        if (adapters.length == 0 || adapters.length != weightsBps.length) revert EmptyVenues();
+        uint256 total;
+        delete _venues;
+        for (uint256 i; i < adapters.length; ++i) {
+            if (address(adapters[i]) == address(0)) revert ZeroAddress();
+            total += weightsBps[i];
+            _venues.push(Venue({adapter: adapters[i], weightBps: weightsBps[i]}));
+        }
+        if (total > BPS) revert WeightOverflow();
+        emit VenuesSet(adapters.length, uint16(total));
+    }
+
+    function venuesLength() external view returns (uint256) { return _venues.length; }
+    function venueAt(uint256 i) external view returns (address adapter, uint16 weightBps) {
+        Venue storage v = _venues[i];
+        return (address(v.adapter), v.weightBps);
+    }
+
+    /// @notice Pull everything back to the router and redeploy by the current weights. Best-effort per venue;
+    ///         off the hot path (owner-only). Use after re-weighting or to harvest drift into the target mix.
+    function rebalance() external onlyOwner nonReentrant {
+        uint256 pulled;
+        uint256 n = _venues.length;
+        for (uint256 i; i < n; ++i) {
+            IYieldAdapter a = _venues[i].adapter;
+            uint256 max = a.maxWithdrawable();
+            if (max == 0) continue;
+            try a.withdraw(max) returns (uint256 got) { pulled += got; } catch {}
+        }
+        uint256 deployed = _deploy(asset.balanceOf(address(this)));
+        emit Rebalanced(pulled, deployed);
+    }
+
+    // ── IYieldAdapter ──────────────────────────────────────────────────────────────
+
+    /// @inheritdoc IYieldAdapter
+    function deposit(uint256 amount) external override onlyVault nonReentrant {
+        if (amount == 0) return;
+        asset.safeTransferFrom(vault, address(this), amount);
+        uint256 deployed = _deploy(amount);
+        emit Supplied(amount, deployed);
+    }
+
+    /// @dev Split `amount` across venues by weight and try to supply each (skipping full/paused sources and
+    ///      swallowing a source revert). Un-deployed funds stay idle in the router. Returns amount deployed.
+    function _deploy(uint256 amount) internal returns (uint256 deployed) {
+        if (amount == 0) return 0;
+        uint256 n = _venues.length;
+        for (uint256 i; i < n; ++i) {
+            Venue storage v = _venues[i];
+            uint256 want = (amount * v.weightBps) / BPS;
+            if (want == 0) continue;
+            uint256 room = v.adapter.maxSuppliable();
+            if (room < want) want = room;
+            if (want == 0) continue;
+            asset.forceApprove(address(v.adapter), want);
+            try v.adapter.deposit(want) { deployed += want; } catch {}
+            asset.forceApprove(address(v.adapter), 0);
+        }
+    }
+
+    /// @inheritdoc IYieldAdapter
+    /// @dev Best-effort: serve from idle first, then pull from venues in order until satisfied. Each pull is
+    ///      try/caught and sized to the venue's headroom; a stalled venue contributes 0. Transfers the total
+    ///      to the vault and returns it (`<= amount`). Never reverts for an availability reason.
+    function withdraw(uint256 amount) external override onlyVault nonReentrant returns (uint256 withdrawn) {
+        if (amount == 0) return 0;
+
+        uint256 idle = asset.balanceOf(address(this));
+        uint256 need = amount > idle ? amount - idle : 0;
+
+        uint256 n = _venues.length;
+        for (uint256 i; i < n && need > 0; ++i) {
+            IYieldAdapter a = _venues[i].adapter;
+            uint256 room = a.maxWithdrawable();
+            if (room == 0) continue;
+            uint256 pull = need < room ? need : room;
+            try a.withdraw(pull) returns (uint256 got) {
+                need = need > got ? need - got : 0;
+            } catch {}
+        }
+
+        // Everything withdrawn now sits in the router (children pay their `vault` == this). Pay the vault.
+        uint256 have = asset.balanceOf(address(this));
+        withdrawn = amount < have ? amount : have;
+        if (withdrawn > 0) asset.safeTransfer(vault, withdrawn);
+        emit Withdrawn(amount, withdrawn);
+    }
+
+    /// @inheritdoc IYieldAdapter
+    function totalAssets() external view override returns (uint256 total) {
+        uint256 n = _venues.length;
+        for (uint256 i; i < n; ++i) total += _venues[i].adapter.totalAssets();
+        total += asset.balanceOf(address(this)); // idle buffer counts
+    }
+
+    /// @inheritdoc IYieldAdapter
+    function maxWithdrawable() external view override returns (uint256 total) {
+        uint256 n = _venues.length;
+        for (uint256 i; i < n; ++i) total += _venues[i].adapter.maxWithdrawable();
+        total += asset.balanceOf(address(this));
+    }
+
+    /// @inheritdoc IYieldAdapter
+    /// @dev Sum of the venues' headroom — the vault only routes here what can actually earn; if every source
+    ///      is full it returns 0 and the vault keeps the capital as its own buffer (rather than deposit it to
+    ///      sit idle in the router).
+    function maxSuppliable() external view override returns (uint256 total) {
+        uint256 n = _venues.length;
+        for (uint256 i; i < n; ++i) total += _venues[i].adapter.maxSuppliable();
+    }
+}
