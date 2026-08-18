@@ -60,3 +60,11 @@ Submitted PR adding Mintware to `### 🪪 Identity & Trust` section of the curat
 - Agent leaderboard lives at `app/(web3)/agents/leaderboard/page.tsx`
 - Agent detail lives at `/agent/{address}` and should link back to `/agents/leaderboard`
 - Do not create another route-group page at `app/(web3)/agents/page.tsx` or Next.js will fail the build due to duplicate `/agents` resolution
+- **Narrative order (2026-08-18):** the page **leads with the agent-treasury vision** (LP
+  participation via the agentic ULV roles + the JIT 402 payment engine — honestly labeled
+  "Blueprint · not yet built," nothing here is deployed/audited/live). On-chain reputation
+  (plugins, live leaderboard, actions table) is the **second**, clearly-optional section — real
+  and live today, just not the lead. Don't reorder this without checking build status hasn't
+  changed. The bigger "agent parking account + x402" build (live treasury demo at `/app/agents`,
+  Arc-testnet-proven) exists on the unmerged, audit-gated `feat/ypn-vault-convergence` branch —
+  do not port claims from it onto `main`'s page until that branch actually ships.
