@@ -3,6 +3,7 @@
 // Spec: docs/developers/agentkit-compute-402-spec.md §6.2.
 
 import { EdgeAuthorizer, Settler } from './facilitator'
+import { SpendableSource } from './treasury'
 
 type FetchLike = typeof fetch
 
@@ -73,4 +74,25 @@ export const deferredSettler: Settler = {
   async settle() {
     return { success: false, errorReason: 'settlement_deferred_relayer_unconfigured' }
   },
+}
+
+/** Live spendable headroom from edge-auth `GET /available/:user` (NAV − holds − caps). Returns null on any
+ *  failure so the treasury view degrades to "spendable == parked" rather than erroring. */
+export function httpSpendableSource(cfg: { url: string; secret: string; fetchImpl?: FetchLike }): SpendableSource {
+  const f = cfg.fetchImpl ?? fetch
+  const base = cfg.url.replace(/\/$/, '')
+  return {
+    async headroomAtomic(agent) {
+      try {
+        const res = await f(`${base}/available/${agent.toLowerCase()}`, {
+          headers: { authorization: `Bearer ${cfg.secret}` },
+        })
+        if (!res.ok) return null
+        const j = (await res.json()) as { available_usdc?: string }
+        return j.available_usdc != null ? BigInt(j.available_usdc) : null
+      } catch {
+        return null
+      }
+    },
+  }
 }

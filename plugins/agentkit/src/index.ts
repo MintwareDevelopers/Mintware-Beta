@@ -268,10 +268,19 @@ const EIP3009_TYPES = {
   ],
 }
 
-/** Minimal wallet surface x402 payment needs — `signTypedData` is present on EVM AgentKit providers. */
+/** Minimal wallet surface the x402 + parking actions need. `signTypedData` (x402 pay) and `sendTransaction`
+ *  (park) are present on EVM AgentKit providers. */
 interface X402Wallet {
   getAddress(): string
   signTypedData?(params: { domain: unknown; types: unknown; primaryType: string; message: unknown }): Promise<string>
+  sendTransaction?(tx: { to: string; data: string; value?: string }): Promise<string>
+}
+
+function pad32(hexOrAddr: string): string {
+  return hexOrAddr.toLowerCase().replace(/^0x/, '').padStart(64, '0')
+}
+function padUint(n: bigint): string {
+  return n.toString(16).padStart(64, '0')
 }
 
 function randomNonce32(): string {
@@ -364,6 +373,45 @@ const mintwareX402PayAction = {
   },
 }
 
+// Arc parking vault + USDC (env-overridable). Defaults = the live Arc-testnet YPN yield stack.
+const PARK_VAULT = () => process.env.MINTWARE_PARK_VAULT ?? '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421'
+const PARK_USDC = () => process.env.MINTWARE_PARK_USDC ?? '0x3600000000000000000000000000000000000000'
+const APPROVE_SEL = '0x095ea7b3' //  approve(address,uint256)
+const DEPOSIT_SEL = '0x6e553f65' //  deposit(uint256,address)  (ERC-4626)
+
+const mintwareParkAction = {
+  name: 'MINTWARE_PARK',
+  description:
+    'Park USDC into the Mintware yield vault so it earns while staying spendable in place (it never locks). ' +
+    'Deposits `amountUsd` USDC from the agent wallet: approves the vault, then deposits. On-chain — the ' +
+    'agent pays gas. After parking, spend it per call with MINTWARE_X402_PAY and check it with MINTWARE_TREASURY.',
+  schema: z.object({
+    amountUsd: z.number().positive().describe('Amount of USDC to park (e.g. 25 = $25).'),
+  }),
+  invoke: async (wallet: X402Wallet, args: { amountUsd: number }): Promise<string> => {
+    if (!wallet.sendTransaction) {
+      throw new Error('This wallet provider cannot sendTransaction — required to park capital into the vault.')
+    }
+    const vault = PARK_VAULT()
+    const usdc = PARK_USDC()
+    const agent = wallet.getAddress()
+    const amount = BigInt(Math.round(args.amountUsd * 1_000_000)) // USDC 6dp
+    if (amount <= 0n) return 'Nothing to park (amount rounds to zero).'
+
+    // 1) approve the vault to pull `amount` USDC.
+    const approveTx = await wallet.sendTransaction({ to: usdc, data: APPROVE_SEL + pad32(vault) + padUint(amount) })
+    // 2) deposit(assets, receiver=agent) → mints vault shares to the agent.
+    const depositTx = await wallet.sendTransaction({ to: vault, data: DEPOSIT_SEL + padUint(amount) + pad32(agent) })
+
+    return [
+      `Parked $${args.amountUsd} USDC into the Mintware yield vault.`,
+      `  approve: ${approveTx}`,
+      `  deposit: ${depositTx}`,
+      `It's now earning yield and stays fully spendable in place — spend per call with MINTWARE_X402_PAY.`,
+    ].join('\n')
+  },
+}
+
 const mintwareTreasuryAction = {
   name: 'MINTWARE_TREASURY',
   description:
@@ -403,6 +451,7 @@ export const mintwareActions = [
   mintwareGetScoreAction,
   mintwareRegisterAction,
   mintwareClaimPendingAction,
+  mintwareParkAction,
   mintwareTreasuryAction,
   mintwareX402QuoteAction,
   mintwareX402PayAction,
@@ -412,6 +461,7 @@ export {
   mintwareGetScoreAction,
   mintwareRegisterAction,
   mintwareClaimPendingAction,
+  mintwareParkAction,
   mintwareTreasuryAction,
   mintwareX402QuoteAction,
   mintwareX402PayAction,

@@ -54,10 +54,11 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 - **Agent parking account + x402 spend** — an agent treasury: park idle USDC that keeps **earning** while
   staying **spendable in place** (spend draws from the yield position via hold→settle; capital never
   un-parks). Mintware is funding rail + x402 facilitator. `lib/x402/*` (incl. `treasury`/`vaultReader`),
-  `app/api/x402/{account,supported,verify,settle,score}`, 3 AgentKit actions (`MINTWARE_TREASURY` + x402
-  quote/pay). **Code-complete, 42 Vitest tests green**; **runtime-gated** (needs `EDGE_AUTH_URL`/`_SECRET`
-  + `X402_PAY_TO`; routes 503 until set). Reputation-gating is **optional**, not a dependency. Not live.
-  Spec: [`docs/developers/agentkit-compute-402-spec.md`](../docs/developers/agentkit-compute-402-spec.md).
+  `app/api/x402/{account,supported,verify,settle,score}`, `/app/agents` UI, 4 AgentKit actions
+  (`MINTWARE_PARK`/`MINTWARE_TREASURY` + x402 quote/pay), edge-auth `GET /available/:user` (read-only live
+  spendable). **Code-complete, 44 Vitest + 82 edge-auth Rust tests green**; **runtime-gated** (needs
+  `EDGE_AUTH_URL`/`_SECRET` + `X402_PAY_TO`; routes 503 until set). Reputation-gating is **optional**, not a
+  dependency. Not live. Spec: [`docs/developers/agentkit-compute-402-spec.md`](../docs/developers/agentkit-compute-402-spec.md).
 
 ## Where to look (routing)
 

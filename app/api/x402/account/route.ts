@@ -5,6 +5,7 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { readAgentTreasury, formatUsdc } from '@/lib/x402/treasury'
 import { rpcParkedReader } from '@/lib/x402/vaultReader'
+import { httpSpendableSource } from '@/lib/x402/edgeHttp'
 import { ARC_TESTNET, ARC_TESTNET_DEPLOYMENT } from '@/config/arc'
 
 export const dynamic = 'force-dynamic'
@@ -18,13 +19,20 @@ export const GET = createHandler(async (req, ctx) => {
   const vault = process.env.NEXT_PUBLIC_ARC_VAULT_ADDRESS ?? ARC_TESTNET_DEPLOYMENT.vault
   const reader = rpcParkedReader({ rpcUrl, vault })
 
+  // When edge-auth is configured, spendable reflects live holds/caps (GET /available/:user); otherwise it
+  // degrades to the full parked balance (parking does not lock).
+  const spend =
+    process.env.EDGE_AUTH_URL && process.env.EDGE_AUTH_SECRET
+      ? httpSpendableSource({ url: process.env.EDGE_AUTH_URL, secret: process.env.EDGE_AUTH_SECRET })
+      : undefined
+
   try {
-    // No SpendableSource wired here → spendable == the full parked balance (parking does not lock).
-    const treasury = await readAgentTreasury(address, reader)
+    const treasury = await readAgentTreasury(address, reader, spend)
     return ctx.json({
       ...treasury,
       parkedUsdcFormatted: formatUsdc(treasury.parkedUsdc),
       spendableUsdcFormatted: formatUsdc(treasury.spendableUsdc),
+      spendableLive: Boolean(spend),
       vault,
       network: 'arc',
     })

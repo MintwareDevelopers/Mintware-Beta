@@ -69,6 +69,7 @@ pub fn app(ctx: AppCtx) -> Router {
         .route("/health", get(health))
         .route("/authorize", post(authorize))
         .route("/holds/:id", get(get_hold))
+        .route("/available/:user", get(get_available))
         .route("/webhooks/rain", post(rain_webhook))
         .with_state(ctx)
 }
@@ -152,6 +153,18 @@ async fn get_hold(State(ctx): State<AppCtx>, headers: HeaderMap, Path(id): Path<
         Some(h) => (StatusCode::OK, Json(hold_view(&id, &h))).into_response(),
         None => (StatusCode::NOT_FOUND, Json(json!({ "error": "not_found" }))).into_response(),
     }
+}
+
+/// Read-only spendable headroom for a user right now (NAV equity − active holds − cap room − liquidity),
+/// WITHOUT reserving anything. Powers the agent parking-account "spendable in place" view. Bearer-guarded
+/// like the other sensitive reads (it discloses a user's balance).
+async fn get_available(State(ctx): State<AppCtx>, headers: HeaderMap, Path(user): Path<String>) -> impl IntoResponse {
+    if !auth_ok(&ctx, &headers) {
+        return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "unauthorized" }))).into_response();
+    }
+    let user = user.trim().to_lowercase();
+    let available = ctx.store.available(&user, now_secs());
+    (StatusCode::OK, Json(json!({ "user": user, "available_usdc": available.to_string() }))).into_response()
 }
 
 fn hold_view(id: &str, h: &Hold) -> HoldView {
@@ -239,6 +252,36 @@ mod tests {
                 .body(Body::from(format!(r#"{{"user":"{ALICE}","amount_usdc":"100000000","hold_id":"badauth"}}"#))).unwrap())
             .await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    async fn get_available(ctx: AppCtx, user: &str, bearer: Option<&str>) -> (StatusCode, serde_json::Value) {
+        let mut b = Request::builder().method("GET").uri(format!("/available/{user}"));
+        if let Some(tok) = bearer {
+            b = b.header("authorization", format!("Bearer {tok}"));
+        }
+        let resp = app(ctx).oneshot(b.body(Body::empty()).unwrap()).await.unwrap();
+        let status = resp.status();
+        let bytes = resp.into_body().collect().await.unwrap().to_bytes();
+        (status, serde_json::from_slice(&bytes).unwrap())
+    }
+
+    #[tokio::test]
+    async fn available_reports_headroom_and_shrinks_after_a_hold() {
+        let ctx = ctx_no_signer();
+        // ALICE has $1,000 equity, huge cap, deep liquidity → available == equity.
+        let (status, body) = get_available(ctx.clone(), ALICE, Some(API_SECRET)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["available_usdc"], "1000000000");
+        // Reserve a $100 hold → available drops by exactly that.
+        let _ = post_authorize(ctx.clone(), &format!(r#"{{"user":"{ALICE}","amount_usdc":"100000000","hold_id":"a-hold"}}"#)).await;
+        let (_s, body2) = get_available(ctx, ALICE, Some(API_SECRET)).await;
+        assert_eq!(body2["available_usdc"], "900000000");
+    }
+
+    #[tokio::test]
+    async fn available_requires_bearer() {
+        let (status, _b) = get_available(ctx_no_signer(), ALICE, None).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
 
     #[tokio::test]

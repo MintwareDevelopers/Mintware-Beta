@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { httpEdgeAuthorizer, httpSettler, deferredSettler } from './edgeHttp'
+import { httpEdgeAuthorizer, httpSettler, deferredSettler, httpSpendableSource } from './edgeHttp'
 import type { PaymentPayload, PaymentRequirements } from './types'
 
 const PAYER = '0xAbCdEf0000000000000000000000000000000001'
@@ -52,5 +52,28 @@ describe('settlers', () => {
 
   it('deferredSettler never claims success', async () => {
     expect(await deferredSettler.settle({ payload, reqs })).toMatchObject({ success: false, errorReason: 'settlement_deferred_relayer_unconfigured' })
+  })
+})
+
+describe('httpSpendableSource', () => {
+  it('maps available_usdc to a bigint and lowercases the user in the path', async () => {
+    let seenUrl = ''
+    const src = httpSpendableSource({
+      url: 'http://edge',
+      secret: 's',
+      fetchImpl: mockFetch(async (url) => {
+        seenUrl = url
+        return json({ user: PAYER.toLowerCase(), available_usdc: '900000000' })
+      }),
+    })
+    expect(await src.headroomAtomic(PAYER)).toBe(900_000_000n)
+    expect(seenUrl).toBe(`http://edge/available/${PAYER.toLowerCase()}`)
+  })
+
+  it('returns null (→ spendable falls back to parked) on non-ok or thrown fetch', async () => {
+    const s500 = httpSpendableSource({ url: 'http://edge', secret: 's', fetchImpl: mockFetch(async () => json({}, 500)) })
+    expect(await s500.headroomAtomic(PAYER)).toBeNull()
+    const sThrow = httpSpendableSource({ url: 'http://edge', secret: 's', fetchImpl: (() => Promise.reject(new Error('down'))) as unknown as typeof fetch })
+    expect(await sThrow.headroomAtomic(PAYER)).toBeNull()
   })
 })

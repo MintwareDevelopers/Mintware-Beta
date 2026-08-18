@@ -11,6 +11,7 @@ AgentKit actions that any AgentKit-powered agent can register:
 | `MINTWARE_GET_SCORE` | Look up the Attribution score for any address (or the agent's own) |
 | `MINTWARE_REGISTER` | Register the agent wallet with the Attribution contract on Base mainnet (one-time) |
 | `MINTWARE_CLAIM_PENDING` | Submit pending oracle-signed attestations on-chain to update the score |
+| `MINTWARE_PARK` | Park USDC into the yield vault (approve + deposit) — earns while staying spendable |
 | `MINTWARE_TREASURY` | Show the agent's parking account — USDC parked (and earning) + spendable in place |
 | `MINTWARE_X402_QUOTE` | Preflight an [x402](https://x402.org)-gated compute/API URL — return the price without paying |
 | `MINTWARE_X402_PAY` | Pay for an x402-gated call in USDC (EIP-3009) from the agent wallet and return the resource |

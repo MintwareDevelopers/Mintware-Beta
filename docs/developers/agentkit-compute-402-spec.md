@@ -187,17 +187,21 @@ requirement.**
 | **P4** | **Reputation-gated pricing** (`lib/x402/pricing.ts`) wired into the facilitator | ✅ code-complete (percentile→policy; ReputationSource port pending a wire to Attribution) |
 | **P5** | MCP transport for the payer action | ⏳ not started |
 
-**The parking account (the core):** `lib/x402/treasury.ts` (park + spend-in-place model) + `vaultReader.ts`
-(reads fee-net parked USDC off the Arc vault: `convertToAssets(shares(agent))`) + `GET /api/x402/account` +
-the `MINTWARE_TREASURY` AgentKit action (parked / spendable / earning). Spendable defaults to the full parked
-balance — parking does not lock.
+**The parking account (the core):**
+- `lib/x402/treasury.ts` (park + spend-in-place model) + `vaultReader.ts` (fee-net parked USDC off the Arc
+  vault: `convertToAssets(shares(agent))`) + `GET /api/x402/account` (returns `spendableLive`).
+- **Park:** `MINTWARE_PARK` AgentKit action (approve + `deposit` into the vault). **Check:** `MINTWARE_TREASURY`.
+- **Live spendable:** edge-auth `GET /available/:user` (read-only headroom = NAV equity − holds − cap −
+  liquidity, reusing `ledger::available`, no hold reserved) → `httpSpendableSource`, wired into the account
+  route. Without edge-auth, spendable defaults to the full parked balance — **parking does not lock**.
+- **UI:** `/app/agents` — the clickable parking account (parked / spendable / earning, live off the vault).
 
 **Build state (2026-08-18):** `lib/x402/*` (types, protocol, pricing, facilitator, require402, edgeHttp,
-config, treasury, vaultReader) + 5 routes under `app/api/x402/*` + 3 new AgentKit actions. **42 Vitest tests
-green**, project typecheck clean. What's **runtime-gated** (not code-gated): `EDGE_AUTH_URL`/`EDGE_AUTH_SECRET`
-+ `X402_PAY_TO` for the facilitator/seller; an HTTP `settle` endpoint on the relayer; a live-hold `SpendableSource`
-for exact spendable (defaults to parked without it). Trust-tiering is **optional** and off by default. Same
-external audit gates real value.
+config, treasury, vaultReader) + 5 routes under `app/api/x402/*` + the `/app/agents` page + 4 new AgentKit
+actions (park, treasury, x402 quote/pay) + edge-auth `GET /available/:user`. **44 Vitest + 82 edge-auth
+(Rust) tests green**, project typecheck + clippy clean. **Runtime-gated** (not code-gated):
+`EDGE_AUTH_URL`/`EDGE_AUTH_SECRET` + `X402_PAY_TO` for the facilitator/seller/live-spendable; an HTTP `settle`
+endpoint on the relayer. Trust-tiering is **optional** and off by default. Same external audit gates real value.
 
 ## 10. Security & risks
 
