@@ -84,7 +84,7 @@ public/
 ## Pages Reference
 
 Auth = `MwAuthGuard` (soft-gate today; dev bypass when `NODE_ENV === 'development'`). The
-User/Team hard gate is `middleware.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` (default off).
+User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` (default off).
 
 ### Marketing / public (no auth)
 

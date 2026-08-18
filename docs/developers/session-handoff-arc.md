@@ -64,7 +64,7 @@ RPC `https://rpc.testnet.arc.io` · faucet `https://faucet.circle.com` · explor
 | Arc settle scripts | `contracts-v4/script/LiveSettleArc.s.sol`, `LiveSettleArcHighValue.s.sol` |
 | Relayer (Rust) | `services/relayer/src/{batch,cctp,settle,submit}.rs` |
 | Edge-auth (Rust) | `services/edge-auth/src/{nav,ledger,portfolio,haircut,chain,...}.rs` |
-| Hard gate | `lib/auth/{rbac,gate,session,cookies}.ts`, `middleware.ts`, `app/api/team/session/route.ts` |
+| Hard gate | `lib/auth/{rbac,gate,session,cookies}.ts`, `proxy.ts`, `app/api/team/session/route.ts` |
 | Arc surface | `app/app/arc/page.tsx` |
 | Config | `config/arc.ts`, `services/*/.env.arc.example`, `foundry.toml` (`arc` endpoint) |
 | Docs | `docs/developers/arc-settlement-integration.md`, `arc-e2e-demo.md`, `eth-settlement-swap-spec.md`, `v3-to-v4-migration-spec.md` |

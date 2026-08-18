@@ -34,7 +34,7 @@
 | `NEXT_PUBLIC_VAULTS_LOCKED` | Public | Set `true` to hide vault pages behind "coming soon" (the real gate; `PHASE2_ENABLED` was removed) |
 | `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS` | Public | Gates V4 contract reads |
 | `NEXT_PUBLIC_MW_TREASURY_ADDRESS` | Public | Set after contract deploy |
-| `TEAM_HARD_GATE` | Server-only | `true` turns ON the Phase-2 User/Team hard gate (`middleware.ts` → `lib/auth/gate.ts`). Unset/`false` = soft-gate showcase, middleware is a pass-through (default). |
+| `TEAM_HARD_GATE` | Server-only | `true` turns ON the Phase-2 User/Team hard gate (`proxy.ts` → `lib/auth/gate.ts`). Unset/`false` = soft-gate showcase, middleware is a pass-through (default). |
 | `PRIVY_APP_SECRET` | Server-only | Privy app secret for server-side session verification (`lib/auth/session.ts#verifyPrivySession`). Required for the hard gate to be a real security boundary; unset → verification fails closed. |
 
 ### x402 (agent pay-per-call — `lib/x402/*`)
