@@ -51,6 +51,11 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 - **Multi-collateral ETH settlement** — ETH-collateral vault + `MintwareEthSettlement` swap +
   relayer batch path, **live on Base Sepolia** (same branch). Earn side (v4 ETH on Base) ↔ CCTP ↔
   spend side (USDC on Arc). Testnet + deploy-gated, same audit caveat.
+- **x402 agent-compute payments** — Mintware as the **x402 facilitator + funding rail** for agents paying
+  per compute call in USDC (`lib/x402/*`, `app/api/x402/{supported,verify,settle,score}`, 2 AgentKit actions
+  in `plugins/agentkit`). **Code-complete P1–P4, 33 Vitest tests green**; **runtime-gated** (needs
+  `EDGE_AUTH_URL`/`_SECRET` + `X402_PAY_TO`; routes 503 until set). Not live. Spec:
+  [`docs/developers/agentkit-compute-402-spec.md`](../docs/developers/agentkit-compute-402-spec.md).
 
 ## Where to look (routing)
 

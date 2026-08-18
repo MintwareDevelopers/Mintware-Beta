@@ -227,6 +227,144 @@ const mintwareClaimPendingAction = {
 }
 
 // =============================================================================
+// x402 — pay for compute per call (spec: docs/developers/agentkit-compute-402-spec.md)
+// =============================================================================
+
+// Base64 helpers (Node + edge).
+function b64decode(s: string): string {
+  return typeof Buffer !== 'undefined' ? Buffer.from(s, 'base64').toString('utf8') : atob(s)
+}
+function b64encode(s: string): string {
+  return typeof Buffer !== 'undefined' ? Buffer.from(s, 'utf8').toString('base64') : btoa(s)
+}
+
+interface X402Requirements {
+  scheme: 'exact' | 'deferred'
+  network: string
+  maxAmountRequired: string
+  asset: string
+  payTo: string
+  resource: string
+  description?: string
+  nonce: string
+  validUntil: number
+  maxTimeoutSeconds?: number
+}
+
+/** EIP-712 domain for USDC `transferWithAuthorization` (EIP-3009), per x402 network. */
+const USDC_DOMAIN: Record<string, { name: string; version: string; chainId: number; verifyingContract: string }> = {
+  base: { name: 'USD Coin', version: '2', chainId: 8453, verifyingContract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
+  'base-sepolia': { name: 'USDC', version: '2', chainId: 84532, verifyingContract: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' },
+}
+
+const EIP3009_TYPES = {
+  TransferWithAuthorization: [
+    { name: 'from', type: 'address' },
+    { name: 'to', type: 'address' },
+    { name: 'value', type: 'uint256' },
+    { name: 'validAfter', type: 'uint256' },
+    { name: 'validBefore', type: 'uint256' },
+    { name: 'nonce', type: 'bytes32' },
+  ],
+}
+
+/** Minimal wallet surface x402 payment needs — `signTypedData` is present on EVM AgentKit providers. */
+interface X402Wallet {
+  getAddress(): string
+  signTypedData?(params: { domain: unknown; types: unknown; primaryType: string; message: unknown }): Promise<string>
+}
+
+function randomNonce32(): string {
+  const bytes = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(bytes) // Web Crypto — global in Node 18+ and browsers
+  return '0x' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** Fetch a resource; if it is 402, return the first advertised requirements (else null = free/served). */
+async function readX402Challenge(url: string): Promise<{ res: Response; reqs: X402Requirements | null }> {
+  const res = await fetch(url)
+  if (res.status !== 402) return { res, reqs: null }
+  const header = res.headers.get('payment-required') ?? res.headers.get('PAYMENT-REQUIRED')
+  const raw = header ? b64decode(header) : await res.clone().text()
+  const parsed = JSON.parse(raw) as { accepts?: X402Requirements[] }
+  const reqs = parsed.accepts?.[0] ?? null
+  return { res, reqs }
+}
+
+const mintwareX402QuoteAction = {
+  name: 'MINTWARE_X402_QUOTE',
+  description:
+    'Preflight an x402-gated compute/API URL WITHOUT paying. Returns the price (USDC), network, recipient, ' +
+    'and description advertised in the 402 challenge, so the agent can decide whether to pay.',
+  schema: z.object({
+    url: z.string().url().describe('The x402-protected resource URL to quote.'),
+  }),
+  invoke: async (_wallet: X402Wallet, args: { url: string }): Promise<string> => {
+    const { res, reqs } = await readX402Challenge(args.url)
+    if (!reqs) return `No payment required (HTTP ${res.status}). The resource is free or already served.`
+    const usdc = (Number(reqs.maxAmountRequired) / 1e6).toLocaleString('en-US', { maximumFractionDigits: 6 })
+    return [
+      `x402 quote for ${reqs.resource}`,
+      `  Price:    up to $${usdc} USDC`,
+      `  Network:  ${reqs.network}`,
+      `  Pay to:   ${reqs.payTo}`,
+      `  Scheme:   ${reqs.scheme}`,
+      reqs.description ? `  About:    ${reqs.description}` : '',
+    ].filter(Boolean).join('\n')
+  },
+}
+
+const mintwareX402PayAction = {
+  name: 'MINTWARE_X402_PAY',
+  description:
+    'Pay for an x402-gated compute/API call from the agent wallet in USDC and return the resource. ' +
+    'Reads the 402 challenge, enforces the optional maxAmountUsd cap, signs an EIP-3009 authorization, ' +
+    'retries with the payment, and returns the resource body. Use MINTWARE_X402_QUOTE first to preview cost.',
+  schema: z.object({
+    url: z.string().url().describe('The x402-protected resource URL to pay for and fetch.'),
+    maxAmountUsd: z.number().optional().describe('Hard cap on what to pay, in USD. Aborts if the price exceeds it.'),
+  }),
+  invoke: async (wallet: X402Wallet, args: { url: string; maxAmountUsd?: number }): Promise<string> => {
+    const { res, reqs } = await readX402Challenge(args.url)
+    if (!reqs) return await res.text() // already free/served
+
+    const priceUsd = Number(reqs.maxAmountRequired) / 1e6
+    if (args.maxAmountUsd != null && priceUsd > args.maxAmountUsd) {
+      return `Aborted: price $${priceUsd} exceeds your cap $${args.maxAmountUsd}. Nothing paid.`
+    }
+    const domain = USDC_DOMAIN[reqs.network]
+    if (!domain) return `Aborted: network "${reqs.network}" not supported for payment by this action.`
+    if (!wallet.signTypedData) {
+      throw new Error('This wallet provider cannot signTypedData — required to authorize an x402 (EIP-3009) payment.')
+    }
+
+    const now = Math.floor(Date.now() / 1000)
+    const authorization = {
+      from: wallet.getAddress(),
+      to: reqs.payTo,
+      value: reqs.maxAmountRequired,
+      validAfter: String(now - 60),
+      validBefore: String(now + (reqs.maxTimeoutSeconds ?? 300)),
+      nonce: randomNonce32(),
+    }
+    const signature = await wallet.signTypedData({
+      domain,
+      types: EIP3009_TYPES,
+      primaryType: 'TransferWithAuthorization',
+      message: authorization,
+    })
+    const paymentPayload = { x402Version: 2, scheme: reqs.scheme, network: reqs.network, payload: { signature, authorization } }
+    const header = b64encode(JSON.stringify(paymentPayload))
+
+    const paid = await fetch(args.url, { headers: { 'PAYMENT-SIGNATURE': header } })
+    if (paid.status === 402) return `Payment rejected by the resource (still 402). Nothing was served; check funds/score.`
+    if (!paid.ok) throw new Error(`Resource returned ${paid.status} after payment: ${paid.statusText}`)
+    const body = await paid.text()
+    return `Paid $${priceUsd} USDC on ${reqs.network}. Resource:\n\n${body}`
+  },
+}
+
+// =============================================================================
 // Exports
 // =============================================================================
 
@@ -234,12 +372,16 @@ export const mintwareActions = [
   mintwareGetScoreAction,
   mintwareRegisterAction,
   mintwareClaimPendingAction,
+  mintwareX402QuoteAction,
+  mintwareX402PayAction,
 ]
 
 export {
   mintwareGetScoreAction,
   mintwareRegisterAction,
   mintwareClaimPendingAction,
+  mintwareX402QuoteAction,
+  mintwareX402PayAction,
   BASE_MAINNET_CONTRACT,
   API_BASE,
 }

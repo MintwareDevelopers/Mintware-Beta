@@ -4,13 +4,20 @@ Coinbase AgentKit actions for [Mintware AI Attribution](https://mintware.finance
 
 ## What it does
 
-Three AgentKit actions that any AgentKit-powered agent can register:
+AgentKit actions that any AgentKit-powered agent can register:
 
 | Action | Description |
 |---|---|
 | `MINTWARE_GET_SCORE` | Look up the Attribution score for any address (or the agent's own) |
 | `MINTWARE_REGISTER` | Register the agent wallet with the Attribution contract on Base mainnet (one-time) |
 | `MINTWARE_CLAIM_PENDING` | Submit pending oracle-signed attestations on-chain to update the score |
+| `MINTWARE_X402_QUOTE` | Preflight an [x402](https://x402.org)-gated compute/API URL — return the price without paying |
+| `MINTWARE_X402_PAY` | Pay for an x402-gated call in USDC (EIP-3009) from the agent wallet and return the resource |
+
+The two x402 actions let an agent **pay for compute per call** in USDC. When the payer is a Mintware
+Liquid Sovereign Account and the seller routes through the Mintware facilitator, the balance stays
+yield-bearing until settlement and access is reputation-gated. See
+[`docs/developers/agentkit-compute-402-spec.md`](../../docs/developers/agentkit-compute-402-spec.md).
 
 **Contract (Base mainnet):** `0xb9FB965Caa7197932b52631e0121Ea54586e2B88`
 
