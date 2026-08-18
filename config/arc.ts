@@ -21,10 +21,15 @@ export const ARC_TESTNET = {
   usdc: '0x3600000000000000000000000000000000000000', // Arc testnet USDC (6dp)
   // Arc's yield primitive — XyloNet's XyloVault (auto-compounding ERC-4626 USDC vault, by ForgeLabs,
   // live on Arc testnet; xylonet.xyz/vault). VERIFIED ON-CHAIN 2026-08-18 via rpc.testnet.arc.io:
-  //   asset()   = 0x3600…0000 (the Arc USDC above)   symbol()   = "xyUSDC"
-  //   decimals()= 18 (share token; asset is 6dp — the adapter is decimals-agnostic, so this is fine)
-  //   totalAssets() ≈ 8.27M USDC (funded, active)     convertToShares(1e6) = 999998 (std 4626 rounding)
-  // This is the value for ARC_YIELD_SOURCE at redeploy (see ARCSettlementConfig.yieldSource below).
+  //   asset()=0x3600…0000 (Arc USDC)   symbol()="xyUSDC"   decimals()=18   totalAssets()≈8.27M USDC (funded)
+  // ⚠ LIVE-SMOKE-TESTED 2026-08-18 (deposit→redeem round-trip, txs on-chain) — it is a NON-STANDARD 4626:
+  //   • withdrawFee()=10 (0.10% exit) + performanceFee()=1000 (10% on yield).
+  //   • convertToAssets()/maxWithdraw() DO NOT net the withdraw fee → they OVER-REPORT realizable NAV;
+  //     previewRedeem()/previewWithdraw() DO net it. maxWithdraw over-reports, so withdraw(assets) REVERTS
+  //     (`INSUFFICIENT_BALANCE`) near full balance — **redeem(shares) is the only working exit.**
+  //   Consequence: NOT a drop-in for a par-spendable settlement vault. Before wiring, MintwareERC4626YieldAdapter
+  //   must (1) value totalAssets via previewRedeem (fee-net, conservative) and (2) exit via redeem(shares).
+  //   See docs/developers/session-handoff-arc.md → "what's left #1".
   xyloVault: '0x240Eb85458CD41361bd8C3773253a1D78054f747',
   // CCTP v2 (public — Circle CCTP docs). Arc's CCTP domain id is 26.
   cctpDomain: 26,
@@ -54,14 +59,16 @@ export interface ArcSettlementConfig {
   /** Real USDC on Arc. */
   usdc?: string
   /** Arc's yield primitive as an ERC-4626 over USDC (slots into MintwareERC4626YieldAdapter).
-   *  CONFIRMED: XyloNet's **XyloVault** at `ARC_TESTNET.xyloVault`
-   *  (`0x240Eb85458CD41361bd8C3773253a1D78054f747`) — verified on-chain 2026-08-18 (asset = Arc USDC,
-   *  symbol xyUSDC). The LIVE adapter still wraps a placeholder mock 4626; earning real Arc yield is a
-   *  ONE-LINE redeploy — set the env var to the XyloVault address and re-run DeployArcSpendStack:
+   *  CONFIRMED address: XyloNet's **XyloVault** at `ARC_TESTNET.xyloVault`
+   *  (`0x240Eb85458CD41361bd8C3773253a1D78054f747`), verified + live-smoke-tested on-chain 2026-08-18.
+   *  ⚠ NOT a clean drop-in — the smoke test found XyloVault is a non-standard 4626 (0.10% withdrawFee +
+   *  10% performanceFee; convertToAssets/maxWithdraw over-report because they ignore the fee, and
+   *  withdraw(assets) reverts near full balance — redeem(shares) is the working exit). See the ⚠ block on
+   *  `ARC_TESTNET.xyloVault` above. So the redeploy is gated on a fee-aware adapter change (totalAssets via
+   *  previewRedeem; exit via redeem). Once that lands, it IS a one-line redeploy:
    *    `ARC_YIELD_SOURCE=0x240Eb85458CD41361bd8C3773253a1D78054f747 \
    *       forge script contracts-v4/script/DeployArcSpendStack.s.sol --rpc-url arc --broadcast --slow`
-   *  Pre-redeploy check: one live deposit/withdraw round-trip through XyloVault (std 4626 rounding; the
-   *  adapter is decimals-agnostic so the 18-dp shares are fine). Arc public mainnet: Sept 16, 2026. */
+   *  Until then keep the mock 4626. Arc public mainnet: Sept 16, 2026. */
   yieldSource?: string
   /** Deployed MintwarePaymentGateway (the settleSpend entrypoint). */
   gateway?: string

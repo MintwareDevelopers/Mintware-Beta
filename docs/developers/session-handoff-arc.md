@@ -93,18 +93,29 @@ RPC `https://rpc.testnet.arc.io` · faucet `https://faucet.circle.com` · explor
 
 ## What's left (business / audit track only)
 
-1. **Wire XyloVault** for real Arc yield — address **confirmed + verified on-chain 2026-08-18**:
-   `0x240Eb85458CD41361bd8C3773253a1D78054f747` (XyloNet XyloVault, `asset()`=Arc USDC, `symbol()`=`xyUSDC`,
-   `totalAssets()`≈8.27M USDC, funded). It's a **one-line redeploy** (the deploy script already reads the env,
-   falling back to the mock):
+1. **Wire XyloVault** for real Arc yield — address **confirmed** `0x240Eb85458CD41361bd8C3773253a1D78054f747`
+   (XyloNet XyloVault, `asset()`=Arc USDC, `symbol()`=`xyUSDC`, `totalAssets()`≈8.27M USDC, funded). **⚠ The
+   live smoke test (2026-08-18, deposit→redeem round-trip on-chain) found it is NOT a clean drop-in** — it's a
+   non-standard 4626:
+   - `withdrawFee()` = **10 bps** (0.10% on exit) + `performanceFee()` = **10%** (on yield).
+   - `convertToAssets()` and `maxWithdraw()` **do not net the withdraw fee → they over-report** realizable NAV;
+     `previewRedeem()`/`previewWithdraw()` do net it. Because `maxWithdraw` over-reports, **`withdraw(assets)`
+     reverts (`INSUFFICIENT_BALANCE`)** near full balance — `redeem(shares)` is the only working exit.
+   - Proof: deposited 1 USDC → 999998 shares; `withdraw(999999)` (=`maxWithdraw`) reverted; `redeem(999998)`
+     returned ~999000 USDC (the 10 bps haircut). Position fully recovered.
+
+   **So the redeploy is gated on a fee-aware adapter change** in `MintwareERC4626YieldAdapter`: (1) value
+   `totalAssets()` via `previewRedeem(balanceOf)` (fee-net, conservative — and identical to `convertToAssets`
+   for fee-free vaults, so it's a safe general improvement); (2) exit via `redeem(shares)` instead of
+   `withdraw(assets)`. An overstated NAV backing *par-spendable* settlement USDC is a solvency risk, so this is
+   a real gate, not cosmetic. Once the adapter is fee-aware, it IS a one-line redeploy (deploy script already
+   reads the env, falling back to the mock):
    ```bash
    ARC_YIELD_SOURCE=0x240Eb85458CD41361bd8C3773253a1D78054f747 \
      forge script contracts-v4/script/DeployArcSpendStack.s.sol --rpc-url arc --broadcast --slow
    ```
-   The adapter is decimals-agnostic (works in USDC-asset units via the 4626 interface), so XyloVault's 18-dp
-   shares are fine. **Only pre-redeploy check:** one live deposit/withdraw round-trip through XyloVault
-   (standard 4626 rounding — `convertToShares(1e6)=999998`). Then repoint the vault/adapter addresses in
-   `config/arc.ts` (`ARC_TESTNET_DEPLOYMENT`) + the `NEXT_PUBLIC_ARC_*` envs.
+   Then repoint `config/arc.ts` (`ARC_TESTNET_DEPLOYMENT`) + the `NEXT_PUBLIC_ARC_*` envs. Until the adapter
+   lands, keep the mock 4626. (Decimals were never the issue — the adapter is asset-denominated; the fee is.)
 2. **CPN card off-ramp + issuer** — the one genuine Circle-relationship piece.
 3. **External audit** — the gate before real value (converged vault + settlement + MEV stack).
 4. **Arc mainnet** — public launch **Sept 16, 2026**.
