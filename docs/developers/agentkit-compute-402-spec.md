@@ -185,7 +185,7 @@ requirement.**
 | **P2** | **Payer:** `MINTWARE_X402_PAY` + `MINTWARE_X402_QUOTE` AgentKit actions (`plugins/agentkit`) | ✅ code-complete |
 | **P3** | **Facilitator-backed-by-YPN:** `YpnFacilitator` + `POST /api/x402/verify`→edge-auth, `POST /api/x402/settle`→relayer | ✅ code-complete (relayer settle transport is a config flip) |
 | **P4** | **Reputation-gated pricing** (`lib/x402/pricing.ts`) wired into the facilitator | ✅ code-complete (percentile→policy; ReputationSource port pending a wire to Attribution) |
-| **P5** | MCP transport for the payer action | ⏳ not started |
+| **P5** | MCP transport — `@mintware/mcp-server` gains `mintware_parking_account` / `x402_quote` / `x402_pay` (viem EIP-3009) | ✅ code-complete |
 
 **The parking account (the core):**
 - `lib/x402/treasury.ts` (park + spend-in-place model) + `vaultReader.ts` (fee-net parked USDC off the Arc

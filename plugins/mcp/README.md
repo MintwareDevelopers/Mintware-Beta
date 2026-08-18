@@ -124,6 +124,26 @@ Returns the number of actions submitted and the transaction hashes.
 
 ---
 
+### `mintware_parking_account`
+
+Show an agent's Mintware capital-parking account — USDC parked (and earning yield) plus what's spendable in place right now. Read-only.
+
+**Input:** `{ "address": "0xabc..." }`
+
+### `mintware_x402_quote`
+
+Preflight an [x402](https://x402.org)-gated compute/API URL without paying — returns the price, network, and recipient from the HTTP 402 challenge. Read-only.
+
+**Input:** `{ "url": "https://…" }`
+
+### `mintware_x402_pay`
+
+Pay for an x402-gated call in USDC (signs an EIP-3009 authorization) and return the resource. The agent parks capital that keeps earning while staying spendable in place; this spends it per call. Only pass a private key for a wallet you control, in a trusted environment.
+
+**Input:** `{ "url": "https://…", "privateKey": "0x…", "maxAmountUsd": 0.05 }`
+
+---
+
 ## Contract details
 
 - **Network:** Base mainnet (chain ID 8453)
