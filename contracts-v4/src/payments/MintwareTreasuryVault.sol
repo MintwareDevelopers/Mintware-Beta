@@ -139,6 +139,15 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     uint256 public juniorUsdcBuffer;
     uint256 public lockExpiry;         // junior hard cliff
     uint256 public idleBufferTargetBps = 8_000; // governable per-vault, [MIN,MAX]
+
+    /// @notice Coverage-ratio floor (pre-audit hardening #7b — Idle/Gearbox pattern). When the junior USDC
+    ///         first-loss buffer thins below `minCoverageBps` of the deployed-at-risk senior, RISK-INCREASING
+    ///         ops are halted (`deployToLP` reverts, JIT no-ops), so senior exposure never outruns the junior
+    ///         cushion — PREVENTING a Black-Thursday shortfall proactively rather than relying on the revert
+    ///         path at the moment of stress. Only the rock-solid USDC buffer counts; the volatile junior
+    ///         token is deliberately NOT valued at spot (manipulable / circular). Default 0 = OFF (behavior
+    ///         unchanged); ops-enable per pool tier (thinner junior ⇒ higher floor — see pool-tiering).
+    uint256 public minCoverageBps;
     bool    public activated;
     /// @notice True while the junior is locked: 100% of collected LP fees credit the senior.
     bool    public teamFeesRedirected;
@@ -203,6 +212,9 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     error InsufficientShares();
     error InsufficientIdleLiquidity();
     error StillLocked();
+    error CoverageTooLow();
+
+    event MinCoverageSet(uint256 bps);
     error BadParam();
     error OnlyJitHook();
     error UsdcNotInPool();
@@ -283,6 +295,14 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         if (bps > MAX_JIT_PER_BLOCK_BPS) revert BadParam();
         jitMaxPerBlockBps = bps;
         emit JitCapSet(bps);
+    }
+
+    /// @notice Set the coverage-ratio floor (bps of deployed-at-risk senior the junior USDC buffer must
+    ///         cover). 0 = OFF (default). See `minCoverageBps`. Risk-increasing ops (deploy / JIT) below
+    ///         the floor are halted.
+    function setMinCoverage(uint16 bps) external onlyOwner {
+        minCoverageBps = bps;
+        emit MinCoverageSet(bps);
     }
 
     /// @notice Wire (or clear) the am-AMM auction that may push rent via `fundRent`. Re-settable by the
@@ -420,6 +440,20 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         return MWTreasuryPositionLib.recoverableUSDC(_posCtx(), oTick, oReady);
     }
 
+    /// @notice Junior USDC first-loss buffer as bps of the deployed-at-risk senior. `>= 10_000` = fully
+    ///         covered; `type(uint256).max` when nothing is deployed. Only the USDC buffer counts (the
+    ///         volatile junior token is NOT valued here — conservative + non-manipulable). Pre-audit #7b.
+    function coverageBps() public view returns (uint256) {
+        return deployedFromSenior == 0 ? type(uint256).max : (juniorUsdcBuffer * BPS) / deployedFromSenior;
+    }
+
+    /// @dev True iff adding `addlDeploy` of at-risk senior keeps coverage at/above the floor. Division-free
+    ///      (no div-by-zero even at zero deployed). Gate OFF (floor 0) ⇒ always true.
+    function _coverageOkAfter(uint256 addlDeploy) internal view returns (bool) {
+        if (minCoverageBps == 0) return true;
+        return juniorUsdcBuffer * BPS >= minCoverageBps * (deployedFromSenior + addlDeploy);
+    }
+
     function _toShares(uint256 assets, uint256 ta, Math.Rounding r) internal view returns (uint256) {
         return SeniorSharesMath.toShares(assets, totalSeniorShares, ta, VIRTUAL, r);
     }
@@ -515,6 +549,10 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         uint256 base = totalSeniorAssets();
         uint256 minIdle = base.mulDiv(idleBufferTargetBps, BPS, Math.Rounding.Ceil);
         if (deployedFromSenior + usdcAmount > base - minIdle) revert BadParam();
+
+        // AUDIT #7b (coverage floor): never grow at-risk senior past what the junior USDC buffer covers.
+        // `usdcAmount` bounds the actual `usdcUsed`, so gating on it is conservative.
+        if (!_coverageOkAfter(usdcAmount)) revert CoverageTooLow();
 
         // Ensure the USDC is on hand from SENIOR sources only (free senior buffer + Aave). The team leg is
         // already held as the junior reserve; the V4 position is settled from the vault's own balance
@@ -647,6 +685,7 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         uint256 headroom = Math.min(adapter.totalAssets(), adapter.maxWithdrawable());
         if (headroom < cap) cap = headroom;
         if (cap == 0) return 0;
+        if (!_coverageOkAfter(cap)) return 0; // AUDIT #7b: skip JIT when the junior cushion is thin (best-effort)
 
         lent = adapter.withdraw(cap); // best-effort; from senior Aave idle, never a junior earmark
         if (lent == 0) return 0;

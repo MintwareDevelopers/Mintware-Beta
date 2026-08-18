@@ -118,6 +118,42 @@ contract MintwareTreasuryJitStackTest is Test {
         return address(team) < address(usdc);
     }
 
+    // AUDIT #7b: coverage-ratio floor gate. Junior USDC buffer = 5000; senior = 10000 (deploy capped at
+    // 2000 by idle-first). The gate halts risk-increasing ops when the junior cushion thins below the floor.
+
+    function test_coverage_gate_off_by_default() public {
+        assertEq(vault.minCoverageBps(), 0, "gate off by default");
+        assertEq(vault.coverageBps(), type(uint256).max, "no at-risk senior -> max coverage");
+        vault.deployToLP(2_000 * ONE, vault.juniorTokens()); // behaves exactly as before
+        assertGt(vault.deployedFromSenior(), 0, "deploy proceeds with the gate off");
+    }
+
+    function test_coverage_gate_halts_deploy_when_junior_thin() public {
+        // Pick the floor from the ACTUAL junior buffer so the test is robust to the harness's exact numbers.
+        uint256 buf = vault.juniorUsdcBuffer();
+        uint256 jt = vault.juniorTokens(); // hoist: expectRevert must see deployToLP as the NEXT external call
+        uint256 dep = 2_000 * ONE;                // the max the idle-first check allows
+        uint256 covAtDep = (buf * 10_000) / dep;  // coverage bps this deploy would leave
+        assertLe(covAtDep + 1, type(uint16).max, "floor fits uint16");
+
+        // A floor JUST ABOVE that coverage must halt the deploy.
+        vault.setMinCoverage(uint16(covAtDep + 1));
+        vm.expectRevert(MintwareTreasuryVault.CoverageTooLow.selector);
+        vault.deployToLP(dep, jt);
+
+        // Lowering the floor to that coverage lets the same deploy through.
+        vault.setMinCoverage(uint16(covAtDep));
+        vault.deployToLP(dep, jt);
+        assertGt(vault.deployedFromSenior(), 0, "a covered deploy still proceeds");
+    }
+
+    function test_coverageBps_view_tracks_deployed() public {
+        assertEq(vault.coverageBps(), type(uint256).max);
+        vault.deployToLP(1_000 * ONE, vault.juniorTokens());
+        // coverage = juniorUsdcBuffer(5000) * 10000 / deployed(<=1000) >= 50_000 bps.
+        assertGe(vault.coverageBps(), 50_000, "junior buffer covers the deployed senior multiple times");
+    }
+
     function test_module_deploys_on_hooked_pool_and_skips_jit_on_its_own_swaps() public {
         // 1. The module deploys senior LP on the HOOKED pool — coexists with the hook.
         uint256 jt = vault.juniorTokens();
