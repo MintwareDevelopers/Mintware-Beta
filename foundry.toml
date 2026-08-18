@@ -28,6 +28,28 @@ arc           = "https://rpc.testnet.arc.io"  # public Arc testnet RPC (Circle) 
 base = { key = "${BASESCAN_API_KEY}", chain = 8453, url = "https://api.basescan.org/api" }
 base_sepolia = { key = "${BASESCAN_API_KEY}", chain = 84532, url = "https://api-sepolia.basescan.org/api" }
 
+# Invariant + fuzz budget — PINNED so the documented depth is reproducible from config alone (not
+# reliant on Foundry's shifting defaults). 256 runs × 500 depth = 128,000 total calls per invariant,
+# matching every suite's natspec ("256 runs × 128,000 calls, 0 reverts"). fail_on_revert stays false:
+# handlers are bounded and solvency is asserted via the invariants + afterInvariant non-vacuity guards.
+[profile.default.invariant]
+runs           = 256
+depth          = 500
+fail_on_revert = false
+
+[profile.default.fuzz]
+runs = 256
+
+# Deep profile for CI / pre-audit sign-off: `FOUNDRY_PROFILE=deep forge test`. Inherits everything from
+# default (src/solc/remappings) and only widens the search. Slower — not the default so local runs stay fast.
+[profile.deep.invariant]
+runs           = 512
+depth          = 1000
+fail_on_revert = false
+
+[profile.deep.fuzz]
+runs = 1024
+
 # Test profile — faster, no optimizer
 [profile.test]
 optimizer      = false

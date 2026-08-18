@@ -183,10 +183,10 @@ No production contract lives under `test/`; all mocks/helpers are under `contrac
 ## 6. Invariants under test
 
 **42 `invariant_*` + 11 `testFuzz_*` functions**, each with a `StdInvariant` handler + targeted
-selectors. ⚠ **Run-config caveat (flag to auditor):** the suites' natspec documents a **256 runs ×
-128,000 calls** budget, but the **root `foundry.toml` has no `[invariant]` block**, so unqualified
-`forge test` applies Foundry's *defaults*, not that depth. The documented depth was run via CI flags,
-not pinned config — **pin an `[invariant]` profile** so the headline depth is reproducible. (Details in §8.)
+selectors. **Run config (pinned):** `foundry.toml` pins `[profile.default.invariant] runs=256, depth=500`
+→ every invariant runs at exactly **"runs: 256, calls: 128,000, reverts: 0"** (verified), matching the
+suites' natspec. A deeper `[profile.deep]` (`runs=512, depth=1000`) is available for pre-audit sign-off
+via `FOUNDRY_PROFILE=deep forge test`.
 
 **YPN treasury solvency / coverage** — `MintwareTreasuryVaultInvariant.t.sol`:
 `invariant_senior_par_covered` (deployed senior par ≤ junior stack), `invariant_senior_fully_backed`,
@@ -257,10 +257,9 @@ Full mapping + test evidence: [`pre-audit-findings-ledger.md`](pre-audit-finding
   documented inline as a PARITY TODO.
 - **Deploy-gated remainder (not audit blockers):** a live relayer `settle` HTTP endpoint + funded key;
   the single→pair frontend ABI cutover; Arc mainnet.
-- **Invariant depth not pinned in config (housekeeping, fix before audit):** the root `foundry.toml`
-  has no `[invariant]` block, so the documented **256 × 128k** budget isn't what an unqualified
-  `forge test` runs. Add an `[invariant]` (and `[fuzz]`) profile so the headline depth is reproducible
-  from config alone — auditors will re-run and expect the numbers to match.
+- **Invariant depth — ✅ FIXED (this dossier's companion commit):** `foundry.toml` now pins
+  `[profile.default.invariant] runs=256, depth=500` (= 128,000 calls, the documented budget) plus a
+  deeper opt-in `[profile.deep]`. Auditors re-running `forge test` get the exact headline numbers.
 - **Owner is single-key `Ownable` on most contracts** (only `AIAttribution` uses `Ownable2Step`). Given
   the owner's fund-moving powers (§4), moving ownership behind a timelock + multisig before mainnet is a
   standing recommendation, not an optional nicety.
