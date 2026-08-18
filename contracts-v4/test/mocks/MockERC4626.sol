@@ -23,10 +23,16 @@ contract MockERC4626 is ERC4626 {
         failWithdrawals = f;
     }
 
-    /// `maxWithdraw` stays truthful (reports redeemable assets) so the adapter attempts the withdraw and
-    /// hits the revert — exercising the best-effort guard rather than the maxWithdrawable==0 short-circuit.
+    /// `maxWithdraw` stays truthful (reports redeemable assets) so the adapter attempts the exit and hits
+    /// the revert — exercising the best-effort guard rather than the maxWithdrawable==0 short-circuit.
+    /// Both exits are gated: the adapter now redeems (not withdraws), so `redeem` must fail too.
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256) {
         require(!failWithdrawals, "MockERC4626: withdraw disabled");
         return super.withdraw(assets, receiver, owner);
+    }
+
+    function redeem(uint256 shares, address receiver, address owner) public override returns (uint256) {
+        require(!failWithdrawals, "MockERC4626: withdraw disabled");
+        return super.redeem(shares, receiver, owner);
     }
 }

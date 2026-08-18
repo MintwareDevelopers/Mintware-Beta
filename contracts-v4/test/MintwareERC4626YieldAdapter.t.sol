@@ -5,8 +5,9 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {MintwareERC4626YieldAdapter} from "../src/vaults/MintwareERC4626YieldAdapter.sol";
-import {MockERC20}   from "./mocks/MockERC20.sol";
-import {MockERC4626} from "./mocks/MockERC4626.sol";
+import {MockERC20}      from "./mocks/MockERC20.sol";
+import {MockERC4626}    from "./mocks/MockERC4626.sol";
+import {MockFeeERC4626} from "./mocks/MockFeeERC4626.sol";
 
 /// @notice Proof for the Arc yield adapter (`MintwareERC4626YieldAdapter`): supply/withdraw round-trip,
 ///         yield accrual into `totalAssets`, best-effort withdraw when the source stalls, the per-block
@@ -115,5 +116,84 @@ contract MintwareERC4626YieldAdapterTest is Test {
         MockERC4626 wrongSource = new MockERC4626(IERC20(address(other))); // underlying != usdc
         vm.expectRevert(MintwareERC4626YieldAdapter.AssetMismatch.selector);
         new MintwareERC4626YieldAdapter(address(usdc), address(wrongSource), address(this), owner);
+    }
+}
+
+/// @notice Regression for the Arc XyloVault finding (2026-08-18): the adapter must survive a fee-charging,
+///         non-standard 4626 whose `convertToAssets`/`maxWithdraw` over-report and whose `withdraw(assets)`
+///         reverts near full balance. `MockFeeERC4626` reproduces XyloVault (10 bps exit fee). The test
+///         contract acts as the vault (sole authorized caller).
+contract MintwareERC4626YieldAdapterFeeTest is Test {
+    MockERC20      internal usdc;
+    MockFeeERC4626 internal source;
+    MintwareERC4626YieldAdapter internal adapter;
+
+    address internal owner = makeAddr("owner");
+    uint256 internal constant FEE_BPS = 10; // 0.10%, exactly XyloVault
+
+    function setUp() public {
+        usdc   = new MockERC20("USD Coin", "USDC", 6);
+        source = new MockFeeERC4626(IERC20(address(usdc)), FEE_BPS);
+        adapter = new MintwareERC4626YieldAdapter(address(usdc), address(source), address(this), owner);
+        usdc.mint(address(this), 1_000_000e6);
+        usdc.approve(address(adapter), type(uint256).max);
+    }
+
+    /// NAV is FEE-NET (previewRedeem), never the over-reporting convertToAssets — the whole point: an
+    /// overstated NAV backing par-spendable USDC is a solvency lie.
+    function test_fee_totalAssets_is_conservative_not_overreported() public {
+        adapter.deposit(100_000e6);
+        // convertToAssets ignores the fee (over-reports); previewRedeem nets it.
+        uint256 shares = source.balanceOf(address(adapter));
+        assertEq(source.convertToAssets(shares), 100_000e6, "convertToAssets over-reports (no fee)");
+        assertEq(adapter.totalAssets(), source.previewRedeem(shares), "adapter uses fee-net previewRedeem");
+        assertApproxEqAbs(adapter.totalAssets(), 99_900e6, 2, "NAV = deposit minus 10 bps exit fee");
+        assertLt(adapter.totalAssets(), 100_000e6, "conservative: below the over-reported figure");
+    }
+
+    /// maxWithdrawable is the fee-net realizable amount, not the inflated convertToAssets.
+    function test_fee_maxWithdrawable_is_fee_net() public {
+        adapter.deposit(100_000e6);
+        assertApproxEqAbs(adapter.maxWithdrawable(), 99_900e6, 2, "fee-net headroom");
+    }
+
+    /// THE regression: withdrawing near full balance would REVERT via 4626 `withdraw(assets)` on XyloVault,
+    /// but the adapter's redeem-based exit succeeds and delivers the fee-net assets to the vault.
+    function test_fee_withdraw_near_full_succeeds_via_redeem() public {
+        adapter.deposit(100_000e6);
+        uint256 want = adapter.maxWithdrawable(); // ~99_900e6 (fee-net)
+
+        // Prove the hazard the adapter routes around: a naive adapter would try withdraw(maxWithdraw), and
+        // maxWithdraw over-reports (ignores the fee), so it needs MORE shares than held → XyloVault reverts.
+        uint256 naiveMax = source.maxWithdraw(address(adapter)); // over-reported ceiling (no fee)
+        assertGt(naiveMax, want, "maxWithdraw over-reports vs fee-net realizable");
+        assertGt(source.previewWithdraw(naiveMax), source.balanceOf(address(adapter)), "withdraw(maxWithdraw) needs > shares held");
+        vm.expectRevert(bytes("XyloVault: INSUFFICIENT_BALANCE"));
+        source.withdraw(naiveMax, address(this), address(adapter));
+
+        uint256 balBefore = usdc.balanceOf(address(this));
+        uint256 got = adapter.withdraw(want); // must NOT revert
+        assertApproxEqAbs(got, want, 2, "delivered the fee-net amount");
+        assertEq(usdc.balanceOf(address(this)) - balBefore, got, "assets reached the vault");
+        assertApproxEqAbs(source.balanceOf(address(adapter)), 0, 1, "shares fully redeemed");
+    }
+
+    /// A partial withdraw returns AT LEAST the requested assets (never silently short) and leaves the rest.
+    function test_fee_partial_withdraw_meets_request() public {
+        adapter.deposit(100_000e6);
+        uint256 balBefore = usdc.balanceOf(address(this));
+        uint256 got = adapter.withdraw(40_000e6);
+        assertGe(got, 40_000e6, "at least the requested assets delivered");
+        assertEq(usdc.balanceOf(address(this)) - balBefore, got, "assets reached the vault");
+        assertGt(adapter.totalAssets(), 0, "remainder still supplied");
+    }
+
+    /// Per-block cap still binds on the fee-net path.
+    function test_fee_per_block_cap_clamps() public {
+        adapter.deposit(100_000e6);
+        vm.prank(owner);
+        adapter.setPerBlockWithdrawCap(25_000e6);
+        assertEq(adapter.maxWithdrawable(), 25_000e6, "capped");
+        assertApproxEqAbs(adapter.withdraw(100_000e6), 25_000e6, 2, "clamped to per-block cap");
     }
 }

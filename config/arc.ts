@@ -26,10 +26,11 @@ export const ARC_TESTNET = {
   //   • withdrawFee()=10 (0.10% exit) + performanceFee()=1000 (10% on yield).
   //   • convertToAssets()/maxWithdraw() DO NOT net the withdraw fee → they OVER-REPORT realizable NAV;
   //     previewRedeem()/previewWithdraw() DO net it. maxWithdraw over-reports, so withdraw(assets) REVERTS
-  //     (`INSUFFICIENT_BALANCE`) near full balance — **redeem(shares) is the only working exit.**
-  //   Consequence: NOT a drop-in for a par-spendable settlement vault. Before wiring, MintwareERC4626YieldAdapter
-  //   must (1) value totalAssets via previewRedeem (fee-net, conservative) and (2) exit via redeem(shares).
-  //   See docs/developers/session-handoff-arc.md → "what's left #1".
+  //     (`INSUFFICIENT_BALANCE`) near full balance — redeem(shares) is the only working exit.
+  //   ✅ HANDLED (2026-08-18): MintwareERC4626YieldAdapter is now FEE-AWARE — totalAssets/maxWithdrawable use
+  //   previewRedeem (fee-net, conservative) and it exits via redeem(shares). Proven by MockFeeERC4626 (a
+  //   XyloVault mimic) — 5 regression tests green. So it is now a clean drop-in; wiring is unblocked (below),
+  //   gated only on the same external audit as the rest of the stack. See docs/…/session-handoff-arc.md #1.
   xyloVault: '0x240Eb85458CD41361bd8C3773253a1D78054f747',
   // CCTP v2 (public — Circle CCTP docs). Arc's CCTP domain id is 26.
   cctpDomain: 26,
@@ -61,14 +62,13 @@ export interface ArcSettlementConfig {
   /** Arc's yield primitive as an ERC-4626 over USDC (slots into MintwareERC4626YieldAdapter).
    *  CONFIRMED address: XyloNet's **XyloVault** at `ARC_TESTNET.xyloVault`
    *  (`0x240Eb85458CD41361bd8C3773253a1D78054f747`), verified + live-smoke-tested on-chain 2026-08-18.
-   *  ⚠ NOT a clean drop-in — the smoke test found XyloVault is a non-standard 4626 (0.10% withdrawFee +
-   *  10% performanceFee; convertToAssets/maxWithdraw over-report because they ignore the fee, and
-   *  withdraw(assets) reverts near full balance — redeem(shares) is the working exit). See the ⚠ block on
-   *  `ARC_TESTNET.xyloVault` above. So the redeploy is gated on a fee-aware adapter change (totalAssets via
-   *  previewRedeem; exit via redeem). Once that lands, it IS a one-line redeploy:
+   *  XyloVault is a non-standard 4626 (0.10% withdrawFee + 10% performanceFee; convertToAssets/maxWithdraw
+   *  over-report, withdraw(assets) reverts near full — see the ⚠ block on `ARC_TESTNET.xyloVault` above).
+   *  ✅ The adapter is now fee-aware (previewRedeem NAV + redeem-based exit; 5 regression tests), so it's a
+   *  clean drop-in. Redeploy is one env var (deploy script falls back to the mock without it):
    *    `ARC_YIELD_SOURCE=0x240Eb85458CD41361bd8C3773253a1D78054f747 \
    *       forge script contracts-v4/script/DeployArcSpendStack.s.sol --rpc-url arc --broadcast --slow`
-   *  Until then keep the mock 4626. Arc public mainnet: Sept 16, 2026. */
+   *  Gated only on the same external audit as the rest of the stack. Arc public mainnet: Sept 16, 2026. */
   yieldSource?: string
   /** Deployed MintwarePaymentGateway (the settleSpend entrypoint). */
   gateway?: string

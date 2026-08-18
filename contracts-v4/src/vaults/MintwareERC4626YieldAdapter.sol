@@ -19,9 +19,13 @@ import {IYieldAdapter} from "./IYieldAdapter.sol";
 /// @dev    Mirrors `AaveV3YieldAdapter`'s safety discipline exactly:
 ///           • `onlyVault` supply/withdraw; `setVault` is ONE-TIME (a re-settable sink could be drained).
 ///           • **Withdraw is BEST-EFFORT and can never revert** — it is called on the settlement hot path;
-///             clamps to headroom + a per-block cap, wraps the 4626 `withdraw` in try/catch, returns the
-///             actual amount so the vault falls back to its own hot reserves. A stalled yield source
-///             degrades to "serve from buffer", never a bricked settlement.
+///             clamps to FEE-NET headroom + a per-block cap, exits via the 4626 `redeem(shares)` (not
+///             `withdraw(assets)`) wrapped in try/catch, and returns the actual assets so the vault falls
+///             back to its own hot reserves. `redeem` (not `withdraw`) because a fee-charging source makes
+///             `withdraw(assets)` revert — see the `withdraw`/`totalAssets` NatSpec (Arc XyloVault, 2026-08).
+///             A stalled yield source degrades to "serve from buffer", never a bricked settlement.
+///           • **Fee-aware NAV** — `totalAssets`/`maxWithdrawable` use `previewRedeem` (fee-net), so a
+///             source with an exit fee can't overstate the NAV that backs par-spendable settlement USDC.
 ///           • **Per-block withdraw cap** bounds how much can leave the source in one block.
 ///           • The 4626's `asset()` is verified against our `asset` in the constructor — a mis-wired source
 ///             (wrong underlying) can't silently mis-account funds (a Bunni-class guard).
@@ -94,14 +98,24 @@ contract MintwareERC4626YieldAdapter is IYieldAdapter, Ownable, ReentrancyGuard 
     }
 
     /// @inheritdoc IYieldAdapter
-    /// @dev Best-effort. Clamps to `maxWithdrawable()` (source headroom ∧ per-block cap), then the 4626
-    ///      `withdraw(assets, vault, this)` sends EXACTLY that many assets to the vault (or reverts, caught →
-    ///      0). Never reverts for an availability reason.
+    /// @dev Best-effort. Clamps to `maxWithdrawable()` (fee-net headroom ∧ per-block cap), then exits via
+    ///      the 4626 `redeem(shares, vault, this)` — NOT `withdraw(assets)`. Rationale (found live on Arc's
+    ///      XyloVault, 2026-08-18): a fee-charging 4626 makes `withdraw(assets)` need MORE shares than we
+    ///      hold (`previewWithdraw` grosses up for the fee) and revert `INSUFFICIENT_BALANCE`, whereas
+    ///      `redeem(shares)` always works and delivers the fee-net assets. Shares are sized from
+    ///      `previewWithdraw(want)`, capped at our balance and the source's `maxRedeem`, and the redeem is
+    ///      wrapped in try/catch — a stalled source degrades to "serve 0 from buffer", never a revert.
     function withdraw(uint256 amount) external override onlyVault nonReentrant returns (uint256 withdrawn) {
         uint256 want = amount < maxWithdrawable() ? amount : maxWithdrawable();
         if (want == 0) return 0;
-        try yieldSource.withdraw(want, vault, address(this)) returns (uint256 /* sharesBurned */) {
-            withdrawn = want; // 4626 withdraw(assets) transfers exactly `want` to the receiver (vault)
+        uint256 shares  = yieldSource.previewWithdraw(want); // shares to net `want` (fee-grossed by source)
+        uint256 bal     = yieldSource.balanceOf(address(this));
+        if (shares > bal) shares = bal;                      // never ask for more shares than we hold
+        uint256 srcMaxR = yieldSource.maxRedeem(address(this));
+        if (shares > srcMaxR) shares = srcMaxR;              // respect source liquidity/pause ceiling
+        if (shares == 0) return 0;
+        try yieldSource.redeem(shares, vault, address(this)) returns (uint256 assetsOut) {
+            withdrawn = assetsOut; // actual USDC delivered to the vault, NET of any exit fee
         } catch {
             return 0; // stalled source → serve from the vault's own buffer instead
         }
@@ -114,16 +128,21 @@ contract MintwareERC4626YieldAdapter is IYieldAdapter, Ownable, ReentrancyGuard 
     }
 
     /// @inheritdoc IYieldAdapter
-    /// @dev Underlying attributable to us = the 4626 assets our shares redeem for (principal + yield).
+    /// @dev Underlying attributable to us = the assets our shares actually REDEEM for, via `previewRedeem`
+    ///      (NET of any withdraw/exit fee the source charges). Conservative on purpose: `convertToAssets`
+    ///      can over-report when the source has an exit fee (as Arc's XyloVault does), which would overstate
+    ///      NAV backing par-spendable settlement USDC. For a fee-free 4626 `previewRedeem == convertToAssets`,
+    ///      so this is a safe general choice.
     function totalAssets() external view override returns (uint256) {
-        return yieldSource.convertToAssets(yieldSource.balanceOf(address(this)));
+        return yieldSource.previewRedeem(yieldSource.balanceOf(address(this)));
     }
 
     /// @inheritdoc IYieldAdapter
-    /// @dev min(our redeemable assets, the source's own `maxWithdraw`, per-block remaining). The 4626's
-    ///      `maxWithdraw` already reflects source liquidity / pause, so a frozen source returns 0 here.
+    /// @dev min(our fee-net redeemable assets, the source's `maxWithdraw`, per-block remaining). `mine` uses
+    ///      `previewRedeem` (fee-net) so this never over-promises; `maxWithdraw` still gates on source
+    ///      liquidity / pause (a frozen source returns 0 there).
     function maxWithdrawable() public view override returns (uint256) {
-        uint256 mine   = yieldSource.convertToAssets(yieldSource.balanceOf(address(this)));
+        uint256 mine   = yieldSource.previewRedeem(yieldSource.balanceOf(address(this)));
         uint256 srcMax = yieldSource.maxWithdraw(address(this));
         uint256 cap    = _blockRemaining();
         uint256 m = mine < srcMax ? mine : srcMax;

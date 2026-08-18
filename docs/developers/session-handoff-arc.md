@@ -104,18 +104,20 @@ RPC `https://rpc.testnet.arc.io` · faucet `https://faucet.circle.com` · explor
    - Proof: deposited 1 USDC → 999998 shares; `withdraw(999999)` (=`maxWithdraw`) reverted; `redeem(999998)`
      returned ~999000 USDC (the 10 bps haircut). Position fully recovered.
 
-   **So the redeploy is gated on a fee-aware adapter change** in `MintwareERC4626YieldAdapter`: (1) value
-   `totalAssets()` via `previewRedeem(balanceOf)` (fee-net, conservative — and identical to `convertToAssets`
-   for fee-free vaults, so it's a safe general improvement); (2) exit via `redeem(shares)` instead of
-   `withdraw(assets)`. An overstated NAV backing *par-spendable* settlement USDC is a solvency risk, so this is
-   a real gate, not cosmetic. Once the adapter is fee-aware, it IS a one-line redeploy (deploy script already
-   reads the env, falling back to the mock):
+   **✅ The adapter is now fee-aware** (`MintwareERC4626YieldAdapter`, 2026-08-18): `totalAssets()` /
+   `maxWithdrawable()` use `previewRedeem(balanceOf)` (fee-net, conservative — identical to `convertToAssets`
+   for fee-free vaults, so a safe general improvement), and it exits via `redeem(shares)` instead of
+   `withdraw(assets)`. Proven by `MockFeeERC4626` (a XyloVault mimic — 10 bps fee, over-reporting
+   `convertToAssets`/`maxWithdraw`, reverting `withdraw`): **5 new regression tests green, full Forge suite
+   463/0/4**. So XyloVault is now a clean drop-in and the redeploy is a one-liner (deploy script falls back to
+   the mock without the env):
    ```bash
    ARC_YIELD_SOURCE=0x240Eb85458CD41361bd8C3773253a1D78054f747 \
      forge script contracts-v4/script/DeployArcSpendStack.s.sol --rpc-url arc --broadcast --slow
    ```
-   Then repoint `config/arc.ts` (`ARC_TESTNET_DEPLOYMENT`) + the `NEXT_PUBLIC_ARC_*` envs. Until the adapter
-   lands, keep the mock 4626. (Decimals were never the issue — the adapter is asset-denominated; the fee is.)
+   Then repoint `config/arc.ts` (`ARC_TESTNET_DEPLOYMENT`) + the `NEXT_PUBLIC_ARC_*` envs. Now gated only on
+   the same external audit as the rest of the stack. (Decimals were never the issue — the adapter is
+   asset-denominated; the fee was.)
 2. **CPN card off-ramp + issuer** — the one genuine Circle-relationship piece.
 3. **External audit** — the gate before real value (converged vault + settlement + MEV stack).
 4. **Arc mainnet** — public launch **Sept 16, 2026**.
