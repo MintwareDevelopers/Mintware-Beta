@@ -149,20 +149,112 @@ export default function AgentsPage() {
     <div className="min-h-screen font-atx-display bg-white text-ink overflow-x-clip">
       <V2Nav active="agents" />
 
-      {/* HERO */}
+      {/* HERO — leads with the treasury/liquidity/payments vision; reputation is a secondary mention */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
           <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">For AI Agents</div>
           <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.03] text-[clamp(2rem,5vw,3.6rem)] max-w-[18ch] [text-wrap:balance]">
-            Give your AI agent <span className="text-gradient-accent">on-chain reputation</span>
+            Give your AI agent a treasury that <span className="text-gradient-accent">earns and pays.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            Mintware Attribution scores AI agent wallets on Base — tracking behaviour, contribution, and risk. Drop in a plugin and your agent earns a portable, machine-readable on-chain reputation that carries across Mintware.
+            Idle capital becomes a real liquidity position in a Mintware vault — earning around the clock — and spends straight from that position the instant an endpoint asks, without ever withdrawing. Drop in a plugin and your agent also earns a portable on-chain reputation, carried across Mintware.
           </p>
+          <a href="#reputation" className="text-[14px] font-medium text-ink-mid hover:text-ink no-underline inline-flex items-center min-h-[44px] mt-2">See what's live today ↓</a>
         </div>
       </section>
 
-      <div className="max-w-[900px] mx-auto px-6 pt-14 pb-20 mw-reveal">
+      {/* ── AGENT TREASURY · the JIT 402 payment engine (blueprint, not built) — the lead story ── */}
+      <section className="border-t border-hair-soft bg-ground-cool">
+        <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[76px] max-[800px]:py-[52px]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Blueprint · not yet built</span>
+          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mt-4">Agent treasury · liquidity &amp; payments</div>
+          <h2 className="font-atx-display font-semibold text-ink mt-4 tracking-[-0.04em] leading-[1.05] text-[clamp(1.7rem,4vw,2.8rem)] max-w-[20ch] [text-wrap:balance]">
+            Agents that pay for themselves — and <span className="text-gradient-accent">never sit idle.</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.55] mt-5 max-w-[64ch]">
+            The direction we're building toward: an agent whose idle capital becomes real liquidity in a Mintware vault — earning fees and MEV like any LP — and pays any endpoint the instant it asks, crypto-native or legacy, over one standard: HTTP 402. Portable on-chain reputation comes with it, as a second, optional layer.
+          </p>
+
+          {/* The 402 flow */}
+          <div className="flex items-center gap-3 mt-12 mb-4">
+            <span className={NUM}>→</span>
+            <span className={LABEL}>The JIT 402 payment engine</span>
+          </div>
+          <div className="grid grid-cols-4 max-[860px]:grid-cols-2 max-[520px]:grid-cols-1 gap-3">
+            {PAY_FLOW.map((s) => (
+              <div key={s.n} className="soft-card p-4">
+                <div className="font-atx-display font-medium text-[15px] text-peri-deep tabular-nums">{s.n}</div>
+                <div className="font-atx-display font-semibold text-[14px] text-ink mt-1">{s.t}</div>
+                <p className="text-[12px] text-ink-mid leading-[1.5] mt-1.5">{s.d}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Rail fork */}
+          <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-3 mt-3">
+            {RAILS.map((r) => (
+              <div key={r.tag} className="soft-card p-5">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-[9px] h-[9px] rounded-full shrink-0" style={{ background: r.tone }} />
+                  <span className="font-atx-display font-semibold text-[14.5px] text-ink">{r.tag}</span>
+                </div>
+                <div className="font-mono text-[11px] text-ink-soft mt-1 ml-[19px]">{r.ex}</div>
+                <ol className="mt-3.5 flex flex-col gap-2">
+                  {r.steps.map((st, i) => (
+                    <li key={i} className="flex gap-2.5 text-[12.5px] text-ink-mid leading-[1.45]">
+                      <span className="font-mono text-[11px] text-peri-deep shrink-0 mt-[1px]">{i + 1}</span>{st}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ))}
+          </div>
+
+          {/* Why */}
+          <div className="flex items-center gap-3 mt-12 mb-4">
+            <span className={NUM}>→</span>
+            <span className={LABEL}>Why it changes the math</span>
+          </div>
+          <div className="grid grid-cols-4 max-[860px]:grid-cols-2 max-[520px]:grid-cols-1 gap-3">
+            {WHY.map((w) => (
+              <div key={w.t} className="soft-card p-4">
+                <div className="font-atx-display font-semibold text-[13.5px] text-ink leading-tight">{w.t}</div>
+                <p className="text-[12px] text-ink-mid leading-[1.5] mt-2">{w.d}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Agentic ULV — leads with LP participation */}
+          <div className="flex items-center gap-3 mt-12 mb-4">
+            <span className={NUM}>→</span>
+            <span className={LABEL}>The vault is the rail · agentic ULV</span>
+          </div>
+          <p className="text-[13.5px] text-ink-mid leading-[1.55] max-w-[68ch] -mt-1 mb-4">
+            Single-sided ULV pools let an agent supply liquidity with one call — <span className="font-mono text-[12.5px] text-ink">depositUSDC(amount)</span> — no two-token inventory, no impermanent-loss math. Capital earns right up to the exact second it's spent.
+          </p>
+          <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3">
+            {ULV_ROLES.map((r) => (
+              <div key={r.role} className="soft-card p-5 flex flex-col">
+                <div className="font-atx-display font-semibold text-[14.5px] text-ink">{r.role}</div>
+                <p className="text-[12.5px] text-ink-mid leading-[1.5] mt-2 flex-1">{r.action}</p>
+                <span className="mt-3.5 inline-block self-start rounded-full bg-white border border-hair px-2.5 py-1 font-mono text-[10.5px] text-peri-deep">{r.prim}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Honesty footer */}
+          <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-5 mt-8 flex items-start gap-3 max-w-[860px]">
+            <span className="w-[7px] h-[7px] rounded-full bg-peri mt-1.5 shrink-0" />
+            <p className="text-[13px] text-ink-mid leading-[1.55]">This is the architecture we're building toward — <span className="font-semibold text-ink">not a live product</span>. It composes pieces Mintware has already built and is testing: the ULV engine, a V4 JIT liquidity hook, and the edge-auth settlement engine. Nothing here is deployed, audited, or an offer.</p>
+          </div>
+        </div>
+      </section>
+
+      <div id="reputation" className="max-w-[900px] mx-auto px-6 pt-14 pb-20 mw-reveal scroll-mt-20">
+
+        <p className="text-[13px] text-ink-mid leading-[1.55] max-w-[68ch] mb-8">
+          Alongside the treasury vision above, every agent wallet also earns a portable on-chain reputation — <span className="font-semibold text-ink">live today</span>, and optional: the integrations below work with or without it.
+        </p>
 
         {/* Plugins */}
         <div className="flex items-center gap-3 mb-4">
@@ -326,93 +418,6 @@ export default function AgentsPage() {
         </div>
 
       </div>
-
-      {/* ── ROADMAP · the JIT 402 payment engine (blueprint, not built) ── */}
-      <section className="border-t border-hair-soft bg-ground-cool">
-        <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[76px] max-[800px]:py-[52px]">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Blueprint · not yet built</span>
-          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mt-4">The road ahead · agent payments</div>
-          <h2 className="font-atx-display font-semibold text-ink mt-4 tracking-[-0.04em] leading-[1.05] text-[clamp(1.7rem,4vw,2.8rem)] max-w-[20ch] [text-wrap:balance]">
-            Agents that pay for themselves — and <span className="text-gradient-accent">never sit idle.</span>
-          </h2>
-          <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.55] mt-5 max-w-[64ch]">
-            Reputation is step one. Where we’re headed: an agent that keeps its whole treasury earning in a vault, then pays any endpoint the instant it asks — crypto-native or legacy — over one standard, HTTP 402.
-          </p>
-
-          {/* The 402 flow */}
-          <div className="flex items-center gap-3 mt-12 mb-4">
-            <span className={NUM}>→</span>
-            <span className={LABEL}>The JIT 402 payment engine</span>
-          </div>
-          <div className="grid grid-cols-4 max-[860px]:grid-cols-2 max-[520px]:grid-cols-1 gap-3">
-            {PAY_FLOW.map((s) => (
-              <div key={s.n} className="soft-card p-4">
-                <div className="font-atx-display font-medium text-[15px] text-peri-deep tabular-nums">{s.n}</div>
-                <div className="font-atx-display font-semibold text-[14px] text-ink mt-1">{s.t}</div>
-                <p className="text-[12px] text-ink-mid leading-[1.5] mt-1.5">{s.d}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Rail fork */}
-          <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-3 mt-3">
-            {RAILS.map((r) => (
-              <div key={r.tag} className="soft-card p-5">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-[9px] h-[9px] rounded-full shrink-0" style={{ background: r.tone }} />
-                  <span className="font-atx-display font-semibold text-[14.5px] text-ink">{r.tag}</span>
-                </div>
-                <div className="font-mono text-[11px] text-ink-soft mt-1 ml-[19px]">{r.ex}</div>
-                <ol className="mt-3.5 flex flex-col gap-2">
-                  {r.steps.map((st, i) => (
-                    <li key={i} className="flex gap-2.5 text-[12.5px] text-ink-mid leading-[1.45]">
-                      <span className="font-mono text-[11px] text-peri-deep shrink-0 mt-[1px]">{i + 1}</span>{st}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            ))}
-          </div>
-
-          {/* Why */}
-          <div className="flex items-center gap-3 mt-12 mb-4">
-            <span className={NUM}>→</span>
-            <span className={LABEL}>Why it changes the math</span>
-          </div>
-          <div className="grid grid-cols-4 max-[860px]:grid-cols-2 max-[520px]:grid-cols-1 gap-3">
-            {WHY.map((w) => (
-              <div key={w.t} className="soft-card p-4">
-                <div className="font-atx-display font-semibold text-[13.5px] text-ink leading-tight">{w.t}</div>
-                <p className="text-[12px] text-ink-mid leading-[1.5] mt-2">{w.d}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Agentic ULV */}
-          <div className="flex items-center gap-3 mt-12 mb-4">
-            <span className={NUM}>→</span>
-            <span className={LABEL}>The vault is the rail · agentic ULV</span>
-          </div>
-          <p className="text-[13.5px] text-ink-mid leading-[1.55] max-w-[68ch] -mt-1 mb-4">
-            Single-sided ULV pools let an agent supply liquidity with one call — <span className="font-mono text-[12.5px] text-ink">depositUSDC(amount)</span> — no two-token inventory, no impermanent-loss math. Capital earns right up to the exact second it’s spent.
-          </p>
-          <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3">
-            {ULV_ROLES.map((r) => (
-              <div key={r.role} className="soft-card p-5 flex flex-col">
-                <div className="font-atx-display font-semibold text-[14.5px] text-ink">{r.role}</div>
-                <p className="text-[12.5px] text-ink-mid leading-[1.5] mt-2 flex-1">{r.action}</p>
-                <span className="mt-3.5 inline-block self-start rounded-full bg-white border border-hair px-2.5 py-1 font-mono text-[10.5px] text-peri-deep">{r.prim}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Honesty footer */}
-          <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-5 mt-8 flex items-start gap-3 max-w-[860px]">
-            <span className="w-[7px] h-[7px] rounded-full bg-peri mt-1.5 shrink-0" />
-            <p className="text-[13px] text-ink-mid leading-[1.55]">This is the architecture we’re building toward — <span className="font-semibold text-ink">not a live product</span>. It composes pieces Mintware has already built and is testing: the ULV engine, a V4 JIT liquidity hook, and the edge-auth settlement engine. Nothing here is deployed, audited, or an offer.</p>
-          </div>
-        </div>
-      </section>
     </div>
   )
 }
