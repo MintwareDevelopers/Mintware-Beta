@@ -2,8 +2,11 @@
 // facilitator can't be built (edge-auth not configured) so routes can fail cleanly with 503 rather than
 // pretending. Spec: docs/developers/agentkit-compute-402-spec.md.
 
-import { YpnFacilitator, Facilitator } from './facilitator'
+import { YpnFacilitator, Facilitator, TrustSource } from './facilitator'
 import { httpEdgeAuthorizer, httpSettler, deferredSettler } from './edgeHttp'
+import { parkedSizeTrustSource } from './trustSources'
+import { rpcParkedReader } from './vaultReader'
+import { ARC_TESTNET, ARC_TESTNET_DEPLOYMENT } from '@/config/arc'
 
 /** USDC (6dp) per supported network — public token addresses. */
 export const USDC_BY_NETWORK: Record<string, string> = {
@@ -35,7 +38,16 @@ export function getFacilitator(): Facilitator | null {
       ? httpSettler({ url: process.env.X402_RELAYER_URL, secret: process.env.X402_RELAYER_SECRET })
       : deferredSettler
 
-  return new YpnFacilitator({ edge, settler, supportedNetworks: supportedNetworks() })
+  return new YpnFacilitator({ edge, settler, supportedNetworks: supportedNetworks(), trust: getTrustSource() })
+}
+
+/** OPTIONAL trust source for hold tiering. Default OFF (undefined) → authorize on NAV alone. Set
+ *  `X402_TRUST_TIERING=parked` to tier by parked size (skin in the game; no Attribution). */
+function getTrustSource(): TrustSource | undefined {
+  if (process.env.X402_TRUST_TIERING !== 'parked') return undefined
+  const rpcUrl = process.env.ARC_RPC_URL ?? ARC_TESTNET.rpcUrl
+  const vault = process.env.NEXT_PUBLIC_ARC_VAULT_ADDRESS ?? ARC_TESTNET_DEPLOYMENT.vault
+  return parkedSizeTrustSource(rpcParkedReader({ rpcUrl, vault }))
 }
 
 /** True when a seller route can price + settle (facilitator + payTo + at least one network). */
