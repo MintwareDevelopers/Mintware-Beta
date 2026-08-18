@@ -209,6 +209,41 @@ function Vaults({ nav }: { nav: Nav }) {
     </>
   )
 }
+function Mev({ nav }: { nav: Nav }) {
+  return (
+    <>
+      <div className={EY}>How it works · MEV · am-AMM</div>
+      <h1>MEV — the <span className="text-gradient-accent">am-AMM engine</span></h1>
+      <p className={SUB}>Instead of leaking loss-versus-rebalancing (LVR) to searchers for free, the vault&apos;s Uniswap V4 hook auctions its own fee-setting right and routes the proceeds back to LPs. Canonical hook: <code>MWHookCoordinator.sol</code>, auction: <code>MWAmAuction.sol</code> / <code>MWAmAuctionLib.sol</code>.</p>
+      <Note k="Status">Built and tested, wired into the same <code>MWHookCoordinator</code> as the ULV vault — <b>in testing on Base Sepolia</b>, not mainnet. <b>79</b> unit / invariant tests green across <code>MWAmAuctionTest</code>, <code>MWAmAuctionLibTest</code>, and the coordinator&apos;s am-AMM suites, plus <b>2 fuzzed invariants at 256 runs × 128,000 calls each, 0 reverts</b>. Nothing here is externally audited.</Note>
+
+      <h2>Three levers, one hook</h2>
+      <ul>
+        <li><b>Truncated oracle guard</b> (<code>MWOracleGuard.sol</code>) — an identity-blind reference tick that lags spot; see <Ln to="security" nav={nav}>Security</Ln> for the circuit breaker.</li>
+        <li><b>Deviation-priced surge fee</b> (<code>MWDynamicFee.sol</code>) — the further spot drifts from the oracle, the more expensive the swap.</li>
+        <li><b>am-AMM auction</b> (<code>MWAmAuction.sol</code>) — the pool&apos;s fee-setting right itself is bid on, Harberger-lease style, and the winner&apos;s rent flows to the vault&apos;s LPs.</li>
+      </ul>
+
+      <h2>The am-AMM auction — market-making rights, not order flow</h2>
+      <p>A normal AMM lets anyone trade at whatever fee the pool happens to charge; the value in setting that fee optimally (higher when a big price move is coming, lower to attract volume) gets captured by whoever is fastest — usually a searcher, not the LP. am-AMM instead lets a <b>manager</b> bid a per-block <b>rent</b> for the right to set the pool&apos;s fee within bounds. The rent is charged every block and pushed straight to <code>rentSink</code> — the pair vault, i.e. the depositors themselves.</p>
+      <Spec>{`topBid    — the current manager: { manager, rent, deposit, feePips }
+nextBid   — a challenger, held pending
+poke()    — coordinator-driven tick: charges rent, evicts on unpaid rent
+             or a stronger challenger, promotes nextBid → topBid
+fundRent(token, amount)  →  IAmAmmRentSink   // pushed to the LP each charge`}</Spec>
+      <p>Custody is split into a push side and a pull side on purpose. Rent is <b>pushed</b> to the LP every charge — LPs never have to claim anything. A manager&apos;s own standing deposit is returned <b>directly</b> on withdrawal (CEI + <code>nonReentrant</code>). Everything else — a displaced deposit, a captured manager fee — is credited to a <b>pull ledger</b> (<code>owed[account][token]</code>) and withdrawn via <code>claim()</code>, so an evicted manager can never block the auction from progressing by reverting on receive.</p>
+
+      <h2>Deviation-priced surge fee</h2>
+      <p>Independent of whether a manager is currently active, every swap still prices in how far spot has drifted from the truncated oracle:</p>
+      <Spec>{'fee = clamp(baseFeePips + slopePipsPerTick × deviationTicks, maxFeePips)\n\nrateLimit(last, target, maxStep):\n  '}<span className="g">// clamps target to within maxStep of last — a single block can&apos;t</span>{'\n  '}<span className="g">// jump from base straight to max, which is exactly what would let a</span>{'\n  '}<span className="g">// searcher cleanly front-run a predictable hike or back-run a drop</span></Spec>
+      <p>For a pool with <b>no active manager</b>, the hook takes <code>max(auction default fee, surge fee)</code> — LPs always get whichever is better — clamped to a <b>10%</b> fallback ceiling so a configuration slip can never runaway.</p>
+
+      <h2>Why route it to LPs instead of searchers</h2>
+      <p>The two levers are complementary, not redundant. The surge fee protects against toxic flow and manipulation <b>whether or not</b> a manager is active — it is the floor. The am-AMM auction captures the <b>upside</b>: when a manager can price the pool&apos;s fee better than the static curve (because they see order flow the static curve can&apos;t), that skill is worth paying rent for, and the rent lands with the vault&apos;s own depositors instead of a searcher&apos;s wallet.</p>
+      <Note k="Where to go next">The auction and the surge fee both live inside the same hook as the JIT engine — see <Ln to="vaults" nav={nav}>Vaults — the ULV engine</Ln>. For the access-control and reentrancy guarantees around all of it, see <Ln to="security" nav={nav}>Security</Ln>.</Note>
+    </>
+  )
+}
 function Matched({ nav }: { nav: Nav }) {
   return (
     <>
@@ -325,6 +360,46 @@ USDC → Circle CPN rail treasury`}</Spec>
     </>
   )
 }
+function AgentPay({ nav }: { nav: Nav }) {
+  return (
+    <>
+      <div className={EY}>Roadmap · Agent payments</div>
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] mb-2"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Blueprint · not yet built</span>
+      <h1>Agent payments — the <span className="text-gradient-accent">402 engine</span></h1>
+      <p className={SUB}>The direction we&apos;re building toward: an autonomous agent whose treasury supplies real liquidity and pays any endpoint the instant it asks — crypto-native or legacy — over one standard, HTTP 402.</p>
+      <Note k="Status — blueprint, not a live product">This composes primitives documented elsewhere on this site that <b>are</b> built and in testing — the <Ln to="vaults" nav={nav}>ULV JIT engine</Ln> and the <Ln to="lsa" nav={nav}>Liquid Sovereign Account&apos;s</Ln> authorize/settle split — plus a net-new agent-facing layer (plugin actions, a 402 facilitator, discovery manifest) that does not exist in this repo yet. Nothing here is deployed, audited, or an offer.</Note>
+
+      <h2>The flow</h2>
+      <Pipe items={[
+        ['01', 'Challenge', 'The agent hits a paid endpoint and gets back HTTP 402: the price, and the rails it accepts.'],
+        ['02', 'Pick a rail', 'Native (x402, on-chain) or legacy (Visa / Mastercard) — the agent reads the 402 payload and chooses.'],
+        ['03', 'Settle', 'Native: sign a session permit, stream USDC on-chain, retry with a proof header. Legacy: mint a just-in-time card.'],
+        ['04', 'Resume & burn', 'The resource unlocks and the task resumes; the single-use card or token auto-burns — nothing reusable is left behind.'],
+      ]} />
+
+      <h2>Why treasury-native, not wallet-native</h2>
+      <p>A conventional agent wallet either sits idle (capital earning nothing between calls) or holds a standing, reusable credential (a card number, an approved allowance) that is a permanent attack surface. Routing every payment through a vault position instead of a hot wallet changes both properties at once:</p>
+      <table className={TABLE}>
+        <thead><tr><th>Property</th><th>Why it matters</th></tr></thead>
+        <tbody>
+          <tr><td><b>Zero idle float</b></td><td>Capital stays in a yield-bearing vault; it only touches a rail at the moment a 402 asks for it.</td></tr>
+          <tr><td><b>No standing attack surface</b></td><td>Compromise the agent and there is no valid, reusable credential to steal — each token is single-use and expires in minutes.</td></tr>
+          <tr><td><b>Vault-enforced spend policy</b></td><td>A daily cap and a per-tx cap are enforced by the same authorization path documented in the <Ln to="lsa" nav={nav}>LSA</Ln>, not by the agent&apos;s own code.</td></tr>
+          <tr><td><b>One stack, every merchant</b></td><td>The same agent could navigate on-chain x402 micro-payments and real-world card-present payments over one settlement core.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>What already exists to build this on</h2>
+      <p>This is not a from-scratch design — it composes pieces documented earlier on this site:</p>
+      <ul>
+        <li>The <Ln to="vaults" nav={nav}>ULV engine&apos;s</Ln> single-call <code>depositUSDC(amount)</code> liquidity supply — an agent becomes an LP with one call, no two-asset inventory to manage.</li>
+        <li>The <Ln to="lsa" nav={nav}>LSA&apos;s</Ln> two-tier authorize/settle split — sub-150ms off-chain authorization against a cached vault NAV, async on-chain settlement by burning exactly enough shares.</li>
+        <li>The <Ln to="lsa" nav={nav}>payment gateway&apos;s</Ln> hybrid EIP-712 permit scheme, already sized for both long-lived low-value spend and short-lived high-value holds.</li>
+      </ul>
+      <p>What is missing is the agent-facing surface itself: a plugin layer for the common agent frameworks, a 402 facilitator that adapts the authorize/settle split to the x402 protocol, and a public discovery manifest. None of that is written against <code>main</code> today.</p>
+    </>
+  )
+}
 function Security({ nav }: { nav: Nav }) {
   return (
     <>
@@ -340,10 +415,8 @@ function Security({ nav }: { nav: Nav }) {
       <Spec>{`checkCircuitBreaker: revert swaps at deviation > maxDeviationTicks
 pokeOracle:          permissionless heal path out of a circuit-breaker deadlock`}</Spec>
 
-      <h2>Deviation-priced dynamic fee (MWDynamicFee.sol)</h2>
-      <Spec>{`fee = base + slope × deviationTicks     // clamped, rate-limited per block
-unmanaged pools: max(auction default, surge)   // recapture LVR
-FALLBACK_MAX_FEE_PIPS = 10%`}</Spec>
+      <h2>Deviation-priced dynamic fee &amp; the am-AMM auction</h2>
+      <p>Swap fees price in how far spot has drifted from the oracle above, rate-limited per block; unmanaged pools fall back to a capped surge fee. The pool&apos;s fee-setting right is itself auctioned — full mechanics on <Ln to="mev" nav={nav}>MEV — the am-AMM engine</Ln>.</p>
 
       <h2>Access &amp; reentrancy</h2>
       <ul>
@@ -418,9 +491,13 @@ const GROUPS: { group: string; items: { id: string; label: string; star?: boolea
   { group: 'How it works', items: [
     { id: 'attribution', label: 'Attribution — the score' },
     { id: 'vaults', label: 'Vaults — the ULV engine' },
+    { id: 'mev', label: 'MEV — the am-AMM engine' },
     { id: 'matched', label: 'Matched liquidity' },
     { id: 'rewards', label: 'Rewards — epochs & distribution' },
     { id: 'lsa', label: 'Liquid Sovereign Account' },
+  ]},
+  { group: 'Roadmap', items: [
+    { id: 'agentpay', label: 'Agent payments — the 402 engine' },
   ]},
   { group: 'Trust', items: [
     { id: 'security', label: 'Security', star: true },
@@ -432,8 +509,8 @@ const GROUPS: { group: string; items: { id: string; label: string; star?: boolea
 ]
 
 const CONTENT: Record<string, (p: { nav: Nav }) => ReactNode> = {
-  overview: Overview, model: Model, attribution: Attribution, vaults: Vaults,
-  matched: Matched, rewards: Rewards, lsa: LSA, security: Security,
+  overview: Overview, model: Model, attribution: Attribution, vaults: Vaults, mev: Mev,
+  matched: Matched, rewards: Rewards, lsa: LSA, agentpay: AgentPay, security: Security,
   wallets: Wallets, contracts: Contracts,
 }
 
