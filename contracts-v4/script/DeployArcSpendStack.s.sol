@@ -19,7 +19,10 @@ import {MockMessageTransmitter} from "../test/mocks/MockMessageTransmitter.sol";
 ///
 ///         Parameterized so it DRY-RUNS anywhere today and BROADCASTS to Arc when it's up:
 ///           - `ARC_USDC`         — real USDC on Arc (else deploys a mock 6dp USDC)
-///           - `ARC_YIELD_SOURCE` — Arc's yield-primitive 4626 over USDC (else deploys a mock 4626)
+///           - `ARC_YIELD_SOURCE` — Arc's yield-primitive 4626 over USDC (else deploys a mock 4626).
+///                                  CONFIRMED = XyloNet XyloVault 0x240Eb85458CD41361bd8C3773253a1D78054f747
+///                                  (verified on-chain 2026-08-18: asset=Arc USDC, symbol xyUSDC). Setting
+///                                  this + re-running is the one-line switch from mock yield to real yield.
 ///           - `ARC_CPN_TREASURY` — Circle Payments Network settlement address (else the deployer)
 ///         Arc chain id is 5042002 (documented; the contracts are chain-agnostic — EIP-712 reads
 ///         block.chainid — so no address is hardcoded). After deploy, point the edge at Arc with

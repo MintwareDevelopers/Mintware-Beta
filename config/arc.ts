@@ -19,6 +19,13 @@ export const ARC_TESTNET = {
   explorer: 'https://testnet.arcscan.app',
   faucet: 'https://faucet.circle.com',
   usdc: '0x3600000000000000000000000000000000000000', // Arc testnet USDC (6dp)
+  // Arc's yield primitive — XyloNet's XyloVault (auto-compounding ERC-4626 USDC vault, by ForgeLabs,
+  // live on Arc testnet; xylonet.xyz/vault). VERIFIED ON-CHAIN 2026-08-18 via rpc.testnet.arc.io:
+  //   asset()   = 0x3600…0000 (the Arc USDC above)   symbol()   = "xyUSDC"
+  //   decimals()= 18 (share token; asset is 6dp — the adapter is decimals-agnostic, so this is fine)
+  //   totalAssets() ≈ 8.27M USDC (funded, active)     convertToShares(1e6) = 999998 (std 4626 rounding)
+  // This is the value for ARC_YIELD_SOURCE at redeploy (see ARCSettlementConfig.yieldSource below).
+  xyloVault: '0x240Eb85458CD41361bd8C3773253a1D78054f747',
   // CCTP v2 (public — Circle CCTP docs). Arc's CCTP domain id is 26.
   cctpDomain: 26,
   cctpTokenMessenger: '0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA',
@@ -47,9 +54,14 @@ export interface ArcSettlementConfig {
   /** Real USDC on Arc. */
   usdc?: string
   /** Arc's yield primitive as an ERC-4626 over USDC (slots into MintwareERC4626YieldAdapter).
-   *  Target: XyloNet's **XyloVault** — an auto-compounding ERC-4626 USDC vault live on Arc testnet
-   *  (xylonet.xyz). Set ARC_YIELD_SOURCE to its address + redeploy the adapter to earn real Arc yield
-   *  (the current deployment uses a placeholder mock 4626). Arc public mainnet: Sept 16, 2026. */
+   *  CONFIRMED: XyloNet's **XyloVault** at `ARC_TESTNET.xyloVault`
+   *  (`0x240Eb85458CD41361bd8C3773253a1D78054f747`) — verified on-chain 2026-08-18 (asset = Arc USDC,
+   *  symbol xyUSDC). The LIVE adapter still wraps a placeholder mock 4626; earning real Arc yield is a
+   *  ONE-LINE redeploy — set the env var to the XyloVault address and re-run DeployArcSpendStack:
+   *    `ARC_YIELD_SOURCE=0x240Eb85458CD41361bd8C3773253a1D78054f747 \
+   *       forge script contracts-v4/script/DeployArcSpendStack.s.sol --rpc-url arc --broadcast --slow`
+   *  Pre-redeploy check: one live deposit/withdraw round-trip through XyloVault (std 4626 rounding; the
+   *  adapter is decimals-agnostic so the 18-dp shares are fine). Arc public mainnet: Sept 16, 2026. */
   yieldSource?: string
   /** Deployed MintwarePaymentGateway (the settleSpend entrypoint). */
   gateway?: string

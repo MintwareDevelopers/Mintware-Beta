@@ -93,7 +93,18 @@ RPC `https://rpc.testnet.arc.io` · faucet `https://faucet.circle.com` · explor
 
 ## What's left (business / audit track only)
 
-1. **Wire XyloVault** (`ARC_YIELD_SOURCE=<XyloNet XyloVault addr>` + redeploy the adapter) for real Arc yield.
+1. **Wire XyloVault** for real Arc yield — address **confirmed + verified on-chain 2026-08-18**:
+   `0x240Eb85458CD41361bd8C3773253a1D78054f747` (XyloNet XyloVault, `asset()`=Arc USDC, `symbol()`=`xyUSDC`,
+   `totalAssets()`≈8.27M USDC, funded). It's a **one-line redeploy** (the deploy script already reads the env,
+   falling back to the mock):
+   ```bash
+   ARC_YIELD_SOURCE=0x240Eb85458CD41361bd8C3773253a1D78054f747 \
+     forge script contracts-v4/script/DeployArcSpendStack.s.sol --rpc-url arc --broadcast --slow
+   ```
+   The adapter is decimals-agnostic (works in USDC-asset units via the 4626 interface), so XyloVault's 18-dp
+   shares are fine. **Only pre-redeploy check:** one live deposit/withdraw round-trip through XyloVault
+   (standard 4626 rounding — `convertToShares(1e6)=999998`). Then repoint the vault/adapter addresses in
+   `config/arc.ts` (`ARC_TESTNET_DEPLOYMENT`) + the `NEXT_PUBLIC_ARC_*` envs.
 2. **CPN card off-ramp + issuer** — the one genuine Circle-relationship piece.
 3. **External audit** — the gate before real value (converged vault + settlement + MEV stack).
 4. **Arc mainnet** — public launch **Sept 16, 2026**.
