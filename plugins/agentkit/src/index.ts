@@ -364,6 +364,37 @@ const mintwareX402PayAction = {
   },
 }
 
+const mintwareTreasuryAction = {
+  name: 'MINTWARE_TREASURY',
+  description:
+    "Show the agent's Mintware capital-parking account: how much USDC is parked (and earning yield) and " +
+    'how much is spendable in place right now. Parking does not lock — the full parked balance stays ' +
+    'spendable per call via x402. Omit address to use the agent\'s own wallet.',
+  schema: z.object({
+    address: z.string().optional().describe("Address to inspect. Omit for the agent's own wallet."),
+  }),
+  invoke: async (wallet: X402Wallet, args: { address?: string }): Promise<string> => {
+    const address = (args.address ?? wallet.getAddress()).toLowerCase()
+    const res = await fetch(`${API_BASE}/api/x402/account?address=${address}`)
+    if (!res.ok) throw new Error(`Mintware account API returned ${res.status}: ${res.statusText}`)
+    const t = (await res.json()) as {
+      parkedUsdcFormatted?: string
+      spendableUsdcFormatted?: string
+      earning?: boolean
+      network?: string
+    }
+    const short = `${address.slice(0, 6)}…${address.slice(-4)}`
+    return [
+      `Mintware parking account for ${short} (${t.network ?? 'arc'})`,
+      `  Parked (earning): $${t.parkedUsdcFormatted ?? '0'} USDC`,
+      `  Spendable now:    $${t.spendableUsdcFormatted ?? '0'} USDC`,
+      t.earning
+        ? `  Status: earning yield, fully spendable in place — spend per call via MINTWARE_X402_PAY.`
+        : `  Status: empty — deposit USDC into the vault to start earning while staying spendable.`,
+    ].join('\n')
+  },
+}
+
 // =============================================================================
 // Exports
 // =============================================================================
@@ -372,6 +403,7 @@ export const mintwareActions = [
   mintwareGetScoreAction,
   mintwareRegisterAction,
   mintwareClaimPendingAction,
+  mintwareTreasuryAction,
   mintwareX402QuoteAction,
   mintwareX402PayAction,
 ]
@@ -380,6 +412,7 @@ export {
   mintwareGetScoreAction,
   mintwareRegisterAction,
   mintwareClaimPendingAction,
+  mintwareTreasuryAction,
   mintwareX402QuoteAction,
   mintwareX402PayAction,
   BASE_MAINNET_CONTRACT,

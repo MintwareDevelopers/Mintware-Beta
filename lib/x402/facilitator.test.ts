@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { YpnFacilitator, EdgeAuthorizer, Settler, ReputationSource } from './facilitator'
+import { YpnFacilitator, EdgeAuthorizer, Settler, TrustSource } from './facilitator'
 import { buildRequirements } from './protocol'
 import { PaymentPayload, PaymentRequirements } from './types'
 
@@ -53,16 +53,22 @@ describe('YpnFacilitator.verify', () => {
     expect(v).toMatchObject({ isValid: false, invalidReason: 'insufficient_equity', payer: PAYER })
   })
 
-  it('reputation-gates the hold: a trusted payer passes, an unknown payer over its headroom is capped', async () => {
-    const trusted: ReputationSource = { percentileOf: async () => 90 } // headroom 1.0
-    const unknown: ReputationSource = { percentileOf: async () => 5 } // headroom 0.25
+  it('authorizes purely on NAV when no trust source is configured (Attribution not required)', async () => {
+    const f = new YpnFacilitator({ edge: approveEdge(), settler: okSettler, supportedNetworks: ['base'] })
+    const v = await f.verify(reqs(), payload('1000000'), NOW)
+    expect(v.isValid).toBe(true) // no trust gating at all
+  })
+
+  it('OPTIONAL trust-gate: a trusted payer passes, an unknown payer over its headroom is capped', async () => {
+    const trusted: TrustSource = { percentileOf: async () => 90 } // headroom 1.0
+    const unknown: TrustSource = { percentileOf: async () => 5 } // headroom 0.25
     const base = { edge: approveEdge(), settler: okSettler, supportedNetworks: ['base'] }
 
-    const okv = await new YpnFacilitator({ ...base, reputation: trusted }).verify(reqs(), payload('1000000'), NOW)
+    const okv = await new YpnFacilitator({ ...base, trust: trusted }).verify(reqs(), payload('1000000'), NOW)
     expect(okv.isValid).toBe(true)
 
-    const capped = await new YpnFacilitator({ ...base, reputation: unknown }).verify(reqs(), payload('1000000'), NOW)
-    expect(capped).toMatchObject({ isValid: false, invalidReason: 'exceeds_reputation_cap', maxSettleable: '250000' })
+    const capped = await new YpnFacilitator({ ...base, trust: unknown }).verify(reqs(), payload('1000000'), NOW)
+    expect(capped).toMatchObject({ isValid: false, invalidReason: 'exceeds_trust_cap', maxSettleable: '250000' })
   })
 })
 

@@ -32,15 +32,18 @@ export interface Settler {
   }): Promise<{ success: boolean; txHash?: string; errorReason?: string }>
 }
 
-/** Optional reputation port — returns the payer's Attribution percentile [0,100]. */
-export interface ReputationSource {
+/** OPTIONAL trust port — a payer signal in [0,100] used only to tier the hold size. The signal can be
+ *  anything (deposit tenure, parked size, staking) — Attribution is ONE possible source, NOT a dependency.
+ *  Omit it entirely and the facilitator authorizes purely on live NAV. */
+export interface TrustSource {
   percentileOf(address: string): Promise<number>
 }
 
 export interface YpnFacilitatorConfig {
   edge: EdgeAuthorizer
   settler: Settler
-  reputation?: ReputationSource
+  /** Optional — omit to authorize purely on NAV (no trust gating). */
+  trust?: TrustSource
   supportedNetworks: string[]
 }
 
@@ -60,17 +63,18 @@ export class YpnFacilitator implements Facilitator {
     const payer = payload.payload.authorization.from
     const requested = BigInt(payload.payload.authorization.value)
 
-    // 2) reputation-gate the hold size (fraction of headroom the facilitator will authorize).
+    // 2) OPTIONAL trust-gate the hold size (fraction of headroom the facilitator will authorize). Skipped
+    //    entirely when no trust source is configured — the default path is pure NAV authorization.
     let cap = requested
-    if (this.cfg.reputation) {
-      const pct = await this.cfg.reputation.percentileOf(payer)
+    if (this.cfg.trust) {
+      const pct = await this.cfg.trust.percentileOf(payer)
       const policy = policyForPercentile(pct)
       // Scale the requested amount by the tier's headroom fraction (integer math, /100).
       const frac = BigInt(Math.round(policy.navHeadroomFraction * 100))
       cap = (requested * frac) / 100n
       if (cap < requested) {
         // The payer's tier won't authorize the full ask up front.
-        return { isValid: false, invalidReason: 'exceeds_reputation_cap', payer, maxSettleable: cap.toString() }
+        return { isValid: false, invalidReason: 'exceeds_trust_cap', payer, maxSettleable: cap.toString() }
       }
     }
 

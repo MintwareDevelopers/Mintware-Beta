@@ -1,7 +1,8 @@
-// Reputation-gated x402 pricing (P4) — map an Attribution score/percentile onto a spend policy: rate limit,
-// price multiplier, and how conservatively to size the facilitator's hold. Reuses the SAME percentile buckets
-// as the rewards multipliers (0–33 / 34–66 / 67–100) so trust is priced consistently across the platform.
-// Spec: docs/developers/agentkit-compute-402-spec.md §7. Pure functions.
+// OPTIONAL trust-tiered x402 pricing (P4) — map a payer TRUST percentile onto a spend policy: rate limit,
+// price multiplier, and how conservatively to size the facilitator's hold. The percentile can come from ANY
+// signal — parked size, deposit tenure, staking, or (optionally) an Attribution score; it is NOT required.
+// With no trust source the facilitator authorizes purely on NAV and none of this applies. Pure functions.
+// Spec: docs/developers/agentkit-compute-402-spec.md §7.
 
 export type TrustTier = 'unknown' | 'standard' | 'trusted'
 

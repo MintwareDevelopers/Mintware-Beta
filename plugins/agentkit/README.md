@@ -11,12 +11,14 @@ AgentKit actions that any AgentKit-powered agent can register:
 | `MINTWARE_GET_SCORE` | Look up the Attribution score for any address (or the agent's own) |
 | `MINTWARE_REGISTER` | Register the agent wallet with the Attribution contract on Base mainnet (one-time) |
 | `MINTWARE_CLAIM_PENDING` | Submit pending oracle-signed attestations on-chain to update the score |
+| `MINTWARE_TREASURY` | Show the agent's parking account — USDC parked (and earning) + spendable in place |
 | `MINTWARE_X402_QUOTE` | Preflight an [x402](https://x402.org)-gated compute/API URL — return the price without paying |
 | `MINTWARE_X402_PAY` | Pay for an x402-gated call in USDC (EIP-3009) from the agent wallet and return the resource |
 
-The two x402 actions let an agent **pay for compute per call** in USDC. When the payer is a Mintware
-Liquid Sovereign Account and the seller routes through the Mintware facilitator, the balance stays
-yield-bearing until settlement and access is reputation-gated. See
+The parking + x402 actions give an agent **a place to park capital that keeps earning while staying
+spendable in place**: `MINTWARE_TREASURY` shows what's parked and spendable, `MINTWARE_X402_PAY` spends
+per call. Because Mintware is both the funding rail and the facilitator, the balance stays yield-bearing
+until settlement — and the capital never un-parks. (Reputation-gating is optional, not required.) See
 [`docs/developers/agentkit-compute-402-spec.md`](../../docs/developers/agentkit-compute-402-spec.md).
 
 **Contract (Base mainnet):** `0xb9FB965Caa7197932b52631e0121Ea54586e2B88`

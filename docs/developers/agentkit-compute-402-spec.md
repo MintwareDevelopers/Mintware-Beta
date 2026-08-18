@@ -2,28 +2,37 @@
 
 > **Status:** spec + initial build (P1–P4 code-complete, config/audit-gated). Branch
 > `feat/ypn-vault-convergence`. Author-time: 2026-08-18. Implementation status at §9.
-> **One-liner:** Mintware becomes the **x402 facilitator + funding rail for agent compute** — agents pay
-> per API/inference call in USDC that stays *yield-bearing until the microsecond of settlement*, authorized
-> in ~10 ms, priced and rate-limited by on-chain **Attribution** reputation.
+> **One-liner:** Mintware gives agents **a place to park capital that keeps earning while staying spendable
+> in place** — an agent treasury where idle USDC earns yield and is spent per call over x402 without ever
+> un-parking into a hot wallet. Mintware is the funding rail *and* the x402 facilitator, so verify is a hold
+> against the *earning* balance and settlement burns from it directly. (Reputation-gating is an **optional
+> lever**, not a dependency — the default path authorizes purely on live NAV.)
 
 ---
 
 ## 1. Thesis
 
-[x402](https://x402.org) is the emerging HTTP-native way for AI agents to pay per request in stablecoins
-(HTTP `402 Payment Required` → sign a payment → retry). It solves the *transport* of a machine payment. It
-does **not** solve where the money lives, whether it should have to sit idle waiting to be spent, whether the
-payer is creditworthy, or how a spend cap is enforced in real time.
+**The product is an agent treasury: a place to park capital that keeps earning while staying spendable.**
+Agents accumulate idle USDC (fees, runway, float) that today sits dead in a hot wallet. Mintware lets an agent
+**park** that USDC in a yield vault where it earns, and **spend it in place** — each payment draws straight
+from the earning position (a hold against NAV → settlement burns shares), so capital is never un-parked to be
+usable. "Never idle, never locked, always yours," for agents.
 
-**That is exactly the stack we already built for YPN.** x402 is the missing HTTP framing on top of it:
+[x402](https://x402.org) is the *spend trigger*: the HTTP-native way for agents to pay per request in
+stablecoins (`402 Payment Required` → sign → retry). x402 solves the *transport* of a machine payment; it does
+**not** solve where the money lives or whether it has to sit idle waiting to be spent. The parking account is
+what makes the spend rail matter — and Mintware being both the funding rail and the facilitator is what lets
+the balance stay productive right up to settlement.
+
+**We already built the hard parts for YPN.** x402 + the account view are the framing on top of it:
 
 | x402 needs… | Mintware already has… |
 |---|---|
+| A place to **park capital that earns** | YPN yield vault — USDC earns in an ERC-4626 source until the instant it's spent (`MintwareERC4626YieldAdapter`, fee-aware) |
 | Verify the payer can pay, fast, per call | `edge-auth` `POST /authorize` — sizes a hold off live vault **NAV** in ~10 ms (proven on Arc) |
-| Settle on-chain after the resource is served | `services/relayer` `settle` + CCTP (`cctp.rs`) |
-| A funding source for the payer | YPN yield vault — USDC earns in an ERC-4626 source until spent (`MintwareERC4626YieldAdapter`, now fee-aware) |
-| Creditworthiness / spend policy | **Attribution** score (on-chain reputation, live on Base) + the edge's VaR haircut |
+| Settle on-chain, burning from the earning balance | `services/relayer` `settle` + CCTP (`cctp.rs`); gateway burns shares → USDC to payee |
 | An agent-side client | `@mintware/agentkit-actions` (`plugins/agentkit`) — Coinbase AgentKit actions, already published |
+| *(optional)* spend policy by trust | pluggable `TrustSource` — parked size / tenure / staking / Attribution. **Not required** |
 
 The wedge is not "an agent pays for a thing." It is: **the only x402 facilitator where the payer's balance is
 productive right up to settlement, and where price/limits are a function of on-chain reputation.** Idle agent
@@ -100,7 +109,7 @@ account setup. Fastest to ship (wraps an existing API), and it makes us an x402 
 | facilitator `/settle` | `services/relayer` `settle` (+ `cctp.rs` if `payTo` is on another chain) |
 | x402 v2 **session token** | `hold_id` (idempotent, reservable, expiring — `store.rs`) |
 | `asset: USDC`, `network: base` | USDC on Base for settlement; **Arc** for the yield leg, **CCTP** bridges |
-| payer creditworthiness | **Attribution** score + edge VaR haircut → the authorized cap |
+| *(optional)* payer spend policy | pluggable `TrustSource` → hold-size fraction. Default: authorize on NAV alone |
 
 ## 5. Why *compute* specifically
 
@@ -141,18 +150,22 @@ A tiny Next.js/`createHandler` wrapper: `require402({ priceUsd, payTo, scheme })
 `PAYMENT-REQUIRED` on an unpaid request and calls the facilitator to verify a `PAYMENT-SIGNATURE`. First
 mount: in front of `/score` (sell an Attribution lookup for USDC).
 
-## 7. Reputation-gated pricing (the differentiator)
+## 7. Optional trust-tiered pricing (a lever, not a dependency)
 
-A seller or our facilitator maps Attribution → policy:
+**The default facilitator authorizes purely on live NAV — no reputation, no Attribution, nothing extra.** The
+account and the spend rail stand on their own. *Optionally*, a facilitator or seller can tier the hold/price by
+a trust percentile:
 
-| Attribution percentile | Rate limit | Price multiplier | Cap sizing |
+| Trust percentile | Rate limit | Price multiplier | Cap sizing |
 |---|---|---|---|
-| 0–33% (unknown/new) | tight | 1.0× (or surcharge) | conservative NAV haircut |
+| 0–33% (unknown/new) | tight | 1.0× (or surcharge) | conservative NAV fraction |
 | 34–66% | standard | 1.0× | standard |
 | 67–100% (proven) | high | discount | full NAV headroom |
 
-This reuses the exact percentile buckets already in the rewards multiplier design, and the VaR haircut already
-in `edge-auth`. No new scoring — just a new consumer of it.
+The percentile can come from **any** signal — parked size, deposit tenure, staking, or (only if wanted) an
+Attribution score. The source is a pluggable `TrustSource` port (`lib/x402/facilitator.ts`); omit it and none
+of this runs. `lib/x402/pricing.ts` implements the buckets. **Attribution is one possible input, never a
+requirement.**
 
 ## 8. Settlement topology
 
@@ -174,11 +187,17 @@ in `edge-auth`. No new scoring — just a new consumer of it.
 | **P4** | **Reputation-gated pricing** (`lib/x402/pricing.ts`) wired into the facilitator | ✅ code-complete (percentile→policy; ReputationSource port pending a wire to Attribution) |
 | **P5** | MCP transport for the payer action | ⏳ not started |
 
-**Build state (2026-08-18):** `lib/x402/*` (types, protocol, pricing, facilitator, require402, edgeHttp, config) +
-4 routes under `app/api/x402/*` + 2 AgentKit actions. **33 Vitest tests green**, project typecheck clean.
-What's **runtime-gated** (not code-gated): `EDGE_AUTH_URL`/`EDGE_AUTH_SECRET` + `X402_PAY_TO` for the seller/
-facilitator to go live; an HTTP `settle` endpoint on the relayer; and a `ReputationSource` wired to the
-Attribution score. Same external audit gates real value. Each phase is independently shippable.
+**The parking account (the core):** `lib/x402/treasury.ts` (park + spend-in-place model) + `vaultReader.ts`
+(reads fee-net parked USDC off the Arc vault: `convertToAssets(shares(agent))`) + `GET /api/x402/account` +
+the `MINTWARE_TREASURY` AgentKit action (parked / spendable / earning). Spendable defaults to the full parked
+balance — parking does not lock.
+
+**Build state (2026-08-18):** `lib/x402/*` (types, protocol, pricing, facilitator, require402, edgeHttp,
+config, treasury, vaultReader) + 5 routes under `app/api/x402/*` + 3 new AgentKit actions. **42 Vitest tests
+green**, project typecheck clean. What's **runtime-gated** (not code-gated): `EDGE_AUTH_URL`/`EDGE_AUTH_SECRET`
++ `X402_PAY_TO` for the facilitator/seller; an HTTP `settle` endpoint on the relayer; a live-hold `SpendableSource`
+for exact spendable (defaults to parked without it). Trust-tiering is **optional** and off by default. Same
+external audit gates real value.
 
 ## 10. Security & risks
 
