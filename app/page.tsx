@@ -130,9 +130,7 @@ function ScoreCard() {
     <>
       {/* SEARCH CARD (always) */}
       <div className="soft-card w-full max-w-[720px] p-[26px] grid gap-4">
-        <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft flex items-center gap-2">
-          <span className="w-[7px] h-[7px] rounded-full bg-peri inline-block" /> Live score engine — try any wallet
-        </div>
+        <span className="live-chip"><span className="dot" aria-hidden />Live score engine — try any wallet</span>
         <div className="flex gap-2.5 max-[480px]:flex-col">
           <input
             value={input}
@@ -141,7 +139,7 @@ function ScoreCard() {
             placeholder="0x… wallet address or ENS name"
             className="flex-1 min-w-0 py-3 px-4 rounded-full bg-white border border-hair font-atx-display text-[15px] text-ink outline-none focus:border-[rgba(108,108,240,0.5)] placeholder:text-ink-soft"
           />
-          <button onClick={() => load(input)} disabled={status === 'loading'} className="glass-pill whitespace-nowrap disabled:opacity-70">
+          <button onClick={() => load(input)} disabled={status === 'loading'} className="glass-pill-primary whitespace-nowrap disabled:opacity-70">
             {status === 'loading' ? 'Scoring…' : 'Check my score'}
           </button>
         </div>
@@ -238,15 +236,16 @@ export default function HomePage() {
       <section className="relative overflow-hidden bg-ground-cool border-b border-hair-soft">
         <AirbrushSplash tone="mix" />
         <div className="relative mx-auto max-w-[1180px] px-6 max-[800px]:px-4 pt-[104px] pb-[80px] max-[800px]:pt-[64px] max-[800px]:pb-[56px] flex flex-col items-center text-center">
-          <h1 className="font-atx-display font-medium text-ink tracking-[-0.045em] leading-[1.02] text-[clamp(2.5rem,6.4vw,4.6rem)] max-w-[18ch] [text-wrap:balance]">
-            Never idle.<br />Never locked.<br /><span className="text-peri">Always yours.</span>
+          <span className="live-chip mb-6"><span className="dot" aria-hidden />Live · scoring 100+ chains right now</span>
+          <h1 className="font-atx-display font-semibold text-ink tracking-[-0.045em] leading-[1.02] text-[clamp(2.6rem,6.8vw,4.9rem)] max-w-[18ch] [text-wrap:balance]">
+            Never idle.<br />Never locked.<br /><span className="text-gradient-accent">Always yours.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1.05rem,1.7vw,1.3rem)] leading-[1.5] mt-6 max-w-[54ch]">
-            Your liquidity, made whole — earning around the clock, and its yield instantly yours to spend.
+            Idle liquidity is a design flaw. Yours earns three ways at once — and its yield spends instantly, without ever unwinding your position.
           </p>
 
           <div className="mt-9 flex flex-wrap gap-3 items-center justify-center">
-            <button onClick={() => launchApp()} className="glass-pill">{launchLabel}</button>
+            <button onClick={() => launchApp()} className="glass-pill-primary">{launchLabel}</button>
             <a href="#how-it-works" className="text-[14px] font-medium text-ink-mid hover:text-ink no-underline inline-flex items-center min-h-[44px]">Check your score ↓</a>
           </div>
         </div>
@@ -261,14 +260,14 @@ export default function HomePage() {
             <div className="relative px-10 max-[800px]:px-6 py-[72px] max-[800px]:py-[52px] flex items-center justify-between gap-8 flex-wrap">
               <div className="max-w-[760px]">
                 <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-pas-peri">The vault engine · never idle</div>
-                <h2 className="font-atx-display font-medium tracking-[-0.04em] leading-[1.03] text-[clamp(2rem,4.6vw,3.4rem)] mt-4 text-white [text-wrap:balance]">
-                  Your capital earns <span className="text-pas-peri">three ways at once.</span>
+                <h2 className="font-atx-display font-semibold tracking-[-0.04em] leading-[1.03] text-[clamp(2rem,4.6vw,3.4rem)] mt-4 text-white [text-wrap:balance]">
+                  Your capital earns <span className="text-gradient-accent">three ways at once.</span>
                 </h2>
                 <p className="text-[15px] leading-[1.55] mt-4 max-w-[54ch]" style={{ color: '#C7C7DC' }}>
-                  Aave lending, Uniswap v4 market-making, and recaptured MEV — one balance, always working. In testing on Base Sepolia.
+                  One balance runs three engines — Aave lending, Uniswap v4 market-making, and recaptured MEV. In testing on Base Sepolia.
                 </p>
               </div>
-              <button onClick={() => launchApp('/app/vaults')} className="glass-pill whitespace-nowrap shrink-0">Explore the vaults →</button>
+              <button onClick={() => launchApp('/app/vaults')} className="glass-pill-primary whitespace-nowrap shrink-0">Explore the vaults →</button>
             </div>
           </div>
         </div>
@@ -295,11 +294,11 @@ export default function HomePage() {
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div>
               <div className={ey}>Two ways to earn</div>
-              <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.7rem,3.2vw,2.6rem)] mt-3 [text-wrap:balance]">
-                The same liquidity, <span className="text-peri">two different jobs.</span>
+              <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.7rem,3.2vw,2.6rem)] mt-3 [text-wrap:balance]">
+                The same liquidity, <span className="text-gradient-accent">two different jobs.</span>
               </h2>
             </div>
-            <span className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-soft rounded-full border border-hair px-3 py-1.5">In testing on Base — not yet live</span>
+            <span className="live-chip"><span className="dot" aria-hidden />In testing on Base — not yet live</span>
           </div>
 
           <div className="grid grid-cols-2 gap-4 mt-8 max-[820px]:grid-cols-1">
@@ -311,7 +310,7 @@ export default function HomePage() {
                   <span className="text-[10px] uppercase tracking-[0.1em] text-ink-soft">For tokens &amp; treasuries</span>
                 </div>
                 <p className="text-[14px] leading-[1.5] text-ink-mid mt-2.5">
-                  MEV-protected, auto-managed LP on Uniswap V4 — your Attribution score and lock tier lift your fee share up to 1.95× vs. the wallet beside you.
+                  MEV-protected, auto-managed LP on Uniswap V4. Your Attribution score and lock tier lift your fee share up to 1.95× over the wallet beside you.
                 </p>
               </div>
               <div className="p-6 bg-ground-cool">
@@ -349,7 +348,7 @@ export default function HomePage() {
                   <span className="text-[10px] uppercase tracking-[0.1em] text-ink-soft">For teams</span>
                 </div>
                 <p className="text-[14px] leading-[1.5] text-ink-mid mt-2.5">
-                  Teams lock their token. The community matches in USDC. That&apos;s real depth — tighter spreads, better fills. During the lock, the fees earned go entirely to the community.
+                  Teams lock their token. The community matches in USDC — real depth, tighter spreads, better fills. During the lock, every fee earned goes to the community.
                 </p>
               </div>
               <div className="p-6 bg-ground-cool flex-1">
@@ -389,11 +388,11 @@ export default function HomePage() {
       <section id="how-it-works" className="bg-white border-b border-hair-soft scroll-mt-[70px]">
         <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
           <div className={ey}>How it works</div>
-          <h2 className="font-atx-display font-medium text-ink tracking-[-0.04em] leading-[1.04] text-[clamp(1.8rem,3.4vw,2.8rem)] max-w-[24ch] mt-3.5 [text-wrap:balance]">
-            See your <span className="text-peri">Attribution score</span> — then watch every action feed it.
+          <h2 className="font-atx-display font-semibold text-ink tracking-[-0.04em] leading-[1.04] text-[clamp(1.8rem,3.4vw,2.8rem)] max-w-[24ch] mt-3.5 [text-wrap:balance]">
+            See your <span className="text-gradient-accent">Attribution score</span> — then watch every action feed it.
           </h2>
           <p className="text-ink-mid text-[16px] leading-[1.55] max-w-[60ch] mt-4">
-            Paste any wallet. Its live score reveals inline — six signals, tier, percentile. Then everything you already do on-chain feeds it.
+            Paste any wallet and its live score reveals inline — six signals, tier, percentile. Everything you already do on-chain feeds it.
           </p>
 
           <div className="mt-9">
@@ -451,10 +450,10 @@ export default function HomePage() {
           <GradientPanel tone="coral" className="p-10 max-[800px]:p-6 grid [grid-template-columns:1fr_0.9fr] gap-10 items-center max-[720px]:grid-cols-1 max-[720px]:gap-6">
             <div>
               <div className={ey}>Stay in the loop</div>
-              <h2 className="font-atx-display font-medium text-ink tracking-[-0.035em] leading-[1.1] text-[clamp(1.5rem,2.6vw,2.1rem)] mt-3 [text-wrap:balance]">
-                New vaults, drops, and score boosts — first.
+              <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.1] text-[clamp(1.5rem,2.6vw,2.1rem)] mt-3 [text-wrap:balance]">
+                New vaults, drops, and score boosts, <span className="text-gradient-accent">before anyone else.</span>
               </h2>
-              <p className="text-[15px] text-ink-mid mt-2.5 max-w-[46ch]">Score-holders get priority access. No spam — just the good stuff.</p>
+              <p className="text-[15px] text-ink-mid mt-2.5 max-w-[46ch]">Score-holders get priority access. No spam, just the good stuff.</p>
             </div>
             <WaitlistForm />
           </GradientPanel>

@@ -13,7 +13,7 @@ export default function TeamSwap() {
   return (
     <>
       <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="font-atx-display font-medium text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Swap</h1>
+        <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Swap</h1>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(22,163,74,0.3)] text-mw-green px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-mw-green" />Live</span>
       </div>
       <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[64ch] mt-2.5">Rebalance treasury assets across chains with best-execution routing (LI.FI). This is the same live router as the retail app — larger moves and new destinations route through <Link href="/app/team/policy" className="text-peri-deep font-medium no-underline">Policy &amp; Approvals</Link> first.</p>
@@ -32,7 +32,9 @@ export default function TeamSwap() {
             { t: 'Policy-gated at size', d: 'Swaps within a signer’s limit clear instantly; larger moves collect the quorum before they execute.' },
           ].map((c) => (
             <div key={c.t} className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-4">
-              <div className="font-atx-display font-semibold text-[14px] text-ink">{c.t}</div>
+              <div className="font-atx-display font-semibold text-[14px] text-ink">
+                {c.t === 'Every swap builds Attribution' ? <>Every swap <span className="text-gradient-accent">builds Attribution</span></> : c.t}
+              </div>
               <p className="text-[13px] text-ink-mid leading-[1.5] mt-1.5">{c.d}</p>
             </div>
           ))}

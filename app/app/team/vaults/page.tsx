@@ -32,10 +32,10 @@ export default function TeamVaults() {
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="font-atx-display font-medium text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Vaults</h1>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Preview · illustrative</span>
+          <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Vaults</h1>
+          <span className="live-chip"><span className="dot" aria-hidden />Preview · illustrative</span>
         </div>
-        <Link href="/app/vault/create" className="glass-pill glass-pill-sm shrink-0">+ Create vault →</Link>
+        <Link href="/app/vault/create" className="glass-pill-primary shrink-0">+ Create vault →</Link>
       </div>
       <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[64ch] mt-2.5">Allocate treasury capital across Growth ULV pools and the Aave idle buffer, and curate your own vaults. Creating a vault is a Curator action — retail LPs deposit into what you build; the strategy, lock terms, and fee split are yours to set.</p>
 

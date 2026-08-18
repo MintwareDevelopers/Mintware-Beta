@@ -153,8 +153,8 @@ export default function AgentsPage() {
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
           <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">For AI Agents</div>
-          <h1 className="font-atx-display font-medium text-ink mt-6 tracking-[-0.04em] leading-[1.03] text-[clamp(2rem,5vw,3.6rem)] max-w-[18ch] [text-wrap:balance]">
-            Give your AI agent <span className="text-peri">on-chain reputation</span>
+          <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.03] text-[clamp(2rem,5vw,3.6rem)] max-w-[18ch] [text-wrap:balance]">
+            Give your AI agent <span className="text-gradient-accent">on-chain reputation</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
             Mintware Attribution scores AI agent wallets on Base — tracking behaviour, contribution, and risk. Drop in a plugin and your agent earns a portable, machine-readable on-chain reputation that carries across Mintware.
@@ -189,6 +189,7 @@ export default function AgentsPage() {
         <div className="flex items-center gap-3 mb-4">
           <span className={NUM}>02</span>
           <span className={LABEL}>Live leaderboard</span>
+          <span className="live-chip"><span className="dot" aria-hidden />Live</span>
         </div>
         <div className="soft-card overflow-hidden mb-10">
           <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-hair-soft max-[700px]:flex-col max-[700px]:items-start">
@@ -198,8 +199,8 @@ export default function AgentsPage() {
                 Live reputation rankings for registered agents, powered by the Attribution oracle.
               </div>
             </div>
-            <a href="/agents/leaderboard" className="text-[12px] font-semibold uppercase tracking-[0.04em] text-peri-deep no-underline whitespace-nowrap hover:underline inline-flex items-center min-h-[40px]">
-              Open full leaderboard →
+            <a href="/agents/leaderboard" className="glass-pill-primary glass-pill-sm whitespace-nowrap">
+              Open leaderboard →
             </a>
           </div>
 
@@ -331,8 +332,8 @@ export default function AgentsPage() {
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[76px] max-[800px]:py-[52px]">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Blueprint · not yet built</span>
           <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mt-4">The road ahead · agent payments</div>
-          <h2 className="font-atx-display font-medium text-ink mt-4 tracking-[-0.04em] leading-[1.05] text-[clamp(1.7rem,4vw,2.8rem)] max-w-[20ch] [text-wrap:balance]">
-            Agents that pay for themselves — and <span className="text-peri">never sit idle.</span>
+          <h2 className="font-atx-display font-semibold text-ink mt-4 tracking-[-0.04em] leading-[1.05] text-[clamp(1.7rem,4vw,2.8rem)] max-w-[20ch] [text-wrap:balance]">
+            Agents that pay for themselves — and <span className="text-gradient-accent">never sit idle.</span>
           </h2>
           <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.55] mt-5 max-w-[64ch]">
             Reputation is step one. Where we’re headed: an agent that keeps its whole treasury earning in a vault, then pays any endpoint the instant it asks — crypto-native or legacy — over one standard, HTTP 402.

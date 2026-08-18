@@ -48,12 +48,12 @@ function SwapContent() {
         {/* ── Editorial hero ── */}
         <section className="bg-ground-cool border-b border-hair-soft">
           <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px] text-center">
-            <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">On-chain reputation · 100+ chains</div>
-            <h1 className="font-atx-display font-medium text-ink mt-5 tracking-[-0.04em] leading-[1.02] text-[clamp(2rem,5vw,3.4rem)] max-w-[16ch] mx-auto [text-wrap:balance]">
-              Trade like it <span className="text-peri">counts.</span>
+            <span className="live-chip"><span className="dot" aria-hidden />On-chain reputation · 100+ chains</span>
+            <h1 className="font-atx-display font-semibold text-ink mt-5 tracking-[-0.04em] leading-[1.02] text-[clamp(2rem,5vw,3.4rem)] max-w-[16ch] mx-auto [text-wrap:balance]">
+              Trade like it <span className="text-gradient-accent">counts.</span>
             </h1>
             <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.5] mt-5 max-w-[58ch] mx-auto">
-              Every swap builds your Attribution score. Trade tokens across chains here; provide liquidity in the reputation-weighted vaults. One reputation carries across both.
+              Every swap builds your Attribution score. Trade here, provide liquidity in the reputation-weighted vaults — one score, both surfaces.
             </p>
           </div>
         </section>
@@ -116,8 +116,8 @@ function SwapContent() {
                 <span className="ml-auto text-[16px] text-coral2-deep">→</span>
               </div>
               <p className="text-[13px] text-ink-mid leading-[1.5]">
-                Reputation-weighted Uniswap V4 vaults — the same position earns more when your
-                Attribution score is stronger. In testing on Base — explore the vaults.
+                Reputation-weighted Uniswap V4 vaults — the same position earns more as your
+                Attribution score climbs. In testing on Base.
               </p>
             </Link>
             <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-ink-soft flex items-center gap-1.5 px-1 mt-6">

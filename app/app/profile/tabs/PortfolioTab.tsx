@@ -183,7 +183,7 @@ export function PortfolioTab({ data, loading, hasWallet }: Props) {
       {!loading && !data && (
         <div className="text-center py-12 text-ink-mid text-[13px]">
           {hasWallet
-            ? 'Could not load data. The API may be indexing your wallet.'
+            ? 'Couldn’t load your data. The API may still be indexing your wallet.'
             : 'Connect your wallet to see your Attribution score.'}
         </div>
       )}

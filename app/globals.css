@@ -190,6 +190,39 @@
   .glass-pill:focus-visible { outline: 2px solid var(--color-peri); outline-offset: 2px; }
   .glass-pill-sm { padding: 9px 18px; font-size: 0.85rem; }
 
+  /* Glass pill — primary. Same frosted family, periwinkle-tinted fill for the one
+     hero-weight CTA per section. Still glass, never solid/black. EXPERIMENTAL. */
+  .glass-pill-primary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 15px 28px; border-radius: 999px;
+    font-weight: 600; font-size: 0.96rem; line-height: 1; cursor: pointer;
+    color: #fff;
+    background: linear-gradient(135deg, var(--color-peri) 0%, var(--color-peri-deep) 100%);
+    box-shadow: 0 6px 20px rgba(108,108,240,.32), inset 0 0 0 1px rgba(255,255,255,.16);
+    transition: transform .2s cubic-bezier(.4,0,.2,1), box-shadow .2s;
+    text-decoration: none; border: none;
+  }
+  .glass-pill-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(108,108,240,.4), inset 0 0 0 1px rgba(255,255,255,.22); }
+  .glass-pill-primary:focus-visible { outline: 2px solid var(--color-peri-deep); outline-offset: 2px; }
+
+  /* Live pulse chip — small eyebrow badge with a beating dot. EXPERIMENTAL. */
+  .live-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 14px 6px 10px; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--color-peri-deep);
+    background: rgba(108,108,240,0.08);
+    border: 1px solid rgba(108,108,240,0.18);
+  }
+  .live-chip .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--color-peri); animation: mw-pulse 1.8s ease-in-out infinite; }
+
+  /* Gradient accent text — the ONE hero-color-word treatment per section (h1/h2 accent
+     spans only; never body copy, never more than one run per heading). EXPERIMENTAL. */
+  .text-gradient-accent {
+    background-image: linear-gradient(100deg, var(--color-peri) 10%, var(--color-coral2-deep) 90%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
   /* Glass card — translucent frosted surface (best over gradients). */
   .glass-card {
     background: rgba(255,255,255,0.62);

@@ -155,7 +155,7 @@ function AccountContent() {
                 <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Liquid Sovereign Account</div>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em]"><span className="w-[5px] h-[5px] rounded-full bg-peri" />Preview · illustrative</span>
               </div>
-              <div className="font-atx-display font-medium text-ink tracking-[-0.03em] leading-[0.9] text-[clamp(2.4rem,6.5vw,3.6rem)] mt-2.5 tabular-nums">$48,512</div>
+              <div className="font-atx-display font-semibold text-ink tracking-[-0.03em] leading-[0.9] text-[clamp(2.4rem,6.5vw,3.6rem)] mt-2.5 tabular-nums">$48,512</div>
               <div className="text-[13px] text-ink-mid mt-2.5">Earning and spendable at once · <span className="text-ink font-semibold">principal never touched</span></div>
             </div>
             <div className="flex gap-8 max-sm:gap-6 flex-wrap">
@@ -173,7 +173,7 @@ function AccountContent() {
           </div>
 
           <div className="flex items-center gap-3 mt-6 flex-wrap">
-            <Link href="/app/vaults" className="glass-pill glass-pill-sm">Deposit →</Link>
+            <Link href="/app/vaults" className="glass-pill-primary glass-pill-sm">Deposit →</Link>
             <Link href="/app/swap" className="glass-pill glass-pill-sm">Swap</Link>
             <button disabled title="Coming soon" className="text-[11px] font-semibold text-ink-soft uppercase tracking-[0.06em]">Move money · coming</button>
           </div>
@@ -193,7 +193,7 @@ function AccountContent() {
               </div>
             ))}
           </div>
-          <div className="text-[10.5px] text-ink-soft mt-4">Money figures illustrative (vaults in testing on Base Sepolia). <span className="text-peri-deep">•</span> Attribution stats are live from your wallet.</div>
+          <div className="text-[10.5px] text-ink-soft mt-4">Money figures are illustrative — vaults are in testing on Base Sepolia. <span className="text-peri-deep">•</span> Attribution stats are live from your wallet.</div>
         </div>
       </div>
 

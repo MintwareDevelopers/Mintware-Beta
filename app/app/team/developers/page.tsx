@@ -40,8 +40,8 @@ export default function TeamDevelopers() {
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="font-atx-display font-medium text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Developers</h1>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em]"><span className="w-[6px] h-[6px] rounded-full bg-peri" />Preview · illustrative</span>
+          <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Developers</h1>
+          <span className="live-chip"><span className="dot" aria-hidden />Preview · illustrative</span>
         </div>
         <button disabled title="Coming soon" className="glass-pill glass-pill-sm shrink-0">+ Create key</button>
       </div>
@@ -106,7 +106,7 @@ export default function TeamDevelopers() {
 
       <div className="rounded-[var(--radius-card)] border border-hair bg-ground-cool p-5 mt-6 max-w-[820px] flex items-start gap-3">
         <span className="w-[7px] h-[7px] rounded-full bg-peri mt-1.5 shrink-0" />
-        <p className="text-[13px] text-ink-mid leading-[1.5]">Every key and webhook can run against the <span className="font-semibold text-ink">Base Sepolia sandbox</span> before it touches mainnet, so you can replay authorization and settlement flows end-to-end without moving real value.</p>
+        <p className="text-[13px] text-ink-mid leading-[1.5]">Every key and webhook runs against the <span className="font-semibold text-ink">Base Sepolia sandbox</span> before it touches mainnet — replay authorization and settlement flows end-to-end without moving real value.</p>
       </div>
 
       <p className="text-[11px] text-ink-soft mt-6">Illustrative. The developer platform is in development — the keys, endpoints, and events shown here are a mockup, not real credentials or a live API.</p>

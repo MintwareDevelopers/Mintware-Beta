@@ -413,7 +413,7 @@ function Step4({
       <button
         onClick={onDeploy}
         disabled={submitting}
-        className="glass-pill w-full justify-center !py-[13px] text-[15px] disabled:opacity-60 disabled:cursor-not-allowed"
+        className="glass-pill-primary w-full justify-center !py-[13px] text-[15px] disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {submitting ? submitLabel : 'Create vault →'}
       </button>
@@ -536,7 +536,7 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
         <div className="flex justify-center mb-4">
           <span className="w-12 h-12 rounded-2xl grid place-items-center text-white text-[22px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 6px 18px rgba(108,108,240,0.35)' }}>✴</span>
         </div>
-        <div className="text-[22px] font-medium text-ink font-atx-display mb-2 tracking-[-0.02em]">
+        <div className="text-[22px] font-semibold text-ink font-atx-display mb-2 tracking-[-0.02em]">
           Vault created
         </div>
         <div className="text-[14px] text-ink-mid mb-7 leading-[1.6]">
@@ -569,7 +569,7 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
-            <h1 className="text-[22px] font-medium text-ink font-atx-display m-0 tracking-[-0.02em]">
+            <h1 className="text-[22px] font-semibold text-ink font-atx-display m-0 tracking-[-0.02em]">
               {STEPS[step]}
             </h1>
             <StepDots current={step} total={STEPS.length} />
