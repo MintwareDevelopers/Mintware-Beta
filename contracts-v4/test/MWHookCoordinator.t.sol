@@ -112,6 +112,59 @@ contract MWHookCoordinatorTest is Test {
         _swap(true, 500e18);
     }
 
+    // ── Diamond-LVR: directional surcharge ───────────────────────────────────
+
+    /// @notice The lever surcharges ONLY the gap-closing (arb) swap direction — the trade that realizes
+    ///         LVR against LPs — and leaves benign, uninformed flow at the symmetric fee. Both compared
+    ///         swaps start from the identical pre-swap tick (snapshot/revert), so only the direction differs.
+    function test_lvr_surcharge_is_directional() public {
+        // dynamic fee ON (modest volatility slope), guard OFF (no breaker), rate-limit OFF.
+        coord.configurePool(poolId, 3000, 100000, 5, 0, true, false, 60, 0, 10);
+
+        // Seed the oracle, then push spot far BELOW it within one block (oracle truncates/lags).
+        _swap(true, 1_000e18);
+        vm.roll(block.number + 1);
+        _swap(true, 300_000e18);
+
+        (, int24 curTick,,) = IPoolManager(address(pm)).getSlot0(poolId);
+        (int24 oTick,) = coord.oracleTick(poolId);
+        assertLt(curTick, oTick, "spot pushed below oracle");
+        // spot < oracle ⇒ ARB (gap-closing) = buy up = !zeroForOne; BENIGN = sell down = zeroForOne.
+
+        // (1) Lever OFF ⇒ both directions price identically.
+        uint256 s0 = vm.snapshotState();
+        _swap(true, 1_000e18);
+        uint24 offBenign = coord.lastFee(poolId);
+        vm.revertToState(s0);
+        _swap(false, 1_000e18);
+        uint24 offArb = coord.lastFee(poolId);
+        assertEq(offArb, offBenign, "lever off: symmetric fee");
+
+        // (2) Lever ON ⇒ arb direction surcharged; benign flow unchanged.
+        vm.revertToState(s0);
+        coord.setLvrParams(poolId, 3000, 0, true); // 3000 pips per captured tick
+        uint256 s1 = vm.snapshotState();
+        _swap(true, 1_000e18);
+        uint24 onBenign = coord.lastFee(poolId);
+        vm.revertToState(s1);
+        _swap(false, 1_000e18);
+        uint24 onArb = coord.lastFee(poolId);
+
+        assertGt(onArb, onBenign, "arb (gap-closing) swap pays the LVR surcharge");
+        assertEq(onBenign, offBenign, "benign flow unchanged by the lever");
+    }
+
+    /// @notice Even an absurd LVR slope can never push the applied fee past the pool's cap.
+    function test_lvr_fee_clamped_to_cap() public {
+        coord.configurePool(poolId, 3000, 10000, 5, 0, true, false, 60, 0, 10); // cap 1%
+        coord.setLvrParams(poolId, 1_000_000, 1_000_000, true);
+        _swap(true, 1_000e18);
+        vm.roll(block.number + 1);
+        _swap(true, 300_000e18);   // spot below oracle
+        _swap(false, 1_000e18);    // arb direction, huge surcharge → must clamp
+        assertLe(coord.lastFee(poolId), uint24(10000), "applied fee clamped to maxFeePips");
+    }
+
     // ── Stage-1.2: oracle-based MEV model (no tx.origin) ─────────────────────
 
     function test_oracle_initializes_after_first_swap() public {

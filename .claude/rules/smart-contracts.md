@@ -67,8 +67,12 @@ delegatecall (`payments/lib/MWTreasuryPositionLib`). Do not reference them — g
 
 `MWHookCoordinator` (canonical hook) + `MWDynamicFee` + `MWOracleGuard` + `MWAmAuction`/`MWAmAuctionLib`.
 Levers: **dynamic / surge / quadratic fee**, **MEV-tax** (Base-only; a bonus, never counted as solvency),
-**am-AMM** (rent + hook enrollment). **All levers OFF/inert by default; oracle-free.** Invariants **7/7**
-green (256×128k). `MWHookCoordinator._rebalanceIdleCapital` / `_calculateDynamicFee` are dead no-ops.
+**am-AMM** (rent + hook enrollment), **Diamond-LVR** (a DIRECTIONAL surcharge on the gap-closing/arb swap
+only — recaptures LVR to LPs without taxing benign flow; `MWDynamicFee.lvrSurchargePips`, wired into both
+`MWHookCoordinator` and the YPN `MintwareTreasuryJitHook`). **All levers OFF/inert by default; oracle-free**
+except Diamond-LVR + dynamic-fee, which use the manipulation-resistant *truncated in-pool* oracle (no CEX
+feed). Invariants **7/7** green (256×128k). `MWHookCoordinator._rebalanceIdleCapital` / `_calculateDynamicFee`
+are dead no-ops.
 
 ## Deployments (honest)
 

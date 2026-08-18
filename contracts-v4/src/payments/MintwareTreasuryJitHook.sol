@@ -118,6 +118,14 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     uint256 public maxFeeStepPerBlock;
     uint24  private _lastFeePips;             // last override applied (rate-limit anchor)
     uint32  private _lastFeeBlock;            // block of `_lastFeePips`
+    /// @notice Diamond-LVR lever (increment 4, opt-in, default OFF). A DIRECTIONAL surcharge added on top of
+    ///         the deviation curve, charged ONLY on the swap that closes spot toward the truncated oracle —
+    ///         the arb that realizes LVR against LPs. Benign flow that widens the gap (the uninformed flow
+    ///         LPs earn on) is never surcharged. Fattest on THIN community pools (this hook's core). Off by
+    ///         default (`lvrEnabled=false`); the surcharge is clamped to `maxFeePips` so it can't brick a swap.
+    uint256 public lvrSlopePipsPerTick;           // pips of LVR surcharge per captured tick
+    uint256 public lvrQuadMultiplierPipsPerTickSq; // convex term per captured tick² (0 ⇒ linear)
+    bool    public lvrEnabled;
 
     // ── surge-floor lever (YPN MEV engine — Phase 1, increment 2) ────────────────────────────────
     /// @notice A time-decaying fee FLOOR taken as `max(baseCurve, surge)` in `_dynamicFee`. It is ARMED
@@ -170,6 +178,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     event JitWidthSet(int24 spacings);
     event OracleParamsSet(int24 maxMovePerBlock, uint32 maxCatchupBlocks);
     event BaseFeeSet(uint24 baseFeePips);
+    event LvrSet(uint256 slopePipsPerTick, uint256 quadMultiplierPipsPerTickSq, bool enabled);
     event MaxFeeSet(uint24 maxFeePips);
     event FeeSlopeSet(uint256 slopePipsPerTick);
     event QuadMultiplierSet(uint256 quadMultiplierPipsPerTickSq);
@@ -372,17 +381,38 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         }
         // Deviation-scaled dynamic-fee override for THIS swap (canonical pool only). Pure + clamped —
         // never reverts; ignored by V4 unless the pool carries DYNAMIC_FEE_FLAG.
-        return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, _dynamicFee(key));
+        return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, _dynamicFee(key, params.zeroForOne));
+    }
+
+    /// @notice Set the Diamond-LVR lever (opt-in, default OFF). Directional surcharge on the gap-closing
+    ///         (arb) swap direction only. Bound `slope`/`quad` ≤ 1_000_000 (MWDynamicFee.MAX_PIPS); the
+    ///         applied fee is always clamped to `maxFeePips`, so `fee ≤ MAX_LP_FEE` is preserved.
+    function setLvr(uint256 slopePipsPerTick, uint256 quadMultiplierPipsPerTickSq, bool enabled) external onlyOwner {
+        lvrSlopePipsPerTick = slopePipsPerTick;
+        lvrQuadMultiplierPipsPerTickSq = quadMultiplierPipsPerTickSq;
+        lvrEnabled = enabled;
+        emit LvrSet(slopePipsPerTick, quadMultiplierPipsPerTickSq, enabled);
     }
 
     /// @notice The LP-fee override for the canonical pool: `volatilityFee(base, max, deviation, slope)`,
     ///         optionally rate-limited per block, tagged with `OVERRIDE_FEE_FLAG`. Reads only the live
     ///         tick + the truncated oracle (both revert-free); the result is clamped to `maxFeePips`, so
-    ///         no input can brick the swap.
-    function _dynamicFee(PoolKey calldata key) private returns (uint24) {
+    ///         no input can brick the swap. `zeroForOne` feeds the Diamond-LVR directional surcharge.
+    function _dynamicFee(PoolKey calldata key, bool zeroForOne) private returns (uint24) {
         (, int24 tick,,) = poolManager.getSlot0(key.toId());
         uint256 dev = _oracle.deviationTicks(tick);
         uint24 fee = MWDynamicFee.volatilityFeeQuad(baseFeePips, maxFeePips, dev, slopePipsPerTick, quadMultiplierPipsPerTickSq);
+        // Diamond-LVR (increment 4): directional surcharge on the arb (gap-closing) direction only. `dev != 0`
+        // ⇒ the oracle is initialized. Arb: spot ABOVE oracle & selling down, or spot BELOW & buying up.
+        if (lvrEnabled && dev != 0) {
+            int24 oTick = _oracle.oracleTick;
+            bool arb = (tick > oTick && zeroForOne) || (tick < oTick && !zeroForOne);
+            if (arb) {
+                uint256 t = uint256(fee)
+                    + MWDynamicFee.lvrSurchargePips(dev, lvrSlopePipsPerTick, lvrQuadMultiplierPipsPerTickSq, maxFeePips);
+                fee = t > maxFeePips ? maxFeePips : uint24(t);
+            }
+        }
         uint256 step = maxFeeStepPerBlock;
         if (step != 0) {
             uint256 elapsed = block.number > _lastFeeBlock ? block.number - _lastFeeBlock : 0;
@@ -427,7 +457,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
 
         if (mgr == address(0)) {
             // Unmanaged → LVR-recapturing deviation fee (the Phase 1–2 stack), no skim, zero delta.
-            return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, _dynamicFee(key));
+            return (IHooks.beforeSwap.selector, BeforeSwapDeltaLibrary.ZERO_DELTA, _dynamicFee(key, params.zeroForOne));
         }
 
         // Managed → manager skims; LP fee 0. Guard a fee that could zero/flip the swap.

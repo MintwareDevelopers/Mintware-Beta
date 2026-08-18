@@ -84,6 +84,16 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         bool    configured;
     }
 
+    /// @notice Diamond-style LVR lever (opt-in, default OFF). A DIRECTIONAL surcharge added on top of the
+    ///         symmetric volatility fee, charged ONLY on the swap that closes spot toward the truncated
+    ///         oracle (the arbitrage that realizes LVR against LPs). Benign flow that widens the gap — the
+    ///         uninformed flow LPs earn on — is never surcharged. See `MWDynamicFee.lvrSurchargePips`.
+    struct LvrParams {
+        uint256 slopePipsPerTick;          // LVR surcharge pips per captured tick (0 ⇒ off)
+        uint256 quadMultiplierPipsPerTickSq; // convex term per captured tick² (0 ⇒ linear)
+        bool    enabled;
+    }
+
     IPoolManager public immutable POOL_MANAGER;
 
     /// @notice The only address permitted to add/remove liquidity in coordinated pools.
@@ -98,6 +108,8 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     mapping(PoolId => bool) public allowExactOutput;
 
     mapping(PoolId => FeeParams) public feeParams;
+    /// @notice Per-pool Diamond-LVR lever config (default zero-value ⇒ disabled).
+    mapping(PoolId => LvrParams) public lvrParams;
     mapping(PoolId => MWOracleGuard.State) internal oracle;
 
     /// @notice Size gate for JIT: only swaps with |amountSpecified| >= this trigger a JIT open.
@@ -116,6 +128,7 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     event OraclePoked(PoolId indexed poolId, int24 oracleTick, int24 currentTick);
     event JitThresholdSet(uint256 threshold);
     event JitEnabledSet(PoolId indexed poolId, bool enabled);
+    event LvrParamsSet(PoolId indexed poolId, uint256 slopePipsPerTick, uint256 quadMultiplierPipsPerTickSq, bool enabled);
 
     error OnlyPoolManager();
     error OnlyVaultCanModifyLiquidity();
@@ -189,6 +202,17 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     function setJitEnabled(PoolId poolId, bool enabled) external onlyOwner {
         jitEnabled[poolId] = enabled;
         emit JitEnabledSet(poolId, enabled);
+    }
+
+    /// @notice Set a pool's Diamond-LVR lever (opt-in, default OFF). A directional surcharge on the
+    ///         gap-closing (arb) swap direction only — recaptures LVR to LPs without taxing benign flow.
+    ///         Bound `slope`/`quad` ≤ 1_000_000 (MWDynamicFee.MAX_PIPS); the applied fee is always clamped
+    ///         to the pool's `maxFeePips`, so the "fee ≤ cap" invariant is preserved.
+    function setLvrParams(PoolId poolId, uint256 slopePipsPerTick, uint256 quadMultiplierPipsPerTickSq, bool enabled)
+        external onlyOwner
+    {
+        lvrParams[poolId] = LvrParams(slopePipsPerTick, quadMultiplierPipsPerTickSq, enabled);
+        emit LvrParamsSet(poolId, slopePipsPerTick, quadMultiplierPipsPerTickSq, enabled);
     }
 
     /// @notice Configure a pool's dynamic-fee + oracle-guard parameters.
@@ -265,6 +289,9 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
             if (fp.dynamicFeeEnabled) {
                 uint256 dev = oracle[id].deviationTicks(currentTick);
                 uint24 target = MWDynamicFee.volatilityFee(fp.baseFeePips, fp.maxFeePips, dev, fp.slopePipsPerTick);
+                // Diamond-LVR: directional surcharge on the arb (gap-closing) direction only.
+                uint24 lvrCap = fp.maxFeePips == 0 ? uint24(1_000_000) : fp.maxFeePips;
+                target = _lvrTarget(id, target, dev, currentTick, params.zeroForOne, lvrCap);
                 uint24 fee = _rateLimitedFee(id, target, fp.maxFeeStepPerBlock);
                 feeOverride = fee | LPFeeLibrary.OVERRIDE_FEE_FLAG;
             }
@@ -321,6 +348,8 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
                 // configured max when set, else to FALLBACK_MAX_FEE_PIPS.
                 uint24 feeCeil = fp.maxFeePips == 0 ? FALLBACK_MAX_FEE_PIPS : fp.maxFeePips;
                 uint24 target  = MWDynamicFee.volatilityFee(fp.baseFeePips, feeCeil, dev, fp.slopePipsPerTick);
+                // Diamond-LVR: directional surcharge on the arb direction (recapture LVR when unmanaged).
+                target         = _lvrTarget(id, target, dev, currentTick, params.zeroForOne, feeCeil);
                 uint24 surge   = _rateLimitedFee(id, target, fp.maxFeeStepPerBlock);
                 if (surge > lpFee) lpFee = surge;      // max(auction default, surge)
                 if (lpFee > feeCeil) lpFee = feeCeil;  // bounded: <= maxFeePips (or FALLBACK) < 1e6
@@ -353,6 +382,23 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         POOL_MANAGER.take(spec, auction, fee);
         IMWAmAuction(auction).recordManagerFee(id, Currency.unwrap(spec), fee);
         return (IHooks.beforeSwap.selector, toBeforeSwapDelta(int128(int256(fee)), 0), zeroLp);
+    }
+
+    /// @dev Diamond-LVR: add the directional surcharge to `base` when this swap CLOSES the gap toward the
+    ///      truncated oracle (the arb direction that realizes LVR), else return `base` unchanged. `dev > 0`
+    ///      implies the oracle is initialized. Arb direction: spot ABOVE oracle & selling down (zeroForOne),
+    ///      or spot BELOW oracle & buying up (!zeroForOne). Result is clamped to `cap`, so `fee ≤ cap` holds.
+    function _lvrTarget(PoolId id, uint24 base, uint256 dev, int24 currentTick, bool zeroForOne, uint24 cap)
+        internal view returns (uint24)
+    {
+        LvrParams storage lp = lvrParams[id];
+        if (!lp.enabled || dev == 0) return base;
+        int24 oTick = oracle[id].oracleTick; // dev > 0 ⇒ initialized
+        bool arb = (currentTick > oTick && zeroForOne) || (currentTick < oTick && !zeroForOne);
+        if (!arb) return base; // benign / gap-widening flow pays no LVR surcharge
+        uint256 sur = MWDynamicFee.lvrSurchargePips(dev, lp.slopePipsPerTick, lp.quadMultiplierPipsPerTickSq, cap);
+        uint256 t = uint256(base) + sur;
+        return t > cap ? cap : uint24(t);
     }
 
     /// @dev Clamp the fee to `maxStepPerBlock × blocksElapsed` of the last applied fee. Within a

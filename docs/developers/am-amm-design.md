@@ -1,5 +1,11 @@
 # am-AMM for the Mintware V4 Hook + Pair Vault — Design & Staged Build
 
+> **Update (2026-08-18): Diamond-LVR lever added — the last deferred MEV piece.** See
+> [§ Diamond-LVR](#diamond-lvr-lever--directional-lvr-capture) at the end. The am-AMM below is the
+> *auction* path to LVR recapture (a manager internalizes it); Diamond-LVR is the *directional-fee*
+> path for the non-managed / dynamic-fee path — a surcharge charged ONLY on the gap-closing (arb)
+> swap direction. Both stay testnet + unaudited.
+
 **Status:** Stages 1, 2, 3, and the custody-level of Stage 4 shipped. The auction now functions
 on swaps (manager sets + receives the fee; LP fee zeroed on managed swaps). Remaining: the
 swap-path invariants (fuzz the skim) + external audit.
@@ -129,3 +135,30 @@ rent monotonic-drain & no free management block · `deposit/rent >= K` always (w
 swaps) · manager can't grief (fee in `[0,cap]`, can't block swaps, can't re-enter) · every active
 block funds rent to the vault (`Σ rent funded == Σ deposit drained`) · displaced bids refunded exactly
 once · manager fees attributed to who was active at skim time · only owner enables, blue-chip only.
+
+## Diamond-LVR lever — directional LVR capture
+
+**The gap this closes.** The dynamic-fee levers (`volatilityFee`, quad, surge, MEV-tax) price *how much*
+and *how often* — they widen the fee with deviation. But they are **symmetric**: they tax the benign,
+uninformed swap that pushes spot *away* from the true price (the flow that PAYS LPs) exactly as hard as
+the toxic arbitrage that pushes spot *toward* the oracle (the flow that EXTRACTS LVR from LPs). That is
+the qualitative gap the external review flagged. The Diamond protocol's core idea — recapture the
+arbitrageur's edge to LPs — is here realized as a **directional** fee.
+
+**Mechanism.** A per-pool, opt-in surcharge (`MWHookCoordinator.lvrParams`, default OFF) added on top of
+the volatility fee, applied by the coordinator **only when the swap closes spot toward the truncated
+oracle** — i.e. the arbitrage direction. Direction test (in `_lvrTarget`):
+`arb = (spot > oracle && zeroForOne) || (spot < oracle && !zeroForOne)`. On the arb print the surcharge is
+`slope·dev + quad·dev²` (pure `MWDynamicFee.lvrSurchargePips`, clamped to `maxFeePips`); benign flow pays
+the symmetric fee only. Applied in **both** fee paths (non-am-AMM and the am-AMM unmanaged fallback).
+
+**Why it's safe on the swap path.** `lvrSurchargePips` is saturating + revert-free (the Bunni-class bar):
+if the linear term alone meets the cap it returns the cap before the quadratic multiply, so nothing
+overflows. The applied fee is always re-clamped to the pool's cap, so the `fee ≤ maxFeePips` invariant is
+preserved. Uses the same truncated oracle already driving the deviation fee + circuit breaker — no new
+price source; the money path still reads no spot price for value.
+
+**Composition.** Diamond-LVR (directional fee) and am-AMM (auctioned management) are alternatives on the
+same axis: for an **enrolled managed** pool the manager sets the fee and internalizes the LVR, so the
+lever is inert there; for **non-managed / dynamic-fee** pools the lever does the LVR recapture. Off by
+default; enable per pool via `setLvrParams(id, slope, quad, true)`. Same audit gate as the rest.

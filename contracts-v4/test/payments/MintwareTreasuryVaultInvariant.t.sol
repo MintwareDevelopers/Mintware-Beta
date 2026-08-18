@@ -321,6 +321,10 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         // FULL lever stack (base + slope·dev + quad·dev² , floored by surge, + MEV-tax), clamped to MAX_LP_FEE
         // — the strongest active-fee solvency proof. Additive-only ⇒ backing can only improve.
         hook.setMevTax(50, 50_000);
+        // Increment 4: enable the Diamond-LVR directional surcharge so every fuzzed `movePrice` swap that
+        // closes the gap to the oracle routes through a LIVE LVR path — proving `fee ≤ cap` (no brick)
+        // holds with the full stack (base + quad + surge + MEV-tax + LVR) on.
+        hook.setLvr(200, 1, true);
         vm.fee(1 gwei);
         vm.txGasPrice(11 gwei);
 

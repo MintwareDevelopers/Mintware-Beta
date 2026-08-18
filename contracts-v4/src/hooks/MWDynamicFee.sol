@@ -99,6 +99,38 @@ library MWDynamicFee {
         return uint24(k * gweiAmt);                         // guaranteed ≤ capPips ≤ MAX_PIPS
     }
 
+    /// @notice Diamond-style LVR surcharge (Phase 3 — the directional lever). LVR (loss-versus-rebalancing)
+    ///         is the value an arbitrageur EXTRACTS from LPs by realigning spot to the true price; it leaks
+    ///         only on the swap that CLOSES the gap to the (truncated) oracle. This returns a surcharge to
+    ///         add ON TOP of the base/volatility fee — but the CALLER applies it to the gap-closing (arb)
+    ///         direction ONLY, passing `capturedTicks` = the mispricing that direction is arbing (and 0 for
+    ///         benign flow that widens the gap). That directionality is what makes it LVR-aware rather than a
+    ///         symmetric volatility tax: benign, uninformed flow — the flow that PAYS LPs — is never
+    ///         surcharged; the arbitrageur's edge is recaptured to the LP. `surcharge = slope·t + quad·t²`,
+    ///         clamped to `capPips`. `slope == quad == 0` (lever off) or `captured == 0` (benign) ⇒ 0.
+    /// @dev    Saturating + revert-free for ANY inputs (no caller bound needed), the Bunni-class swap-path bar:
+    ///         if the linear term alone meets the cap we return `capPips` BEFORE the quadratic multiply, so no
+    ///         product can overflow. Under runtime bounds (`captured` tick-bounded ≤ ~1.77e6; caller keeps
+    ///         `slope`,`quad` ≤ MAX_PIPS) both terms stay far under 2^256 anyway.
+    /// @param capturedTicks              ticks of mispricing the ARB direction is closing (caller: 0 if benign)
+    /// @param slopePipsPerTick           pips of LVR surcharge per captured tick (0 ⇒ lever off)
+    /// @param quadMultiplierPipsPerTickSq convex term per captured tick² (0 ⇒ linear)
+    /// @param capPips                    surcharge ceiling in pips (0 → MAX_PIPS)
+    function lvrSurchargePips(
+        uint256 capturedTicks,
+        uint256 slopePipsPerTick,
+        uint256 quadMultiplierPipsPerTickSq,
+        uint24 capPips
+    ) internal pure returns (uint24) {
+        if (capturedTicks == 0 || (slopePipsPerTick == 0 && quadMultiplierPipsPerTickSq == 0)) return 0;
+        uint256 cap = capPips == 0 ? MAX_PIPS : capPips;
+        uint256 lin = slopePipsPerTick * capturedTicks;
+        if (lin >= cap) return uint24(cap); // linear term alone saturates → no quad multiply, no overflow
+        uint256 fee = lin + quadMultiplierPipsPerTickSq * capturedTicks * capturedTicks;
+        if (fee > cap) fee = cap;
+        return uint24(fee);
+    }
+
     /// @notice Rate-limit a fee move: clamp `target` to within `maxStep` of `last` (Stage-1.2).
     /// @dev    Prevents a single-block jump from base fee to max fee, which is what lets an MEV
     ///         searcher cleanly front-run a predictable hike / back-run a predictable drop. The
