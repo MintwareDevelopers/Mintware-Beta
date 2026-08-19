@@ -37,6 +37,13 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
     install + `PRIVY_APP_SECRET` + Privy-dashboard org/metadata setup.
 - **Marketing:** `/`, `/attribution`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
   `/agents`, `/about`, `/docs`.
+- **Org treasury (new, testnet)** — the multi-tenant treasury MVP built ON the org layer
+  (`orgs`/`org_members` + `attestOrgMembership`, migration `20260818000001`). Auth surface `/app/org/[slug]`
+  (member card — spendable-while-earning), `…/fund` (deposit senior + commit junior + CCTP), `…/pay`
+  (pay-a-vendor), `…/payroll` (CSV batch), `…/roles` (four canned presets, not a policy engine). Public
+  legitimacy artifact `/org/[slug]` + embeddable `/org/[slug]/badge` (frame-ancestors exception, badge
+  path only). Reads via `lib/org/treasuryReader` (converged-vault eth_call); live payout is relayer-gated
+  (503 until configured, same posture as x402). Testnet-only, unaudited.
 
 ## Shelved / not-live (do not present as current)
 
@@ -152,6 +159,14 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 | `/app/agents` | `app/app/agents/page.tsx` |
 | `/app/arc` | `app/app/arc/page.tsx` |
 | `/app/leaderboard` | `app/app/leaderboard/page.tsx` |
+| `/app/org` | `app/app/org/page.tsx` |
+| `/app/org/[slug]` | `app/app/org/[slug]/page.tsx` |
+| `/app/org/[slug]/accept` | `app/app/org/[slug]/accept/page.tsx` |
+| `/app/org/[slug]/fund` | `app/app/org/[slug]/fund/page.tsx` |
+| `/app/org/[slug]/pay` | `app/app/org/[slug]/pay/page.tsx` |
+| `/app/org/[slug]/payroll` | `app/app/org/[slug]/payroll/page.tsx` |
+| `/app/org/[slug]/roles` | `app/app/org/[slug]/roles/page.tsx` |
+| `/app/org/new` | `app/app/org/new/page.tsx` |
 | `/app/profile` | `app/app/profile/page.tsx` |
 | `/app/swap` | `app/app/swap/page.tsx` |
 | `/app/team` | `app/app/team/page.tsx` |
@@ -168,7 +183,10 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 | `/defi` | `app/defi/page.tsx` |
 | `/docs` | `app/docs/page.tsx` |
 | `/explorer` | `app/explorer/page.tsx` |
+| `/org/[slug]` | `app/org/[slug]/page.tsx` |
+| `/org/[slug]/badge` | `app/org/[slug]/badge/page.tsx` |
 | `/privacy` | `app/privacy/page.tsx` |
+| `/proof` | `app/proof/page.tsx` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
 | `/risk-disclosures` | `app/risk-disclosures/page.tsx` |
 | `/teams` | `app/teams/page.tsx` |

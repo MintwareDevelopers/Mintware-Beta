@@ -3,6 +3,8 @@
 // Prime / Safe. Role-scoped visibility: members see only their own cards. ALL
 // illustrative — the org/RBAC layer is Phase 2 (Privy metadata + middleware).
 
+import Link from 'next/link'
+
 type Role = 'Admin' | 'Signer' | 'Approver' | 'Member' | 'Viewer'
 const ROLE_CLS: Record<Role, string> = {
   Admin:    'text-peri-deep',
@@ -36,9 +38,9 @@ export default function TeamRoles() {
           <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Team & Roles</h1>
           <span className="live-chip"><span className="dot" aria-hidden />Preview · illustrative</span>
         </div>
-        <button className="glass-pill glass-pill-sm" disabled title="Coming soon">+ Invite</button>
+        <Link href="/app/org" className="glass-pill glass-pill-sm no-underline">+ Invite</Link>
       </div>
-      <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[64ch] mt-2.5">Invite your team and scope what each person can do — from full admin down to read-only. Members see only their own cards and activity; admins see the whole treasury.</p>
+      <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[64ch] mt-2.5">Invite your team and scope what each person can do — from full admin down to read-only. Members see only their own cards and activity; admins see the whole treasury. <Link href="/app/org" className="text-peri-deep font-medium no-underline hover:underline">Manage members in your org treasury →</Link></p>
 
       {/* Roster */}
       <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-soft mt-6 mb-3">Members · {MEMBERS.length}</div>

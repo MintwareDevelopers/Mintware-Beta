@@ -64,6 +64,13 @@ const TRUST: [string, string][] = [
   ['Fee redirection on-chain', 'The community’s share accrues inside the contract, per unit of community liquidity — no off-chain merkle, no discretion, no rounding drift.'],
 ]
 
+const TREASURY: [string, string][] = [
+  ['Spendable while earning', 'Member balances are par-safe and instantly spendable — cards, x402, cross-chain. The treasury earns the spread while the money sits ready. Never idle, never locked.'],
+  ['Your team, by role', 'Invite by email and pick a preset — owner, manager, contributor, vendor. Each is a daily spend cap. On accept, every member gets a soulbound on-chain membership.'],
+  ['Pay vendors & run payroll', 'One payment or a CSV batch, straight from the treasury and authorized against live solvency. Route to any chain via Circle CCTP.'],
+  ['Proof of reserves, public', 'A live treasury page — NAV, coverage, members, backed on-chain — plus an embeddable badge. Your community verifies solvency without asking.'],
+]
+
 export default function TeamsLandingPage() {
   return (
     <div className="font-atx-display bg-white text-ink min-h-screen overflow-x-clip">
@@ -247,6 +254,35 @@ export default function TeamsLandingPage() {
           <p className="text-[10.5px] text-ink-soft leading-[1.5] mt-4">
             Built for MEME / EMERGING launches and gated as such at deploy. The matched-liquidity vault is invariant-tested
             and ships on Base Sepolia testnet first; live mainnet launches land at Phase 2. Independent audit pending.
+          </p>
+        </div>
+      </section>
+
+      {/* ── 08 · Beyond the launch · the treasury ── */}
+      <section className="bg-white border-b border-hair-soft">
+        <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
+          <Head n="08" label="Beyond the launch · your treasury" />
+          <h2 className={h2}>The capital doesn’t have to sit idle. <span className="text-gradient-accent">Or lock you out.</span></h2>
+          <p className={lead}>
+            The money your team runs on lives in a Mintware treasury that keeps earning while it stays spendable —
+            cards, payroll, vendors, cross-chain — with a public page anyone can verify. Community capital is senior
+            and par-safe; your team’s capital is the junior first-loss that earns the spread.
+          </p>
+          <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
+            {TREASURY.map(([k, d], i) => (
+              <div key={k} className="rounded-2xl bg-white border border-hair p-6" style={{ borderTop: `4px solid ${i % 2 === 0 ? 'var(--color-peri)' : 'var(--color-coral2)'}` }}>
+                <div className="font-atx-display text-[17px] font-medium text-ink">{k}</div>
+                <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-2.5">{d}</p>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-3 mt-8">
+            <Link href="/app/org/new" className="glass-pill-primary">Create your treasury →</Link>
+            <Link href="/app" className="glass-pill">Open the app →</Link>
+          </div>
+          <p className="text-[10.5px] text-ink-soft leading-[1.5] mt-4">
+            In testing on testnet, not yet audited — figures read live from the recorded vault; nothing here is an offer.
+            External audit gates real value.
           </p>
         </div>
       </section>

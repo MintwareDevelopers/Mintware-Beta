@@ -62,16 +62,34 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        // Everything EXCEPT the read-only public solvency badge stays frame-blocked.
+        source: '/((?!org/[^/]+/badge).*)',
         headers: [
           // Prevent clickjacking
           { key: 'X-Frame-Options',       value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy',        value: 'strict-origin-when-cross-origin' },
+          // Force HTTPS for 2 years incl. subdomains (no `preload` yet — that's a separate,
+          // hard-to-reverse submission). Safe: the app is already HTTPS-only on Vercel.
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+          // Deny powerful features this DeFi app's own origin never uses (wallet QR scanning
+          // happens in the wallet app, not our page) + opt out of Topics/FLoC. Deliberately does
+          // NOT set Cross-Origin-Opener-Policy: that would break Privy's popup login flow.
+          { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=(), browsing-topics=()' },
           // Block embedding in iframes from any origin (enforced)
           { key: 'Content-Security-Policy', value: "frame-ancestors 'none';" },
           // Full CSP in report-only — observe violations, then promote to enforcing
           { key: 'Content-Security-Policy-Report-Only', value: CSP_REPORT_ONLY },
+        ],
+      },
+      {
+        // The embeddable treasury badge (#6): read-only public data, no auth, no actions → safe to frame
+        // anywhere. Deliberately omits X-Frame-Options (which has no "allow-any") and opens frame-ancestors.
+        source: '/org/:slug/badge',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy',        value: 'strict-origin-when-cross-origin' },
+          { key: 'Content-Security-Policy', value: 'frame-ancestors *;' },
         ],
       },
     ]

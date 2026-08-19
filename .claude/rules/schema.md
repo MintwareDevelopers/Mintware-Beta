@@ -77,3 +77,13 @@ Source of truth: `docs/schema.sql`
   Deliberately flat — no tier/role weighting. Design doc:
   `docs/developers/attribution-trust-graph-spec.md` §9a. Routes: `POST /api/orgs`,
   `POST /api/orgs/[id]/invite`, `POST /api/orgs/accept`.
+- `20260819000001_rls_backfill_hardening.sql` — **security: enables RLS (deny-all) on the 19
+  tables that shipped WITHOUT it after the original hardening pass** — the money-path tables
+  (`swap_quotes`, `token_pool_deductions`, `vault_lp_positions`, `vault_weighted_epochs`),
+  `orgs`/`org_members`/`waitlist` (PII/emails), the `ai_agent_*`/`ai_*` scoring + oracle-signature
+  tables, `vault_rebalance_proposals`, and the shelved RWA tables. Deny-all is safe because all are
+  accessed **only** via server routes on the service-role client (BYPASSRLS); none are read by the
+  browser. **RLS is the only gate** — Supabase applies no REVOKE, so default anon grants otherwise
+  allow direct PostgREST read/write. ⚠ Core tables (`campaigns`/`wallet_profiles`/`referral_records`/
+  `participants`) live in `docs/schema.sql` (dashboard-managed, NOT a migration) — verify their prod
+  RLS with the query in the migration's footer; the repo cannot confirm it.
