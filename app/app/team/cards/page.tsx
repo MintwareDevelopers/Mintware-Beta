@@ -8,6 +8,7 @@
 // corporate cards + settlement are in development, nothing here is live.
 
 import { useState } from 'react'
+import Link from 'next/link'
 
 const KPIS = [
   { k: 'This cycle', v: '$61.8k', s: 'of $98k limit' },
@@ -62,7 +63,10 @@ export default function TeamCards() {
           <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Cards & <span className="text-gradient-accent">Spend</span></h1>
           <span className="live-chip"><span className="dot" aria-hidden />Preview · illustrative</span>
         </div>
-        <button className="glass-pill glass-pill-sm" disabled title="Coming soon">+ Issue card</button>
+        <div className="flex items-center gap-2">
+          <button className="glass-pill glass-pill-sm" disabled title="Card issuance needs the CPN card issuer — coming soon">+ Issue card</button>
+          <Link href="/app/org" className="glass-pill glass-pill-sm glass-pill-primary no-underline">Open treasury →</Link>
+        </div>
       </div>
       <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[64ch] mt-2.5">Cards spend against treasury liquidity as a credit line — capital keeps earning until settlement. Every authorization is decided by the sub-150ms edge-auth engine and enforced by pre-set limits and merchant controls.</p>
 
