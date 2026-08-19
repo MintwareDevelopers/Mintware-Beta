@@ -69,6 +69,13 @@ const nextConfig = {
           { key: 'X-Frame-Options',       value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy',        value: 'strict-origin-when-cross-origin' },
+          // Force HTTPS for 2 years incl. subdomains (no `preload` yet — that's a separate,
+          // hard-to-reverse submission). Safe: the app is already HTTPS-only on Vercel.
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+          // Deny powerful features this DeFi app's own origin never uses (wallet QR scanning
+          // happens in the wallet app, not our page) + opt out of Topics/FLoC. Deliberately does
+          // NOT set Cross-Origin-Opener-Policy: that would break Privy's popup login flow.
+          { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=(), browsing-topics=()' },
           // Block embedding in iframes from any origin (enforced)
           { key: 'Content-Security-Policy', value: "frame-ancestors 'none';" },
           // Full CSP in report-only — observe violations, then promote to enforcing
