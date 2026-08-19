@@ -90,9 +90,16 @@ TREASURY_VAULT=0x<deployed converged vault> pnpm forge:smoke:coverage-gate
 
 It forks the live chain, pranks the vault owner, and asserts: (1) gate off by default, (2) `deployToLP`
 reverts `CoverageTooLow` when the floor is above current coverage, (3) the same deploy proceeds once the
-floor is lowered, and `coverageBps()` never drops below the active floor — mirroring `test_coverage_gate_*`
-on the *deployed* instance. (Requires the vault activated + `deployedFromSenior > 0`, i.e. steps 3–4 first;
-it self-skips with a clear message otherwise.)
+floor is lowered below the post-deploy coverage — mirroring `test_coverage_gate_*` on the *deployed*
+instance. (Requires the vault activated + `deployedFromSenior > 0`, i.e. steps 3–4 first; it self-skips
+with a clear message otherwise.)
+
+> **✅ Proven live (2026-08-18, Base Sepolia).** Deployed a fresh converged vault via
+> `SoakAmAmmDeploy.s.sol` (self-contained: mock USDC/TEAM/adapter + `commitTeam` + `deployToLP`) to
+> **`0xf10c970157928E7984987302c415D2f296a8Aa01`** (`coverageBps=50000`, `deployedFromSenior=1e9`,
+> `juniorUsdcBuffer=5e9`) and ran this smoke against it — `PASS`: reverts `CoverageTooLow` at floor 50001,
+> proceeds at floor 25000 (`coverageBps after=49504`). The gate works on-chain. (`SoakAmAmmDeploy` is the
+> quickest self-contained way to stand up a coverage-smoke-ready vault — no external team-token/adapter.)
 
 For a **live broadcast** on Base Sepolia (real state change) rather than a sim, the equivalent `cast` sequence:
 

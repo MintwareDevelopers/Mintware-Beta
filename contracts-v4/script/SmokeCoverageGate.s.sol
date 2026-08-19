@@ -75,13 +75,16 @@ contract SmokeCoverageGate is Script {
         require(reverted, "GATE FAIL: deployToLP did NOT revert CoverageTooLow above the floor");
         console2.log("OK: deployToLP reverts CoverageTooLow above the floor (bps)", floorAbove);
 
-        // 3. Lower the floor to the current coverage; the SAME deploy now proceeds.
-        vault.setMinCoverage(uint16(covNow));
+        // 3. Lower the floor SAFELY BELOW the coverage the deploy will leave, and the SAME deploy proceeds.
+        //    (A further deployToLP always lowers coverage a little, so the floor must sit under the
+        //    post-deploy coverage — a floor at the *current* coverage would correctly still block it.)
+        uint16 floorBelow = uint16(covNow / 2); // ~1% more at-risk senior can't halve coverage → clears this
+        vault.setMinCoverage(floorBelow);
         try vault.deployToLP(tinyDeploy, jt) {
-            // proceeded — good; coverage must still hold at/above the floor
             uint256 covAfter = vault.coverageBps();
-            require(covAfter >= covNow, "coverage dropped below the active floor after a covered deploy");
-            console2.log("OK: covered deploy proceeds; coverageBps after", covAfter);
+            require(covAfter >= floorBelow, "coverage dropped below the active floor after a covered deploy");
+            console2.log("OK: covered deploy proceeds under a lower floor (bps)", floorBelow);
+            console2.log("     coverageBps after", covAfter);
         } catch {
             revert("GATE FAIL: a covered deployToLP unexpectedly reverted");
         }
