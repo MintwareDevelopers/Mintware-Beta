@@ -12,10 +12,17 @@ import { MwFooter } from '@/components/web2/MwFooter'
 // 2026-08-19), not generic boilerplate — keep it in sync when providers
 // change (see the reconcile-on-change rule in CLAUDE.md).
 //
-// PLACEHOLDERS — search "[FILL IN]": contact emails, legal entity name,
-// whether Upstash/Redis (rate limiting) or any future KYC vendor is in use
-// at time of publish (currently: rate limiting is present in code but
-// inactive per .claude/rules/security.md — update this policy if that changes).
+// Entity: Mintware LLC, Delaware (state of formation defaulted to Delaware —
+// not explicitly confirmed by the user; correct if wrong).
+//
+// ⚠ privacy@mintware.finance is used throughout, but per the user
+// (2026-08-19) THIS INBOX DOES NOT YET EXIST — must be created and monitored
+// before this policy's "your rights" mechanism is real, not just written.
+//
+// Open item for a future update, not a blocker: whether Upstash/Redis (rate
+// limiting) or any future KYC vendor is in use at time of publish (currently
+// rate limiting is present in code but inactive per .claude/rules/security.md
+// — update this policy if that changes).
 // =============================================================================
 
 export const metadata: Metadata = {
@@ -53,7 +60,7 @@ export default function PrivacyPage() {
       <div className={wrap}>
         <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mb-3">Legal</div>
         <h1 className={h1}>Privacy Policy</h1>
-        <p className="text-[13px] text-ink-soft mb-8">Last updated: [FILL IN DATE] · Effective on posting</p>
+        <p className="text-[13px] text-ink-soft mb-8">Last updated: August 19, 2026 · Effective on posting</p>
 
         <div className="soft-card p-5 mb-10">
           <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft mb-2">On this page</div>
@@ -66,7 +73,7 @@ export default function PrivacyPage() {
 
         <h2 id="overview" className={h2}>1. Overview</h2>
         <p className={p}>
-          This Privacy Policy describes how <b>[FILL IN — Mintware legal entity name]</b>
+          This Privacy Policy describes how <b>Mintware LLC, a Delaware limited liability company</b>
           (&ldquo;Mintware,&rdquo; &ldquo;we,&rdquo; &ldquo;us&rdquo;) collects, uses, and shares
           information when you use mintware.finance and related services (the &ldquo;Services&rdquo;).
           Mintware is <b>non-custodial</b> — your assets never pass through our custody — but the
@@ -117,10 +124,10 @@ export default function PrivacyPage() {
         <p className={p}>We use reasonable administrative, technical, and physical safeguards designed to protect information. No method of transmission or storage is completely secure, and we cannot guarantee absolute security. You are responsible for securing your own wallet credentials — we never have access to a self-custodied wallet's private keys.</p>
 
         <h2 id="rights" className={h2}>8. Your privacy rights</h2>
-        <p className={p}>Depending on your location, you may have the right to access, correct, delete, or export the personal information we hold about you, or to object to or restrict certain processing. To exercise these rights, contact us at <b>[FILL IN — privacy@mintware.finance]</b>. Because much of the information underlying an Attribution score is independently verifiable public blockchain data, some rights (e.g., deletion) may not extend to that on-chain data itself.</p>
+        <p className={p}>Depending on your location, you may have the right to access, correct, delete, or export the personal information we hold about you, or to object to or restrict certain processing. To exercise these rights, contact us at <b>privacy@mintware.finance</b>. Because much of the information underlying an Attribution score is independently verifiable public blockchain data, some rights (e.g., deletion) may not extend to that on-chain data itself.</p>
 
         <h2 id="ccpa" className={h2}>9. California residents (CCPA/CPRA)</h2>
-        <p className={p}>If you are a California resident, you have the right to know what personal information we collect, request deletion, correct inaccurate information, and opt out of the "sale" or "sharing" of personal information as those terms are defined under the CCPA/CPRA. <b>We do not sell or share personal information for cross-context behavioral advertising.</b> Submit a verifiable request via <b>[FILL IN — privacy@mintware.finance]</b>. We will not discriminate against you for exercising these rights.</p>
+        <p className={p}>If you are a California resident, you have the right to know what personal information we collect, request deletion, correct inaccurate information, and opt out of the "sale" or "sharing" of personal information as those terms are defined under the CCPA/CPRA. <b>We do not sell or share personal information for cross-context behavioral advertising.</b> Submit a verifiable request via <b>privacy@mintware.finance</b>. We will not discriminate against you for exercising these rights.</p>
 
         <h2 id="children" className={h2}>10. Children&rsquo;s privacy</h2>
         <p className={p}>The Services are not directed to anyone under 18, and we do not knowingly collect personal information from children. If we learn we have collected information from a child, we will delete it.</p>
@@ -132,7 +139,7 @@ export default function PrivacyPage() {
         <p className={p}>We may update this Privacy Policy from time to time. Material changes will be reflected by an updated &ldquo;Last updated&rdquo; date, and, where required by law, we will provide additional notice.</p>
 
         <h2 id="contact" className={h2}>13. Contact us</h2>
-        <p className={p}>Questions about this Privacy Policy: <b>[FILL IN — privacy@mintware.finance]</b></p>
+        <p className={p}>Questions about this Privacy Policy: <b>privacy@mintware.finance</b></p>
       </div>
       <MwFooter />
     </div>

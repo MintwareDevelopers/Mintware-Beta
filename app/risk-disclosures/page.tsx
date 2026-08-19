@@ -59,7 +59,7 @@ export default function RiskDisclosuresPage() {
       <div className={wrap}>
         <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mb-3">Legal</div>
         <h1 className={h1}>Risk Disclosures</h1>
-        <p className="text-[13px] text-ink-soft mb-8">Last updated: [FILL IN DATE] · Incorporated into our <Link href="/terms" className="text-peri-deep">Terms of Service</Link> by reference</p>
+        <p className="text-[13px] text-ink-soft mb-8">Last updated: August 19, 2026 · Incorporated into our <Link href="/terms" className="text-peri-deep">Terms of Service</Link> by reference</p>
 
         <div className="soft-card p-5 mb-10">
           <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft mb-2">On this page</div>

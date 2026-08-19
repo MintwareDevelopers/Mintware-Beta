@@ -14,13 +14,17 @@ import { MwFooter } from '@/components/web2/MwFooter'
 // specific to Mintware's actual product surface and current honest status
 // (Attribution live on Base mainnet; vaults/payments in testing, unaudited).
 //
-// PLACEHOLDERS REQUIRING REAL INPUT BEFORE THIS GOES LIVE — search "[FILL IN]":
-//   - Legal entity name + state/type of formation (governing law defaults to
-//     Delaware, matching both precedent docs — confirm against actual
-//     incorporation)
-//   - Registered agent / notice address
-//   - Contact emails (legal@, privacy@) — must exist and be monitored
-//   - Arbitration venue/administrator (defaulted to AAA, matching WLFI)
+// Entity: Mintware LLC. State of formation was not specified when this was
+// filled in — DEFAULTED TO DELAWARE (matches both precedent docs) throughout
+// this document; confirm against actual incorporation and correct if wrong.
+//
+// ⚠ legal@mintware.finance is used throughout as the contact address, but per
+// the user (2026-08-19) THIS INBOX DOES NOT YET EXIST. It must be created and
+// monitored before this document is meaningfully enforceable — a notice
+// clause pointing at a dead inbox is a real gap, not a formality.
+//
+// Liability cap set to $500 USD (matches GetTrumpMemes' figure) per user
+// direction. Arbitration administrator defaulted to AAA (matches WLFI).
 // =============================================================================
 
 export const metadata: Metadata = {
@@ -63,7 +67,7 @@ export default function TermsPage() {
       <div className={wrap}>
         <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep mb-3">Legal</div>
         <h1 className={h1}>Terms of Service</h1>
-        <p className="text-[13px] text-ink-soft mb-8">Last updated: [FILL IN DATE] · Effective on posting</p>
+        <p className="text-[13px] text-ink-soft mb-8">Last updated: August 19, 2026 · Effective on posting</p>
 
         <div className="soft-card p-5 mb-10">
           <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft mb-2">On this page</div>
@@ -76,8 +80,8 @@ export default function TermsPage() {
 
         <p className={p}>
           These Terms of Service (&ldquo;<b>Terms</b>&rdquo;) govern your access to and use of the
-          website, applications, and services operated by <b>[FILL IN — Mintware legal entity name,
-          e.g. &ldquo;Mintware Labs, Inc.&rdquo;, a Delaware corporation]</b> (&ldquo;<b>Mintware</b>,&rdquo;
+          website, applications, and services operated by <b>Mintware LLC, a Delaware limited
+          liability company</b> (&ldquo;<b>Mintware</b>,&rdquo;
           &ldquo;<b>we</b>,&rdquo; &ldquo;<b>us</b>&rdquo;), including mintware.finance and any
           associated app, API, or interface (collectively, the &ldquo;<b>Services</b>&rdquo;).
         </p>
@@ -199,7 +203,7 @@ export default function TermsPage() {
           CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA, OR DIGITAL ASSETS, ARISING
           FROM YOUR USE OF THE SERVICES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES. OUR
           AGGREGATE LIABILITY FOR ANY CLAIM ARISING OUT OF OR RELATING TO THE SERVICES WILL NOT EXCEED
-          THE GREATER OF (A) [FILL IN — e.g. $100] USD OR (B) THE AMOUNT YOU PAID TO MINTWARE, IF ANY,
+          THE GREATER OF (A) $500 USD OR (B) THE AMOUNT YOU PAID TO MINTWARE, IF ANY,
           IN THE 12 MONTHS PRECEDING THE CLAIM. Some jurisdictions do not allow the exclusion of
           certain warranties or the limitation of certain damages; in such jurisdictions, our liability
           is limited to the greatest extent permitted by law.
@@ -219,15 +223,14 @@ export default function TermsPage() {
           to file a lawsuit in court.</b>
         </p>
         <h3 className={h3}>Informal resolution first</h3>
-        <p className={p}>Before filing a claim, you agree to send written notice of the dispute to [FILL IN — legal@mintware.finance] and attempt in good faith to resolve it informally for at least 30 days.</p>
+        <p className={p}>Before filing a claim, you agree to send written notice of the dispute to legal@mintware.finance and attempt in good faith to resolve it informally for at least 30 days.</p>
         <h3 className={h3}>Binding individual arbitration</h3>
         <p className={p}>
           Any dispute not resolved informally will be settled by binding arbitration administered by
-          [FILL IN — e.g. the American Arbitration Association ("AAA")] under its rules then in effect,
+          the American Arbitration Association (&ldquo;AAA&rdquo;) under its rules then in effect,
           rather than in court, except that either party may bring an individual claim in small-claims
-          court. The arbitration will be conducted in [FILL IN — venue, e.g. your state of
-          incorporation], and the Federal Arbitration Act governs the interpretation and enforcement of
-          this arbitration provision.
+          court. The arbitration will be conducted in the State of Delaware, and the Federal
+          Arbitration Act governs the interpretation and enforcement of this arbitration provision.
         </p>
         <h3 className={h3}>Class action waiver</h3>
         <p className={p}>
@@ -237,14 +240,14 @@ export default function TermsPage() {
           that claim) may proceed in court, and all other claims remain subject to arbitration.
         </p>
         <h3 className={h3}>Opt-out</h3>
-        <p className={p}>You may opt out of this arbitration provision by sending written notice to [FILL IN — legal@mintware.finance] within 30 days of first accepting these Terms.</p>
+        <p className={p}>You may opt out of this arbitration provision by sending written notice to legal@mintware.finance within 30 days of first accepting these Terms.</p>
 
         <h2 id="governing-law" className={h2}>14. Governing law & venue</h2>
         <p className={p}>
-          These Terms are governed by the laws of the State of [FILL IN — e.g. Delaware], without
-          regard to its conflict-of-laws principles. For any dispute not subject to arbitration, you
-          and Mintware consent to the exclusive jurisdiction of the state and federal courts located
-          in [FILL IN — venue].
+          These Terms are governed by the laws of the State of Delaware, without regard to its
+          conflict-of-laws principles. For any dispute not subject to arbitration, you and Mintware
+          consent to the exclusive jurisdiction of the state and federal courts located in the State
+          of Delaware.
         </p>
 
         <h2 id="termination" className={h2}>15. Termination</h2>
@@ -268,7 +271,7 @@ export default function TermsPage() {
         </p>
 
         <h2 id="contact" className={h2}>18. Contact</h2>
-        <p className={p}>Questions about these Terms: <b>[FILL IN — legal@mintware.finance]</b></p>
+        <p className={p}>Questions about these Terms: <b>legal@mintware.finance</b></p>
       </div>
       <MwFooter />
     </div>
