@@ -867,7 +867,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
- "unicode-xid",
 ]
 
 [[package]]
@@ -2191,7 +2190,7 @@ dependencies = [
  "alloy-eips",
  "alloy-primitives",
  "alloy-sol-types",
- "derive_more 1.0.0",
+ "derive_more 2.1.1",
  "k256",
  "reqwest",
  "serde_json",
