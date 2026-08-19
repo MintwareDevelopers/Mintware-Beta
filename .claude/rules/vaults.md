@@ -37,6 +37,15 @@ fees + MEV are captured and split. The canonical lineage is **`MintwarePairVault
 > (matched launch) both extend `MintwarePairVault` **on purpose** — don't force-merge. Boundary + adversarial
 > findings: [`matched-vault-audit-2026-08-09.md`](../../docs/developers/matched-vault-audit-2026-08-09.md).
 
+**Matched launch — app surface (2026-08-19).** `MintwareMatchedLiquidityVault` now has a UI:
+`/app/liquidity/launch` (reached from the `/app/liquidity` router's "Launch with community matching"
+card). An interactive fill-% preview makes the proportional pairing visceral — it live-computes the
+contract's own `activate()` math (`matchedTokens = teamTokens × filled/target`; remainder refunds; live
+once fill ≥ threshold + ≥3 backers). It only **records intent** via `POST /api/vaults/matched`
+(signed-message, `action: 'mintware-vault-matched'` → `social_vaults` row, `vault_kind='matched'`,
+`contract_address` null); an operator deploys the real Foundry vault + backfills, same as
+`/api/vaults/create`. Match config columns: [`schema.md`](schema.md) (`20260819000002`).
+
 ## ULV engine — live on Base Sepolia (in testing, unaudited)
 
 The Universal Liquidity Vault loop: **deposit → shares · idle in Aave (rehypothecation) · V4 hook
