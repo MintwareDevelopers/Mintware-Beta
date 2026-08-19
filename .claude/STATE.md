@@ -40,6 +40,13 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 
 ## Shelved / not-live (do not present as current)
 
+> **The vault / YPN / settlement / MEV / x402 stack LANDED on `main` (2026-08-18, PR #264) as a
+> DARK LAUNCH.** On `main` ≠ live: every money surface is flag/env-gated OFF in production
+> (`TEAM_HARD_GATE` unset, x402 env unset → routes 503, `NEXT_PUBLIC_VAULTS_LOCKED` operator's call).
+> Still **testnet + unaudited** — external audit is the only gate before real value. Auditor package:
+> [`docs/developers/audit-readiness-dossier.md`](../docs/developers/audit-readiness-dossier.md) +
+> [`docs/developers/pre-audit-findings-ledger.md`](../docs/developers/pre-audit-findings-ledger.md).
+
 - **RWA** — shelved 2026-08-05. Archived: `docs/archive/rwa/`, branch `archive/rwa-surface`.
 - **Campaigns** (token reward pools / points campaigns / MintwareDistributor / Hardhat) —
   shelved 2026-08-12. Archived: `docs/archive/campaigns/`, branch `archive/campaigns-surface`.
@@ -47,13 +54,14 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 - **Vaults / ULV engine** — the engine is **deployed to Base Sepolia only** and unaudited.
   Present as "in testing on Base Sepolia," never "deposit now."
 - **YPN / LSA cards + settlement** — the off-chain engine (edge-auth + relayer) plus the on-chain
-  spend stack are now **proven live on Circle's Arc testnet** (branch `feat/ypn-vault-convergence`,
-  **not on `main`**) — deploy → deposit→earn → CCTP Base→Arc → card settle in USDC, with the edge
-  service authorizing off the live Arc NAV. **Testnet-only, unaudited — never present as production;**
+  spend stack are **proven live on Circle's Arc testnet** and now **on `main` (dark-launched)** —
+  deploy → deposit→earn → CCTP Base→Arc → card settle in USDC, with the edge service authorizing off
+  the live Arc NAV. edge-auth also carries the pre-audit spend-safety gates (hot-buffer reserve floor +
+  circuit-breaker, both off by default). **Testnet-only, unaudited — never present as production;**
   external audit + a real card issuer (CPN) gate real value. Team/Account card UIs remain illustrative.
   Full picture: [`docs/developers/session-handoff-arc.md`](../docs/developers/session-handoff-arc.md).
 - **Multi-collateral ETH settlement** — ETH-collateral vault + `MintwareEthSettlement` swap +
-  relayer batch path, **live on Base Sepolia** (same branch). Earn side (v4 ETH on Base) ↔ CCTP ↔
+  relayer batch path, **on Base Sepolia** (on `main`, dark-launched). Earn side (v4 ETH on Base) ↔ CCTP ↔
   spend side (USDC on Arc). Testnet + deploy-gated, same audit caveat.
 - **Agent parking account + x402 spend** — an agent treasury: park idle USDC that keeps **earning** while
   staying **spendable in place** (spend draws from the yield position via hold→settle; capital never
