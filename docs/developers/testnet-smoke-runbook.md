@@ -90,9 +90,16 @@ TREASURY_VAULT=0x<deployed converged vault> pnpm forge:smoke:coverage-gate
 
 It forks the live chain, pranks the vault owner, and asserts: (1) gate off by default, (2) `deployToLP`
 reverts `CoverageTooLow` when the floor is above current coverage, (3) the same deploy proceeds once the
-floor is lowered, and `coverageBps()` never drops below the active floor — mirroring `test_coverage_gate_*`
-on the *deployed* instance. (Requires the vault activated + `deployedFromSenior > 0`, i.e. steps 3–4 first;
-it self-skips with a clear message otherwise.)
+floor is lowered below the post-deploy coverage — mirroring `test_coverage_gate_*` on the *deployed*
+instance. (Requires the vault activated + `deployedFromSenior > 0`, i.e. steps 3–4 first; it self-skips
+with a clear message otherwise.)
+
+> **✅ Proven live (2026-08-18, Base Sepolia).** Deployed a fresh converged vault via
+> `SoakAmAmmDeploy.s.sol` (self-contained: mock USDC/TEAM/adapter + `commitTeam` + `deployToLP`) to
+> **`0xf10c970157928E7984987302c415D2f296a8Aa01`** (`coverageBps=50000`, `deployedFromSenior=1e9`,
+> `juniorUsdcBuffer=5e9`) and ran this smoke against it — `PASS`: reverts `CoverageTooLow` at floor 50001,
+> proceeds at floor 25000 (`coverageBps after=49504`). The gate works on-chain. (`SoakAmAmmDeploy` is the
+> quickest self-contained way to stand up a coverage-smoke-ready vault — no external team-token/adapter.)
 
 For a **live broadcast** on Base Sepolia (real state change) rather than a sim, the equivalent `cast` sequence:
 
@@ -128,14 +135,46 @@ leg is zero at rest, and — if `minCoverageBps > 0` — `borrowIdleForJit` **sk
 
 ## 7. Spendable gateway — settle a card spend
 
-Follow [`arc-e2e-demo.md`](arc-e2e-demo.md): EIP-712 permit → `settleSpend`/`burnForPayment` → shares burn,
-merchant paid in USDC, `PaymentSettled` emitted. **Assert:** senior stays par-covered after the burn.
+EIP-712 `DelegatedSpendPermit` → `setCircleCpnTreasury(merchant)` (admin) → `settleSpend(...)` (relayer) →
+shares burn, merchant paid in USDC. **Assert:** deployer `shares(user)` dropped by the assets, merchant
+USDC rose by the same. `LiveSettleArc.s.sol` is the reference for building/signing the permit.
+
+> ⚠ **On Arc, settle via `cast send` — NOT `forge script`.** Forge's local EVM mis-simulates Arc's
+> system-contract USDC (`0x3600…0000`) and reverts with a spurious `StackUnderflow`; **`--skip-simulation`
+> does NOT help** (verified 2026-08-18 — forge still traces locally). `cast send` gas-estimates on the real
+> node, which executes the withdraw/settle path correctly. Build the permit sig with `cast` and send:
+> ```bash
+> DS=$(cast call $GATEWAY "domainSeparator()(bytes32)" --rpc-url arc)
+> TH=$(cast keccak "DelegatedSpendPermit(address user,uint256 maxDailySpendUSDC,uint256 nonce,uint256 deadline)")
+> DEADLINE=$(( $(cast block latest -f timestamp --rpc-url arc) + 3600 ))
+> SH=$(cast keccak $(cast abi-encode "f(bytes32,address,uint256,uint256,uint256)" $TH $USER 1000000000 1 $DEADLINE))
+> SIG=$(cast wallet sign --no-hash --private-key $KEY $(cast keccak $(cast concat-hex 0x1901 $DS $SH)))
+> cast send $GATEWAY "setCircleCpnTreasury(address)" $MERCHANT --rpc-url arc --private-key $KEY
+> cast send $GATEWAY "settleSpend(bytes32,address,uint256,address,(address,uint256,uint256,uint256),bytes,(bytes32,address,uint256,uint256,uint256),bytes)" \
+>   $HOLDID $USER 2000000 $MERCHANT "($USER,1000000000,1,$DEADLINE)" $SIG "($ZERO32,$ZERO,0,0,0)" 0x --rpc-url arc --private-key $KEY
+> ```
+> The permit nonce is **revocation-only** (checked, never consumed), so a working nonce is reusable.
+
+> **✅ Proven live (2026-08-18, Arc testnet).** settleSpend tx
+> **`0xfdf7031325a6c3622d28953cb88b145ef317a23ae37ddf24dca10144b221695e`** — burned 2 USDC of vault
+> `shares` (deployer `3e6 → 1e6`) and paid the merchant **2 USDC** (`0 → 2e6`) on Arc. `PaymentSettled`.
 
 ## 8. CCTP Base → Arc bridge
 
-Burn USDC on Base (TokenMessenger) → wait for Circle attestation (~15 min at standard finality, `maxFee=0`)
-→ relayer `receiveAndDeposit` on Arc. **Assert:** the bridged dollar lands as **yield-earning shares**
-(vault share balance rose). Find your burn by **tx hash** — the public TokenMessenger is shared across chains.
+Burn USDC on Base (TokenMessenger `depositForBurn`, `mintRecipient` = the Arc CCTP router) → wait for
+Circle attestation (~15 min at standard finality, `maxFee=0`) → relayer `receiveAndDeposit` on Arc.
+The **destination half** (attestation poll + `receiveAndDeposit` + assert) is scripted:
+
+```bash
+BURN_TX=0x<base burn tx> RECIPIENT=0x<who gets the shares> \
+  ./scripts/cctp-bridge-smoke.sh
+```
+
+It polls Circle's iris API (`/v2/messages/6?transactionHash=…`, Base domain **6**, Arc domain **26**),
+then `cast send`s `receiveAndDeposit(message, attestation, recipient)` on Arc and **asserts** the recipient's
+vault shares rose (the bridged dollar landed as **yield-earning shares**). The **source burn** is Circle's
+standard `TokenMessenger.depositForBurn` — the script deliberately does not hardcode a burn address; use your
+existing burn flow. Find your burn by **tx hash** (the public TokenMessenger is shared across chains).
 
 ## 9. Live authorization off Arc NAV (off-chain leg)
 
