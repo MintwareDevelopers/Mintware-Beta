@@ -18,7 +18,7 @@ alloy-primitives = { version = "0.8", features = ["k256"] }
 # Increment 6b — tx submission. Canonical EIP-1559 tx build + RLP/2718 encoding (never hand-rolled),
 # k256 for the recoverable ECDSA signature over the tx signing hash, blocking JSON-RPC for send/read.
 # The `k256` feature enables signer recovery (TxEnvelope::recover_signer) used in the signing proofs.
-alloy-consensus = { version = "0.8", features = ["k256"] }
+alloy-consensus = { version = "0.12", features = ["k256"] }
 alloy-eips = "0.8"
 k256 = { version = "0.13", features = ["ecdsa"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
