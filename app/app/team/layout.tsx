@@ -10,6 +10,7 @@ import { usePathname } from 'next/navigation'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
 import { ScopeSwitcher } from '@/components/web2/ScopeSwitcher'
 import { TeamGuard } from '@/components/web2/TeamGuard'
+import { TeamOrgBar } from '@/components/web2/TeamOrgBar'
 import { useTeamSession } from '@/components/web2/useTeamSession'
 import { can, type Permission } from '@/lib/auth/rbac'
 
@@ -87,6 +88,7 @@ export default function TeamLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         <div className="max-w-[1120px] mx-auto px-6 py-8 max-[800px]:px-4 max-[800px]:py-6">
+          <TeamOrgBar />
           <TeamGuard>{children}</TeamGuard>
         </div>
       </main>
