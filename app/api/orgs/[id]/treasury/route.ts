@@ -57,7 +57,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       let member = null
       if (address && EVM_RE.test(address)) {
         const realizable = await reader.memberRealizableUsdc(address)
-        member = { address: address.toLowerCase(), spendableUsdc: realizable.toString() }
+        const { data: mem } = await ctx.supabase
+          .from('org_members')
+          .select('role, status, eas_uid')
+          .eq('org_id', org.id)
+          .eq('wallet', address.toLowerCase())
+          .maybeSingle()
+        member = {
+          address: address.toLowerCase(),
+          spendableUsdc: realizable.toString(),
+          role: (mem?.role as string | null) ?? null,
+          status: (mem?.status as string | null) ?? null,
+          easUid: (mem?.eas_uid as string | null) ?? null,
+        }
       }
       return ctx.json({
         ...base,
