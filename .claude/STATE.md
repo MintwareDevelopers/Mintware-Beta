@@ -160,10 +160,12 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 | `/app/arc` | `app/app/arc/page.tsx` |
 | `/app/leaderboard` | `app/app/leaderboard/page.tsx` |
 | `/app/org/[slug]` | `app/app/org/[slug]/page.tsx` |
+| `/app/org/[slug]/accept` | `app/app/org/[slug]/accept/page.tsx` |
 | `/app/org/[slug]/fund` | `app/app/org/[slug]/fund/page.tsx` |
 | `/app/org/[slug]/pay` | `app/app/org/[slug]/pay/page.tsx` |
 | `/app/org/[slug]/payroll` | `app/app/org/[slug]/payroll/page.tsx` |
 | `/app/org/[slug]/roles` | `app/app/org/[slug]/roles/page.tsx` |
+| `/app/org/new` | `app/app/org/new/page.tsx` |
 | `/app/profile` | `app/app/profile/page.tsx` |
 | `/app/swap` | `app/app/swap/page.tsx` |
 | `/app/team` | `app/app/team/page.tsx` |
