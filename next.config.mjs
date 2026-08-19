@@ -62,7 +62,8 @@ const nextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        // Everything EXCEPT the read-only public solvency badge stays frame-blocked.
+        source: '/((?!org/[^/]+/badge).*)',
         headers: [
           // Prevent clickjacking
           { key: 'X-Frame-Options',       value: 'DENY' },
@@ -72,6 +73,16 @@ const nextConfig = {
           { key: 'Content-Security-Policy', value: "frame-ancestors 'none';" },
           // Full CSP in report-only — observe violations, then promote to enforcing
           { key: 'Content-Security-Policy-Report-Only', value: CSP_REPORT_ONLY },
+        ],
+      },
+      {
+        // The embeddable treasury badge (#6): read-only public data, no auth, no actions → safe to frame
+        // anywhere. Deliberately omits X-Frame-Options (which has no "allow-any") and opens frame-ancestors.
+        source: '/org/:slug/badge',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy',        value: 'strict-origin-when-cross-origin' },
+          { key: 'Content-Security-Policy', value: 'frame-ancestors *;' },
         ],
       },
     ]
