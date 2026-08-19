@@ -107,7 +107,10 @@ function AccountContent() {
 
   return (
     <div className="min-h-screen bg-white font-atx-display text-ink overflow-x-clip">
-      <ReferralSheet stats={refStats} trigger={isFirstConnect && !loading && !!data} />
+      {/* Don't auto-pop the "share to grow your Sharing score" sheet at a brand-new, zero-activity
+          wallet — it reads as "refer friends" before they've done anything. Only surface it once
+          there's sharing traction to build on; new users still reach it via the Invite tab. */}
+      <ReferralSheet stats={refStats} trigger={isFirstConnect && !loading && !!data && (refStats?.sharing_score ?? 0) > 0} />
       {editOpen && wallet && (
         <ProfileEditPanel wallet={wallet} meta={meta} onClose={() => setEditOpen(false)} onSaved={refetchMeta} />
       )}
@@ -370,7 +373,9 @@ export default function AccountPage() {
   return (
     <>
       <MwNav />
-      <MwAuthGuard>
+      {/* allowDisconnected: picking "I'm a person" lands here and renders a preview
+          (illustrative numbers + connect prompts) instead of bouncing to '/'. */}
+      <MwAuthGuard allowDisconnected>
         <AccountContent />
       </MwAuthGuard>
     </>
