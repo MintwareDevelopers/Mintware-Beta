@@ -20,6 +20,7 @@
     "forge:test": "forge test -vv",
     "forge:test:gas": "forge test -vv --gas-report",
     "forge:coverage": "forge coverage",
+    "forge:smoke:coverage-gate": "forge script contracts-v4/script/SmokeCoverageGate.s.sol --rpc-url base_sepolia",
     "forge:deploy:phase3:base-sepolia": "forge script contracts-v4/script/DeployPhase3.s.sol --rpc-url base_sepolia --broadcast --verify -vvvv",
     "forge:deploy:phase3:base": "forge script contracts-v4/script/DeployPhase3.s.sol --rpc-url base --broadcast --verify -vvvv",
     "forge:deploy:phase3:dry-run": "forge script contracts-v4/script/DeployPhase3.s.sol --rpc-url base_sepolia -vvvv",
