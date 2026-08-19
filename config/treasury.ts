@@ -34,7 +34,18 @@ export const TREASURY_EXAMPLE = {
     yieldSource: '0xc6235766194Da60CD0bfB65e548d203151C5e56c', // MockERC4626 over USDC (demo)
     teamToken:   '0xF663923a9639f37f9E787770AEaedAb0966e3740', // MockERC20 6dp (demo junior side)
     usdc:        '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // Circle testnet USDC
+    // P3 L2 — the vault's ownership was transferred to a 2-of-3 Gnosis Safe (2026-08-19). In prod the
+    // Safe owners are the team's Privy embedded wallets (email/passkey signers, no MetaMask). Config +
+    // large-withdrawal actions now require 2-of-3 approval; the single-key owner risk is closed.
+    controller:  '0x160A3cd1773904DF5D82943d2759E815FE6b4fA1', // 2-of-3 Safe (Safe 1.4.1, Base Sepolia)
   },
+} as const
+
+// Safe (Gnosis) 1.4.1 canonical contracts on Base Sepolia — used to deploy a team's treasury multisig.
+export const SAFE_BASE_SEPOLIA = {
+  proxyFactory: '0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67',
+  singletonL2:  '0x29fcB43b46531BcA003ddC8FCB67FFE91900C762',
+  singleton:    '0x41675C099F32341bf84BFc5382aF534df5C7461a',
 } as const
 
 export type TreasuryFactoryChain = keyof typeof TREASURY_FACTORY

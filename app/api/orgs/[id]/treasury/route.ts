@@ -9,7 +9,7 @@
 
 import type { NextRequest } from 'next/server'
 import { createHandler } from '@/lib/web2/routeHandler'
-import { makeTreasuryReader, rpcForChain } from '@/lib/org/treasuryReader'
+import { makeTreasuryReader, readSafeInfo, rpcForChain } from '@/lib/org/treasuryReader'
 
 export const dynamic = 'force-dynamic'
 
@@ -88,6 +88,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           onchainOwner,
           // Does the on-chain owner match the org owner's (Privy) wallet? The core control assurance.
           ownerMatchesOrg: !!onchainOwner && onchainOwner.toLowerCase() === org.owner_wallet.toLowerCase(),
+          // If the owner is a Safe multisig (P3 L2), its threshold + signers. null = a plain key (L1).
+          multisig: onchainOwner ? await readSafeInfo(rpcUrl, onchainOwner) : null,
         },
         member,
       })
