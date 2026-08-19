@@ -130,16 +130,40 @@ type ApiError = { success: false; error: string; code?: string }
 // ---------------------------------------------------------------------------
 
 let _redis: Redis | null = null
+let _redisResolved = false
 
 function getRedis(): Redis | null {
-  if (_redis) return _redis
-  try {
-    _redis = Redis.fromEnv()
-    return _redis
-  } catch {
-    // UPSTASH_REDIS_REST_URL / TOKEN not set — rate limiting disabled
-    return null
+  if (_redisResolved) return _redis
+  _redisResolved = true
+  // Accept BOTH the Upstash-native var names and the Vercel KV / Marketplace names. The old
+  // `Redis.fromEnv()` reads ONLY `UPSTASH_REDIS_REST_URL`/`_TOKEN`, so a project provisioned
+  // through Vercel KV (which injects `KV_REST_API_URL`/`_TOKEN`) silently fell open — every
+  // declared limit became a no-op. Read explicitly so provisioning method doesn't matter.
+  const url =
+    process.env.UPSTASH_REDIS_REST_URL ??
+    process.env.KV_REST_API_URL ??
+    process.env.STORAGE_REST_API_URL
+  const token =
+    process.env.UPSTASH_REDIS_REST_TOKEN ??
+    process.env.KV_REST_API_TOKEN ??
+    process.env.STORAGE_REST_API_TOKEN
+  if (url && token) {
+    try {
+      _redis = new Redis({ url, token })
+      // Observable on cold start — grep Vercel logs for this line instead of probing.
+      console.info('[routeHandler] rate limiter ACTIVE — Redis configured')
+    } catch (err) {
+      _redis = null
+      console.warn('[routeHandler] rate limiter INACTIVE — Redis init failed:', String(err))
+    }
+  } else {
+    _redis = null
+    console.warn(
+      '[routeHandler] rate limiter INACTIVE — no Redis env found ' +
+        '(set UPSTASH_REDIS_REST_URL/_TOKEN or KV_REST_API_URL/_TOKEN). Declared limits are no-ops.'
+    )
   }
+  return _redis
 }
 
 // ---------------------------------------------------------------------------
