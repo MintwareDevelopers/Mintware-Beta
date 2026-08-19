@@ -161,6 +161,8 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 | `/app/org` | `app/app/org/page.tsx` |
 | `/app/org/[slug]` | `app/app/org/[slug]/page.tsx` |
 | `/app/org/[slug]/accept` | `app/app/org/[slug]/accept/page.tsx` |
+| `/app/org/[slug]/control` | `app/app/org/[slug]/control/page.tsx` |
+| `/app/org/[slug]/control/setup` | `app/app/org/[slug]/control/setup/page.tsx` |
 | `/app/org/[slug]/fund` | `app/app/org/[slug]/fund/page.tsx` |
 | `/app/org/[slug]/pay` | `app/app/org/[slug]/pay/page.tsx` |
 | `/app/org/[slug]/payroll` | `app/app/org/[slug]/payroll/page.tsx` |
