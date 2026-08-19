@@ -48,6 +48,14 @@
 | `X402_TRUST_TIERING` | Server-only | Opt-in `parked` — enables trust-tiered pricing (default off) |
 | `X402_SCORE_PRICE_ATOMIC` | Server-only | Per-call price (atomic USDC units) for the score endpoint |
 
+### Cards (Lithic sandbox — human org cards)
+
+| Variable | Visibility | Notes |
+|---|---|---|
+| `LITHIC_API_KEY` | Server-only | Lithic sandbox API key — self-serve, no KYB. Production issuance is a separate gated tier, not this key. |
+| `LITHIC_ENV` | Server-only | `sandbox` (default) or `production` — only ever `sandbox` until a real production tier exists |
+| `LITHIC_WEBHOOK_SECRET` | Server-only | ASA responder HMAC secret (`whsec_...`) from enrolling the webhook endpoint in the Lithic sandbox dashboard. Unset = webhook fails closed with 503, never a fake decline. |
+
 ### Arc / parking account (idle-USDC-earns-in-place)
 
 | Variable | Visibility | Notes |

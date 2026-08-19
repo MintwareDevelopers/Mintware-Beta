@@ -46,8 +46,55 @@ integration: [`../../docs/developers/arc-settlement-integration.md`](../../docs/
 - **Agent-facing x402** (park/pay actions, facilitator, discovery) → [`agents.md`](agents.md).
 - **Env + testnet deploys** (edge/relayer/Arc/x402 vars) → [`deployments.md`](deployments.md).
 - **Vaults / ULV / pool tiering** → [`vaults.md`](vaults.md).
+- **Human org cards (Lithic sandbox)** → below.
+
+## Human org cards — Lithic sandbox (2026-08-19)
+
+The showcase loop: **issue → activate → swipe → authorize → settle**, live at `/app/org/[slug]/cards`
+(a real page — `app/app/team/cards/page.tsx` stays the illustrative mock; they are NOT the same
+surface). `lib/org/rolePresets.ts`'s `contributor` preset already said "spend up to $2,000/day from
+the treasury via card / x402" — cards were always meant to draw on the same org treasury + role-cap
+system `/api/orgs/[id]/pay` uses for vendor payouts, not a separate product. **Lithic sandbox only**
+— production issuance is a separate KYB-gated Lithic tier, not a config flip, and is NOT what "CPN"
+elsewhere in this doc refers to (CPN is the Circle-relationship card issuer the honesty banners
+treat as the real gate for going live with real value; Lithic is the demo/showcase rail).
+
+**Provider primary/fallback:** Lithic is the primary card-issuing provider (fast self-serve sandbox,
+default-open real-time ASA decisioning). Rain is a fallback option only, not wired — see the
+Crossmint/Rain/Bridge/Lithic comparison in session notes if resurrecting that evaluation.
+
+- `lib/cards/lithic.ts` — provider-specific leg: sandbox card creation + `simulateSwipe()` (fires a
+  real ASA round-trip via Lithic's own `simulateAuthorization`, for demoing without a physical
+  card) + ASA webhook parse/verify (`standardwebhooks` under the hood via the SDK, fails closed
+  without `LITHIC_WEBHOOK_SECRET`). Sandbox PAN is stored (`org_cards.sandbox_pan`) only because
+  Lithic's simulate call needs it and a sandbox PAN has no real-world payment value — not a pattern
+  for a real PAN.
+- `lib/org/cardAuthorize.ts#decideCardSwipe` — the decision: belt (`org_members.role`'s daily cap)
+  + suspenders (the *same* `httpEdgeAuthorizer` port x402 uses). Fails closed when
+  `EDGE_AUTH_URL`/`_SECRET` are unset, same posture as everywhere else.
+- `app/api/cards/lithic/webhook/route.ts` — the real-time ASA responder (manual Standard-Webhooks
+  verification) + logs every decision to `card_swipe_events` (the spend feed's source).
+- `app/api/orgs/[id]/cards/{route,list,[cardId]/activate,simulate-swipe,events,settle}.ts` — issue
+  (owner) · list + activate (member signs a standing EIP-712 `DelegatedSpendPermit` once, reused
+  across many swipes per `docs/page.tsx`'s "long-lived permit is reusable") · simulate-swipe (any
+  member, fires the real ASA round-trip) · events (spend feed) · settle (owner, sub-$250 only —
+  see below).
+- `org_cards` (migration `20260819000002`) + `card_swipe_events` + permit columns (migration
+  `20260819000003`) — identity mapping, the decision audit trail, and the member's standing permit.
+- **Settlement is real, not deploy-gated, but demo-triggered, not automatic.** `settle` reuses the
+  exact `settleSpend` call already proven live (leg 3 of `lib/proof/latestRun.ts`, real tx
+  `0x7fd4b3f0…`) via `getOracleSigner('root')` in the RELAYER_ROLE seat — the same demo-settlement
+  pattern the admin smoke-test routes already use, invoked on a button press instead of a script.
+  This is **not** the always-on auto-settling relayer described in "Deploy-gated remainder" below —
+  that's a separate, bigger infra task (a dedicated HTTP server + its own funded key). Capped to
+  swipes under $250 because settleSpend only needs the self-signed permit below that threshold; at
+  or above it also needs an edge-auth-signed `ShortLivedHoldAuth`, which isn't wired (a third
+  signing artifact, real additional scope — not faked here).
 
 ## Deploy-gated remainder (not code)
 
-Relayer settle HTTP server + funded key · CPN card issuer (the genuine Circle-relationship piece) ·
-Arc mainnet (Sept 16, 2026) · external audit of the converged stack.
+Always-on auto-settling relayer HTTP server + its own funded key (today's card settle is
+owner-triggered against the oracle signer instead — see above; vendor pay + x402 settle still need
+this for their own automatic paths) · edge-auth-signed high-value (≥$250) card settlement leg · CPN
+card issuer for production (the genuine Circle-relationship piece; Lithic above is sandbox-only and
+a different thing) · Arc mainnet (Sept 16, 2026) · external audit of the converged stack.
