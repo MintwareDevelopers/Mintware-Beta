@@ -4,12 +4,14 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// Content-Security-Policy — shipped in REPORT-ONLY first (reports violations,
-// blocks nothing) so the allowlist can be verified against real wallet/connect/
-// swap flows before switching to enforcing. Server-side hosts (li.quest, coingecko,
-// zerion, nansen, pyth, easscan) are intentionally EXCLUDED — they're API-route
-// calls, not browser calls. RPC hosts are pinned in lib/web3/wagmi.ts to match.
-const CSP_REPORT_ONLY = [
+// Content-Security-Policy — now ENFORCED (was report-only; promoted after validating the
+// allowlist against wallet-connect + swap flows — no connect/frame/img violations). Server-side
+// hosts (li.quest, coingecko, zerion, nansen, pyth, easscan) are intentionally EXCLUDED — they're
+// API-route calls, not browser calls. RPC hosts are pinned in lib/web3/wagmi.ts to match.
+// Note: `script-src` still allows 'unsafe-inline' (Next/wallet inline attrs) — a follow-up can
+// tighten it to nonces. 'unsafe-eval' is deliberately NOT allowed (the dev-only HMR eval
+// violations don't occur in a production build).
+const CSP_ENFORCED = [
   "default-src 'self'",
   "connect-src 'self' blob: data: https://attribution-scorer.ceo-1f9.workers.dev " +
     'https://mainnet.base.org https://sepolia.base.org https://arb1.arbitrum.io https://ethereum-rpc.publicnode.com ' +
@@ -76,10 +78,12 @@ const nextConfig = {
           // happens in the wallet app, not our page) + opt out of Topics/FLoC. Deliberately does
           // NOT set Cross-Origin-Opener-Policy: that would break Privy's popup login flow.
           { key: 'Permissions-Policy', value: 'geolocation=(), microphone=(), camera=(), browsing-topics=()' },
-          // Block embedding in iframes from any origin (enforced)
-          { key: 'Content-Security-Policy', value: "frame-ancestors 'none';" },
-          // Full CSP in report-only — observe violations, then promote to enforcing
-          { key: 'Content-Security-Policy-Report-Only', value: CSP_REPORT_ONLY },
+          // Full CSP now ENFORCED (promoted from report-only). Validated against wallet-connect
+          // + swap flows: no connect-src/frame-src/img-src violations. The only report-only
+          // violations were dev-only `unsafe-eval` from HMR/Fast Refresh (not emitted by a prod
+          // build) — deliberately NOT allowed, so eval-based XSS stays blocked. This policy
+          // includes `frame-ancestors 'none'`, so the separate frame-only header is now redundant.
+          { key: 'Content-Security-Policy', value: CSP_ENFORCED },
         ],
       },
       {

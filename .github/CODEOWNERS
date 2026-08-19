@@ -1,0 +1,23 @@
+# Code owners — required reviewers for security-sensitive surfaces.
+# GitHub auto-requests review from the listed owner on PRs touching these paths.
+# Adjust the handle to a team (e.g. @MintwareDevelopers/security) once one exists.
+
+# API surface + the auth/rate-limit factory
+/app/api/                     @MintWareDevs
+/lib/web2/routeHandler.ts     @MintWareDevs
+/lib/constants.ts             @MintWareDevs
+
+# Security-relevant config
+/next.config.mjs              @MintWareDevs
+/vercel.json                  @MintWareDevs
+
+# Database schema + RLS
+/supabase/migrations/         @MintWareDevs
+/docs/schema.sql              @MintWareDevs
+
+# CI/CD + supply chain
+/.github/                     @MintWareDevs
+
+# On-chain + signing services
+/contracts-v4/                @MintWareDevs
+/services/                    @MintWareDevs

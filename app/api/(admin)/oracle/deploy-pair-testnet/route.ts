@@ -17,6 +17,7 @@ import {
 } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { createHandler } from '@/lib/web2/routeHandler'
+import { ADMIN_SECRET } from '@/lib/constants'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { HOOK_COORDINATOR_ABI, HOOK_COORDINATOR_BYTECODE } from '@/lib/web3/artifacts/hookCoordinator'
 import { PAIR_VAULT_ABI, PAIR_VAULT_BYTECODE } from '@/lib/web3/artifacts/pairVault'
@@ -126,4 +127,4 @@ export const POST = createHandler(async (_req, ctx) => {
     basescanHook: `https://sepolia.basescan.org/address/${mined.hook}`,
     basescanVault: `https://sepolia.basescan.org/address/${vault}`,
   })
-}, { auth: 'bearer-token' })
+}, { auth: 'bearer-token', bearerSecret: ADMIN_SECRET })

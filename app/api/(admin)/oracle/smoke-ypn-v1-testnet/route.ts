@@ -17,6 +17,7 @@
 import { createPublicClient, createWalletClient, http, encodeAbiParameters, keccak256, toHex } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { createHandler } from '@/lib/web2/routeHandler'
+import { ADMIN_SECRET } from '@/lib/constants'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { YIELD_VAULT_ABI } from '@/lib/web3/artifacts/mintwareYieldVault'
 import { PAYMENT_GATEWAY_ABI } from '@/lib/web3/artifacts/mintwarePaymentGateway'
@@ -110,4 +111,4 @@ export const POST = createHandler(async (_req, ctx) => {
     txs,
     basescan: { settle: `https://sepolia.basescan.org/tx/${txs.settleSpend}`, deposit: `https://sepolia.basescan.org/tx/${txs.deposit}` },
   }, ok ? 200 : 500)
-}, { auth: 'bearer-token' })
+}, { auth: 'bearer-token', bearerSecret: ADMIN_SECRET })

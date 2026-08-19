@@ -15,6 +15,7 @@
 // docs/developers/testnet-smoke-runbook.md.
 
 import { createHandler } from '@/lib/web2/routeHandler'
+import { ADMIN_SECRET } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,4 +35,4 @@ export const POST = createHandler(async (_req, ctx) => {
     },
     410,
   )
-}, { auth: 'bearer-token' })
+}, { auth: 'bearer-token', bearerSecret: ADMIN_SECRET })

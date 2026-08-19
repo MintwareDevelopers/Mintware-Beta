@@ -12,6 +12,10 @@ on:
           - devnet
           - mainnet
 
+# Least privilege: on-chain deploy uses a keypair secret, not GITHUB_TOKEN — read-only repo access.
+permissions:
+  contents: read
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
