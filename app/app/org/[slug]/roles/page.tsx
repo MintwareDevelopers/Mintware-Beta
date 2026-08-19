@@ -74,6 +74,12 @@ export default function RolesPage({ params }: { params: Promise<{ slug: string }
           <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Members &amp; roles</h1>
           <p className="text-[13px] text-ink-mid mt-1.5 max-w-[64ch]">Invite by email; when they sign in, their wallet is attested as an OrgMembership on-chain. Each role is a fixed spend preset — pick from four.</p>
 
+          {/* Next step in the flow: once teammates accept, secure the treasury with them as signers. */}
+          <Link href={`/app/org/${slug}/control/setup`} className="mt-4 flex items-center justify-between gap-3 rounded-[12px] border border-[rgba(108,108,240,0.3)] px-4 py-3 no-underline hover:bg-ground-cool transition-colors" style={{ background: 'linear-gradient(120deg, rgba(108,108,240,0.06), transparent)' }}>
+            <span className="text-[13px] text-ink-mid"><b className="text-ink">Secure the treasury with these people.</b> Once they&apos;ve accepted, set up an M-of-N multisig — they become your passkey signers.</span>
+            <span className="text-peri-deep font-semibold text-[13px] shrink-0">Set up multisig →</span>
+          </Link>
+
           {/* invite */}
           <div className="soft-card p-5 mt-6 flex items-end gap-3 max-[640px]:flex-col max-[640px]:items-stretch">
             <label className="flex-1 block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Invite email</span>
