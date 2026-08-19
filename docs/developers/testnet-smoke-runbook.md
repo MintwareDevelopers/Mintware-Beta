@@ -172,9 +172,23 @@ BURN_TX=0x<base burn tx> RECIPIENT=0x<who gets the shares> \
 
 It polls Circle's iris API (`/v2/messages/6?transactionHash=…`, Base domain **6**, Arc domain **26**),
 then `cast send`s `receiveAndDeposit(message, attestation, recipient)` on Arc and **asserts** the recipient's
-vault shares rose (the bridged dollar landed as **yield-earning shares**). The **source burn** is Circle's
-standard `TokenMessenger.depositForBurn` — the script deliberately does not hardcode a burn address; use your
-existing burn flow. Find your burn by **tx hash** (the public TokenMessenger is shared across chains).
+vault shares rose (reads `shares(address)`, this vault's getter — not `balanceOf`). `POLL_MAX` (default 60 ×
+15s) sizes the wait — bump it, Base-Sepolia **standard** finality (threshold 2000) can exceed 15 min. The
+**source burn** is Circle's `TokenMessenger` (v2 `0x8FE6B999…542DAA`, unified across chains) —
+`depositForBurn(amount, 26, mintRecipient=router32, USDC, destinationCaller=router32, maxFee, threshold)`:
+
+```bash
+TM=0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA; BUSDC=0x036CbD53842c5426634e7929541eC2318f3dCF7e
+ROUTER32=0x000000000000000000000000db9db7008cffb09bd1d943c237f57327383dfc03
+cast send $BUSDC "approve(address,uint256)" $TM 1000000 --rpc-url base_sepolia --private-key $KEY
+cast send $TM "depositForBurn(uint256,uint32,bytes32,address,bytes32,uint256,uint32)" \
+  1000000 26 $ROUTER32 $BUSDC $ROUTER32 0 2000 --rpc-url base_sepolia --private-key $KEY   # standard finality
+```
+
+> **✅ Proven live end-to-end (2026-08-18).** Burn on Base Sepolia
+> [`0x7594e388…aa09a7`] → Circle attested (standard finality took ~20 min) → `receiveAndDeposit` on Arc
+> [`0x9ada7968…c771bce`] credited the recipient **+1 USDC of vault shares** (`shares 1e6 → 2e6`). The
+> bridged dollar arrived as yield-earning shares — the full **earn-on-Base → CCTP → spend-on-Arc** loop.
 
 ## 9. Live authorization off Arc NAV (off-chain leg)
 
