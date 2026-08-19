@@ -1,0 +1,48 @@
+name: Context Autosync
+
+# Instead of failing a PR when STATE.md's AUTO blocks are stale (the recurring "forgot to run
+# pnpm context:sync" paper-cut), regenerate them in CI and push the fix straight back to the PR
+# branch. The drift self-heals; nobody has to remember the command. The `context-drift` check in
+# ci.yml then passes on the pushed commit.
+on:
+  pull_request:
+    branches: [main]
+
+# This job needs to push the regenerated STATE.md back to the PR branch.
+permissions:
+  contents: write
+
+concurrency:
+  group: context-autosync-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  autosync:
+    name: Auto-sync AUTO blocks
+    # Only same-repo PRs — you can't push to a fork's branch with GITHUB_TOKEN.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          # Persist creds so the follow-up push authenticates as the workflow token.
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The generator uses only Node builtins — no install needed.
+      - name: Regenerate AUTO blocks
+        run: node scripts/context-sync.mjs
+      - name: Commit + push if anything changed
+        run: |
+          if git diff --quiet; then
+            echo "AUTO blocks already in sync — nothing to push."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Only the files the sync script actually manages — never stray edits.
+          git add .claude/STATE.md .claude/rules
+          git commit -m "chore(context): auto-sync AUTO blocks"
+          git push origin HEAD:${{ github.head_ref }}
