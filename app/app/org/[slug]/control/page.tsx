@@ -17,7 +17,11 @@ import { ROLE_PRESET_LIST } from '@/lib/org/rolePresets'
 interface TreasuryResp {
   org?: { id: string; name: string; slug: string; ownerWallet: string }
   funded?: boolean
-  control?: { onchainOwner: string | null; ownerMatchesOrg: boolean }
+  control?: {
+    onchainOwner: string | null
+    ownerMatchesOrg: boolean
+    multisig: { threshold: number; owners: string[] } | null
+  }
 }
 
 const short = (a?: string | null) => (a && a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a ?? '—')
@@ -40,6 +44,7 @@ export default function ControlPage({ params }: { params: Promise<{ slug: string
   const org = data?.org
   const funded = !!data?.funded
   const ctl = data?.control
+  const ms = ctl?.multisig ?? null // Safe multisig owner (L2), if the treasury is behind one
   const isOwner = !!(address && org && address.toLowerCase() === org.ownerWallet.toLowerCase())
 
   return (
@@ -61,13 +66,16 @@ export default function ControlPage({ params }: { params: Promise<{ slug: string
             <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Who controls it</div>
             <div className="flex items-start justify-between gap-4 flex-wrap mt-3">
               <div className="min-w-0">
-                <div className="text-[16px] font-semibold text-ink">Owned by your Privy wallet</div>
+                <div className="text-[16px] font-semibold text-ink">{ms ? 'Owned by your team multisig' : 'Owned by your Privy wallet'}</div>
                 <p className="text-[13.5px] text-ink-mid leading-[1.55] mt-1.5 max-w-[52ch]">
-                  Email or passkey login → a real non-custodial wallet. No seed phrase, no browser
-                  extension. This is the config authority: it can change settings and move backing.
+                  {ms
+                    ? `${ms.threshold}-of-${ms.owners.length} approval on config changes and large withdrawals. Signers are your team's Privy wallets — each approves with a passkey. No MetaMask, no signing dance.`
+                    : 'Email or passkey login → a real non-custodial wallet. No seed phrase, no browser extension. This is the config authority: it can change settings and move backing.'}
                 </p>
                 <div className="mt-3 text-[12.5px] font-mono text-ink-mid">
-                  Owner (org): <span className="text-ink">{short(org?.ownerWallet)}</span>{isOwner && <span className="text-mw-green"> · that&apos;s you</span>}
+                  {ms
+                    ? <>Safe: <span className="text-ink">{short(ctl?.onchainOwner)}</span> · {ms.owners.length} signers</>
+                    : <>Owner (org): <span className="text-ink">{short(org?.ownerWallet)}</span>{isOwner && <span className="text-mw-green"> · that&apos;s you</span>}</>}
                 </div>
               </div>
               {/* On-chain verification — the real assurance */}
@@ -75,6 +83,8 @@ export default function ControlPage({ params }: { params: Promise<{ slug: string
                 <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft">On-chain check</div>
                 {!funded ? (
                   <div className="text-ink-soft mt-1.5">Set once the treasury is live</div>
+                ) : ms ? (
+                  <div className="mt-1.5"><span className="live-chip"><span className="dot" aria-hidden />{ms.threshold}-of-{ms.owners.length} multisig</span><div className="font-mono text-[11px] text-ink-soft mt-1.5">vault.owner() = Safe ✓</div></div>
                 ) : ctl?.ownerMatchesOrg ? (
                   <div className="mt-1.5"><span className="live-chip"><span className="dot" aria-hidden />Owner verified</span><div className="font-mono text-[11px] text-ink-soft mt-1.5">vault.owner() = {short(ctl.onchainOwner)}</div></div>
                 ) : (
@@ -122,12 +132,22 @@ export default function ControlPage({ params }: { params: Promise<{ slug: string
           {/* ── 3. Layer 2 — quorum, honestly teed up ── */}
           <section className="mt-4 rounded-[16px] border border-[rgba(108,108,240,0.3)] p-6"
             style={{ background: 'linear-gradient(120deg, rgba(108,108,240,0.06), var(--color-ground-cool))' }}>
-            <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">Next — multisig-grade, still no MetaMask</div>
+            <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-peri-deep">
+              {ms ? '✓ Multisig-grade, no MetaMask' : 'Next — multisig-grade, still no MetaMask'}
+            </div>
             <p className="text-[13.5px] text-ink-mid leading-[1.55] mt-2.5 max-w-[62ch]">
-              Layer 2 puts the treasury behind a smart account whose signers are your team&apos;s Privy
-              wallets: <b className="text-ink">M-of-N approval for config &amp; large withdrawals</b>, confirmed by
-              passkey — not a browser-extension signing dance — plus session keys so routine spend needs
-              no popup at all. It needs Privy server-auth (<span className="font-mono text-[12px]">PRIVY_APP_SECRET</span>) enabled on the plan.
+              {ms ? (
+                <>Config &amp; large withdrawals require <b className="text-ink">{ms.threshold}-of-{ms.owners.length} passkey approval</b> from
+                your team&apos;s Privy wallets — no browser-extension signing. Routine spend still needs
+                <b className="text-ink"> no popup</b> (edge-auth authorizes within role caps). The remaining upgrade is
+                session-key delegation for fully-automated spend, which uses Privy server-auth
+                (<span className="font-mono text-[12px]">PRIVY_APP_SECRET</span>).</>
+              ) : (
+                <>Layer 2 puts the treasury behind a smart account whose signers are your team&apos;s Privy
+                wallets: <b className="text-ink">M-of-N approval for config &amp; large withdrawals</b>, confirmed by
+                passkey — not a browser-extension signing dance — plus session keys so routine spend needs
+                no popup at all. It needs Privy server-auth (<span className="font-mono text-[12px]">PRIVY_APP_SECRET</span>) enabled on the plan.</>
+              )}
             </p>
           </section>
         </main>

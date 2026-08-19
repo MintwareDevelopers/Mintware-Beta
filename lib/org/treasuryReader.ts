@@ -46,6 +46,40 @@ export function rpcForChain(chainId: number | null | undefined): string | null {
   return null
 }
 
+/** If `addr` is a Gnosis Safe (multisig), return its threshold + owners; else null. Lets the app show
+ *  "owned by your N-of-M multisig" (P3 L2) instead of a single key. Reads getThreshold()/getOwners(). */
+export async function readSafeInfo(
+  rpcUrl: string,
+  addr: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<{ threshold: number; owners: string[] } | null> {
+  async function call(data: string): Promise<string | null> {
+    try {
+      const res = await fetchImpl(rpcUrl, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to: addr, data }, 'latest'] }),
+      })
+      const j = (await res.json()) as { result?: string; error?: unknown }
+      if (j.error || !j.result || j.result === '0x') return null
+      return j.result
+    } catch { return null }
+  }
+  const thr = await call('0xe75235b8') // getThreshold()
+  if (!thr) return null // not a Safe (or doesn't answer) → treat as a plain key
+  const threshold = Number(BigInt(thr))
+  const owners: string[] = []
+  const own = await call('0xa0e67e2b') // getOwners() → address[]
+  if (own) {
+    const hex = own.replace(/^0x/, '')
+    const len = Number(BigInt('0x' + hex.slice(64, 128))) // word[0]=offset, word[1]=length
+    for (let i = 0; i < len; i++) {
+      owners.push('0x' + hex.slice(128 + i * 64, 128 + i * 64 + 64).slice(24))
+    }
+  }
+  return { threshold, owners }
+}
+
 export function makeTreasuryReader(cfg: { rpcUrl: string; vault: string; fetchImpl?: typeof fetch }) {
   const f = cfg.fetchImpl ?? fetch
   async function call(data: string): Promise<bigint> {
