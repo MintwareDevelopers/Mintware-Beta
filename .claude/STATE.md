@@ -44,13 +44,15 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   legitimacy artifact `/org/[slug]` + embeddable `/org/[slug]/badge` (frame-ancestors exception, badge
   path only). Reads via `lib/org/treasuryReader` (converged-vault eth_call); live payout is relayer-gated
   (503 until configured, same posture as x402). Testnet-only, unaudited.
-- **Org cards (new, Lithic sandbox)** — `POST/GET /api/orgs/[id]/cards` (owner-issues / member-lists)
-  + `POST /api/cards/lithic/webhook` (real-time Auth Stream Access responder). A card swipe is
-  authorized live against real Arc NAV through the same `EdgeAuthorizer` port x402 uses, gated by
-  the swiping member's org role cap (`lib/org/rolePresets.ts`). Backend for `/app/team/cards`'
-  previously-disabled "+ Issue card" button — the frontend itself is still illustrative (not wired
-  to these routes yet). Authorize-only: settlement stays relayer-gated, same as org pay + x402.
-  Sandbox-only (`LITHIC_API_KEY`); see [`payments-ypn.md`](rules/payments-ypn.md#human-org-cards--lithic-sandbox-2026-08-19).
+- **Org cards (new, Lithic sandbox)** — the full issue → activate → swipe → authorize → settle loop,
+  live UI at `/app/org/[slug]/cards` (a real page, not the `/app/team/cards` mock, which stays
+  illustrative). Owner issues a sandbox Lithic card to a member; the member activates it once with
+  their own wallet (a standing EIP-712 `DelegatedSpendPermit`, signed client-side); a real or
+  simulated swipe fires Lithic's ASA webhook (`POST /api/cards/lithic/webhook`), which authorizes
+  live against real Arc NAV through the same `EdgeAuthorizer` port x402 uses, gated by the member's
+  org role cap. Approved sub-$250 swipes can be settled on-chain on demand (owner-triggered
+  `settleSpend`, the same call proven in `lib/proof/latestRun.ts` leg 3 — not an always-on relayer).
+  Sandbox-only (`LITHIC_API_KEY`); full detail: [`payments-ypn.md`](rules/payments-ypn.md#human-org-cards--lithic-sandbox-2026-08-19).
 
 ## Shelved / not-live (do not present as current)
 
@@ -170,6 +172,7 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 | `/app/org` | `app/app/org/page.tsx` |
 | `/app/org/[slug]` | `app/app/org/[slug]/page.tsx` |
 | `/app/org/[slug]/accept` | `app/app/org/[slug]/accept/page.tsx` |
+| `/app/org/[slug]/cards` | `app/app/org/[slug]/cards/page.tsx` |
 | `/app/org/[slug]/control` | `app/app/org/[slug]/control/page.tsx` |
 | `/app/org/[slug]/control/setup` | `app/app/org/[slug]/control/setup/page.tsx` |
 | `/app/org/[slug]/fund` | `app/app/org/[slug]/fund/page.tsx` |

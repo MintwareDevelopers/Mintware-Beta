@@ -26,9 +26,12 @@ export function edgeAuthorizerFromEnv(): EdgeAuthorizer | null {
   return httpEdgeAuthorizer({ url, secret })
 }
 
+/** `orgId`/`orgCardId`/`memberWallet` are populated whenever the card token resolved to a real
+ *  org_cards row (i.e. every outcome except unknown_card / card_lookup_failed) — the webhook route
+ *  uses them to log the decision to card_swipe_events without a second lookup. */
 export type CardAuthDecision =
-  | { approved: true; holdId?: string }
-  | { approved: false; reason: string }
+  | { approved: true; holdId?: string; orgId: string; orgCardId: string; memberWallet: string }
+  | { approved: false; reason: string; orgId?: string; orgCardId?: string; memberWallet?: string }
 
 /** `spentTodayAtomic` is a caller-supplied hook, not computed here — this module has no opinion on
  *  how "today" is tracked (matches the pay route's MVP note: "a production system also tracks
@@ -54,13 +57,14 @@ export async function decideCardSwipe(params: {
   // 1) Resolve card token -> (org, member). Unknown card = decline; never guess.
   const { data: card, error: cardErr } = await supabase
     .from('org_cards')
-    .select('org_id, member_wallet, state')
+    .select('id, org_id, member_wallet, state')
     .eq('provider', provider)
     .eq('provider_card_token', providerCardToken)
     .maybeSingle()
   if (cardErr) return { approved: false, reason: 'card_lookup_failed' }
   if (!card) return { approved: false, reason: 'unknown_card' }
-  if (card.state !== 'OPEN') return { approved: false, reason: 'card_not_open' }
+  const identity = { orgId: card.org_id as string, orgCardId: card.id as string, memberWallet: card.member_wallet as string }
+  if (card.state !== 'OPEN') return { approved: false, reason: 'card_not_open', ...identity }
 
   // 2) Belt — role's daily cap. Membership must be active.
   const { data: member, error: memErr } = await supabase
@@ -69,24 +73,24 @@ export async function decideCardSwipe(params: {
     .eq('org_id', card.org_id)
     .eq('wallet', card.member_wallet)
     .maybeSingle()
-  if (memErr) return { approved: false, reason: 'member_lookup_failed' }
-  if (!member || member.status !== 'active') return { approved: false, reason: 'member_not_active' }
+  if (memErr) return { approved: false, reason: 'member_lookup_failed', ...identity }
+  if (!member || member.status !== 'active') return { approved: false, reason: 'member_not_active', ...identity }
 
   const policy = policyForRole(member.role)
   if (!withinDailyCap(policy, amountAtomicUsdc, spentTodayAtomic)) {
-    return { approved: false, reason: 'over_role_daily_cap' }
+    return { approved: false, reason: 'over_role_daily_cap', ...identity }
   }
 
   // 3) Suspenders — live NAV hold via edge-auth. Fail CLOSED when unconfigured (same posture as
   //    lib/x402/config.ts#getFacilitator and the pay route's relayer gate) — a card is a live-money
   //    surface, never default-approve because a downstream service is missing.
-  if (!edge) return { approved: false, reason: 'edge_auth_unconfigured' }
+  if (!edge) return { approved: false, reason: 'edge_auth_unconfigured', ...identity }
 
   const res = await edge.authorize({
     payer: card.member_wallet,
     amountAtomic: amountAtomicUsdc.toString(),
     ref,
   })
-  if (!res.approved) return { approved: false, reason: res.reason ?? 'insufficient_equity' }
-  return { approved: true, holdId: res.holdId }
+  if (!res.approved) return { approved: false, reason: res.reason ?? 'insufficient_equity', ...identity }
+  return { approved: true, holdId: res.holdId, ...identity }
 }

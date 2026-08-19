@@ -39,6 +39,9 @@ export type SandboxCard = {
   state: string
   spendLimit: number
   spendLimitDuration: string
+  /** SANDBOX ONLY — needed to call simulateAuthorization() later (Lithic has no "simulate by
+   *  token" variant). See the migration header for why this is fine in sandbox and not in prod. */
+  pan: string
 }
 
 /** Issue a sandbox virtual card. `spendLimitCents` is Lithic's own hard ceiling (belt #2, on top of
@@ -58,13 +61,38 @@ export async function issueSandboxVirtualCard(opts: {
     spend_limit_duration: 'TRANSACTION',
     state: 'OPEN',
   })
+  if (!card.pan) throw new Error('lithic_card_create_missing_pan') // sandbox always returns it on create
   return {
     token: card.token!,
     lastFour: card.last_four ?? '',
     state: card.state ?? 'OPEN',
     spendLimit: card.spend_limit ?? 0,
     spendLimitDuration: card.spend_limit_duration ?? 'TRANSACTION',
+    pan: card.pan,
   }
+}
+
+export type SimulatedSwipe = { token?: string; debuggingRequestId?: string }
+
+/** Fire a real ASA round-trip in sandbox: this makes Lithic call OUR webhook exactly as a live
+ *  swipe would, then returns Lithic's own record of the simulated transaction. The actual
+ *  approve/decline decision is read back from card_swipe_events (written by the webhook), not from
+ *  this response — Lithic's simulate response is just a receipt, not the ASA decision. */
+export async function simulateSwipe(opts: {
+  pan: string
+  amountCents: number
+  merchantDescriptor: string
+  mcc?: string
+}): Promise<SimulatedSwipe> {
+  const lithic = getLithicClient()
+  if (!lithic) throw new Error('lithic_unconfigured')
+  const res = await lithic.transactions.simulateAuthorization({
+    pan: opts.pan,
+    amount: opts.amountCents,
+    descriptor: opts.merchantDescriptor,
+    mcc: opts.mcc ?? '5734', // "Computer Software Stores" — a plausible default demo merchant category
+  })
+  return { token: res.token, debuggingRequestId: res.debugging_request_id }
 }
 
 export type AsaVerifyResult =

@@ -57,6 +57,7 @@ export const POST = createHandler(async (req: NextRequest, ctx) => {
     return ctx.json({ result: 'CARD_PAUSED' }, 200) // malformed event we can't safely route — decline
   }
 
+  const startedAt = Date.now()
   const decision = await decideCardSwipe({
     supabase: ctx.supabase,
     provider: 'lithic',
@@ -64,13 +65,40 @@ export const POST = createHandler(async (req: NextRequest, ctx) => {
     amountAtomicUsdc: centsToAtomicUsdc(amountCents),
     ref: event.token, // ASA event token — idempotent hold key, same role as the x402 nonce
   })
+  const latencyMs = Date.now() - startedAt
 
   ctx.log.info('cards.lithic', 'ASA decision', {
     cardToken,
     amountCents,
     approved: decision.approved,
     reason: decision.approved ? undefined : decision.reason,
+    latencyMs,
   })
+
+  // Log every decision to the spend feed — but only when the card actually resolved to one of ours
+  // (unknown_card/card_lookup_failed have no org_card_id to satisfy the FK; those are true "this
+  // isn't our card" edge cases, not something the org's own feed needs to show).
+  if (decision.orgCardId) {
+    const { error: logErr } = await ctx.supabase.from('card_swipe_events').insert({
+      org_id: decision.orgId,
+      org_card_id: decision.orgCardId,
+      member_wallet: decision.memberWallet,
+      provider: 'lithic',
+      provider_event_ref: event.token,
+      amount_atomic_usdc: centsToAtomicUsdc(amountCents).toString(),
+      merchant_descriptor: event.merchant?.descriptor ?? null,
+      decision: decision.approved ? 'approved' : 'declined',
+      decline_reason: decision.approved ? null : decision.reason,
+      edge_hold_id: decision.approved ? (decision.holdId ?? null) : null,
+      latency_ms: latencyMs,
+    })
+    // A duplicate webhook delivery (same provider_event_ref) hits the unique index and no-ops here —
+    // that's fine, the ASA response below is still correct either way. Any OTHER insert failure is
+    // logged but must never block the ASA response itself (the decision already happened).
+    if (logErr && !logErr.message?.includes('duplicate')) {
+      ctx.log.warn('cards.lithic', 'spend feed log failed', { error: logErr.message })
+    }
+  }
 
   if (decision.approved) return ctx.json({ result: 'APPROVED' }, 200)
   return ctx.json({ result: asaResultFor(decision.reason) }, 200)
