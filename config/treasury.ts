@@ -21,4 +21,20 @@ export const TREASURY_FACTORY = {
   },
 } as const
 
+// First team treasury provisioned via the factory + funded end-to-end on Base Sepolia (2026-08-19).
+// Proves the loop: createVault → adapter.setVault → commitTeam (junior first-loss, activates) →
+// depositUSDC (senior, par). State after: totalSeniorAssets 2 USDC · juniorUsdcBuffer 1 USDC · solvent.
+// Demo/example only (mock team token + mock 4626 yield source) — testnet + unaudited.
+export const TREASURY_EXAMPLE = {
+  baseSepolia: {
+    vault:       '0x6Ca20e28619F7C350b617027f5bc1614B81CC0D8',
+    jitHook:     '0xA5657eC658e1c560aC4bb30040bb784D3Fa3E0c8', // mined V4 permission bits 0x20C8
+    gateway:     '0x53b601816DACB51eb0a292C21AdB55ab13ADf12B', // settleSpend card rail
+    adapter:     '0x688a05F94CD12C2A30Af0c584357fA8c5B36645e', // MintwareERC4626YieldAdapter
+    yieldSource: '0xc6235766194Da60CD0bfB65e548d203151C5e56c', // MockERC4626 over USDC (demo)
+    teamToken:   '0xF663923a9639f37f9E787770AEaedAb0966e3740', // MockERC20 6dp (demo junior side)
+    usdc:        '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // Circle testnet USDC
+  },
+} as const
+
 export type TreasuryFactoryChain = keyof typeof TREASURY_FACTORY
