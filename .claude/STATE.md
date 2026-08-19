@@ -110,6 +110,7 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 - `NEXT_PUBLIC_ARC_VAULT_ADDRESS`
 - `NEXT_PUBLIC_ATX_PREVIEW`
 - `NEXT_PUBLIC_EAS_CHAIN_ID`
+- `NEXT_PUBLIC_EAS_SCHEMA_ATTRIBUTION_SCORE_V3`
 - `NEXT_PUBLIC_FEE_VAULT_ADDRESS`
 - `NEXT_PUBLIC_LIFI_API_KEY`
 - `NEXT_PUBLIC_LIFI_INTEGRATOR`
@@ -167,8 +168,11 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 | `/defi` | `app/defi/page.tsx` |
 | `/docs` | `app/docs/page.tsx` |
 | `/explorer` | `app/explorer/page.tsx` |
+| `/privacy` | `app/privacy/page.tsx` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
+| `/risk-disclosures` | `app/risk-disclosures/page.tsx` |
 | `/teams` | `app/teams/page.tsx` |
+| `/terms` | `app/terms/page.tsx` |
 | `/vaults` | `app/(rewards)/vaults/page.tsx` |
 | `/yield-payment-network` | `app/yield-payment-network/page.tsx` |
 <!-- /AUTO:pages -->
