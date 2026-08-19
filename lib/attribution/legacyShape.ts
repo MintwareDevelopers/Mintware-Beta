@@ -32,6 +32,10 @@ export interface LegacyScore {
   // v2 extras carried through so new UI can use them; old UI ignores them.
   percentileBasis: 'estimate' | 'population'
   source?: string
+  /** v2's Risk deduction (≥0, already applied to `score`) — the risk
+   *  pseudo-signal is filtered out of `signals` below (legacy UI expects
+   *  positive signals only), so this is its only surfaced form. */
+  riskPenalty: number
 }
 
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -88,5 +92,6 @@ export function toLegacyScore(result: ScoreResult, activity: WalletActivity, now
       .slice(0, 12)
       .map(p => ({ name: p.symbol, symbol: p.symbol, cat: 'Token', deployed: Math.round(p.usdValue) })),
     percentileBasis: result.percentileBasis,
+    riskPenalty: result.risk.penalty,
   }
 }

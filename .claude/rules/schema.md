@@ -71,3 +71,9 @@ Source of truth: `docs/schema.sql`
 - `20260728000001_rwa_incentive_surface.sql` — `campaigns.surface` / `linked_deal_id` / `duration_match_days` (applied)
 - `20260728000002_activity_action_types.sql` — widens `activity.action_type` CHECK for RWA (`subscribe`/`hold`/`referral_subscribe`)
 - `20260728000003_credit_hold_points.sql` — campaign-scoped unique index `(campaign_id, tx_hash, wallet, action_type)` + atomic idempotent `credit_hold_points()` RPC (guard-insert + participant-increment in one tx; ON CONFLICT DO NOTHING → no double-credit). The global `(wallet, tx_hash, action_type)` index stays for the DeFi path.
+- `20260818000001_org_tenancy.sql` — `orgs` (name/slug/owner_wallet/treasury_vault_address —
+  the last is nullable and set manually by an operator after a real Foundry deploy, never by app
+  code) and `org_members` (email-invited → wallet-accepted → `OrgMembership` EAS attestation).
+  Deliberately flat — no tier/role weighting. Design doc:
+  `docs/developers/attribution-trust-graph-spec.md` §9a. Routes: `POST /api/orgs`,
+  `POST /api/orgs/[id]/invite`, `POST /api/orgs/accept`.

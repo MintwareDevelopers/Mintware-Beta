@@ -86,6 +86,7 @@ export const GET = createHandler(async (req, ctx) => {
       chains:       (json.chains       as number)  ?? 0,
       totalTxCount: (json.totalTxCount as number)  ?? 0,
       character:    (json.character    as { label: string }) ?? { label: 'Unknown' },
+      riskPenalty:  (json.riskPenalty  as number)  ?? 0,
     }
   } catch (err) {
     ctx.log.error('attest-score', 'Score fetch error', { err: String(err) })
@@ -110,7 +111,11 @@ export const GET = createHandler(async (req, ctx) => {
         schema_name: 'AttributionScore',
         eas_uid:     uid,
         attested_at: new Date().toISOString(),
-        metadata:    { score: scoreData.score, tier: scoreData.tier },
+        // Full v2 breakdown, not just score+tier — the on-chain attestation
+        // (legacy schema) can't carry activity/longevity/risk fields until
+        // the v3 schema is registered (see lib/rewards/eas.ts), but nothing
+        // stops the off-chain cache from keeping the real data now.
+        metadata:    { score: scoreData.score, tier: scoreData.tier, signals: scoreData.signals, riskPenalty: scoreData.riskPenalty },
       },
       { onConflict: 'eas_uid' }
     )
