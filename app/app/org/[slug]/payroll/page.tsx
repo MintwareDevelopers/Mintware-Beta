@@ -3,7 +3,7 @@
 // Run payroll (#5) — paste or upload a {wallet, amount} CSV, preview the batch + total, settle as ONE
 // batch payment from the treasury. NOT a scheduler or HR suite — CSV in, one batch out.
 
-import { use, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, use, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSignMessage } from 'wagmi'
 import { MwNav } from '@/components/web2/MwNav'
@@ -43,7 +43,7 @@ export default function PayrollPage({ params }: { params: Promise<{ slug: string
   const total = valid.reduce((s, r) => s + r.usd, 0)
   const badCount = rows.length - valid.length
 
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFile = (e: ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return
     f.text().then(setCsv)
   }

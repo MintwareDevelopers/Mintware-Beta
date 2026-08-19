@@ -8,7 +8,11 @@ import { ROLE_PRESETS, type RolePreset } from '@/lib/org/rolePresets'
 
 export const dynamic = 'force-dynamic'
 
-async function assertOwner(ctx: { supabase: import('@supabase/supabase-js').SupabaseClient; user?: { address: string } }, id: string) {
+// Derive the exact RouteContext type from createHandler (avoids importing @supabase/supabase-js, a
+// transitive dep TS can't resolve directly here).
+type Ctx = Parameters<Parameters<typeof createHandler>[0]>[1]
+
+async function assertOwner(ctx: Ctx, id: string) {
   const { data: org } = await ctx.supabase.from('orgs').select('id, owner_wallet').eq('id', id).single()
   if (!org) return { ok: false as const, code: 404, msg: 'org not found' }
   if (org.owner_wallet.toLowerCase() !== ctx.user!.address.toLowerCase()) return { ok: false as const, code: 403, msg: 'only the org owner can manage members' }

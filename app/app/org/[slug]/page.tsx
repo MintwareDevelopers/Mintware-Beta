@@ -72,7 +72,7 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
                 </div>
                 <div className="flex items-center gap-3">
                   <Link href={`/org/${slug}`} target="_blank" className="text-[12.5px] font-medium text-peri-deep no-underline hover:underline">Public page ↗</Link>
-                  <WalletDisplay />
+                  {address && <WalletDisplay address={address} mono className="text-ink text-[13px] font-medium" />}
                 </div>
               </div>
 
