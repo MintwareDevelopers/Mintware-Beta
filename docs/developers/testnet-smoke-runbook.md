@@ -135,8 +135,29 @@ leg is zero at rest, and — if `minCoverageBps > 0` — `borrowIdleForJit` **sk
 
 ## 7. Spendable gateway — settle a card spend
 
-Follow [`arc-e2e-demo.md`](arc-e2e-demo.md): EIP-712 permit → `settleSpend`/`burnForPayment` → shares burn,
-merchant paid in USDC, `PaymentSettled` emitted. **Assert:** senior stays par-covered after the burn.
+EIP-712 `DelegatedSpendPermit` → `setCircleCpnTreasury(merchant)` (admin) → `settleSpend(...)` (relayer) →
+shares burn, merchant paid in USDC. **Assert:** deployer `shares(user)` dropped by the assets, merchant
+USDC rose by the same. `LiveSettleArc.s.sol` is the reference for building/signing the permit.
+
+> ⚠ **On Arc, settle via `cast send` — NOT `forge script`.** Forge's local EVM mis-simulates Arc's
+> system-contract USDC (`0x3600…0000`) and reverts with a spurious `StackUnderflow`; **`--skip-simulation`
+> does NOT help** (verified 2026-08-18 — forge still traces locally). `cast send` gas-estimates on the real
+> node, which executes the withdraw/settle path correctly. Build the permit sig with `cast` and send:
+> ```bash
+> DS=$(cast call $GATEWAY "domainSeparator()(bytes32)" --rpc-url arc)
+> TH=$(cast keccak "DelegatedSpendPermit(address user,uint256 maxDailySpendUSDC,uint256 nonce,uint256 deadline)")
+> DEADLINE=$(( $(cast block latest -f timestamp --rpc-url arc) + 3600 ))
+> SH=$(cast keccak $(cast abi-encode "f(bytes32,address,uint256,uint256,uint256)" $TH $USER 1000000000 1 $DEADLINE))
+> SIG=$(cast wallet sign --no-hash --private-key $KEY $(cast keccak $(cast concat-hex 0x1901 $DS $SH)))
+> cast send $GATEWAY "setCircleCpnTreasury(address)" $MERCHANT --rpc-url arc --private-key $KEY
+> cast send $GATEWAY "settleSpend(bytes32,address,uint256,address,(address,uint256,uint256,uint256),bytes,(bytes32,address,uint256,uint256,uint256),bytes)" \
+>   $HOLDID $USER 2000000 $MERCHANT "($USER,1000000000,1,$DEADLINE)" $SIG "($ZERO32,$ZERO,0,0,0)" 0x --rpc-url arc --private-key $KEY
+> ```
+> The permit nonce is **revocation-only** (checked, never consumed), so a working nonce is reusable.
+
+> **✅ Proven live (2026-08-18, Arc testnet).** settleSpend tx
+> **`0xfdf7031325a6c3622d28953cb88b145ef317a23ae37ddf24dca10144b221695e`** — burned 2 USDC of vault
+> `shares` (deployer `3e6 → 1e6`) and paid the merchant **2 USDC** (`0 → 2e6`) on Arc. `PaymentSettled`.
 
 ## 8. CCTP Base → Arc bridge
 
