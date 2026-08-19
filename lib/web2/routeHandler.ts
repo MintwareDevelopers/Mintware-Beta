@@ -210,6 +210,18 @@ export function createHandler(
     }
 
     // -------------------------------------------------------------------------
+    // Request-size guard — cheap DoS hardening. Reject an oversized body up front,
+    // before any parsing/auth. No JSON API route here legitimately exceeds 256 KB.
+    // (Content-Length can be absent for chunked bodies; the platform caps those.)
+    // -------------------------------------------------------------------------
+    const MAX_BODY_BYTES = 256 * 1024
+    const contentLength = Number(req.headers.get('content-length') ?? '0')
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      log.warn('request', 'Body too large', { contentLength })
+      return errorResponse('Payload too large', 413, 'PAYLOAD_TOO_LARGE')
+    }
+
+    // -------------------------------------------------------------------------
     // Rate limiting
     // -------------------------------------------------------------------------
 

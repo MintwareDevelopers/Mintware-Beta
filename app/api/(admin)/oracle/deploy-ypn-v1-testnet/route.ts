@@ -20,6 +20,7 @@
 import { createPublicClient, createWalletClient, http } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { createHandler } from '@/lib/web2/routeHandler'
+import { ADMIN_SECRET } from '@/lib/constants'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { AAVE_ADAPTER_ABI, AAVE_ADAPTER_BYTECODE } from '@/lib/web3/artifacts/aaveAdapter'
 import { YIELD_VAULT_ABI, YIELD_VAULT_BYTECODE } from '@/lib/web3/artifacts/mintwareYieldVault'
@@ -108,4 +109,4 @@ export const POST = createHandler(async (_req, ctx) => {
     },
     next: 'Fund the deployer with test USDC, then smoke: vault.deposit(usdc, deployer) → gateway settles a burnForPayment → USDC to a receiver. Set NEXT_PUBLIC_YPN_VAULT_ADDRESS / _GATEWAY_ADDRESS.',
   })
-}, { auth: 'bearer-token' })
+}, { auth: 'bearer-token', bearerSecret: ADMIN_SECRET })

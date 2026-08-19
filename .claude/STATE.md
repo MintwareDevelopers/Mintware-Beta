@@ -119,7 +119,6 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 - `NEXT_PUBLIC_EAS_CHAIN_ID`
 - `NEXT_PUBLIC_EAS_SCHEMA_ATTRIBUTION_SCORE_V3`
 - `NEXT_PUBLIC_FEE_VAULT_ADDRESS`
-- `NEXT_PUBLIC_LIFI_API_KEY`
 - `NEXT_PUBLIC_LIFI_INTEGRATOR`
 - `NEXT_PUBLIC_LIFI_INTEGRATOR_VERIFIED`
 - `NEXT_PUBLIC_MINTWARE_TREASURY`
@@ -185,6 +184,7 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 | `/explorer` | `app/explorer/page.tsx` |
 | `/org/[slug]` | `app/org/[slug]/page.tsx` |
 | `/org/[slug]/badge` | `app/org/[slug]/badge/page.tsx` |
+| `/proof` | `app/proof/page.tsx` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
 | `/teams` | `app/teams/page.tsx` |
 | `/vaults` | `app/(rewards)/vaults/page.tsx` |

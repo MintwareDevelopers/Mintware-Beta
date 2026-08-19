@@ -13,6 +13,7 @@
 import { createPublicClient, createWalletClient, http, keccak256, toBytes } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { createHandler } from '@/lib/web2/routeHandler'
+import { ADMIN_SECRET } from '@/lib/constants'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import {
   WEIGHTED_DISTRIBUTOR_ABI,
@@ -90,4 +91,4 @@ export const POST = createHandler(async (_req, ctx) => {
     registerTx,
     basescan: `https://sepolia.basescan.org/address/${distributor}`,
   })
-}, { auth: 'bearer-token' })
+}, { auth: 'bearer-token', bearerSecret: ADMIN_SECRET })

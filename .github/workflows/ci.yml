@@ -11,6 +11,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: CI only reads the repo. Overrides the org/repo default GITHUB_TOKEN grant.
+permissions:
+  contents: read
+
 jobs:
   context-drift:
     name: Context drift (AUTO blocks)
@@ -77,3 +81,21 @@ jobs:
         run: |
           cargo test --locked
           cargo clippy --all-targets -- -D warnings
+
+  security-audit:
+    name: Dependency audit (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # Advisory for now (continue-on-error) so a pre-existing transitive advisory doesn't
+      # block every merge. Remove `continue-on-error` to make high/critical a hard gate.
+      - name: pnpm audit (high+, prod deps)
+        continue-on-error: true
+        run: pnpm audit --audit-level=high --prod

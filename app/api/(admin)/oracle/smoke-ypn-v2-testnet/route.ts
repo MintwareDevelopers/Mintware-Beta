@@ -30,6 +30,7 @@
 import { createPublicClient, createWalletClient, http, isAddress, getAddress, keccak256, toHex, encodePacked, zeroAddress } from 'viem'
 import { baseSepolia } from 'viem/chains'
 import { createHandler } from '@/lib/web2/routeHandler'
+import { ADMIN_SECRET } from '@/lib/constants'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { VAULT_ABI, GATEWAY_ABI } from '@/lib/web3/artifacts/treasuryV2'
 
@@ -197,4 +198,4 @@ export const POST = createHandler(async (req, ctx) => {
   } catch (e) {
     return ctx.json({ ok: false, step: 'smoke', error: e instanceof Error ? e.message : String(e) }, 500)
   }
-}, { auth: 'bearer-token' })
+}, { auth: 'bearer-token', bearerSecret: ADMIN_SECRET })

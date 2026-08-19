@@ -71,6 +71,10 @@ export const CHAIN_LABELS: Record<number, string> = {
 // ---------------------------------------------------------------------------
 
 export const CRON_SECRET                 = process.env.CRON_SECRET                  ?? ''
+// Dedicated secret for the privileged (admin)/oracle deploy/rotation routes, so a leaked
+// CRON_SECRET can no longer authorize contract deploys or oracle rotation. Fails CLOSED
+// when unset (routes 500 in prod) — set ADMIN_SECRET in Vercel to use those routes.
+export const ADMIN_SECRET                = process.env.ADMIN_SECRET                 ?? ''
 export const CLAIM_MARK_SECRET           = process.env.CLAIM_MARK_SECRET            ?? ''
 export const SWAP_WEBHOOK_SECRET         = process.env.SWAP_WEBHOOK_SECRET          ?? ''
 export const TRADE_SIGNAL_INGEST_SECRET  = process.env.TRADE_SIGNAL_INGEST_SECRET   ?? ''

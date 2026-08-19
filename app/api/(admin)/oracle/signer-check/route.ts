@@ -11,6 +11,7 @@
 
 import { recoverMessageAddress } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
+import { ADMIN_SECRET } from '@/lib/constants'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import type { OracleRole } from '@/lib/web3/oracleKeys'
 
@@ -62,4 +63,4 @@ export const GET = createHandler(async (_req, ctx) => {
       'Signature validity only. You must still rotate the ON-CHAIN oracleSigner to each address via ' +
       'the 48h timelock before Privy signing is accepted on-chain.',
   })
-}, { auth: 'bearer-token' })
+}, { auth: 'bearer-token', bearerSecret: ADMIN_SECRET })

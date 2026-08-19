@@ -109,7 +109,9 @@ async function getLifiQuote(
   wallet:    string,
   toToken:   string
 ): Promise<LifiQuote | null> {
-  const apiKey = process.env.LIFI_API_KEY || process.env.NEXT_PUBLIC_LIFI_API_KEY
+  // Server-only. The NEXT_PUBLIC_ fallback was removed: setting it would inline the key into
+  // the client bundle (the exact footgun the LIFI_API_KEY rename was meant to close).
+  const apiKey = process.env.LIFI_API_KEY
   const params = new URLSearchParams({
     fromChain:       '8453',
     toChain:         '8453',
