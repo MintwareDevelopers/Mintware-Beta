@@ -22,6 +22,12 @@ const FOOTER_LINKS = [
   { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
 ]
 
+const LEGAL_LINKS = [
+  { href: '/terms', label: 'Terms' },
+  { href: '/privacy', label: 'Privacy' },
+  { href: '/risk-disclosures', label: 'Risk Disclosures' },
+]
+
 export function MwFooter() {
   const pathname = usePathname()
   if (pathname?.startsWith('/app/team')) return null   // treasury terminal has its own shell
@@ -44,7 +50,18 @@ export function MwFooter() {
             </a>
           ))}
         </div>
-        <div className="text-[12px] text-ink-soft">© 2026 Mintware · Liquidity should be a public good</div>
+      </div>
+      <div className="border-t border-hair-soft">
+        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-4 flex items-center justify-between flex-wrap gap-4">
+          <div className="text-[12px] text-ink-soft">© 2026 Mintware · Liquidity should be a public good</div>
+          <div className="flex gap-x-5 gap-y-1 text-[12px] flex-wrap">
+            {LEGAL_LINKS.map((l) => (
+              <Link key={l.label} href={l.href} className="text-ink-soft no-underline hover:text-ink-mid inline-flex items-center min-h-[36px]">
+                {l.label}
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
     </footer>
   )
