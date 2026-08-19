@@ -91,9 +91,10 @@ Allowlisted: `localhost:3000`, `mintware-beta.vercel.app`
 
 If a cron route 404s in production, verify the route file and matching `vercel.json` cron entry are actually merged to `main` before debugging envs. The universal pipeline also depends on the first two schema tables (`trade_signals`, `trade_signal_sync_state`) existing in Supabase; without them the cron cannot create its sync cursor or ingest anything.
 
-## Testnet deployments (this branch — `feat/ypn-vault-convergence`)
+## Testnet deployments (landed on `main` via PR #264 — dark-launched)
 
-**All testnet, empty, unaudited, NOT on `main`.** External audit is the only gate left before real value.
+**All testnet, empty, unaudited.** On `main` ≠ live — every money surface is flag/env-gated off in prod.
+External audit is the only gate left before real value.
 
 - **Arc testnet** (Circle Arc L1, chain `5042002`) — YPN spend stack (vault + gateway + CCTP router).
 - **Base Sepolia** — ULV engine + ETH-collateral/settlement stack.

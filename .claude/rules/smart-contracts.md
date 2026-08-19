@@ -11,7 +11,7 @@
 
 # Live Forge stack (current — read this, not the historical sections)
 
-> **Dated note (2026-08-18, branch `feat/ypn-vault-convergence`, not on `main`).** This is the
+> **Dated note (2026-08-18 — this stack LANDED on `main` via PR #264, dark-launched; still testnet + unaudited).** This is the
 > **contract-level "one home"** — the inventory of what is actually built now in `contracts-v4/`
 > (+ AIAttribution in `contracts-ai/`). Product-level detail lives in its own homes:
 > DeFi/ULV vaults → [`vaults.md`](vaults.md); YPN treasury / card / settlement + off-chain services →
