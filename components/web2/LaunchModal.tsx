@@ -37,14 +37,13 @@ export function LaunchModalProvider({ children }: { children: ReactNode }) {
     persistAppMode(mode)
     setOpen(false)
     router.push(appModeHome(mode))
-  }
-
-  // Optional secondary path — connect a wallet now (defaults into the User surface).
-  function connectWallet() {
-    persistAppMode('user')
-    setOpen(false)
-    if (privy.authenticated) { privy.connectWallet(); return }
-    privy.login({ loginMethods: ['wallet', 'email'], walletChainType: 'ethereum-only' })
+    // Connect-first: picking a context immediately prompts Privy when you're not signed in,
+    // so "I'm a person" both ENTERS and CONNECTS in one click. The destination renders a
+    // preview while the Privy modal is up, so it's never a dead-end/redirect. Already-authed
+    // users just route straight in.
+    if (!privy.authenticated) {
+      privy.login({ loginMethods: ['wallet', 'email'], walletChainType: 'ethereum-only' })
+    }
   }
 
   return (
@@ -78,10 +77,6 @@ export function LaunchModalProvider({ children }: { children: ReactNode }) {
                   <span className="shrink-0 text-ink-soft">→</span>
                 </button>
               ))}
-
-              <button onClick={connectWallet} className="mt-1 text-[12px] text-ink-soft hover:text-ink self-center py-1 cursor-pointer">
-                or connect a wallet first →
-              </button>
             </div>
           </div>
         </div>

@@ -58,30 +58,40 @@ export const POST = createHandler(async (req, ctx) => {
   if (!isValidAddress(rawAddr)) {
     return ctx.json({ error: 'invalid address' }, 400)
   }
-  if (typeof authMessage !== 'string' || typeof authSignature !== 'string' || typeof issuedAt !== 'number') {
-    return ctx.json({ error: 'signed authorization required' }, 401)
-  }
-  if (Math.abs(Date.now() - issuedAt) > 15 * 60 * 1000) {
-    return ctx.json({ error: 'authorization expired' }, 401)
-  }
-
   const address  = normalizeAddress(rawAddr)
   const isSolana = solanaEnabled && SOLANA_RE.test(rawAddr)
-  const expectedMessage = buildWalletConnectMessage({ address, issuedAt })
-  if (authMessage !== expectedMessage) {
-    return ctx.json({ error: 'authorization payload mismatch' }, 401)
-  }
 
-  if (EVM_RE.test(rawAddr)) {
-    const signer = await recoverMessageAddress({
-      message: authMessage,
-      signature: authSignature as `0x${string}`,
-    }).catch(() => null)
+  // Ownership signature is OPTIONAL. A plain connect (no signature) does only the low-stakes
+  // last_seen touch + a DETERMINISTIC ref code — so connecting to view costs ZERO wallet
+  // signatures (Privy's login already authenticated the session; a second app signature was
+  // pure friction). A signature is required only to CLAIM a nicer Basename-derived ref code,
+  // where proving the wallet is yours matters (so a code can't be squatted).
+  const signaturePresent =
+    typeof authMessage === 'string' && typeof authSignature === 'string' && typeof issuedAt === 'number'
+  let ownershipProven = false
 
-    if (!signer || signer.toLowerCase() !== address) {
-      return ctx.json({ error: 'invalid authorization signature' }, 401)
+  if (signaturePresent) {
+    if (Math.abs(Date.now() - (issuedAt as number)) > 15 * 60 * 1000) {
+      return ctx.json({ error: 'authorization expired' }, 401)
     }
-  } else {
+    const expectedMessage = buildWalletConnectMessage({ address, issuedAt: issuedAt as number })
+    if (authMessage !== expectedMessage) {
+      return ctx.json({ error: 'authorization payload mismatch' }, 401)
+    }
+    if (EVM_RE.test(rawAddr)) {
+      const signer = await recoverMessageAddress({
+        message: authMessage as string,
+        signature: authSignature as `0x${string}`,
+      }).catch(() => null)
+      if (!signer || signer.toLowerCase() !== address) {
+        return ctx.json({ error: 'invalid authorization signature' }, 401)
+      }
+      ownershipProven = true
+    } else {
+      return ctx.json({ error: 'solana connect authorization unavailable while paused' }, 410)
+    }
+  } else if (isSolana) {
+    // No signature + Solana → nothing safe to do while Solana is paused.
     return ctx.json({ error: 'solana connect authorization unavailable while paused' }, 410)
   }
 
@@ -118,12 +128,18 @@ export const POST = createHandler(async (req, ctx) => {
   }
 
   // ── New wallet — generate a ref code ──────────────────────────────────────
+  // Basename-derived codes are claimable identifiers, so only resolve them when ownership
+  // was proven by a signature. Unsigned connects get the deterministic (unclaimable) code;
+  // the user can upgrade to a Basename code later via a signed claim.
   let refCode: string
-  try {
-    refCode = await generateRefCodeForWallet(address, ctx.supabase)
-  } catch (err) {
-    ctx.log.error('auth/connect', 'generateRefCodeForWallet error', { err: String(err) })
-    // Fallback: deterministic from address — EVM uses hex bytes, Solana uses first 6 chars
+  if (ownershipProven) {
+    try {
+      refCode = await generateRefCodeForWallet(address, ctx.supabase)
+    } catch (err) {
+      ctx.log.error('auth/connect', 'generateRefCodeForWallet error', { err: String(err) })
+      refCode = isSolana ? address.slice(0, 6) : 'mw_' + address.slice(2, 8)
+    }
+  } else {
     refCode = isSolana ? address.slice(0, 6) : 'mw_' + address.slice(2, 8)
   }
 

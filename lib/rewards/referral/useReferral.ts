@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { createSupabaseBrowserClient } from '@/lib/web2/supabase'
 import type { ReferralStats, ReferralRecord } from '@/lib/rewards/referral/types'
 import { useSignMessage } from 'wagmi'
-import { buildReferralApplyMessage, buildWalletConnectMessage } from '@/lib/web3/signedActionMessages'
+import { buildReferralApplyMessage } from '@/lib/web3/signedActionMessages'
 
 type ConnectResult = {
   refCode: string | null
@@ -105,13 +105,14 @@ export function useReferral(address: string | undefined): UseReferralReturn {
       let isNew = false
 
       try {
-        const issuedAt = Date.now()
-        const authMessage = buildWalletConnectMessage({ address: addr, issuedAt })
-        const authSignature = await signMessageAsync({ message: authMessage })
+        // ZERO wallet signatures to connect: Privy's login already authenticated the session,
+        // so we call the connect endpoint UNSIGNED (it does the last_seen touch + a deterministic
+        // ref code). The old second signature here was pure friction on first connect. A nicer
+        // Basename ref code can be claimed later with an explicit signed action.
         const connectRes = await fetch('/api/auth/connect', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ address: addr, issuedAt, authMessage, authSignature }),
+          body:    JSON.stringify({ address: addr }),
         })
 
         if (connectRes.ok) {
@@ -124,10 +125,8 @@ export function useReferral(address: string | undefined): UseReferralReturn {
           storedRefCode = 'mw_' + addr.slice(2, 8).toLowerCase()
         }
       } catch {
-        // User rejected the sign request (WalletConnect dismiss, Privy cancel, etc.)
-        // Fall back to the deterministic ref code and persist the cache so we don't
-        // prompt again. The wallet profile upsert will happen next time they sign.
-        console.warn('[useReferral] connect sign rejected, using deterministic ref code')
+        // Network error — fall back to the deterministic ref code and persist the cache.
+        console.warn('[useReferral] connect call failed, using deterministic ref code')
         storedRefCode = 'mw_' + addr.slice(2, 8).toLowerCase()
       }
 
