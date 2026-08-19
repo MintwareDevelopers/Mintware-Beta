@@ -149,6 +149,9 @@ export default function ControlPage({ params }: { params: Promise<{ slug: string
                 no popup at all. It needs Privy server-auth (<span className="font-mono text-[12px]">PRIVY_APP_SECRET</span>) enabled on the plan.</>
               )}
             </p>
+            {!ms && isOwner && funded && (
+              <Link href={`/app/org/${slug}/control/setup`} className="mt-3.5 inline-block rounded-full bg-peri text-white px-4 py-2 text-[13px] font-semibold no-underline hover:bg-peri-deep transition-colors">Set up multisig →</Link>
+            )}
           </section>
         </main>
       </div>
