@@ -1,0 +1,32 @@
+version: 2
+updates:
+  # JS/TS dependencies (root pnpm workspace)
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Batch low-risk bumps into one PR to cut noise; majors still come individually.
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+
+  # Rust off-chain services (each is a detached workspace with its own Cargo.lock)
+  - package-ecosystem: cargo
+    directory: "/services/edge-auth"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: cargo
+    directory: "/services/relayer"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Keep GitHub Actions pinned versions current (supply-chain surface for CI)
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

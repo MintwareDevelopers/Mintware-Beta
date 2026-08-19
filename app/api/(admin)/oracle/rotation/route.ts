@@ -27,7 +27,7 @@
 // RPC proxy (audit C11). Operator dashboards pass `Authorization: Bearer <secret>`.
 // =============================================================================
 
-import { CHAIN_RPC } from '@/lib/constants'
+import { CHAIN_RPC, ADMIN_SECRET } from '@/lib/constants'
 import { createHandler } from '@/lib/web2/routeHandler'
 
 // Minimal ABI — only the public state getters we need
@@ -135,4 +135,4 @@ export const GET = createHandler(async (req, ctx) => {
     rotation_pending:           rotationPending,
     rotation_available_in_secs: rotationAvailableInSecs,
   })
-}, { auth: 'bearer-token' })
+}, { auth: 'bearer-token', bearerSecret: ADMIN_SECRET })
