@@ -32,7 +32,8 @@ command -v cast >/dev/null || { echo "cast (foundry) not found on PATH"; exit 1;
 
 echo "== 1. poll iris for the attestation (burn tx $BURN_TX, domain $SRC_DOMAIN) =="
 MSG=""; ATT=""
-for i in $(seq 1 60); do   # ~15 min at 15s poll (standard finality)
+POLL_MAX="${POLL_MAX:-60}"   # attempts × 15s. Base-Sepolia STANDARD finality (threshold 2000) can exceed 15 min.
+for i in $(seq 1 "$POLL_MAX"); do
   RESP="$(curl -fsS "$IRIS_BASE/v2/messages/$SRC_DOMAIN?transactionHash=$BURN_TX" || true)"
   STATUS="$(echo "$RESP" | jq -r '.messages[0].status // "pending"' 2>/dev/null || echo pending)"
   if [ "$STATUS" = "complete" ]; then
@@ -41,12 +42,13 @@ for i in $(seq 1 60); do   # ~15 min at 15s poll (standard finality)
     echo "   attested."
     break
   fi
-  echo "   status=$STATUS (attempt $i/60) — waiting 15s"; sleep 15
+  echo "   status=$STATUS (attempt $i/$POLL_MAX) — waiting 15s"; sleep 15
 done
 [ -n "$MSG" ] && [ "$MSG" != "null" ] || { echo "attestation not ready after the poll window — re-run later"; exit 2; }
 
 echo "== 2. record recipient vault shares BEFORE =="
-BEFORE="$(cast call "$ARC_VAULT" "balanceOf(address)(uint256)" "$RECIPIENT" --rpc-url "$ARC_RPC_URL")"
+# The YPN yield vault tracks shares via `shares(address)` (not ERC20 balanceOf). Strip cast's `[1e6]` note.
+BEFORE="$(cast call "$ARC_VAULT" "shares(address)(uint256)" "$RECIPIENT" --rpc-url "$ARC_RPC_URL" | awk '{print $1}')"
 echo "   before: $BEFORE"
 
 echo "== 3. submit receiveAndDeposit on Arc (onlyRelayer) =="
@@ -54,9 +56,9 @@ cast send "$ARC_CCTP_ROUTER" "receiveAndDeposit(bytes,bytes,address)" "$MSG" "$A
   --rpc-url "$ARC_RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY"
 
 echo "== 4. assert recipient vault shares INCREASED (bridged dollar landed as yield-earning shares) =="
-AFTER="$(cast call "$ARC_VAULT" "balanceOf(address)(uint256)" "$RECIPIENT" --rpc-url "$ARC_RPC_URL")"
+AFTER="$(cast call "$ARC_VAULT" "shares(address)(uint256)" "$RECIPIENT" --rpc-url "$ARC_RPC_URL" | awk '{print $1}')"
 echo "   after: $AFTER"
-if [ "$(echo "$AFTER > $BEFORE" | bc 2>/dev/null || echo 0)" = "1" ] || [ "${AFTER%%[^0-9]*}" \> "${BEFORE%%[^0-9]*}" ]; then
+if [ "$AFTER" -gt "$BEFORE" ] 2>/dev/null; then
   echo "PASS: CCTP bridge-and-deposit credited the recipient ($BEFORE -> $AFTER)."
 else
   echo "FAIL: recipient shares did not increase (before=$BEFORE after=$AFTER)."; exit 3
