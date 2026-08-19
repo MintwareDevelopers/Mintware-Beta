@@ -25,6 +25,8 @@ export default function RolesPage({ params }: { params: Promise<{ slug: string }
   const [inviteRole, setInviteRole] = useState<RolePreset>('contributor')
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
+  const [lastLink, setLastLink] = useState<{ email: string; url: string } | null>(null)
+  const [copied, setCopied] = useState(false)
 
   // Resolve slug -> org id + name (public treasury read).
   useEffect(() => {
@@ -47,7 +49,10 @@ export default function RolesPage({ params }: { params: Promise<{ slug: string }
     try {
       const res = await signedOrgFetch({ path: `/api/orgs/${orgId}/invite`, action: 'mintware-org-invite', payload: { email, role: inviteRole }, address, signMessageAsync })
       const d = await res.json()
-      if (res.ok) { setMsg(`Invited ${email} as ${inviteRole}.`); setEmail(''); refresh() } else setMsg(d.error ?? 'invite failed')
+      if (res.ok) {
+        const url = `${window.location.origin}/app/org/${slug}/accept?email=${encodeURIComponent(email)}`
+        setLastLink({ email, url }); setCopied(false); setMsg(''); setEmail(''); refresh()
+      } else setMsg(d.error ?? 'invite failed')
     } catch (e) { setMsg(String(e)) } finally { setBusy('') }
   }
 
@@ -82,6 +87,16 @@ export default function RolesPage({ params }: { params: Promise<{ slug: string }
             <button onClick={invite} disabled={busy === 'invite' || !email} className="rounded-full bg-peri text-white px-5 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy === 'invite' ? 'Signing…' : 'Invite'}</button>
           </div>
           {msg && <div className="text-[12.5px] text-ink-mid mt-3">{msg}</div>}
+          {lastLink && (
+            <div className="soft-card p-4 mt-3 border border-[rgba(108,108,240,0.25)]">
+              <div className="text-[12.5px] text-ink"><span className="font-semibold">{lastLink.email}</span> invited. Send them this link to accept — sign-in is gated to their email, and accepting mints their membership.</div>
+              <div className="flex items-center gap-2 mt-2.5 max-[560px]:flex-col max-[560px]:items-stretch">
+                <code className="flex-1 font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2 overflow-x-auto whitespace-nowrap">{lastLink.url}</code>
+                <button onClick={() => { navigator.clipboard?.writeText(lastLink.url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[12.5px] font-semibold hover:bg-peri-deep transition-colors">{copied ? 'Copied ✓' : 'Copy link'}</button>
+              </div>
+              <div className="text-[11px] text-ink-soft mt-2">No email is sent automatically — share the link however you like (email, Slack, DM).</div>
+            </div>
+          )}
 
           {/* roster */}
           <div className="soft-card mt-4 overflow-hidden">
