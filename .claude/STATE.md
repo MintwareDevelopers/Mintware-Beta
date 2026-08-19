@@ -184,9 +184,12 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
 | `/explorer` | `app/explorer/page.tsx` |
 | `/org/[slug]` | `app/org/[slug]/page.tsx` |
 | `/org/[slug]/badge` | `app/org/[slug]/badge/page.tsx` |
+| `/privacy` | `app/privacy/page.tsx` |
 | `/proof` | `app/proof/page.tsx` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
+| `/risk-disclosures` | `app/risk-disclosures/page.tsx` |
 | `/teams` | `app/teams/page.tsx` |
+| `/terms` | `app/terms/page.tsx` |
 | `/vaults` | `app/(rewards)/vaults/page.tsx` |
 | `/yield-payment-network` | `app/yield-payment-network/page.tsx` |
 <!-- /AUTO:pages -->
