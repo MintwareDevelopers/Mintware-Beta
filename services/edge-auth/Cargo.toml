@@ -30,7 +30,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 # k256 for recoverable ECDSA; keccak/eip712 come from alloy-primitives / alloy-sol-types above.
 k256 = { version = "0.13", features = ["ecdsa"] }
 # Rain webhook signature verification (increment 6): HMAC-SHA256 over the raw body, constant-time.
-hmac = "0.12"
+hmac = "0.13"
 sha2 = "0.10"
 # Redis-backed shared hold store (increment 3 wiring): runs the proven atomic-reserve Lua scripts via
 # EVAL against a real Redis so many edge instances share hold state. tokio async, rustls (no OpenSSL).
