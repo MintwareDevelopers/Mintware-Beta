@@ -30,7 +30,7 @@ const MODES: { mode: AppMode; title: string; sub: string; tone: 'peri' | 'coral'
 // invisible; the label is the job. "Get liquidity" is the capital-constrained / staged-buffer path.
 const TEAM_JOBS: { title: string; sub: string; dest: string; tone: 'peri' | 'coral' }[] = [
   { title: 'Earn on our idle cash', sub: 'Put treasury USDC to work — yield from day one.', dest: '/app/org', tone: 'peri' },
-  { title: 'Get liquidity for our token', sub: 'Only hold one side? Stage it, earn, and pair when a match arrives.', dest: '/app/vaults', tone: 'coral' },
+  { title: 'Get liquidity for our token', sub: 'Only hold one side? Stage it, earn, and pair when a match arrives.', dest: '/app/liquidity', tone: 'coral' },
   { title: 'Run our money', sub: 'Spend, cards, payroll, roles — the treasury terminal.', dest: '/app/team', tone: 'peri' },
   { title: 'Fund an AI agent', sub: 'A balance that earns while your agent spends it (x402).', dest: '/app/agents', tone: 'coral' },
 ]
