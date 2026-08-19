@@ -34,7 +34,7 @@ hmac = "0.12"
 sha2 = "0.10"
 # Redis-backed shared hold store (increment 3 wiring): runs the proven atomic-reserve Lua scripts via
 # EVAL against a real Redis so many edge instances share hold state. tokio async, rustls (no OpenSSL).
-redis = { version = "0.27", default-features = false, features = ["tokio-comp", "tokio-rustls-comp", "script"] }
+redis = { version = "1.6", default-features = false, features = ["tokio-comp", "tokio-rustls-comp", "script"] }
 
 [dev-dependencies]
 # Exercise the axum router in-process (no socket) for the server wiring tests.
