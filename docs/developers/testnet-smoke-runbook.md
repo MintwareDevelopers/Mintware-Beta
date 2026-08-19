@@ -133,9 +133,20 @@ merchant paid in USDC, `PaymentSettled` emitted. **Assert:** senior stays par-co
 
 ## 8. CCTP Base → Arc bridge
 
-Burn USDC on Base (TokenMessenger) → wait for Circle attestation (~15 min at standard finality, `maxFee=0`)
-→ relayer `receiveAndDeposit` on Arc. **Assert:** the bridged dollar lands as **yield-earning shares**
-(vault share balance rose). Find your burn by **tx hash** — the public TokenMessenger is shared across chains.
+Burn USDC on Base (TokenMessenger `depositForBurn`, `mintRecipient` = the Arc CCTP router) → wait for
+Circle attestation (~15 min at standard finality, `maxFee=0`) → relayer `receiveAndDeposit` on Arc.
+The **destination half** (attestation poll + `receiveAndDeposit` + assert) is scripted:
+
+```bash
+BURN_TX=0x<base burn tx> RECIPIENT=0x<who gets the shares> \
+  ./scripts/cctp-bridge-smoke.sh
+```
+
+It polls Circle's iris API (`/v2/messages/6?transactionHash=…`, Base domain **6**, Arc domain **26**),
+then `cast send`s `receiveAndDeposit(message, attestation, recipient)` on Arc and **asserts** the recipient's
+vault shares rose (the bridged dollar landed as **yield-earning shares**). The **source burn** is Circle's
+standard `TokenMessenger.depositForBurn` — the script deliberately does not hardcode a burn address; use your
+existing burn flow. Find your burn by **tx hash** (the public TokenMessenger is shared across chains).
 
 ## 9. Live authorization off Arc NAV (off-chain leg)
 
