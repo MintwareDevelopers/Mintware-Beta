@@ -20,7 +20,7 @@ alloy-primitives = { version = "0.8", features = ["k256"] }
 # The `k256` feature enables signer recovery (TxEnvelope::recover_signer) used in the signing proofs.
 alloy-consensus = { version = "0.8", features = ["k256"] }
 alloy-eips = "0.8"
-k256 = { version = "0.13", features = ["ecdsa"] }
+k256 = { version = "0.14", features = ["ecdsa"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 serde_json = "1"
 # Feature-unification fix: alloy-eip7702 (pulled by alloy-consensus/eips) uses derive_more's `display`
