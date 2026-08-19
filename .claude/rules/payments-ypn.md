@@ -46,8 +46,41 @@ integration: [`../../docs/developers/arc-settlement-integration.md`](../../docs/
 - **Agent-facing x402** (park/pay actions, facilitator, discovery) → [`agents.md`](agents.md).
 - **Env + testnet deploys** (edge/relayer/Arc/x402 vars) → [`deployments.md`](deployments.md).
 - **Vaults / ULV / pool tiering** → [`vaults.md`](vaults.md).
+- **Human org cards (Lithic sandbox)** → below.
+
+## Human org cards — Lithic sandbox (2026-08-19)
+
+The front door onto the SAME authorize leg above, for a real (sandbox) card swipe instead of a
+scripted smoke test. `app/app/team/cards/page.tsx`'s "+ Issue card" button had shipped disabled
+("needs the CPN card issuer — coming soon") since it landed; `lib/org/rolePresets.ts`'s
+`contributor` preset already said "spend up to $2,000/day from the treasury via card / x402" —
+cards were always meant to draw on the same org treasury + role-cap system `/api/orgs/[id]/pay`
+uses for vendor payouts, not a separate product. This wires that in for **Lithic sandbox only** —
+production issuance is a separate KYB-gated Lithic tier, not a config flip, and is NOT what CPN
+above refers to (CPN is the Circle-relationship card issuer this repo's honesty banners still
+treat as the real gate for going live with real value).
+
+- `lib/cards/lithic.ts` — provider-specific leg only: sandbox card creation (`lithic` npm SDK) +
+  ASA (Auth Stream Access) webhook parse/verify (`standardwebhooks` under the hood via the SDK,
+  fails closed without `LITHIC_WEBHOOK_SECRET`).
+- `lib/org/cardAuthorize.ts#decideCardSwipe` — the decision: belt (`org_members.role`'s daily cap,
+  `lib/org/rolePresets.ts`) + suspenders (the *same* `httpEdgeAuthorizer` port x402 uses — a card
+  swipe is authorized through the identical NAV-hold engine, not a parallel one). Fails closed when
+  `EDGE_AUTH_URL`/`_SECRET` are unset, same posture as everywhere else.
+- `app/api/cards/lithic/webhook/route.ts` — the real-time ASA responder (`auth: 'none'` + manual
+  Standard-Webhooks verification, same category as wallet-link/vault-deposit's manual auth).
+- `app/api/orgs/[id]/cards/route.ts` — owner-only issuance (`POST`) + member card list (`GET`).
+- `org_cards` table (migration `20260819000002`) — card-token → (org, member) identity mapping
+  only; no ledger/amount columns, since authorization decisions are never persisted, same as every
+  other spend path here.
+- **Deliberately stops at authorize.** Capture/settle (`MintwarePaymentGateway.settleSpend`) is
+  NOT wired from the webhook — that leg stays deploy-gated behind the relayer HTTP surface (see
+  above), same as `/api/orgs/[id]/pay` and x402 `/settle`. A swipe can be approved/declined live
+  against real Arc NAV today; nothing here moves money yet.
 
 ## Deploy-gated remainder (not code)
 
-Relayer settle HTTP server + funded key · CPN card issuer (the genuine Circle-relationship piece) ·
-Arc mainnet (Sept 16, 2026) · external audit of the converged stack.
+Relayer settle HTTP server + funded key (blocks card capture/settle same as vendor pay + x402
+settle) · CPN card issuer for production (the genuine Circle-relationship piece; Lithic above is
+sandbox-only and a different thing) · Arc mainnet (Sept 16, 2026) · external audit of the converged
+stack.
