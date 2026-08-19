@@ -8,7 +8,7 @@ version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e88e1edea70787c33e11197d3f32ae380f3db19e6e061e539a5bcf8184a6b326"
 dependencies = [
- "alloy-eips",
+ "alloy-eips 0.8.3",
  "alloy-primitives",
  "alloy-rlp",
  "alloy-trie",
@@ -19,6 +19,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-eip2124"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "675264c957689f0fd75f5993a73123c2cc3b5c235a38f5b9037fe6c826bfb2c0"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "crc",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "alloy-eip2930"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -26,6 +39,7 @@ checksum = "0069cf0642457f87a01a014f6dc29d5d893cd4fd8fddf0c3cdfad1bb3ebafc41"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
+ "serde",
 ]
 
 [[package]]
@@ -41,17 +55,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-eip7702"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b15b13d38b366d01e818fe8e710d4d702ef7499eacd44926a06171dd9585d0c"
+dependencies = [
+ "alloy-primitives",
+ "alloy-rlp",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "alloy-eips"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f9fadfe089e9ccc0650473f2d4ef0a28bc015bbca5631d9f0f09e49b557fdb3"
 dependencies = [
  "alloy-eip2930",
- "alloy-eip7702",
+ "alloy-eip7702 0.4.2",
  "alloy-primitives",
  "alloy-rlp",
  "c-kzg",
  "derive_more 1.0.0",
+ "once_cell",
+ "serde",
+ "sha2",
+]
+
+[[package]]
+name = "alloy-eips"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e86967eb559920e4b9102e4cb825fe30f2e9467988353ce4809f0d3f2c90cd4"
+dependencies = [
+ "alloy-eip2124",
+ "alloy-eip2930",
+ "alloy-eip7702 0.5.1",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-serde",
+ "auto_impl",
+ "c-kzg",
+ "derive_more 2.1.1",
+ "either",
  "once_cell",
  "serde",
  "sha2",
@@ -116,6 +163,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "alloy-serde"
+version = "0.12.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a1cd73fc054de6353c7f22ff9b846b0f0f145cd0112da07d4119e41e9959207"
+dependencies = [
+ "alloy-primitives",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -750,6 +808,21 @@ checksum = "8b2a41393f66f16b0823bb79094d54ac5fbd34ab292ddafb9a0456ac9f87d201"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc"
+version = "3.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5eb8a2a1cd12ab0d987a5d5e825195d372001a4094a0376319d5a0ad71c1ba0d"
+dependencies = [
+ "crc-catalog",
+]
+
+[[package]]
+name = "crc-catalog"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "217698eaf96b4a3f0bc4f3662aaa55bdf913cd54d7204591faa790070c6d0853"
 
 [[package]]
 name = "crunchy"
@@ -2188,7 +2261,7 @@ name = "relayer"
 version = "0.1.0"
 dependencies = [
  "alloy-consensus",
- "alloy-eips",
+ "alloy-eips 0.12.6",
  "alloy-primitives",
  "alloy-sol-types",
  "derive_more 1.0.0",
