@@ -54,6 +54,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const reader = makeTreasuryReader({ rpcUrl, vault: org.treasury_vault_address })
     try {
       const snap = await reader.snapshot()
+      // On-chain config owner — lets the app verify the treasury is actually controlled by the
+      // org owner's (Privy) wallet (P3 control check). Best-effort; null if the read fails.
+      const onchainOwner = await reader.owner().catch(() => null)
       let member = null
       if (address && EVM_RE.test(address)) {
         const realizable = await reader.memberRealizableUsdc(address)
@@ -80,6 +83,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           deployedUsdc: snap.deployedUsdc.toString(),
           juniorBufferUsdc: snap.juniorBufferUsdc.toString(),
           fullyCovered: snap.fullyCovered,
+        },
+        control: {
+          onchainOwner,
+          // Does the on-chain owner match the org owner's (Privy) wallet? The core control assurance.
+          ownerMatchesOrg: !!onchainOwner && onchainOwner.toLowerCase() === org.owner_wallet.toLowerCase(),
         },
         member,
       })

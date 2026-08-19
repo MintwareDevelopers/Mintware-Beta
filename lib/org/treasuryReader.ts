@@ -12,6 +12,7 @@ const SEL = {
   juniorUsdcBuffer: '0xfa0f2b74', //  juniorUsdcBuffer()
   seniorShares: '0x6e4a7e08', //      seniorShares(address)
   convertToAssets: '0x07a2d13a', //   convertToAssets(uint256)
+  owner: '0x8da5cb5b', //             owner()                — Ownable config authority
 } as const
 
 const MAX_UINT = (1n << 256n) - 1n
@@ -74,6 +75,12 @@ export function makeTreasuryReader(cfg: { rpcUrl: string; vault: string; fetchIm
         juniorBufferUsdc: jr,
         fullyCovered: cov === MAX_UINT || cov >= 10_000n,
       }
+    },
+    /** The on-chain config owner (Ownable). Lets the app VERIFY the treasury is actually
+     *  controlled by the org owner's (Privy) wallet — the P3 control check. */
+    async owner(): Promise<string> {
+      const raw = await call(SEL.owner)
+      return '0x' + raw.toString(16).padStart(40, '0')
     },
     /** A member's par-safe realizable balance = convertToAssets(seniorShares(member)), atomic 6dp. */
     async memberRealizableUsdc(member: string): Promise<bigint> {
