@@ -167,9 +167,9 @@ export default function ProofPage() {
                 <div className="min-w-0">
                   <p className="text-[13.5px] text-ink-mid leading-[1.55]">{p.note}</p>
                   {p.txHash && (
-                    <a href={txUrl('arc', p.txHash)} target="_blank" rel="noopener"
+                    <a href={txUrl(p.chain ?? 'base-sepolia', p.txHash)} target="_blank" rel="noopener"
                       className="inline-block mt-1.5 font-mono text-[12px] rounded-lg px-2.5 py-1 no-underline text-peri-deep bg-[rgba(108,108,240,0.10)] hover:bg-[rgba(108,108,240,0.18)]">
-                      {shortHash(p.txHash)} · arcscan ↗
+                      {shortHash(p.txHash)} · {(p.chain ?? 'base-sepolia') === 'arc' ? 'arcscan' : 'basescan'} ↗
                     </a>
                   )}
                 </div>
@@ -177,8 +177,10 @@ export default function ProofPage() {
             ))}
           </div>
           <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">
-            Honest status, not a proven run: cards reuse the authorize (leg 2) + settle (leg 3) legs above.
-            No card-originated transaction hash exists yet — the automatic path is wired and dormant.{' '}
+            Proven end-to-end on 2026-08-20: a real sandbox swipe authorized off live NAV, then a
+            card-originated settleSpend burned $2 of senior shares on-chain (linked above). The one
+            still-dormant piece is the AUTOMATIC capture path (off by default). This same run also
+            surfaced a real bug — the settle core was marking a reverted tx as settled — now fixed.{' '}
             <Link href="/app/org" className="text-peri-deep no-underline hover:underline">The card surface →</Link>
           </p>
         </div>

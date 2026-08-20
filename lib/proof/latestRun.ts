@@ -228,7 +228,7 @@ export const STAGED_LIQUIDITY_RUN: ProofFlow = {
 // end-to-end. So this is a truthful status board — 'service' / 'proven-by-reuse' / 'wired' — never a
 // fabricated proven leg. The one real hash cited is leg 3's settleSpend (the identical call a card
 // settle makes), not a card-originated transaction.
-export type CardRailPoint = { label: string; status: 'service' | 'proven' | 'wired'; note: string; txHash?: string }
+export type CardRailPoint = { label: string; status: 'service' | 'proven' | 'wired'; note: string; txHash?: string; chain?: Chain }
 export const CARD_RAIL: {
   eyebrow: string; title: string; titleAccent: string; blurb: string; points: CardRailPoint[]
 } = {
@@ -236,10 +236,10 @@ export const CARD_RAIL: {
   title: 'A card that spends the',
   titleAccent: 'LP balance.',
   blurb:
-    'A member swipes a card; it draws on the org’s LP-backed treasury through the same authorize + settle primitives proven above — not a separate pool. Sandbox card (synthetic PAN, no real merchant), testnet vault: no real-world money moves.',
+    'A member swipes a card; it draws on the org’s LP-backed treasury through the same authorize + settle primitives above — not a separate pool. Proven end-to-end on 2026-08-20: a real $2 sandbox swipe was authorized off live NAV, then settled on-chain, burning $2 of the treasury’s senior shares. Sandbox card (synthetic PAN, no real merchant), testnet vault: no real-world money moves.',
   points: [
-    { label: 'Authorize', status: 'service', note: 'Real-time approve/decline off live vault NAV — the same edge-auth service as leg 2. A hold, not money movement; automatic, as card authorization always is.' },
-    { label: 'Settle', status: 'proven', note: 'Burns vault shares → USDC via the identical settleSpend proven in leg 3 — triggered by a card instead of a script.', txHash: '0x7fd4b3f0db0e01ebf04c8e59147c725f6e5aa77717ae828ff347e626d67c6934' },
-    { label: 'Auto-capture', status: 'wired', note: 'When the network reports a cleared charge, small swipes (≤ $50) can auto-settle. Off by default; the Lithic event subscription is live but this path has not been fired end-to-end yet.' },
+    { label: 'Authorize', status: 'proven', note: 'A real $2 Lithic sandbox swipe → ASA webhook → edge-auth decided off live vault NAV → APPROVED, in the same NAV-hold engine as leg 2. Automatic, as card authorization always is; no tx (it’s an off-chain hold).' },
+    { label: 'Settle', status: 'proven', note: 'settleSpend burned exactly $2 of the member’s senior shares (12.0 → 10.0 USDC) → paid out — a real card-ORIGINATED settlement, not a scripted one.', txHash: '0x7ef19942af5a5e1ebd281e544ba632ca3c6d19e8d3f57e0b0e34eba3d830d8bb', chain: 'base-sepolia' },
+    { label: 'Auto-capture', status: 'wired', note: 'The above settle was the owner-triggered path. The automatic capture (Lithic SETTLED event → auto-settle small swipes ≤ $50) is wired — subscription live — but off by default and not yet fired via the webhook.' },
   ],
 }
