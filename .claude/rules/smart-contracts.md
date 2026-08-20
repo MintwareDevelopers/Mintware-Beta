@@ -44,6 +44,7 @@
 | `AaveV3YieldAdapter` | Idle-capital adapter (Aave v3 rehypothecation) behind the ULV engine. |
 | `MintwareERC4626YieldAdapter` | **Fee-aware** ERC-4626 adapter (Arc yield seam): `totalAssets`/`maxWithdrawable` via `previewRedeem`, exit via `redeem` (handles non-standard 4626 exit fees, e.g. XyloVault). |
 | `Mintwarev3ToV4Migrator` | One-tx migrate a dormant Uniswap-v3 LP → v4 pair vault, mint shares to user (+ fork test). |
+| `MintwareStagedLiquidityRouter` | **Staged-buffer pairing router** (capital-constrained path). Park ONE side in an `IYieldAdapter` (earns from day one), then owner-only `pair()` forms the LP via `MintwareDeFiPairVault.depositFor`. Thin compose — no pricing/V4 of its own; per-adapter 4626 yield pool via `SeniorSharesMath`. 13 Forge tests. Boundary: it's the *one-party deferral* primitive; two-party community matching is `MintwareMatchedLiquidityVault`. |
 | `MintwareWeightedDistributor` | **Reward Rail B** — on-chain sig-verified epoch close; pairs with `cron/vault-weighted-epoch-close` + `vault/weighted-claim`. Invariant-tested. |
 
 **Deleted in P0 consolidation:** single-sided `MintwareBaseVault4626` + `MintwareDeFiVault4626` (known
@@ -84,6 +85,7 @@ are dead no-ops.
 | Base Sepolia (84532) | ETH-collateral vault | `0x09Cda8519737a60FD16D263f94fb56237CDb7E42` | ⚠ testnet |
 | Base Sepolia (84532) | `MintwareEthSettlement` | `0x20140811123db9C00CA1dF1023BA4fE758B98c5F` | ⚠ testnet |
 | Base Sepolia (84532) | `MintwareTreasuryVaultFactory` | `0x45e4f020A002C9B4302C6F2DA59e61C2a85b44F7` | ⚠ testnet — multi-tenant team-treasury factory (2026-08-19). `createVault` onlyOwner (curated). Registry `0x0f6a…30E4`, hook/gateway deployers `0x42A3…c4a7`/`0xFbF7…a644`. Config: `config/treasury.ts` |
+| Base Sepolia (84532) | `MintwareStagedLiquidityRouter` | `0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3` | ⚠ testnet — staged-buffer pairing router (2026-08-19). **Full stage→earn→pair loop proven on-chain** (real hashes: stage `0x3ab38f…`, pair `0x02b3cb…`) against a self-contained mock rig (open-mint token/adapter/pair-vault). Config + proof: `config/stagedRouter.ts`. Live interactive demo: `/app/liquidity/staged`. |
 | Arc testnet (5042002) | Vault (`MintwareYieldVault`) | `0x11Ef…C421` | ⚠ testnet (YPN spend stack) |
 | Arc testnet (5042002) | `MintwarePaymentGateway` | `0x1D07…5399` | ⚠ testnet |
 | Arc testnet (5042002) | `MintwareERC4626YieldAdapter` | `0xb9FB…2B88` | ⚠ testnet |
