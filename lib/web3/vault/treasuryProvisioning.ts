@@ -68,6 +68,31 @@ export function buildTreasuryDeployEnv(rec: TreasuryCreateRecord, infra: Treasur
  * commitTeam's 1st arg (the junior TOKEN amount) is computed at provision time from
  * `tranche.juniorCommitUsdc` and the launch price — it is not derivable here.
  */
+/**
+ * The gateway role grants an operator MUST make after standing a treasury up, or the corresponding
+ * money paths silently revert on-chain. Learned the hard way (2026-08-20 E2E): a factory-deployed
+ * gateway grants RELAYER_ROLE to `gatewayAdmin` (the deployer) — but `settleSpend` is submitted by the
+ * ORACLE signer (`getOracleSigner('root')`), a DIFFERENT address. Without this grant the card/settle
+ * path reverts with `AccessControlUnauthorizedAccount`, and the tx still mines (status 0), so callers
+ * that don't check the receipt would mis-record it as settled.
+ *
+ * `DeployTreasuryV2.s.sol` already grants these when its `RELAYER`/`EDGE_SIGNER` envs are set — but the
+ * FACTORY path does not, so return the grants explicitly for either path. Each is `grantRole(role,
+ * account)` on the gateway, callable by its DEFAULT_ADMIN.
+ *
+ *   RELAYER_ROLE  → the oracle/relayer that submits settleSpend (REQUIRED for any settlement).
+ *   EDGE_SIGNER_ROLE → the edge-auth signer, only if ≥$250 (ShortLivedHoldAuth) settlement is used.
+ */
+export function requiredGatewayRoleGrants(opts: { relayer: string; edgeSigner?: string }): Array<{ role: 'RELAYER_ROLE' | 'EDGE_SIGNER_ROLE'; account: string; required: boolean; why: string }> {
+  const grants: Array<{ role: 'RELAYER_ROLE' | 'EDGE_SIGNER_ROLE'; account: string; required: boolean; why: string }> = [
+    { role: 'RELAYER_ROLE', account: opts.relayer, required: true, why: 'submits settleSpend; without it every settlement reverts (AccessControlUnauthorizedAccount)' },
+  ]
+  if (opts.edgeSigner) {
+    grants.push({ role: 'EDGE_SIGNER_ROLE', account: opts.edgeSigner, required: false, why: 'signs the ShortLivedHoldAuth for ≥$250 settlements (unneeded below the high-value threshold)' })
+  }
+  return grants
+}
+
 export function trancheCommitPlan(t: VaultTrancheIntent): {
   juniorUsdc6dp: string
   seniorUsdc6dp: string

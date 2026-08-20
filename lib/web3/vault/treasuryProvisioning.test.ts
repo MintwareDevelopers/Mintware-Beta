@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildTreasuryDeployEnv, trancheCommitPlan } from './treasuryProvisioning'
+import { buildTreasuryDeployEnv, trancheCommitPlan, requiredGatewayRoleGrants } from './treasuryProvisioning'
 import type { VaultTrancheIntent } from '../signedActionMessages'
 
 const tranche: VaultTrancheIntent = { juniorCommitUsdc: 100_000, lockDays: 180, teamUsdc: 25_000, subordinateUsdc: true }
@@ -58,5 +58,19 @@ describe('trancheCommitPlan', () => {
     const plan = trancheCommitPlan({ juniorCommitUsdc: 100_000, lockDays: 90, teamUsdc: 0, subordinateUsdc: true })
     expect(plan.juniorUsdc6dp).toBe('0')
     expect(plan.seniorUsdc6dp).toBe('0')
+  })
+})
+
+describe('requiredGatewayRoleGrants', () => {
+  it('always requires RELAYER_ROLE for the oracle/relayer (the settleSpend submitter)', () => {
+    const g = requiredGatewayRoleGrants({ relayer: '0xoracle' })
+    expect(g).toHaveLength(1)
+    expect(g[0]).toMatchObject({ role: 'RELAYER_ROLE', account: '0xoracle', required: true })
+  })
+
+  it('adds EDGE_SIGNER_ROLE (optional) only when an edge signer is given', () => {
+    const g = requiredGatewayRoleGrants({ relayer: '0xoracle', edgeSigner: '0xedge' })
+    expect(g.map((x) => x.role)).toEqual(['RELAYER_ROLE', 'EDGE_SIGNER_ROLE'])
+    expect(g.find((x) => x.role === 'EDGE_SIGNER_ROLE')).toMatchObject({ required: false, account: '0xedge' })
   })
 })
