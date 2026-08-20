@@ -44,6 +44,7 @@
 | `AaveV3YieldAdapter` | Idle-capital adapter (Aave v3 rehypothecation) behind the ULV engine. |
 | `MintwareERC4626YieldAdapter` | **Fee-aware** ERC-4626 adapter (Arc yield seam): `totalAssets`/`maxWithdrawable` via `previewRedeem`, exit via `redeem` (handles non-standard 4626 exit fees, e.g. XyloVault). |
 | `Mintwarev3ToV4Migrator` | One-tx migrate a dormant Uniswap-v3 LP → v4 pair vault, mint shares to user (+ fork test). |
+| `MintwareStagedLiquidityRouter` | **Staged-buffer pairing router** (capital-constrained path). Park ONE side in an `IYieldAdapter` (earns from day one), then owner-only `pair()` forms the LP via `MintwareDeFiPairVault.depositFor`. Thin compose — no pricing/V4 of its own; per-adapter 4626 yield pool via `SeniorSharesMath`. 13 Forge tests. Boundary: it's the *one-party deferral* primitive; two-party community matching is `MintwareMatchedLiquidityVault`. |
 | `MintwareWeightedDistributor` | **Reward Rail B** — on-chain sig-verified epoch close; pairs with `cron/vault-weighted-epoch-close` + `vault/weighted-claim`. Invariant-tested. |
 
 **Deleted in P0 consolidation:** single-sided `MintwareBaseVault4626` + `MintwareDeFiVault4626` (known

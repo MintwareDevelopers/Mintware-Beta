@@ -1,11 +1,13 @@
 'use client'
 
-// /app/liquidity — the "Get liquidity for your token" destination (team intake routes here).
+// /app/liquidity/staged — the "Get liquidity for your token" destination (team intake routes here).
 // Presents the staged-buffer framework for capital-constrained teams: stage your single side, it
-// EARNS while it waits, and one-click pair into a live V4 pool when a matching counterparty arrives.
-// The matching engine (MintwareMatchedLiquidityVault) + Aave yield adapter are live primitives; the
-// yield-while-staging composition + notify/opt-in are wired here as the flow. Honest: testnet, and
-// the stage→earn step is live via the treasury/yield vault; auto-match notifications are the next leg.
+// EARNS while it waits, and one-click pair into a live V4 pool when you're ready with the other side.
+// The composition is real: MintwareStagedLiquidityRouter (built + Forge-tested) parks the single side
+// in an IYieldAdapter (Aave) and forms the LP via the pair vault's depositFor — opt-in, owner-only,
+// never automatic. Honest: testnet + unaudited, router not yet deployed; two-party COMMUNITY matching
+// is a different primitive (MintwareMatchedLiquidityVault → /app/liquidity/launch); auto-match
+// notifications are the next leg. Nothing here is an offer.
 
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
@@ -20,8 +22,8 @@ const STEPS = [
     body: '100% of your staged capital is routed into Aave v3, earning baseline yield immediately — not sitting idle in a treasury wallet.',
   },
   {
-    n: 3, title: 'Pair on a match — your call', tone: 'coral',
-    body: 'When a counterparty supplies the other side, you get an alert with the projected LP fee APY vs. your current yield. One passkey click atomically withdraws from Aave, pairs, and mints a live Uniswap v4 position.',
+    n: 3, title: 'Pair when you’re ready — your call', tone: 'coral',
+    body: 'When you bring the other side, one passkey click atomically withdraws your staged capital (with its earned yield) from Aave, pairs both sides, and mints a live Uniswap v4 position straight to you. Owner-only and opt-in — nothing pairs until you say so.',
   },
 ]
 
@@ -80,9 +82,11 @@ export default function StagedBuffer() {
           <Link href="/app/vaults" className="rounded-full border border-hair bg-white text-ink px-5 py-3 text-[14px] font-semibold no-underline hover:bg-ground-cool transition-colors">Browse live vaults</Link>
         </div>
         <p className="text-[12px] text-ink-soft mt-5 max-w-[64ch]">
-          Testnet. The stage-and-earn step is live today (your treasury&apos;s senior USDC earns via Aave
-          from day one); the on-chain match engine is the <span className="font-mono">MintwareMatchedLiquidityVault</span>,
-          and auto-match alerts are the next leg. Nothing here is an offer.
+          Testnet &amp; unaudited. The stage → earn → pair flow is the <span className="font-mono">MintwareStagedLiquidityRouter</span>
+          (built and Forge-tested; parks your side in a yield adapter and forms the LP via the pair
+          vault) — not yet deployed. Two-party <em>community</em> matching is a different primitive
+          (<span className="font-mono">MintwareMatchedLiquidityVault</span> → <Link href="/app/liquidity/launch" className="text-peri-deep no-underline">community-matched launch</Link>);
+          auto-match alerts are the next leg. Nothing here is an offer.
         </p>
       </main>
     </div>
