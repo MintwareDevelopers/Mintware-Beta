@@ -115,6 +115,27 @@ Crossmint/Rain/Bridge/Lithic comparison in session notes if resurrecting that ev
   remainder" — it's the same on-demand oracle-signer pattern, now optionally fired by a capture event
   instead of a click, for small swipes only.
 
+## Treasury provisioning — REQUIRED post-deploy steps (learned from the 2026-08-20 E2E)
+
+Standing a treasury vault up is not enough for the card/settle path to work — two config steps are
+mandatory, and skipping either fails **silently on-chain** (the tx mines with status 0):
+
+1. **Grant `RELAYER_ROLE` to the ORACLE signer on the gateway.** `settleSpend` is submitted by
+   `getOracleSigner('root')` (e.g. `0x7fd88b02…`), NOT the deployer. `DeployTreasuryV2.s.sol` grants
+   it when its `RELAYER` env is set — but the **factory** path (`MintwareTreasuryVaultFactory`) grants
+   roles to `gatewayAdmin` (the deployer), so the oracle signer must be granted separately:
+   `cast send <gateway> "grantRole(bytes32,address)" $(cast keccak RELAYER_ROLE) <oracleSigner>`.
+   `requiredGatewayRoleGrants()` (`lib/web3/vault/treasuryProvisioning.ts`) returns the exact grants.
+   (Without it, settle reverts `AccessControlUnauthorizedAccount` — and a caller that doesn't check
+   `receipt.status` would mis-record it as settled; the settle core now checks it.)
+
+2. **Point edge-auth at THIS vault.** edge-auth authorizes off a SINGLE, env-configured vault
+   (`EDGE_VAULT_ADDRESS` / `EDGE_VAULT_KIND`) — the `/authorize` request carries only `{user, amount,
+   hold_id}`, **no vault**. So a card only authorizes correctly when edge-auth's `EDGE_VAULT_ADDRESS`
+   is the org's treasury. **Known limitation:** one edge-auth instance = one treasury. True
+   multi-treasury (many orgs, one edge-auth) needs a **per-vault NAV** feature — the refresher tracking
+   several vaults and `/authorize` keying by vault address. Tracked as a follow-up, not wired.
+
 ## Deploy-gated remainder (not code)
 
 Always-on auto-settling relayer HTTP server + its own funded key (today's card settle is
