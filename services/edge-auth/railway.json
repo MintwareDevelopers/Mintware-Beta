@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "cargo build --release --bin edge-auth-server && mkdir -p bin && cp target/release/edge-auth-server bin/"
+  },
+  "deploy": {
+    "startCommand": "./bin/edge-auth-server",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}
