@@ -67,14 +67,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ubuntu-latest's preinstalled Rust no longer guarantees the clippy component — it resolved to a
-      # 1.94 toolchain WITHOUT cargo-clippy, so `cargo clippy` failed with "'cargo-clippy' is not
-      # installed for the toolchain '1.94'". Install stable explicitly WITH clippy so the toolchain is
-      # deterministic across runners. cc is still present for mlua's vendored Lua build.
-      - name: Install Rust toolchain (stable + clippy)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
+      # ubuntu-latest's preinstalled Rust (currently 1.94) ships WITHOUT the clippy component, so
+      # `cargo clippy` fails with "'cargo-clippy' is not installed for the toolchain '1.94'".
+      # dtolnay/rust-toolchain@stable did NOT reliably add clippy to that pre-existing toolchain
+      # (the install step passed but `cargo clippy` still couldn't find it), so add the component
+      # explicitly to the active default toolchain — this always resolves for a stable release.
+      - name: Add clippy component
+        run: rustup component add clippy
 
       # The edge-auth + relayer crates are detached workspaces, so test each in its own dir.
       # Live-network tests (EDGE_RPC_URL / RELAYER_RPC_URL) self-skip when the env is unset.
