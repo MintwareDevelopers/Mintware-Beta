@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
-import { LATEST_RUN, STAGED_LIQUIDITY_RUN, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
+import { LATEST_RUN, STAGED_LIQUIDITY_RUN, CARD_RAIL, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
 
 const KIND: Record<Decision['kind'], string> = {
   ok: 'text-mw-green bg-[rgba(22,163,74,0.10)]',
@@ -138,6 +138,48 @@ export default function ProofPage() {
             so the loop is self-contained. The real <span className="font-mono">AaveV3YieldAdapter</span> +{' '}
             <span className="font-mono">MintwareDeFiPairVault</span> implement the same interfaces (Forge-tested).{' '}
             <Link href="/app/liquidity/staged" className="text-peri-deep no-underline hover:underline">Try it live →</Link>
+          </p>
+        </div>
+
+        {/* Card rail — honest status board (NOT a proven on-chain run) */}
+        <div className="mt-14 pt-2 border-t border-hair">
+          <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display mt-8">
+            {CARD_RAIL.eyebrow}
+          </div>
+          <h2 className="font-atx-display font-bold text-[clamp(1.7rem,4.4vw,2.5rem)] leading-[1.06] tracking-[-0.03em] mt-3">
+            {CARD_RAIL.title}<br /><span className="text-gradient-accent">{CARD_RAIL.titleAccent}</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(0.98rem,2vw,1.12rem)] leading-[1.5] max-w-[62ch] mt-4">{CARD_RAIL.blurb}</p>
+
+          <div className="mt-6 flex flex-col gap-3">
+            {CARD_RAIL.points.map((p) => (
+              <div key={p.label} className="soft-card p-5 flex items-start gap-4 max-[560px]:flex-col max-[560px]:gap-2">
+                <div className="flex items-center gap-2.5 min-w-[150px]">
+                  <span className="font-atx-display font-semibold text-[15px] tracking-[-0.01em]">{p.label}</span>
+                  <span className={chip(
+                    p.status === 'proven' ? 'text-mw-green bg-[rgba(22,163,74,0.10)]'
+                    : p.status === 'service' ? 'text-peri-deep bg-[rgba(108,108,240,0.10)]'
+                    : 'text-mw-amber bg-[rgba(196,122,0,0.10)]')}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    {p.status === 'proven' ? 'Proven call' : p.status === 'service' ? 'Live service' : 'Wired · off by default'}
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[13.5px] text-ink-mid leading-[1.55]">{p.note}</p>
+                  {p.txHash && (
+                    <a href={txUrl('arc', p.txHash)} target="_blank" rel="noopener"
+                      className="inline-block mt-1.5 font-mono text-[12px] rounded-lg px-2.5 py-1 no-underline text-peri-deep bg-[rgba(108,108,240,0.10)] hover:bg-[rgba(108,108,240,0.18)]">
+                      {shortHash(p.txHash)} · arcscan ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">
+            Honest status, not a proven run: cards reuse the authorize (leg 2) + settle (leg 3) legs above.
+            No card-originated transaction hash exists yet — the automatic path is wired and dormant.{' '}
+            <Link href="/app/org" className="text-peri-deep no-underline hover:underline">The card surface →</Link>
           </p>
         </div>
 
