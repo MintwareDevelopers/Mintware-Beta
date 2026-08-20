@@ -43,22 +43,34 @@ async function loadPools(): Promise<LlamaPool[]> {
   try { return await inflight } finally { inflight = null }
 }
 
-// Curated targets, matched by (project, symbol, chain) rather than fragile pool ids so a
-// re-listed pool still resolves. Each picks the deepest (max-TVL) real match.
-type Kind = 'floor' | 'fees' | 'volatile'
-const TARGETS: { key: string; label: string; blurb: string; kind: Kind; match: (p: LlamaPool) => boolean }[] = [
-  { key: 'aave-usdc-base', label: 'Aave v3 · USDC', blurb: 'Idle-cash lending rate on Base', kind: 'floor',
-    match: p => p.project === 'aave-v3' && p.symbol === 'USDC' && p.chain === 'Base' },
-  { key: 'aave-usdc-eth', label: 'Aave v3 · USDC', blurb: 'Idle-cash lending rate on Ethereum', kind: 'floor',
-    match: p => p.project === 'aave-v3' && p.symbol === 'USDC' && p.chain === 'Ethereum' },
-  { key: 'morpho-usdc', label: 'Morpho · USDC', blurb: 'Optimized lending on Aave/Compound', kind: 'floor',
-    match: p => /morpho/.test(p.project) && p.symbol === 'USDC' && (p.apyBase ?? 0) > 0 },
-  { key: 'uni-usdc-usdt', label: 'Uniswap v3 · USDC/USDT', blurb: 'Stable-pair swap fees — no IL', kind: 'fees',
+// Two sides of one question: what does a pool BACKED BY USDC earn vs one BACKED BY ETH?
+// Each side has a `floor` (what the idle asset earns — USDC lending vs ETH staking) and `fees`
+// (what it earns as swap liquidity — a stable pair vs an ETH pair). Real pools, matched by
+// (project, symbol) not fragile ids, deepest match wins. `apyBase` only (token-reward bribes
+// excluded). `ilRisk` tells the page whether the fees are keepable (stable ≈ yes, ETH pair = IL).
+//
+// Note: DefiLlama files Morpho vaults under project `morpho-blue` with per-vault symbols
+// (STEAKUSDC, GTUSDCP…), NOT a bare "USDC" — so the USDC floor matches /USDC/ on the symbol and
+// picks the deepest, which surfaces the real curated vaults instead of dropping them.
+type Side = 'usdc' | 'eth'
+type Layer = 'floor' | 'fees'
+const TARGETS: {
+  key: string; side: Side; layer: Layer; label: string; blurb: string; riskNote?: string
+  match: (p: LlamaPool) => boolean
+}[] = [
+  // ── USDC-backed ──────────────────────────────────────────────────────────
+  { key: 'usdc-floor', side: 'usdc', layer: 'floor', label: 'Curated USDC lending', blurb: 'Idle USDC lent out — best curated vault (Morpho)',
+    riskNote: 'Curated lending vault — higher yield than base Aave, with curator risk',
+    match: p => p.project === 'morpho-blue' && /USDC/.test(p.symbol) && (p.apyBase ?? 0) > 0 && p.tvlUsd > 100e6 },
+  { key: 'usdc-fees', side: 'usdc', layer: 'fees', label: 'USDC stable pair', blurb: 'USDC/USDT swap fees — 1bp tier, no IL',
     match: p => p.project === 'uniswap-v3' && /^(USDC-USDT|USDT-USDC)$/.test(p.symbol) },
-  { key: 'uni-dai-usdc', label: 'Uniswap v3 · DAI/USDC', blurb: 'Stable-pair fees, higher turnover', kind: 'fees',
-    match: p => p.project === 'uniswap-v3' && /^(DAI-USDC|USDC-DAI)$/.test(p.symbol) },
-  { key: 'uni-eth-usdc', label: 'Uniswap v3 · ETH/USDC', blurb: 'Volatile pair — high fees, but IL risk', kind: 'volatile',
-    match: p => p.project === 'uniswap-v3' && /^(USDC-WETH|WETH-USDC)$/.test(p.symbol) && p.chain === 'Ethereum' },
+  // ── ETH-backed ───────────────────────────────────────────────────────────
+  { key: 'eth-floor', side: 'eth', layer: 'floor', label: 'ETH staking', blurb: 'Idle ETH staked — the base ETH yield',
+    riskNote: 'Liquid staking — validator/slashing + peg risk, not a dollar',
+    match: p => p.project === 'lido' && p.symbol === 'STETH' },
+  { key: 'eth-fees', side: 'eth', layer: 'fees', label: 'ETH pair', blurb: 'ETH/USDC swap fees — higher tier, big volume',
+    riskNote: 'Volatile pair — fees are large but IL + ETH price move eat into them',
+    match: p => p.project === 'uniswap-v3' && /^(WETH-USDC|USDC-WETH)$/.test(p.symbol) && (p.apyBase ?? 0) > 0 },
 ]
 
 function pick(pools: LlamaPool[], match: (p: LlamaPool) => boolean): LlamaPool | null {
@@ -80,7 +92,8 @@ export const GET = createHandler(async (_req, ctx) => {
     const p = pick(pools, t.match)
     if (!p) return null
     return {
-      key: t.key, label: t.label, blurb: t.blurb, kind: t.kind,
+      key: t.key, side: t.side, layer: t.layer, label: t.label, blurb: t.blurb,
+      riskNote: t.riskNote ?? null,
       chain: p.chain, symbol: p.symbol,
       // apyBase = fee/supply only (excludes token-reward bribes) — the honest keepable number.
       apyBase: p.apyBase,

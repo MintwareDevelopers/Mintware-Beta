@@ -1,12 +1,12 @@
 'use client'
 
-// /the-math — "The Math": a LIVE, benchmarked comparison of what capital actually earns.
-// Every DeFi row is a real pool pulled from DefiLlama (see /api/benchmarks/yields) — real APY,
-// real TVL, real volume, stamped with an as-of date and source. Nothing here is a made-up number.
-// Mintware's own row is the ONE honest projection: it stacks the two real rows above it (lending
-// floor + stable-LP fees on the same dollar — the ULV thesis), clearly labelled projected/testnet,
-// because there is no live Mintware pool to measure yet. The fund row is an illustrative 2-and-20.
-// Light-only, platform design system. Reputation/Attribution stays out of this surface on purpose.
+// /the-math — "The Math": one simple question, answered with live data.
+// What does a liquidity pool BACKED BY USDC earn vs one BACKED BY ETH?
+// Two columns. Each side = a real idle-yield floor (USDC lending vs ETH staking) + real swap
+// fees (a stable pair vs an ETH pair), pulled live from DefiLlama (see /api/benchmarks/yields):
+// real APY (fee/supply only), real TVL, 30-day averages, sourced + dated. The striking, honest
+// takeaway: ETH-backed pools earn FAR more in fees (higher fee tier + volume) but carry IL + ETH
+// price risk; USDC-backed pools earn less but stay dollar-stable. Light-only, platform design.
 
 import { useEffect, useMemo, useState } from 'react'
 import { MwNav } from '@/components/web2/MwNav'
@@ -22,15 +22,12 @@ const money = (n: number) => '$' + Math.round(n).toLocaleString()
 const pct = (n: number | null | undefined) => (n == null ? '—' : (n >= 100 ? n.toFixed(0) : n.toFixed(2)) + '%')
 
 type Row = {
-  key: string; label: string; blurb: string; kind: 'floor' | 'fees' | 'volatile'
-  chain: string; symbol: string; apyBase: number | null; apyMean30d: number | null
-  apyReward: number | null; tvlUsd: number; volumeUsd1d: number | null
-  stablecoin: boolean; ilRisk: string
+  key: string; side: 'usdc' | 'eth'; layer: 'floor' | 'fees'; label: string; blurb: string
+  riskNote: string | null; chain: string; symbol: string
+  apyBase: number | null; apyMean30d: number | null; apyReward: number | null
+  tvlUsd: number; volumeUsd1d: number | null; stablecoin: boolean; ilRisk: string
 }
 type Feed = { ok: true; source: string; sourceUrl: string; asOf: string; rows: Row[] } | { ok: false }
-
-// Fund assumptions — illustrative, industry-standard "2 and 20". Fixed + labelled, not live data.
-const FUND = { gross: 12, mgmt: 2, perf: 20 }
 
 export default function TheMath() {
   const [feed, setFeed] = useState<Feed | null>(null)
@@ -46,49 +43,40 @@ export default function TheMath() {
   }, [])
 
   const rows = feed?.ok ? feed.rows : []
-  const floor = rows.filter(r => r.kind === 'floor')
-  const fees = rows.filter(r => r.kind === 'fees')
-  const volatile = rows.filter(r => r.kind === 'volatile')
-
-  // Mintware's honest projection: deepest Base/USDC lending floor + the USDC/USDT stable-fee pool,
-  // stacked on the same dollar (the ULV mechanism). Falls back to whatever floor/fee rows exist.
-  const mwFloor = floor.find(r => r.chain === 'Base') ?? floor[0] ?? null
-  const mwFee = fees.find(r => /USDC-USDT|USDT-USDC/.test(r.symbol)) ?? fees[0] ?? null
-  const stackApy = useMemo(() => {
-    if (!mwFloor || !mwFee) return null
-    return (mwFloor.apyBase ?? 0) + (mwFee.apyBase ?? 0)
-  }, [mwFloor, mwFee])
-  // 30-day-average stack — the defensible baseline that doesn't ride a single-day fee spike.
-  const stackApy30 = useMemo(() => {
-    if (!mwFloor || !mwFee) return null
-    if (mwFloor.apyMean30d == null || mwFee.apyMean30d == null) return null
-    return mwFloor.apyMean30d + mwFee.apyMean30d
-  }, [mwFloor, mwFee])
-
-  const fundNetApy = FUND.gross - FUND.mgmt - (FUND.gross * FUND.perf) / 100
+  const get = (side: 'usdc' | 'eth', layer: 'floor' | 'fees') => rows.find(r => r.side === side && r.layer === layer) ?? null
   const asOf = feed?.ok ? new Date(feed.asOf) : null
+
+  const sides = useMemo(() => (['usdc', 'eth'] as const).map(side => {
+    const floor = get(side, 'floor')
+    const fees = get(side, 'fees')
+    const floorApy = floor?.apyMean30d ?? floor?.apyBase ?? null
+    const feesApy = fees?.apyMean30d ?? fees?.apyBase ?? null
+    const total = (floorApy ?? 0) + (feesApy ?? 0)
+    return { side, floor, fees, floorApy, feesApy, total }
+  }), [rows]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const usdc = sides[0]
+  const eth = sides[1]
 
   return (
     <div className="min-h-screen bg-white font-atx-display text-ink">
       <MwNav />
-      <main className="mx-auto max-w-[1080px] px-6 max-[700px]:px-4 py-[40px]">
+      <main className="mx-auto max-w-[980px] px-6 max-[700px]:px-4 py-[40px]">
         <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display">
-          The math · never idle · never locked · always yours
+          The math · backing a pool
         </div>
         <h1 className="font-atx-display font-bold text-[clamp(1.9rem,4.7vw,3rem)] leading-[1.04] tracking-[-0.03em] mt-2.5">
-          What does your cash<br /><span className="text-gradient-accent">actually earn?</span>
+          Back a pool with USDC<br />or with <span className="text-gradient-accent">ETH?</span>
         </h1>
-        <p className="text-ink-mid text-[clamp(1rem,2vw,1.14rem)] leading-[1.5] max-w-[64ch] mt-3.5">
-          Real, current rates — not a slider fantasy. Every DeFi row below is a live pool pulled from
-          DefiLlama: real APY, real size, real volume. Mintware’s edge is stacking the two things that
-          already work — a <b className="text-ink">lending floor</b> on idle cash <i>and</i> the
-          <b className="text-ink"> swap fees</b> that same cash earns as liquidity — then keeping it
-          spendable. See it against a locked fund.
+        <p className="text-ink-mid text-[clamp(1rem,2vw,1.14rem)] leading-[1.5] max-w-[62ch] mt-3.5">
+          Same idea, two assets. Your capital earns a <b className="text-ink">floor</b> just sitting idle
+          (lending for USDC, staking for ETH) <i>and</i> <b className="text-ink">swap fees</b> when it backs
+          liquidity. The two assets earn very differently — here it is, side by side, on live rates.
         </p>
 
         {/* deposit control */}
         <div className="mt-6 flex items-center gap-3 flex-wrap">
-          <span className="text-[11.5px] font-semibold tracking-[0.1em] uppercase text-ink-soft">Compare on a deposit of</span>
+          <span className="text-[11.5px] font-semibold tracking-[0.1em] uppercase text-ink-soft">On a deposit of</span>
           <div className="inline-flex items-center gap-1.5">
             {[10_000, 25_000, 100_000, 500_000].map(v => (
               <button key={v} onClick={() => setDep(v)}
@@ -98,196 +86,106 @@ export default function TheMath() {
               </button>
             ))}
           </div>
-          <span className="text-[12px] text-ink-soft">· held for one year</span>
+          <span className="text-[12px] text-ink-soft">· one year</span>
         </div>
 
         {/* source line */}
         <div className="mt-4 text-[12px] text-ink-soft flex items-center gap-2 flex-wrap">
           {feed == null && <span className="inline-flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[var(--color-peri)] animate-pulse" />Loading live rates…</span>}
-          {feed?.ok && asOf && <>Live from <a href={feed.sourceUrl} target="_blank" rel="noreferrer" className="text-peri-deep font-semibold underline underline-offset-2">DefiLlama</a> · as of {asOf.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · APY shown is <b className="text-ink-mid">fee/supply only</b> (token-reward bribes excluded)</>}
-          {feed?.ok === false && <span className="text-[var(--color-coral2-deep)]">Couldn’t load live rates right now — the mechanics below still hold; refresh to retry.</span>}
+          {feed?.ok && asOf && <>Live from <a href={feed.sourceUrl} target="_blank" rel="noreferrer" className="text-peri-deep font-semibold underline underline-offset-2">DefiLlama</a> · as of {asOf.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · rates are <b className="text-ink-mid">30-day averages</b>, fee/supply only</>}
+          {feed?.ok === false && <span className="text-[var(--color-coral2-deep)]">Couldn’t load live rates right now — refresh to retry.</span>}
         </div>
 
-        {/* table */}
-        <div className="mt-4 overflow-x-auto soft-card p-0">
-          <table className="w-full border-collapse min-w-[720px] text-left">
-            <thead>
-              <tr className="text-[10.5px] uppercase tracking-[0.09em] text-ink-soft font-semibold">
-                <Th className="pl-5">Strategy</Th>
-                <Th>Live APY</Th>
-                <Th>On {fmtUsd(dep)} / yr</Th>
-                <Th>Liquidity</Th>
-                <Th className="pr-5">Fees you keep?</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {feed == null && [0, 1, 2, 3].map(i => (
-                <tr key={i} className="border-t border-hair-soft">
-                  <td colSpan={5} className="px-5 py-4"><div className="h-5 rounded bg-ground-cool animate-pulse" /></td>
-                </tr>
-              ))}
-
-              {feed?.ok && (
-                <>
-                  <SectionRow label="The floor — idle cash, lent out" note="Your money doesn’t sit still. Fully liquid, no market risk." />
-                  {floor.map(r => <DataRow key={r.key} r={r} dep={dep} />)}
-
-                  <SectionRow label="The fees — same cash, now liquidity" note="Swaps pay you. On stable pairs there’s no meaningful IL, so the fees are yours to keep." />
-                  {fees.map(r => <DataRow key={r.key} r={r} dep={dep} />)}
-
-                  {volatile.length > 0 && (
-                    <>
-                      <SectionRow label="For contrast — a volatile pool" note="Big APY headline, but impermanent loss quietly eats it. This is the trap Mintware avoids." />
-                      {volatile.map(r => <DataRow key={r.key} r={r} dep={dep} />)}
-                    </>
-                  )}
-
-                  {/* Mintware — the honest projection */}
-                  <tr className="border-t-2" style={{ borderColor: 'var(--color-peri)' }}>
-                    <td className="pl-5 py-4 align-top" style={{ background: 'linear-gradient(100deg, rgba(108,108,240,.09), transparent)' }}>
-                      <div className="font-atx-display font-semibold text-[15px] flex items-center gap-2">
-                        Mintware <span className="text-[9.5px] font-semibold tracking-[0.05em] uppercase text-[var(--color-coral2-deep)] border border-[color-mix(in_srgb,var(--color-coral2-deep)_40%,transparent)] rounded-full px-1.5 py-[1px]">projected</span>
-                      </div>
-                      <div className="text-[11.5px] text-ink-soft mt-1 max-w-[26ch]">
-                        {mwFloor && mwFee ? <>The floor + the fees, stacked on one dollar ({mwFloor.label.split('·')[0].trim()} + {mwFee.symbol}). Testnet, unaudited.</> : 'Floor + fees, stacked.'}
-                      </div>
-                    </td>
-                    <td className="py-4 align-top" style={{ background: 'linear-gradient(100deg, rgba(108,108,240,.09), transparent)' }}>
-                      <div className="font-atx-display font-bold text-[22px] text-gradient-accent num leading-none">{pct(stackApy)}</div>
-                      <div className="text-[10.5px] text-ink-soft mt-1">{mwFloor && mwFee ? `${pct(mwFloor.apyBase)} floor + ${pct(mwFee.apyBase)} fees` : 'stacked'}{stackApy30 != null ? ` · ${pct(stackApy30)} on 30-day avg` : ''}<br />+ MEV recapture (upside, not counted)</div>
-                    </td>
-                    <td className="py-4 align-top" style={{ background: 'linear-gradient(100deg, rgba(108,108,240,.09), transparent)' }}>
-                      <div className="font-atx-display font-bold text-[17px] num text-ink">{stackApy != null ? money(dep * stackApy / 100) : '—'}</div>
-                    </td>
-                    <td className="py-4 align-top" style={{ background: 'linear-gradient(100deg, rgba(108,108,240,.09), transparent)' }}>
-                      <Chip tone="peri">Liquid + spendable</Chip>
-                    </td>
-                    <td className="pr-5 py-4 align-top" style={{ background: 'linear-gradient(100deg, rgba(108,108,240,.09), transparent)' }}>
-                      <span className="text-[12.5px] text-ink">Yes — stable-pair fees, IL ≈ 0</span>
-                    </td>
-                  </tr>
-
-                  {/* Traditional fund */}
-                  <tr className="border-t border-hair">
-                    <td className="pl-5 py-4 align-top">
-                      <div className="font-atx-display font-semibold text-[15px] flex items-center gap-2">
-                        Traditional fund <span className="text-[9.5px] font-semibold tracking-[0.05em] uppercase text-ink-soft border border-hair rounded-full px-1.5 py-[1px]">illustrative</span>
-                      </div>
-                      <div className="text-[11.5px] text-ink-soft mt-1 max-w-[26ch]">“2 and 20”: {FUND.gross}% gross, minus {FUND.mgmt}% of assets + {FUND.perf}% of gains.</div>
-                    </td>
-                    <td className="py-4 align-top">
-                      <div className="font-atx-display font-bold text-[22px] num text-ink leading-none">{fundNetApy.toFixed(1)}%</div>
-                      <div className="text-[10.5px] text-ink-soft mt-1">{FUND.gross}% gross − fees<br />net to you</div>
-                    </td>
-                    <td className="py-4 align-top">
-                      <div className="font-atx-display font-bold text-[17px] num text-ink">{money(dep * fundNetApy / 100)}</div>
-                      <div className="text-[10.5px] text-ink-soft mt-0.5">− {money(dep * FUND.mgmt / 100 + dep * FUND.gross / 100 * FUND.perf / 100)} in fees</div>
-                    </td>
-                    <td className="py-4 align-top"><Chip tone="mute">Locked / gated</Chip></td>
-                    <td className="pr-5 py-4 align-top"><span className="text-[12.5px] text-ink-soft">Fees taken off the top</span></td>
-                  </tr>
-                </>
-              )}
-            </tbody>
-          </table>
+        {/* two columns */}
+        <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-4 mt-5">
+          <SideCard s={usdc} dep={dep} loading={feed == null}
+            title="USDC-backed" sub="A dollar-stable pool" accent="var(--color-peri)"
+            tint="rgba(108,108,240,.07)" />
+          <SideCard s={eth} dep={dep} loading={feed == null}
+            title="ETH-backed" sub="An ETH-denominated pool" accent="var(--color-coral2-deep)"
+            tint="rgba(232,138,103,.09)" />
         </div>
 
         {/* takeaway */}
-        {feed?.ok && stackApy != null && (
-          <div className="mt-4 rounded-[12px] px-4 py-3.5 text-[13.5px] text-ink leading-[1.5]" style={{ background: 'rgba(17,163,126,.10)', border: '1px solid color-mix(in srgb,#11a37e 28%,transparent)' }}>
-            Fee rates swing week to week (watch the 30-day averages), so the honest read isn’t a yield blowout — floor + fees lands
-            in the <b>same ballpark as a good fund’s net</b>. The edge is what the fund can’t match: on {fmtUsd(dep)} the fund keeps
-            <b> {money(dep * FUND.mgmt / 100 + dep * FUND.gross / 100 * FUND.perf / 100)}</b> of your return in fees and locks the
-            principal, while Mintware takes <b>no management cut</b>, stays <b style={{ color: '#11a37e' }}>liquid and spendable</b>,
-            and you self-custody — with MEV recapture as upside on top.
+        {feed?.ok && usdc.feesApy != null && eth.feesApy != null && (
+          <div className="mt-4 rounded-[12px] px-4 py-3.5 text-[13.5px] text-ink leading-[1.5]" style={{ background: 'var(--color-ground-cool)', border: '1px solid var(--color-hair)' }}>
+            <b>The trade-off.</b> ETH-backed pools earn far more in <b>fees</b> — <b style={{ color: 'var(--color-coral2-deep)' }}>{pct(eth.feesApy)}</b> vs USDC’s
+            <b style={{ color: 'var(--color-peri-deep)' }}> {pct(usdc.feesApy)}</b> — because ETH pairs trade at a higher fee tier with far more volume, where stable pairs sit at 1bp.
+            But that ETH fee income comes with <b>impermanent loss and ETH price risk</b>; the USDC side is lower-yield and <b>dollar-stable</b>. USDC’s floor is also higher
+            (lending {pct(usdc.floorApy)} vs staking {pct(eth.floorApy)}). Pick the risk you want.
           </div>
         )}
 
-        {/* how it stacks */}
-        <h2 className="font-atx-display font-bold text-[clamp(1.3rem,2.8vw,1.7rem)] tracking-[-0.02em] mt-10 mb-3">How Mintware gets both at once</h2>
-        <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3.5">
+        {/* where mintware fits — kept short */}
+        <h2 className="font-atx-display font-bold text-[clamp(1.2rem,2.6vw,1.55rem)] tracking-[-0.02em] mt-10 mb-2.5">Where Mintware changes the picture</h2>
+        <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3">
           {[
-            { n: '1', t: 'Idle cash earns the floor', d: 'Deposits that aren’t mid-swap are lent out (Aave / Morpho / Euler) — the same lending rate you see in the top rows. That’s the baseline, always on.' },
-            { n: '2', t: 'The same cash earns fees', d: 'A V4 hook pulls that capital in just-in-time to back each swap, so one dollar earns the lending floor and the swap fee — not one or the other.' },
-            { n: '3', t: 'And it stays spendable', d: 'The balance is usable as USDC (cards, x402, settlement) while it earns — a spend is a hold against the position, not an exit. No lock, no redemption gate.' },
-          ].map(s => (
-            <div key={s.n} className="soft-card p-[18px]">
-              <div className="w-7 h-7 rounded-full grid place-items-center text-[13px] font-bold text-white mb-2.5" style={{ background: 'linear-gradient(135deg,var(--color-peri),var(--color-peri-deep))' }}>{s.n}</div>
-              <h4 className="font-atx-display m-0 mb-1.5 text-[15px] font-semibold tracking-[-0.01em]">{s.t}</h4>
-              <p className="m-0 text-[13px] text-ink-mid leading-[1.55]">{s.d}</p>
+            { t: 'Floor + fees, same dollar', d: 'Idle capital earns the floor (lending/staking) and the same capital is JIT-pulled to earn swap fees — not one or the other. Both columns’ numbers stack instead of choosing.' },
+            { t: 'Keeps the ETH-side fees', d: 'The ETH side’s big fees normally bleed to impermanent loss and arbitrage. JIT (short exposure) + MEV recapture are built to keep more of them — the point of the volatile column.' },
+            { t: 'Still spendable', d: 'Whichever asset backs it, the balance stays usable as USDC (cards / x402 / settlement) while it earns. Never idle, never locked.' },
+          ].map(c => (
+            <div key={c.t} className="soft-card p-[16px]">
+              <h4 className="font-atx-display m-0 mb-1.5 text-[14px] font-semibold tracking-[-0.01em]">{c.t}</h4>
+              <p className="m-0 text-[12.5px] text-ink-mid leading-[1.5]">{c.d}</p>
             </div>
           ))}
         </div>
 
-        <p className="text-[11.5px] text-ink-soft leading-[1.6] max-w-[84ch] mt-7">
-          <b className="text-ink-mid">What’s real and what’s not.</b> The lending, stable-fee, and volatile rows are live pools
-          from DefiLlama — real APY (fee/supply component only, token-reward bribes excluded), real TVL, real volume, as of the
-          timestamp above; rates move, so the numbers change when you reload. The <b className="text-ink-mid">Mintware</b> row is a
-          projection — the two real rows above it, stacked on the same capital (the mechanism Mintware’s vaults implement) — not a
-          measured live yield: <b className="text-ink-mid">the vaults are on Base Sepolia testnet, unaudited, empty; external audit
-          gates real value.</b> MEV recapture is real mechanism but not counted in the figure. The fund row is an illustrative
-          2-and-20, not a specific product. Crypto yield is taxable income; this is not investment or tax advice. “Off the traditional
-          rails” here means self-custody and no intermediary rent — not invisibility to anyone.
+        <p className="text-[11.5px] text-ink-soft leading-[1.6] max-w-[82ch] mt-7">
+          <b className="text-ink-mid">What’s real and what’s not.</b> The floor and fee rates are live pools from DefiLlama — 30-day-average APY (fee/supply
+          component only, token-reward bribes excluded), real TVL; rates move, so the numbers change on reload. Each “pool total” is simply that side’s floor + fees;
+          for the ETH side it is a <b className="text-ink-mid">gross</b> figure — real impermanent loss and ETH price moves reduce what you keep, which is exactly the
+          risk the column is highlighting. The “Where Mintware fits” claims describe mechanisms that are <b className="text-ink-mid">built but on Base Sepolia testnet,
+          unaudited, and empty</b> — external audit gates real value; JIT wins on deep/high-volume pools and can lose on thin ones. Crypto yield is taxable income;
+          this is not investment or tax advice.
         </p>
       </main>
     </div>
   )
 }
 
-function Th({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <th className={`py-3 pr-4 font-semibold ${className}`}>{children}</th>
-}
+type SideData = { side: 'usdc' | 'eth'; floor: Row | null; fees: Row | null; floorApy: number | null; feesApy: number | null; total: number }
 
-function SectionRow({ label, note }: { label: string; note: string }) {
+function SideCard({ s, dep, loading, title, sub, accent, tint }: { s: SideData; dep: number; loading: boolean; title: string; sub: string; accent: string; tint: string }) {
+  if (loading) return <div className="soft-card p-5 h-[360px]"><div className="h-full rounded bg-ground-cool animate-pulse" /></div>
   return (
-    <tr className="bg-ground-cool border-t border-hair">
-      <td colSpan={5} className="px-5 py-2.5">
-        <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-mid">{label}</span>
-        <span className="text-[11.5px] text-ink-soft ml-2 font-normal normal-case tracking-normal">{note}</span>
-      </td>
-    </tr>
+    <div className="soft-card p-5" style={{ background: `linear-gradient(180deg, ${tint}, transparent 60%)` }}>
+      <div className="flex items-baseline justify-between">
+        <div>
+          <div className="font-atx-display font-bold text-[19px] tracking-[-0.01em]" style={{ color: accent }}>{title}</div>
+          <div className="text-[12px] text-ink-soft mt-0.5">{sub}</div>
+        </div>
+        <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] rounded-full px-2 py-[3px]"
+          style={{ color: accent, background: 'color-mix(in srgb,' + accent + ' 12%,transparent)' }}>
+          {s.side === 'usdc' ? 'IL ≈ 0' : 'IL + price risk'}
+        </span>
+      </div>
+
+      {/* total */}
+      <div className="mt-4 pb-3.5 border-b border-hair-soft">
+        <div className="text-[10.5px] uppercase tracking-[0.12em] font-semibold text-ink-soft">Pool total{s.side === 'eth' ? ' (gross)' : ''}</div>
+        <div className="font-atx-display font-bold text-[clamp(2.2rem,6vw,3rem)] leading-[.95] tracking-[-0.03em] num" style={{ color: accent }}>
+          {pct(s.total)}
+        </div>
+        <div className="text-[12.5px] text-ink-mid num mt-0.5">≈ {money(dep * s.total / 100)} on {fmtUsd(dep)} / yr</div>
+      </div>
+
+      {/* breakdown */}
+      <Layer label="Floor" sub={s.floor?.label} apy={s.floorApy} row={s.floor} accent={accent} />
+      <Layer label="Swap fees" sub={s.fees?.label} apy={s.feesApy} row={s.fees} accent={accent} />
+    </div>
   )
 }
 
-function DataRow({ r, dep }: { r: Row; dep: number }) {
-  const apy = r.apyBase ?? 0
-  const isVol = r.kind === 'volatile'
+function Layer({ label, sub, apy, row, accent }: { label: string; sub?: string; apy: number | null; row: Row | null; accent: string }) {
   return (
-    <tr className="border-t border-hair-soft">
-      <td className="pl-5 py-3.5 align-top">
-        <div className="font-atx-display font-semibold text-[14px] flex items-center gap-2">
-          {r.label}
-          <span className="text-[10px] font-medium text-ink-soft border border-hair rounded-full px-1.5 py-[1px]">{r.chain}</span>
-        </div>
-        <div className="text-[11.5px] text-ink-soft mt-1 max-w-[30ch]">{r.blurb}</div>
-        <div className="text-[10.5px] text-ink-soft mt-1 num">
-          {fmtUsd(r.tvlUsd)} TVL{r.volumeUsd1d ? ` · ${fmtUsd(r.volumeUsd1d)}/day volume` : ''}
-        </div>
-      </td>
-      <td className="py-3.5 align-top">
-        <div className="font-atx-display font-bold text-[20px] num leading-none" style={{ color: isVol ? 'var(--color-coral2-deep)' : 'var(--color-peri-deep)' }}>{pct(apy)}</div>
-        {r.apyMean30d != null && <div className="text-[10.5px] text-ink-soft mt-1 num">{pct(r.apyMean30d)} 30-day avg</div>}
-      </td>
-      <td className="py-3.5 align-top">
-        <div className="font-atx-display font-semibold text-[16px] num text-ink">{money(dep * apy / 100)}</div>
-      </td>
-      <td className="py-3.5 align-top">
-        <Chip tone="good">Liquid</Chip>
-      </td>
-      <td className="pr-5 py-3.5 align-top">
-        {isVol
-          ? <span className="text-[12.5px] text-[var(--color-coral2-deep)]">No — IL risk erodes it</span>
-          : <span className="text-[12.5px] text-ink">{r.kind === 'fees' ? 'Yes — IL ≈ 0 on stables' : 'N/A — no market risk'}</span>}
-      </td>
-    </tr>
+    <div className="pt-3.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[12.5px] font-semibold text-ink">{label}</span>
+        <span className="font-atx-display font-bold text-[17px] num" style={{ color: accent }}>{pct(apy)}</span>
+      </div>
+      {sub && <div className="text-[11.5px] text-ink-soft mt-0.5">{sub}{row ? <> · <span className="num">{fmtUsd(row.tvlUsd)}</span> TVL</> : ''}</div>}
+      {row?.riskNote && <div className="text-[10.5px] text-ink-soft mt-1 leading-[1.4]">{row.riskNote}</div>}
+    </div>
   )
-}
-
-function Chip({ children, tone }: { children: React.ReactNode; tone: 'good' | 'peri' | 'mute' }) {
-  const s = tone === 'peri'
-    ? { color: 'var(--color-peri-deep)', bg: 'rgba(108,108,240,.12)' }
-    : tone === 'good'
-      ? { color: '#11a37e', bg: 'rgba(17,163,126,.12)' }
-      : { color: 'var(--color-ink-soft)', bg: 'var(--color-ground-cool)' }
-  return <span className="inline-block text-[11.5px] font-semibold rounded-full px-2 py-[3px] whitespace-nowrap" style={{ color: s.color, background: s.bg }}>{children}</span>
 }
