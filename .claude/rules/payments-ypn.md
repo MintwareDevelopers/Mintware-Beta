@@ -33,6 +33,17 @@ position → settle (burn shares → USDC to the payee). The "never idle, never 
 Tests: `cd services/edge-auth && cargo test` (86) · `cd services/relayer && cargo test` (23); both
 `cargo clippy -D warnings` clean.
 
+**edge-auth is now actually hosted** (2026-08-20) — `https://mintware-edge-auth-production.up.railway.app`
+on Railway (project `mintware-edge-auth`), pointed at the live Arc spend stack. First real deploy of this
+service anywhere; previously only ever run locally during test sessions. `EDGE_SIGNER_KEY` is unset there
+(no ≥$250-lane edge signature yet — matches the card-settle route's own sub-$250 cap), so the ≥$250 lane
+still fails closed by design, not by omission. `services/edge-auth/railway.json` + `rust-toolchain.toml`
+pin the build (Railway's default Nixpacks Rust toolchain was too old for this crate's dependency tree —
+needed 1.90+, pinned to 1.94 to match the version this repo's tests are proven green on) and the
+build/start commands (Railpack's auto-detected binary name didn't match this crate's `[[bin]] name`).
+`EDGE_AUTH_URL`/`EDGE_AUTH_SECRET` are set on Vercel Production + Preview. The `relayer` row above is
+still accurate — settle stays a separate, undeployed task.
+
 ## The Arc loop (proven on testnet, on-chain)
 
 `deploy → deposit → earn → CCTP Base→Arc → card settle in USDC → edge authorizes ~10 ms off live Arc NAV.`
