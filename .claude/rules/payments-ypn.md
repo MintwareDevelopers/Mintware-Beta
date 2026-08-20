@@ -74,6 +74,17 @@ Crossmint/Rain/Bridge/Lithic comparison in session notes if resurrecting that ev
   `EDGE_AUTH_URL`/`_SECRET` are unset, same posture as everywhere else.
 - `app/api/cards/lithic/webhook/route.ts` — the real-time ASA responder (manual Standard-Webhooks
   verification) + logs every decision to `card_swipe_events` (the spend feed's source).
+- `app/api/cards/lithic/capture-webhook/route.ts` — the **automatic settlement** counterpart. Lithic's
+  general Events webhook (`card_transaction.updated` → `status: SETTLED`, DISTINCT secret
+  `LITHIC_EVENT_WEBHOOK_SECRET`) fires when the network clears a charge; this matches it back to the
+  `card_swipe_events` row (`provider_event_ref` = the shared transaction token) and, behind the
+  auto-settle valve, runs the same settle core. **Enrollment is a one-time dashboard step** (create
+  an Event Subscription → this URL, subscribe `card_transaction.updated`, copy its signing secret),
+  symmetric with how ASA was enrolled.
+- `lib/org/settleSwipe.ts#settleSwipeEvent` — the **shared settle core** both the button and the
+  capture webhook call, so the manual and automatic paths can't drift. Auth-free (the caller gates);
+  holds all the pre-flight money-safety guards (approved · unsettled · <$250 · optional lower auto
+  cap · activated permit · not expired). 7 Vitest cases lock the valve + refusals.
 - `app/api/orgs/[id]/cards/{route,list,[cardId]/activate,simulate-swipe,events,settle}.ts` — issue
   (owner) · list + activate (member signs a standing EIP-712 `DelegatedSpendPermit` once, reused
   across many swipes per `docs/page.tsx`'s "long-lived permit is reusable") · simulate-swipe (any
@@ -81,15 +92,17 @@ Crossmint/Rain/Bridge/Lithic comparison in session notes if resurrecting that ev
   see below).
 - `org_cards` (migration `20260819000002`) + `card_swipe_events` + permit columns (migration
   `20260819000003`) — identity mapping, the decision audit trail, and the member's standing permit.
-- **Settlement is real, not deploy-gated, but demo-triggered, not automatic.** `settle` reuses the
-  exact `settleSpend` call already proven live (leg 3 of `lib/proof/latestRun.ts`, real tx
-  `0x7fd4b3f0…`) via `getOracleSigner('root')` in the RELAYER_ROLE seat — the same demo-settlement
-  pattern the admin smoke-test routes already use, invoked on a button press instead of a script.
-  This is **not** the always-on auto-settling relayer described in "Deploy-gated remainder" below —
-  that's a separate, bigger infra task (a dedicated HTTP server + its own funded key). Capped to
-  swipes under $250 because settleSpend only needs the self-signed permit below that threshold; at
-  or above it also needs an edge-auth-signed `ShortLivedHoldAuth`, which isn't wired (a third
-  signing artifact, real additional scope — not faked here).
+- **Settlement is real** (reuses the exact `settleSpend` proven live — leg 3 of
+  `lib/proof/latestRun.ts`, tx `0x7fd4b3f0…` — via `getOracleSigner('root')` in the RELAYER_ROLE
+  seat). Two triggers, one core (`settleSwipeEvent`): the **owner-clicked button** (default; a human
+  is the review checkpoint) and the **capture webhook** (opt-in automatic). Capped under $250 both
+  ways (≥$250 needs an unwired edge-auth `ShortLivedHoldAuth`). The webhook's auto path is gated by a
+  three-part **safety valve** so an unsupervised signer stays bounded: `LITHIC_AUTO_SETTLE_ENABLED`
+  must be `'true'` (default OFF → everything stays a manual click), `LITHIC_AUTO_SETTLE_MAX_USD`
+  (default $50) leaves larger swipes for manual review, and the shared core's hard <$250 ceiling
+  applies regardless. This is still **not** the always-on relayer HTTP server in "Deploy-gated
+  remainder" — it's the same on-demand oracle-signer pattern, now optionally fired by a capture event
+  instead of a click, for small swipes only.
 
 ## Deploy-gated remainder (not code)
 

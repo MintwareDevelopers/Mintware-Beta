@@ -55,6 +55,9 @@
 | `LITHIC_API_KEY` | Server-only | Lithic sandbox API key — self-serve, no KYB. Production issuance is a separate gated tier, not this key. |
 | `LITHIC_ENV` | Server-only | `sandbox` (default) or `production` — only ever `sandbox` until a real production tier exists |
 | `LITHIC_WEBHOOK_SECRET` | Server-only | ASA responder HMAC secret (`whsec_...`) from enrolling the webhook endpoint in the Lithic sandbox dashboard. Unset = webhook fails closed with 503, never a fake decline. |
+| `LITHIC_EVENT_WEBHOOK_SECRET` | Server-only | Signing secret for the **general Events** subscription (`card_transaction.updated`) → `/api/cards/lithic/capture-webhook`. DISTINCT from the ASA secret. Unset = capture webhook fails closed (503). |
+| `LITHIC_AUTO_SETTLE_ENABLED` | Server-only | `'true'` turns ON automatic on-chain settlement when Lithic reports a capture. **Default OFF** — every capture is acked and left for a manual "Settle" click. Enabling lets the oracle signer settle small swipes with no human in the loop, so it's a deliberate ops act. |
+| `LITHIC_AUTO_SETTLE_MAX_USD` | Server-only | Auto-settle ceiling (default `50`). Approved swipes above this are left for manual review. Hard-capped just under the gateway's $250 edge-sig boundary regardless. |
 
 ### Arc / parking account (idle-USDC-earns-in-place)
 
