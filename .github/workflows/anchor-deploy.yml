@@ -69,7 +69,7 @@ jobs:
           echo "Program ID: $(solana address -k target/deploy/mintware_distributor_sol-keypair.json)"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: anchor-build-${{ inputs.network }}
           path: |
