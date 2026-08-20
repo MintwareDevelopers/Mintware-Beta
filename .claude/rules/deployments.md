@@ -23,6 +23,9 @@
 | Variable | Visibility | Notes |
 |---|---|---|
 | `LIFI_API_KEY` | Server-only | Renamed from `NEXT_PUBLIC_LIFI_API_KEY` |
+| `NEXT_PUBLIC_MW_ROUTER_ENABLED` | Public | **MW meta-router** master switch. `true` = best-execution routing (price a Mintware V4 pool, use it when it beats LI.FI, else fall back to LI.FI). Default off → LI.FI-only, unchanged. |
+| `NEXT_PUBLIC_MW_ROUTER_FEE_BPS` / `_MIN_MARGIN_BPS` | Public | Router fee skim + the min margin the internal pool must beat LI.FI by to win. |
+| `MW_ROUTER_ADDRESS_{BASE,BASE_SEPOLIA}` / `MW_V4_QUOTER_{…}` | Server-only | Router + V4 quoter addresses per chain (set after deploy; the internal-quote leg no-ops without them → falls back to LI.FI). |
 | `NEXT_PUBLIC_LIFI_INTEGRATOR_VERIFIED` | Public | Gates fee injection |
 | `MINTWARE_TREASURY_ADDRESS` | Server-only | Fee injection + calldata verification |
 | `NEXT_PUBLIC_MINTWARE_TREASURY` | Public | Client display only |
