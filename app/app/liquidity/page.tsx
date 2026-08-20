@@ -13,8 +13,16 @@ import { MwNav } from '@/components/web2/MwNav'
 const MODELS = [
   {
     tag: 'Have your token',
-    title: 'Launch or deepen a pool',
-    body: 'Commit your token and fund any share of the pairing capital — 20%, 50%, 100%. Whatever you don’t fund is opened to the public to match. One two-sided vault, fees + MEV captured.',
+    title: 'Launch with community matching',
+    body: 'Commit your token on one side. The public funds the USDC side up to your target — and your token pairs proportionally as it fills, refunding whatever isn’t matched. One two-sided vault, fees + MEV captured.',
+    href: '/app/liquidity/launch',
+    cta: 'Preview the pairing →',
+    tone: 'peri' as const,
+  },
+  {
+    tag: 'Have both sides',
+    title: 'Seed a balanced pool yourself',
+    body: 'Already hold your token and the quote? Fund both sides directly and open the vault immediately — no waiting on a community match.',
     href: '/app/vault/create',
     cta: 'Create a vault →',
     tone: 'peri' as const,

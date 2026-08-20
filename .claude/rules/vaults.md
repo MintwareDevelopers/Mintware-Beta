@@ -25,6 +25,7 @@ fees + MEV are captured and split. The canonical lineage is **`MintwarePairVault
 | `vaults/MintwareDeFiPairVault.sol` | go-forward **general balanced LP** pair vault (~73KB — watch EIP-170) | ✅ canonical DeFi |
 | `vaults/MintwareMatchedLiquidityVault.sol` | **team-locked / community-matched launch** vault (≥90d cliff) | ✅ canonical launch |
 | `vaults/Mintwarev3ToV4Migrator.sol` | one-tx migrate a dormant Uniswap-v3 LP into the pair vault, mint shares | ✅ |
+| `vaults/MintwareStagedLiquidityRouter.sol` | **staged-buffer pairing router** (capital-constrained path) — park ONE side in an `IYieldAdapter` (earns), then `pair()` into the pair vault via `depositFor` when the owner brings the other side. Opt-in / owner-only; per-adapter 4626 yield pool (`SeniorSharesMath`). 13 Forge tests | ✅ built, ⚠ not deployed |
 | `vaults/AaveV3YieldAdapter.sol` · `MintwareERC4626YieldAdapter.sol` | idle-capital yield seams (Aave rehypothecation; fee-aware Arc `previewRedeem` NAV adapter) | ✅ |
 | `vaults/MintwareMultiVenueYieldAdapter.sol` | **curator multi-venue baseline yield** — one `IYieldAdapter` that fans idle capital across child adapters (Aave + Morpho/Euler via the 4626 adapter) by weight; best-effort never-revert withdraw; `setVenues`/`rebalance`. 12 tests | ✅ |
 | `vaults/lib/MWJitLib.sol` · `MWIdleLib.sol` · `MWPositionLib.sol` | JIT / idle-rebalance / position math | ✅ |
@@ -36,6 +37,24 @@ fees + MEV are captured and split. The canonical lineage is **`MintwarePairVault
 > **Two products, not a dup:** `MintwareDeFiPairVault` (balanced LP) and `MintwareMatchedLiquidityVault`
 > (matched launch) both extend `MintwarePairVault` **on purpose** — don't force-merge. Boundary + adversarial
 > findings: [`matched-vault-audit-2026-08-09.md`](../../docs/developers/matched-vault-audit-2026-08-09.md).
+
+**Three ways to provide liquidity (all real, don't conflate) — the `/app/liquidity` router picks by
+situation:** ① **balanced** — you hold both sides → `MintwareDeFiPairVault.deposit` (`/app/vault/create`).
+② **matched launch** — you hold your token, the *community* funds the quote and shares the pool →
+`MintwareMatchedLiquidityVault` (`/app/liquidity/launch`, two-party). ③ **staged buffer** — you hold ONE
+side and complete the pair *yourself* later → `MintwareStagedLiquidityRouter` (`/app/liquidity/staged`,
+one-party deferral: park + earn, then owner-only `pair()`). ②≠③: the matched vault splits the pool
+between two economic parties; the staged router credits the single staged owner (the pair vault mints to
+one recipient), so it never does two-party matching — that's the matched vault's job.
+
+**Matched launch — app surface (2026-08-19).** `MintwareMatchedLiquidityVault` now has a UI:
+`/app/liquidity/launch` (reached from the `/app/liquidity` router's "Launch with community matching"
+card). An interactive fill-% preview makes the proportional pairing visceral — it live-computes the
+contract's own `activate()` math (`matchedTokens = teamTokens × filled/target`; remainder refunds; live
+once fill ≥ threshold + ≥3 backers). It only **records intent** via `POST /api/vaults/matched`
+(signed-message, `action: 'mintware-vault-matched'` → `social_vaults` row, `vault_kind='matched'`,
+`contract_address` null); an operator deploys the real Foundry vault + backfills, same as
+`/api/vaults/create`. Match config columns: [`schema.md`](schema.md) (`20260819000002`).
 
 ## ULV engine — live on Base Sepolia (in testing, unaudited)
 
