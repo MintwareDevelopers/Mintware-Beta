@@ -43,9 +43,17 @@ no perpetual-funding basis trade, no borrow-against-collateral strategy. One tie
 ## Phases
 
 ### Phase 0 — Safety foundation *(gates everything)*
-- **Conservation invariants on the idle↔active accounting seam**, fuzzed. *This is the exact class of
-  bug that drained Bunni ($8.3M, Sept 2025) — a rounding error in the idle vs. active balance
-  accounting, not the strategy. It is the #1 technical gate, not a footnote.*
+- **Conservation invariants on the vault accounting**, fuzzed. *Bunni ($8.3M, Sept 2025) died on a
+  **rounding bug in the active/idle split inside `withdraw()`** (`balance.mulDiv(shares, supply)`
+  rounded the deduction DOWN), amplified by **44 micro-withdrawals** that flipped the pool's
+  liquidity selection — **not** the rehypothecation, and **not** the strategy. Per Bunni's own
+  post-mortem, the **rehypothecated funds were locked and safe** — rehypo actually **limited** the
+  loss. So the lesson is narrower and more useful than "rehypo is risky": round every share↔asset
+  conversion in the vault's favor, and **fuzz micro-withdrawal / dust-burst sequences** so ±1-wei
+  rounding can't compound. Our own rounding-direction audit (Phase 0 research) found **no red flags**
+  — every `mulDiv` in the vault/adapter path already favors the vault. The gate is proving it under
+  fuzzing, especially for the **adapters** (which have no conservation suite yet) and the
+  external-4626 adapter against an adverse-rounding source.*
 - Senior/junior tranching wired *(have `SeniorSharesMath`)*; hot buffer + circuit breaker + reserve
   floor *(have, off by default)*.
 - **→ External audit** of the converged accounting before any real value.
@@ -122,8 +130,10 @@ no perpetual-funding basis trade, no borrow-against-collateral strategy. One tie
 ## Precedent (what we're learning from)
 
 - **Bunni v2** — proved ~13% on USDC-USDT via multi-venue rehypothecation + fees (+ am-AMM MEV). Died
-  on a **rounding bug in the idle↔active withdraw accounting**, not the strategy. Permanently shut
-  down. → our Phase 0 gate.
+  on a **rounding bug in the active/idle split inside `withdraw()`**, amplified by 44 micro-withdrawals
+  — **not** the strategy, and **not** the rehypothecation (its rehypo'd funds were locked and *safe*;
+  rehypo limited the loss). Permanently shut down. → our Phase 0 gate: round in the vault's favor +
+  fuzz micro-withdrawal sequences.
 - **EulerSwap** — same asset earns lending yield + backs swaps + is borrow collateral; JIT-borrows the
   counter-asset (up to ~50× depth). The live precedent for "USDC provides ETH" — via *borrow*
   (leverage/liquidation risk), which is why we prefer the *atomic-flash* variant for senior money.
