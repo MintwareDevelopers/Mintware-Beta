@@ -126,7 +126,15 @@ export async function settleSwipeEvent(opts: {
       args: [holdId, permit.user, amountUSDC, zeroAddress, permit, card.permit_signature as `0x${string}`, emptyEdgeAuth, '0x'],
       account, chain, gas: 700_000n,
     })
-    await publicClient.waitForTransactionReceipt({ hash: txHash })
+    // A tx that MINES is not a tx that SUCCEEDED — settleSpend can revert (e.g. the submitter lacks
+    // RELAYER_ROLE, or the permit is stale) and still be included with status 0. Treat a reverted
+    // receipt as a failure and DO NOT mark the event settled, or the feed lies (an unspent swipe
+    // shows as paid, and the on-chain hold is never actually consumed).
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+    if (receipt.status !== 'success') {
+      log?.error('cards.settle', 'settleSpend reverted on-chain', { txHash })
+      return { ok: false, status: 502, error: 'settle_reverted', reason: 'tx', detail: txHash }
+    }
   } catch (e) {
     log?.error('cards.settle', 'settleSpend failed', { error: String(e) })
     return { ok: false, status: 502, error: 'settle_failed', reason: 'tx', detail: String(e) }
