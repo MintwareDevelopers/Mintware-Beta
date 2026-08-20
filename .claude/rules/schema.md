@@ -77,6 +77,11 @@ Source of truth: `docs/schema.sql`
   Deliberately flat — no tier/role weighting. Design doc:
   `docs/developers/attribution-trust-graph-spec.md` §9a. Routes: `POST /api/orgs`,
   `POST /api/orgs/[id]/invite`, `POST /api/orgs/accept`.
+- `20260819000002_matched_vault_config.sql` — adds nullable `social_vaults.match_target_usdc`
+  (numeric) + `activation_threshold_bps` (int, 1–10000 CHECK) for **community-matched launch
+  vaults** (`vault_kind='matched'`, written by `POST /api/vaults/matched`). `vault_kind` is free
+  text (no CHECK) so `'matched'` inserts alongside `'defi'`/`'treasury'`. RLS unchanged (writes
+  are service-role only). Powers the launch flow at `/app/liquidity/launch`.
 - `20260819000001_rls_backfill_hardening.sql` — **security: enables RLS (deny-all) on the 19
   tables that shipped WITHOUT it after the original hardening pass** — the money-path tables
   (`swap_quotes`, `token_pool_deductions`, `vault_lp_positions`, `vault_weighted_epochs`),
