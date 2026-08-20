@@ -16,7 +16,8 @@ export const wagmiConfig = createConfig({
     [mainnet.id]:     http('https://ethereum-rpc.publicnode.com'),
     [base.id]:        http('https://mainnet.base.org'),
     [arbitrum.id]:    http('https://arb1.arbitrum.io/rpc'),
-    [baseSepolia.id]: http('https://sepolia.base.org'),
+    // sepolia.base.org is unreliable (load-balanced nodes drop reads) — publicnode is stable.
+    [baseSepolia.id]: http('https://base-sepolia-rpc.publicnode.com'),
   },
   ssr: true,
   storage: createStorage({

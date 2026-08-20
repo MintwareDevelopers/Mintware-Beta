@@ -11,6 +11,7 @@
 
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
+import { StagedRouterLive } from '@/components/vaults/StagedRouterLive'
 
 const STEPS = [
   {
@@ -76,6 +77,9 @@ export default function StagedBuffer() {
           <p className="text-[12px] text-ink-soft mt-2">You review the ratio, gas, and yield, then approve with one passkey signature — or ignore it and keep earning.</p>
         </div>
 
+        {/* Live, functional on-chain demo of the built router */}
+        <StagedRouterLive />
+
         {/* Actions */}
         <div className="mt-8 flex items-center gap-3 flex-wrap">
           <Link href="/app/org" className="rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold no-underline hover:bg-peri-deep transition-colors">Stage your capital →</Link>
@@ -83,8 +87,9 @@ export default function StagedBuffer() {
         </div>
         <p className="text-[12px] text-ink-soft mt-5 max-w-[64ch]">
           Testnet &amp; unaudited. The stage → earn → pair flow is the <span className="font-mono">MintwareStagedLiquidityRouter</span>
-          (built and Forge-tested; parks your side in a yield adapter and forms the LP via the pair
-          vault) — not yet deployed. Two-party <em>community</em> matching is a different primitive
+          (built, Forge-tested, and <b>now deployed + proven on Base Sepolia</b> — try it live above).
+          It parks your side in a yield adapter and forms the LP via the pair vault. Two-party
+          <em> community</em> matching is a different primitive
           (<span className="font-mono">MintwareMatchedLiquidityVault</span> → <Link href="/app/liquidity/launch" className="text-peri-deep no-underline">community-matched launch</Link>);
           auto-match alerts are the next leg. Nothing here is an offer.
         </p>
