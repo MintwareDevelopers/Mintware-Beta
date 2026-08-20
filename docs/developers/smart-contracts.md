@@ -1,5 +1,15 @@
 # Smart Contracts
 
+> ⚠️ **SUPERSEDED — GHOST DOC. Do not trust the contract facts below.** This is a **pre-pivot** record
+> describing **shelved and retired** contracts:
+> - `MintwareDistributor` — the **campaign** engine is **shelved** (archived `archive/campaigns-surface`);
+>   the "Base Mainnet" distributor addresses here were **never deployed** (2026-08-08 audit).
+> - `SocialVault` / `MWSocialHook` — **retired**; the live stack is **`MWHookCoordinator`** +
+>   **`MintwareDeFiPairVault`** (dual-sided pair vault).
+>
+> **Canonical current contract state:** [`.claude/rules/smart-contracts.md`](../../.claude/rules/smart-contracts.md)
+> and [`.claude/STATE.md`](../../.claude/STATE.md). This file is kept only as a historical record.
+
 ## MintwareDistributor
 
 The MintwareDistributor contract handles campaign reward distribution. Participants call `claim()` with a Merkle proof and oracle signature to receive their allocation.

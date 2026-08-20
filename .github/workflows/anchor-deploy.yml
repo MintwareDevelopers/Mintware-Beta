@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -29,7 +29,7 @@ jobs:
           toolchain: stable
 
       - name: Cache Rust deps
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -69,7 +69,7 @@ jobs:
           echo "Program ID: $(solana address -k target/deploy/mintware_distributor_sol-keypair.json)"
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: anchor-build-${{ inputs.network }}
           path: |
