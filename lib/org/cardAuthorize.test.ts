@@ -4,14 +4,18 @@ import type { EdgeAuthorizer } from '@/lib/x402/facilitator'
 
 const ORG_ID = 'org-1'
 const WALLET = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+const OWNER_WALLET = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' // distinct from WALLET by default,
+// so the existing "member" tests below exercise the org_members path, not the owner bypass.
 const CARD_TOKEN = 'card-token-1'
 
-/** Minimal fake of the two `.from(...)` chains decideCardSwipe touches — org_cards then
- *  org_members — keyed so each table returns its own fixture, same spirit as the facilitator
- *  tests' plain-object port fakes (no real supabase-js involved). */
+/** Minimal fake of the three `.from(...)` chains decideCardSwipe touches — org_cards, orgs, then
+ *  (non-owner only) org_members — keyed so each table returns its own fixture, same spirit as the
+ *  facilitator tests' plain-object port fakes (no real supabase-js involved). */
 function fakeSupabase(opts: {
   card?: { org_id: string; member_wallet: string; state: string } | null
   cardError?: boolean
+  orgOwnerWallet?: string
+  orgError?: boolean
   member?: { role: string; status: string } | null
   memberError?: boolean
 }) {
@@ -26,6 +30,14 @@ function fakeSupabase(opts: {
           }
           if (table === 'org_members') {
             return opts.memberError ? { data: null, error: new Error('boom') } : { data: opts.member ?? null, error: null }
+          }
+          throw new Error(`unexpected table ${table}`)
+        },
+        single: async () => {
+          if (table === 'orgs') {
+            return opts.orgError
+              ? { data: null, error: new Error('boom') }
+              : { data: { owner_wallet: opts.orgOwnerWallet ?? OWNER_WALLET }, error: null }
           }
           throw new Error(`unexpected table ${table}`)
         },
@@ -107,6 +119,25 @@ describe('decideCardSwipe', () => {
       amountAtomicUsdc: 1_000_000_000_000n, ref: 'evt-7', edge: approveEdge,
     })
     expect(res).toMatchObject({ approved: true })
+  })
+
+  it('the org owner can swipe their own card with NO org_members row at all (issuance already lets them hold one without membership)', async () => {
+    const edge: EdgeAuthorizer = { authorize: vi.fn(async () => ({ approved: true, holdId: 'hold-owner' })) }
+    const res = await decideCardSwipe({
+      supabase: fakeSupabase({ card: OPEN_CARD, orgOwnerWallet: WALLET, member: null }), // no membership row
+      provider: 'lithic', providerCardToken: CARD_TOKEN,
+      amountAtomicUsdc: 1_000_000_000_000n, ref: 'evt-owner-1', edge,
+    })
+    expect(res).toMatchObject({ approved: true, holdId: 'hold-owner' })
+  })
+
+  it('declines when the org lookup itself fails', async () => {
+    const res = await decideCardSwipe({
+      supabase: fakeSupabase({ card: OPEN_CARD, orgError: true }),
+      provider: 'lithic', providerCardToken: CARD_TOKEN,
+      amountAtomicUsdc: 1_000_000n, ref: 'evt-org-err', edge: approveEdge,
+    })
+    expect(res).toMatchObject({ approved: false, reason: 'org_lookup_failed' })
   })
 
   it('surfaces an edge-auth decline (suspenders) even when the belt passes', async () => {
