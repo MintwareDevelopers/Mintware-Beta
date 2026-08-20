@@ -4,10 +4,13 @@ import { useState, useEffect, useRef } from 'react'
 import { useChainId } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { getQuote as getLifiQuote } from '@/lib/web2/providers/lifi'
+import { fetchBestRoute, type MwInternalQuote } from '@/lib/web2/providers/mwInternal'
 import type { Token } from '@/config/tokens'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
 
-export type Quote = LifiQuote
+// A quote is either the LI.FI aggregator route or an internal Mintware V4-pool route
+// (chosen per-quote by the meta-router when it beats LI.FI). Discriminate on `provider`.
+export type Quote = LifiQuote | MwInternalQuote
 
 interface QuoteState {
   quote: Quote | null
@@ -87,7 +90,7 @@ export function useQuote(params: UseQuoteParams): QuoteState {
         // Convert decimal amount to wei
         const sellAmountWei = toWei(sellAmount, sellToken.decimals)
 
-        const quote: Quote = await getLifiQuote({
+        const lifi: LifiQuote = await getLifiQuote({
           chainId,
           sellToken:  sellToken.address,
           buyToken:   buyToken.address,
@@ -96,6 +99,23 @@ export function useQuote(params: UseQuoteParams): QuoteState {
           feeBps:     feeBps ?? chainConfig.feeBps,
         })
 
+        // Meta-router augmentation (flag-gated). fetchBestRoute asks whether a Mintware V4 pool
+        // beats this LI.FI quote — comparing net output gas-inclusive — and returns an executable
+        // internal quote only when it wins. Inert by default: returns null unless the router is
+        // enabled + the pair is listed, so the LI.FI quote below is unchanged. Best-effort: null on error.
+        const internal = await fetchBestRoute({
+          chainId,
+          tokenIn:  sellToken.address,
+          tokenOut: buyToken.address,
+          amountInWei:      sellAmountWei,
+          buyTokenDecimals: buyToken.decimals,
+          lifiBuyAmount:  lifi.buyAmount,
+          lifiGasCostUsd: lifi.gasCostUSD  != null ? parseFloat(lifi.gasCostUSD)  : null,
+          fromAmountUsd:  lifi.fromAmountUSD != null ? parseFloat(lifi.fromAmountUSD) : null,
+          signal: abortRef.current.signal,
+        }).catch(() => null)
+
+        const quote: Quote = internal ?? lifi
         const buyAmountDecimal = fromWei(quote.buyAmount, buyToken.decimals)
 
         // Price impact: LI.FI returns price='0' so impact will be null (no warning shown)

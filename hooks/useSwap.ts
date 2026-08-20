@@ -5,6 +5,7 @@ import { parseUnits } from 'viem'
 import { useChainId, useWalletClient, usePublicClient } from 'wagmi'
 import { getChainConfig } from '@/config/chains'
 import { executeSwap as executeLifi } from '@/lib/web2/providers/lifi'
+import { executeSwap as executeInternal } from '@/lib/web2/providers/mwInternal'
 import { createTxToast, type TxToast } from '@/lib/web3/txToast'
 import type { LifiQuote } from '@/lib/web2/providers/lifi'
 import type { Quote } from './useQuote'
@@ -72,6 +73,34 @@ export function useSwap(): SwapState {
     }
 
     setError(null)
+
+    // ── Internal (MW meta-router) path ────────────────────────────────────────
+    // The quote is an internal Mintware V4-pool route (the router beat LI.FI). It carries its own
+    // execution payload; mwInternal.executeSwap handles approve → MWRouter.swapExactInputSingle.
+    if ('provider' in args.quote && args.quote.provider === 'mw-internal') {
+      const itx = createTxToast({ chainId, label: 'Swap' })
+      try {
+        setStatus('swapping')
+        const hash = await executeInternal(args.quote, walletClient, publicClient)
+        itx.submitted(hash)
+        const receipt = await publicClient.waitForTransactionReceipt({ hash })
+        if (receipt.status !== 'success') throw new Error('Swap transaction reverted on-chain')
+        setTxHash(hash)
+        setStatus('success')
+        itx.success(hash)
+      } catch (err: unknown) {
+        const raw = err instanceof Error ? err.message : 'Swap failed'
+        const friendly = raw.includes('execution reverted')
+          ? 'This route is no longer valid. Refresh the quote and try again.'
+          : raw
+        setError(friendly)
+        setStatus('error')
+        itx.error(friendly)
+      }
+      return
+    }
+
+    // ── LI.FI aggregator path (default) ───────────────────────────────────────
     const lifiQuote = args.quote as LifiQuote
     const owner   = walletClient.account.address
     const spender = lifiQuote._txReq.to as `0x${string}`
