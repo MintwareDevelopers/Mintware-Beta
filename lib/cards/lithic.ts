@@ -7,7 +7,7 @@
 // separate, KYB-gated tier on Lithic's side, not a config flip.
 
 import { Lithic } from 'lithic'
-import type { CardAuthorizationApprovalRequestWebhookEvent } from 'lithic/resources/webhooks'
+import type { CardAuthorizationApprovalRequestWebhookEvent, CardTransactionUpdatedWebhookEvent } from 'lithic/resources/webhooks'
 
 let client: Lithic | null | undefined // undefined = not yet constructed, null = constructed but unconfigured
 
@@ -125,4 +125,34 @@ export function verifyAsaRequest(rawBody: string, headers: Record<string, string
  *  integer-scaled from USD so this is exact (no float): cents * 10_000 = atomic-6dp. */
 export function centsToAtomicUsdc(cents: number): bigint {
   return BigInt(Math.round(cents)) * 10_000n
+}
+
+export type CaptureVerifyResult =
+  | { ok: true; event: CardTransactionUpdatedWebhookEvent }
+  | { ok: false; reason: 'unconfigured' | 'bad_signature' | 'not_a_card_transaction' }
+
+/** Verify + parse an inbound **general Events** webhook (`card_transaction.updated`) — Lithic's
+ *  settlement/lifecycle stream, DISTINCT from ASA. It is signed with a SEPARATE secret
+ *  (`LITHIC_EVENT_WEBHOOK_SECRET`, from the event-subscription's "signing secret" in the Lithic
+ *  dashboard — NOT the ASA HMAC secret), so it gets its own verify path even though the parse
+ *  machinery (standardwebhooks) is the same. Fails CLOSED when unset, same posture as ASA.
+ *
+ *  Enrollment (one-time ops step, symmetric with how ASA was enrolled via the dashboard): in the
+ *  Lithic sandbox dashboard, create an Event Subscription pointed at `/api/cards/lithic/capture-webhook`
+ *  subscribed to `card_transaction.updated`, then copy its signing secret into `LITHIC_EVENT_WEBHOOK_SECRET`. */
+export function verifyCaptureRequest(rawBody: string, headers: Record<string, string>): CaptureVerifyResult {
+  const lithic = getLithicClient()
+  const secret = process.env.LITHIC_EVENT_WEBHOOK_SECRET
+  if (!lithic || !secret) return { ok: false, reason: 'unconfigured' }
+  let parsed: unknown
+  try {
+    parsed = lithic.webhooks.parse(rawBody, { headers, secret })
+  } catch {
+    return { ok: false, reason: 'bad_signature' }
+  }
+  const event = parsed as { event_type?: string }
+  if (event.event_type !== 'card_transaction.updated') {
+    return { ok: false, reason: 'not_a_card_transaction' }
+  }
+  return { ok: true, event: parsed as CardTransactionUpdatedWebhookEvent }
 }
