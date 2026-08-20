@@ -66,17 +66,29 @@ export async function decideCardSwipe(params: {
   const identity = { orgId: card.org_id as string, orgCardId: card.id as string, memberWallet: card.member_wallet as string }
   if (card.state !== 'OPEN') return { approved: false, reason: 'card_not_open', ...identity }
 
-  // 2) Belt — role's daily cap. Membership must be active.
-  const { data: member, error: memErr } = await supabase
-    .from('org_members')
-    .select('role, status')
-    .eq('org_id', card.org_id)
-    .eq('wallet', card.member_wallet)
-    .maybeSingle()
-  if (memErr) return { approved: false, reason: 'member_lookup_failed', ...identity }
-  if (!member || member.status !== 'active') return { approved: false, reason: 'member_not_active', ...identity }
+  // 2) Belt — role's daily cap. The org OWNER is implicitly an uncapped active spender (same
+  //     policyForRole('owner') shortcut every other org route uses — /cards issuance already lets
+  //     the owner hold a card without an org_members row, so the swipe decision must recognize that
+  //     too, not require a redundant membership row for the one wallet that's exempt from having one).
+  const { data: org, error: orgErr } = await supabase.from('orgs').select('owner_wallet').eq('id', card.org_id).single()
+  if (orgErr || !org) return { approved: false, reason: 'org_lookup_failed', ...identity }
+  const isOwner = (org.owner_wallet as string).toLowerCase() === card.member_wallet.toLowerCase()
 
-  const policy = policyForRole(member.role)
+  let policy
+  if (isOwner) {
+    policy = policyForRole('owner')
+  } else {
+    const { data: member, error: memErr } = await supabase
+      .from('org_members')
+      .select('role, status')
+      .eq('org_id', card.org_id)
+      .eq('wallet', card.member_wallet)
+      .maybeSingle()
+    if (memErr) return { approved: false, reason: 'member_lookup_failed', ...identity }
+    if (!member || member.status !== 'active') return { approved: false, reason: 'member_not_active', ...identity }
+    policy = policyForRole(member.role)
+  }
+
   if (!withinDailyCap(policy, amountAtomicUsdc, spentTodayAtomic)) {
     return { approved: false, reason: 'over_role_daily_cap', ...identity }
   }
