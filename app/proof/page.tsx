@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
-import { LATEST_RUN, txUrl, addrUrl, shortHash, type Decision } from '@/lib/proof/latestRun'
+import { LATEST_RUN, STAGED_LIQUIDITY_RUN, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
 
 const KIND: Record<Decision['kind'], string> = {
   ok: 'text-mw-green bg-[rgba(22,163,74,0.10)]',
@@ -94,76 +94,51 @@ export default function ProofPage() {
 
         {/* legs */}
         <div className="mt-10 flex flex-col gap-4">
-          {run.legs.map((leg) => (
-            <div key={leg.n} className="soft-card p-6 max-[560px]:p-4">
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="font-atx-display font-bold text-[15px] text-white w-[32px] h-[32px] rounded-[10px] grid place-items-center shrink-0"
-                  style={{ background: 'linear-gradient(135deg,var(--color-peri-mid),var(--color-peri))', boxShadow: '0 3px 10px rgba(108,108,240,.35)' }}>
-                  {leg.n}
-                </span>
-                <h2 className="font-atx-display font-semibold text-[17px] tracking-[-0.02em]">{leg.title}</h2>
-                <span className={chip(leg.status === 'proven' ? 'text-mw-green bg-[rgba(22,163,74,0.10)]' : 'text-peri-deep bg-[rgba(108,108,240,0.10)]')}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-current" />{leg.statusLabel}
-                </span>
-                <span className="font-mono text-[11px] text-ink-soft w-full">{leg.where}</span>
-              </div>
-              <p className="text-[13.5px] text-ink-mid leading-[1.55] mt-3">{leg.desc}</p>
+          {run.legs.map((leg) => <LegCard key={leg.n} leg={leg} />)}
+        </div>
 
-              {leg.deltas && (
-                <div className="mt-3.5 border-t border-hair-soft">
-                  {leg.deltas.map((d) => (
-                    <div key={d.k} className="grid grid-cols-[1fr_auto] gap-3 py-2.5 border-b border-hair-soft text-[13px] items-center">
-                      <span className="text-ink-mid">{d.k}</span>
-                      <span className="font-mono text-[12.5px] tabular-nums">
-                        {d.before && <span className="text-ink-soft">{d.before}</span>}
-                        {d.before && <span className="text-peri px-1.5">→</span>}
-                        <span className="text-ink font-semibold">{d.after}</span>
-                      </span>
-                    </div>
+        {/* Second proven flow — staged-buffer liquidity loop */}
+        <div className="mt-14 pt-2 border-t border-hair">
+          <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display mt-8">
+            {STAGED_LIQUIDITY_RUN.eyebrow}
+          </div>
+          <h2 className="font-atx-display font-bold text-[clamp(1.7rem,4.4vw,2.5rem)] leading-[1.06] tracking-[-0.03em] mt-3">
+            {STAGED_LIQUIDITY_RUN.title}<br /><span className="text-gradient-accent">{STAGED_LIQUIDITY_RUN.titleAccent}</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(0.98rem,2vw,1.12rem)] leading-[1.5] max-w-[62ch] mt-4">
+            {STAGED_LIQUIDITY_RUN.subtitle}
+          </p>
+          <div className="mt-8 flex flex-col gap-4">
+            {STAGED_LIQUIDITY_RUN.legs.map((leg) => <LegCard key={leg.n} leg={leg} />)}
+          </div>
+          <div className="mt-6 overflow-x-auto rounded-[16px] border border-hair shadow-card">
+            <table className="w-full border-collapse text-[13px] min-w-[520px]">
+              <thead>
+                <tr className="bg-ground-cool">
+                  {['Contract', 'Network', 'Address'].map((h) => (
+                    <th key={h} className="text-left font-atx-display text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft px-4 py-3 border-b border-hair">{h}</th>
                   ))}
-                </div>
-              )}
-
-              {leg.decisions && (
-                <div className="mt-3.5 overflow-x-auto rounded-[12px] border border-hair">
-                  <table className="w-full border-collapse text-[13px] min-w-[480px]">
-                    <thead>
-                      <tr className="bg-ground-cool">
-                        {['Request', 'Decision', 'Reason', 'Latency'].map((h) => (
-                          <th key={h} className="text-left font-atx-display text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft px-3.5 py-2.5 border-b border-hair">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {leg.decisions.map((dec) => (
-                        <tr key={dec.req} className="border-b border-hair-soft last:border-0">
-                          <td className="px-3.5 py-2.5 font-mono text-[12px]">{dec.req}</td>
-                          <td className="px-3.5 py-2.5"><span className={chip(KIND[dec.kind])}><span className="w-1.5 h-1.5 rounded-full bg-current" />{dec.label}</span></td>
-                          <td className="px-3.5 py-2.5 text-ink-mid">{dec.reason}</td>
-                          <td className="px-3.5 py-2.5 font-mono text-peri-deep font-semibold">{dec.latency}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {leg.txs && (
-                <div className="mt-3.5 flex flex-col gap-2">
-                  {leg.txs.map((t) => (
-                    <div key={t.hash} className="flex items-center gap-2.5 flex-wrap text-[12.5px]">
-                      <span className="font-atx-display font-semibold text-[11px] uppercase tracking-[0.06em] text-ink-soft min-w-[108px]">{t.label}</span>
-                      <a href={txUrl(t.chain, t.hash)} target="_blank" rel="noopener"
-                        className="font-mono text-[12px] rounded-lg px-2.5 py-1 no-underline text-peri-deep bg-[rgba(108,108,240,0.10)] hover:bg-[rgba(108,108,240,0.18)]">
-                        {shortHash(t.hash)}
-                      </a>
-                      <span className="text-[11px] text-ink-soft">{t.chain === 'arc' ? 'arcscan' : 'basescan'} ↗{t.note ? ` · ${t.note}` : ''}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+                </tr>
+              </thead>
+              <tbody>
+                {STAGED_LIQUIDITY_RUN.contracts.map((c) => (
+                  <tr key={c.address} className="border-b border-hair-soft last:border-0">
+                    <td className="px-4 py-3">{c.name}</td>
+                    <td className="px-4 py-3 text-ink-mid">Base Sepolia</td>
+                    <td className="px-4 py-3">
+                      <a href={addrUrl(c.chain, c.address)} target="_blank" rel="noopener" className="font-mono text-[12px] text-peri-deep no-underline hover:underline">{c.short}</a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">
+            The router is the real product bytecode; the yield source + pair vault here are an open-mint mock rig
+            so the loop is self-contained. The real <span className="font-mono">AaveV3YieldAdapter</span> +{' '}
+            <span className="font-mono">MintwareDeFiPairVault</span> implement the same interfaces (Forge-tested).{' '}
+            <Link href="/app/liquidity/staged" className="text-peri-deep no-underline hover:underline">Try it live →</Link>
+          </p>
         </div>
 
         {/* tests */}
@@ -211,6 +186,79 @@ export default function ProofPage() {
           <Link href="/yield-payment-network" className="text-peri-deep no-underline hover:underline">What is YPN? →</Link>
         </p>
       </main>
+    </div>
+  )
+}
+
+function LegCard({ leg }: { leg: ProofLeg }) {
+  return (
+    <div className="soft-card p-6 max-[560px]:p-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <span className="font-atx-display font-bold text-[15px] text-white w-[32px] h-[32px] rounded-[10px] grid place-items-center shrink-0"
+          style={{ background: 'linear-gradient(135deg,var(--color-peri-mid),var(--color-peri))', boxShadow: '0 3px 10px rgba(108,108,240,.35)' }}>
+          {leg.n}
+        </span>
+        <h2 className="font-atx-display font-semibold text-[17px] tracking-[-0.02em]">{leg.title}</h2>
+        <span className={chip(leg.status === 'proven' ? 'text-mw-green bg-[rgba(22,163,74,0.10)]' : 'text-peri-deep bg-[rgba(108,108,240,0.10)]')}>
+          <span className="w-1.5 h-1.5 rounded-full bg-current" />{leg.statusLabel}
+        </span>
+        <span className="font-mono text-[11px] text-ink-soft w-full">{leg.where}</span>
+      </div>
+      <p className="text-[13.5px] text-ink-mid leading-[1.55] mt-3">{leg.desc}</p>
+
+      {leg.deltas && (
+        <div className="mt-3.5 border-t border-hair-soft">
+          {leg.deltas.map((d) => (
+            <div key={d.k} className="grid grid-cols-[1fr_auto] gap-3 py-2.5 border-b border-hair-soft text-[13px] items-center">
+              <span className="text-ink-mid">{d.k}</span>
+              <span className="font-mono text-[12.5px] tabular-nums">
+                {d.before && <span className="text-ink-soft">{d.before}</span>}
+                {d.before && <span className="text-peri px-1.5">→</span>}
+                <span className="text-ink font-semibold">{d.after}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {leg.decisions && (
+        <div className="mt-3.5 overflow-x-auto rounded-[12px] border border-hair">
+          <table className="w-full border-collapse text-[13px] min-w-[480px]">
+            <thead>
+              <tr className="bg-ground-cool">
+                {['Request', 'Decision', 'Reason', 'Latency'].map((h) => (
+                  <th key={h} className="text-left font-atx-display text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft px-3.5 py-2.5 border-b border-hair">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {leg.decisions.map((dec) => (
+                <tr key={dec.req} className="border-b border-hair-soft last:border-0">
+                  <td className="px-3.5 py-2.5 font-mono text-[12px]">{dec.req}</td>
+                  <td className="px-3.5 py-2.5"><span className={chip(KIND[dec.kind])}><span className="w-1.5 h-1.5 rounded-full bg-current" />{dec.label}</span></td>
+                  <td className="px-3.5 py-2.5 text-ink-mid">{dec.reason}</td>
+                  <td className="px-3.5 py-2.5 font-mono text-peri-deep font-semibold">{dec.latency}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {leg.txs && (
+        <div className="mt-3.5 flex flex-col gap-2">
+          {leg.txs.map((t) => (
+            <div key={t.hash} className="flex items-center gap-2.5 flex-wrap text-[12.5px]">
+              <span className="font-atx-display font-semibold text-[11px] uppercase tracking-[0.06em] text-ink-soft min-w-[108px]">{t.label}</span>
+              <a href={txUrl(t.chain, t.hash)} target="_blank" rel="noopener"
+                className="font-mono text-[12px] rounded-lg px-2.5 py-1 no-underline text-peri-deep bg-[rgba(108,108,240,0.10)] hover:bg-[rgba(108,108,240,0.18)]">
+                {shortHash(t.hash)}
+              </a>
+              <span className="text-[11px] text-ink-soft">{t.chain === 'arc' ? 'arcscan' : 'basescan'} ↗{t.note ? ` · ${t.note}` : ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

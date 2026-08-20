@@ -128,7 +128,7 @@ export const LATEST_RUN: LatestRun = {
   ],
 
   tests: [
-    { value: '489', sub: '/ 0', label: 'Forge tests pass / fail · 46 suites (6 fork skips)' },
+    { value: '502', sub: '/ 0', label: 'Forge tests pass / fail · incl. staged-router suite (6 fork skips)' },
     { value: '109', sub: 'Rust', label: 'edge-auth 86 · relayer 23 — all pass' },
     { value: '7', sub: '/ 7', label: 'MEV + solvency invariants · 256 × 128k' },
     { value: '~10', sub: 'ms', label: 'edge-auth decision, off live NAV' },
@@ -140,5 +140,83 @@ export const LATEST_RUN: LatestRun = {
     { name: 'Yield adapter', chain: 'arc', short: '0xb9FB…2B88', address: ADAPTER },
     { name: 'CCTP deposit router', chain: 'arc', short: '0xDB9D…Fc03', address: CCTP_ROUTER },
     { name: 'CCTP TokenMessenger', chain: 'base-sepolia', short: '0x8FE6…2DAA', address: TOKEN_MESSENGER },
+  ],
+}
+
+// ── Second proven flow: the staged-buffer liquidity loop ────────────────────────────────────────
+// A team that holds ONE side parks it (it earns), then pairs into a pool when they bring the other
+// side. Proven live on Base Sepolia against a self-contained mock rig (open-mint token + yield
+// adapter + pair vault) — the router itself is the real product bytecode. See config/stagedRouter.ts.
+
+export type ProofFlow = {
+  date: string
+  eyebrow: string
+  title: string
+  titleAccent: string
+  subtitle: string
+  legs: ProofLeg[]
+  contracts: { name: string; chain: Chain; short: string; address: string }[]
+}
+
+const S_ROUTER = '0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3'
+const S_TOKEN = '0xE2362BAc754C372F25eCA9850B8eFe0530D38401'
+const S_ADAPTER = '0xe412678FF19D46C4B0682B58D14b48879ad00B5F'
+const S_VAULT = '0xB0144C6c033F5480619851eDF13ff1034707D2F7'
+
+export const STAGED_LIQUIDITY_RUN: ProofFlow = {
+  date: '2026-08-19',
+  eyebrow: 'Staged liquidity · executed on-chain',
+  title: 'Stage one side, earn,',
+  titleAccent: 'pair when ready.',
+  subtitle:
+    'The capital-constrained liquidity path, run live on Base Sepolia. A team parks the single side it holds; it earns while it waits; then one call forms the pool — and the yield it earned flowed into the position, not away.',
+  legs: [
+    {
+      n: 1,
+      title: 'Stage a single side',
+      where: 'Base Sepolia · MintwareStagedLiquidityRouter 0x36fa…33e3',
+      status: 'proven',
+      statusLabel: 'Proven on Base Sepolia',
+      desc: '1,000 sUSD — the one side the team holds — was staged into the router and supplied to the yield adapter in the same action. No 50/50, no forced swap, no second asset required.',
+      deltas: [
+        { k: 'Staged principal', before: '0', after: '1,000 sUSD' },
+        { k: 'Earning in yield adapter', before: '0', after: '1,000 sUSD' },
+      ],
+      txs: [
+        { label: 'Approve', chain: 'base-sepolia', hash: '0x7a53677d7b573e0286144a9cf146429e563d6e0114815960702d385f7f05059e' },
+        { label: 'Stage', chain: 'base-sepolia', hash: '0x3ab38f65436f9f750bcbc7cc8b210a48d5155e32827b7cd4bbe9b3a1ff169c37' },
+      ],
+    },
+    {
+      n: 2,
+      title: 'It earns while it waits',
+      where: 'router · per-adapter yield pool',
+      status: 'proven',
+      statusLabel: 'Proven on Base Sepolia',
+      desc: 'Yield accrued to the staged position. The router’s on-chain stagedAssets read reflects principal plus its pro-rata share of the yield — the buffer was productive from the first block, never idle.',
+      deltas: [{ k: 'Staged value (stagedAssets)', before: '1,000.00', after: '1,099.99 sUSD' }],
+      txs: [{ label: 'Accrue yield', chain: 'base-sepolia', hash: '0x92b9ba8fc24f9e1a74ae5fdd13b32ddf16133d80bf9053f7d5f9bf5007dda17e', note: 'yield to adapter' }],
+    },
+    {
+      n: 3,
+      title: 'Pair into the pool',
+      where: 'Base Sepolia · router → pair vault',
+      status: 'proven',
+      statusLabel: 'Proven on Base Sepolia',
+      desc: 'The owner brought the other side (2,000 TKA). One call pulled the staged side back with its earned yield, paired both, and minted LP straight to the owner — the yield went into the position, and the stage closed.',
+      deltas: [
+        { k: 'Staged side paired (with yield)', after: '1,099.99 sUSD' },
+        { k: 'Counterparty paired', after: '2,000 TKA' },
+        { k: 'LP minted to owner', before: '0', after: '3,099.99' },
+        { k: 'Stage status', before: 'earning', after: 'paired ✓' },
+      ],
+      txs: [{ label: 'Pair', chain: 'base-sepolia', hash: '0x02b3cbb6d49a914f805847b581f9bb770f9feaa0f56b08df22a07643343b8247', note: 'Paired' }],
+    },
+  ],
+  contracts: [
+    { name: 'Staged router', chain: 'base-sepolia', short: '0x36fa…33e3', address: S_ROUTER },
+    { name: 'Staged token (sUSD)', chain: 'base-sepolia', short: '0xE236…8401', address: S_TOKEN },
+    { name: 'Yield adapter', chain: 'base-sepolia', short: '0xe412…0B5F', address: S_ADAPTER },
+    { name: 'Pair vault', chain: 'base-sepolia', short: '0xB014…D2F7', address: S_VAULT },
   ],
 }
