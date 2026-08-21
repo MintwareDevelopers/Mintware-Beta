@@ -202,8 +202,8 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
     /// @inheritdoc IYieldAdapter
     function maxWithdrawable() external view override returns (uint256 total) {
         uint256 n = _venues.length;
-        for (uint256 i; i < n; ++i) total += _venues[i].adapter.maxWithdrawable();
-        total += asset.balanceOf(address(this));
+        for (uint256 i; i < n; ++i) total = _satAdd(total, _venues[i].adapter.maxWithdrawable());
+        total = _satAdd(total, asset.balanceOf(address(this)));
     }
 
     /// @inheritdoc IYieldAdapter
@@ -212,6 +212,17 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
     ///      sit idle in the router).
     function maxSuppliable() external view override returns (uint256 total) {
         uint256 n = _venues.length;
-        for (uint256 i; i < n; ++i) total += _venues[i].adapter.maxSuppliable();
+        for (uint256 i; i < n; ++i) total = _satAdd(total, _venues[i].adapter.maxSuppliable());
+    }
+
+    /// @dev Saturating add. A single uncapped child legitimately reports `type(uint256).max` headroom — an
+    ///      Aave reserve with no supply cap, or a standard ERC-4626 with no deposit limit (exactly the
+    ///      "curator over Aave + Morpho/Euler" composition this contract advertises). Summing two of those
+    ///      with checked arithmetic overflows and REVERTS, and because the vault reads `maxSuppliable()` /
+    ///      `maxWithdrawable()` on its deposit/withdraw path, that revert bricks the money path (DoS). Cap the
+    ///      running total at `type(uint256).max` instead — an "effectively unbounded" headroom is the right
+    ///      answer, and callers already treat these as best-effort ceilings.
+    function _satAdd(uint256 a, uint256 b) private pure returns (uint256) {
+        unchecked { return b > type(uint256).max - a ? type(uint256).max : a + b; }
     }
 }
