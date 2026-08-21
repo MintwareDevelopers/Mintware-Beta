@@ -20,6 +20,8 @@ contract MintwareMultiVenueYieldAdapterTest is Test {
 
     address internal owner = makeAddr("owner");
 
+    event MaxVenueWeightSet(uint16 maxWeightBps); // local mirror for expectEmit
+
     function setUp() public {
         usdc   = new MockERC20("USD Coin", "USDC", 6);
         aave   = new MockVenueAdapter(IERC20(address(usdc)));
@@ -180,5 +182,84 @@ contract MintwareMultiVenueYieldAdapterTest is Test {
         vm.prank(owner);
         vm.expectRevert(MintwareMultiVenueYieldAdapter.VaultAlreadySet.selector);
         r.setVault(makeAddr("attacker"));
+    }
+
+    // ── per-venue risk cap (Phase 1) ────────────────────────────────────────────────
+
+    function test_default_cap_is_no_cap() public view {
+        assertEq(router.maxVenueWeightBps(), 10_000, "default = BPS (opt-in, no cap)");
+    }
+
+    function test_default_cap_allows_full_single_venue() public {
+        // Backward-compat: with the default cap, a 100% single-venue allocation is still allowed.
+        IYieldAdapter[] memory v = new IYieldAdapter[](1);
+        v[0] = aave;
+        uint16[] memory w = new uint16[](1);
+        w[0] = 10_000;
+        vm.prank(owner);
+        router.setVenues(v, w); // no revert
+        (, uint16 wb) = router.venueAt(0);
+        assertEq(wb, 10_000);
+    }
+
+    function test_setMaxVenueWeightBps_sets_and_emits() public {
+        vm.expectEmit(false, false, false, true, address(router));
+        emit MaxVenueWeightSet(4_000);
+        vm.prank(owner);
+        router.setMaxVenueWeightBps(4_000);
+        assertEq(router.maxVenueWeightBps(), 4_000);
+    }
+
+    function test_setMaxVenueWeightBps_rejects_invalid() public {
+        vm.startPrank(owner);
+        vm.expectRevert(MintwareMultiVenueYieldAdapter.InvalidCap.selector);
+        router.setMaxVenueWeightBps(0);
+        vm.expectRevert(MintwareMultiVenueYieldAdapter.InvalidCap.selector);
+        router.setMaxVenueWeightBps(10_001);
+        vm.stopPrank();
+    }
+
+    function test_setMaxVenueWeightBps_only_owner() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(); // Ownable: not owner
+        router.setMaxVenueWeightBps(4_000);
+    }
+
+    function test_setVenues_enforces_cap() public {
+        vm.prank(owner);
+        router.setMaxVenueWeightBps(4_000); // no venue above 40%
+
+        // A 50% venue now violates the cap → reverts.
+        IYieldAdapter[] memory v = new IYieldAdapter[](2);
+        v[0] = aave; v[1] = morpho;
+        uint16[] memory w = new uint16[](2);
+        w[0] = 5_000; w[1] = 3_000;
+        vm.prank(owner);
+        vm.expectRevert(MintwareMultiVenueYieldAdapter.VenueWeightCapExceeded.selector);
+        router.setVenues(v, w);
+
+        // Within the cap (40 / 30 / 20) it succeeds.
+        IYieldAdapter[] memory v2 = new IYieldAdapter[](3);
+        v2[0] = aave; v2[1] = morpho; v2[2] = euler;
+        uint16[] memory w2 = new uint16[](3);
+        w2[0] = 4_000; w2[1] = 3_000; w2[2] = 2_000;
+        vm.prank(owner);
+        router.setVenues(v2, w2); // no revert
+        (, uint16 wb) = router.venueAt(0);
+        assertEq(wb, 4_000, "capped allocation accepted");
+    }
+
+    function test_cap_boundary_equal_is_allowed() public {
+        vm.prank(owner);
+        router.setMaxVenueWeightBps(4_000);
+        // Exactly at the cap is fine (≤, not <).
+        IYieldAdapter[] memory v = new IYieldAdapter[](1);
+        v[0] = aave;
+        uint16[] memory w = new uint16[](1);
+        w[0] = 4_000;
+        vm.prank(owner);
+        router.setVenues(v, w); // no revert
+        (, uint16 wb) = router.venueAt(0);
+        assertEq(wb, 4_000);
     }
 }
