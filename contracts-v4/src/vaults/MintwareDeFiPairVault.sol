@@ -640,7 +640,13 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
             // Canonical path: route LP fees to the oracle-weighted distributor. LPs claim
             // their reputation + referral weighted share there, not from the accumulator.
             if (lp0 > 0 || lp1 > 0) {
+                // AUDIT H3: grant EXACTLY the fee legs for this one pull, then reset to 0 — never leave the
+                // distributor a standing unbounded allowance over the vault's entire (principal-bearing) balance.
+                if (lp0 > 0) token0.forceApprove(weightedDistributor, lp0);
+                if (lp1 > 0) token1.forceApprove(weightedDistributor, lp1);
                 IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, lp0, lp1);
+                if (lp0 > 0) token0.forceApprove(weightedDistributor, 0);
+                if (lp1 > 0) token1.forceApprove(weightedDistributor, 0);
                 emit FeesRoutedToDistributor(distributorVaultId, lp0, lp1);
             }
         } else {
@@ -663,8 +669,8 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         weightedDistributor = dist;
         distributorVaultId  = vaultId;
         IMWWeightedDistributor(dist).registerVault(vaultId, address(token0), address(token1));
-        token0.forceApprove(dist, type(uint256).max);
-        token1.forceApprove(dist, type(uint256).max);
+        // AUDIT H3: NO standing unbounded approval. `_realizeFees` approves exactly the fee legs per pull
+        // and resets to 0, so a compromised/misconfigured distributor can never drain vault principal.
         emit WeightedDistributorSet(dist, vaultId);
     }
 

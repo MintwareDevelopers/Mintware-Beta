@@ -208,9 +208,15 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     ///         gap-closing (arb) swap direction only — recaptures LVR to LPs without taxing benign flow.
     ///         Bound `slope`/`quad` ≤ 1_000_000 (MWDynamicFee.MAX_PIPS); the applied fee is always clamped
     ///         to the pool's `maxFeePips`, so the "fee ≤ cap" invariant is preserved.
+    error BadFeeConfig();
+    error BadLvrParams();
+
     function setLvrParams(PoolId poolId, uint256 slopePipsPerTick, uint256 quadMultiplierPipsPerTickSq, bool enabled)
         external onlyOwner
     {
+        // AUDIT M11: enforce the ≤ MAX_PIPS bound the libs' overflow-freedom + the 7/7 invariants assume
+        // (the NatSpec above always required it; now the code does too).
+        if (slopePipsPerTick > 1_000_000 || quadMultiplierPipsPerTickSq > 1_000_000) revert BadLvrParams();
         lvrParams[poolId] = LvrParams(slopePipsPerTick, quadMultiplierPipsPerTickSq, enabled);
         emit LvrParamsSet(poolId, slopePipsPerTick, quadMultiplierPipsPerTickSq, enabled);
     }
@@ -228,6 +234,10 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         int24 maxDeviationTicks,
         uint32 maxCatchupBlocks
     ) external onlyOwner {
+        // AUDIT M11: bound the deviation slope to the range the fee-lib overflow-freedom + the 7/7
+        // invariants assume. (`maxFeePips == 0` is handled safely by the FALLBACK clamp on BOTH fee paths —
+        // see beforeSwap — so it need not be rejected here.)
+        if (slopePipsPerTick > 1_000_000) revert BadFeeConfig();
         feeParams[poolId] = FeeParams({
             baseFeePips:        baseFeePips,
             maxFeePips:         maxFeePips,
@@ -288,11 +298,14 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
             feeOverride = 0;
             if (fp.dynamicFeeEnabled) {
                 uint256 dev = oracle[id].deviationTicks(currentTick);
-                uint24 target = MWDynamicFee.volatilityFee(fp.baseFeePips, fp.maxFeePips, dev, fp.slopePipsPerTick);
+                // AUDIT M10: a 0 ceiling means "unset" — clamp to the safe FALLBACK (mirrors the am-AMM
+                // branch below) so the surge can NEVER reach 100% and brick swaps when honest arb is needed.
+                uint24 feeCeil = fp.maxFeePips == 0 ? FALLBACK_MAX_FEE_PIPS : fp.maxFeePips;
+                uint24 target = MWDynamicFee.volatilityFee(fp.baseFeePips, feeCeil, dev, fp.slopePipsPerTick);
                 // Diamond-LVR: directional surcharge on the arb (gap-closing) direction only.
-                uint24 lvrCap = fp.maxFeePips == 0 ? uint24(1_000_000) : fp.maxFeePips;
-                target = _lvrTarget(id, target, dev, currentTick, params.zeroForOne, lvrCap);
+                target = _lvrTarget(id, target, dev, currentTick, params.zeroForOne, feeCeil);
                 uint24 fee = _rateLimitedFee(id, target, fp.maxFeeStepPerBlock);
+                if (fee > feeCeil) fee = feeCeil; // bounded (mirrors the unmanaged am-AMM branch)
                 feeOverride = fee | LPFeeLibrary.OVERRIDE_FEE_FLAG;
             }
         }
