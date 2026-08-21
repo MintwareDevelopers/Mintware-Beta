@@ -99,6 +99,17 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     ///         bad day: a shortfall beyond the cap reverts (retry next window) instead of draining junior.
     uint256 public juniorTopUpCapPerCall;
 
+    /// @notice AUDIT H4: the ONE pinned settlement destination. `batchSettleEth` may pay ONLY this address —
+    ///         the relayer cannot redirect funds. Mirrors the Gateway's C1 fix (receiver pinned to the CPN
+    ///         treasury). Owner-settable/re-settable (a settlement-address migration re-points it); until it
+    ///         is set, settlement reverts (`RailNotSet`) so no value can flow to an unpinned address.
+    address public settlementRail;
+
+    /// @notice AUDIT H4: per-call ceiling on `totalUsdc` (0 ⇒ off). Bounds how much a single settlement — and
+    ///         thus a runaway/compromised relayer — can move in one tx, even to the pinned rail. Defense in
+    ///         depth on top of the pin; set per the expected batch size.
+    uint256 public maxSettlePerCall;
+
     /// @dev Transient exact-output target read inside `unlockCallback` (set→unlock→clear in one call).
     uint256 private _pendingUsdcOut;
 
@@ -107,6 +118,8 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     event BandSet(int24 bandTicks);
     event RequireReadyOracleSet(bool required);
     event JuniorTopUpCapSet(uint256 cap);
+    event SettlementRailSet(address indexed rail);
+    event MaxSettlePerCallSet(uint256 cap);
     event WethBackingFunded(address indexed from, uint256 amount, uint256 total);
     event WethBackingWithdrawn(address indexed to, uint256 amount, uint256 total);
     event JuniorBufferFunded(address indexed from, uint256 amount, uint256 total);
@@ -121,6 +134,9 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     error InsufficientWethBacking();
     error SettlementSlippageExceeded(uint256 produced, uint256 required);
     error OracleNotReady();
+    error RailNotSet();
+    error RailMismatch();
+    error SettlementCapExceeded();
 
     modifier onlyRelayer() {
         if (msg.sender != relayer) revert OnlyRelayer();
@@ -194,6 +210,20 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         emit JuniorTopUpCapSet(cap);
     }
 
+    /// @notice AUDIT H4: pin (or re-point) the sole settlement destination. Set to the Gateway / CPN
+    ///         settlement address before enabling settlement; the relayer can never pay anywhere else.
+    function setSettlementRail(address rail) external onlyOwner {
+        if (rail == address(0)) revert ZeroAddress();
+        settlementRail = rail;
+        emit SettlementRailSet(rail);
+    }
+
+    /// @notice AUDIT H4: set the per-call `totalUsdc` ceiling (0 = off). Defense in depth over the pin.
+    function setMaxSettlePerCall(uint256 cap) external onlyOwner {
+        maxSettlePerCall = cap;
+        emit MaxSettlePerCallSet(cap);
+    }
+
     function pause() external onlyOwner { _pause(); }
     function unpause() external onlyOwner { _unpause(); }
 
@@ -257,7 +287,12 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         returns (uint256 usdcFromSwap, uint256 wethSpent, uint256 juniorDrawn)
     {
         if (totalUsdc == 0) revert ZeroAmount();
-        if (rail == address(0)) revert ZeroAddress();
+        // AUDIT H4: pay ONLY the pinned rail — the relayer cannot redirect funds. The passed `rail` must
+        // equal the stored destination (kept as a param for interface stability + an explicit caller assert).
+        if (settlementRail == address(0)) revert RailNotSet();
+        if (rail != settlementRail) revert RailMismatch();
+        // AUDIT H4: per-call ceiling (defense in depth over the pin) — 0 = off.
+        if (maxSettlePerCall != 0 && totalUsdc > maxSettlePerCall) revert SettlementCapExceeded();
 
         // Fail closed: never fire an UNBOUNDED settlement swap in production — require the oracle band.
         if (requireReadyOracle) {
@@ -294,10 +329,10 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         //     reverts if a swap somehow spent more than the tracked backing).
         wethBacking -= wethSpent;
 
-        // (4) Pay the rail IN FULL (swap proceeds + junior top-up). Zero residual by construction.
-        usdc.safeTransfer(rail, totalUsdc);
+        // (4) Pay the PINNED rail IN FULL (swap proceeds + junior top-up). Zero residual by construction.
+        usdc.safeTransfer(settlementRail, totalUsdc);
 
-        emit Settled(rail, totalUsdc, usdcFromSwap, wethSpent, juniorDrawn);
+        emit Settled(settlementRail, totalUsdc, usdcFromSwap, wethSpent, juniorDrawn);
     }
 
     function unlockCallback(bytes calldata) external override returns (bytes memory) {

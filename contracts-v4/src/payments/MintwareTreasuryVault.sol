@@ -163,6 +163,10 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     uint16  public jitMaxPerBlockBps = 500; // 5% default
     uint256 private jitBlock;               // block of the current per-block accumulator
     uint256 private jitBorrowedThisBlock;   // senior USDC lent to JIT so far this block
+    /// @notice AUDIT M3: the vault's USDC balance captured right AFTER lending to the JIT hook. The hook's
+    ///         return is BALANCE-VERIFIED against this (not self-reported) — the borrow→settle round is
+    ///         atomic within one swap, so the balance can only have moved by the hook's return transfer.
+    uint256 private _jitUsdcBaseline;
 
     /// @notice AUDIT H4: cumulative REALIZED JIT PnL in USDC (signed).
     int256  public jitNetPnl;
@@ -402,23 +406,52 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     }
 
     /// @notice The senior claim in USDC — Aave idle + free senior buffer + deployed senior par + any USDC
-    ///         currently out in a JIT position (par). NO price.
+    ///         currently out in a JIT position (par). NO price. This is the "claim value" used for deposits
+    ///         and display; REDEMPTIONS price against the solvency-aware `_redeemNav()` below.
     function totalSeniorAssets() public view returns (uint256) {
         return adapter.totalAssets() + _freeSeniorBuffer() + deployedFromSenior + jitBorrowed;
     }
 
+    /// @notice AUDIT H1 — solvency-aware senior NAV. Identical to `totalSeniorAssets()` whenever the senior
+    ///         is fully covered, but values the deployed LP leg at its ACTUAL realizable USDC — the
+    ///         conservative `min(spot,oracle)` MTM plus the junior USDC first-loss buffer that backstops it,
+    ///         capped at par. It drops BELOW par only in the tail where the LP's recoverable value + junior
+    ///         buffer no longer cover the deployed par (junior token wiped by IL). Redemptions price against
+    ///         `min(par, realizable)` so any shortfall is shared PRO-RATA across all senior holders — closing
+    ///         the first-redeemer run (early exits at par, late exits reverting).
+    function seniorRealizableAssets() public view returns (uint256) {
+        uint256 lpLeg = deployedFromSenior;
+        if (lpLeg != 0) {
+            uint256 backed = recoverableUSDC() + juniorUsdcBuffer; // junior first-loss backstops the LP leg
+            if (backed < lpLeg) lpLeg = backed;                    // impaired: value at what's actually recoverable
+        }
+        return adapter.totalAssets() + _freeSeniorBuffer() + lpLeg + jitBorrowed;
+    }
+
+    /// @dev The NAV a redemption/settlement prices against: never above par, never above what is realizable.
+    ///      In normal (covered) operation this equals par, so the senior redeems 1:1 as before.
+    function _redeemNav() internal view returns (uint256) {
+        uint256 par  = totalSeniorAssets();
+        uint256 real = seniorRealizableAssets();
+        return real < par ? real : par;
+    }
+
+    /// @dev AUDIT H1: mint against the solvency-aware NAV so a depositor into an IMPAIRED pool isn't
+    ///      over-diluted (buying par-priced shares of a sub-par pool). Equals par when fully covered.
     function previewDeposit(uint256 assets) public view returns (uint256) {
-        return _toShares(assets, totalSeniorAssets(), Math.Rounding.Floor);
+        return _toShares(assets, _redeemNav(), Math.Rounding.Floor);
     }
 
     /// @inheritdoc IYieldVault
-    /// @dev Rounds UP so a following `burnForPayment` of the returned shares redeems >= `assets`.
+    /// @dev Rounds UP so a following `burnForPayment` of the returned shares redeems >= `assets`. Prices at
+    ///      the solvency-aware NAV (AUDIT H1) so the Gateway's spend preview reflects the true redeemable.
     function previewWithdraw(uint256 assets) external view returns (uint256) {
-        return _toShares(assets, totalSeniorAssets(), Math.Rounding.Ceil);
+        return _toShares(assets, _redeemNav(), Math.Rounding.Ceil);
     }
 
+    /// @dev AUDIT H1: solvency-aware — the true redeemable value of `shares_` (equals par when covered).
     function convertToAssets(uint256 shares_) public view returns (uint256) {
-        return _toAssets(shares_, totalSeniorAssets(), totalSeniorShares, Math.Rounding.Floor);
+        return _toAssets(shares_, _redeemNav(), totalSeniorShares, Math.Rounding.Floor);
     }
 
     /// @inheritdoc IYieldVault
@@ -474,10 +507,10 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         if (assets == 0) revert ZeroAmount();
         if (to == address(0)) revert ZeroAddress();
 
-        uint256 taBefore = totalSeniorAssets();
+        uint256 navBefore = _redeemNav(); // AUDIT H1: solvency-aware, captured BEFORE the inflow (no self-mint)
         usdc.safeTransferFrom(msg.sender, address(this), assets);
 
-        sharesMinted = _toShares(assets, taBefore, Math.Rounding.Floor);
+        sharesMinted = _toShares(assets, navBefore, Math.Rounding.Floor);
         if (sharesMinted == 0) revert ZeroAmount();
         if (sharesMinted < minShares) revert InsufficientShares();
 
@@ -498,7 +531,9 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         if (sharesToBurn == 0) revert ZeroAmount();
         if (sharesToBurn > bal) revert InsufficientShares();
 
-        assetsOut = convertToAssets(sharesToBurn);
+        // AUDIT H1: price against the solvency-aware NAV (min(par, realizable)) so a tail shortfall is
+        // shared pro-rata, not paid at par to whoever redeems first. Equals par when fully covered.
+        assetsOut = _toAssets(sharesToBurn, _redeemNav(), totalSeniorShares, Math.Rounding.Floor);
         if (assetsOut < minAssets) revert InsufficientIdleLiquidity();
 
         seniorShares[msg.sender] = bal - sharesToBurn;
@@ -524,7 +559,8 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         if (sharesToBurn == 0) revert ZeroAmount();
         if (sharesToBurn > bal) revert InsufficientShares();
 
-        assetsRedeemed = convertToAssets(sharesToBurn);
+        // AUDIT H1: solvency-aware NAV (min(par, realizable)); equals par when fully covered.
+        assetsRedeemed = _toAssets(sharesToBurn, _redeemNav(), totalSeniorShares, Math.Rounding.Floor);
 
         seniorShares[user] = bal - sharesToBurn;
         totalSeniorShares -= sharesToBurn;
@@ -692,15 +728,25 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         jitBorrowed += lent;
         jitBorrowedThisBlock += lent;
         usdc.safeTransfer(jitHook, lent);
+        _jitUsdcBaseline = usdc.balanceOf(address(this)); // AUDIT M3: baseline for balance-verified return
         emit JitBorrowed(lent);
     }
 
     /// @notice The hook returns the borrowed senior USDC (+ any captured fee, net of its close cost) after
     ///         closing its JIT position in the SAME swap. Profit lifts the senior; a shortfall is absorbed
     ///         by the junior USDC buffer so the senior stays whole at par. NEVER reverts.
-    function settleJitReturn(uint256 usdcReturned) external onlyJitHook nonReentrant {
+    function settleJitReturn(uint256 /* usdcReturnedClaimed */) external onlyJitHook nonReentrant {
         uint256 outstanding = jitBorrowed;
         jitBorrowed = 0;
+
+        // AUDIT M3: do NOT trust the hook's self-reported figure — measure what actually arrived. The whole
+        // borrow→settle round is atomic within ONE swap (nonReentrant redemptions cannot interleave), so the
+        // vault's USDC balance moved only by the hook's return transfer since `_jitUsdcBaseline` was set. A
+        // hook that under-returns (or returns nothing) is thus correctly treated as a JIT loss the junior
+        // absorbs, rather than a lie that corrupts `jitNetPnl`/`juniorUsdcBuffer`.
+        uint256 nowBal   = usdc.balanceOf(address(this));
+        uint256 usdcReturned = nowBal > _jitUsdcBaseline ? nowBal - _jitUsdcBaseline : 0;
+        _jitUsdcBaseline = 0;
 
         uint256 shortfall = usdcReturned < outstanding ? outstanding - usdcReturned : 0;
         uint256 draw;
