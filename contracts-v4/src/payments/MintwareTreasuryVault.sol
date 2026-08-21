@@ -170,6 +170,10 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     uint256 public jitMaxCumulativeLoss;
     /// @notice True once the loss breaker has tripped — `borrowIdleForJit` no-ops until reset.
     bool    public jitAutoDisabled;
+    /// @notice Enables the COUNTER-ASSET JIT leg (`borrowIdleForJitCounter`) — the hook borrows senior USDC,
+    ///         swaps it to the counter asset (e.g. ETH), and provides the JIT range on the other side.
+    ///         Default OFF: the leg ships dark until the counter-side hook path is wired + audited.
+    bool    public jitCounterEnabled;
 
     // ── am-AMM rent sink (Phase 3 — enrolled blue-chip pools) ───────────────────────────────────
     /// @notice The sole address allowed to PUSH auction rent via `fundRent` — the `MWAmAuction` contract
@@ -193,6 +197,7 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     event IdleTargetSet(uint16 bps);
     event JitHookSet(address indexed hook);
     event JitCapSet(uint16 bps);
+    event JitCounterEnabledSet(bool enabled);
     event JitBorrowed(uint256 lent);
     event JitSettled(uint256 borrowed, uint256 returned, uint256 shortfall);
     event JitBreakerTripped(int256 netPnl);
@@ -295,6 +300,13 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         if (bps > MAX_JIT_PER_BLOCK_BPS) revert BadParam();
         jitMaxPerBlockBps = bps;
         emit JitCapSet(bps);
+    }
+
+    /// @notice Enable/disable the counter-asset JIT leg (`borrowIdleForJitCounter`). Default OFF; a
+    ///         deliberate ops act — the counter-side hook path is wired + audited before this is turned on.
+    function setJitCounterEnabled(bool on) external onlyOwner {
+        jitCounterEnabled = on;
+        emit JitCounterEnabledSet(on);
     }
 
     /// @notice Set the coverage-ratio floor (bps of deployed-at-risk senior the junior USDC buffer must
@@ -673,6 +685,27 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     function borrowIdleForJit(uint256 want)
         external onlyJitHook nonReentrant returns (uint256 lent)
     {
+        return _lendJit(want);
+    }
+
+    /// @notice Counter-asset JIT borrow — the SAME bounded senior-USDC lend as `borrowIdleForJit`, for the
+    ///         hook's counter-side (e.g. ETH) provision: the hook swaps this USDC to the counter asset,
+    ///         provides the tight JIT range on the other side, and returns USDC at `settleJitReturn` like any
+    ///         other round. Shares the one-slice/per-block/coverage/breaker bounds via `_lendJit`, so a USDC
+    ///         leg and a counter leg can never be outstanding at once. Gated behind `jitCounterEnabled`
+    ///         (default OFF) so it ships dark until the counter-side hook path is wired + audited.
+    function borrowIdleForJitCounter(uint256 want)
+        external onlyJitHook nonReentrant returns (uint256 lent)
+    {
+        if (!jitCounterEnabled) return 0;
+        return _lendJit(want);
+    }
+
+    /// @dev Shared bounded-lend body for both JIT legs. Applies every guard (paused / breaker / one
+    ///      outstanding slice / per-block cap / adapter headroom / coverage floor), then lends senior idle
+    ///      USDC to the hook at PAR (`jitBorrowed`). Internal — the external entry points carry `onlyJitHook`
+    ///      + `nonReentrant`. Behaviour is byte-for-byte the pre-refactor `borrowIdleForJit`.
+    function _lendJit(uint256 want) internal returns (uint256 lent) {
         // AUDIT M6: return 0 (JIT no-ops) rather than revert when paused — this runs inside beforeSwap.
         if (paused()) return 0;
         if (jitAutoDisabled) return 0;              // AUDIT H4: breaker tripped
