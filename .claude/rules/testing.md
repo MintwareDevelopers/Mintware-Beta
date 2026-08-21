@@ -72,6 +72,7 @@
 - `lib/web2/router/fee.test.ts`
 - `lib/web2/router/index.test.ts`
 - `lib/web2/router/internalQuote.test.ts`
+- `lib/web2/router/internalize.test.ts`
 - `lib/web2/router/listing.test.ts`
 - `lib/web2/router/pickBest.test.ts`
 - `lib/web2/router/quoterReader.test.ts`
