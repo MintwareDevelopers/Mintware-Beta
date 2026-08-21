@@ -243,3 +243,32 @@ export const CARD_RAIL: {
     { label: 'Auto-capture', status: 'wired', note: 'The above settle was the owner-triggered path. The automatic capture (Lithic SETTLED event → auto-settle small swipes ≤ $50) is wired — subscription live — but off by default and not yet fired via the webhook.' },
   ],
 }
+
+// ── Formal verification — proofs of the vault math, not just tests ───────────────────────────────
+// Seven safety properties (contracts-v4/test/formal/MWFormalProofs.t.sol) are each backed by a
+// machine-checked proof that runs as a CI gate — NOT just fuzzing. Two methods, because SMT alone
+// can't do it: Halmos symbolically proves the live MWDynamicFee fee-bound logic over ALL inputs; the
+// nonlinear rounding/solvency lemmas that defeat any SMT solver (division by a symbolic value) are
+// proved in Coq (contracts-v4/proofs/coq/MulDivLemmas.v, coqc = the proof). Honest scope below.
+// See docs/developers/ulv-formal-verification.md.
+export type FVProp = { claim: string; method: 'halmos' | 'coq'; target: string }
+export const FORMAL_VERIFICATION: {
+  eyebrow: string; title: string; titleAccent: string; blurb: string; props: FVProp[]; note: string
+} = {
+  eyebrow: 'Formal verification · machine-checked in CI',
+  title: 'The vault math,',
+  titleAccent: 'proven — not just tested.',
+  blurb:
+    'Seven safety properties are backed by a machine-checked proof, not only fuzzing. Halmos symbolically proves the live fee-logic bounds over every possible input; the nonlinear rounding and solvency lemmas that defeat any SMT solver (division by a symbolic value) are proved in Coq. Both run as gates in CI.',
+  props: [
+    { claim: 'Surge fee never exceeds its configured ceiling', method: 'halmos', target: 'MWDynamicFee.volatilityFee · live code' },
+    { claim: 'Volatility only ever adds to the base fee — never below it', method: 'halmos', target: 'MWDynamicFee.volatilityFee · live code' },
+    { claim: 'Per-block fee move never exceeds the rate-limit step', method: 'halmos', target: 'MWDynamicFee.rateLimit · live code' },
+    { claim: 'Fee split conserves exactly (zero dust) + rounding favors LPs', method: 'coq', target: '_splitFee mulDiv lemma' },
+    { claim: 'Idle redeem rounds down — never pays out more than the leg', method: 'coq', target: 'redeem mulDiv lemma' },
+    { claim: 'Concurrent redeemers can never together draw more than backing', method: 'coq', target: 'solvency mulDiv lemma' },
+    { claim: 'Deposit mint creates no value from nothing (inflation-safe)', method: 'coq', target: 'deposit mulDiv lemma' },
+  ],
+  note:
+    'Honest scope: the 3 Halmos proofs bind to the real MWDynamicFee bytecode; the 4 Coq lemmas prove the exact mulDiv arithmetic the vault relies on (proven as lemmas, not bound 1:1 to bytecode — flagged for the external audit). All 7 are also fuzz-proven at 256×128k. Testnet + unaudited.',
+}

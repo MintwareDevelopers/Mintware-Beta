@@ -20,6 +20,8 @@
     "forge:test": "forge test -vv",
     "forge:test:gas": "forge test -vv --gas-report",
     "forge:coverage": "forge coverage",
+    "halmos": "forge build --ast && halmos --root . --forge-build-out contracts-v4/out --contract MWFormalProofs",
+    "coq:proofs": "coqc contracts-v4/proofs/coq/MulDivLemmas.v && echo 'Coq mulDiv lemmas: verified'",
     "forge:smoke:coverage-gate": "forge script contracts-v4/script/SmokeCoverageGate.s.sol --rpc-url base_sepolia",
     "forge:deploy:treasury-v2:base-sepolia": "forge script contracts-v4/script/DeployTreasuryV2.s.sol --rpc-url base_sepolia --broadcast --slow -vvvv",
     "forge:deploy:treasury-v2:dry-run": "forge script contracts-v4/script/DeployTreasuryV2.s.sol --rpc-url base_sepolia -vvvv",

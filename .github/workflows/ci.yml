@@ -106,6 +106,61 @@ jobs:
           cargo test --locked
           cargo clippy --all-targets -- -D warnings
 
+  formal-proofs:
+    name: Formal proofs (Halmos, advisory)
+    runs-on: ubuntu-latest
+    # Where the symbolic proofs actually EXECUTE. The repo's macOS-13-arm64 dev box can't install a
+    # recent Halmos (its yices-solver wheel targets macOS 14+, so uv falls back to 0.2.6, which crashes
+    # with an internal IndexError before solving). Linux has the manylinux yices wheels, so `pipx install
+    # halmos` gets a current build and the 7 MWFormalProofs specs run here. Advisory (continue-on-error)
+    # until a green run is observed and promoted to a hard gate — see docs/developers/ulv-formal-verification.md.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive # forge lib deps (v4-core/periphery, forge-std)
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install Halmos
+        run: |
+          pipx install halmos
+          halmos --version
+
+      - name: Build with AST (Halmos reads the source AST)
+        run: forge build --ast
+
+      - name: Halmos — symbolic proofs (MWFormalProofs, all 7 check_*)
+        # Uses Halmos's BUNDLED default solver (yices) — the only download-free option in CI.
+        # Observed outcome (stable across runs): 3/7 PASS — every proof against real MWDynamicFee hook
+        # code — while the 4 pure mulDiv lemmas (nonlinear 256-bit mul + division by a symbolic value)
+        # TIMEOUT. Established, don't re-litigate: raw time is not the lever (they time out at both 60s
+        # and 300s), and --solver bitwuzla/cvc5 needs a solver DOWNLOAD that CI blocks ("Download not
+        # allowed") so it errors, not solves. Those 4 remain fuzz-proven at 256x128k via the Forge
+        # invariant suite. Advisory (continue-on-error) — the 4 timeouts make this exit 1 by design.
+        run: |
+          halmos --root . --forge-build-out contracts-v4/out --contract MWFormalProofs \
+            --solver-timeout-assertion 120000
+
+  coq-proofs:
+    name: Formal proofs (Coq, mulDiv lemmas)
+    runs-on: ubuntu-latest
+    # A REAL gate (not advisory): these are the 4 nonlinear mulDiv lemmas that Halmos/SMT can't
+    # decide (div-by-symbolic). Coq's nia proves them as decidable, machine-checked theorems — so
+    # `coqc` exiting 0 IS the proof. If this job is green, the 4 are formally verified; combined with
+    # Halmos's 3/7 on live hook code, all 7 MWFormalProofs properties are covered by a proof (not just
+    # fuzzing). See docs/developers/ulv-formal-verification.md.
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Coq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y coq
+          coqc --version
+      - name: Compile the mulDiv lemma proofs (coqc = verification)
+        run: coqc contracts-v4/proofs/coq/MulDivLemmas.v
+
   security-audit:
     name: Dependency audit (advisory)
     runs-on: ubuntu-latest
