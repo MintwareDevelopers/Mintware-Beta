@@ -132,14 +132,16 @@ jobs:
         run: forge build --ast
 
       - name: Halmos — symbolic proofs (MWFormalProofs, all 7 check_*)
-        # Halmos ships bitwuzla/cvc5 as selectable solvers (--solver, auto-downloaded) — bitwuzla is
-        # stronger than the default yices on the nonlinear 256-bit mulDiv lemmas. A prior run showed raw
-        # time is NOT the lever (the 4 lemmas still TIMEOUT at 300s under yices), so this swaps the SOLVER
-        # and keeps a moderate 180s cap — a capable BV solver either cracks these fairly quickly or the
-        # symbolic mul + division-by-symbolic is intractable and no timeout helps.
+        # Uses Halmos's BUNDLED default solver (yices) — the only download-free option in CI.
+        # Observed outcome (stable across runs): 3/7 PASS — every proof against real MWDynamicFee hook
+        # code — while the 4 pure mulDiv lemmas (nonlinear 256-bit mul + division by a symbolic value)
+        # TIMEOUT. Established, don't re-litigate: raw time is not the lever (they time out at both 60s
+        # and 300s), and --solver bitwuzla/cvc5 needs a solver DOWNLOAD that CI blocks ("Download not
+        # allowed") so it errors, not solves. Those 4 remain fuzz-proven at 256x128k via the Forge
+        # invariant suite. Advisory (continue-on-error) — the 4 timeouts make this exit 1 by design.
         run: |
           halmos --root . --forge-build-out contracts-v4/out --contract MWFormalProofs \
-            --solver bitwuzla --solver-timeout-assertion 180000
+            --solver-timeout-assertion 120000
 
   security-audit:
     name: Dependency audit (advisory)

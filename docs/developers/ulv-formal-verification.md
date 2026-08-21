@@ -60,15 +60,26 @@ cause is environmental, **not a proof failure**:
 | `check_redeemIdle_sumNeverExceedsBacking` (mulDiv lemma) | ⏱ **TIMEOUT** (60s) |
 | `check_depositMint_noInflation` (mulDiv lemma) | ⏱ **TIMEOUT** (60s) |
 
-**All 3 proofs against real live hook code pass** — `MWDynamicFee`'s fee bounds and rate-limit are now
+**All 3 proofs against real live hook code pass** — `MWDynamicFee`'s fee bounds and rate-limit are
 symbolically proven over all inputs (within the `vm.assume` bounds). The 4 failures are **TIMEOUTs, not
-counterexamples**: z3 could not *decide* the nonlinear 256-bit `mulDiv` lemmas (multiplication of two
-symbolic words + **division by a symbolic value**) inside the default 60s per-assertion cap — the
-classic SMT-hard case, not a discovered violation. The job stays **advisory** (it exits 1 on the
-timeouts). The honest claim is **"3/7 symbolically proven (including every proof against live hook
-code)"** — never "7/7 verified." Closing more would need a bitwuzla solver + a longer
-`--solver-timeout-assertion`; the divide-by-symbolic lemmas (`redeemIdle`/`depositMint`) may be
-fundamentally intractable, while the divide-by-constant `splitFee` is the likeliest to close.
+counterexamples**: the bundled yices solver could not *decide* the nonlinear 256-bit `mulDiv` lemmas
+(multiplication of two symbolic words + **division by a symbolic value**) — the classic SMT-hard case,
+not a discovered violation.
+
+**We tried to close the other 4 and established that we can't, here (not re-litigating):**
+
+- **More time is not the lever.** A re-run at `--solver-timeout-assertion 300000` (5×) left the result
+  unchanged — the same 4 still TIMEOUT at the full 300s (run `32505972958`, 1201s total).
+- **A stronger solver can't be used in CI.** `--solver bitwuzla` (and `cvc5`) are not bundled — Halmos
+  downloads them on demand, and the CI sandbox blocks it (`solver_output.error='Download not allowed'`),
+  so those runs *error on the missing binary* rather than solve (run `32509211692`). Not worth wiring a
+  vendored solver: division-by-symbolic is likely intractable for any of them, and the 4 lemmas are
+  already fuzz-proven at 256×128k.
+
+So the CI job uses the **bundled yices** solver (download-free), giving a stable **3/7**. The job stays
+**advisory** (`continue-on-error` — the 4 timeouts make it exit 1 by design). The honest claim is
+**"3/7 symbolically proven (including every proof against live hook code); the 4 pure mulDiv lemmas are
+SMT-intractable here and remain fuzz-proven at 256×128k"** — never "7/7 verified."
 
 Run locally on any supported setup (Linux, macOS 14+ arm64, or Docker):
 
