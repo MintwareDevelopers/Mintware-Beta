@@ -45,10 +45,30 @@ cause is environmental, **not a proof failure**:
   rebuild, an `--evm-version paris` build (rules out PUSH0), a forced `halmos>=0.2.9 --python 3.12`
   install (yices wheel unavailable), and Docker (not installed). All four dead-ended on the same cause.
 - **Linux has the manylinux `yices` wheels**, so `pipx install halmos` gets a current build there and
-  the specs execute. A **`Formal proofs (Halmos, advisory)` CI job** (`.github/workflows/ci.yml`) now
-  runs all 7 `check_*` on every push/PR. It is **advisory (`continue-on-error`)** until a green run is
-  observed and promoted to a hard gate — this doc will be updated with the observed result, and the
-  `/proof` page must not claim "symbolically verified" until then.
+  the specs execute. A **`Formal proofs (Halmos, advisory)` CI job** (`.github/workflows/ci.yml`) runs
+  all 7 `check_*` on every push/PR.
+
+**Observed CI result (PR #347, run `32503000438`, 2026-08-21): `3 passed; 4 failed; time: 241s`.**
+
+| Proof | Halmos verdict |
+|---|---|
+| `check_volatilityFee_neverExceedsCeiling` (real `MWDynamicFee`) | ✅ **PASS** (0.05s) |
+| `check_volatilityFee_neverBelowBase` (real `MWDynamicFee`) | ✅ **PASS** (0.06s) |
+| `check_rateLimit_withinStep` (real `MWDynamicFee`) | ✅ **PASS** (0.36s) |
+| `check_splitFee_conservesAndFavorsLP` (mulDiv lemma) | ⏱ **TIMEOUT** (60s) |
+| `check_redeemIdle_roundsDown` (mulDiv lemma) | ⏱ **TIMEOUT** (60s) |
+| `check_redeemIdle_sumNeverExceedsBacking` (mulDiv lemma) | ⏱ **TIMEOUT** (60s) |
+| `check_depositMint_noInflation` (mulDiv lemma) | ⏱ **TIMEOUT** (60s) |
+
+**All 3 proofs against real live hook code pass** — `MWDynamicFee`'s fee bounds and rate-limit are now
+symbolically proven over all inputs (within the `vm.assume` bounds). The 4 failures are **TIMEOUTs, not
+counterexamples**: z3 could not *decide* the nonlinear 256-bit `mulDiv` lemmas (multiplication of two
+symbolic words + **division by a symbolic value**) inside the default 60s per-assertion cap — the
+classic SMT-hard case, not a discovered violation. The job stays **advisory** (it exits 1 on the
+timeouts). The honest claim is **"3/7 symbolically proven (including every proof against live hook
+code)"** — never "7/7 verified." Closing more would need a bitwuzla solver + a longer
+`--solver-timeout-assertion`; the divide-by-symbolic lemmas (`redeemIdle`/`depositMint`) may be
+fundamentally intractable, while the divide-by-constant `splitFee` is the likeliest to close.
 
 Run locally on any supported setup (Linux, macOS 14+ arm64, or Docker):
 
