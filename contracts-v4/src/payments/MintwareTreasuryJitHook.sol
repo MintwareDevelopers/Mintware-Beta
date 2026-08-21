@@ -677,6 +677,16 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
 
     // ── Phase-2 counter-asset (ETH) leg ─────────────────────────────────────────────────────────────
 
+    /// @dev NATIVE-ETH LIMITATION (deferred; the leg is dark by default). The `_pay`/`receive()` seams below
+    ///      carry native-ETH (`address(0)`) settlement scaffolding, but the leg is NOT yet native-ETH-safe
+    ///      end-to-end: (1) `unlockCallback` (and `_close`'s claim redemption) read
+    ///      `teamToken.balanceOf(...)` — an ERC-20 call that reverts when `teamToken == IERC20(address(0))`,
+    ///      so any counter round that defers a USDC claim (the normal case once the JIT range is traversed)
+    ///      cannot be swept; and (2) the treasury vault's junior/team reserve is an ERC-20
+    ///      (`commitTeam` → `safeTransferFrom`), so it cannot even back a native-ETH pool. A native-ETH
+    ///      counter pool therefore needs a wrapped-ETH (WETH) counter asset today, OR a native-balance
+    ///      rework of the sweep + vault. Regression markers: `MintwareTreasuryJitCounterNativeEth.t.sol`.
+
     /// @notice Mirror of `_open` for the ETH side, using v4-NATIVE FLASH accounting (no external loan, no
     ///         price pre-move): borrow a bounded senior-USDC slice, lay a tight single-sided ETH range at the
     ///         CURRENT (pre-trade) tick, and let `modifyLiquidity` book the ETH owed as a transient NEGATIVE
@@ -782,6 +792,18 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     ///      PoolManager reverts the trader's swap). Reads the outstanding ETH debt and buys EXACTLY that much
     ///      ETH with the borrowed USDC (exact-output, oracle-banded); the ETH output nets the debt to zero
     ///      and the USDC cost is paid from the hook's held USDC.
+    ///
+    /// @dev BAND-BLOCK = SAFE-REVERT (a LIVENESS cost, NOT a safety hole). The exact-output repay is clamped
+    ///      to the truncated-oracle band via `_swapLimit`. If a fast, same-tx spot move pushes price BEYOND
+    ///      the band, the clamped swap cannot buy the full owed ETH → a nonzero ETH delta survives →
+    ///      `_closeCounter`'s `require(currencyDelta == 0, "eth debt")` (or, failing that, PoolManager's
+    ///      `CurrencyNotSettled`) reverts the ENTIRE trader swap. That atomically ROLLS BACK the counter
+    ///      borrow taken earlier in this tx's `beforeSwap`: `jitBorrowed`, senior NAV, and the junior buffer
+    ///      are left exactly as before the swap, and nothing is stranded. The band boundary is empirically
+    ///      ~(SWEEP_BAND_TICKS + the counter range width) ≈ a ~6-7% dislocation from the oracle
+    ///      (see `MintwareTreasuryJitCounterHardening.t.sol`). A GRACEFUL revert-to-resting-liquidity fallback
+    ///      (unwind against the vault's own resting position instead of reverting) is a DEFERRED item — it is
+    ///      subtle and unbuilt; today a band-block simply costs the swap its liveness, never solvency.
     function _zeroCounterEthDebt(Currency ethC) internal virtual {
         int256 d = poolManager.currencyDelta(address(this), ethC);
         if (d >= 0) {
@@ -898,7 +920,8 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     function _teamCurrency() private view returns (Currency) { return usdcIsCurrency0 ? _c1 : _c0; }
 
     /// @dev Accept native ETH from `poolManager.take` on native-ETH counter-leg pools. Only the PoolManager
-    ///      ever sends value here; on ERC-20 pools this is never invoked.
+    ///      ever sends value here; on ERC-20 pools this is never invoked. NOTE: native-ETH counter pools are
+    ///      not yet fully supported — see the NATIVE-ETH LIMITATION note above the counter leg.
     receive() external payable {}
 
     function _key() private view returns (PoolKey memory) {
