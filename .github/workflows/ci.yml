@@ -28,6 +28,23 @@ jobs:
       - name: Check .claude AUTO blocks are in sync with code
         run: node scripts/context-sync.mjs --check
 
+  branch-drift:
+    name: Branch drift (which branch is real)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history — behind/ahead vs origin/main needs it
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # Always surface the full drift picture in the logs (informational; never fails).
+      - name: Report branch drift vs main
+        run: node scripts/branch-drift.mjs
+      # Fails if THIS branch is egregiously behind main → you may be planning/merging off a stale base.
+      - name: Fail if the branch is far behind main
+        run: node scripts/branch-drift.mjs --check
+
   js-tests:
     name: Vitest
     runs-on: ubuntu-latest

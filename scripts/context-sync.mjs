@@ -74,7 +74,9 @@ const generators = {
   contracts() {
     const files = ['contracts-v4', 'contracts-ai']
       .flatMap((d) => walk(d, (f) => f.endsWith('.sol')))
-      .filter((f) => f.includes('/src/') || f.includes('/script/'))
+      // `/src/` or `/script/`, but NEVER the forge lib submodules (`.../lib/<dep>/src/…`) — those are
+      // only present when `forge install` has run, so counting them makes this block non-deterministic.
+      .filter((f) => (f.includes('/src/') || f.includes('/script/')) && !f.includes('/lib/'))
       .sort()
     return files.map((f) => `- \`${f}\``).join('\n')
   },
@@ -103,7 +105,8 @@ const generators = {
     const srcNames = [...new Set(
       ['contracts-v4', 'contracts-ai']
         .flatMap((d) => walk(d, (f) => f.endsWith('.sol')))
-        .filter((f) => f.includes('/src/'))
+        // exclude forge lib submodules — see `contracts()`; keeps the count deterministic across CI/local.
+        .filter((f) => f.includes('/src/') && !f.includes('/lib/'))
         .map((f) => f.split('/').pop().replace(/\.sol$/, ''))
     )].sort()
     const undeployed = srcNames.filter((n) => !deployedNames.has(n))

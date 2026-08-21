@@ -19,6 +19,7 @@ Facts derivable from the codebase are **never hand-written**. They live in `AUTO
 
 - Regenerate: `pnpm context:sync` · Verify in CI/pre-commit: `pnpm context:check` (exits 1 if stale).
 - **Never hand-edit between the markers** — your edit is overwritten on the next sync.
+- **"Which branch is real":** `pnpm branches:drift` reports every branch's distance from `main` (this repo has branches 500+ commits behind); `pnpm branches:check` is the CI gate that fails a PR built on an egregiously stale base. Run the report before trusting any "what's built" answer.
 - Generators + their sources (add a generator in `scripts/context-sync.mjs`, add a block anywhere in a target file):
 
 | Block | Source of truth |
