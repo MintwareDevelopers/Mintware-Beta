@@ -35,23 +35,33 @@ trusted callees this is safe, but moving the `positionLiquidity` write *before* 
 | `check_redeemIdle_sumNeverExceedsBacking` | Σ pro-rata over disjoint redeemers ≤ backing (solvency) | idle-leg redeem mulDiv |
 | `check_depositMint_noInflation` | `(TL+V)·liq/(managed+V)` floor — no value minted from nothing | deposit-mint mulDiv w/ virtual-liquidity offset |
 
-**Execution status:** BLOCKED by a toolchain incompatibility — **Halmos 0.2.6** (latest on PyPI) crashes
-with an internal `IndexError: pop from empty list` at parse time (0.0s, before any solving) against
-**Forge 1.5.1**'s build-artifact format. This is a version-compat issue, not a proof failure. Resolving
-it in-repo would require pinning an older Forge (which regresses the rest of the build) or a
-patched/from-source Halmos.
+**Execution status (2026-08-21): specs run in CI (Linux); the local dev box can't run Halmos.** Root
+cause is environmental, **not a proof failure**:
 
-**Mitigation / why this is acceptable now:** every property above is already covered by the
-**256×128k Foundry invariants** which passed with 0 reverts — e.g. `_splitFee` conservation +
-rounding-favors-LP is exercised by the increment-3 conservation tests, and the redeem/deposit mulDiv
-rounding by `invariant_rounding_favors_vault` + `deposit_redeem_no_value_creation`. The Halmos file
-gives the auditor **ready-to-run symbolic specs**; run them under a pinned toolchain:
+- The maintainer dev box is **macOS 13 (Darwin 22.3) on arm64**. A current Halmos depends on
+  `yices-solver`, whose only arm64 wheel targets **macOS 14+** — so `uv`/`pipx` can't install it and
+  fall back to **Halmos 0.2.6**, which crashes with an internal `IndexError: pop from empty list` at
+  parse time (~0.01s, before any solving). Verified this is not fixable locally by: a clean `--ast`
+  rebuild, an `--evm-version paris` build (rules out PUSH0), a forced `halmos>=0.2.9 --python 3.12`
+  install (yices wheel unavailable), and Docker (not installed). All four dead-ended on the same cause.
+- **Linux has the manylinux `yices` wheels**, so `pipx install halmos` gets a current build there and
+  the specs execute. A **`Formal proofs (Halmos, advisory)` CI job** (`.github/workflows/ci.yml`) now
+  runs all 7 `check_*` on every push/PR. It is **advisory (`continue-on-error`)** until a green run is
+  observed and promoted to a hard gate — this doc will be updated with the observed result, and the
+  `/proof` page must not claim "symbolically verified" until then.
+
+Run locally on any supported setup (Linux, macOS 14+ arm64, or Docker):
 
 ```bash
-uv tool install 'halmos==<pinned>'   # a build compatible with the repo's forge, or
-foundryup -v <forge compatible with halmos>   # in an isolated env
-halmos --contract MWFormalProofs --forge-build-out contracts-v4/out
+pnpm halmos   # forge build --ast && halmos --root . --forge-build-out contracts-v4/out --contract MWFormalProofs
 ```
+
+**Why the properties are already trustworthy in the meantime:** every one above is also covered by the
+**256×128k Foundry invariants** which passed with 0 reverts — e.g. `_splitFee` conservation +
+rounding-favors-LP by the increment-3 conservation tests, and the redeem/deposit mulDiv rounding by
+`invariant_rounding_favors_vault` + `deposit_redeem_no_value_creation`. Halmos **proves** over all
+inputs (within the `vm.assume` bounds) where fuzzing only **samples** — so the CI job is a strict
+enhancement over already-green coverage, not a gap being papered over.
 
 ## 3. Recommendation for the external audit (increment 4)
 - Run the Halmos specs under a pinned Forge/Halmos pair (or Certora on the same properties).

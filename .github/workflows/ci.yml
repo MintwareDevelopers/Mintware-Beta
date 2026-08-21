@@ -106,6 +106,32 @@ jobs:
           cargo test --locked
           cargo clippy --all-targets -- -D warnings
 
+  formal-proofs:
+    name: Formal proofs (Halmos, advisory)
+    runs-on: ubuntu-latest
+    # Where the symbolic proofs actually EXECUTE. The repo's macOS-13-arm64 dev box can't install a
+    # recent Halmos (its yices-solver wheel targets macOS 14+, so uv falls back to 0.2.6, which crashes
+    # with an internal IndexError before solving). Linux has the manylinux yices wheels, so `pipx install
+    # halmos` gets a current build and the 7 MWFormalProofs specs run here. Advisory (continue-on-error)
+    # until a green run is observed and promoted to a hard gate — see docs/developers/ulv-formal-verification.md.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive # forge lib deps (v4-core/periphery, forge-std)
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install Halmos
+        run: pipx install halmos
+
+      - name: Build with AST (Halmos reads the source AST)
+        run: forge build --ast
+
+      - name: Halmos — symbolic proofs (MWFormalProofs, all 7 check_*)
+        run: halmos --root . --forge-build-out contracts-v4/out --contract MWFormalProofs
+
   security-audit:
     name: Dependency audit (advisory)
     runs-on: ubuntu-latest
