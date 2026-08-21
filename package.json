@@ -45,6 +45,8 @@
     "anchor:deploy:mainnet": "anchor deploy --provider.cluster mainnet",
     "context:sync": "node scripts/context-sync.mjs",
     "context:check": "node scripts/context-sync.mjs --check",
+    "branches:drift": "node scripts/branch-drift.mjs",
+    "branches:check": "node scripts/branch-drift.mjs --check",
     "deployments:sync": "node scripts/deployments-sync.mjs",
     "deployments:check": "node scripts/deployments-sync.mjs --check"
   },
