@@ -1,0 +1,91 @@
+{
+  "_doc": "THE ONE committed source of deploy truth for Mintware. A deploy is NOT done until it is recorded here. No entry = NOT deployed (do not infer deployment from prose in a rule/doc/memory). Read by scripts/context-sync.mjs to generate the AUTO:build-status block in .claude/STATE.md. Fields per contract: address (checksummed; null if the full address isn't yet recorded), chainId, status (live|testnet|deprecated), note, verified (ISO date the address was last confirmed on-chain).",
+  "_reconcile": "When you deploy (or deprecate) a contract, update this file IN THE SAME PR (CONTEXT-MAP reconcile-on-change). Prefer copying the address straight from the Foundry broadcast record. If you only have a truncated address, set address:null and put the partial in note — an explicit gap beats a fake-precise ghost.",
+  "mainnet": {
+    "base": {
+      "AIAttribution": {
+        "address": "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421",
+        "chainId": 8453,
+        "status": "live",
+        "note": "v3 — the ONLY mainnet contract. v2 (0xb9FB965...) deprecated.",
+        "verified": "2026-08-08"
+      }
+    }
+  },
+  "testnet": {
+    "base-sepolia": {
+      "MintwareEthSettlement": {
+        "address": "0x20140811123db9C00CA1dF1023BA4fE758B98c5F",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "multi-collateral ETH->USDC settlement swap",
+        "verified": "2026-08-19"
+      },
+      "EthCollateralVault": {
+        "address": "0x09Cda8519737a60FD16D263f94fb56237CDb7E42",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "a MintwareYieldVault instance holding mock WETH — the SPEND/collateral vault, NOT a fee-earning ETH LP",
+        "verified": "2026-08-19"
+      },
+      "MintwareTreasuryVaultFactory": {
+        "address": "0x45e4f020A002C9B4302C6F2DA59e61C2a85b44F7",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "multi-tenant team-treasury factory; createVault onlyOwner (curated)",
+        "verified": "2026-08-19"
+      },
+      "MintwareStagedLiquidityRouter": {
+        "address": "0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "staged-buffer pairing router; full stage->earn->pair loop proven on-chain",
+        "verified": "2026-08-19"
+      },
+      "ULVVault": {
+        "address": null,
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "GAP: rules cite a truncated 0x6c0d…5132 — full address not in repo. Complete from the broadcast record.",
+        "verified": null
+      },
+      "ULVHook": {
+        "address": null,
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "GAP: rules cite a truncated 0x9f3c…0AC8 — full address not in repo. Complete from the broadcast record.",
+        "verified": null
+      }
+    },
+    "arc": {
+      "MintwareYieldVault": {
+        "address": null,
+        "chainId": 5042002,
+        "status": "testnet",
+        "note": "GAP: rules cite a truncated 0x11Ef…C421 (coincidental string-match with the Base AIAttribution addr, different chain). Full address not in repo.",
+        "verified": null
+      },
+      "MintwarePaymentGateway": {
+        "address": null,
+        "chainId": 5042002,
+        "status": "testnet",
+        "note": "GAP: rules cite a truncated 0x1D07…5399. Complete from the broadcast record.",
+        "verified": null
+      },
+      "MintwareERC4626YieldAdapter": {
+        "address": null,
+        "chainId": 5042002,
+        "status": "testnet",
+        "note": "GAP: rules cite a truncated 0xb9FB…2B88. Complete from the broadcast record.",
+        "verified": null
+      },
+      "MintwareCctpDepositRouter": {
+        "address": null,
+        "chainId": 5042002,
+        "status": "testnet",
+        "note": "GAP: rules cite a truncated 0xDB9D…Fc03. Complete from the broadcast record.",
+        "verified": null
+      }
+    }
+  }
+}
