@@ -204,11 +204,11 @@ contract YieldLoopIntegration is Test {
     ///         `maxSuppliable()`, and they always set finite mock supply caps. Only the ASSEMBLED vault→router
     ///         path surfaces it.
     ///
-    ///         This test PINS the current (buggy) behavior so the finding is executable; it will start
-    ///         FAILING the moment `maxSuppliable()` is hardened to saturate (e.g. cap the running sum at
-    ///         `type(uint256).max`), which is the intended fix. The main loop above deliberately uses finite
-    ///         venue caps — a legitimate, working configuration that sidesteps the overflow.
-    function test_FINDING_uncapped_children_overflow_bricks_vault_deposit() public {
+    ///         FIXED (fix/multivenue-headroom-overflow): `maxSuppliable()`/`maxWithdrawable()` now use a
+    ///         SATURATING sum (`_satAdd`), so two uncapped children report `type(uint256).max` (effectively
+    ///         unbounded headroom) instead of overflowing and bricking the deposit path. This test now
+    ///         asserts the deposit SUCCEEDS — it will go red again if the saturation is ever removed.
+    function test_FIXED_uncapped_children_deposit_succeeds() public {
         MockVenueAdapter c1 = new MockVenueAdapter(IERC20(address(usdc))); // no cap => maxSuppliable == uint256.max
         MockVenueAdapter c2 = new MockVenueAdapter(IERC20(address(usdc))); // no cap => maxSuppliable == uint256.max
 
@@ -225,12 +225,15 @@ contract YieldLoopIntegration is Test {
         vm.prank(curator);
         r2.setVenues(vs, ws);
 
+        // The two uncapped children saturate to an unbounded ceiling instead of overflowing.
+        assertEq(r2.maxSuppliable(), type(uint256).max, "saturating sum should report unbounded, not revert");
+
         vm.startPrank(alice);
         usdc.approve(address(v2), type(uint256).max);
-        // The vault reads r2.maxSuppliable() (= uint256.max + uint256.max) and the deposit reverts on overflow.
-        vm.expectRevert(stdError.arithmeticError);
-        v2.deposit(1_000e6, alice);
+        uint256 shares = v2.deposit(1_000e6, alice); // no longer reverts
         vm.stopPrank();
+        assertGt(shares, 0, "deposit should mint shares");
+        assertEq(v2.totalAssets(), 1_000e6, "deposited capital accounted, money path not bricked");
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────
