@@ -94,6 +94,7 @@ User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` 
 | `/about` · `/defi` · `/docs` · `/teams` · `/attribution` | `app/{about,defi,docs,teams,attribution}/page.tsx` |
 | `/vaults` | `app/(rewards)/vaults/page.tsx` |
 | `/yield-payment-network` | `app/yield-payment-network/page.tsx` |
+| `/the-math` | `app/the-math/page.tsx` — interactive yield-engine simulator (floor + fees + MEV stack, take-home vs a fund, real DeFi precedents). Footer-linked as "The Math"; the on-platform home of the value-prop model. |
 | `/agents` | `app/agents/page.tsx` (public — leads with earn + x402) |
 | `/agents/leaderboard` | `app/(web3)/agents/leaderboard/page.tsx` (auth) |
 | `/agent/[address]` | `app/(web3)/agent/[address]/page.tsx` (auth) |

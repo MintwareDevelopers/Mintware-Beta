@@ -18,6 +18,7 @@ const FOOTER_LINKS = [
   { href: '/app/swap', label: 'Swap' },
   { href: '/agents', label: 'Agents' },
   { href: '/proof', label: 'Proof' },
+  { href: '/the-math', label: 'The Math' },
   { href: '/docs', label: 'Docs' },
   { href: '/about', label: 'About' },
   { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
