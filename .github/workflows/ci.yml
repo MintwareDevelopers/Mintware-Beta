@@ -143,6 +143,24 @@ jobs:
           halmos --root . --forge-build-out contracts-v4/out --contract MWFormalProofs \
             --solver-timeout-assertion 120000
 
+  coq-proofs:
+    name: Formal proofs (Coq, mulDiv lemmas)
+    runs-on: ubuntu-latest
+    # A REAL gate (not advisory): these are the 4 nonlinear mulDiv lemmas that Halmos/SMT can't
+    # decide (div-by-symbolic). Coq's nia proves them as decidable, machine-checked theorems — so
+    # `coqc` exiting 0 IS the proof. If this job is green, the 4 are formally verified; combined with
+    # Halmos's 3/7 on live hook code, all 7 MWFormalProofs properties are covered by a proof (not just
+    # fuzzing). See docs/developers/ulv-formal-verification.md.
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Coq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y coq
+          coqc --version
+      - name: Compile the mulDiv lemma proofs (coqc = verification)
+        run: coqc contracts-v4/proofs/coq/MulDivLemmas.v
+
   security-audit:
     name: Dependency audit (advisory)
     runs-on: ubuntu-latest
