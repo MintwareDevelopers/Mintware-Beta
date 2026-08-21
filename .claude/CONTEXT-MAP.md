@@ -41,7 +41,8 @@ Every other mention must be a *pointer* to the home, never a copy.
 | Env vars, feature flags, crons, deploy | [`rules/deployments.md`](rules/deployments.md) |
 | Internal API routes | [`rules/api.md`](rules/api.md) |
 | Pages / routing / groupings | [`rules/architecture.md`](rules/architecture.md) |
-| Contracts + addresses (live = Forge) | [`rules/smart-contracts.md`](rules/smart-contracts.md) |
+| Contract code / behavior (Forge) | [`rules/smart-contracts.md`](rules/smart-contracts.md) |
+| **Deployed addresses (the machine-checkable deploy record)** | [`config/deployments.json`](../config/deployments.json) → generates `AUTO:build-status` in [`STATE.md`](STATE.md). **No entry = NOT deployed.** |
 | DB schema | [`rules/schema.md`](rules/schema.md) |
 | Vaults / ULV | [`rules/vaults.md`](rules/vaults.md) |
 | Payments — YPN, settlement, edge-auth/relayer, Arc | [`rules/payments-ypn.md`](rules/payments-ypn.md) |
@@ -52,8 +53,11 @@ Every other mention must be a *pointer* to the home, never a copy.
 **The trigger — a change isn't done until its one home is updated in the same PR.**
 The PR template carries the checklist line; the rule is:
 
-> Did this PR add/remove a **route, page, cron, env flag, or contract**, or **ship/shelve a
-> surface**? Then update its one home (above) **and** `STATE.md` in this same PR.
+> Did this PR add/remove a **route, page, cron, env flag, or contract**, **deploy/deprecate a
+> contract on-chain**, or **ship/shelve a surface**? Then update its one home (above) **and**
+> `STATE.md` in this same PR. **A deploy is not done until [`config/deployments.json`](../config/deployments.json)
+> records it** (copy the address from the Foundry broadcast; a truncated address → `address:null` +
+> a note, never a fake-precise ghost), then run `pnpm context:sync`.
 
 Drift lives in the gap between the code change and the doc change. Same-PR closes the gap.
 

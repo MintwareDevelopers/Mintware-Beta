@@ -78,6 +78,46 @@ const generators = {
       .sort()
     return files.map((f) => `- \`${f}\``).join('\n')
   },
+  // Deploy truth, generated from the ONE committed record (config/deployments.json) + the src tree.
+  // Kills the "built ≠ deployed" ghost: a session reads this table, and anything not in it is NOT deployed.
+  'build-status'() {
+    let dep
+    try { dep = JSON.parse(readFileSync(join(ROOT, 'config/deployments.json'), 'utf8')) } catch {
+      return '_No `config/deployments.json` — deploy status is unverifiable. Add the one committed deploy record._'
+    }
+    const rows = []
+    let full = 0, gaps = 0
+    const deployedNames = new Set()
+    for (const env of ['mainnet', 'testnet']) {
+      for (const [chain, contracts] of Object.entries(dep[env] || {})) {
+        for (const [name, i] of Object.entries(contracts)) {
+          if (name.startsWith('_')) continue
+          deployedNames.add(name)
+          if (i.address) full++; else gaps++
+          const addr = i.address ? `\`${i.address}\`` : '⚠ **address missing**'
+          rows.push({ env, name, cell: `| \`${name}\` | ${env} · ${chain} | ${addr} | ${i.status || '?'} |` })
+        }
+      }
+    }
+    rows.sort((a, b) => (a.env === b.env ? a.name.localeCompare(b.name) : a.env === 'mainnet' ? -1 : 1))
+    const srcNames = [...new Set(
+      ['contracts-v4', 'contracts-ai']
+        .flatMap((d) => walk(d, (f) => f.endsWith('.sol')))
+        .filter((f) => f.includes('/src/'))
+        .map((f) => f.split('/').pop().replace(/\.sol$/, ''))
+    )].sort()
+    const undeployed = srcNames.filter((n) => !deployedNames.has(n))
+    return [
+      '_Source: `config/deployments.json` (the one committed deploy record). **No entry here = NOT deployed** — never infer a deployment from prose._',
+      '',
+      '| Contract | Env · Chain | Address | Status |',
+      '|---|---|---|---|',
+      ...rows.map((r) => r.cell),
+      '',
+      `**${full} recorded with a full address, ${gaps} flagged as a GAP** (truncated in the rules — complete from the broadcast).`,
+      `**${undeployed.length} of ${srcNames.length} \`src\` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).`,
+    ].join('\n')
+  },
   'public-env-flags'() {
     const src = ['app', 'lib', 'components'].flatMap((d) => walk(d, (f) => /\.(ts|tsx)$/.test(f)))
     const found = new Set()
