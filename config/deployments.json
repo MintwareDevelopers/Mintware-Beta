@@ -55,36 +55,88 @@
         "status": "testnet",
         "note": "GAP: rules cite a truncated 0x9f3c…0AC8 — full address not in repo. Complete from the broadcast record.",
         "verified": null
+      },
+      "MintwareYieldVault": {
+        "address": "0x09cda8519737a60fd16d263f94fb56237cdb7e42",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "from broadcast DeployEthCollateralVault.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
+      },
+      "MintwareTreasuryVaultRegistry": {
+        "address": "0x0f6a05666c554671bbffa2079778ae47ec3f30e4",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "from broadcast DeployTreasuryFactory.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
+      },
+      "MintwareTreasuryJitHookDeployer": {
+        "address": "0x42a32787595d9f47a369b3b11ac24b8d0552c4a7",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "from broadcast DeployTreasuryFactory.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
+      },
+      "MintwareTreasuryGatewayDeployer": {
+        "address": "0xfbf781676fe93cd8d8d8e17716461c29f549a644",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "from broadcast DeployTreasuryFactory.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
+      },
+      "MintwareTreasuryVault": {
+        "address": "0x06a894cb97b3f032b0a9b3365d62da392b7f4c2b",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "from broadcast SoakAmAmm.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
+      },
+      "MWAmAuction": {
+        "address": "0x11d7bda166a62ac9edb65152f8cf035c219c5e00",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "from broadcast SoakAmAmm.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
       }
     },
     "arc": {
       "MintwareYieldVault": {
-        "address": null,
+        "address": "0x11ef2c7d84b755f02f3652ca8b16e6e81a96c421",
         "chainId": 5042002,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0x11Ef…C421 (coincidental string-match with the Base AIAttribution addr, different chain). Full address not in repo.",
-        "verified": null
+        "note": "from broadcast DeployArcSpendStack.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
       },
       "MintwarePaymentGateway": {
-        "address": null,
+        "address": "0x1d075cb38f5c126d9c23f1f91fac0a9c8d135399",
         "chainId": 5042002,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0x1D07…5399. Complete from the broadcast record.",
-        "verified": null
+        "note": "from broadcast DeployArcSpendStack.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
       },
       "MintwareERC4626YieldAdapter": {
-        "address": null,
+        "address": "0xb9fb965caa7197932b52631e0121ea54586e2b88",
         "chainId": 5042002,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0xb9FB…2B88. Complete from the broadcast record.",
-        "verified": null
+        "note": "from broadcast DeployArcSpendStack.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
       },
       "MintwareCctpDepositRouter": {
-        "address": null,
+        "address": "0xdb9db7008cffb09bd1d943c237f57327383dfc03",
         "chainId": 5042002,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0xDB9D…Fc03. Complete from the broadcast record.",
-        "verified": null
+        "note": "from broadcast DeployArcSpendStack.s.sol",
+        "verified": "2026-08-21",
+        "source": "broadcast"
       }
     }
   }
