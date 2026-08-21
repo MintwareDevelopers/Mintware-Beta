@@ -59,14 +59,35 @@ no perpetual-funding basis trade, no borrow-against-collateral strategy. One tie
 - **→ External audit** of the converged accounting before any real value.
 
 ### Phase 1 — Safe yield core (~8–12%, mostly built)
-- **Config the multi-venue adapter to best-of venues** — weight to deep, reputable curated vaults
+- **Weight the multi-venue adapter toward best-of venues** — deep, reputable curated vaults
   (Morpho Steakhouse/Gauntlet, Fluid, Sky) with Aave as the floor; **cap the exotic high-APY vaults**,
-  tier by venue risk. *Have `MintwareMultiVenueYieldAdapter`; need venue weights + risk caps.*
-  → lifts the floor from ~3.5% (vanilla Aave) to ~5–6%.
+  tier by venue risk. → lifts the floor from ~3.5% (vanilla Aave) to ~5–6%.
+  > **⚠ Accuracy note (2026-08-21 — corrects an earlier over-claim).** `MintwareMultiVenueYieldAdapter`
+  > does **STATIC, curator-set weighted allocation** (`setVenues(weights)` → `_deploy` splits by
+  > `weightBps`) — it does **NOT** read live rates and route to the best. Per-venue **risk cap** is now
+  > enforced on-chain (`maxVenueWeightBps`, PR #335). But two real gaps remain: (1) it is **not wired into
+  > any deployed vault** — the deploy scripts wire a *single* adapter, and the vault's slot is
+  > `IYieldAdapter public immutable adapter` (**one, set-once, conceived as Aave**), so today a treasury
+  > vault genuinely *is* pigeonholed into one venue; (2) there is **no dynamic best-rate shopping**. Those
+  > are **Phase 1b** below, not done here.
 - **Turn on JIT-concentrated fees + MEV recapture on our own deep pools only**, selective-fired.
   *Have `MWHookCoordinator` / `MintwareTreasuryJitHook` / `MWDynamicFee`; need the selective-firing
   EV keeper + deep-pool "tier" config.*
 - Senior par-protected; junior first-loss.
+
+### Phase 1b — Dynamic best-rate routing (the rate-keeper) *(new; the "shop across platforms" lever)*
+The genuine multi-source uplift: **read each venue's *current* rate (Aave / Morpho / Fluid / Sky / sUSDe)
+and route idle capital toward the best**, bounded by the Phase 1 per-venue cap. This is *not* the static
+weighting above — it's a live comparison + re-allocation. Three pieces:
+- **The allocation brain** (off-chain, pure + tested): `lib/yield/rateRouter.ts` `computeBestRateWeights()`
+  — rank venues by live APY, greedily fill toward the best up to `maxVenueBps` per venue (so it
+  diversifies across the top few, never all-in), leave an idle buffer. Data source: the live DefiLlama
+  feed we already use (`/api/benchmarks/yields`). **Built here.**
+- **The keeper** (off-chain service, *deploy-gated*): periodically calls `adapter.setVenues(...)` +
+  `rebalance()` with the computed weights. The adapter already supports re-weighting — this just drives it.
+- **The wiring** (*deploy-gated*): a deploy script that stands a vault up pointing at the multi-venue
+  adapter → real child adapters (Aave + a Morpho/sUSDe `MintwareERC4626YieldAdapter`), since nothing does
+  this today and the vault's adapter slot is immutable (must be set at construction).
 
 ### Phase 2 — ETH-fee capture, the *safe* way (the differentiator)
 - **Build the flash-loan atomic JIT ETH leg** — the USDC **never leaves the lending floor**;
