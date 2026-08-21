@@ -123,31 +123,23 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Install Halmos (+ best-effort bitwuzla for the nonlinear mulDiv lemmas)
+      - name: Install Halmos
         run: |
           pipx install halmos
           halmos --version
-          # bitwuzla is stronger than z3/yices on nonlinear bitvector arithmetic (the mulDiv lemmas).
-          # Best-effort: if a `bitwuzla` binary lands on PATH we point Halmos at it; otherwise we fall
-          # back to Halmos's default solver. Never hard-fails the job on a missing binary.
-          pipx install bitwuzla 2>/dev/null || pip install --user bitwuzla 2>/dev/null || true
-          if command -v bitwuzla >/dev/null 2>&1; then echo "bitwuzla: $(command -v bitwuzla)"; else echo "bitwuzla: not on PATH — using Halmos default solver"; fi
-          # Capture the exact solver flag names for this Halmos build (so any follow-up wires them correctly).
-          echo "--- halmos solver options ---"; halmos --help 2>&1 | grep -iE "solver|timeout|bitwuzla|yices|z3" || true
 
       - name: Build with AST (Halmos reads the source AST)
         run: forge build --ast
 
       - name: Halmos — symbolic proofs (MWFormalProofs, all 7 check_*)
-        # Raise the per-assertion solver timeout well above the 60s default — the 4 mulDiv lemmas
-        # (nonlinear 256-bit mul + division by a symbolic value) need far longer to decide (if decidable).
-        # Point at bitwuzla when it's available.
+        # Halmos ships bitwuzla/cvc5 as selectable solvers (--solver, auto-downloaded) — bitwuzla is
+        # stronger than the default yices on the nonlinear 256-bit mulDiv lemmas. A prior run showed raw
+        # time is NOT the lever (the 4 lemmas still TIMEOUT at 300s under yices), so this swaps the SOLVER
+        # and keeps a moderate 180s cap — a capable BV solver either cracks these fairly quickly or the
+        # symbolic mul + division-by-symbolic is intractable and no timeout helps.
         run: |
-          SOLVER_ARG=""
-          if command -v bitwuzla >/dev/null 2>&1; then SOLVER_ARG="--solver-command bitwuzla"; fi
-          echo "solver arg: '${SOLVER_ARG:-<halmos default>}'"
           halmos --root . --forge-build-out contracts-v4/out --contract MWFormalProofs \
-            --solver-timeout-assertion 300000 $SOLVER_ARG
+            --solver bitwuzla --solver-timeout-assertion 180000
 
   security-audit:
     name: Dependency audit (advisory)
