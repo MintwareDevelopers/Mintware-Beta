@@ -45,7 +45,14 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
 
     Venue[] private _venues;
 
+    /// @notice Max weight (bps) any single venue may be assigned in `setVenues` — the on-chain
+    ///         venue-risk cap. Defaults to `BPS` (no cap; opt-in). Set it below `BPS` to force
+    ///         diversification so no single (possibly exotic, higher-yield) venue can dominate the
+    ///         allocation — turning "trust the curator not to over-concentrate" into an enforced rule.
+    uint16 public maxVenueWeightBps;
+
     event VaultSet(address indexed vault);
+    event MaxVenueWeightSet(uint16 maxWeightBps);
     event VenuesSet(uint256 count, uint16 totalWeightBps);
     event Rebalanced(uint256 pulled, uint256 redeployed);
     event Supplied(uint256 amount, uint256 deployed);
@@ -56,6 +63,8 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
     error VaultAlreadySet();
     error WeightOverflow();
     error EmptyVenues();
+    error InvalidCap();
+    error VenueWeightCapExceeded();
 
     modifier onlyVault() {
         if (msg.sender != vault) revert OnlyVault();
@@ -69,6 +78,7 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
         if (asset_ == address(0)) revert ZeroAddress();
         asset = IERC20(asset_);
         vault = vault_;
+        maxVenueWeightBps = BPS; // no cap by default (backward-compatible); curator opts in below BPS
     }
 
     // ── admin / curation ─────────────────────────────────────────────────────────
@@ -77,6 +87,15 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
         if (vault != address(0)) revert VaultAlreadySet();
         vault = vault_;
         emit VaultSet(vault_);
+    }
+
+    /// @notice Set the per-venue weight cap (bps). Must be in `(0, BPS]`. Applies to future `setVenues`
+    ///         calls; it does not retroactively move funds — re-run `setVenues` to enforce it on the
+    ///         current set. Lowering it is the risk-tiering lever (e.g. `4_000` = no venue above 40%).
+    function setMaxVenueWeightBps(uint16 cap) external onlyOwner {
+        if (cap == 0 || cap > BPS) revert InvalidCap();
+        maxVenueWeightBps = cap;
+        emit MaxVenueWeightSet(cap);
     }
 
     /// @notice Set the venue set + target weights (curator's allocation call). `Σ weightBps ≤ 10_000`; any
@@ -88,6 +107,7 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
         delete _venues;
         for (uint256 i; i < adapters.length; ++i) {
             if (address(adapters[i]) == address(0)) revert ZeroAddress();
+            if (weightsBps[i] > maxVenueWeightBps) revert VenueWeightCapExceeded();
             total += weightsBps[i];
             _venues.push(Venue({adapter: adapters[i], weightBps: weightsBps[i]}));
         }
