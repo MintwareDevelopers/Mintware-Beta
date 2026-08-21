@@ -166,15 +166,15 @@ contract MintwareTreasuryVaultFactory is Ownable {
         // 5. Wire the JIT seam + gateway (factory is still owner). Set the dynamic-fee floor to p.poolFee
         //    (the hook's ceiling/slope keep their in-code defaults; ops can retune post-transfer).
         vault.setJitHook(hookAddr);
-        MintwareTreasuryJitHook(hookAddr).setJitSkipSender(vaultAddr);
-        MintwareTreasuryJitHook(hookAddr).setBaseFeePips(p.poolFee);
+        MintwareTreasuryJitHook(payable(hookAddr)).setJitSkipSender(vaultAddr);
+        MintwareTreasuryJitHook(payable(hookAddr)).setBaseFeePips(p.poolFee);
         gatewayAddr = gatewayDeployer.deploy(vaultAddr, p.usdc, p.treasury, p.gatewayAdmin);
         vault.setGateway(gatewayAddr);
         vault.setProtocolTreasury(p.treasury);
 
         // 6. Two-phase ownership: hand the wired vault + hook to the intended ops owner.
         vault.transferOwnership(p.owner);
-        MintwareTreasuryJitHook(hookAddr).transferOwnership(p.owner);
+        MintwareTreasuryJitHook(payable(hookAddr)).transferOwnership(p.owner);
 
         // 7. Register + count.
         uint256 id = registry.register(vaultAddr, hookAddr, gatewayAddr, p.team, p.teamToken, p.usdc);

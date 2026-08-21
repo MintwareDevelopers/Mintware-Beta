@@ -13,19 +13,24 @@ import {ModifyLiquidityParams, SwapParams}       from "@uniswap/v4-core/src/type
 import {Hooks}                  from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {TickMath}               from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary}           from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {TransientStateLibrary}  from "@uniswap/v4-core/src/libraries/TransientStateLibrary.sol";
 import {LPFeeLibrary}           from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {MWOracleGuard}          from "../hooks/MWOracleGuard.sol";
 import {MWDynamicFee}           from "../hooks/MWDynamicFee.sol";
 import {LiquidityAmounts}       from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
+import {FullMath}               from "@uniswap/v4-core/src/libraries/FullMath.sol";
 
 import {IERC20}    from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable}   from "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @dev The minimal vault surface the hook drives — the borrow-seam (increment 1).
+/// @dev The minimal vault surface the hook drives — the borrow-seam (increment 1) plus the Phase-2
+///      counter-asset leg (`borrowIdleForJitCounter` + its `jitCounterEnabled` master gate).
 interface IJitVault {
     function borrowIdleForJit(uint256 want) external returns (uint256 lent);
+    function borrowIdleForJitCounter(uint256 want) external returns (uint256 lent);
     function settleJitReturn(uint256 usdcReturned) external;
+    function jitCounterEnabled() external view returns (bool);
 }
 
 /// @dev Minimal view of MWAmAuction the swap hot path needs (Phase 3). The hook is the auction's
@@ -57,10 +62,11 @@ interface IMWAmAuction {
 ///         the pool without any liquidity-callback. V4 auto-skips these callbacks for the hook's OWN swap
 ///         (`msg.sender == self`), so the sweep's team→USDC swap needs no reentrancy guard.
 contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
-    using SafeERC20     for IERC20;
-    using PoolIdLibrary for PoolKey;
-    using StateLibrary  for IPoolManager;
-    using MWOracleGuard for MWOracleGuard.State;
+    using SafeERC20            for IERC20;
+    using PoolIdLibrary        for PoolKey;
+    using StateLibrary         for IPoolManager;
+    using TransientStateLibrary for IPoolManager;
+    using MWOracleGuard        for MWOracleGuard.State;
 
     IPoolManager public immutable poolManager;
     IJitVault    public immutable vault;
@@ -80,11 +86,23 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     PoolId public immutable canonicalPoolId;
 
     bytes32 private constant JIT_SALT = bytes32(uint256(0x314));
+    /// @notice Distinct salt for the Phase-2 counter-asset (ETH) JIT position, so the two legs can never
+    ///         collide in the pool's position map. (In practice the vault serializes them to one at a time.)
+    bytes32 private constant JIT_SALT_ETH = bytes32(uint256(0x315));
 
     /// @notice Minimum |amountSpecified| for JIT to fire (size gate; skip dust swaps).
     uint256 public jitThreshold;
     /// @notice JIT range width, in tickSpacings, to one side of the live tick.
     int24 public jitWidthSpacings = 3;
+
+    // ── Phase-2 counter-asset (ETH) JIT leg (ships dark — inert unless the VAULT's `jitCounterEnabled`
+    //    is set; a `borrowIdleForJitCounter` returns 0 while off, so `_openCounter` no-ops) ────────────
+    /// @notice Minimum |amountSpecified| for the COUNTER leg to fire. Separate from `jitThreshold` so the
+    ///         ETH leg can run a HIGHER size floor (design stance: only the largest, clearly-benign flow).
+    ///         Default 0; the real master gate is the vault's `jitCounterEnabled`.
+    uint256 public jitCounterThreshold;
+    /// @notice Counter-leg range width, in tickSpacings, to one side of the (post-seed-swap) live tick.
+    int24 public jitCounterWidthSpacings = 3;
     /// @notice Swaps initiated by this address never fire JIT — set to the LP module, whose own
     ///         recover/collect swaps must NOT recursively borrow + open a JIT position.
     address public jitSkipSender;
@@ -166,6 +184,12 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     int24   private jitLower;
     int24   private jitUpper;
 
+    // ── per-swap counter-leg (ETH) open state (0 between swaps; separate slots so the two legs never
+    //    clobber each other even though the vault serializes them to one outstanding slice) ───────────
+    uint128 private jitLiquidityEth;
+    int24   private jitLowerEth;
+    int24   private jitUpperEth;
+
     // ── proceeds accumulated across swaps, awaiting the keeper sweep ────────────
     /// @notice ERC-6909 claims minted in afterSwap for the closed position's owed tokens.
     uint256 public usdcClaim;
@@ -173,6 +197,10 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
 
     event JitOpened(uint256 lent, uint128 liquidity);
     event JitClosed(uint256 usdcClaimed, uint256 teamClaimed);
+    event JitCounterOpened(uint256 lent, uint256 ethSeed, uint128 liquidity);
+    event JitCounterClosed(uint256 usdcClaimed, uint256 ethSettled);
+    event JitCounterThresholdSet(uint256 threshold);
+    event JitCounterWidthSet(int24 spacings);
     event JitSwept(uint256 usdcReturned);
     event JitThresholdSet(uint256 threshold);
     event JitWidthSet(int24 spacings);
@@ -253,6 +281,11 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     function setJitWidth(int24 s) external onlyOwner { require(s > 0, "width"); jitWidthSpacings = s; emit JitWidthSet(s); }
     /// @notice Exempt an initiator (the LP module) from firing JIT on its own swaps.
     function setJitSkipSender(address s) external onlyOwner { jitSkipSender = s; }
+
+    /// @notice Size gate for the counter-asset (ETH) leg. The vault's `jitCounterEnabled` is the master
+    ///         gate; this only tunes WHICH swaps are large enough to fire once the leg is enabled.
+    function setJitCounterThreshold(uint256 t) external onlyOwner { jitCounterThreshold = t; emit JitCounterThresholdSet(t); }
+    function setJitCounterWidth(int24 s) external onlyOwner { require(s > 0, "width"); jitCounterWidthSpacings = s; emit JitCounterWidthSet(s); }
 
     /// @notice Tune the truncated oracle: max per-block tick move (manipulation clamp) + catch-up cap.
     function setOracleParams(int24 maxMovePerBlock, uint32 maxCatchupBlocks) external onlyOwner {
@@ -378,6 +411,11 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
 
         if (usdcIsOutput && mag >= jitThreshold && sender != jitSkipSender) {
             _open(key, params.zeroForOne, mag);
+        } else if (!usdcIsOutput && mag >= jitCounterThreshold && sender != jitSkipSender && vault.jitCounterEnabled()) {
+            // Phase-2 counter-asset (ETH) leg: the trader BUYS ETH (output = the counter asset). Inert
+            // unless the vault's `jitCounterEnabled` is set (ships dark). The single-sided `usdcIsOutput`
+            // path above is byte-for-byte unchanged. Like `_open`, this must never revert the swap.
+            _openCounter(key, params.zeroForOne, mag);
         }
         // Deviation-scaled dynamic-fee override for THIS swap (canonical pool only). Pure + clamped —
         // never reverts; ignored by V4 unless the pool carries DYNAMIC_FEE_FLAG.
@@ -488,6 +526,10 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
             return (IHooks.afterSwap.selector, int128(0));
         }
         if (jitLiquidity > 0) _close(key);
+        // Phase-2 counter leg: close + NON-DEFERRABLY unwind the ETH inventory back to USDC in the same
+        // unlock (only the USDC side may be deferred as a 6909 claim). Only one of the two legs is ever
+        // open at a time (the vault serializes them), but checking both is harmless.
+        if (jitLiquidityEth > 0) _closeCounter(key);
         // AUDIT (#7/#3): advance the truncated oracle with the post-swap tick (once per block, clamped).
         (, int24 tick,,) = poolManager.getSlot0(key.toId());
         _oracle.update(tick);
@@ -507,8 +549,13 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     ///         swap the team side to USDC, and return the total to the vault. Permissionless — anyone can
     ///         crank it; it only ever moves value from the pool back to the senior.
     function sweepJit() external returns (uint256 usdcReturned) {
-        if (usdcClaim == 0 && teamClaim == 0) return 0;
-        poolManager.unlock(""); // redeem + swap inside the unlock (see unlockCallback)
+        // Nothing pending AND nothing on hand → no-op. The counter leg (Phase 2) repays its ETH flash debt
+        // synchronously in `_closeCounter`, so it may leave physical USDC on hand WITHOUT any 6909 claim
+        // (e.g. a swap that didn't consume the ETH range) — that USDC must still return to the vault, so we
+        // don't early-return purely on the claims being zero.
+        uint256 held = usdc.balanceOf(address(this));
+        if (usdcClaim == 0 && teamClaim == 0 && held == 0) return 0;
+        if (usdcClaim != 0 || teamClaim != 0) poolManager.unlock(""); // redeem + swap inside the unlock
         usdcReturned = usdc.balanceOf(address(this));
         if (usdcReturned > 0) {
             usdc.safeTransfer(address(vault), usdcReturned);
@@ -628,6 +675,146 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
         emit JitClosed(usdcOwed, teamOwed);
     }
 
+    // ── Phase-2 counter-asset (ETH) leg ─────────────────────────────────────────────────────────────
+
+    /// @notice Mirror of `_open` for the ETH side, using v4-NATIVE FLASH accounting (no external loan, no
+    ///         price pre-move): borrow a bounded senior-USDC slice, lay a tight single-sided ETH range at the
+    ///         CURRENT (pre-trade) tick, and let `modifyLiquidity` book the ETH owed as a transient NEGATIVE
+    ///         delta — an ETH flash debt the pool's own reserves fund for the span of this one swap. The
+    ///         trader's ETH-out swap then fills against the range; `_closeCounter` repays the ETH debt (from
+    ///         the borrowed USDC) before the unlock closes. MUST NOT revert the swap: pre-liquidity failure
+    ///         paths return the USDC and no-op.
+    function _openCounter(PoolKey calldata key, bool zeroForOne, uint256 mag) private {
+        // Borrow senior USDC (par accounting; `jitBorrowed += lent`). Held to repay the ETH flash debt on
+        // close — the USDC never physically leaves as ETH; only a transient v4 delta does.
+        uint256 lent = vault.borrowIdleForJitCounter(mag);
+        if (lent == 0) return;
+
+        (uint160 sqrtP, int24 tick,,) = poolManager.getSlot0(key.toId());
+        // Size the ETH provided so its spot value ≈ the borrowed USDC — the borrow must be able to buy the
+        // ETH back on close, so over-sizing the flash debt is unsafe; equal sizing keeps `lent` sufficient.
+        uint256 ethSeed = _usdcToEthAtSpot(lent, sqrtP);
+        if (ethSeed == 0) { _returnAllUsdcToVault(); return; }
+
+        int24 spacing = _tickSpacing;
+        int24 width = spacing * jitCounterWidthSpacings;
+        int24 lo;
+        int24 hi;
+        // Single-sided ETH range at the PRE-TRADE tick, on the side the trader's ETH-out swap traverses —
+        // identical geometry to `_open` (below the tick when zeroForOne, above when oneForZero).
+        if (zeroForOne) {
+            hi = _alignTick(tick, spacing);
+            lo = hi - width;
+        } else {
+            lo = _alignTick(tick, spacing) + spacing;
+            hi = lo + width;
+        }
+        // AUDIT M6: an unusable range must NO-OP (return the borrow), never revert. No ETH has been taken
+        // yet, so we simply hand the USDC back.
+        if (lo < TickMath.minUsableTick(spacing) || hi > TickMath.maxUsableTick(spacing) || lo >= hi) {
+            _returnAllUsdcToVault();
+            return;
+        }
+        // Below-tick single-sided liquidity is pure currency1; above-tick pure currency0 — `ethSeed` funds
+        // whichever side the range sits on.
+        uint128 L = zeroForOne
+            ? LiquidityAmounts.getLiquidityForAmount1(TickMath.getSqrtPriceAtTick(lo), TickMath.getSqrtPriceAtTick(hi), ethSeed)
+            : LiquidityAmounts.getLiquidityForAmount0(TickMath.getSqrtPriceAtTick(lo), TickMath.getSqrtPriceAtTick(hi), ethSeed);
+        if (L == 0) { _returnAllUsdcToVault(); return; }
+
+        (BalanceDelta delta,) = poolManager.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: int256(uint256(L)), salt: JIT_SALT_ETH}),
+            ""
+        );
+        // The ETH side is NEGATIVE (we owe the pool ETH) — LEAVE it as the flash debt spanning the swap.
+        // Only settle the USDC side (dust; the range is single-sided so this is ~0).
+        int128 dUsdc = usdcIsCurrency0 ? delta.amount0() : delta.amount1();
+        if (dUsdc < 0)      _pay(_usdcCurrency(), uint256(uint128(-dUsdc)));
+        else if (dUsdc > 0) poolManager.take(_usdcCurrency(), address(this), uint256(uint128(dUsdc)));
+
+        jitLiquidityEth = L;
+        jitLowerEth = lo;
+        jitUpperEth = hi;
+        emit JitCounterOpened(lent, ethSeed, L);
+        if (surgeHalfLifeSecs != 0) _armSurge();
+    }
+
+    /// @notice Close the counter position and repay the ETH flash debt SYNCHRONOUSLY (non-deferrable). The
+    ///         USDC the trader put into the range settles LAST (the afterSwap gotcha) → DEFER it as a 6909
+    ///         claim, like the single-sided leg. The ETH debt is repaid by buying exactly the outstanding ETH
+    ///         with the borrowed USDC (oracle-banded), so the senior's USDC never carries ETH price exposure
+    ///         across the tx boundary. Leftover USDC returns to the vault (with the swept claim) via `sweepJit`.
+    function _closeCounter(PoolKey calldata key) private {
+        uint128 L = jitLiquidityEth;
+        (BalanceDelta delta,) = poolManager.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({tickLower: jitLowerEth, tickUpper: jitUpperEth, liquidityDelta: -int256(uint256(L)), salt: JIT_SALT_ETH}),
+            ""
+        );
+        // Removal credits the tokens the position now holds: USDC (the trader's input) + any residual ETH.
+        // USDC side → 6909 claim (deferred). ETH side (positive) is LEFT to offset the flash debt in
+        // delta-space; the remaining net-negative ETH delta is repaid in `_zeroCounterEthDebt`.
+        int128 dUsdc = usdcIsCurrency0 ? delta.amount0() : delta.amount1();
+        uint256 usdcOwed;
+        if (dUsdc > 0) {
+            usdcOwed = uint256(uint128(dUsdc));
+            poolManager.mint(address(this), _usdcCurrency().toId(), usdcOwed);
+            usdcClaim += usdcOwed;
+        } else if (dUsdc < 0) {
+            _pay(_usdcCurrency(), uint256(uint128(-dUsdc)));
+        }
+
+        // Repay the outstanding ETH flash debt from the borrowed USDC (buy exactly the owed ETH, banded).
+        _zeroCounterEthDebt(_teamCurrency());
+
+        // AUDIT (Phase 2, load-bearing): the ETH flash debt MUST net to zero before the outer unlock closes —
+        // else PoolManager reverts the trader's swap (CurrencyNotSettled). Assert it explicitly so a
+        // regression fails loudly here rather than as an opaque unlock-close revert.
+        require(poolManager.currencyDelta(address(this), _teamCurrency()) == 0, "eth debt");
+
+        jitLiquidityEth = 0;
+        emit JitCounterClosed(usdcOwed, uint256(uint128(L)));
+    }
+
+    /// @dev The non-deferrable ETH flash-debt repayment, isolated as an internal seam so tests can neuter it
+    ///      to prove it is load-bearing (removing it leaves a nonzero ETH delta → the `require` above /
+    ///      PoolManager reverts the trader's swap). Reads the outstanding ETH debt and buys EXACTLY that much
+    ///      ETH with the borrowed USDC (exact-output, oracle-banded); the ETH output nets the debt to zero
+    ///      and the USDC cost is paid from the hook's held USDC.
+    function _zeroCounterEthDebt(Currency ethC) internal virtual {
+        int256 d = poolManager.currencyDelta(address(this), ethC);
+        if (d >= 0) {
+            // No debt (or a credit) — realize any positive ETH and convert it to USDC so none is stranded.
+            if (d > 0) { poolManager.take(ethC, address(this), uint256(d)); _swapTeamToUsdc(uint256(d)); }
+            return;
+        }
+        uint256 ethDebt = uint256(-d);
+        bool zeroForOne = usdcIsCurrency0; // sell USDC to buy ETH
+        (uint160 cur,,,) = poolManager.getSlot0(_key().toId());
+        BalanceDelta sd = poolManager.swap(
+            _key(),
+            SwapParams({
+                zeroForOne: zeroForOne,
+                amountSpecified: int256(ethDebt), // exact OUTPUT: buy exactly the owed ETH
+                sqrtPriceLimitX96: _swapLimit(zeroForOne, cur)
+            }),
+            ""
+        );
+        // The +ETH output nets the flash debt to zero in delta-space — do NOT take it. Settle only the USDC
+        // owed (paid from the borrowed USDC the hook holds).
+        int128 sUsdc = usdcIsCurrency0 ? sd.amount0() : sd.amount1();
+        if (sUsdc < 0) _pay(_usdcCurrency(), uint256(uint128(-sUsdc)));
+    }
+
+    /// @dev Return every USDC the hook holds to the vault and settle the borrow (used by the counter-leg
+    ///      no-op paths). `settleJitReturn` never reverts; a round-trip shortfall is absorbed by the junior.
+    function _returnAllUsdcToVault() private {
+        uint256 back = usdc.balanceOf(address(this));
+        if (back > 0) usdc.safeTransfer(address(vault), back);
+        vault.settleJitReturn(back);
+    }
+
     /// @notice Band (ticks) the sweep may move price past the oracle before stopping (AUDIT #3, ~5%).
     int24 private constant SWEEP_BAND_TICKS = 500;
 
@@ -648,6 +835,19 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
             ""
         );
         _settleDelta(_key(), delta);
+    }
+
+    /// @dev Phase-2 counter leg: spot-value `usdcAmt` USDC as an amount of the counter asset (ETH) at the
+    ///      current `sqrtP`, so the ETH range provided is worth ≈ the borrowed USDC. FullMath (512-bit)
+    ///      keeps the sqrtPrice² term overflow-safe.
+    function _usdcToEthAtSpot(uint256 usdcAmt, uint160 sqrtP) private view returns (uint256) {
+        uint256 q96 = 1 << 96;
+        if (usdcIsCurrency0) {
+            // USDC = c0, ETH = c1: amount1 = amount0 · (sqrtP / 2^96)²
+            return FullMath.mulDiv(FullMath.mulDiv(usdcAmt, sqrtP, q96), sqrtP, q96);
+        }
+        // ETH = c0, USDC = c1: amount0 = amount1 · (2^96 / sqrtP)²
+        return FullMath.mulDiv(FullMath.mulDiv(usdcAmt, q96, sqrtP), q96, sqrtP);
     }
 
     /// @dev Oracle-bounded price limit for the sweep, clamped to the executable side of `cur` (no revert).
@@ -684,6 +884,11 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     }
 
     function _pay(Currency currency, uint256 amount) private {
+        // Native ETH (Phase-2 counter leg, native-ETH pools): settle by sending value — no sync/transfer.
+        if (Currency.unwrap(currency) == address(0)) {
+            poolManager.settle{value: amount}();
+            return;
+        }
         poolManager.sync(currency);
         IERC20(Currency.unwrap(currency)).safeTransfer(address(poolManager), amount);
         poolManager.settle();
@@ -691,6 +896,10 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
 
     function _usdcCurrency() private view returns (Currency) { return usdcIsCurrency0 ? _c0 : _c1; }
     function _teamCurrency() private view returns (Currency) { return usdcIsCurrency0 ? _c1 : _c0; }
+
+    /// @dev Accept native ETH from `poolManager.take` on native-ETH counter-leg pools. Only the PoolManager
+    ///      ever sends value here; on ERC-20 pools this is never invoked.
+    receive() external payable {}
 
     function _key() private view returns (PoolKey memory) {
         return PoolKey({currency0: _c0, currency1: _c1, fee: _fee, tickSpacing: _tickSpacing, hooks: IHooks(address(this))});
