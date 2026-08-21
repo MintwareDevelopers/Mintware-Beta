@@ -119,18 +119,24 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 |---|---|---|---|
 | `AIAttribution` | mainnet · base | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` | live |
 | `EthCollateralVault` | testnet · base-sepolia | `0x09Cda8519737a60FD16D263f94fb56237CDb7E42` | testnet |
-| `MintwareCctpDepositRouter` | testnet · arc | ⚠ **address missing** | testnet |
-| `MintwareERC4626YieldAdapter` | testnet · arc | ⚠ **address missing** | testnet |
+| `MintwareCctpDepositRouter` | testnet · arc | `0xdb9db7008cffb09bd1d943c237f57327383dfc03` | testnet |
+| `MintwareERC4626YieldAdapter` | testnet · arc | `0xb9fb965caa7197932b52631e0121ea54586e2b88` | testnet |
 | `MintwareEthSettlement` | testnet · base-sepolia | `0x20140811123db9C00CA1dF1023BA4fE758B98c5F` | testnet |
-| `MintwarePaymentGateway` | testnet · arc | ⚠ **address missing** | testnet |
+| `MintwarePaymentGateway` | testnet · arc | `0x1d075cb38f5c126d9c23f1f91fac0a9c8d135399` | testnet |
 | `MintwareStagedLiquidityRouter` | testnet · base-sepolia | `0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3` | testnet |
+| `MintwareTreasuryGatewayDeployer` | testnet · base-sepolia | `0xfbf781676fe93cd8d8d8e17716461c29f549a644` | testnet |
+| `MintwareTreasuryJitHookDeployer` | testnet · base-sepolia | `0x42a32787595d9f47a369b3b11ac24b8d0552c4a7` | testnet |
+| `MintwareTreasuryVault` | testnet · base-sepolia | `0x06a894cb97b3f032b0a9b3365d62da392b7f4c2b` | testnet |
 | `MintwareTreasuryVaultFactory` | testnet · base-sepolia | `0x45e4f020A002C9B4302C6F2DA59e61C2a85b44F7` | testnet |
-| `MintwareYieldVault` | testnet · arc | ⚠ **address missing** | testnet |
+| `MintwareTreasuryVaultRegistry` | testnet · base-sepolia | `0x0f6a05666c554671bbffa2079778ae47ec3f30e4` | testnet |
+| `MintwareYieldVault` | testnet · base-sepolia | `0x09cda8519737a60fd16d263f94fb56237cdb7e42` | testnet |
+| `MintwareYieldVault` | testnet · arc | `0x11ef2c7d84b755f02f3652ca8b16e6e81a96c421` | testnet |
+| `MWAmAuction` | testnet · base-sepolia | `0x11d7bda166a62ac9edb65152f8cf035c219c5e00` | testnet |
 | `ULVHook` | testnet · base-sepolia | ⚠ **address missing** | testnet |
 | `ULVVault` | testnet · base-sepolia | ⚠ **address missing** | testnet |
 
-**5 recorded with a full address, 6 flagged as a GAP** (truncated in the rules — complete from the broadcast).
-**32 of 40 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
+**15 recorded with a full address, 2 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**29 of 40 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
 ---
