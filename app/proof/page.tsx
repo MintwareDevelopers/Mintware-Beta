@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
-import { LATEST_RUN, STAGED_LIQUIDITY_RUN, CARD_RAIL, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
+import { LATEST_RUN, STAGED_LIQUIDITY_RUN, CARD_RAIL, FORMAL_VERIFICATION, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
 
 const KIND: Record<Decision['kind'], string> = {
   ok: 'text-mw-green bg-[rgba(22,163,74,0.10)]',
@@ -182,6 +182,36 @@ export default function ProofPage() {
             still-dormant piece is the AUTOMATIC capture path (off by default). This same run also
             surfaced a real bug — the settle core was marking a reverted tx as settled — now fixed.{' '}
             <Link href="/app/org" className="text-peri-deep no-underline hover:underline">The card surface →</Link>
+          </p>
+        </div>
+
+        {/* Formal verification — proofs, not just tests */}
+        <div className="mt-14 pt-2 border-t border-hair">
+          <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display mt-8">
+            {FORMAL_VERIFICATION.eyebrow}
+          </div>
+          <h2 className="font-atx-display font-bold text-[clamp(1.7rem,4.4vw,2.5rem)] leading-[1.06] tracking-[-0.03em] mt-3">
+            {FORMAL_VERIFICATION.title}<br /><span className="text-gradient-accent">{FORMAL_VERIFICATION.titleAccent}</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(0.98rem,2vw,1.12rem)] leading-[1.5] max-w-[62ch] mt-4">{FORMAL_VERIFICATION.blurb}</p>
+
+          <div className="mt-6 flex flex-col gap-2.5">
+            {FORMAL_VERIFICATION.props.map((p) => (
+              <div key={p.claim} className="soft-card p-4 flex items-start gap-3.5 max-[560px]:flex-col max-[560px]:gap-2">
+                <span className={`${chip(p.method === 'coq' ? 'text-mw-green bg-[rgba(22,163,74,0.10)]' : 'text-peri-deep bg-[rgba(108,108,240,0.10)]')} shrink-0 min-w-[168px] justify-center`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  {p.method === 'coq' ? 'Coq · machine-checked' : 'Halmos · symbolic'}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[14px] text-ink leading-[1.5] font-medium">{p.claim}</p>
+                  <p className="text-[11.5px] text-ink-soft font-mono mt-0.5">{p.target}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">
+            {FORMAL_VERIFICATION.note}{' '}
+            <Link href="/the-math" className="text-peri-deep no-underline hover:underline">The math →</Link>
           </p>
         </div>
 
