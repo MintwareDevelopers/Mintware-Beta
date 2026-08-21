@@ -130,7 +130,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `ULVVault` | testnet · base-sepolia | ⚠ **address missing** | testnet |
 
 **5 recorded with a full address, 6 flagged as a GAP** (truncated in the rules — complete from the broadcast).
-**292 of 300 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
+**32 of 40 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
 ---
