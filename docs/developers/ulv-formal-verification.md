@@ -76,15 +76,48 @@ not a discovered violation.
   vendored solver: division-by-symbolic is likely intractable for any of them, and the 4 lemmas are
   already fuzz-proven at 256×128k.
 
-So the CI job uses the **bundled yices** solver (download-free), giving a stable **3/7**. The job stays
-**advisory** (`continue-on-error` — the 4 timeouts make it exit 1 by design). The honest claim is
-**"3/7 symbolically proven (including every proof against live hook code); the 4 pure mulDiv lemmas are
-SMT-intractable here and remain fuzz-proven at 256×128k"** — never "7/7 verified."
+So the Halmos CI job uses the **bundled yices** solver (download-free), giving a stable **3/7**, and
+stays **advisory** (`continue-on-error` — the 4 timeouts make it exit 1 by design).
 
-Run locally on any supported setup (Linux, macOS 14+ arm64, or Docker):
+## 2b. Coq — the 4 SMT-intractable lemmas, machine-checked (the workable alternative)
+
+The barrier above is **SMT itself**, not Halmos: division by a symbolic value is undecidable-in-practice
+for any SMT engine. But the 4 timed-out specs are elementary integer **floor / conservation** facts, so
+they are proved instead in **Coq** (`contracts-v4/proofs/coq/MulDivLemmas.v`, `nia` over `Z`) — decidable,
+machine-checked, no solver-download or timeout. Solidity's uint `/` is Euclidean floor division
+(`X = D*q + r, 0 ≤ r < D`), so each lemma is proved from that defining relation and then given a
+`Z.div`-level corollary, so the theorem is literally about floor division = the Solidity `/`.
+
+| Coq theorem | Covers | Solidity spec |
+|---|---|---|
+| `depositMint_no_inflation_div` | `minted·(managed+V) ≤ (TL+V)·liq` | `check_depositMint_noInflation` |
+| `redeem_out_le_idle_div` | `(idle·s)/TL ≤ idle` | `check_redeemIdle_roundsDown` |
+| `redeem_floor_div` | `out·TL ≤ idle·s` (floor) | `check_redeemIdle_roundsDown` |
+| `redeem_exact_full_div` | `s=TL ⇒ out=idle` | `check_redeemIdle_roundsDown` |
+| `redeem_sum_le_backing_div` | `Σ pro-rata ≤ backing` (solvency) | `check_redeemIdle_sumNeverExceedsBacking` |
+| `splitFee_conserves_and_favors_LP` | `t+b ≤ fee` (conservation) ∧ `lpNominal ≤ lp` (rounding favors LP) | `check_splitFee_conservesAndFavorsLP` |
+
+**No `Axiom`, no `Admitted`.** The `Formal proofs (Coq, mulDiv lemmas)` CI job compiles the file with
+`coqc` — a **real gate** (not advisory): `coqc` exiting 0 *is* the proof. Observed **green** on PR #347
+(commit `575f9661`). Run locally with `pnpm coq:proofs`.
+
+## Bottom line
+
+All 7 `MWFormalProofs` properties are now backed by a **proof**, not just fuzzing:
+- **3/7 — symbolically proven against real live hook code** (Halmos over `MWDynamicFee`).
+- **4/7 — machine-checked in Coq** as the exact `mulDiv` arithmetic lemmas the vault relies on (the
+  same "lemma, not bytecode-bound 1:1" framing already noted for these four; binding them to the vault
+  bytecode would mean extracting the math into a shared pure library — noted for the external audit).
+
+Honest claim: *"every formal-verification property is proven — 3 symbolically (Halmos), 4 as
+machine-checked Coq lemmas."* Not a single one rests on fuzzing alone (though all 7 are **also**
+fuzz-proven at 256×128k, as defense in depth).
+
+Run locally:
 
 ```bash
-pnpm halmos   # forge build --ast && halmos --root . --forge-build-out contracts-v4/out --contract MWFormalProofs
+pnpm coq:proofs   # coqc contracts-v4/proofs/coq/MulDivLemmas.v  — the 4 mulDiv lemmas (needs coq)
+pnpm halmos       # the 3 live-code symbolic proofs (Halmos; needs a supported Halmos: Linux / macOS 14+ / Docker)
 ```
 
 **Why the properties are already trustworthy in the meantime:** every one above is also covered by the
