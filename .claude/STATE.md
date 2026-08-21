@@ -238,6 +238,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/defi` | `app/defi/page.tsx` |
 | `/docs` | `app/docs/page.tsx` |
 | `/explorer` | `app/explorer/page.tsx` |
+| `/legal` | `app/legal/page.tsx` |
 | `/org/[slug]` | `app/org/[slug]/page.tsx` |
 | `/org/[slug]/badge` | `app/org/[slug]/badge/page.tsx` |
 | `/privacy` | `app/privacy/page.tsx` |

@@ -101,6 +101,7 @@ User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` 
 | `/[address]` | `app/[address]/page.tsx` — Attribution profile lookup |
 | `/explorer` | `app/explorer/page.tsx` → redirects to `/explorer.html` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
+| `/legal` | `app/legal/page.tsx` — **INTERNAL, auth-gated** (`MwAuthGuard`), NOT public: structural & regulatory posture memo (non-custodial-software positioning, five bright lines, risk register). `/proof`-doc style, light-only. Not legal advice. |
 
 ### Retail app `/app/*` (User / Team split)
 
