@@ -205,6 +205,13 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     error StillLocked();
     error NothingToWithdraw();
     error ZeroDistributor();
+    error LaunchPriceMoved();
+
+    /// @notice AUDIT H6: max deviation (bps of sqrtPriceX96) the live pool price may sit from the launch
+    ///         price at activation. The empty pool is swappable during funding; a live price outside this
+    ///         band means someone moved it, and activation aborts rather than deploy the locked position at
+    ///         a manipulated tick. 100 bps of sqrtPrice ≈ ~2% of price.
+    uint256 internal constant LAUNCH_SQRT_BAND_BPS = 100;
     error WeightedDistributorAlreadySet();
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -706,8 +713,19 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
 
         uint160 sqrtLower = TickMath.getSqrtPriceAtTick(tickLower);
         uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(tickUpper);
+
+        // AUDIT H6: the pool was initialized at commit but left EMPTY + swappable through the funding window;
+        // a swap against zero liquidity can move slot0 for ~free. Require the LIVE price to still sit at the
+        // launch price within a tight band (else someone moved the empty pool → abort, don't deploy the
+        // 90-day-locked position at a manipulated tick), and size liquidity off the LIVE price so the deploy
+        // is exact even within the band.
+        (uint160 curSqrt,,,) = poolManager.getSlot0(poolKey.toId());
+        uint256 band = uint256(launchSqrtPriceX96) * LAUNCH_SQRT_BAND_BPS / 10_000;
+        uint256 lo = uint256(launchSqrtPriceX96) > band ? uint256(launchSqrtPriceX96) - band : 0;
+        if (curSqrt < lo || uint256(curSqrt) > uint256(launchSqrtPriceX96) + band) revert LaunchPriceMoved();
+
         uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(
-            launchSqrtPriceX96, sqrtLower, sqrtUpper, amt0, amt1
+            curSqrt, sqrtLower, sqrtUpper, amt0, amt1
         );
 
         uint256 b0 = IERC20(Currency.unwrap(poolKey.currency0)).balanceOf(address(this));
