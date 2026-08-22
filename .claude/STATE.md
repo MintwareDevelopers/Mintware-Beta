@@ -253,6 +253,10 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/proof` | `app/proof/page.tsx` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
 | `/risk-disclosures` | `app/risk-disclosures/page.tsx` |
+| `/solutions/companies` | `app/solutions/companies/page.tsx` |
+| `/solutions/funds` | `app/solutions/funds/page.tsx` |
+| `/solutions/network-states` | `app/solutions/network-states/page.tsx` |
+| `/solutions/treasuries` | `app/solutions/treasuries/page.tsx` |
 | `/teams` | `app/teams/page.tsx` |
 | `/terms` | `app/terms/page.tsx` |
 | `/the-math` | `app/the-math/page.tsx` |

@@ -31,6 +31,14 @@ const LEGAL_LINKS = [
   { href: '/risk-disclosures', label: 'Risk Disclosures' },
 ]
 
+// Solutions — the audience vertical selling pages.
+const SOLUTIONS_LINKS = [
+  { href: '/solutions/network-states', label: 'Network States' },
+  { href: '/solutions/treasuries', label: 'Treasuries' },
+  { href: '/solutions/companies', label: 'Companies' },
+  { href: '/solutions/funds', label: 'Funds' },
+]
+
 export function MwFooter() {
   const pathname = usePathname()
   if (pathname?.startsWith('/app/team')) return null   // treasury terminal has its own shell
@@ -51,6 +59,16 @@ export function MwFooter() {
             >
               {l.label}
             </a>
+          ))}
+        </div>
+      </div>
+      <div className="border-t border-hair-soft">
+        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-4 flex items-center gap-x-6 gap-y-1 flex-wrap text-[13px]">
+          <span className="font-atx-display font-semibold text-ink-soft text-[11px] uppercase tracking-[0.1em] mr-1">Solutions</span>
+          {SOLUTIONS_LINKS.map((l) => (
+            <Link key={l.label} href={l.href} className="text-ink-mid no-underline hover:text-ink font-medium inline-flex items-center min-h-[40px]">
+              {l.label}
+            </Link>
           ))}
         </div>
       </div>
