@@ -109,7 +109,7 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         assertEq(vaultAddr, predicted, "vault != predicted");
 
         c.vault   = MintwareTreasuryVault(vaultAddr);
-        c.hook    = MintwareTreasuryJitHook(hookAddr);
+        c.hook    = MintwareTreasuryJitHook(payable(hookAddr));
         c.gateway = gwAddr;
         c.team    = teamTok;
         c.adapter = adp;

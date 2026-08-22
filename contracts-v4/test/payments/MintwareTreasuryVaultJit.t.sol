@@ -45,6 +45,18 @@ contract MockJitHook {
         usdc.transfer(address(vault), amount);
         vault.settleJitReturn(amount);
     }
+
+    // ── counter-asset leg (Phase 2): same seam, borrow via the counter entry point ──
+    function borrowCounter(uint256 want) external returns (uint256 lent) {
+        lent = vault.borrowIdleForJitCounter(want);
+    }
+
+    function roundCounter(uint256 want, uint256 returnAmount) external returns (uint256 lent) {
+        lent = vault.borrowIdleForJitCounter(want);
+        if (lent == 0) return 0; // disabled → nothing to settle
+        usdc.transfer(address(vault), returnAmount);
+        vault.settleJitReturn(returnAmount);
+    }
 }
 
 /// @notice Increment 1 of the JIT/surge build (#5, option C): proves the vault's JIT borrow-seam in
@@ -65,6 +77,8 @@ contract MintwareTreasuryVaultJitTest is Test {
 
     uint256 internal constant ONE = 1e6;
     uint256 internal constant JUNIOR_BUFFER = 5_000 * ONE;
+
+    event JitCounterEnabledSet(bool enabled); // local mirror for expectEmit
 
     function setUp() public {
         pm   = new PoolManager(address(this));
@@ -222,5 +236,66 @@ contract MintwareTreasuryVaultJitTest is Test {
         hook.round(400 * ONE, 404 * ONE);  // return principal + $4 fee
         assertEq(vault.jitNetPnl(), int256(4 * ONE), "profit not recorded in jitNetPnl");
         assertFalse(vault.jitAutoDisabled(), "breaker tripped on a profit");
+    }
+
+    // ── Phase 2: the counter-asset JIT leg (dark by default, same seam when on) ──────
+    function test_counter_disabled_by_default() public {
+        assertFalse(vault.jitCounterEnabled(), "counter leg should default OFF");
+        assertEq(hook.borrowCounter(500 * ONE), 0, "disabled counter leg must lend nothing");
+    }
+
+    function test_setJitCounterEnabled_sets_and_emits() public {
+        vm.expectEmit(false, false, false, true, address(vault));
+        emit JitCounterEnabledSet(true);
+        vault.setJitCounterEnabled(true);
+        assertTrue(vault.jitCounterEnabled());
+    }
+
+    function test_setJitCounterEnabled_only_owner() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert(); // Ownable: not owner
+        vault.setJitCounterEnabled(true);
+    }
+
+    function test_only_jit_hook_can_borrow_counter() public {
+        vault.setJitCounterEnabled(true);
+        vm.expectRevert(MintwareTreasuryVault.OnlyJitHook.selector);
+        vault.borrowIdleForJitCounter(1 * ONE); // caller is the test, not the hook
+    }
+
+    function test_counter_leg_bounded_by_same_per_block_cap() public {
+        vault.setJitCounterEnabled(true);
+        // Same 5% × $10k = $500 per-block cap as the USDC leg (both flow through `_lendJit`).
+        uint256 lent = hook.borrowCounter(20_000 * ONE);
+        assertEq(lent, 500 * ONE, "counter leg not bounded to the 5% per-block cap");
+        assertEq(vault.jitBorrowed(), lent, "counter borrow not tracked in jitBorrowed at par");
+        usdc.mint(address(hook), 1); // dust for rounding
+        hook.settle(lent);
+        assertEq(vault.jitBorrowed(), 0, "not cleared after settle");
+    }
+
+    function test_counter_profitable_round_lifts_senior() public {
+        vault.setJitCounterEnabled(true);
+        uint256 navBefore = vault.totalSeniorAssets();
+        uint256 fee = 3 * ONE;
+        usdc.mint(address(hook), fee);
+        uint256 lent = hook.roundCounter(400 * ONE, 400 * ONE + fee);
+        assertGt(lent, 0, "nothing lent on the enabled counter leg");
+        assertEq(vault.jitBorrowed(), 0, "jitBorrowed not cleared");
+        assertEq(vault.totalSeniorAssets(), navBefore + fee, "counter-leg fee did not lift senior NAV");
+    }
+
+    // The single-slice bound is SHARED: a USDC leg and a counter leg can never be outstanding at once.
+    function test_legs_are_mutually_exclusive_one_slice() public {
+        vault.setJitCounterEnabled(true);
+        uint256 lent1 = hook.borrow(300 * ONE);
+        assertGt(lent1, 0, "USDC leg borrow failed");
+        assertEq(hook.borrowCounter(300 * ONE), 0, "counter leg borrowed while a USDC slice was outstanding");
+        hook.settle(lent1);
+        // vice-versa
+        uint256 lent2 = hook.borrowCounter(100 * ONE);
+        assertGt(lent2, 0, "counter leg blocked after settle");
+        assertEq(hook.borrow(100 * ONE), 0, "USDC leg borrowed while a counter slice was outstanding");
+        hook.settle(lent2);
     }
 }
