@@ -27,9 +27,23 @@ abstract contract MWGuardianPausable is Ownable, Pausable {
     /// @notice Address permitted to fast-pause (monitoring bot / guardian multisig).
     address public guardian;
 
+    /// @notice AUDIT M5: timestamp of the current pause (0 when unpaused). Used by the auto-heal below.
+    uint256 public pausedAt;
+
+    /// @notice AUDIT M5: after a pause has stood for this long, ANYONE may unpause (`unpauseAfterTimeout`).
+    ///         This bounds a lower-trust guardian's power: a fast-pause is a temporary emergency brake, not
+    ///         an indefinite freeze of user withdrawals/redemptions. The owner can always re-pause (resetting
+    ///         the clock) if the incident is ongoing, and can unpause immediately. Default 30 days — long
+    ///         enough for real incident response, finite so a single key can never trap user funds forever.
+    uint256 public maxPauseDuration = 30 days;
+
     event GuardianSet(address indexed guardian);
+    event MaxPauseDurationSet(uint256 seconds_);
+    event AutoUnpaused(uint256 pausedAt, uint256 at);
 
     error NotGuardianOrOwner();
+    error PauseTimeoutNotReached();
+    error AutoHealDisabled();
 
     constructor(address initialOwner) Ownable(initialOwner) {}
 
@@ -45,13 +59,34 @@ abstract contract MWGuardianPausable is Ownable, Pausable {
         emit GuardianSet(_guardian);
     }
 
-    /// @notice Emergency pause — callable by the guardian (fast) or the owner.
+    /// @notice AUDIT M5: tune the auto-heal window (0 disables it — owner-only indefinite pause). Owner only.
+    function setMaxPauseDuration(uint256 seconds_) external onlyOwner {
+        maxPauseDuration = seconds_;
+        emit MaxPauseDurationSet(seconds_);
+    }
+
+    /// @notice Emergency pause — callable by the guardian (fast) or the owner. Stamps `pausedAt` so the
+    ///         auto-heal timeout can bound how long a fast-pause may stand.
     function pause() external onlyGuardianOrOwner {
+        pausedAt = block.timestamp;
         _pause();
     }
 
     /// @notice Resume operations — owner only (deliberate).
     function unpause() external onlyOwner {
+        pausedAt = 0;
+        _unpause();
+    }
+
+    /// @notice AUDIT M5: permissionless auto-heal. Once a pause has stood for `maxPauseDuration`, ANYONE may
+    ///         lift it — so a compromised/rogue guardian cannot freeze user exits indefinitely (only the
+    ///         owner can, by actively re-pausing). Disabled when `maxPauseDuration == 0`.
+    function unpauseAfterTimeout() external {
+        if (maxPauseDuration == 0) revert AutoHealDisabled();
+        _requirePaused();
+        if (block.timestamp < pausedAt + maxPauseDuration) revert PauseTimeoutNotReached();
+        emit AutoUnpaused(pausedAt, block.timestamp);
+        pausedAt = 0;
         _unpause();
     }
 }

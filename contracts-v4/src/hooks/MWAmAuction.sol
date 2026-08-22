@@ -241,8 +241,16 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
         if (rentDue > 0) {
             top.deposit = uint128(uint256(top.deposit) - rentDue);
             topBid[id].deposit = top.deposit;
-            _fundRent(id, p.bidToken, rentDue);
-            emit RentCharged(id, top.manager, rentDue);
+            if (_fundRent(id, p.bidToken, rentDue)) {
+                emit RentCharged(id, top.manager, rentDue);
+            } else {
+                // AUDIT M7: the sink rejected the push — roll back the charge so the swap proceeds. The
+                // manager keeps its deposit (not depleted); the sink simply earns no rent this block.
+                top.deposit = uint128(uint256(top.deposit) + rentDue);
+                topBid[id].deposit = top.deposit;
+                rentDue  = 0;
+                depleted = false;
+            }
         }
 
         // 2. Evict a depleted manager.
@@ -269,10 +277,13 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
         return (top.manager, MWAmAuctionLib.effectiveFee(top, p));
     }
 
-    function _fundRent(PoolId id, address token, uint256 amount) internal {
+    function _fundRent(PoolId id, address token, uint256 amount) internal returns (bool ok) {
         address sink = rentSink[id];
         IERC20(token).forceApprove(sink, amount);
-        IAmAmmRentSink(sink).fundRent(token, amount);
+        // AUDIT M7: this runs inside a swap's beforeSwap — the rent push must NEVER brick the swap. If the
+        // sink rejects it (paused/hostile/reverting token), report failure so the caller rolls back the
+        // charge (rent skipped this block, not lost) instead of reverting the whole swap.
+        try IAmAmmRentSink(sink).fundRent(token, amount) { ok = true; } catch { ok = false; }
         IERC20(token).forceApprove(sink, 0); // clear any residual allowance a partial-pull sink left
     }
 

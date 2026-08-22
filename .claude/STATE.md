@@ -119,6 +119,14 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 |---|---|---|---|
 | `AIAttribution` | mainnet · base | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` | live |
 | `EthCollateralVault` | testnet · base-sepolia | `0x09Cda8519737a60FD16D263f94fb56237CDb7E42` | testnet |
+| `EthSeniorDemo_Gateway` | testnet · base-sepolia | `0x16609c074C8A1b1CaB826248EA98877D8f5FA96F` | testnet |
+| `EthSeniorDemo_JitHook` | testnet · base-sepolia | `0xE21D937855a128c79D95305bFE0604Ae660160C8` | testnet |
+| `EthSeniorDemo_mTEAM` | testnet · base-sepolia | `0x1882C98444f2Df37fEC27903e08501BE1c403a65` | testnet |
+| `EthSeniorDemo_mUSDC` | testnet · base-sepolia | `0x647ce78D1baE29087A21cFF7fA293f0Be041f462` | testnet |
+| `EthSeniorDemo_mWETH` | testnet · base-sepolia | `0x97D3F83D1f4EeFC5B9842C2041F482766F221B60` | testnet |
+| `EthSeniorDemo_Settlement` | testnet · base-sepolia | `0x6d0a1520e47bAE8F5304859a6a0193dDa567A9E0` | testnet |
+| `EthSeniorDemo_TreasuryVault` | testnet · base-sepolia | `0xb84776B8CB27C924A3B4e704C0FF826CB4A98A1c` | testnet |
+| `EthSeniorDemo_YieldAdapter` | testnet · base-sepolia | `0xd01EcCF90Ac339B836c85e800ca11235D48F916f` | testnet |
 | `MintwareCctpDepositRouter` | testnet · arc | `0xdb9db7008cffb09bd1d943c237f57327383dfc03` | testnet |
 | `MintwareERC4626YieldAdapter` | testnet · arc | `0xb9fb965caa7197932b52631e0121ea54586e2b88` | testnet |
 | `MintwareEthSettlement` | testnet · base-sepolia | `0x20140811123db9C00CA1dF1023BA4fE758B98c5F` | testnet |
@@ -135,8 +143,8 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `ULVHook` | testnet · base-sepolia | ⚠ **address missing** | testnet |
 | `ULVVault` | testnet · base-sepolia | ⚠ **address missing** | testnet |
 
-**15 recorded with a full address, 2 flagged as a GAP** (truncated in the rules — complete from the broadcast).
-**21 of 32 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
+**23 recorded with a full address, 2 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**20 of 31 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
 ---
@@ -245,6 +253,10 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/proof` | `app/proof/page.tsx` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
 | `/risk-disclosures` | `app/risk-disclosures/page.tsx` |
+| `/solutions/companies` | `app/solutions/companies/page.tsx` |
+| `/solutions/funds` | `app/solutions/funds/page.tsx` |
+| `/solutions/network-states` | `app/solutions/network-states/page.tsx` |
+| `/solutions/treasuries` | `app/solutions/treasuries/page.tsx` |
 | `/teams` | `app/teams/page.tsx` |
 | `/terms` | `app/terms/page.tsx` |
 | `/the-math` | `app/the-math/page.tsx` |

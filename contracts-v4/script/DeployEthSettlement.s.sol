@@ -26,6 +26,17 @@ contract DeployEthSettlement is Script {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
         address deployer = vm.addr(deployerKey);
 
+        // AUDIT H4 wiring: `batchSettleEth` reverts `RailNotSet` until the sole settlement destination is
+        // pinned, so the deploy MUST call `setSettlementRail(...)` or the contract ships unusable. The rail
+        // is the address that RECEIVES the settled USDC (the Gateway / CPN settlement address). It is not
+        // deployed by THIS script, so it's read from `SETTLEMENT_RAIL`; the fallback is the deployer itself
+        // — a safe testnet default (settlement pays back to the operator's own EOA for a soak), and it keeps
+        // the deployer-as-owner/relayer pattern this script already uses. Point it at the real Gateway/CPN
+        // address for anything beyond a local soak.
+        address settlementRail = vm.envOr("SETTLEMENT_RAIL", deployer);
+        // AUDIT H4 (optional, defense in depth): per-call `totalUsdc` ceiling. 0 = off (default).
+        uint256 maxSettlePerCall = vm.envOr("SETTLE_MAX_PER_CALL", uint256(0));
+
         vm.startBroadcast(deployerKey);
         MockERC20 usdc = new MockERC20("USD Coin (mock)", "USDC", 6);
 
@@ -40,6 +51,12 @@ contract DeployEthSettlement is Script {
         // TRUE by default — real settlements revert until an oracle hook is wired (a full soak's job).
         MintwareEthSettlement settlement =
             new MintwareEthSettlement(IPoolManager(POOL_MANAGER), key, address(usdc), WETH, deployer, deployer);
+
+        // Pin the settlement rail (deployer is owner → this onlyOwner call succeeds). Without it, every
+        // `batchSettleEth` reverts `RailNotSet`; the passed `rail` at settle time must equal this address.
+        settlement.setSettlementRail(settlementRail);
+        // Optional per-call cap (skip when 0 = off, the contract default).
+        if (maxSettlePerCall != 0) settlement.setMaxSettlePerCall(maxSettlePerCall);
         vm.stopBroadcast();
 
         console.log("=== MintwareEthSettlement deployed (Base Sepolia) ===");
@@ -49,6 +66,8 @@ contract DeployEthSettlement is Script {
         console.log("USDC (mock,6dp):", address(usdc));
         console.log("Settlement:    ", address(settlement));
         console.log("relayer:       ", deployer);
+        console.log("settlementRail:", settlementRail);
+        console.log("maxSettlePerCall (0=off):", maxSettlePerCall);
         console.log("");
         console.log("Gated dry-run (proves calldata dispatches on-chain):");
         console.log("  RELAYER_RPC_URL=<base-sepolia> SETTLEMENT_ADDRESS=", address(settlement));

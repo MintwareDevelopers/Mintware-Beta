@@ -433,6 +433,11 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     ) internal returns (uint256 sharesMinted) {
         if (!poolInitialized) revert PoolNotInitialized();
 
+        // AUDIT M12 (DEFERRED): a new depositor can capture a slice of pending, uncollected swap fees
+        // (redeem realizes fees first; deposit does not). A naive `_realizeFees()` here corrupts the
+        // single-sided migrator's balance-diff dust refund, so the correct fix needs the deposit intake
+        // reworked to balance-diff and exclude realized fees — tracked as follow-up, not a fund-loss risk.
+
         // Settle any accrued fees for the RECIPIENT on their existing balance BEFORE their share
         // count changes (so the accumulator stays correct).
         _claimFees(recipient);
@@ -640,8 +645,26 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
             // Canonical path: route LP fees to the oracle-weighted distributor. LPs claim
             // their reputation + referral weighted share there, not from the accumulator.
             if (lp0 > 0 || lp1 > 0) {
-                IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, lp0, lp1);
-                emit FeesRoutedToDistributor(distributorVaultId, lp0, lp1);
+                // AUDIT H3: grant EXACTLY the fee legs for this one pull, then reset to 0 — never leave the
+                // distributor a standing unbounded allowance over the vault's entire (principal-bearing) balance.
+                if (lp0 > 0) token0.forceApprove(weightedDistributor, lp0);
+                if (lp1 > 0) token1.forceApprove(weightedDistributor, lp1);
+                // AUDIT M6: `_realizeFees` runs on the REDEMPTION path — the distributor's liveness must not
+                // gate exits. If `fundFees` reverts (paused/buggy distributor), reset the approval and fall
+                // back to the pro-rata accumulator so the fees stay in the vault backing claims and the
+                // redemption proceeds.
+                try IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, lp0, lp1) {
+                    if (lp0 > 0) token0.forceApprove(weightedDistributor, 0);
+                    if (lp1 > 0) token1.forceApprove(weightedDistributor, 0);
+                    emit FeesRoutedToDistributor(distributorVaultId, lp0, lp1);
+                } catch {
+                    if (lp0 > 0) token0.forceApprove(weightedDistributor, 0);
+                    if (lp1 > 0) token1.forceApprove(weightedDistributor, 0);
+                    accFee0PerShare += (lp0 * ACC_PRECISION) / totalLiquidity;
+                    accFee1PerShare += (lp1 * ACC_PRECISION) / totalLiquidity;
+                    feeReserve0 += lp0;
+                    feeReserve1 += lp1;
+                }
             }
         } else {
             // Legacy path: pro-rata per-share accrual (pre-wiring / un-migrated vaults).
@@ -663,8 +686,8 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         weightedDistributor = dist;
         distributorVaultId  = vaultId;
         IMWWeightedDistributor(dist).registerVault(vaultId, address(token0), address(token1));
-        token0.forceApprove(dist, type(uint256).max);
-        token1.forceApprove(dist, type(uint256).max);
+        // AUDIT H3: NO standing unbounded approval. `_realizeFees` approves exactly the fee legs per pull
+        // and resets to 0, so a compromised/misconfigured distributor can never drain vault principal.
         emit WeightedDistributorSet(dist, vaultId);
     }
 

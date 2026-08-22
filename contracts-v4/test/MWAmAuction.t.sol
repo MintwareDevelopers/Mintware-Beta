@@ -327,9 +327,12 @@ contract MWAmAuctionTest is Test {
         vm.roll(110); _poke();   // seat alice (sink not armed yet)
         rs.arm();
         vm.roll(115);
+        // AUDIT M7: a hostile/reentrant sink no longer BRICKS the swap. Its re-entry is still neutralized by
+        // the ReentrancyGuard (it gains nothing); `_fundRent` catches the revert and rolls back the rent, so
+        // `poke` completes gracefully (rent simply skipped this block) instead of reverting the whole swap.
         vm.prank(coord);
-        vm.expectRevert();       // reentry into claim() trips ReentrancyGuard -> whole poke reverts
-        auction.poke(id);
+        (address mgr,) = auction.poke(id); // MUST NOT revert
+        assertEq(mgr, alice, "manager should still be seated after a hostile-sink block");
     }
 
     // ── helpers to read packed bids ─────────────────────────────────────────────

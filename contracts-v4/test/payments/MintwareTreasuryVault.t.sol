@@ -239,6 +239,44 @@ contract MintwareTreasuryVaultTest is Test {
         assertLt(tokensBack, committed, "junior recovered its full commit (did not absorb loss)");
     }
 
+    // ── AUDIT H1: under impairment (junior wiped), redemptions HAIRCUT pro-rata — no first-redeemer run ──
+    function test_H1_impaired_redemptions_haircut_prorata_no_run() public {
+        // Fresh stack, NO junior USDC buffer — the only backstop is the team token, which we then wipe.
+        Stack memory s = _spawn(0, 2_000_000 * int256(ONE_USDC));
+        address bob = makeAddr("bob");
+        _deposit(s, alice, 100_000 * ONE_USDC);
+        _deposit(s, bob,   100_000 * ONE_USDC); // two EQUAL senior holders
+
+        // Deploy a senior slice into the LP with junior token, then wipe the team mark to ~1% of par.
+        uint256 jt = s.v.juniorTokens();
+        vm.prank(owner);
+        s.v.deployToLP(20_000 * ONE_USDC, jt);
+        _crashTeamTo(s, 100_000_000); // sqrtFracE9 = 1e8 → team price ~1%; the LP leg's recoverable collapses
+
+        // With no junior USDC buffer, the senior is now UNDER-COVERED: realizable < par.
+        assertLt(s.v.seniorRealizableAssets(), s.v.totalSeniorAssets(), "vault should be under-covered");
+
+        uint256 aliceShares = s.v.seniorShares(alice);
+        uint256 bobShares   = s.v.seniorShares(bob);
+        assertEq(aliceShares, bobShares, "precondition: equal holders");
+
+        // The per-share value is now HAIRCUT (below par) — the key fix: a first redeemer can no longer
+        // extract PAR from the liquid buffer while later holders eat the whole loss.
+        assertLt(s.v.convertToAssets(aliceShares), 100_000 * ONE_USDC, "shares still valued at par when impaired");
+        assertEq(s.v.convertToAssets(aliceShares), s.v.convertToAssets(bobShares), "value depends on redemption order");
+
+        // Both holders redeem half (well within the liquid Aave buffer). The OLD behavior paid the FIRST
+        // redeemer par and disadvantaged the second; now they receive the SAME pro-rata haircut.
+        vm.prank(alice);
+        uint256 aliceOut = s.v.redeemSenior(aliceShares / 2, 0);
+        vm.prank(bob);
+        uint256 bobOut = s.v.redeemSenior(bobShares / 2, 0); // MUST NOT revert
+
+        assertGt(bobOut, 0, "second redeemer got nothing (first-redeemer run not fixed)");
+        assertApproxEqRel(aliceOut, bobOut, 0.01e18, "unequal payout: first redeemer advantaged");
+        assertLt(aliceOut, 50_000 * ONE_USDC, "haircut not applied: paid par on an under-covered vault");
+    }
+
     // ── AUDIT M1: only the constructor-bound team may commit + activate (no front-run hijack) ──
     function test_commitTeam_onlyBoundTeam() public {
         Stack memory s;

@@ -79,6 +79,9 @@ contract MintwareEthSettlementTest is Test {
         );
         vm.prank(owner);
         settle.setOracleSource(address(oracle));
+        // AUDIT H4: pin the settlement rail (now required before any settlement can pay out).
+        vm.prank(owner);
+        settle.setSettlementRail(rail);
         // Fresh oracle pinned at spot (tick 0) -> the band brackets the current price.
         oracle.set(0, true);
 
@@ -237,9 +240,36 @@ contract MintwareEthSettlementTest is Test {
         vm.startPrank(relayer);
         vm.expectRevert(MintwareEthSettlement.ZeroAmount.selector);
         settle.batchSettleEth(0, 0, rail);
-        vm.expectRevert(MintwareEthSettlement.ZeroAddress.selector);
+        // AUDIT H4: any rail other than the pinned one is rejected (the relayer cannot redirect funds).
+        vm.expectRevert(MintwareEthSettlement.RailMismatch.selector);
         settle.batchSettleEth(100e18, 0, address(0));
+        vm.expectRevert(MintwareEthSettlement.RailMismatch.selector);
+        settle.batchSettleEth(100e18, 0, attacker);
         vm.stopPrank();
+    }
+
+    /// AUDIT H4: settlement is impossible until the rail is pinned, and only ever pays the pinned rail;
+    /// the per-call cap bounds a single settlement.
+    function test_H4_RailPinnedAndCapped() public {
+        // A fresh instance with NO rail set cannot settle.
+        MintwareEthSettlement fresh = new MintwareEthSettlement(
+            IPoolManager(address(pm)), key, address(usdc), address(weth), owner, relayer
+        );
+        vm.prank(relayer);
+        vm.expectRevert(MintwareEthSettlement.RailNotSet.selector);
+        fresh.batchSettleEth(100e18, 0, rail);
+
+        // On the wired instance, a per-call cap bounds a single settlement.
+        vm.prank(owner);
+        settle.setMaxSettlePerCall(50e18);
+        _fundBacking(1_000e18);
+        vm.prank(relayer);
+        vm.expectRevert(MintwareEthSettlement.SettlementCapExceeded.selector);
+        settle.batchSettleEth(100e18, 0, rail);
+        // Under the cap it goes through and pays exactly the pinned rail.
+        vm.prank(relayer);
+        settle.batchSettleEth(40e18, 30e18, rail);
+        assertEq(usdc.balanceOf(rail), 40e18, "pinned rail paid exactly, under the cap");
     }
 
     /// Constructor rejects a pool that isn't the {weth, usdc} pair.

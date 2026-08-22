@@ -20,14 +20,22 @@ const FOOTER_LINKS = [
   { href: '/proof', label: 'Proof' },
   { href: '/the-math', label: 'The Math' },
   { href: '/docs', label: 'Docs' },
+  { href: '/legal', label: 'Legal' },
   { href: '/about', label: 'About' },
-  { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
 ]
 
 const LEGAL_LINKS = [
   { href: '/terms', label: 'Terms' },
   { href: '/privacy', label: 'Privacy' },
   { href: '/risk-disclosures', label: 'Risk Disclosures' },
+]
+
+// Solutions — the audience vertical selling pages.
+const SOLUTIONS_LINKS = [
+  { href: '/solutions/network-states', label: 'Network States' },
+  { href: '/solutions/treasuries', label: 'Treasuries' },
+  { href: '/solutions/companies', label: 'Companies' },
+  { href: '/solutions/funds', label: 'Funds' },
 ]
 
 export function MwFooter() {
@@ -42,14 +50,23 @@ export function MwFooter() {
         </Link>
         <div className="flex gap-x-6 gap-y-1 text-[13px] font-medium flex-wrap">
           {FOOTER_LINKS.map((l) => (
-            <a
+            <Link
               key={l.label}
               href={l.href}
               className="text-ink-mid no-underline hover:text-ink inline-flex items-center min-h-[44px]"
-              {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
             >
               {l.label}
-            </a>
+            </Link>
+          ))}
+        </div>
+      </div>
+      <div className="border-t border-hair-soft">
+        <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-4 flex items-center gap-x-6 gap-y-1 flex-wrap text-[13px]">
+          <span className="font-atx-display font-semibold text-ink-soft text-[11px] uppercase tracking-[0.1em] mr-1">Solutions</span>
+          {SOLUTIONS_LINKS.map((l) => (
+            <Link key={l.label} href={l.href} className="text-ink-mid no-underline hover:text-ink font-medium inline-flex items-center min-h-[40px]">
+              {l.label}
+            </Link>
           ))}
         </div>
       </div>

@@ -101,7 +101,7 @@ User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` 
 | `/[address]` | `app/[address]/page.tsx` — Attribution profile lookup |
 | `/explorer` | `app/explorer/page.tsx` → redirects to `/explorer.html` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
-| `/legal` | `app/legal/page.tsx` — **INTERNAL, auth-gated** (`MwAuthGuard`), NOT public: structural & regulatory posture memo (non-custodial-software positioning, five bright lines, risk register). `/proof`-doc style, light-only. Not legal advice. |
+| `/legal` | `app/legal/page.tsx` — **PUBLIC** "Legal & Disclosures" page (no auth): non-custodial-software positioning, five bright lines, partner licence map, Delaware-LLC entity note, and user-facing risk disclosures. `/proof`-doc style, light-only, footer-linked as "Legal". Information, not legal advice; nothing on it is an offer. (Internal risk-register/counsel content was removed when it was made public.) |
 
 ### Retail app `/app/*` (User / Team split)
 

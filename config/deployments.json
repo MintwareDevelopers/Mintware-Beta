@@ -1,13 +1,13 @@
 {
   "_doc": "THE ONE committed source of deploy truth for Mintware. A deploy is NOT done until it is recorded here. No entry = NOT deployed (do not infer deployment from prose in a rule/doc/memory). Read by scripts/context-sync.mjs to generate the AUTO:build-status block in .claude/STATE.md. Fields per contract: address (checksummed; null if the full address isn't yet recorded), chainId, status (live|testnet|deprecated), note, verified (ISO date the address was last confirmed on-chain).",
-  "_reconcile": "When you deploy (or deprecate) a contract, update this file IN THE SAME PR (CONTEXT-MAP reconcile-on-change). Prefer copying the address straight from the Foundry broadcast record. If you only have a truncated address, set address:null and put the partial in note — an explicit gap beats a fake-precise ghost.",
+  "_reconcile": "When you deploy (or deprecate) a contract, update this file IN THE SAME PR (CONTEXT-MAP reconcile-on-change). Prefer copying the address straight from the Foundry broadcast record. If you only have a truncated address, set address:null and put the partial in note \u2014 an explicit gap beats a fake-precise ghost.",
   "mainnet": {
     "base": {
       "AIAttribution": {
         "address": "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421",
         "chainId": 8453,
         "status": "live",
-        "note": "v3 — the ONLY mainnet contract. v2 (0xb9FB965...) deprecated.",
+        "note": "v3 \u2014 the ONLY mainnet contract. v2 (0xb9FB965...) deprecated.",
         "verified": "2026-08-08"
       }
     }
@@ -25,7 +25,7 @@
         "address": "0x09Cda8519737a60FD16D263f94fb56237CDb7E42",
         "chainId": 84532,
         "status": "testnet",
-        "note": "a MintwareYieldVault instance holding mock WETH — the SPEND/collateral vault, NOT a fee-earning ETH LP",
+        "note": "a MintwareYieldVault instance holding mock WETH \u2014 the SPEND/collateral vault, NOT a fee-earning ETH LP",
         "verified": "2026-08-19"
       },
       "MintwareTreasuryVaultFactory": {
@@ -46,14 +46,14 @@
         "address": null,
         "chainId": 84532,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0x6c0d…5132 — full address not in repo. Complete from the broadcast record.",
+        "note": "GAP: rules cite a truncated 0x6c0d\u20265132 \u2014 full address not in repo. Complete from the broadcast record.",
         "verified": null
       },
       "ULVHook": {
         "address": null,
         "chainId": 84532,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0x9f3c…0AC8 — full address not in repo. Complete from the broadcast record.",
+        "note": "GAP: rules cite a truncated 0x9f3c\u20260AC8 \u2014 full address not in repo. Complete from the broadcast record.",
         "verified": null
       },
       "MintwareYieldVault": {
@@ -103,6 +103,62 @@
         "note": "from broadcast SoakAmAmm.s.sol",
         "verified": "2026-08-21",
         "source": "broadcast"
+      },
+      "EthSeniorDemo_TreasuryVault": {
+        "address": "0xb84776B8CB27C924A3B4e704C0FF826CB4A98A1c",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
+        "verified": "2026-08-21"
+      },
+      "EthSeniorDemo_JitHook": {
+        "address": "0xE21D937855a128c79D95305bFE0604Ae660160C8",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
+        "verified": "2026-08-21"
+      },
+      "EthSeniorDemo_Gateway": {
+        "address": "0x16609c074C8A1b1CaB826248EA98877D8f5FA96F",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
+        "verified": "2026-08-21"
+      },
+      "EthSeniorDemo_Settlement": {
+        "address": "0x6d0a1520e47bAE8F5304859a6a0193dDa567A9E0",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
+        "verified": "2026-08-21"
+      },
+      "EthSeniorDemo_mUSDC": {
+        "address": "0x647ce78D1baE29087A21cFF7fA293f0Be041f462",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
+        "verified": "2026-08-21"
+      },
+      "EthSeniorDemo_mTEAM": {
+        "address": "0x1882C98444f2Df37fEC27903e08501BE1c403a65",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
+        "verified": "2026-08-21"
+      },
+      "EthSeniorDemo_mWETH": {
+        "address": "0x97D3F83D1f4EeFC5B9842C2041F482766F221B60",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
+        "verified": "2026-08-21"
+      },
+      "EthSeniorDemo_YieldAdapter": {
+        "address": "0xd01EcCF90Ac339B836c85e800ca11235D48F916f",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
+        "verified": "2026-08-21"
       }
     },
     "arc": {

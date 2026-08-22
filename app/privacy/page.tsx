@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { V2Nav } from '@/components/ui2/V2Nav'
-import { MwFooter } from '@/components/web2/MwFooter'
 
 // =============================================================================
 // /privacy — Privacy Policy.
@@ -141,7 +140,6 @@ export default function PrivacyPage() {
         <h2 id="contact" className={h2}>13. Contact us</h2>
         <p className={p}>Questions about this Privacy Policy: <b>privacy@mintware.finance</b></p>
       </div>
-      <MwFooter />
     </div>
   )
 }

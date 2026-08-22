@@ -272,3 +272,39 @@ export const FORMAL_VERIFICATION: {
   note:
     'Honest scope: the 3 Halmos proofs bind to the real MWDynamicFee bytecode; the 4 Coq lemmas prove the exact mulDiv arithmetic the vault relies on (proven as lemmas, not bound 1:1 to bytecode — flagged for the external audit). All 7 are also fuzz-proven at 256×128k. Testnet + unaudited.',
 }
+
+// ── Security self-assessment — we ran a firm-grade checklist on ourselves, then fixed it ─────────
+// A pre-audit readiness exercise: the whole contract stack was reviewed against a consolidated public
+// checklist (SCSVS + SWC + Solcurity + DeFi vulnerability classes) by parallel reviewers, findings
+// deduped + severity-ranked, then remediated + re-reviewed. This is a SELF-REVIEW, not an external
+// audit. Full detail: docs/developers/self-assessment-security-2026-08-21.md + audit-readiness-checklist.md.
+export type AuditFix = { sev: 'H' | 'M' | 'L'; title: string; status: 'Fixed' | 'Deferred' }
+export const SECURITY_AUDIT: {
+  eyebrow: string; title: string; titleAccent: string; blurb: string
+  stats: { value: string; sub: string; label: string }[]
+  fixes: AuditFix[]; note: string
+} = {
+  eyebrow: 'Security self-assessment · audit-readiness',
+  title: 'We ran a firm-grade checklist',
+  titleAccent: 'on ourselves — and fixed it.',
+  blurb:
+    'Before paying for an external audit, we reviewed the entire contract stack against the same public standards the firms use — SCSVS, the SWC weakness registry, Solcurity, and the DeFi-specific vulnerability classes — with parallel reviewers, then deduped, ranked, remediated, and re-reviewed the findings.',
+  stats: [
+    { value: '0', sub: 'Critical', label: 'critical findings across 38 contracts' },
+    { value: '6 / 6', sub: 'High', label: 'high-severity findings remediated' },
+    { value: '10', sub: '+', label: 'mediums & lows fixed (rest scoped)' },
+    { value: '440', sub: '/ 0', label: 'tests pass / fail after remediation' },
+  ],
+  fixes: [
+    { sev: 'H', title: 'Senior "par" NAV now solvency-aware — tail haircuts pro-rata, no first-redeemer run', status: 'Fixed' },
+    { sev: 'H', title: 'No unbounded token approvals — a distributor can no longer drain vault principal', status: 'Fixed' },
+    { sev: 'H', title: 'Settlement pays only a pinned rail — a relayer can’t redirect funds', status: 'Fixed' },
+    { sev: 'H', title: 'Dead, misleading FeeVault (unverified owner-set root) deleted', status: 'Fixed' },
+    { sev: 'H', title: 'Matched-launch can’t be deployed at a manipulated empty-pool price', status: 'Fixed' },
+    { sev: 'M', title: 'Guardian pause auto-heals — a single key can’t freeze user exits forever', status: 'Fixed' },
+    { sev: 'M', title: 'JIT return balance-verified; hot-path calls can’t brick swaps/redemptions', status: 'Fixed' },
+    { sev: 'M', title: 'Circuit breaker no longer blocks the arb that heals a thin-pool price', status: 'Fixed' },
+  ],
+  note:
+    'This is a SELF-REVIEW, not an external audit — it surfaces what a firm would flag before we pay for one; it does not replace it. All 6 High findings + the core Mediums are fixed, re-reviewed, and testnet-deployed; a few lower-severity items are scoped as follow-ups. Everything remains testnet + unaudited — an external audit is the gate before real value.',
+}

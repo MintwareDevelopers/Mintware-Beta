@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
-import { MwFooter } from '@/components/web2/MwFooter'
 
 // =============================================================================
 // /risk-disclosures — the document doing most of the real protective work.
@@ -129,7 +128,6 @@ export default function RiskDisclosuresPage() {
 
         <p className={p + ' mt-8'}>These disclosures are incorporated by reference into our <Link href="/terms" className="text-peri-deep">Terms of Service</Link>. By using the Services you acknowledge you have read and understood them.</p>
       </div>
-      <MwFooter />
     </div>
   )
 }
