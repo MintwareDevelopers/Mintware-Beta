@@ -1,101 +1,99 @@
-# Making the ETH backing "never idle" — design + research
+# Making the ETH backing "never idle" — via lending (Aave/Morpho), not staking
 
-> **Problem (verified in code, 2026-08-22).** The product ethos is *"never idle."* It is **true for the
-> senior USDC** — `MintwareTreasuryVault.depositUSDC` auto-supplies capital into a yield adapter on deposit
-> (`_supplyToAdapter → adapter.deposit`, proven on Arc against a live yield source). It is **NOT true for the
-> ETH backing**: in `MintwareEthSettlement`, `wethBacking` is a raw WETH balance that just sits — funded,
-> then only ever spent on a settlement swap or withdrawn. **No staking, no adapter, no yield.** This design
-> makes the ETH backing earn liquid-staking yield while staying settlement-liquid, so the claim is honest.
+> **Decision (2026-08-22).** The ETH backing must earn so *"never idle"* is honest — but via
+> **DeFi lending** (Aave/Morpho supply), **not liquid staking.** Staking-as-a-service is the exact
+> profile the SEC pursued (Kraken, Coinbase); non-custodial, over-collateralized, algorithmic lending
+> into a public protocol is a different posture and is the one counsel cleared. Same "never idle" outcome,
+> no staking-securities exposure. See the staking analysis lower down (considered + rejected).
+
+> **Problem (verified in code).** The senior **USDC** already earns — `MintwareTreasuryVault.depositUSDC`
+> auto-supplies into a yield adapter on deposit (proven on Arc). The **ETH backing does not**: in
+> `MintwareEthSettlement`, `wethBacking` is a raw WETH balance that just sits until spent or withdrawn.
+> This wires it to earn **lending** yield while staying settlement-liquid — the same seam the USDC uses,
+> so the model is consistent across both sides.
 
 ## Design goal (one sentence)
 
-The WETH backing earns liquid-staking yield through a **ministerial** adapter, keeping only a **liquid
-buffer** on hand, and **unwinds on demand** before a settlement swap — so settlements are never starved and
-the ETH is never idle. Same proven idle-buffer/supply/pull shape the treasury vault already uses for USDC.
+The WETH backing earns **Aave/Morpho lending** yield through the existing `IYieldAdapter` seam, keeping only
+a **liquid buffer** on hand and **unwinding on demand** before a settlement swap — so the ETH is never idle
+and settlements are never starved. Identical idle-buffer/supply/pull shape the treasury vault already uses
+for USDC.
 
-## Why this shape (research)
+## Why this is the clean path (research)
+
+### The yield source is a lending market, not consensus
+Supply WETH → borrowers pay interest → yield. No validator role, no network-securing service, no promised
+rate — the interest is set by supply/demand (utilization). Honest caveat: WETH lending yield is **modest**
+(~1–3%, usually below USDC's because ETH borrow demand is low) — but the ETH is *collateral*, so any yield
+is a bonus that makes "never idle" true, not the headline. The earning story stays a **USDC** story.
+
+### The adapter already exists and already speaks WETH — NO new yield contract
+`AaveV3YieldAdapter` is **asset-generic**: constructor takes `_asset` + `_aToken`; its NatSpec reads *"The
+underlying token this adapter idles (e.g. USDC or WETH)."* So the real instance is just
+`AaveV3YieldAdapter(WETH, aWETH)` — or `MintwareMultiVenueYieldAdapter` to fan across **Aave + Morpho** for
+WETH. The settlement contract talks only to `IYieldAdapter`; the venue lives behind it.
 
 ### The binding constraint: settlement needs *liquid* WETH
 `batchSettleEth` runs an **exact-output** WETH→USDC swap that consumes WETH from `weth.balanceOf(this)`
-(`MintwareEthSettlement.sol:376,384`). If the backing is staked, it isn't on hand at swap time. So we cannot
-simply "stake it all" — we must keep enough liquid WETH to feed the swap, and unwind more when a settlement
-is large. This is *exactly* the tension the treasury vault already solved for USDC with
-`idleBufferTargetBps` + `_supplyToAdapter` + `_pullUSDC`. We reuse that shape, not invent one.
+(`:376,384`). So we cannot lend it all — keep a liquid buffer to feed the swap, unwind more when a
+settlement is large. This is exactly what the treasury vault does for USDC (`idleBufferTargetBps` +
+`_supplyToAdapter` + `_pullUSDC`). We reuse that shape. `IYieldAdapter.withdraw` is **best-effort / never
+reverts for liquidity** — ideal for a pre-settlement pull, because a partial unwind is already safe (junior
+top-up + `minUsdcOut` floor + revert-and-retry handle any shortfall; the rail is never underpaid).
 
-### The interface is already the right seam
-`IYieldAdapter` (`src/vaults/IYieldAdapter.sol`) is perfect for this:
-- `deposit(amount)` — stake WETH (buffer excess).
-- `withdraw(amount) → withdrawn` — **best-effort, never reverts for liquidity** (returns partial/0). Ideal
-  for a pre-settlement pull: a partial unwind is safe because the swap + junior top-up + `minUsdcOut`
-  catastrophe floor already handle a shortfall (revert-and-retry, rail never underpaid).
-- `totalAssets()` — WETH attributable (principal + yield), **fee-/rate-aware** so we never overstate backing.
-- `maxWithdrawable()` — instant liquidity (size the pull as `min(need, maxWithdrawable())`).
-- `maxSuppliable()` — supply headroom.
+## The build (wiring `MintwareEthSettlement`)
 
-So the settlement contract talks only to this interface; the wstETH specifics live behind the adapter
-(built separately, `legal/ministerial-adapter`).
+**Safe default — additive, off until deliberately enabled.** New `IYieldAdapter public wethAdapter`
+defaults to `address(0)`. **While unset, behaviour is byte-for-byte today's** (WETH fully liquid, no
+lending). Setting an audited WETH lending adapter is what turns on earning. Nothing changes silently.
 
-## The build (Phase B — wiring `MintwareEthSettlement`)
+1. **`wethAdapter`** (`IYieldAdapter`, owner-settable, first-set-immediate then locked — will adopt the
+   shared 48h risk-param timelock the governance branch adds).
+2. **`wethIdleBufferBps`** (default `3000` = keep 30% liquid, lend 70%), bounded — conservative because
+   settlement WETH turns over and unwinds should be rare.
+3. **`totalWethBacking()` view** = on-hand WETH `+ wethAdapter.totalAssets()` (0 adapter → just on-hand).
+   Aave aTokens rebase, so `totalAssets` already reflects accrued interest at redeemable value — never
+   overstates.
+4. **`_supplyExcessWeth()`** (forceApprove→deposit→reset-on-catch, respect `maxSuppliable`) from
+   `fundWethBacking` + an owner/keeper `sweepWethToAdapter()`.
+5. **`_ensureLiquidWeth(need)`** — pull `min(need−onHand, maxWithdrawable())` via `wethAdapter.withdraw`
+   (best-effort) when on-hand is short.
+6. **`batchSettleEth`** — before `poolManager.unlock`, estimate `wethNeed ≈ (totalUsdc / oraclePrice) *
+   marginBps` (~120%) and `_ensureLiquidWeth(wethNeed)`. If the adapter can't fully unwind, the EXISTING
+   shortfall path applies unchanged — rail paid in full or not at all. H4 rail-pin, R2-M2 caps, oracle band,
+   junior top-up, `minUsdcOut` floor all **unchanged** — the lending layer sits underneath them.
+7. **Conservation** — invariant becomes `totalWethBacking()` decreases by exactly the WETH the swap consumed
+   (unwind just moves WETH adapter→on-hand). Keep the L4 donation clamp. `withdrawWethBacking` pulls from the
+   adapter first if on-hand is short.
 
-**Safe default — this is additive and off until deliberately turned on.** New `IYieldAdapter public
-wethAdapter` defaults to `address(0)`. **While unset, behaviour is byte-for-byte today's** (WETH fully
-liquid, no staking). Setting an audited adapter is what turns on earning. No behaviour change ships without
-an explicit, audited enablement.
+## Risk analysis (what lending actually introduces — different from staking)
 
-New/changed surface:
-1. **`wethAdapter`** (`IYieldAdapter`, settable) + **`wethIdleBufferBps`** (default e.g. `3000` = keep 30%
-   liquid, stake 70% — deliberately more conservative than the USDC vault's 20%, because settlement WETH
-   turns over frequently and unwind slippage should be rare). Both are **risk parameters** → they go through
-   the **48h bounded timelock** the governance workstream is adding (`legal/timelock-risk-params`); the
-   adapter is *set-once-then-timelocked* like the oracle signer.
-2. **`totalWethBacking()` view** = `weth.balanceOf(this)` (on-hand) `+ wethAdapter.totalAssets()` (staked,
-   fee-aware). This is the number NAV/solvency reads — **valued at the adapter's realistic exit price, never
-   the wrapped face value**, so a wstETH discount can't overstate the backing.
-3. **`_supplyExcessWeth()`** — internal: `liquid = weth.balanceOf(this)`; `target = totalWethBacking() *
-   wethIdleBufferBps / 1e4`; if `liquid > target`, `deposit(min(liquid - target, maxSuppliable()))` into the
-   adapter (forceApprove→deposit→reset-on-catch, mirroring `_supplyToAdapter`). Called from
-   `fundWethBacking` and an owner/keeper `sweepWethToAdapter()`.
-4. **`_ensureLiquidWeth(need)`** — internal: if `weth.balanceOf(this) < need`, pull `min(need − onHand,
-   maxWithdrawable())` via `wethAdapter.withdraw` (best-effort). Called **before** the settlement swap.
-5. **`batchSettleEth` change** — before `poolManager.unlock`, estimate the WETH the exact-output swap will
-   consume: `wethNeed ≈ (totalUsdc / oraclePrice) * marginBps` (oracle tick → price; `marginBps` ~120% to
-   cover slippage), then `_ensureLiquidWeth(wethNeed)`. If the adapter can't fully unwind, the swap consumes
-   what's liquid and the **existing** shortfall path (junior top-up, `minUsdcOut` floor, revert-and-retry)
-   applies unchanged — **the rail is still paid in full or not at all.** No new underpayment risk.
-6. **Backing conservation across buffer + adapter.** Today `wethBacking` tracks physical WETH and decays by
-   `wethSpent` (`:403`, with the L4 donation clamp). With staking, the tracked-backing invariant becomes
-   **`totalWethBacking()` decreases by exactly the WETH the swap consumed** (the unwind just moves WETH from
-   adapter→on-hand, conserving the total). The invariant suite must assert this across a fund→stake→settle→
-   unwind sequence.
-7. **`withdrawWethBacking`** — pull from the adapter first if on-hand is short (`_ensureLiquidWeth` then
-   transfer); never sell staked position at a loss for a routine withdraw (bound to `maxWithdrawable`).
-
-## Risk analysis (the part staking actually introduces)
-
-| Risk | Mitigation in this design |
+| Risk | Mitigation |
 |---|---|
-| **stETH/wstETH depeg** (value < 1:1 WETH; ~7% in 2022) — shrinks backing for par settlements | `totalWethBacking()` values via the adapter's **fee-/rate-aware exit preview**, never face value → NAV can't overstate. A depeg is an **ETH-side move the junior first-loss tranche already exists to absorb** (same tranche that absorbs ETH price moves). Conservative default buffer (30% liquid) means most settlements never touch staked WETH. |
-| **Withdrawal illiquidity** — real Lido withdrawals are a multi-day queue | The adapter's `withdraw`/`maxWithdrawable` use the **instant** path (wstETH→WETH DEX swap, bounded slippage), **not** the queue. The liquid buffer covers routine settlement; only large batches unwind, and `withdraw` is best-effort so a thin moment degrades gracefully (revert-and-retry), never a DoS. |
-| **Ministerial / SEC Aug-2025** | The adapter has **no discretion** over stake timing/amount (driven only by the buffer rule + caller amount) and **no promised rate** — see `legal/ministerial-adapter`. Settlement just calls `deposit`/`withdraw`; it never "decides" to stake. |
-| **Edge-auth coherence** | edge-auth's VaR haircut `γ = 1 − (z·σ·√T + slippage)` should fold in a small **wstETH/ETH basis σ** so the reserved buffer covers the staking basis too. Off-chain follow-up (note in `services/edge-auth`), not a contract change. |
-| **New external dependency (adapter) on the settlement hot path** | `withdraw` is best-effort/non-reverting; adapter `deposit` is wrapped in try/catch (like `_supplyToAdapter`); `wethAdapter == 0` fully bypasses everything. A broken adapter degrades to "stays liquid," never bricks settlement. |
+| **Lending-protocol smart-contract risk** (Aave/Morpho hack) | The **same risk the USDC side already accepts.** Aave v3 is battle-tested; Morpho via curated vaults. Backing exposed only to the amount lent (buffer stays on-hand). |
+| **Utilization / withdrawal crunch** (near-100% utilization → supply temporarily illiquid) | `withdraw`/`maxWithdrawable` reflect available liquidity; a thin moment degrades to partial-unwind → junior top-up → revert-and-retry, never a settlement DoS. The 30% liquid buffer keeps routine settlements off the adapter. |
+| **Rate variability** | No guaranteed rate — consistent with the no-APY discipline. |
+| **New dependency on the settlement hot path** | `withdraw` best-effort/non-reverting; `deposit` in try/catch; `wethAdapter == 0` bypasses everything → a broken adapter degrades to "stays liquid," never bricks settlement. |
+| ~~stETH depeg / slashing / staking-securities~~ | **N/A — not staking.** This is why lending was chosen. |
 
-## Phasing
+## Deployment
 
-- **Phase A — the adapter** (`legal/ministerial-adapter`, in progress): ministerial wstETH `IYieldAdapter`
-  + mock (Lido isn't on testnet) + tests + SEC mapping doc.
-- **Phase B — the wiring** (this doc): buffer + supply + pull-on-settle + fee-aware `totalWethBacking` +
-  invariants, in `MintwareEthSettlement`. **Interface-only dependency on Phase A** → can be built in parallel
-  against `IYieldAdapter` with a mock, integrated at deploy by setting `wethAdapter`.
-- **Enablement** (post-audit): deploy the real wstETH adapter, timelock-set it as `wethAdapter`, size the
-  buffer. Until then the settlement behaves exactly as today (safe default).
+Real WETH lending isn't on Base Sepolia → tests use a **mock** `IYieldAdapter` (best-effort withdraw +
+settable utilization/illiquidity). Real instance = `AaveV3YieldAdapter(WETH, aWETH)` (or MultiVenue) on
+mainnet, set as `wethAdapter` **post-audit** via the timelock. Until then the settlement behaves exactly as
+today (safe default).
+
+## Considered + rejected: liquid staking (wstETH)
+
+Higher headline yield (~3–4% vs ~1–3%), but: (1) **SEC** — staking-on-behalf + yield pass-through is the
+Kraken/Coinbase enforcement profile; a "ministerial" wrapper only narrows it. (2) **Depeg** — stETH can
+trade below ETH (~7% in 2022), shrinking backing. (3) **Withdrawal queue** — multi-day, forcing reliance on
+a DEX exit. Lending avoids all three for a small yield give-up on an asset that's collateral anyway.
 
 ## What must stay green / true
 
-- All existing `MintwareEthSettlement` tests pass with `wethAdapter == 0` (proves the safe default is a
-  no-op).
-- New tests: fund→auto-stake, settle-pulls-from-adapter, large-settle-partial-unwind-still-pays-or-reverts,
-  `totalWethBacking` conservation across the whole sequence, depeg-shrinks-NAV-not-overstated, adapter-broken
-  degrades-to-liquid, withdraw-pulls-from-adapter.
-- The H4 rail pin, R2-M2 caps, oracle band, junior top-up, and `minUsdcOut` floor are **unchanged** — the
-  staking layer sits *underneath* them.
+- All existing `MintwareEthSettlement` tests pass with `wethAdapter == 0` (safe default is a no-op).
+- New tests: fund→auto-lend; settle-pulls-from-adapter; large-settle→partial-unwind→still-pays-or-cleanly-
+  reverts; `totalWethBacking` conservation across fund→lend→settle→unwind; utilization/illiquidity degrades
+  gracefully; broken-adapter degrades-to-liquid; withdraw-pulls-from-adapter; an invariant if tractable.
+- H4 / R2-M2 / oracle band / junior top-up / `minUsdcOut` floor unchanged — lending sits underneath them.
