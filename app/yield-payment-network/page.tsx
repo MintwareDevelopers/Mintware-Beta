@@ -9,7 +9,7 @@ import { YieldCalculatorWidget } from '@/components/marketing/ypn/YieldCalculato
 import { CircleTechBadge } from '@/components/marketing/ypn/CircleTechBadge'
 import { CoreMechanismSection } from '@/components/marketing/ypn/CoreMechanismSection'
 import { AppConversionCTA } from '@/components/marketing/ypn/AppConversionCTA'
-import { YPN_ETHOS, YPN_LIQUIDITY, YPN_TECH } from '@/constants/ypn-landing'
+import { YPN_ETHOS, YPN_LIQUIDITY, YPN_TECH, YPN_ETH_SENIOR } from '@/constants/ypn-landing'
 
 // =============================================================================
 // /yield-payment-network — PUBLIC marketing surface for the Liquid Sovereign
@@ -74,6 +74,26 @@ export default function YieldPaymentNetworkPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* The senior tranche — the headline value prop (counsel-safe framing) */}
+      <section className="bg-ground-cool border-b border-hair-soft">
+        <div className="mx-auto max-w-[1080px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px]">
+          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">{YPN_ETH_SENIOR.eyebrow}</div>
+          <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3 max-w-[18ch] [text-wrap:balance]">
+            {YPN_ETH_SENIOR.title} <span className="text-gradient-accent">{YPN_ETH_SENIOR.titleAccent}</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(15px,1.7vw,17px)] leading-[1.6] mt-5 max-w-[70ch]">{YPN_ETH_SENIOR.body}</p>
+          <div className="grid grid-cols-3 max-[820px]:grid-cols-1 gap-4 mt-8">
+            {YPN_ETH_SENIOR.cards.map((c) => (
+              <div key={c.k} className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-6">
+                <div className="font-atx-display font-semibold text-[16px] tracking-[-0.01em] text-ink mb-2">{c.k}</div>
+                <p className="text-[14px] leading-[1.55] text-ink-mid">{c.v}</p>
+              </div>
+            ))}
+          </div>
+          <p className="font-mono text-[11px] text-ink-soft mt-6 max-w-[74ch] leading-[1.5]">{YPN_ETH_SENIOR.note}</p>
         </div>
       </section>
 

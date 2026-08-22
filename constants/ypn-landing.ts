@@ -261,6 +261,25 @@ export const YPN_TECH = {
   note: 'On testnet — deployed ≠ audited. An external audit precedes mainnet or real value.',
 } as const
 
+// ─── The senior tranche — the headline value prop (counsel-safe framing) ─────
+// Honesty guardrails (see /legal + docs/developers/eth-senior-tranche.md): NO "deposit / savings /
+// guaranteed / fixed APY" language. Frame as "cash that stays productive," yield "from the pools it
+// backs" (protocol-native, not a Mintware promise), and always the testnet/not-a-guarantee note.
+export const YPN_ETH_SENIOR = {
+  eyebrow: 'The senior tranche',
+  title: 'Cash that stays cash —',
+  titleAccent: 'and stays productive.',
+  body:
+    'Put in USDC and it stays spendable at par, like cash — while the capital works, earning from the pools it backs. The design splits the risk in two: the community holds the price-free senior side, and a first-loss junior tranche absorbs the market’s ups and downs. Your balance behaves like a dollar; the volatility lands on the tranche built to take it.',
+  cards: [
+    { k: 'Price-free by design', v: 'The senior claim never reads a pool price. Impermanent loss and market moves land on the junior tranche first, not on your balance.' },
+    { k: 'Covered, then fair', v: 'Redeemable at par while the first-loss cushion covers it. If a tail event ever exhausts that cushion, everyone shares the same transparent, pro-rata outcome — no race for the exit.' },
+    { k: 'Spend without unwinding', v: 'Pay straight from the balance while it stays deployed — a spend is a hold against the earning position, then a settle. Never idle, never locked.' },
+  ],
+  note:
+    'In testing on Base Sepolia — testnet, unaudited, no real value. This is a design property of an autonomous vault, not a deposit, a guarantee, or investment advice; an external audit precedes any real value.',
+} as const
+
 export type YpnPillar = (typeof YPN_PILLARS.cards)[number]
 export type YpnMatrixRow = (typeof YPN_MATRIX.rows)[number]
 export type YpnFlowStep = (typeof YPN_FLOW.steps)[number]
