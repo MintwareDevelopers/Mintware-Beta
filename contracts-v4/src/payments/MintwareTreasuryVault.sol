@@ -14,8 +14,9 @@ import {TickMath}        from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {IYieldVault}      from "./IYieldVault.sol";
 import {IYieldAdapter}    from "../vaults/IYieldAdapter.sol";
 import {SeniorSharesMath} from "../lib/SeniorSharesMath.sol";
-import {MintwarePairVault}       from "../vaults/MintwarePairVault.sol";
-import {MWTreasuryPositionLib}   from "./lib/MWTreasuryPositionLib.sol";
+import {MintwarePairVault}         from "../vaults/MintwarePairVault.sol";
+import {MWTimelockedRiskParams}    from "../lib/MWTimelockedRiskParams.sol";
+import {MWTreasuryPositionLib}     from "./lib/MWTreasuryPositionLib.sol";
 
 /// @dev The JIT hook's truncated-oracle reference (AUDIT #7/#3). Optional: if the vault's JIT hook
 ///      doesn't implement it (or none is set), valuation falls back to spot.
@@ -84,7 +85,7 @@ interface IJitOracle {
 /// @dev    Idle-first (idleBufferTargetBps, default 8000 = 80%): the LP slice is small, so the Aave
 ///         buffer serves ~all card spends instantly and the exposed (IL-bearing) fraction stays inside
 ///         the junior's coverage.
-contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVault {
+contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVault, MWTimelockedRiskParams {
     using SafeERC20 for IERC20;
     using Math      for uint256;
 
@@ -104,6 +105,24 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     uint16 public constant FEE_COMMUNITY_BPS = 6_000;
     uint16 public constant FEE_TEAM_BPS      = 3_000;
     uint16 public constant FEE_PROTOCOL_BPS  = 1_000;
+
+    // ── governed risk-parameter ids + bounds (legal 48h-timelock rail) ─────────────────────────────
+    // Every setter below routes through `MWTimelockedRiskParams`: bounded at propose time, instant while
+    // pre-activation OR when the change TIGHTENS safety, else 48h-timelocked + disclosed. Ids are public so
+    // ops/governance can call `confirmRiskParam`/`cancelRiskParam` and index the disclosure events.
+    bytes32 public constant RP_IDLE_BUFFER_TARGET = keccak256("MintwareTreasuryVault.idleBufferTargetBps");
+    bytes32 public constant RP_JIT_CAP            = keccak256("MintwareTreasuryVault.jitMaxPerBlockBps");
+    bytes32 public constant RP_MIN_COVERAGE       = keccak256("MintwareTreasuryVault.minCoverageBps");
+    bytes32 public constant RP_MAX_BURN_PER_BLOCK = keccak256("MintwareTreasuryVault.maxBurnPerBlock");
+    bytes32 public constant RP_JIT_MAX_CUM_LOSS   = keccak256("MintwareTreasuryVault.jitMaxCumulativeLoss");
+    /// @notice Sanity ceiling on the coverage floor (≤ 500% over-collateralization). Rejects a nonsense floor
+    ///         at propose time; the meaningful control is the timelock, not this bound.
+    uint256 public constant MAX_MIN_COVERAGE_BPS  = 50_000;
+    /// @notice Fat-finger ceilings on the two "0 == off" USDC threshold caps. Decimals-agnostic — they only
+    ///         reject an absurd typo; the timelock governs the meaningful (loosening) direction, not a
+    ///         numeric economic bound.
+    uint256 public constant MAX_BURN_CAP          = type(uint128).max;
+    uint256 public constant MAX_JIT_CUM_LOSS_CAP  = type(uint128).max;
 
     IERC20        public immutable usdc;      // 6dp senior settlement asset
     IERC20        public immutable teamToken; // junior reserve asset
@@ -287,10 +306,11 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         protocolTreasury = t;
     }
 
+    /// @notice Governed (48h-timelocked) risk param — LOWERING the idle-buffer target deploys MORE senior
+    ///         USDC into the IL-bearing LP (risk-increasing → timelocked); RAISING it (safety) is instant.
+    ///         Bounded [MIN_IDLE_TARGET_BPS, MAX_IDLE_TARGET_BPS] at propose time. Instant before activation.
     function setIdleBufferTarget(uint16 bps) external onlyOwner {
-        if (bps < MIN_IDLE_TARGET_BPS || bps > MAX_IDLE_TARGET_BPS) revert BadParam();
-        idleBufferTargetBps = bps;
-        emit IdleTargetSet(bps);
+        _changeRiskParam(RP_IDLE_BUFFER_TARGET, bps, 0);
     }
 
     /// @notice Wire the JIT hook (set-once). It becomes the sole caller of `borrowIdleForJit`/
@@ -303,25 +323,26 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         emit JitHookSet(hook_);
     }
 
-    /// @notice Governs the bounded senior slice lendable to JIT per block (0 disables JIT lending).
+    /// @notice Governed (48h-timelocked) risk param — the bounded senior slice lendable to JIT per block
+    ///         (0 disables JIT lending). RAISING the cap exposes more senior to JIT (risk-increasing →
+    ///         timelocked); LOWERING it (safety) is instant. Bounded ≤ MAX_JIT_PER_BLOCK_BPS at propose time.
     function setJitCap(uint16 bps) external onlyOwner {
-        if (bps > MAX_JIT_PER_BLOCK_BPS) revert BadParam();
-        jitMaxPerBlockBps = bps;
-        emit JitCapSet(bps);
+        _changeRiskParam(RP_JIT_CAP, bps, 0);
     }
 
-    /// @notice Set the coverage-ratio floor (bps of deployed-at-risk senior the junior USDC buffer must
-    ///         cover). 0 = OFF (default). See `minCoverageBps`. Risk-increasing ops (deploy / JIT) below
-    ///         the floor are halted.
+    /// @notice Governed (48h-timelocked) risk param — the coverage-ratio floor (bps of deployed-at-risk
+    ///         senior the junior USDC buffer must cover; 0 = OFF). LOWERING the floor weakens the cushion
+    ///         (risk-increasing → timelocked); RAISING it (safety) is instant. Bounded ≤ MAX_MIN_COVERAGE_BPS.
     function setMinCoverage(uint16 bps) external onlyOwner {
-        minCoverageBps = bps;
-        emit MinCoverageSet(bps);
+        _changeRiskParam(RP_MIN_COVERAGE, bps, 0);
     }
 
-    /// @notice AUDIT M1: set the per-block `burnForPayment` ceiling in USDC (0 = off). Owner only.
+    /// @notice AUDIT M1 — Governed (48h-timelocked) risk param: the per-block `burnForPayment` ceiling in
+    ///         USDC (0 = off = unbounded = loosest). RAISING the cap (or setting it to 0) lets the senior
+    ///         drain faster (risk-increasing → timelocked); LOWERING a non-zero cap (safety) is instant.
+    ///         Bounded ≤ MAX_BURN_CAP at propose time.
     function setMaxBurnPerBlock(uint256 cap) external onlyOwner {
-        maxBurnPerBlock = cap;
-        emit MaxBurnPerBlockSet(cap);
+        _changeRiskParam(RP_MAX_BURN_PER_BLOCK, cap, 0);
     }
 
     /// @notice Wire (or clear) the am-AMM auction that may push rent via `fundRent`. Re-settable by the
@@ -332,17 +353,85 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         emit RentFunderSet(funder);
     }
 
-    /// @notice AUDIT H4: set the cumulative realized-JIT-loss threshold that trips the breaker (USDC).
+    /// @notice AUDIT H4 — Governed (48h-timelocked) risk param: the cumulative realized-JIT-loss threshold
+    ///         that trips the breaker, in USDC (0 = off = no breaker = loosest). RAISING the threshold (or
+    ///         setting it to 0) lets JIT bleed further before auto-disabling (risk-increasing → timelocked);
+    ///         LOWERING a non-zero threshold (safety) is instant. Bounded ≤ MAX_JIT_CUM_LOSS_CAP.
+    /// @dev    NOTE: this governs only the DELIBERATE tuning of the breaker THRESHOLD. The breaker itself
+    ///         (auto-disable in `settleJitReturn`/`forceSettleJit`) fires INSTANTLY and is never timelocked.
     function setJitMaxCumulativeLoss(uint256 maxLoss) external onlyOwner {
-        jitMaxCumulativeLoss = maxLoss;
-        emit JitMaxCumulativeLossSet(maxLoss);
+        _changeRiskParam(RP_JIT_MAX_CUM_LOSS, maxLoss, 0);
     }
+
+    /// @notice Confirm a 48h-timelocked risk-parameter change once its delay has elapsed (owner-only wrapper
+    ///         over `MWTimelockedRiskParams`). `param` is one of the `RP_*` ids.
+    function confirmRiskParam(bytes32 param) external onlyOwner { _confirmRiskParam(param); }
+
+    /// @notice Cancel a pending (not-yet-confirmed) risk-parameter change — abort a rogue/superseded proposal.
+    function cancelRiskParam(bytes32 param) external onlyOwner { _cancelRiskParam(param); }
 
     /// @notice AUDIT H4: clear a tripped JIT breaker (owner review) and reset the PnL accumulator.
     function resetJitBreaker() external onlyOwner {
         emit JitBreakerReset(jitNetPnl);
         jitAutoDisabled = false;
         jitNetPnl = 0;
+    }
+
+    // ── MWTimelockedRiskParams hooks (describe this vault's governed params) ────────────────────────
+
+    /// @dev The vault is "live" (timelock binds) once the team has committed and deposits are open. Before
+    ///      that — deploy wiring + test setUp — every risk-param set is instant (first-set-immediate).
+    function _riskParamsLive() internal view override returns (bool) {
+        return activated;
+    }
+
+    function _validateRiskParam(bytes32 param, uint256 v, uint256 /*v2*/) internal view override {
+        if (param == RP_IDLE_BUFFER_TARGET) {
+            if (v < MIN_IDLE_TARGET_BPS || v > MAX_IDLE_TARGET_BPS) revert BadParam();
+        } else if (param == RP_JIT_CAP) {
+            if (v > MAX_JIT_PER_BLOCK_BPS) revert BadParam();
+        } else if (param == RP_MIN_COVERAGE) {
+            if (v > MAX_MIN_COVERAGE_BPS) revert BadParam();
+        } else if (param == RP_MAX_BURN_PER_BLOCK) {
+            if (v > MAX_BURN_CAP) revert BadParam();
+        } else if (param == RP_JIT_MAX_CUM_LOSS) {
+            if (v > MAX_JIT_CUM_LOSS_CAP) revert BadParam();
+        } else {
+            revert BadParam();
+        }
+    }
+
+    function _readRiskParam(bytes32 param) internal view override returns (uint256) {
+        if (param == RP_IDLE_BUFFER_TARGET) return idleBufferTargetBps;
+        if (param == RP_JIT_CAP)            return jitMaxPerBlockBps;
+        if (param == RP_MIN_COVERAGE)       return minCoverageBps;
+        if (param == RP_MAX_BURN_PER_BLOCK) return maxBurnPerBlock;
+        if (param == RP_JIT_MAX_CUM_LOSS)   return jitMaxCumulativeLoss;
+        revert BadParam();
+    }
+
+    function _writeRiskParam(bytes32 param, uint256 v, uint256 /*v2*/) internal override {
+        if (param == RP_IDLE_BUFFER_TARGET)      { idleBufferTargetBps  = uint16(v); emit IdleTargetSet(uint16(v)); }
+        else if (param == RP_JIT_CAP)            { jitMaxPerBlockBps    = uint16(v); emit JitCapSet(uint16(v)); }
+        else if (param == RP_MIN_COVERAGE)       { minCoverageBps       = v;         emit MinCoverageSet(v); }
+        else if (param == RP_MAX_BURN_PER_BLOCK) { maxBurnPerBlock      = v;         emit MaxBurnPerBlockSet(v); }
+        else if (param == RP_JIT_MAX_CUM_LOSS)   { jitMaxCumulativeLoss = v;         emit JitMaxCumulativeLossSet(v); }
+        else revert BadParam();
+    }
+
+    /// @dev Direction gate: instant before activation, else instant only when the change TIGHTENS safety.
+    function _riskParamInstant(bytes32 param, uint256 v, uint256 /*v2*/) internal view override returns (bool) {
+        if (!activated) return true; // first-set-immediate
+        uint256 cur = _readRiskParam(param);
+        // higher == stricter → instant on raise/equal: idle-buffer target, coverage floor
+        if (param == RP_IDLE_BUFFER_TARGET || param == RP_MIN_COVERAGE) return v >= cur;
+        // lower == stricter → instant on lower/equal: JIT per-block cap
+        if (param == RP_JIT_CAP) return v <= cur;
+        // "0 == off == loosest" caps/thresholds (maxBurnPerBlock, jitMaxCumulativeLoss): stricter == a lower
+        // NON-ZERO value; disabling (→ 0) or raising is loosening. Map 0 → +inf, instant iff effNew <= effOld.
+        uint256 effNew = v   == 0 ? type(uint256).max : v;
+        uint256 effOld = cur == 0 ? type(uint256).max : cur;
+        return effNew <= effOld;
     }
 
     // NOTE: pause()/unpause() are inherited from MintwarePairVault → MWGuardianPausable (guardian may

@@ -18,6 +18,8 @@ import {Ownable}         from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable}        from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+import {MWTimelockedRiskParams} from "../lib/MWTimelockedRiskParams.sol";
+
 /// @dev The truncated-oracle reference the settlement swap bounds against — the SAME surface the JIT hook
 ///      exposes (`MintwareTreasuryJitHook.oracleTick()`). In production the WETH/USDC pool's hook supplies
 ///      it; `ready == false` (or a zero source) makes the swap fall back to unbounded (pre-first-swap only).
@@ -52,7 +54,7 @@ interface IOracleTickSource {
 ///         vault's OWN am-AMM pool: this contract swaps as itself, and if set as the hook's `jitSkipSender`
 ///         its settlement swaps are exempt from the JIT/am-AMM auction path — no self-skim, no reentrant
 ///         `fundRent` deadlock. Settlement and trading flow never collide.
-contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, ReentrancyGuard {
+contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, ReentrancyGuard, MWTimelockedRiskParams {
     using SafeERC20     for IERC20;
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
@@ -130,6 +132,24 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     ///         floor is still the tighter of this and the oracle band.
     uint16 public minSettleOutBps;
     uint16 internal constant SETTLE_BPS = 10_000;
+
+    // ── governed risk-parameter ids + bounds (legal 48h-timelock rail) ─────────────────────────────
+    // Every risk setter below routes through `MWTimelockedRiskParams`: bounded at propose time; instant
+    // while pre-arming (before `settlementRail` is pinned — i.e. deploy + test setUp) OR when the change
+    // TIGHTENS safety; else 48h-timelocked + disclosed. Ids are public for `confirmRiskParam`/`cancelRiskParam`.
+    bytes32 public constant RP_BAND_TICKS            = keccak256("MintwareEthSettlement.bandTicks");
+    bytes32 public constant RP_JUNIOR_TOPUP_CAP      = keccak256("MintwareEthSettlement.juniorTopUpCapPerCall");
+    bytes32 public constant RP_MAX_SETTLE_PER_CALL   = keccak256("MintwareEthSettlement.maxSettlePerCall");
+    bytes32 public constant RP_SETTLE_WINDOW_CAP     = keccak256("MintwareEthSettlement.settlementWindowCap");
+    bytes32 public constant RP_MIN_SETTLE_OUT_BPS    = keccak256("MintwareEthSettlement.minSettleOutBps");
+    bytes32 public constant RP_REQUIRE_READY_ORACLE  = keccak256("MintwareEthSettlement.requireReadyOracle");
+    /// @notice Widest slippage band the settlement swap may open (~20% at spacing-60). Fat-finger ceiling.
+    int24   public constant MAX_BAND_TICKS           = 2_000;
+    /// @notice Fat-finger ceilings on the "0 == off" USDC caps + window. Decimals-agnostic (USDC may be 6dp
+    ///         or 18dp across deployments) — these only reject an absurd typo; the timelock governs the
+    ///         meaningful (loosening) direction, not a numeric economic bound.
+    uint256 public constant MAX_SETTLE_CAP           = type(uint128).max;
+    uint256 public constant MAX_SETTLE_WINDOW        = 3650 days;
 
     /// @dev Transient exact-output target read inside `unlockCallback` (set→unlock→clear in one call).
     uint256 private _pendingUsdcOut;
@@ -219,21 +239,26 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         emit OracleSourceSet(source);
     }
 
+    /// @notice Governed (48h-timelocked) risk param — the ticks the settlement swap may move past the oracle
+    ///         before stopping. WIDENING the band tolerates more slippage (risk-increasing → timelocked);
+    ///         NARROWING it (safety) is instant. Bounded (0, MAX_BAND_TICKS] at propose time.
     function setBandTicks(int24 band) external onlyOwner {
-        if (band <= 0) revert ZeroAmount();
-        bandTicks = band;
-        emit BandSet(band);
+        _changeRiskParam(RP_BAND_TICKS, uint256(uint24(band)), 0);
     }
 
-    /// @notice Toggle the fail-closed require-ready-oracle guard. Keep TRUE in production.
+    /// @notice Governed (48h-timelocked) risk param — the fail-closed require-ready-oracle guard. DISABLING
+    ///         it (→ unbounded, sandwichable swaps) is risk-increasing → timelocked; ENABLING it (safety) is
+    ///         instant. Keep TRUE in production; only disable for a pre-oracle bootstrap (before the rail is
+    ///         pinned, so instant then).
     function setRequireReadyOracle(bool required) external onlyOwner {
-        requireReadyOracle = required;
-        emit RequireReadyOracleSet(required);
+        _changeRiskParam(RP_REQUIRE_READY_ORACLE, required ? 1 : 0, 0);
     }
 
+    /// @notice Governed (48h-timelocked) risk param — max junior top-up per settlement (0 = off = up to the
+    ///         WHOLE buffer = loosest). RAISING the cap (or setting 0) lets more first-loss bleed per call
+    ///         (risk-increasing → timelocked); LOWERING a non-zero cap (safety) is instant. Bounded ≤ MAX_SETTLE_CAP.
     function setJuniorTopUpCapPerCall(uint256 cap) external onlyOwner {
-        juniorTopUpCapPerCall = cap;
-        emit JuniorTopUpCapSet(cap);
+        _changeRiskParam(RP_JUNIOR_TOPUP_CAP, cap, 0);
     }
 
     /// @notice AUDIT H4: pin (or re-point) the sole settlement destination. Set to the Gateway / CPN
@@ -244,35 +269,124 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         emit SettlementRailSet(rail);
     }
 
-    /// @notice AUDIT H4: set the per-call `totalUsdc` ceiling (0 = off). Defense in depth over the pin.
+    /// @notice AUDIT H4 — Governed (48h-timelocked) risk param: the per-call `totalUsdc` ceiling (0 = off =
+    ///         loosest). RAISING it (or setting 0) lets a single settlement move more (risk-increasing →
+    ///         timelocked); LOWERING a non-zero cap (safety) is instant. Bounded ≤ MAX_SETTLE_CAP.
     function setMaxSettlePerCall(uint256 cap) external onlyOwner {
-        maxSettlePerCall = cap;
-        emit MaxSettlePerCallSet(cap);
+        _changeRiskParam(RP_MAX_SETTLE_PER_CALL, cap, 0);
     }
 
-    /// @notice AUDIT R2-M2: set the cumulative/windowed settlement ceiling (USDC) + rolling window length
-    ///         (seconds). `cap == 0` disables it; when enabled `windowSecs` must be non-zero. Bounds TOTAL
-    ///         extraction a runaway relayer can push through the pinned rail, giving the guardian time to pause.
+    /// @notice AUDIT R2-M2 — Governed (48h-timelocked) risk param: the cumulative/windowed settlement ceiling
+    ///         (USDC) + rolling window (seconds). `cap == 0` disables it; when enabled `windowSecs` must be
+    ///         non-zero. LOOSENING (raising the cap, disabling it, or shortening the window) is risk-increasing
+    ///         → timelocked; TIGHTENING (enabling from off, lowering the cap without shortening the window) is
+    ///         instant. Bounds TOTAL extraction a runaway relayer can push through the pinned rail.
     function setSettlementWindowCap(uint256 cap, uint256 windowSecs) external onlyOwner {
-        if (cap != 0 && windowSecs == 0) revert BadParam();
-        maxSettlePerWindow = cap;
-        settleWindow       = windowSecs;
-        _windowStart       = block.timestamp; // fresh window on (re)config
-        _settledInWindow   = 0;
-        emit SettlementWindowCapSet(cap, windowSecs);
+        _changeRiskParam(RP_SETTLE_WINDOW_CAP, cap, windowSecs);
     }
 
-    /// @notice AUDIT R2-M2: require the relayer's `minUsdcOut` to be ≥ this fraction (bps) of `totalUsdc`
-    ///         (0 = off). Stops a rogue relayer passing `minUsdcOut = 0` and settling the swap at a near-zero
-    ///         output. Must be ≤ 100%.
+    /// @notice AUDIT R2-M2 — Governed (48h-timelocked) risk param: require the relayer's `minUsdcOut` to be
+    ///         ≥ this fraction (bps) of `totalUsdc` (0 = off = loosest). LOWERING it weakens the swap-output
+    ///         floor (risk-increasing → timelocked); RAISING it (safety) is instant. Bounded ≤ 100%.
     function setMinSettleOutBps(uint16 bps) external onlyOwner {
-        if (bps > SETTLE_BPS) revert BadParam();
-        minSettleOutBps = bps;
-        emit MinSettleOutBpsSet(bps);
+        _changeRiskParam(RP_MIN_SETTLE_OUT_BPS, bps, 0);
     }
+
+    /// @notice Confirm a 48h-timelocked risk-parameter change once its delay has elapsed. `param` is an `RP_*` id.
+    function confirmRiskParam(bytes32 param) external onlyOwner { _confirmRiskParam(param); }
+
+    /// @notice Cancel a pending (not-yet-confirmed) risk-parameter change — abort a rogue/superseded proposal.
+    function cancelRiskParam(bytes32 param) external onlyOwner { _cancelRiskParam(param); }
 
     function pause() external onlyOwner { _pause(); }
     function unpause() external onlyOwner { _unpause(); }
+
+    // ── MWTimelockedRiskParams hooks (describe this contract's governed params) ─────────────────────
+
+    /// @dev "Live" (timelock binds) once the settlement destination is pinned. Before the rail is set,
+    ///      settlement reverts (`RailNotSet`) so no value can flow — hence risk-param sets are instant then
+    ///      (first-set-immediate: deploy wiring + test setUp).
+    function _riskParamsLive() internal view override returns (bool) {
+        return settlementRail != address(0);
+    }
+
+    function _validateRiskParam(bytes32 param, uint256 v, uint256 v2) internal view override {
+        if (param == RP_BAND_TICKS) {
+            if (v == 0 || v > uint256(uint24(MAX_BAND_TICKS))) revert BadParam();
+        } else if (param == RP_JUNIOR_TOPUP_CAP || param == RP_MAX_SETTLE_PER_CALL) {
+            if (v > MAX_SETTLE_CAP) revert BadParam();
+        } else if (param == RP_SETTLE_WINDOW_CAP) {
+            if (v != 0 && v2 == 0) revert BadParam();          // enabled cap needs a window (existing rule)
+            if (v > MAX_SETTLE_CAP || v2 > MAX_SETTLE_WINDOW) revert BadParam();
+        } else if (param == RP_MIN_SETTLE_OUT_BPS) {
+            if (v > SETTLE_BPS) revert BadParam();
+        } else if (param == RP_REQUIRE_READY_ORACLE) {
+            if (v > 1) revert BadParam();
+        } else {
+            revert BadParam();
+        }
+    }
+
+    function _readRiskParam(bytes32 param) internal view override returns (uint256) {
+        if (param == RP_BAND_TICKS)           return uint256(uint24(bandTicks));
+        if (param == RP_JUNIOR_TOPUP_CAP)     return juniorTopUpCapPerCall;
+        if (param == RP_MAX_SETTLE_PER_CALL)  return maxSettlePerCall;
+        if (param == RP_SETTLE_WINDOW_CAP)    return maxSettlePerWindow;
+        if (param == RP_MIN_SETTLE_OUT_BPS)   return minSettleOutBps;
+        if (param == RP_REQUIRE_READY_ORACLE) return requireReadyOracle ? 1 : 0;
+        revert BadParam();
+    }
+
+    function _writeRiskParam(bytes32 param, uint256 v, uint256 v2) internal override {
+        if (param == RP_BAND_TICKS) {
+            bandTicks = int24(uint24(v)); emit BandSet(bandTicks);
+        } else if (param == RP_JUNIOR_TOPUP_CAP) {
+            juniorTopUpCapPerCall = v; emit JuniorTopUpCapSet(v);
+        } else if (param == RP_MAX_SETTLE_PER_CALL) {
+            maxSettlePerCall = v; emit MaxSettlePerCallSet(v);
+        } else if (param == RP_SETTLE_WINDOW_CAP) {
+            maxSettlePerWindow = v;
+            settleWindow       = v2;
+            _windowStart       = block.timestamp; // fresh window on (re)config (unchanged behavior)
+            _settledInWindow   = 0;
+            emit SettlementWindowCapSet(v, v2);
+        } else if (param == RP_MIN_SETTLE_OUT_BPS) {
+            minSettleOutBps = uint16(v); emit MinSettleOutBpsSet(uint16(v));
+        } else if (param == RP_REQUIRE_READY_ORACLE) {
+            requireReadyOracle = (v != 0); emit RequireReadyOracleSet(v != 0);
+        } else {
+            revert BadParam();
+        }
+    }
+
+    /// @dev Direction gate: instant before the rail is pinned, else instant only when the change TIGHTENS.
+    function _riskParamInstant(bytes32 param, uint256 v, uint256 v2) internal view override returns (bool) {
+        if (settlementRail == address(0)) return true; // first-set-immediate (pre-arming)
+        // higher == stricter → instant on raise/equal: min-settle-out floor, require-ready-oracle guard (0/1)
+        if (param == RP_MIN_SETTLE_OUT_BPS || param == RP_REQUIRE_READY_ORACLE) {
+            return v >= _readRiskParam(param);
+        }
+        // lower == stricter → instant on lower/equal: slippage band
+        if (param == RP_BAND_TICKS) {
+            return v <= _readRiskParam(param);
+        }
+        // "0 == off == loosest" caps → stricter == a lower NON-ZERO value (map 0 → +inf).
+        if (param == RP_JUNIOR_TOPUP_CAP || param == RP_MAX_SETTLE_PER_CALL) {
+            uint256 cur = _readRiskParam(param);
+            uint256 effNew = v   == 0 ? type(uint256).max : v;
+            uint256 effOld = cur == 0 ? type(uint256).max : cur;
+            return effNew <= effOld;
+        }
+        // windowed cap (two-value): enabling from OFF is always tightening; otherwise instant only when the
+        // absolute cap does not loosen AND the window does not shorten (both conservative — no rate increase).
+        // Any other change (raise cap / disable / shorten window) is risk-increasing → timelocked.
+        // (param == RP_SETTLE_WINDOW_CAP)
+        uint256 oldCap = maxSettlePerWindow;
+        if (oldCap == 0 && v != 0) return true;            // adding a limit where there was none
+        uint256 effNewCap = v      == 0 ? type(uint256).max : v;
+        uint256 effOldCap = oldCap == 0 ? type(uint256).max : oldCap;
+        return effNewCap <= effOldCap && v2 >= settleWindow;
+    }
 
     // ── funding (models the vault depositing ETH backing + the team funding first-loss) ──────────────
 

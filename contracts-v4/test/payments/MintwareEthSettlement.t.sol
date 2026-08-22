@@ -13,6 +13,8 @@ import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
 import {MintwareEthSettlement, IOracleTickSource} from "../../src/payments/MintwareEthSettlement.sol";
+import {MWTimelockedRiskParams} from "../../src/lib/MWTimelockedRiskParams.sol";
+import {Ownable}         from "@openzeppelin/contracts/access/Ownable.sol";
 import {MockERC20}      from "../mocks/MockERC20.sol";
 import {TestSwapRouter} from "../helpers/TestSwapRouter.sol";
 
@@ -219,9 +221,18 @@ contract MintwareEthSettlementTest is Test {
         vm.expectRevert(MintwareEthSettlement.OracleNotReady.selector);
         settle.batchSettleEth(100e18, 0, rail);
 
-        // Owner may disable the guard for a pre-oracle bootstrap; then it proceeds (min-out bounded).
+        // LEGAL 48h TIMELOCK: disabling the fail-closed oracle guard is RISK-INCREASING, so once the rail is
+        // pinned (setUp does this) it no longer applies instantly — propose → warp 48h → confirm. (A genuine
+        // *pre-oracle* bootstrap happens before the rail is set, where it is instant.)
+        bytes32 id = settle.RP_REQUIRE_READY_ORACLE(); // hoist (getter must not consume the prank)
         vm.prank(owner);
         settle.setRequireReadyOracle(false);
+        assertTrue(settle.requireReadyOracle(), "disable must not apply before the delay");
+        vm.warp(block.timestamp + 48 hours + 1);
+        vm.prank(owner);
+        settle.confirmRiskParam(id);
+        assertFalse(settle.requireReadyOracle(), "guard not disabled after confirm");
+
         vm.prank(relayer);
         settle.batchSettleEth(100e18, 95e18, rail);
         assertEq(usdc.balanceOf(rail), 100e18, "settles once the guard is disabled");
@@ -340,5 +351,81 @@ contract MintwareEthSettlementTest is Test {
         vm.prank(relayer);
         settle.batchSettleEth(100e18, 96e18, rail);
         assertEq(usdc.balanceOf(rail), 100e18, "rail paid once floor satisfied");
+    }
+
+    // ── LEGAL 48h TIMELOCK on settlement risk parameters ────────────────────────────────────────────
+
+    /// @dev Before the rail is pinned the surface isn't live, so risk-param sets — including loosening —
+    ///      apply instantly (first-set-immediate: deploy wiring + test setUp).
+    function test_riskparam_first_set_immediate_before_rail() public {
+        MintwareEthSettlement fresh = new MintwareEthSettlement(
+            IPoolManager(address(pm)), key, address(usdc), address(weth), owner, relayer
+        );
+        vm.startPrank(owner);
+        fresh.setMaxSettlePerCall(50e18); // arm
+        fresh.setMaxSettlePerCall(100e18); // RAISE (loosen) — instant because not yet armed (rail unset)
+        assertEq(fresh.maxSettlePerCall(), 100e18, "pre-arm loosening must be instant");
+        vm.stopPrank();
+    }
+
+    /// @dev Once the rail is pinned (setUp does this), tightening stays instant; loosening is timelocked.
+    function test_riskparam_loosen_timelocked_after_arm() public {
+        vm.startPrank(owner);
+        settle.setMaxSettlePerCall(50e18);               // arm from OFF — tightening → instant
+        assertEq(settle.maxSettlePerCall(), 50e18);
+        settle.setMaxSettlePerCall(200e18);              // RAISE — loosen → timelocked (not applied)
+        assertEq(settle.maxSettlePerCall(), 50e18, "loosen must not apply before delay");
+        vm.warp(block.timestamp + 48 hours + 1);
+        settle.confirmRiskParam(settle.RP_MAX_SETTLE_PER_CALL());
+        assertEq(settle.maxSettlePerCall(), 200e18, "loosen applies after confirm");
+        vm.stopPrank();
+    }
+
+    /// @dev The two-value windowed cap: enabling from OFF is tightening (instant); raising the cap is a
+    ///      loosening → timelocked.
+    function test_riskparam_window_cap_two_value_timelock() public {
+        vm.startPrank(owner);
+        settle.setSettlementWindowCap(150e18, 1 days);   // enable from OFF — instant
+        assertEq(settle.maxSettlePerWindow(), 150e18);
+        assertEq(settle.settleWindow(), 1 days);
+        settle.setSettlementWindowCap(500e18, 1 days);   // raise cap — loosen → timelocked
+        assertEq(settle.maxSettlePerWindow(), 150e18, "raise must not apply instantly");
+        vm.warp(block.timestamp + 48 hours + 1);
+        settle.confirmRiskParam(settle.RP_SETTLE_WINDOW_CAP());
+        assertEq(settle.maxSettlePerWindow(), 500e18, "raise applies after confirm");
+        vm.stopPrank();
+    }
+
+    /// @dev Disabling the fail-closed oracle guard is risk-increasing → timelocked; enabling is instant.
+    function test_riskparam_require_oracle_disable_timelocked() public {
+        assertTrue(settle.requireReadyOracle(), "default on");
+        vm.startPrank(owner);
+        settle.setRequireReadyOracle(false); // DISABLE (loosen) — timelocked
+        assertTrue(settle.requireReadyOracle(), "disable must not apply instantly");
+        vm.warp(block.timestamp + 48 hours + 1);
+        settle.confirmRiskParam(settle.RP_REQUIRE_READY_ORACLE());
+        assertFalse(settle.requireReadyOracle(), "disable applies after confirm");
+        vm.stopPrank();
+    }
+
+    /// @dev Out-of-bounds rejected at propose; only owner may propose / confirm.
+    function test_riskparam_bounds_and_auth() public {
+        vm.prank(owner);
+        vm.expectRevert(MintwareEthSettlement.BadParam.selector);
+        settle.setBandTicks(2_001); // > MAX_BAND_TICKS
+        vm.prank(owner);
+        vm.expectRevert(MintwareEthSettlement.BadParam.selector);
+        settle.setMinSettleOutBps(10_001); // > 100%
+
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
+        settle.setMaxSettlePerCall(1);
+
+        bytes32 id = settle.RP_MAX_SETTLE_PER_CALL(); // hoist (getter must not be the expectRevert target)
+        vm.prank(owner);
+        settle.setMaxSettlePerCall(200e18); // schedule (loosen)
+        vm.prank(attacker);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, attacker));
+        settle.confirmRiskParam(id);
     }
 }

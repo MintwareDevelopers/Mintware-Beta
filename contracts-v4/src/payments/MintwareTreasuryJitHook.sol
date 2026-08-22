@@ -22,6 +22,8 @@ import {IERC20}    from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable}   from "@openzeppelin/contracts/access/Ownable.sol";
 
+import {MWTimelockedRiskParams} from "../lib/MWTimelockedRiskParams.sol";
+
 /// @dev The minimal vault surface the hook drives — the borrow-seam (increment 1).
 interface IJitVault {
     function borrowIdleForJit(uint256 want) external returns (uint256 lent);
@@ -59,7 +61,7 @@ interface IMWAmAuction {
 ///         (JIT_SALT) coexist in
 ///         the pool without any liquidity-callback. V4 auto-skips these callbacks for the hook's OWN swap
 ///         (`msg.sender == self`), so the sweep's team→USDC swap needs no reentrancy guard.
-contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
+contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable, MWTimelockedRiskParams {
     using SafeERC20     for IERC20;
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
@@ -83,6 +85,18 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     PoolId public immutable canonicalPoolId;
 
     bytes32 private constant JIT_SALT = bytes32(uint256(0x314));
+
+    // ── governed risk-parameter id + bounds (legal 48h-timelock rail) ──────────────────────────────
+    // The truncated-oracle clamp is the ONE senior-solvency-relevant knob on this hook: the vault values its
+    // position at `min(spot, oracle)` and the settlement swap bounds against this oracle, so LOOSENING the
+    // clamp weakens manipulation resistance for the whole stack. It therefore routes through the 48h timelock
+    // (risk-increasing = looser clamp); tightening is instant; instant before the oracle's first swap
+    // (bootstrap). The pure fee/MEV levers below are NOT governed here — they are bounded ≤ MAX_LP_FEE, can
+    // never brick a swap or touch principal, and are explicitly "bonus, not solvency"; ops must tune them
+    // responsively, so a 48h delay on a fee tweak would be counter-productive.
+    bytes32 public constant RP_ORACLE_PARAMS       = keccak256("MintwareTreasuryJitHook.oracleParams");
+    int24   public constant MAX_ORACLE_MOVE_TICKS  = 2_000;   // fat-finger ceiling on the per-block move clamp
+    uint32  public constant MAX_ORACLE_CATCHUP     = 7_200;   // fat-finger ceiling on the catch-up block cap
 
     /// @notice Minimum |amountSpecified| for JIT to fire (size gate; skip dust swaps).
     uint256 public jitThreshold;
@@ -198,6 +212,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     error NotArmer();
     error FeeTooHigh();
     error ExactOutputNotSupported();
+    error BadParam();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(poolManager)) revert OnlyPoolManager();
@@ -257,12 +272,52 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     /// @notice Exempt an initiator (the LP module) from firing JIT on its own swaps.
     function setJitSkipSender(address s) external onlyOwner { jitSkipSender = s; }
 
-    /// @notice Tune the truncated oracle: max per-block tick move (manipulation clamp) + catch-up cap.
+    /// @notice Governed (48h-timelocked) risk param — the truncated oracle's max per-block tick move
+    ///         (manipulation clamp) + catch-up cap. RAISING either value tracks spot faster → weaker
+    ///         manipulation resistance for the vault NAV floor + settlement band (risk-increasing →
+    ///         timelocked); LOWERING both (safety) is instant. Instant before the oracle's first swap
+    ///         (bootstrap). Bounded (0, MAX_ORACLE_MOVE_TICKS] / ≤ MAX_ORACLE_CATCHUP at propose time.
     function setOracleParams(int24 maxMovePerBlock, uint32 maxCatchupBlocks) external onlyOwner {
-        require(maxMovePerBlock > 0, "move");
-        _oracle.maxTickMovePerBlock = maxMovePerBlock;
-        _oracle.maxCatchupBlocks    = maxCatchupBlocks;
-        emit OracleParamsSet(maxMovePerBlock, maxCatchupBlocks);
+        _changeRiskParam(RP_ORACLE_PARAMS, uint256(uint24(maxMovePerBlock)), uint256(maxCatchupBlocks));
+    }
+
+    /// @notice Confirm a 48h-timelocked risk-parameter change once its delay has elapsed. `param` is `RP_*`.
+    function confirmRiskParam(bytes32 param) external onlyOwner { _confirmRiskParam(param); }
+
+    /// @notice Cancel a pending (not-yet-confirmed) risk-parameter change — abort a rogue/superseded proposal.
+    function cancelRiskParam(bytes32 param) external onlyOwner { _cancelRiskParam(param); }
+
+    // ── MWTimelockedRiskParams hooks ───────────────────────────────────────────────────────────────
+
+    /// @dev "Live" (timelock binds) once the truncated oracle has seen its first swap; before that the
+    ///      clamp isn't yet protecting anything, so bootstrap sets are instant (first-set-immediate).
+    function _riskParamsLive() internal view override returns (bool) {
+        return _oracle.initialized;
+    }
+
+    function _validateRiskParam(bytes32 param, uint256 v, uint256 v2) internal pure override {
+        if (param != RP_ORACLE_PARAMS) revert BadParam();
+        if (v == 0 || v > uint256(uint24(MAX_ORACLE_MOVE_TICKS))) revert BadParam();
+        if (v2 > MAX_ORACLE_CATCHUP) revert BadParam();
+    }
+
+    function _readRiskParam(bytes32 param) internal view override returns (uint256) {
+        if (param != RP_ORACLE_PARAMS) revert BadParam();
+        return uint256(uint24(_oracle.maxTickMovePerBlock));
+    }
+
+    function _writeRiskParam(bytes32 param, uint256 v, uint256 v2) internal override {
+        if (param != RP_ORACLE_PARAMS) revert BadParam();
+        _oracle.maxTickMovePerBlock = int24(uint24(v));
+        _oracle.maxCatchupBlocks    = uint32(v2);
+        emit OracleParamsSet(int24(uint24(v)), uint32(v2));
+    }
+
+    /// @dev Instant before the oracle is live, else instant only when BOTH the move clamp and the catch-up
+    ///      cap are TIGHTENED (not-increased) — raising either loosens manipulation resistance.
+    function _riskParamInstant(bytes32, uint256 v, uint256 v2) internal view override returns (bool) {
+        if (!_oracle.initialized) return true; // first-set-immediate (pre-first-swap bootstrap)
+        return v <= uint256(uint24(_oracle.maxTickMovePerBlock)) && v2 <= uint256(_oracle.maxCatchupBlocks);
     }
 
     // ── dynamic-fee lever tuning (owner-gated, bounded so the fee path can never exceed MAX_LP_FEE) ──

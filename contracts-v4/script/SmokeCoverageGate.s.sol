@@ -25,6 +25,10 @@ interface ITreasuryVaultSmoke {
     function coverageBps() external view returns (uint256);
     function setMinCoverage(uint16 bps) external;
     function deployToLP(uint256 usdcAmount, uint256 maxTeamToken) external;
+    // Legal 48h-timelock rail (MWTimelockedRiskParams): lowering the floor is risk-increasing → timelocked.
+    function confirmRiskParam(bytes32 param) external;
+    function RP_MIN_COVERAGE() external view returns (bytes32);
+    function RISK_PARAM_DELAY() external view returns (uint256);
     error CoverageTooLow();
 }
 
@@ -75,25 +79,35 @@ contract SmokeCoverageGate is Script {
         require(reverted, "GATE FAIL: deployToLP did NOT revert CoverageTooLow above the floor");
         console2.log("OK: deployToLP reverts CoverageTooLow above the floor (bps)", floorAbove);
 
-        // 3. Lower the floor SAFELY BELOW the coverage the deploy will leave, and the SAME deploy proceeds.
-        //    (A further deployToLP always lowers coverage a little, so the floor must sit under the
-        //    post-deploy coverage — a floor at the *current* coverage would correctly still block it.)
+        // 3. LEGAL 48h TIMELOCK: lowering the floor is RISK-INCREASING, so it no longer applies instantly.
+        //    Propose the lower floor and assert the live value is UNCHANGED — a further deploy still blocks.
+        //    (Fork-sim only: we `vm.warp` past the delay to confirm; on a live chain this is a real 48h wait.)
         uint16 floorBelow = uint16(covNow / 2); // ~1% more at-risk senior can't halve coverage → clears this
-        vault.setMinCoverage(floorBelow);
+        vault.setMinCoverage(floorBelow); // schedules; does NOT apply yet
+        require(vault.minCoverageBps() == floorAbove, "TIMELOCK FAIL: lower floor applied before the 48h delay");
+        console2.log("OK: lowering the floor is timelocked (not applied yet); live floor still (bps)", floorAbove);
+
+        // 3b. After the 48h delay + confirm, the lower floor applies and the SAME deploy proceeds.
+        vm.warp(block.timestamp + vault.RISK_PARAM_DELAY() + 1);
+        vault.confirmRiskParam(vault.RP_MIN_COVERAGE());
+        require(vault.minCoverageBps() == floorBelow, "TIMELOCK FAIL: floor not applied after confirm");
         try vault.deployToLP(tinyDeploy, jt) {
             uint256 covAfter = vault.coverageBps();
             require(covAfter >= floorBelow, "coverage dropped below the active floor after a covered deploy");
-            console2.log("OK: covered deploy proceeds under a lower floor (bps)", floorBelow);
+            console2.log("OK: covered deploy proceeds under the confirmed lower floor (bps)", floorBelow);
             console2.log("     coverageBps after", covAfter);
         } catch {
             revert("GATE FAIL: a covered deployToLP unexpectedly reverted");
         }
 
-        // 4. Reset the gate to its default (off).
+        // 4. Reset the gate to its default (off) — also risk-increasing → timelocked → warp + confirm.
         vault.setMinCoverage(0);
+        vm.warp(block.timestamp + vault.RISK_PARAM_DELAY() + 1);
+        vault.confirmRiskParam(vault.RP_MIN_COVERAGE());
+        require(vault.minCoverageBps() == 0, "reset to off did not apply after confirm");
         vm.stopPrank();
 
-        console2.log("PASS: coverage-ratio gate behaves as specified on the deployed vault.");
+        console2.log("PASS: coverage-ratio gate + 48h risk-param timelock behave as specified on the deployed vault.");
     }
 
     function _isCoverageTooLow(bytes memory reason) internal pure returns (bool) {

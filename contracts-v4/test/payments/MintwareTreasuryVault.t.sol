@@ -13,6 +13,7 @@ import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
 import {MintwareTreasuryVault} from "../../src/payments/MintwareTreasuryVault.sol";
+import {MWTimelockedRiskParams} from "../../src/lib/MWTimelockedRiskParams.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
@@ -124,6 +125,20 @@ contract MintwareTreasuryVaultTest is Test {
         usdc.approve(address(s.v), type(uint256).max);
         shares = s.v.depositUSDC(amt, 0, who);
         vm.stopPrank();
+    }
+
+    /// @dev LEGAL 48h TIMELOCK: lowering the idle-buffer target is now a RISK-INCREASING change (it deploys
+    ///      more senior USDC into the IL-bearing LP), so post-activation it goes through the governance
+    ///      timelock — propose → warp 48h → confirm — instead of applying instantly. Raising it (safety)
+    ///      stays instant and is covered by `test_idle_target_governance`. The mock adapter has no
+    ///      time-based accrual, so the warp does not perturb NAV/solvency assertions in these scenarios.
+    function _lowerIdleTarget(Stack memory s, uint16 bps) internal {
+        vm.startPrank(owner);
+        s.v.setIdleBufferTarget(bps); // schedules the change (does not apply yet)
+        vm.warp(vm.getBlockTimestamp() + s.v.RISK_PARAM_DELAY() + 1);
+        s.v.confirmRiskParam(s.v.RP_IDLE_BUFFER_TARGET());
+        vm.stopPrank();
+        require(s.v.idleBufferTargetBps() == bps, "idle target not applied after confirm");
     }
 
     /// @dev Trader dumps `teamIn` team → the pool price of team FALLS (impermanent loss on the vault LP).
@@ -314,8 +329,7 @@ contract MintwareTreasuryVaultTest is Test {
         Stack memory s = _spawn(buffer, 200_000 * int256(ONE_USDC));
         _deposit(s, makeAddr("h3user"), 100_000 * ONE_USDC);
 
-        vm.prank(owner);
-        s.v.setIdleBufferTarget(5_000);
+        _lowerIdleTarget(s, 5_000);
         uint256 jt = s.v.juniorTokens();
         vm.prank(owner);
         s.v.deployToLP(50_000 * ONE_USDC, jt);
@@ -381,8 +395,7 @@ contract MintwareTreasuryVaultTest is Test {
         _deposit(s, makeAddr("payUser"), 100_000 * ONE_USDC);
         address u = makeAddr("payUser");
 
-        vm.prank(owner);
-        s.v.setIdleBufferTarget(5_000);
+        _lowerIdleTarget(s, 5_000);
         uint256 jt = s.v.juniorTokens();
         vm.prank(owner);
         s.v.deployToLP(50_000 * ONE_USDC, jt);
@@ -423,8 +436,7 @@ contract MintwareTreasuryVaultTest is Test {
         address u = makeAddr("junU2");
         _deposit(s, u, 100_000 * ONE_USDC);
 
-        vm.prank(owner);
-        s.v.setIdleBufferTarget(5_000);
+        _lowerIdleTarget(s, 5_000);
         uint256 jt = s.v.juniorTokens();
         vm.prank(owner);
         s.v.deployToLP(50_000 * ONE_USDC, jt);
@@ -453,8 +465,7 @@ contract MintwareTreasuryVaultTest is Test {
         address u = makeAddr("junU3");
         _deposit(s, u, 100_000 * ONE_USDC);
 
-        vm.prank(owner);
-        s.v.setIdleBufferTarget(5_000);
+        _lowerIdleTarget(s, 5_000);
         uint256 jt = s.v.juniorTokens();
         vm.prank(owner);
         s.v.deployToLP(50_000 * ONE_USDC, jt);
@@ -649,23 +660,40 @@ contract MintwareTreasuryVaultTest is Test {
         vm.stopPrank();
     }
 
-    // ── governance bounds on the idle-buffer target ────────────────────────────────
-
+    // ── governance bounds + 48h timelock on the idle-buffer target (legal rail) ─────────────────────
+    //
+    // Bounds are still rejected at PROPOSE time. RAISING the target (more idle in Aave = safer) applies
+    // INSTANTLY. LOWERING it (more senior in the IL-bearing LP = risk-increasing) is 48h-timelocked +
+    // disclosed. `S.v` is activated in setUp, so the timelock is live.
     function test_idle_target_bounds() public {
+        bytes32 id = S.v.RP_IDLE_BUFFER_TARGET(); // hoist: the getter must not be the expectRevert target
         vm.startPrank(owner);
 
+        // Out-of-range values are rejected at propose time — they can't even be scheduled.
         vm.expectRevert(MintwareTreasuryVault.BadParam.selector);
         S.v.setIdleBufferTarget(4_999); // < MIN 5000
-
         vm.expectRevert(MintwareTreasuryVault.BadParam.selector);
         S.v.setIdleBufferTarget(9_501); // > MAX 9500
 
-        S.v.setIdleBufferTarget(5_000);
-        assertEq(S.v.idleBufferTargetBps(), 5_000);
+        // RAISE (tighten for safety) = instant. Default is 8000.
         S.v.setIdleBufferTarget(9_500);
-        assertEq(S.v.idleBufferTargetBps(), 9_500);
-        S.v.setIdleBufferTarget(7_000);
-        assertEq(S.v.idleBufferTargetBps(), 7_000);
+        assertEq(S.v.idleBufferTargetBps(), 9_500, "raise should apply instantly");
+
+        // LOWER (risk-increasing) = timelocked: schedules, does NOT apply yet.
+        S.v.setIdleBufferTarget(5_000);
+        assertEq(S.v.idleBufferTargetBps(), 9_500, "lower must not apply before the 48h delay");
+        (uint256 pv,, uint256 eta) = S.v.pendingRiskParam(id);
+        assertEq(pv, 5_000, "pending value not recorded");
+        assertGt(eta, 0, "no eta scheduled");
+
+        // Cannot confirm early.
+        vm.expectRevert(MWTimelockedRiskParams.RiskParamDelayNotElapsed.selector);
+        S.v.confirmRiskParam(id);
+
+        // After 48h it confirms and applies.
+        vm.warp(vm.getBlockTimestamp() + S.v.RISK_PARAM_DELAY() + 1);
+        S.v.confirmRiskParam(id);
+        assertEq(S.v.idleBufferTargetBps(), 5_000, "lower should apply after confirm");
 
         vm.stopPrank();
     }
