@@ -280,6 +280,26 @@ export const YPN_ETH_SENIOR = {
     'In testing on Base Sepolia — testnet, unaudited, no real value. This is a design property of an autonomous vault, not a deposit, a guarantee, or investment advice; an external audit precedes any real value.',
 } as const
 
+// ─── Standing — spend-based service tiers (counsel-safe framing) ────────────
+// Honesty guardrails (see /legal bright line #4/#6 + docs/legal/priority-buffer-redesign.md item
+// #5): Standing is earned ONLY by genuine, settled, third-party card spend — never by depositing,
+// holding, or staking anything. Every perk is a SERVICE-QUALITY improvement (settlement speed,
+// spend headroom, early access) — never a payout, a new token, or anything tradeable. No
+// "earn / appreciate / trade" language. Fully independent of the Attribution score, which stays
+// informational-only (docs/legal/attribution-informational.md) and never gates anything here.
+export const YPN_STANDING = {
+  eyebrow: 'Built for how you actually use it',
+  title: 'The more you spend,',
+  titleAccent: 'the better it gets.',
+  body: 'Standing tracks real, settled spending on your card — nothing else. There’s nothing to deposit, hold, or stake to move up. Using the account for what it’s for is what moves you forward.',
+  tiers: [
+    { name: 'Active', unlock: 'A handful of real purchases', perk: 'Priority settlement — your spend clears faster in the batch queue.' },
+    { name: 'Established', unlock: 'Sustained spend over time', perk: 'A tighter hold on your own balance, so more of what you have becomes available to spend.' },
+    { name: 'Trusted', unlock: 'A long, consistent track record', perk: 'A higher daily limit, and first access to new accounts before general availability.' },
+  ],
+  note: 'Standing is computed from your own settlement history only — never from the Attribution score, and never a reward for holding or staking anything. It changes how the account serves you, not what it pays you.',
+} as const
+
 export type YpnPillar = (typeof YPN_PILLARS.cards)[number]
 export type YpnMatrixRow = (typeof YPN_MATRIX.rows)[number]
 export type YpnFlowStep = (typeof YPN_FLOW.steps)[number]

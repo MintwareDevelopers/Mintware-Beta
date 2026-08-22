@@ -9,7 +9,7 @@ import { YieldCalculatorWidget } from '@/components/marketing/ypn/YieldCalculato
 import { CircleTechBadge } from '@/components/marketing/ypn/CircleTechBadge'
 import { CoreMechanismSection } from '@/components/marketing/ypn/CoreMechanismSection'
 import { AppConversionCTA } from '@/components/marketing/ypn/AppConversionCTA'
-import { YPN_ETHOS, YPN_LIQUIDITY, YPN_TECH, YPN_ETH_SENIOR } from '@/constants/ypn-landing'
+import { YPN_ETHOS, YPN_LIQUIDITY, YPN_TECH, YPN_ETH_SENIOR, YPN_STANDING } from '@/constants/ypn-landing'
 
 // =============================================================================
 // /yield-payment-network — PUBLIC marketing surface for the Liquid Sovereign
@@ -94,6 +94,28 @@ export default function YieldPaymentNetworkPage() {
             ))}
           </div>
           <p className="font-mono text-[11px] text-ink-soft mt-6 max-w-[74ch] leading-[1.5]">{YPN_ETH_SENIOR.note}</p>
+        </div>
+      </section>
+
+      {/* Standing — spend-based service tiers (counsel-safe framing) */}
+      <section className="bg-white border-b border-hair-soft">
+        <div className="mx-auto max-w-[1080px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px]">
+          <div className="text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep">{YPN_STANDING.eyebrow}</div>
+          <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.05] text-[clamp(1.9rem,4vw,3rem)] mt-3 max-w-[18ch] [text-wrap:balance]">
+            {YPN_STANDING.title} <span className="text-gradient-accent">{YPN_STANDING.titleAccent}</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(15px,1.7vw,17px)] leading-[1.6] mt-5 max-w-[64ch]">{YPN_STANDING.body}</p>
+          <div className="grid grid-cols-3 max-[820px]:grid-cols-1 gap-4 mt-8">
+            {YPN_STANDING.tiers.map((t, i) => (
+              <div key={t.name} className="rounded-[var(--radius-card)] border border-hair bg-ground-cool p-6">
+                <div className="text-[11px] font-semibold text-peri-deep tabular-nums">{String(i + 1).padStart(2, '0')}</div>
+                <div className="font-atx-display font-semibold text-[17px] tracking-[-0.01em] text-ink mt-1.5">{t.name}</div>
+                <div className="text-[11.5px] uppercase tracking-[0.08em] text-ink-soft mt-2">{t.unlock}</div>
+                <p className="text-[14px] leading-[1.5] text-ink-mid mt-2">{t.perk}</p>
+              </div>
+            ))}
+          </div>
+          <p className="font-mono text-[11px] text-ink-soft mt-6 max-w-[74ch] leading-[1.5]">{YPN_STANDING.note}</p>
         </div>
       </section>
 
