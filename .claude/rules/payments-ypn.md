@@ -13,6 +13,14 @@ position → settle (burn shares → USDC to the payee). The "never idle, never 
 - **Tranches:** community capital is **senior** (par, USDC-spendable); team capital is **junior**
   (first-loss). Fuses the matched-liquidity × ULV lineage (see [`vaults.md`](vaults.md)) with a payment
   gateway + a USDC yield adapter.
+- **⭐ The ETH senior tranche** — the headline value prop — has its own explainer:
+  [`../../docs/developers/eth-senior-tranche.md`](../../docs/developers/eth-senior-tranche.md). A community
+  dollar that stays a spendable **$1 while earning DeFi yield**, because the junior tranche absorbs the
+  volatility. The senior NAV is **price-free** and, since the 2026-08 audit (H1), **solvency-aware on
+  redemption**: **par while covered, pro-rata haircut in the tail** (no first-redeemer run) — which is what
+  makes "always $1" honest rather than a marketing claim. Live on Base Sepolia (testnet+mock+unaudited);
+  see that doc for addresses. ⚠ The par-spendable-yield shape is the **#1 legal item** ([`/legal`](../../app/legal/page.tsx)) —
+  public copy must avoid "deposit / savings / guaranteed / fixed APY" framing.
 - Marketing surface: `/yield-payment-network` (zero-opportunity-cost cash narrative).
 
 ## On-chain stack (Forge — details in [`smart-contracts.md`](smart-contracts.md))
