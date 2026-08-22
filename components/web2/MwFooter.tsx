@@ -20,6 +20,7 @@ const FOOTER_LINKS = [
   { href: '/proof', label: 'Proof' },
   { href: '/the-math', label: 'The Math' },
   { href: '/docs', label: 'Docs' },
+  { href: '/legal', label: 'Legal' },
   { href: '/about', label: 'About' },
   { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
 ]
