@@ -2,7 +2,7 @@
 
 // Fund the treasury (#1) — two deposit screens, not a treasury-management engine. (a) If no vault is
 // recorded yet: record the address of the operator's Foundry-deployed converged vault (PATCH). (b) Once
-// recorded: deposit USDC (senior, par-safe) and — one click — put up first-loss (junior, commitTeam).
+// recorded: deposit USDC (senior, par while covered) and — one click — put up first-loss (junior, commitTeam).
 // Plus a "fund from another chain" link that routes via the proven CCTP flow.
 
 import { use, useEffect, useState } from 'react'
@@ -111,7 +111,7 @@ export default function FundPage({ params }: { params: Promise<{ slug: string }>
                   <button onClick={() => deposit('senior')} className="flex-1 rounded-full bg-peri text-white px-4 py-3 text-[13.5px] font-semibold hover:bg-peri-deep transition-colors">Deposit to treasury (senior)</button>
                   {isOwner && <button onClick={() => deposit('junior')} className="flex-1 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-4 py-3 text-[13.5px] font-semibold hover:border-peri transition-colors">Put up first-loss (junior)</button>}
                 </div>
-                <p className="text-[11.5px] text-ink-soft mt-3">Senior deposits are par-safe and spendable. Junior (owner-only) is first-loss, 90-day lock, and earns the treasury's spread.</p>
+                <p className="text-[11.5px] text-ink-soft mt-3">Senior deposits stay spendable and redeem at par while the treasury covers them. In a loss event the junior (owner-only) tranche absorbs losses first — first-loss, 90-day lock, and earns the treasury's spread.</p>
               </div>
               <Link href="/app/arc" className="soft-card p-4 mt-4 flex items-center justify-between no-underline group">
                 <div><div className="text-[13.5px] font-semibold text-ink group-hover:text-peri-deep transition-colors">Fund from another chain</div><div className="text-[12px] text-ink-soft mt-0.5">Bridge USDC in via Circle CCTP — lands as treasury shares.</div></div>

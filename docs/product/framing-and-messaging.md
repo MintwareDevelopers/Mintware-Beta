@@ -17,8 +17,9 @@ wrong.** (Supersedes the 2026-08 "reputation-weighted DeFi" framing — reputati
 
 - **Zoomed out (the mission / movement):** *Liquidity should be a public good* — liquidity that
   isn't hoarded, locked, or extracted; it serves everyone.
-- **Zoomed in (the promise to one person):** *Your liquidity, made whole* — your capital isn't
-  trapped or wasted; it's productive, liquid, spendable, and fairly rewarded.
+- **Zoomed in (the promise to one person):** *Your liquidity, always working* — your capital isn't
+  trapped or wasted; it's productive, liquid, spendable, and fairly rewarded. (Never *"made whole"* —
+  it reads as a principal guarantee; see §4.)
 
 They are the **same belief**, not two threads. The collective version is the banner; the personal
 version is the hero. They must never be swapped (the mission line is not a product hero — see §1).
@@ -30,7 +31,7 @@ version is the hero. They must never be swapped (the mission line is not a produ
 | Clause | Means | Proven by |
 |---|---|---|
 | **Never idle** | *productive* — capital earns three ways at once | Vaults / ULV engine · Swap |
-| **Never locked** | *liquid & spendable* — yield spendable at the point of sale, principal never moves | Liquid Sovereign Account (YPN) |
+| **Never locked** | *liquid & spendable* — yield spendable at the point of sale; you spend from yield, not your position | Liquid Sovereign Account (YPN) |
 | **Always yours** | *fairly earned + owned + non-custodial* — the best LPs earn the most; you hold your share and your keys | Attribution (fairness layer) · AI Agents · Privy custody |
 
 Every page on the platform is demonstrating **one** of these three. That is the continuity test:
@@ -46,7 +47,7 @@ the *what-you-get*.
 | Altitude | Line | Lives on |
 |---|---|---|
 | **Mission** *(the movement / why)* | **Liquidity should be a public good.** | About page, the ethos band, deck opener, founder's note — the banner. **Never a product hero.** |
-| **Hero / tagline** *(your personal promise)* | **Never idle. Never locked. Always yours.** <br/>sub: *Your liquidity, made whole — earning around the clock, and its yield instantly yours to spend.* | Homepage hero, primary product surfaces. |
+| **Hero / tagline** *(your personal promise)* | **Never idle. Never locked. Always yours.** <br/>sub: *Your liquidity, always working — earning around the clock, and its yield instantly yours to spend.* | Homepage hero, primary product surfaces. |
 | **One-liner** *(the how)* | Your USDC earns three ways at once — Aave lending, Uniswap v4 market-making, and recaptured MEV — while staying liquid and spendable. And the LPs who bring real, committed liquidity earn the biggest share. | Sub-heros, meta descriptions, opening paragraphs. |
 | **Villain** *(the wedge)* | DeFi makes you choose: your money *earns* — locked in a farm, illiquid, sitting next to mercenary capital — or it stays *usable* and earns nothing. **Never both.** Mintware ends the trade-off. | Every "the problem" beat; each page ladders back to this. |
 
@@ -110,7 +111,7 @@ Secondary audiences (they appear, they don't lead the homepage):
 ## 4. Vocabulary — always / never
 
 **Always (the liquidity thread):**
-- The spine: *never idle · never locked · always yours · your liquidity, made whole.*
+- The spine: *never idle · never locked · always yours · your liquidity, always working.*
 - *productive · liquid · spendable*; *earns three ways at once*; *stays spendable at the point of sale.*
 - *your share · own your LP position · a market owned by its LPs.*
 - *the LPs who bring real, committed liquidity earn the most.*
@@ -125,6 +126,11 @@ Secondary audiences (they appear, they don't lead the homepage):
 - ❌ **"Audited" / "fully audited"** (say *"independent audit pending"*).
 - ❌ **"community-owned"** for the matched vault's team liquidity.
 - ❌ **"risk-free" / "guaranteed" / fixed-APY** promises · ❌ vaults **"live" / "deposit now"** (undeployed).
+- ❌ **"made whole" / "principal protected" / "fully backed" / "par-safe" / "your dollar is safe"** — any
+  wording that implies a principal guarantee. Say the *mechanism* instead: senior is **redeemable at par
+  while the treasury covers it**, the junior tranche **absorbs losses first**, and a tail event is a
+  transparent **pro-rata haircut** — a waterfall, not a promise. And say *"spend from yield, not your
+  position"* — never *"principal never touched / never moves."*
 - ❌ Specific **TVL or wallet-count** stats (we don't publish them) · ❌ **"KYC-free"** as a selling point.
 - ❌ Coined acronyms not yet earned (e.g. **"AWY"**).
 
@@ -174,8 +180,8 @@ Secondary audiences (they appear, they don't lead the homepage):
 ## 8. Elevator pitch (decks / social)
 
 > DeFi makes you choose: your money earns — locked away, illiquid, next to mercenary capital — or it
-> stays usable and earns nothing. Mintware ends the trade-off. Your liquidity is made whole: **never
+> stays usable and earns nothing. Mintware ends the trade-off. Your liquidity is always working: **never
 > idle** (it earns three ways at once — Aave lending, v4 market-making, recaptured MEV), **never
-> locked** (the yield is spendable at the point of sale, principal never moves), and **always yours**
+> locked** (the yield is spendable at the point of sale; you spend from yield, not your position), and **always yours**
 > (the LPs who bring real, committed liquidity earn the most; you hold your share and your keys).
 > Built security-first, independent audit pending. Because liquidity should be a public good.

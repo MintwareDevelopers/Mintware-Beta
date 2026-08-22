@@ -65,7 +65,7 @@ const TRUST: [string, string][] = [
 ]
 
 const TREASURY: [string, string][] = [
-  ['Spendable while earning', 'Member balances are par-safe and instantly spendable — cards, x402, cross-chain. The treasury earns the spread while the money sits ready. Never idle, never locked.'],
+  ['Spendable while earning', 'Member balances redeem at par while the treasury covers them, and stay instantly spendable — cards, x402, cross-chain. The treasury earns the spread while the money sits ready. Never idle, never locked.'],
   ['Your team, by role', 'Invite by email and pick a preset — owner, manager, contributor, vendor. Each is a daily spend cap. On accept, every member gets a soulbound on-chain membership.'],
   ['Pay vendors & run payroll', 'One payment or a CSV batch, straight from the treasury and authorized against live solvency. Route to any chain via Circle CCTP.'],
   ['Proof of reserves, public', 'A live treasury page — NAV, coverage, members, backed on-chain — plus an embeddable badge. Your community verifies solvency without asking.'],
@@ -265,8 +265,9 @@ export default function TeamsLandingPage() {
           <h2 className={h2}>The capital doesn’t have to sit idle. <span className="text-gradient-accent">Or lock you out.</span></h2>
           <p className={lead}>
             The money your team runs on lives in a Mintware treasury that keeps earning while it stays spendable —
-            cards, payroll, vendors, cross-chain — with a public page anyone can verify. Community capital is senior
-            and par-safe; your team’s capital is the junior first-loss that earns the spread.
+            cards, payroll, vendors, cross-chain — with a public page anyone can verify. Community capital is senior —
+            redeemable at par while the treasury covers it; your team’s capital is the junior tranche that absorbs
+            losses first and earns the spread.
           </p>
           <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
             {TREASURY.map(([k, d], i) => (

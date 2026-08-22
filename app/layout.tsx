@@ -36,7 +36,7 @@ const jetbrainsMono = JetBrains_Mono({
 const BASE_URL = 'https://mintware.finance'
 
 export const metadata: Metadata = {
-  title:       'Mintware — Your liquidity, made whole',
+  title:       'Mintware — Never idle. Never locked. Always yours.',
   description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
   metadataBase: new URL(BASE_URL),
   icons: {
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     type:        'website',
     url:         BASE_URL,
     siteName:    'Mintware',
-    title:       'Mintware — Your liquidity, made whole',
+    title:       'Mintware — Never idle. Never locked. Always yours.',
     description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
     images: [{ url: '/opengraph-image', width: 1200, height: 630 }],
   },
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
     card:        'summary_large_image',
     site:        '@Mintware_org',
     creator:     '@Mintware_org',
-    title:       'Mintware — Your liquidity, made whole',
+    title:       'Mintware — Never idle. Never locked. Always yours.',
     description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
     images:      ['/opengraph-image'],
   },

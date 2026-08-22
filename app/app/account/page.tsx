@@ -159,7 +159,7 @@ function AccountContent() {
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em]"><span className="w-[5px] h-[5px] rounded-full bg-peri" />Preview · illustrative</span>
               </div>
               <div className="font-atx-display font-semibold text-ink tracking-[-0.03em] leading-[0.9] text-[clamp(2.4rem,6.5vw,3.6rem)] mt-2.5 tabular-nums">$48,512</div>
-              <div className="text-[13px] text-ink-mid mt-2.5">Earning and spendable at once · <span className="text-ink font-semibold">principal never touched</span></div>
+              <div className="text-[13px] text-ink-mid mt-2.5">Earning and spendable at once · <span className="text-ink font-semibold">you spend yield, not your position</span></div>
             </div>
             <div className="flex gap-8 max-sm:gap-6 flex-wrap">
               <div className="min-w-0">
@@ -261,7 +261,7 @@ function AccountContent() {
               <div className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card overflow-hidden">
                 <div className="flex items-center justify-between px-5 py-3 border-b border-hair-soft">
                   <span className="font-atx-display font-semibold text-[13.5px] text-ink">Recent spend</span>
-                  <span className="text-[10px] uppercase tracking-[0.08em] text-ink-soft">principal untouched</span>
+                  <span className="text-[10px] uppercase tracking-[0.08em] text-ink-soft">spent from yield</span>
                 </div>
                 {SPEND.map((s, i) => (
                   <div key={i} className="flex items-center gap-3 px-5 py-2.5 border-b border-hair-soft last:border-0">
@@ -277,7 +277,7 @@ function AccountContent() {
               <div className="grid grid-cols-3 max-[520px]:grid-cols-1 gap-2.5 mt-3">
                 {[
                   ['Spend against, not out of', 'Your balance keeps earning while you spend against it.'],
-                  ['Principal never touched', 'You draw on yield and liquidity, not your position.'],
+                  ['Spend yield, not your position', 'You draw on yield and liquidity, not your position.'],
                   ['Sub-150ms authorization', 'The same edge-auth engine that decides treasury spend.'],
                 ].map(([t, d]) => (
                   <div key={t} className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-3.5">

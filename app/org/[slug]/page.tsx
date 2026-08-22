@@ -81,8 +81,8 @@ export default function OrgTreasuryPage({ params }: { params: Promise<{ slug: st
                 {data.org.name}
               </h1>
               <p className="text-ink-mid text-[15px] leading-[1.5] mt-3 max-w-[52ch]">
-                Member balances stay <span className="text-ink font-medium">spendable and par-safe</span> while the treasury keeps earning.
-                Every claim is backed on-chain — <span className="text-ink font-medium">never idle, never locked, always yours.</span>
+                Member balances stay <span className="text-ink font-medium">spendable and redeem at par while the treasury covers them</span> — the treasury keeps earning.
+                Every claim is an on-chain claim on the vault — <span className="text-ink font-medium">never idle, never locked, always yours.</span>
               </p>
             </div>
             {data.funded && data.snapshot ? (

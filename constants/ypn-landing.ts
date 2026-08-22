@@ -28,7 +28,7 @@ export const YPN_HERO = {
   bullets: [
     { title: 'Institutional Yield', body: 'Combines Uniswap v4 market-making with Aave lending to continuously compound your principal.' },
     { title: 'Instant Real-World Spending', body: 'Pays out instant card purchases.' },
-    { title: 'Yield-Only Spending', body: 'Card swipes use accrued yield while leaving your underlying principal untouched.' },
+    { title: 'Yield-Only Spending', body: 'Card swipes draw on accrued yield while leaving your underlying position in place.' },
     { title: 'Native USDC Gas', body: 'Frictionless transactions powered by USDC.' },
   ],
 } as const
@@ -176,7 +176,7 @@ export const YPN_CIRCLE = {
 export const YPN_CALCULATOR = {
   eyebrow: 'Estimate',
   title: 'Your always-liquid yield',
-  sub: 'See what your balance could earn while staying 100% spendable — no lockup, no withdrawal window, principal untouched.',
+  sub: 'See what your balance could earn while staying 100% spendable — no lockup, no withdrawal window, spent from yield.',
   disclaimer: 'Illustrative estimate only. Not a quote, offer, or guarantee of yield. Actual returns vary with market conditions.',
   tvl: {
     label: 'Your balance (single-sided USDC)',
@@ -220,7 +220,7 @@ export const YPN_ETHOS = {
 export const YPN_TEASER = {
   eyebrow: 'Mintware Liquid Sovereign Account',
   title: 'Earn while you spend',
-  body: 'That’s the other half: the yield your balance earns is spendable at the point of sale. Tap to pay while your capital keeps working — no unwinding, no cashing out, principal never touched.',
+  body: 'That’s the other half: the yield your balance earns is spendable at the point of sale. Tap to pay while your capital keeps working — no unwinding, no cashing out; you spend the yield, not your position.',
   cta: 'Explore the Liquid Sovereign Account',
   href: '/yield-payment-network',
 } as const

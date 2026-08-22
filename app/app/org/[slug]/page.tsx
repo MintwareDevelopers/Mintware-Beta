@@ -1,7 +1,7 @@
 'use client'
 
 // Org home (authenticated) — leads with the MEMBER CARD (#2), the wow: your role, spendable-right-now
-// (par-safe), and the one line that makes "spendable while earning" legible. Then the treasury snapshot
+// (par while covered), and the one line that makes "spendable while earning" legible. Then the treasury snapshot
 // and role-gated action tiles (fund #1 · pay #4 · payroll #5 · roles #3). Not a dashboard — a card + tiles.
 
 import { use, useCallback, useEffect, useState } from 'react'
@@ -92,7 +92,7 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
                     {isConnected ? usd(data.member?.spendableUsdc) : '—'}
                   </div>
                   <div className="text-[13px] text-white/80 mt-2">
-                    Par-safe, backed by the treasury.{' '}
+                    Redeemable at par while the treasury covers it.{' '}
                     <span className="text-white font-medium">Never idle, never locked, always yours.</span>
                   </div>
                 </div>
