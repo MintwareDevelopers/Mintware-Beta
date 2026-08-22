@@ -146,9 +146,12 @@ contract DeployEthSeniorStackDemo is Script {
 
         MintwareEthSettlement settlement =
             new MintwareEthSettlement(IPoolManager(POOL_MANAGER), wethKey, address(usdc), address(weth), deployer, deployer);
-        settlement.setSettlementRail(deployer);   // AUDIT H4: pin the sole settlement destination.
-        settlement.setOracleSource(address(0));    // no oracle source in the mock rig.
-        settlement.setRequireReadyOracle(false);   // relax the fail-closed gate for the demo ONLY.
+        // AUDIT R4-H1: configure the fail-closed gate BEFORE pinning the rail — while pre-armed, risk-param
+        // changes (and the oracle source) apply instantly; once the rail is pinned the oracle source is frozen
+        // and loosening the gate is 48h-timelocked. The mock rig has no oracle source, so it stays the
+        // constructor default (address(0)) — we no longer call setOracleSource(address(0)) (which now reverts).
+        settlement.setRequireReadyOracle(false);   // relax the fail-closed gate for the demo ONLY (pre-arming).
+        settlement.setSettlementRail(deployer);    // AUDIT H4: pin the sole settlement destination (goes live).
         console.log("EthSettlement:   ", address(settlement));
 
         vm.stopBroadcast();

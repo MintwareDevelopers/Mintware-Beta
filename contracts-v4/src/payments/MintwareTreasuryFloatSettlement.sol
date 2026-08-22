@@ -14,10 +14,12 @@ import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary
 import {FullMath}              from "@uniswap/v4-core/src/libraries/FullMath.sol";
 
 import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata}  from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {MWGuardianPausable}    from "../lib/MWGuardianPausable.sol";
+import {MWTimelockedRiskParams} from "../lib/MWTimelockedRiskParams.sol";
 import {IYieldAdapter}         from "../vaults/IYieldAdapter.sol";
 
 /// @dev The truncated-oracle reference the ETH/USDC swap leg bounds against — the SAME surface the JIT hook
@@ -64,11 +66,13 @@ interface IWstEthRate {
 ///         surface is the operating float (hot path) and the second (`wstETH/ETH`) hop on the keeper/emergency
 ///         paths. Senior stays price-free: a settlement pays the rail a FIXED `totalUsdc` or reverts.
 ///
-/// @dev    DECIMALS SCOPE — the USD valuation math (`totalBackingUsd`, the Lido/oracle price conversions)
-///         assumes the wstETH / WETH / USDC test tokens are all 18-dp (as deployed with mocks on testnet).
-///         Real-decimal handling (USDC 6-dp) is part of the post-audit wiring, together with the real
-///         Lido / pool / adapter addresses — none of which are wired into a live deploy here.
-contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable, ReentrancyGuard {
+/// @dev    DECIMALS (AUDIT R4-L2 — now decimals-aware). wstETH and WETH MUST be 18-dp (verified at
+///         construction — the `WETH-per-wstETH` 1e18 rate + the intermediate WETH amount assume it); USDC may
+///         be ANY decimals ≤ 18 (read + verified at construction). The USD valuation carries explicit
+///         `usdcDecimals` scaling: `totalBackingUsd()` / `coverageUsd()` are denominated in a canonical
+///         **18-dp USD** accounting unit (decimals-invariant), so a real 6-dp USDC values correctly — no
+///         1e12 error mixing native USDC with the 18-dp wstETH value, and emergency-swap sizing is scaled too.
+contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable, ReentrancyGuard, MWTimelockedRiskParams {
     using SafeERC20     for IERC20;
     using PoolIdLibrary for PoolKey;
     using StateLibrary  for IPoolManager;
@@ -81,6 +85,13 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
     IERC20       public immutable wstEth;   // ETH-side collateral (a Lido LST — a rate, not a staking service)
     IERC20       public immutable weth;     // the ETH hop token
     IERC20       public immutable usdc;     // settlement asset (paid to the rail) + the operating float
+
+    // ── AUDIT R4-L2: decimals-aware valuation ──────────────────────────────────────────
+    /// @notice USDC decimals, read + verified (≤ 18) at construction. `_usdcTo18` scales a native-USDC amount
+    ///         into the canonical 18-dp USD accounting unit (`× 10**(18 - usdcDecimals)`). wstETH/WETH are
+    ///         verified to be 18-dp at construction, so only USDC needs scaling.
+    uint8   public immutable usdcDecimals;
+    uint256 private immutable _usdcTo18;
 
     // Canonical wstETH/WETH pool ("stake pool" — the near-1:1 rate hop, deepest wstETH liquidity).
     PoolId  public immutable stakePoolId;
@@ -134,6 +145,12 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
     /// @notice The Lido wstETH-rate reference. `address(0)` ⇒ the wstETH/ETH leg is unbounded (bootstrap only).
     IWstEthRate public lidoRateSource;
 
+    /// @notice AUDIT R4-L3: OPTIONAL manipulation-resistant (truncated/TWAP) reference for the wstETH/WETH stake
+    ///         pool, used ONLY as a DOWNWARD sanity floor on the valuation rate (never overstate). Valuation
+    ///         reads the un-sandwichable Lido rate as primary; the raw single-block pool spot is NOT read for
+    ///         valuation (a griefer could push it down to DoS `coverageUsd()`). `address(0)` ⇒ trust Lido alone.
+    IOracleTickSource public stakeOracleSource;
+
     // ── H4 pinned rail + R2-M2 settlement caps (SHARED by batchSettle + batchSettleViaSwap) ─
     address public settlementRail;
     uint256 public juniorTopUpCapPerCall;
@@ -144,6 +161,24 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
     uint256 private _settledInWindow;
     uint16  public minSettleOutBps;
     uint16  internal constant BPS = 10_000;
+
+    // ── AUDIT R4-L4: governed risk-parameter ids + bounds (shared 48h-timelock rail) ─────────────────
+    // The risk setters below route through `MWTimelockedRiskParams`: bounded at propose time; instant while
+    // pre-arming (before `settlementRail` is pinned) OR when the change TIGHTENS safety; else 48h-timelocked +
+    // disclosed. Guardian pause stays instant (never routed here). Ids are public for confirm/cancel.
+    bytes32 public constant RP_BAND_TICKS           = keccak256("MintwareTreasuryFloatSettlement.bandTicks");
+    bytes32 public constant RP_REQUIRE_READY_ORACLE = keccak256("MintwareTreasuryFloatSettlement.requireReadyOracle");
+    bytes32 public constant RP_JUNIOR_TOPUP_CAP     = keccak256("MintwareTreasuryFloatSettlement.juniorTopUpCapPerCall");
+    bytes32 public constant RP_MAX_SETTLE_PER_CALL  = keccak256("MintwareTreasuryFloatSettlement.maxSettlePerCall");
+    bytes32 public constant RP_SETTLE_WINDOW_CAP    = keccak256("MintwareTreasuryFloatSettlement.settlementWindowCap");
+    bytes32 public constant RP_MIN_SETTLE_OUT_BPS   = keccak256("MintwareTreasuryFloatSettlement.minSettleOutBps");
+    bytes32 public constant RP_REBALANCE_PER_CALL   = keccak256("MintwareTreasuryFloatSettlement.maxRebalancePerCall");
+    bytes32 public constant RP_REBALANCE_WINDOW_CAP = keccak256("MintwareTreasuryFloatSettlement.rebalanceWindowCap");
+    bytes32 public constant RP_USDC_FLOAT_ADAPTER   = keccak256("MintwareTreasuryFloatSettlement.usdcFloatAdapter");
+    bytes32 public constant RP_WSTETH_ADAPTER       = keccak256("MintwareTreasuryFloatSettlement.wstEthAdapter");
+    int24   public constant MAX_BAND_TICKS          = 2_000;
+    uint256 public constant MAX_SETTLE_CAP          = type(uint128).max;
+    uint256 public constant MAX_SETTLE_WINDOW       = 3650 days;
 
     // ── keeper rebalance caps (bound backing→float churn) ──────────────────────────────
     /// @notice Per-call ceiling on `wstEthIn` a single `rebalanceFloat` may convert (0 ⇒ off).
@@ -173,6 +208,7 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
     event KeeperSet(address indexed keeper);
     event OracleSourceSet(address indexed source);
     event LidoRateSourceSet(address indexed source);
+    event StakeOracleSourceSet(address indexed source);
     event BandSet(int24 bandTicks);
     event LidoBandSet(uint16 bps);
     event RequireReadyOracleSet(bool required);
@@ -201,6 +237,11 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
     // ── errors ─────────────────────────────────────────────────────────────────────────
     error ZeroAddress();
     error ZeroAmount();
+    error AlreadySet();                 // AUDIT R4-H1: oracle/lido/stake source frozen once the rail is live
+    error InsufficientJuniorBuffer();   // AUDIT R4-Info: over-withdraw of the junior buffer (was ZeroAmount)
+    error BadDecimals();                // AUDIT R4-L2: wstETH/WETH must be 18-dp; USDC ≤ 18-dp
+    error RebalanceCapNotSet();         // AUDIT R4-M1: rebalanceFloat fails closed until the window cap is set
+    error LidoRateSourceNotSet();       // AUDIT R4-L1: symmetric fail-closed when requireReadyOracle
     error NotWstEthWethPool();
     error NotWethUsdcPool();
     error OnlyRelayer();
@@ -245,8 +286,17 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         address relayer_,
         address keeper_
     ) MWGuardianPausable(owner_) {
+        if (address(pm) == address(0)) revert ZeroAddress(); // AUDIT R4-Info: zero-check the pool manager
         if (wstEth_ == address(0) || weth_ == address(0) || usdc_ == address(0)) revert ZeroAddress();
         if (relayer_ == address(0) || keeper_ == address(0)) revert ZeroAddress();
+
+        // AUDIT R4-L2: read + verify token decimals. wstETH/WETH MUST be 18-dp (the WETH-per-wstETH 1e18 rate
+        // and the intermediate WETH amount assume it); USDC may be any decimals ≤ 18, scaled into 18-dp USD.
+        if (IERC20Metadata(wstEth_).decimals() != 18 || IERC20Metadata(weth_).decimals() != 18) revert BadDecimals();
+        uint8 ud = IERC20Metadata(usdc_).decimals();
+        if (ud > 18) revert BadDecimals();
+        usdcDecimals = ud;
+        _usdcTo18    = 10 ** (18 - ud);
 
         // Verify the stake pool is exactly {wstEth, weth}.
         {
@@ -280,58 +330,209 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         keeper  = keeper_;  emit KeeperSet(keeper_);
     }
 
-    // ── admin: roles + oracle band ─────────────────────────────────────────────────────
+    // ── admin: roles + reference sources ───────────────────────────────────────────────
 
     function setRelayer(address r) external onlyOwner { if (r == address(0)) revert ZeroAddress(); relayer = r; emit RelayerSet(r); }
     function setKeeper(address k)  external onlyOwner { if (k == address(0)) revert ZeroAddress(); keeper  = k; emit KeeperSet(k); }
-    function setOracleSource(address s) external onlyOwner { oracleSource = IOracleTickSource(s); emit OracleSourceSet(s); }
-    function setLidoRateSource(address s) external onlyOwner { lidoRateSource = IWstEthRate(s); emit LidoRateSourceSet(s); }
 
-    function setBandTicks(int24 band) external onlyOwner { if (band <= 0) revert ZeroAmount(); bandTicks = band; emit BandSet(band); }
+    /// @notice AUDIT R4-H1/L4: the truncated-oracle source the ETH/USDC band trusts. A hostile source ⇒ an
+    ///         instant senior drain at a manipulated price, so — mirroring the vault's SET-ONCE `jitHook` — it
+    ///         may be set/re-pointed ONLY while the rail is not yet pinned (`!_riskParamsLive()`: deploy wiring
+    ///         / bootstrap); once live it is FROZEN. Rejects `address(0)` (would silently unbound the swap).
+    function setOracleSource(address s) external onlyOwner {
+        if (s == address(0)) revert ZeroAddress();
+        if (_riskParamsLive()) revert AlreadySet();
+        oracleSource = IOracleTickSource(s); emit OracleSourceSet(s);
+    }
+
+    /// @notice AUDIT R4-H1/L4/L1: the Lido wstETH-rate reference (bounds the wstETH/ETH leg + anchors valuation).
+    ///         Same set-once-post-rail posture as the oracle source — a compromised owner cannot instantly swap
+    ///         in a hostile rate once live. Rejects `address(0)` (when `requireReadyOracle`, an unset Lido source
+    ///         now fails the swap paths closed — see R4-L1).
+    function setLidoRateSource(address s) external onlyOwner {
+        if (s == address(0)) revert ZeroAddress();
+        if (_riskParamsLive()) revert AlreadySet();
+        lidoRateSource = IWstEthRate(s); emit LidoRateSourceSet(s);
+    }
+
+    /// @notice AUDIT R4-L3: OPTIONAL manipulation-resistant (truncated/TWAP) stake-pool reference used as a
+    ///         downward valuation floor. Set-once-post-rail (frozen once live). `address(0)` ⇒ trust Lido alone.
+    function setStakeOracleSource(address s) external onlyOwner {
+        if (_riskParamsLive()) revert AlreadySet();
+        stakeOracleSource = IOracleTickSource(s); emit StakeOracleSourceSet(s);
+    }
+
+    // ── admin: instant (non-governed) tuning ────────────────────────────────────────────
+
     function setLidoBandBps(uint16 bps) external onlyOwner { if (bps > BPS) revert BadParam(); lidoBandBps = bps; emit LidoBandSet(bps); }
-    function setRequireReadyOracle(bool required) external onlyOwner { requireReadyOracle = required; emit RequireReadyOracleSet(required); }
-
-    // ── admin: H4 pin + R2-M2 caps (shared) ────────────────────────────────────────────
-
-    function setJuniorTopUpCapPerCall(uint256 cap) external onlyOwner { juniorTopUpCapPerCall = cap; emit JuniorTopUpCapSet(cap); }
-
-    /// @notice AUDIT H4: pin (or re-point) the sole settlement destination. Set before enabling settlement.
-    function setSettlementRail(address rail) external onlyOwner { if (rail == address(0)) revert ZeroAddress(); settlementRail = rail; emit SettlementRailSet(rail); }
-    function setMaxSettlePerCall(uint256 cap) external onlyOwner { maxSettlePerCall = cap; emit MaxSettlePerCallSet(cap); }
-
-    /// @notice AUDIT R2-M2: cumulative/windowed settlement ceiling (USDC) + rolling window (secs). Bounds TOTAL
-    ///         extraction a runaway relayer can push through the pinned rail (hot + emergency), giving the
-    ///         guardian time to pause.
-    function setSettlementWindowCap(uint256 cap, uint256 windowSecs) external onlyOwner {
-        if (cap != 0 && windowSecs == 0) revert BadParam();
-        maxSettlePerWindow = cap; settleWindow = windowSecs;
-        _settleWindowStart = block.timestamp; _settledInWindow = 0;
-        emit SettlementWindowCapSet(cap, windowSecs);
-    }
-
-    /// @notice AUDIT R2-M2: require the emergency-swap `minUsdcOut` to be ≥ this fraction (bps) of `totalUsdc`.
-    function setMinSettleOutBps(uint16 bps) external onlyOwner { if (bps > BPS) revert BadParam(); minSettleOutBps = bps; emit MinSettleOutBpsSet(bps); }
-
-    /// @notice Bound backing→float churn: per-call + rolling-window wstETH ceilings for `rebalanceFloat`.
-    function setRebalanceCaps(uint256 perCall, uint256 perWindow, uint256 windowSecs) external onlyOwner {
-        if (perWindow != 0 && windowSecs == 0) revert BadParam();
-        maxRebalancePerCall = perCall; maxRebalancePerWindow = perWindow; rebalanceWindow = windowSecs;
-        _rebalWindowStart = block.timestamp; _rebalancedInWindow = 0;
-        emit RebalanceCapsSet(perCall, perWindow, windowSecs);
-    }
 
     /// @notice Set the emergency-valve conversion headroom (bps). Must be ≤ 100%.
     function setEmergencySwapHeadroomBps(uint16 bps) external onlyOwner { if (bps > BPS) revert BadParam(); emergencySwapHeadroomBps = bps; emit EmergencyHeadroomSet(bps); }
 
-    /// @notice Bounded float-sizing risk params. NatSpec: adopt the shared 48h timelock (`MWTimelockedOracleSigner`
-    ///         pattern) before mainnet — these gate how far a settlement may dip on-hand liquidity.
+    /// @notice Float-sizing (liquidity-comfort, not a solvency guard): the keeper target + the on-hand minimum a
+    ///         sweep may not push below. Instant onlyOwner (not routed through the timelock).
     function setFloatParams(uint256 target, uint256 min) external onlyOwner { floatTargetUsdc = target; floatMinUsdc = min; emit FloatParamsSet(target, min); }
 
-    /// @notice Wire the optional USDC-float lending adapter (safe-default `address(0)` = no lending, just hold).
-    ///         NatSpec: adopt the shared 48h timelock before mainnet.
-    function setUsdcFloatAdapter(address a) external onlyOwner { usdcFloatAdapter = IYieldAdapter(a); emit FloatAdapterSet(a); }
-    /// @notice Wire the optional wstETH double-stack lending adapter (safe-default `address(0)` = no lending).
-    function setWstEthAdapter(address a) external onlyOwner { wstEthAdapter = IYieldAdapter(a); emit WstEthAdapterSet(a); }
+    /// @notice AUDIT H4: pin (or re-point) the sole settlement destination. Set before enabling settlement.
+    ///         Pinning it flips `_riskParamsLive()` true — the risk-param timelock (and source freeze) then bind.
+    function setSettlementRail(address rail) external onlyOwner { if (rail == address(0)) revert ZeroAddress(); settlementRail = rail; emit SettlementRailSet(rail); }
+
+    // ── admin: GOVERNED risk params (AUDIT R4-L4 — 48h-timelocked loosening, instant tightening/pre-rail) ─
+
+    /// @notice Governed: the ticks the ETH/USDC leg may move past the oracle. WIDENING (risk-increasing) is
+    ///         timelocked; NARROWING (safety) is instant. Bounded (0, MAX_BAND_TICKS].
+    function setBandTicks(int24 band) external onlyOwner { _changeRiskParam(RP_BAND_TICKS, uint256(uint24(band)), 0); }
+
+    /// @notice Governed: the fail-closed require-ready-oracle guard. DISABLING (→ unbounded swaps) is timelocked;
+    ///         ENABLING (safety) is instant.
+    function setRequireReadyOracle(bool required) external onlyOwner { _changeRiskParam(RP_REQUIRE_READY_ORACLE, required ? 1 : 0, 0); }
+
+    /// @notice Governed: max junior top-up per settlement (0 = off = loosest). RAISING/0 timelocked; LOWERING instant.
+    function setJuniorTopUpCapPerCall(uint256 cap) external onlyOwner { _changeRiskParam(RP_JUNIOR_TOPUP_CAP, cap, 0); }
+
+    /// @notice Governed: per-call `totalUsdc` ceiling (0 = off). RAISING/0 timelocked; LOWERING a non-zero cap instant.
+    function setMaxSettlePerCall(uint256 cap) external onlyOwner { _changeRiskParam(RP_MAX_SETTLE_PER_CALL, cap, 0); }
+
+    /// @notice AUDIT R2-M2 + R4-L4: cumulative/windowed settlement ceiling (USDC) + rolling window (secs). Bounds
+    ///         TOTAL extraction across repeated calls (hot + emergency). LOOSENING (raise cap / disable / shorten
+    ///         window) is timelocked; TIGHTENING (enable from off / lower cap without shortening) is instant.
+    function setSettlementWindowCap(uint256 cap, uint256 windowSecs) external onlyOwner { _changeRiskParam(RP_SETTLE_WINDOW_CAP, cap, windowSecs); }
+
+    /// @notice Governed: require the swap `minUsdcOut` to be ≥ this fraction (bps) of expected out. LOWERING
+    ///         timelocked; RAISING (safety) instant. Also floors `rebalanceFloat`'s minUsdcOut (R4-M1).
+    function setMinSettleOutBps(uint16 bps) external onlyOwner { _changeRiskParam(RP_MIN_SETTLE_OUT_BPS, bps, 0); }
+
+    /// @notice AUDIT R4-M1 + R4-L4: bound backing→float churn — per-call + rolling-window wstETH ceilings for
+    ///         `rebalanceFloat` (which now FAILS CLOSED until `maxRebalancePerWindow` is set). LOOSENING each
+    ///         dimension is timelocked; TIGHTENING (arm from off / lower) is instant.
+    function setRebalanceCaps(uint256 perCall, uint256 perWindow, uint256 windowSecs) external onlyOwner {
+        _changeRiskParam(RP_REBALANCE_PER_CALL, perCall, 0);
+        _changeRiskParam(RP_REBALANCE_WINDOW_CAP, perWindow, windowSecs);
+    }
+
+    /// @notice AUDIT R4-L4: wire the optional USDC-float lending adapter (safe-default `address(0)` = no lending).
+    ///         Enabling / re-pointing to a NEW adapter (funds → external protocol = risk-increasing) is timelocked;
+    ///         CLEARING to `address(0)` (safety) is instant.
+    function setUsdcFloatAdapter(address a) external onlyOwner { _changeRiskParam(RP_USDC_FLOAT_ADAPTER, uint256(uint160(a)), 0); }
+    /// @notice AUDIT R4-L4: wire the optional wstETH double-stack lending adapter. Same governance as the float adapter.
+    function setWstEthAdapter(address a) external onlyOwner { _changeRiskParam(RP_WSTETH_ADAPTER, uint256(uint160(a)), 0); }
+
+    /// @notice Confirm a 48h-timelocked risk-param change once its delay elapsed. `param` is an `RP_*` id.
+    function confirmRiskParam(bytes32 param) external onlyOwner { _confirmRiskParam(param); }
+    /// @notice Cancel a pending (not-yet-confirmed) risk-param change — abort a rogue/superseded proposal.
+    function cancelRiskParam(bytes32 param) external onlyOwner { _cancelRiskParam(param); }
+
+    // ── MWTimelockedRiskParams hooks (describe this contract's governed params) ─────────────────────
+
+    /// @dev "Live" (timelock binds) once the settlement destination is pinned. Before then settlement reverts
+    ///      (`RailNotSet`), so risk-param sets + source wiring are instant (first-set-immediate: deploy + setUp).
+    function _riskParamsLive() internal view override returns (bool) { return settlementRail != address(0); }
+
+    function _validateRiskParam(bytes32 param, uint256 v, uint256 v2) internal view override {
+        if (param == RP_BAND_TICKS) {
+            if (v == 0 || v > uint256(uint24(MAX_BAND_TICKS))) revert BadParam();
+        } else if (param == RP_REQUIRE_READY_ORACLE) {
+            if (v > 1) revert BadParam();
+        } else if (param == RP_JUNIOR_TOPUP_CAP || param == RP_MAX_SETTLE_PER_CALL || param == RP_REBALANCE_PER_CALL) {
+            if (v > MAX_SETTLE_CAP) revert BadParam();
+        } else if (param == RP_SETTLE_WINDOW_CAP || param == RP_REBALANCE_WINDOW_CAP) {
+            if (v != 0 && v2 == 0) revert BadParam();                       // enabled cap needs a window
+            if (v > MAX_SETTLE_CAP || v2 > MAX_SETTLE_WINDOW) revert BadParam();
+        } else if (param == RP_MIN_SETTLE_OUT_BPS) {
+            if (v > BPS) revert BadParam();
+        } else if (param == RP_USDC_FLOAT_ADAPTER || param == RP_WSTETH_ADAPTER) {
+            // any address (incl. 0 = clear) is valid
+        } else {
+            revert BadParam();
+        }
+    }
+
+    function _readRiskParam(bytes32 param) internal view override returns (uint256) {
+        if (param == RP_BAND_TICKS)            return uint256(uint24(bandTicks));
+        if (param == RP_REQUIRE_READY_ORACLE)  return requireReadyOracle ? 1 : 0;
+        if (param == RP_JUNIOR_TOPUP_CAP)      return juniorTopUpCapPerCall;
+        if (param == RP_MAX_SETTLE_PER_CALL)   return maxSettlePerCall;
+        if (param == RP_SETTLE_WINDOW_CAP)     return maxSettlePerWindow;
+        if (param == RP_MIN_SETTLE_OUT_BPS)    return minSettleOutBps;
+        if (param == RP_REBALANCE_PER_CALL)    return maxRebalancePerCall;
+        if (param == RP_REBALANCE_WINDOW_CAP)  return maxRebalancePerWindow;
+        if (param == RP_USDC_FLOAT_ADAPTER)    return uint256(uint160(address(usdcFloatAdapter)));
+        if (param == RP_WSTETH_ADAPTER)        return uint256(uint160(address(wstEthAdapter)));
+        revert BadParam();
+    }
+
+    function _writeRiskParam(bytes32 param, uint256 v, uint256 v2) internal override {
+        if (param == RP_BAND_TICKS) {
+            bandTicks = int24(uint24(v)); emit BandSet(bandTicks);
+        } else if (param == RP_REQUIRE_READY_ORACLE) {
+            requireReadyOracle = (v != 0); emit RequireReadyOracleSet(v != 0);
+        } else if (param == RP_JUNIOR_TOPUP_CAP) {
+            juniorTopUpCapPerCall = v; emit JuniorTopUpCapSet(v);
+        } else if (param == RP_MAX_SETTLE_PER_CALL) {
+            maxSettlePerCall = v; emit MaxSettlePerCallSet(v);
+        } else if (param == RP_SETTLE_WINDOW_CAP) {
+            _writeWindowCap(false, v, v2);
+        } else if (param == RP_MIN_SETTLE_OUT_BPS) {
+            minSettleOutBps = uint16(v); emit MinSettleOutBpsSet(uint16(v));
+        } else if (param == RP_REBALANCE_PER_CALL) {
+            maxRebalancePerCall = v; emit RebalanceCapsSet(v, maxRebalancePerWindow, rebalanceWindow);
+        } else if (param == RP_REBALANCE_WINDOW_CAP) {
+            _writeWindowCap(true, v, v2);
+        } else if (param == RP_USDC_FLOAT_ADAPTER) {
+            usdcFloatAdapter = IYieldAdapter(address(uint160(v))); emit FloatAdapterSet(address(uint160(v)));
+        } else if (param == RP_WSTETH_ADAPTER) {
+            wstEthAdapter = IYieldAdapter(address(uint160(v))); emit WstEthAdapterSet(address(uint160(v)));
+        } else {
+            revert BadParam();
+        }
+    }
+
+    /// @dev Shared write for the two windowed caps. AUDIT R4-M2: an INSTANT (tightening/equal) reconfig must NOT
+    ///      wipe the cumulative accumulator (else "≤ cap per window" degrades to "≤ cap per block"). Start a fresh
+    ///      window ONLY when enabling from OFF or on a genuine LOOSENING (already timelocked); else carry forward.
+    function _writeWindowCap(bool rebal, uint256 cap, uint256 windowSecs) private {
+        uint256 oldCap    = rebal ? maxRebalancePerWindow : maxSettlePerWindow;
+        uint256 oldWindow = rebal ? rebalanceWindow       : settleWindow;
+        if (rebal) { maxRebalancePerWindow = cap; rebalanceWindow = windowSecs; }
+        else       { maxSettlePerWindow    = cap; settleWindow    = windowSecs; }
+        bool enablingFromOff = (oldCap == 0 && cap != 0);
+        uint256 effNew = cap    == 0 ? type(uint256).max : cap;
+        uint256 effOld = oldCap == 0 ? type(uint256).max : oldCap;
+        bool loosening = effNew > effOld || windowSecs < oldWindow;
+        if (enablingFromOff || loosening) {
+            if (rebal) { _rebalWindowStart = block.timestamp; _rebalancedInWindow = 0; }
+            else       { _settleWindowStart = block.timestamp; _settledInWindow   = 0; }
+        }
+        if (rebal) emit RebalanceCapsSet(maxRebalancePerCall, cap, windowSecs);
+        else       emit SettlementWindowCapSet(cap, windowSecs);
+    }
+
+    /// @dev Direction gate: instant pre-rail; else instant only when the change TIGHTENS (or is neutral).
+    function _riskParamInstant(bytes32 param, uint256 v, uint256 v2) internal view override returns (bool) {
+        if (!_riskParamsLive()) return true; // first-set-immediate (pre-arming)
+        // higher == stricter → instant on raise/equal
+        if (param == RP_MIN_SETTLE_OUT_BPS || param == RP_REQUIRE_READY_ORACLE) return v >= _readRiskParam(param);
+        // lower == stricter → instant on lower/equal
+        if (param == RP_BAND_TICKS) return v <= _readRiskParam(param);
+        // adapters: clearing to address(0) (no external lending) is safety → instant; enabling/re-point → timelocked
+        if (param == RP_USDC_FLOAT_ADAPTER || param == RP_WSTETH_ADAPTER) return v == 0;
+        // "0 == off == loosest" single caps → stricter == lower NON-ZERO value (map 0 → +inf)
+        if (param == RP_JUNIOR_TOPUP_CAP || param == RP_MAX_SETTLE_PER_CALL || param == RP_REBALANCE_PER_CALL) {
+            uint256 cur = _readRiskParam(param);
+            uint256 effNew = v   == 0 ? type(uint256).max : v;
+            uint256 effOld = cur == 0 ? type(uint256).max : cur;
+            return effNew <= effOld;
+        }
+        // windowed caps (two-value): enabling from OFF is tightening; else instant only when the cap does not
+        // loosen AND the window does not shorten. (RP_SETTLE_WINDOW_CAP | RP_REBALANCE_WINDOW_CAP)
+        bool rebal = (param == RP_REBALANCE_WINDOW_CAP);
+        uint256 oldCap    = rebal ? maxRebalancePerWindow : maxSettlePerWindow;
+        uint256 oldWindow = rebal ? rebalanceWindow       : settleWindow;
+        if (oldCap == 0 && v != 0) return true;
+        uint256 en = v      == 0 ? type(uint256).max : v;
+        uint256 eo = oldCap == 0 ? type(uint256).max : oldCap;
+        return en <= eo && v2 >= oldWindow;
+    }
 
     // ── funding / withdrawal (all three balances) ──────────────────────────────────────
 
@@ -386,7 +587,7 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
     function withdrawJuniorBuffer(address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
-        if (amount > juniorUsdcBuffer) revert ZeroAmount();
+        if (amount > juniorUsdcBuffer) revert InsufficientJuniorBuffer(); // AUDIT R4-Info: was ZeroAmount()
         juniorUsdcBuffer -= amount;
         usdc.safeTransfer(to, amount);
         emit JuniorBufferWithdrawn(to, amount, juniorUsdcBuffer);
@@ -487,8 +688,8 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
             uint256 required = (totalUsdc * minSettleOutBps) / BPS;
             if (minUsdcOut < required) revert MinUsdcOutTooLow(minUsdcOut, required);
         }
-        // Fail closed: never fire an UNBOUNDED ETH/USDC leg in production.
-        if (requireReadyOracle) { (, bool ready) = _oracle(); if (!ready) revert OracleNotReady(); }
+        // Fail closed: never fire an UNBOUNDED swap in production — require BOTH references (R4-L1 symmetric).
+        _requireReferencesReady();
 
         // Size the wstETH to convert from the oracle + Lido references (+ headroom for fees/slippage), capped
         // by available backing (unwinds the wstETH double-stack adapter best-effort if on-hand is short).
@@ -547,13 +748,24 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         returns (uint256 usdcOut)
     {
         if (wstEthIn == 0) revert ZeroAmount();
+        // AUDIT R4-M1(a): fail closed — a keeper cannot convert backing until the windowed churn cap is armed
+        // (mirrors the `RailNotSet` posture). Without this, the default config left `rebalanceFloat` unthrottled.
+        if (maxRebalancePerWindow == 0) revert RebalanceCapNotSet();
         if (maxRebalancePerCall != 0 && wstEthIn > maxRebalancePerCall) revert RebalanceCapExceeded();
-        if (maxRebalancePerWindow != 0) {
+        {
             if (block.timestamp >= _rebalWindowStart + rebalanceWindow) { _rebalWindowStart = block.timestamp; _rebalancedInWindow = 0; }
             _rebalancedInWindow += wstEthIn;
             if (_rebalancedInWindow > maxRebalancePerWindow) revert RebalanceWindowCapExceeded();
         }
-        if (requireReadyOracle) { (, bool ready) = _oracle(); if (!ready) revert OracleNotReady(); }
+        // AUDIT R4-M1(b): floor the keeper's `minUsdcOut` at a `minSettleOutBps` fraction of the EXPECTED output
+        // (the conservative USDC value of `wstEthIn`), so a rogue keeper can't pass `minUsdcOut = 0` and let the
+        // bounded swap walk the pool to the band edge and self-sandwich. Same floor logic as `batchSettleViaSwap`.
+        if (minSettleOutBps != 0) {
+            uint256 required = (_expectedUsdcOut(wstEthIn) * minSettleOutBps) / BPS;
+            if (minUsdcOut < required) revert MinUsdcOutTooLow(minUsdcOut, required);
+        }
+        // Fail closed: require BOTH references before firing the 2-hop swap (R4-L1 symmetric).
+        _requireReferencesReady();
 
         // Source the wstETH on-hand (unwind the double-stack adapter best-effort if short).
         if (wstEthIn > wstEthBacking && address(wstEthAdapter) != address(0)) {
@@ -672,6 +884,25 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         return oracleSource.oracleTick();
     }
 
+    /// @dev AUDIT R4-L1: when `requireReadyOracle`, BOTH legs must be bounded before any swap fires — the
+    ///      ETH/USDC oracle must be ready AND the wstETH/ETH leg's Lido rate source must be wired. Previously
+    ///      only the ETH/USDC leg was fail-closed; an operator who forgot to wire `lidoRateSource` could run an
+    ///      unbounded, sandwichable wstETH→WETH swap. Symmetric now. Guards `batchSettleViaSwap`/`rebalanceFloat`
+    ///      (the only callers that reach `_do2HopExactIn`).
+    function _requireReferencesReady() private view {
+        if (!requireReadyOracle) return;
+        (, bool ready) = _oracle();
+        if (!ready) revert OracleNotReady();
+        if (address(lidoRateSource) == address(0)) revert LidoRateSourceNotSet();
+    }
+
+    /// @dev Expected USDC output (NATIVE USDC units) for converting `wstIn` at the conservative valuation rate —
+    ///      the floor reference for `rebalanceFloat`'s `minUsdcOut` (R4-M1). `_wstEthValueUsd` is 18-dp USD, so
+    ///      divide by `_usdcTo18` back to native USDC.
+    function _expectedUsdcOut(uint256 wstIn) private view returns (uint256) {
+        return _wstEthValueUsd(wstIn) / _usdcTo18;
+    }
+
     function _sqrtAtClamped(int256 tick) private pure returns (uint160) {
         if (tick < TickMath.MIN_TICK) return TickMath.MIN_SQRT_PRICE + 1;
         if (tick > TickMath.MAX_TICK) return TickMath.MAX_SQRT_PRICE - 1;
@@ -720,61 +951,69 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
 
     // ── valuation / views ───────────────────────────────────────────────────────────────
 
-    /// @notice Total USD backing = USDC float (on-hand + lent) + wstETH value in USDC + wstETH lent value.
-    ///         wstETH is valued at the LESSER of the Lido redemption rate and the current pool spot rate, times
-    ///         the truncated-oracle ETH/USD price — so a depeg (pool rate below Lido) LOWERS the reported
-    ///         backing and it NEVER overstates what the treasury could realize. Fee-aware via the adapters'
-    ///         own `totalAssets` (the fee-aware ERC-4626 adapter values NAV net of exit fees).
+    /// @notice Total backing in the canonical **18-dp USD** accounting unit (AUDIT R4-L2 — decimals-aware):
+    ///         USDC float (on-hand + lent, scaled from native USDC to 18-dp USD) + wstETH value in 18-dp USD.
+    ///         wstETH is valued at the conservative effective rate (Lido primary, floored by a manipulation-
+    ///         resistant truncated stake oracle if wired — see `_effEthPerWst`) × the truncated ETH/USD oracle
+    ///         price, so it NEVER overstates and a raw single-block spot cannot grief it down (R4-L3). Fee-aware
+    ///         via the adapters' own `totalAssets` (the ERC-4626 adapter values NAV net of exit fees).
     function totalBackingUsd() public view returns (uint256) {
-        uint256 floatUsd = usdcFloat;
-        if (address(usdcFloatAdapter) != address(0)) floatUsd += usdcFloatAdapter.totalAssets();
+        uint256 floatNative = usdcFloat;
+        if (address(usdcFloatAdapter) != address(0)) floatNative += usdcFloatAdapter.totalAssets();
 
         uint256 wstTotal = wstEthBacking;
         if (address(wstEthAdapter) != address(0)) wstTotal += wstEthAdapter.totalAssets();
 
-        return floatUsd + _wstEthValueUsd(wstTotal);
+        return floatNative * _usdcTo18 + _wstEthValueUsd(wstTotal);
     }
 
-    /// @notice Convenience: `totalBackingUsd() + juniorUsdcBuffer` — the full solvency numerator.
-    function coverageUsd() external view returns (uint256) { return totalBackingUsd() + juniorUsdcBuffer; }
+    /// @notice Convenience: `totalBackingUsd() + junior` — the full solvency numerator, in 18-dp USD (R4-L2).
+    function coverageUsd() external view returns (uint256) { return totalBackingUsd() + juniorUsdcBuffer * _usdcTo18; }
 
-    /// @dev wstETH → USDC value at the CONSERVATIVE effective rate (min of Lido + pool spot) × oracle ETH/USD.
+    /// @dev wstETH → 18-dp USD at the CONSERVATIVE effective rate (Lido, floored by truncated spot) × oracle ETH/USD.
     function _wstEthValueUsd(uint256 wstAmount) private view returns (uint256) {
         if (wstAmount == 0) return 0;
         uint256 effEthPerWst = _effEthPerWst();     // WETH per wstETH, 1e18
-        uint256 ethUsd       = _oracleEthUsd();     // USDC per WETH, 1e18
+        uint256 ethUsd       = _oracleEthUsd();     // 18-dp USD per WETH, 1e18 (decimals-normalized)
         if (effEthPerWst == 0 || ethUsd == 0) return 0; // no reference ⇒ don't overstate (value 0)
-        uint256 ethValue = FullMath.mulDiv(wstAmount, effEthPerWst, WAD); // in WETH units
-        return FullMath.mulDiv(ethValue, ethUsd, WAD);                    // in USDC units
+        uint256 ethValue = FullMath.mulDiv(wstAmount, effEthPerWst, WAD); // in WETH units (18-dp)
+        return FullMath.mulDiv(ethValue, ethUsd, WAD);                    // in 18-dp USD
     }
 
-    /// @dev The conservative WETH-per-wstETH rate: min(Lido redemption rate, current pool spot). Depeg-aware.
+    /// @dev AUDIT R4-L3: conservative WETH-per-wstETH rate. The un-sandwichable Lido redemption rate is PRIMARY;
+    ///      a raw single-block pool spot is NOT read (a griefer could push it down to DoS `coverageUsd`). If a
+    ///      MANIPULATION-RESISTANT truncated stake oracle is wired, it is used ONLY as a downward sanity floor
+    ///      (never overstate). `lido == 0` (bootstrap) falls back to the truncated reference if present.
     function _effEthPerWst() private view returns (uint256) {
-        uint256 lido = address(lidoRateSource) != address(0) ? lidoRateSource.stEthPerToken() : 0;
-        uint256 spot = _stakeSpotRate();
-        if (lido == 0) return spot;
-        if (spot == 0) return lido;
-        return lido < spot ? lido : spot;
+        uint256 lido      = address(lidoRateSource) != address(0) ? lidoRateSource.stEthPerToken() : 0;
+        uint256 truncSpot = _truncatedStakeRate();  // 0 if no truncated stake oracle wired
+        if (lido == 0) return truncSpot;            // bootstrap only (no Lido rate yet)
+        if (truncSpot == 0) return lido;            // no manipulation-resistant floor wired ⇒ trust Lido
+        return truncSpot < lido ? truncSpot : lido; // downward sanity floor only
     }
 
-    /// @dev WETH-per-wstETH implied by the stake pool's current sqrtPrice (1e18).
-    function _stakeSpotRate() private view returns (uint256) {
-        (uint160 sp,,,) = poolManager.getSlot0(stakePoolId);
-        if (sp == 0) return 0;
-        uint256 priceC1PerC0 = _priceFromSqrt(sp); // currency1 per currency0, 1e18
-        // rate = WETH per wstETH
-        if (wstEthIsCurrency0Stake) return priceC1PerC0;          // c1=WETH per c0=wstETH
+    /// @dev AUDIT R4-L3: WETH-per-wstETH from the OPTIONAL truncated (manipulation-resistant) stake-pool oracle
+    ///      tick, 1e18. Zero when unwired / not ready. Raw `getSlot0` spot is intentionally no longer used.
+    function _truncatedStakeRate() private view returns (uint256) {
+        if (address(stakeOracleSource) == address(0)) return 0;
+        (int24 t, bool ready) = stakeOracleSource.oracleTick();
+        if (!ready) return 0;
+        uint256 priceC1PerC0 = _priceFromSqrt(_sqrtAtClamped(int256(t))); // currency1 per currency0, 1e18
+        if (wstEthIsCurrency0Stake) return priceC1PerC0;                  // c1=WETH per c0=wstETH
         return priceC1PerC0 == 0 ? 0 : FullMath.mulDiv(WAD, WAD, priceC1PerC0); // invert
     }
 
-    /// @dev USDC-per-WETH from the TRUNCATED ORACLE tick (manipulation-resistant), 1e18. Spot is not used here.
+    /// @dev ETH/USD from the TRUNCATED ORACLE tick, normalized to **18-dp USD per WETH** (×1e18). The raw pool
+    ///      price is native-USDC per WETH; `× _usdcTo18` lifts it into the decimals-invariant 18-dp USD unit
+    ///      (AUDIT R4-L2). Spot is not used here.
     function _oracleEthUsd() private view returns (uint256) {
         (int24 oTick, bool ready) = _oracle();
         if (!ready) return 0;
-        uint160 sp = _sqrtAtClamped(int256(oTick));
-        uint256 priceC1PerC0 = _priceFromSqrt(sp); // currency1 per currency0 of the ETH/USDC pool, 1e18
-        if (wethIsCurrency0Eth) return priceC1PerC0;               // c1=USDC per c0=WETH
-        return priceC1PerC0 == 0 ? 0 : FullMath.mulDiv(WAD, WAD, priceC1PerC0); // invert
+        uint256 priceC1PerC0 = _priceFromSqrt(_sqrtAtClamped(int256(oTick))); // c1 per c0 of the ETH/USDC pool, 1e18
+        uint256 native = wethIsCurrency0Eth
+            ? priceC1PerC0                                                    // c1=USDC per c0=WETH
+            : (priceC1PerC0 == 0 ? 0 : FullMath.mulDiv(WAD, WAD, priceC1PerC0)); // invert
+        return native * _usdcTo18;                                           // native USDC → 18-dp USD
     }
 
     /// @dev price (currency1 per currency0), 1e18, from sqrtPriceX96. (sqrtP/2^96)^2 × 1e18.
@@ -792,13 +1031,16 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         return PoolKey({currency0: _e0, currency1: _e1, fee: _eFee, tickSpacing: _eSpacing, hooks: _eHooks});
     }
 
-    /// @dev wstETH needed to realize `usdcAmount`, at the conservative Lido/oracle references (pre-headroom).
-    ///      Reverts if a reference is missing (can't size an emergency swap without a price/rate).
+    /// @dev wstETH needed to realize `usdcAmount` (NATIVE USDC), at the conservative Lido/oracle references
+    ///      (pre-headroom). AUDIT R4-L2: scale the native USDC into the 18-dp USD unit before dividing by the
+    ///      18-dp-USD ETH price, so emergency-swap sizing is correct for a real 6-dp USDC. Reverts if a
+    ///      reference is missing (can't size an emergency swap without a price/rate).
     function _wstEthForUsdc(uint256 usdcAmount) private view returns (uint256) {
-        uint256 ethUsd = _oracleEthUsd();  // USDC per WETH, 1e18
+        uint256 ethUsd = _oracleEthUsd();  // 18-dp USD per WETH, 1e18
         uint256 eff    = _effEthPerWst();  // WETH per wstETH, 1e18
         if (ethUsd == 0 || eff == 0) revert OracleNotReady();
-        uint256 wethNeeded = FullMath.mulDiv(usdcAmount, WAD, ethUsd); // WETH for the USDC
-        return FullMath.mulDiv(wethNeeded, WAD, eff);                  // wstETH for the WETH
+        uint256 usd18      = usdcAmount * _usdcTo18;                   // native USDC → 18-dp USD
+        uint256 wethNeeded = FullMath.mulDiv(usd18, WAD, ethUsd);     // WETH for the USD
+        return FullMath.mulDiv(wethNeeded, WAD, eff);                 // wstETH for the WETH
     }
 }

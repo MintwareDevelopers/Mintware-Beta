@@ -353,6 +353,47 @@ contract MintwareEthSettlementTest is Test {
         assertEq(usdc.balanceOf(rail), 100e18, "rail paid once floor satisfied");
     }
 
+    // ── ROUND-4 REGRESSION ──────────────────────────────────────────────────────────────────────────
+
+    /// AUDIT R4-H1: the oracle source is FROZEN once the rail is pinned (set-once posture, like the vault's
+    /// jitHook), so the compromised-owner instant-drain sequence (setRelayer(self) + setOracleSource(malicious)
+    /// + settle) is no longer instant. Pre-arming re-points stay instant; address(0) is always rejected.
+    function test_R4H1_OracleSource_FrozenOnceRailPinned() public {
+        MockOracleSource o2 = new MockOracleSource();
+        vm.prank(owner);
+        vm.expectRevert(MintwareEthSettlement.AlreadySet.selector);
+        settle.setOracleSource(address(o2));            // rail pinned in setUp → frozen
+        vm.prank(owner);
+        vm.expectRevert(MintwareEthSettlement.ZeroAddress.selector);
+        settle.setOracleSource(address(0));             // always rejected
+
+        MintwareEthSettlement fresh = new MintwareEthSettlement(
+            IPoolManager(address(pm)), key, address(usdc), address(weth), owner, relayer
+        );
+        vm.startPrank(owner);
+        fresh.setOracleSource(address(o2));
+        fresh.setOracleSource(address(oracle));         // pre-rail re-point is instant
+        fresh.setSettlementRail(rail);                  // goes live
+        vm.expectRevert(MintwareEthSettlement.AlreadySet.selector);
+        fresh.setOracleSource(address(o2));             // frozen once live
+        vm.stopPrank();
+    }
+
+    /// AUDIT R4-M2: re-applying the SAME (cap, window) is a tightening/equal reconfig → instant, and must NOT
+    /// wipe the cumulative accumulator (the PoC that turned "≤ cap per window" into "≤ cap per block").
+    function test_R4M2_windowCap_reapplySameValue_doesNotClearAccumulator() public {
+        _fundBacking(50_000e18);
+        vm.prank(owner);
+        settle.setSettlementWindowCap(150e18, 1 days);
+        vm.prank(relayer);
+        settle.batchSettleEth(100e18, 90e18, rail);     // 100 counted in the window
+        vm.prank(owner);
+        settle.setSettlementWindowCap(150e18, 1 days);  // identical re-apply → must carry accumulator forward
+        vm.prank(relayer);
+        vm.expectRevert(MintwareEthSettlement.SettlementWindowCapExceeded.selector);
+        settle.batchSettleEth(60e18, 50e18, rail);      // 100 + 60 > 150 still binds (PoC bypass fails)
+    }
+
     // ── LEGAL 48h TIMELOCK on settlement risk parameters ────────────────────────────────────────────
 
     /// @dev Before the rail is pinned the surface isn't live, so risk-param sets — including loosening —

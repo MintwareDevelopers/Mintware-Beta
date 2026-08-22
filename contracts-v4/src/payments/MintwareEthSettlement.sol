@@ -171,6 +171,8 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
 
     error ZeroAddress();
     error ZeroAmount();
+    error AlreadySet();               // AUDIT R4-H1: oracle source frozen once the rail is live
+    error InsufficientJuniorBuffer(); // AUDIT R4-Info: over-withdraw of the junior buffer (was ZeroAmount)
     error NotWethUsdcPool();
     error OnlyRelayer();
     error OnlyPoolManager();
@@ -234,7 +236,16 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         emit RelayerSet(relayer_);
     }
 
+    /// @notice AUDIT R4-H1: set / re-point the truncated-oracle source the settlement band trusts. The band is
+    ///         derived ENTIRELY from `oracleSource.oracleTick()`, so a hostile source ⇒ an instant senior drain at
+    ///         a manipulated price — the very "disable the guard" move the 48h timelock is meant to delay. We
+    ///         therefore mirror the vault's SET-ONCE `jitHook` posture: re-points are allowed ONLY while the rail
+    ///         is not yet pinned (`!_riskParamsLive()` — deploy wiring / pre-oracle bootstrap); once the rail is
+    ///         live the source is FROZEN. A compromised owner can no longer instantly swap in a malicious oracle.
+    ///         Rejects `address(0)` (an unset source would silently fall back to an unbounded swap).
     function setOracleSource(address source) external onlyOwner {
+        if (source == address(0)) revert ZeroAddress();
+        if (_riskParamsLive()) revert AlreadySet(); // rail pinned ⇒ frozen (set-once, like the vault's jitHook)
         oracleSource = IOracleTickSource(source);
         emit OracleSourceSet(source);
     }
@@ -345,10 +356,24 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         } else if (param == RP_MAX_SETTLE_PER_CALL) {
             maxSettlePerCall = v; emit MaxSettlePerCallSet(v);
         } else if (param == RP_SETTLE_WINDOW_CAP) {
+            // AUDIT R4-M2: an INSTANT (tightening/equal) reconfig must NOT wipe the cumulative accumulator —
+            // re-applying the same `(cap, window)` used to zero `_settledInWindow`, turning "≤ cap per window"
+            // into "≤ cap per block" and defeating the guardian-reaction-time control the 48h delay protects.
+            // Start a FRESH window only when enabling from OFF (no prior accumulator) or on a genuine LOOSENING
+            // (raise cap / shorten window — already 48h-timelocked, so the guardian had notice). Otherwise carry
+            // `_windowStart`/`_settledInWindow` FORWARD so the running total keeps binding.
+            uint256 oldCap    = maxSettlePerWindow;
+            uint256 oldWindow = settleWindow;
             maxSettlePerWindow = v;
             settleWindow       = v2;
-            _windowStart       = block.timestamp; // fresh window on (re)config (unchanged behavior)
-            _settledInWindow   = 0;
+            bool enablingFromOff = (oldCap == 0 && v != 0);
+            uint256 effNew = v      == 0 ? type(uint256).max : v;
+            uint256 effOld = oldCap == 0 ? type(uint256).max : oldCap;
+            bool loosening = effNew > effOld || v2 < oldWindow;
+            if (enablingFromOff || loosening) {
+                _windowStart     = block.timestamp;
+                _settledInWindow = 0;
+            }
             emit SettlementWindowCapSet(v, v2);
         } else if (param == RP_MIN_SETTLE_OUT_BPS) {
             minSettleOutBps = uint16(v); emit MinSettleOutBpsSet(uint16(v));
@@ -426,7 +451,7 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     function withdrawJuniorBuffer(address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
-        if (amount > juniorUsdcBuffer) revert ZeroAmount();
+        if (amount > juniorUsdcBuffer) revert InsufficientJuniorBuffer(); // AUDIT R4-Info: was ZeroAmount()
         juniorUsdcBuffer -= amount;
         usdc.safeTransfer(to, amount);
         emit JuniorBufferWithdrawn(to, amount, juniorUsdcBuffer);

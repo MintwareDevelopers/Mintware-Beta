@@ -162,6 +162,21 @@ contract MintwareTreasuryFloatSettlementTest is Test {
         vm.stopPrank();
     }
 
+    // ── AUDIT R4-L4: the rail is pinned in setUp, so enabling a lending adapter (risk-increasing) is now
+    //    48h-timelocked. These helpers propose → warp → confirm so the adapter is live for the test.
+    function _armFloatAdapter(address a) internal {
+        bytes32 id = fs.RP_USDC_FLOAT_ADAPTER(); // hoist (getter must not consume the prank)
+        vm.prank(owner); fs.setUsdcFloatAdapter(a);
+        vm.warp(block.timestamp + 48 hours + 1);
+        vm.prank(owner); fs.confirmRiskParam(id);
+    }
+    function _armWstAdapter(address a) internal {
+        bytes32 id = fs.RP_WSTETH_ADAPTER(); // hoist (getter must not consume the prank)
+        vm.prank(owner); fs.setWstEthAdapter(a);
+        vm.warp(block.timestamp + 48 hours + 1);
+        vm.prank(owner); fs.confirmRiskParam(id);
+    }
+
     // ── HOT PATH: settle from float, no swap ─────────────────────────────────────────────
 
     function test_HotPath_SettleFromFloat_NoSwap() public {
@@ -205,8 +220,7 @@ contract MintwareTreasuryFloatSettlementTest is Test {
     /// Float on-hand short but the float adapter covers it (best-effort unwind on the hot path).
     function test_HotPath_UnwindsFloatAdapter() public {
         MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
-        vm.prank(owner);
-        fs.setUsdcFloatAdapter(address(adapter));
+        _armFloatAdapter(address(adapter));
         vm.prank(owner);
         fs.setFloatParams(0, 20e18); // floatMin 20
 
@@ -230,6 +244,9 @@ contract MintwareTreasuryFloatSettlementTest is Test {
 
     function test_Keeper_RebalanceFloat_TopsUpFloat() public {
         _fundBacking(1_000e18);
+        // AUDIT R4-M1: rebalance fails closed until the windowed churn cap is armed (arming from off is instant).
+        vm.prank(owner);
+        fs.setRebalanceCaps(0, 1_000e18, 1 days);
         uint256 floatBefore = fs.usdcFloat();
 
         vm.prank(keeper);
@@ -281,6 +298,8 @@ contract MintwareTreasuryFloatSettlementTest is Test {
     /// The Lido-rate floor rejects a depegged/sandwiched wstETH/ETH leg (realized rate below the floor).
     function test_Keeper_LidoFloor_RejectsDepeg() public {
         _fundBacking(10_000e18);
+        vm.prank(owner);
+        fs.setRebalanceCaps(0, 10_000e18, 1 days); // arm the churn cap so we reach the Lido floor check
         _manipulateStakeDown(); // wstETH pool spot far below the Lido rate
 
         vm.prank(keeper);
@@ -342,8 +361,7 @@ contract MintwareTreasuryFloatSettlementTest is Test {
 
     function test_DoubleStack_FloatLending_EarnsAndUnwinds() public {
         MockYieldAdapter adapter = new MockYieldAdapter(address(usdc));
-        vm.prank(owner);
-        fs.setUsdcFloatAdapter(address(adapter));
+        _armFloatAdapter(address(adapter));
         vm.prank(owner);
         fs.setFloatParams(0, 0);
 
@@ -365,8 +383,7 @@ contract MintwareTreasuryFloatSettlementTest is Test {
 
     function test_DoubleStack_WstEthLending_Earns() public {
         MockYieldAdapter adapter = new MockYieldAdapter(address(wstEth));
-        vm.prank(owner);
-        fs.setWstEthAdapter(address(adapter));
+        _armWstAdapter(address(adapter));
 
         _fundBacking(1_000e18);
         vm.prank(keeper);
@@ -379,18 +396,24 @@ contract MintwareTreasuryFloatSettlementTest is Test {
         assertEq(fs.totalBackingUsd(), before + 40e18, "wstETH double-stack yield lifts total backing (at 1:1)");
     }
 
-    // ── VALUATION: depeg lowers totalBackingUsd, never overstates ─────────────────────────
+    // ── VALUATION: R4-L3 — raw spot can't grief coverage down; a genuine Lido move can ─────
 
-    function test_Valuation_DepegLowersBacking_NeverOverstates() public {
+    /// @dev AUDIT R4-L3: `coverageUsd()`/`totalBackingUsd()` value against the un-sandwichable Lido rate; a raw
+    ///      single-block stake-pool spot push must NOT lower reported backing (that was a griefing DoS on any
+    ///      consumer gating spend on coverage). A GENUINE Lido-rate move still lowers it (never overstate).
+    function test_Valuation_R4L3_RawSpotCannotGriefCoverageDown() public {
         _fundBacking(1_000e18);
-        // At 1:1, 1000 wstETH is worth 1000 USDC.
-        assertEq(fs.totalBackingUsd(), 1_000e18, "fair value at peg");
+        assertEq(fs.totalBackingUsd(), 1_000e18, "fair value at peg (Lido rate)");
+        assertEq(fs.coverageUsd(), 1_000e18, "coverage at peg");
 
-        _manipulateStakeDown(); // pool spot for wstETH/WETH drops below the Lido rate
-        uint256 depegged = fs.totalBackingUsd();
-        assertLt(depegged, 1_000e18, "depeg LOWERS reported backing");
-        // And it never exceeds what the conservative min(rate, spot) implies.
-        assertGt(depegged, 0, "still positive");
+        // A griefer slams the raw wstETH/WETH pool spot far below the Lido rate in one block.
+        _manipulateStakeDown();
+        assertEq(fs.totalBackingUsd(), 1_000e18, "raw spot push does NOT lower backing (uses un-sandwichable Lido)");
+        assertEq(fs.coverageUsd(),   1_000e18, "coverage NOT griefable down by a single-block spot push");
+
+        // A GENUINE Lido-rate drop (wstETH now redeems 0.9 WETH) DOES lower it — never overstates.
+        lido.set(0.9e18);
+        assertEq(fs.totalBackingUsd(), 900e18, "genuine Lido-rate drop lowers backing (never overstate)");
     }
 
     /// When the pool spot rises ABOVE the Lido rate, valuation stays pinned to the (lower) Lido rate — never
@@ -506,6 +529,154 @@ contract MintwareTreasuryFloatSettlementTest is Test {
         new MintwareTreasuryFloatSettlement(
             IPoolManager(address(pm)), stakeKey, badEth,
             address(wstEth), address(weth), address(usdc), owner, relayer, keeper
+        );
+    }
+
+    // ── ROUND-4 REGRESSION ────────────────────────────────────────────────────────────────
+
+    /// AUDIT R4-M2: re-applying the SAME (cap, window) is a tightening/equal reconfig → instant, and it must NOT
+    /// wipe the cumulative accumulator (the PoC that turned "≤ cap per window" into "≤ cap per block").
+    function test_R4M2_WindowCap_ReapplySameValue_DoesNotClearAccumulator() public {
+        _fundFloat(10_000e18);
+        vm.prank(owner);
+        fs.setSettlementWindowCap(150e18, 1 days); // enable from off (instant)
+        vm.prank(relayer);
+        fs.batchSettle(100e18, rail);              // 100 counted in the window
+        // Re-apply the identical cap → must carry the accumulator forward, not reset it.
+        vm.prank(owner);
+        fs.setSettlementWindowCap(150e18, 1 days);
+        vm.prank(relayer);
+        vm.expectRevert(MintwareTreasuryFloatSettlement.SettlementWindowCapExceeded.selector);
+        fs.batchSettle(60e18, rail);              // 100 + 60 > 150 still binds (PoC bypass fails)
+    }
+
+    /// AUDIT R4-M1(a): the keeper's rebalance fails closed until the windowed churn cap is armed.
+    function test_R4M1_RebalanceFailsClosed_UntilWindowCapSet() public {
+        _fundBacking(1_000e18);
+        vm.prank(keeper);
+        vm.expectRevert(MintwareTreasuryFloatSettlement.RebalanceCapNotSet.selector);
+        fs.rebalanceFloat(100e18, 95e18);
+        vm.prank(owner);
+        fs.setRebalanceCaps(0, 1_000e18, 1 days); // arm (instant from off)
+        vm.prank(keeper);
+        assertGt(fs.rebalanceFloat(100e18, 95e18), 0, "works once the churn cap is armed");
+    }
+
+    /// AUDIT R4-M1(b): the keeper's minUsdcOut is floored at a minSettleOutBps fraction of the EXPECTED out, so
+    /// minUsdcOut = 0 (self-sandwich to the band edge) is rejected.
+    function test_R4M1_RebalanceMinUsdcOutFloor_RejectsZero() public {
+        _fundBacking(1_000e18);
+        vm.startPrank(owner);
+        fs.setRebalanceCaps(0, 1_000e18, 1 days);
+        fs.setMinSettleOutBps(9_000); // require ≥ 90% of expected out
+        vm.stopPrank();
+        vm.prank(keeper);
+        vm.expectRevert(); // MinUsdcOutTooLow
+        fs.rebalanceFloat(100e18, 0);
+        vm.prank(keeper);
+        assertGt(fs.rebalanceFloat(100e18, 95e18), 0, "a minUsdcOut above the floor is accepted");
+    }
+
+    /// AUDIT R4-L1: when requireReadyOracle is true, the swap paths fail closed if the Lido source is unset —
+    /// symmetric with the ETH/USDC leg (previously leg-1 wstETH→ETH ran unbounded).
+    function test_R4L1_SwapPathsFailClosed_WhenLidoUnset() public {
+        MintwareTreasuryFloatSettlement f2 = new MintwareTreasuryFloatSettlement(
+            IPoolManager(address(pm)), stakeKey, ethKey,
+            address(wstEth), address(weth), address(usdc), owner, relayer, keeper
+        );
+        MockTruncOracle o2 = new MockTruncOracle();
+        vm.startPrank(owner);
+        f2.setOracleSource(address(o2));          // oracle wired, but Lido source NEVER set
+        f2.setRebalanceCaps(0, 1_000e18, 1 days);
+        f2.setSettlementRail(rail);
+        vm.stopPrank();
+        o2.set(0, true);                          // oracle IS ready
+        wstEth.mint(lp, 1_000e18);
+        vm.startPrank(lp); wstEth.approve(address(f2), type(uint256).max); f2.fundWstEthBacking(1_000e18); vm.stopPrank();
+
+        vm.prank(relayer);
+        vm.expectRevert(MintwareTreasuryFloatSettlement.LidoRateSourceNotSet.selector);
+        f2.batchSettleViaSwap(100e18, 0, rail);
+        vm.prank(keeper);
+        vm.expectRevert(MintwareTreasuryFloatSettlement.LidoRateSourceNotSet.selector);
+        f2.rebalanceFloat(100e18, 0);
+    }
+
+    /// AUDIT R4-H1: once the rail is pinned (setUp) the oracle/lido sources are FROZEN (set-once posture);
+    /// re-points are instant only pre-arming. address(0) is always rejected.
+    function test_R4H1_Sources_FrozenOnceRailPinned() public {
+        MockTruncOracle o2 = new MockTruncOracle();
+        vm.prank(owner);
+        vm.expectRevert(MintwareTreasuryFloatSettlement.AlreadySet.selector);
+        fs.setOracleSource(address(o2));
+        vm.prank(owner);
+        vm.expectRevert(MintwareTreasuryFloatSettlement.ZeroAddress.selector);
+        fs.setOracleSource(address(0));
+        vm.prank(owner);
+        vm.expectRevert(MintwareTreasuryFloatSettlement.AlreadySet.selector);
+        fs.setLidoRateSource(address(lido));
+
+        // Pre-arming (fresh instance, rail unpinned) re-points are instant.
+        MintwareTreasuryFloatSettlement f2 = new MintwareTreasuryFloatSettlement(
+            IPoolManager(address(pm)), stakeKey, ethKey,
+            address(wstEth), address(weth), address(usdc), owner, relayer, keeper
+        );
+        vm.startPrank(owner);
+        f2.setOracleSource(address(o2));
+        f2.setOracleSource(address(oracle)); // re-point, still instant pre-rail
+        vm.stopPrank();
+        assertEq(address(f2.oracleSource()), address(oracle), "pre-rail re-point is instant");
+    }
+
+    /// AUDIT R4-L4: post-rail loosening is 48h-timelocked; tightening / arm-from-off is instant; pause is instant.
+    function test_R4L4_PostRailLoosening_Timelocked_TighteningInstant() public {
+        vm.prank(owner);
+        fs.setMaxSettlePerCall(50e18);            // arm from off → instant (tightening)
+        assertEq(fs.maxSettlePerCall(), 50e18, "arm from off is instant");
+        vm.prank(owner);
+        fs.setMaxSettlePerCall(200e18);           // RAISE (loosen) → timelocked
+        assertEq(fs.maxSettlePerCall(), 50e18, "raise not applied immediately");
+        bytes32 id = fs.RP_MAX_SETTLE_PER_CALL(); // hoist (getter must not consume the prank)
+        vm.warp(block.timestamp + 48 hours + 1);
+        vm.prank(owner);
+        fs.confirmRiskParam(id);
+        assertEq(fs.maxSettlePerCall(), 200e18, "applied after the 48h delay");
+
+        // Guardian pause stays INSTANT (never routed through the timelock).
+        address g = makeAddr("g");
+        vm.prank(owner); fs.setGuardian(g);
+        vm.prank(g); fs.pause();
+        assertTrue(fs.paused(), "guardian pause is instant");
+    }
+
+    /// AUDIT R4-L2: a real 6-dp USDC values correctly — native USDC is scaled into the canonical 18-dp USD unit,
+    /// never added raw to the 18-dp wstETH value (the reported 1e12 error).
+    function test_R4L2_SixDecimalUsdc_FloatValuesInEighteenDpUsd() public {
+        MockERC20 usdc6 = new MockERC20("USDC6", "USDC6", 6);
+        PoolKey memory eth6 = _poolKey(address(weth), address(usdc6));
+        MintwareTreasuryFloatSettlement fs6 = new MintwareTreasuryFloatSettlement(
+            IPoolManager(address(pm)), stakeKey, eth6,
+            address(wstEth), address(weth), address(usdc6), owner, relayer, keeper
+        );
+        assertEq(fs6.usdcDecimals(), 6, "decimals read + stored at construction");
+        usdc6.mint(team, 1_500e6);
+        vm.startPrank(team);
+        usdc6.approve(address(fs6), type(uint256).max);
+        fs6.fundFloat(1_000e6);
+        fs6.fundJuniorBuffer(500e6);
+        vm.stopPrank();
+        assertEq(fs6.totalBackingUsd(), 1_000e18, "6-dp float scaled to 18-dp USD (no 1e12 error)");
+        assertEq(fs6.coverageUsd(),     1_500e18, "6-dp float + junior scaled to 18-dp USD");
+    }
+
+    /// AUDIT R4-L2: the collateral (wstETH/WETH) MUST be 18-dp — a non-18-dp collateral fails closed at construction.
+    function test_R4L2_ConstructorRejectsNon18DpCollateral() public {
+        MockERC20 wst6 = new MockERC20("wst6", "wst6", 6);
+        PoolKey memory badStake = _poolKey(address(wst6), address(weth));
+        vm.expectRevert(MintwareTreasuryFloatSettlement.BadDecimals.selector);
+        new MintwareTreasuryFloatSettlement(
+            IPoolManager(address(pm)), badStake, ethKey,
+            address(wst6), address(weth), address(usdc), owner, relayer, keeper
         );
     }
 }
