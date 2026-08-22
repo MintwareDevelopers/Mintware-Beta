@@ -91,11 +91,11 @@ export const NS_MATH = {
   rows: [
     { k: 'Treasury size (illustrative)', v: '$10,000,000' },
     { k: 'Idle in a multisig at ~0%', v: '$0 / yr' },
-    { k: 'Productive-but-spendable at an illustrative ~4–8%*', v: '≈ $400k – $800k / yr' },
+    { k: 'Productive-but-spendable at an illustrative ~11–14%*', v: '≈ $1.1M – $1.4M / yr' },
     { k: 'Liquidity given up to earn it', v: 'None — spendable at par, on demand' },
   ],
   footnote:
-    '*Illustrative only, not a quote, offer, or guarantee of yield. Stablecoin lending has historically ranged roughly ~2–10% depending on conditions; LP + rehypothecation strategies target the higher end. Actual returns vary with market conditions and can be lower. Testnet — no real value.',
+    '*Illustrative only, not a quote, offer, or guarantee of yield. The stacked model targets ~11–14% — a best-venue lending floor (~6–8%, shopping Aave + Morpho, where some USDC markets have reached ~7–8%) plus a ~4–5% LP-fee + MEV/LVR-recapture layer on the same capital. Protocol-native yield varies with market conditions and can be lower. Testnet — no real value.',
 } as const
 
 // ─── How Mintware solves it — value props mapped to a network state. ─────────
@@ -139,7 +139,7 @@ export const NS_MECHANICS = {
   items: [
     ['Senior stays par', 'The community’s balance never reads a pool price. Impermanent loss and market swings land on the junior first-loss tranche, not on member funds.'],
     ['Covered, then fair', 'Redeemable at par while the first-loss cushion covers it. If a tail event ever exhausts the cushion, everyone shares one transparent pro-rata outcome — no first-redeemer run.'],
-    ['The ULV engine', 'Idle capital earns in Aave; just-in-time Uniswap v4 liquidity plus MEV/LVR recapture return value that normally leaks to arbitrageurs. Capital is never sitting still.'],
+    ['The ULV engine', 'Idle capital earns at the best lending venue — the adapter shops Aave and Morpho for the top USDC rate; just-in-time Uniswap v4 liquidity plus MEV/LVR recapture stack a second layer of return on the same capital. Nothing sits still.'],
     ['Spend without unwinding', 'A card swipe or payout is a hold against the earning position, then a settle — the underlying stays deployed the entire time.'],
   ],
   note:
@@ -176,4 +176,4 @@ export const NS_CTA = {
 
 // Small, dated Sources line at the foot — credibility, not decoration.
 export const NS_SOURCES =
-  'Sources: stablecoin supply & settlement volume ($46T total / ~$9T adjusted) — a16z State of Crypto 2025; idle-stablecoin figure — CoinDesk Research (2025, all stablecoins, not DAO-treasuries alone); DAO treasury aggregate & stablecoin share — DeepDAO (2025); Praxis $525M raise — The Block (Oct 2024); pop-up-city count — Gitcoin case study (2024); Estonia e-Residency statistics — e-resident.gov.ee (2024–25); USDC circulation & CCTP volume — Circle (2025). Movement framing: Balaji Srinivasan, “The Network State” (2022); Vitalik Buterin’s Zuzalu (2023). Figures are approximate, dated, and cited for context — not offers; several movement figures are project-reported. Yield figures are illustrative and not guarantees.'
+  'Sources: stablecoin supply & settlement volume ($46T total / ~$9T adjusted) — a16z State of Crypto 2025; idle-stablecoin figure — CoinDesk Research (2025, all stablecoins, not DAO-treasuries alone); DAO treasury aggregate & stablecoin share — DeepDAO (2025); Praxis $525M raise — The Block (Oct 2024); pop-up-city count — Gitcoin case study (2024); Estonia e-Residency statistics — e-resident.gov.ee (2024–25); USDC circulation & CCTP volume — Circle (2025). Movement framing: Balaji Srinivasan, “The Network State” (2022); Vitalik Buterin’s Zuzalu (2023). Figures are approximate, dated, and cited for context — not offers; several movement figures are project-reported. Yield: the stacked model targets ~11–14% — a best-venue lending floor (~6–8%, shopping Aave + Morpho; Aave USDC ~3.3–3.5% and Morpho USDC vaults ~4–8%, some ~7–8%, per Aave / Morpho / eco.com, 2026) plus a ~4–5% LP-fee + MEV-recapture layer on the same capital. Illustrative vision target, testnet, not a promised rate; protocol-native yield varies with market conditions.'

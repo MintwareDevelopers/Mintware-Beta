@@ -15,7 +15,7 @@
 // HONESTY (see solutions-pages-spec + /legal): ONE concentrated testnet note
 // carries the legal weight (see TREASURY_STATUS). No "deposit / savings /
 // guaranteed / fixed APY / FDIC / insured" as if true. No specific yield % as a
-// promise — the ~3.5–9% band is sourced + labelled ILLUSTRATIVE. Vision framing:
+// promise — the stacked ~11–14% target is sourced + labelled ILLUSTRATIVE. Vision framing:
 // where Mintware is building to, proven on testnet, not a production guarantee.
 // =============================================================================
 
@@ -61,19 +61,20 @@ export const TREASURY_PROBLEM = {
 } as const
 
 // ─── The worked math — HONEST opportunity cost ──────────────────────────────
-// Illustrative rate sits inside the sourced ~3.5–9% stablecoin-lending band
-// (Aave v3 USDC 2025 avg ~5.9%). Labelled illustrative + testnet — never a promise.
+// Illustrative stacked target ~11–14%: a best-venue lending floor (~6–8%, shopping
+// Aave + Morpho) plus a ~4–5% LP-fee + MEV layer on the SAME capital. ~12% is the
+// single illustrative midpoint. Labelled illustrative + testnet — never a promise.
 export const TREASURY_MATH = {
   eyebrow: 'The math',
   title: 'What idle costs — and what stays on the table.',
   intro: 'A worked example, not a quote. Take a mid-size treasury holding $10M in stablecoins for runway.',
   rows: [
     { label: 'Idle in a multisig', rate: '~0%', earns: '$0 / yr', tone: 'flat' },
-    { label: 'Staying fully spendable while it works', rate: '~5% illustrative', earns: '≈ $500,000 / yr', tone: 'accent' },
+    { label: 'Staying fully spendable while it works', rate: '~12% illustrative', earns: '≈ $1,200,000 / yr', tone: 'accent' },
   ],
-  punch: '≈ $500,000 a year',
-  punchSub: 'left on the table by a single $10M treasury — at no loss of liquidity. Across the ~$4.5B in stablecoins DAOs hold today, an illustrative 5% is on the order of $225M/yr the ecosystem forgoes for sitting still.',
-  note: 'Illustrative only. 5% sits inside the sourced ~3.5–9% range stablecoin lending has paid across Aave, Morpho, Compound, and Spark in 2025 — it is a model of opportunity cost, not a rate Mintware offers or guarantees. Protocol-native yield varies with market conditions.',
+  punch: '≈ $1.2M a year',
+  punchSub: 'left on the table by a single $10M treasury — at no loss of liquidity. Across the ~$4.5B in stablecoins DAOs hold today, an illustrative 12% is on the order of $540M/yr the ecosystem forgoes for sitting still.',
+  note: 'Illustrative only. The stacked model targets ~11–14% — a best-venue lending floor (~6–8%, shopping Aave + Morpho, where some USDC markets have reached ~7–8%) plus a ~4–5% LP-fee + MEV-recapture layer on the same capital; ~12% is the illustrative midpoint. It is a model of opportunity cost, not a rate Mintware offers or guarantees. Protocol-native yield varies with market conditions.',
 } as const
 
 // ─── How Mintware solves it — map value props to treasury needs ─────────────
@@ -85,7 +86,7 @@ export const TREASURY_SOLUTION = {
     {
       index: '01',
       title: 'Earns while it stays spendable',
-      body: 'The senior balance behaves like a dollar and stays 1:1 spendable, while the capital earns protocol-native yield from the pools it backs — Aave rehypothecation plus just-in-time V4 liquidity and recaptured MEV. No unwinding, no withdrawal window, no cashing out to pay a vendor.',
+      body: 'The senior balance behaves like a dollar and stays 1:1 spendable, while the capital earns protocol-native yield from the pools it backs — best-venue lending (the adapter shops Aave + Morpho for the top USDC rate) plus just-in-time V4 liquidity and recaptured MEV stacked on the same capital. No unwinding, no withdrawal window, no cashing out to pay a vendor.',
     },
     {
       index: '02',
@@ -161,6 +162,6 @@ export const TREASURY_SOURCES = [
   { n: '1', text: 'DAO treasury value (~$24.5B, 2025) & stablecoin share (~18%): DeepDAO / CoinLaw DAO Treasury Holdings Statistics, 2025.' },
   { n: '2', text: 'Stablecoin settlement volume ($33T, 2025, +72% YoY) & supply projections: Arkham / CEX.IO / Citi 2025 stablecoin research.' },
   { n: '3', text: 'Safe (Gnosis Safe) multisig scale ($100B+ TVL, 10M+ accounts): Safe / DeFiLlama / CoinGecko, 2025.' },
-  { n: '4', text: 'Stablecoin lending yield (~3.5–9%; Aave v3 USDC 2025 avg ~5.9%): RebelFi / Spark / earnpark Aave guides, 2025–26. Illustrative, not a Mintware rate.' },
+  { n: '4', text: 'Best-venue stablecoin lending floor (~6–8%, shopping Aave + Morpho): Aave USDC ~3.3–3.5% and Morpho USDC vaults ~4–8% (some ~7–8%), per Aave / Morpho / eco.com / earnpark, 2026. The stacked ~11–14% target adds a ~4–5% LP-fee + MEV-recapture layer on the same capital; illustrative vision target, not a Mintware rate.' },
   { n: '5', text: 'Crypto-linked card spend (~$18B annualized, +100%+ YoY; Visa 90%+): CoinDesk / insights4vc / Artemis, 2025–26.' },
 ] as const

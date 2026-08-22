@@ -63,7 +63,7 @@ const COPY = {
       {
         index: '01',
         title: 'Put idle treasury to work — without giving up liquidity',
-        body: 'USDC in the vault earns protocol-native yield from the pools it backs: idle capital is rehypothecated into lending, and just-in-time V4 liquidity recaptures fees and MEV that would otherwise leak to arbitrageurs. Your operating cash stops sitting still.',
+        body: 'USDC in the vault earns protocol-native yield from the pools it backs: idle capital is rehypothecated into best-venue lending (the adapter shops Aave + Morpho for the top USDC rate), and just-in-time V4 liquidity recaptures fees and MEV that would otherwise leak to arbitrageurs — a second layer stacked on the same capital. Your operating cash stops sitting still.',
       },
       {
         index: '02',
@@ -90,11 +90,11 @@ const COPY = {
     body: 'A simple, defensible model. A startup that parks $2M of runway idle for a year gives up the yield it could have earned with no loss of liquidity — because on Mintware the same $2M stays fully spendable while it works.',
     rows: [
       { label: 'Runway held idle in a wallet', sub: 'spendable, ~0% yield', value: '$0 / yr', tone: 'flat' },
-      { label: 'Same $2M, productive + spendable', sub: 'illustrative ~5% blended, still 100% spendable', value: '≈ $100,000 / yr', tone: 'earn' },
-      { label: 'Opportunity cost of doing nothing', sub: 'at no loss of liquidity', value: '≈ $100,000 / yr', tone: 'accent' },
+      { label: 'Same $2M, productive + spendable', sub: 'illustrative ~12% stacked, still 100% spendable', value: '≈ $240,000 / yr', tone: 'earn' },
+      { label: 'Opportunity cost of doing nothing', sub: 'at no loss of liquidity', value: '≈ $240,000 / yr', tone: 'accent' },
     ],
     footnote:
-      'Illustrative only. Reputable USDC lending venues have ranged roughly 3.5–9% through 2026 (Aave USDC ~3–5% on Ethereum, higher on Base/Arbitrum); LP + rehypothecation strategies target the upper end. A blended ~5% is a modelling assumption, not a promised or fixed rate — actual yield is variable and set by the market.',
+      'Illustrative only. The stacked model targets ~11–14% — a best-venue lending floor (~6–8%, shopping Aave + Morpho, where some USDC markets have reached ~7–8%; Aave USDC ~3.3–3.5% in 2026) plus a ~4–5% LP-fee + MEV-recapture layer on the same capital. A ~12% midpoint is a modelling assumption, not a promised or fixed rate — actual yield is variable and set by the market.',
   },
 
   terminal: {
@@ -148,7 +148,7 @@ const COPY = {
   },
 
   sources:
-    'Sources: CoinDesk Research & “Crypto card spending hits $18B” (Jan 2026); Grant Graham, “Stablecoins in Corporate Treasury” (2026); Artemis Analytics & Bancoli B2B stablecoin data (2025–26); insights4vc, “The State of Stablecoin Cards” (2026); eco.com USDC-yield comparison (2026); Vesto / Slash startup-treasury guidance. Figures are dated and approximate; yield ranges are illustrative.',
+    'Sources: CoinDesk Research & “Crypto card spending hits $18B” (Jan 2026); Grant Graham, “Stablecoins in Corporate Treasury” (2026); Artemis Analytics & Bancoli B2B stablecoin data (2025–26); insights4vc, “The State of Stablecoin Cards” (2026); Aave / Morpho / eco.com USDC-yield comparison (2026, best-venue lending floor ~6–8%); Vesto / Slash startup-treasury guidance. Figures are dated and approximate; the stacked ~11–14% yield target is illustrative, not a promised rate.',
 } as const
 
 export default function CompaniesSolutionPage() {

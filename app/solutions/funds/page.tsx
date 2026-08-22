@@ -114,11 +114,11 @@ const C = {
     intro: 'A simple, honest opportunity-cost model. Take $100M of stablecoin reserve a fund holds fully liquid between deployments. The point is not a promised return — it is that staying callable no longer has to mean earning nothing.',
     rows: [
       { label: 'Idle cash (today)', rate: '~0%', yr: '$0', note: 'Fully callable, earning nothing — the status quo.' },
-      { label: 'Stablecoin lending', rate: '~4%', yr: '~$4.0M / yr', note: 'Illustrative: Aave USDC supply ranged ~3.8–5.2% over a 30-day window in 2026.' },
-      { label: 'LP + rehypothecation + MEV recapture', rate: '~6%', yr: '~$6.0M / yr', note: 'Illustrative target: idle capital lent while just-in-time V4 liquidity captures fees + recaptured MEV/LVR.' },
+      { label: 'Best-venue lending (Aave + Morpho)', rate: '~7%', yr: '~$7.0M / yr', note: 'Illustrative: the adapter shops Aave (~3.3–3.5%, 2026) + Morpho USDC vaults (~4–8%, some ~7–8%) for the best supply rate.' },
+      { label: 'Stacked: best-venue lending + LP fee + MEV recapture', rate: '~12%', yr: '~$12.0M / yr', note: 'Illustrative target: the lending floor plus just-in-time V4 liquidity capturing fees + recaptured MEV/LVR on the same capital.' },
     ],
-    highlight: 'Same $100M. Same day-one callability. The difference between the top row and the bottom is roughly $4–6M a year of foregone return — the quiet tax of holding productive dollars as dead cash.',
-    note: 'Illustrative model on testnet — not a quote, offer, promise of yield, or investment advice. Rates are historical/illustrative ranges (Aave USDC ~3.8–5.2% over 30 days, 2026; eco.com); actual returns vary with market conditions and can be zero. LP/rehypothecation strategies carry additional risk.',
+    highlight: 'Same $100M. Same day-one callability. The difference between the top row and the bottom is roughly $12M a year of foregone return — the quiet tax of holding productive dollars as dead cash.',
+    note: 'Illustrative model on testnet — not a quote, offer, promise of yield, or investment advice. The stacked ~11–14% target is a best-venue lending floor (~6–8%, shopping Aave + Morpho; Aave USDC ~3.3–3.5%, Morpho USDC vaults ~4–8%, 2026; eco.com) plus a ~4–5% LP-fee + MEV-recapture layer on the same capital. Actual returns vary with market conditions and can be zero. LP/rehypothecation strategies carry additional risk.',
   },
 
   mechanics: {
@@ -128,7 +128,7 @@ const C = {
     items: [
       { k: 'Structured tranches', v: 'Senior capital is price-free — it never reads a pool price, so it stays spendable at par. A junior first-loss tranche absorbs impermanent loss and market moves. The senior balance behaves like cash; the volatility lands on the tranche built to take it.' },
       { k: 'Solvency-aware redemption', v: 'Redeemable at par while the first-loss cushion covers it. If a tail event ever exhausts the cushion, everyone shares the same transparent pro-rata outcome — no race for the exit, no first-redeemer advantage.' },
-      { k: 'The ULV engine', v: 'Idle capital earns via rehypothecation into lending; just-in-time V4 liquidity plus MEV/LVR recapture return value that normally leaks to arbitrageurs. Capital is never idle inside the vault.' },
+      { k: 'The ULV engine', v: 'Idle capital earns via rehypothecation into best-venue lending — the adapter shops Aave and Morpho for the top USDC rate; just-in-time V4 liquidity plus MEV/LVR recapture stack a second layer of return that normally leaks to arbitrageurs. Capital is never idle inside the vault.' },
       { k: 'Native-USDC rails', v: 'Settlement is USDC-native on Circle / Arc with CCTP bridging; card spend runs through a regulated card partner. Mintware never custodies funds and never touches fiat.' },
     ],
   },
@@ -172,7 +172,7 @@ const C = {
     'VC dry powder ~$600.9B — Eqvista (2026); crypto fund deployment — Insights4VC / The Block (2026)',
     'Stablecoin tx +72% YoY — KuCoin (2026); x402 ~165M tx / ~69k agents — Chainalysis, CoinDesk (2026)',
     'Tokenized MMF/RWA AUM ($5B+ / BUIDL ~$2.9B / RWA ~$31.4B) — CoinDesk, Bitcoin.com (2026)',
-    'Aave USDC supply ~3.8–5.2% (30-day, 2026) — eco.com; on-chain credit scoring — cryptocreditscores.org, Spectral (2026)',
+    'Best-venue lending floor ~6–8% (Aave USDC ~3.3–3.5%, Morpho USDC vaults ~4–8%, some ~7–8%, 2026) — Aave / Morpho / eco.com; stacked ~11–14% adds a ~4–5% LP-fee + MEV layer (illustrative); on-chain credit scoring — cryptocreditscores.org, Spectral (2026)',
   ],
 } as const
 
