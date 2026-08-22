@@ -136,13 +136,19 @@ contract MintwareTreasuryJitStackTest is Test {
         uint256 covAtDep = (buf * 10_000) / dep;  // coverage bps this deploy would leave
         assertLe(covAtDep + 1, type(uint16).max, "floor fits uint16");
 
-        // A floor JUST ABOVE that coverage must halt the deploy.
+        // A floor JUST ABOVE that coverage must halt the deploy. RAISING the floor (safety) is instant.
         vault.setMinCoverage(uint16(covAtDep + 1));
         vm.expectRevert(MintwareTreasuryVault.CoverageTooLow.selector);
         vault.deployToLP(dep, jt);
 
-        // Lowering the floor to that coverage lets the same deploy through.
+        // LEGAL 48h TIMELOCK: lowering the coverage floor is RISK-INCREASING, so it no longer applies
+        // instantly — propose → warp 48h → confirm. (The mock adapter has no time accrual, so the warp is
+        // inert for the numbers below.) Then the same deploy goes through.
         vault.setMinCoverage(uint16(covAtDep));
+        assertEq(vault.minCoverageBps(), covAtDep + 1, "lower must not apply before the delay");
+        vm.warp(vm.getBlockTimestamp() + vault.RISK_PARAM_DELAY() + 1);
+        vault.confirmRiskParam(vault.RP_MIN_COVERAGE());
+        assertEq(vault.minCoverageBps(), covAtDep, "lower should apply after confirm");
         vault.deployToLP(dep, jt);
         assertGt(vault.deployedFromSenior(), 0, "a covered deploy still proceeds");
     }

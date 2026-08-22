@@ -23,6 +23,8 @@ import {MintwareTreasuryJitHook}   from "../../src/payments/MintwareTreasuryJitH
 import {MWAmAuction}               from "../../src/hooks/MWAmAuction.sol";
 import {AmParams}                  from "../../src/hooks/MWAmAuctionLib.sol";
 
+import {MWTimelockedRiskParams}   from "../../src/lib/MWTimelockedRiskParams.sol";
+import {Ownable}                  from "@openzeppelin/contracts/access/Ownable.sol";
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
@@ -527,5 +529,59 @@ contract MintwareTreasuryJitHookTest is Test {
         vm.prank(makeAddr("stranger"));
         vm.expectRevert();
         hook.setAuction(address(1));
+    }
+
+    // ── LEGAL 48h TIMELOCK on the oracle-clamp risk param (setOracleParams) ─────────────────────────
+    //
+    // The truncated-oracle clamp is the hook's one senior-solvency knob (the vault values its position at
+    // `min(spot, oracle)`; settlement bounds against it). LOOSENING the clamp (raising the per-block move
+    // or catch-up) is risk-increasing → 48h-timelocked; TIGHTENING is instant; instant before the oracle's
+    // first swap (bootstrap). Values aren't publicly readable, so this asserts the schedule/gate state.
+    function test_oracleParams_governance_timelock() public {
+        bytes32 id = hook.RP_ORACLE_PARAMS();
+
+        // Pre-first-swap: oracle not live → any set is instant (bootstrap).
+        (, bool ready0) = hook.oracleTick();
+        assertFalse(ready0, "oracle already live");
+        hook.setOracleParams(500, 60); // instant
+        (,, uint256 eta0) = hook.pendingRiskParam(id);
+        assertEq(eta0, 0, "bootstrap set must not schedule a timelock");
+
+        // Warm the oracle with a real swap → now live.
+        _buyTeam(trader, 1_000 * ONE);
+        (, bool ready1) = hook.oracleTick();
+        assertTrue(ready1, "oracle not live after a swap");
+
+        // LOOSEN (raise the per-block move 500 → 1000) → timelocked.
+        hook.setOracleParams(1_000, 60);
+        (uint256 pv, uint256 pv2, uint256 eta1) = hook.pendingRiskParam(id);
+        assertEq(pv, 1_000, "pending move");
+        assertEq(pv2, 60, "pending catchup");
+        assertGt(eta1, 0, "loosening not scheduled");
+
+        // Early confirm reverts; after 48h it applies.
+        vm.expectRevert(MWTimelockedRiskParams.RiskParamDelayNotElapsed.selector);
+        hook.confirmRiskParam(id);
+        vm.warp(block.timestamp + 48 hours + 1);
+        hook.confirmRiskParam(id);
+        (,, uint256 clr) = hook.pendingRiskParam(id);
+        assertEq(clr, 0, "pending not cleared after confirm");
+
+        // TIGHTEN (lower both move 1000 → 300 and catchup 60 → 30) → instant.
+        hook.setOracleParams(300, 30);
+        (,, uint256 eta2) = hook.pendingRiskParam(id);
+        assertEq(eta2, 0, "tightening must be instant");
+    }
+
+    function test_oracleParams_bounds_and_auth() public {
+        vm.expectRevert(MintwareTreasuryJitHook.BadParam.selector);
+        hook.setOracleParams(0, 30); // move must be > 0
+        vm.expectRevert(MintwareTreasuryJitHook.BadParam.selector);
+        hook.setOracleParams(2_001, 30); // > MAX_ORACLE_MOVE_TICKS
+
+        address stranger = makeAddr("stranger");
+        vm.prank(stranger);
+        vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, stranger));
+        hook.setOracleParams(300, 30);
     }
 }
