@@ -22,7 +22,6 @@ const FOOTER_LINKS = [
   { href: '/docs', label: 'Docs' },
   { href: '/legal', label: 'Legal' },
   { href: '/about', label: 'About' },
-  { href: 'https://x.com/Mintware_org', label: 'Twitter', external: true },
 ]
 
 const LEGAL_LINKS = [
@@ -51,14 +50,13 @@ export function MwFooter() {
         </Link>
         <div className="flex gap-x-6 gap-y-1 text-[13px] font-medium flex-wrap">
           {FOOTER_LINKS.map((l) => (
-            <a
+            <Link
               key={l.label}
               href={l.href}
               className="text-ink-mid no-underline hover:text-ink inline-flex items-center min-h-[44px]"
-              {...(l.external ? { target: '_blank', rel: 'noopener' } : {})}
             >
               {l.label}
-            </a>
+            </Link>
           ))}
         </div>
       </div>
