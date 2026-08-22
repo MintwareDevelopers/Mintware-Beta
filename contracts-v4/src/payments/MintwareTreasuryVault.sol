@@ -168,6 +168,13 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     ///         atomic within one swap, so the balance can only have moved by the hook's return transfer.
     uint256 private _jitUsdcBaseline;
 
+    /// @notice AUDIT M1: optional per-block ceiling (USDC) on Gateway-driven `burnForPayment`, so even a
+    ///         compromised/buggy Gateway can only drain the senior at a BOUNDED rate — giving the guardian
+    ///         time to pause. 0 = off (default). Defense in depth on top of the Gateway's own permit caps.
+    uint256 public maxBurnPerBlock;
+    uint256 private _burnBlock;
+    uint256 private _burnedThisBlock;
+
     /// @notice AUDIT H4: cumulative REALIZED JIT PnL in USDC (signed).
     int256  public jitNetPnl;
     /// @notice Owner-set: if cumulative net JIT loss breaches this (USDC), the breaker trips. 0 = off.
@@ -219,7 +226,9 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     error CoverageTooLow();
 
     event MinCoverageSet(uint256 bps);
+    event MaxBurnPerBlockSet(uint256 cap);
     error BadParam();
+    error BurnRateExceeded();
     error OnlyJitHook();
     error UsdcNotInPool();
     error OnlyRentFunder();
@@ -307,6 +316,12 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     function setMinCoverage(uint16 bps) external onlyOwner {
         minCoverageBps = bps;
         emit MinCoverageSet(bps);
+    }
+
+    /// @notice AUDIT M1: set the per-block `burnForPayment` ceiling in USDC (0 = off). Owner only.
+    function setMaxBurnPerBlock(uint256 cap) external onlyOwner {
+        maxBurnPerBlock = cap;
+        emit MaxBurnPerBlockSet(cap);
     }
 
     /// @notice Wire (or clear) the am-AMM auction that may push rent via `fundRent`. Re-settable by the
@@ -561,6 +576,14 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
 
         // AUDIT H1: solvency-aware NAV (min(par, realizable)); equals par when fully covered.
         assetsRedeemed = _toAssets(sharesToBurn, _redeemNav(), totalSeniorShares, Math.Rounding.Floor);
+
+        // AUDIT M1: bound the per-block burn rate so even a compromised Gateway can only drain the senior
+        // slowly (guardian has time to pause). Defense in depth over the Gateway's own permit caps. 0 = off.
+        if (maxBurnPerBlock != 0) {
+            if (block.number != _burnBlock) { _burnBlock = block.number; _burnedThisBlock = 0; }
+            _burnedThisBlock += assetsRedeemed;
+            if (_burnedThisBlock > maxBurnPerBlock) revert BurnRateExceeded();
+        }
 
         seniorShares[user] = bal - sharesToBurn;
         totalSeniorShares -= sharesToBurn;
