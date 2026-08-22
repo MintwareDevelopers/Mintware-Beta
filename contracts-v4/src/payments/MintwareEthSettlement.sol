@@ -11,12 +11,15 @@ import {SwapParams}            from "@uniswap/v4-core/src/types/PoolOperation.so
 import {IHooks}                from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary}          from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {FullMath}             from "@uniswap/v4-core/src/libraries/FullMath.sol";
 
 import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable}         from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable}        from "@openzeppelin/contracts/utils/Pausable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+
+import {IYieldAdapter}   from "../vaults/IYieldAdapter.sol";
 
 /// @dev The truncated-oracle reference the settlement swap bounds against — the SAME surface the JIT hook
 ///      exposes (`MintwareTreasuryJitHook.oracleTick()`). In production the WETH/USDC pool's hook supplies
@@ -134,6 +137,43 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     /// @dev Transient exact-output target read inside `unlockCallback` (set→unlock→clear in one call).
     uint256 private _pendingUsdcOut;
 
+    // ── never-idle: WETH backing earns lending (Aave/Morpho) yield while staying settlement-liquid ──────
+    //
+    // The WETH the vault deposits here as settlement backing should not sit idle. This wires it — through
+    // the SAME `IYieldAdapter` seam the treasury vault uses for USDC (`_supplyToAdapter`/`_pullUSDC`) — to
+    // a WETH LENDING adapter (`AaveV3YieldAdapter(WETH, aWETH)` / MultiVenue on Aave+Morpho), NOT staking.
+    // Only a liquid buffer stays on-hand; the rest lends; a pre-settlement `_ensureLiquidWeth` unwinds on
+    // demand. Everything below is ADDITIVE and OFF by default: with `wethAdapter == address(0)` behaviour
+    // is byte-for-byte today's (WETH fully liquid, no lending). See docs/developers/eth-backing-never-idle-design.md.
+
+    /// @notice The WETH lending yield sink. **Defaults to `address(0)`; while unset the contract behaves
+    ///         byte-for-byte as before (no lending, WETH fully liquid).** Set to an audited WETH lending
+    ///         adapter (`AaveV3YieldAdapter(WETH, aWETH)` or `MintwareMultiVenueYieldAdapter`) to turn earning
+    ///         on. First set takes effect immediately; thereafter it is LOCKED (mirrors the spirit of
+    ///         `MWTimelockedOracleSigner` — one deliberate wiring, then immutable at this layer).
+    /// @dev    RISK PARAM. This setter will adopt the shared 48h risk-param timelock the governance branch
+    ///         adds; it does NOT hard-depend on it (that branch ships separately). The first-set-then-lock
+    ///         rule is the conservative interim: the adapter can only ever be wired ONCE from here.
+    IYieldAdapter public wethAdapter;
+
+    /// @notice Fraction (bps) of total WETH backing to keep LIQUID on-hand; the remainder is lent. Default
+    ///         `3000` = keep 30% liquid, lend 70% — conservative because settlement WETH turns over and an
+    ///         on-demand unwind is the routine path only for unusually large batches. Bounded
+    ///         [`MIN_WETH_BUFFER_BPS`, `MAX_WETH_BUFFER_BPS`].
+    /// @dev    RISK PARAM (same timelock note as `wethAdapter`).
+    uint16 public wethIdleBufferBps = 3_000;
+
+    /// @notice Safety margin (bps) applied to the oracle-estimated WETH the next settlement swap will
+    ///         consume, so the pre-settlement unwind pulls a cushion above the point estimate. Default
+    ///         `12000` = 120%. Bounded [`SETTLE_BPS`, `MAX_SETTLE_MARGIN_BPS`] (never below 100%).
+    /// @dev    RISK PARAM (same timelock note as `wethAdapter`).
+    uint16 public settleMarginBps = 12_000;
+
+    uint16 internal constant MIN_WETH_BUFFER_BPS   = 1_000;  // >=10% liquid, else routine settlements churn the adapter
+    uint16 internal constant MAX_WETH_BUFFER_BPS   = 10_000; // <=100% (100% = fully liquid, i.e. lending effectively off)
+    uint16 internal constant MAX_SETTLE_MARGIN_BPS = 30_000; // <=300% cushion on the unwind estimate
+    uint256 internal constant Q96 = 1 << 96;                 // fixed-point unit for the oracle price
+
     event RelayerSet(address indexed relayer);
     event OracleSourceSet(address indexed source);
     event BandSet(int24 bandTicks);
@@ -148,6 +188,11 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     event JuniorBufferFunded(address indexed from, uint256 amount, uint256 total);
     event JuniorBufferWithdrawn(address indexed to, uint256 amount, uint256 total);
     event Settled(address indexed rail, uint256 totalUsdc, uint256 usdcFromSwap, uint256 wethSpent, uint256 juniorDrawn);
+    event WethAdapterSet(address indexed adapter);
+    event WethIdleBufferBpsSet(uint16 bps);
+    event SettleMarginBpsSet(uint16 bps);
+    event WethSuppliedToAdapter(uint256 amount);
+    event WethUnwoundFromAdapter(uint256 requested, uint256 withdrawn);
 
     error ZeroAddress();
     error ZeroAmount();
@@ -163,6 +208,7 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     error SettlementWindowCapExceeded();
     error MinUsdcOutTooLow(uint256 supplied, uint256 required);
     error BadParam();
+    error AdapterAlreadySet();
 
     modifier onlyRelayer() {
         if (msg.sender != relayer) revert OnlyRelayer();
@@ -271,6 +317,43 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         emit MinSettleOutBpsSet(bps);
     }
 
+    /// @notice Wire the WETH LENDING adapter (turns "never idle" on). First set takes effect immediately;
+    ///         thereafter it is LOCKED — the adapter can only ever be set ONCE from here (first-set-then-lock,
+    ///         mirroring `MWTimelockedOracleSigner`'s spirit). Pass an audited `AaveV3YieldAdapter(WETH,aWETH)`
+    ///         / `MintwareMultiVenueYieldAdapter`. Until it is set, backing stays fully liquid (today's behaviour).
+    /// @dev    RISK PARAM — will adopt the shared 48h risk-param timelock (separate governance branch); this
+    ///         does not hard-depend on it. The lock is the conservative interim.
+    function setWethAdapter(address adapter) external onlyOwner {
+        if (adapter == address(0)) revert ZeroAddress();
+        if (address(wethAdapter) != address(0)) revert AdapterAlreadySet();
+        wethAdapter = IYieldAdapter(adapter);
+        emit WethAdapterSet(adapter);
+    }
+
+    /// @notice Set the liquid-buffer fraction (bps) kept on-hand; the remainder lends. Bounded
+    ///         [`MIN_WETH_BUFFER_BPS`, `MAX_WETH_BUFFER_BPS`].
+    /// @dev    RISK PARAM (timelock note as `setWethAdapter`).
+    function setWethIdleBufferBps(uint16 bps) external onlyOwner {
+        if (bps < MIN_WETH_BUFFER_BPS || bps > MAX_WETH_BUFFER_BPS) revert BadParam();
+        wethIdleBufferBps = bps;
+        emit WethIdleBufferBpsSet(bps);
+    }
+
+    /// @notice Set the safety margin (bps) on the pre-settlement unwind estimate. Bounded
+    ///         [`SETTLE_BPS` (100%), `MAX_SETTLE_MARGIN_BPS`].
+    /// @dev    RISK PARAM (timelock note as `setWethAdapter`).
+    function setSettleMarginBps(uint16 bps) external onlyOwner {
+        if (bps < SETTLE_BPS || bps > MAX_SETTLE_MARGIN_BPS) revert BadParam();
+        settleMarginBps = bps;
+        emit SettleMarginBpsSet(bps);
+    }
+
+    /// @notice Owner/keeper: push any WETH backing held above the liquid buffer into the lending adapter.
+    ///         Idempotent and best-effort — a no-op when no adapter is set or nothing is above the buffer.
+    function sweepWethToAdapter() external onlyOwner {
+        _supplyExcessWeth();
+    }
+
     function pause() external onlyOwner { _pause(); }
     function unpause() external onlyOwner { _unpause(); }
 
@@ -286,16 +369,32 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         weth.safeTransferFrom(msg.sender, address(this), amount);
         wethBacking += amount;
         emit WethBackingFunded(msg.sender, amount, wethBacking);
+        // NEVER IDLE: auto-lend everything above the liquid buffer (no-op while `wethAdapter == 0`).
+        _supplyExcessWeth();
     }
 
     /// @notice Owner reclaims unused WETH backing (e.g. wind-down). Cannot touch the junior USDC buffer.
+    /// @dev `wethBacking` tracks TOTAL backing (on-hand + lent). If on-hand is short, unwind from the
+    ///      adapter first (best-effort) before transferring out; a wind-down beyond what can be unwound
+    ///      right now reverts `InsufficientWethBacking` rather than under-deliver.
     function withdrawWethBacking(address to, uint256 amount) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
         if (amount > wethBacking) revert InsufficientWethBacking();
+        _ensureLiquidWeth(amount); // pull from the lending adapter if on-hand is short (no-op while unset)
+        if (weth.balanceOf(address(this)) < amount) revert InsufficientWethBacking();
         wethBacking -= amount;
         weth.safeTransfer(to, amount);
         emit WethBackingWithdrawn(to, amount, wethBacking);
+    }
+
+    /// @notice Total WETH backing settlement — on-hand `+ wethAdapter.totalAssets()` (0 adapter ⇒ on-hand
+    ///         only). aTokens rebase, so `totalAssets` already values accrued lending interest at its
+    ///         redeemable amount — this view is never an overstatement of what can actually be realized.
+    function totalWethBacking() public view returns (uint256) {
+        uint256 onHand = weth.balanceOf(address(this));
+        if (address(wethAdapter) == address(0)) return onHand;
+        return onHand + wethAdapter.totalAssets();
     }
 
     /// @notice Fund the junior first-loss USDC buffer.
@@ -371,6 +470,14 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
             (, bool ready) = _oracle();
             if (!ready) revert OracleNotReady();
         }
+
+        // NEVER IDLE: before the swap, unwind enough lent WETH so the swap has liquid inventory to consume.
+        // Estimate the WETH this swap will need from the oracle price (~`settleMarginBps` cushion) and pull
+        // `min(need − onHand, maxWithdrawable())` from the adapter (best-effort, never reverts). No-op while
+        // `wethAdapter == 0`. If the adapter can't fully unwind (utilization crunch), the swap simply consumes
+        // what's on-hand and the EXISTING shortfall path (junior top-up, minUsdcOut floor, revert-and-retry)
+        // applies UNCHANGED — the lending layer sits underneath H4/R2-M2/oracle-band/junior/minUsdcOut.
+        _ensureLiquidWeth(_estimateWethNeed(totalUsdc));
 
         uint256 usdcBefore = usdc.balanceOf(address(this));
         uint256 wethBefore = weth.balanceOf(address(this));
@@ -451,6 +558,70 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     function _oracle() private view returns (int24 tick, bool ready) {
         if (address(oracleSource) == address(0)) return (int24(0), false);
         return oracleSource.oracleTick();
+    }
+
+    // ── never-idle lending internals (mirror the treasury vault's _supplyToAdapter / _pullUSDC shape) ──────
+
+    /// @dev Push WETH backing held above the liquid buffer into the lending adapter. Best-effort — a failed
+    ///      deposit resets the approval and leaves the WETH on-hand (degrades to "stays liquid," never
+    ///      reverts the caller). No-op while `wethAdapter == 0`. The buffer target is a fraction of TOTAL
+    ///      tracked backing (`wethBacking`), so it lends only the excess that is actually on-hand.
+    function _supplyExcessWeth() internal {
+        if (address(wethAdapter) == address(0)) return;
+        uint256 onHand = weth.balanceOf(address(this));
+        uint256 target = FullMath.mulDiv(wethBacking, wethIdleBufferBps, SETTLE_BPS);
+        if (onHand <= target) return;
+        uint256 excess     = onHand - target;
+        uint256 suppliable = wethAdapter.maxSuppliable();
+        uint256 toSupply   = excess < suppliable ? excess : suppliable;
+        if (toSupply == 0) return;
+        weth.forceApprove(address(wethAdapter), toSupply);
+        try wethAdapter.deposit(toSupply) {
+            emit WethSuppliedToAdapter(toSupply);
+        } catch {
+            weth.forceApprove(address(wethAdapter), 0); // deposit reverted → un-approve, keep WETH liquid
+        }
+    }
+
+    /// @dev Ensure the contract holds >= `need` WETH on-hand to feed the settlement swap, unwinding
+    ///      `min(need − onHand, maxWithdrawable())` from the lending adapter. `withdraw` is best-effort and
+    ///      NEVER reverts for a liquidity reason — a partial (or zero) unwind is safe because the swap then
+    ///      just consumes what's on-hand and the existing shortfall path handles the rest. No-op while unset.
+    function _ensureLiquidWeth(uint256 need) internal {
+        if (address(wethAdapter) == address(0) || need == 0) return;
+        uint256 onHand = weth.balanceOf(address(this));
+        if (onHand >= need) return;
+        uint256 short = need - onHand;
+        uint256 avail = wethAdapter.maxWithdrawable();
+        uint256 pull  = short < avail ? short : avail;
+        if (pull == 0) return;
+        uint256 got = wethAdapter.withdraw(pull); // best-effort; may return < pull under a utilization crunch
+        emit WethUnwoundFromAdapter(pull, got);
+    }
+
+    /// @dev Estimate the WETH the next settlement swap will consume to produce `totalUsdc`, from the oracle
+    ///      price, then apply the `settleMarginBps` cushion. Used ONLY to size the pre-settlement unwind — an
+    ///      over-estimate just leaves harmless extra WETH on-hand (still counted in `totalWethBacking`), an
+    ///      under-estimate falls through to the unchanged shortfall path. Returns 0 when no adapter is wired
+    ///      (nothing to unwind); returns `type(uint256).max` (pull all available) when the oracle can't price
+    ///      (only reachable when the require-ready-oracle guard is disabled for bootstrap).
+    function _estimateWethNeed(uint256 totalUsdc) private view returns (uint256) {
+        if (address(wethAdapter) == address(0)) return 0;
+        (int24 oTick, bool ready) = _oracle();
+        if (!ready) return type(uint256).max;
+
+        uint160 sqrtP    = _sqrtAtClamped(int256(oTick));
+        // price_Q96 = token1-per-token0 in RAW token units (decimals already baked into the pool price).
+        uint256 priceQ96 = FullMath.mulDiv(uint256(sqrtP), uint256(sqrtP), Q96);
+        if (priceQ96 == 0) return type(uint256).max;
+
+        uint256 est = wethIsCurrency0
+            // token1 = USDC per WETH ⇒ USDC-per-WETH = priceQ96/Q96 ⇒ wethNeed = totalUsdc·Q96/priceQ96
+            ? FullMath.mulDiv(totalUsdc, Q96, priceQ96)
+            // token1 = WETH per USDC ⇒ WETH-per-USDC = priceQ96/Q96 ⇒ wethNeed = totalUsdc·priceQ96/Q96
+            : FullMath.mulDiv(totalUsdc, priceQ96, Q96);
+
+        return FullMath.mulDiv(est, settleMarginBps, SETTLE_BPS);
     }
 
     function _sqrtAtClamped(int256 tick) private pure returns (uint160) {
