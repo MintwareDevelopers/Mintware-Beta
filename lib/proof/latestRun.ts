@@ -377,3 +377,35 @@ export const AUDIT_MATRIX: {
   note:
     'Honest scope: Layer-1’s automated scanners (Slither/Aderyn) could not run to completion in this local environment — a crytic-compile/forge version incompatibility + the monorepo’s dual Foundry root, documented in the report and recommended for CI; Certora/HEVM/Echidna/Medusa/Mythril are not provisioned here. What did run — 39 new dynamic tests across Layers 2/3/5, the Halmos+Coq formal gates, and the storage-collision check — found no new defect. Self-review, not an external audit; testnet + unaudited.',
 }
+
+// ── Security self-assessment · ROUND 4 — we audited our own NEWEST code ───────────────────────────
+// After shipping the operating-float settlement + the 48h risk-param timelock, we turned the same
+// adversarial audit (3 reviewers: money-path, governance, composition) on that new code specifically —
+// before it could sit un-reviewed on main. It found a real High in our own fresh work, which is exactly
+// the point. Full detail: docs/developers/self-assessment-security-round4-2026-08-22.md.
+export const SECURITY_AUDIT_R4: {
+  eyebrow: string; title: string; titleAccent: string; blurb: string
+  stats: { value: string; sub: string; label: string }[]
+  fixes: AuditFix[]; note: string
+} = {
+  eyebrow: 'Security self-assessment · round 4',
+  title: 'We audited our own',
+  titleAccent: 'newest code, too.',
+  blurb:
+    'New code deserves the same scrutiny as old code — so the operating-float settlement and the 48h risk-param timelock got their own adversarial pass (money-path, governance, composition reviewers) before sitting un-reviewed on main. It found a genuine High in our own fresh work. We fixed everything, and confirmed the earlier three rounds are regression-free.',
+  stats: [
+    { value: '0', sub: 'Critical', label: 'critical findings in the new float + timelock code' },
+    { value: '1 / 1', sub: 'High', label: 'high-severity finding remediated' },
+    { value: '6', sub: '+', label: 'mediums & lows fixed (all of them)' },
+    { value: '622', sub: '/ 0', label: 'tests pass / fail · no round-1–3 regression' },
+  ],
+  fixes: [
+    { sev: 'H', title: 'The settlement oracle can no longer be re-pointed after go-live — closes a compromised-owner instant-drain path', status: 'Fixed' },
+    { sev: 'M', title: 'The keeper’s rebalance fails closed until throttled — it can’t churn the whole backing on the default config', status: 'Fixed' },
+    { sev: 'M', title: 'The windowed extraction cap can’t be silently reset per-block — the accumulator carries forward', status: 'Fixed' },
+    { sev: 'L', title: 'Valuation handles real 6-decimal USDC and prices against the un-sandwichable staking rate', status: 'Fixed' },
+    { sev: 'L', title: 'Both swap legs fail closed symmetrically, and the new settlement adopts the same 48h timelock', status: 'Fixed' },
+  ],
+  note:
+    'Self-review, not an external audit. The point of this round: newly-shipped code is the most dangerous code — so we adversarially audited our own float-settlement + timelock the moment it landed, found a real High (an instant oracle re-point path), and fixed it plus every Medium and Low. A separate reviewer confirmed the earlier three rounds’ invariants are byte-for-byte intact. Testnet + unaudited — an external audit remains the gate before real value.',
+}
