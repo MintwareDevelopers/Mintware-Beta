@@ -267,7 +267,8 @@ export default function TeamsLandingPage() {
             The money your team runs on lives in a Mintware treasury that keeps earning while it stays spendable —
             cards, payroll, vendors, cross-chain — with a public page anyone can verify. Community capital is senior —
             redeemable at par while the treasury covers it; your team’s capital is the junior tranche that absorbs
-            losses first and earns the spread.
+            losses first and earns the spread. The order is fixed in the contract: the code pays the community first,
+            automatically — no admin override.
           </p>
           <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
             {TREASURY.map(([k, d], i) => (

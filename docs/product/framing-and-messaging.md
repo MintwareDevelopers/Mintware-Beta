@@ -115,6 +115,11 @@ Secondary audiences (they appear, they don't lead the homepage):
 - *productive · liquid · spendable*; *earns three ways at once*; *stays spendable at the point of sale.*
 - *your share · own your LP position · a market owned by its LPs.*
 - *the LPs who bring real, committed liquidity earn the most.*
+- *the code pays the community first, automatically — no admin override* — the sanctioned way to say the
+  waterfall is code-enforced. It describes the payout *ordering* (senior/community before junior/team),
+  which is a true, immutable code fact ([`docs/legal/tranche-legal-facts.md`](../legal/tranche-legal-facts.md)) —
+  NOT a principal guarantee. Keep it paired with the mechanism ("redeemable at par *while covered*"), never
+  as "your money is safe."
 - *Liquidity should be a public good* — **mission altitude only.**
 - Honest verbs for anything unshipped: *designed to · built to · coming · in testing.*
 

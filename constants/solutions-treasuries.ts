@@ -96,7 +96,7 @@ export const TREASURY_SOLUTION = {
     {
       index: '03',
       title: 'Structured to protect the treasury',
-      body: 'Community/senior capital is price-free — par, USDC-spendable — while a junior first-loss tranche absorbs the volatility. Redemption is solvency-aware: par while covered, fair pro-rata in the tail. The market moves land on the tranche built to take them, not on your operating balance.',
+      body: 'Community/senior capital is price-free — par, USDC-spendable — while a junior first-loss tranche absorbs the volatility. The code pays the community first, automatically — no admin override. Redemption is solvency-aware: par while covered, fair pro-rata in the tail. The market moves land on the tranche built to take them, not on your operating balance.',
     },
     {
       index: '04',
