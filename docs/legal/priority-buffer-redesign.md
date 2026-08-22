@@ -46,6 +46,131 @@ Set explicitly by the team and confirmed correct by the research below, not just
   exclusively the operator's own money with zero outside investment in that layer — the moment a
   third party buys into it, substance-over-form collapses the distinction back to a junior tranche.
 
+## The case law, one at a time — what each one threatens, and how the redesign answers it
+
+The sections above give the conclusions. This is the actual chain of reasoning — each real
+precedent, what it puts at risk for a protected/first-loss vault, and exactly which part of the
+redesign answers it (or honestly doesn't yet).
+
+### 1. SEC v. BarnBridge DAO (2023) — the direct precedent
+
+**The problem.** SEC used *Reves*, not Howey, against a senior/junior tranche paying a
+guaranteed senior yield funded by diverting junior capital when returns fell short, marketed to
+the public with no registration or exemption ($509M raised, $1.7M settlement, DAO wound down).
+Critically, **both** the fixed senior bonds **and** the variable junior bonds were caught —
+variability on the junior side didn't save it.
+
+**How we overcame it.** Remove the specific aggravating facts, not the word "tranche": (2) strip
+every "guaranteed"/"always whole" claim and replace it with an accurate priority-not-promise
+disclosure; (1) junior capital was never sold to the public in this design in the first place
+(team seeds junior with its own token) — harden that into an on-chain restriction so it can never
+become a BarnBridge-style publicly-sold "junior bond"; (6) full, unrestricted MEV/fee yield keeps
+the product framed as usage-based participation rather than a promised-return investment scheme.
+
+### 2. SEC v. Edwards, 540 U.S. 389 (2004) — fixed return doesn't exempt from Howey
+
+**The problem.** Early in this process we considered "just make the senior return explicitly
+variable/probabilistic instead of guaranteed" as the fix. *Edwards* forecloses that as a
+standalone move — the Supreme Court held fixed vs. variable return is legally irrelevant to
+Howey. BarnBridge's own order proves the same thing for *Reves* (it caught the variable junior
+bonds too).
+
+**How we overcame it.** We didn't rely on a fixed→variable wording change as *the* fix. Item #2
+removes the *promise* itself — not "make it variable," but "stop promising anything, fixed or
+variable, and disclose a mechanical priority claim instead" — paired with the structural fix in
+item #1. Wording changes alone were explicitly tested and rejected here before landing on this.
+
+### 3. Reves v. Ernst & Young, 494 U.S. 56 (1990) — the four-factor "notes" test
+
+**The problem.** Applied to a fixed-return senior tranche, the four factors go badly: (1)
+motivation — pure profit-seeking on both sides; (2) plan of distribution — broad public retail
+marketing; (3) public expectations — a "guaranteed yield" pitch is exactly what triggers investor
+expectations of a security; (4) risk-reducing factor — **structurally absent**: no FDIC-equivalent
+insurance, no alternative regulator covering the instrument.
+
+**How we overcame it — and where we honestly haven't yet.** Item #2 directly targets factor 3:
+replacing "guaranteed" with "the code pays you first, mechanically, with the buffer size visible
+on-chain" changes what a reasonable investor is told to expect. **Factor 4 is not fixed by
+anything in items 1/2/5/6** — this is the one gap disclosure alone cannot close. It's exactly why
+items #3 (fee-funded reserve) and #4 (third-party coverage) exist on the roadmap; until one of
+those ships, factor 4 stays a real, acknowledged weak point, not a solved one.
+
+### 4. Marine Bank v. Weaver, 455 U.S. 551 (1982) — what a real factor-4 fix looks like
+
+**The problem/contrast.** This is the case that shows the shape of an actual fix: a bank CD
+escaped Howey/Reves specifically *because* it was FDIC-insured and subject to federal banking
+regulation — a real, external risk-reducing factor, not a disclosure choice. Mintware has no
+equivalent today.
+
+**Status: not addressed by this round.** Flagged directly rather than glossed over — this is the
+honest reason items #3 and #4 remain on the roadmap even though they're deferred. Disclosure and
+structural fixes (1/2/5/6) reduce exposure; only an actual reserve or actual third-party coverage
+would build something in Marine Bank's slot.
+
+### 5. United Housing Foundation v. Forman, 421 U.S. 837 (1975) — the one favorable precedent
+
+**The opportunity.** *Forman* held co-op housing shares weren't securities because buyers
+purchased them to *use* (live in the housing), not to passively invest for profit from someone
+else's efforts. This is real, on-point Supreme Court doctrine for "buying into something you
+actually use" changing the Howey analysis.
+
+**How we leveraged it.** Item #5 is built directly against this precedent — tying the vault
+position to genuine card-spend usage, and rewriting the product's own framing ("a position in a
+service you use, not a fund you invest in and leave alone") to make the *Forman* argument
+substantively true, not just asserted.
+
+**The caveat that keeps this honest.** *SEC v. Coinbase* (S.D.N.Y. 2024) rejected Coinbase's
+argument that its staking efforts were merely "ministerial" and therefore didn't satisfy Howey's
+"efforts of others" prong — courts have been willing to find even fairly mechanical platform
+efforts sufficient despite a user "doing something too." So item #5 is real, favorable support —
+not a guaranteed defense on its own.
+
+### 6. SEC v. Kraken (2023) + SEC's Aug 2025 liquid-staking staff statement — the separate ETH-yield question
+
+**The problem.** Kraken's staking-as-a-service was a security because it took custody, pooled
+user funds, **decoupled the rate it paid from the rate it actually earned on-chain**, and
+promised a return. This is a different question from tranching, but it's the one that governs how
+the ETH side of a vault should earn yield at all.
+
+**How we overcame it.** The wstETH-native design decided earlier in this same research thread
+(landing via PR #357) avoids every one of Kraken's factors by construction: non-custodial, no
+rate-setting discretion, yield is the token's own exchange-rate appreciation, not a rate Mintware
+sets or promises. This lines up with the SEC's Aug 2025 staff statement's conditions for liquid
+staking to fall outside securities treatment.
+
+**The line we deliberately stayed behind.** That same 2025 statement explicitly **excludes
+restaking** (EigenLayer/AVS-style) from its safe treatment, because choosing which AVSs/operators
+to route to is real managerial discretion. The design uses plain wstETH, not a restaking layer —
+on purpose, to stay inside the covered zone.
+
+### 7. SEC v. VALIC, 359 U.S. 65 (1959) — why "just call it insurance" doesn't work
+
+**The problem we considered and rejected.** One option researched was building an in-house
+discretionary claims/coverage mechanism to soften the tranche (Nexus Mutual-style). *VALIC* is the
+reason this doesn't cleanly work: the Supreme Court held that calling something "insurance"
+doesn't exempt it from federal securities law unless there's *genuine risk transfer/underwriting*
+— and building an in-house risk pool from scratch additionally invites **state insurance-law
+licensing exposure** (50 regulators, real per-day penalties, arguably less patient with crypto
+novelty than the SEC currently is).
+
+**How we overcame it.** Rejected building Mintware's own insurance/claims mechanism for exactly
+this reason. If coverage is added later, it's item #4 — *buying* cover from an already-established
+third party (Nexus Mutual / Sherlock, following the real Yearn/Idle precedent) — which pushes both
+the pooling problem and the insurance-licensing problem onto a structure that already exists,
+rather than inventing a new one at Mintware.
+
+### 8. The SEC/CFTC 2026 interpretive framework — substance over form
+
+**The problem.** Regulators (and Commissioner Peirce's July 2026 "Headstands and Summervaults"
+remarks specifically) are explicit that they look at how a product actually functions, not what
+it's labeled — a "performance bond" that's economically a junior tranche sold to outsiders is
+still a junior tranche no matter what it's called.
+
+**How we overcame it.** This is why item #1 is a structural, on-chain transfer restriction on the
+junior share — not a renaming exercise. The whole redesign is built to survive a substance-over-form
+read: the mechanism actually changed (junior locked to team addresses, payout order fixed in code,
+usage genuinely tied to product design), not just the vocabulary around it.
+
 ## What's being adopted now (items 1, 2, 5, 6)
 
 **1 — First-loss capital stays structurally, not just policy-wise, team-only.**
@@ -114,18 +239,20 @@ framing. Once items 1 and 2 land, the platform sits on the same ground those unt
 already occupy — the residual risk is background risk shared by the entire pooled-LP category, not
 a Mintware-specific exposure.
 
-## Sources (from the 2026-08-22 research pass)
+## Citation index
 
-- SEC BarnBridge order (Securities Act Release 33-11262) and press release 2023-258
-- *SEC v. Edwards*, 540 U.S. 389 (2004) — fixed return does not exempt from Howey
-- *Reves v. Ernst & Young*, 494 U.S. 56 (1990) — four-factor "family resemblance" test for notes
-- *Marine Bank v. Weaver*, 455 U.S. 551 (1982) — risk-reducing factor (insurance/regulation) contrast
-- *United Housing Foundation v. Forman*, 421 U.S. 837 (1975) — consumptive-use vs. investment intent
-- *SEC v. Coinbase* (S.D.N.Y. 2024) — ministerial efforts still satisfy "efforts of others"
-- SEC Feb 2023 Kraken settlement (staking-as-a-service) and Aug 2025 SEC staff statement on liquid
-  staking (ministerial/non-discretionary conditions; explicitly excludes restaking)
-- Maple Finance / Goldfinch / Centrifuge live tranche structures under Reg D 506(c) + KYC (the
-  rejected-as-default alternative path)
-- Nexus Mutual / Sherlock discretionary-coverage models; Aave Safety Module / Umbrella
-- SEC Commissioner Peirce, "Headstands and Summervaults" remarks (July 22, 2026) — warning against
-  structural gymnastics to avoid the securities label
+Full reasoning for each is in the numbered walkthrough above; this is just the reference list.
+
+| # | Authority | Cited for |
+|---|---|---|
+| 1 | SEC BarnBridge order (Securities Act Release 33-11262) + press release 2023-258 | The direct precedent — what actually got a tranche shut down |
+| 2 | *SEC v. Edwards*, 540 U.S. 389 (2004) | Fixed vs. variable return is not the legal distinguishing factor |
+| 3 | *Reves v. Ernst & Young*, 494 U.S. 56 (1990) | The four-factor "notes" test |
+| 4 | *Marine Bank v. Weaver*, 455 U.S. 551 (1982) | What a genuine risk-reducing factor (factor 4) looks like |
+| 5 | *United Housing Foundation v. Forman*, 421 U.S. 837 (1975) | Consumptive/active use vs. passive investment intent |
+| 6 | *SEC v. Coinbase* (S.D.N.Y. 2024) | Ministerial efforts still satisfy "efforts of others" |
+| 6 | SEC Feb 2023 Kraken settlement; SEC Aug 2025 liquid-staking staff statement | Custody/pooling/rate-decoupling triggers; the plain-staking safe conditions; restaking excluded |
+| 7 | *SEC v. VALIC*, 359 U.S. 65 (1959) | "Insurance" labeling doesn't exempt without genuine risk transfer |
+| 8 | SEC/CFTC 2026 interpretive framework; Commissioner Peirce, "Headstands and Summervaults" (July 22, 2026) | Substance-over-form; warning against structural gymnastics |
+| — | Maple Finance / Goldfinch / Centrifuge (Reg D 506(c) + KYC tranches) | The rejected-as-default alternative path |
+| — | Nexus Mutual / Sherlock; Aave Safety Module / Umbrella | Third-party coverage and reserve-fund comparators (items #3–4) |
