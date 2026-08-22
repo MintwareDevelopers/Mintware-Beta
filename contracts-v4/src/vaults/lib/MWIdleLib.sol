@@ -243,8 +243,30 @@ library MWIdleLib {
 
         if (c.weightedDistributor != address(0)) {
             (uint256 r0, uint256 r1) = isToken0 ? (lpAmt, uint256(0)) : (uint256(0), lpAmt);
-            IMWWeightedDistributorFees(c.weightedDistributor).fundFees(c.distributorVaultId, r0, r1);
-            emit FeesRoutedToDistributor(c.distributorVaultId, r0, r1);
+            // AUDIT R2-H3: per-call approve → fundFees → reset-to-0. H3 dropped the standing allowance
+            // `setWeightedDistributor` used to grant, so a BARE `fundFees` (the distributor pulls via
+            // safeTransferFrom) reverts on every harvest — stranding all Aave yield for a distributor-wired
+            // vault. Grant exactly this leg, then reset. Approvals issue AS THE VAULT (this library is
+            // delegatecalled). Plus M6-style try/catch: a paused/buggy distributor must not strand yield —
+            // fall back to the pro-rata accumulator (or treasury if there are no LPs).
+            token.forceApprove(c.weightedDistributor, lpAmt);
+            try IMWWeightedDistributorFees(c.weightedDistributor).fundFees(c.distributorVaultId, r0, r1) {
+                token.forceApprove(c.weightedDistributor, 0);
+                emit FeesRoutedToDistributor(c.distributorVaultId, r0, r1);
+            } catch {
+                token.forceApprove(c.weightedDistributor, 0);
+                if (c.totalLiquidity == 0) {
+                    token.safeTransfer(c.treasury, lpAmt);
+                    mintwareAmt += lpAmt;
+                    lpAmt = 0;
+                } else if (isToken0) {
+                    s.accFee0PerShare += (lpAmt * ACC_PRECISION) / c.totalLiquidity;
+                    s.feeReserve0 += lpAmt;
+                } else {
+                    s.accFee1PerShare += (lpAmt * ACC_PRECISION) / c.totalLiquidity;
+                    s.feeReserve1 += lpAmt;
+                }
+            }
         } else if (c.totalLiquidity == 0) {
             // No LPs to credit — forward to treasury rather than strand it or divide by zero.
             token.safeTransfer(c.treasury, lpAmt);

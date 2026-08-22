@@ -301,4 +301,44 @@ contract MintwareEthSettlementTest is Test {
             assertEq(usdc.balanceOf(rail), railBefore, "revert -> rail unchanged");
         }
     }
+
+    // ── AUDIT R2-M2: cumulative/windowed cap + minUsdcOut fraction floor ─────────────────────────────
+
+    /// The windowed cap bounds TOTAL extraction across repeated calls (the per-call cap alone does not).
+    function test_R2M2_windowedCap_boundsCumulativeExtraction() public {
+        _fundBacking(50_000e18);
+        // Cap total settlement at 150 USDC per rolling day (per-call cap left off).
+        vm.prank(owner);
+        settle.setSettlementWindowCap(150e18, 1 days);
+
+        vm.prank(relayer);
+        settle.batchSettleEth(100e18, 90e18, rail); // 100 <= 150 → ok
+
+        vm.prank(relayer);
+        vm.expectRevert(MintwareEthSettlement.SettlementWindowCapExceeded.selector);
+        settle.batchSettleEth(60e18, 50e18, rail); // 100 + 60 = 160 > 150 → blocked
+
+        // After the window rolls, the budget resets.
+        vm.warp(block.timestamp + 1 days + 1);
+        vm.prank(relayer);
+        settle.batchSettleEth(120e18, 100e18, rail); // fresh window → ok
+        assertEq(usdc.balanceOf(rail), 220e18, "rail paid 100 + 120 across two windows");
+    }
+
+    /// The minUsdcOut floor rejects a rogue relayer passing 0 (or too-low) on a settlement.
+    function test_R2M2_minUsdcOutFloor_rejectsTooLow() public {
+        _fundBacking(50_000e18);
+        _fundJunior(500e18);
+        vm.prank(owner);
+        settle.setMinSettleOutBps(9_500); // require >= 95% of owed as the swap-output floor
+
+        vm.prank(relayer);
+        vm.expectRevert(abi.encodeWithSelector(MintwareEthSettlement.MinUsdcOutTooLow.selector, uint256(0), uint256(95e18)));
+        settle.batchSettleEth(100e18, 0, rail); // minUsdcOut 0 < 95 → rejected
+
+        // A compliant minUsdcOut passes.
+        vm.prank(relayer);
+        settle.batchSettleEth(100e18, 96e18, rail);
+        assertEq(usdc.balanceOf(rail), 100e18, "rail paid once floor satisfied");
+    }
 }
