@@ -277,6 +277,10 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     // ── funding (models the vault depositing ETH backing + the team funding first-loss) ──────────────
 
     /// @notice Pull `amount` WETH in as settlement backing (the ETH-collateral vault funds this).
+    /// @dev AUDIT (defense-in-depth, Info): credits the NOMINAL `amount`, not a balance-diff — this
+    ///      assumes a standard (non-fee-on-transfer) `weth`, which canonical WETH is. A fee-on-transfer
+    ///      collateral token would over-credit `wethBacking`; wire only standard tokens here. (Contrast
+    ///      the pair vault's `fundRent`, which is balance-diff for hostile-token safety.)
     function fundWethBacking(uint256 amount) external {
         if (amount == 0) revert ZeroAmount();
         weth.safeTransferFrom(msg.sender, address(this), amount);
@@ -295,6 +299,8 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     }
 
     /// @notice Fund the junior first-loss USDC buffer.
+    /// @dev AUDIT (defense-in-depth, Info): nominal credit, not balance-diff — assumes standard USDC
+    ///      (which it is). Do not wire a fee-on-transfer token here. See `fundWethBacking` note.
     function fundJuniorBuffer(uint256 amount) external {
         if (amount == 0) revert ZeroAmount();
         usdc.safeTransferFrom(msg.sender, address(this), amount);

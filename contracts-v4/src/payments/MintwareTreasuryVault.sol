@@ -369,6 +369,8 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         juniorTokens += teamTokens;
 
         if (juniorUSDC > 0) {
+            // AUDIT (defense-in-depth, Info): nominal credit, not balance-diff — assumes standard USDC
+            // (which it is). fundRent (the hot path) uses balance-diff; this one-shot commit does not.
             usdc.safeTransferFrom(msg.sender, address(this), juniorUSDC);
             juniorUsdcBuffer += juniorUSDC;
         }

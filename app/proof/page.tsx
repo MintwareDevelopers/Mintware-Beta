@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
-import { LATEST_RUN, STAGED_LIQUIDITY_RUN, CARD_RAIL, FORMAL_VERIFICATION, SECURITY_AUDIT, SECURITY_AUDIT_R2, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
+import { LATEST_RUN, STAGED_LIQUIDITY_RUN, CARD_RAIL, FORMAL_VERIFICATION, SECURITY_AUDIT, SECURITY_AUDIT_R2, AUDIT_MATRIX, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
 
 const KIND: Record<Decision['kind'], string> = {
   ok: 'text-mw-green bg-[rgba(22,163,74,0.10)]',
@@ -287,6 +287,47 @@ export default function ProofPage() {
             ))}
           </div>
           <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">{SECURITY_AUDIT_R2.note}</p>
+        </div>
+
+        {/* Defense-in-depth matrix — round 3, layer-shaped */}
+        <div className="mt-14 pt-2 border-t border-hair">
+          <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display mt-8">
+            {AUDIT_MATRIX.eyebrow}
+          </div>
+          <h2 className="font-atx-display font-bold text-[clamp(1.7rem,4.4vw,2.5rem)] leading-[1.06] tracking-[-0.03em] mt-3">
+            {AUDIT_MATRIX.title}<br /><span className="text-gradient-accent">{AUDIT_MATRIX.titleAccent}</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(0.98rem,2vw,1.12rem)] leading-[1.5] max-w-[62ch] mt-4">{AUDIT_MATRIX.blurb}</p>
+
+          <div className="grid grid-cols-4 max-[720px]:grid-cols-2 gap-3 mt-6">
+            {AUDIT_MATRIX.stats.map((m) => (
+              <div key={m.label} className="rounded-[16px] border border-hair bg-white shadow-card p-4">
+                <div className="font-atx-display font-bold text-[1.7rem] tracking-[-0.02em] tabular-nums">
+                  {m.value}<span className="text-peri-deep text-[1.1rem]"> {m.sub}</span>
+                </div>
+                <div className="text-[12px] text-ink-mid mt-1 leading-[1.4]">{m.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 flex flex-col gap-2">
+            {AUDIT_MATRIX.layers.map((l) => (
+              <div key={l.n} className="soft-card p-4 flex items-start gap-3.5 max-[560px]:flex-col max-[560px]:gap-2">
+                <span className="font-mono text-[12px] text-peri-deep tabular-nums shrink-0 pt-0.5">{l.n}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-atx-display font-semibold text-[14.5px] tracking-[-0.01em] text-ink">{l.name}</span>
+                    <span className="font-mono text-[11px] text-ink-soft">{l.tool}</span>
+                  </div>
+                  <p className="text-[12.5px] leading-[1.5] text-ink-mid mt-1">{l.note}</p>
+                </div>
+                <span className={chip(l.status === 'green' ? 'text-mw-green bg-[rgba(22,163,74,0.10)]' : 'text-mw-amber bg-[rgba(196,122,0,0.10)]') + ' shrink-0'}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />{l.status === 'green' ? 'Green' : 'Env-blocked'}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">{AUDIT_MATRIX.note}</p>
         </div>
 
         {/* tests */}
