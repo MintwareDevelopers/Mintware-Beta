@@ -3,10 +3,17 @@
 // /legal — PUBLIC "Legal & Disclosures" page (not legal advice, not an offer).
 // Rendered in the /proof doc style (MwNav + centered column, platform tokens, light-only). The
 // posture: Mintware is non-custodial software, not a financial intermediary; every regulated leg
-// (fiat, cards, USDC issuance) belongs to a licensed partner. Public-safe: it states the five
+// (fiat, cards, USDC issuance) belongs to a licensed partner. Public-safe: it states the six
 // bright lines, the partner licence map, the Delaware-LLC entity note, and USER-facing risk
 // disclosures. It deliberately contains NO internal risk-register / counsel questions / candid
-// self-exposure content — those live only in internal working documents, never here.
+// self-exposure content — those live only in internal working documents, never here (see
+// docs/legal/priority-buffer-redesign.md for the full internal rationale + research trail).
+//
+// Bright line #6 and the reworded #4 reflect the 2026-08-22 "priority buffer" redesign: protected
+// LP positions are paid first by immutable, non-discretionary contract logic (never a guarantee),
+// first-loss capital is restricted on-chain to team-controlled addresses (never sold to depositors
+// or outside investors), and protocol-native yield — including MEV/fee capture — flows in full and
+// unrestricted to every LP position that earned it, senior and junior alike.
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
@@ -34,14 +41,20 @@ const BRIGHT_LINES: { n: number; title: string; do: string; dont: string }[] = [
   {
     n: 4,
     title: 'No promise of return — we are not a deposit-taker',
-    do: 'Route protocol-native economics (LP fees, MEV recapture, on-chain lending yield) to the LP position that earned them.',
-    dont: 'Promise, guarantee, or owe a return; hold user deposits as a liability on a Mintware balance sheet; market a “savings account.”',
+    do: 'Route protocol-native economics (LP fees, MEV recapture, on-chain lending yield) to the LP position that earned them — in full, unrestricted, senior and junior alike. Where a vault pairs a protected and a first-loss position, payout order (protected side first) is fixed in contract logic, not a settable parameter; any risk parameter that affects the size of protection is bounded, publicly disclosed on-chain, and either instant only when it tightens protection or delayed 48h with an on-chain event when it loosens it.',
+    dont: 'Promise, guarantee, or owe a return or a par-value outcome; hold user deposits as a liability on a Mintware balance sheet; market a “savings account” or an “always whole” claim; or let payout order itself be changed post-deployment by anyone.',
   },
   {
     n: 5,
     title: 'Reputation is information — not advice or a credit decision',
     do: 'Compute analytics over public on-chain data and present them as information.',
     dont: 'Issue personalised investment advice, or make eligibility/credit determinations that trigger fair-lending or consumer-reporting regimes.',
+  },
+  {
+    n: 6,
+    title: 'First-loss capital is the team’s own — never sold to depositors',
+    do: 'Fund the loss-absorbing side of a vault only with the team’s own capital (typically the token the team already brought to seed the pool). Restrict that position on-chain to team-controlled addresses.',
+    dont: 'Tokenize, market, or sell first-loss exposure to depositors or outside investors as an investment product, or let it become a freely transferable instrument once any lock period ends.',
   },
 ]
 
@@ -68,8 +81,8 @@ const REGIMES: { regime: string; sub: string; trigger: string; why: string }[] =
   },
   {
     regime: 'Securities / deposit-taking', sub: 'Howey · banking',
-    trigger: 'An investment of money in a common enterprise with profit expected from others’ efforts; or taking deposits.',
-    why: 'An LP position is participation in an autonomous pool (like being an LP anywhere), and yield is protocol-native — not a return promised by, or from the efforts of, Mintware.',
+    trigger: 'An investment of money in a common enterprise with profit expected from others’ efforts; or taking deposits; or a note-like promise of a fixed/guaranteed return.',
+    why: 'An LP position is participation in an autonomous pool (like being an LP anywhere), and yield — including MEV/fee capture — is protocol-native and unrestricted, not a return promised by, or from the efforts of, Mintware. Where a vault has a protected/first-loss split, protection is fixed contract priority, never a guarantee, and first-loss capital is the team’s own — never a security sold to a second class of investors.',
   },
 ]
 
@@ -83,7 +96,7 @@ const PARTNERS: { who: string; role: string; note: string; mw?: boolean }[] = [
 const DISCLOSURES: { title: string; body: string }[] = [
   {
     title: 'Testnet and unaudited — do not deposit real value',
-    body: 'Everything Mintware operates today runs on public test networks, with unaudited smart-contract code and no real assets. Nothing here is production software. Do not send real funds to any Mintware contract or interface until an external security audit is complete and this page says otherwise.',
+    body: 'Everything Mintware operates today runs on public test networks, with unaudited smart-contract code and no real assets. Nothing here is production software. Do not send real funds to any Mintware contract or interface until an external security audit is complete and this page says otherwise. Before any vault holds real value, we intend to add a protocol-fee-funded loss reserve and third-party smart-contract coverage as additional backstops on top of the first-loss protections described above.',
   },
   {
     title: 'A vault balance is not a bank deposit',
@@ -96,6 +109,10 @@ const DISCLOSURES: { title: string; body: string }[] = [
   {
     title: 'Smart contracts carry risk, including total loss',
     body: 'Smart contracts can contain bugs, be exploited, or behave unexpectedly; bridges, oracles, and third-party protocols add further risk. You could lose some or all of the value you interact with. Because Mintware is non-custodial, you are solely responsible for your wallet, keys, and transactions — we cannot recover, reverse, or freeze them.',
+  },
+  {
+    title: 'A protected position is a priority claim, not a guarantee',
+    body: 'Where a vault pairs a protected position with a first-loss position, protection means the protected side is paid first — a fixed order in the contract code, not a settable parameter and not a promise that it will always be made whole. Parameters affecting the size of protection are bounded and publicly disclosed on-chain (changes that loosen protection are delayed 48h and logged; changes that tighten it apply immediately). In an extreme loss event the first-loss balance could still be exhausted before the protected side is fully covered. First-loss capital is the team’s own and is restricted on-chain to team-controlled addresses; it is never sold to depositors or outside investors as an investment.',
   },
   {
     title: 'Not investment, legal, or tax advice',
@@ -165,11 +182,16 @@ export default function LegalDisclosuresPage() {
             it does not take custody, does not move fiat, and does not act as anyone’s financial agent. Everything below is a consequence
             of holding that line.
           </p>
+          <p className="text-ink-mid text-[15px] leading-[1.6] max-w-[64ch] mt-3">
+            A vault position is built around <span className="text-ink font-medium">actual use</span>, not passive waiting — the same wallet
+            position that provides liquidity is the one you spend against through the platform’s card and settlement tools. It is a
+            position in a service you use, not a fund you invest in and leave alone.
+          </p>
         </section>
 
         {/* 2 — bright lines */}
         <section className="mt-12">
-          <Kicker no="02">The five bright lines</Kicker>
+          <Kicker no="02">The six bright lines</Kicker>
           <p className="text-ink-mid text-[15px] mt-[-6px] mb-5 max-w-[64ch]">
             Our structure is defined by a set of things Mintware deliberately <span className="italic">does not do</span>. Each one keeps a whole category of regulated activity from attaching to the software.
           </p>
