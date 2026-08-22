@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
-import { MwFooter } from '@/components/web2/MwFooter'
 
 // =============================================================================
 // /terms — Terms of Service.
@@ -273,7 +272,6 @@ export default function TermsPage() {
         <h2 id="contact" className={h2}>18. Contact</h2>
         <p className={p}>Questions about these Terms: <b>legal@mintware.finance</b></p>
       </div>
-      <MwFooter />
     </div>
   )
 }
