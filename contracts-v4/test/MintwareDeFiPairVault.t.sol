@@ -520,6 +520,35 @@ contract MintwareDeFiPairVaultTest is Test {
         vault.fundRent(address(rogue), 100e18);
     }
 
+    // ── AUDIT R2-H3: fundRent must NOT revert on a distributor-wired vault ────────────
+    //
+    // Round-1 H3 dropped the standing distributor allowance but only patched `_realizeFees`. `fundRent`'s
+    // `fundFees` call was left BARE — so every am-AMM rent push reverted on a distributor-wired vault (rent
+    // path DoS'd). The R2-H3 fix adds per-call approve→reset + try/catch fallback here. This proves the rent
+    // now routes to the distributor without reverting.
+    function test_R2H3_fundRent_distributorWired_doesNotRevert() public {
+        _init();
+        _deposit(alice, 200_000e18, 200_000e18, LockTier.Flex);
+
+        MintwareWeightedDistributor dist =
+            new MintwareWeightedDistributor(makeAddr("oracle"), deployer);
+        bytes32 vid = keccak256("defi-pair-rent");
+        dist.setAuthorizedRegistrar(address(vault), true); // front-run guard (audit MED)
+        vault.setWeightedDistributor(address(dist), vid);
+
+        vault.setRentFunder(address(this));
+        _t0().mint(address(this), 1000e18);
+        _t0().approve(address(vault), 1000e18);
+
+        // Before the fix this REVERTED (no distributor allowance) → rent path DoS'd.
+        vault.fundRent(address(_t0()), 1000e18); // must NOT revert
+
+        // The rent reached the distributor's open epoch (not the pro-rata accumulator).
+        MintwareWeightedDistributor.Epoch memory e = dist.getEpoch(vid, 1);
+        assertEq(e.pot0, 1000e18, "R2-H3: rent routed to distributor pot0");
+        assertEq(vault.accFee0PerShare(), 0, "accumulator must stay untouched when distributor routed");
+    }
+
     function test_fundRent_only_rent_funder() public {
         _init();
         vault.setRentFunder(address(this));

@@ -212,6 +212,14 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     ///         band means someone moved it, and activation aborts rather than deploy the locked position at
     ///         a manipulated tick. 100 bps of sqrtPrice ≈ ~2% of price.
     uint256 internal constant LAUNCH_SQRT_BAND_BPS = 100;
+
+    /// @notice AUDIT R2-M1: grace period past the funding window after which a threshold-MET but still
+    ///         un-activated launch may be aborted (everyone refunded). Escapes the H6-griefing DoS where an
+    ///         attacker front-runs every `activate()` with a free empty-pool swap that pushes slot0 outside
+    ///         the launch band (→ `LaunchPriceMoved`), trapping the team's tokens + community escrow because
+    ///         `abort()` otherwise reverts `ThresholdWasMet`. The team keeps a full window + this grace to
+    ///         land a clean activation before the escape opens.
+    uint256 internal constant LAUNCH_GRACE_PERIOD = 3 days;
     error WeightedDistributorAlreadySet();
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -269,6 +277,10 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         if (teamTokens == 0 || targetQuote == 0 || fundingWindow == 0) revert BadConfig();
         if (thresholdBps == 0 || thresholdBps > BPS) revert BadConfig();
         if (lockDur < MIN_LOCK_DURATION || lockDur > MAX_LOCK_DURATION) revert BadLockDuration();
+        // AUDIT R2-L2: the canonical hook MUST be wired before any launch — otherwise `_validatePoolKey`'s
+        // hook check is a no-op (it only enforces when `expectedHook != 0`) and a launch could land in an
+        // UNGATED pool (no vault-only-LP gate + oracle guard). Require it here so every launch is protected.
+        if (expectedHook == address(0)) revert BadPoolHook();
         _validatePoolKey(poolKey_);
 
         // Range: symmetric profile half-width around the launch tick, aligned to spacing.
@@ -407,10 +419,15 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     function abort() external nonReentrant {
         if (phase != Phase.Funding || fundingWindowEnd == 0) revert WrongPhase();
         if (block.timestamp < fundingWindowEnd) revert FundingStillOpen();
-        if (
+        // AUDIT R2-M1: threshold-met launches normally MUST activate (not abort). But `activate()` is
+        // griefable indefinitely (empty-pool swap → LaunchPriceMoved), so once the post-window GRACE has
+        // elapsed with the vault still un-activated, open the abort escape even when the threshold was met —
+        // otherwise the team's tokens + community escrow are trapped forever. Everyone is refunded (team
+        // here, community via withdrawCommunityFunding), so recovery no longer hinges on a griefable path.
+        bool thresholdMet =
             communityDeposited >= (targetMatchQuote * activationThresholdBps) / BPS &&
-            communityDepositorCount >= MIN_COMMUNITY_DEPOSITORS
-        ) revert ThresholdWasMet();
+            communityDepositorCount >= MIN_COMMUNITY_DEPOSITORS;
+        if (thresholdMet && block.timestamp < fundingWindowEnd + LAUNCH_GRACE_PERIOD) revert ThresholdWasMet();
 
         phase = Phase.Aborted;
         uint256 teamRefund = teamTokenCommitment;

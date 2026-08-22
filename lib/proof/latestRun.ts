@@ -308,3 +308,38 @@ export const SECURITY_AUDIT: {
   note:
     'This is a SELF-REVIEW, not an external audit — it surfaces what a firm would flag before we pay for one; it does not replace it. All 6 High findings + the core Mediums are fixed, re-reviewed, and testnet-deployed; a few lower-severity items are scoped as follow-ups. Everything remains testnet + unaudited — an external audit is the gate before real value.',
 }
+
+// ── Security self-assessment · ROUND 2 — we ran it AGAIN, on the fixed code ──────────────────────
+// A second, independent pass (7 fresh reviewers), each doing two jobs: re-verify round-1's fixes
+// ADVERSARIALLY (don't trust the AUDIT comments), and hunt for what a checklist scan misses — biased
+// to economic attacks over call SEQUENCES. The honest headline: round-1's Highs all held in
+// isolation, but three of its own fixes were incomplete or opened a new hole that only shows up under
+// sequence analysis. That's exactly why the second pass was worth running. Full detail:
+// docs/developers/self-assessment-security-round2-2026-08-22.md.
+export const SECURITY_AUDIT_R2: {
+  eyebrow: string; title: string; titleAccent: string; blurb: string
+  stats: { value: string; sub: string; label: string }[]
+  fixes: AuditFix[]; note: string
+} = {
+  eyebrow: 'Security self-assessment · round 2',
+  title: 'Then we ran it again —',
+  titleAccent: 'and audited our own fixes.',
+  blurb:
+    'A second independent pass over the whole stack, a day after the first. Each reviewer re-verified round-1’s remediations adversarially and hunted for what a checklist misses — attacks that only appear across a sequence of legitimate calls. It found that three of round-1’s own fixes were incomplete or opened a new hole. We fixed those too, then re-ran everything.',
+  stats: [
+    { value: '0', sub: 'Critical', label: 'critical findings on the remediated stack' },
+    { value: '3 / 3', sub: 'High', label: 'new high-severity findings remediated' },
+    { value: '6', sub: '+', label: 'mediums & lows fixed (rest scoped)' },
+    { value: '450', sub: '/ 0', label: 'tests pass / fail · +11 new regression tests' },
+  ],
+  fixes: [
+    { sev: 'H', title: 'Deposits can no longer be tricked by a depressed pool price into minting cheap senior shares', status: 'Fixed' },
+    { sev: 'H', title: 'A fully-used JIT slice can’t be stranded — senior NAV can never count phantom backing at par', status: 'Fixed' },
+    { sev: 'H', title: 'Completed round-1’s approval fix across every fee-funding path — rent + yield no longer revert', status: 'Fixed' },
+    { sev: 'M', title: 'Junior first-loss can’t exit while senior liquidity is still deployed', status: 'Fixed' },
+    { sev: 'M', title: 'Settlement now caps cumulative extraction, not just per-call — a rogue relayer can’t bleed it', status: 'Fixed' },
+    { sev: 'M', title: 'Reward pot credits fees actually received (fee-on-transfer safe), never the requested amount', status: 'Fixed' },
+  ],
+  note:
+    'Still a SELF-REVIEW, not an external audit. The candid takeaway: a fix isn’t done until it’s been attacked as a sequence, not just re-checked in isolation — the second pass caught what the first pass’s own remediations missed. All three new Highs + the core Mediums are fixed and re-run green; lower-severity items are scoped as follow-ups. Testnet + unaudited — an external audit remains the gate before real value.',
+}

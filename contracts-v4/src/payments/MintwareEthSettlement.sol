@@ -110,6 +110,27 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     ///         depth on top of the pin; set per the expected batch size.
     uint256 public maxSettlePerCall;
 
+    /// @notice AUDIT R2-M2: cumulative/windowed settlement ceiling (USDC) — 0 ⇒ off. The per-call cap alone
+    ///         doesn't bound TOTAL extraction: a rogue/compromised relayer can call `batchSettleEth`
+    ///         repeatedly (each ≤ `maxSettlePerCall`) and, with a loose `minUsdcOut`, convert all WETH backing
+    ///         + drain the junior buffer to the pinned rail with no on-chain proof a real charge exists. This
+    ///         caps aggregate `totalUsdc` settled within a rolling `settleWindow`, so the guardian has time to
+    ///         pause. Owner-set alongside `settleWindow`.
+    uint256 public maxSettlePerWindow;
+    /// @notice AUDIT R2-M2: length (seconds) of the rolling settlement window `maxSettlePerWindow` applies to.
+    ///         Ignored while `maxSettlePerWindow == 0`.
+    uint256 public settleWindow;
+    uint256 private _windowStart;      // start timestamp of the current window
+    uint256 private _settledInWindow;  // Σ totalUsdc settled since `_windowStart`
+
+    /// @notice AUDIT R2-M2: minimum acceptable swap output as a fraction (bps) of `totalUsdc` — 0 ⇒ off. When
+    ///         set, `batchSettleEth` requires the relayer-supplied `minUsdcOut` to be AT LEAST this fraction of
+    ///         `totalUsdc`, so a rogue relayer cannot pass `minUsdcOut = 0` and let the bounded swap execute at
+    ///         a near-zero output (converting WETH backing cheaply + leaning on the junior top-up). The real
+    ///         floor is still the tighter of this and the oracle band.
+    uint16 public minSettleOutBps;
+    uint16 internal constant SETTLE_BPS = 10_000;
+
     /// @dev Transient exact-output target read inside `unlockCallback` (set→unlock→clear in one call).
     uint256 private _pendingUsdcOut;
 
@@ -120,6 +141,8 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     event JuniorTopUpCapSet(uint256 cap);
     event SettlementRailSet(address indexed rail);
     event MaxSettlePerCallSet(uint256 cap);
+    event SettlementWindowCapSet(uint256 cap, uint256 windowSecs);
+    event MinSettleOutBpsSet(uint16 bps);
     event WethBackingFunded(address indexed from, uint256 amount, uint256 total);
     event WethBackingWithdrawn(address indexed to, uint256 amount, uint256 total);
     event JuniorBufferFunded(address indexed from, uint256 amount, uint256 total);
@@ -137,6 +160,9 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     error RailNotSet();
     error RailMismatch();
     error SettlementCapExceeded();
+    error SettlementWindowCapExceeded();
+    error MinUsdcOutTooLow(uint256 supplied, uint256 required);
+    error BadParam();
 
     modifier onlyRelayer() {
         if (msg.sender != relayer) revert OnlyRelayer();
@@ -224,6 +250,27 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         emit MaxSettlePerCallSet(cap);
     }
 
+    /// @notice AUDIT R2-M2: set the cumulative/windowed settlement ceiling (USDC) + rolling window length
+    ///         (seconds). `cap == 0` disables it; when enabled `windowSecs` must be non-zero. Bounds TOTAL
+    ///         extraction a runaway relayer can push through the pinned rail, giving the guardian time to pause.
+    function setSettlementWindowCap(uint256 cap, uint256 windowSecs) external onlyOwner {
+        if (cap != 0 && windowSecs == 0) revert BadParam();
+        maxSettlePerWindow = cap;
+        settleWindow       = windowSecs;
+        _windowStart       = block.timestamp; // fresh window on (re)config
+        _settledInWindow   = 0;
+        emit SettlementWindowCapSet(cap, windowSecs);
+    }
+
+    /// @notice AUDIT R2-M2: require the relayer's `minUsdcOut` to be ≥ this fraction (bps) of `totalUsdc`
+    ///         (0 = off). Stops a rogue relayer passing `minUsdcOut = 0` and settling the swap at a near-zero
+    ///         output. Must be ≤ 100%.
+    function setMinSettleOutBps(uint16 bps) external onlyOwner {
+        if (bps > SETTLE_BPS) revert BadParam();
+        minSettleOutBps = bps;
+        emit MinSettleOutBpsSet(bps);
+    }
+
     function pause() external onlyOwner { _pause(); }
     function unpause() external onlyOwner { _unpause(); }
 
@@ -293,6 +340,25 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         if (rail != settlementRail) revert RailMismatch();
         // AUDIT H4: per-call ceiling (defense in depth over the pin) — 0 = off.
         if (maxSettlePerCall != 0 && totalUsdc > maxSettlePerCall) revert SettlementCapExceeded();
+
+        // AUDIT R2-M2: cumulative/windowed ceiling — bounds TOTAL extraction across repeated calls, not just
+        // one call. Roll the window forward lazily, then accumulate and check.
+        if (maxSettlePerWindow != 0) {
+            if (block.timestamp >= _windowStart + settleWindow) {
+                _windowStart     = block.timestamp;
+                _settledInWindow = 0;
+            }
+            _settledInWindow += totalUsdc;
+            if (_settledInWindow > maxSettlePerWindow) revert SettlementWindowCapExceeded();
+        }
+
+        // AUDIT R2-M2: floor the relayer-supplied `minUsdcOut` at a fraction of `totalUsdc` so a rogue relayer
+        // can't pass 0 and let the bounded swap execute at a near-zero output (cheap WETH conversion + junior
+        // top-up). 0 = off. The effective floor remains the tighter of this and the oracle band.
+        if (minSettleOutBps != 0) {
+            uint256 required = (totalUsdc * minSettleOutBps) / SETTLE_BPS;
+            if (minUsdcOut < required) revert MinUsdcOutTooLow(minUsdcOut, required);
+        }
 
         // Fail closed: never fire an UNBOUNDED settlement swap in production — require the oracle band.
         if (requireReadyOracle) {

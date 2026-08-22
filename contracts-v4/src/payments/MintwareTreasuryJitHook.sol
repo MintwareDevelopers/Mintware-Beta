@@ -26,6 +26,9 @@ import {Ownable}   from "@openzeppelin/contracts/access/Ownable.sol";
 interface IJitVault {
     function borrowIdleForJit(uint256 want) external returns (uint256 lent);
     function settleJitReturn(uint256 usdcReturned) external;
+    /// @dev AUDIT R2-H2: read the outstanding par-counted JIT slice so the keeper sweep can reconcile a
+    ///      strand (physical drained but nothing converted) instead of leaving it outstanding forever.
+    function jitBorrowed() external view returns (uint256);
 }
 
 /// @dev Minimal view of MWAmAuction the swap hot path needs (Phase 3). The hook is the auction's
@@ -507,12 +510,34 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable {
     ///         swap the team side to USDC, and return the total to the vault. Permissionless — anyone can
     ///         crank it; it only ever moves value from the pool back to the senior.
     function sweepJit() external returns (uint256 usdcReturned) {
-        if (usdcClaim == 0 && teamClaim == 0) return 0;
+        // AUDIT R2-H2: also retry while PHYSICAL balances remain on the hook — not just while claims do.
+        // A prior sweep can redeem the claims to physical but be UNABLE to convert the team leg (the
+        // team→USDC unwind is oracle-band-clamped and can execute ~nothing when spot is outside the band),
+        // stranding physical team/USDC on the hook while the vault's `jitBorrowed` stays outstanding. The
+        // old `(usdcClaim==0 && teamClaim==0)` short-circuit then made that strand PERMANENT: it returned
+        // before retrying even after the oracle caught up, so all future JIT stayed disabled and the phantom
+        // slice counted at par in the senior NAV. Retrying while any physical remains lets it self-heal.
+        if (
+            usdcClaim == 0 && teamClaim == 0 &&
+            teamToken.balanceOf(address(this)) == 0 &&
+            usdc.balanceOf(address(this)) == 0
+        ) return 0;
+
         poolManager.unlock(""); // redeem + swap inside the unlock (see unlockCallback)
         usdcReturned = usdc.balanceOf(address(this));
         if (usdcReturned > 0) {
             usdc.safeTransfer(address(vault), usdcReturned);
-            vault.settleJitReturn(usdcReturned);
+            vault.settleJitReturn(usdcReturned); // reconciles jitBorrowed (junior absorbs any shortfall)
+        } else if (
+            // AUDIT R2-H2: reconcile on ANY sweep that fully drains the position (no claims, no physical
+            // recovered) while the vault still shows an outstanding slice — book it as a junior-absorbed
+            // loss rather than leave `jitBorrowed` outstanding forever. `forceSettleJit()` on the vault is
+            // the owner backstop for the case even this can't clear.
+            usdcClaim == 0 && teamClaim == 0 &&
+            teamToken.balanceOf(address(this)) == 0 &&
+            vault.jitBorrowed() > 0
+        ) {
+            vault.settleJitReturn(0);
         }
         emit JitSwept(usdcReturned);
     }

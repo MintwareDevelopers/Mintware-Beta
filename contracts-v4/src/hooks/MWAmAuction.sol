@@ -96,6 +96,10 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
         if (_rentSink == address(0) || p.bidToken == address(0)) revert ZeroAddress();
         // minBidMultBps must be strictly > 1.0x (10_000) — 1.0x allows 1-wei slot churn.
         if (p.K == 0 || p.minRent == 0 || p.minBidMultBps <= 10_000) revert InvalidBid();
+        // AUDIT R2-L4: bound feeMaxPips strictly below 100% (1e6). At feePips >= 1e6 the manager skim equals
+        // (or exceeds) the whole swap input — the hook's `fee = amt*feePips/1e6` would zero/flip the swap and
+        // the `feePips >= 1_000_000` guard in the swap path reverts EVERY swap, bricking the enrolled pool.
+        if (p.feeMaxPips >= 1_000_000) revert InvalidBid();
         if (p.defaultFeePips > p.feeMaxPips) revert InvalidBid();
         // bidToken is locked once set: changing it while deposits are escrowed in the old
         // token would pay out / charge rent in the wrong asset and break custody accounting.
