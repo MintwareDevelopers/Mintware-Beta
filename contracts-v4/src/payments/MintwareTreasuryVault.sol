@@ -405,10 +405,17 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         emit JuniorRedeemed(team, tok, cash);
     }
 
-    /// @dev The senior tranche is fully covered WITHOUT drawing the junior first-loss capital.
+    /// @dev The senior tranche no longer needs the junior first-loss capital as a backstop.
+    /// @dev AUDIT R2-M4: releasing the junior first-loss (ETH stake + `juniorUsdcBuffer`) requires the
+    ///      senior to no longer be LP-EXPOSED — the position fully UNWOUND (`deployedFromSenior == 0`) with
+    ///      no JIT loan in flight — NOT merely `recoverableUSDC() >= deployedFromSenior` at this instant.
+    ///      The old point-in-time cover let the team pull ALL first-loss while senior USDC was still in the
+    ///      LP; a later team-token drop then impaired senior with ZERO backstop. Requiring the LP unwound
+    ///      means there is nothing left for the junior to have to backstop. (The team recovers its capital
+    ///      by first calling `recoverFromLP` to re-idle the deployed senior, exactly the intended flow.)
     function _seniorFullyCovered() internal view returns (bool) {
         if (jitBorrowed != 0) return false;
-        return recoverableUSDC() >= deployedFromSenior;
+        return deployedFromSenior == 0;
     }
 
     // ── senior views / conversions (price-free) ───────────────────────────────────
@@ -451,10 +458,22 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         return real < par ? real : par;
     }
 
-    /// @dev AUDIT H1: mint against the solvency-aware NAV so a depositor into an IMPAIRED pool isn't
-    ///      over-diluted (buying par-priced shares of a sub-par pool). Equals par when fully covered.
+    /// @dev AUDIT R2-H1: the NAV the MINT path prices against — par (`totalSeniorAssets()`), NEVER the
+    ///      solvency-aware `min(spot,oracle)` `_redeemNav()`. Round-1 H1 reused the redeem NAV on mint
+    ///      "for fairness", but that NAV is deflatable in-tx by pushing the vault's own pool spot DOWN
+    ///      (`recoverableUSDC()` collapses → realizable < par → fewer assets per share → MORE shares
+    ///      minted). A depositor could then swap spot back and redeem at restored par, extracting from
+    ///      existing senior holders. Par is not downward-manipulable, so pricing mint at par closes it.
+    ///      Trade-off (accepted): a depositor into a GENUINELY impaired pool pays par (subsidizes existing
+    ///      holders) rather than being protected — the SAFE direction (loss to the new depositor, never to
+    ///      the tranche). Redemptions keep `_redeemNav()` — protection from a HIGH spot is still correct.
+    function _mintNav() internal view returns (uint256) {
+        return totalSeniorAssets();
+    }
+
+    /// @dev AUDIT R2-H1: mint-side preview prices at par (non-downward-manipulable), not `_redeemNav()`.
     function previewDeposit(uint256 assets) public view returns (uint256) {
-        return _toShares(assets, _redeemNav(), Math.Rounding.Floor);
+        return _toShares(assets, _mintNav(), Math.Rounding.Floor);
     }
 
     /// @inheritdoc IYieldVault
@@ -464,9 +483,11 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         return _toShares(assets, _redeemNav(), Math.Rounding.Ceil);
     }
 
-    /// @dev AUDIT H1: solvency-aware — the true redeemable value of `shares_` (equals par when covered).
+    /// @dev AUDIT R2-H1: mint-side conversion prices at par (non-downward-manipulable). This view is the
+    ///      "shares → assets at deposit terms" quote; the true redeemable (solvency-aware) value is read
+    ///      via `redeemSenior`/`previewWithdraw`/`burnForPayment`, which price against `_redeemNav()`.
     function convertToAssets(uint256 shares_) public view returns (uint256) {
-        return _toAssets(shares_, _redeemNav(), totalSeniorShares, Math.Rounding.Floor);
+        return _toAssets(shares_, _mintNav(), totalSeniorShares, Math.Rounding.Floor);
     }
 
     /// @inheritdoc IYieldVault
@@ -522,7 +543,7 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         if (assets == 0) revert ZeroAmount();
         if (to == address(0)) revert ZeroAddress();
 
-        uint256 navBefore = _redeemNav(); // AUDIT H1: solvency-aware, captured BEFORE the inflow (no self-mint)
+        uint256 navBefore = _mintNav(); // AUDIT R2-H1: par NAV (non-downward-manipulable), captured BEFORE the inflow (no self-mint)
         usdc.safeTransferFrom(msg.sender, address(this), assets);
 
         sharesMinted = _toShares(assets, navBefore, Math.Rounding.Floor);
@@ -788,6 +809,35 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
             emit JitBreakerTripped(jitNetPnl);
         }
         emit JitSettled(outstanding, usdcReturned, shortfall);
+    }
+
+    /// @notice AUDIT R2-H2: owner escape hatch for a STUCK `jitBorrowed` the keeper sweep cannot clear
+    ///         (e.g. the team leg stays unconvertible within the oracle band across blocks, so the hook's
+    ///         `sweepJit` never returns USDC and `settleJitReturn` never runs). Left outstanding, the
+    ///         phantom slice disables ALL future JIT (`borrowIdleForJit` no-ops on `jitBorrowed != 0`),
+    ///         blocks `redeemJunior` (`_seniorFullyCovered` stays false), and counts at par in the senior
+    ///         NAV on non-existent backing. This reconciles it the SAME way `settleJitReturn(0)` would:
+    ///         the outstanding slice is booked as a JIT loss the junior USDC buffer absorbs first, so the
+    ///         senior stays whole to the extent the buffer covers it. CONSERVATIVE + last-resort: if the
+    ///         hook later recovers and returns USDC, `settleJitReturn` books it as senior profit — i.e.
+    ///         the error direction is always toward OVER-covering the senior (junior over-pays), never an
+    ///         exfil. onlyOwner + one-way (can only decrease the senior claim / draw junior first-loss).
+    function forceSettleJit() external onlyOwner nonReentrant {
+        uint256 outstanding = jitBorrowed;
+        if (outstanding == 0) return;
+        jitBorrowed = 0;
+
+        uint256 draw = outstanding < juniorUsdcBuffer ? outstanding : juniorUsdcBuffer;
+        if (draw > 0) { juniorUsdcBuffer -= draw; emit JuniorUsdcAbsorbed(draw); }
+        _supplyToAdapter(draw); // freed junior USDC becomes senior-side idle → keeps senior whole to `draw`
+        _jitUsdcBaseline = 0;
+
+        jitNetPnl -= int256(outstanding);
+        if (jitMaxCumulativeLoss != 0 && !jitAutoDisabled && jitNetPnl < -int256(jitMaxCumulativeLoss)) {
+            jitAutoDisabled = true;
+            emit JitBreakerTripped(jitNetPnl);
+        }
+        emit JitSettled(outstanding, 0, outstanding);
     }
 
     // ── IUnlockCallback ─────────────────────────────────────────────────────────────

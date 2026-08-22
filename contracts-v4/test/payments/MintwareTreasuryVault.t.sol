@@ -260,10 +260,12 @@ contract MintwareTreasuryVaultTest is Test {
         uint256 bobShares   = s.v.seniorShares(bob);
         assertEq(aliceShares, bobShares, "precondition: equal holders");
 
-        // The per-share value is now HAIRCUT (below par) — the key fix: a first redeemer can no longer
-        // extract PAR from the liquid buffer while later holders eat the whole loss.
-        assertLt(s.v.convertToAssets(aliceShares), 100_000 * ONE_USDC, "shares still valued at par when impaired");
-        assertEq(s.v.convertToAssets(aliceShares), s.v.convertToAssets(bobShares), "value depends on redemption order");
+        // AUDIT R2-H1: `convertToAssets` is now the MINT-side (par) quote — spot-invariant by design, so it
+        // reads par even while impaired; that is intentional (a low spot must not deflate the mint price).
+        // The impaired HAIRCUT + no-first-redeemer-run now live on the REDEEM path and are proven directly by
+        // the equal, sub-par `redeemSenior` payouts below. `seniorRealizableAssets < totalSeniorAssets`
+        // (asserted above) is the sub-par redeem NAV that drives that haircut.
+        assertEq(s.v.convertToAssets(aliceShares), s.v.convertToAssets(bobShares), "mint quote is order-independent");
 
         // Both holders redeem half (well within the liquid Aave buffer). The OLD behavior paid the FIRST
         // redeemer par and disadvantaged the second; now they receive the SAME pro-rata haircut.
@@ -333,6 +335,44 @@ contract MintwareTreasuryVaultTest is Test {
         assertEq(s.v.juniorUsdcBuffer(), bufBefore, "junior USDC buffer released while senior underwater");
         assertEq(s.v.juniorTokens(), tokBefore, "junior ETH released while senior underwater");
         assertEq(team.balanceOf(teamAddr), teamTokBefore, "team pulled first-loss ETH while senior underwater");
+    }
+
+    // ── AUDIT R2-M4: redeemJunior HOLDS first-loss while the LP is still deployed, even if COVERED now ──
+    //
+    // The old `_seniorFullyCovered` released the junior first-loss whenever `recoverableUSDC() >=
+    // deployedFromSenior` at that instant — NOT requiring the LP be unwound. A team could pull ALL
+    // first-loss while senior USDC was still LP-exposed; a later team-token drop then impaired senior with
+    // zero backstop. R2-M4 requires `deployedFromSenior == 0` (LP unwound) before releasing first-loss.
+    function test_R2M4_redeemJunior_held_while_LP_deployed_even_if_covered() public {
+        Stack memory s = _spawn(50_000 * ONE_USDC, 2_000_000 * int256(ONE_USDC));
+        _deposit(s, makeAddr("m4user"), 100_000 * ONE_USDC);
+        uint256 jt = s.v.juniorTokens();
+        vm.prank(owner);
+        s.v.deployToLP(20_000 * ONE_USDC, jt);
+
+        // Healthy state: fully COVERED right now, but the LP is STILL deployed (senior LP-exposed).
+        assertGt(s.v.deployedFromSenior(), 0, "precondition: LP deployed");
+        assertGe(s.v.recoverableUSDC(), s.v.deployedFromSenior(), "precondition: covered at this instant");
+
+        vm.warp(vm.getBlockTimestamp() + LOCK_DUR + 1);
+
+        // First-loss must be HELD BACK while the LP is deployed (point-in-time cover is not enough).
+        uint256 tokBefore     = s.v.juniorTokens();
+        uint256 bufBefore     = s.v.juniorUsdcBuffer();
+        uint256 teamTokBefore = team.balanceOf(teamAddr);
+        vm.prank(teamAddr);
+        s.v.redeemJunior();
+        assertEq(s.v.juniorTokens(), tokBefore, "junior ETH released while LP still deployed");
+        assertEq(s.v.juniorUsdcBuffer(), bufBefore, "junior USDC buffer released while LP still deployed");
+        assertEq(team.balanceOf(teamAddr), teamTokBefore, "team pulled first-loss while LP deployed");
+
+        // Once the owner unwinds the LP (deployedFromSenior == 0), the first-loss is releasable.
+        vm.prank(owner);
+        s.v.recoverFromLP(100_000 * ONE_USDC); // large → fully unwinds
+        assertEq(s.v.deployedFromSenior(), 0, "LP fully unwound");
+        vm.prank(teamAddr);
+        s.v.redeemJunior();
+        assertGt(team.balanceOf(teamAddr), teamTokBefore, "first-loss released after LP unwound");
     }
 
     // ── the senior is NEVER settled below par: burnForPayment reverts rather than underpay ─

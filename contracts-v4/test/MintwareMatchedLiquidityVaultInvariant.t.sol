@@ -14,6 +14,8 @@ import {StateLibrary}        from "@uniswap/v4-core/src/libraries/StateLibrary.s
 
 import {MintwareMatchedLiquidityVault} from "../src/vaults/MintwareMatchedLiquidityVault.sol";
 import {PoolProfile}                   from "../src/vaults/VaultTypes.sol";
+import {HookMiner}                      from "../src/lib/HookMiner.sol";
+import {MWHookCoordinator}              from "../src/hooks/MWHookCoordinator.sol";
 
 import {MockERC20}      from "./mocks/MockERC20.sol";
 import {TestSwapRouter} from "./helpers/TestSwapRouter.sol";
@@ -170,12 +172,19 @@ contract MintwareMatchedLiquidityVaultInvariantTest is StdInvariant, Test {
         (Currency c0, Currency c1) = address(proj) < address(quote)
             ? (Currency.wrap(address(proj)), Currency.wrap(address(quote)))
             : (Currency.wrap(address(quote)), Currency.wrap(address(proj)));
-        key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: 60, hooks: IHooks(address(0))});
 
         vault = new MintwareMatchedLiquidityVault(
             address(pm), address(proj), address(quote), team, treasury, address(0),
             PoolProfile.MEME, address(this)
         );
+
+        // AUDIT R2-L2: commitTeam now requires a wired hook — bind a canonical coordinator (vault-only LP).
+        bytes memory coordArgs = abi.encode(IPoolManager(address(pm)), address(vault), address(this));
+        (address coordAddr, bytes32 coordSalt) =
+            HookMiner.find(address(this), uint160(0xAC8), type(MWHookCoordinator).creationCode, coordArgs);
+        new MWHookCoordinator{salt: coordSalt}(IPoolManager(address(pm)), address(vault), address(this));
+        vault.setExpectedHook(coordAddr);
+        key = PoolKey({currency0: c0, currency1: c1, fee: 3000, tickSpacing: 60, hooks: IHooks(coordAddr)});
 
         // Commit + fund to activation (three distinct depositors → past the min-depositor floor).
         proj.mint(team, T);

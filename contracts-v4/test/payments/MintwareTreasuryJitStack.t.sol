@@ -325,4 +325,56 @@ contract MintwareTreasuryJitStackTest is Test {
         // (4) the senior is whole-or-up — any JIT close cost came out of the junior first.
         assertGe(vault.totalSeniorAssets() + 3, navBefore, "senior lost value the junior should have covered");
     }
+
+    // ── AUDIT R2-H2: a stuck `jitBorrowed` (the strand) is recoverable ──────────────────────────────
+    //
+    // The strand: a fully-utilized JIT slice leaves `jitBorrowed` outstanding; if the keeper sweep can't
+    // convert the team leg (oracle band) it never returns USDC, so `settleJitReturn` never runs and
+    // `jitBorrowed` stays outstanding — disabling ALL future JIT (one-slice-at-a-time guard) and counting a
+    // phantom slice at par in the senior NAV. The fix adds an owner `forceSettleJit()` escape hatch (and a
+    // sweep that retries while physical remains). This proves the owner backstop recovers the strand.
+    function test_R2H2_forceSettleJit_recovers_stuck_borrow() public {
+        // Fire JIT with a real trader swap → jitBorrowed > 0.
+        team.mint(trader, 1_000_000 * ONE);
+        vm.startPrank(trader);
+        team.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, _sellTeamZeroForOne(), 3_000 * ONE);
+        vm.stopPrank();
+        uint256 stuck = vault.jitBorrowed();
+        assertGt(stuck, 0, "precondition: a JIT slice is outstanding");
+
+        // SIMULATE THE STRAND: do NOT sweep. While jitBorrowed is outstanding, all future JIT is disabled —
+        // a second trader swap cannot borrow (one-slice-at-a-time), so the vault is stuck.
+        vm.roll(block.number + 1);
+        vm.startPrank(trader);
+        swapRouter.swap(key, _sellTeamZeroForOne(), 3_000 * ONE);
+        vm.stopPrank();
+        assertEq(vault.jitBorrowed(), stuck, "stuck: future JIT stayed disabled while borrow outstanding");
+
+        uint256 bufBefore = vault.juniorUsdcBuffer();
+
+        // The owner force-settles the stuck slice — junior first-loss absorbs it, borrow clears.
+        vault.forceSettleJit();
+        assertEq(vault.jitBorrowed(), 0, "R2-H2: forceSettleJit did not clear the stuck borrow");
+        assertLe(vault.juniorUsdcBuffer(), bufBefore, "junior should have absorbed (not gained)");
+        assertApproxEqAbs(vault.juniorUsdcBuffer(), bufBefore - stuck, 1, "junior absorbed the outstanding slice");
+
+        // RECOVERED: JIT re-enables — a fresh trader swap fires JIT again.
+        vm.roll(block.number + 1);
+        vm.startPrank(trader);
+        swapRouter.swap(key, _sellTeamZeroForOne(), 3_000 * ONE);
+        vm.stopPrank();
+        assertGt(vault.jitBorrowed(), 0, "R2-H2: JIT did not re-enable after recovery");
+    }
+
+    /// forceSettleJit is owner-gated and a no-op when nothing is outstanding.
+    function test_R2H2_forceSettleJit_onlyOwner_and_noop_when_clear() public {
+        assertEq(vault.jitBorrowed(), 0, "nothing outstanding");
+        vault.forceSettleJit(); // no-op, no revert
+        assertEq(vault.jitBorrowed(), 0, "still nothing outstanding");
+
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        vault.forceSettleJit();
+    }
 }

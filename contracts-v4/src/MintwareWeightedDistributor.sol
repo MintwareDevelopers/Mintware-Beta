@@ -184,15 +184,25 @@ contract MintwareWeightedDistributor is EIP712, MWGuardianPausable, MWTimelocked
         uint256 epochNumber = currentEpoch[vaultId];
         Epoch storage e = epochs[vaultId][epochNumber];
 
+        // AUDIT R2-M3: credit what was ACTUALLY received, not the requested amount (balance-diff). A
+        // fee-on-transfer token (the community/meme tier is exactly where these appear) delivers less than
+        // `amountN`; crediting the request inflates `pot`, so the signed `total ≤ pot` ceiling (C5) could pass
+        // for a `total` exceeding tokens actually held → a cross-epoch/cross-vault shortfall at claim time.
         if (amount0 > 0) {
+            uint256 before0 = IERC20(v.token0).balanceOf(address(this));
             IERC20(v.token0).safeTransferFrom(msg.sender, address(this), amount0);
-            e.pot0 += amount0;
+            uint256 recv0 = IERC20(v.token0).balanceOf(address(this)) - before0;
+            e.pot0 += recv0;
+            amount0 = recv0; // report the credited amount in the event
         }
         if (amount1 > 0) {
             // token1 == address(0) means single-sided; reject stray token1 funding.
             if (v.token1 == address(0)) revert ZeroToken0();
+            uint256 before1 = IERC20(v.token1).balanceOf(address(this));
             IERC20(v.token1).safeTransferFrom(msg.sender, address(this), amount1);
-            e.pot1 += amount1;
+            uint256 recv1 = IERC20(v.token1).balanceOf(address(this)) - before1;
+            e.pot1 += recv1;
+            amount1 = recv1;
         }
 
         emit FeesFunded(vaultId, epochNumber, msg.sender, amount0, amount1);

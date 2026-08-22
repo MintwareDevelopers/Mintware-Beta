@@ -733,24 +733,38 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         uint256 received = IERC20(token).balanceOf(address(this)) - balBefore;
         if (received == 0) return;
 
+        bool routed = false;
         if (weightedDistributor != address(0)) {
             (uint256 r0, uint256 r1) = isToken0 ? (received, uint256(0)) : (uint256(0), received);
-            IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, r0, r1);
-        } else if (totalLiquidity == 0) {
-            // No LPs to credit — forward to treasury rather than strand it or divide by zero.
-            IERC20(token).safeTransfer(treasury, received);
-        } else if (isToken0) {
-            uint256 pool0 = rentDust0 + received;
-            uint256 add0  = (pool0 * ACC_PRECISION) / totalLiquidity;
-            accFee0PerShare += add0;
-            rentDust0 = pool0 - (add0 * totalLiquidity) / ACC_PRECISION;
-            feeReserve0 += received; // rent tokens stay in the vault to back claims — segregate
-        } else {
-            uint256 pool1 = rentDust1 + received;
-            uint256 add1  = (pool1 * ACC_PRECISION) / totalLiquidity;
-            accFee1PerShare += add1;
-            rentDust1 = pool1 - (add1 * totalLiquidity) / ACC_PRECISION;
-            feeReserve1 += received;
+            // AUDIT R2-H3: per-call approve → fundFees → reset-to-0. H3 removed the standing allowance
+            // `setWeightedDistributor` used to grant, so a BARE `fundFees` here (the distributor pulls via
+            // safeTransferFrom) reverts on every rent push — DoS'ing the rent path for any distributor-wired
+            // vault. Rent arrives in exactly ONE token, so grant that one leg, then reset (in both the success
+            // and catch paths). Plus M6-style try/catch: a paused/buggy distributor must not brick rent intake
+            // (swap hot path) — fall back to the pro-rata accumulator so the rent stays in the vault backing LP.
+            IERC20(token).forceApprove(weightedDistributor, received);
+            try IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, r0, r1) {
+                routed = true;
+            } catch {}
+            IERC20(token).forceApprove(weightedDistributor, 0);
+        }
+        if (!routed) {
+            if (totalLiquidity == 0) {
+                // No LPs to credit — forward to treasury rather than strand it or divide by zero.
+                IERC20(token).safeTransfer(treasury, received);
+            } else if (isToken0) {
+                uint256 pool0 = rentDust0 + received;
+                uint256 add0  = (pool0 * ACC_PRECISION) / totalLiquidity;
+                accFee0PerShare += add0;
+                rentDust0 = pool0 - (add0 * totalLiquidity) / ACC_PRECISION;
+                feeReserve0 += received; // rent tokens stay in the vault to back claims — segregate
+            } else {
+                uint256 pool1 = rentDust1 + received;
+                uint256 add1  = (pool1 * ACC_PRECISION) / totalLiquidity;
+                accFee1PerShare += add1;
+                rentDust1 = pool1 - (add1 * totalLiquidity) / ACC_PRECISION;
+                feeReserve1 += received;
+            }
         }
         emit RentFunded(token, received);
     }

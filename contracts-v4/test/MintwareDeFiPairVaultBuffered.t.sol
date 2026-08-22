@@ -12,6 +12,7 @@ import {Currency}             from "@uniswap/v4-core/src/types/Currency.sol";
 import {StateLibrary}         from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 
 import {MintwareDeFiPairVault} from "../src/vaults/MintwareDeFiPairVault.sol";
+import {MintwareWeightedDistributor} from "../src/MintwareWeightedDistributor.sol";
 import {PoolProfile, LockTier} from "../src/vaults/VaultTypes.sol";
 import {AaveV3YieldAdapter}    from "../src/vaults/AaveV3YieldAdapter.sol";
 import {IYieldAdapter}         from "../src/vaults/IYieldAdapter.sol";
@@ -334,5 +335,39 @@ contract MintwareDeFiPairVaultBufferedTest is Test {
         vm.prank(alice);
         vm.expectRevert(MintwareDeFiPairVault.AaveTemporarilyIlliquid.selector);
         vault.executeRedeem();
+    }
+
+    // ── AUDIT R2-H3: harvestYield must NOT revert on a distributor-wired vault ───────────────────────
+    //
+    // Round-1 H3 removed the standing distributor allowance but added the per-call approve to ONLY the
+    // `_realizeFees` site — leaving `harvestYield`→MWIdleLib with a BARE `fundFees` that reverts on every
+    // call once a distributor is wired (Aave yield permanently stranded). The R2-H3 fix adds the per-call
+    // approve→reset + M6-style try/catch at this site too. This proves harvest now routes yield cleanly.
+    function test_R2H3_harvestYield_distributorWired_doesNotRevert() public {
+        MintwareWeightedDistributor dist =
+            new MintwareWeightedDistributor(makeAddr("oracle"), address(this));
+        bytes32 vid = keccak256("buffered-defi");
+        dist.setAuthorizedRegistrar(address(vault), true); // front-run guard (audit MED)
+        vault.setWeightedDistributor(address(dist), vid);
+
+        _deposit(alice, 200_000e18, 200_000e18, LockTier.Flex);
+        vm.prank(provider);
+        vault.supplyIdle((vault.positionLiquidity() * 5) / 10);
+
+        // Simulate Aave supply yield on both legs.
+        uint256 yield0 = 1_000e18;
+        uint256 yield1 = 800e18;
+        t0.mint(address(a0Tok), yield0);
+        t1.mint(address(a1Tok), yield1);
+        a0Tok.simulateYield(address(adapter0), yield0);
+        a1Tok.simulateYield(address(adapter1), yield1);
+
+        // Before the fix this REVERTED (no distributor allowance) → all Aave yield stranded.
+        vm.prank(provider);
+        vault.harvestYield(); // must NOT revert
+
+        // The harvested LP yield reached the distributor's open epoch (not the pro-rata accumulator).
+        MintwareWeightedDistributor.Epoch memory e = dist.getEpoch(vid, 1);
+        assertTrue(e.pot0 > 0 || e.pot1 > 0, "R2-H3: harvest yield routed to the distributor");
     }
 }

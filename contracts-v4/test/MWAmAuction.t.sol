@@ -318,6 +318,22 @@ contract MWAmAuctionTest is Test {
         auction.configurePool(PoolId.wrap(keccak256("p3")), address(sink), p2);
     }
 
+    /// AUDIT R2-L4: feeMaxPips >= 1e6 (100%) is rejected — otherwise a manager skim >= the whole swap
+    /// input would zero/flip the swap and the `feePips >= 1e6` guard in the swap path bricks every swap.
+    function test_R2L4_configurePool_rejects_feeMaxPips_at_or_above_1e6() public {
+        AmParams memory p2 = _params();
+        p2.feeMaxPips = 1_000_000; // == 100%
+        vm.prank(owner);
+        vm.expectRevert(MWAmAuction.InvalidBid.selector);
+        auction.configurePool(PoolId.wrap(keccak256("p4")), address(sink), p2);
+
+        // Just under the cap (999_999) is accepted.
+        p2.feeMaxPips = 999_999;
+        p2.defaultFeePips = 3000;
+        vm.prank(owner);
+        auction.configurePool(PoolId.wrap(keccak256("p5")), address(sink), p2);
+    }
+
     /// F-C: a reentering rent sink cannot double-charge — the guard trips and poke reverts.
     function test_poke_reentrant_sink_is_blocked() public {
         ReentrantSink rs = new ReentrantSink(auction);
