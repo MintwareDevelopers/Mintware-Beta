@@ -52,7 +52,7 @@ export default async function OgImage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
               <div style={{ width: 11, height: 11, borderRadius: 6, background: CORAL, display: 'flex' }} />
               <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: 3, color: INK_SOFT, textTransform: 'uppercase' }}>
-                Your liquidity, made whole
+                Cash that keeps earning
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', fontSize: 78, fontWeight: 800, letterSpacing: -3, lineHeight: 1.02, color: INK }}>

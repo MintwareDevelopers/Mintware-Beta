@@ -4,7 +4,7 @@
 // 20260818000001_org_tenancy migration header + the deprecated deploy-ypn-v2-testnet route).
 //
 // GET  /api/orgs/:id/treasury[?address=0x..]  — public. Org + on-chain snapshot + member count
-//                                               (+ the caller's par-safe realizable balance if ?address).
+//                                               (+ the caller's par-while-covered realizable balance if ?address).
 // PATCH /api/orgs/:id/treasury                — owner-only (signed-message). Records vault + chain.
 
 import type { NextRequest } from 'next/server'

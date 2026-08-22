@@ -38,7 +38,7 @@ That is what makes the money price-free — the tranche waterfall, on-chain.
 |---|---|---|
 | Asset in | single-sided USDC | native token reserve (meme/utility OR ETH/AAVE/etc.) |
 | Claim | USDC, par + yield, **price-free** | residual equity, MTM |
-| Loss order | made whole **first** | **first-loss** (absorbs price + IL) |
+| Loss order | paid **first** (before junior) | **first-loss** (absorbs price + IL) |
 | Liquidity | **free + spendable** (YPN) | **locked** >= 90d hard cliff |
 | Shares | `seniorShares` (implements `IYieldVault`) | `juniorShares` (redeem post-lock) |
 | Yield during lock | Aave interest **+ 100% of LP fees/MEV** | none (excluded from fee denom — reuse `teamFeesRedirected`) |
@@ -110,9 +110,11 @@ invariant_senior_par:
     seniorClaim  <=  aaveBufferValue + recoverableLP_USDC + juniorReserveValue
 ```
 
-i.e. the community's par USDC claim is *always* fully backed by (idle Aave + the USDC recoverable
-from the LP + the team's junior reserve). The 80/20 default keeps the LP-exposed slice small enough
-the junior comfortably covers worst-case IL. Supporting invariants:
+i.e. the design *targets* keeping the community's par USDC claim covered by (idle Aave + the USDC
+recoverable from the LP + the team's junior reserve). This is the invariant the vault is built to hold —
+not an unconditional guarantee: redemption is **solvency-aware** — par while that coverage holds, and a
+transparent **pro-rata haircut** if a tail event ever exhausts it (H1). The 80/20 default keeps the
+LP-exposed slice small enough the junior comfortably covers worst-case IL. Supporting invariants:
 
 | Invariant | Statement |
 |---|---|
