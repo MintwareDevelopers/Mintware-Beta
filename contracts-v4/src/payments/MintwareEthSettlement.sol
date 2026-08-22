@@ -325,9 +325,10 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
             juniorDrawn = shortfall;
         }
 
-        // (3) Backing conservation: reduce ETH backing by exactly the WETH consumed (checked → underflow
-        //     reverts if a swap somehow spent more than the tracked backing).
-        wethBacking -= wethSpent;
+        // (3) Backing conservation: reduce ETH backing by the WETH consumed. AUDIT L4: clamp so a direct
+        //     WETH donation (balance > tracked `wethBacking`) that lets a swap consume more than tracked
+        //     can't underflow-revert and DoS settlement — the untracked donation is simply not double-counted.
+        wethBacking = wethSpent >= wethBacking ? 0 : wethBacking - wethSpent;
 
         // (4) Pay the PINNED rail IN FULL (swap proceeds + junior top-up). Zero residual by construction.
         usdc.safeTransfer(settlementRail, totalUsdc);

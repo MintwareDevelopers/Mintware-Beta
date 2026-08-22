@@ -281,8 +281,16 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         (, int24 currentTick,,) = POOL_MANAGER.getSlot0(id);
 
         // Circuit breaker: revert swaps at extreme deviation from the truncated oracle.
+        // AUDIT M9: only block the gap-WIDENING direction. A swap that REDUCES the deviation (the arb that
+        // restores price) must always be allowed — otherwise a cheap push past the band on a thin pool bricks
+        // the pool AND the very swap that would heal it. When this swap closes the gap toward the oracle, skip
+        // the breaker entirely.
         if (fp.guardEnabled) {
-            oracle[id].checkCircuitBreaker(currentTick);
+            MWOracleGuard.State storage og = oracle[id];
+            if (og.initialized) {
+                bool widening = currentTick >= og.oracleTick ? !params.zeroForOne : params.zeroForOne;
+                if (widening) og.checkCircuitBreaker(currentTick);
+            }
         }
 
         // ── Fee path (UNCHANGED). am-AMM enrolled pools: the manager sets the fee and receives it;

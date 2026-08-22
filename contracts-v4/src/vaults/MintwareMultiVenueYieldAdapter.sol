@@ -195,8 +195,10 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
     /// @inheritdoc IYieldAdapter
     function totalAssets() external view override returns (uint256 total) {
         uint256 n = _venues.length;
-        for (uint256 i; i < n; ++i) total += _venues[i].adapter.totalAssets();
-        total += asset.balanceOf(address(this)); // idle buffer counts
+        // AUDIT L3: saturating add (like maxWithdrawable/maxSuppliable) so a single misbehaving child
+        // reporting type(uint256).max can't overflow-revert the NAV read and brick every vault path.
+        for (uint256 i; i < n; ++i) total = _satAdd(total, _venues[i].adapter.totalAssets());
+        total = _satAdd(total, asset.balanceOf(address(this))); // idle buffer counts
     }
 
     /// @inheritdoc IYieldAdapter
