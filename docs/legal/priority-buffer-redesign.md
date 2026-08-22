@@ -65,12 +65,17 @@ logic for a post-lock transfer restriction to team-controlled addresses.
 **2 — Kill the guarantee; keep the mechanism.**
 The par-first payout logic doesn't need to change. What changes is the promise: no "guaranteed,"
 "always whole," or "your money is safe" language anywhere, replaced with an accurate claim — the
-contract pays the protected side first, mechanically, with no admin override, and the buffer's
-real-time size is visible on-chain. Waterfall/priority parameters should be immutable at deploy (no
-owner-settable ratio) so the disclosure is actually true, not just written.
-*Action:* confirm no owner-settable function can alter payout priority post-deploy; if one exists,
-either remove it or put it behind the same class of timelock as other risk parameters, and update
-all product copy accordingly.
+contract pays the protected side first, mechanically, and the buffer's real-time size is visible
+on-chain.
+*Verified 2026-08-22 against PR #355 (`MWTimelockedRiskParams`):* payout **order** itself (protected
+side first) is not a settable parameter anywhere in that PR's governed-setter list — it's fixed in
+contract logic. What *is* owner-settable are risk **parameters** that affect the *size* of
+protection (idle buffer target, min coverage, JIT caps, junior top-up caps, settlement bands) — and
+as of #355 those are bounded, disclosed via `RiskParamProposed/Confirmed/Cancelled` events, and
+asymmetric by design: tightening protection applies instantly, loosening it is delayed 48h. This is
+a *better* disclosure story than blanket immutability claims would have been — it's accurate, and
+it's what the public page now says. No further code action needed for item #2; keep the public copy
+in sync if the governed-setter list changes.
 
 **5 — Active-use framing, made real, not just marketing.**
 The one favorable Supreme Court doctrine here (*United Housing Foundation v. Forman*, 1975) turns

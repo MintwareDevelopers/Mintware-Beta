@@ -41,8 +41,8 @@ const BRIGHT_LINES: { n: number; title: string; do: string; dont: string }[] = [
   {
     n: 4,
     title: 'No promise of return — we are not a deposit-taker',
-    do: 'Route protocol-native economics (LP fees, MEV recapture, on-chain lending yield) to the LP position that earned them — in full, unrestricted, senior and junior alike. Where a vault pairs a protected and a first-loss position, the protected side is paid first by fixed, non-discretionary contract logic, with the loss-absorbing balance visible on-chain in real time.',
-    dont: 'Promise, guarantee, or owe a return or a par-value outcome; hold user deposits as a liability on a Mintware balance sheet; market a “savings account” or an “always whole” claim; or let any admin key change payout order after deployment.',
+    do: 'Route protocol-native economics (LP fees, MEV recapture, on-chain lending yield) to the LP position that earned them — in full, unrestricted, senior and junior alike. Where a vault pairs a protected and a first-loss position, payout order (protected side first) is fixed in contract logic, not a settable parameter; any risk parameter that affects the size of protection is bounded, publicly disclosed on-chain, and either instant only when it tightens protection or delayed 48h with an on-chain event when it loosens it.',
+    dont: 'Promise, guarantee, or owe a return or a par-value outcome; hold user deposits as a liability on a Mintware balance sheet; market a “savings account” or an “always whole” claim; or let payout order itself be changed post-deployment by anyone.',
   },
   {
     n: 5,
@@ -112,7 +112,7 @@ const DISCLOSURES: { title: string; body: string }[] = [
   },
   {
     title: 'A protected position is a priority claim, not a guarantee',
-    body: 'Where a vault pairs a protected position with a first-loss position, protection means the protected side is paid first by fixed, non-discretionary contract code — not a promise that it will always be made whole. In an extreme loss event the first-loss balance could be exhausted before the protected side is fully covered. First-loss capital is the team’s own and is restricted on-chain to team-controlled addresses; it is never sold to depositors or outside investors as an investment.',
+    body: 'Where a vault pairs a protected position with a first-loss position, protection means the protected side is paid first — a fixed order in the contract code, not a settable parameter and not a promise that it will always be made whole. Parameters affecting the size of protection are bounded and publicly disclosed on-chain (changes that loosen protection are delayed 48h and logged; changes that tighten it apply immediately). In an extreme loss event the first-loss balance could still be exhausted before the protected side is fully covered. First-loss capital is the team’s own and is restricted on-chain to team-controlled addresses; it is never sold to depositors or outside investors as an investment.',
   },
   {
     title: 'Not investment, legal, or tax advice',
