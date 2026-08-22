@@ -96,7 +96,7 @@ const PARTNERS: { who: string; role: string; note: string; mw?: boolean }[] = [
 const DISCLOSURES: { title: string; body: string }[] = [
   {
     title: 'Testnet and unaudited — do not deposit real value',
-    body: 'Everything Mintware operates today runs on public test networks, with unaudited smart-contract code and no real assets. Nothing here is production software. Do not send real funds to any Mintware contract or interface until an external security audit is complete and this page says otherwise.',
+    body: 'Everything Mintware operates today runs on public test networks, with unaudited smart-contract code and no real assets. Nothing here is production software. Do not send real funds to any Mintware contract or interface until an external security audit is complete and this page says otherwise. Before any vault holds real value, we intend to add a protocol-fee-funded loss reserve and third-party smart-contract coverage as additional backstops on top of the first-loss protections described above.',
   },
   {
     title: 'A vault balance is not a bank deposit',

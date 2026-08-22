@@ -216,15 +216,26 @@ but it's free and it's good product design regardless: tie visible benefit to ac
 No change. Confirmed correct by every research pass — this was never the risk driver, and nothing
 in the redesign touches it.
 
-## Deferred, not adopted yet (items 3, 4)
+## Deferred, not adopted yet (items 3, 4) — and stated intent to add them before real value is at risk
 
 - **3 — Fee-funded reserve (protocol revenue, not investor capital).** A second backstop layer
   funded from Mintware's own fee/MEV cut (not a sold instrument) is the single cleanest mechanism
   the research found — zero second-party "investment of money" in that layer at all, since it's
-  retained earnings. Worth building later as an additive layer; not required for 1/2/5/6 to hold.
+  retained earnings. This is the one lever that would actually address Reves factor 4 / Marine
+  Bank's "risk-reducing factor" gap (see #3 and #4 in the case-law walkthrough above) — it isn't
+  built yet because there's no fee revenue to fund it with while everything runs on testnet.
 - **4 — Third-party smart-contract coverage** (Nexus Mutual / Sherlock, following the Yearn/Idle
-  precedent) for exploit/oracle-failure tail risk. Real budget line, not a legal trick; deferred as
-  a cost/ops decision, not a rejected idea.
+  precedent) for exploit/oracle-failure tail risk. Real budget line, not a legal trick — also a
+  factor-4-shaped fix, and also not worth buying cover for testnet contracts holding no real value.
+
+**Why deferred rather than rejected, and when this changes:** items 1/2/5/6 are the correct scope
+*right now* because the product is testnet, unaudited, and holds no real value — there is nothing
+for a reserve to backstop and nothing for third-party coverage to insure yet. The stated intent is
+to add both #3 and #4 **before any vault is opened to real capital**, not as an afterthought once
+it already is. This should be treated as a pre-mainnet checklist item, not a someday-maybe: the
+public `/legal` page's testnet disclosure now states this intent directly so it's on record for
+team, legal, and investors alike, and it should be revisited explicitly as part of whatever gates
+the testnet → real-value transition (audit completion, mainnet deploy decision, etc.).
 
 ## The residual risk that no redesign removes
 
