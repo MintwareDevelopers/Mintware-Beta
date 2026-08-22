@@ -152,6 +152,12 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     uint256 public reservedProtocolUSDC;
 
     // ── junior (team) ─────────────────────────────────────────────────────────────
+    /// @dev AUDIT (legal) — FACT 1 (junior is the operator's own, permanently team-bound capital).
+    ///      `team` is bound ONCE at construction and has NO setter (no `setTeam` exists anywhere in this
+    ///      contract). The junior first-loss reserve below (`juniorTokens` + `juniorUsdcBuffer`) is pure
+    ///      internal accounting — NOT a transferable ERC-20 share (the only share ledger is `seniorShares`)
+    ///      — and is redeemable ONLY by this address via `redeemJunior` (`OnlyTeam`). It can therefore never
+    ///      be reassigned to, or withdrawn by, any non-team account: zero outside investment in the junior.
     address public team;
     uint256 public juniorTokens;       // team token in the reserve (locked)
     /// @notice The team's OPTIONAL committed USDC — idle, stable first-loss coverage.
@@ -293,6 +299,15 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     }
 
     // ── admin / wiring (set-once) ─────────────────────────────────────────────────
+    //
+    // AUDIT (legal) — FACT 2 (the waterfall is immutable; no admin override). EVERY `set*` below is EITHER
+    // a plumbing address (gateway / protocolTreasury / jitHook / rentFunder) OR a bounded, 48h-timelocked
+    // RISK parameter (idle-buffer target, JIT cap, coverage floor, per-block burn cap, JIT loss breaker).
+    // There is NO owner-settable payout / waterfall / par ratio: the senior-first ordering is enforced in
+    // `_seniorFullyCovered()` + `MWTreasuryPositionLib.recover` (seniority swap) + the redemption waterfall
+    // `_pullUSDC` (junior drawn LAST), and the fee splits are the `constant`s FEE_COMMUNITY/TEAM/PROTOCOL_BPS
+    // (60/30/10). None of these can be changed by any admin call. Community is paid first, at par,
+    // automatically, by code.
 
     function setGateway(address gateway_) external onlyOwner {
         if (gateway != address(0)) revert AlreadySet();
@@ -468,6 +483,11 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     }
 
     /// @notice Post-cliff, the team redeems the junior: its remaining token reserve plus any junior USDC.
+    /// @dev AUDIT (legal) — FACT 1: the ONLY exit for junior first-loss capital, gated `OnlyTeam` to the
+    ///      immutable `team`. No owner/governance/admin override exists; junior value never reaches a
+    ///      non-team address. AUDIT (legal) — FACT 2: the release is additionally gated on
+    ///      `_seniorFullyCovered()`, so the senior is made whole BEFORE any first-loss is returned
+    ///      (senior-before-junior is code-enforced here, not an admin decision).
     function redeemJunior() external nonReentrant {
         if (msg.sender != team) revert OnlyTeam();
         if (block.timestamp < lockExpiry) revert StillLocked();
@@ -496,6 +516,9 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         emit JuniorRedeemed(team, tok, cash);
     }
 
+    /// @dev AUDIT (legal) — FACT 2: the code-enforced seniority gate. First-loss (junior) capital is
+    ///      releasable ONLY once the senior is no longer LP-exposed — the senior is made whole FIRST. There
+    ///      is no owner-settable payout ratio and no admin override of this ordering; it is pure code.
     /// @dev The senior tranche no longer needs the junior first-loss capital as a backstop.
     /// @dev AUDIT R2-M4: releasing the junior first-loss (ETH stake + `juniorUsdcBuffer`) requires the
     ///      senior to no longer be LP-EXPOSED — the position fully UNWOUND (`deployedFromSenior == 0`) with
