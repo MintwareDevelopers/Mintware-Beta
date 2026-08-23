@@ -149,18 +149,27 @@ pub fn build_and_sign(
 /// broadcast). Deliberately not a full provider: the relayer's hot path is thin.
 pub struct Rpc {
     url: String,
-    client: reqwest::blocking::Client,
+    /// Built lazily on first use. The blocking client internally owns a runtime, and constructing (or
+    /// dropping) that inside an async runtime panics — so `Rpc::new` must be safe to call from anywhere
+    /// (e.g. when the server assembles its context in a tokio task). In production the first RPC call
+    /// happens inside `tokio::task::spawn_blocking`, where building the blocking client is fine.
+    client: std::sync::OnceLock<reqwest::blocking::Client>,
 }
 
 impl Rpc {
     pub fn new(url: impl Into<String>) -> Self {
-        Self { url: url.into(), client: reqwest::blocking::Client::new() }
+        Self { url: url.into(), client: std::sync::OnceLock::new() }
+    }
+
+    /// The lazily-initialized blocking HTTP client (see the field note).
+    pub(crate) fn client(&self) -> &reqwest::blocking::Client {
+        self.client.get_or_init(reqwest::blocking::Client::new)
     }
 
     fn call(&self, method: &str, params: serde_json::Value) -> Result<serde_json::Value, SubmitError> {
         let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params });
         let resp: serde_json::Value = self
-            .client
+            .client()
             .post(&self.url)
             .json(&body)
             .send()
@@ -269,7 +278,7 @@ pub fn dry_run_call(
     let body = serde_json::json!({ "jsonrpc": "2.0", "id": 1, "method": "eth_call",
         "params": [{ "from": format!("{from:?}"), "to": format!("{to:?}"), "data": data }, "latest"] });
     let resp: serde_json::Value = rpc
-        .client
+        .client()
         .post(&rpc.url)
         .json(&body)
         .send()

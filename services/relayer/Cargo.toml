@@ -11,6 +11,13 @@ description = "YPN settlement relayer — encodes + submits the Gateway settleSp
 [lib]
 path = "src/lib.rs"
 
+# Always-on HTTP settle server. Wraps the signing/submission library (settle/batch/cctp) in an axum
+# service so x402 `/settle`, org vendor-pay, and the >=$250 card leg have a live on-chain settle path.
+# The library stays usable standalone; the binary is the deployable surface (mirrors edge-auth).
+[[bin]]
+name = "relayer-server"
+path = "src/main.rs"
+
 [dependencies]
 # ABI encode/decode of settleSpend + its nested structs.
 alloy-sol-types = "0.8"
@@ -26,9 +33,18 @@ serde_json = "1"
 # Feature-unification fix: alloy-eip7702 (pulled by alloy-consensus/eips) uses derive_more's `display`
 # derive, which is non-default in derive_more 1.0 — declare it directly so the feature is enabled.
 derive_more = { version = "1", features = ["display", "from"] }
+# HTTP settle server (mirrors services/edge-auth): axum over the submit library. The library's RPC
+# client is `reqwest::blocking`, so every on-chain call is offloaded via `tokio::task::spawn_blocking`
+# — the async runtime is never blocked. serde derives the request/response wire types.
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 # The gated on-chain dry-run test also uses reqwest/serde_json (now regular deps above).
+# Exercise the axum router in-process (no socket) for the server wiring tests — same as edge-auth.
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
 
 [lints.rust]
 unsafe_code = "forbid"

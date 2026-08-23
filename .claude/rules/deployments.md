@@ -46,10 +46,27 @@
 |---|---|---|
 | `EDGE_AUTH_URL` / `EDGE_AUTH_SECRET` | Server-only | Base URL + shared secret for the Rust `services/edge-auth` decide/reserve/sign service. **Secret-name note:** the TS caller (`lib/x402/config.ts`) sends `EDGE_AUTH_SECRET`; the Rust service reads **`EDGE_API_SECRET` first, then falls back to `EDGE_AUTH_SECRET`** (`services/edge-auth/src/main.rs`). The live Railway deploy sets `EDGE_API_SECRET`, so both names are accepted — but whichever name(s) you set, **they must hold the SAME value** (it's a shared bearer secret) or `/authorize` will reject the caller. |
 | `X402_PAY_TO` | Server-only | Receiving address for x402 settlements |
-| `X402_RELAYER_URL` / `X402_RELAYER_SECRET` | Server-only | Rust `services/relayer` endpoint + secret for `settleSpend` |
+| `X402_RELAYER_URL` / `X402_RELAYER_SECRET` | Server-only | Rust `services/relayer` HTTP endpoint + bearer secret for `settleSpend`. `_URL` = the deployed `relayer-server` base URL; `_SECRET` must equal the server's `RELAYER_HTTP_SECRET` (shared bearer). |
 | `X402_SUPPORTED_NETWORKS` | Server-only | Comma list of chains the facilitator accepts |
 | `X402_TRUST_TIERING` | Server-only | Opt-in `parked` — enables trust-tiered pricing (default off) |
 | `X402_SCORE_PRICE_ATOMIC` | Server-only | Per-call price (atomic USDC units) for the score endpoint |
+
+### Relayer HTTP settle server (`services/relayer` — `relayer-server` bin)
+
+The always-on on-chain settle service: `POST /settle` · `POST /settle-batch` · `GET /health`. Every
+money-moving gate **fails closed** — the service boots and answers `/health`, but settle stays disabled
+(401/503) until the operator sets the bearer + funded key + RPC. Railway-deployable
+(`services/relayer/railway.json` + `rust-toolchain.toml`, mirroring edge-auth). **Not deployed yet** —
+this is the "always-on relayer" in the deploy-gated remainder; runs live only when these are set.
+
+| Variable | Visibility | Notes |
+|---|---|---|
+| `RELAYER_HTTP_SECRET` | Server-only | Bearer secret guarding `/settle` + `/settle-batch`. **Unset ⇒ all settle requests 401 (fail closed).** Must equal the caller's `X402_RELAYER_SECRET` (and any org/card caller's relayer secret). |
+| `RELAYER_SIGNER_KEY` | Server-only | Funded signer key (holds `RELAYER_ROLE` on the Gateway / settlement contract). Falls back to `RELAYER_SUBMIT_KEY`. **Unset/invalid ⇒ 503 `signer_unavailable`** (never runs keyless). Never log or commit. |
+| `RELAYER_RPC_URL` | Server-only | Destination-chain JSON-RPC. **Unset ⇒ 503 `rpc_unavailable`.** |
+| `RELAYER_GATEWAY_ADDRESS` | Server-only | Default `MintwarePaymentGateway` for `/settle` (per-request `gateway` overrides). Falls back to `GATEWAY_ADDRESS`. |
+| `RELAYER_SETTLEMENT_ADDRESS` | Server-only | Default `MintwareEthSettlement` for `/settle-batch` (per-request `settlement` overrides). Falls back to `SETTLEMENT_ADDRESS`. |
+| `PORT` | Server-only | Bind port (default `8080`). |
 
 ### Cards (Lithic sandbox — human org cards)
 
