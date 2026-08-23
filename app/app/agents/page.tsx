@@ -5,6 +5,7 @@
 // Spec: docs/developers/agentkit-compute-402-spec.md. Design uses the Mintware mw-* tokens.
 
 import { useState, useCallback } from 'react'
+import { MwNav } from '@/components/web2/MwNav'
 
 const DEMO_ADDR = '0x9c646C48a302f4725450669f1218d3FDb3e933AD'
 
@@ -48,6 +49,8 @@ export default function AgentParkingPage() {
   }, [address])
 
   return (
+    <>
+      <MwNav />
     <div className="max-w-[880px] mx-auto px-6 py-10">
       <div className="text-[11px] font-bold tracking-[1.5px] uppercase text-mw-brand mb-3 font-sans">
         Agent treasury
@@ -133,5 +136,6 @@ export default function AgentParkingPage() {
         to spend per call. Testnet — deployed ≠ audited; external audit gates real value.
       </p>
     </div>
+    </>
   )
 }

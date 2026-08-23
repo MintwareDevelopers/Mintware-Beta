@@ -5,6 +5,7 @@
 // transaction behind it — this page is the clickable version of the Arc integration proof.
 
 import { useEffect, useState } from 'react'
+import { MwNav } from '@/components/web2/MwNav'
 import { ARC_TESTNET, ARC_TESTNET_DEPLOYMENT } from '@/config/arc'
 
 const EXPLORER = 'https://testnet.arcscan.app/address/'
@@ -62,6 +63,8 @@ export default function ArcDemoPage() {
   }, [])
 
   return (
+    <>
+      <MwNav />
     <div className="max-w-[880px] mx-auto px-6 py-10">
       <div className="text-[11px] font-bold tracking-[1.5px] uppercase text-mw-brand mb-3 font-sans">
         Live on Arc testnet · chain {ARC_TESTNET.chainId}
@@ -132,5 +135,6 @@ export default function ArcDemoPage() {
         (XyloNet XyloVault) is wired; external audit gates real value. Arc mainnet: Sept 16, 2026.
       </p>
     </div>
+    </>
   )
 }

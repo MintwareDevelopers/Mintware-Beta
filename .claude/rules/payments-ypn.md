@@ -109,7 +109,7 @@ Crossmint/Rain/Bridge/Lithic comparison in session notes if resurrecting that ev
   across many swipes per `docs/page.tsx`'s "long-lived permit is reusable") · simulate-swipe (any
   member, fires the real ASA round-trip) · events (spend feed) · settle (owner, sub-$250 only —
   see below).
-- `org_cards` (migration `20260819000002`) + `card_swipe_events` + permit columns (migration
+- `org_cards` (migration `20260819000004`) + `card_swipe_events` + permit columns (migration
   `20260819000003`) — identity mapping, the decision audit trail, and the member's standing permit.
 - **Settlement is real** (reuses the exact `settleSpend` proven live — leg 3 of
   `lib/proof/latestRun.ts`, tx `0x7fd4b3f0…` — via `getOracleSigner('root')` in the RELAYER_ROLE

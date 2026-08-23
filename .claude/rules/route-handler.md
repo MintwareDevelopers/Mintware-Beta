@@ -1,7 +1,7 @@
 # Route Handler Factory (`createHandler`)
 
 **File:** `lib/web2/routeHandler.ts`
-**Status:** Complete — all `route.ts` files use `createHandler` (60 route files as of 2026-08-08; a couple of cron routes still read `NextResponse.json` directly — migrate when convenient).
+**Status:** Complete — all `route.ts` files use `createHandler` (75 route files as of 2026-08-23; a couple of cron routes still read `NextResponse.json` directly — migrate when convenient).
 
 ## What It Does
 

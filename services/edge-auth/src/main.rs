@@ -132,9 +132,14 @@ async fn main() {
     }
     // AUDIT C1: bearer secret for /authorize + /holds. FAIL CLOSED — if unset, those endpoints reject
     // every request (they mint EDGE_SIGNER signatures and reserve user equity; they must never be open).
-    let api_secret = env::var("EDGE_API_SECRET").ok().map(|s| Arc::new(s.into_bytes()));
+    // Accept EDGE_AUTH_SECRET as a fallback name (the TS caller in lib/x402/config.ts sends that var);
+    // both names must hold the SAME value. EDGE_API_SECRET wins when both are set (the live Railway var).
+    let api_secret = env::var("EDGE_API_SECRET")
+        .or_else(|_| env::var("EDGE_AUTH_SECRET"))
+        .ok()
+        .map(|s| Arc::new(s.into_bytes()));
     if api_secret.is_none() {
-        eprintln!("edge-auth: ⚠ EDGE_API_SECRET UNSET — /authorize and /holds will reject ALL requests (fail-closed). Set it to enable the service.");
+        eprintln!("edge-auth: ⚠ EDGE_API_SECRET / EDGE_AUTH_SECRET UNSET — /authorize and /holds will reject ALL requests (fail-closed). Set one to enable the service.");
     }
     let ctx = AppCtx { store: store.clone(), edge: build_edge_signer(), rain_secret, api_secret };
 

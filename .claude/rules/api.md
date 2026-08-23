@@ -10,12 +10,12 @@ Import from `lib/web2/api.ts` — **never hardcode**.
 
 ## Endpoints
 
+> ⛔ **Campaigns shelved (2026-08-12).** The campaign worker endpoints (`GET /campaigns`,
+> `GET /campaign`, `POST /join`, `GET /leaderboard?campaign_id=`) were retired with the campaign
+> surface — do not treat them as live. Only `/score` remains in use (via `scoreApiUrl()`).
+
 | Endpoint | Method | Description |
 |---|---|---|
-| `GET /campaigns` | GET | All campaigns |
-| `GET /campaign?id=&address=` | GET | Single campaign + participant data |
-| `POST /join` | POST | Join a campaign `{ campaign_id, address }` |
-| `GET /leaderboard?campaign_id=` | GET | Leaderboard for a campaign |
 | `GET /score?address=` | GET | Full Attribution score profile |
 
 ## `/score` Response Shape
@@ -74,14 +74,16 @@ All internal API routes use the `createHandler` factory — see `.claude/rules/r
 | `/api/referral` | GET | `?address=` reads `referral_stats` |
 | `/api/referral/apply` | POST | Server-gated referral insert — 24h time-gate |
 | `/api/swap/quote` | POST | LI.FI proxy (hides API key, injects fee) |
-| `/api/campaigns/swap-event` | POST | On-chain tx verification before reward credit |
-| `/api/claim` | POST | Merkle proof + oracle sig — fetches `deadline` from DB |
-| `/api/claim/status` | GET | Returns `deadline` in distribution shape |
-| `/api/claim/mark-claimed` | POST | Bearer-auth — marks pending_rewards as claimed |
+| `/api/swap/best-route` | POST | MW meta-router quote (flag-gated; falls back to LI.FI) |
 | `/api/agents/leaderboard` | GET | AI agent leaderboard |
 | `/api/agents/[address]/pending` | GET | Pending actions for agent address |
 | `/api/eas/attest-score` | POST | EAS offchain score attestation |
-| `/api/eas/attest-reward` | POST | EAS offchain reward attestation |
 | `/api/auth/connect` | POST | Wallet connect + basename ref code resolution |
 | `/api/waitlist` | POST | Waitlist signup → `waitlist` Supabase table |
+
+> ⛔ **Shelved with the campaign surface (2026-08-12) — these routes no longer exist:**
+> `/api/campaigns/swap-event`, `/api/claim`, `/api/claim/status`, `/api/claim/mark-claimed`,
+> `/api/eas/attest-reward`. The live rewards path is the universal pipeline
+> (`app/api/(rewards)/cron/universal-*`, `/api/universal/trade-signal`) + the vault-weighted
+> epoch rails (`/api/vault/weighted-claim`). See `.claude/STATE.md`.
 | `/api/benchmarks/yields` | GET | Live yield benchmarks for `/the-math` — curated real pools from DefiLlama (`apyBase` only), 1h module-memo, fails soft `{ok:false}`. No auth. |

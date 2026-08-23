@@ -44,7 +44,7 @@
 
 | Variable | Visibility | Notes |
 |---|---|---|
-| `EDGE_AUTH_URL` / `EDGE_AUTH_SECRET` | Server-only | Base URL + shared secret for the Rust `services/edge-auth` decide/reserve/sign service |
+| `EDGE_AUTH_URL` / `EDGE_AUTH_SECRET` | Server-only | Base URL + shared secret for the Rust `services/edge-auth` decide/reserve/sign service. **Secret-name note:** the TS caller (`lib/x402/config.ts`) sends `EDGE_AUTH_SECRET`; the Rust service reads **`EDGE_API_SECRET` first, then falls back to `EDGE_AUTH_SECRET`** (`services/edge-auth/src/main.rs`). The live Railway deploy sets `EDGE_API_SECRET`, so both names are accepted — but whichever name(s) you set, **they must hold the SAME value** (it's a shared bearer secret) or `/authorize` will reject the caller. |
 | `X402_PAY_TO` | Server-only | Receiving address for x402 settlements |
 | `X402_RELAYER_URL` / `X402_RELAYER_SECRET` | Server-only | Rust `services/relayer` endpoint + secret for `settleSpend` |
 | `X402_SUPPORTED_NETWORKS` | Server-only | Comma list of chains the facilitator accepts |

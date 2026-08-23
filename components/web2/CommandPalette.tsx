@@ -80,9 +80,9 @@ export function CommandPalette() {
           </Command.Group>
 
           <Command.Group heading="Links">
-            <Command.Item onSelect={() => { setOpen(false); window.open('https://docs.mintware.io', '_blank') }}>
+            <Command.Item onSelect={() => { setOpen(false); router.push('/docs') }}>
               <div className="cmdk-icon"><ExternalLink size={14} /></div>
-              Documentation ↗
+              Documentation
             </Command.Item>
           </Command.Group>
         </Command.List>
