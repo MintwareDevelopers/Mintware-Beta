@@ -1,5 +1,15 @@
 # Security (MintGuard)
 
+> ⛔ **Swap-reward crediting is SHELVED (2026-08-12).** The on-chain reward-verification surface
+> below — `verifySwapTx()` in `campaigns/swap-event`, `resolveQuoteAmountUsd` (`lib/rewards/resolveQuote.ts`),
+> `processTokenPool` / `deduct_token_pool_reward*`, and `pending_rewards` as a live anti-abuse surface —
+> **was removed with the campaign engine** (those files/routes no longer exist). Treat checklist rows 4–5,
+> the `verifySwapTx()` section, the server-recorded-quotes bullet, and the `pending_rewards` anti-abuse
+> section as **historical**. Still live: the LI.FI **`/api/swap/quote`** proxy (API-key hiding + fee
+> injection). The live rewards path is the universal pipeline + vault-weighted epoch rails (see
+> `.claude/rules/rewards.md` / `.claude/STATE.md`). CSP, rate-limit posture (Upstash unset → inactive),
+> and referral time-gate rows below remain accurate.
+
 ## Hardening Checklist
 
 | # | Item | Status |

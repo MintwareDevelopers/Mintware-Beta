@@ -33,7 +33,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const { count: memberCount } = await ctx.supabase
       .from('org_members')
       .select('id', { count: 'exact', head: true })
-      .eq('org_id', id)
+      .eq('org_id', org.id)
       .eq('status', 'active')
 
     const base = {

@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Card swipe events + standing spend permits — completes the showcase loop
 -- (issue -> activate -> swipe -> authorize -> settle) on top of the org_cards
--- table from 20260819000002.
+-- table from 20260819000004.
 --
 -- `card_swipe_events` is the audit trail the ASA webhook writes on EVERY decision
 -- (approved or declined) — it's what a real spend feed reads, and what the settle
@@ -57,6 +57,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS card_swipe_events_provider_ref_idx ON card_swi
 CREATE INDEX IF NOT EXISTS card_swipe_events_org_created_idx ON card_swipe_events (org_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS card_swipe_events_settle_candidates_idx ON card_swipe_events (org_id, decision, settled);
 
-ALTER TABLE card_swipe_events ENABLE ROW LEVEL SECURITY; -- deny-all, service-role only (see 20260819000002 header)
+ALTER TABLE card_swipe_events ENABLE ROW LEVEL SECURITY; -- deny-all, service-role only (see 20260819000004 header)
 
 COMMENT ON TABLE card_swipe_events IS 'Audit trail of every card-swipe authorize decision (approved/declined) + settlement status. Written only by the ASA webhook + settle route.';

@@ -73,7 +73,8 @@ only — recaptures LVR to LPs without taxing benign flow; `MWDynamicFee.lvrSurc
 `MWHookCoordinator` and the YPN `MintwareTreasuryJitHook`). **All levers OFF/inert by default; oracle-free**
 except Diamond-LVR + dynamic-fee, which use the manipulation-resistant *truncated in-pool* oracle (no CEX
 feed). Invariants **7/7** green (256×128k). `MWHookCoordinator._rebalanceIdleCapital` / `_calculateDynamicFee`
-are dead no-ops.
+were **removed** (not no-op'd) — the dynamic fee is now live and wired inline in `beforeSwap`
+(`MWDynamicFee.volatilityFee` + Diamond-LVR + rate limit). Swap flow: `docs/developers/ulv-swap-flow.md`.
 
 ## Deployments (honest)
 
