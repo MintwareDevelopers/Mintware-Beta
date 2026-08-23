@@ -119,7 +119,8 @@ Foundry deploy scripts (`contracts-v4/script/`):
 |---|---|
 | `DeployArcSpendStack.s.sol` | Arc YPN spend stack |
 | `DeployEthCollateralVault.s.sol` | ETH-collateral vault |
-| `DeployEthSettlement.s.sol` | ETH settlement stack |
+| `DeployEthSettlement.s.sol` | ETH settlement stack (`MintwareEthSettlement`) |
+| `DeployFloatSettlement.s.sol` | **Go-forward** YPN float settlement (`MintwareTreasuryFloatSettlement`) — establishes the deploy path; env-with-mock-fallback. AUDIT + real-deep-pool gated (needs real wstETH/ETH + ETH/USDC pools + Lido/oracle refs for real use; testnet uses mocks). |
 | `DeployWeightedDistributor.s.sol` | Vault-weighted epoch reward rail |
 
 ## Build Notes

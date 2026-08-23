@@ -6,7 +6,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { MwNav }       from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
-import { fmtUSD }      from '@/lib/web2/api'
+import { fmtUSD, shortAddr } from '@/lib/web2/api'
 import type { SocialVault, LpDeposit, WithdrawalQueueEntry, LockTier } from '@/lib/web2/vault/types'
 import { LOCK_TIERS } from '@/lib/web2/vault/types'
 import { useVaultDeposit, useVaultWithdraw, useVaultExecuteRedeem, useVaultOnchain, TOKEN0_SYMBOL, TOKEN1_SYMBOL } from '@/lib/web3/vault/useSocialVault'
@@ -15,8 +15,6 @@ import { buildVaultDepositMessage, buildVaultWithdrawMessage } from '@/lib/web3/
 // Design v2 (Privy-esque). Styling only — all on-chain deposit/withdraw logic unchanged.
 
 // ─── helpers ────────────────────────────────────────────────────────────────
-function shortAddr(a: string) { return `${a.slice(0, 6)}…${a.slice(-4)}` }
-
 function daysUntil(iso: string) {
   return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000))
 }
