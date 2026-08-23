@@ -13,8 +13,10 @@ import {TickMath}              from "@uniswap/v4-core/src/libraries/TickMath.sol
 import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
 import {MintwareTreasuryFloatSettlement, IOracleTickSource} from "../../src/payments/MintwareTreasuryFloatSettlement.sol";
-import {MockERC20}      from "../mocks/MockERC20.sol";
-import {MockLidoRate}   from "../mocks/MockLidoRate.sol";
+import {MockERC20}        from "../mocks/MockERC20.sol";
+import {MockLidoRate}     from "../mocks/MockLidoRate.sol";
+import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
 contract InvOracle is IOracleTickSource {
     int24 public tick; bool public ready;
@@ -29,13 +31,23 @@ contract InvOracle is IOracleTickSource {
 ///         cushion (funded, NOT counted as senior) absorbs the small ETH/USDC-leg swap slippage on rebalances.
 contract FloatSettlementHandler is Test {
     MintwareTreasuryFloatSettlement public fs;
-    MockERC20 public wstEth; MockERC20 public usdc;
+    MockERC20 public wstEth; MockERC20 public weth; MockERC20 public usdc;
     address public relayer; address public keeper; address public rail;
+    TestSwapRouter public swapRouter;
+    PoolKey public stakeKey; PoolKey public ethKey;
+    bool public wstIs0Stake; bool public wethIs0Eth;
 
     uint256 public seniorPar; // ghost: senior claimable at par (USDC 1e18)
 
-    constructor(MintwareTreasuryFloatSettlement _fs, MockERC20 _wst, MockERC20 _usdc, address _relayer, address _keeper, address _rail) {
-        fs = _fs; wstEth = _wst; usdc = _usdc; relayer = _relayer; keeper = _keeper; rail = _rail;
+    constructor(
+        MintwareTreasuryFloatSettlement _fs, MockERC20 _wst, MockERC20 _weth, MockERC20 _usdc,
+        address _relayer, address _keeper, address _rail,
+        TestSwapRouter _swapRouter, PoolKey memory _stakeKey, PoolKey memory _ethKey,
+        bool _wstIs0Stake, bool _wethIs0Eth
+    ) {
+        fs = _fs; wstEth = _wst; weth = _weth; usdc = _usdc; relayer = _relayer; keeper = _keeper; rail = _rail;
+        swapRouter = _swapRouter; stakeKey = _stakeKey; ethKey = _ethKey;
+        wstIs0Stake = _wstIs0Stake; wethIs0Eth = _wethIs0Eth;
     }
 
     function fundFloat(uint256 a) external {
@@ -93,6 +105,52 @@ contract FloatSettlementHandler is Test {
         vm.prank(keeper);
         try fs.rebalanceFloat(w, minOut) {} catch {}
     }
+
+    /// AUDIT R4-Info: exercise the EMERGENCY VALVE (2-hop bounded swap) — discharges senior par like a settle,
+    /// sourcing USDC from wstETH backing. Junior (funded, not senior) absorbs any bounded shortfall.
+    function emergencySettle(uint256 x) external {
+        if (seniorPar == 0 || fs.wstEthBacking() == 0) return;
+        x = bound(x, 1e18, seniorPar < 1_000e18 ? seniorPar : 1_000e18);
+        vm.prank(relayer);
+        try fs.batchSettleViaSwap(x, 0, rail) { seniorPar -= x; } catch {}
+    }
+
+    /// AUDIT R4-Info: exercise the DOUBLE-STACK — sweep idle balances into the lending adapters (value is still
+    /// counted via the adapters' totalAssets, so senior par is untouched).
+    function sweepFloat(uint256 a) external {
+        if (address(fs.usdcFloatAdapter()) == address(0)) return;
+        uint256 onHand = fs.usdcFloat();
+        uint256 minKeep = fs.floatMinUsdc();
+        if (onHand <= minKeep) return;
+        a = bound(a, 1, onHand - minKeep);
+        vm.prank(keeper);
+        try fs.sweepFloatToAdapter(a) {} catch {}
+    }
+
+    function sweepWst(uint256 a) external {
+        if (address(fs.wstEthAdapter()) == address(0)) return;
+        uint256 onHand = fs.wstEthBacking();
+        if (onHand == 0) return;
+        a = bound(a, 1, onHand);
+        vm.prank(keeper);
+        try fs.sweepWstEthToAdapter(a) {} catch {}
+    }
+
+    /// AUDIT R4-Info: a PRICE-MANIPULATING actor slams the raw stake / eth pool spot around. Solvency must hold
+    /// regardless — R4-L3 means the raw stake spot never feeds valuation, and the eth-leg band bounds swaps.
+    function manipulate(uint256 amt, bool stake, bool up) external {
+        amt = bound(amt, 1e18, 2_000_000e18);
+        PoolKey memory key = stake ? stakeKey : ethKey;
+        MockERC20 sellTok = stake
+            ? (up ? weth : wstEth)
+            : (up ? usdc : weth);
+        bool zeroForOne = stake
+            ? (up ? !wstIs0Stake : wstIs0Stake)
+            : (up ? !wethIs0Eth  : wethIs0Eth);
+        sellTok.mint(address(this), amt);
+        sellTok.approve(address(swapRouter), type(uint256).max);
+        try swapRouter.swap(key, zeroForOne, amt) {} catch {}
+    }
 }
 
 /// @title Solvency invariant: totalBackingUsd() + junior ≥ Σ senior claimable at par, across fuzzed
@@ -100,13 +158,17 @@ contract FloatSettlementHandler is Test {
 contract MintwareTreasuryFloatSettlementInvariant is Test {
     PoolManager             internal pm;
     PoolModifyLiquidityTest internal lpRouter;
+    TestSwapRouter          internal swapRouter;
     InvOracle               internal oracle;
     MockLidoRate            internal lido;
     MintwareTreasuryFloatSettlement internal fs;
     FloatSettlementHandler  internal handler;
+    MockYieldAdapter        internal usdcAdapter;
+    MockYieldAdapter        internal wstAdapter;
 
     MockERC20 internal wstEth; MockERC20 internal weth; MockERC20 internal usdc;
     PoolKey internal stakeKey; PoolKey internal ethKey;
+    bool internal wstIs0Stake; bool internal wethIs0Eth;
 
     address internal owner   = makeAddr("owner");
     address internal relayer = makeAddr("relayer");
@@ -117,10 +179,11 @@ contract MintwareTreasuryFloatSettlementInvariant is Test {
     int24   internal constant SPACING = 60;
 
     function setUp() public {
-        pm       = new PoolManager(address(this));
-        lpRouter = new PoolModifyLiquidityTest(IPoolManager(address(pm)));
-        oracle   = new InvOracle();
-        lido     = new MockLidoRate(1e18);
+        pm         = new PoolManager(address(this));
+        lpRouter   = new PoolModifyLiquidityTest(IPoolManager(address(pm)));
+        swapRouter = new TestSwapRouter(IPoolManager(address(pm)));
+        oracle     = new InvOracle();
+        lido       = new MockLidoRate(1e18);
 
         wstEth = new MockERC20("wstETH", "wstETH", 18);
         weth   = new MockERC20("WETH", "WETH", 18);
@@ -130,14 +193,24 @@ contract MintwareTreasuryFloatSettlementInvariant is Test {
         ethKey   = _poolKey(address(weth), address(usdc));
         pm.initialize(stakeKey, INIT_SQRT);
         pm.initialize(ethKey, INIT_SQRT);
+        wstIs0Stake = address(wstEth) < address(weth);
+        wethIs0Eth  = address(weth) < address(usdc);
 
         fs = new MintwareTreasuryFloatSettlement(
             IPoolManager(address(pm)), stakeKey, ethKey,
             address(wstEth), address(weth), address(usdc), owner, relayer, keeper
         );
+        usdcAdapter = new MockYieldAdapter(address(usdc));
+        wstAdapter  = new MockYieldAdapter(address(wstEth));
         vm.startPrank(owner);
         fs.setOracleSource(address(oracle));
         fs.setLidoRateSource(address(lido));
+        // Wire the double-stack + arm the keeper churn cap BEFORE the rail (pre-arming ⇒ instant). This
+        // exercises the adapters + keeps `rebalanceFloat` open (R4-M1 fails it closed without a window cap).
+        fs.setUsdcFloatAdapter(address(usdcAdapter));
+        fs.setWstEthAdapter(address(wstAdapter));
+        fs.setFloatParams(0, 0);
+        fs.setRebalanceCaps(0, type(uint128).max, 365 days);
         fs.setSettlementRail(rail);
         vm.stopPrank();
         oracle.set(0, true);
@@ -145,7 +218,10 @@ contract MintwareTreasuryFloatSettlementInvariant is Test {
         _seedPool(stakeKey);
         _seedPool(ethKey);
 
-        handler = new FloatSettlementHandler(fs, wstEth, usdc, relayer, keeper, rail);
+        handler = new FloatSettlementHandler(
+            fs, wstEth, weth, usdc, relayer, keeper, rail,
+            swapRouter, stakeKey, ethKey, wstIs0Stake, wethIs0Eth
+        );
 
         // A standing junior cushion (NOT senior) to absorb bounded rebalance slippage.
         usdc.mint(address(handler), 5_000_000e18);

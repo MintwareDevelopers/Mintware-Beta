@@ -93,6 +93,11 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
     IERC20       public immutable projectToken; // team-locked side
     IERC20       public immutable quoteToken;   // community side (USDC / WETH / USDI / …)
     bool         public immutable projIsToken0;
+    /// @dev AUDIT (legal) — FACT 1 (team side is the operator's own, permanently team-bound capital).
+    ///      `team` is `immutable` — set once at construction, never reassignable (no setter). The team's
+    ///      matched liquidity is tracked as `teamLiquidity` (a uint of V4 liquidity units — NOT a minted,
+    ///      transferable junior share) and its ONLY exit is `teamWithdraw` (`onlyTeam`, hard cliff). It can
+    ///      never be transferred to, or withdrawn by, a third party.
     address      public immutable team;         // provider / launch team
     address      public immutable feeVault;     // epoch sink for the Mintware cut (optional)
     PoolProfile  public immutable profile;      // MEME or EMERGING only
@@ -640,6 +645,11 @@ contract MintwareMatchedLiquidityVault is MintwarePairVault, IUnlockCallback {
         }
 
         // Denominator: while locked, community only (team excluded → earns 0%).
+        // AUDIT (legal) — FACT 3 (community keeps full, unrestricted MEV / pool-fee yield). While the team
+        // is locked (`teamFeesRedirected`) the fee denominator is `totalCommunityShares` ALONE — the team's
+        // units are excluded, so the team earns 0% and the community earns 100% of the LP remainder (net of
+        // the fixed `MINTWARE_FEE_BPS` protocol cut). No cap, no team skim, no admin throttle on the
+        // community's upside. am-AMM rent (the MEV yield replacement) routes through this exact split.
         uint256 denom = teamFeesRedirected ? totalCommunityShares : (totalCommunityShares + teamLiquidity);
         if (denom == 0) {
             // No eligible liquidity to reward (e.g. all community exited mid-lock) → protocol takes it.
