@@ -18,6 +18,7 @@ import {IYieldAdapter} from "./IYieldAdapter.sol";
 import {MWJitLib} from "./lib/MWJitLib.sol";
 import {MWIdleLib} from "./lib/MWIdleLib.sol";
 import {MWPositionLib} from "./lib/MWPositionLib.sol";
+import {MWFeeLib} from "./lib/MWFeeLib.sol"; // SIZE: realized-fee + rent routing extracted here
 
 /// @dev Minimal view of MintwareWeightedDistributor used for oracle-weighted fee routing.
 interface IMWWeightedDistributor {
@@ -591,20 +592,6 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         return _realizeFees();
     }
 
-    /// @dev Split a realized fee into (treasuryCut, buybackCut, lpAmt) under the configurable
-    ///      three-way template. BOTH protocol cuts round DOWN; the LP takes the EXACT remainder, so
-    ///      (treasuryCut + buybackCut + lpAmt == fee) always holds (zero dust stranded) and any
-    ///      rounding loss accrues to the LPs, never the protocol.
-    function _splitFee(uint256 fee)
-        internal
-        view
-        returns (uint256 treasuryCut, uint256 buybackCut, uint256 lpAmt)
-    {
-        treasuryCut = (fee * treasuryFeeBps) / BPS;
-        buybackCut  = (fee * buybackFeeBps) / BPS;
-        lpAmt       = fee - treasuryCut - buybackCut; // remainder → LP (favors LPs)
-    }
-
     /// @dev Realize accrued swap fees on the live V4 position and split them via the configurable
     ///      three-way value-capture template (LP / treasury / buyback+burn; ULV increment 3). SCOPE:
     ///      this covers ONLY realized position fees — regular trading fees plus the increment-1c
@@ -614,66 +601,18 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
     ///      (`fundRent`, routed 100% to LPs), or the Aave yield harvest (`harvestYield`, still the flat
     ///      MINTWARE_FEE_BPS cut). The LP leg's downstream routing (weighted distributor vs pro-rata
     ///      accumulator) is UNCHANGED.
+    ///
+    ///      SIZE: the split + routing body lives in `MWFeeLib.realizeFees` (extracted for EIP-170 size,
+    ///      same stateless-library pattern as MWJitLib/MWIdleLib). The short-circuit guard below stays
+    ///      here (it reads `positionLiquidity`, whose `== 0` case — all capital idled in Aave — means
+    ///      there is no live V4 position to collect from; a `modifyLiquidity(0)` on an empty position
+    ///      reverts `CannotUpdateEmptyPosition`). This wrapper loads the six fee-routing counters,
+    ///      delegates, and writes every one back — completeness is load-bearing.
     function _realizeFees() internal returns (uint256 fee0, uint256 fee1) {
-        // `positionLiquidity == 0` (all capital idled in Aave) means there is no live V4 position to
-        // collect from — a `modifyLiquidity(0)` on an empty position reverts `CannotUpdateEmptyPosition`.
         if (!poolInitialized || totalLiquidity == 0 || positionLiquidity == 0) return (0, 0);
-        bytes memory res = poolManager.unlock(abi.encode(Action.Collect, bytes("")));
-        (fee0, fee1) = abi.decode(res, (uint256, uint256));
-        if (fee0 == 0 && fee1 == 0) return (0, 0);
-
-        (uint256 treasury0, uint256 buyback0, uint256 lp0) = _splitFee(fee0);
-        (uint256 treasury1, uint256 buyback1, uint256 lp1) = _splitFee(fee1);
-
-        // Route the two NON-LP legs. If no buyback sink is wired, fold the buyback cut into the
-        // treasury transfer — never strand it, never transfer to address(0).
-        address sink = buybackSink;
-        if (sink == address(0)) {
-            uint256 t0 = treasury0 + buyback0;
-            uint256 t1 = treasury1 + buyback1;
-            if (t0 > 0) token0.safeTransfer(treasury, t0);
-            if (t1 > 0) token1.safeTransfer(treasury, t1);
-        } else {
-            if (treasury0 > 0) token0.safeTransfer(treasury, treasury0);
-            if (treasury1 > 0) token1.safeTransfer(treasury, treasury1);
-            if (buyback0 > 0)  token0.safeTransfer(sink, buyback0);
-            if (buyback1 > 0)  token1.safeTransfer(sink, buyback1);
-        }
-
-        // LP leg → the EXISTING routing, unchanged.
-        if (weightedDistributor != address(0)) {
-            // Canonical path: route LP fees to the oracle-weighted distributor. LPs claim
-            // their reputation + referral weighted share there, not from the accumulator.
-            if (lp0 > 0 || lp1 > 0) {
-                // AUDIT H3: grant EXACTLY the fee legs for this one pull, then reset to 0 — never leave the
-                // distributor a standing unbounded allowance over the vault's entire (principal-bearing) balance.
-                if (lp0 > 0) token0.forceApprove(weightedDistributor, lp0);
-                if (lp1 > 0) token1.forceApprove(weightedDistributor, lp1);
-                // AUDIT M6: `_realizeFees` runs on the REDEMPTION path — the distributor's liveness must not
-                // gate exits. If `fundFees` reverts (paused/buggy distributor), reset the approval and fall
-                // back to the pro-rata accumulator so the fees stay in the vault backing claims and the
-                // redemption proceeds.
-                try IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, lp0, lp1) {
-                    if (lp0 > 0) token0.forceApprove(weightedDistributor, 0);
-                    if (lp1 > 0) token1.forceApprove(weightedDistributor, 0);
-                    emit FeesRoutedToDistributor(distributorVaultId, lp0, lp1);
-                } catch {
-                    if (lp0 > 0) token0.forceApprove(weightedDistributor, 0);
-                    if (lp1 > 0) token1.forceApprove(weightedDistributor, 0);
-                    accFee0PerShare += (lp0 * ACC_PRECISION) / totalLiquidity;
-                    accFee1PerShare += (lp1 * ACC_PRECISION) / totalLiquidity;
-                    feeReserve0 += lp0;
-                    feeReserve1 += lp1;
-                }
-            }
-        } else {
-            // Legacy path: pro-rata per-share accrual (pre-wiring / un-migrated vaults).
-            accFee0PerShare += (lp0 * ACC_PRECISION) / totalLiquidity;
-            accFee1PerShare += (lp1 * ACC_PRECISION) / totalLiquidity;
-            feeReserve0 += lp0; // these tokens stay in the vault to back claims — segregate them
-            feeReserve1 += lp1;
-        }
-        emit FeesCollected(fee0, fee1, treasury0, treasury1, buyback0, buyback1);
+        MWFeeLib.FeeState memory s = _loadFee();
+        (s, fee0, fee1) = MWFeeLib.realizeFees(_feeCtx(), s);
+        _storeFee(s);
     }
 
     /// @notice One-time wiring of the reputation + referral weighted distributor. Once set,
@@ -733,40 +672,51 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         uint256 received = IERC20(token).balanceOf(address(this)) - balBefore;
         if (received == 0) return;
 
-        bool routed = false;
-        if (weightedDistributor != address(0)) {
-            (uint256 r0, uint256 r1) = isToken0 ? (received, uint256(0)) : (uint256(0), received);
-            // AUDIT R2-H3: per-call approve → fundFees → reset-to-0. H3 removed the standing allowance
-            // `setWeightedDistributor` used to grant, so a BARE `fundFees` here (the distributor pulls via
-            // safeTransferFrom) reverts on every rent push — DoS'ing the rent path for any distributor-wired
-            // vault. Rent arrives in exactly ONE token, so grant that one leg, then reset (in both the success
-            // and catch paths). Plus M6-style try/catch: a paused/buggy distributor must not brick rent intake
-            // (swap hot path) — fall back to the pro-rata accumulator so the rent stays in the vault backing LP.
-            IERC20(token).forceApprove(weightedDistributor, received);
-            try IMWWeightedDistributor(weightedDistributor).fundFees(distributorVaultId, r0, r1) {
-                routed = true;
-            } catch {}
-            IERC20(token).forceApprove(weightedDistributor, 0);
-        }
-        if (!routed) {
-            if (totalLiquidity == 0) {
-                // No LPs to credit — forward to treasury rather than strand it or divide by zero.
-                IERC20(token).safeTransfer(treasury, received);
-            } else if (isToken0) {
-                uint256 pool0 = rentDust0 + received;
-                uint256 add0  = (pool0 * ACC_PRECISION) / totalLiquidity;
-                accFee0PerShare += add0;
-                rentDust0 = pool0 - (add0 * totalLiquidity) / ACC_PRECISION;
-                feeReserve0 += received; // rent tokens stay in the vault to back claims — segregate
-            } else {
-                uint256 pool1 = rentDust1 + received;
-                uint256 add1  = (pool1 * ACC_PRECISION) / totalLiquidity;
-                accFee1PerShare += add1;
-                rentDust1 = pool1 - (add1 * totalLiquidity) / ACC_PRECISION;
-                feeReserve1 += received;
-            }
-        }
-        emit RentFunded(token, received);
+        // SIZE: routing body (weighted-distributor R2-H3/M6 path + pro-rata carried-dust fallback +
+        // RentFunded event) lives in MWFeeLib.fundRent. Guards + balance-diff intake stay here; the
+        // wrapper loads the six fee-routing counters, delegates, and writes every one back.
+        MWFeeLib.FeeState memory s = _loadFee();
+        s = MWFeeLib.fundRent(_feeCtx(), s, isToken0, received);
+        _storeFee(s);
+    }
+
+    // ── Fee library plumbing (Ctx build + full-field load/store) ─────────────
+    // Same stateless pattern as the JIT/idle plumbing. MWFeeLib cannot read the vault's immutables or
+    // storage under delegatecall, so `_feeCtx` hands it the immutables + routing config and
+    // `_loadFee`/`_storeFee` mirror the COMPLETE set of fee-routing-mutable storage in and back out.
+    // Load/store completeness is load-bearing — the six fields are the exact set the library touches.
+
+    function _feeCtx() internal view returns (MWFeeLib.Ctx memory) {
+        return MWFeeLib.Ctx({
+            pm:                  poolManager,
+            t0:                  token0,
+            t1:                  token1,
+            treasury:            treasury,
+            weightedDistributor: weightedDistributor,
+            distributorVaultId:  distributorVaultId,
+            buybackSink:         buybackSink,
+            treasuryFeeBps:      treasuryFeeBps,
+            buybackFeeBps:       buybackFeeBps,
+            totalLiquidity:      totalLiquidity
+        });
+    }
+
+    function _loadFee() internal view returns (MWFeeLib.FeeState memory s) {
+        s.accFee0PerShare = accFee0PerShare;
+        s.accFee1PerShare = accFee1PerShare;
+        s.feeReserve0     = feeReserve0;
+        s.feeReserve1     = feeReserve1;
+        s.rentDust0       = rentDust0;
+        s.rentDust1       = rentDust1;
+    }
+
+    function _storeFee(MWFeeLib.FeeState memory s) internal {
+        accFee0PerShare = s.accFee0PerShare;
+        accFee1PerShare = s.accFee1PerShare;
+        feeReserve0     = s.feeReserve0;
+        feeReserve1     = s.feeReserve1;
+        rentDust0       = s.rentDust0;
+        rentDust1       = s.rentDust1;
     }
 
     function claimFees() external nonReentrant notDuringJit {
