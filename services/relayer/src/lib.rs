@@ -14,6 +14,8 @@
 
 pub mod batch;
 pub mod cctp;
+pub mod idem;
+pub mod server;
 pub mod settle;
 pub mod submit;
 
@@ -24,6 +26,8 @@ pub use cctp::{
     build_and_sign_receive, submit_receive, AttestedMessage, CctpError, IrisClient, ReceiveAndDeposit,
     CCTP_DOMAIN_ARC, CCTP_DOMAIN_BASE,
 };
+pub use idem::{IdemStore, Reserved};
+pub use server::{app, AppCtx};
 pub use settle::{EdgeAuth, Permit, SettleParams, SettlementError, HIGH_VALUE_THRESHOLD};
 pub use submit::{
     build_and_sign, build_and_sign_call, dry_run, dry_run_call, submit_settlement, DryRun, GasParams,

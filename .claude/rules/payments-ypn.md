@@ -36,10 +36,19 @@ position → settle (burn shares → USDC to the payee). The "never idle, never 
 | Service | Role | Surface |
 |---|---|---|
 | **edge-auth** (axum) | Sub-150 ms authorization: decide → reserve a hold off cached **NAV** with a VaR haircut → sign. Fail-closed bearer. Two Pre-audit #6 spend-safety gates in the decision core (`portfolio::PortfolioGuard`, both OFF by default): an always-liquid **hot-buffer reserve floor** (`reserve_floor_breached`) + a system-wide **circuit-breaker** (`circuit_breaker_open`), set via `MemStore::set_liquidity_reserve`/`set_breaker`. | `POST /authorize` · `GET /holds/:id` · `GET /available/:user` (read-only live spendable = NAV − holds − cap − liquidity − hot-buffer reserve; 0 while the breaker is open) · `POST /webhooks/rain` |
-| **relayer** | Builds + submits `settleSpend` and the CCTP bridge orchestration. **A signing/submission library — no HTTP server yet** (a live `settle` endpoint = a separate server + funded key, deploy-gated). | `settle.rs` · `cctp.rs` · `batch.rs` · `submit.rs` |
+| **relayer** (axum) | Builds + submits `settleSpend` (+ ETH-collateral batch + CCTP bridge) — the signing/submission **library** (`settle.rs`/`batch.rs`/`cctp.rs`/`submit.rs`) now has an **always-on HTTP server** (`server.rs` + `relayer-server` bin) wrapping it. Fail-closed bearer + funded key + RPC (mirrors edge-auth). **Built + tested, NOT deployed** — runs live only when the operator sets the funded key + RPC. | `POST /settle` · `POST /settle-batch` · `GET /health` |
 
-Tests: `cd services/edge-auth && cargo test` (86) · `cd services/relayer && cargo test` (23); both
-`cargo clippy -D warnings` clean.
+The relayer server: `POST /settle` takes `{ hold_id, user, assets, receiver, permit{…,signature}, edge?{…} }`
+(+ optional `gateway`) → the library `settleSpend` path → `{ success, tx_hash, status }`. `POST /settle-batch`
+takes `{ holds[], rail, settlement_slippage_bps, settlement?, batch_id? }` → `batchSettleEth`. **Idempotent:**
+a settle for the same hold id (or batch id / derived hold-id hash) never double-submits — a completed key
+returns its cached `tx_hash` (`status:"duplicate"`), an in-flight one is 409 (in-memory, per-process; the
+on-chain nonce is the cross-replica backstop — see `src/idem.rs`). **CCTP `/bridge` deferred** (the iris
+poll/attestation-pending flow doesn't fit a single synchronous request; `submit_receive` stays library-only,
+noted in `server.rs`). Env + fail-closed posture: [`deployments.md`](deployments.md#relayer-http-settle-server-servicesrelayer--relayer-server-bin).
+
+Tests: `cd services/edge-auth && cargo test` (86) · `cd services/relayer && cargo test` (42: 39 unit +
+3 self-skipping live); both `cargo clippy -D warnings` clean.
 
 **edge-auth is now actually hosted** (2026-08-20) — `https://mintware-edge-auth-production.up.railway.app`
 on Railway (project `mintware-edge-auth`), pointed at the live Arc spend stack. First real deploy of this
@@ -146,8 +155,10 @@ mandatory, and skipping either fails **silently on-chain** (the tx mines with st
 
 ## Deploy-gated remainder (not code)
 
-Always-on auto-settling relayer HTTP server + its own funded key (today's card settle is
-owner-triggered against the oracle signer instead — see above; vendor pay + x402 settle still need
-this for their own automatic paths) · edge-auth-signed high-value (≥$250) card settlement leg · CPN
+Always-on auto-settling relayer HTTP server is now **built** (`services/relayer` `relayer-server` bin —
+`/settle` · `/settle-batch`, fail-closed bearer/key/RPC, idempotent) but still needs a **deploy**: its own
+funded key (holding `RELAYER_ROLE`) + RPC + a Railway deploy before it runs live (today's card settle is
+owner-triggered against the oracle signer instead — see above; vendor pay + x402 settle route to this
+server once it's deployed + env-set) · edge-auth-signed high-value (≥$250) card settlement leg · CPN
 card issuer for production (the genuine Circle-relationship piece; Lithic above is sandbox-only and
 a different thing) · Arc mainnet (Sept 16, 2026) · external audit of the converged stack.
