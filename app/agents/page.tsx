@@ -5,6 +5,7 @@
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { shortAddr } from '@/lib/web2/api'
 
 const LABEL = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
 const NUM = 'text-[12px] font-semibold text-peri-deep tabular-nums'
@@ -154,10 +155,6 @@ const ULV_ROLES = [
   { role: 'Yield Arbitrageur', action: 'Shifts capital across Uniswap v4 fee tiers by pool volume, around the clock, with no human signature prompts.', prim: 'v4 dynamic hooks · EIP-712 permits' },
   { role: 'JIT Liquidation Node', action: 'Withdraws the exact USDC needed to fund a JIT card the instant a 402 challenge lands.', prim: 'HTTP 402 interceptor · flash settlement' },
 ]
-
-function shortAddr(addr: string) {
-  return addr.slice(0, 6) + '…' + addr.slice(-4)
-}
 
 const warnPill = 'text-[10px] font-semibold uppercase tracking-[0.06em] px-2 py-[3px] rounded-full border border-[rgba(209,67,67,0.3)] text-[#D14343]'
 const okPill = 'text-[10px] font-semibold uppercase tracking-[0.06em] px-2 py-[3px] rounded-full border border-hair text-ink-mid'

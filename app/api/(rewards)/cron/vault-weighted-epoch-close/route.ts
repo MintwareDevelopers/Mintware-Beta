@@ -18,7 +18,7 @@
 //     `referral_records` (referrer, referred); `vault_weighted_epochs` sink table.
 
 import { createHandler } from '@/lib/web2/routeHandler'
-import { getServerLegacyScore } from '@/lib/attribution/serverScore'
+import { getAttributionPercentile } from '@/lib/rewards/vault/attributionSnapshot'
 import { CHAIN_RPC } from '@/lib/constants'
 import type { Hex } from 'viem'
 import type { LockTier } from '@/lib/web2/vault/types'
@@ -37,19 +37,21 @@ export const dynamic = 'force-dynamic'
 
 const SIG_WINDOW_SECS = 60 * 60 // keeper must submit within an hour of signing
 
-/** Best-effort Attribution percentile fetch for a set of wallets. Returns null (→ fail-closed)
- *  if the score source errors wholesale; a per-wallet miss is simply absent from the map.
- *  Uses the in-repo Engine v2 (getServerLegacyScore) — the same canonical score the UI shows.
- *  The engine's global token-bucket limiter (providers/etherscan.ts) keeps this batch under
- *  Etherscan's ~5 req/sec free tier; a per-wallet error just drops that wallet from the map. */
+/** The attribution-snapshot step, folded INLINE (fresh, in-process) before weights are computed —
+ *  the shared core is `getAttributionPercentile` (the same read the standalone /api/vault/
+ *  attribution-snapshot route uses), so no extra Vercel-Hobby cron slot is needed and the two
+ *  can't drift. Best-effort per wallet: returns null (→ caller fail-closes) if the score source
+ *  errors wholesale; a per-wallet miss is simply ABSENT from the map (→ assembleLpInputs marks it
+ *  NaN → scoresAvailable=false → C9 skip). The engine's global token-bucket limiter
+ *  (providers/etherscan.ts) keeps this batch under Etherscan's ~5 req/sec free tier. */
 async function loadPercentiles(wallets: string[]): Promise<Map<string, number> | null> {
   try {
     const map = new Map<string, number>()
     await Promise.all(
       wallets.map(async (w) => {
         try {
-          const pct = (await getServerLegacyScore(w)).percentile
-          if (typeof pct === 'number') map.set(w.toLowerCase(), pct)
+          const pct = await getAttributionPercentile(w)
+          if (Number.isFinite(pct)) map.set(w.toLowerCase(), pct)
         } catch { /* per-wallet miss → absent from map */ }
       })
     )

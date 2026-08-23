@@ -8,14 +8,11 @@ import { useLaunch }          from '@/components/web2/LaunchModal'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { MintwareMark }        from '@/components/ui2/MintwareMark'
 import { ScopeSwitcher }        from '@/components/web2/ScopeSwitcher'
+import { shortAddr }            from '@/lib/web2/api'
 
 // MwNav — the authenticated in-app nav. Design v2 (Privy-esque): translucent
 // white/blur bar, periwinkle logo mark, glass-pill actions. All wallet/Privy
 // logic preserved.
-
-function shortAddr(a: string) {
-  return a.slice(0, 6) + '…' + a.slice(-4)
-}
 
 export function MwNav() {
   const pathname = usePathname()

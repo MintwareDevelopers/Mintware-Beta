@@ -5,6 +5,7 @@ import { useRouter }           from 'next/navigation'
 import { MwNav }               from '@/components/web2/MwNav'
 import { MwAuthGuard }         from '@/components/web2/MwAuthGuard'
 import { useEffect, useState } from 'react'
+import { shortAddr }           from '@/lib/web2/api'
 
 // AI agent leaderboard (ERC-8004). Design v2 (Privy-esque).
 const LABEL = 'uppercase tracking-[0.14em] text-[11px] font-semibold text-ink-soft'
@@ -22,10 +23,6 @@ interface AgentRow {
   mwp_submissions:  number
   rank:             number
   updated_at:       string
-}
-
-function shortAddr(addr: string) {
-  return addr.slice(0, 6) + '…' + addr.slice(-4)
 }
 
 const chip = 'inline-flex items-center gap-1 rounded-full border border-hair text-ink-mid px-2 py-[2px] text-[9px] font-semibold tracking-[0.4px] uppercase'

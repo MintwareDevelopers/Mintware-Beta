@@ -5,7 +5,7 @@
 
 import { ImageResponse } from 'next/og'
 import { NextRequest }   from 'next/server'
-import { API }           from '@/lib/web2/api'
+import { API, shortAddr } from '@/lib/web2/api'
 
 export const runtime = 'edge'
 export const alt     = 'Mintware — Wallet Attribution Score'
@@ -16,10 +16,6 @@ function tierColor(tier: string): string {
   if (tier === 'gold')   return '#C27A00'
   if (tier === 'silver') return '#9898C0'
   return '#4f7ef7'
-}
-
-function shortAddr(addr: string): string {
-  return addr.slice(0, 6) + '…' + addr.slice(-4)
 }
 
 function fmtTier(tier: string): string {

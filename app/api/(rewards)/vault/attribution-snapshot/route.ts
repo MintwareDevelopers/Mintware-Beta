@@ -10,26 +10,13 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { createWalletClient, http } from 'viem'
 import { base, baseSepolia } from 'viem/chains'
-import { getServerLegacyScore } from '@/lib/attribution/serverScore'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
-
-function attributionMultiplierBps(percentile: number) {
-  if (percentile >= 67) return 15000
-  if (percentile >= 34) return 12500
-  return 10000
-}
-
-function durationMultiplierBps(depositedAt: string) {
-  const days = (Date.now() - new Date(depositedAt).getTime()) / 86_400_000
-  if (days >= 180) return 13000
-  if (days >= 90)  return 12000
-  if (days >= 30)  return 11000
-  return 10000
-}
-
-function combinedMultiplierBps(a: number, b: number) {
-  return Math.min(Math.round((a * b) / 10000), 19500)
-}
+import {
+  attributionMultiplierBps,
+  durationMultiplierBps,
+  combinedMultiplierBps,
+  getAttributionPercentile,
+} from '@/lib/rewards/vault/attributionSnapshot'
 
 const CLAIM_EXPIRY_SECS = 90 * 24 * 60 * 60
 
@@ -59,7 +46,7 @@ export const GET = createHandler(async (req, ctx) => {
 
   let percentile = 0
   try {
-    percentile = (await getServerLegacyScore(walletAddr, { supabase: ctx.supabase })).percentile ?? 0
+    percentile = await getAttributionPercentile(walletAddr, { supabase: ctx.supabase })
   } catch { /* non-fatal */ }
 
   let durationBps = 10000
