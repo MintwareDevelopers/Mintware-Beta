@@ -332,6 +332,60 @@ contract MintwareTreasuryJitStackTest is Test {
         assertGe(vault.totalSeniorAssets() + 3, navBefore, "senior lost value the junior should have covered");
     }
 
+    /// @dev Free SENIOR buffer = vault USDC on hand minus every junior/protocol earmark (mirrors the vault's
+    ///      internal `_freeSeniorBuffer`), so the test can bound the redeem NAV from outside the contract.
+    function _freeBuffer() internal view returns (uint256) {
+        uint256 bal = usdc.balanceOf(address(vault));
+        uint256 r = vault.reservedJuniorUSDC() + vault.juniorUsdcBuffer() + vault.reservedProtocolUSDC();
+        return bal > r ? bal - r : 0;
+    }
+
+    /// AUDIT R5-L1: an outstanding/stranded JIT slice must NOT be counted at PAR in the REDEEM-side NAV.
+    /// Deploy a senior LP slice, fire JIT and DELIBERATELY leave it un-swept, then dump team hard (an
+    /// adverse move that drops the LP's recoverable USDC). Assert the deployed-at-risk legs — LP par PLUS
+    /// the outstanding JIT par — never exceed what is actually recoverable (`recoverableUSDC()` = min(spot,
+    /// oracle) LP MTM, which does NOT include the hook's JIT slice) plus the junior USDC first-loss buffer;
+    /// and that `seniorRealizableAssets()` (the redeem NAV) is bounded by that recoverable backing. The main
+    /// invariant suite runs with JIT off and always sweeps to `jitBorrowed == 0` before asserting, so it
+    /// misses exactly this un-swept-slice-across-a-price-move window.
+    function testFuzz_R5L1_jit_leg_not_par_in_redeem_nav(uint256 swapSeed, uint256 dumpSeed) public {
+        // A live, price-sensitive LP leg so `recoverableUSDC()` moves with the mark.
+        uint256 jt = vault.juniorTokens();
+        vault.deployToLP(2_000 * ONE, jt);
+        assertGt(vault.deployedFromSenior(), 0, "precondition: senior par deployed to the LP");
+
+        // Fire JIT with a real trader team→USDC swap, then DO NOT sweep — the slice stays outstanding.
+        uint256 m = bound(swapSeed, 1_000 * ONE, 20_000 * ONE);
+        team.mint(trader, 400_000_000 * ONE);
+        vm.startPrank(trader);
+        team.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, _sellTeamZeroForOne(), m); // fires JIT (usdc is the output)
+        vm.stopPrank();
+        assertGt(vault.jitBorrowed(), 0, "precondition: a JIT slice is outstanding (un-swept)");
+
+        // Adverse move in a later block: dump team hard → the LP's recoverable USDC value falls. The H2
+        // one-slice guard means this second team→USDC swap opens NO new slice (borrow no-ops), so the
+        // original slice stays outstanding across the price move — exactly the missed window.
+        vm.roll(block.number + 1);
+        uint256 dump = bound(dumpSeed, 1_000 * ONE, 5_000_000 * ONE);
+        team.mint(trader, dump);
+        vm.prank(trader);
+        swapRouter.swap(key, _sellTeamZeroForOne(), dump);
+
+        // Extended solvency invariant — both at-risk legs bounded by the recoverable backing.
+        assertLe(
+            vault.deployedFromSenior() + vault.jitBorrowed(),
+            vault.recoverableUSDC() + vault.juniorUsdcBuffer() + 2,
+            "R5-L1: deployed+JIT par exceeds recoverable backing while a JIT slice is stranded"
+        );
+        // The redeem NAV must value the at-risk legs at what's recoverable — never adding the JIT leg at par.
+        assertLe(
+            vault.seniorRealizableAssets(),
+            adapter.totalAssets() + _freeBuffer() + vault.recoverableUSDC() + vault.juniorUsdcBuffer() + 2,
+            "R5-L1: redeem NAV exceeds recoverable backing (JIT leg still counted at par)"
+        );
+    }
+
     // ── AUDIT R2-H2: a stuck `jitBorrowed` (the strand) is recoverable ──────────────────────────────
     //
     // The strand: a fully-utilized JIT slice leaves `jitBorrowed` outstanding; if the keeper sweep can't

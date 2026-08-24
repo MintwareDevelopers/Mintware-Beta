@@ -25,7 +25,7 @@ contract MockJit {
     constructor(MintwareTreasuryVault v, IERC20 u) { vault = v; usdc = u; }
     function round(uint256 want, uint256 ret) external returns (uint256 lent) {
         lent = vault.borrowIdleForJit(want);
-        usdc.transfer(address(vault), ret);
+        usdc.approve(address(vault), ret); // R5-H1: vault pulls the return via transferFrom
         vault.settleJitReturn(ret);
     }
 }

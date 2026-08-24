@@ -170,8 +170,8 @@ contract TreasuryNavHandler is Test {
         // PROFIT (ret > what's on hand) mints new value — count it as yield so conservation stays exact.
         uint256 bal = usdc.balanceOf(address(this));
         if (bal < ret) { uint256 need = ret - bal; usdc.mint(address(this), need); gYield += need; }
-        // The hook transfers the returned USDC to the vault, then reports it (production order).
-        usdc.transfer(address(vault), ret);
+        // R5-H1: the hook approves and the vault PULLS the return via transferFrom (production order).
+        usdc.approve(address(vault), ret);
         try vault.settleJitReturn(ret) { nJitSettles++; } catch {}
         _record();
     }
