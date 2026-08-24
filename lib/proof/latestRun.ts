@@ -409,3 +409,33 @@ export const SECURITY_AUDIT_R4: {
   note:
     'Self-review, not an external audit. The point of this round: newly-shipped code is the most dangerous code — so we adversarially audited our own float-settlement + timelock the moment it landed, found a real High (an instant oracle re-point path), and fixed it plus every Medium and Low. A separate reviewer confirmed the earlier three rounds’ invariants are byte-for-byte intact. Testnet + unaudited — an external audit remains the gate before real value.',
 }
+
+// Round 5 — firm-grade pass modeled on Hacken + CertiK SOPs (STRIDE threat model, micro/macro
+// split, 15-category checklist, L/I/E/C severity, PoC-for-High). Six reviewers; found two Highs
+// (one PoC-confirmed in our own JIT accounting, one in our own fresh x402 settle code) + several
+// lows, all fixed. Full detail: docs/developers/self-assessment-security-round5-2026-08-24.md.
+export const SECURITY_AUDIT_R5: {
+  eyebrow: string; title: string; titleAccent: string; blurb: string
+  stats: { value: string; sub: string; label: string }[]
+  fixes: AuditFix[]; note: string
+} = {
+  eyebrow: 'Security self-assessment · round 5',
+  title: 'We ran it the way',
+  titleAccent: 'a firm would.',
+  blurb:
+    'This round deliberately mirrored the published SOPs of Hacken and CertiK — a STRIDE threat model, a micro (function) + macro (system) split, the 15-category checklist, severity scored on likelihood × impact × exploitability, and a required proof-of-concept for anything High. Six reviewers read the whole stack. It found two genuine Highs — both in our own recent code — and we fixed them, wrote the PoC as a permanent regression test, and fixed the lows too.',
+  stats: [
+    { value: '6', sub: 'reviewers', label: 'STRIDE + micro/macro clusters, firm-grade SOP' },
+    { value: '2 / 2', sub: 'High', label: 'high-severity findings remediated (one PoC-confirmed)' },
+    { value: '202', sub: '/ 0', label: 'affected-suite tests pass / fail (contracts 121 · x402 81)' },
+    { value: '0', sub: 'Critical', label: 'critical findings' },
+  ],
+  fixes: [
+    { sev: 'H', title: 'JIT settlement now measures the return inside the settle call — a stale cross-transaction baseline had let a routine op hide a real loss onto the protected tranche (PoC-confirmed, now a regression test)', status: 'Fixed' },
+    { sev: 'H', title: 'The agent pay-per-call settle now verifies the payer’s signed payment authorization and binds it to the exact receiver + amount — closing a drain path in code we’d just shipped', status: 'Fixed' },
+    { sev: 'L', title: 'The redemption NAV no longer counts an outstanding JIT slice at par, and the price-guard rejects a param that could silently disable it', status: 'Fixed' },
+    { sev: 'L', title: 'A settlement swap can’t strand backing on a partial fill, and the settlement destination is set-once (no re-point after go-live)', status: 'Fixed' },
+  ],
+  note:
+    'Self-review, not an external audit — run at firm quality (Hacken/CertiK methodology), not by a firm. The honest headline: a firm-grade pass on our own newest code found two real Highs, including one with a working exploit against our JIT loss-attribution, and we fixed them plus the lows and re-verified everything else held. Testnet + unaudited — an external audit remains the gate before real value.',
+}
