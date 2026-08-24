@@ -113,8 +113,9 @@ Each runtime keeps its existing Attribution actions and adds the 5-action parkin
 
 | Area | Location |
 |---|---|
-| Core lib | `lib/x402/*` — `types`, `protocol`, `pricing`, `facilitator`, `require402`, `edgeHttp`, `config`, `treasury` (park + spend-in-place), `vaultReader` (fee-net parked USDC off the Arc vault) |
-| Routes | `app/api/x402/{account,supported,verify,settle,score}` — `verify`→edge-auth, `settle`→relayer, `score` is a dogfood 402 paywall over Attribution |
+| Core lib | `lib/x402/*` — `types`, `protocol`, `pricing`, `facilitator`, `require402`, `edgeHttp`, `config`, `treasury` (park + spend-in-place), `vaultReader` (fee-net parked USDC off the Arc vault), `permitStore` (payer-keyed standing `DelegatedSpendPermit` store) |
+| Routes | `app/api/x402/{account,supported,verify,settle,score,permit}` — `verify`→edge-auth, `settle`→relayer, `score` is a dogfood 402 paywall over Attribution, `permit` registers/reads the payer's standing spend-permit |
+| Standing permit | `POST /api/x402/permit` — an agent signs ONE EIP-712 `DelegatedSpendPermit` (the SAME scheme the human card flow uses — `lib/org/spendPermit.ts`, domain `Mintware Payment Gateway`/`2.0`) verified server-side (recovers to `payer`, `user`==`payer`) → stored in `x402_standing_permits` (deny-all RLS). `/api/x402/settle` fetches it by `(payer, gateway)` and threads it into the relayer `SettleParams.permit`; **no permit registered ⇒ settle fails closed `no_standing_permit`** (never fabricated). Closes the `settlement_permit_unavailable` gap. |
 | Discovery | `public/.well-known/x402.json` (facilitator/schemes/networks) |
 | Live spendable | edge-auth `GET /available/:user` (read-only headroom = NAV − holds − cap − liquidity; without it, spendable defaults to full parked balance — parking never locks) |
 | UI | public `/agents` (reorged to lead with earn + pay) · `/app/agents` (live clickable parking account: parked / spendable / earning) |

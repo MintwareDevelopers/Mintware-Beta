@@ -6,7 +6,7 @@ import { YpnFacilitator, Facilitator, TrustSource } from './facilitator'
 import { httpEdgeAuthorizer, httpSettler, deferredSettler } from './edgeHttp'
 import { parkedSizeTrustSource } from './trustSources'
 import { rpcParkedReader } from './vaultReader'
-import { ARC_TESTNET, ARC_TESTNET_DEPLOYMENT } from '@/config/arc'
+import { ARC_TESTNET, ARC_TESTNET_DEPLOYMENT, ARC_CHAIN_ID } from '@/config/arc'
 
 /** USDC (6dp) per supported network — public token addresses. */
 export const USDC_BY_NETWORK: Record<string, string> = {
@@ -53,4 +53,26 @@ function getTrustSource(): TrustSource | undefined {
 /** True when a seller route can price + settle (facilitator + payTo + at least one network). */
 export function sellerReady(): boolean {
   return Boolean(getFacilitator() && defaultPayTo() && supportedNetworks().length)
+}
+
+/** The `MintwarePaymentGateway` an x402 standing permit authorizes — the EIP-712 `verifyingContract`
+ *  the payer signs against AND the gateway the relayer runs `settleSpend` on. Must be a SINGLE value
+ *  so registration (permit route) and lookup (settle route) agree. Resolves server-side from env,
+ *  never from a client-supplied address. `X402_GATEWAY_ADDRESS` overrides; otherwise it falls back to
+ *  the relayer's default gateway, then the Arc spend-stack gateway. Returns undefined when unset →
+ *  callers fail closed. */
+export function x402PermitGateway(): string | undefined {
+  return (
+    process.env.X402_GATEWAY_ADDRESS ??
+    process.env.RELAYER_GATEWAY_ADDRESS ??
+    process.env.NEXT_PUBLIC_ARC_GATEWAY_ADDRESS
+  )
+}
+
+/** Chain id the x402 permit's EIP-712 domain is bound to. Must match the gateway's chain. Defaults to
+ *  Arc (the x402 spend chain); overridable via `X402_PERMIT_CHAIN_ID` / `EDGE_CHAIN_ID`. */
+export function x402PermitChainId(): number {
+  const raw = process.env.X402_PERMIT_CHAIN_ID ?? process.env.EDGE_CHAIN_ID
+  const n = raw != null ? Number(raw) : ARC_CHAIN_ID
+  return Number.isFinite(n) && n > 0 ? n : ARC_CHAIN_ID
 }

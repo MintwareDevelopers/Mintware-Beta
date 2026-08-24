@@ -8,21 +8,13 @@
 // to the card's member_wallet) — same "Routes That Do Manual Auth" category as vault deposit.
 
 import type { NextRequest } from 'next/server'
-import { createPublicClient, http, verifyTypedData } from 'viem'
+import { createPublicClient, http } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { rpcForChain } from '@/lib/org/treasuryReader'
 import { VAULT_ABI } from '@/lib/web3/artifacts/treasuryV2'
+import { verifyDelegatedSpendPermit } from '@/lib/org/spendPermit'
 
 export const dynamic = 'force-dynamic'
-
-const PERMIT_TYPES = {
-  DelegatedSpendPermit: [
-    { name: 'user', type: 'address' },
-    { name: 'maxDailySpendUSDC', type: 'uint256' },
-    { name: 'nonce', type: 'uint256' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-} as const
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string; cardId: string }> }) {
   const { id, cardId } = await params
@@ -59,11 +51,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return ctx.json({ error: 'treasury_read_failed' }, 502)
     }
 
-    const message = { user: card.member_wallet as `0x${string}`, maxDailySpendUSDC, nonce, deadline }
-    const valid = await verifyTypedData({
-      address: card.member_wallet as `0x${string}`,
-      domain: { name: 'Mintware Payment Gateway', version: '2.0', chainId: org.treasury_chain_id, verifyingContract: gateway as `0x${string}` },
-      types: PERMIT_TYPES, primaryType: 'DelegatedSpendPermit', message,
+    const valid = await verifyDelegatedSpendPermit({
+      signer: card.member_wallet as `0x${string}`,
+      chainId: org.treasury_chain_id,
+      gateway: gateway as `0x${string}`,
+      message: { user: card.member_wallet as `0x${string}`, maxDailySpendUSDC, nonce, deadline },
       signature: signature as `0x${string}`,
     })
     if (!valid) return ctx.json({ error: 'signature does not recover to the card holder' }, 401)
