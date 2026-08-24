@@ -176,6 +176,15 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
     bytes32 public constant RP_REBALANCE_WINDOW_CAP = keccak256("MintwareTreasuryFloatSettlement.rebalanceWindowCap");
     bytes32 public constant RP_USDC_FLOAT_ADAPTER   = keccak256("MintwareTreasuryFloatSettlement.usdcFloatAdapter");
     bytes32 public constant RP_WSTETH_ADAPTER       = keccak256("MintwareTreasuryFloatSettlement.wstEthAdapter");
+    // AUDIT R5 (exploit red-team): the leg-1 wstETH→ETH slippage floor (`lidoBandBps`, via
+    // `_enforceLidoFloor`) and the emergency-valve conversion headroom are RISK anchors on the settlement
+    // swap, exactly like `bandTicks` on leg 2 — with `minSettleOutBps` default-off they can be the ONLY
+    // bound on their leg. They were instant `onlyOwner` setters, letting a rogue owner widen the slippage
+    // floor in one block and (with a colluding keeper) self-sandwich-drain backing — the exact bypass the
+    // R4-L4 timelock closes for the sibling. Now routed through the same 48h rail (widening timelocked,
+    // tightening instant).
+    bytes32 public constant RP_LIDO_BAND            = keccak256("MintwareTreasuryFloatSettlement.lidoBandBps");
+    bytes32 public constant RP_EMERGENCY_HEADROOM   = keccak256("MintwareTreasuryFloatSettlement.emergencySwapHeadroomBps");
     int24   public constant MAX_BAND_TICKS          = 2_000;
     uint256 public constant MAX_SETTLE_CAP          = type(uint128).max;
     uint256 public constant MAX_SETTLE_WINDOW       = 3650 days;
@@ -364,10 +373,13 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
 
     // ── admin: instant (non-governed) tuning ────────────────────────────────────────────
 
-    function setLidoBandBps(uint16 bps) external onlyOwner { if (bps > BPS) revert BadParam(); lidoBandBps = bps; emit LidoBandSet(bps); }
+    /// @notice Governed (AUDIT R5): the leg-1 wstETH→ETH slippage floor. WIDENING (risk-increasing) is
+    ///         48h-timelocked; NARROWING (safety) is instant. Bounded ≤ 100%.
+    function setLidoBandBps(uint16 bps) external onlyOwner { _changeRiskParam(RP_LIDO_BAND, bps, 0); }
 
-    /// @notice Set the emergency-valve conversion headroom (bps). Must be ≤ 100%.
-    function setEmergencySwapHeadroomBps(uint16 bps) external onlyOwner { if (bps > BPS) revert BadParam(); emergencySwapHeadroomBps = bps; emit EmergencyHeadroomSet(bps); }
+    /// @notice Governed (AUDIT R5): the emergency-valve conversion headroom (bps, ≤ 100%). RAISING (spends more
+    ///         wstETH backing per unit output = risk-increasing) is 48h-timelocked; LOWERING is instant.
+    function setEmergencySwapHeadroomBps(uint16 bps) external onlyOwner { _changeRiskParam(RP_EMERGENCY_HEADROOM, bps, 0); }
 
     /// @notice Float-sizing (liquidity-comfort, not a solvency guard): the keeper target + the on-hand minimum a
     ///         sweep may not push below. Instant onlyOwner (not routed through the timelock).
@@ -446,7 +458,7 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         } else if (param == RP_SETTLE_WINDOW_CAP || param == RP_REBALANCE_WINDOW_CAP) {
             if (v != 0 && v2 == 0) revert BadParam();                       // enabled cap needs a window
             if (v > MAX_SETTLE_CAP || v2 > MAX_SETTLE_WINDOW) revert BadParam();
-        } else if (param == RP_MIN_SETTLE_OUT_BPS) {
+        } else if (param == RP_MIN_SETTLE_OUT_BPS || param == RP_LIDO_BAND || param == RP_EMERGENCY_HEADROOM) {
             if (v > BPS) revert BadParam();
         } else if (param == RP_USDC_FLOAT_ADAPTER || param == RP_WSTETH_ADAPTER) {
             // any address (incl. 0 = clear) is valid
@@ -466,6 +478,8 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         if (param == RP_REBALANCE_WINDOW_CAP)  return maxRebalancePerWindow;
         if (param == RP_USDC_FLOAT_ADAPTER)    return uint256(uint160(address(usdcFloatAdapter)));
         if (param == RP_WSTETH_ADAPTER)        return uint256(uint160(address(wstEthAdapter)));
+        if (param == RP_LIDO_BAND)             return lidoBandBps;
+        if (param == RP_EMERGENCY_HEADROOM)    return emergencySwapHeadroomBps;
         revert BadParam();
     }
 
@@ -482,6 +496,10 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
             _writeWindowCap(false, v, v2);
         } else if (param == RP_MIN_SETTLE_OUT_BPS) {
             minSettleOutBps = uint16(v); emit MinSettleOutBpsSet(uint16(v));
+        } else if (param == RP_LIDO_BAND) {
+            lidoBandBps = uint16(v); emit LidoBandSet(uint16(v));
+        } else if (param == RP_EMERGENCY_HEADROOM) {
+            emergencySwapHeadroomBps = uint16(v); emit EmergencyHeadroomSet(uint16(v));
         } else if (param == RP_REBALANCE_PER_CALL) {
             maxRebalancePerCall = v; emit RebalanceCapsSet(v, maxRebalancePerWindow, rebalanceWindow);
         } else if (param == RP_REBALANCE_WINDOW_CAP) {
@@ -520,8 +538,8 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         if (!_riskParamsLive()) return true; // first-set-immediate (pre-arming)
         // higher == stricter → instant on raise/equal
         if (param == RP_MIN_SETTLE_OUT_BPS || param == RP_REQUIRE_READY_ORACLE) return v >= _readRiskParam(param);
-        // lower == stricter → instant on lower/equal
-        if (param == RP_BAND_TICKS) return v <= _readRiskParam(param);
+        // lower == stricter → instant on lower/equal (narrower band / less headroom = safer)
+        if (param == RP_BAND_TICKS || param == RP_LIDO_BAND || param == RP_EMERGENCY_HEADROOM) return v <= _readRiskParam(param);
         // adapters: clearing to address(0) (no external lending) is safety → instant; enabling/re-point → timelocked
         if (param == RP_USDC_FLOAT_ADAPTER || param == RP_WSTETH_ADAPTER) return v == 0;
         // "0 == off == loosest" single caps → stricter == lower NON-ZERO value (map 0 → +inf)
