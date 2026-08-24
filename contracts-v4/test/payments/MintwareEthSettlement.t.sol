@@ -379,6 +379,28 @@ contract MintwareEthSettlementTest is Test {
         vm.stopPrank();
     }
 
+    /// @notice R5: the settlement rail is SET-ONCE. Once pinned it cannot be re-pointed (mirrors the R4-H1
+    ///         set-once oracle-source freeze), closing the owner+relayer one-block backing-drain-to-hostile-rail
+    ///         vector. `address(0)` stays rejected; a fresh instance can pin exactly once.
+    function test_R5_SettlementRail_FrozenOnceSet() public {
+        vm.prank(owner);
+        vm.expectRevert(MintwareEthSettlement.AlreadySet.selector);
+        settle.setSettlementRail(makeAddr("hostileRail")); // rail pinned in setUp → frozen
+
+        vm.prank(owner);
+        vm.expectRevert(MintwareEthSettlement.ZeroAddress.selector);
+        settle.setSettlementRail(address(0));
+
+        MintwareEthSettlement fresh = new MintwareEthSettlement(
+            IPoolManager(address(pm)), key, address(usdc), address(weth), owner, relayer
+        );
+        vm.startPrank(owner);
+        fresh.setSettlementRail(rail);                     // first pin OK
+        vm.expectRevert(MintwareEthSettlement.AlreadySet.selector);
+        fresh.setSettlementRail(makeAddr("other"));        // re-point frozen
+        vm.stopPrank();
+    }
+
     /// AUDIT R4-M2: re-applying the SAME (cap, window) is a tightening/equal reconfig → instant, and must NOT
     /// wipe the cumulative accumulator (the PoC that turned "≤ cap per window" into "≤ cap per block").
     function test_R4M2_windowCap_reapplySameValue_doesNotClearAccumulator() public {

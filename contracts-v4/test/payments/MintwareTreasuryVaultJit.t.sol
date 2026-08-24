@@ -29,9 +29,10 @@ contract MockJitHook {
     }
 
     /// Borrow up to `want`, then return `returnAmount` to the vault and settle. Returns what was lent.
+    /// R5-H1: the vault PULLS the return via transferFrom, so approve rather than pre-transfer.
     function round(uint256 want, uint256 returnAmount) external returns (uint256 lent) {
         lent = vault.borrowIdleForJit(want);
-        usdc.transfer(address(vault), returnAmount);
+        usdc.approve(address(vault), returnAmount);
         vault.settleJitReturn(returnAmount);
     }
 
@@ -42,7 +43,7 @@ contract MockJitHook {
     }
 
     function settle(uint256 amount) external {
-        usdc.transfer(address(vault), amount);
+        usdc.approve(address(vault), amount);
         vault.settleJitReturn(amount);
     }
 }
@@ -159,6 +160,42 @@ contract MintwareTreasuryVaultJitTest is Test {
         assertEq(v.juniorUsdcBuffer(), 0, "buffer should be exhausted");
         assertApproxEqAbs(v.totalSeniorAssets(), navBefore - 7 * ONE, 2, "senior dip not bounded to the residual");
         assertEq(v.jitBorrowed(), 0, "jitBorrowed not cleared");
+    }
+
+    // ── AUDIT R5-H1: the JIT return is measured LOCALLY to the settle call, not via a cross-tx baseline ──
+    //
+    // Reviewer PoC. The deployed design settles JIT in a SEPARATE, permissionless `sweepJit()` transaction —
+    // NOT atomically inside the opening swap. So `borrow` and `settle` here are separate calls, and a
+    // legitimate op (`fundRent`) moves `usdc.balanceOf(vault)` in between. A genuine $10 JIT loss must be
+    // booked as -$10 (junior absorbs it). PRE-FIX, `settleJitReturn` computed `nowBal - baseline` where the
+    // baseline was captured in the opening swap; the $20 of intervening rent leaked into that delta, HIDING
+    // the loss as phantom +$10 profit (junior untouched) — which also blinds the H4 loss breaker.
+    function test_R5H1_jit_loss_not_hidden_by_intervening_op() public {
+        // Wire this test as the am-AMM rent funder so it can push senior USDC while the JIT slice is open.
+        vault.setRentFunder(address(this));
+
+        uint256 bufBefore = vault.juniorUsdcBuffer();
+        assertEq(vault.jitNetPnl(), int256(0), "precondition: flat JIT pnl");
+
+        // Phase 1 (opening swap): the hook borrows $400. The vault sends it $400 → the hook now holds it.
+        uint256 lent = hook.borrow(400 * ONE);
+        assertEq(lent, 400 * ONE, "borrowed the slice");
+        assertEq(vault.jitBorrowed(), 400 * ONE, "slice outstanding across calls");
+
+        // Between open and settle: a legitimate $20 rent push. During the lock this credits the senior and
+        // STAYS on the vault's hand → it moves `usdc.balanceOf(vault)`, the exact leak the old baseline hit.
+        usdc.mint(address(this), 20 * ONE);
+        usdc.approve(address(vault), 20 * ONE);
+        vault.fundRent(address(usdc), 20 * ONE);
+
+        // Phase 2 (later sweep): the hook returns only $390 — a real $10 close cost. It keeps the other $10.
+        hook.settle(390 * ONE);
+
+        assertEq(vault.jitBorrowed(), 0, "slice cleared");
+        // Junior first-loss must absorb EXACTLY the $10 real loss (pre-fix: untouched).
+        assertEq(vault.juniorUsdcBuffer(), bufBefore - 10 * ONE, "junior buffer did not absorb the real $10 loss");
+        // Realized PnL must be -$10 (pre-fix: phantom +$10, which would hide the loss from the H4 breaker).
+        assertEq(vault.jitNetPnl(), -int256(10 * ONE), "JIT loss mis-booked as phantom profit");
     }
 
     // ── access control ────────────────────────────────────────────────────────

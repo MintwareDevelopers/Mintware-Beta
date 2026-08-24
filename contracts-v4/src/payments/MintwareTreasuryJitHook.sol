@@ -581,7 +581,10 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable, MWTimelock
         poolManager.unlock(""); // redeem + swap inside the unlock (see unlockCallback)
         usdcReturned = usdc.balanceOf(address(this));
         if (usdcReturned > 0) {
-            usdc.safeTransfer(address(vault), usdcReturned);
+            // AUDIT R5-H1: APPROVE and let the vault PULL exactly this amount inside `settleJitReturn` (it
+            // books the balance-diff), so the credited return is measured LOCALLY to that call — immune to
+            // any vault-balance movement between this permissionless sweep and the opening swap.
+            usdc.forceApprove(address(vault), usdcReturned);
             vault.settleJitReturn(usdcReturned); // reconciles jitBorrowed (junior absorbs any shortfall)
         } else if (
             // AUDIT R2-H2: reconcile on ANY sweep that fully drains the position (no claims, no physical
@@ -650,7 +653,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable, MWTimelock
         // TickMath.getSqrtPriceAtTick would revert INSIDE beforeSwap — bricking the pool. If the range
         // is unusable, no-op the JIT (return the borrow) rather than let the swap revert.
         if (lo < TickMath.minUsableTick(spacing) || hi > TickMath.maxUsableTick(spacing) || lo >= hi) {
-            usdc.safeTransfer(address(vault), lent);
+            usdc.forceApprove(address(vault), lent); // AUDIT R5-H1: vault pulls; return measured in-call
             vault.settleJitReturn(lent);
             return;
         }
@@ -659,7 +662,7 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable, MWTimelock
             : LiquidityAmounts.getLiquidityForAmount0(TickMath.getSqrtPriceAtTick(lo), TickMath.getSqrtPriceAtTick(hi), lent);
         if (L == 0) {
             // couldn't form a position — return the USDC to the vault (settles the borrow immediately).
-            usdc.safeTransfer(address(vault), lent);
+            usdc.forceApprove(address(vault), lent); // AUDIT R5-H1: vault pulls; return measured in-call
             vault.settleJitReturn(lent);
             return;
         }

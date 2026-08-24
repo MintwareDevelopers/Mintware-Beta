@@ -188,10 +188,6 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     uint16  public jitMaxPerBlockBps = 500; // 5% default
     uint256 private jitBlock;               // block of the current per-block accumulator
     uint256 private jitBorrowedThisBlock;   // senior USDC lent to JIT so far this block
-    /// @notice AUDIT M3: the vault's USDC balance captured right AFTER lending to the JIT hook. The hook's
-    ///         return is BALANCE-VERIFIED against this (not self-reported) — the borrow→settle round is
-    ///         atomic within one swap, so the balance can only have moved by the hook's return transfer.
-    uint256 private _jitUsdcBaseline;
 
     /// @notice AUDIT M1: optional per-block ceiling (USDC) on Gateway-driven `burnForPayment`, so even a
     ///         compromised/buggy Gateway can only drain the senior at a BOUNDED rate — giving the guardian
@@ -556,12 +552,21 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     ///         `min(par, realizable)` so any shortfall is shared PRO-RATA across all senior holders — closing
     ///         the first-redeemer run (early exits at par, late exits reverting).
     function seniorRealizableAssets() public view returns (uint256) {
-        uint256 lpLeg = deployedFromSenior;
-        if (lpLeg != 0) {
-            uint256 backed = recoverableUSDC() + juniorUsdcBuffer; // junior first-loss backstops the LP leg
-            if (backed < lpLeg) lpLeg = backed;                    // impaired: value at what's actually recoverable
+        // AUDIT R5-L1 (round-5): value the deployed-at-risk legs together — the LP leg (`deployedFromSenior`)
+        // AND any outstanding/stranded JIT slice (`jitBorrowed`) — at what is ACTUALLY recoverable, capped at
+        // par. The prior version bounded only the LP leg and then added `jitBorrowed` at PAR unconditionally;
+        // during an adverse team-price move with an un-swept JIT slice that let an early senior redeemer exit
+        // at an inflated NAV, drawing the junior first-loss (the first-redeemer run H1 closed, re-opened for
+        // the JIT leg). `recoverableUSDC()` values only the vault's OWN LP position (not the hook's JIT slice),
+        // so a stranded JIT slice is backed solely by the junior USDC buffer here — exactly as the redemption
+        // waterfall can realize. The MINT path keeps `jitBorrowed` at par (`totalSeniorAssets`), which is the
+        // safe direction. Fully covered ⇒ identical to par, so the senior still redeems 1:1 in normal operation.
+        uint256 deployedLegs = deployedFromSenior + jitBorrowed;
+        if (deployedLegs != 0) {
+            uint256 backed = recoverableUSDC() + juniorUsdcBuffer; // junior first-loss backstops the at-risk legs
+            if (backed < deployedLegs) deployedLegs = backed;      // impaired: value at what's actually recoverable
         }
-        return adapter.totalAssets() + _freeSeniorBuffer() + lpLeg + jitBorrowed;
+        return adapter.totalAssets() + _freeSeniorBuffer() + deployedLegs;
     }
 
     /// @dev The NAV a redemption/settlement prices against: never above par, never above what is realizable.
@@ -886,25 +891,33 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         jitBorrowed += lent;
         jitBorrowedThisBlock += lent;
         usdc.safeTransfer(jitHook, lent);
-        _jitUsdcBaseline = usdc.balanceOf(address(this)); // AUDIT M3: baseline for balance-verified return
         emit JitBorrowed(lent);
     }
 
     /// @notice The hook returns the borrowed senior USDC (+ any captured fee, net of its close cost) after
-    ///         closing its JIT position in the SAME swap. Profit lifts the senior; a shortfall is absorbed
-    ///         by the junior USDC buffer so the senior stays whole at par. NEVER reverts.
-    function settleJitReturn(uint256 /* usdcReturnedClaimed */) external onlyJitHook nonReentrant {
+    ///         closing its JIT position and sweeping the proceeds. Profit lifts the senior; a shortfall is
+    ///         absorbed by the junior USDC buffer so the senior stays whole at par.
+    /// @param  reported the USDC the hook says it is returning — the hook must have APPROVED at least this
+    ///         much; the vault PULLS it here and credits only what physically arrives in THIS call.
+    /// @dev AUDIT R5-H1 (round-5): the return is measured PHYSICALLY and LOCALLY to this call — the vault
+    ///      pulls `reported` from the hook via `transferFrom` and books the balance-diff, rather than
+    ///      `nowBal - baseline` where the baseline was captured in the OPENING swap. The borrow→settle round
+    ///      is NOT atomic in the deployed design: the hook only mints ERC-6909 claims in `afterSwap`; the real
+    ///      settle is a later, PERMISSIONLESS `sweepJit()` transaction. Between open and settle, routine ops
+    ///      (`burnForPayment`, `depositUSDC`, `fundRent`, `accrueFees`, `redeemSenior`) move
+    ///      `usdc.balanceOf(this)`, so a cross-tx baseline no longer measured the hook's actual return —
+    ///      hiding real JIT loss (senior par backed by phantom USDC) or over-drawing the junior. Pulling here
+    ///      binds `usdcReturned`, `jitNetPnl`, and the junior draw strictly to what was DELIVERED in this call.
+    function settleJitReturn(uint256 reported) external onlyJitHook nonReentrant {
         uint256 outstanding = jitBorrowed;
         jitBorrowed = 0;
 
-        // AUDIT M3: do NOT trust the hook's self-reported figure — measure what actually arrived. The whole
-        // borrow→settle round is atomic within ONE swap (nonReentrant redemptions cannot interleave), so the
-        // vault's USDC balance moved only by the hook's return transfer since `_jitUsdcBaseline` was set. A
-        // hook that under-returns (or returns nothing) is thus correctly treated as a JIT loss the junior
-        // absorbs, rather than a lie that corrupts `jitNetPnl`/`juniorUsdcBuffer`.
-        uint256 nowBal   = usdc.balanceOf(address(this));
-        uint256 usdcReturned = nowBal > _jitUsdcBaseline ? nowBal - _jitUsdcBaseline : 0;
-        _jitUsdcBaseline = 0;
+        uint256 usdcReturned;
+        if (reported > 0) {
+            uint256 beforeBal = usdc.balanceOf(address(this));
+            usdc.safeTransferFrom(jitHook, address(this), reported); // hook approved this; reverts if it can't deliver
+            usdcReturned = usdc.balanceOf(address(this)) - beforeBal;
+        }
 
         uint256 shortfall = usdcReturned < outstanding ? outstanding - usdcReturned : 0;
         uint256 draw;
@@ -944,7 +957,6 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         uint256 draw = outstanding < juniorUsdcBuffer ? outstanding : juniorUsdcBuffer;
         if (draw > 0) { juniorUsdcBuffer -= draw; emit JuniorUsdcAbsorbed(draw); }
         _supplyToAdapter(draw); // freed junior USDC becomes senior-side idle → keeps senior whole to `draw`
-        _jitUsdcBaseline = 0;
 
         jitNetPnl -= int256(outstanding);
         if (jitMaxCumulativeLoss != 0 && !jitAutoDisabled && jitNetPnl < -int256(jitMaxCumulativeLoss)) {

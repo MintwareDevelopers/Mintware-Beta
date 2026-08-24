@@ -135,6 +135,9 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     error ExactOutputNotSupported();
     error AuctionAlreadySet();
     error FeeTooHigh();
+    /// @dev AUDIT L-2: a negative int24 oracle-guard param wraps to ~16.7M via `uint256(uint24(...))` in
+    ///      MWOracleGuard, silently disabling the circuit breaker / collapsing the per-block truncation.
+    error NegativeGuardParam();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(POOL_MANAGER)) revert OnlyPoolManager();
@@ -238,6 +241,12 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         // invariants assume. (`maxFeePips == 0` is handled safely by the FALLBACK clamp on BOTH fee paths —
         // see beforeSwap — so it need not be rejected here.)
         if (slopePipsPerTick > 1_000_000) revert BadFeeConfig();
+        // AUDIT L-2: the signed oracle-guard params must be non-negative. MWOracleGuard reads them as
+        // `uint256(uint24(...))`, so a negative value (e.g. -1) wraps to 16,777,215 — a negative
+        // maxDeviationTicks makes the breaker band effectively infinite (never trips) and a negative
+        // maxTickMovePerBlock lets the truncated oracle jump straight to spot in one block, collapsing the
+        // manipulation resistance. (These are the only signed params here; maxCatchupBlocks is unsigned.)
+        if (maxTickMovePerBlock < 0 || maxDeviationTicks < 0) revert NegativeGuardParam();
         feeParams[poolId] = FeeParams({
             baseFeePips:        baseFeePips,
             maxFeePips:         maxFeePips,

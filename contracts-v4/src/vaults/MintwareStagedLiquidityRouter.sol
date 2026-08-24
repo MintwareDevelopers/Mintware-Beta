@@ -54,8 +54,11 @@ interface IPairVaultLike {
 contract MintwareStagedLiquidityRouter is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    /// @dev Symmetric virtual shares/assets offset for the per-adapter pool (matches the v1 vault).
-    uint256 private constant VIRTUAL = 1e3;
+    /// @dev Symmetric virtual shares/assets offset for the per-adapter pool. AUDIT L-8: raised 1e3 → 1e6 to
+    ///      match the payment vaults' (`MintwareTreasuryVault`) offset. Shares price against the live,
+    ///      donation-inflatable `adapter.totalAssets()`, so the larger offset forces a would-be donation
+    ///      griefer to move ~1e6× a victim's deposit — economically irrational — instead of ~1e3×.
+    uint256 private constant VIRTUAL = 1e6;
 
     struct Stage {
         address owner;          // who staged; the only address that can pair or unstage

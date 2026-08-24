@@ -272,10 +272,14 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         _changeRiskParam(RP_JUNIOR_TOPUP_CAP, cap, 0);
     }
 
-    /// @notice AUDIT H4: pin (or re-point) the sole settlement destination. Set to the Gateway / CPN
-    ///         settlement address before enabling settlement; the relayer can never pay anywhere else.
+    /// @notice AUDIT H4 / R5: pin the sole settlement destination — SET ONCE. Set to the Gateway / CPN
+    ///         settlement address before enabling settlement; the relayer can never pay anywhere else. R5:
+    ///         the rail is a settlement TRUST ANCHOR, so — mirroring the R4-H1 set-once oracle-source freeze —
+    ///         it can no longer be re-pointed once pinned. Re-pointing was an owner+relayer one-block drain of
+    ///         settlement backing to a hostile destination; freezing it removes that vector.
     function setSettlementRail(address rail) external onlyOwner {
         if (rail == address(0)) revert ZeroAddress();
+        if (settlementRail != address(0)) revert AlreadySet(); // set-once (rail pinned ⇒ frozen)
         settlementRail = rail;
         emit SettlementRailSet(rail);
     }
