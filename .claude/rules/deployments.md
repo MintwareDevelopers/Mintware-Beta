@@ -137,8 +137,42 @@ Foundry deploy scripts (`contracts-v4/script/`):
 | `DeployArcSpendStack.s.sol` | Arc YPN spend stack |
 | `DeployEthCollateralVault.s.sol` | ETH-collateral vault |
 | `DeployEthSettlement.s.sol` | ETH settlement stack (`MintwareEthSettlement`) |
-| `DeployFloatSettlement.s.sol` | **Go-forward** YPN float settlement (`MintwareTreasuryFloatSettlement`) — establishes the deploy path; env-with-mock-fallback. AUDIT + real-deep-pool gated (needs real wstETH/ETH + ETH/USDC pools + Lido/oracle refs for real use; testnet uses mocks). |
+| `DeployFloatSettlement.s.sol` | **Go-forward** YPN float settlement (`MintwareTreasuryFloatSettlement`) — establishes the deploy path; env-with-mock-fallback. AUDIT + real-deep-pool gated (needs real wstETH/ETH + ETH/USDC pools + Lido/oracle refs for real use; testnet uses mocks). Carries a **pool-depth pre-flight guard** — see below. |
 | `DeployWeightedDistributor.s.sol` | Vault-weighted epoch reward rail |
+
+### Float-settlement mainnet references + pool-depth guard (`DeployFloatSettlement.s.sol`)
+
+**Still env-gated until real deep pools exist.** The float settlement's keeper 2-hop
+(wstETH → ETH → USDC) + emergency swap need DEEP `wstETH/ETH` + `ETH/USDC` pools and real Lido/Aave
+references. The pool liquidity itself is an ops/capital step (out of scope here); the *code* half is:
+
+**Mainnet reference addresses** (canonical **Ethereum mainnet**; documented, env-overridable **defaults** —
+NOT hardcoded into any audited contract; one home = [`config/settlement.ts`](../../config/settlement.ts)).
+**⚠ VERIFY every address before deploy** — exact-address correctness is a deploy-time responsibility; set
+each explicitly in the deploy env and re-check against Etherscan / the protocol's own docs:
+
+| Ref | Address (⚠ VERIFY at deploy) | Deploy env var |
+|---|---|---|
+| Lido `wstETH` (18dp) | `0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0` | `WSTETH_ADDRESS` (+ `LIDO_RATE_SOURCE`) |
+| Lido `stETH` (18dp) | `0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84` | (rate math ref) |
+| Aave v3 `Pool` | `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2` | (idle rehypothecation ref) |
+| `WETH` (18dp) | `0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2` | `WETH_ADDRESS` |
+| `USDC` (6dp) | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` | `USDC_ADDRESS` |
+
+**Pool-depth pre-flight guard.** Before deploying the settlement the script reads the **actual** in-range
+liquidity of BOTH canonical pools (`StateLibrary.getLiquidity(poolManager, poolId)`) and **reverts
+`PoolTooThin`** if either is below `MIN_POOL_LIQUIDITY` — so it is impossible to stand the settlement up
+against a thin pool. Controls:
+- `ENFORCE_POOL_DEPTH` — default `= !INIT_POOLS`, i.e. **ON for a real deploy** (real pools already exist →
+  `INIT_POOLS=false`), **OFF on the mock rig** (freshly-initialized mock pools have no real depth, mirroring
+  how the script relaxes its other mock-only gates).
+- `MIN_POOL_LIQUIDITY` — the floor (Uniswap-V4 `L` units, **pool-specific, not USD**). Default
+  `MIN_POOL_LIQUIDITY_DEFAULT = 1e15` is a conservative placeholder that **⚠ MUST be tuned per pool/decimals
+  at deploy**.
+
+This whole path stays **env-gated + audit-gated**: on testnet it runs against mocks (guard skipped); a real
+mainnet deploy requires the verified addresses above, real deep pools passing the depth guard, real Lido/oracle
+references, and an external audit.
 
 ## Build Notes
 

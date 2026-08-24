@@ -5,6 +5,8 @@ import {Script, console}                 from "forge-std/Script.sol";
 import {IPoolManager}                    from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IHooks}                          from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {PoolKey}                         from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {PoolId, PoolIdLibrary}           from "@uniswap/v4-core/src/types/PoolId.sol";
+import {StateLibrary}                    from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {Currency}                        from "@uniswap/v4-core/src/types/Currency.sol";
 import {MintwareTreasuryFloatSettlement} from "../src/payments/MintwareTreasuryFloatSettlement.sol";
 import {MockERC20}                       from "../test/mocks/MockERC20.sol";
@@ -40,14 +42,34 @@ import {MockLidoRate}                    from "../test/mocks/MockLidoRate.sol";
 ///     STAKE_POOL_FEE / STAKE_POOL_SPACING · ETH_POOL_FEE / ETH_POOL_SPACING  (pool keys; else 3000 / 60)
 ///     INIT_POOLS                     (true on testnet to initialize the mock pools; set FALSE when the real
 ///                                     deep pools already exist on-chain — initializing an existing pool reverts)
+///     ENFORCE_POOL_DEPTH             (pool-depth pre-flight; default = !INIT_POOLS, i.e. ON for a real deploy,
+///                                     OFF for the mock rig. When ON, the script reads the actual in-range
+///                                     liquidity of BOTH canonical pools and REVERTS `PoolTooThin` if either is
+///                                     below MIN_POOL_LIQUIDITY — you cannot deploy the settlement against a thin
+///                                     pool. Mocks have no real depth, so it's relaxed on the testnet stand-up.)
+///     MIN_POOL_LIQUIDITY             (min in-range liquidity L each pool must carry; default MIN_POOL_LIQUIDITY_DEFAULT.
+///                                     ⚠ VERIFY per pool/decimals at deploy — L units are pool-specific, not USD.)
 ///     SETTLE_MAX_PER_CALL            (optional per-call USDC ceiling; 0 = off, the default)
 ///
 ///   Run (testnet, self-contained mocks):
 ///     forge script contracts-v4/script/DeployFloatSettlement.s.sol --rpc-url base_sepolia --broadcast --slow -vvvv
 contract DeployFloatSettlement is Script {
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary  for IPoolManager;
+
     /// Live Base Sepolia V4 PoolManager (matches config/treasury.ts + testnet_deploy_env; same as the sibling scripts).
     address constant POOL_MANAGER    = 0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408;
     uint160 constant INIT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0 (coarse mock placeholder)
+
+    /// Default floor for the pool-depth pre-flight guard: the minimum in-range liquidity `L` each canonical
+    /// pool must carry before a REAL settlement deploy is allowed. ⚠ VERIFY / TUNE at deploy — Uniswap-V4 `L`
+    /// is a pool-specific unit (a function of the pair's decimals + price), NOT a USD figure, so this default is
+    /// a conservative non-zero placeholder that MUST be re-tuned per the actual wstETH/ETH and ETH/USDC pools.
+    uint128 constant MIN_POOL_LIQUIDITY_DEFAULT = 1e15;
+
+    /// Reverted by the pre-flight guard when a canonical pool's in-range liquidity is below the floor — makes it
+    /// impossible to deploy the settlement against a thin pool (the 2-hop replenish/emergency-swap would slip).
+    error PoolTooThin(string pool, uint128 have, uint128 need);
 
     function run() external {
         uint256 deployerKey = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -70,6 +92,12 @@ contract DeployFloatSettlement is Script {
 
         bool    initPools       = vm.envOr("INIT_POOLS",         true);
         uint256 maxSettlePerCall = vm.envOr("SETTLE_MAX_PER_CALL", uint256(0));
+
+        // Pool-depth pre-flight. Default: ON for a real deploy (real deep pools already exist → INIT_POOLS=false),
+        // OFF for the self-contained mock rig (mocks have no real depth). Same "real deploy" signal the rest of
+        // the script uses to distinguish mocks from real references.
+        bool    enforceDepth    = vm.envOr("ENFORCE_POOL_DEPTH", !initPools);
+        uint128 minPoolLiquidity = uint128(vm.envOr("MIN_POOL_LIQUIDITY", uint256(MIN_POOL_LIQUIDITY_DEFAULT)));
 
         console.log("=== MintwareTreasuryFloatSettlement deploy (go-forward YPN settlement) ===");
         console.log("Chain:       ", block.chainid);
@@ -97,6 +125,23 @@ contract DeployFloatSettlement is Script {
         if (initPools) {
             IPoolManager(POOL_MANAGER).initialize(stakeKey, INIT_SQRT_PRICE);
             IPoolManager(POOL_MANAGER).initialize(ethKey,   INIT_SQRT_PRICE);
+        }
+
+        // 2b. POOL-DEPTH PRE-FLIGHT (real deploys only). The float settlement's keeper 2-hop
+        //     (wstETH → ETH → USDC) and emergency swap slip badly on a thin pool, so reject the deploy
+        //     outright if EITHER canonical pool is below the liquidity floor. Read the ACTUAL in-range
+        //     liquidity via StateLibrary (extsload) — no trust in an off-chain number. Relaxed on the mock
+        //     rig, where the just-initialized pools carry no liquidity by construction.
+        if (enforceDepth) {
+            uint128 stakeL = IPoolManager(POOL_MANAGER).getLiquidity(stakeKey.toId());
+            uint128 ethL   = IPoolManager(POOL_MANAGER).getLiquidity(ethKey.toId());
+            console.log("Pool-depth pre-flight (min L):", minPoolLiquidity);
+            console.log("  wstETH/ETH liquidity:      ", stakeL);
+            console.log("  ETH/USDC   liquidity:      ", ethL);
+            if (stakeL < minPoolLiquidity) revert PoolTooThin("wstETH/ETH", stakeL, minPoolLiquidity);
+            if (ethL   < minPoolLiquidity) revert PoolTooThin("ETH/USDC",   ethL,   minPoolLiquidity);
+        } else {
+            console.log("Pool-depth pre-flight: SKIPPED (mock rig / ENFORCE_POOL_DEPTH=false).");
         }
 
         // 3. Deploy the settlement (9 ctor args: pm, stakeKey, ethKey, wstEth, weth, usdc, owner, relayer, keeper).
