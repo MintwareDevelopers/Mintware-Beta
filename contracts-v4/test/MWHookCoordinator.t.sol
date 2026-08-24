@@ -368,25 +368,6 @@ contract MWHookCoordinatorTest is Test {
         coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 60, 6000, 10);
     }
 
-    // ── jit/amAmm wiring guard: a pool must never run BOTH at once ────────────────────────
-
-    function test_jit_and_amAmm_mutually_exclusive_amAmm_second() public {
-        coord.setJitEnabled(poolId, true);
-        vm.expectRevert(MWHookCoordinator.JitAmAmmConflict.selector);
-        coord.setAmAmmEnabled(poolId, true); // second setter reverts
-        // Disabling the first frees the pool to enroll in the other.
-        coord.setJitEnabled(poolId, false);
-        coord.setAmAmmEnabled(poolId, true);
-        assertTrue(coord.amAmmEnabled(poolId), "am-AMM enrolled after JIT cleared");
-    }
-
-    function test_jit_and_amAmm_mutually_exclusive_jit_second() public {
-        coord.setAmAmmEnabled(poolId, true);
-        vm.expectRevert(MWHookCoordinator.JitAmAmmConflict.selector);
-        coord.setJitEnabled(poolId, true); // second setter reverts
-        assertFalse(coord.jitEnabled(poolId), "JIT stayed off while am-AMM enrolled");
-    }
-
     // ── jitClose stuck-flag hardening: a reverting jitClose must not brick afterSwap ──────
 
     /// @notice If the JIT bridge's `jitClose` ever reverted, the coordinator's best-effort try/catch in

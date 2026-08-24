@@ -85,10 +85,15 @@ daily-cap gate; per-payment receiver+amount now come from the verified signature
   wstETH actually consumed — backing conserved, stays earning.
 - **L-8 — staged-router virtual offset `1e3 → 1e6`** to match the payment vaults (donation-griefing
   resistance).
-- **Info hardening:** `jitEnabled && amAmmEnabled` on one pool now rejected (`JitAmAmmConflict`);
-  `setSettlementRail` is **set-once / frozen once pinned** on both settlement contracts (mirrors the
-  R4-H1 oracle-source freeze, removing the owner+relayer one-block rail-repoint drain vector); a
-  `jitActive`-false-at-rest test guards the theoretical stuck-flag freeze.
+- **Info hardening:** `setSettlementRail` is **set-once / frozen once pinned** on both settlement
+  contracts (mirrors the R4-H1 oracle-source freeze, removing the owner+relayer one-block rail-repoint
+  drain vector); a `jitActive`-false-at-rest test guards the theoretical stuck-flag freeze.
+- **Withdrawn (honest note):** the reviewer also floated an *Info*-level "wiring guard" to reject
+  enabling JIT + am-AMM on one pool. It was implemented, then **withdrawn** — the codebase has a
+  dedicated `MintwareDeFiPairVaultJitAmAmmTest` that exercises both together on one pool *by design*,
+  so combined mode is a supported, tested configuration, not a misconfiguration. The full CI suite
+  caught the setUp revert; the guard was removed. A speculative hardening suggestion is not
+  automatically correct — it must be checked against actual intended behavior.
 
 ### ⚪ Deferred (documented, not silent — bounded / needs a design or ops decision)
 

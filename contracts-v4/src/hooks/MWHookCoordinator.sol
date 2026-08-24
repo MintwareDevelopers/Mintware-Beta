@@ -138,10 +138,6 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     /// @dev AUDIT L-2: a negative int24 oracle-guard param wraps to ~16.7M via `uint256(uint24(...))` in
     ///      MWOracleGuard, silently disabling the circuit breaker / collapsing the per-block truncation.
     error NegativeGuardParam();
-    /// @dev jit/amAmm wiring guard: a pool must not run BOTH the am-AMM manager skim (LP fee zeroed) and
-    ///      size-gated JIT at once — the JIT would supply inventory that earns nothing while bearing price
-    ///      risk. Whichever setter is called second reverts.
-    error JitAmAmmConflict();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(POOL_MANAGER)) revert OnlyPoolManager();
@@ -187,10 +183,8 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     }
 
     /// @notice Enroll/unenroll a pool in the am-AMM. Owner must keep this in sync with the
-    ///         auction's `configurePool`/`setEnabled` for the same pool. A pool may not run am-AMM AND
-    ///         size-gated JIT simultaneously (see `JitAmAmmConflict`).
+    ///         auction's `configurePool`/`setEnabled` for the same pool.
     function setAmAmmEnabled(PoolId poolId, bool enabled) external onlyOwner {
-        if (enabled && jitEnabled[poolId]) revert JitAmAmmConflict();
         amAmmEnabled[poolId] = enabled;
     }
 
@@ -207,10 +201,8 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     }
 
     /// @notice Enroll/unenroll a pool for size-gated JIT. Only enable for pools whose configured
-    ///         `vault` is the JIT bridge for that exact pool. A pool may not run size-gated JIT AND
-    ///         am-AMM simultaneously (see `JitAmAmmConflict`).
+    ///         `vault` is the JIT bridge for that exact pool.
     function setJitEnabled(PoolId poolId, bool enabled) external onlyOwner {
-        if (enabled && amAmmEnabled[poolId]) revert JitAmAmmConflict();
         jitEnabled[poolId] = enabled;
         emit JitEnabledSet(poolId, enabled);
     }
