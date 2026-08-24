@@ -10,7 +10,13 @@
 
 import type { EdgeAuthorizer } from '@/lib/x402/facilitator'
 import { httpEdgeAuthorizer } from '@/lib/x402/edgeHttp'
-import { policyForRole, withinDailyCap } from '@/lib/org/rolePresets'
+import { policyForRole } from '@/lib/org/rolePresets'
+import {
+  getStandingForWallet,
+  withinStandingDailyCap,
+  softHeadroomCeiling,
+  type StandingTier,
+} from '@/lib/org/standing'
 import type { getServiceClient } from '@/lib/web2/supabase'
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
@@ -48,6 +54,10 @@ export async function decideCardSwipe(params: {
   spentTodayAtomic?: bigint
   /** Injectable for tests; defaults to the real edge-auth transport built from env. */
   edge?: EdgeAuthorizer | null
+  /** Injectable standing tier for tests. When omitted, standing is computed on-read from the
+   *  member's own settled card spend (getStandingForWallet), failing SAFE to `none`. Standing only
+   *  ever WIDENS a limit within an existing hard cap — never bypasses a money-path guard. */
+  standingTier?: StandingTier
 }): Promise<CardAuthDecision> {
   const { supabase, providerCardToken, provider, amountAtomicUsdc, ref, spentTodayAtomic = 0n } = params
   const edge = params.edge !== undefined ? params.edge : edgeAuthorizerFromEnv()
@@ -89,8 +99,27 @@ export async function decideCardSwipe(params: {
     policy = policyForRole(member.role)
   }
 
-  if (!withinDailyCap(policy, amountAtomicUsdc, spentTodayAtomic)) {
+  // 2b) Standing — a service-quality tier derived PURELY from this member's OWN settled card spend
+  //     (never a reputation/Attribution score). It only ever WIDENS a limit within an existing hard
+  //     cap; a `none`/unknown/missing tier reproduces today's exact behavior. Computed on-read unless
+  //     a tier is injected (tests). Fail-safe: getStandingForWallet returns `none` on any error.
+  const standingTier: StandingTier =
+    params.standingTier ?? (await getStandingForWallet(supabase, card.member_wallet, card.org_id as string)).tier
+
+  // Belt — role daily cap, TIER-WIDENED (Trusted perk: higher daily limit). effectiveDailyCap is
+  // widen-only and hard-clamped, so a `none` tier == the raw role cap (unchanged), and no tier can
+  // remove the cap or turn a receive-only (0n) role into a spender.
+  if (!withinStandingDailyCap(policy.dailyCapUsdc, standingTier, amountAtomicUsdc, spentTodayAtomic)) {
     return { approved: false, reason: 'over_role_daily_cap', ...identity }
+  }
+
+  // Headroom — soft per-swipe ceiling, TIER-WIDENED (Established perk: more of your balance
+  // available). DISABLED by default (returns null → no soft cap → today's exact behavior); when an
+  // operator opts into a conservative floor it engages, and even then a tier can only widen UP TO the
+  // hard $250 settle ceiling, never past it and never around the edge-auth NAV guard below.
+  const softCeiling = softHeadroomCeiling(standingTier)
+  if (softCeiling !== null && amountAtomicUsdc > softCeiling) {
+    return { approved: false, reason: 'over_headroom_soft_cap', ...identity }
   }
 
   // 3) Suspenders — live NAV hold via edge-auth. Fail CLOSED when unconfigured (same posture as
