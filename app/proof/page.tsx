@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
-import { LATEST_RUN, STAGED_LIQUIDITY_RUN, CARD_RAIL, FORMAL_VERIFICATION, SECURITY_AUDIT, SECURITY_AUDIT_R2, SECURITY_AUDIT_R4, SECURITY_AUDIT_R5, AUDIT_MATRIX, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
+import { LATEST_RUN, STAGED_LIQUIDITY_RUN, CARD_RAIL, FORMAL_VERIFICATION, SECURITY_AUDIT, SECURITY_AUDIT_R2, SECURITY_AUDIT_R4, SECURITY_AUDIT_R5, EXPLOIT_REDTEAM, AUDIT_MATRIX, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
 
 const KIND: Record<Decision['kind'], string> = {
   ok: 'text-mw-green bg-[rgba(22,163,74,0.10)]',
@@ -402,6 +402,43 @@ export default function ProofPage() {
             ))}
           </div>
           <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">{SECURITY_AUDIT_R5.note}</p>
+        </div>
+
+        {/* Security self-assessment · AUTONOMOUS EXPLOIT RED-TEAM */}
+        <div className="mt-14 pt-2 border-t border-hair">
+          <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display mt-8">
+            {EXPLOIT_REDTEAM.eyebrow}
+          </div>
+          <h2 className="font-atx-display font-bold text-[clamp(1.7rem,4.4vw,2.5rem)] leading-[1.06] tracking-[-0.03em] mt-3">
+            {EXPLOIT_REDTEAM.title}<br /><span className="text-gradient-accent">{EXPLOIT_REDTEAM.titleAccent}</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(0.98rem,2vw,1.12rem)] leading-[1.5] max-w-[62ch] mt-4">{EXPLOIT_REDTEAM.blurb}</p>
+
+          <div className="grid grid-cols-4 max-[720px]:grid-cols-2 gap-3 mt-6">
+            {EXPLOIT_REDTEAM.stats.map((m) => (
+              <div key={m.label} className="rounded-[16px] border border-hair bg-white shadow-card p-4">
+                <div className="font-atx-display font-bold text-[1.7rem] tracking-[-0.02em] tabular-nums">
+                  {m.value}<span className="text-peri-deep text-[1.1rem]"> {m.sub}</span>
+                </div>
+                <div className="text-[12px] text-ink-mid mt-1 leading-[1.4]">{m.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-5 flex flex-col gap-2">
+            {EXPLOIT_REDTEAM.fixes.map((f) => (
+              <div key={f.title} className="soft-card p-4 flex items-start gap-3">
+                <span className={chip(f.sev === 'H' ? 'text-[#C0392B] bg-[rgba(209,67,67,0.10)]' : f.sev === 'M' ? 'text-mw-amber bg-[rgba(196,122,0,0.10)]' : 'text-mw-green bg-[rgba(22,163,74,0.10)]') + ' shrink-0'}>
+                  {f.sev === 'H' ? 'High' : f.sev === 'M' ? 'Med' : 'Low'}
+                </span>
+                <p className="text-[13.5px] text-ink leading-[1.5] min-w-0 flex-1">{f.title}</p>
+                <span className={chip('text-mw-green bg-[rgba(22,163,74,0.10)]') + ' shrink-0'}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />{f.status}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">{EXPLOIT_REDTEAM.note}</p>
         </div>
 
         {/* tests */}
