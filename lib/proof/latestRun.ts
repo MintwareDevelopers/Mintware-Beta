@@ -439,3 +439,32 @@ export const SECURITY_AUDIT_R5: {
   note:
     'Self-review, not an external audit — run at firm quality (Hacken/CertiK methodology), not by a firm. The honest headline: a firm-grade pass on our own newest code found two real Highs, including one with a working exploit against our JIT loss-attribution, and we fixed them plus the lows and re-verified everything else held. Testnet + unaudited — an external audit remains the gate before real value.',
 }
+
+// Autonomous exploit red-team — five agents each CONSTRUCTED a working multi-step exploit as an
+// executable Foundry PoC (attack-and-prove), not a review. Found one real Medium (a settlement
+// slippage band that skipped the 48h governance delay its sibling band enforces), fixed it; four
+// attack theses held under real executable attacks. Detail: docs/developers/exploit-redteam-2026-08-24.md.
+export const EXPLOIT_REDTEAM: {
+  eyebrow: string; title: string; titleAccent: string; blurb: string
+  stats: { value: string; sub: string; label: string }[]
+  fixes: AuditFix[]; note: string
+} = {
+  eyebrow: 'Security self-assessment · autonomous exploit red-team',
+  title: 'We didn’t just review it.',
+  titleAccent: 'We attacked it.',
+  blurb:
+    'Reviewing finds what you think to look for; attacking finds what actually breaks. So we turned five autonomous agents loose to each construct a working multi-step exploit — as a real, executable proof-of-concept — against a different surface: reentrancy, JIT loss-attribution, oracle/MEV manipulation, tranche solvency, and settlement/access-control. One got through: a slippage band that could be widened in a single block, skipping the 48-hour governance delay its sibling band enforces. We fixed it and proved the fix. The other four attacks were blocked — with the executable proof to show it.',
+  stats: [
+    { value: '5', sub: 'attacks', label: 'autonomous agents, each built an executable exploit PoC' },
+    { value: '1 / 1', sub: 'Medium', label: 'the one attack that got through — remediated + regression-tested' },
+    { value: '4', sub: 'held', label: 'reentrancy · JIT · oracle/MEV · tranche solvency — blocked under attack' },
+    { value: '0', sub: 'Critical/High', label: 'no critical or high findings' },
+  ],
+  fixes: [
+    { sev: 'M', title: 'A settlement slippage floor could be widened instantly by the owner, skipping the 48h governance delay its sibling band enforces — a rogue-owner drain path. Now routed through the same timelock (widening delayed, tightening instant).', status: 'Fixed' },
+    { sev: 'L', title: 'Held under attack: a malicious yield adapter’s re-entrancy is reverted by the guard on every money-path entry point (proven with a real reentrant-adapter PoC).', status: 'Held' },
+    { sev: 'L', title: 'Held under attack: the JIT loss-attribution and stranded-slice redemption fixes both resisted; oracle manipulation is blocked in-block and bounded to the first-loss tranche across blocks; the first-redeemer run stays closed.', status: 'Held' },
+  ],
+  note:
+    'Self-review run at real red-team depth, not an external audit. Attacking our own code with executable exploits found one genuine Medium that a checklist review and static analysis both missed — a sibling-setter timelock asymmetry — which we fixed and regression-tested; every other attack was blocked with proof. Two nuanced edge cases are documented for follow-up rather than claimed closed. Testnet + unaudited — an external audit remains the gate before real value.',
+}
