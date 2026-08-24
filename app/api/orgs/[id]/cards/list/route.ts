@@ -8,6 +8,7 @@ import { createHandler } from '@/lib/web2/routeHandler'
 import { requireActiveCaller } from '@/lib/org/requireActiveCaller'
 import { rpcForChain } from '@/lib/org/treasuryReader'
 import { VAULT_ABI } from '@/lib/web3/artifacts/treasuryV2'
+import { getStandingForWallet } from '@/lib/org/standing'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         }
       }
 
-      return ctx.json({ cards: data ?? [], gateway })
+      // Read-only Standing surface — each card carries its holder's tier, derived on-read from that
+      // member's OWN settled spend (getStandingForWallet, spend-only, never a reputation score). This
+      // is display-only: it does NOT gate the list and never affects a spend/authorize decision here.
+      const cards = (data ?? []) as Array<Record<string, unknown>>
+      const standings = await Promise.all(
+        cards.map((c) => getStandingForWallet(ctx.supabase, c.member_wallet as string, id)),
+      )
+      const cardsWithStanding = cards.map((c, i) => ({
+        ...c,
+        standing: {
+          tier: standings[i].tier,
+          settledCount: standings[i].settledCount,
+          distinctDays: standings[i].distinctDays,
+          spanDays: standings[i].spanDays,
+        },
+      }))
+
+      return ctx.json({ cards: cardsWithStanding, gateway })
     },
     { auth: 'signed-message', action: 'mintware-org-cards-list' },
   )(req)

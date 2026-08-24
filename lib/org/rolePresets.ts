@@ -72,10 +72,18 @@ export function policyForRole(role: string | null | undefined): RolePolicy {
   return ROLE_PRESETS[key] ?? ROLE_PRESETS.contributor
 }
 
+/** Is a proposed spend (atomic USDC) within a raw daily cap? null cap = always allowed; 0n cap =
+ *  never. `spentToday` is the member's already-spent amount today (atomic USDC). Split out from
+ *  `withinDailyCap` so the standing layer can check a tier-adjusted cap with identical belt semantics
+ *  (lib/org/standing.ts#withinStandingDailyCap). */
+export function withinDailyCapValue(cap: bigint | null, amountUsdc: bigint, spentToday: bigint = 0n): boolean {
+  if (cap === null) return true
+  if (cap === 0n) return false
+  return spentToday + amountUsdc <= cap
+}
+
 /** Is a proposed spend (atomic USDC) within this role's daily cap? null cap = always allowed;
  *  0n cap = never. `spentToday` is the member's already-spent amount today (atomic USDC). */
 export function withinDailyCap(policy: RolePolicy, amountUsdc: bigint, spentToday: bigint = 0n): boolean {
-  if (policy.dailyCapUsdc === null) return true
-  if (policy.dailyCapUsdc === 0n) return false
-  return spentToday + amountUsdc <= policy.dailyCapUsdc
+  return withinDailyCapValue(policy.dailyCapUsdc, amountUsdc, spentToday)
 }

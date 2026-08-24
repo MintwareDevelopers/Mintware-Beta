@@ -23,6 +23,7 @@ const ROOT = path.resolve(__dirname, '..', '..')
 const SPEND_PATH_MODULES = [
   'lib/org/cardAuthorize.ts', // card-swipe authorize decision (role cap + edge-auth NAV hold)
   'lib/org/settleSwipe.ts',   // on-chain settle (burn shares → pay merchant)
+  'lib/org/standing.ts',      // Standing tier — derived from settled spend, feeds the authorize belt/headroom
   'lib/x402/edgeHttp.ts',     // edge-auth NAV-hold client (verify/settle transport)
 ]
 
