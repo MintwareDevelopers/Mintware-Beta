@@ -6,7 +6,12 @@
   "facilitator": {
     "verify": "https://mintware.finance/api/x402/verify",
     "settle": "https://mintware.finance/api/x402/settle",
-    "supported": "https://mintware.finance/api/x402/supported"
+    "supported": "https://mintware.finance/api/x402/supported",
+    "permit": "https://mintware.finance/api/x402/permit"
+  },
+  "permit": {
+    "register": "https://mintware.finance/api/x402/permit",
+    "description": "Register a standing EIP-712 DelegatedSpendPermit ONCE (sign against the Mintware Payment Gateway); every later pay-per-call settles a slice against it. Required before settlement — without it, settle fails closed."
   },
   "schemes": ["exact", "deferred"],
   "networks": ["base", "base-sepolia", "arc"],

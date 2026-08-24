@@ -82,12 +82,14 @@ export function httpEdgeAuthorizer(cfg: { url: string; secret: string; fetchImpl
  *                  payload, because the x402 signature is an EIP-3009 `TransferWithAuthorization`,
  *                  a different scheme than the Gateway's long-lived `DelegatedSpendPermit`.
  *
- *  TODO(x402→gateway permit): the pure x402 agent flow does not carry the payer's `DelegatedSpendPermit`.
- *  To settle an x402 charge through `MintwarePaymentGateway.settleSpend`, the facilitator/settle route
- *  must fetch the payer's stored long-lived permit + signature (the same permit store the card flow
- *  signs into once, `lib/org/*`) and thread it here as `permit` (and `edge` for `>= $250`). Until that
- *  store is wired, we FAIL CLOSED (`settlement_permit_unavailable`) rather than POST a body the Gateway
- *  would reject on-chain — we never fabricate a signature. */
+ *  x402→gateway permit (RESOLVED): the pure x402 agent flow does not carry the payer's
+ *  `DelegatedSpendPermit`, so `/api/x402/settle` fetches the payer's stored long-lived permit from the
+ *  standing-permit store (`lib/x402/permitStore.ts` — the agent twin of the card permit the `lib/org/*`
+ *  flow signs into once, verified against the SHARED scheme in `lib/org/spendPermit.ts`) and threads it
+ *  here as `permit` (and `edge` for `>= $250`). The settle route fails closed with `no_standing_permit`
+ *  when the payer has not registered one; if a `permit` still somehow reaches here absent, we FAIL
+ *  CLOSED (`settlement_permit_unavailable`) rather than POST a body the Gateway rejects — never fabricate
+ *  a signature. */
 export function httpSettler(cfg: { url: string; secret?: string; fetchImpl?: FetchLike }): Settler {
   const f = cfg.fetchImpl ?? fetch
   const base = cfg.url.replace(/\/$/, '')

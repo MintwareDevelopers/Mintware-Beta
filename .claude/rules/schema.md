@@ -92,3 +92,13 @@ Source of truth: `docs/schema.sql`
   allow direct PostgREST read/write. ⚠ Core tables (`campaigns`/`wallet_profiles`/`referral_records`/
   `participants`) live in `docs/schema.sql` (dashboard-managed, NOT a migration) — verify their prod
   RLS with the query in the migration's footer; the repo cannot confirm it.
+- `20260824000001_x402_standing_permits.sql` — **`x402_standing_permits`** table: the agent twin of
+  the `org_cards` permit columns (`20260819000003`). Payer-keyed store of a standing EIP-712
+  `DelegatedSpendPermit` (columns `payer`, `gateway`, `chain_id`, `permit_user`,
+  `max_daily_spend_usdc`, `nonce`, `deadline`, `signature`) so an x402 agent — who need NOT be an org
+  member — registers ONE permit and every pay-per-call settle reuses it. Unique `(payer, gateway)`;
+  re-registering upserts (newest wins). **Deny-all RLS** (service-role only, mirrors
+  `20260819000001`) — written by `POST /api/x402/permit`, read by `/api/x402/settle` via
+  `lib/x402/permitStore.ts`; never browser-read. The permit is verified against the SAME scheme the
+  card flow uses (`lib/org/spendPermit.ts` — domain `Mintware Payment Gateway`/`2.0`, typehash
+  `DelegatedSpendPermit(address user,uint256 maxDailySpendUSDC,uint256 nonce,uint256 deadline)`).

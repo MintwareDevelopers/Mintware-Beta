@@ -50,6 +50,8 @@
 | `X402_SUPPORTED_NETWORKS` | Server-only | Comma list of chains the facilitator accepts |
 | `X402_TRUST_TIERING` | Server-only | Opt-in `parked` — enables trust-tiered pricing (default off) |
 | `X402_SCORE_PRICE_ATOMIC` | Server-only | Per-call price (atomic USDC units) for the score endpoint |
+| `X402_GATEWAY_ADDRESS` | Server-only | The `MintwarePaymentGateway` an x402 standing `DelegatedSpendPermit` authorizes — the EIP-712 `verifyingContract` at registration (`POST /api/x402/permit`) AND the settle gateway. `x402PermitGateway()` (`lib/x402/config.ts`) resolves it, falling back to `RELAYER_GATEWAY_ADDRESS` then `NEXT_PUBLIC_ARC_GATEWAY_ADDRESS`. **Unset ⇒ permit register + settle fail closed** (503 / `no_standing_permit`). |
+| `X402_PERMIT_CHAIN_ID` | Server-only | Chain id the standing permit's EIP-712 domain binds to. Defaults to Arc (`5042002`); falls back to `EDGE_CHAIN_ID`. Must match the gateway's chain. |
 
 ### Relayer HTTP settle server (`services/relayer` — `relayer-server` bin)
 
