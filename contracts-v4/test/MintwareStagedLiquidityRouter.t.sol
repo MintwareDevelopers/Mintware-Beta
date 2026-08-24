@@ -100,6 +100,22 @@ contract MintwareStagedLiquidityRouterTest is Test {
         assertApproxEqAbs(router.stagedAssets(idB), 1_000 * UNIT, 1e15, "bob buys in at NAV");
     }
 
+    /// @notice AUDIT L-8: shares price against the live, donation-inflatable `adapter.totalAssets()`. The
+    ///         symmetric virtual offset (raised 1e3 → 1e6 to match the payment vaults) neutralizes the classic
+    ///         first-depositor donation-inflation grief: an attacker who seeds 1 wei and then donates directly
+    ///         to the adapter cannot round a later victim's shares to zero, and the victim's value is preserved.
+    function test_L8_DonationInflationResisted() public {
+        uint256 atkId = _stageUsdc(alice, 1);        // attacker seeds 1 wei of shares
+        _accrue(adapterUsdc, usdc, 1_000 * UNIT);    // donation: spike totalAssets directly
+
+        uint256 vicId = _stageUsdc(bob, 1_000 * UNIT);
+        (,,,,, , uint256 vicShares) = router.stages(vicId);
+        assertGt(vicShares, 0, "victim shares not rounded to zero (donation attack resisted)");
+        assertApproxEqRel(router.stagedAssets(vicId), 1_000 * UNIT, 0.01e18, "victim value ~ preserved");
+        // The attacker cannot profit: their 1-wei stake is worth far less than the donation they burned.
+        assertLt(router.stagedAssets(atkId), 1_000 * UNIT, "donation grief is unprofitable");
+    }
+
     function test_ZeroAmountReverts() public {
         vm.prank(alice);
         vm.expectRevert(MintwareStagedLiquidityRouter.ZeroAmount.selector);

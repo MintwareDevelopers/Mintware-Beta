@@ -135,6 +135,13 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     error ExactOutputNotSupported();
     error AuctionAlreadySet();
     error FeeTooHigh();
+    /// @dev AUDIT L-2: a negative int24 oracle-guard param wraps to ~16.7M via `uint256(uint24(...))` in
+    ///      MWOracleGuard, silently disabling the circuit breaker / collapsing the per-block truncation.
+    error NegativeGuardParam();
+    /// @dev jit/amAmm wiring guard: a pool must not run BOTH the am-AMM manager skim (LP fee zeroed) and
+    ///      size-gated JIT at once — the JIT would supply inventory that earns nothing while bearing price
+    ///      risk. Whichever setter is called second reverts.
+    error JitAmAmmConflict();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(POOL_MANAGER)) revert OnlyPoolManager();
@@ -180,8 +187,10 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     }
 
     /// @notice Enroll/unenroll a pool in the am-AMM. Owner must keep this in sync with the
-    ///         auction's `configurePool`/`setEnabled` for the same pool.
+    ///         auction's `configurePool`/`setEnabled` for the same pool. A pool may not run am-AMM AND
+    ///         size-gated JIT simultaneously (see `JitAmAmmConflict`).
     function setAmAmmEnabled(PoolId poolId, bool enabled) external onlyOwner {
+        if (enabled && jitEnabled[poolId]) revert JitAmAmmConflict();
         amAmmEnabled[poolId] = enabled;
     }
 
@@ -198,8 +207,10 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     }
 
     /// @notice Enroll/unenroll a pool for size-gated JIT. Only enable for pools whose configured
-    ///         `vault` is the JIT bridge for that exact pool.
+    ///         `vault` is the JIT bridge for that exact pool. A pool may not run size-gated JIT AND
+    ///         am-AMM simultaneously (see `JitAmAmmConflict`).
     function setJitEnabled(PoolId poolId, bool enabled) external onlyOwner {
+        if (enabled && amAmmEnabled[poolId]) revert JitAmAmmConflict();
         jitEnabled[poolId] = enabled;
         emit JitEnabledSet(poolId, enabled);
     }
@@ -238,6 +249,12 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
         // invariants assume. (`maxFeePips == 0` is handled safely by the FALLBACK clamp on BOTH fee paths —
         // see beforeSwap — so it need not be rejected here.)
         if (slopePipsPerTick > 1_000_000) revert BadFeeConfig();
+        // AUDIT L-2: the signed oracle-guard params must be non-negative. MWOracleGuard reads them as
+        // `uint256(uint24(...))`, so a negative value (e.g. -1) wraps to 16,777,215 — a negative
+        // maxDeviationTicks makes the breaker band effectively infinite (never trips) and a negative
+        // maxTickMovePerBlock lets the truncated oracle jump straight to spot in one block, collapsing the
+        // manipulation resistance. (These are the only signed params here; maxCatchupBlocks is unsigned.)
+        if (maxTickMovePerBlock < 0 || maxDeviationTicks < 0) revert NegativeGuardParam();
         feeParams[poolId] = FeeParams({
             baseFeePips:        baseFeePips,
             maxFeePips:         maxFeePips,

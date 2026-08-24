@@ -308,6 +308,58 @@ contract MintwareTreasuryFloatSettlementTest is Test {
         assertEq(fs.wstEthBacking(), 10_000e18, "backing untouched on revert");
     }
 
+    /// @notice AUDIT L-3: when leg 2's oracle band BINDS, the WETH→USDC swap partial-fills. Before the fix the
+    ///         unspent WETH was orphaned — no accounting variable tracks raw WETH — while backing was debited the
+    ///         full input, permanently stranding protocol backing under price divergence. Now the residual WETH is
+    ///         swept back to wstETH and the backing debit nets to the wstETH actually consumed: no WETH is left
+    ///         untracked and total backing value is conserved.
+    function test_L3_BandBind_Leg2_ReHopsResidualWeth_NoOrphan() public {
+        _fundBacking(1_000e18);
+        vm.prank(owner);
+        fs.setRebalanceCaps(0, 1_000e18, 1 days);  // arm the windowed churn cap
+
+        // Push the ETH/USDC spot far past the oracle band in the WETH-selling direction (oracle stays at 0),
+        // so leg 2 (WETH→USDC, same direction) is band-bound to ~zero fill and leaves residual WETH.
+        _manipulateEthDown();
+
+        uint256 backingUsdBefore = fs.totalBackingUsd();
+        uint256 backingBefore    = fs.wstEthBacking();
+
+        vm.prank(keeper);
+        fs.rebalanceFloat(500e18, 0);              // convert 500 wstETH; leg 2 band binds
+
+        // (1) No orphaned WETH: the partial-fill residual was re-hopped back to wstETH.
+        assertEq(weth.balanceOf(address(fs)), 0, "no untracked WETH stranded on the contract");
+        // (2) Backing debited by LESS than the full input — the re-hopped wstETH stays on-hand as backing.
+        assertLt(backingBefore - fs.wstEthBacking(), 500e18, "backing debited only by net wstETH consumed");
+        // (3) Value conserved: total backing (wstETH + float, in USD) preserved up to bounded swap fees.
+        assertApproxEqRel(fs.totalBackingUsd(), backingUsdBefore, 0.02e18, "backing value conserved (no leak)");
+    }
+
+    /// @notice R5: the settlement rail is SET-ONCE. Once pinned it cannot be re-pointed (mirrors the R4-H1
+    ///         set-once oracle-source freeze), closing the owner+relayer one-block backing-drain-to-hostile-rail
+    ///         vector. `address(0)` stays rejected; a fresh instance can pin exactly once.
+    function test_R5_SettlementRail_FrozenOnceSet() public {
+        vm.prank(owner);
+        vm.expectRevert(MintwareTreasuryFloatSettlement.AlreadySet.selector);
+        fs.setSettlementRail(makeAddr("hostileRail")); // rail pinned in setUp → frozen
+
+        vm.prank(owner);
+        vm.expectRevert(MintwareTreasuryFloatSettlement.ZeroAddress.selector);
+        fs.setSettlementRail(address(0));
+
+        MintwareTreasuryFloatSettlement fresh = new MintwareTreasuryFloatSettlement(
+            IPoolManager(address(pm)), stakeKey, ethKey,
+            address(wstEth), address(weth), address(usdc),
+            owner, relayer, keeper
+        );
+        vm.startPrank(owner);
+        fresh.setSettlementRail(rail);                 // first pin OK
+        vm.expectRevert(MintwareTreasuryFloatSettlement.AlreadySet.selector);
+        fresh.setSettlementRail(makeAddr("other"));    // re-point frozen
+        vm.stopPrank();
+    }
+
     // ── EMERGENCY VALVE: 2-hop swap when the float is exhausted ───────────────────────────
 
     function test_Emergency_SettleViaSwap_WhenFloatEmpty() public {

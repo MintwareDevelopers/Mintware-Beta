@@ -21,6 +21,16 @@ import {PoolProfile, LockTier}   from "../src/vaults/VaultTypes.sol";
 import {MockERC20}      from "./mocks/MockERC20.sol";
 import {TestSwapRouter} from "./helpers/TestSwapRouter.sol";
 
+/// @dev A JIT-bridge stand-in whose `jitClose` ALWAYS reverts — used to prove the coordinator's
+///      best-effort `try IMWJitVault(vault).jitClose() {} catch {}` in afterSwap keeps the swap path alive
+///      (a swallowed jitClose revert must never brick the pool). `jitOpen` reverts too (afterSwap never
+///      calls it, but a real bridge that could revert on open is covered by the resting-liquidity fallback).
+contract RevertingJitVault {
+    error Boom();
+    function jitOpen(bool, uint256) external pure returns (uint128) { revert Boom(); }
+    function jitClose() external pure { revert Boom(); }
+}
+
 /// @notice Integration tests for MWHookCoordinator against a real V4 PoolManager, using the
 ///         go-forward dual-sided `MintwareDeFiPairVault` as the vault behind the (vault-agnostic)
 ///         coordinator: vault-gated LP + the MEV sandwich/cooldown guard blocking a real backrun
@@ -336,6 +346,64 @@ contract MWHookCoordinatorTest is Test {
 
     function BalanceDeltaZero() internal pure returns (BalanceDelta) {
         return BalanceDelta.wrap(0);
+    }
+
+    // ── AUDIT L-2: configurePool rejects negative int24 oracle-guard params ───────────────
+    // A negative value is read by MWOracleGuard as `uint256(uint24(...))` and wraps to ~16.7M —
+    // silently disabling the circuit breaker / collapsing the per-block truncation. Must revert.
+
+    function test_configurePool_rejects_negative_maxTickMovePerBlock() public {
+        vm.expectRevert(MWHookCoordinator.NegativeGuardParam.selector);
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, -1, 6000, 10);
+    }
+
+    function test_configurePool_rejects_negative_maxDeviationTicks() public {
+        vm.expectRevert(MWHookCoordinator.NegativeGuardParam.selector);
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 60, -1, 10);
+    }
+
+    function test_configurePool_accepts_zero_and_positive_guard_params() public {
+        // Boundary: 0 is valid (disabled breaker), positive is valid.
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 0, 0, 10);
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, true, 60, 6000, 10);
+    }
+
+    // ── jit/amAmm wiring guard: a pool must never run BOTH at once ────────────────────────
+
+    function test_jit_and_amAmm_mutually_exclusive_amAmm_second() public {
+        coord.setJitEnabled(poolId, true);
+        vm.expectRevert(MWHookCoordinator.JitAmAmmConflict.selector);
+        coord.setAmAmmEnabled(poolId, true); // second setter reverts
+        // Disabling the first frees the pool to enroll in the other.
+        coord.setJitEnabled(poolId, false);
+        coord.setAmAmmEnabled(poolId, true);
+        assertTrue(coord.amAmmEnabled(poolId), "am-AMM enrolled after JIT cleared");
+    }
+
+    function test_jit_and_amAmm_mutually_exclusive_jit_second() public {
+        coord.setAmAmmEnabled(poolId, true);
+        vm.expectRevert(MWHookCoordinator.JitAmAmmConflict.selector);
+        coord.setJitEnabled(poolId, true); // second setter reverts
+        assertFalse(coord.jitEnabled(poolId), "JIT stayed off while am-AMM enrolled");
+    }
+
+    // ── jitClose stuck-flag hardening: a reverting jitClose must not brick afterSwap ──────
+
+    /// @notice If the JIT bridge's `jitClose` ever reverted, the coordinator's best-effort try/catch in
+    ///         afterSwap must swallow it and STILL return the selector — a swallowed revert can never brick
+    ///         the swap path (and, at the vault that owns `jitActive`, the flag is proven false at rest by
+    ///         MintwareDeFiPairVault's `test_jit_close_survives_hostile_resupply`).
+    function test_afterSwap_survives_reverting_jitClose() public {
+        // Isolate the JIT branch: guard + dynamic fee OFF so afterSwap's oracle update is skipped.
+        coord.configurePool(poolId, 3000, 100000, 0, 0, false, false, 60, 6000, 10);
+        RevertingJitVault badVault = new RevertingJitVault();
+        coord.setVault(address(badVault));
+        coord.setJitEnabled(poolId, true);
+
+        SwapParams memory sp = SwapParams(true, -int256(1_000e18), 0);
+        vm.prank(address(pm));
+        (bytes4 sel,) = coord.afterSwap(alice, poolKey, sp, BalanceDeltaZero(), "");
+        assertEq(sel, IHooks.afterSwap.selector, "afterSwap returns cleanly despite reverting jitClose");
     }
 
     // ── Stage-2.1: routing-discoverability gas budget ────────────────────────

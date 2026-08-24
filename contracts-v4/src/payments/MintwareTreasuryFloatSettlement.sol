@@ -373,9 +373,17 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
     ///         sweep may not push below. Instant onlyOwner (not routed through the timelock).
     function setFloatParams(uint256 target, uint256 min) external onlyOwner { floatTargetUsdc = target; floatMinUsdc = min; emit FloatParamsSet(target, min); }
 
-    /// @notice AUDIT H4: pin (or re-point) the sole settlement destination. Set before enabling settlement.
-    ///         Pinning it flips `_riskParamsLive()` true — the risk-param timelock (and source freeze) then bind.
-    function setSettlementRail(address rail) external onlyOwner { if (rail == address(0)) revert ZeroAddress(); settlementRail = rail; emit SettlementRailSet(rail); }
+    /// @notice AUDIT H4 / R5: pin the sole settlement destination — SET ONCE. Set before enabling settlement.
+    ///         Pinning it flips `_riskParamsLive()` true — the risk-param timelock AND the source freeze then
+    ///         bind. R5: the rail is a settlement TRUST ANCHOR, so — mirroring the R4-H1 set-once oracle-source
+    ///         freeze — it can no longer be re-pointed once pinned. Re-pointing was an owner+relayer one-block
+    ///         drain of settlement backing to a hostile destination; freezing it removes that vector.
+    function setSettlementRail(address rail) external onlyOwner {
+        if (rail == address(0)) revert ZeroAddress();
+        if (settlementRail != address(0)) revert AlreadySet(); // set-once (rail pinned ⇒ frozen)
+        settlementRail = rail;
+        emit SettlementRailSet(rail);
+    }
 
     // ── admin: GOVERNED risk params (AUDIT R4-L4 — 48h-timelocked loosening, instant tightening/pre-rail) ─
 
@@ -778,14 +786,18 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         _op = OP_REBALANCE; _swapArg = wstEthIn; _outUsdc = 0; _outWstSpent = 0;
         poolManager.unlock("");
         usdcOut = _outUsdc;
+        // AUDIT L-3: debit backing by the wstETH ACTUALLY consumed, not the full input. If leg 2's oracle
+        // band bound and partial-filled, `_do2HopExactIn` re-hopped the residual WETH back to wstETH, so the
+        // net wstETH spent (`_outWstSpent`) is below `wstEthIn`; the re-hopped wstETH stays on-hand as backing.
+        uint256 wstSpent = _outWstSpent;
         _op = OP_NONE; _swapArg = 0; _outUsdc = 0; _outWstSpent = 0;
 
         if (usdcOut < minUsdcOut) revert SettlementSlippageExceeded(usdcOut, minUsdcOut);
 
         // backing → float (conserves value up to bounded swap slippage; never a payout).
-        wstEthBacking -= wstEthIn;
+        wstEthBacking -= wstSpent;
         usdcFloat     += usdcOut;
-        emit FloatRebalanced(msg.sender, wstEthIn, usdcOut);
+        emit FloatRebalanced(msg.sender, wstSpent, usdcOut);
     }
 
     // ── unlock callback: the 2-hop swap ────────────────────────────────────────────────
@@ -803,15 +815,34 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
     ///      exact-input `WETH → USDC` (oracle-bounded). Settled sequentially (leg1 produces WETH on-hand, leg2
     ///      consumes it) — no cross-pool net-delta arithmetic. Results land in `_outUsdc` / `_outWstSpent`.
     function _do2HopExactIn(uint256 wstEthIn) private {
+        // Snapshot pre-existing WETH so the L-3 residual sweep touches ONLY this op's leftover, not any
+        // unrelated balance (a WETH donation would just become extra backing — additive, never a risk).
+        uint256 wethBefore = weth.balanceOf(address(this));
+
         // Leg 1 (wstETH→ETH): sell wstETH for WETH, full-range limit → arithmetic Lido-rate floor after.
         uint256 wethMid = _swapExactIn(_stakeKey(), wstEthIsCurrency0Stake, wstEthIn);
         _enforceLidoFloor(wstEthIn, wethMid);
-        _outWstSpent = wstEthIn;
+
+        uint256 netWstSpent = wstEthIn;
 
         // Leg 2 (ETH→USDC): sell WETH for USDC, oracle-bounded (the manipulation-sensitive leg).
         if (wethMid > 0) {
             _outUsdc = _swapExactInBounded(_ethKey(), ethPoolId, wethIsCurrency0Eth, wethMid);
+
+            // AUDIT L-3: if the oracle band BINDS, leg 2 partial-fills and leaves raw WETH on the contract
+            // that NO accounting variable tracks (`totalBackingUsd()` counts wstEth/usdc/adapters, never raw
+            // WETH) — permanently stranded backing, since `wstEthBacking` was debited the full `wstEthIn`.
+            // Sweep the residual back through the stake pool to wstETH and NET it out of `_outWstSpent`, so
+            // the callers reduce `wstEthBacking` only by the wstETH actually consumed. Backing is conserved
+            // and stays earning as wstETH rather than orphaned as WETH.
+            uint256 residualWeth = weth.balanceOf(address(this)) - wethBefore;
+            if (residualWeth > 0) {
+                uint256 wstBack = _swapExactIn(_stakeKey(), !wstEthIsCurrency0Stake, residualWeth);
+                netWstSpent = wstBack >= wstEthIn ? 0 : wstEthIn - wstBack;
+            }
         }
+
+        _outWstSpent = netWstSpent;
     }
 
     // ── swap helpers ───────────────────────────────────────────────────────────────────
