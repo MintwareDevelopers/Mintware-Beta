@@ -138,6 +138,11 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     /// @dev AUDIT L-2: a negative int24 oracle-guard param wraps to ~16.7M via `uint256(uint24(...))` in
     ///      MWOracleGuard, silently disabling the circuit breaker / collapsing the per-block truncation.
     error NegativeGuardParam();
+    /// @dev AUDIT (Slither missing-zero-check, triaged): the JIT-bridge `vault`, the am-AMM `auction`,
+    ///      and the pool manager are never meaningfully the zero address here (unlike JitHook's
+    ///      `setAuction`/`setJitSkipSender` or the vault's `setRentFunder`, where zero is a documented
+    ///      "clear/disable" sentinel). Reject it so an owner fat-finger can't silently break JIT/am-AMM.
+    error ZeroAddress();
 
     modifier onlyPoolManager() {
         if (msg.sender != address(POOL_MANAGER)) revert OnlyPoolManager();
@@ -145,6 +150,10 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     }
 
     constructor(IPoolManager _poolManager, address _vault, address _initialOwner) MWGuardianPausable(_initialOwner) {
+        // NB: `_vault` is intentionally allowed to be address(0) here — the deploy pattern mines the hook
+        // address first (CREATE2) and wires the vault post-deploy via `setVault`, so it is unknown at
+        // construction. The pool manager, by contrast, is always a real deployed contract.
+        if (address(_poolManager) == address(0)) revert ZeroAddress();
         POOL_MANAGER = _poolManager;
         vault        = _vault;
 
@@ -172,12 +181,14 @@ contract MWHookCoordinator is IHooks, MWGuardianPausable {
     // ── admin ──────────────────────────────────────────────────────────────
 
     function setVault(address _vault) external onlyOwner {
+        if (_vault == address(0)) revert ZeroAddress();
         vault = _vault;
         emit VaultUpdated(_vault);
     }
 
     /// @notice Wire the am-AMM auction once (chicken-and-egg with the auction's setCoordinator).
     function setAuction(address _auction) external onlyOwner {
+        if (_auction == address(0)) revert ZeroAddress();
         if (auction != address(0)) revert AuctionAlreadySet();
         auction = _auction;
     }
