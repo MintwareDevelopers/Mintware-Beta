@@ -40,14 +40,63 @@ describe('httpEdgeAuthorizer', () => {
 })
 
 describe('settlers', () => {
-  const reqs = { network: 'base', payTo: '0x2' } as unknown as PaymentRequirements
-  const payload = {} as PaymentPayload
+  const HOLD = `0x${'01'.repeat(32)}`
+  const reqs = { network: 'base', payTo: '0x2222222222222222222222222222222222222222', maxAmountRequired: '100000000' } as unknown as PaymentRequirements
+  // x402 payload carries an EIP-3009 authorization: `from` = payer, `value` = atomic USDC charge.
+  const payload = { payload: { authorization: { from: PAYER, value: '100000000' } } } as unknown as PaymentPayload
+  const permit = {
+    user: PAYER.toLowerCase(),
+    max_daily_spend_usdc: '1000000000',
+    nonce: '1',
+    deadline: '9999999999',
+    signature: '0xaa',
+  }
 
-  it('httpSettler maps success + failure', async () => {
-    const ok = httpSettler({ url: 'http://relay', fetchImpl: mockFetch(async () => json({ success: true, tx_hash: '0xabc' })) })
-    expect(await ok.settle({ holdId: 'h', payload, reqs })).toMatchObject({ success: true, txHash: '0xabc' })
+  it('httpSettler POSTs the real SettleParams-shaped body (hold_id/user/assets/receiver/permit)', async () => {
+    let seenBody: any
+    const ok = httpSettler({
+      url: 'http://relay',
+      fetchImpl: mockFetch(async (_u, init) => {
+        seenBody = JSON.parse(String(init!.body))
+        return json({ success: true, tx_hash: '0xabc', status: 'submitted' })
+      }),
+    })
+    expect(await ok.settle({ holdId: HOLD, payload, reqs, permit })).toMatchObject({ success: true, txHash: '0xabc' })
+    expect(seenBody).toEqual({
+      hold_id: HOLD,
+      user: PAYER.toLowerCase(),
+      assets: '100000000',
+      receiver: reqs.payTo,
+      permit,
+    })
+    expect(seenBody.edge).toBeUndefined() // low-value: no edge auth
+  })
+
+  it('httpSettler includes the edge auth for high-value settles', async () => {
+    let seenBody: any
+    const edge = { hold_id: HOLD, user: PAYER.toLowerCase(), amount_usdc: '300000000', nonce: '1', expiry: '9999999999', signature: '0xbb' }
+    const ok = httpSettler({ url: 'http://relay', fetchImpl: mockFetch(async (_u, init) => { seenBody = JSON.parse(String(init!.body)); return json({ success: true, tx_hash: '0xabc' }) }) })
+    await ok.settle({ holdId: HOLD, payload, reqs, permit, edge })
+    expect(seenBody.edge).toEqual(edge)
+  })
+
+  it('httpSettler fails closed when the Gateway permit is unavailable (never POSTs a fake body)', async () => {
+    let called = false
+    const s = httpSettler({ url: 'http://relay', fetchImpl: mockFetch(async () => { called = true; return json({ success: true }) }) })
+    expect(await s.settle({ holdId: HOLD, payload, reqs })).toMatchObject({ success: false, errorReason: 'settlement_permit_unavailable' })
+    expect(called).toBe(false)
+  })
+
+  it('httpSettler fails closed when the hold id is missing', async () => {
+    const s = httpSettler({ url: 'http://relay', fetchImpl: mockFetch(async () => json({ success: true })) })
+    expect(await s.settle({ payload, reqs, permit })).toMatchObject({ success: false, errorReason: 'settlement_hold_missing' })
+  })
+
+  it('httpSettler maps a relayer failure + unreachable', async () => {
+    const bad = httpSettler({ url: 'http://relay', fetchImpl: mockFetch(async () => json({ success: false, error: 'submit_error' }, 502)) })
+    expect(await bad.settle({ holdId: HOLD, payload, reqs, permit })).toMatchObject({ success: false, errorReason: 'relayer_502' })
     const down = httpSettler({ url: 'http://relay', fetchImpl: (() => Promise.reject(new Error('x'))) as unknown as typeof fetch })
-    expect(await down.settle({ holdId: 'h', payload, reqs })).toMatchObject({ success: false, errorReason: 'relayer_unreachable' })
+    expect(await down.settle({ holdId: HOLD, payload, reqs, permit })).toMatchObject({ success: false, errorReason: 'relayer_unreachable' })
   })
 
   it('deferredSettler never claims success', async () => {

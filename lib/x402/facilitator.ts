@@ -10,7 +10,13 @@ import { policyForPercentile } from './pricing'
 
 export interface Facilitator {
   verify(reqs: PaymentRequirements, payload: PaymentPayload, now: number): Promise<VerifyResult>
-  settle(reqs: PaymentRequirements, payload: PaymentPayload, holdId?: string): Promise<SettleResult>
+  settle(
+    reqs: PaymentRequirements,
+    payload: PaymentPayload,
+    holdId?: string,
+    permit?: RelayerPermit,
+    edge?: RelayerEdgeAuth,
+  ): Promise<SettleResult>
   supported(): Promise<{ schemes: string[]; networks: string[] }>
 }
 
@@ -23,12 +29,37 @@ export interface EdgeAuthorizer {
   }): Promise<{ approved: boolean; holdId?: string; holdAtomic?: string; reason?: string }>
 }
 
+/** The gateway's long-lived `DelegatedSpendPermit` + EIP-712 signature, in the relayer's wire shape
+ *  (snake_case, decimal-string integers). NOT the same thing as the x402 EIP-3009 authorization —
+ *  see the TODO in `edgeHttp.httpSettler`. Sourced from a permit store, not the x402 payload. */
+export interface RelayerPermit {
+  user: string
+  max_daily_spend_usdc: string
+  nonce: string
+  deadline: string
+  signature: string
+}
+
+/** The edge's short-lived high-value (`>= $250`) hold authorization, relayer wire shape. */
+export interface RelayerEdgeAuth {
+  hold_id: string
+  user: string
+  amount_usdc: string
+  nonce: string
+  expiry: string
+  signature: string
+}
+
 /** On-chain settlement port — mapped onto the relayer, mocked in tests. */
 export interface Settler {
   settle(input: {
     holdId?: string
     payload: PaymentPayload
     reqs: PaymentRequirements
+    /** Gateway spend permit — required by the relayer's `settleSpend`; absent in the pure x402 flow. */
+    permit?: RelayerPermit
+    /** Edge auth for charges `>= $250`; absent in the pure x402 flow. */
+    edge?: RelayerEdgeAuth
   }): Promise<{ success: boolean; txHash?: string; errorReason?: string }>
 }
 
@@ -95,8 +126,14 @@ export class YpnFacilitator implements Facilitator {
     }
   }
 
-  async settle(reqs: PaymentRequirements, payload: PaymentPayload, holdId?: string): Promise<SettleResult> {
-    const res = await this.cfg.settler.settle({ holdId, payload, reqs })
+  async settle(
+    reqs: PaymentRequirements,
+    payload: PaymentPayload,
+    holdId?: string,
+    permit?: RelayerPermit,
+    edge?: RelayerEdgeAuth,
+  ): Promise<SettleResult> {
+    const res = await this.cfg.settler.settle({ holdId, payload, reqs, permit, edge })
     return { success: res.success, txHash: res.txHash, network: reqs.network, errorReason: res.errorReason }
   }
 
