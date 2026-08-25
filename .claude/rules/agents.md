@@ -122,8 +122,12 @@ Each runtime keeps its existing Attribution actions and adds the 5-action parkin
 | Spec (full) | [`docs/developers/agentkit-compute-402-spec.md`](../../docs/developers/agentkit-compute-402-spec.md) |
 
 **Runtime gates:** the facilitator/seller/live-spendable need `EDGE_AUTH_URL` / `EDGE_AUTH_SECRET`
-+ `X402_PAY_TO`; routes **503** until set. The relayer now has an **always-on HTTP settle server**
-(`services/relayer` `relayer-server` bin — `POST /settle`, fail-closed bearer/key/RPC, idempotent);
-until it's **deployed** and `X402_RELAYER_URL`/`_SECRET` point at it, the facilitator falls back to
-`deferredSettler` (authorize-now, settle-later). Fail-closed: edge-auth rejects when its secret is
-unset (audit C1), and the facilitator inherits that.
++ `X402_PAY_TO`; routes **503** until set. **Settle transport** (`config.ts#getSettler`, precedence):
+(1) `X402_RELAYER_URL` → the Rust `services/relayer` HTTP server (raw-key submitter — optional override);
+(2) **`X402_SETTLE_PROVIDER=oracle` → in-process `settleSpend` via `getOracleSigner('root')`** — the SAME
+Privy/oracle signer seat the human card flow uses (`lib/org/settleSwipe.ts`); no separate service, no raw
+key (`ORACLE_SIGNER_PROVIDER=privy` keeps it in Privy's enclave). **This is the platform-consistent path**
+(`lib/x402/oracleSettler.ts`); (3) neither → `deferredSettler` (authorize-now, settle-later). The
+Privy/relayer signer must hold `RELAYER_ROLE` on the gateway. Fail-closed: edge-auth rejects when its
+secret is unset (audit C1), and the facilitator inherits that; `/api/x402/settle` requires a standing
+permit whenever a real settle transport is wired (`x402OnchainSettleConfigured()`).
