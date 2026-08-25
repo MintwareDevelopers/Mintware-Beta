@@ -42,7 +42,20 @@ though ~7.79 of junior first-loss remains. Root: **`_recoverFromLP` (MintwareTre
 floors the senior write-down at `recoverableUSDC()` ALONE**; `_pullUSDC` draws junior only for a *physical*
 shortfall, never to cushion the *par* write-down, so junior is stranded for the last redeemer.
 
-## Three patch attempts — validated and REJECTED
+## Validation infrastructure now in place (closing the blind spot)
+
+Two test assets make this fixable-and-verifiable rather than a leap of faith:
+- **`MintwareTreasurySeniorYield.t.sol` — a yield tripwire (PASSES on `main`).** The mock adapter reports
+  `totalAssets = balanceOf`, so minting USDC into it simulates Aave interest. These tests prove a senior
+  redemption returns *par + yield*, so any fix that strips yield (e.g. a deposits-only claim) now fails
+  LOUDLY instead of passing green against a yield-less mock.
+- **`MintwareTreasuryRedemptionOrder.t.sol` — the pro-rata fuzz guard (`vm.skip(true)`).** Fuzzes holder
+  sizes, impairment depth, AND redemption order; asserts equal per-share payout (a revert = maximal
+  shortchange). It **cleanly catches the class** (`max−min per-share ≈ 0.95` vs 2% tolerance) and, in
+  testing the fix attempts below, caught *every* incomplete patch — the existing solvency invariants do
+  not model sequential-redemption order-dependence; this does. Un-skip it when the redesign lands.
+
+## Six patch attempts — validated and REJECTED
 
 1. **Credit `juniorUsdcBuffer` in `seniorRealizableAssets`** (value legs at `min(deployed+jit, recoverable)`
    + junior separately). **No-op here** — proven by identical trace numbers. The binding term is *par*
@@ -58,8 +71,22 @@ shortfall, never to cushion the *par* write-down, so junior is stranded for the 
    caps at par. **The test suite cannot catch this** (the mock adapter has no yield), so the change would
    pass CI while silently regressing production. A correct claim must track deposits **+ accrued yield** (a
    yield-accrual index) — materially more than a patch.
+4. **Yield-preserving par floor: `_redeemNav = min(max(seniorParLiability, totalSeniorAssets()), realizable)`.**
+   Elegant on paper — `totalSeniorAssets` (yield-inclusive) governs normal ops so yield is kept, the
+   deposit floor stops the tail collapse. The **yield tripwire passes**. But the tail redeemer then
+   **REVERTS**: with the floor, the tail NAV correctly rises to `realizable`, but the share-math **virtual
+   offset overshoots `realizable`** on the last full redemption of a tiny pool (`+VIRTUAL` in the
+   numerator), so `_pullUSDC` can't source the payout.
+5. **Add a clamp `assetsOut = min(assetsOut, seniorRealizableAssets())`** to kill the overshoot. Fixes the
+   specific PROBE2 case — but the **fresh-fuzzed guard immediately finds another** severe-impairment config
+   where a holder is still shortchanged (`max−min ≈ 0.95`). Each path fixed, the fuzzer finds the next.
 
-All three were reverted; `contracts-v4/src` is unchanged from `main`.
+All were reverted; `contracts-v4/src` is unchanged from `main`. The pattern across six attempts is
+conclusive: **NAV pricing alone cannot fix this** — early redeemers *physically* consume the shared pool
+(idle senior, LP proceeds, junior first-loss) at their computed NAV, so no matter how the tail is priced,
+the physical USDC is not there for it. The fix must change the **physical draw** (reserve each holder's
+pro-rata share, or socialize the loss before any redemption) — coordinated with the NAV, the virtual
+offset, and the 60/30/10 fee-reserve buckets. That is a redemption-gate REDESIGN.
 
 ## Why it needs a redesign (the recommendation)
 
