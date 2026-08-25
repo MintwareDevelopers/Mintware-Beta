@@ -158,23 +158,16 @@ contract MintwareTreasuryNavResidualsTest is MintwareTreasuryJitStackTest {
         emit log_named_uint("PROBE2 user  reverted?              ", uRev ? 1 : 0);
         emit log_named_uint("PROBE2 carol reverted?              ", cRev ? 1 : 0);
 
-        // KNOWN RESIDUAL (R6, exploit red-team probe — DOCUMENTED FOR EXTERNAL AUDIT, deliberately NOT
-        // fixed). Under SEVERE impairment (loss exceeding TOTAL junior first-loss capacity), the redemption
-        // waterfall is first-come-first-served on the depleting junior buffer / senior principal, so the
-        // LAST/tail redeemer is shortchanged (here carol ~0.09 vs the early alice ~0.89) while junior sits
-        // unspent and senior par (`totalSeniorAssets`) collapses toward 0 (min(par,real) then zeroes the
-        // tail). It is SAFE-DIRECTION — the tail senior is UNDER-paid, never over-paid, and total payout ≤
-        // vault assets (solvency invariants stay green) — but it is NOT the pro-rata the NatSpec promises.
-        // A correct fix needs a loss-SOCIALIZATION / redemption-gate REDESIGN, not a patch: two patch
-        // attempts were validated and rejected — (1) crediting the junior buffer in `seniorRealizableAssets`
-        // is a no-op here (par, not realizable, is the binding term); (2) having `_recoverFromLP` un-earmark
-        // junior to cushion the par write-down trades the under-pay for an `InsufficientIdleLiquidity` REVERT
-        // (the freed junior is consumed by EARLIER redeemers, over-stating the tail's claim). This test PINS
-        // the current behavior so any future redesign FLIPS it (alerting the maintainer to re-characterize).
-        bool tailShortchanged = cRev || (psCarol * 100 < psAlice * 99);
-        assertTrue(
-            tailShortchanged,
-            "R6 KNOWN RESIDUAL: tail redeemer shortchanged under severe impairment (documented for audit)"
+        // R6 REDEMPTION-GATE FIX (proportional draw): under SEVERE impairment (loss exceeding TOTAL junior
+        // first-loss capacity), the dust tail redeemer now receives ~the SAME per-share as the early
+        // redeemer — the junior first-loss is shared pro-rata (each redeemer draws their fair share `f` of
+        // every bucket), not drained first-come-first-served. Pre-fix carol got ~0.09 vs alice ~0.89 while
+        // junior sat unspent; now carol is within ~3% of alice and never reverts. (Any residual is bounded
+        // fee/rounding, not a shortchange — see MintwareTreasuryRedemptionOrder for the fuzzed proof.)
+        assertFalse(cRev, "R6: tail redeemer must not revert (fail-soft settlement)");
+        assertGe(
+            psCarol * 100, psAlice * 97,
+            "R6: tail redeemer must be paid ~pro-rata with the early redeemer (junior socialized, not drained)"
         );
     }
 }

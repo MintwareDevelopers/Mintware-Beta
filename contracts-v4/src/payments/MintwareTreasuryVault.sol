@@ -141,6 +141,12 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     // ── senior (community) ────────────────────────────────────────────────────────
     mapping(address => uint256) public seniorShares;
     uint256 public totalSeniorShares;
+    /// @notice AUDIT R6 (redemption gate): senior PRINCIPAL claim floor (deposits − redemptions' pro-rata
+    ///         share). Floor under the redeem par cap (`max(this, totalSeniorAssets())`) so the cap keeps
+    ///         senior YIELD (via `totalSeniorAssets`) yet does not collapse in the impaired tail. Paired with
+    ///         the PROPORTIONAL draw in `_pullUSDC` (each redeemer draws their fair share `f` of EVERY bucket)
+    ///         to share the haircut across every redeemer regardless of order. MINT unchanged (AUDIT R2-H1).
+    uint256 public seniorParLiability;
     /// @notice Senior USDC currently out in the LP, valued at PAR (never MTM).
     uint256 public deployedFromSenior;
     /// @notice USDC held by the vault that belongs to the JUNIOR (post-lock team fee cuts), excluded
@@ -507,7 +513,10 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
 
         uint256 cash = fees + firstLossUsdc;
         if (tok > 0)  teamToken.safeTransfer(team, tok);
-        if (cash > 0) { _pullUSDC(cash); usdc.safeTransfer(team, cash); }
+        if (cash > 0) { // team exit: f=1 (no senior junior-cap), full-or-revert
+            if (_pullUSDC(cash, 1, 1) < cash) revert InsufficientIdleLiquidity();
+            usdc.safeTransfer(team, cash);
+        }
 
         emit JuniorRedeemed(team, tok, cash);
     }
@@ -561,20 +570,34 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         // so a stranded JIT slice is backed solely by the junior USDC buffer here — exactly as the redemption
         // waterfall can realize. The MINT path keeps `jitBorrowed` at par (`totalSeniorAssets`), which is the
         // safe direction. Fully covered ⇒ identical to par, so the senior still redeems 1:1 in normal operation.
+        // AUDIT R6: value the deployed legs at the LP's ACTUAL recoverable USDC + the junior first-loss buffer
+        // SEPARATELY, so junior backs senior par whether or not anything is deployed. Sum = physically
+        // realizable senior assets (Aave idle + on-hand senior + LP recoverable + junior); `_redeemNav` caps
+        // at par so it never over-values. The proportional `_pullUSDC` draws each redeemer's fair share of it.
         uint256 deployedLegs = deployedFromSenior + jitBorrowed;
-        if (deployedLegs != 0) {
-            uint256 backed = recoverableUSDC() + juniorUsdcBuffer; // junior first-loss backstops the at-risk legs
-            if (backed < deployedLegs) deployedLegs = backed;      // impaired: value at what's actually recoverable
-        }
-        return adapter.totalAssets() + _freeSeniorBuffer() + deployedLegs;
+        uint256 recov = recoverableUSDC();   // the vault's OWN LP position only (never the hook's JIT slice)
+        if (recov < deployedLegs) deployedLegs = recov;
+        return adapter.totalAssets() + _freeSeniorBuffer() + deployedLegs + juniorUsdcBuffer;
     }
 
-    /// @dev The NAV a redemption/settlement prices against: never above par, never above what is realizable.
-    ///      In normal (covered) operation this equals par, so the senior redeems 1:1 as before.
+    /// @dev The NAV a redemption/settlement prices against. AUDIT R6: par cap =
+    ///      `max(seniorParLiability, totalSeniorAssets())` — `totalSeniorAssets()` (yield-inclusive) governs
+    ///      normal operation so the senior redeems par + yield, while the deposit floor stops the cap
+    ///      collapsing in the impaired tail. `realizable` (junior-inclusive) is the true floor; the
+    ///      PROPORTIONAL `_pullUSDC` makes the physical haircut order-independent. Never over-values.
     function _redeemNav() internal view returns (uint256) {
-        uint256 par  = totalSeniorAssets();
+        uint256 tsa  = totalSeniorAssets();
+        uint256 par  = seniorParLiability > tsa ? seniorParLiability : tsa;
         uint256 real = seniorRealizableAssets();
         return real < par ? real : par;
+    }
+
+    /// @dev AUDIT R6: retire the redeeming shares' PRO-RATA slice of the senior par floor. Called BEFORE the
+    ///      `totalSeniorShares` decrement so the ratio is correct.
+    function _extinguishParLiability(uint256 sharesToBurn) internal {
+        uint256 ts = totalSeniorShares;
+        if (ts == 0) return;
+        seniorParLiability -= (seniorParLiability * sharesToBurn) / ts; // ≤ seniorParLiability since burn ≤ ts
     }
 
     /// @dev AUDIT R2-H1: the NAV the MINT path prices against — par (`totalSeniorAssets()`), NEVER the
@@ -672,6 +695,7 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         // EFFECTS before the external adapter.deposit (CEI).
         seniorShares[to]  += sharesMinted;
         totalSeniorShares += sharesMinted;
+        seniorParLiability += assets; // AUDIT R6: senior deposits at par (non-collapsing claim floor)
 
         _supplyToAdapter(assets);
 
@@ -689,12 +713,22 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         // AUDIT H1: price against the solvency-aware NAV (min(par, realizable)) so a tail shortfall is
         // shared pro-rata, not paid at par to whoever redeems first. Equals par when fully covered.
         assetsOut = _toAssets(sharesToBurn, _redeemNav(), totalSeniorShares, Math.Rounding.Floor);
+        // AUDIT R6: never pay more than physically realizable (guards the share-math virtual-offset overshoot
+        // on the last full redemption of a tiny pool).
+        uint256 real_ = seniorRealizableAssets();
+        if (assetsOut > real_) assetsOut = real_;
         if (assetsOut < minAssets) revert InsufficientIdleLiquidity();
 
+        uint256 tsSnap = totalSeniorShares;   // R6: draw-fraction denominator (snapshot pre-decrement)
+        _extinguishParLiability(sharesToBurn); // R6: retire this redeemer's pro-rata claim floor
         seniorShares[msg.sender] = bal - sharesToBurn;
         totalSeniorShares -= sharesToBurn;
 
-        _pullUSDC(assetsOut);
+        // AUDIT R6: best-effort physical settlement. In a catastrophic-impairment tail the recoverable NAV
+        // can exceed what the LP physically returns (slippage); pay what is realizable rather than reverting
+        // (which would strand the redeemer entirely), gated by the redeemer's own `minAssets` floor.
+        assetsOut = _pullUSDC(assetsOut, sharesToBurn, tsSnap);
+        if (assetsOut < minAssets) revert InsufficientIdleLiquidity();
         usdc.safeTransfer(msg.sender, assetsOut);
 
         emit SeniorRedeem(msg.sender, sharesToBurn, assetsOut);
@@ -716,6 +750,9 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
 
         // AUDIT H1: solvency-aware NAV (min(par, realizable)); equals par when fully covered.
         assetsRedeemed = _toAssets(sharesToBurn, _redeemNav(), totalSeniorShares, Math.Rounding.Floor);
+        // AUDIT R6: cap at physically-realizable (see redeemSenior).
+        uint256 realB_ = seniorRealizableAssets();
+        if (assetsRedeemed > realB_) assetsRedeemed = realB_;
 
         // AUDIT M1: bound the per-block burn rate so even a compromised Gateway can only drain the senior
         // slowly (guardian has time to pause). Defense in depth over the Gateway's own permit caps. 0 = off.
@@ -725,10 +762,14 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
             if (_burnedThisBlock > maxBurnPerBlock) revert BurnRateExceeded();
         }
 
+        uint256 tsSnap = totalSeniorShares;   // R6: draw-fraction denominator (snapshot pre-decrement)
+        _extinguishParLiability(sharesToBurn); // R6: retire this redeemer's pro-rata claim floor
         seniorShares[user] = bal - sharesToBurn;
         totalSeniorShares -= sharesToBurn;
 
-        _pullUSDC(assetsRedeemed);
+        // Card settlement is full-or-revert (a merchant must be paid in full); it is capped small so the
+        // vault has liquidity for it even under impairment.
+        if (_pullUSDC(assetsRedeemed, sharesToBurn, tsSnap) < assetsRedeemed) revert InsufficientIdleLiquidity();
         usdc.safeTransfer(receiver, assetsRedeemed);
 
         emit PaymentBurn(user, receiver, sharesToBurn, assetsRedeemed);
@@ -1049,27 +1090,58 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     /// @dev Ensure the vault holds >= `need` USDC on hand to pay the senior. Waterfall: free senior
     ///      buffer → Aave → LP (junior team leg) → junior USDC buffer (first-loss). Reverts
     ///      `InsufficientIdleLiquidity` rather than underpay — the senior is never settled below par.
-    function _pullUSDC(uint256 need) internal {
-        uint256 freeOnHand = _freeSeniorBuffer();
-        if (freeOnHand >= need) return;
+    /// @dev AUDIT R6 (redemption gate — PROPORTIONAL draw). Source `need` for a redeemer holding fraction
+    ///      `f = shareNum/shareDen` of the senior tranche by drawing their FAIR SHARE of EVERY bucket, so a
+    ///      finite first-loss buffer is shared across all redeemers rather than consumed first-come-first-
+    ///      served (which shortchanged / reverted the tail). The junior first-loss is drawn ONLY for the
+    ///      part of `need` beyond the redeemer's fair share of SENIOR-OWN assets (Aave idle + on-hand senior
+    ///      + LP recoverable), and capped at `f × juniorUsdcBuffer`; the remainder comes from the senior-own
+    ///      buckets (fungible: free → adapter → LP, so their waterfall order is fairness-neutral). Non-
+    ///      redemption callers pass `shareNum == shareDen` (f = 1 ⇒ no junior cap), preserving prior behavior.
+    /// @return paid the USDC actually made available on-hand (≤ need). Best-effort: does NOT revert on a
+    ///         shortfall (e.g. LP-recovery slippage in a catastrophic tail) — the caller decides whether a
+    ///         partial fill is acceptable (`redeemSenior` pays it, gated by the redeemer's `minAssets`;
+    ///         `burnForPayment`/team-exit revert if underfilled).
+    function _pullUSDC(uint256 need, uint256 shareNum, uint256 shareDen) internal returns (uint256 paid) {
+        if (need == 0) return 0;
 
-        uint256 short = need - freeOnHand;
-        uint256 got = adapter.withdraw(short);               // best-effort
-        if (got < short && positionLiquidity != 0) {
-            _recoverFromLP(short - got);                      // deeper fallback: unwind LP (junior team leg)
+        // 1) Draw at most this redeemer's FAIR SHARE of senior-own realizable (Aave idle + on-hand senior +
+        //    LP recoverable, EXCLUDING junior). Capping the senior-own draw at `f × seniorOwn` (rather than
+        //    taking all available) is what shares the fungible adapter/LP across redeemers so the tail isn't
+        //    starved — every redeemer leaves the others their share.
+        uint256 ownTarget = need;
+        if (shareDen != 0) {
+            uint256 seniorOwn = adapter.totalAssets() + _freeSeniorBuffer() + recoverableUSDC();
+            uint256 fairOwn   = (seniorOwn * shareNum) / shareDen;
+            if (ownTarget > fairOwn) ownTarget = fairOwn; // never draw more than the fair senior-own share
         }
-
-        freeOnHand = _freeSeniorBuffer();
-        if (freeOnHand < need && juniorUsdcBuffer > 0) {
-            // LAST RESORT: the junior USDC buffer absorbs the residual senior shortfall (first-loss).
-            uint256 stillShort = need - freeOnHand;
-            uint256 draw = stillShort < juniorUsdcBuffer ? stillShort : juniorUsdcBuffer;
-            juniorUsdcBuffer -= draw;
-            emit JuniorUsdcAbsorbed(draw);
+        uint256 freeOnHand = _freeSeniorBuffer();
+        if (freeOnHand < ownTarget) {
+            uint256 short = ownTarget - freeOnHand;
+            uint256 got = adapter.withdraw(short);                     // best-effort
+            if (got < short && positionLiquidity != 0) {
+                _recoverFromLP(short - got);                           // unwind LP (senior's own leg)
+            }
             freeOnHand = _freeSeniorBuffer();
         }
 
-        if (freeOnHand < need) revert InsufficientIdleLiquidity();
+        // 2) Junior first-loss absorbs the ACTUAL residual (need − what senior-own provided, incl. any LP
+        //    slippage), capped at this redeemer's pro-rata share `f × juniorUsdcBuffer`. Computed AFTER the
+        //    senior-own pass so junior makes the redeemer whole up to their fair first-loss (a lone senior is
+        //    fully covered: f = 1 ⇒ cap = the whole buffer), while a finite buffer is still shared across many.
+        if (freeOnHand < need && juniorUsdcBuffer != 0) {
+            uint256 fairJunior = shareDen == 0 ? juniorUsdcBuffer : (juniorUsdcBuffer * shareNum) / shareDen;
+            if (fairJunior > juniorUsdcBuffer) fairJunior = juniorUsdcBuffer;
+            uint256 stillShort = need - freeOnHand;
+            uint256 draw = stillShort < fairJunior ? stillShort : fairJunior;
+            if (draw != 0) {
+                juniorUsdcBuffer -= draw;                              // un-earmark ⇒ flows into free buffer
+                emit JuniorUsdcAbsorbed(draw);
+                freeOnHand = _freeSeniorBuffer();
+            }
+        }
+
+        return freeOnHand < need ? freeOnHand : need; // best-effort; caller enforces its own floor
     }
 
     /// @dev Fund a DEPLOY from SENIOR sources ONLY — free senior buffer + Aave withdrawable. Unlike the
