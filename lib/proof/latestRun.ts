@@ -278,7 +278,7 @@ export const FORMAL_VERIFICATION: {
 // checklist (SCSVS + SWC + Solcurity + DeFi vulnerability classes) by parallel reviewers, findings
 // deduped + severity-ranked, then remediated + re-reviewed. This is a SELF-REVIEW, not an external
 // audit. Full detail: docs/developers/self-assessment-security-2026-08-21.md + audit-readiness-checklist.md.
-export type AuditFix = { sev: 'H' | 'M' | 'L'; title: string; status: 'Fixed' | 'Deferred' }
+export type AuditFix = { sev: 'H' | 'M' | 'L'; title: string; status: 'Fixed' | 'Deferred' | 'Held' }
 export const SECURITY_AUDIT: {
   eyebrow: string; title: string; titleAccent: string; blurb: string
   stats: { value: string; sub: string; label: string }[]
