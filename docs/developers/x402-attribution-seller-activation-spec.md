@@ -1,9 +1,14 @@
 # Attribution-for-Agents (x402 Seller) — Activation Runbook
 
-> **Status (verified 2026-08-25): code-complete + tested on `main`. This is the go-live delta — NOT a
-> rebuild.** `GET /api/x402/score` is a 402-paywalled Attribution score lookup; the full path (verify = live
-> YPN NAV hold, settle = relayer) is built and wired. What remains is **config + deploy + audit**, below.
-> Do not re-spec or reimplement — re-specifying risks a duplicate/conflicting build of tested code.
+> **Status (verified 2026-08-25): the 402 seller is ALREADY LIVE in production.**
+> `GET https://mintware.finance/api/x402/score?address=0x…` returns a real **HTTP 402** PAYMENT-REQUIRED
+> challenge today (confirmed by request) — verify = live YPN NAV hold. The 503 gate is already passed:
+> `EDGE_AUTH_URL`/`EDGE_AUTH_SECRET` are set on Vercel; `defaultPayTo()` resolves via the
+> `MINTWARE_TREASURY_ADDRESS` fallback (so `X402_PAY_TO` is not required); `supportedNetworks()` defaults to
+> `['base','base-sepolia']`. **The one remaining gap is the LIVE SETTLE path**: `X402_RELAYER_URL` is unset,
+> so the facilitator uses `deferredSettler` (hold placed, settle deferred). Deploy the relayer + wire it
+> (§2 Step 2) to get real on-chain `tx_hash` settlement — audit-gated. This is the go-live delta, NOT a
+> rebuild; do not re-spec or reimplement tested code (81/81 Vitest green).
 
 ## 0. Verified state (what's already done)
 
@@ -33,14 +38,11 @@ Trust-tiered pricing (`pricing.ts`) is optional; **Attribution is one optional i
 
 ## 2. Go-live runbook (config + deploy — no code changes)
 
-### Step 1 — Vercel env: turns `503` → real `402` (verify works; settle deferred)
-| Var | Value | Notes |
-|---|---|---|
-| `EDGE_AUTH_URL` | `https://mintware-edge-auth-production.up.railway.app` | already deployed |
-| `EDGE_AUTH_SECRET` | *(secret)* | MUST equal edge-auth's `EDGE_API_SECRET` |
-| `X402_PAY_TO` | *(receiving address)* | x402 settlement recipient |
-
-Without these the route returns `503 x402_seller_unconfigured` **by design** — do not relax that check.
+### Step 1 — ✅ DONE (verified live 2026-08-25): the `402` challenge is already serving
+`EDGE_AUTH_URL` + `EDGE_AUTH_SECRET` are set on Vercel (Production + Preview); `defaultPayTo()` resolves via
+the `MINTWARE_TREASURY_ADDRESS` fallback (`X402_PAY_TO` optional — set it only to route x402 receipts to a
+DIFFERENT address); `supportedNetworks()` defaults to `['base','base-sepolia']`. So the route already passes
+its own guard and returns a real `402` (not `503`). Nothing to do here unless changing the pay-to.
 
 ### Step 2 — deploy the relayer + wire it: turns deferred → live on-chain settle (`tx_hash`)
 1. Deploy `services/relayer` (`relayer-server` bin) on Railway (mirrors edge-auth; `railway.json` +
