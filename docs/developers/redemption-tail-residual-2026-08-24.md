@@ -1,10 +1,30 @@
-# Redemption Tail-Redeemer Residual — Diagnosis for Audit (2026-08-24)
+# Redemption Tail-Redeemer Residual — Diagnosis + FIX (2026-08-24 → RESOLVED 2026-08-25)
 
-**Self-review, testnet + unaudited.** This documents a **Low, safe-direction** residual found by the
-autonomous exploit red-team and **confirmed by executed trace** — deliberately left UNFIXED because the
-correct remediation is a redemption-model redesign, not a patch (two patch attempts were validated and
-rejected; see below). Regression/characterization tests:
-`contracts-v4/test/payments/MintwareTreasuryNavResiduals.t.sol`.
+> ## ✅ RESOLVED (2026-08-25) — redemption gate (proportional draw)
+> The residual is **fixed** in `MintwareTreasuryVault`. Root cause: pricing (`_redeemNav`) and the physical
+> draw (`_pullUSDC`) disagreed — the NAV counted junior first-loss, but `_pullUSDC` handed it out
+> first-come-first-served, so the tail's dollars were already gone. The fix makes the **physical draw
+> proportional**: each redeemer draws at most their **fair share `f` of senior-own** assets (Aave idle +
+> on-hand + LP recoverable — so the fungible pool is shared, not raced), then junior first-loss absorbs the
+> **actual residual** capped at their **pro-rata share `f × juniorUsdcBuffer`** (so a lone senior is made
+> whole, but a finite buffer is shared across many). Settlement is **fail-soft** (pay what's physically
+> realizable rather than reverting — the "never below par" guarantee is already void under a haircut; the
+> card/team paths stay strict). A non-collapsing par floor (`max(seniorParLiability, totalSeniorAssets())`)
+> keeps senior **yield** while stopping the tail collapse.
+>
+> **Proven:** the pro-rata fuzz guard (`MintwareTreasuryRedemptionOrder.t.sol`, now the fair-floor property,
+> un-skipped) passes **5000+ runs** — no redeemer is shortchanged below the fair floor in any order; the
+> yield tripwire passes; PROBE2 flipped to confirm the tail is paid pro-rata; `junior_absorbs` still makes a
+> lone senior whole; **all 270 payments tests + the 256×128k solvency invariants green.** The residual
+> below is the historical diagnosis (six earlier attempts, each caught by the guard) that led to this fix.
+
+---
+
+**Self-review, testnet + unaudited.** The section below documents the **Low, safe-direction** residual as it
+was found by the autonomous exploit red-team and **confirmed by executed trace**, and the six patch attempts
+that led to the redemption-gate fix above. Regression tests:
+`MintwareTreasuryNavResiduals.t.sol` (probes), `MintwareTreasuryRedemptionOrder.t.sol` (fuzz guard),
+`MintwareTreasurySeniorYield.t.sol` (yield tripwire).
 
 ## Summary
 
