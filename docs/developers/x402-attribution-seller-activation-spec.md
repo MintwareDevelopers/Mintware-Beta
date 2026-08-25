@@ -44,42 +44,62 @@ the `MINTWARE_TREASURY_ADDRESS` fallback (`X402_PAY_TO` optional — set it only
 DIFFERENT address); `supportedNetworks()` defaults to `['base','base-sepolia']`. So the route already passes
 its own guard and returns a real `402` (not `503`). Nothing to do here unless changing the pay-to.
 
-### Step 2 — deploy the relayer + wire it: turns deferred → live on-chain settle (`tx_hash`)
+### Step 2 — turn deferred → live on-chain settle (`tx_hash`)
 
-**(a) Railway service** — root `services/relayer` (its `railway.json` already defines build/start:
-`cargo build --release --bin relayer-server` → `./bin/relayer-server`). Set these service variables
-(⚠ = secret you supply; the server **fails closed** without the first three):
+Two ways to wire the on-chain settle leg. **Option A is the platform-consistent one** — settle through
+the SAME Privy/oracle signer the card flow already uses, no separate service, no raw key. Option B (the
+Rust relayer) stays supported as an override for when you want a dedicated always-on submitter.
 
-| Var | Value | Notes |
-|---|---|---|
-| `RELAYER_HTTP_SECRET` ⚠ | a strong random bearer | must equal Vercel `X402_RELAYER_SECRET` |
-| `RELAYER_SIGNER_KEY` ⚠ | funded key that holds `RELAYER_ROLE` on the gateway | never commit/log; `RELAYER_SUBMIT_KEY` is the fallback name |
-| `RELAYER_RPC_URL` | destination-chain JSON-RPC (Base-first) | Base Sepolia for testnet |
-| `RELAYER_GATEWAY_ADDRESS` | the `MintwarePaymentGateway` address | fallback name `GATEWAY_ADDRESS`; for `/settle` |
-| `RELAYER_SETTLEMENT_ADDRESS` | `MintwareEthSettlement` (optional) | only for `/settle-batch`; fallback `SETTLEMENT_ADDRESS` |
-| `PORT` | `8080` (default) | Railway usually injects its own |
+`config.ts#getSettler()` precedence: `X402_RELAYER_URL` set → Rust relayer (Option B); else
+`X402_SETTLE_PROVIDER=oracle` → in-process oracle/Privy settler (Option A); else `deferredSettler`.
 
-**(b) Grant the role** (post-deploy, once) — the signer must hold `RELAYER_ROLE` on the gateway or every
+#### Option A — in-process oracle/Privy settle (recommended, Privy-consistent)
+
+The x402 `settleSpend` is submitted by `getOracleSigner('root')` — identical to the card path
+(`lib/org/settleSwipe.ts`). With `ORACLE_SIGNER_PROVIDER=privy` the signing key lives in **Privy's
+enclave** (a Privy server wallet you control), not in env. No `services/relayer` deploy, no
+`RELAYER_SIGNER_KEY`.
+
+**Prereqs (one-time):** the Privy signer setup from `docs/developers/professional-key-setup.md` —
+`ORACLE_SIGNER_PROVIDER=privy`, `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `ROOT_ORACLE_PRIVY_WALLET_ID`,
+`ROOT_ORACLE_PRIVY_ADDRESS`. That Privy wallet address must hold `RELAYER_ROLE` on the gateway (grant
+below) and hold a little gas on the settle chain.
+
+**Vercel wiring:**
+```bash
+vercel env add X402_SETTLE_PROVIDER  production   # = oracle   ← flips config.ts to the in-process settler
+vercel env add X402_GATEWAY_ADDRESS  production   # = the MintwarePaymentGateway address
+vercel env add X402_PERMIT_CHAIN_ID  production   # = settle chain id (Arc 5042002 default; set Base's if Base-first)
+vercel env add X402_PAY_TO           production   # = the address that RECEIVES the fees (see note below)
+vercel --prod
+```
+
+**Grant the role** (once) — the Privy signer address must hold `RELAYER_ROLE` on the gateway or every
 settle mines with status 0:
 ```bash
-cast send <GATEWAY> "grantRole(bytes32,address)" $(cast keccak "RELAYER_ROLE") <SIGNER_ADDR> \
+cast send <GATEWAY> "grantRole(bytes32,address)" $(cast keccak "RELAYER_ROLE") <PRIVY_SIGNER_ADDR> \
   --rpc-url <RPC> --private-key <GATEWAY_ADMIN_KEY>
 ```
 
-**(c) Verify the server** is up + fail-closed-clean:
-```bash
-curl -s https://<railway-url>/health          # expect ok
-```
+> **Where the fees land — two wallets, not one.** The **signer** above (`getOracleSigner('root')`, a
+> Privy wallet) only *submits* the tx and pays gas. The **fee revenue** (the $0.01/call USDC) goes to
+> `settleSpend`'s `receiver` = `defaultPayTo()` = **`X402_PAY_TO`** (falling back to the Arc gateway,
+> then `MINTWARE_TREASURY_ADDRESS`). **To collect all x402 fees in a Privy wallet you can access, set
+> `X402_PAY_TO` to that Privy wallet's address.** Then both the signer and the receiver are Privy wallets
+> you control.
 
-**(d) Vercel wiring** (flips `config.ts` from `deferredSettler` → `httpSettler`):
-```bash
-vercel env add X402_RELAYER_URL     production   # = https://<railway-url>
-vercel env add X402_RELAYER_SECRET  production   # ⚠ = the RELAYER_HTTP_SECRET above
-vercel env add X402_GATEWAY_ADDRESS production   # = the gateway address
-vercel env add X402_PERMIT_CHAIN_ID production   # = settle chain id (Arc 5042002 default; set Base's if Base-first)
-vercel --prod                                    # redeploy so the build picks them up
-```
-Then settle returns a real `tx_hash` instead of `deferredSettler`. **Do not do this with real value pre-audit.**
+#### Option B — Rust relayer (`services/relayer`) — optional override
+
+Use only if you want a dedicated always-on submitter. Root `services/relayer` (`railway.json` already
+defines `cargo build --release --bin relayer-server` → `./bin/relayer-server`). Service vars (⚠ = secret;
+fails closed without the first three): `RELAYER_HTTP_SECRET` (= Vercel `X402_RELAYER_SECRET`),
+`RELAYER_SIGNER_KEY` (funded raw key holding `RELAYER_ROLE`; fallback `RELAYER_SUBMIT_KEY`),
+`RELAYER_RPC_URL`, `RELAYER_GATEWAY_ADDRESS` (fallback `GATEWAY_ADDRESS`), `RELAYER_SETTLEMENT_ADDRESS`
+(optional, `/settle-batch`), `PORT` (8080). Grant `RELAYER_ROLE` to the signer as above; `curl /health`;
+then set Vercel `X402_RELAYER_URL` + `X402_RELAYER_SECRET` (+ `X402_GATEWAY_ADDRESS`/`X402_PERMIT_CHAIN_ID`/
+`X402_PAY_TO`) and `vercel --prod`. Note this path needs a **raw** funded key, so it is NOT Privy-consistent.
+
+**Do not do either with real value pre-audit.**
 
 ### Step 3 — settle chain: Base-first
 Per canonical-spec §11 decision #4. Do not build Arc settlement in this pass — Arc stays the yield leg, CCTP

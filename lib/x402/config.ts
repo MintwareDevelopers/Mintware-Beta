@@ -4,6 +4,7 @@
 
 import { YpnFacilitator, Facilitator, TrustSource } from './facilitator'
 import { httpEdgeAuthorizer, httpSettler, deferredSettler } from './edgeHttp'
+import { oracleSettler } from './oracleSettler'
 import { parkedSizeTrustSource } from './trustSources'
 import { rpcParkedReader } from './vaultReader'
 import { ARC_TESTNET, ARC_TESTNET_DEPLOYMENT, ARC_CHAIN_ID } from '@/config/arc'
@@ -33,12 +34,32 @@ export function getFacilitator(): Facilitator | null {
   if (!url || !secret) return null
 
   const edge = httpEdgeAuthorizer({ url, secret })
-  const settler =
-    process.env.X402_RELAYER_URL
-      ? httpSettler({ url: process.env.X402_RELAYER_URL, secret: process.env.X402_RELAYER_SECRET })
-      : deferredSettler
+  return new YpnFacilitator({ edge, settler: getSettler(), supportedNetworks: supportedNetworks(), trust: getTrustSource() })
+}
 
-  return new YpnFacilitator({ edge, settler, supportedNetworks: supportedNetworks(), trust: getTrustSource() })
+/** Select the on-chain settle transport. Precedence:
+ *   1. `X402_RELAYER_URL` set → the Rust `services/relayer` HTTP server (explicit override).
+ *   2. `X402_SETTLE_PROVIDER=oracle` → the in-process `settleSpend` via `getOracleSigner('root')` — the
+ *      SAME Privy/oracle signer the card flow uses (`lib/org/settleSwipe.ts`). No separate relayer service,
+ *      no raw key: `ORACLE_SIGNER_PROVIDER=privy` keeps the key in Privy's enclave. This is the
+ *      platform-consistent path.
+ *   3. neither → `deferredSettler` (VERIFY/hold works; settle deferred). Default → deploy-gating unchanged.
+ */
+function getSettler() {
+  if (process.env.X402_RELAYER_URL) {
+    return httpSettler({ url: process.env.X402_RELAYER_URL, secret: process.env.X402_RELAYER_SECRET })
+  }
+  if ((process.env.X402_SETTLE_PROVIDER ?? '').toLowerCase() === 'oracle') {
+    return oracleSettler({ gateway: x402PermitGateway(), chainId: x402PermitChainId() })
+  }
+  return deferredSettler
+}
+
+/** True when a real (fund-moving) on-chain settle transport is wired — either the Rust relayer or the
+ *  in-process oracle/Privy settler. The settle route uses this to fail closed early (require a standing
+ *  permit) only when settlement would actually submit on-chain; the deferred default is unaffected. */
+export function x402OnchainSettleConfigured(): boolean {
+  return Boolean(process.env.X402_RELAYER_URL) || (process.env.X402_SETTLE_PROVIDER ?? '').toLowerCase() === 'oracle'
 }
 
 /** OPTIONAL trust source for hold tiering. Default OFF (undefined) → authorize on NAV alone. Set

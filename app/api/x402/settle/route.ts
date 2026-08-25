@@ -2,7 +2,7 @@
 // Body: { paymentRequirements, paymentPayload, holdId? }. Spec: agentkit-compute-402-spec.md §6.2.
 
 import { createHandler } from '@/lib/web2/routeHandler'
-import { getFacilitator, x402PermitGateway } from '@/lib/x402/config'
+import { getFacilitator, x402PermitGateway, x402OnchainSettleConfigured } from '@/lib/x402/config'
 import { getStandingPermit } from '@/lib/x402/permitStore'
 import { verifyEip3009Authorization } from '@/lib/x402/verifyAuthorization'
 import type { RelayerPermit, RelayerEdgeAuth } from '@/lib/x402/facilitator'
@@ -43,10 +43,11 @@ export const POST = createHandler(async (req, ctx) => {
     if (gateway) permit = (await getStandingPermit(ctx.supabase, payer, gateway)) ?? undefined
   }
 
-  // Fail closed: with a relayer configured, settle would submit on-chain — refuse clearly rather than
-  // hand the relayer a body the Gateway rejects (or fabricate a signature). When no relayer is set the
-  // facilitator's deferredSettler handles it (deploy-gating unchanged), so only short-circuit here.
-  if (!permit && process.env.X402_RELAYER_URL) {
+  // Fail closed: with a real settle transport wired (the Rust relayer OR the in-process oracle/Privy
+  // settler), settle would submit on-chain — refuse clearly rather than hand it a body the Gateway rejects
+  // (or fabricate a signature). When neither is set the facilitator's deferredSettler handles it
+  // (deploy-gating unchanged), so only short-circuit here.
+  if (!permit && x402OnchainSettleConfigured()) {
     return ctx.json({ success: false, errorReason: 'no_standing_permit' }, 402)
   }
 
