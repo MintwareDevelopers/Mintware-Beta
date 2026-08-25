@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.MintwareDevelopers/mcp-server",
   "description": "Look up on-chain Attribution reputation scores for wallets and AI agents on Base, plus the agent leaderboard, agent registration, and pending oracle-attestation claims.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "url": "https://github.com/MintwareDevelopers/Mintware-Beta",
     "source": "github"
@@ -13,8 +13,10 @@
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@mintware/mcp-server",
-      "version": "0.1.0",
-      "transport": { "type": "stdio" }
+      "version": "0.1.1",
+      "transport": {
+        "type": "stdio"
+      }
     }
   ]
 }
