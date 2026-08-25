@@ -1,0 +1,41 @@
+name: Publish to MCP Registry
+
+# Registers plugins/mcp/server.json with the official MCP registry
+# (registry.modelcontextprotocol.io) using GitHub OIDC — no interactive
+# login, no stored secret. Authenticates as this repository via the
+# `io.github.mintwaredevelopers/*` namespace.
+#
+# NOTE: verify the exact `mcp-publisher` subcommand names below against
+# `./mcp-publisher --help` before relying on this — written from the
+# registry's documented OIDC flow, not a live test run.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "plugins/mcp/server.json"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write # required for GitHub OIDC token exchange
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download mcp-publisher
+        run: |
+          curl -fsSL -o mcp-publisher.tar.gz \
+            https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz
+          tar xzf mcp-publisher.tar.gz
+          chmod +x mcp-publisher
+
+      - name: Authenticate via GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        working-directory: plugins/mcp
+        run: ../../mcp-publisher publish
