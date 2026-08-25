@@ -3,8 +3,10 @@
 // pretending. Spec: docs/developers/agentkit-compute-402-spec.md.
 
 import { YpnFacilitator, Facilitator, TrustSource } from './facilitator'
+import { DirectFacilitator } from './directFacilitator'
 import { httpEdgeAuthorizer, httpSettler, deferredSettler } from './edgeHttp'
 import { oracleSettler } from './oracleSettler'
+import { directSettler } from './directSettler'
 import { parkedSizeTrustSource } from './trustSources'
 import { rpcParkedReader } from './vaultReader'
 import { ARC_TESTNET, ARC_TESTNET_DEPLOYMENT, ARC_CHAIN_ID } from '@/config/arc'
@@ -27,8 +29,17 @@ export function defaultPayTo(): string | undefined {
   return process.env.X402_PAY_TO ?? process.env.NEXT_PUBLIC_ARC_GATEWAY_ADDRESS ?? process.env.MINTWARE_TREASURY_ADDRESS
 }
 
-/** Build the facilitator from env, or null if edge-auth isn't configured. */
+/** Build the facilitator from env, or null if it can't be configured.
+ *
+ *  X402_SETTLE_PROVIDER=direct → the standard x402 "exact" model: verify a signed EIP-3009 transfer and
+ *  submit it straight to `payTo` (no vault, no edge-auth, no on-chain role — the simplest/safest way for a
+ *  seller to just collect the fee in a wallet). Otherwise the YPN vault-backed facilitator (edge-auth NAV
+ *  hold → settleSpend), which requires EDGE_AUTH_URL/SECRET and returns null without them. */
 export function getFacilitator(): Facilitator | null {
+  if ((process.env.X402_SETTLE_PROVIDER ?? '').toLowerCase() === 'direct') {
+    return new DirectFacilitator({ supportedNetworks: supportedNetworks(), settler: directSettler() })
+  }
+
   const url = process.env.EDGE_AUTH_URL
   const secret = process.env.EDGE_AUTH_SECRET
   if (!url || !secret) return null
