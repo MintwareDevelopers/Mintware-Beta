@@ -1,10 +1,9 @@
 {
   "type": "https://ercs.ethereum.org/ERCS/erc-8257#tool-manifest-v1",
   "name": "Mintware Attribution Score",
-  "slug": "attribution-score",
   "description": "On-chain reputation score (0-925) for any wallet or AI agent, built from real behavior across 100+ chains. Reputation-gate agent-to-agent actions: refuse trades with fresh/suspicious counterparties, size limits by borrower reputation, prioritize higher-rep agents.",
   "endpoint": "https://mintware.finance/api/x402/score",
-  "documentationUrl": "https://mintware.finance/docs",
+  "io.mintware.documentationUrl": "https://mintware.finance/docs",
   "inputs": {
     "type": "object",
     "properties": {
