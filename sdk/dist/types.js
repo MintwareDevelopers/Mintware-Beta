@@ -1,5 +1,5 @@
 // =============================================================================
-// @mintware/ai-attribution-sdk — types
+// @mintwarehq/ai-attribution-sdk — types
 // =============================================================================
 export {};
 //# sourceMappingURL=types.js.map

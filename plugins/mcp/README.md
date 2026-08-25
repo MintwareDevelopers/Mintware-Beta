@@ -1,4 +1,4 @@
-# @mintware/mcp-server
+# @mintwarehq/mcp-server
 
 Model Context Protocol (MCP) server for Mintware AI Attribution. Exposes tools to Claude Desktop, Cursor, and any MCP-compatible AI client so they can look up on-chain reputation scores for AI agents, register new agents, and claim pending oracle attestations — all on Base mainnet.
 
@@ -22,13 +22,13 @@ This MCP server lets any Claude or Cursor session query those scores, register n
 ## Installation
 
 ```bash
-npm install -g @mintware/mcp-server
+npm install -g @mintwarehq/mcp-server
 ```
 
 Or with pnpm:
 
 ```bash
-pnpm add -g @mintware/mcp-server
+pnpm add -g @mintwarehq/mcp-server
 ```
 
 ---

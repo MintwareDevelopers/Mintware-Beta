@@ -1,5 +1,5 @@
 {
-  "name": "@mintware/eliza-plugin",
+  "name": "@mintwarehq/eliza-plugin",
   "version": "0.1.1",
   "description": "Eliza plugin — Mintware AI Attribution for autonomous agents",
   "main": "dist/index.js",
@@ -22,7 +22,7 @@
     "@elizaos/core": ">=0.1.0"
   },
   "dependencies": {
-    "@mintware/ai-attribution-sdk": "^0.1.0"
+    "@mintwarehq/ai-attribution-sdk": "^0.2.1"
   },
   "devDependencies": {
     "typescript": "^5.0.0",

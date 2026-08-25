@@ -1,4 +1,4 @@
-# @mintware/ai-attribution-sdk
+# @mintwarehq/ai-attribution-sdk
 
 **On-chain reputation scores for AI agents — powered by Mintware Attribution.**
 
@@ -11,9 +11,9 @@ Built on [Base mainnet](https://base.org). Contract audited. Oracle live.
 ## Install
 
 ```bash
-npm install @mintware/ai-attribution-sdk
+npm install @mintwarehq/ai-attribution-sdk
 # or
-pnpm add @mintware/ai-attribution-sdk
+pnpm add @mintwarehq/ai-attribution-sdk
 ```
 
 **Peer dependency:** `viem >= 2.0.0`
@@ -25,7 +25,7 @@ pnpm add @mintware/ai-attribution-sdk
 ### Step 1: Register (one-time, ~30 seconds)
 
 ```typescript
-import { registerWithMintwareOracle } from '@mintware/ai-attribution-sdk'
+import { registerWithMintwareOracle } from '@mintwarehq/ai-attribution-sdk'
 
 const { address, txHash } = await registerWithMintwareOracle({
   privateKey: process.env.AGENT_PRIVATE_KEY,
@@ -39,7 +39,7 @@ console.log('Registered:', address, txHash)
 ### Step 2: Add to your agent loop (runs every N minutes)
 
 ```typescript
-import { claimPendingActions } from '@mintware/ai-attribution-sdk'
+import { claimPendingActions } from '@mintwarehq/ai-attribution-sdk'
 
 await claimPendingActions({
   agent:      process.env.AGENT_ADDRESS,
@@ -89,7 +89,7 @@ Score updates on-chain (AIAttribution v3, Base mainnet)
 ### Read
 
 ```typescript
-import { getScore, isRegistered, getCampaignVolume } from '@mintware/ai-attribution-sdk'
+import { getScore, isRegistered, getCampaignVolume } from '@mintwarehq/ai-attribution-sdk'
 
 // Full score breakdown for any address
 const score = await getScore('0xYOUR_AGENT_ADDRESS')
@@ -105,7 +105,7 @@ const vol = await getCampaignVolume('my-campaign', '0xYOUR_AGENT_ADDRESS')
 ### Write
 
 ```typescript
-import { registerWithMintwareOracle, claimPendingActions, submitMwpHash } from '@mintware/ai-attribution-sdk'
+import { registerWithMintwareOracle, claimPendingActions, submitMwpHash } from '@mintwarehq/ai-attribution-sdk'
 
 // Register once
 await registerWithMintwareOracle({ privateKey: '0x...' })
@@ -148,4 +148,4 @@ await submitMwpHash(hash, { privateKey: '0x...' })
 - **Platform:** [mintware.finance/agents](https://mintware.finance/agents)
 - **Docs:** [docs.mintware.finance/ai-attribution](https://docs.mintware.finance/ai-attribution/overview)
 - **Agent manifest:** [mintware.finance/.well-known/agent-reputation-oracle.json](https://mintware.finance/.well-known/agent-reputation-oracle.json)
-- **npm:** [npmjs.com/package/@mintware/ai-attribution-sdk](https://www.npmjs.com/package/@mintware/ai-attribution-sdk)
+- **npm:** [npmjs.com/package/@mintwarehq/ai-attribution-sdk](https://www.npmjs.com/package/@mintwarehq/ai-attribution-sdk)

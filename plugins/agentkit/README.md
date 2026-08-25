@@ -1,4 +1,4 @@
-# @mintware/agentkit-actions
+# @mintwarehq/agentkit-actions
 
 Coinbase AgentKit actions for [Mintware AI Attribution](https://mintware.finance) — on-chain reputation scoring for AI agents on Base.
 
@@ -30,9 +30,9 @@ until settlement — and the capital never un-parks. (Reputation-gating is optio
 ## Installation
 
 ```bash
-npm install @mintware/agentkit-actions @coinbase/agentkit zod
+npm install @mintwarehq/agentkit-actions @coinbase/agentkit zod
 # or
-pnpm add @mintware/agentkit-actions @coinbase/agentkit zod
+pnpm add @mintwarehq/agentkit-actions @coinbase/agentkit zod
 ```
 
 ---
@@ -61,7 +61,7 @@ import {
   mintwareGetScoreAction,
   mintwareRegisterAction,
   mintwareClaimPendingAction,
-} from '@mintware/agentkit-actions'
+} from '@mintwarehq/agentkit-actions'
 
 // ── 1. Create wallet provider ─────────────────────────────────────────────────
 
@@ -104,7 +104,7 @@ console.log(result.messages.at(-1)?.content)
 ### Register all actions at once using the convenience array
 
 ```ts
-import { mintwareActions } from '@mintware/agentkit-actions'
+import { mintwareActions } from '@mintwarehq/agentkit-actions'
 
 for (const action of mintwareActions) {
   agentkit.use(action)
@@ -131,7 +131,7 @@ for (const action of mintwareActions) {
 **Schema:** `{}` (no arguments)
 
 - Reads `AGENT_PRIVATE_KEY` from `process.env`.
-- Calls `registerWithMintwareOracle` from `@mintware/ai-attribution-sdk`.
+- Calls `registerWithMintwareOracle` from `@mintwarehq/ai-attribution-sdk`.
 - Returns the tx hash on success.
 - Throws if `AGENT_PRIVATE_KEY` is not set or the transaction reverts.
 
@@ -141,7 +141,7 @@ for (const action of mintwareActions) {
 
 - Reads `AGENT_PRIVATE_KEY` from `process.env`.
 - Gets the agent address from `walletProvider.getAddress()`.
-- Calls `claimPendingActions` from `@mintware/ai-attribution-sdk`.
+- Calls `claimPendingActions` from `@mintwarehq/ai-attribution-sdk`.
 - Returns the count and tx hashes of submitted attestations, or a "nothing to claim" message.
 - Throws if `AGENT_PRIVATE_KEY` is not set.
 

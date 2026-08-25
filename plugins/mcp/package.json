@@ -1,5 +1,5 @@
 {
-  "name": "@mintware/mcp-server",
+  "name": "@mintwarehq/mcp-server",
   "version": "0.1.1",
   "description": "MCP server — Mintware AI Attribution tools for Claude and Cursor",
   "main": "dist/index.js",
@@ -24,7 +24,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@mintware/ai-attribution-sdk": "^0.1.0",
+    "@mintwarehq/ai-attribution-sdk": "^0.2.1",
     "viem": "^2.47.4"
   },
   "devDependencies": {

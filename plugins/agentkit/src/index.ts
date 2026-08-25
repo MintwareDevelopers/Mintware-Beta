@@ -1,5 +1,5 @@
 // =============================================================================
-// @mintware/agentkit-actions
+// @mintwarehq/agentkit-actions
 //
 // Coinbase AgentKit actions for Mintware AI Attribution.
 // Exposes three actions:
@@ -15,7 +15,7 @@ import { z } from 'zod'
 import {
   registerWithMintwareOracle,
   claimPendingActions,
-} from '@mintware/ai-attribution-sdk'
+} from '@mintwarehq/ai-attribution-sdk'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

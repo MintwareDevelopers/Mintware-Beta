@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // =============================================================================
-// @mintware/mcp-server
+// @mintwarehq/mcp-server
 //
 // Model Context Protocol server — Mintware tools for Claude Desktop, Cursor, and any MCP client.
 //
@@ -28,7 +28,7 @@ import {
 import {
   registerWithMintwareOracle,
   claimPendingActions,
-} from "@mintware/ai-attribution-sdk"
+} from "@mintwarehq/ai-attribution-sdk"
 
 import { privateKeyToAccount } from "viem/accounts"
 

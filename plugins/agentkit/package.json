@@ -1,5 +1,5 @@
 {
-  "name": "@mintware/agentkit-actions",
+  "name": "@mintwarehq/agentkit-actions",
   "version": "0.1.1",
   "description": "Coinbase AgentKit actions for Mintware AI Attribution",
   "main": "dist/index.js",
@@ -22,7 +22,7 @@
     "@coinbase/agentkit": ">=0.1.0"
   },
   "dependencies": {
-    "@mintware/ai-attribution-sdk": "^0.1.0",
+    "@mintwarehq/ai-attribution-sdk": "^0.2.1",
     "zod": "^3.0.0"
   },
   "devDependencies": {
