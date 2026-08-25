@@ -45,13 +45,41 @@ DIFFERENT address); `supportedNetworks()` defaults to `['base','base-sepolia']`.
 its own guard and returns a real `402` (not `503`). Nothing to do here unless changing the pay-to.
 
 ### Step 2 — deploy the relayer + wire it: turns deferred → live on-chain settle (`tx_hash`)
-1. Deploy `services/relayer` (`relayer-server` bin) on Railway (mirrors edge-auth; `railway.json` +
-   `rust-toolchain.toml` present) with: `RELAYER_HTTP_SECRET`, `RELAYER_SIGNER_KEY` (funded, holds
-   `RELAYER_ROLE` on the gateway — see `treasuryProvisioning.requiredGatewayRoleGrants`), `RELAYER_RPC_URL`,
-   `RELAYER_GATEWAY_ADDRESS`.
-2. Vercel: `X402_RELAYER_URL` (its base URL), `X402_RELAYER_SECRET` (= relayer's `RELAYER_HTTP_SECRET`),
-   `X402_GATEWAY_ADDRESS`, `X402_PERMIT_CHAIN_ID` (defaults to Arc `5042002`). `config.ts` then selects
-   `httpSettler` and settle returns a real `tx_hash`.
+
+**(a) Railway service** — root `services/relayer` (its `railway.json` already defines build/start:
+`cargo build --release --bin relayer-server` → `./bin/relayer-server`). Set these service variables
+(⚠ = secret you supply; the server **fails closed** without the first three):
+
+| Var | Value | Notes |
+|---|---|---|
+| `RELAYER_HTTP_SECRET` ⚠ | a strong random bearer | must equal Vercel `X402_RELAYER_SECRET` |
+| `RELAYER_SIGNER_KEY` ⚠ | funded key that holds `RELAYER_ROLE` on the gateway | never commit/log; `RELAYER_SUBMIT_KEY` is the fallback name |
+| `RELAYER_RPC_URL` | destination-chain JSON-RPC (Base-first) | Base Sepolia for testnet |
+| `RELAYER_GATEWAY_ADDRESS` | the `MintwarePaymentGateway` address | fallback name `GATEWAY_ADDRESS`; for `/settle` |
+| `RELAYER_SETTLEMENT_ADDRESS` | `MintwareEthSettlement` (optional) | only for `/settle-batch`; fallback `SETTLEMENT_ADDRESS` |
+| `PORT` | `8080` (default) | Railway usually injects its own |
+
+**(b) Grant the role** (post-deploy, once) — the signer must hold `RELAYER_ROLE` on the gateway or every
+settle mines with status 0:
+```bash
+cast send <GATEWAY> "grantRole(bytes32,address)" $(cast keccak "RELAYER_ROLE") <SIGNER_ADDR> \
+  --rpc-url <RPC> --private-key <GATEWAY_ADMIN_KEY>
+```
+
+**(c) Verify the server** is up + fail-closed-clean:
+```bash
+curl -s https://<railway-url>/health          # expect ok
+```
+
+**(d) Vercel wiring** (flips `config.ts` from `deferredSettler` → `httpSettler`):
+```bash
+vercel env add X402_RELAYER_URL     production   # = https://<railway-url>
+vercel env add X402_RELAYER_SECRET  production   # ⚠ = the RELAYER_HTTP_SECRET above
+vercel env add X402_GATEWAY_ADDRESS production   # = the gateway address
+vercel env add X402_PERMIT_CHAIN_ID production   # = settle chain id (Arc 5042002 default; set Base's if Base-first)
+vercel --prod                                    # redeploy so the build picks them up
+```
+Then settle returns a real `tx_hash` instead of `deferredSettler`. **Do not do this with real value pre-audit.**
 
 ### Step 3 — settle chain: Base-first
 Per canonical-spec §11 decision #4. Do not build Arc settlement in this pass — Arc stays the yield leg, CCTP
