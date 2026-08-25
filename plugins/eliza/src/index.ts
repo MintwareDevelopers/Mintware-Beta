@@ -12,7 +12,7 @@
 //   QUOTE_X402               — preflight an x402-gated URL's price (no payment)
 //   PAY_X402                 — pay an x402 call in USDC (EIP-3009) and return the resource
 //
-// Contract (Base mainnet): 0xb9FB965Caa7197932b52631e0121Ea54586e2B88
+// Contract (Base mainnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
 // Park vault (Arc testnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
 // API base:                https://mintware.finance
 // =============================================================================
@@ -36,7 +36,7 @@ import {
 
 const API_BASE = 'https://mintware.finance'
 
-const BASE_MAINNET_CONTRACT = '0xb9FB965Caa7197932b52631e0121Ea54586e2B88' as const
+const BASE_MAINNET_CONTRACT = '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421' as const
 
 // ── Types for API responses ───────────────────────────────────────────────────
 

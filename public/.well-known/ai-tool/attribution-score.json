@@ -1,0 +1,40 @@
+{
+  "type": "https://ercs.ethereum.org/ERCS/erc-8257#tool-manifest-v1",
+  "name": "Mintware Attribution Score",
+  "slug": "attribution-score",
+  "description": "On-chain reputation score (0-925) for any wallet or AI agent, built from real behavior across 100+ chains. Reputation-gate agent-to-agent actions: refuse trades with fresh/suspicious counterparties, size limits by borrower reputation, prioritize higher-rep agents.",
+  "endpoint": "https://mintware.finance/api/x402/score",
+  "documentationUrl": "https://mintware.finance/docs",
+  "inputs": {
+    "type": "object",
+    "properties": {
+      "address": {
+        "type": "string",
+        "pattern": "^0x[0-9a-fA-F]{40}$",
+        "description": "The EVM address to score."
+      }
+    },
+    "required": ["address"]
+  },
+  "outputs": {
+    "type": "object",
+    "properties": {
+      "score": { "type": "integer", "minimum": 0, "maximum": 925, "description": "Total Attribution score." },
+      "tier": { "type": "string", "enum": ["bronze", "silver", "gold"] },
+      "percentile": { "type": "integer", "minimum": 0, "maximum": 100 },
+      "rawScore": { "type": "integer" },
+      "riskPenalty": { "type": "integer" }
+    },
+    "required": ["score", "tier", "percentile"]
+  },
+  "creatorAddress": "0x9c646c48a302f4725450669f1218d3fdb3e933ad",
+  "io.x402.pricing": {
+    "scheme": "exact",
+    "asset": "USDC",
+    "amount": "10000",
+    "decimals": 6,
+    "networks": ["base-sepolia"],
+    "note": "Paid lookups over x402 ($0.01/call). A free read is also available at /api/attribution/score-v2."
+  },
+  "io.mintware.note": "Access is currently open (no predicate). A future Mintware Agent Pass NFT predicate may grant discounted/priority tiers (ERC-8257 predicates support tiered access) — not yet live, do not treat as promised."
+}

@@ -147,7 +147,7 @@ Pay for an x402-gated call in USDC (signs an EIP-3009 authorization) and return 
 ## Contract details
 
 - **Network:** Base mainnet (chain ID 8453)
-- **Contract:** `0xb9FB965Caa7197932b52631e0121Ea54586e2B88`
+- **Contract:** `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421`
 - **API:** `https://mintware.finance`
 
 ---

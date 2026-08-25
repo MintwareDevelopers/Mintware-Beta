@@ -7,14 +7,14 @@
 //   REGISTER_MINTWARE        — register the agent wallet with Attribution
 //   CLAIM_PENDING_ACTIONS    — submit pre-signed oracle attestations to the contract
 //
-// Contract (Base mainnet): 0xb9FB965Caa7197932b52631e0121Ea54586e2B88
+// Contract (Base mainnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
 // API base:                https://mintware.finance
 // =============================================================================
 import { elizaLogger, } from '@elizaos/core';
 import { registerWithMintwareOracle, claimPendingActions, } from '@mintware/ai-attribution-sdk';
 // ── Constants ─────────────────────────────────────────────────────────────────
 const API_BASE = 'https://mintware.finance';
-const BASE_MAINNET_CONTRACT = '0xb9FB965Caa7197932b52631e0121Ea54586e2B88';
+const BASE_MAINNET_CONTRACT = '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421';
 // ── Helper: extract Ethereum address from a message string ────────────────────
 function extractAddress(text) {
     const match = text.match(/0x[0-9a-fA-F]{40}/);

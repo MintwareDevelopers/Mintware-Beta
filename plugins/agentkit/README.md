@@ -23,7 +23,7 @@ per call. Because Mintware is both the funding rail and the facilitator, the bal
 until settlement — and the capital never un-parks. (Reputation-gating is optional, not required.) See
 [`docs/developers/agentkit-compute-402-spec.md`](../../docs/developers/agentkit-compute-402-spec.md).
 
-**Contract (Base mainnet):** `0xb9FB965Caa7197932b52631e0121Ea54586e2B88`
+**Contract (Base mainnet):** `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421`
 
 ---
 
