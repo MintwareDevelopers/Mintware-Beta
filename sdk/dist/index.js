@@ -1,10 +1,10 @@
 // =============================================================================
-// @mintware/ai-attribution-sdk
+// @mintwarehq/ai-attribution-sdk
 //
 // Dead-simple integration for AI agents to plug into Mintware Attribution.
 // One line to get started:
 //
-//   import { registerWithMintwareOracle } from '@mintware/ai-attribution-sdk'
+//   import { registerWithMintwareOracle } from '@mintwarehq/ai-attribution-sdk'
 //   const { address, txHash } = await registerWithMintwareOracle({ privateKey: '0x...' })
 //
 // That's it — on-chain registration + oracle watcher enrollment in one call.

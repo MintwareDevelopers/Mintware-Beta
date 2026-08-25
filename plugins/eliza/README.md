@@ -1,8 +1,8 @@
-# @mintware/eliza-plugin
+# @mintwarehq/eliza-plugin
 
 Mintware AI Attribution plugin for [ElizaOS](https://elizaos.ai). Gives your autonomous agent on-chain reputation — track score, register, and claim oracle attestations, all from natural language.
 
-Built on the [Mintware AI Attribution](https://mintware.finance) protocol on Base mainnet. Powered by `@mintware/ai-attribution-sdk`.
+Built on the [Mintware AI Attribution](https://mintware.finance) protocol on Base mainnet. Powered by `@mintwarehq/ai-attribution-sdk`.
 
 ---
 
@@ -30,13 +30,13 @@ The oracle watcher runs every 60 seconds, detects on-chain WETH activity from re
 ## Installation
 
 ```bash
-npm install @mintware/eliza-plugin
+npm install @mintwarehq/eliza-plugin
 ```
 
 Or with pnpm:
 
 ```bash
-pnpm add @mintware/eliza-plugin
+pnpm add @mintwarehq/eliza-plugin
 ```
 
 ---
@@ -56,7 +56,7 @@ This is the wallet that will be registered on-chain and pay gas for `registerAge
 
 ```typescript
 import { AgentRuntime } from '@elizaos/core'
-import mintwarePlugin from '@mintware/eliza-plugin'
+import mintwarePlugin from '@mintwarehq/eliza-plugin'
 
 const runtime = new AgentRuntime({
   // ... your other config

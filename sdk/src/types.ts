@@ -1,5 +1,5 @@
 // =============================================================================
-// @mintware/ai-attribution-sdk — types
+// @mintwarehq/ai-attribution-sdk — types
 // =============================================================================
 
 /** Full score breakdown for an agent */

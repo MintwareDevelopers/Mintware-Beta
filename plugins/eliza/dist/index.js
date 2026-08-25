@@ -1,5 +1,5 @@
 // =============================================================================
-// @mintware/eliza-plugin
+// @mintwarehq/eliza-plugin
 //
 // Mintware AI Attribution plugin for ElizaOS.
 // Exposes three actions:
@@ -11,7 +11,7 @@
 // API base:                https://mintware.finance
 // =============================================================================
 import { elizaLogger, } from '@elizaos/core';
-import { registerWithMintwareOracle, claimPendingActions, } from '@mintware/ai-attribution-sdk';
+import { registerWithMintwareOracle, claimPendingActions, } from '@mintwarehq/ai-attribution-sdk';
 // ── Constants ─────────────────────────────────────────────────────────────────
 const API_BASE = 'https://mintware.finance';
 const BASE_MAINNET_CONTRACT = '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421';

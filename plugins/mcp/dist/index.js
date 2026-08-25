@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // =============================================================================
-// @mintware/mcp-server
+// @mintwarehq/mcp-server
 //
 // Model Context Protocol server — Mintware AI Attribution tools.
 // Exposes four tools to Claude Desktop, Cursor, and any MCP-compatible client:
@@ -18,7 +18,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const index_js_1 = require("@modelcontextprotocol/sdk/server/index.js");
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const types_js_1 = require("@modelcontextprotocol/sdk/types.js");
-const ai_attribution_sdk_1 = require("@mintware/ai-attribution-sdk");
+const ai_attribution_sdk_1 = require("@mintwarehq/ai-attribution-sdk");
 // ── Constants ─────────────────────────────────────────────────────────────────
 const API_BASE = "https://mintware.finance";
 const BASE_MAINNET_CONTRACT = "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421";

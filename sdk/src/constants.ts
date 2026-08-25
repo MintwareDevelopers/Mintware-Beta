@@ -1,5 +1,5 @@
 // =============================================================================
-// @mintware/ai-attribution-sdk — constants
+// @mintwarehq/ai-attribution-sdk — constants
 // Contract addresses and ABI for AIAttribution.sol
 // =============================================================================
 

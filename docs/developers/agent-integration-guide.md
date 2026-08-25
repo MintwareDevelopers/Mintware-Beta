@@ -32,34 +32,34 @@ paid (x402) path if you'd rather your agent pay per lookup than call the free en
 
 ## In your framework
 
-### Coinbase AgentKit — [`@mintware/agentkit-actions`](https://www.npmjs.com/package/@mintware/agentkit-actions)
+### Coinbase AgentKit — [`@mintwarehq/agentkit-actions`](https://www.npmjs.com/package/@mintwarehq/agentkit-actions)
 
 ```bash
-pnpm add @mintware/agentkit-actions @coinbase/agentkit zod
+pnpm add @mintwarehq/agentkit-actions @coinbase/agentkit zod
 ```
 ```ts
-import { mintwareGetScoreAction } from '@mintware/agentkit-actions'
+import { mintwareGetScoreAction } from '@mintwarehq/agentkit-actions'
 const agentkit = await AgentKit.from({ walletProvider, actionProviders: [] })
 agentkit.use(mintwareGetScoreAction)   // agent gains MINTWARE_GET_SCORE — look up any address's score in-loop
 // also available: mintwareRegisterAction, mintwareClaimPendingAction, and the parking + x402 actions
 ```
 
-### ElizaOS — [`@mintware/eliza-plugin`](https://www.npmjs.com/package/@mintware/eliza-plugin)
+### ElizaOS — [`@mintwarehq/eliza-plugin`](https://www.npmjs.com/package/@mintwarehq/eliza-plugin)
 
 ```bash
-pnpm add @mintware/eliza-plugin
+pnpm add @mintwarehq/eliza-plugin
 ```
 ```ts
-import mintwarePlugin from '@mintware/eliza-plugin'
+import mintwarePlugin from '@mintwarehq/eliza-plugin'
 const runtime = new AgentRuntime({ /* …character… */, plugins: [mintwarePlugin] })
 ```
 The agent responds to natural language like *"check the attribution score for 0x…"* via the
 `GET_ATTRIBUTION_SCORE` action (plus register/claim, parking, and `PAY_X402`).
 
-### MCP (Claude Desktop / Cursor) — [`@mintware/mcp-server`](https://www.npmjs.com/package/@mintware/mcp-server)
+### MCP (Claude Desktop / Cursor) — [`@mintwarehq/mcp-server`](https://www.npmjs.com/package/@mintwarehq/mcp-server)
 
 ```bash
-npm install -g @mintware/mcp-server
+npm install -g @mintwarehq/mcp-server
 ```
 ```json
 // claude_desktop_config.json → "mcpServers"
@@ -106,4 +106,4 @@ raw `score` floor. Reputation-gating is **advisory**: it's a signal to weigh, no
 - Attribution contract (Base mainnet, v3): `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421`
 - Agent leaderboard: <https://mintware.finance/agents/leaderboard>
 - x402 facilitator manifest: <https://mintware.finance/.well-known/x402.json>
-- Packages: [`@mintware/agentkit-actions`](https://www.npmjs.com/package/@mintware/agentkit-actions) · [`@mintware/eliza-plugin`](https://www.npmjs.com/package/@mintware/eliza-plugin) · [`@mintware/mcp-server`](https://www.npmjs.com/package/@mintware/mcp-server)
+- Packages: [`@mintwarehq/agentkit-actions`](https://www.npmjs.com/package/@mintwarehq/agentkit-actions) · [`@mintwarehq/eliza-plugin`](https://www.npmjs.com/package/@mintwarehq/eliza-plugin) · [`@mintwarehq/mcp-server`](https://www.npmjs.com/package/@mintwarehq/mcp-server)

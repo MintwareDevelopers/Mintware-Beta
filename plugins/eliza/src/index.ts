@@ -1,5 +1,5 @@
 // =============================================================================
-// @mintware/eliza-plugin
+// @mintwarehq/eliza-plugin
 //
 // Mintware AI Attribution plugin for ElizaOS.
 // Exposes eight actions:
@@ -30,7 +30,7 @@ import {
 import {
   registerWithMintwareOracle,
   claimPendingActions,
-} from '@mintware/ai-attribution-sdk'
+} from '@mintwarehq/ai-attribution-sdk'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

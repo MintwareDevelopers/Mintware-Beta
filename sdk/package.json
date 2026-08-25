@@ -1,5 +1,5 @@
 {
-  "name": "@mintware/ai-attribution-sdk",
+  "name": "@mintwarehq/ai-attribution-sdk",
   "version": "0.2.1",
   "description": "Mintware AI Attribution SDK — ERC-8004 agent trust layer for DeFi",
   "main": "dist/index.js",
