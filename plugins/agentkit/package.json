@@ -1,11 +1,22 @@
 {
   "name": "@mintware/agentkit-actions",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Coinbase AgentKit actions for Mintware AI Attribution",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "scripts": { "build": "tsc" },
-  "keywords": ["agentkit", "coinbase", "mintware", "ai-attribution", "base", "defi", "reputation", "agent"],
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [
+    "agentkit",
+    "coinbase",
+    "mintware",
+    "ai-attribution",
+    "base",
+    "defi",
+    "reputation",
+    "agent"
+  ],
   "license": "MIT",
   "peerDependencies": {
     "@coinbase/agentkit": ">=0.1.0"
