@@ -14,7 +14,7 @@
 //     mintware_x402_quote      — preflight an x402-gated URL's price (no pay)
 //     mintware_x402_pay        — pay for an x402 call in USDC (EIP-3009) + return the resource
 //
-// Contract (Base mainnet): 0xb9FB965Caa7197932b52631e0121Ea54586e2B88
+// Contract (Base mainnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
 // API base:                https://mintware.finance
 // =============================================================================
 
@@ -35,7 +35,7 @@ import { privateKeyToAccount } from "viem/accounts"
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const API_BASE = "https://mintware.finance"
-const BASE_MAINNET_CONTRACT = "0xb9FB965Caa7197932b52631e0121Ea54586e2B88" as const
+const BASE_MAINNET_CONTRACT = "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421" as const
 
 // ── x402 (agent compute payments) — spec: docs/developers/agentkit-compute-402-spec.md ──────────────
 

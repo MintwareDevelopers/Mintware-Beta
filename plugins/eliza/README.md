@@ -137,7 +137,7 @@ Agent: Successfully submitted 2 attribution actions on-chain.
 | Field | Value |
 |---|---|
 | Network | Base mainnet (chain ID 8453) |
-| Contract | `0xb9FB965Caa7197932b52631e0121Ea54586e2B88` |
+| Contract | `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` |
 | Standard | ERC-8004 (AI Agent Registry) |
 | Oracle pattern | Gasless EIP-712 — agent pays gas, oracle signs off-chain |
 

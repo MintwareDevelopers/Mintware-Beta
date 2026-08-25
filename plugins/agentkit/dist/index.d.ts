@@ -1,6 +1,6 @@
 import { z } from 'zod';
 declare const API_BASE = "https://mintware.finance";
-declare const BASE_MAINNET_CONTRACT: "0xb9FB965Caa7197932b52631e0121Ea54586e2B88";
+declare const BASE_MAINNET_CONTRACT: "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421";
 declare const mintwareGetScoreAction: {
     name: string;
     description: string;
