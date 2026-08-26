@@ -25,6 +25,8 @@ import type { NextRequest } from 'next/server'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { verifyCaptureRequest } from '@/lib/cards/lithic'
 import { settleSwipeEvent, CARD_HIGH_VALUE_THRESHOLD } from '@/lib/org/settleSwipe'
+import { syncBufferBalance } from '@/lib/org/bufferMonitor'
+import { refillCardBuffer } from '@/lib/org/bufferRefill'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -62,11 +64,32 @@ export const POST = createHandler(async (req: NextRequest, ctx) => {
   // Match back to the swipe the ASA webhook authorized (provider_event_ref = the same transaction token).
   const { data: swipe } = await ctx.supabase
     .from('card_swipe_events')
-    .select('id, org_id, decision, settled, amount_atomic_usdc')
+    .select('id, org_id, org_card_id, decision, settled, amount_atomic_usdc')
     .eq('provider', 'lithic').eq('provider_event_ref', token).maybeSingle()
   if (!swipe) { ctx.log.info('cards.lithic', 'capture for an unknown/foreign transaction — ignored', { token }); return ctx.json({ ok: true, ignored: true }, 200) }
   if (swipe.decision !== 'approved') return ctx.json({ ok: true, ignored: true, reason: 'not_approved' }, 200)
   if (swipe.settled) return ctx.json({ ok: true, already_settled: true }, 200) // idempotent — duplicate delivery
+
+  // ── Buffer mode (docs/developers/card-spend-buffer-spec.md §5) ──
+  // When the card runs on a spend buffer, the pre-funded buffer wallet ALREADY paid the merchant
+  // through the card network at authorization time — there is NO vault→merchant settleSpend here.
+  // At capture the buffer's on-chain USDC has dropped, so the reactive job is: mark the swipe cleared,
+  // reconcile the cached balance against chain, and enqueue a refill from the vault (which no-ops
+  // unless CARD_BUFFER_REFILL_ENABLED + the per-card gates are satisfied). This runs independent of the
+  // LITHIC_AUTO_SETTLE valves below — those gate the vault settle signer, which buffer mode never uses.
+  if (process.env.CARD_BUFFER_ENABLED === 'true' && swipe.org_card_id) {
+    const { data: hasBuffer } = await ctx.supabase
+      .from('card_spend_buffers').select('id').eq('org_card_id', swipe.org_card_id).maybeSingle()
+    if (hasBuffer) {
+      await ctx.supabase.from('card_swipe_events')
+        .update({ settled: true, settled_at: new Date().toISOString() }).eq('id', swipe.id)
+      await syncBufferBalance({ supabase: ctx.supabase, orgId: swipe.org_id, orgCardId: swipe.org_card_id, log: ctx.log })
+      const refill = await refillCardBuffer({ supabase: ctx.supabase, orgId: swipe.org_id, orgCardId: swipe.org_card_id, trigger: 'reactive', log: ctx.log })
+      ctx.log.info('cards.lithic', 'buffer capture reconciled', { eventId: swipe.id, refilled: refill.ok })
+      return ctx.json({ ok: true, settled: true, mode: 'buffer', refilled: refill.ok, refillReason: refill.ok ? undefined : refill.reason }, 200)
+    }
+    // buffer feature on but this card has no buffer → fall through to the vault settle path.
+  }
 
   // Valve 1: off by default.
   if (process.env.LITHIC_AUTO_SETTLE_ENABLED !== 'true') {
