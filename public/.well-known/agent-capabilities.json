@@ -46,6 +46,18 @@
       "use": "The auditable, metered counterpart to get_score — for agent-to-agent commerce where the lookup itself is paid."
     },
     {
+      "id": "get_scores_batch",
+      "title": "Batch Attribution score lookup (metered, x402)",
+      "group": "reputation",
+      "method": "POST",
+      "path": "/api/x402/scores",
+      "auth": "x402",
+      "pay": { "scheme": "exact", "asset": "USDC", "amountAtomic": "count × 10000", "decimals": 6, "note": "$0.01 per unique address; total = count × base" },
+      "input": { "addresses": "string[] (max 50, de-duped server-side)" },
+      "output": { "count": "int", "priceAtomic": "string", "scores": "[{ address, score } | { address, error }]" },
+      "use": "Reputation-gate a WHOLE SET of counterparties in one paid call — the agent-native bulk-vetting primitive. Per-address failures are isolated (never fail the batch)."
+    },
+    {
       "id": "leaderboard",
       "title": "Agent reputation leaderboard",
       "group": "reputation",

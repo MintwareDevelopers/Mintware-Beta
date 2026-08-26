@@ -72,7 +72,7 @@ app/api/
              cron/* (universal-*, vault-*, treasury) · universal/trade-signal
              vault/{deposit,withdraw,weighted-claim,attribution-snapshot}
   (admin)/   oracle/* (testnet deploy + smoke helpers)
-  x402/      account · score · supported · verify · settle
+  x402/      account · score · scores · supported · verify · settle
   team/session
 
 public/
