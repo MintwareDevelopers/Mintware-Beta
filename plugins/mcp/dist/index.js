@@ -298,6 +298,24 @@ server.setRequestHandler(types_js_1.ListToolsRequestSchema, async () => {
                     "pool discovery for routers — not a user-facing pool list.",
                 inputSchema: { type: "object", properties: {}, required: [] },
             },
+            {
+                name: "mintware_swap_quote",
+                description: "Get an executable swap quote via Mintware's LI.FI proxy. Returns LI.FI's raw quote INCLUDING the " +
+                    "`transactionRequest` (to, data, value) — so the AGENT signs and broadcasts it with its own wallet key. " +
+                    "This tool does NOT move funds or sign anything; it only returns the quote for the agent to execute. " +
+                    "Amounts are raw token units (wei/atomic). `taker` is the agent's own address.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        chainId: { type: "number", description: "EVM chain id (e.g. 8453 for Base)." },
+                        sellToken: { type: "string", description: "Token address being sold (0x…)." },
+                        buyToken: { type: "string", description: "Token address being bought (0x…)." },
+                        sellAmount: { type: "string", description: "Amount to sell, in raw token units (atomic/wei)." },
+                        taker: { type: "string", description: "The agent's own wallet address (receives the bought token)." },
+                    },
+                    required: ["chainId", "sellToken", "buyToken", "sellAmount", "taker"],
+                },
+            },
         ],
     };
 });
@@ -661,6 +679,39 @@ server.setRequestHandler(types_js_1.CallToolRequestSchema, async (request) => {
         }
         catch (err) {
             return { content: [{ type: "text", text: `Failed to fetch pools: ${err instanceof Error ? err.message : String(err)}` }] };
+        }
+    }
+    // ── mintware_swap_quote ───────────────────────────────────────────────────
+    if (name === "mintware_swap_quote") {
+        const { chainId, sellToken, buyToken, sellAmount, taker } = (args ?? {});
+        if (!chainId || !sellToken || !buyToken || !sellAmount || !taker) {
+            return { content: [{ type: "text", text: "Missing required fields: chainId, sellToken, buyToken, sellAmount, taker." }] };
+        }
+        if (!/^0x[0-9a-fA-F]{40}$/.test(taker)) {
+            return { content: [{ type: "text", text: "Invalid taker address." }] };
+        }
+        try {
+            const res = await fetch(`${API_BASE}/api/swap/quote`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ chainId, sellToken, buyToken, sellAmount, taker }),
+            });
+            if (!res.ok) {
+                const errText = await res.text().catch(() => res.statusText);
+                return { content: [{ type: "text", text: `Quote failed (${res.status}): ${errText.slice(0, 300)}` }] };
+            }
+            const quote = await res.json();
+            return {
+                content: [{
+                        type: "text",
+                        text: "Executable swap quote (LI.FI). The `transactionRequest` below is the tx to sign and broadcast " +
+                            "with the agent's OWN wallet key — this tool does not sign or send it.\n\n" +
+                            JSON.stringify(quote, null, 2),
+                    }],
+            };
+        }
+        catch (err) {
+            return { content: [{ type: "text", text: `Swap quote error: ${err instanceof Error ? err.message : String(err)}` }] };
         }
     }
     // ── Unknown tool ──────────────────────────────────────────────────────────

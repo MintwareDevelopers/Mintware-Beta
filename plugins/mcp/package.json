@@ -1,6 +1,6 @@
 {
   "name": "@mintwarehq/mcp-server",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "MCP server — Mintware AI Attribution tools for Claude and Cursor",
   "main": "dist/index.js",
   "bin": {

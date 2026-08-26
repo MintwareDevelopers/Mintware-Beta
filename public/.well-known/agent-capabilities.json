@@ -156,14 +156,15 @@
     },
     {
       "id": "swap_quote",
-      "title": "Swap quote (LI.FI / MW meta-router)",
+      "title": "Swap quote (LI.FI / MW meta-router) — returns executable transactionRequest",
       "group": "defi",
       "method": "POST",
       "path": "/api/swap/quote",
       "altPath": "/api/swap/best-route",
       "auth": "none",
-      "toolStatus": "no-tool-yet",
-      "gap": "Execution is currently client-side (LI.FI executeRoute) — no agent execute path yet."
+      "tools": ["mintware_swap_quote"],
+      "returns": "LI.FI raw quote incl. transactionRequest (to, data, value) — the agent signs + broadcasts it with its own key.",
+      "note": "The quote tool is read-only (no signing). Auto-execute (a plugin that signs + broadcasts the agent's swap for it) is intentionally deferred — it moves the agent's real funds and warrants a dedicated, guarded build."
     },
     {
       "id": "vault_list",
