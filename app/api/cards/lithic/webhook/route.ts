@@ -22,11 +22,12 @@ export const dynamic = 'force-dynamic'
  *  https://docs.lithic.com/reference/cardauthorizationapprovalrequestwebhook). Chosen for the
  *  closest honest semantic fit, not to game merchant-facing messaging. */
 function asaResultFor(reason: string): string {
-  if (reason === 'over_role_daily_cap') return 'VELOCITY_EXCEEDED'
+  if (reason === 'over_role_daily_cap' || reason === 'over_per_tx_cap') return 'VELOCITY_EXCEEDED'
   if (reason === 'unknown_card' || reason === 'card_not_open' || reason === 'member_not_active') {
     return 'CARD_PAUSED'
   }
-  // insufficient_equity, edge_unreachable, edge_auth_unconfigured, edge_<status>, lookup failures, etc.
+  // insufficient_equity, insufficient_buffer (card spend buffer), edge_unreachable,
+  // edge_auth_unconfigured, edge_<status>, lookup failures, etc.
   return 'INSUFFICIENT_FUNDS'
 }
 
