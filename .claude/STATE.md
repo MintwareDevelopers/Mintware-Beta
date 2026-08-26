@@ -159,6 +159,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/api/treasury/normalize-mev` | `0 3 * * *` |
 | `/api/cron/vault-epoch-close` | `0 0 * * 1` |
 | `/api/cron/vault-weighted-epoch-close` | `0 1 * * 1` |
+| `/api/cron/farcaster-weekly-cast` | `0 2 * * 1` |
 <!-- /AUTO:crons -->
 
 ## Public feature flags in code (generated)

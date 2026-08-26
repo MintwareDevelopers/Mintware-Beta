@@ -108,6 +108,7 @@ this is the "always-on relayer" in the deploy-gated remainder; runs live only wh
 | `/api/treasury/normalize-mev` | `0 3 * * *` |
 | `/api/cron/vault-epoch-close` | `0 0 * * 1` |
 | `/api/cron/vault-weighted-epoch-close` | `0 1 * * 1` |
+| `/api/cron/farcaster-weekly-cast` | `0 2 * * 1` |
 <!-- /AUTO:crons -->
 
 Hobby plan: max once/day per cron.
