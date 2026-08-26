@@ -231,8 +231,20 @@ value.
   `settleSwipe.ts`), gated by `CARD_BUFFER_REFILL_ENABLED` + per-card config + the breaker.
 - **Auth wiring** (`decideCardSwipe`) — the flat check replaces live-NAV on the card rail when
   `CARD_BUFFER_ENABLED` + a buffer row exist; default path unchanged.
+- **Monitor** (`lib/org/bufferMonitor.ts#syncBufferBalance`) — reconciles the cached balance against
+  on-chain `usdc.balanceOf(buffer_address)`.
+- **Reactive path** (capture-webhook buffer branch) — at capture the pre-funded buffer already paid;
+  marks cleared, reconciles, enqueues a reactive refill (no `settleSpend`).
+- **Steady-state cron** (`/api/cron/card-buffer-refill`, 5 tests) — bearer-auth sweep: sync + refill
+  each enabled buffer. Dark-launched; not yet in `vercel.json` (bearer-callable meanwhile).
+- **User controls** (`/api/orgs/[id]/cards/[cardId]/buffer` + `parseBufferConfig`, 9 tests) —
+  member/owner-gated config write (enable, service level, caps, sizing inputs, breaker).
 
-**Still to build:** the monitor/reconciliation (cached balance ↔ on-chain `balanceOf`), the reactive
-capture-webhook hook (decrement + enqueue a refill) and steady-state cron, the user-controls surface
-(governed target / per-tx cap / refill-rate cap — mirror `MWTimelockedRiskParams`), and the spend
-agent's four jobs (§5). The §9 open items above remain open.
+The buffer is now **end-to-end**: configure → flat auth → capture reconcile + reactive refill → cron
+backstop → on-chain `refillBuffer`. ~89 TS + 12 Forge tests green; both feature flags OFF by default.
+
+**Still to build:** the spend agent's adaptive-tuning + predictive-top-up jobs (§5.1/§5.3), the
+governed on-chain per-user caps with `MWTimelockedRiskParams` tighten-instant/loosen-delayed semantics
+(the current `setUserDailyRefillCap` is a plain admin setter), and the §9 pre-build open items
+(measure real `T`, confirm issuer yield-buffer support, decide default `z`). External audit of
+`refillBuffer` gates real value.
