@@ -1,0 +1,237 @@
+{
+  "$schema": "https://mintware.finance/.well-known/agent-capabilities.schema.json",
+  "name": "Mintware",
+  "version": "1",
+  "description": "On-chain reputation (Attribution) + agent-native payments (x402) + yield-bearing capital parking. Mintware is the reputation layer, the payment rail, and the yield source in one — designed for autonomous agents to discover, authenticate, pay, and transact with zero human clicks.",
+  "baseUrl": "https://mintware.finance",
+  "docs": "https://mintware.finance/llms.txt",
+  "discovery": {
+    "x402": "https://mintware.finance/.well-known/x402.json",
+    "erc8004": "https://mintware.finance/.well-known/erc8004-registration.json",
+    "erc8257": "https://mintware.finance/.well-known/ai-tool/attribution-score.json",
+    "a2a": "https://mintware.finance/.well-known/agent.json",
+    "mcp": "io.github.MintwareDevelopers/mcp-server"
+  },
+  "auth": {
+    "none": "Public read — no auth.",
+    "x402": "Pay-per-call over x402 (EIP-3009 authorization). See /.well-known/x402.json.",
+    "signed-message": "EIP-191/EIP-712 signed message from the acting wallet; the server rebuilds and strict-compares the exact message (action + issuedAt bound).",
+    "standing-permit": "A one-time EIP-712 DelegatedSpendPermit registered via x402/permit; reused across many settles.",
+    "agent-key": "The agent's own wallet key signs an on-chain transaction (agent pays gas)."
+  },
+  "capabilities": [
+    {
+      "id": "get_score",
+      "title": "Attribution score lookup",
+      "group": "reputation",
+      "method": "GET",
+      "path": "/api/attribution/score-v2?address={address}",
+      "auth": "none",
+      "input": { "address": "0x-EVM address" },
+      "output": { "score": "0-925", "tier": "bronze|silver|gold", "percentile": "0-100", "rawScore": "int", "riskPenalty": "int" },
+      "tools": ["mintware_get_score", "MINTWARE_GET_SCORE", "GET_ATTRIBUTION_SCORE"],
+      "use": "Reputation-gate any agent-to-agent action: refuse trades with fresh/suspicious counterparties, size limits by reputation."
+    },
+    {
+      "id": "get_score_paid",
+      "title": "Attribution score lookup (metered, x402)",
+      "group": "reputation",
+      "method": "GET",
+      "path": "/api/x402/score?address={address}",
+      "auth": "x402",
+      "pay": { "scheme": "exact", "asset": "USDC", "amountAtomic": "10000", "decimals": 6, "note": "$0.01/call" },
+      "input": { "address": "0x-EVM address" },
+      "output": { "score": "0-925", "tier": "string", "percentile": "int", "..." : "full profile" },
+      "tools": ["MINTWARE_X402_PAY", "PAY_X402"],
+      "use": "The auditable, metered counterpart to get_score — for agent-to-agent commerce where the lookup itself is paid."
+    },
+    {
+      "id": "leaderboard",
+      "title": "Agent reputation leaderboard",
+      "group": "reputation",
+      "method": "GET",
+      "path": "/api/agents/leaderboard",
+      "auth": "none",
+      "output": { "agents": "[{ address, total_score, rank, behavior, contribution, interpretability, risk }]" },
+      "tools": ["mintware_leaderboard"]
+    },
+    {
+      "id": "agent_detail",
+      "title": "Agent detail + ERC-8004 metadata",
+      "group": "reputation",
+      "method": "GET",
+      "path": "/api/agents/{address}",
+      "auth": "none",
+      "related": ["/api/agents/{address}/erc8004-metadata", "/api/agents/{address}/pending"]
+    },
+    {
+      "id": "register_agent",
+      "title": "Register an agent for Attribution scoring",
+      "group": "reputation",
+      "method": "on-chain",
+      "path": "AIAttribution v3 @ 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421 (Base mainnet)",
+      "auth": "agent-key",
+      "tools": ["mintware_register", "MINTWARE_REGISTER", "REGISTER_MINTWARE"],
+      "sdk": "@mintwarehq/ai-attribution-sdk"
+    },
+    {
+      "id": "claim_pending",
+      "title": "Claim pending oracle-signed attestations",
+      "group": "reputation",
+      "method": "GET+on-chain",
+      "path": "/api/agents/{address}/pending",
+      "auth": "agent-key",
+      "tools": ["mintware_claim_pending", "MINTWARE_CLAIM_PENDING", "CLAIM_PENDING_ACTIONS"]
+    },
+    {
+      "id": "attest_score",
+      "title": "EAS off-chain score attestation",
+      "group": "reputation",
+      "method": "POST",
+      "path": "/api/eas/attest-score",
+      "auth": "none",
+      "toolStatus": "no-tool-yet"
+    },
+    {
+      "id": "mwp",
+      "title": "Model Workspace Protocol transparency hashes",
+      "group": "reputation",
+      "method": "POST",
+      "path": "/api/agents/mwp",
+      "auth": "signed-message",
+      "toolStatus": "no-tool-yet"
+    },
+    {
+      "id": "x402_quote",
+      "title": "Preflight an x402-gated URL (no payment)",
+      "group": "payments",
+      "method": "GET",
+      "path": "any x402 resource; returns 402 with the price",
+      "auth": "none",
+      "tools": ["MINTWARE_X402_QUOTE", "QUOTE_X402"]
+    },
+    {
+      "id": "x402_pay",
+      "title": "Pay for an x402-gated call",
+      "group": "payments",
+      "method": "GET+payment",
+      "path": "resource URL + PAYMENT-SIGNATURE header",
+      "auth": "x402",
+      "tools": ["MINTWARE_X402_PAY", "PAY_X402"]
+    },
+    {
+      "id": "x402_permit",
+      "title": "Register a standing spend-permit",
+      "group": "payments",
+      "method": "POST",
+      "path": "/api/x402/permit",
+      "auth": "signed-message",
+      "note": "One-time EIP-712 DelegatedSpendPermit; every later settle reuses it."
+    },
+    {
+      "id": "x402_account",
+      "title": "Parking account — parked / spendable / earning",
+      "group": "payments",
+      "method": "GET",
+      "path": "/api/x402/account?address={address}",
+      "auth": "none",
+      "tools": ["mintware_parking_account", "MINTWARE_TREASURY", "SHOW_TREASURY"]
+    },
+    {
+      "id": "park",
+      "title": "Park USDC into a yield vault (earns while spendable)",
+      "group": "payments",
+      "method": "on-chain",
+      "path": "ERC-4626 approve + deposit (MINTWARE_PARK_VAULT)",
+      "auth": "agent-key",
+      "tools": ["MINTWARE_PARK", "PARK_USDC"]
+    },
+    {
+      "id": "unpark",
+      "title": "Un-park USDC (redeem shares)",
+      "group": "payments",
+      "method": "on-chain",
+      "auth": "agent-key",
+      "tools": ["MINTWARE_UNPARK", "UNPARK_USDC"]
+    },
+    {
+      "id": "swap_quote",
+      "title": "Swap quote (LI.FI / MW meta-router)",
+      "group": "defi",
+      "method": "POST",
+      "path": "/api/swap/quote",
+      "altPath": "/api/swap/best-route",
+      "auth": "none",
+      "toolStatus": "no-tool-yet",
+      "gap": "Execution is currently client-side (LI.FI executeRoute) — no agent execute path yet."
+    },
+    {
+      "id": "vault_list",
+      "title": "List vaults",
+      "group": "defi",
+      "method": "GET",
+      "path": "/api/vaults",
+      "altPath": "/api/vault?id={id}",
+      "auth": "none",
+      "toolStatus": "no-tool-yet"
+    },
+    {
+      "id": "vault_deposit",
+      "title": "Deposit into a vault",
+      "group": "defi",
+      "method": "POST",
+      "path": "/api/vault/deposit",
+      "auth": "signed-message",
+      "toolStatus": "no-tool-yet",
+      "status": "testnet + audit-gated (Base Sepolia); interface agent-ready, value-moving gated on external audit"
+    },
+    {
+      "id": "vault_withdraw",
+      "title": "Withdraw from a vault",
+      "group": "defi",
+      "method": "POST",
+      "path": "/api/vault/withdraw",
+      "auth": "signed-message",
+      "toolStatus": "no-tool-yet",
+      "status": "testnet + audit-gated"
+    },
+    {
+      "id": "vault_weighted_claim",
+      "title": "Claim vault-weighted epoch rewards",
+      "group": "defi",
+      "method": "POST",
+      "path": "/api/vault/weighted-claim",
+      "auth": "signed-message",
+      "toolStatus": "no-tool-yet"
+    },
+    {
+      "id": "yields",
+      "title": "Live yield benchmarks",
+      "group": "data",
+      "method": "GET",
+      "path": "/api/benchmarks/yields",
+      "auth": "none"
+    },
+    {
+      "id": "pools",
+      "title": "Pool manifest",
+      "group": "data",
+      "method": "GET",
+      "path": "/api/pools",
+      "auth": "none"
+    },
+    {
+      "id": "profile",
+      "title": "Read / write agent identity profile",
+      "group": "identity",
+      "method": "GET|POST",
+      "path": "/api/profile",
+      "auth": "signed-message (write)",
+      "toolStatus": "no-tool-yet"
+    }
+  ],
+  "notes": [
+    "Value-moving surfaces (vault deposits, real settlement) are testnet + external-audit-gated; their agent-first INTERFACE is documented here and ready, activation follows audit.",
+    "toolStatus:no-tool-yet marks capabilities whose API exists but which are not yet exposed as an MCP/AgentKit/Eliza tool — the current build-out target."
+  ]
+}
