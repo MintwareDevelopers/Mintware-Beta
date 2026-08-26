@@ -1,0 +1,48 @@
+# Mintware
+
+> On-chain reputation (Attribution) + agent-native payments (x402) + yield-bearing capital parking.
+> Mintware is the reputation layer, the payment rail, and the yield source in one — built so autonomous
+> agents can discover, authenticate, pay, and transact with zero human clicks.
+
+The fastest way to integrate: read the machine-readable capability manifest, then call the endpoints or
+install a runtime plugin. No account or human sign-in is required to read reputation scores.
+
+## Start here (machine-readable)
+
+- [Agent capability manifest](https://mintware.finance/.well-known/agent-capabilities.json): every
+  agent-callable action — endpoint, method, auth, input/output, x402 price, and which tools expose it.
+- [x402 facilitator manifest](https://mintware.finance/.well-known/x402.json): pay-per-call schemes + networks.
+- [ERC-8004 registration](https://mintware.finance/.well-known/erc8004-registration.json): agent identity.
+- [ERC-8257 tool manifest](https://mintware.finance/.well-known/ai-tool/attribution-score.json): the score tool, listed in OpenSea's agent registry.
+- [A2A agent card](https://mintware.finance/.well-known/agent.json).
+
+## Core actions (no auth)
+
+- Reputation score for any wallet/agent (0–925): `GET /api/attribution/score-v2?address=0x…` → `{ score, tier, percentile }`.
+- Agent leaderboard: `GET /api/agents/leaderboard`.
+- Agent detail: `GET /api/agents/{address}` (+ `/erc8004-metadata`, `/pending`).
+- Live yield benchmarks: `GET /api/benchmarks/yields`. Pools: `GET /api/pools`.
+
+## Paid / agent-native actions
+
+- Metered score lookup over x402 ($0.01/call): `GET /api/x402/score?address=0x…` → `402 PAYMENT-REQUIRED`, pay via EIP-3009.
+- Parking account (park USDC that earns while spendable per call): `GET /api/x402/account?address=0x…`.
+- Register / claim Attribution on-chain: AIAttribution v3 `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421` (Base mainnet).
+
+## Runtime plugins (install and go)
+
+- Model Context Protocol (Claude Desktop / Cursor): `@mintwarehq/mcp-server` — registered at `io.github.MintwareDevelopers/mcp-server`.
+- Coinbase AgentKit: `@mintwarehq/agentkit-actions`.
+- ElizaOS: `@mintwarehq/eliza-plugin`.
+- SDK: `@mintwarehq/ai-attribution-sdk`.
+
+## Guides
+
+- [Reputation-gate your agent in 5 lines](https://mintware.finance/docs) — the minimal integration.
+
+## Notes for agents
+
+- Reputation-gating is advisory: a signal to weigh, not a guarantee.
+- Value-moving DeFi surfaces (vault deposits, settlement) are testnet + external-audit-gated; their agent
+  interface is documented in the capability manifest and activates as they clear audit. Reading scores and
+  paying for lookups are live today.

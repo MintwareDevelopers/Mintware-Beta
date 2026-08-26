@@ -1,0 +1,97 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mintware Agent API",
+    "version": "1.0.0",
+    "description": "Agent-facing endpoints for on-chain reputation (Attribution), x402 payments, and capital parking. Full capability index: https://mintware.finance/.well-known/agent-capabilities.json",
+    "contact": { "url": "https://mintware.finance" }
+  },
+  "servers": [{ "url": "https://mintware.finance" }],
+  "paths": {
+    "/api/attribution/score-v2": {
+      "get": {
+        "operationId": "getScore",
+        "summary": "Attribution reputation score for a wallet or agent (free)",
+        "parameters": [
+          { "name": "address", "in": "query", "required": true, "schema": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" } }
+        ],
+        "responses": { "200": { "description": "Score profile", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Score" } } } } }
+      }
+    },
+    "/api/x402/score": {
+      "get": {
+        "operationId": "getScorePaid",
+        "summary": "Attribution score over x402 (metered, $0.01/call)",
+        "parameters": [
+          { "name": "address", "in": "query", "required": true, "schema": { "type": "string", "pattern": "^0x[0-9a-fA-F]{40}$" } }
+        ],
+        "responses": {
+          "402": { "description": "PAYMENT-REQUIRED — pay via EIP-3009 and retry with a PAYMENT-SIGNATURE header" },
+          "200": { "description": "Full score profile (after payment)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Score" } } } }
+        }
+      }
+    },
+    "/api/x402/account": {
+      "get": {
+        "operationId": "getParkingAccount",
+        "summary": "Parking account — parked / spendable / earning balances",
+        "parameters": [ { "name": "address", "in": "query", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Parking account state" } }
+      }
+    },
+    "/api/x402/supported": {
+      "get": { "operationId": "x402Supported", "summary": "x402 schemes + networks the facilitator accepts", "responses": { "200": { "description": "Supported schemes/networks" } } }
+    },
+    "/api/agents/leaderboard": {
+      "get": { "operationId": "getLeaderboard", "summary": "AI agent reputation leaderboard (ERC-8004)", "responses": { "200": { "description": "Ranked agents" } } }
+    },
+    "/api/agents/{address}": {
+      "get": {
+        "operationId": "getAgent",
+        "summary": "Agent detail",
+        "parameters": [ { "name": "address", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Agent record" } }
+      }
+    },
+    "/api/agents/{address}/pending": {
+      "get": {
+        "operationId": "getPending",
+        "summary": "Pending oracle-signed attestations for an agent",
+        "parameters": [ { "name": "address", "in": "path", "required": true, "schema": { "type": "string" } } ],
+        "responses": { "200": { "description": "Pending attestations" } }
+      }
+    },
+    "/api/swap/quote": {
+      "post": {
+        "operationId": "swapQuote",
+        "summary": "Swap quote (LI.FI proxy; server injects integrator fee). Execution is client-side today.",
+        "responses": { "200": { "description": "Quote incl. mw_quote_id" } }
+      }
+    },
+    "/api/vaults": {
+      "get": { "operationId": "listVaults", "summary": "List vaults (testnet — Base Sepolia)", "responses": { "200": { "description": "Vaults" } } }
+    },
+    "/api/benchmarks/yields": {
+      "get": { "operationId": "getYields", "summary": "Live yield benchmarks (curated DefiLlama pools)", "responses": { "200": { "description": "Yield benchmarks" } } }
+    },
+    "/api/pools": {
+      "get": { "operationId": "getPools", "summary": "Pool manifest", "responses": { "200": { "description": "Pools" } } }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Score": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "string" },
+          "score": { "type": "integer", "minimum": 0, "maximum": 925 },
+          "tier": { "type": "string", "enum": ["bronze", "silver", "gold"] },
+          "percentile": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "rawScore": { "type": "integer" },
+          "riskPenalty": { "type": "integer" }
+        },
+        "required": ["score", "tier", "percentile"]
+      }
+    }
+  }
+}
