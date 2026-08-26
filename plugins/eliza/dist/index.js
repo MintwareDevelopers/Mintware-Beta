@@ -2,12 +2,18 @@
 // @mintwarehq/eliza-plugin
 //
 // Mintware AI Attribution plugin for ElizaOS.
-// Exposes three actions:
+// Exposes eight actions:
 //   GET_ATTRIBUTION_SCORE    — look up any agent's on-chain reputation
 //   REGISTER_MINTWARE        — register the agent wallet with Attribution
 //   CLAIM_PENDING_ACTIONS    — submit pre-signed oracle attestations to the contract
+//   PARK_USDC                — park USDC into the Mintware yield vault (ERC-4626)
+//   UNPARK_USDC              — redeem vault shares back to USDC
+//   SHOW_TREASURY            — read parked / spendable / earning balances
+//   QUOTE_X402               — preflight an x402-gated URL's price (no payment)
+//   PAY_X402                 — pay an x402 call in USDC (EIP-3009) and return the resource
 //
 // Contract (Base mainnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
+// Park vault (Arc testnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
 // API base:                https://mintware.finance
 // =============================================================================
 import { elizaLogger, } from '@elizaos/core';
@@ -397,14 +403,692 @@ const claimPendingActionsAction = {
     ],
 };
 // =============================================================================
+// Capital-parking (Arc yield vault) + x402 pay-per-call
+//
+// Mirrors the five AgentKit actions (MINTWARE_PARK / _UNPARK / _TREASURY /
+// _X402_QUOTE / _X402_PAY) in Eliza's action shape. On-chain writes use a viem
+// wallet client built from AGENT_PRIVATE_KEY; the Arc vault/USDC/RPC default to
+// the live Arc-testnet YPN yield stack and are overridable via runtime settings.
+// =============================================================================
+// ── Arc parking vault + USDC (settings-overridable) ───────────────────────────
+const PARK_VAULT_DEFAULT = '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421';
+const PARK_USDC_DEFAULT = '0x3600000000000000000000000000000000000000';
+const PARK_RPC_DEFAULT = 'https://rpc.testnet.arc.io';
+const PARK_CHAIN_ID_DEFAULT = 5042002; // Arc testnet
+// ERC-20 / ERC-4626 selectors.
+const APPROVE_SEL = '0x095ea7b3'; // approve(address,uint256)
+const DEPOSIT_SEL = '0x6e553f65'; // deposit(uint256,address)  (ERC-4626)
+const REDEEM_SEL = '0xdb006a75'; // redeem(uint256)  (burns caller's shares → USDC to caller)
+const PREVIEW_WITHDRAW_SEL = '0x0a28a477'; // previewWithdraw(uint256)  → shares needed
+const SHARES_SEL = '0xce7c2ac2'; // shares(address)
+function parkVault(runtime) {
+    return runtime.getSetting('MINTWARE_PARK_VAULT') || PARK_VAULT_DEFAULT;
+}
+function parkUsdc(runtime) {
+    return runtime.getSetting('MINTWARE_PARK_USDC') || PARK_USDC_DEFAULT;
+}
+function parkRpc(runtime) {
+    return runtime.getSetting('MINTWARE_PARK_RPC') || PARK_RPC_DEFAULT;
+}
+function parkChainId(runtime) {
+    const raw = runtime.getSetting('MINTWARE_PARK_CHAIN_ID');
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : PARK_CHAIN_ID_DEFAULT;
+}
+// ── Calldata / nonce helpers ──────────────────────────────────────────────────
+function pad32(hexOrAddr) {
+    return hexOrAddr.toLowerCase().replace(/^0x/, '').padStart(64, '0');
+}
+function padUint(n) {
+    return n.toString(16).padStart(64, '0');
+}
+function randomNonce32() {
+    const bytes = new Uint8Array(32);
+    globalThis.crypto.getRandomValues(bytes); // Web Crypto — global in Node 18+ and browsers
+    return '0x' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+// ── Base64 helpers (Node + edge) ──────────────────────────────────────────────
+function b64decode(s) {
+    return typeof Buffer !== 'undefined' ? Buffer.from(s, 'base64').toString('utf8') : atob(s);
+}
+function b64encode(s) {
+    return typeof Buffer !== 'undefined' ? Buffer.from(s, 'utf8').toString('base64') : btoa(s);
+}
+// ── Message parsing helpers ───────────────────────────────────────────────────
+function extractUrl(text) {
+    const match = text.match(/https?:\/\/[^\s'"]+/);
+    return match ? match[0] : null;
+}
+function extractUsdAmount(text) {
+    const match = text.match(/\$?\s*([0-9]+(?:\.[0-9]+)?)/);
+    if (!match)
+        return null;
+    const n = Number(match[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+}
+// ── Arc read (eth_call) ───────────────────────────────────────────────────────
+async function arcEthCall(rpc, to, data) {
+    const res = await fetch(rpc, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_call', params: [{ to, data }, 'latest'] }),
+    });
+    const j = (await res.json());
+    return j.result && j.result !== '0x' ? BigInt(j.result) : 0n;
+}
+// ── Arc write (viem wallet client from AGENT_PRIVATE_KEY) ──────────────────────
+async function sendArcTx(runtime, privateKey, tx) {
+    const { createWalletClient, http, defineChain } = await import('viem');
+    const { privateKeyToAccount } = await import('viem/accounts');
+    const account = privateKeyToAccount(privateKey);
+    const rpc = parkRpc(runtime);
+    const chain = defineChain({
+        id: parkChainId(runtime),
+        name: 'Arc',
+        nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+        rpcUrls: { default: { http: [rpc] } },
+    });
+    const client = createWalletClient({ account, chain, transport: http(rpc) });
+    return client.sendTransaction({
+        account,
+        chain,
+        to: tx.to,
+        data: tx.data,
+        value: tx.value ?? 0n,
+    });
+}
+// ── x402 (EIP-3009 pay-per-call) ──────────────────────────────────────────────
+const API_BASE_X402 = API_BASE;
+/** EIP-712 domain for USDC `transferWithAuthorization` (EIP-3009), per x402 network. */
+const USDC_DOMAIN = {
+    base: { name: 'USD Coin', version: '2', chainId: 8453, verifyingContract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
+    'base-sepolia': { name: 'USDC', version: '2', chainId: 84532, verifyingContract: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' },
+};
+const EIP3009_TYPES = {
+    TransferWithAuthorization: [
+        { name: 'from', type: 'address' },
+        { name: 'to', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'validAfter', type: 'uint256' },
+        { name: 'validBefore', type: 'uint256' },
+        { name: 'nonce', type: 'bytes32' },
+    ],
+};
+/** Fetch a resource; if it is 402, return the first advertised requirements (else null = free/served). */
+async function readX402Challenge(url) {
+    const res = await fetch(url);
+    if (res.status !== 402)
+        return { res, reqs: null };
+    const header = res.headers.get('payment-required') ?? res.headers.get('PAYMENT-REQUIRED');
+    const raw = header ? b64decode(header) : await res.clone().text();
+    const parsed = JSON.parse(raw);
+    const reqs = parsed.accepts?.[0] ?? null;
+    return { res, reqs };
+}
+// =============================================================================
+// Action 4 — PARK_USDC
+// =============================================================================
+const parkUsdcAction = {
+    name: 'PARK_USDC',
+    similes: [
+        'park usdc',
+        'park my usdc',
+        'deposit into the yield vault',
+        'park capital',
+        'earn yield on my usdc',
+        'put usdc to work',
+        'start earning yield',
+        'deposit usdc to earn',
+        'park my cash',
+        'move usdc into the vault',
+    ],
+    description: 'Parks USDC into the Mintware yield vault so it earns while staying spendable in place (it never locks). ' +
+        'Deposits the USDC amount from the message: approves the vault, then deposits (ERC-4626). ' +
+        'On-chain — the agent pays gas. Requires AGENT_PRIVATE_KEY. Vault/USDC/RPC default to the Arc-testnet YPN stack.',
+    validate: async (runtime, _message) => {
+        const key = runtime.getSetting('AGENT_PRIVATE_KEY');
+        if (!key) {
+            elizaLogger.warn('[mintware] PARK_USDC: AGENT_PRIVATE_KEY not set');
+            return false;
+        }
+        return true;
+    },
+    handler: async (runtime, message, _state, _options, callback) => {
+        elizaLogger.info('[mintware] PARK_USDC triggered');
+        const privateKey = runtime.getSetting('AGENT_PRIVATE_KEY');
+        if (!privateKey) {
+            await callback({
+                text: 'AGENT_PRIVATE_KEY is not configured. Please set it in your agent environment to park capital on-chain.',
+            });
+            return false;
+        }
+        const amountUsd = extractUsdAmount(message.content?.text ?? '');
+        if (amountUsd == null) {
+            await callback({
+                text: 'How much USDC should I park? e.g. "park $25 into the vault".',
+            });
+            return false;
+        }
+        const amount = BigInt(Math.round(amountUsd * 1000000)); // USDC 6dp
+        if (amount <= 0n) {
+            await callback({ text: 'Nothing to park (amount rounds to zero).' });
+            return false;
+        }
+        const vault = parkVault(runtime);
+        const usdc = parkUsdc(runtime);
+        let agent;
+        try {
+            const { privateKeyToAccount } = await import('viem/accounts');
+            agent = privateKeyToAccount(privateKey).address;
+        }
+        catch (err) {
+            elizaLogger.error('[mintware] Could not derive address from AGENT_PRIVATE_KEY:', err);
+            await callback({
+                text: 'Failed to derive wallet address from AGENT_PRIVATE_KEY. Please check the key is a valid 0x-prefixed hex private key.',
+            });
+            return false;
+        }
+        await callback({ text: `Parking $${amountUsd} USDC into the Mintware yield vault — submitting approve + deposit…` });
+        try {
+            // 1) approve the vault to pull `amount` USDC.
+            const approveTx = await sendArcTx(runtime, privateKey, {
+                to: usdc,
+                data: APPROVE_SEL + pad32(vault) + padUint(amount),
+            });
+            // 2) deposit(assets, receiver=agent) → mints vault shares to the agent.
+            const depositTx = await sendArcTx(runtime, privateKey, {
+                to: vault,
+                data: DEPOSIT_SEL + padUint(amount) + pad32(agent),
+            });
+            elizaLogger.info(`[mintware] Parked $${amountUsd} — approve: ${approveTx}, deposit: ${depositTx}`);
+            await callback({
+                text: [
+                    `Parked $${amountUsd} USDC into the Mintware yield vault.`,
+                    `  approve: ${approveTx}`,
+                    `  deposit: ${depositTx}`,
+                    `It's now earning yield and stays fully spendable in place — spend per call with PAY_X402.`,
+                ].join('\n'),
+            });
+            return true;
+        }
+        catch (err) {
+            elizaLogger.error('[mintware] PARK_USDC error:', err);
+            await callback({
+                text: `Failed to park USDC: ${err instanceof Error ? err.message : String(err)}`,
+            });
+            return false;
+        }
+    },
+    examples: [
+        [
+            { user: '{{user1}}', content: { text: 'Park $25 into the vault' } },
+            {
+                user: '{{agentName}}',
+                content: {
+                    text: 'Parked $25 USDC into the Mintware yield vault.\n  approve: 0xabc…\n  deposit: 0xdef…\nIt\'s now earning yield and stays fully spendable in place — spend per call with PAY_X402.',
+                    action: 'PARK_USDC',
+                },
+            },
+        ],
+    ],
+};
+// =============================================================================
+// Action 5 — UNPARK_USDC
+// =============================================================================
+const unparkUsdcAction = {
+    name: 'UNPARK_USDC',
+    similes: [
+        'unpark usdc',
+        'un-park my usdc',
+        'redeem from the vault',
+        'withdraw from the yield vault',
+        'pull my usdc out',
+        'take usdc back',
+        'unpark everything',
+        'redeem vault shares',
+        'cash out of the vault',
+        'get my usdc back',
+    ],
+    description: 'Un-parks USDC from the Mintware yield vault back to the agent wallet by redeeming vault shares. ' +
+        'Include an amount to un-park part; omit it to un-park everything. Capital is always yours — parking never locks. ' +
+        'On-chain — the agent pays gas. Requires AGENT_PRIVATE_KEY.',
+    validate: async (runtime, _message) => {
+        const key = runtime.getSetting('AGENT_PRIVATE_KEY');
+        if (!key) {
+            elizaLogger.warn('[mintware] UNPARK_USDC: AGENT_PRIVATE_KEY not set');
+            return false;
+        }
+        return true;
+    },
+    handler: async (runtime, message, _state, _options, callback) => {
+        elizaLogger.info('[mintware] UNPARK_USDC triggered');
+        const privateKey = runtime.getSetting('AGENT_PRIVATE_KEY');
+        if (!privateKey) {
+            await callback({
+                text: 'AGENT_PRIVATE_KEY is not configured. Please set it in your agent environment to un-park from the vault.',
+            });
+            return false;
+        }
+        const vault = parkVault(runtime);
+        const rpc = parkRpc(runtime);
+        let agent;
+        try {
+            const { privateKeyToAccount } = await import('viem/accounts');
+            agent = privateKeyToAccount(privateKey).address;
+        }
+        catch (err) {
+            elizaLogger.error('[mintware] Could not derive address from AGENT_PRIVATE_KEY:', err);
+            await callback({
+                text: 'Failed to derive wallet address from AGENT_PRIVATE_KEY. Please check the key is a valid 0x-prefixed hex private key.',
+            });
+            return false;
+        }
+        // Detect an explicit amount ("un-park all" / no number → redeem everything).
+        const text = message.content?.text ?? '';
+        const wantsAll = /\ball\b|everything/i.test(text);
+        const amountUsd = wantsAll ? null : extractUsdAmount(text);
+        try {
+            const balShares = await arcEthCall(rpc, vault, SHARES_SEL + pad32(agent));
+            if (balShares === 0n) {
+                await callback({ text: 'Nothing parked to un-park.' });
+                return true;
+            }
+            let sharesToBurn = balShares; // default: un-park all
+            if (amountUsd != null) {
+                const amount = BigInt(Math.round(amountUsd * 1000000));
+                const need = await arcEthCall(rpc, vault, PREVIEW_WITHDRAW_SEL + padUint(amount)); // shares to net `amount`
+                sharesToBurn = need < balShares ? need : balShares;
+            }
+            if (sharesToBurn === 0n) {
+                await callback({ text: 'Nothing to un-park (amount rounds to zero).' });
+                return true;
+            }
+            const tx = await sendArcTx(runtime, privateKey, {
+                to: vault,
+                data: REDEEM_SEL + padUint(sharesToBurn),
+            });
+            const which = amountUsd != null ? `$${amountUsd}` : 'all parked USDC';
+            elizaLogger.info(`[mintware] Un-parked ${which} — redeemed ${sharesToBurn} shares, tx: ${tx}`);
+            await callback({
+                text: `Un-parked ${which} — redeemed ${sharesToBurn} shares. redeem tx: ${tx}. USDC is back in the agent wallet.`,
+            });
+            return true;
+        }
+        catch (err) {
+            elizaLogger.error('[mintware] UNPARK_USDC error:', err);
+            await callback({
+                text: `Failed to un-park USDC: ${err instanceof Error ? err.message : String(err)}`,
+            });
+            return false;
+        }
+    },
+    examples: [
+        [
+            { user: '{{user1}}', content: { text: 'Un-park all my USDC' } },
+            {
+                user: '{{agentName}}',
+                content: {
+                    text: 'Un-parked all parked USDC — redeemed 25000000 shares. redeem tx: 0xabc…. USDC is back in the agent wallet.',
+                    action: 'UNPARK_USDC',
+                },
+            },
+        ],
+    ],
+};
+// =============================================================================
+// Action 6 — SHOW_TREASURY
+// =============================================================================
+const showTreasuryAction = {
+    name: 'SHOW_TREASURY',
+    similes: [
+        'show my treasury',
+        'show my parking account',
+        'how much is parked',
+        'how much can i spend',
+        'check my spendable balance',
+        'show parked usdc',
+        'mintware account balance',
+        'what\'s in my vault',
+        'treasury status',
+        'parking account',
+    ],
+    description: "Shows the agent's Mintware capital-parking account: how much USDC is parked (earning yield) and how much " +
+        'is spendable in place right now. Parking does not lock — the full parked balance stays spendable per call via x402. ' +
+        'Read-only. Pass an address in the message, or omit it to use the agent\'s own wallet.',
+    validate: async (_runtime, _message) => {
+        // Read-only — no private key required
+        return true;
+    },
+    handler: async (runtime, message, _state, _options, callback) => {
+        elizaLogger.info('[mintware] SHOW_TREASURY triggered');
+        let address = extractAddress(message.content?.text ?? '');
+        if (!address) {
+            const agentKey = runtime.getSetting('AGENT_PRIVATE_KEY');
+            if (agentKey) {
+                try {
+                    const { privateKeyToAccount } = await import('viem/accounts');
+                    address = privateKeyToAccount(agentKey).address.toLowerCase();
+                }
+                catch (err) {
+                    elizaLogger.warn('[mintware] Could not derive address from AGENT_PRIVATE_KEY:', err);
+                }
+            }
+        }
+        if (!address) {
+            await callback({
+                text: 'Please provide an address to inspect, e.g. "show treasury for 0xabc…", or set AGENT_PRIVATE_KEY to use the agent\'s own wallet.',
+            });
+            return false;
+        }
+        try {
+            const res = await fetch(`${API_BASE_X402}/api/x402/account?address=${address}`);
+            if (!res.ok)
+                throw new Error(`Mintware account API returned ${res.status}: ${res.statusText}`);
+            const t = (await res.json());
+            const short = `${address.slice(0, 6)}…${address.slice(-4)}`;
+            await callback({
+                text: [
+                    `Mintware parking account for ${short} (${t.network ?? 'arc'})`,
+                    `  Parked (earning): $${t.parkedUsdcFormatted ?? '0'} USDC`,
+                    `  Spendable now:    $${t.spendableUsdcFormatted ?? '0'} USDC`,
+                    t.earning
+                        ? `  Status: earning yield, fully spendable in place — spend per call via PAY_X402.`
+                        : `  Status: empty — park USDC into the vault to start earning while staying spendable.`,
+                ].join('\n'),
+            });
+            return true;
+        }
+        catch (err) {
+            elizaLogger.error('[mintware] SHOW_TREASURY error:', err);
+            await callback({
+                text: `Failed to fetch parking account: ${err instanceof Error ? err.message : String(err)}`,
+            });
+            return false;
+        }
+    },
+    examples: [
+        [
+            { user: '{{user1}}', content: { text: 'Show my treasury' } },
+            {
+                user: '{{agentName}}',
+                content: {
+                    text: 'Mintware parking account for 0xabc1…ef12 (arc)\n  Parked (earning): $250 USDC\n  Spendable now:    $250 USDC\n  Status: earning yield, fully spendable in place — spend per call via PAY_X402.',
+                    action: 'SHOW_TREASURY',
+                },
+            },
+        ],
+    ],
+};
+// =============================================================================
+// Action 7 — QUOTE_X402
+// =============================================================================
+const quoteX402Action = {
+    name: 'QUOTE_X402',
+    similes: [
+        'quote x402',
+        'how much does this cost',
+        'preview x402 price',
+        'what does this api cost',
+        'price this compute call',
+        'check x402 price',
+        'preflight x402',
+        'quote this url',
+        'cost to call',
+        'how much to pay for',
+    ],
+    description: 'Preflights an x402-gated compute/API URL WITHOUT paying. Returns the price (USDC), network, recipient, and ' +
+        'description advertised in the 402 challenge, so the agent can decide whether to pay. Read-only. Include the URL in the message.',
+    validate: async (_runtime, _message) => {
+        // Read-only — no private key required
+        return true;
+    },
+    handler: async (_runtime, message, _state, _options, callback) => {
+        elizaLogger.info('[mintware] QUOTE_X402 triggered');
+        const url = extractUrl(message.content?.text ?? '');
+        if (!url) {
+            await callback({ text: 'Please include the x402-protected URL to quote, e.g. "quote x402 for https://…".' });
+            return false;
+        }
+        try {
+            const { res, reqs } = await readX402Challenge(url);
+            if (!reqs) {
+                await callback({ text: `No payment required (HTTP ${res.status}). The resource is free or already served.` });
+                return true;
+            }
+            const usdc = (Number(reqs.maxAmountRequired) / 1e6).toLocaleString('en-US', { maximumFractionDigits: 6 });
+            await callback({
+                text: [
+                    `x402 quote for ${reqs.resource}`,
+                    `  Price:    up to $${usdc} USDC`,
+                    `  Network:  ${reqs.network}`,
+                    `  Pay to:   ${reqs.payTo}`,
+                    `  Scheme:   ${reqs.scheme}`,
+                    reqs.description ? `  About:    ${reqs.description}` : '',
+                ].filter(Boolean).join('\n'),
+            });
+            return true;
+        }
+        catch (err) {
+            elizaLogger.error('[mintware] QUOTE_X402 error:', err);
+            await callback({
+                text: `Failed to quote x402 resource: ${err instanceof Error ? err.message : String(err)}`,
+            });
+            return false;
+        }
+    },
+    examples: [
+        [
+            { user: '{{user1}}', content: { text: 'Quote x402 for https://api.example.com/compute' } },
+            {
+                user: '{{agentName}}',
+                content: {
+                    text: 'x402 quote for https://api.example.com/compute\n  Price:    up to $0.01 USDC\n  Network:  base\n  Pay to:   0xabc…\n  Scheme:   exact',
+                    action: 'QUOTE_X402',
+                },
+            },
+        ],
+    ],
+};
+// =============================================================================
+// Action 8 — PAY_X402
+// =============================================================================
+const payX402Action = {
+    name: 'PAY_X402',
+    similes: [
+        'pay x402',
+        'pay for this call',
+        'pay and fetch',
+        'pay the api',
+        'settle x402',
+        'pay for compute',
+        'pay to access',
+        'buy this compute call',
+        'pay for and fetch',
+        'authorize x402 payment',
+    ],
+    description: 'Pays for an x402-gated compute/API call from the agent wallet in USDC and returns the resource. Reads the 402 ' +
+        'challenge, signs an EIP-3009 authorization, retries with the payment, and returns the resource body. ' +
+        'On-chain-signed — requires AGENT_PRIVATE_KEY. Use QUOTE_X402 first to preview cost. Include the URL in the message.',
+    validate: async (runtime, _message) => {
+        const key = runtime.getSetting('AGENT_PRIVATE_KEY');
+        if (!key) {
+            elizaLogger.warn('[mintware] PAY_X402: AGENT_PRIVATE_KEY not set');
+            return false;
+        }
+        return true;
+    },
+    handler: async (runtime, message, _state, _options, callback) => {
+        elizaLogger.info('[mintware] PAY_X402 triggered');
+        const privateKey = runtime.getSetting('AGENT_PRIVATE_KEY');
+        if (!privateKey) {
+            await callback({
+                text: 'AGENT_PRIVATE_KEY is not configured. Please set it in your agent environment to authorize x402 payments.',
+            });
+            return false;
+        }
+        const text = message.content?.text ?? '';
+        const url = extractUrl(text);
+        if (!url) {
+            await callback({ text: 'Please include the x402-protected URL to pay for, e.g. "pay x402 for https://…".' });
+            return false;
+        }
+        // Optional hard cap: "cap $5", "up to $5", or "max 5".
+        const capMatch = text.match(/(?:cap|max|up to|under|below)\s*\$?\s*([0-9]+(?:\.[0-9]+)?)/i);
+        const maxAmountUsd = capMatch ? Number(capMatch[1]) : undefined;
+        try {
+            const { res, reqs } = await readX402Challenge(url);
+            if (!reqs) {
+                const body = await res.text(); // already free/served
+                await callback({ text: body });
+                return true;
+            }
+            const priceUsd = Number(reqs.maxAmountRequired) / 1e6;
+            if (maxAmountUsd != null && priceUsd > maxAmountUsd) {
+                await callback({ text: `Aborted: price $${priceUsd} exceeds your cap $${maxAmountUsd}. Nothing paid.` });
+                return true;
+            }
+            const domain = USDC_DOMAIN[reqs.network];
+            if (!domain) {
+                await callback({ text: `Aborted: network "${reqs.network}" not supported for payment by this action.` });
+                return false;
+            }
+            // Sign the EIP-3009 TransferWithAuthorization off the agent key.
+            const { privateKeyToAccount } = await import('viem/accounts');
+            const account = privateKeyToAccount(privateKey);
+            const now = Math.floor(Date.now() / 1000);
+            const authorization = {
+                from: account.address,
+                to: reqs.payTo,
+                value: reqs.maxAmountRequired,
+                validAfter: String(now - 60),
+                validBefore: String(now + (reqs.maxTimeoutSeconds ?? 300)),
+                nonce: randomNonce32(),
+            };
+            const signature = await account.signTypedData({
+                domain,
+                types: EIP3009_TYPES,
+                primaryType: 'TransferWithAuthorization',
+                message: authorization,
+            });
+            const paymentPayload = { x402Version: 2, scheme: reqs.scheme, network: reqs.network, payload: { signature, authorization } };
+            const header = b64encode(JSON.stringify(paymentPayload));
+            const paid = await fetch(url, { headers: { 'PAYMENT-SIGNATURE': header } });
+            if (paid.status === 402) {
+                await callback({ text: 'Payment rejected by the resource (still 402). Nothing was served; check funds/score.' });
+                return false;
+            }
+            if (!paid.ok)
+                throw new Error(`Resource returned ${paid.status} after payment: ${paid.statusText}`);
+            const body = await paid.text();
+            elizaLogger.info(`[mintware] Paid $${priceUsd} USDC on ${reqs.network} for ${reqs.resource}`);
+            await callback({ text: `Paid $${priceUsd} USDC on ${reqs.network}. Resource:\n\n${body}` });
+            return true;
+        }
+        catch (err) {
+            elizaLogger.error('[mintware] PAY_X402 error:', err);
+            await callback({
+                text: `Failed to pay x402 resource: ${err instanceof Error ? err.message : String(err)}`,
+            });
+            return false;
+        }
+    },
+    examples: [
+        [
+            { user: '{{user1}}', content: { text: 'Pay x402 for https://api.example.com/compute' } },
+            {
+                user: '{{agentName}}',
+                content: {
+                    text: 'Paid $0.01 USDC on base. Resource:\n\n{ "result": "…" }',
+                    action: 'PAY_X402',
+                },
+            },
+        ],
+    ],
+};
+// =============================================================================
 // Plugin export
 // =============================================================================
+// =============================================================================
+// Read actions — verified against the live route handlers (GET, no-auth)
+// =============================================================================
+const showVaultsAction = {
+    name: 'MINTWARE_VAULT_LIST',
+    similes: ['SHOW_VAULTS', 'LIST_VAULTS', 'MINTWARE_VAULTS'],
+    description: 'List Mintware liquidity vaults (dual-sided DeFi on Uniswap V4) with each vault\'s current epoch. In testing on Base Sepolia — read-only.',
+    validate: async () => true,
+    handler: async (_runtime, _message, _state, _options, callback) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/vaults`);
+            if (!res.ok)
+                throw new Error(`API returned ${res.status}: ${res.statusText}`);
+            await callback({ text: 'Mintware vaults:\n\n' + JSON.stringify(await res.json(), null, 2) });
+            return true;
+        }
+        catch (err) {
+            await callback({ text: `Failed to list vaults: ${err instanceof Error ? err.message : String(err)}` });
+            return false;
+        }
+    },
+    examples: [],
+};
+const showYieldsAction = {
+    name: 'MINTWARE_YIELDS',
+    similes: ['SHOW_YIELDS', 'YIELD_BENCHMARKS', 'BEST_YIELDS'],
+    description: 'Live yield benchmarks — curated real DeFi pools (base APY) Mintware references. Use to compare where idle capital could earn.',
+    validate: async () => true,
+    handler: async (_runtime, _message, _state, _options, callback) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/benchmarks/yields`);
+            if (!res.ok)
+                throw new Error(`API returned ${res.status}: ${res.statusText}`);
+            await callback({ text: 'Live yield benchmarks:\n\n' + JSON.stringify(await res.json(), null, 2) });
+            return true;
+        }
+        catch (err) {
+            await callback({ text: `Failed to fetch yields: ${err instanceof Error ? err.message : String(err)}` });
+            return false;
+        }
+    },
+    examples: [],
+};
+const showPoolsAction = {
+    name: 'MINTWARE_POOLS',
+    similes: ['SHOW_POOLS', 'MINTWARE_LIQUIDITY_POOLS'],
+    description: "Mintware's liquidity manifest for solver/aggregator networks (UniswapX, CoW, 1inch).",
+    validate: async () => true,
+    handler: async (_runtime, _message, _state, _options, callback) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/pools`);
+            if (!res.ok)
+                throw new Error(`API returned ${res.status}: ${res.statusText}`);
+            await callback({ text: 'Mintware pool manifest:\n\n' + JSON.stringify(await res.json(), null, 2) });
+            return true;
+        }
+        catch (err) {
+            await callback({ text: `Failed to fetch pools: ${err instanceof Error ? err.message : String(err)}` });
+            return false;
+        }
+    },
+    examples: [],
+};
 const mintwarePlugin = {
     name: 'mintware-attribution',
-    description: 'Mintware AI Attribution — on-chain reputation scoring for AI agents on Base',
-    actions: [getAttributionScoreAction, registerMintwareAction, claimPendingActionsAction],
+    description: 'Mintware AI Attribution + capital parking (yield vault) + x402 pay-per-call for AI agents on Base/Arc',
+    actions: [
+        getAttributionScoreAction,
+        registerMintwareAction,
+        claimPendingActionsAction,
+        parkUsdcAction,
+        unparkUsdcAction,
+        showTreasuryAction,
+        quoteX402Action,
+        payX402Action,
+        showVaultsAction,
+        showYieldsAction,
+        showPoolsAction,
+    ],
     evaluators: [],
     providers: [],
 };
 export default mintwarePlugin;
-export { mintwarePlugin, getAttributionScoreAction, registerMintwareAction, claimPendingActionsAction };
+export { mintwarePlugin, getAttributionScoreAction, registerMintwareAction, claimPendingActionsAction, parkUsdcAction, unparkUsdcAction, showTreasuryAction, quoteX402Action, payX402Action, };

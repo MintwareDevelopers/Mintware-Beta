@@ -489,6 +489,78 @@ const mintwareTreasuryAction = {
 }
 
 // =============================================================================
+// Read tools — verified against the live route handlers (GET/POST, no-auth)
+// =============================================================================
+
+const mintwareVaultListAction = {
+  name: 'MINTWARE_VAULT_LIST',
+  description:
+    'Lists Mintware liquidity vaults (dual-sided reputation-adjacent DeFi on Uniswap V4) with each vault\'s ' +
+    'current epoch. Optional status filter. NOTE: vaults are in testing on Base Sepolia — read-only, not for real deposits yet.',
+  schema: z.object({ status: z.string().optional().describe("Optional filter, e.g. 'active'.") }),
+  invoke: async (_wallet: unknown, args: { status?: string }): Promise<string> => {
+    const url = args.status ? `${API_BASE}/api/vaults?status=${encodeURIComponent(args.status)}` : `${API_BASE}/api/vaults`
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`Mintware API returned ${res.status}: ${res.statusText}`)
+    return JSON.stringify(await res.json(), null, 2)
+  },
+}
+
+const mintwareYieldsAction = {
+  name: 'MINTWARE_YIELDS',
+  description:
+    'Live yield benchmarks — a curated set of real DeFi pools (base APY, from DefiLlama) Mintware references. ' +
+    'Use when comparing where idle capital could earn.',
+  schema: z.object({}),
+  invoke: async (): Promise<string> => {
+    const res = await fetch(`${API_BASE}/api/benchmarks/yields`)
+    if (!res.ok) throw new Error(`Mintware API returned ${res.status}: ${res.statusText}`)
+    return JSON.stringify(await res.json(), null, 2)
+  },
+}
+
+const mintwarePoolsAction = {
+  name: 'MINTWARE_POOLS',
+  description: "Mintware's liquidity manifest for solver/aggregator networks (UniswapX, CoW, 1inch).",
+  schema: z.object({}),
+  invoke: async (): Promise<string> => {
+    const res = await fetch(`${API_BASE}/api/pools`)
+    if (!res.ok) throw new Error(`Mintware API returned ${res.status}: ${res.statusText}`)
+    return JSON.stringify(await res.json(), null, 2)
+  },
+}
+
+const mintwareSwapQuoteAction = {
+  name: 'MINTWARE_SWAP_QUOTE',
+  description:
+    'Get an executable swap quote via Mintware\'s LI.FI proxy. Returns the raw quote INCLUDING the ' +
+    'transactionRequest (to, data, value) — the AGENT signs + broadcasts it with its own key. This action ' +
+    'does NOT sign or move funds. Amounts are raw token units; taker is the agent\'s own address.',
+  schema: z.object({
+    chainId: z.number().describe('EVM chain id (e.g. 8453 for Base).'),
+    sellToken: z.string().describe('Token address being sold (0x…).'),
+    buyToken: z.string().describe('Token address being bought (0x…).'),
+    sellAmount: z.string().describe('Amount to sell, in raw token units (atomic/wei).'),
+    taker: z.string().describe("The agent's own wallet address."),
+  }),
+  invoke: async (
+    _wallet: unknown,
+    args: { chainId: number; sellToken: string; buyToken: string; sellAmount: string; taker: string },
+  ): Promise<string> => {
+    const res = await fetch(`${API_BASE}/api/swap/quote`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(args),
+    })
+    if (!res.ok) {
+      const t = await res.text().catch(() => res.statusText)
+      return `Quote failed (${res.status}): ${t.slice(0, 300)}`
+    }
+    return 'Executable swap quote — sign + broadcast the transactionRequest with your own key:\n\n' + JSON.stringify(await res.json(), null, 2)
+  },
+}
+
+// =============================================================================
 // Exports
 // =============================================================================
 
@@ -501,6 +573,10 @@ export const mintwareActions = [
   mintwareTreasuryAction,
   mintwareX402QuoteAction,
   mintwareX402PayAction,
+  mintwareVaultListAction,
+  mintwareYieldsAction,
+  mintwarePoolsAction,
+  mintwareSwapQuoteAction,
 ]
 
 export {
@@ -512,6 +588,10 @@ export {
   mintwareTreasuryAction,
   mintwareX402QuoteAction,
   mintwareX402PayAction,
+  mintwareVaultListAction,
+  mintwareYieldsAction,
+  mintwarePoolsAction,
+  mintwareSwapQuoteAction,
   BASE_MAINNET_CONTRACT,
   API_BASE,
 }

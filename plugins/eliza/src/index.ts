@@ -1281,6 +1281,67 @@ const payX402Action: Action = {
 // Plugin export
 // =============================================================================
 
+// =============================================================================
+// Read actions — verified against the live route handlers (GET, no-auth)
+// =============================================================================
+
+const showVaultsAction: Action = {
+  name: 'MINTWARE_VAULT_LIST',
+  similes: ['SHOW_VAULTS', 'LIST_VAULTS', 'MINTWARE_VAULTS'],
+  description: 'List Mintware liquidity vaults (dual-sided DeFi on Uniswap V4) with each vault\'s current epoch. In testing on Base Sepolia — read-only.',
+  validate: async (): Promise<boolean> => true,
+  handler: async (_runtime: IAgentRuntime, _message: Memory, _state: State | undefined, _options: Record<string, unknown>, callback: HandlerCallback): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/vaults`)
+      if (!res.ok) throw new Error(`API returned ${res.status}: ${res.statusText}`)
+      await callback({ text: 'Mintware vaults:\n\n' + JSON.stringify(await res.json(), null, 2) })
+      return true
+    } catch (err) {
+      await callback({ text: `Failed to list vaults: ${err instanceof Error ? err.message : String(err)}` })
+      return false
+    }
+  },
+  examples: [],
+}
+
+const showYieldsAction: Action = {
+  name: 'MINTWARE_YIELDS',
+  similes: ['SHOW_YIELDS', 'YIELD_BENCHMARKS', 'BEST_YIELDS'],
+  description: 'Live yield benchmarks — curated real DeFi pools (base APY) Mintware references. Use to compare where idle capital could earn.',
+  validate: async (): Promise<boolean> => true,
+  handler: async (_runtime: IAgentRuntime, _message: Memory, _state: State | undefined, _options: Record<string, unknown>, callback: HandlerCallback): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/benchmarks/yields`)
+      if (!res.ok) throw new Error(`API returned ${res.status}: ${res.statusText}`)
+      await callback({ text: 'Live yield benchmarks:\n\n' + JSON.stringify(await res.json(), null, 2) })
+      return true
+    } catch (err) {
+      await callback({ text: `Failed to fetch yields: ${err instanceof Error ? err.message : String(err)}` })
+      return false
+    }
+  },
+  examples: [],
+}
+
+const showPoolsAction: Action = {
+  name: 'MINTWARE_POOLS',
+  similes: ['SHOW_POOLS', 'MINTWARE_LIQUIDITY_POOLS'],
+  description: "Mintware's liquidity manifest for solver/aggregator networks (UniswapX, CoW, 1inch).",
+  validate: async (): Promise<boolean> => true,
+  handler: async (_runtime: IAgentRuntime, _message: Memory, _state: State | undefined, _options: Record<string, unknown>, callback: HandlerCallback): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/pools`)
+      if (!res.ok) throw new Error(`API returned ${res.status}: ${res.statusText}`)
+      await callback({ text: 'Mintware pool manifest:\n\n' + JSON.stringify(await res.json(), null, 2) })
+      return true
+    } catch (err) {
+      await callback({ text: `Failed to fetch pools: ${err instanceof Error ? err.message : String(err)}` })
+      return false
+    }
+  },
+  examples: [],
+}
+
 const mintwarePlugin: Plugin = {
   name: 'mintware-attribution',
   description: 'Mintware AI Attribution + capital parking (yield vault) + x402 pay-per-call for AI agents on Base/Arc',
@@ -1293,6 +1354,9 @@ const mintwarePlugin: Plugin = {
     showTreasuryAction,
     quoteX402Action,
     payX402Action,
+    showVaultsAction,
+    showYieldsAction,
+    showPoolsAction,
   ],
   evaluators: [],
   providers: [],
