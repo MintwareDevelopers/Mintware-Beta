@@ -3,13 +3,17 @@
 // =============================================================================
 // @mintwarehq/mcp-server
 //
-// Model Context Protocol server — Mintware AI Attribution tools.
-// Exposes four tools to Claude Desktop, Cursor, and any MCP-compatible client:
+// Model Context Protocol server — Mintware tools for Claude Desktop, Cursor, and any MCP client.
 //
-//   mintware_get_score      — fetch on-chain reputation score for an agent
-//   mintware_leaderboard    — top agents by Attribution score
-//   mintware_register       — register a wallet with the Attribution contract
-//   mintware_claim_pending  — submit pending oracle attestations on-chain
+//   Attribution:
+//     mintware_get_score      — fetch on-chain reputation score for an agent
+//     mintware_leaderboard    — top agents by Attribution score
+//     mintware_register       — register a wallet with the Attribution contract
+//     mintware_claim_pending  — submit pending oracle attestations on-chain
+//   Parking account + x402 compute payments (spec: docs/developers/agentkit-compute-402-spec.md):
+//     mintware_parking_account — USDC parked (earning) + spendable in place
+//     mintware_x402_quote      — preflight an x402-gated URL's price (no pay)
+//     mintware_x402_pay        — pay for an x402 call in USDC (EIP-3009) + return the resource
 //
 // Contract (Base mainnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
 // API base:                https://mintware.finance
@@ -19,9 +23,46 @@ const index_js_1 = require("@modelcontextprotocol/sdk/server/index.js");
 const stdio_js_1 = require("@modelcontextprotocol/sdk/server/stdio.js");
 const types_js_1 = require("@modelcontextprotocol/sdk/types.js");
 const ai_attribution_sdk_1 = require("@mintwarehq/ai-attribution-sdk");
+const accounts_1 = require("viem/accounts");
 // ── Constants ─────────────────────────────────────────────────────────────────
 const API_BASE = "https://mintware.finance";
 const BASE_MAINNET_CONTRACT = "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421";
+/** EIP-712 domain for USDC transferWithAuthorization (EIP-3009), per x402 network. */
+const USDC_DOMAIN = {
+    base: { name: "USD Coin", version: "2", chainId: 8453, verifyingContract: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+    "base-sepolia": { name: "USDC", version: "2", chainId: 84532, verifyingContract: "0x036CbD53842c5426634e7929541eC2318f3dCF7e" },
+};
+const EIP3009_TYPES = {
+    TransferWithAuthorization: [
+        { name: "from", type: "address" },
+        { name: "to", type: "address" },
+        { name: "value", type: "uint256" },
+        { name: "validAfter", type: "uint256" },
+        { name: "validBefore", type: "uint256" },
+        { name: "nonce", type: "bytes32" },
+    ],
+};
+function b64decode(s) {
+    return Buffer.from(s, "base64").toString("utf8");
+}
+function b64encode(s) {
+    return Buffer.from(s, "utf8").toString("base64");
+}
+function randomNonce32() {
+    const bytes = new Uint8Array(32);
+    globalThis.crypto.getRandomValues(bytes);
+    return ("0x" + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(""));
+}
+/** Fetch a URL; if 402, return the first advertised x402 requirements (else null = free/served). */
+async function readX402Challenge(url) {
+    const res = await fetch(url);
+    if (res.status !== 402)
+        return { res, reqs: null };
+    const header = res.headers.get("payment-required") ?? res.headers.get("PAYMENT-REQUIRED");
+    const raw = header ? b64decode(header) : await res.clone().text();
+    const parsed = JSON.parse(raw);
+    return { res, reqs: parsed.accepts?.[0] ?? null };
+}
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function shortAddr(addr) {
     return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -184,6 +225,78 @@ server.setRequestHandler(types_js_1.ListToolsRequestSchema, async () => {
                     },
                     required: ["address", "privateKey"],
                 },
+            },
+            {
+                name: "mintware_parking_account",
+                description: "Show an agent's Mintware capital-parking account: how much USDC is parked (and earning yield) and " +
+                    "how much is spendable in place right now. Mintware lets an agent park idle USDC in a yield vault " +
+                    "where it earns, and spend it per call over x402 without ever un-parking — parking never locks. " +
+                    "Read-only, no key required.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        address: { type: "string", description: "Agent wallet address (0x-prefixed, 42 chars)." },
+                    },
+                    required: ["address"],
+                },
+            },
+            {
+                name: "mintware_x402_quote",
+                description: "Preflight an x402-gated compute/API URL WITHOUT paying. Returns the price (USDC), network, " +
+                    "recipient, and description advertised in the HTTP 402 challenge, so you can decide whether to pay. " +
+                    "Read-only, no key required.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        url: { type: "string", description: "The x402-protected resource URL to quote." },
+                    },
+                    required: ["url"],
+                },
+            },
+            {
+                name: "mintware_x402_pay",
+                description: "Pay for an x402-gated compute/API call in USDC and return the resource. Reads the 402 challenge, " +
+                    "enforces the optional maxAmountUsd cap, signs an EIP-3009 USDC authorization with the provided key, " +
+                    "retries with the payment, and returns the resource body. IMPORTANT: only pass a private key for a " +
+                    "wallet you control, in a trusted environment. Use mintware_x402_quote first to preview cost.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        url: { type: "string", description: "The x402-protected resource URL to pay for and fetch." },
+                        privateKey: {
+                            type: "string",
+                            description: "Private key of the paying wallet (0x-prefixed hex, 66 chars). Signs the EIP-3009 authorization.",
+                        },
+                        maxAmountUsd: { type: "number", description: "Hard cap on what to pay, in USD. Aborts if the price exceeds it." },
+                    },
+                    required: ["url", "privateKey"],
+                },
+            },
+            {
+                name: "mintware_vault_list",
+                description: "List Mintware liquidity vaults (dual-sided, reputation-adjacent DeFi on Uniswap V4). Returns each " +
+                    "vault with its current epoch (pool, bonus pool, status, deadline). Optional status filter. " +
+                    "NOTE: vaults are currently in testing on Base Sepolia — read-only discovery, not for real deposits yet.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        status: { type: "string", description: "Optional filter, e.g. 'active'." },
+                    },
+                    required: [],
+                },
+            },
+            {
+                name: "mintware_yields",
+                description: "Live yield benchmarks — a curated set of real DeFi pools (base APY, from DefiLlama) that Mintware " +
+                    "references. Use this when an agent is comparing where idle capital could earn. Returns " +
+                    "{ ok, source, asOf, rows }.",
+                inputSchema: { type: "object", properties: {}, required: [] },
+            },
+            {
+                name: "mintware_pools",
+                description: "Mintware's liquidity manifest for solver/aggregator networks (UniswapX, CoW, 1inch). Machine-readable " +
+                    "pool discovery for routers — not a user-facing pool list.",
+                inputSchema: { type: "object", properties: {}, required: [] },
             },
         ],
     };
@@ -405,6 +518,149 @@ server.setRequestHandler(types_js_1.CallToolRequestSchema, async (request) => {
                     },
                 ],
             };
+        }
+    }
+    // ── mintware_parking_account ──────────────────────────────────────────────
+    if (name === "mintware_parking_account") {
+        const { address } = args;
+        if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
+            return { content: [{ type: "text", text: "Invalid address. Provide a valid 0x-prefixed address (42 chars)." }] };
+        }
+        try {
+            const res = await fetch(`${API_BASE}/api/x402/account?address=${address.toLowerCase()}`);
+            if (!res.ok)
+                throw new Error(`API returned ${res.status}: ${res.statusText}`);
+            const t = (await res.json());
+            const text = [
+                `Mintware parking account for ${shortAddr(address)} (${t.network ?? "arc"})`,
+                `  Parked (earning): $${t.parkedUsdcFormatted ?? "0"} USDC`,
+                `  Spendable now:    $${t.spendableUsdcFormatted ?? "0"} USDC`,
+                t.earning
+                    ? "  Status: earning yield, fully spendable in place — spend per call with mintware_x402_pay."
+                    : "  Status: empty — deposit USDC into the vault to start earning while staying spendable.",
+            ].join("\n");
+            return { content: [{ type: "text", text }] };
+        }
+        catch (err) {
+            return { content: [{ type: "text", text: `Failed to read parking account: ${err instanceof Error ? err.message : String(err)}` }] };
+        }
+    }
+    // ── mintware_x402_quote ───────────────────────────────────────────────────
+    if (name === "mintware_x402_quote") {
+        const { url } = args;
+        try {
+            const { res, reqs } = await readX402Challenge(url);
+            if (!reqs)
+                return { content: [{ type: "text", text: `No payment required (HTTP ${res.status}). The resource is free or already served.` }] };
+            const usdc = (Number(reqs.maxAmountRequired) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 6 });
+            const text = [
+                `x402 quote for ${reqs.resource}`,
+                `  Price:    up to $${usdc} USDC`,
+                `  Network:  ${reqs.network}`,
+                `  Pay to:   ${reqs.payTo}`,
+                `  Scheme:   ${reqs.scheme}`,
+                reqs.description ? `  About:    ${reqs.description}` : "",
+            ].filter(Boolean).join("\n");
+            return { content: [{ type: "text", text }] };
+        }
+        catch (err) {
+            return { content: [{ type: "text", text: `Failed to quote: ${err instanceof Error ? err.message : String(err)}` }] };
+        }
+    }
+    // ── mintware_x402_pay ─────────────────────────────────────────────────────
+    if (name === "mintware_x402_pay") {
+        const { url, privateKey, maxAmountUsd } = args;
+        if (!privateKey || !/^0x[0-9a-fA-F]{64}$/.test(privateKey)) {
+            return { content: [{ type: "text", text: "Invalid private key. Provide a 0x-prefixed 64-char hex key." }] };
+        }
+        try {
+            const { res, reqs } = await readX402Challenge(url);
+            if (!reqs)
+                return { content: [{ type: "text", text: await res.text() }] }; // already free/served
+            const priceUsd = Number(reqs.maxAmountRequired) / 1e6;
+            if (maxAmountUsd != null && priceUsd > maxAmountUsd) {
+                return { content: [{ type: "text", text: `Aborted: price $${priceUsd} exceeds your cap $${maxAmountUsd}. Nothing paid.` }] };
+            }
+            const domain = USDC_DOMAIN[reqs.network];
+            if (!domain)
+                return { content: [{ type: "text", text: `Aborted: network "${reqs.network}" not supported for payment.` }] };
+            const account = (0, accounts_1.privateKeyToAccount)(privateKey);
+            const now = Math.floor(Date.now() / 1000);
+            const authorization = {
+                from: account.address,
+                to: reqs.payTo,
+                value: BigInt(reqs.maxAmountRequired),
+                validAfter: BigInt(now - 60),
+                validBefore: BigInt(now + (reqs.maxTimeoutSeconds ?? 300)),
+                nonce: randomNonce32(),
+            };
+            const signature = await account.signTypedData({
+                domain,
+                types: EIP3009_TYPES,
+                primaryType: "TransferWithAuthorization",
+                message: authorization,
+            });
+            // Serialize BigInts as decimal strings for the wire payload.
+            const wireAuth = {
+                from: authorization.from,
+                to: authorization.to,
+                value: authorization.value.toString(),
+                validAfter: authorization.validAfter.toString(),
+                validBefore: authorization.validBefore.toString(),
+                nonce: authorization.nonce,
+            };
+            const header = b64encode(JSON.stringify({ x402Version: 2, scheme: reqs.scheme, network: reqs.network, payload: { signature, authorization: wireAuth } }));
+            const paid = await fetch(url, { headers: { "PAYMENT-SIGNATURE": header } });
+            if (paid.status === 402)
+                return { content: [{ type: "text", text: "Payment rejected by the resource (still 402). Nothing served; check funds/policy." }] };
+            if (!paid.ok)
+                throw new Error(`Resource returned ${paid.status} after payment: ${paid.statusText}`);
+            const body = await paid.text();
+            return { content: [{ type: "text", text: `Paid $${priceUsd} USDC on ${reqs.network}. Resource:\n\n${body}` }] };
+        }
+        catch (err) {
+            return { content: [{ type: "text", text: `x402 payment failed: ${err instanceof Error ? err.message : String(err)}` }] };
+        }
+    }
+    // ── mintware_vault_list ───────────────────────────────────────────────────
+    if (name === "mintware_vault_list") {
+        const { status } = (args ?? {});
+        try {
+            const url = status ? `${API_BASE}/api/vaults?status=${encodeURIComponent(status)}` : `${API_BASE}/api/vaults`;
+            const res = await fetch(url);
+            if (!res.ok)
+                throw new Error(`API returned ${res.status}: ${res.statusText}`);
+            const data = await res.json();
+            return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+        }
+        catch (err) {
+            return { content: [{ type: "text", text: `Failed to list vaults: ${err instanceof Error ? err.message : String(err)}` }] };
+        }
+    }
+    // ── mintware_yields ───────────────────────────────────────────────────────
+    if (name === "mintware_yields") {
+        try {
+            const res = await fetch(`${API_BASE}/api/benchmarks/yields`);
+            if (!res.ok)
+                throw new Error(`API returned ${res.status}: ${res.statusText}`);
+            const data = await res.json();
+            return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+        }
+        catch (err) {
+            return { content: [{ type: "text", text: `Failed to fetch yields: ${err instanceof Error ? err.message : String(err)}` }] };
+        }
+    }
+    // ── mintware_pools ────────────────────────────────────────────────────────
+    if (name === "mintware_pools") {
+        try {
+            const res = await fetch(`${API_BASE}/api/pools`);
+            if (!res.ok)
+                throw new Error(`API returned ${res.status}: ${res.statusText}`);
+            const data = await res.json();
+            return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+        }
+        catch (err) {
+            return { content: [{ type: "text", text: `Failed to fetch pools: ${err instanceof Error ? err.message : String(err)}` }] };
         }
     }
     // ── Unknown tool ──────────────────────────────────────────────────────────

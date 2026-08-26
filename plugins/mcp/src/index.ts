@@ -376,6 +376,35 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ["url", "privateKey"],
         },
       },
+      {
+        name: "mintware_vault_list",
+        description:
+          "List Mintware liquidity vaults (dual-sided, reputation-adjacent DeFi on Uniswap V4). Returns each " +
+          "vault with its current epoch (pool, bonus pool, status, deadline). Optional status filter. " +
+          "NOTE: vaults are currently in testing on Base Sepolia — read-only discovery, not for real deposits yet.",
+        inputSchema: {
+          type: "object",
+          properties: {
+            status: { type: "string", description: "Optional filter, e.g. 'active'." },
+          },
+          required: [],
+        },
+      },
+      {
+        name: "mintware_yields",
+        description:
+          "Live yield benchmarks — a curated set of real DeFi pools (base APY, from DefiLlama) that Mintware " +
+          "references. Use this when an agent is comparing where idle capital could earn. Returns " +
+          "{ ok, source, asOf, rows }.",
+        inputSchema: { type: "object", properties: {}, required: [] },
+      },
+      {
+        name: "mintware_pools",
+        description:
+          "Mintware's liquidity manifest for solver/aggregator networks (UniswapX, CoW, 1inch). Machine-readable " +
+          "pool discovery for routers — not a user-facing pool list.",
+        inputSchema: { type: "object", properties: {}, required: [] },
+      },
     ],
   }
 })
@@ -742,6 +771,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: "text", text: `Paid $${priceUsd} USDC on ${reqs.network}. Resource:\n\n${body}` }] }
     } catch (err) {
       return { content: [{ type: "text", text: `x402 payment failed: ${err instanceof Error ? err.message : String(err)}` }] }
+    }
+  }
+
+  // ── mintware_vault_list ───────────────────────────────────────────────────
+
+  if (name === "mintware_vault_list") {
+    const { status } = (args ?? {}) as { status?: string }
+    try {
+      const url = status ? `${API_BASE}/api/vaults?status=${encodeURIComponent(status)}` : `${API_BASE}/api/vaults`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`API returned ${res.status}: ${res.statusText}`)
+      const data = await res.json()
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] }
+    } catch (err) {
+      return { content: [{ type: "text", text: `Failed to list vaults: ${err instanceof Error ? err.message : String(err)}` }] }
+    }
+  }
+
+  // ── mintware_yields ───────────────────────────────────────────────────────
+
+  if (name === "mintware_yields") {
+    try {
+      const res = await fetch(`${API_BASE}/api/benchmarks/yields`)
+      if (!res.ok) throw new Error(`API returned ${res.status}: ${res.statusText}`)
+      const data = await res.json()
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] }
+    } catch (err) {
+      return { content: [{ type: "text", text: `Failed to fetch yields: ${err instanceof Error ? err.message : String(err)}` }] }
+    }
+  }
+
+  // ── mintware_pools ────────────────────────────────────────────────────────
+
+  if (name === "mintware_pools") {
+    try {
+      const res = await fetch(`${API_BASE}/api/pools`)
+      if (!res.ok) throw new Error(`API returned ${res.status}: ${res.statusText}`)
+      const data = await res.json()
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] }
+    } catch (err) {
+      return { content: [{ type: "text", text: `Failed to fetch pools: ${err instanceof Error ? err.message : String(err)}` }] }
     }
   }
 
