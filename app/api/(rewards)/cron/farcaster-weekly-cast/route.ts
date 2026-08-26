@@ -13,18 +13,24 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { getServerLegacyScore } from '@/lib/attribution/serverScore'
 import { generateWeeklyDigest, type ScoredEntry } from '@/lib/web2/farcasterDigest'
-import { TREASURY_ADDRESS } from '@/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
 const EVM_RE = /^0x[0-9a-fA-F]{40}$/
+
+// Fallback default when no ?addresses= is given. NOT TREASURY_ADDRESS — checked before launch
+// (2026-08-26) and every Mintware-controlled candidate wallet scores 0/925 (stale testnet
+// contract or genuinely fresh EOA), which would make every un-parameterized run useless. Using
+// vitalik.eth as a known-good placeholder until the real candidate-address pipeline (trending/
+// active wallets) exists — see the route's own `note` field below.
+const FALLBACK_SEED_ADDRESS = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'
 
 export const GET = createHandler(async (req, ctx) => {
   const url = new URL(req.url)
   const raw = url.searchParams.get('addresses')
   const addresses = raw
     ? raw.split(',').map((a) => a.trim()).filter((a) => EVM_RE.test(a))
-    : [TREASURY_ADDRESS]
+    : [FALLBACK_SEED_ADDRESS]
 
   if (addresses.length === 0) {
     return ctx.json({ error: 'no_valid_addresses' }, 400)
@@ -42,6 +48,6 @@ export const GET = createHandler(async (req, ctx) => {
   return ctx.json({
     draft,
     scoredAddresses: addresses,
-    note: 'DRAFT ONLY — not posted. Seed address list is just the team treasury wallet for now; a real weekly candidate list (trending/active wallets) is a follow-up, not built here. To post: review this text, then call publishCast() from lib/web2/farcaster.ts (same helper the launch-cast script uses).',
+    note: 'DRAFT ONLY — not posted. Default seed is a known-good placeholder (Mintware\'s own wallets all score 0 — see FALLBACK_SEED_ADDRESS comment); a real weekly candidate list (trending/active wallets) is a follow-up, not built here. To post: review this text, then call publishCast() from lib/web2/farcaster.ts (same helper the launch-cast script uses).',
   })
 }, { auth: 'bearer-token' })
