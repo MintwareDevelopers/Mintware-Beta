@@ -40,9 +40,10 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         "ShortLivedHoldAuth(bytes32 holdId,address user,uint256 amountUSDC,uint256 nonce,uint256 expiry)"
     );
 
-    uint256 public constant HIGH_VALUE_THRESHOLD     = 250_000_000;    // $250.00 (6dp)
-    uint256 public constant DEFAULT_GLOBAL_DAILY_CAP = 1_000_000_000;  // $1,000.00
-    uint256 public constant MAX_SHORT_LIVED_WINDOW   = 5 minutes;
+    uint256 public constant HIGH_VALUE_THRESHOLD      = 250_000_000;    // $250.00 (6dp)
+    uint256 public constant DEFAULT_GLOBAL_DAILY_CAP  = 1_000_000_000;  // $1,000.00
+    uint256 public constant DEFAULT_GLOBAL_REFILL_CAP = 1_000_000_000;  // $1,000.00/day buffer-refill default
+    uint256 public constant MAX_SHORT_LIVED_WINDOW    = 5 minutes;
 
     IYieldVault public immutable vault;
     IERC20 public immutable usdc;
@@ -51,6 +52,12 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     mapping(address => mapping(uint256 => uint256)) public dailySpendUSDC; // user => epochDay => spent
     mapping(address => uint256) public userDailyCap;
     mapping(address => mapping(uint256 => bool)) public usedNonces;        // user => nonce => revoked
+
+    // ── card spend buffer (docs/developers/card-spend-buffer-spec.md, Option A) ──
+    mapping(address => address) public bufferOf;                            // user => their self-registered buffer wallet
+    mapping(address => mapping(uint256 => uint256)) public dailyRefillUSDC; // user => epochDay => refilled (separate ledger)
+    mapping(address => uint256) public userDailyRefillCap;                  // 0 => DEFAULT_GLOBAL_REFILL_CAP
+    mapping(bytes32 => bool) public refillDone;                             // refillId => done (idempotency)
 
     struct Hold {
         address user;
@@ -80,6 +87,9 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     event NonceRevoked(address indexed user, uint256 indexed nonce);
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
     event UserDailyCapUpdated(address indexed user, uint256 newCap);
+    event BufferAddressUpdated(address indexed user, address indexed oldBuffer, address indexed newBuffer);
+    event BufferRefilled(bytes32 indexed refillId, address indexed user, address indexed buffer, uint256 assets, uint256 sharesBurned);
+    event UserDailyRefillCapUpdated(address indexed user, uint256 newCap);
 
     error InvalidAmount();
     error PermitExpired();
@@ -94,6 +104,9 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     error HoldCancelledError();
     error ZeroAddress();
     error UnknownHold();
+    error BufferNotSet();
+    error RefillAlreadyDone();
+    error ExceedsDailyRefillLimit();
 
     constructor(address vault_, address usdc_, address treasury_, address admin_)
         EIP712("Mintware Payment Gateway", "2.0")
@@ -123,6 +136,11 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         emit UserDailyCapUpdated(user, newCap);
     }
 
+    function setUserDailyRefillCap(address user, uint256 newCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        userDailyRefillCap[user] = newCap;
+        emit UserDailyRefillCapUpdated(user, newCap);
+    }
+
     function pause() external onlyRole(PAUSER_ROLE) { _pause(); }
     function unpause() external onlyRole(PAUSER_ROLE) { _unpause(); }
 
@@ -131,6 +149,15 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         if (usedNonces[msg.sender][nonce]) revert NonceRevokedError();
         usedNonces[msg.sender][nonce] = true;
         emit NonceRevoked(msg.sender, nonce);
+    }
+
+    /// @notice A user registers (or rotates) their OWN card spend-buffer wallet — the address a
+    ///         `refillBuffer` redemption pays into. `msg.sender`-pinned so a relayer can never choose
+    ///         where a refill lands: the buffer-refill analogue of the AUDIT C1 `receiver` pin.
+    function setBufferAddress(address buffer) external {
+        if (buffer == address(0)) revert ZeroAddress();
+        emit BufferAddressUpdated(msg.sender, bufferOf[msg.sender], buffer);
+        bufferOf[msg.sender] = buffer;
     }
 
     /// @notice Settle a card charge the edge engine authorized. RELAYER-only.
@@ -215,6 +242,66 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         uint256 spent = dailySpendUSDC[user][epochDay];
         if (spent + amount > effectiveCap) revert ExceedsDailySpendLimit();
         dailySpendUSDC[user][epochDay] = spent + amount;
+    }
+
+    // ── card spend buffer refill (Option A — per-user, funded from the user's own senior shares) ──
+
+    /// @notice Redeem a slice of the user's OWN senior position into USDC and push it to the user's
+    ///         registered spend buffer. RELAYER-only. Spec: docs/developers/card-spend-buffer-spec.md.
+    ///
+    /// @dev    This REPOSITIONS the user's own capital (vault → their own buffer wallet) — it is not a
+    ///         merchant payout. The theft vector `settleSpend`'s edge signature guards against is closed
+    ///         here structurally: `receiver` is pinned to `bufferOf[user]`, which only the user can set
+    ///         (`setBufferAddress`), so a compromised relayer cannot redirect the USDC. No edge auth is
+    ///         therefore required. Refills carry their OWN daily-cap ledger (`dailyRefillUSDC`), separate
+    ///         from the spend ledger and each bounded by the user's signed permit cap and an admin
+    ///         protocol cap — so the worst a rogue relayer can do is move a bounded amount per day into
+    ///         the user's own wallet, and the runaway-refill rate is capped. The permit proves the user
+    ///         consented to programmatic burns of their shares. Idempotent per `refillId`. CEI order.
+    function refillBuffer(
+        bytes32 refillId,
+        address user,
+        uint256 assets,
+        DelegatedSpendPermit calldata permit,
+        bytes calldata permitSig
+    ) external onlyRole(RELAYER_ROLE) nonReentrant whenNotPaused returns (uint256 sharesBurned) {
+        if (assets == 0) revert InvalidAmount();
+
+        // Destination is PINNED to the user's own registered buffer — never relayer-chosen (mirrors C1).
+        address receiver = bufferOf[user];
+        if (receiver == address(0)) revert BufferNotSet();
+
+        // ── long-lived delegated permit (the user's consent to burn their shares) ──
+        if (block.timestamp > permit.deadline) revert PermitExpired();
+        if (permit.user != user) revert InvalidPermitSignature();
+        bytes32 permitHash = keccak256(abi.encode(
+            DELEGATED_SPEND_PERMIT_TYPEHASH, permit.user, permit.maxDailySpendUSDC, permit.nonce, permit.deadline
+        ));
+        if (_hashTypedDataV4(permitHash).recover(permitSig) != user) revert InvalidPermitSignature();
+        if (usedNonces[user][permit.nonce]) revert NonceRevokedError();
+
+        // ── liquidity + refill daily cap + idempotency (EFFECTS before the external burn — CEI) ──
+        if (vault.idleBuffer() < assets) revert InsufficientIdleLiquidity();
+        if (refillDone[refillId]) revert RefillAlreadyDone();
+
+        _checkAndUpdateRefillLimit(user, assets, permit.maxDailySpendUSDC);
+        refillDone[refillId] = true;
+
+        // ── asset-denominated redemption into the user's buffer ──
+        sharesBurned = vault.previewWithdraw(assets);                 // rounds UP → redeemed >= assets
+        uint256 redeemed = vault.burnForPayment(user, sharesBurned, receiver);
+        if (redeemed < assets) revert InsufficientIdleLiquidity();
+
+        emit BufferRefilled(refillId, user, receiver, assets, sharesBurned);
+    }
+
+    function _checkAndUpdateRefillLimit(address user, uint256 amount, uint256 permitMaxDaily) internal {
+        uint256 epochDay = block.timestamp / 1 days;
+        uint256 protocolCap = userDailyRefillCap[user] > 0 ? userDailyRefillCap[user] : DEFAULT_GLOBAL_REFILL_CAP;
+        uint256 effectiveCap = permitMaxDaily < protocolCap ? permitMaxDaily : protocolCap;
+        uint256 spent = dailyRefillUSDC[user][epochDay];
+        if (spent + amount > effectiveCap) revert ExceedsDailyRefillLimit();
+        dailyRefillUSDC[user][epochDay] = spent + amount;
     }
 
     function domainSeparator() external view returns (bytes32) {
