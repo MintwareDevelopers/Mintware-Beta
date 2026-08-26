@@ -174,7 +174,7 @@
       "path": "/api/swap/quote",
       "altPath": "/api/swap/best-route",
       "auth": "none",
-      "tools": ["mintware_swap_quote"],
+      "tools": ["mintware_swap_quote", "MINTWARE_SWAP_QUOTE"],
       "returns": "LI.FI raw quote incl. transactionRequest (to, data, value) — the agent signs + broadcasts it with its own key.",
       "note": "The quote tool is read-only (no signing). Auto-execute (a plugin that signs + broadcasts the agent's swap for it) is intentionally deferred — it moves the agent's real funds and warrants a dedicated, guarded build."
     },
