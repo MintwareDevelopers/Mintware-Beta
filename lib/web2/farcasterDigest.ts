@@ -1,69 +1,67 @@
 // =============================================================================
-// lib/web2/farcasterDigest.ts — the ONE place @mintware-agent uses an LLM.
+// lib/web2/farcasterDigest.ts — the weekly @mintware-agent digest.
 //
-// Everything else on the account (score-lookup replies) is templated — this is the
-// exception, because a short weekly "here's what's interesting" digest genuinely
-// benefits from judgment. Claude Haiku 4.5 (deliberate choice, not a cost downgrade —
-// see conversation 2026-08-25): the task is short-form summarization, not deep reasoning.
+// Templated, not LLM-generated — same reasoning as the reply-to-mention flow
+// (formatScoreReply in lib/web2/farcaster.ts): picking out what's notable across a
+// handful of scored wallets and filling a sentence is logic, not judgment. No paid
+// dependency, no new billing account. Decided 2026-08-26 after weighing a Claude
+// Haiku 4.5 version — see conversation history; the flat, factual read actually
+// fits the account's "understated, not hype" voice better than generated variety.
 //
 // Draft-only by design — this module never posts. The caller (the cron route) returns
 // the draft for review; posting is a separate, explicit action. See
-// docs/product/farcaster-attribution-growth-playbook.md — credibility-primary, no
-// unreviewed autonomous posting yet.
+// docs/product/farcaster-attribution-growth-playbook.md.
 // =============================================================================
 
-import Anthropic from '@anthropic-ai/sdk'
-import { ANTHROPIC_API_KEY } from '@/lib/constants'
 import type { LegacyScore } from '@/lib/attribution/legacyShape'
-
-const MINTWARE_AGENT_PERSONA = `You are @mintware-agent, the disclosed, agent-run Farcaster account for
-Mintware (on-chain Attribution reputation scoring for AI agents on Base). Your voice: factual, useful,
-understated — never hype, never "🚀" energy, no manufactured urgency. You are infrastructure that
-happens to post, not an influencer account.
-
-Write a single short cast (Farcaster casts are capped around 320 characters — stay well under that)
-summarizing the wallets/scores given to you. Point out something genuinely interesting or notable if
-there is one (a high score, a big spread, a surprising percentile) — don't just list numbers flatly.
-End with an invitation to reply with an address to get scored. No hashtags, no emoji spam (one is fine
-if it earns its place), no exclamation-point stacking.`
 
 export interface ScoredEntry {
   address: string
   score: LegacyScore & { source: string }
 }
 
-/** Generates the weekly digest cast text. Never posts — caller decides what to do with the draft. */
-export async function generateWeeklyDigest(entries: ScoredEntry[]): Promise<string> {
-  if (!ANTHROPIC_API_KEY) {
-    throw new Error('anthropic_unconfigured: ANTHROPIC_API_KEY not set')
-  }
+function short(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`
+}
+
+// A little week-to-week phrasing variety without an LLM — fully deterministic, keyed off
+// the ISO week number so it rotates on its own with no state to track.
+const OPENERS = [
+  'This week:',
+  'Scored this week:',
+  "This week's lookups:",
+  'From the past week:',
+]
+
+function isoWeekNumber(d: Date): number {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const dayNum = date.getUTCDay() || 7
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum)
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+}
+
+/** Generates the weekly digest cast text — templated, no LLM call, no external cost. */
+export function generateWeeklyDigest(entries: ScoredEntry[], now: Date = new Date()): string {
   if (entries.length === 0) {
     throw new Error('no_entries: need at least one scored address to write a digest')
   }
 
-  const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY })
+  const opener = OPENERS[isoWeekNumber(now) % OPENERS.length]
 
-  const dataBlock = entries
-    .map((e) => {
-      const short = `${e.address.slice(0, 6)}…${e.address.slice(-4)}`
-      return `${short}: score ${e.score.score}/925, tier ${e.score.tier}, ${e.score.percentile}th percentile, ${e.score.chains} chains, ${e.score.totalTxCount} txs`
-    })
-    .join('\n')
+  if (entries.length === 1) {
+    const e = entries[0]
+    return `${opener} ${short(e.address)} → ${e.score.score}/925 (${e.score.tier}, ${e.score.percentile}th pct, ${e.score.chains} chains). Reply with any address and I'll score it too.`
+  }
 
-  const response = await client.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 400,
-    system: [
-      {
-        type: 'text',
-        text: MINTWARE_AGENT_PERSONA,
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
-    messages: [{ role: 'user', content: `This week's scored wallets:\n\n${dataBlock}` }],
-  })
+  const sorted = [...entries].sort((a, b) => b.score.score - a.score.score)
+  const top = sorted[0]
+  const lines = sorted
+    .map((e) => `${short(e.address)}: ${e.score.score}/925 (${e.score.tier})`)
+    .join(' · ')
 
-  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
-  if (!textBlock) throw new Error('no_text_in_response')
-  return textBlock.text.trim()
+  const spread = sorted[0].score.score - sorted[sorted.length - 1].score.score
+  const spreadNote = spread > 300 ? ` Wide spread this week — ${spread} points top to bottom.` : ''
+
+  return `${opener} ${lines}. Highest: ${short(top.address)} at ${top.score.percentile}th percentile.${spreadNote} Reply with any address and I'll score it too.`
 }

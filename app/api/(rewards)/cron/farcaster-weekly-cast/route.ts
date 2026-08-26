@@ -36,7 +36,7 @@ export const GET = createHandler(async (req, ctx) => {
     entries.push({ address, score })
   }
 
-  const draft = await generateWeeklyDigest(entries)
+  const draft = generateWeeklyDigest(entries)
   ctx.log.info('farcaster', 'weekly digest drafted (not posted)', { addresses, draftLength: draft.length })
 
   return ctx.json({

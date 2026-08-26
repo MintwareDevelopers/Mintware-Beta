@@ -76,9 +76,6 @@ export const CRON_SECRET                 = process.env.CRON_SECRET              
 export const NEYNAR_WEBHOOK_SECRET       = process.env.NEYNAR_WEBHOOK_SECRET         ?? ''
 export const NEYNAR_API_KEY              = process.env.NEYNAR_API_KEY                ?? ''
 export const NEYNAR_SIGNER_UUID          = process.env.NEYNAR_SIGNER_UUID            ?? ''
-// Claude — used ONLY for the weekly Farcaster leaderboard digest draft (lib/web2/farcasterDigest.ts).
-// The mention-reply path never calls this — that's a template, not a generation.
-export const ANTHROPIC_API_KEY           = process.env.ANTHROPIC_API_KEY             ?? ''
 // Dedicated secret for the privileged (admin)/oracle deploy/rotation routes, so a leaked
 // CRON_SECRET can no longer authorize contract deploys or oracle rotation. Fails CLOSED
 // when unset (routes 500 in prod) — set ADMIN_SECRET in Vercel to use those routes.
