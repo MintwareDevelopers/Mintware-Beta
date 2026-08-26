@@ -71,6 +71,11 @@ export const CHAIN_LABELS: Record<number, string> = {
 // ---------------------------------------------------------------------------
 
 export const CRON_SECRET                 = process.env.CRON_SECRET                  ?? ''
+// Neynar (Farcaster) — @mintware-agent. Webhook secret verifies X-Neynar-Signature (HMAC-SHA512)
+// on inbound mention webhooks; the API key + signer UUID authorize outbound casts/replies.
+export const NEYNAR_WEBHOOK_SECRET       = process.env.NEYNAR_WEBHOOK_SECRET         ?? ''
+export const NEYNAR_API_KEY              = process.env.NEYNAR_API_KEY                ?? ''
+export const NEYNAR_SIGNER_UUID          = process.env.NEYNAR_SIGNER_UUID            ?? ''
 // Dedicated secret for the privileged (admin)/oracle deploy/rotation routes, so a leaked
 // CRON_SECRET can no longer authorize contract deploys or oracle rotation. Fails CLOSED
 // when unset (routes 500 in prod) — set ADMIN_SECRET in Vercel to use those routes.
