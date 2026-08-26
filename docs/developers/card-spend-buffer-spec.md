@@ -211,3 +211,28 @@ any card rail, agent-held credential or not.
       both the settlement-shortfall path and the new buffer-refill path
 - [ ] Spec the spend agent's exact autonomy boundary — which of its four jobs (§5) act without
       confirmation vs. require it, before any real capital is behind this
+
+## 10. Build status (2026-08-26) — Option A, dark-launched
+
+Decision: **Option A** (per-user buffer funded from the member's OWN senior shares). Everything below
+is **testnet/pre-audit** and **flag-gated OFF by default**; external audit of `refillBuffer` gates real
+value.
+
+**Built + tested:**
+- **Sizing** (`lib/cards/bufferSizing.ts`, 19 tests) — newsvendor + safety-stock `z·σ·√(T/period)`,
+  Acklam probit; mirrors the edge-auth VaR haircut shape, rounds UP.
+- **Decision logic** (`lib/cards/bufferPolicy.ts`, 15 tests) — flat auth check · refill planner ·
+  refill-rate circuit breaker (reuses the edge-auth breaker instinct).
+- **On-chain refill** (`MintwarePaymentGateway.refillBuffer` + `setBufferAddress` + separate
+  `dailyRefillUSDC` cap, 12 Forge tests, 0 regression) — reuses the whole `settleSpend` safety core;
+  closes the AUDIT-C1 theft vector structurally (receiver pinned to the user's self-registered buffer).
+- **Schema** (`20260826000001`) — `card_spend_buffers` (1:1) + `card_buffer_refills` ledger, deny-all RLS.
+- **Refill orchestrator** (`lib/org/bufferRefill.ts`, 8 tests) — the shared core (mirrors
+  `settleSwipe.ts`), gated by `CARD_BUFFER_REFILL_ENABLED` + per-card config + the breaker.
+- **Auth wiring** (`decideCardSwipe`) — the flat check replaces live-NAV on the card rail when
+  `CARD_BUFFER_ENABLED` + a buffer row exist; default path unchanged.
+
+**Still to build:** the monitor/reconciliation (cached balance ↔ on-chain `balanceOf`), the reactive
+capture-webhook hook (decrement + enqueue a refill) and steady-state cron, the user-controls surface
+(governed target / per-tx cap / refill-rate cap — mirror `MWTimelockedRiskParams`), and the spend
+agent's four jobs (§5). The §9 open items above remain open.

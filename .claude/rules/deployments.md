@@ -85,6 +85,17 @@ this is the "always-on relayer" in the deploy-gated remainder; runs live only wh
 | `LITHIC_AUTO_SETTLE_ENABLED` | Server-only | `'true'` turns ON automatic on-chain settlement when Lithic reports a capture. **Default OFF** — every capture is acked and left for a manual "Settle" click. Enabling lets the oracle signer settle small swipes with no human in the loop, so it's a deliberate ops act. |
 | `LITHIC_AUTO_SETTLE_MAX_USD` | Server-only | Auto-settle ceiling (default `50`). Approved swipes above this are left for manual review. Hard-capped just under the gateway's $250 edge-sig boundary regardless. |
 
+### Card spend buffer (docs/developers/card-spend-buffer-spec.md — testnet/pre-audit)
+
+Two INDEPENDENT dark-launch flags, both **OFF by default and fail-closed**. The buffer model is a
+pre-funded flat balance the issuer checks at auth time, topped up from the member's vault position —
+a real card rail can't survive a live AMM-NAV read in the ~6s ASA window (spec §1).
+
+| Variable | Visibility | Notes |
+|---|---|---|
+| `CARD_BUFFER_ENABLED` | Server-only | `'true'` makes `decideCardSwipe` use the FLAT buffer check (`lib/cards/bufferPolicy.authorizeAgainstBuffer` against `card_spend_buffers.buffer_balance_atomic`) INSTEAD of the live-NAV `edge.authorize` on the card rail, for any card that has a buffer row. Unset/other → the edge-auth path is byte-for-byte unchanged. |
+| `CARD_BUFFER_REFILL_ENABLED` | Server-only | `'true'` lets `lib/org/bufferRefill.refillCardBuffer` submit the on-chain `MintwarePaymentGateway.refillBuffer` (redeem the member's own senior shares → their registered buffer wallet, via `getOracleSigner('root')` in the RELAYER seat). Unset → the orchestrator no-ops (`reason:'disabled'`). Also gated per-card by `auto_refill_enabled` + a registered buffer + a live permit + the refill-rate breaker. |
+
 ### Arc / parking account (idle-USDC-earns-in-place)
 
 | Variable | Visibility | Notes |
