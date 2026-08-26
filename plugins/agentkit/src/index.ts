@@ -560,6 +560,94 @@ const mintwareSwapQuoteAction = {
   },
 }
 
+const mintwareSwapExecuteAction = {
+  name: 'MINTWARE_SWAP_EXECUTE',
+  description:
+    'Execute a same-chain token swap FROM THE AGENT WALLET: fetches an executable quote via Mintware\'s ' +
+    'LI.FI proxy, then signs + broadcasts it with the agent\'s OWN key (the agent pays gas). For an ERC-20 ' +
+    'sell it first sends the required token approval; a native-coin sell needs none. This moves the agent\'s ' +
+    'own funds — use MINTWARE_SWAP_QUOTE to preview first. Amounts are raw token units (atomic/wei). ' +
+    'Optional minBuyAmount is a slippage guard: it aborts BEFORE anything is sent if the quote\'s guaranteed ' +
+    'minimum output is below it.',
+  schema: z.object({
+    chainId: z.number().describe('EVM chain id (e.g. 8453 for Base).'),
+    sellToken: z.string().describe(
+      'Token address being sold (0x…). Use the native sentinel 0xEeee…EEeE or 0x0000…0000 for the chain\'s native coin.',
+    ),
+    buyToken: z.string().describe('Token address being bought (0x…).'),
+    sellAmount: z.string().describe('Amount to sell, in raw token units (atomic/wei).'),
+    minBuyAmount: z.string().optional().describe(
+      'Optional slippage guard (raw units): abort if the quote\'s guaranteed minimum output is below this.',
+    ),
+  }),
+  invoke: async (
+    wallet: X402Wallet,
+    args: { chainId: number; sellToken: string; buyToken: string; sellAmount: string; minBuyAmount?: string },
+  ): Promise<string> => {
+    if (!wallet.sendTransaction) {
+      throw new Error('This wallet provider cannot sendTransaction — required to execute a swap.')
+    }
+    const taker = wallet.getAddress()
+
+    // 1) Quote via the Mintware proxy (server injects the platform fee; the LI.FI key stays server-side).
+    const res = await fetch(`${API_BASE}/api/swap/quote`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        chainId: args.chainId,
+        sellToken: args.sellToken,
+        buyToken: args.buyToken,
+        sellAmount: args.sellAmount,
+        taker,
+      }),
+    })
+    if (!res.ok) {
+      const t = await res.text().catch(() => res.statusText)
+      return `Quote failed (${res.status}) — nothing was signed or sent: ${t.slice(0, 300)}`
+    }
+    const quote = (await res.json()) as {
+      estimate?: { toAmountMin?: string; toAmount?: string; approvalAddress?: string }
+      transactionRequest?: { to?: string; data?: string; value?: string }
+    }
+    const tx = quote.transactionRequest
+    if (!tx?.to || !tx?.data) {
+      return 'The quote did not include an executable transaction — nothing was sent.'
+    }
+
+    // 2) Optional slippage guard — checked BEFORE any on-chain action.
+    if (args.minBuyAmount != null && quote.estimate?.toAmountMin != null) {
+      if (BigInt(quote.estimate.toAmountMin) < BigInt(args.minBuyAmount)) {
+        return `Aborted: guaranteed output ${quote.estimate.toAmountMin} is below your minBuyAmount ${args.minBuyAmount}. Nothing was sent.`
+      }
+    }
+
+    // 3) ERC-20 sell needs an approval to the route's spender first; a native-coin sell does not.
+    const NATIVE = new Set(['0x0000000000000000000000000000000000000000', '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'])
+    const isNative = NATIVE.has(args.sellToken.toLowerCase())
+    const lines: string[] = []
+    if (!isNative) {
+      const spender = quote.estimate?.approvalAddress ?? tx.to
+      const approveTx = await wallet.sendTransaction({
+        to: args.sellToken,
+        data: APPROVE_SEL + pad32(spender) + padUint(BigInt(args.sellAmount)),
+      })
+      lines.push(`  approve: ${approveTx}`)
+    }
+
+    // 4) Sign + broadcast the swap with the agent's own key.
+    const swapTx = await wallet.sendTransaction({ to: tx.to, data: tx.data, value: tx.value ?? '0x0' })
+    lines.push(`  swap:    ${swapTx}`)
+
+    const min = quote.estimate?.toAmountMin ?? quote.estimate?.toAmount ?? '?'
+    return [
+      `Swap submitted from the agent wallet on chain ${args.chainId}.`,
+      ...lines,
+      `  min out: ${min} (raw units of ${args.buyToken})`,
+      `Signed + broadcast with the agent's own key — the agent pays gas.`,
+    ].join('\n')
+  },
+}
+
 // =============================================================================
 // Exports
 // =============================================================================
@@ -577,6 +665,7 @@ export const mintwareActions = [
   mintwareYieldsAction,
   mintwarePoolsAction,
   mintwareSwapQuoteAction,
+  mintwareSwapExecuteAction,
 ]
 
 export {
@@ -592,6 +681,7 @@ export {
   mintwareYieldsAction,
   mintwarePoolsAction,
   mintwareSwapQuoteAction,
+  mintwareSwapExecuteAction,
   BASE_MAINNET_CONTRACT,
   API_BASE,
 }
