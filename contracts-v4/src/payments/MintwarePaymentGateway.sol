@@ -61,6 +61,7 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     mapping(address => uint256) public userDailyRefillCap;                  // 0 => DEFAULT_GLOBAL_REFILL_CAP
     mapping(bytes32 => bool) public refillDone;                             // refillId => done (idempotency)
     mapping(bytes32 => address) public refillCapParamUser;                  // timelock param tag => the user it caps
+    mapping(address => bool) public userRefillPaused;                       // user's own on-chain refill kill-switch
 
     struct Hold {
         address user;
@@ -93,6 +94,7 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     event BufferAddressUpdated(address indexed user, address indexed oldBuffer, address indexed newBuffer);
     event BufferRefilled(bytes32 indexed refillId, address indexed user, address indexed buffer, uint256 assets, uint256 sharesBurned);
     event UserDailyRefillCapUpdated(address indexed user, uint256 newCap);
+    event RefillPauseSet(address indexed user, bool paused);
 
     error InvalidAmount();
     error PermitExpired();
@@ -111,6 +113,7 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     error RefillAlreadyDone();
     error ExceedsDailyRefillLimit();
     error RefillCapTooHigh();
+    error RefillPausedError();
 
     constructor(address vault_, address usdc_, address treasury_, address admin_)
         EIP712("Mintware Payment Gateway", "2.0")
@@ -208,6 +211,14 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         if (buffer == address(0)) revert ZeroAddress();
         emit BufferAddressUpdated(msg.sender, bufferOf[msg.sender], buffer);
         bufferOf[msg.sender] = buffer;
+    }
+
+    /// @notice A user pauses/unpauses THEIR OWN buffer refills on-chain (audit fix L4). msg.sender-pinned,
+    ///         so — unlike revokeNonce, which would also stop spending — a user can granularly halt a
+    ///         (possibly compromised) relayer from refilling their buffer without touching their card spend.
+    function setRefillPaused(bool paused) external {
+        userRefillPaused[msg.sender] = paused;
+        emit RefillPauseSet(msg.sender, paused);
     }
 
     /// @notice Settle a card charge the edge engine authorized. RELAYER-only.
@@ -308,6 +319,15 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     ///         protocol cap — so the worst a rogue relayer can do is move a bounded amount per day into
     ///         the user's own wallet, and the runaway-refill rate is capped. The permit proves the user
     ///         consented to programmatic burns of their shares. Idempotent per `refillId`. CEI order.
+    ///
+    /// @dev    TWO-LEDGER PERMIT MODEL (audit M2 — accepted by design). One long-lived `DelegatedSpendPermit`
+    ///         authorizes BOTH `settleSpend` (merchant payout) and `refillBuffer`, each metered by its OWN
+    ///         daily ledger (`dailySpendUSDC` vs `dailyRefillUSDC`). This is intentional: a refill is not a
+    ///         second spend — it repositions the user's OWN shares into the user's OWN pinned buffer, from
+    ///         which spending is still bounded by the spend ledger. So the refill leg has NO theft vector
+    ///         (the `≥$250` edge second-signer gate exists to protect *merchant* payouts and is deliberately
+    ///         not required here) and is bounded instead by its own timelock-governed cap, the off-chain
+    ///         refill-rate breaker, and the user's on-chain `setRefillPaused` kill-switch (audit L4).
     function refillBuffer(
         bytes32 refillId,
         address user,
@@ -316,6 +336,9 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         bytes calldata permitSig
     ) external onlyRole(RELAYER_ROLE) nonReentrant whenNotPaused returns (uint256 sharesBurned) {
         if (assets == 0) revert InvalidAmount();
+
+        // The user's own on-chain refill kill-switch (audit L4) — checked first.
+        if (userRefillPaused[user]) revert RefillPausedError();
 
         // Destination is PINNED to the user's own registered buffer — never relayer-chosen (mirrors C1).
         address receiver = bufferOf[user];

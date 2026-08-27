@@ -282,4 +282,30 @@ contract MintwareGatewayBufferRefillTest is Test {
         vm.expectRevert(MWTimelockedRiskParams.NoRiskParamPending.selector);
         gateway.confirmUserDailyRefillCap(user);
     }
+
+    // ── user's on-chain refill pause (audit fix L4) ──────────────────────────────
+
+    function test_refill_userPause_blocks_thenUnpause() public {
+        vm.prank(user);
+        gateway.setRefillPaused(true);
+        MintwarePaymentGateway.DelegatedSpendPermit memory p = _permit(1_000 * ONE, 30, block.timestamp + 1 days);
+        bytes memory sig = _signPermit(userPk, p);
+        vm.expectRevert(MintwarePaymentGateway.RefillPausedError.selector);
+        gateway.refillBuffer(keccak256("r-paused"), user, 100 * ONE, p, sig);
+
+        vm.prank(user);
+        gateway.setRefillPaused(false);
+        uint256 burned = _refill(keccak256("r-unpaused"), 100 * ONE, 1_000 * ONE, 31);
+        assertGt(burned, 0, "unpaused refill should succeed");
+    }
+
+    function test_refillPause_isSelfOnly() public {
+        vm.prank(user);
+        gateway.setRefillPaused(true);
+        assertTrue(gateway.userRefillPaused(user), "user set own pause");
+        // a stranger can only flip their OWN flag — the user's stays as they set it.
+        vm.prank(makeAddr("stranger"));
+        gateway.setRefillPaused(false);
+        assertTrue(gateway.userRefillPaused(user), "stranger cannot unpause the user");
+    }
 }
