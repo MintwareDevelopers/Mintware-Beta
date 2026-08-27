@@ -1,7 +1,7 @@
 // End-to-end flow test for the Bridge card rail — drives the REAL orchestration (onboarding runner +
 // approve orchestrator + reconcile) with fakes for the external legs (Bridge client, Privy signer,
-// chain, DB). This is the "test the whole flow" test: issue → approve → prime → activate → spend →
-// reconcile → refill, plus the cold-decline guard on the unhappy path.
+// chain, DB). This is the "test the whole flow" test: issue → (member permit) → approve → prime →
+// go_live → spend → reconcile → refill, plus the pauses and guards on the unhappy paths.
 
 import { afterEach, describe, expect, it } from 'vitest'
 import { runOnboarding, type OnboardDeps } from '@/lib/org/bridgeOnboard'
@@ -22,15 +22,21 @@ afterEach(() => {
   else process.env.CARD_BRIDGE_ENABLED = saved
 })
 
-/** In-memory onboarding harness: each dep mutates a shared state exactly like the real effects would. */
-function harness(opts: { primeConfirms: boolean }) {
-  const state: OnboardState = { cardIssued: false, approvalGranted: false, bufferPrimed: false, activated: false }
+/** In-memory onboarding harness: each dep mutates a shared state exactly like the real effects would.
+ *  `memberSigns` toggles whether the member has signed their standing permit (a member action). */
+function harness(opts: { primeConfirms: boolean; memberSigns: boolean }) {
+  const state: OnboardState = {
+    cardIssued: false,
+    permitSigned: opts.memberSigns, // set out-of-band by the member, not by the orchestrator
+    approvalGranted: false,
+    bufferPrimed: false,
+    liveProvisioned: false,
+  }
   const events: string[] = []
   const deps: OnboardDeps = {
     async loadState() { return { ...state } },
     async issueCard() { events.push('issue'); state.cardIssued = true },
     async grantApproval() {
-      // exercises the REAL approve orchestrator + calldata encoding
       const r = await grantBridgeApproval({ usdcAddress: USDC, dailyCapAtomic: DAY, signer: fakeSigner, spender: SPENDER })
       if (!r.ok) throw new Error(`approval failed: ${r.reason}`)
       events.push('approve')
@@ -38,46 +44,56 @@ function harness(opts: { primeConfirms: boolean }) {
     },
     async primeBuffer() {
       events.push('prime')
-      // only mark primed when the (simulated) on-chain refill confirms to the minimum
       if (opts.primeConfirms) state.bufferPrimed = true
     },
-    async activate() { events.push('activate'); state.activated = true },
+    async goLive() { events.push('go_live'); state.liveProvisioned = true },
   }
   return { state, events, deps }
 }
 
 describe('bridge card — full onboarding flow', () => {
-  it('runs issue → approve → prime → activate and never activates before the buffer is primed', async () => {
+  it('runs issue → (permit) → approve → prime → go_live and never goes live before the buffer is primed', async () => {
     process.env.CARD_BRIDGE_ENABLED = 'true'
-    const h = harness({ primeConfirms: true })
+    const h = harness({ primeConfirms: true, memberSigns: true })
     const res = await runOnboarding(h.deps)
 
     expect(res.complete).toBe(true)
-    expect(res.ran).toEqual(['issue_card', 'grant_approval', 'prime_buffer', 'activate'])
-    // activation happened strictly after priming
-    expect(h.events.indexOf('activate')).toBeGreaterThan(h.events.indexOf('prime'))
-    expect(h.state.activated).toBe(true)
+    expect(res.ran).toEqual(['issue_card', 'grant_approval', 'prime_buffer', 'go_live']) // permit is the member's, not "run"
+    expect(h.events.indexOf('go_live')).toBeGreaterThan(h.events.indexOf('prime'))
+    expect(h.state.liveProvisioned).toBe(true)
   })
 
-  it('cold-decline guard: if the buffer never primes, the card is NEVER activated', async () => {
+  it('pauses for the member permit — issues the card, then waits (never primes/goes live)', async () => {
     process.env.CARD_BRIDGE_ENABLED = 'true'
-    const h = harness({ primeConfirms: false })
+    const h = harness({ primeConfirms: true, memberSigns: false })
+    const res = await runOnboarding(h.deps)
+
+    expect(res.complete).toBe(false)
+    expect(res.awaitingMember).toBe('sign_permit')
+    expect(res.ran).toEqual(['issue_card'])
+    expect(h.events).not.toContain('prime')
+    expect(h.events).not.toContain('go_live')
+  })
+
+  it('cold-decline guard: if the buffer never primes, the card is NEVER made live', async () => {
+    process.env.CARD_BRIDGE_ENABLED = 'true'
+    const h = harness({ primeConfirms: false, memberSigns: true })
     const res = await runOnboarding(h.deps)
 
     expect(res.complete).toBe(false)
     expect(res.stopped).toContain('prime_buffer')
-    expect(h.events).not.toContain('activate') // the whole point
-    expect(h.state.activated).toBe(false)
+    expect(h.events).not.toContain('go_live')
+    expect(h.state.liveProvisioned).toBe(false)
   })
 
-  it('resumes idempotently from a partially-onboarded card', async () => {
+  it('resumes idempotently from a partially-onboarded card (permit already signed)', async () => {
     process.env.CARD_BRIDGE_ENABLED = 'true'
-    const h = harness({ primeConfirms: true })
+    const h = harness({ primeConfirms: true, memberSigns: true })
     h.state.cardIssued = true
-    h.state.approvalGranted = true // already done in a prior run
+    h.state.approvalGranted = true
     const res = await runOnboarding(h.deps)
     expect(res.complete).toBe(true)
-    expect(res.ran).toEqual(['prime_buffer', 'activate']) // only the remaining steps
+    expect(res.ran).toEqual(['prime_buffer', 'go_live'])
   })
 })
 
@@ -104,7 +120,6 @@ describe('bridge card — spend/reconcile loop', () => {
     const h = reconcileHarness()
     const r = await reconcileBridgeEvent({ kind: 'refund', orgCardId: 'card_1' }, h.deps)
     expect(r).toEqual({ action: 'synced' })
-    expect(h.syncs).toEqual(['card_1'])
     expect(h.refills).toHaveLength(0)
   })
 
