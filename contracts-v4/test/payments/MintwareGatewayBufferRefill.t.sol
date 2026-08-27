@@ -268,4 +268,18 @@ contract MintwareGatewayBufferRefillTest is Test {
         vm.expectRevert();
         gateway.setUserDailyRefillCap(user, 40 * ONE);
     }
+
+    function test_cap_instantTighten_clearsPendingLoosen() public {
+        gateway.setUserDailyRefillCap(user, 500 * ONE);  // $1000 default -> $500: tighten, instant
+        gateway.setUserDailyRefillCap(user, 800 * ONE);  // $500 -> $800: loosen, queued
+        ( , , uint256 eta1) = gateway.pendingRiskParam(_capParam(user));
+        assertGt(eta1, 0, "loosen should be queued");
+        // An emergency instant tighten must DROP the stale queued loosen (audit fix L1).
+        gateway.setUserDailyRefillCap(user, 100 * ONE);  // $500 -> $100: tighten, instant
+        assertEq(gateway.userDailyRefillCap(user), 100 * ONE, "tighten applied");
+        ( , , uint256 eta2) = gateway.pendingRiskParam(_capParam(user));
+        assertEq(eta2, 0, "the stale loosen must be dropped, not left confirmable");
+        vm.expectRevert(MWTimelockedRiskParams.NoRiskParamPending.selector);
+        gateway.confirmUserDailyRefillCap(user);
+    }
 }
