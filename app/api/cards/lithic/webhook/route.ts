@@ -91,12 +91,21 @@ export const POST = createHandler(async (req: NextRequest, ctx) => {
       decision: decision.approved ? 'approved' : 'declined',
       decline_reason: decision.approved ? null : decision.reason,
       edge_hold_id: decision.approved ? (decision.holdId ?? null) : null,
+      auth_mode: decision.approved ? (decision.mode ?? null) : null, // capture honors this (audit fix H2)
       latency_ms: latencyMs,
     })
-    // A duplicate webhook delivery (same provider_event_ref) hits the unique index and no-ops here —
-    // that's fine, the ASA response below is still correct either way. Any OTHER insert failure is
-    // logged but must never block the ASA response itself (the decision already happened).
-    if (logErr && !logErr.message?.includes('duplicate')) {
+    // A duplicate webhook delivery (same provider_event_ref) hits the unique index and no-ops the log.
+    if (logErr?.message?.includes('duplicate')) {
+      // …but decideCardSwipe already ran again and, in buffer mode, reserved a SECOND hold for this same
+      // swipe (audit fix C1). The original delivery already holds it — undo this call's double-reserve.
+      if (decision.approved && decision.mode === 'buffer' && decision.orgCardId) {
+        await ctx.supabase.rpc('release_card_buffer', {
+          p_org_card_id: decision.orgCardId,
+          p_amount: centsToAtomicUsdc(amountCents).toString(),
+        })
+      }
+    } else if (logErr) {
+      // Any OTHER insert failure is logged but must never block the ASA response (the decision happened).
       ctx.log.warn('cards.lithic', 'spend feed log failed', { error: logErr.message })
     }
   }

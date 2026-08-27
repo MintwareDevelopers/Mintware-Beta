@@ -10,7 +10,6 @@
 
 import type { EdgeAuthorizer } from '@/lib/x402/facilitator'
 import { httpEdgeAuthorizer } from '@/lib/x402/edgeHttp'
-import { authorizeAgainstBuffer } from '@/lib/cards/bufferPolicy'
 import { policyForRole } from '@/lib/org/rolePresets'
 import {
   getStandingForWallet,
@@ -37,7 +36,7 @@ export function edgeAuthorizerFromEnv(): EdgeAuthorizer | null {
  *  org_cards row (i.e. every outcome except unknown_card / card_lookup_failed) — the webhook route
  *  uses them to log the decision to card_swipe_events without a second lookup. */
 export type CardAuthDecision =
-  | { approved: true; holdId?: string; orgId: string; orgCardId: string; memberWallet: string }
+  | { approved: true; holdId?: string; mode?: 'buffer' | 'edge'; orgId: string; orgCardId: string; memberWallet: string }
   | { approved: false; reason: string; orgId?: string; orgCardId?: string; memberWallet?: string }
 
 /** `spentTodayAtomic` is a caller-supplied hook, not computed here — this module has no opinion on
@@ -134,21 +133,18 @@ export async function decideCardSwipe(params: {
   //        (Agent-initiated x402 spend is a different rail with no such clock and keeps its live-NAV
   //        path — it never enters this function.) Flag-gated: OFF by default → path (b) unchanged.
   if (process.env.CARD_BUFFER_ENABLED === 'true') {
-    const { data: buf } = await supabase
-      .from('card_spend_buffers')
-      .select('buffer_balance_atomic, per_tx_cap_atomic')
-      .eq('org_card_id', card.id)
-      .maybeSingle()
-    if (buf) {
-      const decision = authorizeAgainstBuffer(
-        amountAtomicUsdc,
-        BigInt(String(buf.buffer_balance_atomic ?? '0')),
-        BigInt(String(buf.per_tx_cap_atomic ?? '0')),
-      )
-      if (!decision.approved) return { approved: false, reason: decision.reason ?? 'insufficient_buffer', ...identity }
-      return { approved: true, ...identity }
-    }
-    // Feature on but this card has no buffer configured → fall through to the default edge-auth path.
+    // ATOMIC check-and-hold (audit fix C1): reserve_card_buffer debits an on-DB reservation ledger under
+    // a row lock, so concurrent/sequential swipes can't both pass against one balance. It reads the
+    // per-tx cap + available (= balance − reserved) from the row itself. 'no_buffer' → this card has no
+    // buffer, fall through to edge-auth.
+    const { data: reserve } = await supabase.rpc('reserve_card_buffer', {
+      p_org_card_id: card.id,
+      p_amount: amountAtomicUsdc.toString(),
+    })
+    if (reserve === 'ok') return { approved: true, mode: 'buffer', ...identity }
+    if (reserve === 'over_cap') return { approved: false, reason: 'over_per_tx_cap', ...identity }
+    if (reserve === 'insufficient') return { approved: false, reason: 'insufficient_buffer', ...identity }
+    // 'no_buffer' / null → fall through to the default edge-auth path.
   }
 
   //    (b) default: live NAV hold via edge-auth. Fail CLOSED when unconfigured (same posture as
@@ -162,5 +158,5 @@ export async function decideCardSwipe(params: {
     ref,
   })
   if (!res.approved) return { approved: false, reason: res.reason ?? 'insufficient_equity', ...identity }
-  return { approved: true, holdId: res.holdId, ...identity }
+  return { approved: true, holdId: res.holdId, mode: 'edge', ...identity }
 }

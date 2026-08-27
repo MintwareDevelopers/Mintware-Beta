@@ -18,9 +18,13 @@ function fakeSupabase(opts: {
   orgError?: boolean
   member?: { role: string; status: string } | null
   memberError?: boolean
-  buf?: { buffer_balance_atomic: string; per_tx_cap_atomic: string } | null
+  reserve?: string // reserve_card_buffer RPC result: 'ok' | 'over_cap' | 'insufficient' | 'no_buffer'
 }) {
   return {
+    rpc: async (fn: string) => {
+      if (fn === 'reserve_card_buffer') return { data: opts.reserve ?? 'no_buffer', error: null }
+      return { data: null, error: null }
+    },
     from(table: string) {
       const chain = {
         select: () => chain,
@@ -31,9 +35,6 @@ function fakeSupabase(opts: {
           }
           if (table === 'org_members') {
             return opts.memberError ? { data: null, error: new Error('boom') } : { data: opts.member ?? null, error: null }
-          }
-          if (table === 'card_spend_buffers') {
-            return { data: opts.buf ?? null, error: null }
           }
           throw new Error(`unexpected table ${table}`)
         },
@@ -257,62 +258,63 @@ describe('decideCardSwipe', () => {
     })
   })
 
-  // ─── Card spend buffer mode — flag-gated flat check that replaces live-NAV on the card rail ──────
+  // ─── Card spend buffer mode — atomic reservation replaces live-NAV on the card rail (audit fix C1) ──
   describe('card spend buffer mode', () => {
     afterEach(() => { delete process.env.CARD_BUFFER_ENABLED })
-    const buf = (balance: string, cap = '0') => ({ buffer_balance_atomic: balance, per_tx_cap_atomic: cap })
 
-    it('OFF by default: even a funded buffer is ignored — the swipe uses edge-auth', async () => {
-      // flag unset → default path. declineEdge proves edge-auth ran, not the funded flat buffer.
+    it('OFF by default: reservation is not attempted — the swipe uses edge-auth', async () => {
+      // flag unset → default path. declineEdge proves edge-auth ran, not the buffer reservation.
       const res = await decideCardSwipe({
-        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, buf: buf('1000000000') }),
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'ok' }),
         provider: 'lithic', providerCardToken: CARD_TOKEN,
         amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-off', edge: declineEdge, standingTier: 'none',
       })
       expect(res).toMatchObject({ approved: false, reason: 'insufficient_equity' })
     })
 
-    it('ON: a buffer that covers the swipe approves WITHOUT edge-auth or a holdId', async () => {
+    it('ON: a successful atomic reserve approves in buffer mode WITHOUT edge-auth or a holdId', async () => {
       process.env.CARD_BUFFER_ENABLED = 'true'
       const edge: EdgeAuthorizer = { authorize: vi.fn(async () => ({ approved: true, holdId: 'unused' })) }
       const res = await decideCardSwipe({
-        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, buf: buf('100000000') }),
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'ok' }),
         provider: 'lithic', providerCardToken: CARD_TOKEN,
         amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-ok', edge, standingTier: 'none',
       })
-      expect(res).toMatchObject({ approved: true })
+      expect(res).toMatchObject({ approved: true, mode: 'buffer' })
       expect((res as { holdId?: string }).holdId).toBeUndefined()
       expect(edge.authorize).not.toHaveBeenCalled()
     })
 
-    it('ON: declines insufficient_buffer when the swipe exceeds the balance', async () => {
+    it('ON: reserve returning "insufficient" declines insufficient_buffer', async () => {
       process.env.CARD_BUFFER_ENABLED = 'true'
       const res = await decideCardSwipe({
-        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, buf: buf('20000000') }),
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'insufficient' }),
         provider: 'lithic', providerCardToken: CARD_TOKEN,
         amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-low', edge: approveEdge, standingTier: 'none',
       })
       expect(res).toMatchObject({ approved: false, reason: 'insufficient_buffer' })
     })
 
-    it('ON: declines over_per_tx_cap before the balance check', async () => {
+    it('ON: reserve returning "over_cap" declines over_per_tx_cap', async () => {
       process.env.CARD_BUFFER_ENABLED = 'true'
       const res = await decideCardSwipe({
-        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, buf: buf('100000000', '30000000') }),
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'over_cap' }),
         provider: 'lithic', providerCardToken: CARD_TOKEN,
         amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-cap', edge: approveEdge, standingTier: 'none',
       })
       expect(res).toMatchObject({ approved: false, reason: 'over_per_tx_cap' })
     })
 
-    it('ON but no buffer configured for this card → falls through to edge-auth', async () => {
+    it('ON but "no_buffer" for this card → falls through to edge-auth (mode:edge)', async () => {
       process.env.CARD_BUFFER_ENABLED = 'true'
+      const edge: EdgeAuthorizer = { authorize: vi.fn(async () => ({ approved: true, holdId: 'h' })) }
       const res = await decideCardSwipe({
-        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, buf: null }),
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'no_buffer' }),
         provider: 'lithic', providerCardToken: CARD_TOKEN,
-        amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-none', edge: declineEdge, standingTier: 'none',
+        amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-none', edge, standingTier: 'none',
       })
-      expect(res).toMatchObject({ approved: false, reason: 'insufficient_equity' })
+      expect(res).toMatchObject({ approved: true, mode: 'edge', holdId: 'h' })
+      expect(edge.authorize).toHaveBeenCalledOnce()
     })
   })
 })
