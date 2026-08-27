@@ -70,10 +70,25 @@ export function computeRiskGatedWeights(
   const gated: VenueRate[] = []
   for (const v of venues) {
     const risk = riskByKey[v.key]
-    const level: RiskLevel = risk?.level ?? (haltOnMissing ? 'halt' : 'ok')
+
+    // Resolve the level, failing CLOSED on both an ABSENT and a MALFORMED signal:
+    //   • no signal      → halt if haltOnMissing (default), else ok (the opt-in yield-over-safety mode);
+    //   • unknown level  → ALWAYS halt (a garbage/unexpected oracle status is a signal error, and a
+    //     circuit breaker must never treat an unrecognized status as "safe" — regardless of haltOnMissing).
+    let level: RiskLevel
+    let missReason: string | undefined
+    if (!risk) {
+      level = haltOnMissing ? 'halt' : 'ok'
+      missReason = 'no risk signal (fail-closed)'
+    } else if (risk.level === 'ok' || risk.level === 'elevated' || risk.level === 'halt') {
+      level = risk.level
+    } else {
+      level = 'halt'
+      missReason = 'malformed risk signal (fail-closed)'
+    }
 
     if (level === 'halt') {
-      halted.push({ key: v.key, reason: risk?.reason ?? (risk ? undefined : 'no risk signal (fail-closed)') })
+      halted.push({ key: v.key, reason: risk?.reason ?? missReason })
       continue // hard constraint: excluded from the allocation entirely
     }
     if (level === 'elevated') {

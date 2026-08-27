@@ -89,6 +89,33 @@ weighting above — it's a live comparison + re-allocation. Three pieces:
   adapter → real child adapters (Aave + a Morpho/sUSDe `MintwareERC4626YieldAdapter`), since nothing does
   this today and the vault's adapter slot is immutable (must be set at construction).
 
+### Phase 1b+ — Venue risk gate: the circuit breaker *(new; PR #407)*
+Non-negotiable #3 (venue-risk tiering) made **real-time**. v0 (`computeBestRateWeights`) chases the best
+rate; the **risk gate (v1)** wraps it with a hard-constraint circuit breaker so capital exits a
+deteriorating venue *before the rate itself becomes the trap* — the rsETH-exploit failure mode (Apr 2026:
+an attractive rate that was a blow-up in progress). Layered on the v0 allocator:
+- **The gate** (off-chain, pure + tested): `lib/yield/riskGate.ts` `computeRiskGatedWeights()` consumes an
+  **external risk-oracle** signal per venue and applies it as a HARD CONSTRAINT before allocating —
+  `halt` → the venue is **deallocated** (weight 0) regardless of its rate; `elevated` → throttled to a
+  tighter cap (`VenueRate.maxBpsOverride`, added here); a **missing OR malformed** signal fails **closed**
+  (halt). Returns `{ weights, halted, throttled }` for disclosure/telemetry. **Built.**
+- **The oracle feed + keeper** (*deploy-gated*): the external risk source, and the keeper that turns the
+  gated weights into `setVenues()` / `rebalance()`. Not built.
+
+**Differentiation (a provable claim, not a yield claim):** rate-following aggregators (Idle/Yearn/Beefy)
+have no risk-deterioration defense; curator vaults (Sommelier/Re7/Steakhouse) react on a human's schedule.
+This reacts the moment the oracle signal changes.
+
+**Honest AI sequencing (explicit — do NOT mislabel):** v0 (best-rate math) and v1 (deterministic rules
+over an external signal) are **disciplined risk management, not AI**. The genuine learned model —
+predicting risk deterioration + rebalance-cost tradeoffs from historical protocol-failure data — is **v2**,
+a separate later chapter that runs **strictly inside** v1's guardrails; only then does an AI narrative
+honestly apply, shown by methodology + track record rather than a claimed label. Pitching v0/v1 as AI is
+the exact cosmetic labeling sophisticated diligence screens for.
+
+**Self-audit (2026-08-26):** two issues found + fixed — a malformed oracle level now fails **closed** (was
+read as `ok`), and a non-finite per-venue cap override can no longer produce a `NaN` weight. 23 tests green.
+
 ### Phase 2 — ETH-fee capture, the *safe* way (the differentiator)
 - **Build the flash-loan atomic JIT ETH leg** — the USDC **never leaves the lending floor**;
   flash-source ETH per swap, provide JIT, capture the fee, repay, all atomic. No held ETH, no

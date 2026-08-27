@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { computeRiskGatedWeights, type VenueRisk } from './riskGate'
-import { type VenueRate } from './rateRouter'
+import { computeBestRateWeights, type VenueRate } from './rateRouter'
 
 const V = (key: string, apyBps: number): VenueRate => ({ key, apyBps, available: true })
 
@@ -60,6 +60,14 @@ describe('computeRiskGatedWeights — the circuit breaker', () => {
     expect(weights[0]).toEqual({ key: 'exotic', weightBps: 4000 })
   })
 
+  it('audit F1: a MALFORMED/unknown level fails CLOSED (halt) even with haltOnMissing:false', () => {
+    // A present-but-garbage oracle status is a signal ERROR — the breaker must never read it as safe.
+    const risk = { exotic: { level: 'weird' as unknown as 'ok' }, aave: { level: 'ok' as const }, morpho: { level: 'ok' as const } }
+    const { weights, halted } = computeRiskGatedWeights(VENUES, risk, { maxVenueBps: 4000, haltOnMissing: false })
+    expect(halted).toEqual([{ key: 'exotic', reason: 'malformed risk signal (fail-closed)' }])
+    expect(weights.find((w) => w.key === 'exotic')).toBeUndefined()
+  })
+
   it('halting EVERY venue yields an empty allocation (all capital stays idle/safe)', () => {
     const risk: Record<string, VenueRisk> = { exotic: { level: 'halt' }, aave: { level: 'halt' }, morpho: { level: 'halt' } }
     const { weights, halted } = computeRiskGatedWeights(VENUES, risk, { maxVenueBps: 4000 })
@@ -71,5 +79,14 @@ describe('computeRiskGatedWeights — the circuit breaker', () => {
     const { weights } = computeRiskGatedWeights(VENUES, allOk, { maxVenueBps: 4000, idleBufferBps: 2000 })
     const total = weights.reduce((s, w) => s + w.weightBps, 0)
     expect(total).toBeLessThanOrEqual(8000) // budget = 10000 - 2000
+  })
+
+  it('audit F2: a non-finite maxBpsOverride falls back to the global cap (no NaN weight)', () => {
+    const weights = computeBestRateWeights(
+      [{ key: 'a', apyBps: 500, maxBpsOverride: NaN as unknown as number }],
+      { maxVenueBps: 4000 },
+    )
+    expect(weights).toEqual([{ key: 'a', weightBps: 4000 }])
+    expect(Number.isFinite(weights[0].weightBps)).toBe(true)
   })
 })

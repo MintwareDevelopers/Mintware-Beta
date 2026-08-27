@@ -73,8 +73,11 @@ export function computeBestRateWeights(venues: VenueRate[], opts: RateRouteOptio
   let remaining = budget
   for (const v of pool) {
     if (remaining <= 0) break
-    // effective cap = min(global cap, this venue's optional tighter override)
-    const cap = v.maxBpsOverride != null ? Math.min(maxVenueBps, Math.max(0, v.maxBpsOverride)) : maxVenueBps
+    // effective cap = min(global cap, this venue's optional tighter override). A non-finite override is
+    // ignored (falls back to the global cap) so a garbage value can never produce a NaN weight.
+    const cap = Number.isFinite(v.maxBpsOverride as number)
+      ? Math.min(maxVenueBps, Math.max(0, v.maxBpsOverride as number))
+      : maxVenueBps
     const w = Math.min(cap, remaining)
     if (w <= 0) continue
     out.push({ key: v.key, weightBps: w })
