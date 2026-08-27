@@ -257,3 +257,24 @@ backstop → on-chain `refillBuffer`. ~89 TS + 12 Forge tests green; both featur
 the remaining §9 pre-build items (measure real `T` — needs a live integration; confirm issuer
 yield-buffer support — needs a Rain/Bridge answer). External audit of the `refillBuffer` contract change
 gates real value.
+
+## 11. Security audit + remediation (2026-08-26)
+
+Adversarial Hacken/CertiK-style round: 5 independent reviewers attacked the new code by dimension,
+a refute-first verifier tested each finding against the real code (default REFUTED). 18 survived (14
+confirmed, 4 plausible); 3 refuted. All 9 distinct root issues fixed + tested, 0 regression:
+
+| ID | Sev | Fix |
+|---|---|---|
+| C1 | Critical | Reservation ledger — `reserved_atomic` + atomic `reserve_card_buffer` (SELECT…FOR UPDATE) debits at auth; no more over-approval across swipes. |
+| H1 | High | Buffer address derived from on-chain `bufferOf[member]`, never client/DB. |
+| H2 | High | `auth_mode` recorded per swipe; capture honors it (no dropped settlement). |
+| M1 | Med | `begin/end_card_refill` — atomic rate window + per-card in-flight mutex (no double-refill / breaker bypass). |
+| M2 | Accepted | Two-ledger permit documented — refill has no theft vector (own pinned buffer), bounded by refill cap + breaker + pause. |
+| L1 | Low | Instant risk-param tighten clears a queued loosen. |
+| L2 | Low | Removed the unauthenticated GET config leak. |
+| L3 | Low | Unique refillId minted up front (no `'pending'` wedge). |
+| L4 | Low | On-chain `userRefillPaused` self-serve kill-switch. |
+
+New migrations: `20260826000002` (reservation + auth_mode), `20260826000003` (refill lock). Still
+testnet/pre-audit — an external audit remains the gate for real value.
