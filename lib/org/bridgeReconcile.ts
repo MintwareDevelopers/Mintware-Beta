@@ -29,13 +29,18 @@ export interface ReconcileDeps {
   syncBuffer(orgCardId: string): Promise<{ ok: boolean }>
   /** Redeem a vault slice back into the buffer toward target. Returns the refill outcome. */
   refill(orgCardId: string, trigger: string): Promise<{ ok: boolean; reason?: string }>
+  /** Deposit buffer surplus (above target) back into the vault. Optional — when omitted, a refund just
+   *  resyncs (surplus is left in the buffer). Provided → a refund skims the surplus back to earning. */
+  sweep?(orgCardId: string): Promise<{ ok: boolean; reason?: string }>
   log?(msg: string, meta?: Record<string, unknown>): void
 }
 
 export type ReconcileResult =
   | { action: 'refilled' }
   | { action: 'refill_skipped'; reason?: string }
-  | { action: 'synced' } // refund or non-spend movement: balance updated, no refill needed
+  | { action: 'synced' } // refund or non-spend movement: balance updated, no sweep configured/needed
+  | { action: 'swept' } // refund surplus deposited back into the vault
+  | { action: 'sweep_skipped'; reason?: string } // sweep configured but declined (disabled / nothing to sweep)
   | { action: 'sync_failed' } // on-chain resync failed → refill deliberately skipped (avoid stale-cache over-redeem)
   | { action: 'ignored' }
   | { action: 'no_card' }
@@ -63,6 +68,11 @@ export async function reconcileBridgeEvent(
 
     if (ev.kind === 'refund') {
       deps.log?.('bridge.reconcile.refund', { orgCardId: ev.orgCardId, eventId: ev.eventId })
+      // a refund pushes the buffer ABOVE target; skim the surplus back into the vault so it earns again.
+      if (deps.sweep) {
+        const s = await deps.sweep(ev.orgCardId)
+        return s.ok ? { action: 'swept' } : { action: 'sweep_skipped', reason: s.reason }
+      }
       return { action: 'synced' }
     }
 

@@ -14,10 +14,15 @@
 // (Bridge signs with its own Stripe-style scheme), same category as the Lithic webhooks.
 
 import type { NextRequest } from 'next/server'
+import { createPublicClient, http } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
+import { rpcForChain } from '@/lib/org/treasuryReader'
 import { bridgeCardsEnabled } from '@/lib/cards/bridge'
+import { bufferSweepEnabled } from '@/lib/cards/sweep'
 import { normalizeBridgeEvent, verifyBridgeWebhook } from '@/lib/cards/bridgeClient'
 import { reconcileBridgeEvent } from '@/lib/org/bridgeReconcile'
+import { sweepBufferToVault } from '@/lib/org/bridgeSweep'
+import { privySignerFromEnv } from '@/lib/org/walletSigner'
 import { syncBufferBalance } from '@/lib/org/bufferMonitor'
 import { refillCardBuffer } from '@/lib/org/bufferRefill'
 
@@ -85,6 +90,42 @@ export const POST = createHandler(async (req: NextRequest, ctx) => {
             ctx.log.warn('cards.bridge', 'Bridge spend but refill DISABLED — buffer will not top up', { orgCardId })
           }
           return r.ok ? { ok: true } : { ok: false, reason: r.reason }
+        },
+        // Deploy-gated: skims a refund's surplus back into the vault. Any missing piece (flag off, no
+        // Privy signer, no target) is a clean skip — the surplus just stays in the buffer (the pre-sweep
+        // behavior). Only runs on a refund, so the extra reads/signer are off the spend hot path.
+        sweep: async (orgCardId) => {
+          if (!bufferSweepEnabled()) return { ok: false, reason: 'disabled' }
+          const usdcAddress = process.env.BRIDGE_USDC_ADDRESS
+          if (!usdcAddress) return { ok: false, reason: 'no_usdc' }
+          const [{ data: c }, { data: o }, { data: b }] = await Promise.all([
+            ctx.supabase.from('org_cards').select('member_wallet').eq('id', orgCardId).maybeSingle(),
+            ctx.supabase.from('orgs').select('treasury_vault_address, treasury_chain_id').eq('id', card.org_id).maybeSingle(),
+            ctx.supabase.from('card_spend_buffers')
+              .select('buffer_balance_atomic, reserved_atomic, buffer_target_atomic, privy_wallet_id')
+              .eq('org_card_id', orgCardId).maybeSingle(),
+          ])
+          if (!c?.member_wallet || !o?.treasury_vault_address || !o.treasury_chain_id || !b?.privy_wallet_id) {
+            return { ok: false, reason: 'unconfigured' }
+          }
+          const signer = privySignerFromEnv(b.privy_wallet_id, o.treasury_chain_id)
+          if (!signer) return { ok: false, reason: 'signer' }
+          const rpcUrl = rpcForChain(o.treasury_chain_id)
+          const publicClient = rpcUrl ? createPublicClient({ transport: http(rpcUrl) }) : null
+          const available = (() => { try { return BigInt(b.buffer_balance_atomic) - BigInt(b.reserved_atomic ?? 0) } catch { return 0n } })()
+          const target = (() => { try { return BigInt(b.buffer_target_atomic) } catch { return 0n } })()
+          const res = await sweepBufferToVault({
+            usdcAddress,
+            vaultAddress: o.treasury_vault_address,
+            member: c.member_wallet,
+            availableAtomic: available,
+            targetAtomic: target,
+            signer,
+            confirm: publicClient
+              ? async (hash) => ({ success: (await publicClient.waitForTransactionReceipt({ hash })).status === 'success' })
+              : undefined,
+          })
+          return res.ok ? { ok: true } : { ok: false, reason: res.reason }
         },
         log: (m, meta) => ctx.log.info('cards.bridge', m, meta),
       },

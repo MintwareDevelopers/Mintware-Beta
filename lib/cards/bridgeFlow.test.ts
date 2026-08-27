@@ -116,11 +116,33 @@ describe('bridge card — spend/reconcile loop', () => {
     expect(h.refills).toEqual([{ card: 'card_1', trigger: 'bridge_spend' }])
   })
 
-  it('a refund resyncs only — no refill (balance went up)', async () => {
+  it('a refund resyncs only when no sweep is configured (balance went up)', async () => {
     const h = reconcileHarness()
     const r = await reconcileBridgeEvent({ kind: 'refund', orgCardId: 'card_1' }, h.deps)
     expect(r).toEqual({ action: 'synced' })
     expect(h.refills).toHaveLength(0)
+  })
+
+  it('a refund SWEEPS the surplus back to the vault when a sweep is configured', async () => {
+    const sweeps: string[] = []
+    const deps: ReconcileDeps = {
+      async syncBuffer() { return { ok: true } },
+      async refill() { return { ok: true } },
+      async sweep(card) { sweeps.push(card); return { ok: true } },
+    }
+    const r = await reconcileBridgeEvent({ kind: 'refund', orgCardId: 'card_1' }, deps)
+    expect(r).toEqual({ action: 'swept' })
+    expect(sweeps).toEqual(['card_1'])
+  })
+
+  it('reports sweep_skipped when the sweep declines (e.g. disabled / nothing above target)', async () => {
+    const deps: ReconcileDeps = {
+      async syncBuffer() { return { ok: true } },
+      async refill() { return { ok: true } },
+      async sweep() { return { ok: false, reason: 'nothing' } },
+    }
+    const r = await reconcileBridgeEvent({ kind: 'refund', orgCardId: 'card_1' }, deps)
+    expect(r).toEqual({ action: 'sweep_skipped', reason: 'nothing' })
   })
 
   it('ignores unrelated events and events with no known card', async () => {
