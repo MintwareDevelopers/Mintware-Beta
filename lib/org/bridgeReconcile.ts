@@ -23,8 +23,10 @@ export interface NormalizedBridgeEvent {
 }
 
 export interface ReconcileDeps {
-  /** Reconcile the DB balance cache from on-chain `usdc.balanceOf(bufferOf[user])`. */
-  syncBuffer(orgCardId: string): Promise<void>
+  /** Reconcile the DB balance cache from on-chain `usdc.balanceOf(bufferOf[user])`. Returns ok=false
+   *  when the on-chain read failed and the cache was NOT refreshed — the caller must then NOT refill
+   *  (sizing off a stale cache can over-redeem). */
+  syncBuffer(orgCardId: string): Promise<{ ok: boolean }>
   /** Redeem a vault slice back into the buffer toward target. Returns the refill outcome. */
   refill(orgCardId: string, trigger: string): Promise<{ ok: boolean; reason?: string }>
   log?(msg: string, meta?: Record<string, unknown>): void
@@ -34,13 +36,16 @@ export type ReconcileResult =
   | { action: 'refilled' }
   | { action: 'refill_skipped'; reason?: string }
   | { action: 'synced' } // refund or non-spend movement: balance updated, no refill needed
+  | { action: 'sync_failed' } // on-chain resync failed → refill deliberately skipped (avoid stale-cache over-redeem)
   | { action: 'ignored' }
   | { action: 'no_card' }
+  | { action: 'error'; reason?: string } // a dep threw — swallowed so the webhook can still ack 200
 
 /**
  * React to one normalized Bridge event. Spend → resync + refill; refund → resync only; anything else
- * → ignore. Never throws for a well-formed event (the webhook must ack 200 so Bridge doesn't retry-
- * storm); a failed refill is reported, not raised.
+ * → ignore. NEVER throws (the webhook must ack 200 so Bridge doesn't retry-storm): a dep that rejects
+ * is caught and reported as `error`. Refill is gated on a SUCCESSFUL resync — if the on-chain read
+ * failed, we skip the refill rather than size it off a stale cache (which could over-redeem).
  */
 export async function reconcileBridgeEvent(
   ev: NormalizedBridgeEvent,
@@ -49,15 +54,24 @@ export async function reconcileBridgeEvent(
   if (ev.kind === 'ignore') return { action: 'ignored' }
   if (!ev.orgCardId) return { action: 'no_card' }
 
-  await deps.syncBuffer(ev.orgCardId)
+  try {
+    const synced = await deps.syncBuffer(ev.orgCardId)
+    if (!synced.ok) {
+      deps.log?.('bridge.reconcile.sync_failed', { orgCardId: ev.orgCardId, eventId: ev.eventId })
+      return { action: 'sync_failed' }
+    }
 
-  if (ev.kind === 'refund') {
-    deps.log?.('bridge.reconcile.refund', { orgCardId: ev.orgCardId, eventId: ev.eventId })
-    return { action: 'synced' }
+    if (ev.kind === 'refund') {
+      deps.log?.('bridge.reconcile.refund', { orgCardId: ev.orgCardId, eventId: ev.eventId })
+      return { action: 'synced' }
+    }
+
+    // kind === 'spend'
+    const res = await deps.refill(ev.orgCardId, 'bridge_spend')
+    if (res.ok) return { action: 'refilled' }
+    return { action: 'refill_skipped', reason: res.reason }
+  } catch (e) {
+    deps.log?.('bridge.reconcile.error', { orgCardId: ev.orgCardId, error: e instanceof Error ? e.message : String(e) })
+    return { action: 'error', reason: e instanceof Error ? e.message : String(e) }
   }
-
-  // kind === 'spend'
-  const res = await deps.refill(ev.orgCardId, 'bridge_spend')
-  if (res.ok) return { action: 'refilled' }
-  return { action: 'refill_skipped', reason: res.reason }
 }

@@ -69,7 +69,8 @@ describe('issueBridgeCard', () => {
 
 describe('verifyBridgeWebhook', () => {
   const SECRET = 'whsec_test'
-  const sign = (body: string, t = '1700000000') => {
+  const T = 1_700_000_000
+  const sign = (body: string, t: number = T) => {
     const v1 = createHmac('sha256', SECRET).update(`${t}.${body}`).digest('hex')
     return { 'stripe-signature': `t=${t},v1=${v1}` }
   }
@@ -79,18 +80,26 @@ describe('verifyBridgeWebhook', () => {
     expect(verifyBridgeWebhook('{}', {})).toEqual({ ok: false, reason: 'unconfigured' })
   })
 
-  it('accepts a correctly-signed event', () => {
+  it('accepts a correctly-signed, fresh event', () => {
     process.env.BRIDGE_WEBHOOK_SECRET = SECRET
     const body = JSON.stringify({ id: 'evt_1', type: 'issuing_transaction.created' })
-    const r = verifyBridgeWebhook(body, sign(body))
+    const r = verifyBridgeWebhook(body, sign(body), { nowSecs: T })
     expect(r.ok).toBe(true)
     if (r.ok) expect(r.event.type).toBe('issuing_transaction.created')
   })
 
-  it('rejects a tampered body / wrong signature', () => {
+  it('rejects a STALE (replayed) event outside the tolerance window', () => {
+    process.env.BRIDGE_WEBHOOK_SECRET = SECRET
+    const body = JSON.stringify({ id: 'evt_1', type: 'issuing_transaction.created' })
+    // same valid signature, but "now" is 400s past the signed timestamp (> 300s default)
+    const r = verifyBridgeWebhook(body, sign(body), { nowSecs: T + 400 })
+    expect(r).toEqual({ ok: false, reason: 'stale' })
+  })
+
+  it('rejects a tampered body / wrong signature (before the freshness check)', () => {
     process.env.BRIDGE_WEBHOOK_SECRET = SECRET
     const headers = sign(JSON.stringify({ type: 'a' }))
-    const r = verifyBridgeWebhook(JSON.stringify({ type: 'tampered' }), headers)
+    const r = verifyBridgeWebhook(JSON.stringify({ type: 'tampered' }), headers, { nowSecs: T })
     expect(r).toEqual({ ok: false, reason: 'bad_signature' })
   })
 
@@ -108,9 +117,14 @@ describe('normalizeBridgeEvent', () => {
     expect(r).toEqual({ kind: 'spend', providerCardId: 'card_x', amountAtomic: 12_340_000n, eventId: 'evt' })
   })
 
-  it('maps a refund to refund', () => {
+  it('maps a standard (positive) refund to refund', () => {
     const r = normalizeBridgeEvent(evt('issuing_transaction.created', { type: 'refund', amount: 500, card: 'card_x' }))
     expect(r.kind).toBe('refund')
+  })
+
+  it('maps a refund REVERSAL (type refund, negative amount) to spend — it is a debit', () => {
+    const r = normalizeBridgeEvent(evt('issuing_transaction.created', { type: 'refund', amount: -500, card: 'card_x' }))
+    expect(r.kind).toBe('spend')
   })
 
   it('falls back on sign when type is absent (negative = spend)', () => {

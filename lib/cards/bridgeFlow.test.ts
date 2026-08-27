@@ -102,7 +102,7 @@ describe('bridge card — spend/reconcile loop', () => {
     const refills: Array<{ card: string; trigger: string }> = []
     const syncs: string[] = []
     const deps: ReconcileDeps = {
-      async syncBuffer(card) { syncs.push(card) },
+      async syncBuffer(card) { syncs.push(card); return { ok: true } },
       async refill(card, trigger) { refills.push({ card, trigger }); return { ok: true } },
     }
     return { refills, syncs, deps }
@@ -132,10 +132,30 @@ describe('bridge card — spend/reconcile loop', () => {
 
   it('reports a skipped refill without throwing (webhook must still ack)', async () => {
     const deps: ReconcileDeps = {
-      async syncBuffer() {},
+      async syncBuffer() { return { ok: true } },
       async refill() { return { ok: false, reason: 'at_target' } },
     }
     const r = await reconcileBridgeEvent({ kind: 'spend', orgCardId: 'card_1' }, deps)
     expect(r).toEqual({ action: 'refill_skipped', reason: 'at_target' })
+  })
+
+  it('a FAILED resync skips the refill (never sizes off a stale cache)', async () => {
+    const refills: string[] = []
+    const deps: ReconcileDeps = {
+      async syncBuffer() { return { ok: false } }, // on-chain read failed, cache not refreshed
+      async refill(card) { refills.push(card); return { ok: true } },
+    }
+    const r = await reconcileBridgeEvent({ kind: 'spend', orgCardId: 'card_1' }, deps)
+    expect(r).toEqual({ action: 'sync_failed' })
+    expect(refills).toHaveLength(0) // the whole point — no refill off an unreconciled cache
+  })
+
+  it('a throwing dep is caught → error action (webhook can still ack 200)', async () => {
+    const deps: ReconcileDeps = {
+      async syncBuffer() { throw new Error('supabase down') },
+      async refill() { return { ok: true } },
+    }
+    const r = await reconcileBridgeEvent({ kind: 'spend', orgCardId: 'card_1' }, deps)
+    expect(r.action).toBe('error')
   })
 })

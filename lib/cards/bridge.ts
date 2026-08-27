@@ -57,6 +57,9 @@ export function bridgeConfigured(): boolean {
   return bridgeCardsEnabled() && !!process.env.BRIDGE_API_KEY && bridgeCardsSpender() !== null
 }
 
+/** Default multiple of the buffer target the standing allowance is scoped to, when a target is given. */
+export const BRIDGE_ALLOWANCE_BUFFER_HEADROOM = 3
+
 export interface ApproveAllowanceParams {
   /** The card's maximum daily spend (atomic USDC, 6dp). The on-chain allowance is sized off this. */
   dailyCapAtomic: bigint
@@ -66,6 +69,16 @@ export interface ApproveAllowanceParams {
   minAllowanceAtomic?: bigint
   /** Never grant more than this (atomic USDC). Default: BRIDGE_ALLOWANCE_HARD_MAX_ATOMIC. Always wins. */
   hardMaxAtomic?: bigint
+  /**
+   * The buffer target (atomic USDC). When provided (> 0), the allowance is additionally scoped to
+   * `bufferHeadroomMultiple × bufferTarget` — so on-chain exposure tracks the INTENDED buffer, not the
+   * funding wallet's whole balance. The funding wallet is the member's own Privy wallet and may hold
+   * personal funds beyond the buffer; without this, Bridge's pull-right would extend to all of them up
+   * to the hard max. Strongly recommended for a live grant.
+   */
+  bufferTargetAtomic?: bigint
+  /** Multiple of `bufferTargetAtomic` the allowance may cover. Default BRIDGE_ALLOWANCE_BUFFER_HEADROOM. */
+  bufferHeadroomMultiple?: number
 }
 
 const bigMin = (a: bigint, b: bigint): bigint => (a < b ? a : b)
@@ -73,9 +86,11 @@ const bigMax = (a: bigint, b: bigint): bigint => (a > b ? a : b)
 
 /**
  * Compute the capped standing allowance to grant Bridge on USDC. `coverageDays × dailyCap`, floored at
- * `minAllowance` (default one day of cap) and — always last — clamped down to `hardMax`. The hard max is
- * the ultimate ceiling: even a misconfigured floor larger than it cannot push the grant above it. This
- * is a bounded pull-right by construction, never an unlimited approval.
+ * `minAllowance` (default one day of cap) and — always last — clamped down to the ceiling. The ceiling
+ * is `min(hardMax, bufferHeadroom × bufferTarget)` when a buffer target is supplied, else `hardMax`.
+ * The ceiling always wins: even a misconfigured floor larger than it cannot push the grant above it.
+ * This is a bounded pull-right by construction, never an unlimited approval — and, when scoped to the
+ * buffer, bounded to roughly the intended buffer rather than the wallet's whole balance.
  */
 export function computeApproveAllowanceAtomic(p: ApproveAllowanceParams): bigint {
   if (p.dailyCapAtomic <= 0n) throw new Error('dailyCapAtomic must be > 0')
@@ -86,10 +101,17 @@ export function computeApproveAllowanceAtomic(p: ApproveAllowanceParams): bigint
   const hardMax = p.hardMaxAtomic ?? BRIDGE_ALLOWANCE_HARD_MAX_ATOMIC
   if (hardMax <= 0n) throw new Error('hardMaxAtomic must be > 0')
 
+  let ceiling = hardMax
+  if (p.bufferTargetAtomic != null && p.bufferTargetAtomic > 0n) {
+    const headroom = p.bufferHeadroomMultiple ?? BRIDGE_ALLOWANCE_BUFFER_HEADROOM
+    if (!Number.isInteger(headroom) || headroom < 1) throw new Error('bufferHeadroomMultiple must be an integer >= 1')
+    ceiling = bigMin(hardMax, p.bufferTargetAtomic * BigInt(headroom))
+  }
+
   const floor = p.minAllowanceAtomic ?? p.dailyCapAtomic
   const base = p.dailyCapAtomic * BigInt(coverageDays)
-  // floor first (never under-provision), then clamp to the hard max last (the ceiling always wins).
-  return bigMin(hardMax, bigMax(base, floor))
+  // floor first (never under-provision), then clamp to the ceiling last (it always wins).
+  return bigMin(ceiling, bigMax(base, floor))
 }
 
 /** A raw transaction for Privy to sign from the funding (buffer) wallet. No signing happens here. */

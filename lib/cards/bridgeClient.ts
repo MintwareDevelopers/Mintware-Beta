@@ -65,7 +65,7 @@ export async function issueBridgeCard(p: IssueCardParams): Promise<IssuedCard> {
 
 export type WebhookVerify =
   | { ok: true; event: BridgeWebhookEvent }
-  | { ok: false; reason: 'unconfigured' | 'bad_signature' | 'malformed' }
+  | { ok: false; reason: 'unconfigured' | 'bad_signature' | 'stale' | 'malformed' }
 
 export interface BridgeWebhookEvent {
   id?: string
@@ -94,12 +94,25 @@ const hexEq = (a: string, b: string): boolean => {
   }
 }
 
+/** Default replay-tolerance window (seconds) — matches Stripe's SDK default. */
+export const WEBHOOK_TOLERANCE_SECS = 300
+
 /**
  * Verify a Bridge/Stripe webhook signature over the RAW body and return the parsed event. Fail-closed:
  * 'unconfigured' when BRIDGE_WEBHOOK_SECRET is unset (→ 503, never a blind accept), 'bad_signature'
- * on mismatch. Signed payload is `${t}.${rawBody}`, HMAC-SHA256 with the secret.
+ * on mismatch, 'stale' when the signed timestamp is outside the tolerance window. Signed payload is
+ * `${t}.${rawBody}`, HMAC-SHA256 with the secret.
+ *
+ * The freshness check closes the replay vector: a captured valid webhook re-POSTed later still has a
+ * valid HMAC (the body is unchanged), so ONLY the timestamp bound stops it. `nowSecs` is injectable for
+ * deterministic tests. This is necessary but not sufficient — the route also dedupes on event id so a
+ * replay INSIDE the window is a no-op.
  */
-export function verifyBridgeWebhook(rawBody: string, headers: Record<string, string>): WebhookVerify {
+export function verifyBridgeWebhook(
+  rawBody: string,
+  headers: Record<string, string>,
+  opts: { toleranceSecs?: number; nowSecs?: number } = {},
+): WebhookVerify {
   const secret = process.env.BRIDGE_WEBHOOK_SECRET
   if (!secret) return { ok: false, reason: 'unconfigured' }
 
@@ -110,6 +123,12 @@ export function verifyBridgeWebhook(rawBody: string, headers: Record<string, str
 
   const expected = createHmac('sha256', secret).update(`${t}.${rawBody}`).digest('hex')
   if (!v1.some((sig) => hexEq(sig, expected))) return { ok: false, reason: 'bad_signature' }
+
+  // Freshness (replay window) — checked AFTER the HMAC passes so it isn't a timing oracle.
+  const toleranceSecs = opts.toleranceSecs ?? WEBHOOK_TOLERANCE_SECS
+  const nowSecs = opts.nowSecs ?? Math.floor(Date.now() / 1000)
+  const ts = Number(t)
+  if (!Number.isFinite(ts) || Math.abs(nowSecs - ts) > toleranceSecs) return { ok: false, reason: 'stale' }
 
   try {
     const event = JSON.parse(rawBody) as BridgeWebhookEvent
@@ -153,7 +172,14 @@ export function normalizeBridgeEvent(event: BridgeWebhookEvent): ParsedBridgeEve
     const txType = typeof obj.type === 'string' ? obj.type : ''
     const cents = typeof obj.amount === 'number' ? obj.amount : 0
     const amountAtomic = centsToAtomicUsdc(cents)
-    if (txType === 'refund') return { kind: 'refund', providerCardId, amountAtomic, eventId }
+    // A capture is always a debit → spend. A `refund` is a CREDIT (positive) → refund, EXCEPT a refund
+    // REVERSAL, which Stripe represents as type 'refund' with a NEGATIVE amount — that's a debit, so it
+    // must refill like a spend, not be skipped like a credit. Hence: classify refunds by sign too.
+    if (txType === 'refund') {
+      return cents < 0
+        ? { kind: 'spend', providerCardId, amountAtomic, eventId } // refund reversal = debit
+        : { kind: 'refund', providerCardId, amountAtomic, eventId }
+    }
     if (txType === 'capture') return { kind: 'spend', providerCardId, amountAtomic, eventId }
     // fall back on sign: Stripe issuing debits are negative amounts.
     if (cents < 0) return { kind: 'spend', providerCardId, amountAtomic, eventId }

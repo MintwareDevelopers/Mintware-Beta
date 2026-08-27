@@ -8,13 +8,14 @@
 // downstream — refillBuffer requires their signed permit — so this route can't drain a member who
 // hasn't opted in even though it's admin-triggered.
 //
-// Deploy-wiring points (both required before a live run; the flow itself is unit-tested with fakes in
-// lib/cards/bridgeFlow.test.ts): BRIDGE_USDC_ADDRESS (the USDC the card spends), and resolving the
-// funding wallet's PRIVY WALLET ID for the approve signer (Privy keys wallets by id, not address).
+// Deploy-wiring: BRIDGE_USDC_ADDRESS (the USDC the card spends). The funding wallet's Privy wallet id
+// is read from card_spend_buffers.privy_wallet_id (Privy keys wallets by id, not address).
 
 import type { NextRequest } from 'next/server'
+import { createPublicClient, http } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { ADMIN_SECRET } from '@/lib/constants'
+import { rpcForChain } from '@/lib/org/treasuryReader'
 import { bridgeConfigured } from '@/lib/cards/bridge'
 import { issueBridgeCard } from '@/lib/cards/bridgeClient'
 import { grantBridgeApproval } from '@/lib/org/bridgeApprove'
@@ -35,15 +36,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const cardId = String(body.cardId ?? '')
     if (!cardId) return ctx.json({ error: 'cardId required' }, 400)
 
-    // Card + funding wallet + chain.
     const { data: card } = await ctx.supabase
       .from('org_cards')
-      .select('id, org_id, member_wallet, permit_max_daily_usdc')
+      .select('id, org_id, member_wallet, permit_max_daily_usdc, permit_deadline')
       .eq('id', cardId).eq('org_id', orgId).maybeSingle()
     if (!card) return ctx.json({ error: 'card not found' }, 404)
 
     const { data: buf } = await ctx.supabase
-      .from('card_spend_buffers').select('buffer_address').eq('org_card_id', cardId).maybeSingle()
+      .from('card_spend_buffers')
+      .select('buffer_address, buffer_target_atomic, privy_wallet_id')
+      .eq('org_card_id', cardId).maybeSingle()
     const fundingWallet = buf?.buffer_address as string | undefined
     if (!fundingWallet) return ctx.json({ error: 'funding (buffer) wallet not registered on-chain yet' }, 409)
 
@@ -55,18 +57,33 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const usdcAddress = process.env.BRIDGE_USDC_ADDRESS
     if (!usdcAddress) return ctx.json({ error: 'BRIDGE_USDC_ADDRESS not configured' }, 503)
 
+    const rpcUrl = rpcForChain(chainId)
+    if (!rpcUrl) return ctx.json({ error: 'unsupported chain' }, 400)
+    const publicClient = createPublicClient({ transport: http(rpcUrl) })
     const chainSlug = process.env.BRIDGE_CHAIN_SLUG ?? 'base'
     const now = () => new Date().toISOString()
+    const nowSecs = Math.floor(Date.now() / 1000)
+
+    // hard-stop helper: a persisted-state write that fails must not be silently ignored (else the
+    // external effect and our record diverge, and a retry re-does the external call).
+    const mustPersist = async (patch: Record<string, unknown>) => {
+      const { error } = await ctx.supabase.from('org_cards').update(patch).eq('id', cardId)
+      if (error) throw new Error(`persist failed: ${error.message}`)
+    }
 
     const deps: OnboardDeps = {
       async loadState(): Promise<OnboardState> {
         const { data } = await ctx.supabase
           .from('org_cards')
-          .select('bridge_card_id, activated_at, bridge_approved_at, bridge_primed_at, bridge_live_at')
+          .select('bridge_card_id, activated_at, permit_deadline, bridge_approved_at, bridge_primed_at, bridge_live_at')
           .eq('id', cardId).single()
+        // permitSigned reflects LIVE validity, not merely "was once signed": an expired permit routes
+        // back to the member step instead of stalling later at prime.
+        const permitLive = !!data?.activated_at &&
+          (() => { try { return BigInt(data!.permit_deadline) > BigInt(nowSecs) } catch { return false } })()
         return {
           cardIssued: !!data?.bridge_card_id,
-          permitSigned: !!data?.activated_at, // member signed their standing DelegatedSpendPermit
+          permitSigned: permitLive,
           approvalGranted: !!data?.bridge_approved_at,
           bufferPrimed: !!data?.bridge_primed_at,
           liveProvisioned: !!data?.bridge_live_at,
@@ -80,35 +97,45 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           chain: chainSlug,
           idempotencyKey: `bridge-issue-${cardId}`,
         })
-        await ctx.supabase.from('org_cards').update({ bridge_card_id: issued.bridgeCardId }).eq('id', cardId)
+        await mustPersist({ bridge_card_id: issued.bridgeCardId })
       },
 
       async grantApproval() {
-        // Privy signs the capped approve from the funding wallet. NOTE: Privy keys wallets by id;
-        // resolving the member's Privy wallet id from `fundingWallet` is a deploy-wiring point.
-        const signer = privySignerFromEnv(fundingWallet, chainId)
+        const privyWalletId = buf?.privy_wallet_id as string | undefined
+        if (!privyWalletId) throw new Error('privy_wallet_id not set for funding wallet')
+        const signer = privySignerFromEnv(privyWalletId, chainId)
         if (!signer) throw new Error('privy_signer_unavailable')
         const dailyCapAtomic = (() => { try { return BigInt(card.permit_max_daily_usdc) } catch { return 0n } })()
         if (dailyCapAtomic <= 0n) throw new Error('no daily cap (permit not signed?)')
-        const res = await grantBridgeApproval({ usdcAddress, dailyCapAtomic, signer })
+        const bufferTargetAtomic = (() => { try { return BigInt(buf?.buffer_target_atomic ?? 0) } catch { return 0n } })()
+        const res = await grantBridgeApproval({
+          usdcAddress,
+          dailyCapAtomic,
+          bufferTargetAtomic,
+          signer,
+          // ok only once the approve MINED successfully — not merely broadcast (cold-decline guard).
+          confirm: async (hash) => {
+            const receipt = await publicClient.waitForTransactionReceipt({ hash })
+            return { success: receipt.status === 'success' }
+          },
+        })
         if (!res.ok) throw new Error(`approval failed: ${res.reason}`)
-        await ctx.supabase
-          .from('org_cards')
-          .update({ bridge_approved_at: now(), bridge_approval_tx: res.txHash })
-          .eq('id', cardId)
+        await mustPersist({ bridge_approved_at: now(), bridge_approval_tx: res.txHash })
       },
 
       async primeBuffer() {
-        // manual (onboarding) trigger; refillCardBuffer stays fail-closed behind CARD_BUFFER_REFILL_ENABLED
-        // and requires the member's permit (which precedes this step).
         const res = await refillCardBuffer({ supabase: ctx.supabase, orgId, orgCardId: cardId, trigger: 'manual', log: ctx.log })
-        if (res.ok) await ctx.supabase.from('org_cards').update({ bridge_primed_at: now() }).eq('id', cardId)
+        // "primed" means the buffer holds >= its minimum. A confirmed refill OR "already at target"
+        // both satisfy that — treat at_target as primed (else a pre-funded card stalls forever).
+        if (res.ok || res.reason === 'at_target') await mustPersist({ bridge_primed_at: now() })
         else ctx.log.warn('cards.bridge', 'prime refill did not confirm', { reason: res.reason })
-        // if it didn't confirm, loadState still shows bufferPrimed=false → runOnboarding stops cleanly
       },
 
       async goLive() {
-        await ctx.supabase.from('org_cards').update({ bridge_live_at: now(), state: 'live' }).eq('id', cardId)
+        // idempotent: only claim go-live if not already live (guards concurrent onboarding runs from
+        // double-provisioning once push-provisioning is wired in).
+        await ctx.supabase.from('org_cards').update({ bridge_live_at: now(), state: 'live' })
+          .eq('id', cardId).is('bridge_live_at', null)
       },
 
       log: (m, meta) => ctx.log.info('cards.bridge', m, meta),

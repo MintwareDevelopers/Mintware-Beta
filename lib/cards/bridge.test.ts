@@ -99,10 +99,28 @@ describe('bridge — capped allowance sizing', () => {
     ).toBe(BRIDGE_ALLOWANCE_HARD_MAX_ATOMIC)
   })
 
+  it('scopes the allowance to the buffer when a target is given (not the wallet balance)', () => {
+    // 7 days of $500/day = $3500; but a $200 buffer × 3 headroom = $600 ceiling wins.
+    const bufferTargetAtomic = 200_000_000n
+    expect(computeApproveAllowanceAtomic({ dailyCapAtomic: DAY, bufferTargetAtomic })).toBe(600_000_000n)
+  })
+
+  it('buffer scoping never exceeds the hard max either', () => {
+    // absurd buffer AND absurd daily cap so the base is huge → the hard max is the binding ceiling.
+    const bufferTargetAtomic = 1_000_000_000_000n
+    const hugeCap = 1_000_000_000_000n
+    expect(computeApproveAllowanceAtomic({ dailyCapAtomic: hugeCap, bufferTargetAtomic })).toBe(BRIDGE_ALLOWANCE_HARD_MAX_ATOMIC)
+  })
+
+  it('a non-positive buffer target is ignored (falls back to the cap/hard-max ceiling)', () => {
+    expect(computeApproveAllowanceAtomic({ dailyCapAtomic: DAY, bufferTargetAtomic: 0n })).toBe(DAY * 7n)
+  })
+
   it('rejects nonsensical inputs', () => {
     expect(() => computeApproveAllowanceAtomic({ dailyCapAtomic: 0n })).toThrow()
     expect(() => computeApproveAllowanceAtomic({ dailyCapAtomic: DAY, coverageDays: 0 })).toThrow()
     expect(() => computeApproveAllowanceAtomic({ dailyCapAtomic: DAY, hardMaxAtomic: 0n })).toThrow()
+    expect(() => computeApproveAllowanceAtomic({ dailyCapAtomic: DAY, bufferTargetAtomic: 100n, bufferHeadroomMultiple: 0 })).toThrow()
   })
 })
 

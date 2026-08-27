@@ -68,4 +68,22 @@ describe('grantBridgeApproval', () => {
     expect(r.reason).toBe('signer_error')
     expect(r.detail).toContain('nope')
   })
+
+  it('with confirm, only reports ok when the approve tx actually MINED successfully', async () => {
+    process.env.CARD_BRIDGE_ENABLED = 'true'
+    const signer = recordingSigner('0xmined')
+    const ok = await grantBridgeApproval({
+      usdcAddress: USDC, dailyCapAtomic: DAY, signer, spender: SPENDER,
+      confirm: async () => ({ success: true }),
+    })
+    expect(ok.ok).toBe(true)
+
+    const reverted = await grantBridgeApproval({
+      usdcAddress: USDC, dailyCapAtomic: DAY, signer, spender: SPENDER,
+      confirm: async () => ({ success: false }), // broadcast then reverted/dropped
+    })
+    expect(reverted.ok).toBe(false)
+    if (reverted.ok) return
+    expect(reverted.reason).toBe('not_confirmed')
+  })
 })
