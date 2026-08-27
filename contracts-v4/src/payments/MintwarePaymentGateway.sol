@@ -10,6 +10,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {IYieldVault} from "./IYieldVault.sol";
+import {MWTimelockedRiskParams} from "../lib/MWTimelockedRiskParams.sol";
 
 /// @title  MintwarePaymentGateway
 /// @notice YPN settlement gateway. A RELAYER submits `settleSpend` for a card charge the edge engine
@@ -25,7 +26,7 @@ import {IYieldVault} from "./IYieldVault.sol";
 ///         CHECKS the nonce (rejecting revoked permits) and never consumes it. Replay of a specific
 ///         charge is prevented by `holds[holdId].settled`; over-spend by the daily cap. `revokeNonce`
 ///         is the sole writer of `usedNonces`.
-contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausable {
+contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausable, MWTimelockedRiskParams {
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
 
@@ -42,7 +43,8 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
 
     uint256 public constant HIGH_VALUE_THRESHOLD      = 250_000_000;    // $250.00 (6dp)
     uint256 public constant DEFAULT_GLOBAL_DAILY_CAP  = 1_000_000_000;  // $1,000.00
-    uint256 public constant DEFAULT_GLOBAL_REFILL_CAP = 1_000_000_000;  // $1,000.00/day buffer-refill default
+    uint256 public constant DEFAULT_GLOBAL_REFILL_CAP = 1_000_000_000;      // $1,000.00/day buffer-refill default
+    uint256 public constant MAX_REFILL_CAP            = 1_000_000_000_000;  // $1,000,000 — fat-finger bound on a governed cap
     uint256 public constant MAX_SHORT_LIVED_WINDOW    = 5 minutes;
 
     IYieldVault public immutable vault;
@@ -58,6 +60,7 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     mapping(address => mapping(uint256 => uint256)) public dailyRefillUSDC; // user => epochDay => refilled (separate ledger)
     mapping(address => uint256) public userDailyRefillCap;                  // 0 => DEFAULT_GLOBAL_REFILL_CAP
     mapping(bytes32 => bool) public refillDone;                             // refillId => done (idempotency)
+    mapping(bytes32 => address) public refillCapParamUser;                  // timelock param tag => the user it caps
 
     struct Hold {
         address user;
@@ -107,6 +110,7 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
     error BufferNotSet();
     error RefillAlreadyDone();
     error ExceedsDailyRefillLimit();
+    error RefillCapTooHigh();
 
     constructor(address vault_, address usdc_, address treasury_, address admin_)
         EIP712("Mintware Payment Gateway", "2.0")
@@ -136,9 +140,55 @@ contract MintwarePaymentGateway is AccessControl, EIP712, ReentrancyGuard, Pausa
         emit UserDailyCapUpdated(user, newCap);
     }
 
+    /// @notice Propose (or instantly apply) a per-user daily buffer-refill cap, through the 48h risk-param
+    ///         timelock. TIGHTENING — a lower *effective* cap — applies instantly (safety never waits);
+    ///         LOOSENING — a higher effective cap — is delayed 48h and cancellable, so a compromised owner
+    ///         can't instantly widen how fast a user's vault position drains into their buffer. `newCap == 0`
+    ///         resets to the global default (`DEFAULT_GLOBAL_REFILL_CAP`); direction compares EFFECTIVE caps
+    ///         so that reset is judged against the default, not against a raw zero.
     function setUserDailyRefillCap(address user, uint256 newCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        userDailyRefillCap[user] = newCap;
-        emit UserDailyRefillCapUpdated(user, newCap);
+        bytes32 param = _refillCapParam(user);
+        refillCapParamUser[param] = user;
+        _changeRiskParam(param, newCap, 0);
+    }
+
+    /// @notice Confirm a timelocked (loosening) refill-cap change once its 48h has elapsed.
+    function confirmUserDailyRefillCap(address user) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _confirmRiskParam(_refillCapParam(user));
+    }
+
+    /// @notice Cancel a pending refill-cap change before it can be confirmed.
+    function cancelUserDailyRefillCap(address user) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _cancelRiskParam(_refillCapParam(user));
+    }
+
+    // ── MWTimelockedRiskParams hooks (governs userDailyRefillCap only) ──
+    function _refillCapParam(address user) internal pure returns (bytes32) {
+        return keccak256(abi.encode("MW_REFILL_CAP", user));
+    }
+
+    function _effectiveRefillCap(address user) internal view returns (uint256) {
+        return userDailyRefillCap[user] > 0 ? userDailyRefillCap[user] : DEFAULT_GLOBAL_REFILL_CAP;
+    }
+
+    function _validateRiskParam(bytes32, uint256 v, uint256 v2) internal pure override {
+        if (v > MAX_REFILL_CAP || v2 != 0) revert RefillCapTooHigh();
+    }
+
+    function _writeRiskParam(bytes32 param, uint256 v, uint256) internal override {
+        address user = refillCapParamUser[param];
+        userDailyRefillCap[user] = v;
+        emit UserDailyRefillCapUpdated(user, v);
+    }
+
+    function _readRiskParam(bytes32 param) internal view override returns (uint256) {
+        return userDailyRefillCap[refillCapParamUser[param]];
+    }
+
+    function _riskParamInstant(bytes32 param, uint256 v, uint256) internal view override returns (bool) {
+        uint256 curEff = _effectiveRefillCap(refillCapParamUser[param]);
+        uint256 newEff = v > 0 ? v : DEFAULT_GLOBAL_REFILL_CAP;
+        return newEff <= curEff; // tightening (smaller/equal effective cap) is instant; loosening waits 48h
     }
 
     function pause() external onlyRole(PAUSER_ROLE) { _pause(); }

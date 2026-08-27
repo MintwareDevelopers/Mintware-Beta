@@ -10,6 +10,7 @@ import {Currency}     from "@uniswap/v4-core/src/types/Currency.sol";
 
 import {MintwarePaymentGateway} from "../../src/payments/MintwarePaymentGateway.sol";
 import {MintwareTreasuryVault}  from "../../src/payments/MintwareTreasuryVault.sol";
+import {MWTimelockedRiskParams} from "../../src/lib/MWTimelockedRiskParams.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
@@ -208,5 +209,63 @@ contract MintwareGatewayBufferRefillTest is Test {
         _refill(keccak256("r-sep"), 300 * ONE, 1_000 * ONE, 11);
         assertEq(gateway.dailyRefillUSDC(user, block.timestamp / 1 days), 300 * ONE, "refill ledger wrong");
         assertEq(gateway.dailySpendUSDC(user, block.timestamp / 1 days), 0, "spend ledger must be untouched by a refill");
+    }
+
+    // ── timelock-governed refill cap (tighten-instant / loosen-delayed) ──────────
+
+    function _capParam(address u) internal pure returns (bytes32) { return keccak256(abi.encode("MW_REFILL_CAP", u)); }
+
+    function test_cap_tightening_appliesInstantly() public {
+        // Default effective cap is $1,000; tightening to $40 is a safety decrease → instant, no queue.
+        gateway.setUserDailyRefillCap(user, 40 * ONE);
+        assertEq(gateway.userDailyRefillCap(user), 40 * ONE, "tighten should apply now");
+        ( , , uint256 eta) = gateway.pendingRiskParam(_capParam(user));
+        assertEq(eta, 0, "no pending change for an instant tighten");
+    }
+
+    function test_cap_loosening_isTimelocked_thenConfirms() public {
+        gateway.setUserDailyRefillCap(user, 40 * ONE);  // tighten first (instant)
+        gateway.setUserDailyRefillCap(user, 500 * ONE); // loosen $40 -> $500: delayed
+        assertEq(gateway.userDailyRefillCap(user), 40 * ONE, "loosen must NOT apply yet");
+        ( , , uint256 eta) = gateway.pendingRiskParam(_capParam(user));
+        assertGt(eta, block.timestamp, "loosen must be queued 48h out");
+
+        vm.expectRevert(MWTimelockedRiskParams.RiskParamDelayNotElapsed.selector);
+        gateway.confirmUserDailyRefillCap(user);
+
+        vm.warp(block.timestamp + gateway.RISK_PARAM_DELAY());
+        gateway.confirmUserDailyRefillCap(user);
+        assertEq(gateway.userDailyRefillCap(user), 500 * ONE, "loosen should apply after the delay");
+    }
+
+    function test_cap_pendingLoosen_isCancellable() public {
+        gateway.setUserDailyRefillCap(user, 40 * ONE);
+        gateway.setUserDailyRefillCap(user, 500 * ONE); // queue a loosen
+        gateway.cancelUserDailyRefillCap(user);
+        assertEq(gateway.userDailyRefillCap(user), 40 * ONE, "cancel leaves the tight cap in place");
+        vm.expectRevert(MWTimelockedRiskParams.NoRiskParamPending.selector);
+        gateway.confirmUserDailyRefillCap(user);
+    }
+
+    function test_cap_pendingLoosen_oldCapStillEnforced() public {
+        gateway.setUserDailyRefillCap(user, 40 * ONE);  // instant tighten
+        gateway.setUserDailyRefillCap(user, 500 * ONE); // queued loosen (not yet live)
+        // The OLD $40 cap must still gate a refill — the loosening hasn't taken effect.
+        MintwarePaymentGateway.DelegatedSpendPermit memory p = _permit(1_000 * ONE, 20, block.timestamp + 1 days);
+        bytes memory sig = _signPermit(userPk, p);
+        vm.expectRevert(MintwarePaymentGateway.ExceedsDailyRefillLimit.selector);
+        gateway.refillBuffer(keccak256("r-pending-loosen"), user, 100 * ONE, p, sig); // $100 > live $40 cap
+    }
+
+    function test_cap_aboveMax_reverts() public {
+        uint256 tooHigh = gateway.MAX_REFILL_CAP() + 1; // pre-compute: expectRevert binds to the NEXT call
+        vm.expectRevert(MintwarePaymentGateway.RefillCapTooHigh.selector);
+        gateway.setUserDailyRefillCap(user, tooHigh);
+    }
+
+    function test_cap_setter_isAdminOnly() public {
+        vm.prank(makeAddr("stranger"));
+        vm.expectRevert();
+        gateway.setUserDailyRefillCap(user, 40 * ONE);
     }
 }
