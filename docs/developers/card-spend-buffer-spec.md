@@ -278,3 +278,20 @@ confirmed, 4 plausible); 3 refuted. All 9 distinct root issues fixed + tested, 0
 
 New migrations: `20260826000002` (reservation + auth_mode), `20260826000003` (refill lock). Still
 testnet/pre-audit — an external audit remains the gate for real value.
+
+### Round 2 — re-audit of the fixes (2026-08-26)
+
+A second adversarial round attacked the fixes themselves (29 agents). 17 survived (15 confirmed, 2
+plausible); 7 refuted. The C1 reservation ledger had traded over-approval for lifecycle gaps — all fixed:
+
+| ID | Sev | Fix |
+|---|---|---|
+| R1 | High | Reservations released on VOIDED/EXPIRED/REVERSED capture events + a cron reconciliation sweep for missed webhooks. |
+| R2 | High | Non-duplicate ASA log-insert failure → fail closed (release + decline), no orphaned hold. |
+| R6 | Med | Atomic `settled=false→true` claim — concurrent captures can't double-release. |
+| R3 | Med | `end_card_refill(refund)` rolls the rate window back on a failed/reverted refill. |
+| R4 | Med | In-flight TTL 120s→300s (shrinks the crash-race double-refill window). |
+| R5 | Med | `syncBufferBalance` clears the cached balance to 0 when `bufferOf` de-registers. |
+| R7/R8/R9 | Low | Refill sizes off available (balance−reserved); off-chain refiller honors `userRefillPaused`; duplicate detection via SQL code 23505. |
+
+Migration `20260826000004`. Two adversarial rounds; external audit still gates real value.
