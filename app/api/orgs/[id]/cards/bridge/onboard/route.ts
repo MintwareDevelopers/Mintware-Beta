@@ -141,14 +141,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       log: (m, meta) => ctx.log.info('cards.bridge', m, meta),
     }
 
-    const result = await runOnboarding(deps)
-    return ctx.json({
-      ok: true,
-      complete: result.complete,
-      ran: result.ran,
-      awaitingMember: result.awaitingMember ?? null,
-      stopped: result.stopped ?? null,
-      state: result.finalState,
-    })
+    // Per-card single-flight: refuse concurrent onboarding runs for the same card (audit hardening).
+    const { data: claimed } = await ctx.supabase.rpc('begin_card_onboard', { p_card_id: cardId, p_ttl_secs: 300 })
+    if (claimed !== true) return ctx.json({ error: 'onboarding already in progress for this card' }, 409)
+
+    try {
+      const result = await runOnboarding(deps)
+      return ctx.json({
+        ok: true,
+        complete: result.complete,
+        ran: result.ran,
+        awaitingMember: result.awaitingMember ?? null,
+        stopped: result.stopped ?? null,
+        state: result.finalState,
+      })
+    } finally {
+      await ctx.supabase.rpc('end_card_onboard', { p_card_id: cardId })
+    }
   }, { auth: 'bearer-token', bearerSecret: ADMIN_SECRET })(req)
 }
