@@ -60,7 +60,14 @@ export async function syncBufferBalance(opts: {
     const gateway = (await publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'gateway' })) as `0x${string}`
     // The AUTHORITATIVE buffer wallet — the same bufferOf[user] the on-chain refillBuffer pays into.
     bufferAddr = (await publicClient.readContract({ address: gateway, abi: GATEWAY_ABI, functionName: 'bufferOf', args: [buf.member_wallet as `0x${string}`] })) as `0x${string}`
-    if (!bufferAddr || bufferAddr.toLowerCase() === zeroAddress) return { ok: false, reason: 'no_buffer' }
+    if (!bufferAddr || bufferAddr.toLowerCase() === zeroAddress) {
+      // Member never registered — or has UN-registered — an on-chain buffer. Clear the stale cache so a
+      // previously-synced balance can't keep authorizing against a de-registered buffer (re-audit R5).
+      await supabase.from('card_spend_buffers')
+        .update({ buffer_balance_atomic: '0', buffer_address: null, balance_synced_at: new Date().toISOString() })
+        .eq('id', buf.id)
+      return { ok: false, reason: 'no_buffer' }
+    }
     const usdc = (await publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'usdc' })) as `0x${string}`
     balance = (await publicClient.readContract({ address: usdc, abi: erc20Abi, functionName: 'balanceOf', args: [bufferAddr] })) as bigint
   } catch (e) {

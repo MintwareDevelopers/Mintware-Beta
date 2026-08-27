@@ -20,7 +20,7 @@ import { bufferTargetAtomic, type BufferSizingParams } from '@/lib/cards/bufferS
 import { refillPlan } from '@/lib/cards/bufferPolicy'
 
 type Reason =
-  | 'disabled' | 'not_found' | 'not_enabled' | 'no_buffer' | 'at_target' | 'rate_capped'
+  | 'disabled' | 'not_found' | 'not_enabled' | 'no_buffer' | 'at_target' | 'rate_capped' | 'paused'
   | 'not_activated' | 'permit_expired' | 'permit_malformed' | 'config' | 'chain' | 'read' | 'signer' | 'tx'
 
 export type RefillOutcome =
@@ -85,8 +85,11 @@ export async function refillCardBuffer(opts: {
   }
   const target = bufferTargetAtomic(sizing)
 
+  // Size off AVAILABLE (balance − reserved), not raw balance (re-audit R7) — else a buffer with holds
+  // looks "at target" while its spendable headroom is actually below target.
+  const availableAtomic = big(buf.buffer_balance_atomic) - big(buf.reserved_atomic)
   const plan = refillPlan({
-    bufferBalanceAtomic: big(buf.buffer_balance_atomic),
+    bufferBalanceAtomic: availableAtomic > 0n ? availableAtomic : 0n,
     targetAtomic: target,
     minRefillAtomic: big(buf.min_refill_atomic),
   })
@@ -115,7 +118,9 @@ export async function refillCardBuffer(opts: {
     return { ok: false, status: 429, error: `refill not permitted (${begin.status})`, reason: 'rate_capped' }
   }
 
-  // From here the in-flight slot is HELD — release it on every exit path via finally.
+  // From here the in-flight slot is HELD — release it on every exit path via finally. `confirmed` gates
+  // whether the window room is kept (a real refill) or refunded (a refusal/failure) — re-audit R3.
+  let confirmed = false
   try {
     const refillAmount = allowed
 
@@ -142,6 +147,15 @@ export async function refillCardBuffer(opts: {
     } catch {
       return { ok: false, status: 502, error: 'treasury_read_failed', reason: 'read' }
     }
+
+    // Respect the user's ON-CHAIN refill pause off-chain too (re-audit R8) — skip a tx that would just
+    // revert RefillPausedError and waste gas. The on-chain check remains the authority.
+    try {
+      const paused = (await publicClient.readContract({
+        address: gateway, abi: GATEWAY_ABI, functionName: 'userRefillPaused', args: [buf.member_wallet as `0x${string}`],
+      })) as boolean
+      if (paused) return { ok: false, status: 409, error: 'user has paused buffer refills', reason: 'paused' }
+    } catch { /* read failed — fall through; refillBuffer still enforces the pause on-chain */ }
 
     let account
     try {
@@ -199,9 +213,11 @@ export async function refillCardBuffer(opts: {
     }).eq('id', buf.id)
 
     const explorerUrl = (org.treasury_chain_id === 5042002 ? 'https://testnet.arcscan.app/tx/' : 'https://sepolia.basescan.org/tx/') + txHash
+    confirmed = true // the refill moved funds → the window room it claimed is kept
     return { ok: true, txHash, explorerUrl, refilledAtomic: refillAmount, breakerTripped: false }
   } finally {
-    // Always release the in-flight slot (success, refusal, or throw).
-    await supabase.rpc('end_card_refill', { p_org_card_id: orgCardId })
+    // Always release the in-flight slot; refund the claimed window room UNLESS the refill confirmed
+    // (re-audit R3 — a reverted/failed refill must not permanently consume the rate-window budget).
+    await supabase.rpc('end_card_refill', { p_org_card_id: orgCardId, p_refund: confirmed ? '0' : allowed.toString() })
   }
 }

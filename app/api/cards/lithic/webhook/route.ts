@@ -94,10 +94,12 @@ export const POST = createHandler(async (req: NextRequest, ctx) => {
       auth_mode: decision.approved ? (decision.mode ?? null) : null, // capture honors this (audit fix H2)
       latency_ms: latencyMs,
     })
-    // A duplicate webhook delivery (same provider_event_ref) hits the unique index and no-ops the log.
-    if (logErr?.message?.includes('duplicate')) {
-      // …but decideCardSwipe already ran again and, in buffer mode, reserved a SECOND hold for this same
-      // swipe (audit fix C1). The original delivery already holds it — undo this call's double-reserve.
+    // Duplicate delivery (unique index) — prefer the SQL error CODE (23505) over a brittle message
+    // substring (re-audit R9).
+    const isDup = (logErr as { code?: string } | null)?.code === '23505' || !!logErr?.message?.includes('duplicate')
+    if (logErr && isDup) {
+      // decideCardSwipe ran again and, in buffer mode, reserved a SECOND hold for this same swipe (C1).
+      // The original delivery already holds it — undo this call's double-reserve.
       if (decision.approved && decision.mode === 'buffer' && decision.orgCardId) {
         await ctx.supabase.rpc('release_card_buffer', {
           p_org_card_id: decision.orgCardId,
@@ -105,8 +107,17 @@ export const POST = createHandler(async (req: NextRequest, ctx) => {
         })
       }
     } else if (logErr) {
-      // Any OTHER insert failure is logged but must never block the ASA response (the decision happened).
       ctx.log.warn('cards.lithic', 'spend feed log failed', { error: logErr.message })
+      // A NON-duplicate insert failure on a BUFFER approval orphans the reservation — there'd be no swipe
+      // row for capture to ever release against (re-audit R2). FAIL CLOSED: release the hold and DECLINE,
+      // rather than approve an untracked spend that leaks reserved_atomic forever.
+      if (decision.approved && decision.mode === 'buffer' && decision.orgCardId) {
+        await ctx.supabase.rpc('release_card_buffer', {
+          p_org_card_id: decision.orgCardId,
+          p_amount: centsToAtomicUsdc(amountCents).toString(),
+        })
+        return ctx.json({ result: asaResultFor('insufficient_buffer') }, 200)
+      }
     }
   }
 

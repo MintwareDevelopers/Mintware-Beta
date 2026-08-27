@@ -4,6 +4,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 let SCAN_ROWS: unknown[] = []
 vi.mock('@/lib/web2/supabase', () => ({
   getServiceClient: () => ({
+    rpc: async () => ({ data: '0', error: null }), // reconcile_card_reservations
     from: () => {
       const chain: Record<string, unknown> = {
         select: () => chain,

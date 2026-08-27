@@ -56,6 +56,14 @@ export const POST = createHandler(async (_req, ctx) => {
     const orgCardId = (row as { org_card_id: string }).org_card_id
     if (!orgId) { failed++; continue }
 
+    // Belt-and-suspenders (re-audit R1): release holds for buffer auths that never settled past the
+    // ~7-day card auth-hold window — a missed reversal/void webhook — so a stuck reservation can't
+    // slowly starve a funded buffer.
+    await ctx.supabase.rpc('reconcile_card_reservations', {
+      p_org_card_id: orgCardId,
+      p_stale_before: new Date(Date.now() - 8 * 86_400_000).toISOString(),
+    })
+
     // Adaptively re-size the target from the member's real spend (§5.3), then reconcile the cached
     // balance before deciding the refill. Both are best-effort — a failure falls back to stored values.
     await tuneBufferSizing({ supabase: ctx.supabase, orgCardId, log: ctx.log })
