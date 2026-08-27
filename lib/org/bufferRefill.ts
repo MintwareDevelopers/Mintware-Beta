@@ -17,7 +17,7 @@ import { viemChainFor } from '@/lib/web3/chains'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { VAULT_ABI, GATEWAY_ABI } from '@/lib/web3/artifacts/treasuryV2'
 import { bufferTargetAtomic, type BufferSizingParams } from '@/lib/cards/bufferSizing'
-import { refillPlan, checkRefillRate, type RefillRateState } from '@/lib/cards/bufferPolicy'
+import { refillPlan } from '@/lib/cards/bufferPolicy'
 
 type Reason =
   | 'disabled' | 'not_found' | 'not_enabled' | 'no_buffer' | 'at_target' | 'rate_capped'
@@ -94,113 +94,114 @@ export async function refillCardBuffer(opts: {
   await supabase.from('card_spend_buffers').update({ buffer_target_atomic: target.toString(), updated_at: new Date().toISOString() }).eq('id', buf.id)
   if (!plan.shouldRefill) return { ok: false, status: 200, error: 'buffer already at or above target', reason: 'at_target' }
 
-  // ── refill-rate circuit breaker ──
-  const rateState: RefillRateState = {
-    windowStartSecs: Number(buf.refill_window_start_secs),
-    refilledInWindowAtomic: big(buf.refilled_in_window_atomic),
+  // ── atomic refill-rate breaker + in-flight claim (audit fix M1) ──
+  // begin_card_refill rolls the window, enforces the manual breaker + rate cap, and claims a single
+  // in-flight slot per card (120s TTL), all under one row lock — so the reactive path and the cron
+  // can't both fire for one deficit or race the window accounting. It returns the ALLOWED amount.
+  const { data: beginRaw } = await supabase.rpc('begin_card_refill', {
+    p_org_card_id: orgCardId,
+    p_amount: plan.refillAmountAtomic.toString(),
+    p_now_secs: nowSecs(),
+  })
+  const begin = (beginRaw ?? { status: 'no_buffer', allowed: '0' }) as { status: string; allowed: string }
+  const allowed = big(begin.allowed)
+  if (begin.status !== 'ok' || allowed <= 0n) {
+    await supabase.from('card_buffer_refills').insert({
+      org_card_id: orgCardId, member_wallet: buf.member_wallet,
+      refill_id: 'skip:' + keccak256(toBytes(`${buf.id}:${nowSecs()}:${begin.status}`)),
+      amount_atomic: plan.refillAmountAtomic.toString(), status: 'rate_capped',
+      breaker_tripped: begin.status === 'breaker' || begin.status === 'rate_capped', trigger, reason: begin.status,
+    })
+    return { ok: false, status: 429, error: `refill not permitted (${begin.status})`, reason: 'rate_capped' }
   }
-  const rate = checkRefillRate(
-    rateState,
-    plan.refillAmountAtomic,
-    { capAtomic: big(buf.refill_rate_cap_atomic), windowSecs: Number(buf.refill_window_secs), breakerOpen: !!buf.breaker_open },
-    nowSecs(),
-  )
-  if (!rate.allowed || rate.allowedAmountAtomic <= 0n) {
-    // persist the rolled window even on a hard block, and log the trip
+
+  // From here the in-flight slot is HELD — release it on every exit path via finally.
+  try {
+    const refillAmount = allowed
+
+    // ── card permit (the member's standing consent to burn their shares) ──
+    const { data: card } = await supabase
+      .from('org_cards')
+      .select('permit_max_daily_usdc, permit_nonce, permit_deadline, permit_signature')
+      .eq('id', orgCardId).single()
+    if (!card?.permit_signature) return { ok: false, status: 409, error: 'card not activated — member must sign a standing permit first', reason: 'not_activated' }
+    const permitDeadline = big(card.permit_deadline)
+    if (permitDeadline <= BigInt(nowSecs())) return { ok: false, status: 409, error: 'the member’s standing permit has expired', reason: 'permit_expired' }
+    if (!isHex(card.permit_signature)) return { ok: false, status: 500, error: 'stored permit signature is malformed', reason: 'permit_malformed' }
+
+    const rpcUrl = rpcForChain(org.treasury_chain_id)
+    const chain = viemChainFor(org.treasury_chain_id)
+    if (!rpcUrl || !chain) return { ok: false, status: 400, error: 'unsupported chain', reason: 'chain' }
+
+    const publicClient = createPublicClient({ chain, transport: http(rpcUrl) })
+    let gateway: `0x${string}`
+    try {
+      gateway = (await publicClient.readContract({
+        address: org.treasury_vault_address as `0x${string}`, abi: VAULT_ABI, functionName: 'gateway',
+      })) as `0x${string}`
+    } catch {
+      return { ok: false, status: 502, error: 'treasury_read_failed', reason: 'read' }
+    }
+
+    let account
+    try {
+      account = await getOracleSigner('root')
+    } catch (e) {
+      log?.error('cards.refill', 'oracle signer unavailable', { error: String(e) })
+      return { ok: false, status: 503, error: 'refill_signer_unavailable', reason: 'signer' }
+    }
+    const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) })
+
+    // A UNIQUE refillId minted up front (audit fix L3) — no 'pending' placeholder that could collide on
+    // the (org_card_id, refill_id) unique index and wedge future refills after a mid-insert crash.
+    const refillId = keccak256(toBytes(`refill:${orgCardId}:${crypto.randomUUID()}`))
+    const { error: insErr } = await supabase.from('card_buffer_refills').insert({
+      org_card_id: orgCardId, member_wallet: buf.member_wallet, refill_id: refillId,
+      amount_atomic: refillAmount.toString(), status: 'pending', trigger,
+    })
+    if (insErr) return { ok: false, status: 500, error: 'could not open refill ledger row', reason: 'config', detail: String(insErr.message) }
+
+    const permit = {
+      user: buf.member_wallet as `0x${string}`,
+      maxDailySpendUSDC: big(card.permit_max_daily_usdc),
+      nonce: big(card.permit_nonce),
+      deadline: permitDeadline,
+    }
+
+    let txHash: `0x${string}`
+    try {
+      txHash = await walletClient.writeContract({
+        address: gateway, abi: GATEWAY_ABI, functionName: 'refillBuffer',
+        args: [refillId, permit.user, refillAmount, permit, card.permit_signature as `0x${string}`],
+        account, chain, gas: 700_000n,
+      })
+      // A mined tx is not a successful tx — refillBuffer can revert (status 0) and still be included.
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
+      if (receipt.status !== 'success') {
+        await supabase.from('card_buffer_refills').update({ status: 'failed', tx_hash: txHash, reason: 'reverted on-chain' }).eq('refill_id', refillId)
+        return { ok: false, status: 502, error: 'refill_reverted', reason: 'tx', detail: txHash }
+      }
+    } catch (e) {
+      await supabase.from('card_buffer_refills').update({ status: 'failed', reason: String(e) }).eq('refill_id', refillId)
+      log?.error('cards.refill', 'refillBuffer failed', { error: String(e) })
+      return { ok: false, status: 502, error: 'refill_failed', reason: 'tx', detail: String(e) }
+    }
+
+    // success: close the ledger + optimistically credit the cache (the monitor reconciles from chain).
+    // The rate window was already advanced atomically by begin_card_refill.
+    await supabase.from('card_buffer_refills')
+      .update({ status: 'confirmed', tx_hash: txHash, confirmed_at: new Date().toISOString() })
+      .eq('refill_id', refillId)
     await supabase.from('card_spend_buffers').update({
-      refill_window_start_secs: rate.nextState.windowStartSecs,
-      refilled_in_window_atomic: rate.nextState.refilledInWindowAtomic.toString(),
+      buffer_balance_atomic: (big(buf.buffer_balance_atomic) + refillAmount).toString(),
+      last_refill_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', buf.id)
-    await supabase.from('card_buffer_refills').insert({
-      org_card_id: orgCardId, member_wallet: buf.member_wallet, refill_id: 'ratecap:' + keccak256(toBytes(`${buf.id}:${nowSecs()}`)),
-      amount_atomic: plan.refillAmountAtomic.toString(), status: 'rate_capped', breaker_tripped: true, trigger, reason: 'refill-rate cap / breaker',
-    })
-    return { ok: false, status: 429, error: 'refill-rate cap reached (or breaker open)', reason: 'rate_capped' }
+
+    const explorerUrl = (org.treasury_chain_id === 5042002 ? 'https://testnet.arcscan.app/tx/' : 'https://sepolia.basescan.org/tx/') + txHash
+    return { ok: true, txHash, explorerUrl, refilledAtomic: refillAmount, breakerTripped: false }
+  } finally {
+    // Always release the in-flight slot (success, refusal, or throw).
+    await supabase.rpc('end_card_refill', { p_org_card_id: orgCardId })
   }
-  const refillAmount = rate.allowedAmountAtomic
-
-  // ── card permit (the member's standing consent to burn their shares) ──
-  const { data: card } = await supabase
-    .from('org_cards')
-    .select('permit_max_daily_usdc, permit_nonce, permit_deadline, permit_signature')
-    .eq('id', orgCardId).single()
-  if (!card?.permit_signature) return { ok: false, status: 409, error: 'card not activated — member must sign a standing permit first', reason: 'not_activated' }
-  const permitDeadline = big(card.permit_deadline)
-  if (permitDeadline <= BigInt(nowSecs())) return { ok: false, status: 409, error: 'the member’s standing permit has expired', reason: 'permit_expired' }
-  if (!isHex(card.permit_signature)) return { ok: false, status: 500, error: 'stored permit signature is malformed', reason: 'permit_malformed' }
-
-  const rpcUrl = rpcForChain(org.treasury_chain_id)
-  const chain = viemChainFor(org.treasury_chain_id)
-  if (!rpcUrl || !chain) return { ok: false, status: 400, error: 'unsupported chain', reason: 'chain' }
-
-  const publicClient = createPublicClient({ chain, transport: http(rpcUrl) })
-  let gateway: `0x${string}`
-  try {
-    gateway = (await publicClient.readContract({
-      address: org.treasury_vault_address as `0x${string}`, abi: VAULT_ABI, functionName: 'gateway',
-    })) as `0x${string}`
-  } catch {
-    return { ok: false, status: 502, error: 'treasury_read_failed', reason: 'read' }
-  }
-
-  let account
-  try {
-    account = await getOracleSigner('root')
-  } catch (e) {
-    log?.error('cards.refill', 'oracle signer unavailable', { error: String(e) })
-    return { ok: false, status: 503, error: 'refill_signer_unavailable', reason: 'signer' }
-  }
-  const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) })
-
-  // Create the ledger row first — its uuid seeds a stable, idempotent on-chain refillId.
-  const { data: ledger, error: insErr } = await supabase.from('card_buffer_refills').insert({
-    org_card_id: orgCardId, member_wallet: buf.member_wallet, refill_id: 'pending',
-    amount_atomic: refillAmount.toString(), status: 'pending', breaker_tripped: rate.breakerTripped, trigger,
-  }).select('id').single()
-  if (insErr || !ledger) return { ok: false, status: 500, error: 'could not open refill ledger row', reason: 'config', detail: String(insErr?.message) }
-  const refillId = keccak256(toBytes(String(ledger.id)))
-  await supabase.from('card_buffer_refills').update({ refill_id: refillId }).eq('id', ledger.id)
-
-  const permit = {
-    user: buf.member_wallet as `0x${string}`,
-    maxDailySpendUSDC: big(card.permit_max_daily_usdc),
-    nonce: big(card.permit_nonce),
-    deadline: permitDeadline,
-  }
-
-  let txHash: `0x${string}`
-  try {
-    txHash = await walletClient.writeContract({
-      address: gateway, abi: GATEWAY_ABI, functionName: 'refillBuffer',
-      args: [refillId, permit.user, refillAmount, permit, card.permit_signature as `0x${string}`],
-      account, chain, gas: 700_000n,
-    })
-    // A mined tx is not a successful tx — refillBuffer can revert (status 0) and still be included.
-    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash })
-    if (receipt.status !== 'success') {
-      await supabase.from('card_buffer_refills').update({ status: 'failed', tx_hash: txHash, reason: 'reverted on-chain' }).eq('id', ledger.id)
-      return { ok: false, status: 502, error: 'refill_reverted', reason: 'tx', detail: txHash }
-    }
-  } catch (e) {
-    await supabase.from('card_buffer_refills').update({ status: 'failed', reason: String(e) }).eq('id', ledger.id)
-    log?.error('cards.refill', 'refillBuffer failed', { error: String(e) })
-    return { ok: false, status: 502, error: 'refill_failed', reason: 'tx', detail: String(e) }
-  }
-
-  // ── success: advance the rate window, optimistically credit the cached balance (the monitor
-  //    reconciles against on-chain), and close the ledger row. ──
-  await supabase.from('card_buffer_refills')
-    .update({ status: 'confirmed', tx_hash: txHash, confirmed_at: new Date().toISOString() })
-    .eq('id', ledger.id)
-  await supabase.from('card_spend_buffers').update({
-    buffer_balance_atomic: (big(buf.buffer_balance_atomic) + refillAmount).toString(),
-    refill_window_start_secs: rate.nextState.windowStartSecs,
-    refilled_in_window_atomic: rate.nextState.refilledInWindowAtomic.toString(),
-    last_refill_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq('id', buf.id)
-
-  const explorerUrl = (org.treasury_chain_id === 5042002 ? 'https://testnet.arcscan.app/tx/' : 'https://sepolia.basescan.org/tx/') + txHash
-  return { ok: true, txHash, explorerUrl, refilledAtomic: refillAmount, breakerTripped: rate.breakerTripped }
 }

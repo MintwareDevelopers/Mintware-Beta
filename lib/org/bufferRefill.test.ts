@@ -11,8 +11,13 @@ const ORG_ID = 'org-1'
 const CARD_ID = 'card-1'
 const OK_ORG = { treasury_vault_address: '0xVault', treasury_chain_id: 84532 }
 
-function fakeSupabase(opts: { org?: unknown; buf?: unknown; card?: unknown }) {
+function fakeSupabase(opts: { org?: unknown; buf?: unknown; card?: unknown; begin?: { status: string; allowed: string } }) {
   return {
+    rpc: async (fn: string) => {
+      if (fn === 'begin_card_refill') return { data: opts.begin ?? { status: 'ok', allowed: '0' }, error: null }
+      if (fn === 'end_card_refill') return { data: null, error: null }
+      return { data: null, error: null }
+    },
     from(table: string) {
       const chain: Record<string, unknown> = {
         select: () => chain,
@@ -86,19 +91,17 @@ describe('refillCardBuffer — dark-launch gates + breaker', () => {
       expect(res).toMatchObject({ ok: false, reason: 'at_target', status: 200 })
     })
 
-    it('rate_capped: an open manual breaker halts the refill', async () => {
-      const res = await call(fakeSupabase({ org: OK_ORG, buf: bufRow({ buffer_balance_atomic: '0', breaker_open: true }) }))
+    it('rate_capped: begin_card_refill reports the manual breaker is open', async () => {
+      // atomic begin (audit fix M1) decides the breaker; balance 0 → refillPlan wants a refill, so it reaches begin.
+      const res = await call(fakeSupabase({ org: OK_ORG, buf: bufRow({ buffer_balance_atomic: '0' }), begin: { status: 'breaker', allowed: '0' } }))
       expect(res).toMatchObject({ ok: false, reason: 'rate_capped', status: 429 })
     })
 
-    it('rate_capped: the window refill cap is already exhausted', async () => {
-      const nowWindowStart = Math.floor(Date.now() / 1000) // fresh window → not elapsed, so it won't reset
+    it('rate_capped: begin_card_refill reports an in-flight refill or an exhausted window', async () => {
       const res = await call(fakeSupabase({
         org: OK_ORG,
-        buf: bufRow({
-          buffer_balance_atomic: '0', refill_rate_cap_atomic: '100000000',
-          refilled_in_window_atomic: '100000000', refill_window_start_secs: nowWindowStart,
-        }),
+        buf: bufRow({ buffer_balance_atomic: '0' }),
+        begin: { status: 'in_flight', allowed: '0' },
       }))
       expect(res).toMatchObject({ ok: false, reason: 'rate_capped' })
     })
