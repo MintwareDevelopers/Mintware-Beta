@@ -6,11 +6,11 @@
 // Lithic's ~6s window — it cannot make an RPC call per swipe. This monitor keeps that cache honest:
 // the refill cron syncs before deciding, and the reactive path syncs after a capture drains the buffer.
 
-import { createPublicClient, http, erc20Abi } from 'viem'
+import { createPublicClient, http, erc20Abi, zeroAddress } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
 import { rpcForChain } from '@/lib/org/treasuryReader'
 import { viemChainFor } from '@/lib/web3/chains'
-import { VAULT_ABI } from '@/lib/web3/artifacts/treasuryV2'
+import { VAULT_ABI, GATEWAY_ABI } from '@/lib/web3/artifacts/treasuryV2'
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
 type Logger = { warn: (t: string, m: string, c?: Record<string, unknown>) => void }
@@ -19,8 +19,13 @@ export type SyncResult =
   | { ok: true; balanceAtomic: bigint }
   | { ok: false; reason: 'config' | 'no_buffer' | 'chain' | 'read' }
 
-/** Read the buffer wallet's real USDC balance on-chain and write it into the cache. The USDC token is
- *  resolved from the treasury vault (`vault.usdc()`) so no separate token config is needed. */
+/**
+ * Reconcile the cached buffer balance from chain. The buffer address is derived from ON-CHAIN
+ * bufferOf[member] (the only authority — audit fix H1), NOT from the DB field, so a tampered/hostile
+ * DB address can never point the trusted balance cache at funds the member doesn't control. USDC is
+ * resolved from vault.usdc(); the gateway from vault.gateway(). Both the balance and the DB
+ * buffer_address mirror are overwritten with on-chain truth on every sync.
+ */
 export async function syncBufferBalance(opts: {
   supabase: SupabaseClient
   orgId: string
@@ -38,10 +43,10 @@ export async function syncBufferBalance(opts: {
 
   const { data: buf } = await supabase
     .from('card_spend_buffers')
-    .select('id, buffer_address')
+    .select('id, member_wallet')
     .eq('org_card_id', orgCardId)
     .maybeSingle()
-  if (!buf?.buffer_address) return { ok: false, reason: 'no_buffer' }
+  if (!buf?.member_wallet) return { ok: false, reason: 'no_buffer' }
 
   const rpcUrl = rpcForChain(org.treasury_chain_id)
   const chain = viemChainFor(org.treasury_chain_id)
@@ -49,13 +54,15 @@ export async function syncBufferBalance(opts: {
 
   const publicClient = createPublicClient({ chain, transport: http(rpcUrl) })
   let balance: bigint
+  let bufferAddr: `0x${string}`
   try {
-    const usdc = (await publicClient.readContract({
-      address: org.treasury_vault_address as `0x${string}`, abi: VAULT_ABI, functionName: 'usdc',
-    })) as `0x${string}`
-    balance = (await publicClient.readContract({
-      address: usdc, abi: erc20Abi, functionName: 'balanceOf', args: [buf.buffer_address as `0x${string}`],
-    })) as bigint
+    const vault = org.treasury_vault_address as `0x${string}`
+    const gateway = (await publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'gateway' })) as `0x${string}`
+    // The AUTHORITATIVE buffer wallet — the same bufferOf[user] the on-chain refillBuffer pays into.
+    bufferAddr = (await publicClient.readContract({ address: gateway, abi: GATEWAY_ABI, functionName: 'bufferOf', args: [buf.member_wallet as `0x${string}`] })) as `0x${string}`
+    if (!bufferAddr || bufferAddr.toLowerCase() === zeroAddress) return { ok: false, reason: 'no_buffer' }
+    const usdc = (await publicClient.readContract({ address: vault, abi: VAULT_ABI, functionName: 'usdc' })) as `0x${string}`
+    balance = (await publicClient.readContract({ address: usdc, abi: erc20Abi, functionName: 'balanceOf', args: [bufferAddr] })) as bigint
   } catch (e) {
     log?.warn('cards.buffer', 'on-chain balance read failed', { orgCardId, error: String(e) })
     return { ok: false, reason: 'read' }
@@ -63,7 +70,7 @@ export async function syncBufferBalance(opts: {
 
   await supabase
     .from('card_spend_buffers')
-    .update({ buffer_balance_atomic: balance.toString(), balance_synced_at: new Date().toISOString() })
+    .update({ buffer_balance_atomic: balance.toString(), buffer_address: bufferAddr.toLowerCase(), balance_synced_at: new Date().toISOString() })
     .eq('id', buf.id)
 
   return { ok: true, balanceAtomic: balance }

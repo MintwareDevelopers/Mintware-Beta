@@ -8,7 +8,6 @@ describe('parseBufferConfig', () => {
       perTxCapAtomic: '50000000', minRefillAtomic: 1000000, refillRateCapAtomic: '500000000',
       refillWindowSecs: 3600, sigmaPeriodSecs: 86400, leadTimeSecs: 60,
       meanDemandLeadtimeAtomic: '100000000', demandStdevAtomic: '80000000',
-      bufferAddress: '0xABCDEF0123456789abcdef0123456789ABCDEF01',
     })
     expect(r.ok).toBe(true)
     if (!r.ok) return
@@ -17,8 +16,12 @@ describe('parseBufferConfig', () => {
       per_tx_cap_atomic: '50000000', min_refill_atomic: '1000000', refill_rate_cap_atomic: '500000000',
       refill_window_secs: 3600, sigma_period_secs: 86400, lead_time_secs: 60,
       mean_demand_leadtime_atomic: '100000000', demand_stdev_atomic: '80000000',
-      buffer_address: '0xabcdef0123456789abcdef0123456789abcdef01', // lowercased
     })
+  })
+
+  it('IGNORES a client-supplied bufferAddress (audit fix H1 — monitor derives it from on-chain)', () => {
+    const r = parseBufferConfig({ autoRefillEnabled: true, bufferAddress: '0xdeadbeef00000000000000000000000000000000' })
+    expect(r).toEqual({ ok: true, patch: { auto_refill_enabled: true } }) // no buffer_address in the patch
   })
 
   it('is a partial update — only provided fields appear', () => {
@@ -52,11 +55,6 @@ describe('parseBufferConfig', () => {
   it('rejects non-positive seconds', () => {
     expect(parseBufferConfig({ refillWindowSecs: 0 }).ok).toBe(false)
     expect(parseBufferConfig({ leadTimeSecs: -5 }).ok).toBe(false)
-  })
-
-  it('rejects a malformed buffer address', () => {
-    expect(parseBufferConfig({ bufferAddress: '0x123' }).ok).toBe(false)
-    expect(parseBufferConfig({ bufferAddress: 'not-an-addr' }).ok).toBe(false)
   })
 
   it('accepts a manual breaker toggle', () => {

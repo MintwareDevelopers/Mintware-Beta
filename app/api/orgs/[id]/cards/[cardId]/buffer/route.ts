@@ -1,37 +1,19 @@
 // Card spend-buffer config — the user-controls surface (docs/developers/card-spend-buffer-spec.md §6).
 //
-// GET  — read this card's buffer config + state + the freshly-computed target.
 // POST — create/update the OFF-CHAIN tuning knobs (enable, service level, per-tx cap, refill-rate cap,
-//        sizing inputs, manual breaker, and the registered buffer_address mirror). Signed-message auth:
-//        only the card MEMBER (whose capital funds the buffer) or the org OWNER may configure it. This
-//        never moves money — it shapes future refills, which are themselves bounded by the on-chain
-//        caps (setBufferAddress / setUserDailyRefillCap) + the refill-rate breaker.
+//        sizing inputs, manual breaker). Signed-message auth: only the card MEMBER (whose capital funds
+//        the buffer) or the org OWNER may configure it. This never moves money — it shapes future
+//        refills, themselves bounded by the on-chain caps + the refill-rate breaker. The buffer_address
+//        is NOT settable here (audit fix H1) — the monitor derives it from on-chain bufferOf[member].
+//
+// (An unauthenticated GET that returned the full row — member wallet, address, balances — was removed
+//  as audit fix L2; a read surface can be re-added with proper auth when a UI needs it.)
 
 import type { NextRequest } from 'next/server'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { parseBufferConfig } from '@/lib/cards/bufferConfig'
-import { bufferTargetAtomic } from '@/lib/cards/bufferSizing'
 
 export const dynamic = 'force-dynamic'
-
-const big = (v: unknown) => { try { return BigInt(String(v ?? '0')) } catch { return 0n } }
-
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string; cardId: string }> }) {
-  const { id, cardId } = await params
-  return createHandler(async (_r, ctx) => {
-    const { data: buf } = await ctx.supabase
-      .from('card_spend_buffers').select('*').eq('org_card_id', cardId).maybeSingle()
-    if (!buf) return ctx.json({ configured: false, orgId: id, orgCardId: cardId })
-    const target = bufferTargetAtomic({
-      meanDemandLeadTimeAtomic: big(buf.mean_demand_leadtime_atomic),
-      demandStdevAtomic: big(buf.demand_stdev_atomic),
-      sigmaPeriodSecs: Number(buf.sigma_period_secs),
-      leadTimeSecs: Number(buf.lead_time_secs),
-      serviceLevelBps: Number(buf.service_level_bps),
-    })
-    return ctx.json({ configured: true, buffer: buf, computedTargetAtomic: target.toString() })
-  })(req)
-}
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string; cardId: string }> }) {
   const { id, cardId } = await params

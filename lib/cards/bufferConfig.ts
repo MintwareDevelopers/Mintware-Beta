@@ -34,8 +34,6 @@ function posInt(v: unknown): number | null {
   return Number.isInteger(n) && n > 0 ? n : null
 }
 
-const EVM_RE = /^0x[0-9a-fA-F]{40}$/
-
 export function parseBufferConfig(body: unknown): ParseResult {
   if (!isPlainObject(body)) return { ok: false, error: 'body must be an object' }
   const patch: BufferConfigPatch = {}
@@ -75,11 +73,9 @@ export function parseBufferConfig(body: unknown): ParseResult {
       patch[col] = s
     }
   }
-  if ('bufferAddress' in body) {
-    const addr = String(body.bufferAddress)
-    if (!EVM_RE.test(addr)) return { ok: false, error: 'bufferAddress must be a 0x EVM address' }
-    patch.buffer_address = addr.toLowerCase()
-  }
+  // NOTE (audit fix H1): `bufferAddress` is deliberately NOT accepted from the client. The monitor
+  // (lib/org/bufferMonitor) derives it from on-chain bufferOf[member] — the only authority — so a
+  // caller can't point the trusted balance cache at an address they don't actually control.
   if ('breakerOpen' in body) {
     if (typeof body.breakerOpen !== 'boolean') return { ok: false, error: 'breakerOpen must be a boolean' }
     patch.breaker_open = body.breakerOpen
