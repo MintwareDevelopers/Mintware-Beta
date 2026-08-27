@@ -15,11 +15,13 @@ vi.mock('@/lib/web2/supabase', () => ({
   }),
 }))
 vi.mock('@/lib/org/bufferMonitor', () => ({ syncBufferBalance: vi.fn(async () => ({ ok: true, balanceAtomic: 0n })) }))
+vi.mock('@/lib/org/bufferTuner', () => ({ tuneBufferSizing: vi.fn(async () => ({ ok: false, reason: 'insufficient_samples' })) }))
 vi.mock('@/lib/org/bufferRefill', () => ({ refillCardBuffer: vi.fn() }))
 
 import { POST } from '@/app/api/(rewards)/cron/card-buffer-refill/route'
 import { refillCardBuffer } from '@/lib/org/bufferRefill'
 import { syncBufferBalance } from '@/lib/org/bufferMonitor'
+import { tuneBufferSizing } from '@/lib/org/bufferTuner'
 
 const SECRET = 'cron-secret'
 const authed = () =>
@@ -61,7 +63,8 @@ describe('POST /api/cron/card-buffer-refill', () => {
     const body = await res.json()
     expect(body).toMatchObject({ enabled: true, scanned: 3, refilled: 1, skipped: 2, failed: 0 })
     expect(body.refilledCards).toEqual(['card-A'])
-    // balance is reconciled before each refill decision
+    // each buffer is adaptively tuned + reconciled before the refill decision
+    expect(tuneBufferSizing).toHaveBeenCalledTimes(3)
     expect(syncBufferBalance).toHaveBeenCalledTimes(3)
     expect(refillCardBuffer).toHaveBeenCalledTimes(3)
     expect(vi.mocked(refillCardBuffer).mock.calls[0][0]).toMatchObject({ orgId: 'org-1', orgCardId: 'card-A', trigger: 'cron' })

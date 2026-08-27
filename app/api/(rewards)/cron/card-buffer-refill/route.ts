@@ -16,6 +16,7 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { syncBufferBalance } from '@/lib/org/bufferMonitor'
 import { refillCardBuffer } from '@/lib/org/bufferRefill'
+import { tuneBufferSizing } from '@/lib/org/bufferTuner'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,7 +56,9 @@ export const POST = createHandler(async (_req, ctx) => {
     const orgCardId = (row as { org_card_id: string }).org_card_id
     if (!orgId) { failed++; continue }
 
-    // Reconcile the cache before sizing the refill; a read failure is non-fatal (fall back to cache).
+    // Adaptively re-size the target from the member's real spend (§5.3), then reconcile the cached
+    // balance before deciding the refill. Both are best-effort — a failure falls back to stored values.
+    await tuneBufferSizing({ supabase: ctx.supabase, orgCardId, log: ctx.log })
     await syncBufferBalance({ supabase: ctx.supabase, orgId, orgCardId, log: ctx.log })
 
     const res = await refillCardBuffer({ supabase: ctx.supabase, orgId, orgCardId, trigger: 'cron', log: ctx.log })

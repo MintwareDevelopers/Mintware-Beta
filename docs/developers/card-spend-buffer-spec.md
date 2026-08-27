@@ -243,8 +243,14 @@ value.
 The buffer is now **end-to-end**: configure → flat auth → capture reconcile + reactive refill → cron
 backstop → on-chain `refillBuffer`. ~89 TS + 12 Forge tests green; both feature flags OFF by default.
 
-**Still to build:** the spend agent's adaptive-tuning + predictive-top-up jobs (§5.1/§5.3), the
+- **Adaptive sizing** (`lib/cards/bufferTuning.ts` + `lib/org/bufferTuner.ts`, 15 tests) — the spend
+  agent's §5.3 safety-stock tuning: derives (μ_L, σ) from the member's settled swipe history and
+  EMA-blends the stored sizing inputs toward the measured distribution (recomputing the target). Run
+  by the refill cron; no capital. `z` default is settled → 95% (`serviceLevelBps 9500`) coffee / 99%
+  (`9900`) business, per `BUFFER_PROFILE_DEFAULTS`.
+
+**Still to build:** the spend agent's §5.1 *predictive* top-up (needs an earlier-than-auth signal), the
 governed on-chain per-user caps with `MWTimelockedRiskParams` tighten-instant/loosen-delayed semantics
-(the current `setUserDailyRefillCap` is a plain admin setter), and the §9 pre-build open items
-(measure real `T`, confirm issuer yield-buffer support, decide default `z`). External audit of
-`refillBuffer` gates real value.
+(the current `setUserDailyRefillCap` is a plain admin setter), and the remaining §9 pre-build items
+(measure real `T` — needs a live integration; confirm issuer yield-buffer support — needs a Rain/Bridge
+answer). External audit of `refillBuffer` gates real value.
