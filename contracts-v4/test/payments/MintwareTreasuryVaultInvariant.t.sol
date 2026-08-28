@@ -305,6 +305,19 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         MintwareTreasuryJitHook hook =
             new MintwareTreasuryJitHook{salt: hookSalt}(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         require(address(hook) == hookAddr, "hook addr");
+
+        // Deploy the vault RIGHT AFTER the hook so ONLY the hook's CREATE2 sits between the nonce snapshot
+        // (predictedVault, above) and this CREATE. forge 1.8+ advances the deployer nonce across the
+        // intervening hook-config CALLs too, which would push the vault off its predicted slot — so those
+        // config calls move BELOW (they're order-independent of the vault, and still land before initialize).
+        key = PoolKey({
+            currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
+            tickSpacing: SPACING, hooks: IHooks(hookAddr)
+        });
+        vault = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), owner, teamAddr);
+        require(address(vault) == predictedVault, "vault addr prediction");
+
+        // ── hook fee/MEV levers (configured post-CREATE, pre-initialize) ─────────────────────────────
         hook.setJitThreshold(type(uint256).max); // JIT off — this gate isolates the fee lever
         // Increment 2: enable + arm the surge floor so every fuzzed `movePrice` swap routes through a LIVE
         // surge. The `warp` handler decays it (1h–3d/call), so across 128k calls the swaps sample the whole
@@ -327,13 +340,6 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         hook.setLvr(200, 1, true);
         vm.fee(1 gwei);
         vm.txGasPrice(11 gwei);
-
-        key = PoolKey({
-            currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG,
-            tickSpacing: SPACING, hooks: IHooks(hookAddr)
-        });
-        vault = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), owner, teamAddr);
-        require(address(vault) == predictedVault, "vault addr prediction");
 
         // Owner-gated init: sender (this) == hook.owner() (this), so beforeInitialize authorizes it.
         pm.initialize(key, INIT_SQRT_PRICE);
