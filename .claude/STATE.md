@@ -11,9 +11,11 @@
 **Last reconciled:** 2026-08-27
 
 > **Direction decisions (2026-08-27, from the full system review):**
-> - **Cards → Bridge is the SOLE rail.** **Lithic DROPPED**, **Arc DROPPED** (reduces complexity). The
->   Bridge approve-and-pull rail is built (PR #408, off-main); the Lithic ASA rail on `main` is retired
->   (dark, don't invest further); Arc is being **removed from the code** (was testnet-live, now out).
+> - **Cards → Bridge is the go-forward rail; Lithic KEPT as the interim working rail; Arc DROPPED.**
+>   Bridge (approve-and-pull, PR #408, off-main, deploy-gated) is the direction — but **Lithic stays**
+>   (it's the more-complete rail on `main`, and its edge-auth live-NAV auth may keep more capital earning
+>   than Bridge's flat buffer — real holder value). Retire Lithic only at Bridge parity (checklist in the
+>   `system_review_tasklist` memory). **Arc is being removed from the code** (was testnet-live, now out).
 > - **x402 score/batch sellers are LIVE-IN-PROD** (`/api/x402/score`, real 402) — but settle is on
 >   base-sepolia testnet USDC. The one genuinely-live paid surface.
 > - **Only ONE mainnet contract:** `AIAttribution` v3 (fundless attestation ledger). Everything with
@@ -54,11 +56,12 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   path only). Reads via `lib/org/treasuryReader` (converged-vault eth_call); live payout is relayer-gated
   (503 until configured, same posture as x402). Testnet-only, unaudited.
 - **Org cards** — the issue → activate → swipe → authorize → settle loop, UI at `/app/org/[slug]/cards`
-  (a real page, not the illustrative `/app/team/cards` mock). **⛔ The Lithic ASA rail (on `main`, dark,
-  `LITHIC_API_KEY`-gated) is RETIRED as of 2026-08-27** — kept inert for its proven `settleSpend` lineage
-  (leg 3 of `lib/proof/latestRun.ts`) but no longer the direction. **Bridge is the go-forward card rail**
-  (approve-and-pull from the member's Privy wallet + the buffer spine; PR #408, off-main, deploy-gated on
-  real Bridge creds). Not live for a real consumer swipe on either rail. See memory `bridge_card_rail`.
+  (a real page, not the illustrative `/app/team/cards` mock). **The Lithic ASA rail (on `main`, dark,
+  `LITHIC_API_KEY`-gated) is the INTERIM working rail** — kept (not retired): it's the more-complete rail
+  with a proven `settleSpend` lineage (leg 3 of `lib/proof/latestRun.ts`) and edge-auth live-NAV auth.
+  **Bridge is the go-forward card rail** (approve-and-pull from the member's Privy wallet + the buffer
+  spine; PR #408, off-main, deploy-gated) — it replaces Lithic only at parity (see `system_review_tasklist`
+  memory). Not live for a real consumer swipe on either rail yet. See memory `bridge_card_rail`.
 
 ## Shelved / not-live (do not present as current)
 
