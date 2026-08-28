@@ -10,6 +10,7 @@ import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
+import { policyForRole } from '@/lib/org/rolePresets'
 
 interface Row { to: string; amountUsdc: string; usd: number; ok: boolean }
 
@@ -33,10 +34,20 @@ export default function PayrollPage({ params }: { params: Promise<{ slug: string
   const [csv, setCsv] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
+  // Payroll pays vendors — owner or a canPayVendors role only (server also enforces on /pay). 'loading' until known.
+  const [perm, setPerm] = useState<'loading' | 'allowed' | 'denied'>('loading')
 
   useEffect(() => {
-    fetch(`/api/orgs/${slug}/treasury`).then((r) => r.json()).then((d) => { if (d?.org) { setOrgId(d.org.id); setOrgName(d.org.name) } }).catch(() => {})
-  }, [slug])
+    const q = address ? `?address=${address}` : ''
+    fetch(`/api/orgs/${slug}/treasury${q}`).then((r) => r.json()).then((d) => {
+      if (!d?.org) return
+      setOrgId(d.org.id); setOrgName(d.org.name)
+      if (!address) { setPerm('loading'); return }
+      const isOwner = !!(d.org.ownerWallet && d.org.ownerWallet.toLowerCase() === address.toLowerCase())
+      const canPay = isOwner || (d.member?.status === 'active' && policyForRole(d.member.role).canPayVendors)
+      setPerm(canPay ? 'allowed' : 'denied')
+    }).catch(() => {})
+  }, [slug, address])
 
   const rows = useMemo(() => parseCsv(csv), [csv])
   const valid = rows.filter((r) => r.ok)
@@ -72,33 +83,43 @@ export default function PayrollPage({ params }: { params: Promise<{ slug: string
           <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Run payroll</h1>
           <p className="text-[13px] text-ink-mid mt-1.5">Paste or upload a CSV of <code className="font-mono text-[12px]">wallet, amount</code>. One batch settlement from the treasury.</p>
 
-          <div className="soft-card p-5 mt-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Recipients CSV</span>
-              <label className="text-[12px] text-peri-deep cursor-pointer hover:underline">upload .csv<input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" /></label>
+          {perm === 'denied' ? (
+            <div className="soft-card p-6 mt-6 text-[13.5px] text-ink-mid leading-[1.55]">
+              Running payroll draws from the treasury, so it&apos;s limited to the <span className="font-semibold text-ink">owner</span> and <span className="font-semibold text-ink">managers</span>. Ask an owner if you need to run a batch.
             </div>
-            <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={7} placeholder={'0xabc…,1200.00\n0xdef…,850'} className="w-full rounded-[10px] border border-hair px-3 py-2.5 text-[13px] font-mono outline-none focus:border-peri resize-y" />
-          </div>
-
-          {rows.length > 0 && (
-            <div className="soft-card mt-4 overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-3 border-b border-hair-soft">
-                <span className="text-[13px] font-semibold text-ink">{valid.length} valid{badCount > 0 ? ` · ${badCount} skipped` : ''}</span>
-                <span className="text-[15px] font-semibold text-ink tabular-nums">${total.toFixed(2)}</span>
+          ) : perm === 'loading' ? (
+            <div className="soft-card p-6 mt-6 text-[13px] text-ink-soft">Checking your permissions…</div>
+          ) : (
+            <>
+              <div className="soft-card p-5 mt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Recipients CSV</span>
+                  <label className="text-[12px] text-peri-deep cursor-pointer hover:underline">upload .csv<input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" /></label>
+                </div>
+                <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={7} placeholder={'0xabc…,1200.00\n0xdef…,850'} className="w-full rounded-[10px] border border-hair px-3 py-2.5 text-[13px] font-mono outline-none focus:border-peri resize-y" />
               </div>
-              <div className="max-h-[240px] overflow-y-auto">
-                {rows.slice(0, 100).map((r, i) => (
-                  <div key={i} className={`flex items-center gap-3 px-5 py-2 border-b border-hair-soft last:border-b-0 text-[13px] ${r.ok ? '' : 'opacity-45'}`}>
-                    <span className="font-mono text-ink flex-1 truncate">{r.to || '—'}</span>
-                    <span className="tabular-nums text-ink">{r.ok ? `$${r.usd.toFixed(2)}` : 'invalid'}</span>
+
+              {rows.length > 0 && (
+                <div className="soft-card mt-4 overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-hair-soft">
+                    <span className="text-[13px] font-semibold text-ink">{valid.length} valid{badCount > 0 ? ` · ${badCount} skipped` : ''}</span>
+                    <span className="text-[15px] font-semibold text-ink tabular-nums">${total.toFixed(2)}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  <div className="max-h-[240px] overflow-y-auto">
+                    {rows.slice(0, 100).map((r, i) => (
+                      <div key={i} className={`flex items-center gap-3 px-5 py-2 border-b border-hair-soft last:border-b-0 text-[13px] ${r.ok ? '' : 'opacity-45'}`}>
+                        <span className="font-mono text-ink flex-1 truncate">{r.to || '—'}</span>
+                        <span className="tabular-nums text-ink">{r.ok ? `$${r.usd.toFixed(2)}` : 'invalid'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          <button onClick={run} disabled={busy || valid.length === 0} className="mt-4 rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy ? 'Authorizing…' : `Pay ${valid.length || ''} in one batch`}</button>
-          {result && <div className={`mt-4 rounded-[var(--radius-card)] border p-4 text-[13px] leading-[1.5] ${result.ok ? 'border-[rgba(42,158,138,0.3)] bg-mw-green-muted' : 'border-[rgba(194,83,122,0.3)] bg-white'} text-ink`}>{result.text}</div>}
+              <button onClick={run} disabled={busy || valid.length === 0} className="mt-4 rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy ? 'Authorizing…' : `Pay ${valid.length || ''} in one batch`}</button>
+              {result && <div className={`mt-4 rounded-[var(--radius-card)] border p-4 text-[13px] leading-[1.5] ${result.ok ? 'border-[rgba(42,158,138,0.3)] bg-mw-green-muted' : 'border-[rgba(194,83,122,0.3)] bg-white'} text-ink`}>{result.text}</div>}
+            </>
+          )}
         </main>
       </div>
     </MwAuthGuard>
