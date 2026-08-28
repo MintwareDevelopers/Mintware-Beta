@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     'Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock your fee share flows to the people who backed you. Trust us becomes check the contract.',
 }
 
-const TWITTER = 'https://x.com/Mintware_org'
+const TWITTER = 'https://x.com/Mintware_Fi'
 
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
 const wrap = 'mx-auto max-w-[1100px] px-6 max-[800px]:px-4 mw-reveal'

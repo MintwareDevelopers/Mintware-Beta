@@ -59,8 +59,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card:        'summary_large_image',
-    site:        '@Mintware_org',
-    creator:     '@Mintware_org',
+    site:        '@Mintware_Fi',
+    creator:     '@Mintware_Fi',
     title:       'Mintware — Never idle. Never locked. Always yours.',
     description: 'Never idle, never locked, always yours. USDC that earns three ways at once and stays spendable — where the LPs who bring real, committed liquidity earn the most.',
     images:      ['/opengraph-image'],

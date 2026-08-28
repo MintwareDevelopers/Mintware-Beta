@@ -160,7 +160,7 @@ const C = {
     secondary: [
       { label: 'See it proven on-chain', href: '/proof' },
       { label: 'The yield-engine math', href: '/the-math' },
-      { label: 'Talk to us', href: 'https://x.com/Mintware_org' },
+      { label: 'Talk to us', href: 'https://x.com/Mintware_Fi' },
     ],
   },
 
