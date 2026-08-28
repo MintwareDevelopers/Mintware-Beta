@@ -13,7 +13,8 @@
 
 use alloy_consensus::{SignableTransaction, TxEip1559};
 use alloy_eips::eip2718::Encodable2718;
-use alloy_primitives::{hex, keccak256, Address, Bytes, PrimitiveSignature, TxKind, B256, U256};
+// alloy 1.x renamed `PrimitiveSignature` → `Signature`; alias to keep the signing code below unchanged.
+use alloy_primitives::{hex, keccak256, Address, Bytes, Signature as PrimitiveSignature, TxKind, B256, U256};
 use k256::ecdsa::SigningKey;
 
 use crate::settle::{SettleParams, SettlementError};
@@ -322,6 +323,7 @@ fn address_from_key(key: &SigningKey) -> Address {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_consensus::transaction::SignerRecoverable; // alloy 1.x: recover_signer moved to this trait
     use crate::settle::Permit;
     use alloy_eips::eip2718::Decodable2718;
 

@@ -20,13 +20,13 @@ path = "src/main.rs"
 
 [dependencies]
 # ABI encode/decode of settleSpend + its nested structs.
-alloy-sol-types = "0.8"
-alloy-primitives = { version = "0.8", features = ["k256"] }
+alloy-sol-types = "1"
+alloy-primitives = { version = "1", features = ["k256"] }
 # Increment 6b — tx submission. Canonical EIP-1559 tx build + RLP/2718 encoding (never hand-rolled),
 # k256 for the recoverable ECDSA signature over the tx signing hash, blocking JSON-RPC for send/read.
 # The `k256` feature enables signer recovery (TxEnvelope::recover_signer) used in the signing proofs.
-alloy-consensus = { version = "0.8", features = ["k256"] }
-alloy-eips = "0.8"
+alloy-consensus = { version = "1", features = ["k256"] }
+alloy-eips = "1"
 k256 = { version = "0.13", features = ["ecdsa"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 serde_json = "1"
@@ -36,7 +36,7 @@ derive_more = { version = "1", features = ["display", "from"] }
 # HTTP settle server (mirrors services/edge-auth): axum over the submit library. The library's RPC
 # client is `reqwest::blocking`, so every on-chain call is offloaded via `tokio::task::spawn_blocking`
 # — the async runtime is never blocked. serde derives the request/response wire types.
-axum = "0.7"
+axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 serde = { version = "1", features = ["derive"] }
 

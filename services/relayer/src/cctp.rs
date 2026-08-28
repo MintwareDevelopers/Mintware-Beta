@@ -157,6 +157,7 @@ pub fn submit_receive(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_consensus::transaction::SignerRecoverable; // alloy 1.x: recover_signer moved to this trait
     use alloy_primitives::keccak256;
 
     fn base() -> ReceiveAndDeposit {
@@ -178,7 +179,7 @@ mod tests {
         let p = base();
         let data = p.calldata();
         assert_eq!(&data[..4], &ReceiveAndDeposit::selector());
-        let decoded = receiveAndDepositCall::abi_decode(&data, true).unwrap();
+        let decoded = receiveAndDepositCall::abi_decode(&data).unwrap();
         assert_eq!(decoded.recipient, p.recipient);
         assert_eq!(decoded.message.as_ref(), p.message.as_slice());
         assert_eq!(decoded.attestation.as_ref(), p.attestation.as_slice());
