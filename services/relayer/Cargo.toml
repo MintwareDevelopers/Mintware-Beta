@@ -36,7 +36,7 @@ derive_more = { version = "1", features = ["display", "from"] }
 # HTTP settle server (mirrors services/edge-auth): axum over the submit library. The library's RPC
 # client is `reqwest::blocking`, so every on-chain call is offloaded via `tokio::task::spawn_blocking`
 # — the async runtime is never blocked. serde derives the request/response wire types.
-axum = "0.7"
+axum = "0.8"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 serde = { version = "1", features = ["derive"] }
 
