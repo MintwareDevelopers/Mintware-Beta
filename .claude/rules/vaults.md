@@ -1,8 +1,13 @@
 # Vaults — DeFi LP / ULV
 
+> **⚠ STALE BODY (flagged 2026-08-27 system review).** Much of this file predates the current
+> treasury/payments stack; treat the tables/contract names below as HISTORICAL. Authoritative
+> live/deployed status = [`.claude/STATE.md`](../STATE.md) + [`config/deployments.json`](../../config/deployments.json).
+> **Arc was dropped (2026-08-27)** — the `session-handoff-arc` reference below is historical.
+>
 > **One home for the Vaults topic.** For platform-wide live/shelved status, [`.claude/STATE.md`](../STATE.md)
 > wins over this file. MEV levers → [`smart-contracts.md`](smart-contracts.md); YPN card/settlement →
-> [`deployments.md`](deployments.md) + [`session-handoff-arc.md`](../../docs/developers/session-handoff-arc.md).
+> [`deployments.md`](deployments.md).
 
 > ⚠ **RECONCILE (2026-08-18):** honest status — **Base Sepolia only, empty, unaudited.** Present vaults
 > as *"in testing on Base Sepolia,"* never *"deposit now."* External audit is the only gate left before
