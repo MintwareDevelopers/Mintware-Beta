@@ -1,31 +1,30 @@
 'use client'
 
 // /app/account — the retail home: Account + Profile MESHED into one stats-forward
-// page. Leads with account info (balance, holdings, spend) and SPRINKLES Attribution
-// through the stats rather than giving it its own big section. Real data: the
-// Attribution score + signals + referrals + profile meta/edit (same as the old
-// Profile). Illustrative: balance / positions / card (vaults in testing on Base
+// page. Leads with account info (balance, holdings, spend). The human-facing
+// Attribution score/tier/badges display was removed 2026-08-28 (see
+// attribution_review_2026_08_28 memory) — `scoreApiUrl()` is still fetched because
+// the SAME response also carries real portfolio data (`projects`/`uvOpportunities`)
+// consumed by the Portfolio tab below; don't remove the fetch without re-plumbing
+// that. Illustrative: balance / positions / card (vaults in testing on Base
 // Sepolia; card settlement engine off-chain but deploy-gated). Profile now redirects
-// here; the detailed reputation/portfolio/invite views live in the tabs below.
+// here; the detailed portfolio/liquidity/invite views live in the tabs below.
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Copy, Check, ChevronRight, BarChart2, Droplets, Share2 } from 'lucide-react'
+import { Copy, Check, BarChart2, Droplets, Share2 } from 'lucide-react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { YourOrgs } from '@/components/web2/YourOrgs'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
-import { AnimatedScore } from '@/components/web2/AnimatedScore'
 import { scoreApiUrl } from '@/lib/web2/api'
-import { computeBadges } from '@/lib/rewards/badges'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
 import { useReferral } from '@/lib/rewards/referral/useReferral'
 import { ProfileSocials } from '@/components/rewards/profile/ProfileSocials'
 import { ProfileEditPanel } from '@/components/rewards/profile/ProfileEditPanel'
-import { AttestationBadge } from '@/components/rewards/profile/AttestationBadge'
 import { ReferralSheet } from '@/components/rewards/referral/ReferralSheet'
 import { InviteTab } from '@/components/rewards/referral/InviteTab'
 import { PortfolioTab } from '../profile/tabs/PortfolioTab'
@@ -78,26 +77,13 @@ function AccountContent() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const score        = data?.score ?? 0
-  const tier         = data?.tier ? data.tier.charAt(0).toUpperCase() + data.tier.slice(1) : '—'
-  const percentile   = data?.percentile ?? 0
   const avatarLetter = wallet ? wallet.charAt(2).toUpperCase() : '?'
-  const mult = percentile >= 67 ? '1.5×' : percentile >= 34 ? '1.25×' : '1.0×'
 
-  const badges       = data ? computeBadges({ walletAge: data.walletAge ?? '', percentile, totalTxCount: data.totalTxCount ?? 0, signals: data.signals ?? [], treeSize: data.treeSize ?? 0 }, data.treeSize ?? 0) : []
-  const earnedBadges = badges.filter(b => b.earned)
-  const signals      = data?.signals ?? []
-
-  // Meshed stat grid — money stats sprinkled with real Attribution stats.
-  const STATS: { l: string; v: string; hl?: boolean; rep?: boolean }[] = [
+  const STATS: { l: string; v: string; hl?: boolean }[] = [
     { l: 'Total deposited', v: '$48,200' },
     { l: 'Blended APY',     v: '7.4%', hl: true },
     { l: 'Accrued yield',   v: '$312.40' },
     { l: 'Positions',       v: String(POSITIONS.length) },
-    { l: 'Attribution',     v: data ? String(score) : '—', rep: true },
-    { l: 'Percentile',      v: percentile ? `top ${100 - percentile}%` : '—', rep: true },
-    { l: 'Reward mult.',    v: data ? mult : '—', rep: true, hl: true },
-    { l: 'Network',         v: `${data?.treeSize ?? 0} wallets`, rep: true },
   ]
 
   const TABS: { id: Tab; icon: React.ReactNode; label: string }[] = [
@@ -131,24 +117,18 @@ function AccountContent() {
                   {meta?.displayName
                     ? <span className="text-ink text-[16px] font-semibold tracking-[-0.01em]">{meta.displayName}</span>
                     : <WalletDisplay address={wallet} mono className="text-ink text-[15px] font-semibold" />}
-                  {data && <span className="text-[9px] font-semibold rounded-full border border-[rgba(108,108,240,0.4)] text-peri-deep bg-[rgba(108,108,240,0.08)] px-2 py-[2px] tracking-[0.06em] uppercase">{tier}</span>}
                 </div>
                 <div className="text-[10.5px] text-ink-soft mt-0.5 flex items-center gap-1.5 font-mono">
                   {wallet ? `${wallet.slice(0, 8)}…${wallet.slice(-6)}` : '—'}
                   <button onClick={copyAddress} title={copied ? 'Copied!' : 'Copy'} className="inline-flex items-center justify-center w-5 h-5 rounded-md border border-hair bg-white cursor-pointer text-ink-soft hover:text-peri-deep transition-colors">
                     {copied ? <Check size={10} className="text-peri-deep" /> : <Copy size={10} />}
                   </button>
-                  {data?.walletAge && <span className="max-sm:hidden">· {data.walletAge}</span>}
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
+              <ProfileSocials socials={meta?.socials} />
               {wallet && <button onClick={() => setEditOpen(true)} className="glass-pill glass-pill-sm">✎ Edit</button>}
-              {wallet && (
-                <Link href={`/${wallet}`} className="inline-flex items-center gap-[4px] text-[11px] font-semibold text-peri-deep no-underline uppercase tracking-[0.06em]">
-                  <ChevronRight size={12} />Public profile
-                </Link>
-              )}
             </div>
           </div>
 
@@ -167,11 +147,6 @@ function AccountContent() {
                 <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft whitespace-nowrap">Available to spend</div>
                 <div className="font-atx-display font-medium text-[24px] tracking-[-0.02em] mt-1.5 tabular-nums text-peri-deep">$48,512</div>
                 <div className="text-[11px] text-ink-soft mt-0.5">all of it · never locked</div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft whitespace-nowrap">Reputation</div>
-                <div className="font-atx-display font-medium text-[24px] tracking-[-0.02em] mt-1.5 tabular-nums text-ink">{data ? tier : '—'}</div>
-                <div className="text-[11px] text-ink-soft mt-0.5">{data ? `${score} · ${mult} yield mult.` : 'connect to score'}</div>
               </div>
             </div>
           </div>
@@ -193,14 +168,12 @@ function AccountContent() {
           <div className="grid grid-cols-4 max-[720px]:grid-cols-2 gap-x-6 gap-y-5">
             {STATS.map((s) => (
               <div key={s.l} className="flex flex-col gap-[3px] min-w-0">
-                <span className="text-[10px] uppercase tracking-[0.08em] text-ink-soft whitespace-nowrap flex items-center gap-1.5">
-                  {s.rep && <span className="w-[5px] h-[5px] rounded-full bg-peri inline-block shrink-0" />}{s.l}
-                </span>
+                <span className="text-[10px] uppercase tracking-[0.08em] text-ink-soft whitespace-nowrap">{s.l}</span>
                 <span className={`font-atx-display text-[20px] font-medium whitespace-nowrap tabular-nums ${s.hl ? 'text-peri-deep' : 'text-ink'}`}>{s.v}</span>
               </div>
             ))}
           </div>
-          <div className="text-[10.5px] text-ink-soft mt-4">Money figures are illustrative — vaults are in testing on Base Sepolia. <span className="text-peri-deep">•</span> Attribution stats are live from your wallet.</div>
+          <div className="text-[10.5px] text-ink-soft mt-4">Money figures are illustrative — vaults are in testing on Base Sepolia.</div>
         </div>
       </div>
 
@@ -294,52 +267,6 @@ function AccountContent() {
           </div>
           <p className="text-[11px] text-ink-soft mt-5">The card and on-chain settlement are in development — the engine exists off-chain but isn't wired to a funded relayer or live vault. Not a live card or an offer.</p>
         </div>
-      </div>
-
-      {/* ── Reputation breakdown (sprinkled, compact) ── */}
-      <div className={`${WRAP} py-8`}>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className={EY}><span className="w-[7px] h-[7px] rounded-full bg-peri inline-block" />Reputation · what your score is made of</div>
-          {data?.character && (
-            <span className="rounded-full border px-2.5 py-[3px] text-[11px] font-medium" style={{ color: data.character.color, borderColor: data.character.color }}>{data.character.icon} {data.character.label}</span>
-          )}
-        </div>
-        {(earnedBadges.length > 0 || wallet) && (
-          <div className="flex items-center gap-2 mt-4 flex-wrap">
-            {earnedBadges.map(b => (
-              <span key={b.id} className="inline-flex items-center gap-[5px] rounded-full px-2.5 py-[3px] text-[11px] font-semibold border" style={{ color: b.color, borderColor: b.color }} title={b.desc}>{b.icon} {b.label}</span>
-            ))}
-            {wallet && <AttestationBadge attestationUid={meta?.attestationUid ?? null} address={wallet} isOwner onAttested={refetchMeta} />}
-            <ProfileSocials socials={meta?.socials} className="ml-1" />
-          </div>
-        )}
-        {signals.length > 0 ? (
-          <div className="grid grid-cols-3 gap-x-7 gap-y-4 max-sm:grid-cols-1 mt-5">
-            {signals.map(sig => {
-              const pct = score > 0 ? Math.round((sig.score / score) * 100) : 0
-              const barPct = sig.max > 0 ? Math.min(100, Math.round((sig.score / sig.max) * 100)) : 0
-              return (
-                <div key={sig.key}>
-                  <div className="flex justify-between text-[12px] mb-1.5">
-                    <span className="text-ink font-semibold">{sig.name}</span>
-                    <span className="text-ink-soft">{sig.score} · {pct}%</span>
-                  </div>
-                  <div className="h-[8px] rounded-full bg-ground-cool border border-hair relative overflow-hidden">
-                    <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${barPct}%`, background: sig.color }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <div className="text-[12px] text-ink-soft mt-4">{loading ? 'Loading your reputation…' : 'Connect your wallet to see your reputation breakdown.'}</div>
-        )}
-        {data && (
-          <div className="flex items-center gap-4 mt-6 flex-wrap">
-            <AnimatedScore value={score} className="text-[38px] font-medium text-peri-deep font-atx-display tracking-[-2px] leading-none block" />
-            <div className="text-[12px] text-ink-soft">Attribution score{percentile ? <> · <span className="text-coral2-deep">top {100 - percentile}%</span></> : null} · <span className="text-ink font-semibold">{mult}</span> yield multiplier{data.totalLo != null && data.totalHi != null ? <> · <span className="text-coral2-deep font-semibold">${data.totalLo.toLocaleString()}–${data.totalHi.toLocaleString()}</span> est. opportunity / yr</> : null}</div>
-          </div>
-        )}
       </div>
 
       {/* ── Tabs: Portfolio / Liquidity / Invite ── */}

@@ -20,7 +20,6 @@ import { useTokenList } from '@/hooks/useTokenList'
 import { getChainConfig } from '@/config/chains'
 import { getNativeToken } from '@/config/tokens'
 import { TokenSelector } from './TokenSelector'
-import { AttributionScorePreview } from './AttributionScorePreview'
 import { PostSwapSummary } from './PostSwapSummary'
 import { ChainSelector } from './ChainSelector'
 import { SwapConfirmSheet } from './SwapConfirmSheet'
@@ -176,8 +175,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
   const feeAmountUSD = sellAmountUSD !== null && chainConfig
     ? (sellAmountUSD * chainConfig.feeBps) / 10000
     : null
-
-  const estimatedScoreGain = sellAmountUSD ? Math.round(sellAmountUSD / 10) : 0
 
   // Quick amount buttons
   const setPercent = useCallback(
@@ -492,9 +489,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
             </div>
           )}
 
-          {/* Attribution score preview */}
-          <AttributionScorePreview estimatedScoreGain={estimatedScoreGain} />
-
           {quoteSummary && (
             <div className="px-[12px] py-[10px] rounded-xl bg-ground-cool border border-hair text-[12px] text-ink-mid leading-[1.55]">
               {quoteSummary}
@@ -590,8 +584,6 @@ export function SwapWidget({ preselectBuy, preselectChainId }: {
           buyAmount={buyAmount}
           buyToken={buyToken}
           sellAmountUSD={sellAmountUSD}
-          estimatedScoreGain={estimatedScoreGain}
-          currentScore={0}
           onDismiss={() => {
             setShowConfirm(false)
             reset()

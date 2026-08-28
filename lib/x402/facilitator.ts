@@ -7,6 +7,7 @@
 import { PaymentRequirements, PaymentPayload, VerifyResult, SettleResult } from './types'
 import { checkPayloadAgainst } from './protocol'
 import { policyForPercentile } from './pricing'
+import { logSettleEvent, SettleProvider } from './settleLog'
 
 export interface Facilitator {
   verify(reqs: PaymentRequirements, payload: PaymentPayload, now: number): Promise<VerifyResult>
@@ -76,6 +77,9 @@ export interface YpnFacilitatorConfig {
   /** Optional — omit to authorize purely on NAV (no trust gating). */
   trust?: TrustSource
   supportedNetworks: string[]
+  /** Which on-chain settle transport `settler` actually is — logged on every settle event via
+   *  settleLog.ts, not used for any control flow. Defaults to 'deferred' if omitted. */
+  settleProvider?: SettleProvider
 }
 
 /** The YPN-backed facilitator. verify = reputation-gated NAV hold; settle = relayer submit. */
@@ -134,7 +138,9 @@ export class YpnFacilitator implements Facilitator {
     edge?: RelayerEdgeAuth,
   ): Promise<SettleResult> {
     const res = await this.cfg.settler.settle({ holdId, payload, reqs, permit, edge })
-    return { success: res.success, txHash: res.txHash, network: reqs.network, errorReason: res.errorReason }
+    const result = { success: res.success, txHash: res.txHash, network: reqs.network, errorReason: res.errorReason }
+    logSettleEvent(reqs, payload, result, this.cfg.settleProvider ?? 'deferred', holdId)
+    return result
   }
 
   async supported() {

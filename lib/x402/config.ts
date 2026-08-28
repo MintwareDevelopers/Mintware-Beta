@@ -9,6 +9,7 @@ import { oracleSettler } from './oracleSettler'
 import { directSettler } from './directSettler'
 import { parkedSizeTrustSource } from './trustSources'
 import { rpcParkedReader } from './vaultReader'
+import { SettleProvider } from './settleLog'
 
 // x402 permit/settle chain defaults. Arc was dropped (2026-08-27) — base-sepolia is the settle chain
 // (the live seller runs X402_SETTLE_PROVIDER=direct, which picks the network from the buyer's payment).
@@ -51,7 +52,13 @@ export function getFacilitator(): Facilitator | null {
   if (!url || !secret) return null
 
   const edge = httpEdgeAuthorizer({ url, secret })
-  return new YpnFacilitator({ edge, settler: getSettler(), supportedNetworks: supportedNetworks(), trust: getTrustSource() })
+  return new YpnFacilitator({
+    edge,
+    settler: getSettler(),
+    supportedNetworks: supportedNetworks(),
+    trust: getTrustSource(),
+    settleProvider: getSettlerProvider(),
+  })
 }
 
 /** Select the on-chain settle transport. Precedence:
@@ -70,6 +77,13 @@ function getSettler() {
     return oracleSettler({ gateway: x402PermitGateway(), chainId: x402PermitChainId() })
   }
   return deferredSettler
+}
+
+/** Mirrors getSettler()'s precedence — only used to label x402_settle_events rows, no control flow. */
+function getSettlerProvider(): SettleProvider {
+  if (process.env.X402_RELAYER_URL) return 'relayer'
+  if ((process.env.X402_SETTLE_PROVIDER ?? '').toLowerCase() === 'oracle') return 'oracle'
+  return 'deferred'
 }
 
 /** True when a real (fund-moving) on-chain settle transport is wired — either the Rust relayer or the

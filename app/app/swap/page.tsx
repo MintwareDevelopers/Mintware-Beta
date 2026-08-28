@@ -4,56 +4,37 @@
 // /swap — cross-chain LI.FI swap, front and centre. Design v2 (Privy-esque).
 //
 //   • The trade core is the real <SwapWidget/> (LI.FI fee-injection).
-//   • Editorial hero + reputation stat band wired to the live /score API.
 //   • Cross-links to the reputation-weighted /vaults product.
 //
-// Campaigns were shelved (2026-08-12) — this is a plain swap that still builds
-// your Attribution score. No campaign context, points, or reward crediting.
+// Campaigns were shelved (2026-08-12) — this is a plain swap, no campaign
+// context, points, or reward crediting. The human-facing "Attribution score"
+// framing/reputation stat band was removed 2026-08-28 (see
+// attribution_review_2026_08_28 memory) — the vaults cross-link below still
+// accurately describes the real vault-weighted reward mechanic, just without
+// branding this page itself around a personal score.
 // =============================================================================
 
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense } from 'react'
 import Link from 'next/link'
-import { useAccount } from 'wagmi'
 import { MwNav } from '@/components/web2/MwNav'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
-import { scoreApiUrl } from '@/lib/web2/api'
 
 const LABEL = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
 
 // ─── Swap Page ─────────────────────────────────────────────────────────────────
 function SwapContent() {
-  const { address } = useAccount()
-  const wallet = address?.toLowerCase() ?? ''
-
-  const [swapScore, setSwapScore] = useState<number | null>(null)
-  const [swapTier,  setSwapTier]  = useState<string | null>(null)
-  const [swapPct,   setSwapPct]   = useState<number | null>(null)
-
-  // Attribution score for the reputation rail
-  useEffect(() => {
-    if (!wallet) { setSwapScore(null); setSwapTier(null); setSwapPct(null); return }
-    fetch(scoreApiUrl(wallet))
-      .then(r => r.json())
-      .then(d => {
-        setSwapScore(d.score ?? 0)
-        setSwapTier(d.tier ? d.tier.charAt(0).toUpperCase() + d.tier.slice(1) : null)
-        setSwapPct(typeof d.percentile === 'number' ? d.percentile : null)
-      })
-      .catch(() => {})
-  }, [wallet])
-
   return (
     <div className="page-swap bg-white min-h-screen font-atx-display text-ink overflow-x-clip">
 
         {/* ── Editorial hero ── */}
         <section className="bg-ground-cool border-b border-hair-soft">
           <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[48px] text-center">
-            <span className="live-chip"><span className="dot" aria-hidden />On-chain reputation · 100+ chains</span>
+            <span className="live-chip"><span className="dot" aria-hidden />Cross-chain · 100+ chains</span>
             <h1 className="font-atx-display font-semibold text-ink mt-5 tracking-[-0.04em] leading-[1.02] text-[clamp(2rem,5vw,3.4rem)] max-w-[16ch] mx-auto [text-wrap:balance]">
               Trade like it <span className="text-gradient-accent">counts.</span>
             </h1>
             <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.5] mt-5 max-w-[58ch] mx-auto">
-              Every swap builds your Attribution score. Trade here, provide liquidity in the reputation-weighted vaults — one score, both surfaces.
+              Best price across chains. Trade here, or provide liquidity in the reputation-weighted vaults.
             </p>
           </div>
         </section>
@@ -72,37 +53,7 @@ function SwapContent() {
           </div>
         </div>
 
-        {/* ── Below & framed: reputation stat band ── */}
-        <section className="border-y border-hair-soft mt-9 bg-ground-cool">
-          <div className="mx-auto max-w-[1180px] grid [grid-template-columns:1.4fr_1fr_1fr_1fr] max-[720px]:[grid-template-columns:1fr_1fr] mw-reveal">
-            {[
-              {
-                l: 'Your score',
-                v: wallet ? (swapScore !== null ? <span key="s" className="text-peri-deep">{swapScore}</span> : '…') : '—',
-                sub: wallet ? (swapTier ?? 'attribution') : 'connect wallet',
-              },
-              {
-                l: 'Tier',
-                v: wallet ? (swapTier ?? '…') : '—',
-                sub: 'attribution',
-              },
-              {
-                l: 'Percentile',
-                v: swapPct !== null ? `top ${Math.max(1, 100 - swapPct)}%` : '—',
-                sub: wallet ? 'across all wallets' : 'connect wallet',
-              },
-              { l: 'Routing', v: 'Aggregated', sub: '0x · LI.FI' },
-            ].map((s, i) => (
-              <div key={i} className={`px-7 py-4 max-[600px]:px-4 ${i < 3 ? 'border-r border-hair-soft' : ''}`}>
-                <div className={`${LABEL} text-[9px] mb-1.5`}>{s.l}</div>
-                <div className="font-atx-display font-medium text-[15px] tabular-nums text-ink">{s.v}</div>
-                <div className="text-[10px] text-ink-soft mt-0.5 truncate">{s.sub}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Below & framed: the other surface + attribution ── */}
+        {/* ── Below & framed: the other surface ── */}
         <div className="mx-auto max-w-[1180px] px-7 py-8 max-[600px]:px-4">
           <div className="max-w-[520px]">
             <div className={`${LABEL} mb-3`}>The other surface</div>
@@ -120,9 +71,6 @@ function SwapContent() {
                 Attribution score climbs. In testing on Base.
               </p>
             </Link>
-            <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-ink-soft flex items-center gap-1.5 px-1 mt-6">
-              ✴ Powered by Attribution
-            </div>
           </div>
         </div>
       </div>
