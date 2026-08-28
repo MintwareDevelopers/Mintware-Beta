@@ -216,7 +216,8 @@ mod tests {
         for (i, v) in argv.iter().enumerate() { argv_t.set(i + 1, *v).unwrap(); }
         lua.globals().set("ARGV", argv_t).unwrap();
         let ret: mlua::Table = lua.load(script).eval().unwrap();
-        (ret.get::<_, String>(1).unwrap(), ret.get::<_, String>(2).unwrap())
+        // mlua 0.10+: Table::get takes ONE generic (the value type); the key type is inferred.
+        (ret.get::<String>(1).unwrap(), ret.get::<String>(2).unwrap())
     }
 
     // reserve with: equity, cap, idle, now, ttl fixed; amount/user/hold vary.

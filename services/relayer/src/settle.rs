@@ -171,7 +171,7 @@ mod tests {
         let p = low_value();
         let data = p.calldata();
         assert_eq!(&data[..4], &SettleParams::selector());
-        let decoded = settleSpendCall::abi_decode(&data, true).unwrap();
+        let decoded = settleSpendCall::abi_decode(&data).unwrap();
         assert_eq!(decoded.holdId, p.hold_id);
         assert_eq!(decoded.user, p.user);
         assert_eq!(decoded.assets, U256::from(p.assets));
@@ -189,7 +189,7 @@ mod tests {
         p.assets = 300_000_000; // >= $250
         p.edge = Some(edge_for(&p));
         let data = p.calldata();
-        let decoded = settleSpendCall::abi_decode(&data, true).unwrap();
+        let decoded = settleSpendCall::abi_decode(&data).unwrap();
         assert_eq!(decoded.edgeAuth.holdId, p.hold_id);
         assert_eq!(decoded.edgeAuth.amountUSDC, U256::from(300_000_000u64));
         assert_eq!(decoded.edgeSig.as_ref(), &[0xbb; 65]);

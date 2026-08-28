@@ -183,6 +183,7 @@ pub fn submit_batch_settlement(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_consensus::transaction::SignerRecoverable; // alloy 1.x: recover_signer moved to this trait
     use alloy_primitives::keccak256;
 
     fn hold(id: u8, amt: u128) -> Hold {
@@ -227,7 +228,7 @@ mod tests {
         let p = base();
         let data = p.calldata();
         assert_eq!(&data[..4], &BatchSettleParams::selector());
-        let decoded = batchSettleEthCall::abi_decode(&data, true).unwrap();
+        let decoded = batchSettleEthCall::abi_decode(&data).unwrap();
         assert_eq!(decoded.totalUsdc, U256::from(100_000_000u64));
         assert_eq!(decoded.minUsdcOut, U256::from(99_000_000u64));
         assert_eq!(decoded.rail, p.rail);
