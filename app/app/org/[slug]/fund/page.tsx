@@ -33,10 +33,10 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
   const [amount, setAmount] = useState('')
   const [status, setStatus] = useState('')
 
-  const reload = () => fetch(`/api/orgs/${slug}/treasury`).then((r) => r.json()).then((d) => {
-    if (d?.org) setOrg({ id: d.org.id, name: d.org.name, vault: d.treasuryVaultAddress, chainId: d.treasuryChainId, owner: d.org.ownerWallet })
+  const reload = () => fetch(`/api/orgs/${slug}/treasury${address ? `?address=${address}` : ''}`).then((r) => r.json()).then((d) => {
+    if (d?.org) setOrg({ id: d.org.id, name: d.org.name, vault: d.treasuryVaultAddress, chainId: d.treasuryChainId, owner: d.org.ownerWallet ?? '' })
   }).catch(() => {})
-  useEffect(() => { reload() }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { reload() }, [slug, address]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isOwner = !!(org && address && org.owner.toLowerCase() === address.toLowerCase())
   const vaultAddr = (org?.vault as `0x${string}`) ?? undefined

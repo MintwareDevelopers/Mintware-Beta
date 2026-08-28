@@ -36,7 +36,7 @@ export default function MultisigSetup({ params }: { params: Promise<{ slug: stri
   const [done, setDone] = useState(false)
 
   const pc = usePublicClient({ chainId: org?.chainId ?? undefined })
-  const isOwner = !!(address && org && address.toLowerCase() === org.ownerWallet.toLowerCase())
+  const isOwner = !!(address && org && address.toLowerCase() === org.ownerWallet?.toLowerCase())
 
   // Load org + treasury (owner, vault, chain, whether already a multisig).
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function MultisigSetup({ params }: { params: Promise<{ slug: stri
   // Seed signers = owner + active members with wallets (deduped).
   const seedSigners = useCallback(async () => {
     if (!org || !address) return
-    const base = [org.ownerWallet.toLowerCase()]
+    const base = [org.ownerWallet?.toLowerCase() ?? '']
     const res = await signedOrgFetch({ path: `/api/orgs/${org.id}/members`, action: 'mintware-org-members', method: 'POST', address, signMessageAsync }).catch(() => null)
     if (res && res.ok) {
       const d = await res.json()
@@ -135,7 +135,7 @@ export default function MultisigSetup({ params }: { params: Promise<{ slug: stri
                 <p className="text-[12.5px] text-ink-soft mt-1.5">Your active team wallets. Toggle who can approve; the owner is always a signer.</p>
                 <div className="mt-3 flex flex-col gap-2">
                   {signers.map((s) => {
-                    const locked = s === org.ownerWallet.toLowerCase()
+                    const locked = s === org.ownerWallet?.toLowerCase()
                     return (
                       <label key={s} className={`flex items-center gap-3 rounded-[10px] border border-hair px-3 py-2.5 text-[13px] ${locked ? 'bg-ground-cool' : 'cursor-pointer hover:bg-ground-cool'}`}>
                         <input type="checkbox" checked disabled={locked} onChange={() => { if (!locked) setSigners((p) => p.filter((x) => x !== s)) }} />

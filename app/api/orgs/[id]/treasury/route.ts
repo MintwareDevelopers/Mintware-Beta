@@ -30,69 +30,82 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .single()
     if (error || !org) return ctx.json({ error: 'org not found' }, 404)
 
-    const { count: memberCount } = await ctx.supabase
-      .from('org_members')
-      .select('id', { count: 'exact', head: true })
-      .eq('org_id', org.id)
-      .eq('status', 'active')
+    // Who's asking — gate the sensitive fields (owner wallet, member count, financial snapshot, on-chain
+    // owner + multisig signers) to the org OWNER or an ACTIVE MEMBER. A public/unknown caller gets only
+    // name/slug/funded + the vault address (a public contract) — never the owner's wallet, the team's
+    // signer set, or the treasury figures. (Hardening follow-up: signature-proven reads; ?address is a
+    // known-address gate, not a cryptographic one.)
+    const addrLc = address && EVM_RE.test(address) ? address.toLowerCase() : null
+    let memberRow: { role: string | null; status: string | null; eas_uid: string | null } | null = null
+    if (addrLc) {
+      const { data: mem } = await ctx.supabase
+        .from('org_members').select('role, status, eas_uid')
+        .eq('org_id', org.id).eq('wallet', addrLc).maybeSingle()
+      memberRow = (mem as { role: string | null; status: string | null; eas_uid: string | null } | null) ?? null
+    }
+    const privileged = (addrLc !== null && addrLc === org.owner_wallet.toLowerCase()) || memberRow?.status === 'active'
+
+    let memberCount: number | null = null
+    if (privileged) {
+      const { count } = await ctx.supabase
+        .from('org_members').select('id', { count: 'exact', head: true })
+        .eq('org_id', org.id).eq('status', 'active')
+      memberCount = count ?? 0
+    }
 
     const base = {
-      org: { id: org.id, name: org.name, slug: org.slug, ownerWallet: org.owner_wallet },
+      org: { id: org.id, name: org.name, slug: org.slug, ...(privileged ? { ownerWallet: org.owner_wallet } : {}) },
       treasuryVaultAddress: org.treasury_vault_address as string | null,
       treasuryChainId: (org.treasury_chain_id as number | null) ?? null,
-      memberCount: memberCount ?? 0,
+      memberCount,
     }
 
     // No vault recorded yet → onboarding state (fund screen shows "record your treasury" step).
     if (!org.treasury_vault_address || !org.treasury_chain_id) {
-      return ctx.json({ ...base, funded: false, snapshot: null, member: null })
+      return ctx.json({ ...base, funded: false, snapshot: null, control: null, member: null })
     }
 
     const rpcUrl = rpcForChain(org.treasury_chain_id)
-    if (!rpcUrl) return ctx.json({ ...base, funded: true, snapshot: null, member: null, note: 'unsupported chain for reads' })
+    if (!rpcUrl) return ctx.json({ ...base, funded: true, snapshot: null, control: null, member: null, note: 'unsupported chain for reads' })
 
     const reader = makeTreasuryReader({ rpcUrl, vault: org.treasury_vault_address })
     try {
       const snap = await reader.snapshot()
-      // On-chain config owner — lets the app verify the treasury is actually controlled by the
-      // org owner's (Privy) wallet (P3 control check). Best-effort; null if the read fails.
-      const onchainOwner = await reader.owner().catch(() => null)
+      const funded = snap.navUsdc > 0n
+
+      // The caller's own realizable balance — only for an ACTUAL member of this org (never an arbitrary address).
       let member = null
-      if (address && EVM_RE.test(address)) {
-        const realizable = await reader.memberRealizableUsdc(address)
-        const { data: mem } = await ctx.supabase
-          .from('org_members')
-          .select('role, status, eas_uid')
-          .eq('org_id', org.id)
-          .eq('wallet', address.toLowerCase())
-          .maybeSingle()
+      if (addrLc && memberRow) {
+        const realizable = await reader.memberRealizableUsdc(addrLc)
         member = {
-          address: address.toLowerCase(),
+          address: addrLc,
           spendableUsdc: realizable.toString(),
-          role: (mem?.role as string | null) ?? null,
-          status: (mem?.status as string | null) ?? null,
-          easUid: (mem?.eas_uid as string | null) ?? null,
+          role: memberRow.role ?? null,
+          status: memberRow.status ?? null,
+          easUid: memberRow.eas_uid ?? null,
         }
       }
-      return ctx.json({
-        ...base,
-        funded: snap.navUsdc > 0n,
-        snapshot: {
+
+      // Financial snapshot + control (on-chain owner + multisig signers) are org internals — privileged only.
+      let snapshot = null
+      let control = null
+      if (privileged) {
+        snapshot = {
           navUsdc: snap.navUsdc.toString(),
           coverageBps: snap.coverageBps > 1_000_000n ? null : Number(snap.coverageBps), // null = fully covered (MAX)
           deployedUsdc: snap.deployedUsdc.toString(),
           juniorBufferUsdc: snap.juniorBufferUsdc.toString(),
           fullyCovered: snap.fullyCovered,
-        },
-        control: {
+        }
+        const onchainOwner = await reader.owner().catch(() => null)
+        control = {
           onchainOwner,
-          // Does the on-chain owner match the org owner's (Privy) wallet? The core control assurance.
           ownerMatchesOrg: !!onchainOwner && onchainOwner.toLowerCase() === org.owner_wallet.toLowerCase(),
-          // If the owner is a Safe multisig (P3 L2), its threshold + signers. null = a plain key (L1).
           multisig: onchainOwner ? await readSafeInfo(rpcUrl, onchainOwner) : null,
-        },
-        member,
-      })
+        }
+      }
+
+      return ctx.json({ ...base, funded, snapshot, control, member })
     } catch (e) {
       return ctx.json({ ...base, funded: true, snapshot: null, member: null, error: 'treasury_read_failed', detail: String(e) }, 502)
     }

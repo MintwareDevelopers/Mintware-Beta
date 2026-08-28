@@ -47,7 +47,7 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
 
   const policy: RolePolicy = policyForRole(data?.member?.role)
   const isMember = !!data?.member && data.member.status === 'active'
-  const isOwner = !!(data && address && data.org.ownerWallet.toLowerCase() === address.toLowerCase())
+  const isOwner = !!(data && address && data.org.ownerWallet?.toLowerCase() === address.toLowerCase())
 
   const tiles = [
     { href: `pay`,     label: 'Pay a vendor',  sub: 'One payment, any chain',         show: policy.canPayVendors || isOwner },
