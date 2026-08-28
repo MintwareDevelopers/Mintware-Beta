@@ -101,7 +101,7 @@ function Attribution() {
       <div className={EY}>How it works · Attribution</div>
       <h1>Attribution — the score</h1>
       <p className={SUB}>A chain-agnostic reputation score computed from seven on-chain dimensions plus a risk penalty. Pure, deterministic, and weighted so a whale is not 10× a minnow.</p>
-      <p>Attribution reads a wallet&apos;s on-chain history and reduces it to one number in <b>[0, 925]</b> (engine <code>attribution-v2.0.0</code>, in <code>lib/attribution/*</code>). <code>computeScore(activity, nowMs)</code> is pure and deterministic. It is live: the on-chain <b>AIAttribution v3</b> contract sits on Base mainnet.</p>
+      <p>Attribution reads a wallet&apos;s on-chain history and reduces it to one number in <b>[0, 925]</b> (engine <code>attribution-v2.0.0</code>, in <code>lib/attribution/*</code>). <code>computeScore(activity, nowMs)</code> is pure and deterministic. The score you see is computed off-chain in this repo, not read from a contract. A separate <b>AIAttribution v3</b> attestation contract is registered on Base mainnet for agents to reference, but it does not source the number here.</p>
 
       <h2>Seven dimensions + a risk penalty</h2>
       <p>The positive weights sum to exactly <b>925</b> (<code>MAX_SCORE</code>). There are seven positive dimensions and a separate deduction — not &ldquo;eight signals.&rdquo;</p>
