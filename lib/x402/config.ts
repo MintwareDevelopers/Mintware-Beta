@@ -23,7 +23,10 @@ export const USDC_BY_NETWORK: Record<string, string> = {
 
 export function supportedNetworks(): string[] {
   const raw = process.env.X402_SUPPORTED_NETWORKS
-  const list = (raw ? raw.split(',') : ['base', 'base-sepolia']).map((s) => s.trim()).filter(Boolean)
+  // Default to TESTNET ONLY (base-sepolia). Everything x402 is pre-audit; mainnet settle must be an
+  // explicit, deliberate opt-in via X402_SUPPORTED_NETWORKS — never the default, so a buyer paying on
+  // Base mainnet can't trigger a real-USDC settle unless the operator has switched it on knowingly.
+  const list = (raw ? raw.split(',') : ['base-sepolia']).map((s) => s.trim()).filter(Boolean)
   return list.filter((n) => n in USDC_BY_NETWORK)
 }
 
