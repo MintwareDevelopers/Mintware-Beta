@@ -27,8 +27,6 @@
     "forge:deploy:treasury-v2:dry-run": "forge script contracts-v4/script/DeployTreasuryV2.s.sol --rpc-url base_sepolia -vvvv",
     "forge:deploy:treasury-factory:base-sepolia": "forge script contracts-v4/script/DeployTreasuryFactory.s.sol --rpc-url base_sepolia --broadcast --slow -vvvv",
     "forge:create-treasury-vault:base-sepolia": "forge script contracts-v4/script/CreateTreasuryVault.s.sol --rpc-url base_sepolia --broadcast --slow -vvvv",
-    "forge:deploy:arc-spend:arc": "forge script contracts-v4/script/DeployArcSpendStack.s.sol --rpc-url arc --broadcast --slow -vvvv",
-    "forge:deploy:arc-spend:dry-run": "forge script contracts-v4/script/DeployArcSpendStack.s.sol -vvvv",
     "forge:deploy:eth-settlement:base-sepolia": "forge script contracts-v4/script/DeployEthSettlement.s.sol --rpc-url base_sepolia --broadcast --slow -vvvv",
     "forge:deploy:eth-collateral:base-sepolia": "forge script contracts-v4/script/DeployEthCollateralVault.s.sol --rpc-url base_sepolia --broadcast --slow -vvvv",
     "forge:deploy:pair:base-sepolia": "forge script contracts-v4/script/DeployPairVault.s.sol --rpc-url base_sepolia --broadcast --verify -vvvv",

@@ -108,7 +108,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const chainId = Number(body.treasuryChainId)
       if (!EVM_RE.test(vault)) return ctx.json({ error: 'valid treasuryVaultAddress required' }, 400)
       if (!Number.isInteger(chainId) || chainId <= 0) return ctx.json({ error: 'valid treasuryChainId required' }, 400)
-      if (!rpcForChain(chainId)) return ctx.json({ error: 'unsupported chain (Base Sepolia 84532 or Arc 5042002)' }, 400)
+      if (!rpcForChain(chainId)) return ctx.json({ error: 'unsupported chain (Base Sepolia 84532)' }, 400)
 
       const { data: org, error: orgErr } = await ctx.supabase.from('orgs').select('id, owner_wallet').eq('id', id).single()
       if (orgErr || !org) return ctx.json({ error: 'org not found' }, 404)

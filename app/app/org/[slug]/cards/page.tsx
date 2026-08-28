@@ -30,8 +30,7 @@ type Gateway = { address: string; chainId: number } | null
 
 const fmtUsd = (atomic: string) => `$${(Number(atomic) / 1_000_000).toFixed(2)}`
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
-const explorerTx = (chainId: number, hash: string) =>
-  chainId === 5042002 ? `https://testnet.arcscan.app/tx/${hash}` : `https://sepolia.basescan.org/tx/${hash}`
+const explorerTx = (_chainId: number, hash: string) => `https://sepolia.basescan.org/tx/${hash}`
 
 export default function CardsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)

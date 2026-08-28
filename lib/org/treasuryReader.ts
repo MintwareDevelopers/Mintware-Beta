@@ -37,10 +37,9 @@ export interface TreasurySnapshot {
   fullyCovered: boolean
 }
 
-/** RPC per chain for public reads. Base Sepolia → publicnode (dodges the stale-mempool node);
- *  Arc testnet → the pinned RPC. Returns null for an unknown chain. */
+/** RPC per chain for public reads. Base Sepolia → publicnode (dodges the stale-mempool node).
+ *  (Arc testnet was dropped 2026-08-27.) Returns null for an unknown chain. */
 export function rpcForChain(chainId: number | null | undefined): string | null {
-  if (chainId === 5042002) return 'https://rpc.testnet.arc.io'
   if (chainId === 84532) return process.env.BASE_SEPOLIA_RPC_URL || 'https://base-sepolia-rpc.publicnode.com'
   if (chainId === 8453) return process.env.BASE_RPC_URL || 'https://base-rpc.publicnode.com'
   return null

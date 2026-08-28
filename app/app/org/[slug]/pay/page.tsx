@@ -14,7 +14,6 @@ import { signedOrgFetch } from '@/lib/org/signedFetch'
 
 const CHAINS = [
   { id: 84532, name: 'Base Sepolia' },
-  { id: 5042002, name: 'Circle Arc' },
 ]
 const toAtomic = (usd: string) => {
   const n = Math.round(parseFloat(usd) * 1e6)

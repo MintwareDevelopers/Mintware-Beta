@@ -86,7 +86,7 @@ export default function RiskDisclosuresPage() {
 
         <h2 id="contract" className={h2}>3. Smart-contract & protocol risk</h2>
         <Risk t="Unaudited contracts">As of this writing, no contract underlying the vaults or payments surface has completed an external security audit. Audited status, when achieved, will be stated explicitly on the relevant product page — absence of that statement means unaudited.</Risk>
-        <Risk t="Testnet, not mainnet">The vault engine and payments stack currently operate on Base Sepolia and Circle Arc testnet. Testnet contracts are unproven, may contain bugs, and are not backed by real economic value regardless of any figure displayed.</Risk>
+        <Risk t="Testnet, not mainnet">The vault engine and payments stack currently operate on Base Sepolia testnet. Testnet contracts are unproven, may contain bugs, and are not backed by real economic value regardless of any figure displayed.</Risk>
         <Risk t="Bugs & exploits">Smart contracts, however careful the engineering, can contain vulnerabilities. A bug or exploit in Mintware's contracts, or in a third-party protocol Mintware routes through (Aave, Uniswap V4), can result in loss of funds routed through it.</Risk>
         <Risk t="Upgrade & governance risk">We may pause, deprecate, or migrate contracts, including via a guardian kill-switch, at our discretion in response to a discovered vulnerability or other operational need. This can temporarily or permanently affect your ability to withdraw or use a position.</Risk>
         <Risk t="Third-party protocol dependency">The vaults route idle capital through third-party protocols (currently Aave). A failure, exploit, or parameter change in that protocol can affect vault solvency independent of any bug in Mintware's own contracts.</Risk>
@@ -104,7 +104,7 @@ export default function RiskDisclosuresPage() {
         <Risk t="Illustrative figures">APY, TVL, or example-vault figures shown before a vault is live and funded are illustrative projections, not historical results, and should not be relied upon.</Risk>
 
         <h2 id="payments" className={h2}>6. Payments, agent & x402 risk</h2>
-        <Risk t="Experimental, testnet-only">The Liquid Sovereign Account, card-spend, and agent x402 payment rails are experimental and currently run against testnet infrastructure (Circle Arc testnet). No real card, real settlement, or real merchant transaction should be assumed to occur through these features unless explicitly stated as live.</Risk>
+        <Risk t="Experimental, testnet-only">The Liquid Sovereign Account, card-spend, and agent x402 payment rails are experimental and currently run against testnet infrastructure (Base Sepolia). No real card, real settlement, or real merchant transaction should be assumed to occur through these features unless explicitly stated as live.</Risk>
         <Risk t="No settlement guarantee">Authorization of a spend (e.g. an edge-auth "approve") is not a guarantee of final on-chain settlement. A settlement can fail, be delayed, or be reversed by an underlying rail (Circle, Visa) independent of Mintware's own systems.</Risk>
         <Risk t="Agent delegation risk">Granting an autonomous agent a scoped spending permission means that agent can act within that scope without further confirmation from you. Misconfigured limits, a compromised agent, or a bug in the delegation logic can result in unintended spend up to the granted limit.</Risk>
 

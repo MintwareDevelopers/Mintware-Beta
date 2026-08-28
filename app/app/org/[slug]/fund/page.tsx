@@ -21,7 +21,7 @@ const VAULT_ABI = [
 ] as const
 const ERC20_ABI = [{ type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }] }] as const
 
-const CHAINS = [{ id: 84532, name: 'Base Sepolia' }, { id: 5042002, name: 'Circle Arc' }]
+const CHAINS = [{ id: 84532, name: 'Base Sepolia' }]
 
 export default function FundPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
@@ -113,10 +113,6 @@ export default function FundPage({ params }: { params: Promise<{ slug: string }>
                 </div>
                 <p className="text-[11.5px] text-ink-soft mt-3">Senior deposits stay spendable and redeem at par while the treasury covers them. In a loss event the junior (owner-only) tranche absorbs losses first — first-loss, 90-day lock, and earns the treasury's spread.</p>
               </div>
-              <Link href="/app/arc" className="soft-card p-4 mt-4 flex items-center justify-between no-underline group">
-                <div><div className="text-[13.5px] font-semibold text-ink group-hover:text-peri-deep transition-colors">Fund from another chain</div><div className="text-[12px] text-ink-soft mt-0.5">Bridge USDC in via Circle CCTP — lands as treasury shares.</div></div>
-                <span className="text-peri-deep">→</span>
-              </Link>
             </>
           ) : null}
 
