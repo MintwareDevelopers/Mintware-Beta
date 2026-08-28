@@ -92,6 +92,17 @@ Source of truth: `docs/schema.sql`
   allow direct PostgREST read/write. ⚠ Core tables (`campaigns`/`wallet_profiles`/`referral_records`/
   `participants`) live in `docs/schema.sql` (dashboard-managed, NOT a migration) — verify their prod
   RLS with the query in the migration's footer; the repo cannot confirm it.
+- `20260828000002_x402_settle_events.sql` — **`x402_settle_events`** table: best-effort log of every
+  x402 settle attempt (`payer`, `payee`, `resource`, `network`, `asset`, `amount_atomic`, `provider`
+  — `'direct'|'relayer'|'oracle'|'deferred'`, `success`, `tx_hash`, `error_reason`, `hold_id`).
+  Written from the two `Facilitator.settle()` implementations (`lib/x402/facilitator.ts`
+  `YpnFacilitator`, `lib/x402/directFacilitator.ts` `DirectFacilitator`) via the fire-and-forget
+  `lib/x402/settleLog.ts#logSettleEvent` — the single choke point every settle call funnels
+  through regardless of route (`/api/x402/settle`, `/score`, `/scores`). Before this, no settle
+  outcome was persisted anywhere; the result was serialized straight into the HTTP response and
+  discarded. Pure observability today — nothing reads it yet. Deny-all RLS (service-role only,
+  mirrors `20260819000001`). See memory `attribution_review_2026_08_28` for why (prerequisite for
+  an eventual agent-reputation "behavior"/"contribution" signal, if that gets built).
 - `20260824000001_x402_standing_permits.sql` — **`x402_standing_permits`** table: the agent twin of
   the `org_cards` permit columns (`20260819000003`). Payer-keyed store of a standing EIP-712
   `DelegatedSpendPermit` (columns `payer`, `gateway`, `chain_id`, `permit_user`,

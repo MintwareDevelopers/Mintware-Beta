@@ -9,6 +9,7 @@ import { PaymentRequirements, PaymentPayload, VerifyResult, SettleResult } from 
 import { checkPayloadAgainst } from './protocol'
 import { verifyEip3009Authorization } from './verifyAuthorization'
 import { Facilitator, Settler } from './facilitator'
+import { logSettleEvent } from './settleLog'
 
 export class DirectFacilitator implements Facilitator {
   constructor(private readonly cfg: { supportedNetworks: string[]; settler: Settler }) {}
@@ -34,7 +35,9 @@ export class DirectFacilitator implements Facilitator {
   async settle(reqs: PaymentRequirements, payload: PaymentPayload): Promise<SettleResult> {
     // permit/edge are ignored in the direct model (no DelegatedSpendPermit / settleSpend).
     const res = await this.cfg.settler.settle({ payload, reqs })
-    return { success: res.success, txHash: res.txHash, network: reqs.network, errorReason: res.errorReason }
+    const result = { success: res.success, txHash: res.txHash, network: reqs.network, errorReason: res.errorReason }
+    logSettleEvent(reqs, payload, result, 'direct')
+    return result
   }
 
   async supported() {

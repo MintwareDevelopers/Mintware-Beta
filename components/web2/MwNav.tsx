@@ -38,7 +38,7 @@ export function MwNav() {
     { href: '/app/account', label: 'Account' },
     { href: '/app/swap', label: 'Swap' },
     { href: '/app/vaults', label: 'Vaults' },
-    { href: '/app/leaderboard', label: 'Leaderboard' },
+    { href: '/agents/leaderboard', label: 'Agents' },
   ]
 
   return (

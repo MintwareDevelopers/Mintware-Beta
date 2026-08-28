@@ -8,8 +8,6 @@ interface PostSwapSummaryProps {
   buyAmount: string
   buyToken: Token | null
   sellAmountUSD: number | null
-  estimatedScoreGain: number
-  currentScore: number
   onDismiss: () => void
 }
 
@@ -17,13 +15,9 @@ export function PostSwapSummary({
   txHash,
   buyAmount,
   buyToken,
-  estimatedScoreGain,
-  currentScore,
   onDismiss,
 }: PostSwapSummaryProps) {
   const { address } = useMintwareIdentity()
-
-  const newScore = currentScore + estimatedScoreGain
 
   const referralUrl = address
     ? `${window.location.origin}/app/swap?ref=${address}`
@@ -49,21 +43,6 @@ export function PostSwapSummary({
               {parseFloat(buyAmount).toFixed(6)} {buyToken.symbol} received
             </div>
           )}
-        </div>
-
-        <div className="px-[24px] py-[20px]">
-          {estimatedScoreGain > 0 && (
-            <div className="flex items-start gap-[12px] py-[10px] border-b border-hair-soft">
-              <span className="w-[8px] h-[8px] rounded-full bg-peri inline-block mt-[6px] shrink-0" />
-              <div className="flex-1">
-                <div className="font-atx-display text-[13px] font-semibold text-ink">
-                  Attribution score <span className="font-mono text-[13px] font-semibold text-coral2-deep">+{estimatedScoreGain} pts</span>
-                </div>
-                <div className="text-[12px] text-ink-soft mt-[1px]">New score: {newScore}</div>
-              </div>
-            </div>
-          )}
-
         </div>
 
         <div className="px-[24px] pb-[24px] flex flex-col gap-[8px]">

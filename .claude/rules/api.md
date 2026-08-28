@@ -77,7 +77,6 @@ All internal API routes use the `createHandler` factory — see `.claude/rules/r
 | `/api/swap/best-route` | POST | MW meta-router quote (flag-gated; falls back to LI.FI) |
 | `/api/agents/leaderboard` | GET | AI agent leaderboard |
 | `/api/agents/[address]/pending` | GET | Pending actions for agent address |
-| `/api/eas/attest-score` | POST | EAS offchain score attestation |
 | `/api/auth/connect` | POST | Wallet connect + basename ref code resolution |
 | `/api/waitlist` | POST | Waitlist signup → `waitlist` Supabase table |
 
@@ -86,4 +85,9 @@ All internal API routes use the `createHandler` factory — see `.claude/rules/r
 > `/api/eas/attest-reward`. The live rewards path is the universal pipeline
 > (`app/api/(rewards)/cron/universal-*`, `/api/universal/trade-signal`) + the vault-weighted
 > epoch rails (`/api/vault/weighted-claim`). See `.claude/STATE.md`.
+>
+> ⛔ **Removed 2026-08-28 with the human-facing Attribution surface:** `/api/eas/attest-score`
+> (score-specific EAS attestation — `AttestationBadge` was its only caller, also removed). The
+> general offchain-attestation plumbing (`lib/eas.ts`) stays — `attestOrgMembership` still uses
+> it — only the score-attestation route/UI is gone. See memory `attribution_review_2026_08_28`.
 | `/api/benchmarks/yields` | GET | Live yield benchmarks for `/the-math` — curated real pools from DefiLlama (`apyBase` only), 1h module-memo, fails soft `{ok:false}`. No auth. |

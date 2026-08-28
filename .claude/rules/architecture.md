@@ -27,16 +27,15 @@ app/
   layout.tsx              # Root layout — fonts, metadata, <Providers>, <Analytics>
   globals.css             # Tailwind base + @theme tokens + @layer components
   page.tsx                # Landing page — Tailwind v4
-  about/ defi/ docs/ teams/ attribution/   # Marketing pages (public)
+  about/ defi/ docs/ teams/                # Marketing pages (public)
   vaults/ yield-payment-network/ agents/   # Marketing pages (public)
   explorer/page.tsx       # Redirects to /explorer.html
-  [address]/page.tsx      # Public wallet → Attribution profile lookup
   app/                    # ▼ Retail app — bifurcates User / Team after Launch (soft gate)
     page.tsx              # Launch entry
     account/              # USER: Liquid Sovereign Account — the money home (auth)
     swap/ vaults/         # USER: real LI.FI swap · vault list
     vault/[id]/ vault/create/   # USER: vault detail / create (auth)
-    leaderboard/ profile/       # USER: reputation leaderboard · identity (auth)
+    profile/                    # USER: identity — redirects into /app/account (auth)
     agents/               # Agent parking account + x402 (spend-in-place)
     arc/                  # Circle Arc settlement demo
     team/                 # TEAM: treasury terminal
@@ -66,9 +65,9 @@ lib/
   attribution/*  x402/*  auth/*  eas.ts  supabase.ts
 
 app/api/
-  (web2)/    attribution/score-v2 · profile · swap/quote · vault(s) · waitlist
+  (web2)/    attribution/score-v2 · swap/quote · vault(s) · waitlist
   (web3)/    agents/* · wallet-link
-  (rewards)/ referral(/apply) · auth/connect · eas/attest-score
+  (rewards)/ referral(/apply) · auth/connect
              cron/* (universal-*, vault-*, treasury) · universal/trade-signal
              vault/{deposit,withdraw,weighted-claim,attribution-snapshot}
   (admin)/   oracle/* (testnet deploy + smoke helpers)
@@ -91,14 +90,13 @@ User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` 
 | Route | File |
 |---|---|
 | `/` | `app/page.tsx` |
-| `/about` · `/defi` · `/docs` · `/teams` · `/attribution` | `app/{about,defi,docs,teams,attribution}/page.tsx` |
+| `/about` · `/defi` · `/docs` · `/teams` | `app/{about,defi,docs,teams}/page.tsx` |
 | `/vaults` | `app/(rewards)/vaults/page.tsx` |
 | `/yield-payment-network` | `app/yield-payment-network/page.tsx` |
 | `/the-math` | `app/the-math/page.tsx` — interactive yield-engine simulator (floor + fees + MEV stack, take-home vs a fund, real DeFi precedents). Footer-linked as "The Math"; the on-platform home of the value-prop model. |
 | `/agents` | `app/agents/page.tsx` (public — leads with earn + x402) |
 | `/agents/leaderboard` | `app/(web3)/agents/leaderboard/page.tsx` (auth) |
 | `/agent/[address]` | `app/(web3)/agent/[address]/page.tsx` (auth) |
-| `/[address]` | `app/[address]/page.tsx` — Attribution profile lookup |
 | `/explorer` | `app/explorer/page.tsx` → redirects to `/explorer.html` |
 | `/ref/[code]` | `app/(rewards)/ref/[code]/page.tsx` |
 | `/legal` | `app/legal/page.tsx` — **PUBLIC** "Legal & Disclosures" page (no auth): non-custodial-software positioning, five bright lines, partner licence map, Delaware-LLC entity note, and user-facing risk disclosures. `/proof`-doc style, light-only, footer-linked as "Legal". Information, not legal advice; nothing on it is an offer. (Internal risk-register/counsel content was removed when it was made public.) |
@@ -113,7 +111,6 @@ User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` 
 | `/app/vaults` | `app/app/vaults/page.tsx` | User | No |
 | `/app/vault/[id]` | `app/app/vault/[id]/page.tsx` | User | Yes |
 | `/app/vault/create` | `app/app/vault/create/page.tsx` | User | Yes |
-| `/app/leaderboard` | `app/app/leaderboard/page.tsx` | User | No |
 | `/app/profile` | `app/app/profile/page.tsx` | User — identity | Yes |
 | `/app/agents` | `app/app/agents/page.tsx` | Agent parking account + x402 | No |
 | `/app/arc` | `app/app/arc/page.tsx` | Circle Arc settlement demo | No |
@@ -129,3 +126,11 @@ User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` 
 5. **shadcn/ui exists but unused** — scaffolded at init; app uses custom CSS + `components/ui`/`ui2`.
 6. **Explorer stays static** — D3 complexity; `/explorer` redirects to `/public/explorer.html`.
 7. **Dev auth bypass** — `MwAuthGuard` skips redirect when `NODE_ENV === 'development'`.
+8. **Attribution's human-facing surface was gutted 2026-08-28** — `/attribution` marketing page,
+   `/app/leaderboard`, `/[address]` public wallet lookup, EAS score-attestation UI (`AttestationBadge`),
+   and the fabricated swap-widget score preview are all removed. The scoring engine
+   (`lib/attribution/*`, `/api/attribution/score-v2`) and its two live reward-weighting consumers
+   (vault-weighted epoch close, universal pipeline rebate gating) are untouched — direction is to
+   reface Attribution toward AI-agent reputation for the x402/ERC-8004 economy, not human display.
+   `AttributionScorePreview`/`app/[address]`/`app/api/(rewards)/eas/attest-score` no longer exist —
+   don't recreate them. See memory `attribution_review_2026_08_28`.
