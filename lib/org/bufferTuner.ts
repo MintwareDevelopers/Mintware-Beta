@@ -54,8 +54,8 @@ export async function tuneBufferSizing(opts: {
     .gte('created_at', sinceIso)
     .limit(5000)
 
-  const swipes: DemandSwipe[] = (rows ?? [])
-    .map((r) => ({ amountAtomic: big((r as { amount_atomic_usdc: unknown }).amount_atomic_usdc), atSecs: Math.floor(Date.parse((r as { created_at: string }).created_at) / 1000) }))
+  const swipes: DemandSwipe[] = ((rows ?? []) as Array<{ amount_atomic_usdc: unknown; created_at: string }>)
+    .map((r) => ({ amountAtomic: big(r.amount_atomic_usdc), atSecs: Math.floor(Date.parse(r.created_at) / 1000) }))
     .filter((s) => s.amountAtomic > 0n && Number.isFinite(s.atSecs))
 
   const stats = computeDemandStats({
