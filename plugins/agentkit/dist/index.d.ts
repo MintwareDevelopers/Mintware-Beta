@@ -179,6 +179,36 @@ declare const mintwareSwapQuoteAction: {
         taker: string;
     }) => Promise<string>;
 };
+declare const mintwareSwapExecuteAction: {
+    name: string;
+    description: string;
+    schema: z.ZodObject<{
+        chainId: z.ZodNumber;
+        sellToken: z.ZodString;
+        buyToken: z.ZodString;
+        sellAmount: z.ZodString;
+        minBuyAmount: z.ZodOptional<z.ZodString>;
+    }, "strip", z.ZodTypeAny, {
+        chainId: number;
+        sellToken: string;
+        buyToken: string;
+        sellAmount: string;
+        minBuyAmount?: string | undefined;
+    }, {
+        chainId: number;
+        sellToken: string;
+        buyToken: string;
+        sellAmount: string;
+        minBuyAmount?: string | undefined;
+    }>;
+    invoke: (wallet: X402Wallet, args: {
+        chainId: number;
+        sellToken: string;
+        buyToken: string;
+        sellAmount: string;
+        minBuyAmount?: string;
+    }) => Promise<string>;
+};
 export declare const mintwareActions: ({
     name: string;
     description: string;
@@ -297,5 +327,34 @@ export declare const mintwareActions: ({
         sellAmount: string;
         taker: string;
     }) => Promise<string>;
+} | {
+    name: string;
+    description: string;
+    schema: z.ZodObject<{
+        chainId: z.ZodNumber;
+        sellToken: z.ZodString;
+        buyToken: z.ZodString;
+        sellAmount: z.ZodString;
+        minBuyAmount: z.ZodOptional<z.ZodString>;
+    }, "strip", z.ZodTypeAny, {
+        chainId: number;
+        sellToken: string;
+        buyToken: string;
+        sellAmount: string;
+        minBuyAmount?: string | undefined;
+    }, {
+        chainId: number;
+        sellToken: string;
+        buyToken: string;
+        sellAmount: string;
+        minBuyAmount?: string | undefined;
+    }>;
+    invoke: (wallet: X402Wallet, args: {
+        chainId: number;
+        sellToken: string;
+        buyToken: string;
+        sellAmount: string;
+        minBuyAmount?: string;
+    }) => Promise<string>;
 })[];
-export { mintwareGetScoreAction, mintwareRegisterAction, mintwareClaimPendingAction, mintwareParkAction, mintwareUnparkAction, mintwareTreasuryAction, mintwareX402QuoteAction, mintwareX402PayAction, mintwareVaultListAction, mintwareYieldsAction, mintwarePoolsAction, mintwareSwapQuoteAction, BASE_MAINNET_CONTRACT, API_BASE, };
+export { mintwareGetScoreAction, mintwareRegisterAction, mintwareClaimPendingAction, mintwareParkAction, mintwareUnparkAction, mintwareTreasuryAction, mintwareX402QuoteAction, mintwareX402PayAction, mintwareVaultListAction, mintwareYieldsAction, mintwarePoolsAction, mintwareSwapQuoteAction, mintwareSwapExecuteAction, BASE_MAINNET_CONTRACT, API_BASE, };

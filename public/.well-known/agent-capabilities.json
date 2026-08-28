@@ -176,7 +176,19 @@
       "auth": "none",
       "tools": ["mintware_swap_quote", "MINTWARE_SWAP_QUOTE"],
       "returns": "LI.FI raw quote incl. transactionRequest (to, data, value) — the agent signs + broadcasts it with its own key.",
-      "note": "The quote tool is read-only (no signing). Auto-execute (a plugin that signs + broadcasts the agent's swap for it) is intentionally deferred — it moves the agent's real funds and warrants a dedicated, guarded build."
+      "note": "The quote tool is read-only (no signing). For end-to-end execution use swap_execute (AgentKit MINTWARE_SWAP_EXECUTE), which quotes then signs + broadcasts with the agent's own key."
+    },
+    {
+      "id": "swap_execute",
+      "title": "Execute a swap from the agent wallet (quote → sign → broadcast)",
+      "group": "defi",
+      "method": "GET+on-chain",
+      "path": "/api/swap/quote (then the agent broadcasts the returned transactionRequest)",
+      "auth": "agent-key",
+      "tools": ["MINTWARE_SWAP_EXECUTE"],
+      "input": { "chainId": "int", "sellToken": "0x-address or native sentinel", "buyToken": "0x-address", "sellAmount": "raw units", "minBuyAmount": "raw units (optional slippage guard)" },
+      "returns": "The approve (ERC-20 sells only) + swap transaction hashes.",
+      "note": "The agent signs + broadcasts with its OWN key and pays gas — Mintware never holds the funds or the key. ERC-20 sells send the route's required approval first; native-coin sells don't. minBuyAmount aborts before any on-chain action if the guaranteed output is too low. AgentKit only — MCP/Eliza tool surfaces have no signer."
     },
     {
       "id": "vault_list",
