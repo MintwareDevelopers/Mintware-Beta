@@ -632,7 +632,7 @@ async function sendTx(
   const rpc = parkRpc(runtime)
   const chain = defineChain({
     id: parkChainId(runtime),
-    name: 'Arc',
+    name: 'Base Sepolia',
     nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
     rpcUrls: { default: { http: [rpc] } },
   })
@@ -715,7 +715,7 @@ const parkUsdcAction: Action = {
   description:
     'Parks USDC into the Mintware yield vault so it earns while staying spendable in place (it never locks). ' +
     'Deposits the USDC amount from the message: approves the vault, then deposits (ERC-4626). ' +
-    'On-chain — the agent pays gas. Requires AGENT_PRIVATE_KEY. Vault/USDC/RPC default to the Arc-testnet YPN stack.',
+    'On-chain — the agent pays gas. Requires AGENT_PRIVATE_KEY. Vault/USDC/RPC default to the base-sepolia YPN stack.',
 
   validate: async (runtime: IAgentRuntime, _message: Memory): Promise<boolean> => {
     const key = runtime.getSetting('AGENT_PRIVATE_KEY')
@@ -1018,7 +1018,7 @@ const showTreasuryAction: Action = {
 
       await callback({
         text: [
-          `Mintware parking account for ${short} (${t.network ?? 'arc'})`,
+          `Mintware parking account for ${short} (${t.network ?? 'base-sepolia'})`,
           `  Parked (earning): $${t.parkedUsdcFormatted ?? '0'} USDC`,
           `  Spendable now:    $${t.spendableUsdcFormatted ?? '0'} USDC`,
           t.earning
@@ -1042,7 +1042,7 @@ const showTreasuryAction: Action = {
       {
         user: '{{agentName}}',
         content: {
-          text: 'Mintware parking account for 0xabc1…ef12 (arc)\n  Parked (earning): $250 USDC\n  Spendable now:    $250 USDC\n  Status: earning yield, fully spendable in place — spend per call via PAY_X402.',
+          text: 'Mintware parking account for 0xabc1…ef12 (base-sepolia)\n  Parked (earning): $250 USDC\n  Spendable now:    $250 USDC\n  Status: earning yield, fully spendable in place — spend per call via PAY_X402.',
           action: 'SHOW_TREASURY',
         },
       },
@@ -1344,7 +1344,7 @@ const showPoolsAction: Action = {
 
 const mintwarePlugin: Plugin = {
   name: 'mintware-attribution',
-  description: 'Mintware AI Attribution + capital parking (yield vault) + x402 pay-per-call for AI agents on Base/Arc',
+  description: 'Mintware AI Attribution + capital parking (yield vault) + x402 pay-per-call for AI agents on Base',
   actions: [
     getAttributionScoreAction,
     registerMintwareAction,
