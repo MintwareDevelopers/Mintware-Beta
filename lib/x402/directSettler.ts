@@ -44,7 +44,6 @@ const USDC_EIP3009_ABI = [
 const NETWORKS: Record<string, { chainId: number; rpcEnv: string; defaultRpc: string }> = {
   base: { chainId: 8453, rpcEnv: 'BASE_RPC_URL', defaultRpc: 'https://mainnet.base.org' },
   'base-sepolia': { chainId: 84532, rpcEnv: 'BASE_SEPOLIA_RPC_URL', defaultRpc: 'https://base-sepolia-rpc.publicnode.com' },
-  arc: { chainId: 5042002, rpcEnv: 'ARC_RPC_URL', defaultRpc: 'https://rpc.testnet.arc.io' },
 }
 
 /** The one impure step — submit the transfer + await the receipt — injectable so the settler is unit-testable

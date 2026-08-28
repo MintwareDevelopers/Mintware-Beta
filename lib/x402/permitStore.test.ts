@@ -41,7 +41,7 @@ const GATEWAY = '0xBbBBbBbbBBBbBBbBBBBBbBBbbbBbBbbbBBbBBbBB'
 const input = {
   payer: PAYER,
   gateway: GATEWAY,
-  chainId: 5042002,
+  chainId: 84532,
   user: PAYER,
   maxDailySpendUsdc: '2000000',
   nonce: '7',
