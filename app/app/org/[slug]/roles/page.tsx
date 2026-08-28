@@ -14,6 +14,8 @@ import { ROLE_PRESET_LIST, type RolePreset } from '@/lib/org/rolePresets'
 
 interface Member { id: string; invited_email: string | null; wallet: string | null; role: string; status: string; eas_uid: string | null }
 
+const capText = (c: bigint | null): string => c === null ? 'No spend cap' : c === 0n ? 'Receive-only' : `$${(Number(c) / 1e6).toLocaleString()}/day`
+
 export default function RolesPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params)
   const { address } = useMintwareIdentity()
@@ -81,16 +83,30 @@ export default function RolesPage({ params }: { params: Promise<{ slug: string }
           </Link>
 
           {/* invite */}
-          <div className="soft-card p-5 mt-6 flex items-end gap-3 max-[640px]:flex-col max-[640px]:items-stretch">
-            <label className="flex-1 block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Invite email</span>
+          <div className="soft-card p-5 mt-6">
+            <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Invite email</span>
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@org.xyz" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri" />
             </label>
-            <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Role</span>
-              <select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as RolePreset)} className="mt-1.5 rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri bg-white">
-                {ROLE_PRESET_LIST.map((p) => <option key={p.preset} value={p.preset}>{p.label}</option>)}
-              </select>
-            </label>
-            <button onClick={invite} disabled={busy === 'invite' || !email} className="rounded-full bg-peri text-white px-5 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy === 'invite' ? 'Signing…' : 'Invite'}</button>
+            <div className="mt-4">
+              <span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Role</span>
+              <div className="grid grid-cols-3 max-[640px]:grid-cols-1 gap-2 mt-1.5">
+                {ROLE_PRESET_LIST.filter((p) => p.preset !== 'owner').map((p) => {
+                  const on = inviteRole === p.preset
+                  return (
+                    <button key={p.preset} type="button" onClick={() => setInviteRole(p.preset)} aria-pressed={on}
+                      className={`text-left rounded-[12px] border p-3 transition-colors ${on ? 'border-peri bg-[rgba(108,108,240,0.06)]' : 'border-hair hover:border-[rgba(108,108,240,0.4)]'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[13.5px] font-semibold text-ink">{p.label}</span>
+                        {on && <span className="text-peri-deep text-[13px]" aria-hidden>✓</span>}
+                      </div>
+                      <div className="text-[11px] font-mono tabular-nums text-peri-deep mt-0.5">{capText(p.dailyCapUsdc)}</div>
+                      <div className="text-[11.5px] text-ink-soft mt-1 leading-[1.4]">{p.blurb}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <button onClick={invite} disabled={busy === 'invite' || !email} className="mt-4 rounded-full bg-peri text-white px-5 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy === 'invite' ? 'Signing…' : `Invite as ${ROLE_PRESET_LIST.find((p) => p.preset === inviteRole)?.label ?? 'member'}`}</button>
           </div>
           {msg && <div className="text-[12.5px] text-ink-mid mt-3">{msg}</div>}
           {lastLink && (
