@@ -16,6 +16,26 @@ function isValidEmail(raw: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)
 }
 
+// GET /api/orgs/[id]/invite?email= — the accept page's pre-login peek: given the org (slug or id) and
+// the invited email, return the org name + the pending invite's role so the invitee can be shown what
+// they're joining (role + spend cap). No auth — the invitee has no wallet yet — and it only ever
+// reveals a role for an invite that is actually PENDING for that exact email; no email = no role.
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  return createHandler(async (r, ctx) => {
+    const email = new URL(r.url).searchParams.get('email')?.toLowerCase()
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    const { data: org } = await ctx.supabase
+      .from('orgs').select('id, name, slug').eq(isUuid ? 'id' : 'slug', id).maybeSingle()
+    if (!org) return ctx.json({ error: 'org not found' }, 404)
+    if (!email || !isValidEmail(email)) return ctx.json({ orgId: org.id, orgName: org.name, role: null, pending: false })
+    const { data: invite } = await ctx.supabase
+      .from('org_members').select('role')
+      .eq('org_id', org.id).eq('invited_email', email).eq('status', 'invited').maybeSingle()
+    return ctx.json({ orgId: org.id, orgName: org.name, role: invite?.role ?? null, pending: !!invite })
+  })(req)
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

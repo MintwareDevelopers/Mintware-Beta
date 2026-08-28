@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Copy, Check, ChevronRight, BarChart2, Droplets, Share2 } from 'lucide-react'
 import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
+import { YourOrgs } from '@/components/web2/YourOrgs'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
 import { WalletDisplay } from '@/components/web3/WalletDisplay'
 import { AnimatedScore } from '@/components/web2/AnimatedScore'
@@ -182,6 +183,9 @@ function AccountContent() {
           </div>
         </div>
       </section>
+
+      {/* Orgs this wallet belongs to — one-click back to their card (de-orphans invited members). */}
+      <YourOrgs address={evmAddress} />
 
       {/* ── Meshed stats grid (money + attribution) ── */}
       <div className="border-b border-hair-soft bg-white">
