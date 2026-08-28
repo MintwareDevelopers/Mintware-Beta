@@ -1,5 +1,10 @@
 # Smart Contracts
 
+> **⚠ STALE BODY (flagged 2026-08-27 system review).** The authoritative live/deployed contract status
+> is [`.claude/STATE.md`](../STATE.md) + [`config/deployments.json`](../../config/deployments.json)
+> (`built ≠ deployed ≠ live`; only `AIAttribution` v3 is on mainnet, and it's fundless). Contract names
+> and address tables below may be stale/historical — verify against those two sources before trusting them.
+
 > **⛔ CAMPAIGNS SHELVED (2026-08-12):** the `MintwareDistributor` campaign distributor and its
 > **entire Hardhat toolchain** (`contracts/`, `scripts/deploy*`, `hardhat.config.cts`,
 > `tsconfig.hardhat.json`, the `hardhat:*` npm scripts) were **removed from the repo** — preserved on

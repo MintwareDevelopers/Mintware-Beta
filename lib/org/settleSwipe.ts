@@ -144,6 +144,6 @@ export async function settleSwipeEvent(opts: {
     .update({ settled: true, settle_tx: txHash, settled_at: new Date().toISOString() })
     .eq('id', eventId)
 
-  const explorerUrl = (org.treasury_chain_id === 5042002 ? 'https://testnet.arcscan.app/tx/' : 'https://sepolia.basescan.org/tx/') + txHash
+  const explorerUrl = 'https://sepolia.basescan.org/tx/' + txHash
   return { ok: true, txHash, explorerUrl, amountAtomicUsdc: amountUSDC }
 }

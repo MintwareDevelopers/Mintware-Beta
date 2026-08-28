@@ -30,9 +30,8 @@ const usd = (atomic: string | undefined) => {
   if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}k`
   return `$${n.toFixed(2)}`
 }
-const chainName = (id: number | null) => (id === 5042002 ? 'Circle Arc testnet' : id === 84532 ? 'Base Sepolia' : id ? `chain ${id}` : '—')
-const explorer = (id: number | null, addr: string) =>
-  id === 5042002 ? `https://testnet.arcscan.app/address/${addr}` : `https://sepolia.basescan.org/address/${addr}`
+const chainName = (id: number | null) => (id === 84532 ? 'Base Sepolia' : id ? `chain ${id}` : '—')
+const explorer = (_id: number | null, addr: string) => `https://sepolia.basescan.org/address/${addr}`
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`
 
 export default function OrgTreasuryPage({ params }: { params: Promise<{ slug: string }> }) {

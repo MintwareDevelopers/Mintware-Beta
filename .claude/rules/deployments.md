@@ -4,7 +4,10 @@
 
 - **URL**: `mintware.finance` (also `mintware-beta.vercel.app`)
 - **GitHub**: `https://github.com/MintwareDevelopers/Mintware-Beta`
-- **Platform**: Vercel (Hobby plan)
+- **Platform**: Vercel — ⚠ **plan UNCONFIRMED (verify in dashboard).** `vercel.json` declares **5 crons**,
+  which **cannot deploy on Hobby** (Hobby caps at 2, once/day). Since the x402 seller is live in prod and
+  builds ship (2026-08-27), prod is **almost certainly on Pro** — but confirm the plan + the live commit
+  SHA in the dashboard (open task). "Hobby" mentions below are legacy.
 - **Branch**: `main` → auto-deploy
 
 ## Build
@@ -111,9 +114,11 @@ this is the "always-on relayer" in the deploy-gated remainder; runs live only wh
 | `/api/cron/farcaster-weekly-cast` | `0 2 * * 1` |
 <!-- /AUTO:crons -->
 
-Hobby plan: max once/day per cron.
-
-Privy rollout note: the Privy integration is already merged on `main` at commit `ec56a62d` and production env/dashboard setup was completed, but it is not live until Vercel can deploy a newer build than the old production commit. On Hobby, frequent cron schedules in `vercel.json` block that deployment; after upgrading Vercel, redeploy `main` (or commit `ec56a62d`) so the `NEXT_PUBLIC_PRIVY_APP_ID` build-time gate can take effect.
+⚠ **Legacy (Hobby) note:** "max once/day per cron" applied on Hobby. With **5 crons live in `vercel.json`**
+this only holds if prod is on **Pro** — confirm the plan (see Production above). The old "Hobby frequent
+crons block deployment / Privy not live until a newer build deploys" caveat is **STALE**: prod is shipping
+newer builds (x402 seller went live 2026-08-27), so deployment is no longer blocked. Confirm Privy's actual
+live status against the deployed commit rather than trusting this note.
 
 ## Reown Cloud (WalletConnect)
 

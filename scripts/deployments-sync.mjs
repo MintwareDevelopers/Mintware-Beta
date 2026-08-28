@@ -24,7 +24,6 @@ const LEDGER = 'config/deployments.json'
 const CHAINS = {
   '8453': ['mainnet', 'base'],
   '84532': ['testnet', 'base-sepolia'],
-  '5042002': ['testnet', 'arc'],
   '42161': ['testnet', 'arbitrum'],
   '56': ['testnet', 'bnb'],
 }

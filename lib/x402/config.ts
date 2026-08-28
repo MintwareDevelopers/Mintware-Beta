@@ -9,13 +9,16 @@ import { oracleSettler } from './oracleSettler'
 import { directSettler } from './directSettler'
 import { parkedSizeTrustSource } from './trustSources'
 import { rpcParkedReader } from './vaultReader'
-import { ARC_TESTNET, ARC_TESTNET_DEPLOYMENT, ARC_CHAIN_ID } from '@/config/arc'
+
+// x402 permit/settle chain defaults. Arc was dropped (2026-08-27) — base-sepolia is the settle chain
+// (the live seller runs X402_SETTLE_PROVIDER=direct, which picks the network from the buyer's payment).
+const DEFAULT_PERMIT_CHAIN_ID = 84532 // Base Sepolia
+const DEFAULT_BASE_SEPOLIA_RPC = 'https://base-sepolia-rpc.publicnode.com'
 
 /** USDC (6dp) per supported network — public token addresses. */
 export const USDC_BY_NETWORK: Record<string, string> = {
   base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   'base-sepolia': '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-  arc: '0x3600000000000000000000000000000000000000',
 }
 
 export function supportedNetworks(): string[] {
@@ -26,7 +29,7 @@ export function supportedNetworks(): string[] {
 
 /** The settlement recipient (Gateway / treasury) for the seller side. */
 export function defaultPayTo(): string | undefined {
-  return process.env.X402_PAY_TO ?? process.env.NEXT_PUBLIC_ARC_GATEWAY_ADDRESS ?? process.env.MINTWARE_TREASURY_ADDRESS
+  return process.env.X402_PAY_TO ?? process.env.MINTWARE_TREASURY_ADDRESS
 }
 
 /** Build the facilitator from env, or null if it can't be configured.
@@ -77,8 +80,10 @@ export function x402OnchainSettleConfigured(): boolean {
  *  `X402_TRUST_TIERING=parked` to tier by parked size (skin in the game; no Attribution). */
 function getTrustSource(): TrustSource | undefined {
   if (process.env.X402_TRUST_TIERING !== 'parked') return undefined
-  const rpcUrl = process.env.ARC_RPC_URL ?? ARC_TESTNET.rpcUrl
-  const vault = process.env.NEXT_PUBLIC_ARC_VAULT_ADDRESS ?? ARC_TESTNET_DEPLOYMENT.vault
+  // Parked-size tiering needs an explicit parking vault (Arc's was dropped). Disabled unless configured.
+  const vault = process.env.NEXT_PUBLIC_VAULT_ADDRESS
+  if (!vault) return undefined
+  const rpcUrl = process.env.BASE_SEPOLIA_RPC_URL ?? DEFAULT_BASE_SEPOLIA_RPC
   return parkedSizeTrustSource(rpcParkedReader({ rpcUrl, vault }))
 }
 
@@ -91,20 +96,16 @@ export function sellerReady(): boolean {
  *  the payer signs against AND the gateway the relayer runs `settleSpend` on. Must be a SINGLE value
  *  so registration (permit route) and lookup (settle route) agree. Resolves server-side from env,
  *  never from a client-supplied address. `X402_GATEWAY_ADDRESS` overrides; otherwise it falls back to
- *  the relayer's default gateway, then the Arc spend-stack gateway. Returns undefined when unset →
- *  callers fail closed. */
+ *  the relayer's default gateway. Returns undefined when unset → callers fail closed. */
 export function x402PermitGateway(): string | undefined {
-  return (
-    process.env.X402_GATEWAY_ADDRESS ??
-    process.env.RELAYER_GATEWAY_ADDRESS ??
-    process.env.NEXT_PUBLIC_ARC_GATEWAY_ADDRESS
-  )
+  return process.env.X402_GATEWAY_ADDRESS ?? process.env.RELAYER_GATEWAY_ADDRESS
 }
 
 /** Chain id the x402 permit's EIP-712 domain is bound to. Must match the gateway's chain. Defaults to
- *  Arc (the x402 spend chain); overridable via `X402_PERMIT_CHAIN_ID` / `EDGE_CHAIN_ID`. */
+ *  Base Sepolia (the settle chain since Arc was dropped); overridable via `X402_PERMIT_CHAIN_ID` /
+ *  `EDGE_CHAIN_ID`. */
 export function x402PermitChainId(): number {
   const raw = process.env.X402_PERMIT_CHAIN_ID ?? process.env.EDGE_CHAIN_ID
-  const n = raw != null ? Number(raw) : ARC_CHAIN_ID
-  return Number.isFinite(n) && n > 0 ? n : ARC_CHAIN_ID
+  const n = raw != null ? Number(raw) : DEFAULT_PERMIT_CHAIN_ID
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_PERMIT_CHAIN_ID
 }

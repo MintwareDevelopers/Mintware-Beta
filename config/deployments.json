@@ -160,40 +160,6 @@
         "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
         "verified": "2026-08-21"
       }
-    },
-    "arc": {
-      "MintwareYieldVault": {
-        "address": "0x11ef2c7d84b755f02f3652ca8b16e6e81a96c421",
-        "chainId": 5042002,
-        "status": "testnet",
-        "note": "from broadcast DeployArcSpendStack.s.sol",
-        "verified": "2026-08-21",
-        "source": "broadcast"
-      },
-      "MintwarePaymentGateway": {
-        "address": "0x1d075cb38f5c126d9c23f1f91fac0a9c8d135399",
-        "chainId": 5042002,
-        "status": "testnet",
-        "note": "from broadcast DeployArcSpendStack.s.sol",
-        "verified": "2026-08-21",
-        "source": "broadcast"
-      },
-      "MintwareERC4626YieldAdapter": {
-        "address": "0xb9fb965caa7197932b52631e0121ea54586e2b88",
-        "chainId": 5042002,
-        "status": "testnet",
-        "note": "from broadcast DeployArcSpendStack.s.sol",
-        "verified": "2026-08-21",
-        "source": "broadcast"
-      },
-      "MintwareCctpDepositRouter": {
-        "address": "0xdb9db7008cffb09bd1d943c237f57327383dfc03",
-        "chainId": 5042002,
-        "status": "testnet",
-        "note": "from broadcast DeployArcSpendStack.s.sol",
-        "verified": "2026-08-21",
-        "source": "broadcast"
-      }
     }
   }
 }

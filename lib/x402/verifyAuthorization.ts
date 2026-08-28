@@ -30,11 +30,10 @@ export const EIP3009_TRANSFER_TYPES = {
 /** USDC EIP-712 domain identity per x402 network (name/version/chainId). `verifyingContract` comes from
  *  the payment requirements' `asset` when present (the exact USDC contract the seller advertised),
  *  falling back to the known public token address for the network (`USDC_BY_NETWORK`). base/base-sepolia
- *  match `plugins/agentkit`'s `USDC_DOMAIN` byte-for-byte; arc is the Circle-Arc USDC identity. */
+ *  match `plugins/agentkit`'s `USDC_DOMAIN` byte-for-byte. */
 const USDC_DOMAIN_ID: Record<string, { name: string; version: string; chainId: number }> = {
   base: { name: 'USD Coin', version: '2', chainId: 8453 },
   'base-sepolia': { name: 'USDC', version: '2', chainId: 84532 },
-  arc: { name: 'USDC', version: '2', chainId: 5042002 },
 }
 
 /** Resolve the USDC EIP-712 domain for `network`, using `asset` as `verifyingContract` when it is a valid

@@ -17,7 +17,7 @@ import { POST } from '@/app/api/x402/permit/route'
 import { putStandingPermit } from '@/lib/x402/permitStore'
 
 const GATEWAY = '0x1D075cB38f5c126D9c23f1f91faC0A9C8d135399'
-const CHAIN_ID = 5042002
+const CHAIN_ID = 84532 // Base Sepolia (Arc dropped 2026-08-27)
 
 const payerAccount = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d')
 const otherAccount = privateKeyToAccount('0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba')
