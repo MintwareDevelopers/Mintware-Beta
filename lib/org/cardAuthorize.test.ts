@@ -18,12 +18,23 @@ function fakeSupabase(opts: {
   orgError?: boolean
   member?: { role: string; status: string } | null
   memberError?: boolean
+  swipeEvents?: Array<{ amount_atomic_usdc: string }> // prior APPROVED swipes today (card_swipe_events)
+  swipeEventsError?: boolean
 }) {
   return {
     from(table: string) {
       const chain = {
         select: () => chain,
         eq: () => chain,
+        // card_swipe_events day-total query terminates on .gte(created_at) and is awaited directly.
+        gte: async () => {
+          if (table === 'card_swipe_events') {
+            return opts.swipeEventsError
+              ? { data: null, error: new Error('boom') }
+              : { data: opts.swipeEvents ?? [], error: null }
+          }
+          throw new Error(`unexpected gte on table ${table}`)
+        },
         maybeSingle: async () => {
           if (table === 'org_cards') {
             return opts.cardError ? { data: null, error: new Error('boom') } : { data: opts.card ?? null, error: null }
@@ -101,6 +112,41 @@ describe('decideCardSwipe', () => {
     })
     expect(res).toMatchObject({ approved: false, reason: 'over_role_daily_cap' })
     expect(edge.authorize).not.toHaveBeenCalled()
+  })
+
+  it('the daily cap is CUMULATIVE: a small swipe declines once today’s approved spend + amount exceeds the cap', async () => {
+    const edge: EdgeAuthorizer = { authorize: vi.fn(async () => ({ approved: true })) }
+    const res = await decideCardSwipe({
+      // $1,900 already approved today; a $200 swipe would take the day to $2,100 > the $2k cap.
+      supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, swipeEvents: [{ amount_atomic_usdc: '1900000000' }] }),
+      provider: 'lithic', providerCardToken: CARD_TOKEN,
+      amountAtomicUsdc: 200_000_000n, // $200 — fine on its own, over the cap cumulatively
+      ref: 'evt-5b', edge,
+    })
+    expect(res).toMatchObject({ approved: false, reason: 'over_role_daily_cap' })
+    expect(edge.authorize).not.toHaveBeenCalled() // belt trips before the NAV hold
+  })
+
+  it('a swipe that stays under the cap cumulatively still passes the belt (reaches edge-auth)', async () => {
+    const edge: EdgeAuthorizer = { authorize: vi.fn(async () => ({ approved: true, holdId: 'h-cum' })) }
+    const res = await decideCardSwipe({
+      // $1,900 already spent; a $50 swipe → $1,950, still under $2k.
+      supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, swipeEvents: [{ amount_atomic_usdc: '1900000000' }] }),
+      provider: 'lithic', providerCardToken: CARD_TOKEN,
+      amountAtomicUsdc: 50_000_000n, ref: 'evt-5c', edge,
+    })
+    expect(res).toMatchObject({ approved: true, holdId: 'h-cum' })
+    expect(edge.authorize).toHaveBeenCalled()
+  })
+
+  it('a card_swipe_events read error falls back to 0n (never hard-declines on a DB hiccup) — edge-auth stays the guard', async () => {
+    const edge: EdgeAuthorizer = { authorize: vi.fn(async () => ({ approved: true, holdId: 'h-fallback' })) }
+    const res = await decideCardSwipe({
+      supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, swipeEventsError: true }),
+      provider: 'lithic', providerCardToken: CARD_TOKEN,
+      amountAtomicUsdc: 50_000_000n, ref: 'evt-5d', edge,
+    })
+    expect(res).toMatchObject({ approved: true, holdId: 'h-fallback' })
   })
 
   it('a vendor (receive-only, 0 cap) can never swipe', async () => {
