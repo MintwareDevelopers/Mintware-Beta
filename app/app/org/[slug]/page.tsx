@@ -50,7 +50,6 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
   const isOwner = !!(data && address && data.org.ownerWallet.toLowerCase() === address.toLowerCase())
 
   const tiles = [
-    { href: `fund`,    label: 'Fund treasury', sub: 'Deposit senior · commit junior', show: isOwner || policy.canManageTreasury },
     { href: `pay`,     label: 'Pay a vendor',  sub: 'One payment, any chain',         show: policy.canPayVendors || isOwner },
     { href: `payroll`, label: 'Run payroll',   sub: 'CSV → one batch settlement',     show: policy.canPayVendors || isOwner },
     { href: `roles`,   label: 'Members & roles',sub: 'Invite · assign a preset',      show: isOwner || policy.canManageTreasury },
@@ -104,10 +103,33 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
                 </div>
               </section>
 
+              {/* Two ways to grow the treasury — Savings (one asset) vs Vaults (both assets). Kept distinct, never conflated. */}
+              <section className="mt-8">
+                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft mb-3">Grow the treasury — two ways</div>
+                <div className="grid grid-cols-2 max-[720px]:grid-cols-1 gap-3">
+                  <Link href={`/app/org/${slug}/fund`} className="soft-card p-5 no-underline group hover:shadow-card-hover transition-shadow block">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-atx-display font-semibold text-[16px] text-ink group-hover:text-peri-deep transition-colors">Savings</div>
+                      <span className="text-[9.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft rounded-full border border-hair px-2 py-0.5 shrink-0">One asset</span>
+                    </div>
+                    <p className="text-[12.5px] text-ink-mid mt-2 leading-[1.5]">Park a single asset (USDC or ETH). Earns a steady yield, holds at par, and stays spendable on the card.</p>
+                    <div className="text-[12.5px] font-semibold text-peri-deep mt-3">Open Savings →</div>
+                  </Link>
+                  <Link href="/app/vaults" className="soft-card p-5 no-underline group hover:shadow-card-hover transition-shadow block">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-atx-display font-semibold text-[16px] text-ink group-hover:text-peri-deep transition-colors">Vaults</div>
+                      <span className="text-[9.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft rounded-full border border-hair px-2 py-0.5 shrink-0">Both assets</span>
+                    </div>
+                    <p className="text-[12.5px] text-ink-mid mt-2 leading-[1.5]">Provide both assets as liquidity. Earns trading fees plus reputation-weighted rewards — deeper upside, with LP exposure.</p>
+                    <div className="text-[12.5px] font-semibold text-peri-deep mt-3">Open Vaults →</div>
+                  </Link>
+                </div>
+              </section>
+
               {!data.funded && (
-                <div className="soft-card p-5 mt-4 flex items-center justify-between gap-4 max-[600px]:flex-col max-[600px]:items-start">
-                  <div><div className="text-[13.5px] font-semibold text-ink">Treasury not funded yet</div><p className="text-[12.5px] text-ink-mid mt-1 max-w-[60ch]">Record your deployed vault and add senior + junior capital to bring it online.</p></div>
-                  {(isOwner || policy.canManageTreasury) && <Link href={`/app/org/${slug}/fund`} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[13px] font-semibold no-underline hover:bg-peri-deep transition-colors">Set up treasury →</Link>}
+                <div className="soft-card p-4 mt-4 flex items-center justify-between gap-4 max-[600px]:flex-col max-[600px]:items-start">
+                  <div className="text-[12.5px] text-ink-mid">New here? Start with <span className="font-semibold text-ink">Savings</span> — one deposit, earning, and spendable.</div>
+                  {(isOwner || policy.canManageTreasury) && <Link href={`/app/org/${slug}/fund`} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[13px] font-semibold no-underline hover:bg-peri-deep transition-colors">Set up Savings →</Link>}
                 </div>
               )}
 
