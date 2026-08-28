@@ -145,5 +145,10 @@
     "tw-animate-css": "1.3.3",
     "typescript": "5.9.3",
     "vitest": "^4.1.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@solana-program/token>@solana/kit": "5.5.1"
+    }
   }
 }
