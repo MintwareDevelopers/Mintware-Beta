@@ -45,10 +45,10 @@ export default function ControlPage({ params }: { params: Promise<{ slug: string
   const funded = !!data?.funded
   const ctl = data?.control
   const ms = ctl?.multisig ?? null // Safe multisig owner (L2), if the treasury is behind one
-  const isOwner = !!(address && org && address.toLowerCase() === org.ownerWallet.toLowerCase())
+  const isOwner = !!(address && org && address.toLowerCase() === org.ownerWallet?.toLowerCase())
 
   return (
-    <MwAuthGuard allowDisconnected>
+    <MwAuthGuard>
       <div className="min-h-screen bg-white font-atx-display text-ink">
         <MwNav />
         <main className="mx-auto max-w-[860px] px-6 max-[700px]:px-4 py-[44px]">
