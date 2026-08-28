@@ -373,17 +373,18 @@ const mintwareX402PayAction = {
   },
 }
 
-// Arc parking vault + USDC (env-overridable). Defaults = the live Arc-testnet YPN yield stack.
-const PARK_VAULT = () => process.env.MINTWARE_PARK_VAULT ?? '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421'
-const PARK_USDC = () => process.env.MINTWARE_PARK_USDC ?? '0x3600000000000000000000000000000000000000'
-const PARK_RPC = () => process.env.MINTWARE_PARK_RPC ?? 'https://rpc.testnet.arc.io'
+// Parking vault + USDC (env-overridable). Arc was dropped (2026-08-27); defaults are the base-sepolia
+// MintwareYieldVault stack. Override via MINTWARE_PARK_VAULT / _USDC / _RPC for another deployment.
+const PARK_VAULT = () => process.env.MINTWARE_PARK_VAULT ?? '0x09Cda8519737a60FD16D263f94fb56237CDb7E42'
+const PARK_USDC = () => process.env.MINTWARE_PARK_USDC ?? '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
+const PARK_RPC = () => process.env.MINTWARE_PARK_RPC ?? 'https://base-sepolia-rpc.publicnode.com'
 const APPROVE_SEL = '0x095ea7b3' //  approve(address,uint256)
 const DEPOSIT_SEL = '0x6e553f65' //  deposit(uint256,address)  (ERC-4626)
 const REDEEM_SEL = '0xdb006a75' //  redeem(uint256)  (burns caller's shares → USDC to caller)
 const PREVIEW_WITHDRAW_SEL = '0x0a28a477' //  previewWithdraw(uint256)  → shares needed
 const SHARES_SEL = '0xce7c2ac2' //  shares(address)
 
-async function arcEthCall(to: string, data: string): Promise<bigint> {
+async function ethCall(to: string, data: string): Promise<bigint> {
   const res = await fetch(PARK_RPC(), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -440,13 +441,13 @@ const mintwareUnparkAction = {
     }
     const vault = PARK_VAULT()
     const agent = wallet.getAddress()
-    const balShares = await arcEthCall(vault, SHARES_SEL + pad32(agent))
+    const balShares = await ethCall(vault, SHARES_SEL + pad32(agent))
     if (balShares === 0n) return 'Nothing parked to un-park.'
 
     let sharesToBurn = balShares // default: un-park all
     if (args.amountUsd != null) {
       const amount = BigInt(Math.round(args.amountUsd * 1_000_000))
-      const need = await arcEthCall(vault, PREVIEW_WITHDRAW_SEL + padUint(amount)) // shares to net `amount`
+      const need = await ethCall(vault, PREVIEW_WITHDRAW_SEL + padUint(amount)) // shares to net `amount`
       sharesToBurn = need < balShares ? need : balShares
     }
     if (sharesToBurn === 0n) return 'Nothing to un-park (amount rounds to zero).'
@@ -478,7 +479,7 @@ const mintwareTreasuryAction = {
     }
     const short = `${address.slice(0, 6)}…${address.slice(-4)}`
     return [
-      `Mintware parking account for ${short} (${t.network ?? 'arc'})`,
+      `Mintware parking account for ${short} (${t.network ?? 'base-sepolia'})`,
       `  Parked (earning): $${t.parkedUsdcFormatted ?? '0'} USDC`,
       `  Spendable now:    $${t.spendableUsdcFormatted ?? '0'} USDC`,
       t.earning

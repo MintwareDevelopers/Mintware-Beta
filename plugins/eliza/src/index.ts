@@ -13,7 +13,7 @@
 //   PAY_X402                 — pay an x402 call in USDC (EIP-3009) and return the resource
 //
 // Contract (Base mainnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
-// Park vault (Arc testnet): 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421
+// Park vault (base-sepolia): 0x09Cda8519737a60FD16D263f94fb56237CDb7E42  (Arc dropped 2026-08-27)
 // API base:                https://mintware.finance
 // =============================================================================
 
@@ -533,20 +533,20 @@ const claimPendingActionsAction: Action = {
 }
 
 // =============================================================================
-// Capital-parking (Arc yield vault) + x402 pay-per-call
+// Capital-parking (base-sepolia yield vault) + x402 pay-per-call
 //
 // Mirrors the five AgentKit actions (MINTWARE_PARK / _UNPARK / _TREASURY /
 // _X402_QUOTE / _X402_PAY) in Eliza's action shape. On-chain writes use a viem
-// wallet client built from AGENT_PRIVATE_KEY; the Arc vault/USDC/RPC default to
-// the live Arc-testnet YPN yield stack and are overridable via runtime settings.
+// wallet client built from AGENT_PRIVATE_KEY; the vault/USDC/RPC default to the
+// base-sepolia YPN yield stack (Arc dropped 2026-08-27) and are overridable via runtime settings.
 // =============================================================================
 
-// ── Arc parking vault + USDC (settings-overridable) ───────────────────────────
+// ── Parking vault + USDC (settings-overridable; base-sepolia — Arc dropped 2026-08-27) ────────────
 
-const PARK_VAULT_DEFAULT = '0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421'
-const PARK_USDC_DEFAULT  = '0x3600000000000000000000000000000000000000'
-const PARK_RPC_DEFAULT   = 'https://rpc.testnet.arc.io'
-const PARK_CHAIN_ID_DEFAULT = 5042002 // Arc testnet
+const PARK_VAULT_DEFAULT = '0x09Cda8519737a60FD16D263f94fb56237CDb7E42' // base-sepolia MintwareYieldVault
+const PARK_USDC_DEFAULT  = '0x036CbD53842c5426634e7929541eC2318f3dCF7e' // base-sepolia USDC
+const PARK_RPC_DEFAULT   = 'https://base-sepolia-rpc.publicnode.com'
+const PARK_CHAIN_ID_DEFAULT = 84532 // Base Sepolia
 
 // ERC-20 / ERC-4626 selectors.
 const APPROVE_SEL          = '0x095ea7b3' // approve(address,uint256)
@@ -606,9 +606,9 @@ function extractUsdAmount(text: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
-// ── Arc read (eth_call) ───────────────────────────────────────────────────────
+// ── on-chain read (eth_call) ──────────────────────────────────────────────────
 
-async function arcEthCall(rpc: string, to: string, data: string): Promise<bigint> {
+async function ethCall(rpc: string, to: string, data: string): Promise<bigint> {
   const res = await fetch(rpc, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -618,9 +618,9 @@ async function arcEthCall(rpc: string, to: string, data: string): Promise<bigint
   return j.result && j.result !== '0x' ? BigInt(j.result) : 0n
 }
 
-// ── Arc write (viem wallet client from AGENT_PRIVATE_KEY) ──────────────────────
+// ── on-chain write (viem wallet client from AGENT_PRIVATE_KEY) ─────────────────
 
-async function sendArcTx(
+async function sendTx(
   runtime: IAgentRuntime,
   privateKey: `0x${string}`,
   tx: { to: string; data: string; value?: bigint },
@@ -776,12 +776,12 @@ const parkUsdcAction: Action = {
 
     try {
       // 1) approve the vault to pull `amount` USDC.
-      const approveTx = await sendArcTx(runtime, privateKey as `0x${string}`, {
+      const approveTx = await sendTx(runtime, privateKey as `0x${string}`, {
         to: usdc,
         data: APPROVE_SEL + pad32(vault) + padUint(amount),
       })
       // 2) deposit(assets, receiver=agent) → mints vault shares to the agent.
-      const depositTx = await sendArcTx(runtime, privateKey as `0x${string}`, {
+      const depositTx = await sendTx(runtime, privateKey as `0x${string}`, {
         to: vault,
         data: DEPOSIT_SEL + padUint(amount) + pad32(agent),
       })
@@ -892,7 +892,7 @@ const unparkUsdcAction: Action = {
     const amountUsd = wantsAll ? null : extractUsdAmount(text)
 
     try {
-      const balShares = await arcEthCall(rpc, vault, SHARES_SEL + pad32(agent))
+      const balShares = await ethCall(rpc, vault, SHARES_SEL + pad32(agent))
       if (balShares === 0n) {
         await callback({ text: 'Nothing parked to un-park.' })
         return true
@@ -901,7 +901,7 @@ const unparkUsdcAction: Action = {
       let sharesToBurn = balShares // default: un-park all
       if (amountUsd != null) {
         const amount = BigInt(Math.round(amountUsd * 1_000_000))
-        const need = await arcEthCall(rpc, vault, PREVIEW_WITHDRAW_SEL + padUint(amount)) // shares to net `amount`
+        const need = await ethCall(rpc, vault, PREVIEW_WITHDRAW_SEL + padUint(amount)) // shares to net `amount`
         sharesToBurn = need < balShares ? need : balShares
       }
       if (sharesToBurn === 0n) {
@@ -909,7 +909,7 @@ const unparkUsdcAction: Action = {
         return true
       }
 
-      const tx = await sendArcTx(runtime, privateKey as `0x${string}`, {
+      const tx = await sendTx(runtime, privateKey as `0x${string}`, {
         to: vault,
         data: REDEEM_SEL + padUint(sharesToBurn),
       })
