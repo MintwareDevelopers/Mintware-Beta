@@ -121,10 +121,8 @@ impl EdgeSigner {
         };
         let digest = auth.eip712_signing_hash(&self.domain);
 
-        let (sig, recid) = self
-            .key
-            .sign_prehash_recoverable(digest.as_slice())
-            .map_err(|e| SignerError::Sign(e.to_string()))?;
+        // k256 0.14: sign_prehash_recoverable is infallible — returns the (Signature, RecoveryId) tuple directly.
+        let (sig, recid) = self.key.sign_prehash_recoverable(digest.as_slice());
 
         let mut signature = [0u8; 65];
         signature[..64].copy_from_slice(&sig.to_bytes());
@@ -144,7 +142,8 @@ impl EdgeSigner {
 /// Derive the Ethereum address from a secp256k1 signing key (keccak of the uncompressed pubkey X‖Y).
 fn address_from_key(key: &SigningKey) -> Address {
     let vk = key.verifying_key();
-    let point = vk.to_encoded_point(false); // 0x04 ‖ X(32) ‖ Y(32)
+    // ecdsa 0.17 (k256 0.14) replaced VerifyingKey::to_encoded_point with to_sec1_point(compress).
+    let point = vk.to_sec1_point(false); // uncompressed SEC1: 0x04 ‖ X(32) ‖ Y(32)
     let hash = keccak256(&point.as_bytes()[1..]);
     Address::from_slice(&hash[12..])
 }
@@ -201,7 +200,7 @@ mod tests {
         let recid = RecoveryId::from_byte(signed.signature[64] - 27).unwrap();
         let vk = VerifyingKey::recover_from_prehash(digest.as_slice(), &sig, recid).unwrap();
         let recovered = {
-            let p = vk.to_encoded_point(false);
+            let p = vk.to_sec1_point(false);
             let h = keccak256(&p.as_bytes()[1..]);
             Address::from_slice(&h[12..])
         };
