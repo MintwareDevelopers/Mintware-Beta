@@ -30,81 +30,145 @@ const PLUGINS = [
     id: 'agentkit',
     name: 'Coinbase AgentKit',
     badge: 'Base · Arc',
-    desc: 'Park, pay over x402, and check reputation — every action below callable by an AgentKit agent from natural language.',
-    install: 'pnpm add @mintware/agentkit-actions @coinbase/agentkit zod',
+    desc: 'Park, pay over x402, quote + execute swaps, and check reputation — every action below callable by an AgentKit agent from natural language. The only runtime with a signer, so swap execution lives here.',
+    install: 'pnpm add @mintwarehq/agentkit-actions @coinbase/agentkit zod',
     docs: '/docs',
   },
   {
     id: 'eliza',
     name: 'ElizaOS Plugin',
     badge: 'Autonomous agents',
-    desc: 'Drop-in plugin for ElizaOS agents — the same actions, fired by conversational triggers.',
-    install: 'pnpm add @mintware/eliza-plugin',
+    desc: 'Drop-in plugin for ElizaOS agents — parking, x402 pay, reputation, and read tools (vaults, yields, pools), fired by conversational triggers.',
+    install: 'pnpm add @mintwarehq/eliza-plugin',
     docs: '/docs',
   },
   {
     id: 'mcp',
     name: 'MCP Server',
     badge: 'Claude · Cursor',
-    desc: 'Model Context Protocol server for Claude Desktop and Cursor — the same actions, no code required.',
-    install: 'pnpm add -g @mintware/mcp-server',
+    desc: 'Model Context Protocol server for Claude Desktop and Cursor — the read + quote tools, no code required. Listed in the MCP registry as io.github.MintwareDevelopers/mcp-server.',
+    install: 'pnpm add -g @mintwarehq/mcp-server',
     docs: '/docs',
   },
 ]
 
+// Machine-readable discovery surfaces — an agent finds Mintware and learns every capability
+// with zero human involvement. All public, no auth, served from mintware.finance.
+const DISCOVERY = [
+  { path: '/.well-known/agent-capabilities.json', name: 'Capability manifest', desc: 'One source of truth — every action with its endpoint, auth, I/O, x402 price, and the tool name in each runtime.' },
+  { path: '/llms.txt', name: 'llms.txt', desc: 'The plain-text agent primer: what Mintware is, the endpoints, and how to authenticate + pay.' },
+  { path: '/.well-known/openapi.json', name: 'OpenAPI', desc: 'Machine-readable spec of the public HTTP surface — point a codegen or tool-caller straight at it.' },
+  { path: '/.well-known/x402.json', name: 'x402 discovery', desc: 'The facilitator, schemes, and networks for pay-per-call — how an agent pays without a human.' },
+  { path: '/.well-known/erc8004-registration.json', name: 'ERC-8004 identity', desc: 'On-chain agent identity (Mintware is Agent #37297 on Base) for trust + discovery.' },
+  { path: '/.well-known/ai-tool/attribution-score.json', name: 'ERC-8257 tool', desc: 'Registered agent-tool manifest (OpenSea tool registry) so agents can find the score tool.' },
+]
+
+// The paid surfaces — an agent pays per call over x402, priced in USDC.
+const PAID_ENDPOINTS = [
+  { path: 'GET /api/x402/score', price: '$0.01 / call', desc: 'Attribution score for one address — the auditable, metered counterpart to the free lookup.' },
+  { path: 'POST /api/x402/scores', price: '$0.01 × count', desc: 'Batch score lookup — reputation-gate a whole set of counterparties in one paid call.' },
+]
+
+// Full cross-runtime matrix — names verified against the published plugin sources.
+// AgentKit is the only runtime with a signer, so swap execution is AgentKit-only.
 const ACTIONS = [
-  // Treasury + payments (the primary capability) first; reputation after.
+  // Treasury + payments (the primary capability).
   {
-    name: 'PARK',
+    name: 'MINTWARE_PARK',
     eliza: 'PARK_USDC',
     mcp: '—',
     desc: 'Park USDC into the yield vault — it earns while staying spendable in place.',
     readOnly: false,
   },
   {
-    name: 'UNPARK',
+    name: 'MINTWARE_UNPARK',
     eliza: 'UNPARK_USDC',
     mcp: '—',
     desc: 'Un-park USDC back to the wallet by redeeming vault shares. Always yours.',
     readOnly: false,
   },
   {
-    name: 'TREASURY',
+    name: 'MINTWARE_TREASURY',
     eliza: 'SHOW_TREASURY',
     mcp: 'mintware_parking_account',
     desc: 'Show the parking account — USDC parked (earning) and spendable in place.',
     readOnly: true,
   },
   {
-    name: 'X402_QUOTE',
+    name: 'MINTWARE_X402_QUOTE',
     eliza: 'QUOTE_X402',
     mcp: 'mintware_x402_quote',
     desc: 'Preflight an x402-gated compute/API URL — the price, without paying.',
     readOnly: true,
   },
   {
-    name: 'X402_PAY',
+    name: 'MINTWARE_X402_PAY',
     eliza: 'PAY_X402',
     mcp: 'mintware_x402_pay',
     desc: 'Pay for an x402-gated call in USDC (EIP-3009) and get the resource back.',
     readOnly: false,
   },
+  // Swap — the new end-to-end capability.
   {
-    name: 'GET_SCORE',
+    name: 'MINTWARE_SWAP_QUOTE',
+    eliza: '—',
+    mcp: 'mintware_swap_quote',
+    desc: 'Get an executable swap quote (LI.FI proxy, fee injected server-side) — the agent signs it itself.',
+    readOnly: true,
+  },
+  {
+    name: 'MINTWARE_SWAP_EXECUTE',
+    eliza: '—',
+    mcp: '—',
+    desc: 'Quote → sign → broadcast a swap with the agent\'s own key. Approves ERC-20 first; minBuyAmount slippage guard. AgentKit-only (it has the signer).',
+    readOnly: false,
+  },
+  // Read / data tools.
+  {
+    name: 'MINTWARE_VAULT_LIST',
+    eliza: 'MINTWARE_VAULT_LIST',
+    mcp: 'mintware_vault_list',
+    desc: 'List Mintware liquidity vaults (dual-sided V4) with each vault\'s current epoch.',
+    readOnly: true,
+  },
+  {
+    name: 'MINTWARE_YIELDS',
+    eliza: 'MINTWARE_YIELDS',
+    mcp: 'mintware_yields',
+    desc: 'Live yield benchmarks — a curated set of real DeFi pools (base APY) to compare against.',
+    readOnly: true,
+  },
+  {
+    name: 'MINTWARE_POOLS',
+    eliza: 'MINTWARE_POOLS',
+    mcp: 'mintware_pools',
+    desc: 'The liquidity manifest for solver / aggregator networks (UniswapX, CoW, 1inch).',
+    readOnly: true,
+  },
+  // Reputation.
+  {
+    name: 'MINTWARE_GET_SCORE',
     eliza: 'GET_ATTRIBUTION_SCORE',
     mcp: 'mintware_get_score',
     desc: 'Look up Attribution score for any address or the agent\'s own wallet.',
     readOnly: true,
   },
   {
-    name: 'REGISTER',
+    name: '—',
+    eliza: '—',
+    mcp: 'mintware_leaderboard',
+    desc: 'Read the agent reputation leaderboard (MCP only).',
+    readOnly: true,
+  },
+  {
+    name: 'MINTWARE_REGISTER',
     eliza: 'REGISTER_MINTWARE',
     mcp: 'mintware_register',
     desc: 'One-time on-chain registration with the Attribution contract on Base.',
     readOnly: false,
   },
   {
-    name: 'CLAIM_PENDING',
+    name: 'MINTWARE_CLAIM_PENDING',
     eliza: 'CLAIM_PENDING_ACTIONS',
     mcp: 'mintware_claim_pending',
     desc: 'Pull pre-signed oracle attestations and record them on-chain.',
@@ -113,7 +177,7 @@ const ACTIONS = [
 ]
 
 const CODE_SNIPPET = `import { AgentKit, CdpWalletProvider } from '@coinbase/agentkit'
-import { mintwareActions } from '@mintware/agentkit-actions'
+import { mintwareActions } from '@mintwarehq/agentkit-actions'
 
 const walletProvider = await CdpWalletProvider.configureWithWallet({
   apiKeyName:    process.env.CDP_API_KEY_NAME,
@@ -123,10 +187,13 @@ const walletProvider = await CdpWalletProvider.configureWithWallet({
 
 const agentkit = await AgentKit.from({ walletProvider, actionProviders: [] })
 
-// Register all Mintware actions — park/unpark, treasury, x402 pay, + reputation
+// Register every Mintware action — park/unpark, treasury, x402 pay,
+// swap quote + execute, vault/yield/pool reads, + reputation
 for (const action of mintwareActions) agentkit.use(action)
 
-// Your agent can now: "Park $50, then pay https://api.example/compute for me."`
+// Your agent can now, with no human clicks:
+//   "Park $50, then pay https://api.example/compute for me."
+//   "Swap 100 USDC for WETH on Base." → signs + broadcasts with its own key.`
 
 // ── The agent parking account + 402 payment engine. BUILT and proven on Arc testnet
 // (deposit→earn→CCTP→settle loop on-chain; x402 seller/facilitator/AgentKit/MCP code-
@@ -309,9 +376,47 @@ export default function AgentsPage() {
 
       <div className="max-w-[900px] mx-auto px-6 pt-14 pb-20 mw-reveal">
 
-        {/* Plugins */}
+        {/* Discovery layer — agent-native by default */}
         <div className="flex items-center gap-3 mb-4">
           <span className={NUM}>01</span>
+          <span className={LABEL}>Agent-native discovery</span>
+        </div>
+        <p className="text-[13px] text-ink-mid leading-[1.55] max-w-[68ch] -mt-1 mb-4">
+          An agent finds Mintware and learns every capability with <span className="font-semibold text-ink">zero human clicks</span> — discover → authenticate → read → swap → pay. These surfaces are public, no auth, and machine-readable.
+        </p>
+        <div className="grid grid-cols-2 max-[640px]:grid-cols-1 gap-3 mb-6">
+          {DISCOVERY.map((d) => (
+            <a key={d.path} href={d.path} target="_blank" rel="noopener noreferrer" className="soft-card p-4 no-underline block hover:border-peri transition-colors group">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-atx-display font-semibold text-[13.5px] text-ink">{d.name}</span>
+                <span className="text-peri-deep text-[14px] opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+              </div>
+              <div className="font-mono text-[10.5px] text-peri-deep mt-1 break-all">{d.path}</div>
+              <p className="text-[12px] text-ink-mid leading-[1.5] mt-2">{d.desc}</p>
+            </a>
+          ))}
+        </div>
+        {/* Priced surfaces (x402) */}
+        <div className="soft-card p-5 mb-10">
+          <div className="flex items-center gap-2.5 mb-1">
+            <span className="w-[9px] h-[9px] rounded-full bg-peri shrink-0" />
+            <span className="font-atx-display font-semibold text-[14px] text-ink">Priced over x402 — agent-to-agent commerce</span>
+          </div>
+          <p className="text-[12.5px] text-ink-mid leading-[1.5] ml-[19px] mb-3.5">Some surfaces are metered: an agent pays per call in USDC, no account, no human. Fees settle to a wallet we control.</p>
+          <div className="flex flex-col gap-2">
+            {PAID_ENDPOINTS.map((e) => (
+              <div key={e.path} className="flex items-center gap-3 rounded-xl bg-ground-cool border border-hair px-3 py-2.5 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-1">
+                <span className="font-mono text-[11.5px] font-semibold text-ink min-w-[220px] shrink-0 max-[560px]:min-w-0">{e.path}</span>
+                <span className="text-[12px] text-ink-mid flex-1">{e.desc}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.06em] px-2 py-[3px] rounded-full border border-[rgba(108,108,240,0.3)] text-peri-deep whitespace-nowrap shrink-0">{e.price}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Plugins */}
+        <div className="flex items-center gap-3 mb-4">
+          <span className={NUM}>02</span>
           <span className={LABEL}>Available integrations</span>
         </div>
         <div className="grid grid-cols-3 gap-3 mb-10 max-[640px]:grid-cols-1">
@@ -332,7 +437,7 @@ export default function AgentsPage() {
 
         {/* Leaderboard — reputation (secondary) */}
         <div id="reputation" className="flex items-center gap-3 mb-4 scroll-mt-20">
-          <span className={NUM}>02</span>
+          <span className={NUM}>03</span>
           <span className={LABEL}>Reputation · Attribution leaderboard</span>
           <span className="live-chip"><span className="dot" aria-hidden />Live</span>
         </div>
@@ -407,7 +512,7 @@ export default function AgentsPage() {
 
         {/* Actions table */}
         <div className="flex items-center gap-3 mb-4">
-          <span className={NUM}>03</span>
+          <span className={NUM}>04</span>
           <span className={LABEL}>Actions (all integrations)</span>
         </div>
         <div className="soft-card overflow-hidden mb-10">
@@ -439,7 +544,7 @@ export default function AgentsPage() {
 
         {/* Code snippet */}
         <div className="flex items-center gap-3 mb-4">
-          <span className={NUM}>04</span>
+          <span className={NUM}>05</span>
           <span className={LABEL}>Quick start — AgentKit</span>
         </div>
         <div className="rounded-2xl border border-hair bg-ink overflow-hidden mb-10">
@@ -454,7 +559,7 @@ export default function AgentsPage() {
 
         {/* Env vars */}
         <div className="flex items-center gap-3 mb-4">
-          <span className={NUM}>05</span>
+          <span className={NUM}>06</span>
           <span className={LABEL}>Environment variables</span>
         </div>
         <div className="soft-card overflow-hidden">
