@@ -126,7 +126,7 @@ export default function MultisigSetup({ params }: { params: Promise<{ slug: stri
           ) : org?.alreadyMultisig ? (
             <div className="soft-card p-6 mt-6"><div className="live-chip"><span className="dot" aria-hidden />Already a multisig</div><p className="text-[13.5px] text-ink-mid mt-2">Your treasury is already owned by a multisig. <Link href={`/app/org/${slug}/control`} className="text-peri-deep no-underline hover:underline">View control →</Link></p></div>
           ) : !org?.vault ? (
-            <div className="soft-card p-6 mt-6 text-[14px] text-ink-mid">Deploy + record your treasury first, then secure it with a multisig. <Link href={`/app/org/${slug}/fund`} className="text-peri-deep no-underline hover:underline">Set up treasury →</Link></div>
+            <div className="soft-card p-6 mt-6 text-[14px] text-ink-mid">Set up your treasury first — start with Savings — then secure it with a multisig. <Link href={`/app/org/${slug}`} className="text-peri-deep no-underline hover:underline">Open treasury →</Link></div>
           ) : (
             <>
               {/* Signers */}

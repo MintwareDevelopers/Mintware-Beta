@@ -88,7 +88,7 @@ export function TeamOrgBar() {
       </span>
       <span className="flex items-center gap-2 shrink-0">
         {!active?.funded && active?.isOwner && (
-          <Link href={`/app/org/${active.slug}/fund`} className="glass-pill glass-pill-sm glass-pill-primary no-underline">Set up treasury →</Link>
+          <Link href={`/app/org/${active.slug}`} className="glass-pill glass-pill-sm glass-pill-primary no-underline">Open treasury →</Link>
         )}
         <Link href={`/app/org/${active?.slug}`} className="glass-pill glass-pill-sm no-underline">Manage →</Link>
       </span>
