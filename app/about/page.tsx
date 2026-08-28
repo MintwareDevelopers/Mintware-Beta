@@ -32,9 +32,9 @@ function Head({ n, label }: { n: string; label: string }) {
 
 // ── data ─────────────────────────────────────────────────────────────────────
 const PILLARS: [string, string, string, string][] = [
-  ['Measure', 'Attribution', 'On-chain reputation across 100+ chains — six signals, one score, EAS-attested on Base. Live today.', '/attribution'],
-  ['Reward', 'The engine', 'Value routes by reputation — your score multiplies your vault returns and your referrals compound, never weighted by raw dollars.', '/defi'],
-  ['Hold', 'The vaults', 'Reputation-weighted Uniswap V4 liquidity — dual-sided pairs, built security-first. In testing ahead of launch.', '/defi'],
+  ['Earn', 'The vault engine', 'One balance earns three ways at once — Aave lending, Uniswap V4 market-making, and recaptured MEV. Dual-sided pairs, built security-first. In testing ahead of launch.', '/vaults'],
+  ['Spend', 'The Liquid Sovereign Account', 'Your balance stays spendable as USDC — on a card or over x402 — while it keeps earning. Never idle, never locked, always yours.', '/yield-payment-network'],
+  ['Match', 'Liquidity for teams', 'Teams lock their token, the community matches in USDC — real depth and tighter spreads, with every fee during the lock going to the community.', '/teams'],
 ]
 
 export default function AboutPage() {
@@ -131,10 +131,10 @@ export default function AboutPage() {
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[52px] mw-reveal">
           <GradientPanel tone="lavender" className="p-10 max-[800px]:p-6 flex items-center justify-between flex-wrap gap-5">
             <div className="font-atx-display font-medium text-ink text-[clamp(1.4rem,2.4vw,2rem)] tracking-[-0.02em] leading-[1.1] max-w-[26ch] [text-wrap:balance]">
-              Your wallet already has a history. See what it’s built.
+              Liquidity that never sits still. See what it can do.
             </div>
             <div className="flex gap-3 flex-wrap">
-              <Link href="/attribution" className="glass-pill-primary">Explore Attribution →</Link>
+              <Link href="/vaults" className="glass-pill-primary">Explore the vaults →</Link>
               <Link href="/defi" className="glass-pill">How the vaults work →</Link>
             </div>
           </GradientPanel>

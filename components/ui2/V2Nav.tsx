@@ -14,12 +14,11 @@ const FEATURES = [
   { key: 'vaults', href: '/vaults', label: 'Vaults' },
   { key: 'ypn', href: '/yield-payment-network', label: 'Liquid Sovereign Account' },
   { key: 'cards', href: '/cards', label: 'Cards' },
-  { key: 'attribution', href: '/attribution', label: 'Attribution' },
   { key: 'agents', href: '/agents', label: 'Agents' },
   { key: 'teams', href: '/teams', label: 'For Teams' },
 ] as const
 
-export type V2NavActive = 'vaults' | 'ypn' | 'cards' | 'attribution' | 'agents' | 'teams' | 'defi'
+export type V2NavActive = 'vaults' | 'ypn' | 'cards' | 'agents' | 'teams' | 'defi'
 
 export function V2Nav({ active }: { active?: V2NavActive }) {
   const { isConnected } = useMintwareIdentity()
