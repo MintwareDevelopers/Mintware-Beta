@@ -30,15 +30,14 @@ contract MintwareWeightedDistributorTest is Test {
     function setUp() public {
         oracle = vm.addr(ORACLE_PK);
 
-        vm.prank(owner);
+        // forge 1.8+ rejects a fresh vm.prank overwriting one a `new`/CREATE didn't consume, so drive
+        // the owner-only setup as one start/stopPrank block (same msg.sender as the three pranks it replaces).
+        vm.startPrank(owner);
         dist = new MintwareWeightedDistributor(oracle, owner);
-
-        vm.prank(owner);
         dist.setGuardian(guardian);
-
         // Authorize this test contract as a registrar (front-run guard — audit MED).
-        vm.prank(owner);
         dist.setAuthorizedRegistrar(address(this), true);
+        vm.stopPrank();
 
         token0 = new MockERC20("Token0", "PEPE", 18);
         token1 = new MockERC20("Token1", "USDC", 6);
