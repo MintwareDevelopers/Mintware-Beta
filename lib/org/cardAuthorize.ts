@@ -32,6 +32,30 @@ export function edgeAuthorizerFromEnv(): EdgeAuthorizer | null {
   return httpEdgeAuthorizer({ url, secret })
 }
 
+/** Sum a member's APPROVED card swipes since 00:00 UTC today (atomic USDC, 6dp) — the real cumulative
+ *  daily-spend the role cap checks against. A query failure returns 0n so a transient DB hiccup can't
+ *  decline every swipe; edge-auth's NAV hold below stays the hard money backstop regardless. */
+export async function sumApprovedTodayAtomic(
+  supabase: SupabaseClient,
+  orgId: string,
+  memberWallet: string,
+): Promise<bigint> {
+  const dayStart = new Date()
+  dayStart.setUTCHours(0, 0, 0, 0)
+  const { data, error } = await supabase
+    .from('card_swipe_events')
+    .select('amount_atomic_usdc')
+    .eq('org_id', orgId)
+    .eq('member_wallet', memberWallet)
+    .eq('decision', 'approved')
+    .gte('created_at', dayStart.toISOString())
+  if (error || !data) return 0n
+  return (data as Array<{ amount_atomic_usdc: string }>).reduce(
+    (sum, r) => sum + BigInt(r.amount_atomic_usdc),
+    0n,
+  )
+}
+
 /** `orgId`/`orgCardId`/`memberWallet` are populated whenever the card token resolved to a real
  *  org_cards row (i.e. every outcome except unknown_card / card_lookup_failed) — the webhook route
  *  uses them to log the decision to card_swipe_events without a second lookup. */
@@ -39,12 +63,12 @@ export type CardAuthDecision =
   | { approved: true; holdId?: string; orgId: string; orgCardId: string; memberWallet: string }
   | { approved: false; reason: string; orgId?: string; orgCardId?: string; memberWallet?: string }
 
-/** `spentTodayAtomic` is a caller-supplied hook, not computed here — this module has no opinion on
- *  how "today" is tracked (matches the pay route's MVP note: "a production system also tracks
- *  spentToday; MVP checks this batch total"). Card swipes are far higher-frequency than vendor
- *  payouts, so a real spentToday accumulator is the natural next step once this is exercised for
- *  real; passing 0n here (the default) means the role cap only bounds a SINGLE swipe, not the day —
- *  edge-auth's own NAV hold is still the hard backstop regardless. */
+/** `spentTodayAtomic` — the member's cumulative APPROVED spend so far this UTC day, which the role
+ *  daily cap checks against. Callers may inject it (tests); when omitted it's computed on-read from
+ *  card_swipe_events (sumApprovedTodayAtomic) so the cap bounds the whole DAY, not a single swipe.
+ *  (It previously defaulted to 0n — the role cap then only bounded one swipe: the audit gap this
+ *  closes.) A small read-vs-write race between concurrent swipes is acceptable — edge-auth's NAV hold
+ *  is the hard money backstop; this cap is the belt. */
 export async function decideCardSwipe(params: {
   supabase: SupabaseClient
   providerCardToken: string
@@ -59,7 +83,7 @@ export async function decideCardSwipe(params: {
    *  ever WIDENS a limit within an existing hard cap — never bypasses a money-path guard. */
   standingTier?: StandingTier
 }): Promise<CardAuthDecision> {
-  const { supabase, providerCardToken, provider, amountAtomicUsdc, ref, spentTodayAtomic = 0n } = params
+  const { supabase, providerCardToken, provider, amountAtomicUsdc, ref } = params
   const edge = params.edge !== undefined ? params.edge : edgeAuthorizerFromEnv()
 
   if (amountAtomicUsdc <= 0n) return { approved: false, reason: 'non_positive_amount' }
@@ -105,6 +129,11 @@ export async function decideCardSwipe(params: {
   //     a tier is injected (tests). Fail-safe: getStandingForWallet returns `none` on any error.
   const standingTier: StandingTier =
     params.standingTier ?? (await getStandingForWallet(supabase, card.member_wallet, card.org_id as string)).tier
+
+  // Cumulative day-spend for THIS member (see the param doc): an injected value wins (tests),
+  // otherwise sum today's approved swipes so the cap bounds the whole day rather than one swipe.
+  const spentTodayAtomic =
+    params.spentTodayAtomic ?? (await sumApprovedTodayAtomic(supabase, card.org_id as string, card.member_wallet))
 
   // Belt — role daily cap, TIER-WIDENED (Trusted perk: higher daily limit). effectiveDailyCap is
   // widen-only and hard-clamped, so a `none` tier == the raw role cap (unchanged), and no tier can
