@@ -20,7 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 # ABI encode/decode of settleSpend + its nested structs.
-alloy-sol-types = "1.6"
+alloy-sol-types = "0.8"
 alloy-primitives = { version = "0.8", features = ["k256"] }
 # Increment 6b — tx submission. Canonical EIP-1559 tx build + RLP/2718 encoding (never hand-rolled),
 # k256 for the recoverable ECDSA signature over the tx signing hash, blocking JSON-RPC for send/read.
