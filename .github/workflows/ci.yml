@@ -74,6 +74,15 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          # Pin to a KNOWN-GOOD version, not the action's default (nightly) or a moving `stable`.
+          # forge >=1.8.0 tightened vm.prank (can't overwrite an unapplied prank, incl. before a
+          # CREATE) and changed CREATE-nonce accounting, which reds two suites' setUp()
+          # (MintwareWeightedDistributor, MintwareTreasuryVaultInvariant) — pure test-harness
+          # fragility (hardcoded nonce prediction against an immutable-vault circular deploy), NOT a
+          # contract bug: the full non-fork suite passes 709/709 on 1.5.1. Modernizing those two
+          # setUp()s for 1.8+ is tracked as a follow-up; pin 1.5.1 so CI is green + reproducible.
+          version: "1.5.1"
 
       - name: Forge tests
         run: forge test -vv
@@ -122,6 +131,15 @@ jobs:
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+        with:
+          # Pin to a KNOWN-GOOD version, not the action's default (nightly) or a moving `stable`.
+          # forge >=1.8.0 tightened vm.prank (can't overwrite an unapplied prank, incl. before a
+          # CREATE) and changed CREATE-nonce accounting, which reds two suites' setUp()
+          # (MintwareWeightedDistributor, MintwareTreasuryVaultInvariant) — pure test-harness
+          # fragility (hardcoded nonce prediction against an immutable-vault circular deploy), NOT a
+          # contract bug: the full non-fork suite passes 709/709 on 1.5.1. Modernizing those two
+          # setUp()s for 1.8+ is tracked as a follow-up; pin 1.5.1 so CI is green + reproducible.
+          version: "1.5.1"
 
       - name: Install Halmos
         run: |
