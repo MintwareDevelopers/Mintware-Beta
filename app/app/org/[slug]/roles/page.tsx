@@ -29,13 +29,18 @@ export default function RolesPage({ params }: { params: Promise<{ slug: string }
   const [msg, setMsg] = useState('')
   const [lastLink, setLastLink] = useState<{ email: string; url: string } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [ownerWallet, setOwnerWallet] = useState<string | null>(null)
 
-  // Resolve slug -> org id + name (public treasury read).
+  // Resolve slug -> org id + name. Pass ?address so the treasury read returns ownerWallet to the owner
+  // (gated to owner/members server-side) — lets us hide the owner-only invite/role controls from others.
   useEffect(() => {
-    fetch(`/api/orgs/${slug}/treasury`).then((r) => r.json()).then((d) => {
-      if (d?.org) { setOrgId(d.org.id); setOrgName(d.org.name) }
+    const q = address ? `?address=${address}` : ''
+    fetch(`/api/orgs/${slug}/treasury${q}`).then((r) => r.json()).then((d) => {
+      if (d?.org) { setOrgId(d.org.id); setOrgName(d.org.name); setOwnerWallet(d.org.ownerWallet ?? null) }
     }).catch(() => {})
-  }, [slug])
+  }, [slug, address])
+
+  const isOwner = !!(address && ownerWallet && address.toLowerCase() === ownerWallet.toLowerCase())
 
   // Roster read = signed POST (owner-only, includes emails).
   const refresh = useCallback(async () => {
@@ -76,13 +81,18 @@ export default function RolesPage({ params }: { params: Promise<{ slug: string }
           <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Members &amp; roles</h1>
           <p className="text-[13px] text-ink-mid mt-1.5 max-w-[64ch]">Invite by email; when they sign in, their wallet is attested as an OrgMembership on-chain. Each role is a fixed spend preset — pick from four.</p>
 
-          {/* Next step in the flow: once teammates accept, secure the treasury with them as signers. */}
+          {/* Next step in the flow: once teammates accept, secure the treasury with them as signers. Owner-only. */}
+          {isOwner && (
           <Link href={`/app/org/${slug}/control/setup`} className="mt-4 flex items-center justify-between gap-3 rounded-[12px] border border-[rgba(108,108,240,0.3)] px-4 py-3 no-underline hover:bg-ground-cool transition-colors" style={{ background: 'linear-gradient(120deg, rgba(108,108,240,0.06), transparent)' }}>
             <span className="text-[13px] text-ink-mid"><b className="text-ink">Secure the treasury with these people.</b> Once they&apos;ve accepted, set up an M-of-N multisig — they become your passkey signers.</span>
             <span className="text-peri-deep font-semibold text-[13px] shrink-0">Set up multisig →</span>
           </Link>
+          )}
 
-          {/* invite */}
+          {/* invite — owner-only (the invite route is owner-gated server-side; hide the form from everyone else). */}
+          {!isOwner ? (
+            <div className="soft-card p-5 mt-6 text-[13px] text-ink-mid">You're viewing this org's members. Only the <span className="font-semibold text-ink">owner</span> can invite teammates or change roles.</div>
+          ) : (<>
           <div className="soft-card p-5 mt-6">
             <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Invite email</span>
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@org.xyz" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri" />
@@ -118,6 +128,8 @@ export default function RolesPage({ params }: { params: Promise<{ slug: string }
               </div>
               <div className="text-[11px] text-ink-soft mt-2">No email is sent automatically — share the link however you like (email, Slack, DM).</div>
             </div>
+          )}
+          </>
           )}
 
           {/* roster */}
