@@ -86,13 +86,15 @@ export default function FundPage({ params }: { params: Promise<{ slug: string }>
         <MwNav />
         <main className="mx-auto max-w-[600px] px-6 max-[700px]:px-4 py-[44px]">
           <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {org?.name || 'Org'}</Link>
-          <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Fund the treasury</h1>
+          <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Savings</h1>
+          <p className="text-[13px] text-ink-mid mt-2 leading-[1.5] max-w-[54ch]">Park a <span className="font-semibold text-ink">single asset</span> in the team treasury — it earns a steady yield, holds at par, and stays spendable on the card. Want to provide <span className="font-semibold text-ink">both assets</span> as liquidity instead? That's <Link href="/app/vaults" className="text-peri-deep no-underline hover:underline font-medium">Vaults</Link>.</p>
 
           {org && !org.vault ? (
             <div className="soft-card p-5 mt-6">
-              <div className="text-[13.5px] font-semibold text-ink">Record your treasury</div>
-              <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">The converged vault links an on-chain library, so an operator deploys it once with Foundry, then records the address here:</p>
-              <code className="block font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2.5 mt-3 overflow-x-auto whitespace-nowrap">pnpm forge:deploy:treasury-v2:base-sepolia</code>
+              <div className="text-[13.5px] font-semibold text-ink">One-time setup</div>
+              <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Savings is held by an on-chain vault that's provisioned once — then you just deposit. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
+              <div className="text-[10.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft mt-3 mb-1.5">Operator — deploy once</div>
+              <code className="block font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2.5 overflow-x-auto whitespace-nowrap">pnpm forge:deploy:treasury-v2:base-sepolia</code>
               {isOwner ? (
                 <div className="flex gap-2 mt-4 max-[520px]:flex-col">
                   <input value={recAddr} onChange={(e) => setRecAddr(e.target.value)} placeholder="0x… vault address" className="flex-1 rounded-[10px] border border-hair px-3 py-2.5 text-[13px] font-mono outline-none focus:border-peri" />
