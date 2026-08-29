@@ -237,9 +237,12 @@ export default function HomePage() {
               <h2 className="font-atx-display font-semibold text-ink tracking-[-0.03em] leading-[1.1] text-[clamp(1.6rem,2.8vw,2.3rem)] mt-3 [text-wrap:balance]">
                 Every claim here has an <span className="text-gradient-accent">on-chain receipt.</span>
               </h2>
-              <div className="flex items-center gap-2.5 mt-4 text-[13.5px] text-ink-mid flex-wrap">
-                <span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block" />Last settle <span className="font-mono text-ink font-bold">$2.00 · 12→10 USDC</span> · <Link href="/proof" className="text-peri-deep font-semibold no-underline hover:underline">see the proof →</Link>
-              </div>
+              <Link href="/proof" className="inline-flex items-center gap-2.5 mt-4 rounded-full border border-hair bg-white/70 pl-3 pr-3.5 py-2 text-[12.5px] text-ink-mid no-underline hover:border-[rgba(76,76,214,0.4)] hover:bg-white transition-colors">
+                <span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block shrink-0" />
+                <span className="whitespace-nowrap">Last settle</span>
+                <span className="font-mono text-ink font-bold whitespace-nowrap">$2.00 · 12→10 USDC</span>
+                <span className="text-peri-deep font-semibold whitespace-nowrap">proof →</span>
+              </Link>
             </div>
             <div>
               <div className="font-semibold mb-3 text-[15px] text-ink">Get in before it opens.</div>
