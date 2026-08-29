@@ -237,18 +237,15 @@ export default function HomePage() {
               <h2 className="font-atx-display font-semibold text-ink tracking-[-0.03em] leading-[1.1] text-[clamp(1.6rem,2.8vw,2.3rem)] mt-3 [text-wrap:balance]">
                 Every claim here has an <span className="text-gradient-accent">on-chain receipt.</span>
               </h2>
-              <p className="text-ink-mid text-[1.05rem] leading-[1.55] mt-3.5 max-w-[44ch]">
-                Mintware is in testing on Base Sepolia — non-custodial, and openly unaudited. We’re not asking you to trust us. We’re showing you the ledger.
-              </p>
-              <div className="flex items-center gap-2.5 mt-[18px] text-[13.5px] text-ink-mid">
-                <span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block" />Last settle: <span className="font-mono text-ink font-bold">$2.00 → 12→10 USDC</span> · <Link href="/proof" className="text-peri-deep font-semibold no-underline hover:underline">see the proof →</Link>
+              <div className="flex items-center gap-2.5 mt-4 text-[13.5px] text-ink-mid flex-wrap">
+                <span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block" />Last settle <span className="font-mono text-ink font-bold">$2.00 · 12→10 USDC</span> · <Link href="/proof" className="text-peri-deep font-semibold no-underline hover:underline">see the proof →</Link>
               </div>
             </div>
             <div>
-              <div className="font-semibold mb-3 text-[15px] text-ink">New vaults, cards, and agent rails — before anyone else.</div>
+              <div className="font-semibold mb-3 text-[15px] text-ink">Get in before it opens.</div>
               <WaitlistForm />
-              <div className="text-[12.5px] text-ink-soft mt-3.5 leading-[1.5]">
-                In testing, non-custodial, unaudited — no real funds yet. Nothing here is a deposit, savings account, or guaranteed return. <Link href="/legal" className="text-peri-deep font-semibold no-underline hover:underline">Legal &amp; disclosures →</Link>
+              <div className="text-[12px] text-ink-soft mt-3 leading-[1.5]">
+                Non-custodial · in testing on Base Sepolia · not a deposit or guaranteed return. <Link href="/legal" className="text-peri-deep font-semibold no-underline hover:underline">Legal →</Link>
               </div>
             </div>
           </GradientPanel>
