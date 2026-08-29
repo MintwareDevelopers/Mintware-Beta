@@ -1,11 +1,12 @@
 'use client'
 
 // =============================================================================
-// Homepage — vision rework (2026-08). Confidence-first, six bands that BUILD
-// instead of loop: ① the promise · ② the Liquid Sovereign Account · ③ THE CARD
-// (the wow — spend the yield, not the position) · ④ how the engine earns, once ·
-// ⑤ three doors (You / Teams / Agents) · ⑥ the honest handshake ("every claim
-// has an on-chain receipt"). The mechanism ("three ways") is stated exactly once.
+// Homepage — vision rework (2026-08). Confidence-first, bands that BUILD instead
+// of loop: ① the promise · ② WHAT WE ARE (Uniswap V4 vaults for everyone — the
+// pros' market-making engine, with an illustrative APY comparison vs a plain USDC
+// lender) · ③ the Liquid Sovereign Account · ④ THE CARD (the wow — spend the
+// yield, not the position) · ⑤ how the engine earns · ⑥ three doors (You / Teams
+// / Agents) · ⑦ the honest handshake ("every claim has an on-chain receipt").
 // Live wiring kept: Privy launch, WaitlistForm.
 // =============================================================================
 
@@ -58,7 +59,55 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ② THE IDEA — the Liquid Sovereign Account */}
+      {/* ② WHAT WE ARE — Uniswap V4 vaults for everyone (comes out swinging, states it directly) */}
+      <section className="bg-ground-cool border-b border-hair-soft">
+        <div className="mx-auto max-w-[1120px] px-7 max-[640px]:px-[18px] py-[92px] max-[640px]:py-[60px]">
+          <div className="grid grid-cols-[1.05fr_0.95fr] gap-[44px] items-center max-[860px]:grid-cols-1 max-[860px]:gap-9">
+            <div>
+              <div className={ey}>Built on Uniswap V4</div>
+              <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.8rem,3.6vw,2.9rem)] mt-3.5 [text-wrap:balance]">
+                The market-making engine the pros use, <span className="text-gradient-accent">opened to everyone.</span>
+              </h2>
+              <p className="text-ink-mid text-[clamp(1.02rem,1.6vw,1.2rem)] leading-[1.55] mt-[18px] max-w-[46ch]">
+                Mintware puts your dollars in a Uniswap&nbsp;V4 vault that runs the same automated, MEV-protected strategy the pros deploy — earning lending, swap fees, and recaptured MEV, all at once.
+              </p>
+              <div className="text-[12.5px] text-ink-mid mt-[22px]"><b className="text-peri-deep">↳</b> Three engines, one balance — always working.</div>
+            </div>
+
+            {/* illustrative APY comparison — the lender's whole rate is our first segment */}
+            <div className="soft-card p-[26px]">
+              <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Illustrative — not a projection or guarantee</div>
+              <div className="flex items-end justify-center gap-8 h-[210px] mt-4">
+                {/* lender */}
+                <div className="flex-1 max-w-[110px] flex flex-col items-center justify-end h-full">
+                  <div className="font-mono font-bold text-[15px] text-ink-mid mb-2">~5.0%</div>
+                  <div className="w-full rounded-[7px] bg-[rgba(138,138,158,0.45)]" style={{ height: '83px' }} />
+                </div>
+                {/* mintware — stacked */}
+                <div className="flex-1 max-w-[110px] flex flex-col items-center justify-end h-full">
+                  <div className="font-mono font-bold text-[15px] text-peri-deep mb-2">~10.0%</div>
+                  <div className="w-full flex flex-col rounded-[7px] overflow-hidden">
+                    <div className="w-full bg-coral2" style={{ height: '27px' }} title="Recaptured MEV" />
+                    <div className="w-full bg-peri-mid" style={{ height: '57px' }} title="Swap fees" />
+                    <div className="w-full bg-peri" style={{ height: '83px' }} title="Lending" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-center gap-8 mt-3 text-center">
+                <div className="flex-1 max-w-[110px]"><div className="text-[12.5px] font-semibold text-ink">USDC lender</div><div className="text-[11px] text-ink-soft">one job · lending</div></div>
+                <div className="flex-1 max-w-[110px]"><div className="text-[12.5px] font-semibold text-ink">Mintware vault</div><div className="text-[11px] text-ink-soft">three jobs</div></div>
+              </div>
+              <div className="flex items-center justify-center gap-4 mt-4 pt-4 border-t border-hair-soft text-[11px] text-ink-mid flex-wrap">
+                <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[3px] bg-peri inline-block" />Lending</span>
+                <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[3px] bg-peri-mid inline-block" />Swap fees</span>
+                <span className="inline-flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-[3px] bg-coral2 inline-block" />Recaptured MEV</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ③ THE IDEA — the Liquid Sovereign Account */}
       <section className="bg-white border-b border-hair-soft">
         <div className="mx-auto max-w-[1120px] px-7 max-[640px]:px-[18px] py-[92px] max-[640px]:py-[60px]">
           <div className="grid grid-cols-[1.05fr_0.95fr] gap-[44px] items-center max-[860px]:grid-cols-1 max-[860px]:gap-8">
