@@ -91,7 +91,7 @@ export default function DefiLandingPage() {
             One deposit. <span className="text-gradient-accent">Three income streams.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            MEV-protected, auto-managed liquidity on Uniswap v4 — one balance earning three ways at once: Aave lending, swap fees, and recaptured MEV, with no rebalancing. Your lock tier lifts your fee share, so a longer commitment earns a larger share than the wallet beside it.
+            MEV-protected, auto-managed liquidity on Uniswap v4 — one balance earning three ways at once: best-rate lending routed across venues, swap fees, and recaptured MEV, with no rebalancing. Your lock tier lifts your fee share, so a longer commitment earns a larger share than the wallet beside it.
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
             <Link href="/vaults" className="glass-pill-primary">Open the vaults →</Link>

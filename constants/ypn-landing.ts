@@ -26,7 +26,7 @@ export const YPN_HERO = {
   title: 'Spend while you',
   titleAccent: 'earn.',
   bullets: [
-    { title: 'Institutional Yield', body: 'Combines Uniswap v4 market-making with Aave lending to continuously compound your principal.' },
+    { title: 'Institutional Yield', body: 'Combines Uniswap v4 market-making with best-rate lending, routed across venues, to continuously compound your principal.' },
     { title: 'Instant Real-World Spending', body: 'Pays out instant card purchases.' },
     { title: 'Yield-Only Spending', body: 'Card swipes draw on accrued yield while leaving your underlying position in place.' },
     { title: 'Native USDC Gas', body: 'Frictionless transactions powered by USDC.' },
@@ -42,7 +42,7 @@ export const YPN_THESIS = {
     { product: 'Traditional checking', liquidity: '100% liquid', yield: '~0% yield', verdict: 'Purchasing power rots to inflation.', us: false },
     { product: 'Savings & CDs', liquidity: 'Locked', yield: 'Yield-bearing', verdict: 'Capital trapped behind withdrawal windows.', us: false },
     { product: 'Traditional DeFi LPs', liquidity: 'Friction-heavy', yield: 'High yield', verdict: 'Manual unwinding, DEX swaps, gas, tax events.', us: false },
-    { product: 'Liquid Sovereign Account', liquidity: '100% liquid', yield: 'Institutional yield', verdict: 'Aave v3 + v4 MEV recapture — earnings instantly spendable in the real world.', us: true },
+    { product: 'Liquid Sovereign Account', liquidity: '100% liquid', yield: 'Institutional yield', verdict: 'Best-venue lending + v4 MEV recapture — earnings instantly spendable in the real world.', us: true },
   ],
 } as const
 
@@ -131,7 +131,7 @@ export const YPN_MATRIX = {
       audience: 'HNW DeFi checking',
       pain: 'Earn institutional yield while buying coffee.',
       solution: '“Why keep $250k at 0.01%?”',
-      solutionDetail: 'Capture Aave yield + LVR arbitrage on-chain, yet remain instantly spendable via Apple Pay.',
+      solutionDetail: 'Capture best-venue lending yield + LVR arbitrage on-chain, yet remain instantly spendable via Apple Pay.',
       accent: 'text-atx-blue',
     },
     {
@@ -147,7 +147,7 @@ export const YPN_MATRIX = {
       audience: 'Invisible DeFi',
       pain: 'Deposit dollars, tap your phone, watch it grow.',
       solution: 'No hooks to understand',
-      solutionDetail: 'Mass retail never sees v4 hooks, JIT, or Aave adapters — just a balance that grows every day, even as they spend.',
+      solutionDetail: 'Mass retail never sees v4 hooks, JIT, or lending adapters — just a balance that grows every day, even as they spend.',
       accent: 'text-atx-mesquite',
     },
   ],
@@ -186,7 +186,7 @@ export const YPN_CALCULATOR = {
     default: 250_000,
   },
   apy: {
-    label: 'Estimated blended APY (Aave + v4 MEV)',
+    label: 'Estimated blended APY (best-venue lending + v4 MEV)',
     min: 1,
     max: 20,
     step: 0.5,
@@ -233,11 +233,11 @@ export const YPN_LIQUIDITY = {
   eyebrow: 'How it works',
   title: 'Liquidity,',
   titleAccent: 'finally accessible.',
-  body: 'A market-maker anchors the pool with a blended position — say 200 ETH + 300,000 USDC. The public makes up the difference. Every dollar then runs as active Uniswap v4 liquidity with an Aave buffer underneath, so one balance earns twice — lending yield stacked with trading capture (fees + recaptured MEV/LVR) — while staying spendable at the point of sale.',
+  body: 'A market-maker anchors the pool with a blended position — say 200 ETH + 300,000 USDC. The public makes up the difference. Every dollar then runs as active Uniswap v4 liquidity with a best-rate lending buffer underneath, so one balance earns twice — lending yield stacked with trading capture (fees + recaptured MEV/LVR) — while staying spendable at the point of sale.',
   flow: [
     { label: 'Broker anchors', sub: 'blended liquidity — e.g. 200 ETH + 300k USDC' },
     { label: 'Public fills',    sub: 'the community makes up the difference' },
-    { label: 'One vault',       sub: 'active Uniswap v4 + an Aave buffer' },
+    { label: 'One vault',       sub: 'active Uniswap v4 + a best-rate lending buffer' },
     { label: 'Stacked yield',   sub: 'earned twice — and spendable' },
   ],
   doors: [

@@ -23,7 +23,7 @@ import { YPN_ETHOS, YPN_LIQUIDITY, YPN_TECH, YPN_ETH_SENIOR, YPN_STANDING } from
 export const metadata: Metadata = {
   title: 'Liquid Sovereign Account — Mintware',
   description:
-    'Cash that earns while you spend it. USDC in a Uniswap v4 Unified Liquidity Vault earns institutional yield (Aave v3 + v4 MEV) and stays 100% spendable at Visa terminals in sub-400ms — you spend from yield, not your position. Coming soon.',
+    'Cash that earns while you spend it. USDC in a Uniswap v4 Unified Liquidity Vault earns institutional yield (best-venue lending + v4 MEV) and stays 100% spendable at Visa terminals in sub-400ms — you spend from yield, not your position. Coming soon.',
 }
 
 export default function YieldPaymentNetworkPage() {
