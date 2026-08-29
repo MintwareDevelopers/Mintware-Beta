@@ -158,29 +158,8 @@ export default function HomePage() {
               <div className="text-[12.5px] text-ink-mid mt-[22px]"><b className="text-peri-deep">↳</b> You spent $42.10. Your position didn’t move — only the yield did.</div>
             </div>
 
-            {/* card scene */}
-            <div className="relative flex justify-center items-center min-h-[340px]">
-              <div className="relative w-[min(400px,90%)] aspect-[1.586/1] rounded-[22px] text-white p-[26px] overflow-hidden -rotate-6 shadow-[0_30px_70px_-28px_rgba(40,30,90,0.42)]" style={{ background: 'linear-gradient(135deg, #5a5af0 0%, #7d63e6 44%, #ef8a63 108%)' }}>
-                <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(115deg, rgba(255,255,255,0.28), transparent 40%)' }} />
-                <div className="relative flex justify-between items-center">
-                  <span className="font-atx-display font-bold tracking-[-0.01em] text-[17px]">Mintware</span>
-                  <span className="w-9 h-[27px] rounded-md opacity-95" style={{ background: 'linear-gradient(135deg,#f5d98a,#d9a94e)' }} />
-                </div>
-                <div className="absolute left-[26px] bottom-[56px] font-mono text-[17px] tracking-[2px]">4823  ••••  ••••  7140</div>
-                <div className="absolute left-[26px] bottom-[26px] text-[12px] tracking-[0.5px] uppercase opacity-90">A. Sovereign</div>
-                <div className="absolute right-[26px] bottom-[22px] font-atx-display font-bold text-[15px] opacity-95">LSA</div>
-              </div>
-
-              {/* floating receipt */}
-              <div className="absolute right-[2%] bottom-[6%] w-[236px] soft-card p-[15px_16px] rotate-3 shadow-[0_30px_70px_-28px_rgba(40,30,90,0.42)]">
-                <div className="flex justify-between items-center text-[12.5px] py-[5px]"><span className="text-ink-soft">Tap</span><b className="font-mono">$42.10</b></div>
-                <div className="flex justify-between items-center text-[12.5px] py-[5px]"><span className="text-ink-soft">Authorized</span><span className="text-mw-green font-bold">12&nbsp;ms ✓</span></div>
-                <div className="flex justify-between items-center text-[12.5px] py-[5px]"><span className="text-ink-soft">Settled</span><span className="text-mw-green font-bold">on-chain ✓</span></div>
-                <div className="h-px bg-hair-soft my-1.5" />
-                <div className="flex justify-between items-center text-[12.5px] py-[5px]"><span className="text-ink-soft">Balance</span><b className="font-mono">$12,437.90</b></div>
-                <div className="flex items-center gap-[7px] text-[12px] text-mw-green font-semibold mt-1"><span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block" />still earning — position never unwound</div>
-              </div>
-            </div>
+            {/* card scene — the receipt fills in tap → authorized → settled → still earning, on scroll */}
+            <CardScene />
           </div>
         </div>
       </section>
@@ -254,6 +233,66 @@ export default function HomePage() {
           </GradientPanel>
         </div>
       </section>
+    </div>
+  )
+}
+
+// ─── Card scene — the tap→settle receipt fills in when scrolled into view ─────
+const CARD_SCENE_CSS = `
+.cardscene .rrow{opacity:0;transform:translateY(7px)}
+.cardscene.in .cc{animation:mwtap 720ms cubic-bezier(.34,1.56,.64,1) 150ms both}
+.cardscene.in .rrow{animation:mwrise 440ms ease-out both}
+.cardscene.in .rrow:nth-child(1){animation-delay:.35s}
+.cardscene.in .rrow:nth-child(2){animation-delay:.70s}
+.cardscene.in .rrow:nth-child(3){animation-delay:1.05s}
+.cardscene.in .rrow:nth-child(4){animation-delay:1.30s}
+.cardscene.in .rrow:nth-child(5){animation-delay:1.55s}
+.cardscene.in .rrow:nth-child(6){animation-delay:1.95s}
+.cardscene.in .earn-dot{animation:mwpulse 2.2s ease-in-out 2.5s infinite}
+@keyframes mwtap{0%{transform:rotate(-6deg) scale(1)}28%{transform:rotate(-6deg) scale(.955)}100%{transform:rotate(-6deg) scale(1)}}
+@keyframes mwrise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+@keyframes mwpulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.45)}50%{box-shadow:0 0 0 5px rgba(34,197,94,0)}}
+@media (prefers-reduced-motion:reduce){
+  .cardscene .rrow{opacity:1 !important;transform:none !important;animation:none !important}
+  .cardscene .cc,.cardscene .earn-dot{animation:none !important}
+}`
+
+function CardScene() {
+  const ref = React.useRef<HTMLDivElement>(null)
+  const [inView, setInView] = React.useState(false)
+  React.useEffect(() => {
+    const el = ref.current
+    if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); return }
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) { setInView(true); io.disconnect() }
+    }, { threshold: 0.4 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
+  return (
+    <div ref={ref} className={`cardscene relative flex justify-center items-center min-h-[340px]${inView ? ' in' : ''}`}>
+      <style>{CARD_SCENE_CSS}</style>
+      <div className="cc relative w-[min(400px,90%)] aspect-[1.586/1] rounded-[22px] text-white p-[26px] overflow-hidden -rotate-6 shadow-[0_30px_70px_-28px_rgba(40,30,90,0.42)]" style={{ background: 'linear-gradient(135deg, #5a5af0 0%, #7d63e6 44%, #ef8a63 108%)' }}>
+        <div aria-hidden className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(115deg, rgba(255,255,255,0.28), transparent 40%)' }} />
+        <div className="relative flex justify-between items-center">
+          <span className="font-atx-display font-bold tracking-[-0.01em] text-[17px]">Mintware</span>
+          <span className="w-9 h-[27px] rounded-md opacity-95" style={{ background: 'linear-gradient(135deg,#f5d98a,#d9a94e)' }} />
+        </div>
+        <div className="absolute left-[26px] bottom-[56px] font-mono text-[17px] tracking-[2px]">4823  ••••  ••••  7140</div>
+        <div className="absolute left-[26px] bottom-[26px] text-[12px] tracking-[0.5px] uppercase opacity-90">A. Sovereign</div>
+        <div className="absolute right-[26px] bottom-[22px] font-atx-display font-bold text-[15px] opacity-95">LSA</div>
+      </div>
+
+      {/* floating receipt — rows rise in sequence */}
+      <div className="absolute right-[2%] bottom-[6%] w-[236px] soft-card p-[15px_16px] rotate-3 shadow-[0_30px_70px_-28px_rgba(40,30,90,0.42)]">
+        <div className="rrow flex justify-between items-center text-[12.5px] py-[5px]"><span className="text-ink-soft">Tap</span><b className="font-mono">$42.10</b></div>
+        <div className="rrow flex justify-between items-center text-[12.5px] py-[5px]"><span className="text-ink-soft">Authorized</span><span className="text-mw-green font-bold">12&nbsp;ms ✓</span></div>
+        <div className="rrow flex justify-between items-center text-[12.5px] py-[5px]"><span className="text-ink-soft">Settled</span><span className="text-mw-green font-bold">on-chain ✓</span></div>
+        <div className="rrow h-px bg-hair-soft my-1.5" />
+        <div className="rrow flex justify-between items-center text-[12.5px] py-[5px]"><span className="text-ink-soft">Balance</span><b className="font-mono">$12,437.90</b></div>
+        <div className="rrow flex items-center gap-[7px] text-[12px] text-mw-green font-semibold mt-1"><span className="earn-dot w-[7px] h-[7px] rounded-full bg-mw-live inline-block" />still earning — position never unwound</div>
+      </div>
     </div>
   )
 }
