@@ -103,6 +103,22 @@ Source of truth: `docs/schema.sql`
   discarded. Pure observability today — nothing reads it yet. Deny-all RLS (service-role only,
   mirrors `20260819000001`). See memory `attribution_review_2026_08_28` for why (prerequisite for
   an eventual agent-reputation "behavior"/"contribution" signal, if that gets built).
+- `20260829000001_treasury_spend_ledger.sql` — **`treasury_spend_events`** table: the unified
+  org-treasury spend ledger, one row per spend across ALL rails. Columns: `org_id` (FK orgs),
+  `spend_type` (`'vendor_pay'|'payroll'|'card_swipe'|'x402'|'deposit'|'withdraw'`), `provider`,
+  `provider_event_ref` (+ partial UNIQUE `(provider, provider_event_ref)` for idempotency),
+  `batch_id` (groups a payroll run), `initiated_by`+`initiator_role`, `from_wallet`, `to_wallet`,
+  `amount_atomic_usdc` (text, uint256-safe), `asset`, `chain_id`, `category`, `memo`, `status`
+  (`'recorded'|'settled'|'failed'`), `settled`, `settle_tx`, `receipt_status`, `shares_burned`,
+  `error_reason`, `latency_ms`, `created_at`, `settled_at`. **Reconciliation rule:** a row is only
+  marked `settled` after its tx mines with `receipt.status === 'success'` (mirrors
+  `lib/org/settleSwipe.ts`; a reverted tx never reads as paid). Union of the two proven schemas
+  (`card_swipe_events` tenancy/idempotency/settle-triplet + `x402_settle_events` observability/actor
+  indexes) plus the `spend_type` discriminator. Written by `lib/treasury/spendLog.ts`
+  (`recordSpendEvents`/`markSpendSettled`/`markSpendFailed`/`spentTodayAtomic`); vendor pay + payroll
+  (`/api/orgs/[id]/pay`) record here today (cards/x402/deposits join in the reporting-feed follow-up).
+  Deny-all RLS, service-role only (mirrors `20260819000001`). Closes the gap where vendor pay +
+  payroll persisted nothing. See memory `treasury_spend_ledger`.
 - `20260824000001_x402_standing_permits.sql` — **`x402_standing_permits`** table: the agent twin of
   the `org_cards` permit columns (`20260819000003`). Payer-keyed store of a standing EIP-712
   `DelegatedSpendPermit` (columns `payer`, `gateway`, `chain_id`, `permit_user`,

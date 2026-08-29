@@ -1,8 +1,9 @@
 'use client'
 
-// Pay a vendor (#4) — the atomic settlement. One recipient, one amount, a chain dropdown (CCTP routes
-// cross-chain). Validated against your role cap + the treasury's on-chain headroom, then settled via the
-// relayer (or shown as "ready — relayer deploy-gated on testnet"). NOT a netting engine — one payment.
+// Pay a vendor (#4) — one recipient, one amount, an optional category + memo for reporting. Validated
+// against the caller's CUMULATIVE daily cap + the treasury's on-chain headroom, then RECORDED to the
+// unified treasury spend ledger (treasury_spend_events). On-chain per-recipient settlement is the next
+// milestone (see app/api/orgs/[id]/pay/route.ts header). NOT a netting engine — one payment.
 
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
@@ -30,6 +31,8 @@ export default function PayPage({ params }: { params: Promise<{ slug: string }> 
   const [to, setTo] = useState('')
   const [amount, setAmount] = useState('')
   const [chainId, setChainId] = useState(84532)
+  const [category, setCategory] = useState('')
+  const [memo, setMemo] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
   // Permission to pay vendors — owner or a role with canPayVendors (manager). Resolved from the
@@ -58,11 +61,10 @@ export default function PayPage({ params }: { params: Promise<{ slug: string }> 
     try {
       const res = await signedOrgFetch({
         path: `/api/orgs/${orgId}/pay`, action: 'mintware-org-pay',
-        payload: { payments: [{ to, amountUsdc: atomic, chainId }] }, address, signMessageAsync,
+        payload: { payments: [{ to, amountUsdc: atomic, chainId }], category: category || undefined, memo: memo || undefined }, address, signMessageAsync,
       })
       const d = await res.json()
-      if (res.ok && d.ok) setResult({ ok: true, text: `Paid ${amount} USDC to ${to.slice(0, 6)}… on ${CHAINS.find((c) => c.id === chainId)?.name}.` })
-      else if (res.status === 503 && d.gated === 'relayer_not_configured') setResult({ ok: true, text: `Validated ✓ — ${amount} USDC ready to settle. Live settlement needs the relayer (deploy-gated on testnet).` })
+      if (res.ok && d.ok) setResult({ ok: true, text: `Recorded ✓ — ${amount} USDC to ${to.slice(0, 6)}… It’s in your treasury ledger. On-chain settlement lands with the treasury settle path.` })
       else setResult({ ok: false, text: d.error || d.message || 'Payment failed.' })
     } catch (e) { setResult({ ok: false, text: String(e) }) } finally { setBusy(false) }
   }
@@ -98,7 +100,15 @@ export default function PayPage({ params }: { params: Promise<{ slug: string }> 
                     </select>
                   </label>
                 </div>
-                <button onClick={submit} disabled={busy} className="rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy ? 'Authorizing…' : 'Pay from treasury'}</button>
+                <div className="flex gap-3 max-[520px]:flex-col">
+                  <label className="flex-1 block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Category <span className="text-ink-soft/70 normal-case tracking-normal font-normal">· for reports</span></span>
+                    <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g. Contractors" maxLength={80} className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri" />
+                  </label>
+                  <label className="flex-1 block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Memo <span className="text-ink-soft/70 normal-case tracking-normal font-normal">· optional</span></span>
+                    <input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="What's this for?" maxLength={280} className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri" />
+                  </label>
+                </div>
+                <button onClick={submit} disabled={busy} className="rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy ? 'Recording…' : 'Pay from treasury'}</button>
               </div>
 
               {result && <div className={`mt-4 rounded-[var(--radius-card)] border p-4 text-[13px] leading-[1.5] ${result.ok ? 'border-[rgba(42,158,138,0.3)] bg-mw-green-muted text-ink' : 'border-[rgba(194,83,122,0.3)] bg-white text-ink'}`}>{result.text}</div>}
