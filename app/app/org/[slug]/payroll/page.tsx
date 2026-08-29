@@ -32,6 +32,7 @@ export default function PayrollPage({ params }: { params: Promise<{ slug: string
   const [orgId, setOrgId] = useState<string | null>(null)
   const [orgName, setOrgName] = useState('')
   const [csv, setCsv] = useState('')
+  const [category, setCategory] = useState('Payroll')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null)
   // Payroll pays vendors — owner or a canPayVendors role only (server also enforces on /pay). 'loading' until known.
@@ -65,11 +66,10 @@ export default function PayrollPage({ params }: { params: Promise<{ slug: string
     try {
       const res = await signedOrgFetch({
         path: `/api/orgs/${orgId}/pay`, action: 'mintware-org-pay',
-        payload: { payments: valid.map((r) => ({ to: r.to, amountUsdc: r.amountUsdc })) }, address, signMessageAsync,
+        payload: { payments: valid.map((r) => ({ to: r.to, amountUsdc: r.amountUsdc })), category: category || 'Payroll' }, address, signMessageAsync,
       })
       const d = await res.json()
-      if (res.ok && d.ok) setResult({ ok: true, text: `Paid ${valid.length} recipients · $${total.toFixed(2)} total, in one batch.` })
-      else if (res.status === 503 && d.gated === 'relayer_not_configured') setResult({ ok: true, text: `Validated ✓ — ${valid.length} recipients / $${total.toFixed(2)} ready. Live settlement needs the relayer (deploy-gated on testnet).` })
+      if (res.ok && d.ok) setResult({ ok: true, text: `Recorded ✓ — ${valid.length} recipients · $${total.toFixed(2)} total, as one batch in your treasury ledger. On-chain settlement lands with the treasury settle path.` })
       else setResult({ ok: false, text: d.error || d.message || 'Payroll failed.' })
     } catch (e) { setResult({ ok: false, text: String(e) }) } finally { setBusy(false) }
   }
@@ -97,6 +97,9 @@ export default function PayrollPage({ params }: { params: Promise<{ slug: string
                   <label className="text-[12px] text-peri-deep cursor-pointer hover:underline">upload .csv<input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" /></label>
                 </div>
                 <textarea value={csv} onChange={(e) => setCsv(e.target.value)} rows={7} placeholder={'0xabc…,1200.00\n0xdef…,850'} className="w-full rounded-[10px] border border-hair px-3 py-2.5 text-[13px] font-mono outline-none focus:border-peri resize-y" />
+                <label className="block mt-3"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Category <span className="text-ink-soft/70 normal-case tracking-normal font-normal">· labels the whole run in reports</span></span>
+                  <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Payroll" maxLength={80} className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri" />
+                </label>
               </div>
 
               {rows.length > 0 && (
@@ -116,7 +119,7 @@ export default function PayrollPage({ params }: { params: Promise<{ slug: string
                 </div>
               )}
 
-              <button onClick={run} disabled={busy || valid.length === 0} className="mt-4 rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy ? 'Authorizing…' : `Pay ${valid.length || ''} in one batch`}</button>
+              <button onClick={run} disabled={busy || valid.length === 0} className="mt-4 rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy ? 'Recording…' : `Pay ${valid.length || ''} in one batch`}</button>
               {result && <div className={`mt-4 rounded-[var(--radius-card)] border p-4 text-[13px] leading-[1.5] ${result.ok ? 'border-[rgba(42,158,138,0.3)] bg-mw-green-muted' : 'border-[rgba(194,83,122,0.3)] bg-white'} text-ink`}>{result.text}</div>}
             </>
           )}
