@@ -60,6 +60,7 @@ export default function ActivityPage({ params }: { params: Promise<{ slug: strin
   const [category, setCategory] = useState('')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
+  const [groupBy, setGroupBy] = useState<'category' | 'member' | 'month'>('category')
 
   useEffect(() => {
     fetch(`/api/orgs/${slug}/treasury`).then((r) => r.json()).then((d) => { if (d?.org) { setOrgId(d.org.id); setOrgName(d.org.name) } }).catch(() => {})
@@ -93,16 +94,30 @@ export default function ActivityPage({ params }: { params: Promise<{ slug: strin
     return x
   }, [rows, type, status, category, from, to, q])
 
-  const { totalAtomic, count, byCategory } = useMemo(() => {
+  const monthLabel = (iso: string) => { try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) } catch { return iso.slice(0, 7) } }
+
+  const { totalAtomic, count, rollup } = useMemo(() => {
     let total = 0n
-    const cat = new Map<string, bigint>()
+    const m = new Map<string, { label: string; v: bigint; sort: string }>()
+    const keyOf = (r: Row): { key: string; label: string; sort: string } => {
+      if (groupBy === 'member') { const k = r.initiatedBy ?? 'unknown'; return { key: k, label: short(k), sort: k } }
+      if (groupBy === 'month') { const s = r.createdAt.slice(0, 7); return { key: s, label: monthLabel(r.createdAt), sort: s } }
+      const k = r.category ?? 'Uncategorized'; return { key: k, label: k, sort: k }
+    }
     for (const r of filtered) {
       if (r.status === 'failed') continue
-      try { total += BigInt(r.amountAtomic); cat.set(r.category ?? 'Uncategorized', (cat.get(r.category ?? 'Uncategorized') ?? 0n) + BigInt(r.amountAtomic)) } catch { /* skip */ }
+      let amt: bigint
+      try { amt = BigInt(r.amountAtomic) } catch { continue }
+      total += amt
+      const { key, label, sort } = keyOf(r)
+      const cur = m.get(key) ?? { label, v: 0n, sort }
+      cur.v += amt; m.set(key, cur)
     }
-    const byCategory = Array.from(cat.entries()).map(([k, v]) => ({ k, v: v.toString() })).sort((a, b) => (BigInt(a.v) < BigInt(b.v) ? 1 : -1))
-    return { totalAtomic: total.toString(), count: filtered.length, byCategory }
-  }, [filtered])
+    // Months sort newest-first by their sort key; everything else sorts by amount desc.
+    const rows = Array.from(m.values()).map((x) => ({ k: x.label, v: x.v.toString(), sort: x.sort }))
+    rows.sort(groupBy === 'month' ? (a, b) => (a.sort < b.sort ? 1 : -1) : (a, b) => (BigInt(a.v) < BigInt(b.v) ? 1 : -1))
+    return { totalAtomic: total.toString(), count: filtered.length, rollup: rows }
+  }, [filtered, groupBy]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const exportCsv = () => {
     const head = ['date', 'type', 'recipient', 'category', 'memo', 'initiated_by', 'amount_usdc', 'status', 'settle_tx']
@@ -146,14 +161,21 @@ export default function ActivityPage({ params }: { params: Promise<{ slug: strin
               <div className="text-[12.5px] text-ink-soft mt-1">{count} payment{count === 1 ? '' : 's'}</div>
             </div>
             <div className="soft-card p-5">
-              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft mb-2.5">By category</div>
-              {byCategory.length === 0 ? <div className="text-[13px] text-ink-soft">No spend yet.</div> : (
+              <div className="flex items-center justify-between gap-2 mb-2.5">
+                <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">By {groupBy}</div>
+                <div className="flex gap-1">
+                  {(['category', 'member', 'month'] as const).map((g) => (
+                    <button key={g} onClick={() => setGroupBy(g)} className={`text-[11px] font-semibold rounded-full px-2.5 py-1 transition-colors ${groupBy === g ? 'bg-peri text-white' : 'bg-ground-cool text-ink-mid hover:text-ink'}`}>{g[0].toUpperCase() + g.slice(1)}</button>
+                  ))}
+                </div>
+              </div>
+              {rollup.length === 0 ? <div className="text-[13px] text-ink-soft">No spend yet.</div> : (
                 <div className="flex flex-col gap-2">
-                  {byCategory.slice(0, 5).map(({ k, v }) => {
+                  {rollup.slice(0, 6).map(({ k, v }) => {
                     const pct = totalAtomic === '0' ? 0 : Number((BigInt(v) * 100n) / (BigInt(totalAtomic) || 1n))
                     return (
                       <div key={k} className="flex items-center gap-3">
-                        <span className="text-[12.5px] text-ink w-[104px] truncate">{k}</span>
+                        <span className="text-[12.5px] text-ink w-[112px] truncate">{k}</span>
                         <span className="flex-1 h-2 rounded-full bg-ground-cool overflow-hidden"><span className="block h-full rounded-full bg-peri" style={{ width: `${Math.max(4, pct)}%` }} /></span>
                         <span className="text-[12.5px] font-mono text-ink-mid tabular-nums w-[84px] text-right">${usd(v)}</span>
                       </div>
