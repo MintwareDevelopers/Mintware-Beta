@@ -242,6 +242,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/org` | `app/app/org/page.tsx` |
 | `/app/org/[slug]` | `app/app/org/[slug]/page.tsx` |
 | `/app/org/[slug]/accept` | `app/app/org/[slug]/accept/page.tsx` |
+| `/app/org/[slug]/activity` | `app/app/org/[slug]/activity/page.tsx` |
 | `/app/org/[slug]/cards` | `app/app/org/[slug]/cards/page.tsx` |
 | `/app/org/[slug]/control` | `app/app/org/[slug]/control/page.tsx` |
 | `/app/org/[slug]/control/setup` | `app/app/org/[slug]/control/setup/page.tsx` |

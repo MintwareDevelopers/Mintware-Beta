@@ -55,6 +55,7 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
     { href: `roles`,   label: 'Members & roles',sub: 'Invite · assign a preset',      show: isOwner || policy.canManageTreasury },
     { href: `control`, label: 'Treasury control',sub: 'Privy-owned · role-cap policy',  show: true },
     { href: `cards`,   label: 'Cards & spend', sub: 'Issue · activate · swipe live',  show: isMember || isOwner },
+    { href: `activity`,label: 'Activity',      sub: 'Every spend · reports · CSV',    show: isMember || isOwner },
   ].filter((t) => t.show)
 
   return (
