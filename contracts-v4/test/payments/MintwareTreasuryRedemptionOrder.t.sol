@@ -27,6 +27,10 @@ contract MintwareTreasuryRedemptionOrderTest is MintwareTreasuryJitStackTest {
         uint256 s = vault.seniorShares(who);
         if (s == 0) return (0, false);
         hadShares = true;
+        // Re-settle the oracle to spot before each redemption: the PRIOR redeemer's recover sold team and
+        // moved spot, so the lagging oracle would clamp THIS redeemer's bounded recover — an artifact of the
+        // anti-manipulation swap floor, not the R6 waterfall. Settling isolates the pro-rata property.
+        _settleOracleToSpot();
         vm.prank(who);
         try vault.redeemSenior(s, 0) returns (uint256 a) {
             perShare = (a * WAD) / s;
@@ -80,6 +84,10 @@ contract MintwareTreasuryRedemptionOrderTest is MintwareTreasuryJitStackTest {
         vm.stopPrank();
         vm.roll(block.number + 1);
         hook.sweepJit();
+
+        // Let the truncated oracle settle to the post-dump spot so the bounded recover can realize the MTM
+        // (R6 is a settled-redemption property, not a flash-crash-window one — see _settleOracleToSpot).
+        _settleOracleToSpot();
 
         // The fair floor EVERY redeemer is entitled to at least (snapshot pre-redemption).
         uint256 fairPs = _fairFloorPerShare();

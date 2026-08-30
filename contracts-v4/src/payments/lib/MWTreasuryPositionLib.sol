@@ -172,6 +172,14 @@ library MWTreasuryPositionLib {
         if (c.positionLiquidity == 0) return 0;
         (uint160 spotSqrt,,,) = c.pm.getSlot0(c.key.toId());
         uint256 vSpot = _valueAt(c, spotSqrt);
+        // AUDIT (oracle-tail spot-manip, High): the pure-spot fallback below is a manipulable mark and MUST
+        // NOT price the SENIOR REDEEM NAV. That is enforced UPSTREAM at the vault: `deployToLP` refuses to
+        // create a live position without a ready oracle (structural gate) AND `MintwareTreasuryVault.
+        // recoverableUSDC()` reverts `OracleNotReady()` when `positionLiquidity>0 && !oReady`, so this branch
+        // is unreachable via the redeem/settle valuation path. It survives only for the owner-driven
+        // RECOVER/COLLECT unlock ops (unwinding a live position when the oracle is transiently down), where
+        // executing the unwind at spot is the intended fail-safe (a redemption must never be permanently
+        // bricked); the seniority swap itself is still oracle-bounded whenever `oReady`.
         if (!oReady) return vSpot;
         uint256 vOracle = _valueAt(c, TickMath.getSqrtPriceAtTick(oTick));
         return vSpot < vOracle ? vSpot : vOracle;

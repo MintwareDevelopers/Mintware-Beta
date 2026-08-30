@@ -112,20 +112,74 @@ contract MintwareTreasuryJitStackTest is Test {
             ModifyLiquidityParams({tickLower: lo, tickUpper: hi, liquidityDelta: 5_000_000 * int256(uint256(ONE)), salt: bytes32(0)}),
             ""
         );
+
+        // Widen the truncated-oracle catch-up (bounded by the hook's own MAX_ORACLE_MOVE_TICKS/CATCHUP) so a
+        // settling helper can walk the oracle to a crashed spot within a couple of rolled blocks — the R6
+        // accounting probes below are about the redemption WATERFALL, not manipulation resistance (that is the
+        // JitLeak PoC + `test_spotManipulation`, which both rely only on the per-block FREEZE, unaffected here).
+        // Instant: set while the oracle is still un-initialized (pre-first-swap bootstrap).
+        hook.setOracleParams(hook.MAX_ORACLE_MOVE_TICKS(), hook.MAX_ORACLE_CATCHUP());
+
+        // FIX 2a: deployToLP now requires a READY oracle. The JIT hook's truncated oracle initializes on the
+        // first swap through the hooked pool, so warm it here with ONE small buy-team swap (USDC in ⇒ no JIT,
+        // no senior borrow). ~0.002% price move on the 5M-liquidity pool ⇒ negligible for the assertions below.
+        team.mint(address(this), 200 * ONE);
+        usdc.mint(address(this), 200 * ONE);
+        usdc.approve(address(swapRouter), type(uint256).max);
+        team.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(key, !_sellTeamZeroForOne(), 100 * ONE);
+        (, bool oReady) = hook.oracleTick();
+        require(oReady, "harness: oracle warmup failed");
+
+        // FIX 3: deployToLP now requires a non-zero coverage floor. Arm the smallest floor (1 bps); the
+        // $5,000 junior USDC buffer covers every (≤ a few-thousand) deploy in the derived tests many times
+        // over, so this does not change their economics. Tests that exercise the floor mechanics override it.
+        vault.setMinCoverage(1);
     }
 
     function _sellTeamZeroForOne() internal view returns (bool) {
         return address(team) < address(usdc);
     }
 
+    /// @dev Let the JIT hook's TRUNCATED oracle catch DOWN to the (post-crash) spot. FIX 2a makes the vault
+    ///      require a ready oracle to have a live LP; the oracle then also BOUNDS the recover/seniority swap
+    ///      (it will not sell into a price that is far below the lagging oracle — the anti-manipulation floor).
+    ///      In the flash-crash block that means the recover realizes little, so a redemption in that exact
+    ///      window is a LIVENESS (not solvency) shortfall. A realistic redemption happens AFTER the oracle has
+    ///      settled. This walks the oracle to spot (roll past the catch-up window + observe the low price each
+    ///      round; sweep any JIT the tiny observe-swap opens) so `recoverableUSDC()` (min(spot,oracle)) matches
+    ///      what the bounded recover can realize — the condition the pro-rata (R6) waterfall is defined under.
+    function _settleOracleToSpot() internal {
+        for (uint256 i = 0; i < 12; i++) {
+            (int24 oTick,) = hook.oracleTick();
+            (, int24 spot,,) = pm.getSlot0(key.toId());
+            int256 gap = int256(oTick) - int256(spot);
+            if (gap < 0) gap = -gap;
+            if (gap <= 500) break; // within the swap band ⇒ recover no longer clamped
+            // Roll past the (widened) catch-up window so ONE observe-swap moves the oracle its maximal step
+            // toward the current low spot; sweep any JIT the tiny observe-swap opens.
+            vm.roll(block.number + uint256(uint32(hook.MAX_ORACLE_CATCHUP())) + 1);
+            team.mint(address(this), 1 * ONE);
+            team.approve(address(swapRouter), type(uint256).max);
+            swapRouter.swap(key, _sellTeamZeroForOne(), 1 * ONE);
+            hook.sweepJit();
+        }
+    }
+
     // AUDIT #7b: coverage-ratio floor gate. Junior USDC buffer = 5000; senior = 10000 (deploy capped at
     // 2000 by idle-first). The gate halts risk-increasing ops when the junior cushion thins below the floor.
 
-    function test_coverage_gate_off_by_default() public {
-        assertEq(vault.minCoverageBps(), 0, "gate off by default");
+    /// @notice FIX 3 — the coverage floor is now MANDATORY to deploy. The shipped default (0) no longer
+    ///         permits an uncushioned deploy: `deployToLP` reverts `CoverageFloorUnset` while the floor is
+    ///         off (the CoverageFloorUnset gate is also proven on a fresh vault in RedTeamTrancheInflationRecall).
+    ///         The harness arms a 1-bps floor in setUp, under which a covered deploy proceeds normally.
+    function test_coverage_floor_required_for_deploy() public {
+        // The harness armed a (tiny) floor; the shipped-default 0 is what FIX 3 forbids.
+        assertGt(vault.minCoverageBps(), 0, "harness arms the coverage floor (FIX 3: 0 would forbid deploy)");
         assertEq(vault.coverageBps(), type(uint256).max, "no at-risk senior -> max coverage");
-        vault.deployToLP(2_000 * ONE, vault.juniorTokens()); // behaves exactly as before
-        assertGt(vault.deployedFromSenior(), 0, "deploy proceeds with the gate off");
+        // A covered deploy proceeds (junior USDC buffer amply covers it at the armed floor).
+        vault.deployToLP(2_000 * ONE, vault.juniorTokens());
+        assertGt(vault.deployedFromSenior(), 0, "covered deploy proceeds under an armed floor");
     }
 
     function test_coverage_gate_halts_deploy_when_junior_thin() public {

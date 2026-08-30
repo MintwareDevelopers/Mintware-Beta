@@ -445,11 +445,11 @@ contract MintwareTreasuryJitHook is IHooks, IUnlockCallback, Ownable, MWTimelock
     /// @notice Set the Diamond-LVR lever (opt-in, default OFF). Directional surcharge on the gap-closing
     ///         (arb) swap direction only. Bound `slope`/`quad` ≤ 1_000_000 (MWDynamicFee.MAX_PIPS); the
     ///         applied fee is always clamped to `maxFeePips`, so `fee ≤ MAX_LP_FEE` is preserved.
-    function setLvr(uint256 slopePipsPerTick, uint256 quadMultiplierPipsPerTickSq, bool enabled) external onlyOwner {
-        lvrSlopePipsPerTick = slopePipsPerTick;
-        lvrQuadMultiplierPipsPerTickSq = quadMultiplierPipsPerTickSq;
+    function setLvr(uint256 lvrSlope, uint256 lvrQuad, bool enabled) external onlyOwner {
+        lvrSlopePipsPerTick = lvrSlope;
+        lvrQuadMultiplierPipsPerTickSq = lvrQuad;
         lvrEnabled = enabled;
-        emit LvrSet(slopePipsPerTick, quadMultiplierPipsPerTickSq, enabled);
+        emit LvrSet(lvrSlope, lvrQuad, enabled);
     }
 
     /// @notice The LP-fee override for the canonical pool: `volatilityFee(base, max, deviation, slope)`,

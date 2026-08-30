@@ -18,6 +18,7 @@ import {PoolProfile}                   from "../../src/vaults/VaultTypes.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {MockReadyOracle}  from "../mocks/MockReadyOracle.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
 /// @title  LEGAL FACT 2 — the waterfall is immutable, with no admin override
@@ -76,12 +77,18 @@ contract WaterfallImmutableTreasuryTest is Test {
         vm.startPrank(owner);
         v.setGateway(gateway);
         v.setProtocolTreasury(protocol);
+        // FIX 2a: deployToLP requires a ready oracle — wire a live-tick stand-in (valuation == spot). FIX 3:
+        // arm the smallest coverage floor (1 bps); the $10 junior buffer below covers the deploys at that floor.
+        v.setJitHook(address(new MockReadyOracle(IPoolManager(address(pm)), key)));
+        v.setMinCoverage(1);
         vm.stopPrank();
 
         team.mint(teamAddr, TEAM_COMMIT);
+        usdc.mint(teamAddr, 10 * ONE_USDC); // tiny junior USDC buffer to satisfy the FIX-3 coverage floor
         vm.startPrank(teamAddr);
         team.approve(address(v), type(uint256).max);
-        v.commitTeam(TEAM_COMMIT, 0, LOCK_DUR);
+        usdc.approve(address(v), type(uint256).max);
+        v.commitTeam(TEAM_COMMIT, 10 * ONE_USDC, LOCK_DUR);
         vm.stopPrank();
 
         // Baseline external depth so the vault's seniority swaps land at realistic prices.
@@ -142,10 +149,13 @@ contract WaterfallImmutableTreasuryTest is Test {
         // Plumbing addresses.
         v.setProtocolTreasury(makeAddr("proto2"));
         v.setRentFunder(makeAddr("rent"));
-        v.setJitHook(makeAddr("jit"));            // set-once
+        // jitHook is already wired (to the oracle stand-in) in setUp — it is set-once, another plumbing
+        // address whose value is not a payout ratio; re-setting is intentionally rejected.
+        vm.expectRevert(MintwareTreasuryVault.AlreadySet.selector);
+        v.setJitHook(makeAddr("jit"));
         // Risk parameters — none is a payout ratio. Tightening ones apply instantly.
         v.setIdleBufferTarget(9_000);             // raise (safer)  → instant
-        v.setMinCoverage(200);                    // raise from 0   → instant
+        v.setMinCoverage(200);                    // raise (safer)  → instant
         v.setJitCap(100);                         // lower (safer)  → instant
         v.setMaxBurnPerBlock(1_000_000 * ONE_USDC);
         v.setJitMaxCumulativeLoss(1_000_000 * ONE_USDC);
@@ -217,6 +227,10 @@ contract WaterfallImmutableTreasuryTest is Test {
         vm.startPrank(owner);
         v2.setGateway(gateway);
         v2.setProtocolTreasury(protocol);
+        // FIX 2a/3: ready-oracle stand-in (valuation == spot) + smallest coverage floor (the 30k buffer
+        // below covers the 50k deploy at 1 bps many times over).
+        v2.setJitHook(address(new MockReadyOracle(IPoolManager(address(pm2)), key2)));
+        v2.setMinCoverage(1);
         vm.stopPrank();
 
         uint256 buffer = 30_000 * ONE_USDC;

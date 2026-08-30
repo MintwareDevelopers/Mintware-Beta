@@ -16,6 +16,7 @@ import {MintwareTreasuryVault}     from "../../src/payments/MintwareTreasuryVaul
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {MockReadyOracle}  from "../mocks/MockReadyOracle.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
 /// @notice END-TO-END proof that the SELF-HELD V4 position (Phase-2 convergence — the retired external
@@ -72,13 +73,20 @@ contract MintwareTreasuryVaultRealPoolTest is Test {
         vm.startPrank(owner);
         vault.setGateway(gateway);
         vault.setProtocolTreasury(protocol);
+        // FIX 2a: deployToLP requires a ready oracle — a live-tick stand-in keeps recoverableUSDC == spot
+        // (the correct MTM here). FIX 3: arm the smallest floor (1 bps); the $10 junior buffer below covers
+        // the $20k deploy at that floor and is negligible vs the $100k senior.
+        vault.setJitHook(address(new MockReadyOracle(IPoolManager(address(pm)), key)));
+        vault.setMinCoverage(1);
         vm.stopPrank();
 
         // Team commits the junior first-loss reserve, opening the vault.
         team.mint(teamAddr, TEAM_COMMIT);
+        usdc.mint(teamAddr, 10 ether); // tiny junior USDC buffer to satisfy the FIX-3 coverage floor
         vm.startPrank(teamAddr);
         team.approve(address(vault), type(uint256).max);
-        vault.commitTeam(TEAM_COMMIT, 0, 365 days);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.commitTeam(TEAM_COMMIT, 10 ether, 365 days);
         vm.stopPrank();
 
         // Deep baseline pool liquidity so the vault's seniority swaps have realistic depth.

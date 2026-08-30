@@ -172,6 +172,12 @@ contract MintwareTreasuryVaultFactory is Ownable {
         vault.setGateway(gatewayAddr);
         vault.setProtocolTreasury(p.treasury);
 
+        // AUDIT (coverage floor default-0, Med): arm the coverage floor at creation so a curated vault can
+        // never deploy senior into the LP with the junior USDC first-loss cushion OFF. Default = par (100%);
+        // ops can TIGHTEN to Tier-C (e.g. 18_000) instantly, or loosen via the 48h timelock. Set while the
+        // vault is pre-activation (factory is still owner) so it applies instantly (first-set-immediate).
+        vault.setMinCoverage(10_000);
+
         // 6. Two-phase ownership: hand the wired vault + hook to the intended ops owner.
         vault.transferOwnership(p.owner);
         MintwareTreasuryJitHook(hookAddr).transferOwnership(p.owner);

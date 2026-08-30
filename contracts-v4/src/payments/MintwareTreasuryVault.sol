@@ -179,6 +179,19 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     ///         token is deliberately NOT valued at spot (manipulable / circular). Default 0 = OFF (behavior
     ///         unchanged); ops-enable per pool tier (thinner junior ⇒ higher floor — see pool-tiering).
     uint256 public minCoverageBps;
+
+    /// @notice AUDIT (recall-liveness, Low) — always-liquid hot-buffer reserve, in bps of the senior base.
+    ///         `_supplyToAdapter` leaves this fraction of the senior UN-swept in the vault so a BOUNDED
+    ///         card-settle survives TOTAL adapter illiquidity (an Aave utilization spike / a withholding
+    ///         venue). Purely additive: `0` (default) reproduces the prior sweep-everything behavior exactly.
+    ///         Owner-governable, bounded by `MAX_HOT_BUFFER_BPS`. Raising it (more liquid reserve) is safety;
+    ///         it is a small conservative reserve, not a structural NAV component (the buffer is still senior
+    ///         USDC, counted in `_freeSeniorBuffer`/`idleBuffer`).
+    uint16 public hotBufferBps;
+    /// @notice Ceiling on `hotBufferBps` (≤ 20% of senior kept always-liquid — beyond this the LP/idle split
+    ///         loses meaning). A sane conservative default is a few hundred bps; 0 = OFF.
+    uint16 public constant MAX_HOT_BUFFER_BPS = 2_000;
+
     bool    public activated;
     /// @notice True while the junior is locked: 100% of collected LP fees credit the senior.
     bool    public teamFeesRedirected;
@@ -251,8 +264,11 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     error InsufficientIdleLiquidity();
     error StillLocked();
     error CoverageTooLow();
+    error OracleNotReady();     // AUDIT (oracle-tail spot-manip): live LP cannot be priced without a ready oracle
+    error CoverageFloorUnset(); // AUDIT (coverage floor default-0): deploy refused while the floor is OFF
 
     event MinCoverageSet(uint256 bps);
+    event HotBufferBpsSet(uint16 bps);
     event MaxBurnPerBlockSet(uint256 cap);
     error BadParam();
     error BurnRateExceeded();
@@ -352,6 +368,17 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     ///         (risk-increasing → timelocked); RAISING it (safety) is instant. Bounded ≤ MAX_MIN_COVERAGE_BPS.
     function setMinCoverage(uint16 bps) external onlyOwner {
         _changeRiskParam(RP_MIN_COVERAGE, bps, 0);
+    }
+
+    /// @notice AUDIT (recall-liveness, Low) — set the always-liquid hot-buffer reserve (bps of the senior
+    ///         base kept UN-swept). Owner-governable, bounded ≤ `MAX_HOT_BUFFER_BPS`. Not routed through the
+    ///         timelock rail: it only ever ADDS on-vault liquidity (raising it is safety; lowering it merely
+    ///         frees senior USDC into the same yield adapter the vault already uses), so no waterfall/payout
+    ///         term is affected. Additive: `0` disables it (default, prior behavior).
+    function setHotBufferBps(uint16 bps) external onlyOwner {
+        if (bps > MAX_HOT_BUFFER_BPS) revert BadParam();
+        hotBufferBps = bps;
+        emit HotBufferBpsSet(bps);
     }
 
     /// @notice AUDIT M1 — Governed (48h-timelocked) risk param: the per-block `burnForPayment` ceiling in
@@ -610,7 +637,18 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     ///      holders) rather than being protected — the SAFE direction (loss to the new depositor, never to
     ///      the tranche). Redemptions keep `_redeemNav()` — protection from a HIGH spot is still correct.
     function _mintNav() internal view returns (uint256) {
-        return totalSeniorAssets();
+        // AUDIT (junior-siphon, High): price mint at `max(par, redeemNav)`. Par (`totalSeniorAssets()`)
+        // is the non-downward-manipulable spot-invariant governing normal operation (R2-H1). But after a
+        // real yield-source LOSS (adapter.totalAssets drops) with the junior USDC buffer intact,
+        // `totalSeniorAssets()` can fall BELOW the solvency-aware `_redeemNav()` (which adds the junior
+        // buffer). Minting at the depressed `tsa` then let a fresh depositor mint cheap and redeem at the
+        // junior-restored par, siphoning the junior first-loss meant for the PRE-EXISTING seniors. Taking
+        // the MAX prices mint no lower than the redeem NAV, so a round-trip can never extract from junior.
+        // When `redeemNav <= tsa` (the R2-H1 spot-crash case) `max == tsa`, preserving the spot-invariance
+        // of the mint side (a depressed spot cannot LOWER the mint NAV below par).
+        uint256 tsa = totalSeniorAssets();
+        uint256 rn  = _redeemNav();
+        return tsa > rn ? tsa : rn;
     }
 
     /// @dev AUDIT R2-H1: mint-side preview prices at par (non-downward-manipulable), not `_redeemNav()`.
@@ -648,6 +686,15 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     function recoverableUSDC() public view returns (uint256) {
         if (positionLiquidity == 0) return 0;
         (int24 oTick, bool oReady) = _oracleTick();
+        // AUDIT (oracle-tail spot-manip, High) — belt-and-suspenders. A LIVE LP position (positionLiquidity>0)
+        // must NEVER be valued off a not-ready oracle: with no truncated oracle the mark falls back to PURE
+        // SPOT, which a same-block round-trip pump can inflate (lifting the senior redeem NAV in the impaired
+        // tail, re-opening the first-redeemer run). Fail closed on the whole senior-valuation path
+        // (`seniorRealizableAssets`/`_redeemNav`/`redeemSenior`/`burnForPayment`, and the mint `_mintNav`) —
+        // a transient oracle outage briefly blocks redeem/settle (liveness) rather than paying off a
+        // manipulable spot. `deployToLP` already refuses to create a live position without a ready oracle
+        // (structural gate), so in normal operation this revert is unreachable.
+        if (!oReady) revert OracleNotReady();
         return MWTreasuryPositionLib.recoverableUSDC(_posCtx(), oTick, oReady);
     }
 
@@ -784,6 +831,19 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     {
         if (usdcAmount == 0) revert ZeroAmount();
         if (maxTeamToken > juniorTokens) revert ZeroAmount();
+
+        // AUDIT (oracle-tail spot-manip, High) — STRUCTURAL GATE. Never expose senior capital to the LP
+        // unless a manipulation-resistant (truncated) oracle is READY: a deployed position priced off pure
+        // spot is the impaired-tail single-block-pump surface. Refusing the deploy makes that state
+        // unreachable — `recoverableUSDC()` has nothing spot-priced to value until a ready oracle exists.
+        (, bool oReady) = _oracleTick();
+        if (!oReady) revert OracleNotReady();
+
+        // AUDIT (coverage floor default-0, Med) — the junior USDC first-loss cushion must be ARMED before
+        // senior is deployed at risk. `minCoverageBps == 0` short-circuits `_coverageOkAfter` to `true`,
+        // which would silently permit an UNCUSHIONED senior deploy (a later team-token crash then imposes a
+        // real senior haircut). Refuse structurally: a vault must set a coverage floor before deploying.
+        if (minCoverageBps == 0) revert CoverageFloorUnset();
 
         // Enforce idle-first: keep >= target of the senior base in the Aave buffer after deploying.
         uint256 base = totalSeniorAssets();
@@ -1076,9 +1136,28 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         emit RecoveredFromLP(usdcWanted, usdcReturned, teamBack);
     }
 
-    /// @dev Push idle USDC into Aave, best-effort (never reverts the caller). Mirrors v1.
+    /// @dev The always-liquid hot-buffer reserve target in USDC = `hotBufferBps` of the senior base. Kept
+    ///      on-hand (un-swept) by `_supplyToAdapter` so a bounded card-settle survives total adapter freeze.
+    function _hotBufferReserve() internal view returns (uint256) {
+        if (hotBufferBps == 0) return 0;
+        return totalSeniorAssets().mulDiv(hotBufferBps, BPS, Math.Rounding.Floor);
+    }
+
+    /// @dev Push idle USDC into Aave, best-effort (never reverts the caller). Mirrors v1. AUDIT
+    ///      (recall-liveness, Low): withhold `_hotBufferReserve()` from the sweep so that much senior USDC
+    ///      always stays on-vault (independent of the adapter). Additive — `hotBufferBps == 0` ⇒ unchanged.
     function _supplyToAdapter(uint256 amount) internal {
         if (amount == 0) return;
+        uint256 reserve = _hotBufferReserve();
+        if (reserve != 0) {
+            // Only sweep the free senior USDC ABOVE the reserve (`_freeSeniorBuffer` already includes `amount`,
+            // which is on hand by the time this is called). Never sweep below the always-liquid floor.
+            uint256 free = _freeSeniorBuffer();
+            if (free <= reserve) return;
+            uint256 supplyCap = free - reserve;
+            if (amount > supplyCap) amount = supplyCap;
+            if (amount == 0) return;
+        }
         uint256 suppliable = adapter.maxSuppliable();
         uint256 toSupply   = amount < suppliable ? amount : suppliable;
         if (toSupply == 0) return;

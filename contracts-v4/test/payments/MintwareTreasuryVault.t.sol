@@ -17,6 +17,7 @@ import {MWTimelockedRiskParams} from "../../src/lib/MWTimelockedRiskParams.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {MockReadyOracle}  from "../mocks/MockReadyOracle.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
 /// @title  MintwareTreasuryVault unit tests (self-held V4 position)
@@ -65,7 +66,9 @@ contract MintwareTreasuryVaultTest is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         team = new MockERC20("Team Token", "TEAM", 6);
 
-        S = _spawn(0, 2_000_000 * int256(ONE_USDC));
+        // $10 junior USDC buffer: satisfies the FIX-3 coverage floor (1 bps) for the ≤$50k deploys below.
+        // Negligible vs the $100k senior — excluded from the senior NAV, so par/haircut assertions are intact.
+        S = _spawn(10 * ONE_USDC, 2_000_000 * int256(ONE_USDC));
 
         // fund + deposit alice ($100k senior) on the primary stack.
         _deposit(S, alice, 100_000 * ONE_USDC);
@@ -93,6 +96,12 @@ contract MintwareTreasuryVaultTest is Test {
         vm.startPrank(owner);
         s.v.setGateway(gateway);
         s.v.setProtocolTreasury(protocol);
+        // FIX 2a: deployToLP now requires a ready oracle — wire a minimal ready-oracle stand-in (live tick ⇒
+        // min(spot,oracle) == pure spot, so every valuation assertion below is unchanged). FIX 3: deployToLP
+        // now requires a non-zero coverage floor. Set the smallest floor (1 bps) so a tiny junior USDC buffer
+        // is enough to permit these tests' deploys, without materially changing the tranche economics.
+        s.v.setJitHook(address(new MockReadyOracle(IPoolManager(address(s.pm)), s.key)));
+        s.v.setMinCoverage(1);
         vm.stopPrank();
 
         team.mint(teamAddr, TEAM_COMMIT);
@@ -256,8 +265,10 @@ contract MintwareTreasuryVaultTest is Test {
 
     // ── AUDIT H1: under impairment (junior wiped), redemptions HAIRCUT pro-rata — no first-redeemer run ──
     function test_H1_impaired_redemptions_haircut_prorata_no_run() public {
-        // Fresh stack, NO junior USDC buffer — the only backstop is the team token, which we then wipe.
-        Stack memory s = _spawn(0, 2_000_000 * int256(ONE_USDC));
+        // Near-zero junior USDC buffer ($10): the only meaningful backstop is the team token, which we then
+        // wipe. The $10 satisfies the FIX-3 coverage floor to permit the deploy; it is far too small to lift
+        // the impaired realizable NAV back to par, so the tail haircut is unchanged.
+        Stack memory s = _spawn(10 * ONE_USDC, 2_000_000 * int256(ONE_USDC));
         address bob = makeAddr("bob");
         _deposit(s, alice, 100_000 * ONE_USDC);
         _deposit(s, bob,   100_000 * ONE_USDC); // two EQUAL senior holders
@@ -391,7 +402,7 @@ contract MintwareTreasuryVaultTest is Test {
 
     // ── the senior is NEVER settled below par: burnForPayment reverts rather than underpay ─
     function test_burnForPayment_reverts_not_underpays_when_junior_wiped() public {
-        Stack memory s = _spawn(0, 200_000 * int256(ONE_USDC));
+        Stack memory s = _spawn(10 * ONE_USDC, 200_000 * int256(ONE_USDC)); // $10 buffer just satisfies FIX-3 floor
         _deposit(s, makeAddr("payUser"), 100_000 * ONE_USDC);
         address u = makeAddr("payUser");
 

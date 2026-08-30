@@ -147,6 +147,15 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         usdc.approve(address(c.vault), type(uint256).max);
         c.vault.depositUSDC(10_000 * ONE, 0, user);
         vm.stopPrank();
+
+        // FIX 2a: warm the factory-made hook's truncated oracle (initializes on the first swap) so the
+        // deployToLP calls below — which now require a ready oracle — proceed. Buy-team swap (USDC in ⇒ no
+        // JIT). The factory already armed the coverage floor (FIX 3, minCoverage = 10_000) at createVault.
+        usdc.mint(address(this), 200 * ONE);
+        c.team.mint(address(this), 200 * ONE);
+        usdc.approve(address(swapRouter), type(uint256).max);
+        c.team.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(c.key, !_sellTeamZeroForOne(c.team), 100 * ONE);
     }
 
     function _sellTeamZeroForOne(MockERC20 teamTok) internal view returns (bool) {
