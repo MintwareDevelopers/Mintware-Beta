@@ -23,7 +23,7 @@ import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
 export const metadata: Metadata = {
   title: 'For Funds — Dry powder that isn’t dead weight | Mintware',
   description:
-    'Infrastructure for crypto funds, VCs, and asset managers: uncalled capital that stays fully callable while it earns, agent strategies funded per-call over x402, and reputation-weighted allocation — non-custodial, native-USDC settlement. In testing on testnet, unaudited; not an offer or investment advice.',
+    'Infrastructure for crypto funds, VCs, and asset managers: uncalled capital that stays fully callable while it earns, agent strategies funded per-call over x402, and best-venue yield on the same balance — non-custodial, native-USDC settlement. In testing on testnet, unaudited; not an offer or investment advice.',
 }
 
 // ─── Copy + data (all figures dated + sourced; see SOURCES) ──────────────────
@@ -33,7 +33,7 @@ const C = {
     status: 'Vision · in testing on testnet',
     title: 'Dry powder that isn’t',
     titleAccent: 'dead weight.',
-    lede: 'Funds sit on capital between calls — reserves, uncalled commitments, stablecoin dry powder — and most of it earns nothing while it waits. Mintware is the infrastructure to keep that balance fully callable and productive at the same time: earning protocol-native yield, spendable per-call by your agents, and allocated by on-chain reputation. Non-custodial, native-USDC, operated by you.',
+    lede: 'Funds sit on capital between calls — reserves, uncalled commitments, stablecoin dry powder — and most of it earns nothing while it waits. Mintware is the infrastructure to keep that balance fully callable and productive at the same time: earning protocol-native yield and spendable per-call by your agents. Non-custodial, native-USDC, operated by you.',
     stats: [
       { v: '~$315B', s: 'stablecoins', label: 'Total stablecoin supply mid-2026 — up from ~$124B at end-2023.' },
       { v: '~$4.6B', s: 'earning', label: 'Of that supply, the portion classified as yield-bearing. The rest is idle.' },
@@ -95,14 +95,14 @@ const C = {
       },
       {
         i: '03',
-        title: 'Allocation by on-chain reputation — Attribution',
-        how: 'Attribution scores on-chain behaviour into a portable reputation signal. In 2026, on-chain scores increasingly govern loan-to-value, access, and counterparty risk — the same primitive can weight membership, allocation, and access to a fund’s pools.',
-        why: 'Route capital and access by verifiable on-chain track record instead of trust-me. Lower counterparty risk, higher capital utilization, allocation you can defend on-chain.',
+        title: 'Best-venue yield on the same balance — ULV',
+        how: 'Idle capital is rehypothecated into best-venue lending — the adapter shops Aave and Morpho for the top USDC rate — while just-in-time V4 liquidity plus MEV/LVR recapture stack a second layer of return on the same dollars. LPs are paid pro-rata by their share of the pool.',
+        why: 'Higher capital utilization without a second pool of money: reserves earn a lending floor and an LP-fee layer at once, and the balance stays fully callable the whole time.',
       },
       {
         i: '04',
         title: 'Non-custodial, native-USDC settlement',
-        how: 'Keys stay with the fund (self-custody + external wallets); capital lives in the fund’s wallet or in autonomous, audited contracts — never with Mintware. Settlement is USDC-native over Circle / Arc rails with CCTP bridging; Mintware never touches fiat.',
+        how: 'Keys stay with the fund (self-custody + external wallets); capital lives in the fund’s wallet or in autonomous, audited contracts — never with Mintware. Settlement is USDC-native over Circle rails with CCTP bridging; Mintware never touches fiat.',
         why: 'No custodian in the middle of your treasury, no off-ramp tax, no counterparty holding the balance. The infrastructure is yours to operate; the licensed pieces stay with licensed partners.',
       },
     ],
@@ -129,7 +129,7 @@ const C = {
       { k: 'Structured tranches', v: 'Senior capital is price-free — it never reads a pool price, so it stays spendable at par. A junior first-loss tranche absorbs impermanent loss and market moves. The senior balance behaves like cash; the volatility lands on the tranche built to take it.' },
       { k: 'Solvency-aware redemption', v: 'Redeemable at par while the first-loss cushion covers it. If a tail event ever exhausts the cushion, everyone shares the same transparent pro-rata outcome — no race for the exit, no first-redeemer advantage.' },
       { k: 'The ULV engine', v: 'Idle capital earns via rehypothecation into best-venue lending — the adapter shops Aave and Morpho for the top USDC rate; just-in-time V4 liquidity plus MEV/LVR recapture stack a second layer of return that normally leaks to arbitrageurs. Capital is never idle inside the vault.' },
-      { k: 'Native-USDC rails', v: 'Settlement is USDC-native on Circle / Arc with CCTP bridging; card spend runs through a regulated card partner. Mintware never custodies funds and never touches fiat.' },
+      { k: 'Native-USDC rails', v: 'Settlement is USDC-native on Circle with CCTP bridging; card spend runs through a regulated card partner. Mintware never custodies funds and never touches fiat.' },
     ],
   },
 
@@ -146,8 +146,8 @@ const C = {
     points: [
       { k: 'Non-custodial by construction', v: 'Self-custody (Privy + external wallets) or autonomous contracts hold the capital — never Mintware.' },
       { k: 'Formal verification, not just tests', v: 'Machine-checked (Coq) and symbolic (Halmos) proofs on the properties where money can be lost.' },
-      { k: 'Proven end-to-end on-chain', v: 'The whole YPN loop, plus a native-USDC Base→Arc bridge, executed on testnet with transaction hashes you can open in a block explorer.' },
-      { k: 'Circle / Arc rails', v: 'USDC-native settlement built on Circle’s Arc and CCTP; licensed partners carry the regulated legs.' },
+      { k: 'Proven end-to-end on-chain', v: 'The whole YPN loop, plus a native-USDC CCTP bridge, executed on testnet with transaction hashes you can open in a block explorer.' },
+      { k: 'Circle rails', v: 'USDC-native settlement built on Circle and CCTP; licensed partners carry the regulated legs.' },
     ],
     cta: { label: 'See the whole loop run on-chain', href: '/proof' },
   },
@@ -165,7 +165,7 @@ const C = {
   },
 
   honesty:
-    'In testing on Base Sepolia and Circle’s Arc testnet — testnet, unaudited, valueless test USDC. Nothing here is an offer, a solicitation, investment / legal / tax advice, or a claim that Mintware manages, advises, or holds a fund’s capital: it is non-custodial software a fund operates itself. The senior balance is a claim on an autonomous vault, not a deposit, and is not guaranteed, insured, or a fixed rate. Yield figures are illustrative and historical, never a promise. An external audit precedes any real value.',
+    'In testing on Base Sepolia — testnet, unaudited, valueless test USDC. Nothing here is an offer, a solicitation, investment / legal / tax advice, or a claim that Mintware manages, advises, or holds a fund’s capital: it is non-custodial software a fund operates itself. The senior balance is a claim on an autonomous vault, not a deposit, and is not guaranteed, insured, or a fixed rate. Yield figures are illustrative and historical, never a promise. An external audit precedes any real value.',
 
   sources: [
     'Stablecoin supply ~$315–321B, ~$4.6B yield-bearing — Crypto-Economy, CoinDesk, KuCoin (2026)',

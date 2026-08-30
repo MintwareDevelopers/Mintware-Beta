@@ -196,12 +196,12 @@ function Vaults({ nav }: { nav: Nav }) {
 
       <h2>Lock tiers &amp; redemption</h2>
       <table className={TABLE}>
-        <thead><tr><th>Tier</th><th>Lock</th><th>Multiplier</th></tr></thead>
+        <thead><tr><th>Tier</th><th>Lock / withdrawal notice</th></tr></thead>
         <tbody>
-          <tr><td><b>Flex</b></td><td>none</td><td>1.0×</td></tr>
-          <tr><td><b>Committed</b></td><td>30 days</td><td>1.1×</td></tr>
-          <tr><td><b>Aligned</b></td><td>90 days</td><td>1.25×</td></tr>
-          <tr><td><b>Core</b></td><td>180 days</td><td>1.5×</td></tr>
+          <tr><td><b>Flex</b></td><td>none</td></tr>
+          <tr><td><b>Committed</b></td><td>30 days</td></tr>
+          <tr><td><b>Aligned</b></td><td>90 days</td></tr>
+          <tr><td><b>Core</b></td><td>180 days</td></tr>
         </tbody>
       </table>
       <p>Early exit pays a penalty to treasury by elapsed fraction: <b>&lt; 20% → 2.0%</b>, <b>20–50% → 1.0%</b>, <b>50–80% → 0.5%</b>. Redemption is async: <code>requestRedeem</code> (after a 24h <code>MIN_HOLD</code>) → a 7-day <code>NOTICE_PERIOD</code> → <code>executeRedeem</code>.</p>

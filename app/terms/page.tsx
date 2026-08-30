@@ -113,7 +113,7 @@ export default function TermsPage() {
         <h2 id="services" className={h2}>3. The services</h2>
         <p className={p}>Mintware provides a non-custodial interface to on-chain products across three areas. <b>We do not take custody of your assets at any point</b> — you interact with smart contracts directly through your own wallet.</p>
         <ul className={ul}>
-          <li><b>Attribution</b> — an on-chain reputation score computed from public wallet activity, published via offchain EAS attestations and an on-chain contract on Base mainnet.</li>
+          <li><b>Attribution</b> — a reputation score computed off-chain from public wallet activity, with an on-chain contract on Base mainnet.</li>
           <li><b>Vaults</b> — reputation-adjacent liquidity provision on Uniswap V4. <b>Currently in testing on Base Sepolia, unaudited, and not open to real value.</b> Nothing on this platform should be read as an invitation to deposit real funds until we state otherwise in writing.</li>
           <li><b>Payments</b> — a yield-bearing spend account and agent payment rails (including HTTP&nbsp;402-based machine payments). <b>Currently in testing, unaudited, gated behind required configuration, and not generally available.</b></li>
         </ul>

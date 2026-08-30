@@ -25,10 +25,10 @@ import {
 //
 // ANGLE: Mintware = the financial rail for a network state — a shared treasury
 // that earns while staying spendable at par by members (YPN), non-custodial,
-// reputation-weighted membership (Attribution), settled in native USDC (Circle /
-// Arc). Leads with the yield story + the two macro trends + movement momentum,
-// quantified. Honest: one concentrated testnet/unaudited note; illustrative
-// yield only; no deposit / guaranteed / fixed-APY language.
+// settled in native USDC (Circle). Leads with the yield story + the two macro
+// trends + movement momentum, quantified. Honest: one concentrated
+// testnet/unaudited note; illustrative yield only; no deposit / guaranteed /
+// fixed-APY language.
 // =============================================================================
 
 export const metadata: Metadata = {

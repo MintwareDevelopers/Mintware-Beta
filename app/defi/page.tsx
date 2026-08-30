@@ -66,7 +66,7 @@ export default function DefiLandingPage() {
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
           <div className={ey}>The vault engine · never idle</div>
           <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[16ch] [text-wrap:balance]">
-            One deposit. <span className="text-gradient-accent">Three income streams.</span>
+            One balance. <span className="text-gradient-accent">Three income streams.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
             MEV-protected, auto-managed liquidity on Uniswap v4 — one balance earning three ways at once: Aave lending, swap fees, and recaptured MEV, with no rebalancing. Idle capital never sits still, and the yield stays spendable while your position keeps working.

@@ -78,7 +78,7 @@ const COPY = {
       {
         index: '04',
         title: 'Native USDC settlement, your keys',
-        body: 'Settlement is USDC-native over Circle / Arc rails with CCTP bridging; card spend runs through a regulated card partner. Mintware never touches fiat and never takes custody — funds live in your wallet or in autonomous, audited contracts.',
+        body: 'Settlement is USDC-native over Circle rails with CCTP bridging; card spend runs through a regulated card partner. Mintware never touches fiat and never takes custody — funds live in your wallet or in autonomous, audited contracts.',
       },
     ],
   },
@@ -118,12 +118,12 @@ const COPY = {
       { k: 'Structured tranches', v: 'Company capital can sit senior and price-free — behaving like a dollar — while a first-loss junior tranche absorbs market moves. The volatility lands on the tranche built to take it.' },
       { k: 'Solvency-aware redemption', v: 'Par while the first-loss cushion covers it; a fair, transparent pro-rata outcome in the tail. No race for the exit, no first-redeemer advantage.' },
       { k: 'Non-custodial by design', v: 'Self-custody via Privy + external wallets. Mintware never holds your keys; value lives in your wallet or in autonomous contracts.' },
-      { k: 'Native USDC rails', v: 'USDC-native settlement + CCTP bridging on Circle / Arc; a regulated partner carries the card and fiat legs. Mintware never touches fiat.' },
+      { k: 'Native USDC rails', v: 'USDC-native settlement + CCTP bridging on Circle; a regulated partner carries the card and fiat legs. Mintware never touches fiat.' },
     ],
   },
 
   honesty:
-    'Honest status: Mintware is in testing on testnet (Base Sepolia + Circle’s Arc testnet), pre-launch and unaudited — the whole loop has been proven end-to-end on-chain with real transaction hashes, but on empty vaults with valueless test USDC. This page describes the vision and where we are building to, not a live production service. Nothing here is a deposit, a savings or insured account, a guaranteed or fixed yield, or an offer, investment, legal, or tax advice; illustrative figures are models, not promises. External audit and a production card/settlement partner gate real value.',
+    'Honest status: Mintware is in testing on testnet (Base Sepolia), pre-launch and unaudited — the whole loop has been proven end-to-end on-chain with real transaction hashes, but on empty vaults with valueless test USDC. This page describes the vision and where we are building to, not a live production service. Nothing here is a deposit, a savings or insured account, a guaranteed or fixed yield, or an offer, investment, legal, or tax advice; illustrative figures are models, not promises. External audit and a production card/settlement partner gate real value.',
 
   trust: {
     eyebrow: 'Why trust it',
@@ -133,7 +133,7 @@ const COPY = {
       { k: 'Non-custodial', v: 'Your keys, your funds. Mintware and its contracts never take custody.' },
       { k: 'Testnet-proven end to end', v: 'Deposit → earn → authorize → spend, plus a native USDC bridge — every leg executed on-chain with real, explorable hashes.' },
       { k: 'Self-reviewed & hardened', v: 'An audit-readiness pass with 0 Criticals and all Highs remediated, on top of formal, machine-checked verification of the money-path invariants.' },
-      { k: 'Built on Circle / Arc rails', v: 'USDC-native settlement and CCTP bridging on Circle’s infrastructure — not a bespoke bridge of our own.' },
+      { k: 'Built on Circle rails', v: 'USDC-native settlement and CCTP bridging on Circle’s infrastructure — not a bespoke bridge of our own.' },
     ],
     cta: { label: 'See the on-chain proof', href: '/proof' },
   },

@@ -6,8 +6,7 @@
 //
 // ANGLE: Mintware is the financial rail for a network state — a SHARED TREASURY
 // that earns DeFi yield while staying spendable at par by members (YPN),
-// NON-CUSTODIAL (members hold their own keys), with REPUTATION-WEIGHTED
-// membership/access (Attribution), settled in native USDC (Circle / Arc).
+// NON-CUSTODIAL (members hold their own keys), settled in native USDC (Circle).
 // The quantified case: idle community capital that could earn × real-world spend
 // moving on-chain = exactly the gap YPN fills.
 //
@@ -24,7 +23,7 @@
 export const NS_META = {
   title: 'For Network States & Settlements — Mintware',
   description:
-    'The financial rail for a network state: a shared treasury that earns DeFi yield while staying spendable at par by members, non-custodial, with reputation-weighted membership, settled in native USDC on Circle / Arc. Vision, proven on testnet.',
+    'The financial rail for a network state: a shared treasury that earns DeFi yield while staying spendable at par by members, non-custodial, settled in native USDC on Circle. Vision, proven on testnet.',
 } as const
 
 export const NS_HERO = {
@@ -32,7 +31,7 @@ export const NS_HERO = {
   title: 'A treasury that earns like a fund —',
   titleAccent: 'and spends like cash.',
   lead:
-    'Network states run on a shared treasury and a member roll. Today that treasury either sits idle in stablecoins earning nothing, or gets locked in yield venues your members can’t spend from. Mintware makes it one balance: capital that stays productive while every member can spend it at par — non-custodial, reputation-aware, settled in native USDC.',
+    'Network states run on a shared treasury and a member roll. Today that treasury either sits idle in stablecoins earning nothing, or gets locked in yield venues your members can’t spend from. Mintware makes it one balance: capital that stays productive while every member can spend it at par — non-custodial, settled in native USDC.',
   ctaPrimary: { label: 'How it works ↓', href: '#how' },
   ctaSecondary: { label: 'See it run on-chain →', href: '/proof' },
 } as const
@@ -45,7 +44,7 @@ export const NS_PROBLEM = {
   points: [
     ['Idle capital', 'Crowdfunded USDC sits in a treasury multisig earning nothing — or gets locked in a yield strategy no member can spend from without an unwind, a bridge, and a taxable exit.'],
     ['Payments leak off-chain', 'Member dues, grants, vendor payouts and stipends detour through banks, cards and exchanges — slow, custodial, and foreign to the community that raised the money.'],
-    ['Membership without a spine', 'Citizenship and access are a spreadsheet or a token balance. There’s no portable, on-chain reputation to weight who gets what — allocation, access, voice.'],
+    ['No middle ground on the treasury', 'The shared treasury is forced to choose: keep it liquid in a multisig earning 0%, or lock it in a yield venue no member can spend from. Liquidity or yield — never both.'],
   ],
 } as const
 
@@ -104,7 +103,7 @@ export const NS_SOLUTION = {
   title: 'One rail for the money',
   titleAccent: 'of a network state.',
   lead:
-    'The same primitive that makes personal cash productive scales to a community treasury — earning while it stays spendable, owned by its members, and aware of who they are.',
+    'The same primitive that makes personal cash productive scales to a community treasury — earning while it stays spendable, and owned by its members.',
   cards: [
     {
       k: 'A treasury that stays spendable',
@@ -117,14 +116,14 @@ export const NS_SOLUTION = {
       v: 'Members hold their own keys — self-custody via Privy plus any external wallet. Mintware never takes custody; funds live in members’ wallets or in autonomous, audited-to-be contracts. The community stays sovereign over its own money.',
     },
     {
-      k: 'Reputation-weighted membership',
+      k: 'Capital that never sits idle',
       tone: 'peri',
-      v: 'Attribution scores real on-chain behaviour into a portable reputation. Use it to weight citizenship, allocation, and access — a spine for who gets what, that a wallet balance alone can’t give you.',
+      v: 'Idle treasury USDC earns protocol-native yield — the adapter shops best-venue lending and just-in-time V4 liquidity stacks a second layer of return on the same balance. Member funds keep working right up to the moment they’re spent, and LPs are paid pro-rata by their share of the pool.',
     },
     {
       k: 'Native USDC settlement',
       tone: 'coral',
-      v: 'Payments settle in USDC on Circle / Arc rails, bridged across chains via CCTP, with real-world card spend through a regulated card partner. Mintware never touches fiat — licensed partners carry that leg.',
+      v: 'Payments settle in native USDC on Circle rails, bridged across chains via CCTP, with real-world card spend through a regulated card partner. Mintware never touches fiat — licensed partners carry that leg.',
     },
   ],
 } as const
@@ -143,7 +142,7 @@ export const NS_MECHANICS = {
     ['Spend without unwinding', 'A card swipe or payout is a hold against the earning position, then a settle — the underlying stays deployed the entire time.'],
   ],
   note:
-    'In testing on Base Sepolia and Circle’s Arc testnet — testnet, unaudited, no real value. These are design properties of autonomous contracts, not a deposit, a guarantee, or investment advice; an external audit is the gate before real value.',
+    'In testing on Base Sepolia — testnet, unaudited, no real value. These are design properties of autonomous contracts, not a deposit, a guarantee, or investment advice; an external audit is the gate before real value.',
 } as const
 
 // ─── Why us / trust. ─────────────────────────────────────────────────────────
@@ -162,7 +161,7 @@ export const NS_TRUST = {
   points: [
     ['Non-custodial', 'Members hold their keys. Funds live in the user’s wallet or in autonomous contracts — never on a Mintware balance sheet.'],
     ['Proven end-to-end', 'Deposit → earn → authorize → spend, plus a native USDC bridge, all executed on testnet with real hashes you can open in a block explorer.'],
-    ['Built on Circle / Arc rails', 'USDC-native settlement plus CCTP bridging ($126B+ moved across 17 chains) on Circle’s infrastructure; Circle’s USDC-native Arc L1 was announced in 2025. Card spend runs via a regulated partner (sandbox today). We build on their rails — we don’t claim their licences.'],
+    ['Built on Circle rails', 'USDC-native settlement plus CCTP bridging ($126B+ moved across 17 chains) on Circle’s infrastructure. Card spend runs via a regulated partner (sandbox today). We build on their rails — we don’t claim their licences.'],
   ],
   proofCta: { label: 'See the on-chain proof →', href: '/proof' },
   mathCta: { label: 'Read the math →', href: '/the-math' },
