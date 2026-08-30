@@ -20,8 +20,6 @@ import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiqui
 import {HookMiner}                 from "../../src/lib/HookMiner.sol";
 import {MintwareTreasuryVault}     from "../../src/payments/MintwareTreasuryVault.sol";
 import {MintwareTreasuryJitHook}   from "../../src/payments/MintwareTreasuryJitHook.sol";
-import {MWAmAuction}               from "../../src/hooks/MWAmAuction.sol";
-import {AmParams}                  from "../../src/hooks/MWAmAuctionLib.sol";
 
 import {MWTimelockedRiskParams}   from "../../src/lib/MWTimelockedRiskParams.sol";
 import {Ownable}                  from "@openzeppelin/contracts/access/Ownable.sol";
@@ -52,10 +50,6 @@ contract MintwareTreasuryJitHookTest is Test {
     address internal teamAddr = makeAddr("team");
     address internal user     = makeAddr("user");
     address internal trader   = makeAddr("trader");
-    address internal mgr      = makeAddr("mgr"); // am-AMM manager (Phase 3)
-
-    MWAmAuction internal auction;
-    uint24 internal constant MGR_FEE_PIPS = 5_000; // 0.5% manager-set fee
 
     uint160 internal constant INIT_SQRT_PRICE = 79228162514264337593543950336; // 1:1 @ tick 0
     int24   internal constant SPACING = 60;
@@ -80,11 +74,12 @@ contract MintwareTreasuryJitHookTest is Test {
         PoolKey memory ctorKey = PoolKey({currency0: c0, currency1: c1, fee: LPFeeLibrary.DYNAMIC_FEE_FLAG, tickSpacing: SPACING, hooks: IHooks(address(0))});
         vault = new MintwareTreasuryVault(address(pm), ctorKey, address(usdc), address(adapter), address(this), teamAddr); // owner=this
 
-        // Mine the hook address (beforeSwap|afterSwap = 0xC0). The ctor ignores key.hooks, so a
-        // placeholder-hooks key is fine for the initcode; the pool + hook agree on the real address.
+        // Mine the hook address (beforeInitialize|beforeSwap|afterSwap = 0x20C0; no beforeSwapReturnDelta —
+        // am-AMM skim shelved off this hook, so it returns ZERO delta always). The ctor ignores key.hooks,
+        // so a placeholder-hooks key is fine for the initcode; the pool + hook agree on the real address.
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), address(vault), address(this));
         (address hookAddr, bytes32 salt) =
-            HookMiner.find(address(this), uint160(0x20C8), type(MintwareTreasuryJitHook).creationCode, args);
+            HookMiner.find(address(this), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, args);
         hook = new MintwareTreasuryJitHook{salt: salt}(address(pm), ctorKey, address(usdc), address(vault), address(this));
         require(address(hook) == hookAddr, "hook addr");
 
@@ -423,112 +418,42 @@ contract MintwareTreasuryJitHookTest is Test {
         hook.setMevTax(50, 1_000_001);
     }
 
-    // ── am-AMM enrollment (YPN MEV engine, Phase 3) ─────────────────────────────────────────────
+    // ── am-AMM SHELVED off this hook (2026-08-30) ───────────────────────────────────────────────────
+    // The am-AMM manager-fee-skim tests (`test_amAmm_managedSwap_skimsToManager_andSkipsJit`,
+    // `test_amAmm_unmanagedSwap_dynamicFeeFallback`, `test_amAmm_jitSkipSender_bypassesAuction`,
+    // `test_amAmm_enrollment_ownerGated`) and their `_enrollAmAmm`/`_seatManager` helpers were removed:
+    // the skim was the ONLY non-zero-BeforeSwapDelta writer on this hook and is intentionally shelved
+    // (flags 0x20C8 → 0x20C0, no `beforeSwapReturnDelta`). `MWAmAuction`/`MWAmAuctionLib` remain
+    // standalone contracts — their own unit tests (`MWAmAuction.t.sol` etc.) still cover them.
 
-    /// Deploy + wire the auction (hook = coordinator), enroll the canonical pool with USDC rent, and set
-    /// the vault as the rent sink. Owner is `this` throughout this suite.
-    function _enrollAmAmm() internal {
-        auction = new MWAmAuction(address(this));
-        auction.setCoordinator(address(hook));
-        hook.setAuction(address(auction));
-        hook.setAmAmmEnabled(true);
-        auction.configurePool(key.toId(), address(vault), AmParams({
-            enabled: true, bidToken: address(usdc), feeMaxPips: 30_000, defaultFeePips: 3000,
-            minRent: 100, K: 10, minBidMultBps: 11_000
-        }));
-        vault.setRentFunder(address(auction)); // vault owner = this here
+    // ── permission-bit proof: hook returns ZERO delta always, no beforeSwapReturnDelta bit ──────────
+
+    /// The mined hook address carries exactly beforeInitialize|beforeSwap|afterSwap (0x20C0) and NOT the
+    /// beforeSwapReturnDelta bit (0x0008) — the on-chain guarantee the hook never returns a non-zero delta.
+    function test_hookFlags_areExactly0x20C0_noReturnDelta() public view {
+        uint160 flags = uint160(address(hook)) & 0x3FFF; // low 14 bits = the V4 permission mask
+        assertEq(flags, uint160(0x20C0), "hook flags are not exactly 0x20C0");
+        assertEq(flags & 0x0008, 0, "hook still carries the beforeSwapReturnDelta bit");
     }
 
-    /// Seat `mgr` as the auction manager: bid USDC rent (deposit = rent·K), then roll past K so the next
-    /// swap's `poke` promotes them.
-    function _seatManager() internal {
-        usdc.mint(mgr, 1_000_000 * ONE);
-        vm.startPrank(mgr);
-        usdc.approve(address(auction), type(uint256).max);
-        auction.bid(key.toId(), MGR_FEE_PIPS, 100, 1000); // rent 100, deposit 1000 = rent*K
-        vm.stopPrank();
-        vm.roll(block.number + 11); // past K → next poke promotes mgr
-    }
-
-    /// A managed swap: the manager skims the fee, the swap still settles (beforeSwapReturnDelta nets zero),
-    /// and JIT is SKIPPED (am-AMM replaces it on enrolled pools).
-    function test_amAmm_managedSwap_skimsToManager_andSkipsJit() public {
-        _enrollAmAmm();
-        _seatManager();
-
-        uint256 teamOwedBefore = auction.owed(mgr, address(team));
-        uint256 outBefore = usdc.balanceOf(trader);
-
-        // Sell team → USDC (the JIT-triggering direction), exact input.
-        uint256 amtIn = 10_000 * ONE;
-        team.mint(trader, amtIn);
-        vm.startPrank(trader);
-        team.approve(address(swapRouter), type(uint256).max);
-        swapRouter.swap(key, _sellTeamZeroForOne(), amtIn);
-        vm.stopPrank();
-
-        assertGt(usdc.balanceOf(trader), outBefore, "managed swap did not settle (delta accounting broke)");
-        assertEq(vault.jitBorrowed(), 0, "JIT fired on an am-AMM-enrolled pool (should be replaced)");
-        assertGt(auction.owed(mgr, address(team)) - teamOwedBefore, 0, "manager did not skim the fee");
-    }
-
-    /// An unmanaged swap on an enrolled pool falls back to the deviation dynamic fee — no skim, still
-    /// settles, JIT still skipped.
-    function test_amAmm_unmanagedSwap_dynamicFeeFallback() public {
-        _enrollAmAmm(); // no manager seated → poke returns mgr == 0
-
-        uint256 amtIn = 10_000 * ONE;
-        usdc.mint(trader, amtIn);
-        uint256 teamBefore = team.balanceOf(trader);
-        vm.startPrank(trader);
-        usdc.approve(address(swapRouter), type(uint256).max);
-        swapRouter.swap(key, !_sellTeamZeroForOne(), amtIn); // buy team (usdc in)
-        vm.stopPrank();
-
-        assertGt(team.balanceOf(trader), teamBefore, "unmanaged swap did not settle");
-        assertEq(auction.owed(mgr, address(usdc)), 0, "skim occurred with no manager");
-        assertEq(vault.jitBorrowed(), 0, "JIT fired on enrolled pool (unmanaged)");
-    }
-
-    /// AUDIT (P3 review, HIGH) regression: a swap from `jitSkipSender` (which is how the vault's OWN
-    /// recover/collect swaps reach beforeSwap — they run inside the vault's nonReentrant unlock) must be
-    /// EXEMPT from the auction: a plain pass-through with no `poke`. If it poked, poke → auction →
-    /// vault.fundRent (nonReentrant) would deadlock and revert the vault op. Proven by: the auction is
-    /// never touched (manager `owed` unchanged) and the fee slot is a bare 0 (no override/skim).
-    function test_amAmm_jitSkipSender_bypassesAuction() public {
-        _enrollAmAmm();
-        _seatManager();
-        address skip = makeAddr("vaultProxy");
-        hook.setJitSkipSender(skip);
-
-        // Promote the manager + accrue rent via a real (non-exempt) external swap through the router.
-        _buyTeam(user, 1_000 * ONE);
-        vm.roll(block.number + 3); // rent would be due on the next poke
-        uint256 usdcOwed = auction.owed(mgr, address(usdc));
-        uint256 teamOwed = auction.owed(mgr, address(team));
-
-        // beforeSwap FROM the exempt sender: bare pass-through (fee slot 0), auction untouched.
+    /// `beforeSwap` returns a ZERO BeforeSwapDelta — the hook only ever overrides the LP fee, never books a
+    /// delta (am-AMM skim shelved off it). Called directly as the PoolManager on the non-JIT direction so
+    /// no `modifyLiquidity` runs (which would need the manager unlocked); the JIT-fire path itself is
+    /// covered by `test_traderSwap_firesJit_thenSweepMakesSeniorWhole`. A non-zero delta here would need the
+    /// `beforeSwapReturnDelta` bit — which the flag test proves is absent.
+    function test_beforeSwap_returnsZeroDelta() public {
+        _buyTeam(trader, 1_000 * ONE); // a real swap first so the oracle is initialized
+        // Buy-team direction: USDC is the INPUT (usdcIsOutput == false) → no JIT borrow/open.
         SwapParams memory sp = SwapParams({
-            zeroForOne: _sellTeamZeroForOne(),
+            zeroForOne: _buyTeamZeroForOne(),
             amountSpecified: -int256(1_000 * ONE),
             sqrtPriceLimitX96: 0
         });
         vm.prank(address(pm));
-        (, , uint24 fee) = hook.beforeSwap(skip, key, sp, "");
-        assertEq(fee, 0, "exempt sender did not get a bare pass-through fee slot");
-        assertEq(auction.owed(mgr, address(usdc)), usdcOwed, "exempt sender poked/skimmed the auction (usdc)");
-        assertEq(auction.owed(mgr, address(team)), teamOwed, "exempt sender poked/skimmed the auction (team)");
-    }
-
-    /// Enrollment is owner-gated.
-    function test_amAmm_enrollment_ownerGated() public {
-        vm.prank(makeAddr("stranger"));
-        vm.expectRevert();
-        hook.setAmAmmEnabled(true);
-
-        vm.prank(makeAddr("stranger"));
-        vm.expectRevert();
-        hook.setAuction(address(1));
+        (, BeforeSwapDelta d, uint24 fee) = hook.beforeSwap(trader, key, sp, "");
+        assertEq(BeforeSwapDelta.unwrap(d), 0, "beforeSwap returned a non-zero delta");
+        // The hook still applies its LP-fee override (delta-free) — the override flag must be set.
+        assertGt(fee & LPFeeLibrary.OVERRIDE_FEE_FLAG, 0, "fee override flag missing");
     }
 
     // ── LEGAL 48h TIMELOCK on the oracle-clamp risk param (setOracleParams) ─────────────────────────

@@ -317,7 +317,7 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
         address predictedVault = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
         bytes memory hookArgs = abi.encode(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         (address hookAddr, bytes32 hookSalt) =
-            HookMiner.find(address(this), uint160(0x20C8), type(MintwareTreasuryJitHook).creationCode, hookArgs);
+            HookMiner.find(address(this), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, hookArgs);
         MintwareTreasuryJitHook hook =
             new MintwareTreasuryJitHook{salt: hookSalt}(address(pm), ctorKey, address(usdc), predictedVault, address(this));
         require(address(hook) == hookAddr, "hook addr");

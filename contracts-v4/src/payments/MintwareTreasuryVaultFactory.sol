@@ -42,8 +42,9 @@ import {
 ///
 ///         v1 access: `createVault` is `onlyOwner` (Mintware-curated / whitelisted teams).
 contract MintwareTreasuryVaultFactory is Ownable {
-    /// @dev beforeSwap | afterSwap — the hook's required permission bits.
-    uint160 internal constant JIT_HOOK_FLAGS = 0x20C8; // beforeInitialize | beforeSwap | afterSwap
+    /// @dev The JIT hook's required permission bits: beforeInitialize | beforeSwap | afterSwap.
+    ///      No `beforeSwapReturnDelta` — the hook returns ZERO delta always (am-AMM skim shelved off it).
+    uint160 internal constant JIT_HOOK_FLAGS = 0x20C0; // beforeInitialize | beforeSwap | afterSwap
     /// @dev All 14 V4 permission bits.
     uint160 internal constant ALL_HOOK_MASK = uint160((1 << 14) - 1);
 
