@@ -12,6 +12,7 @@ import {MintwareTreasuryVault}          from "./MintwareTreasuryVault.sol";
 import {MintwareTreasuryJitHook}        from "./MintwareTreasuryJitHook.sol";
 import {MintwareTreasuryVaultRegistry}  from "./MintwareTreasuryVaultRegistry.sol";
 import {
+    MintwareTreasuryVaultDeployer,
     MintwareTreasuryJitHookDeployer,
     MintwareTreasuryGatewayDeployer
 } from "./MintwareTreasuryDeployers.sol";
@@ -29,10 +30,12 @@ import {
 ///
 ///         The vault + hook + gateway creation codes sum to ~35.8 KB, so a single `new`-based factory that
 ///         embeds all three would exceed the 24,576-byte runtime limit (the same trap that deferred the
-///         4626 `createVault`). This factory therefore embeds ONLY the vault creation code (its own
-///         `new`), and delegates the hook (CREATE2) and gateway (CREATE) to thin deployer helpers. Because
-///         the vault is the factory's OWN — and only — CREATE per call, the vault lands at
-///         `computeCreateAddress(factory, factoryNonce)` with `factoryNonce == 1 + deployCount`.
+///         4626 `createVault`). This factory therefore embeds NONE of the three creation codes: it delegates
+///         the vault (CREATE) and gateway (CREATE) and hook (CREATE2) to thin deployer helpers. Because the
+///         vault is the vaultDeployer's OWN — and only — CREATE per call, the vault lands at
+///         `computeCreateAddress(vaultDeployer, 1 + vaultDeployer.deployCount())`, which the off-chain miner
+///         mines the hook salt against (via `predictNextVault()` → `vaultDeployer.predictNext()`) and the
+///         factory then asserts (`VaultAddressMismatch`).
 ///
 ///         ── Ownership two-phase ───────────────────────────────────────────────────────────────────────
 ///         The wiring calls (`setJitHook`, `setGateway`, `setProtocolTreasury`, `setJitSkipSender`) are
@@ -50,12 +53,9 @@ contract MintwareTreasuryVaultFactory is Ownable {
 
     IPoolManager                         public immutable poolManager;
     MintwareTreasuryVaultRegistry        public immutable registry;
+    MintwareTreasuryVaultDeployer        public immutable vaultDeployer;
     MintwareTreasuryJitHookDeployer      public immutable hookDeployer;
     MintwareTreasuryGatewayDeployer      public immutable gatewayDeployer;
-
-    /// @notice Number of vaults created — equals the factory's CREATE count, so the next vault lands at
-    ///         `computeCreateAddress(factory, 1 + deployCount)`.
-    uint256 public deployCount;
 
     struct CreateParams {
         address usdc;
@@ -88,24 +88,28 @@ contract MintwareTreasuryVaultFactory is Ownable {
     constructor(
         address poolManager_,
         address registry_,
+        address vaultDeployer_,
         address hookDeployer_,
         address gatewayDeployer_,
         address initialOwner
     ) Ownable(initialOwner) {
         if (
-            poolManager_ == address(0) || registry_ == address(0) ||
+            poolManager_ == address(0) || registry_ == address(0) || vaultDeployer_ == address(0) ||
             hookDeployer_ == address(0) || gatewayDeployer_ == address(0)
         ) revert ZeroAddress();
         poolManager     = IPoolManager(poolManager_);
         registry        = MintwareTreasuryVaultRegistry(registry_);
+        vaultDeployer   = MintwareTreasuryVaultDeployer(vaultDeployer_);
         hookDeployer    = MintwareTreasuryJitHookDeployer(hookDeployer_);
         gatewayDeployer = MintwareTreasuryGatewayDeployer(gatewayDeployer_);
     }
 
     /// @notice The address the NEXT `createVault` will deploy the vault at. The off-chain miner mines the
-    ///         hook salt against THIS (via `hookDeployer.predictAddress`).
+    ///         hook salt against THIS (via `hookDeployer.predictAddress`). The vault is deployed by
+    ///         `vaultDeployer` (its only CREATE per call), so the prediction is keyed to the DEPLOYER's
+    ///         nonce, not the factory's.
     function predictNextVault() public view returns (address) {
-        return _computeCreateAddress(address(this), 1 + deployCount);
+        return vaultDeployer.predictNext();
     }
 
     function createVault(CreateParams calldata p, bytes32 hookSalt)
@@ -149,10 +153,13 @@ contract MintwareTreasuryVaultFactory is Ownable {
             hooks: IHooks(hookAddr)
         });
 
-        // 2. Vault — the factory's own (and only) CREATE this call, so it lands at `predictedVault`.
-        //    Owner = factory so the wiring below (onlyOwner) is callable; transferred to p.owner at the end.
-        MintwareTreasuryVault vault =
-            new MintwareTreasuryVault(address(poolManager), hookedKey, p.usdc, p.adapter, address(this), p.team);
+        // 2. Vault via the vaultDeployer (its own and only CREATE this call, so it lands at `predictedVault`).
+        //    Owner = factory (passed THROUGH the deployer) so the wiring below (onlyOwner) is callable;
+        //    transferred to p.owner at the end. The deployer holds the ~21.8 KB vault creation code off the
+        //    factory's own bytecode (EIP-170).
+        MintwareTreasuryVault vault = MintwareTreasuryVault(
+            vaultDeployer.deploy(address(poolManager), hookedKey, p.usdc, p.adapter, address(this), p.team)
+        );
         vaultAddr = address(vault);
         if (vaultAddr != predictedVault) revert VaultAddressMismatch();
 
@@ -183,30 +190,9 @@ contract MintwareTreasuryVaultFactory is Ownable {
         vault.transferOwnership(p.owner);
         MintwareTreasuryJitHook(hookAddr).transferOwnership(p.owner);
 
-        // 7. Register + count.
+        // 7. Register. (The vault-CREATE count lives on `vaultDeployer`, which advances its own nonce.)
         uint256 id = registry.register(vaultAddr, hookAddr, gatewayAddr, p.team, p.teamToken, p.usdc);
-        deployCount += 1;
 
         emit VaultCreated(id, vaultAddr, p.team, hookAddr, gatewayAddr, p.teamToken);
-    }
-
-    /// @dev CREATE address = keccak256(rlp([deployer, nonce]))[12:]. Handles nonces up to uint32, far
-    ///      beyond any realistic `1 + deployCount`. Mirrors forge-std's `computeCreateAddress`.
-    function _computeCreateAddress(address deployer, uint256 nonce) internal pure returns (address) {
-        bytes memory data;
-        if (nonce == 0x00) {
-            data = abi.encodePacked(bytes1(0xd6), bytes1(0x94), deployer, bytes1(0x80));
-        } else if (nonce <= 0x7f) {
-            data = abi.encodePacked(bytes1(0xd6), bytes1(0x94), deployer, uint8(nonce));
-        } else if (nonce <= 0xff) {
-            data = abi.encodePacked(bytes1(0xd7), bytes1(0x94), deployer, bytes1(0x81), uint8(nonce));
-        } else if (nonce <= 0xffff) {
-            data = abi.encodePacked(bytes1(0xd8), bytes1(0x94), deployer, bytes1(0x82), uint16(nonce));
-        } else if (nonce <= 0xffffff) {
-            data = abi.encodePacked(bytes1(0xd9), bytes1(0x94), deployer, bytes1(0x83), uint24(nonce));
-        } else {
-            data = abi.encodePacked(bytes1(0xda), bytes1(0x94), deployer, bytes1(0x84), uint32(nonce));
-        }
-        return address(uint160(uint256(keccak256(data))));
     }
 }

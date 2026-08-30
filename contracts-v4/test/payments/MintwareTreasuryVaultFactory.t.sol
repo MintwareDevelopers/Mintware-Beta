@@ -21,6 +21,7 @@ import {MintwarePaymentGateway}           from "../../src/payments/MintwarePayme
 import {MintwareTreasuryVaultRegistry}    from "../../src/payments/MintwareTreasuryVaultRegistry.sol";
 import {MintwareTreasuryVaultFactory}     from "../../src/payments/MintwareTreasuryVaultFactory.sol";
 import {
+    MintwareTreasuryVaultDeployer,
     MintwareTreasuryJitHookDeployer,
     MintwareTreasuryGatewayDeployer
 } from "../../src/payments/MintwareTreasuryDeployers.sol";
@@ -43,6 +44,7 @@ contract MintwareTreasuryVaultFactoryTest is Test {
     MockERC20 internal usdc; // shared 6dp settlement asset
 
     MintwareTreasuryVaultRegistry   internal registry;
+    MintwareTreasuryVaultDeployer   internal vaultDeployer;
     MintwareTreasuryJitHookDeployer internal hookDeployer;
     MintwareTreasuryGatewayDeployer internal gwDeployer;
     MintwareTreasuryVaultFactory    internal factory;
@@ -69,13 +71,15 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         usdc       = new MockERC20("USD Coin", "USDC", 6);
 
         // Factory stack. Owner/admin = this test → it may call createVault + wire the deployers.
-        registry     = new MintwareTreasuryVaultRegistry(address(this));
-        hookDeployer = new MintwareTreasuryJitHookDeployer(address(this));
-        gwDeployer   = new MintwareTreasuryGatewayDeployer(address(this));
-        factory      = new MintwareTreasuryVaultFactory(
-            address(pm), address(registry), address(hookDeployer), address(gwDeployer), address(this)
+        registry      = new MintwareTreasuryVaultRegistry(address(this));
+        vaultDeployer = new MintwareTreasuryVaultDeployer(address(this));
+        hookDeployer  = new MintwareTreasuryJitHookDeployer(address(this));
+        gwDeployer    = new MintwareTreasuryGatewayDeployer(address(this));
+        factory       = new MintwareTreasuryVaultFactory(
+            address(pm), address(registry), address(vaultDeployer), address(hookDeployer), address(gwDeployer), address(this)
         );
         registry.setFactory(address(factory));
+        vaultDeployer.setFactory(address(factory));
         hookDeployer.setFactory(address(factory));
         gwDeployer.setFactory(address(factory));
     }

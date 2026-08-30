@@ -5,6 +5,7 @@ import {Script, console}                     from "forge-std/Script.sol";
 import {MintwareTreasuryVaultRegistry}       from "../src/payments/MintwareTreasuryVaultRegistry.sol";
 import {MintwareTreasuryVaultFactory}        from "../src/payments/MintwareTreasuryVaultFactory.sol";
 import {
+    MintwareTreasuryVaultDeployer,
     MintwareTreasuryJitHookDeployer,
     MintwareTreasuryGatewayDeployer
 } from "../src/payments/MintwareTreasuryDeployers.sol";
@@ -30,13 +31,14 @@ contract DeployTreasuryFactory is Script {
         vm.startBroadcast(deployerKey);
 
         // Registry + deployer helpers (admin = deployer so it can point them at the factory below).
-        MintwareTreasuryVaultRegistry   registry     = new MintwareTreasuryVaultRegistry(owner);
+        MintwareTreasuryVaultRegistry   registry      = new MintwareTreasuryVaultRegistry(owner);
+        MintwareTreasuryVaultDeployer   vaultDeployer = new MintwareTreasuryVaultDeployer(deployer);
         MintwareTreasuryJitHookDeployer hookDeployer  = new MintwareTreasuryJitHookDeployer(deployer);
         MintwareTreasuryGatewayDeployer gwDeployer     = new MintwareTreasuryGatewayDeployer(deployer);
 
         // Factory (immutable refs to the above).
         MintwareTreasuryVaultFactory factory = new MintwareTreasuryVaultFactory(
-            poolMgr, address(registry), address(hookDeployer), address(gwDeployer), owner
+            poolMgr, address(registry), address(vaultDeployer), address(hookDeployer), address(gwDeployer), owner
         );
 
         // Two-phase wiring: bind the factory into the registry + deployers (set-once).
@@ -46,6 +48,7 @@ contract DeployTreasuryFactory is Script {
         } else {
             console.log("NOTE: registry owner != deployer; owner must call registry.setFactory(factory).");
         }
+        vaultDeployer.setFactory(address(factory));
         hookDeployer.setFactory(address(factory));
         gwDeployer.setFactory(address(factory));
 
@@ -53,6 +56,7 @@ contract DeployTreasuryFactory is Script {
 
         console.log("=== YPN Treasury Vault Factory deployed ===");
         console.log("Registry:       ", address(registry));
+        console.log("VaultDeployer:  ", address(vaultDeployer));
         console.log("HookDeployer:   ", address(hookDeployer));
         console.log("GatewayDeployer:", address(gwDeployer));
         console.log("Factory:        ", address(factory));
