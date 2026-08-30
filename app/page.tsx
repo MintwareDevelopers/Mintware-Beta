@@ -52,6 +52,21 @@ const ACTIONS = [
   { b: 'Run an agent', fd: 'Machines earn reputation — ERC-8004', pts: 'Agent trust', hot: false },
 ]
 
+const LOOP = [
+  { tag: 'Earn',      t: 'Working from second one', d: 'Your capital sits in a lending market and earns immediately. Idle is the exception, not the rule.' },
+  { tag: 'Depth',     t: 'Becomes depth on demand', d: 'The instant a trade needs it, it’s provisioned as deep liquidity — then returns to earning.' },
+  { tag: 'Fees',      t: 'Traders arrive',          d: 'Deep, reliable execution draws real flow. Every swap pays a fee.' },
+  { tag: 'Protected', t: 'Your side stays safe',    d: 'A senior / junior split keeps the spendable side protected while risk sits on first-loss capital.' },
+  { tag: 'Spend',     t: 'Spend the yield',         d: 'Pay from realized earnings — cards, payroll, vendors — while the position keeps working.' },
+  { tag: 'Always',    t: '…and it never stopped',   d: 'Out only for the microseconds of a swap. That’s the whole idea.' },
+]
+
+const TIERS = [
+  { n: 'Blue-chip',        d: 'Deep, stable pairs. A thin first-loss layer, tight risk.', accent: 'rgba(108,108,240,0.9)',  hot: false },
+  { n: 'Liquid markets',   d: 'Active pairs with dynamic fees and recaptured MEV.',        accent: 'rgba(108,108,240,0.9)',  hot: false },
+  { n: 'Community tokens', d: 'Your token, backstopped by its own first-loss — real depth without renting a market maker.', accent: 'rgba(232,138,103,0.95)', hot: true },
+]
+
 const MAX_SCORE = 925
 const RING_C = 2 * Math.PI * 90 // circumference for r=90
 
@@ -273,6 +288,9 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* THE LOOP — how a dollar works: earn → depth → fees → tranche → spend → still earning */}
+      <TheLoopSection launchApp={launchApp} />
+
       {/* LIQUID SOVEREIGN ACCOUNT — liquidity as a public good */}
       <YieldPaymentNetworkSection />
 
@@ -460,6 +478,95 @@ export default function HomePage() {
         </div>
       </section>
     </div>
+  )
+}
+
+// ─── The loop — numbered vertical flow → tiers → Treasury Mesh teaser ────────
+function TheLoopSection({ launchApp }: { launchApp: (path?: string) => void }) {
+  return (
+    <section className="bg-white border-b border-hair-soft">
+      <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[88px] max-[800px]:py-[56px]">
+        <div className={ey}>How it works · the loop</div>
+        <h2 className="font-atx-display font-semibold text-ink tracking-[-0.04em] leading-[1.04] text-[clamp(1.8rem,3.4vw,2.8rem)] max-w-[22ch] mt-3.5 [text-wrap:balance]">
+          One dollar. Six moves. <span className="text-gradient-accent">Never idle.</span>
+        </h2>
+        <p className="text-ink-mid text-[16px] leading-[1.55] max-w-[60ch] mt-4">
+          Your capital earns in a lending market, becomes market depth the instant a trade needs it, and pays its yield out as spendable dollars — without ever unwinding your position.
+        </p>
+
+        {/* the numbered vertical flow — the centerpiece */}
+        <div className="mt-11 max-w-[720px]">
+          {LOOP.map((s, i) => {
+            const last = i === LOOP.length - 1
+            const spend = i === 4
+            const ring = spend
+              ? 'text-coral2-deep border-[rgba(232,138,103,0.55)]'
+              : 'text-peri-deep border-[rgba(108,108,240,0.45)]'
+            return (
+              <div key={s.t} className="grid grid-cols-[54px_1fr] gap-5 max-[520px]:gap-4">
+                <div className="flex flex-col items-center">
+                  <div className={`w-[54px] h-[54px] rounded-full grid place-items-center bg-white border-[1.5px] ${ring} font-atx-display font-medium text-[19px] tabular-nums shadow-[0_1px_2px_rgba(23,23,31,0.06)]`}>
+                    {last ? '↻' : i + 1}
+                  </div>
+                  {!last && <div className="w-[2px] flex-1 min-h-[22px] my-1.5 bg-[rgba(108,108,240,0.16)]" />}
+                </div>
+                <div className={last ? 'pt-1.5' : 'pt-1.5 pb-9'}>
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="font-atx-display text-[18px] font-medium text-ink tracking-[-0.01em]">{s.t}</span>
+                    <span className="text-[9px] uppercase tracking-[0.14em] font-semibold text-ink-soft">{s.tag}</span>
+                  </div>
+                  <p className="text-[14.5px] text-ink-mid leading-[1.5] mt-1.5 max-w-[52ch]">{s.d}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* tiers — clean, top-accent */}
+        <div className="mt-16">
+          <div className={ey}>Same engine, priced to your token</div>
+          <div className="grid grid-cols-3 gap-4 mt-4 max-[720px]:grid-cols-1">
+            {TIERS.map((t) => (
+              <div key={t.n} className="soft-card p-6 flex flex-col gap-2 border-t-[3px]" style={{ borderTopColor: t.accent }}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-atx-display text-[16px] font-medium text-ink">{t.n}</span>
+                  {t.hot && <span className={hotChip + ' whitespace-nowrap'}>where memes fit</span>}
+                </div>
+                <p className="text-[13.5px] text-ink-mid leading-[1.45]">{t.d}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Treasury Mesh teaser */}
+        <div className="mt-12 rounded-[var(--radius-panel)] border border-hair bg-ground-cool p-8 max-[800px]:p-6 grid [grid-template-columns:1.15fr_0.85fr] gap-8 items-center max-[720px]:grid-cols-1">
+          <div>
+            <div className={ey}>Where this is going</div>
+            <h3 className="font-atx-display font-semibold text-ink tracking-[-0.03em] leading-[1.1] text-[clamp(1.4rem,2.4vw,2rem)] mt-3 [text-wrap:balance]">
+              A shared liquidity network.
+            </h3>
+            <p className="text-[15px] text-ink-mid leading-[1.55] mt-3 max-w-[52ch]">
+              One team’s idle treasury can deepen another team’s market — earning while it stays spendable, risk isolated per token. Liquidity as a public good, pooled across the ecosystem.
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-3 font-atx-display max-[420px]:gap-2">
+            <span className="flex flex-col items-center gap-1 rounded-2xl bg-white border border-hair px-4 py-3 text-[13px] font-medium text-ink">Team A<span className="text-[10px] font-normal text-ink-soft">idle senior</span></span>
+            <span className="text-coral2-deep text-[20px] font-semibold">⇄</span>
+            <span className="grid place-items-center w-[74px] h-[74px] rounded-full bg-[rgba(108,108,240,0.1)] border-[1.5px] border-[rgba(108,108,240,0.5)] text-[12px] font-semibold text-peri-deep text-center leading-[1.1] shrink-0">shared<br />depth</span>
+            <span className="text-coral2-deep text-[20px] font-semibold">⇄</span>
+            <span className="flex flex-col items-center gap-1 rounded-2xl bg-white border border-hair px-4 py-3 text-[13px] font-medium text-ink">Team B<span className="text-[10px] font-normal text-ink-soft">idle senior</span></span>
+          </div>
+        </div>
+
+        {/* one honest closing beat */}
+        <div className="flex items-center justify-between gap-4 flex-wrap mt-8">
+          <div className="text-[12px] text-ink-mid tracking-[0.01em]">
+            <b className="text-peri-deep">↳</b> Engineered and adversarially stress-tested. In testing on Base — external audit before real value.
+          </div>
+          <button onClick={() => launchApp('/app/vaults')} className="glass-pill glass-pill-sm whitespace-nowrap">See the vaults →</button>
+        </div>
+      </div>
+    </section>
   )
 }
 
