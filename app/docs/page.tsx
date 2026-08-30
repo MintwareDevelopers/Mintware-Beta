@@ -205,7 +205,7 @@ function Vaults({ nav }: { nav: Nav }) {
         </tbody>
       </table>
       <p>Early exit pays a penalty to treasury by elapsed fraction: <b>&lt; 20% → 2.0%</b>, <b>20–50% → 1.0%</b>, <b>50–80% → 0.5%</b>. Redemption is async: <code>requestRedeem</code> (after a 24h <code>MIN_HOLD</code>) → a 7-day <code>NOTICE_PERIOD</code> → <code>executeRedeem</code>.</p>
-      <Note k="Reward routing">Reputation-weighted LP rewards use the <Ln to="rewards" nav={nav}>weighted distributor</Ln>. For the pro-rata launch variant, see <Ln to="matched" nav={nav}>Matched liquidity</Ln>.</Note>
+      <Note k="Reward routing">Vaults pay LPs <b>pro-rata by liquidity share</b> today. A reputation-weighted reward rail (the <Ln to="rewards" nav={nav}>weighted distributor</Ln>) is <b>built but undeployed</b> — not a live payout path. See also <Ln to="matched" nav={nav}>Matched liquidity</Ln>.</Note>
     </>
   )
 }
@@ -262,9 +262,9 @@ function Matched({ nav }: { nav: Nav }) {
       ]} />
       <p><code>activate</code> is permissionless once it clears a threshold fill and a minimum number of depositors: it forms a <b>50/50</b> team-locked / community-free position and refunds any unmatched team remainder. The alternative terminal state is <code>abort</code> — a full refund to both sides.</p>
 
-      <h2>Fees are pro-rata — not reputation-weighted</h2>
-      <p>This is the key honest distinction from the Growth vault. Community fees are strictly <b>pro-rata to quote contribution</b>. While the position is locked, <code>teamFeesRedirected</code> excludes the team: the <b>team earns 0%</b> and the <b>community earns 100%</b> of fees for the duration of the lock.</p>
-      <Note k="Which vault weights reputation?">Only the <Ln to="vaults" nav={nav}>Growth (pair) vault</Ln> routes rewards through reputation/referral weighting. The matched vault is pure pro-rata by design.</Note>
+      <h2>Fees are pro-rata</h2>
+      <p>Community fees are strictly <b>pro-rata to quote contribution</b>. While the position is locked, <code>teamFeesRedirected</code> excludes the team: the <b>team earns 0%</b> and the <b>community earns 100%</b> of fees for the duration of the lock.</p>
+      <Note k="No reputation-weighting on payouts">Both the <Ln to="vaults" nav={nav}>Growth (pair) vault</Ln> and the matched vault pay LPs <b>pro-rata by liquidity share</b>. Any reputation-weighted reward rail is built but <b>undeployed</b> — not a live payout path.</Note>
     </>
   )
 }

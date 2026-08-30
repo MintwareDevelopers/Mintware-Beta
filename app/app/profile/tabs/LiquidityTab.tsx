@@ -45,17 +45,6 @@ export function LiquidityTab({ wallet }: Props) {
       .finally(() => setLpLoading(false))
   }, [wallet])
 
-  const tierColors: Record<string, string> = {
-    flex:      'var(--color-ink-soft)',
-    committed: 'var(--color-peri)',
-    aligned:   'var(--color-peri-deep)',
-    core:      'var(--color-coral2)',
-  }
-
-  const tierMultipliers: Record<string, string> = {
-    flex: '1.0×', committed: '1.15×', aligned: '1.3×', core: '1.5×',
-  }
-
   if (lpLoading) {
     return <div className="text-center py-12 text-ink-mid text-[13px]">Loading positions…</div>
   }
@@ -100,7 +89,6 @@ export function LiquidityTab({ wallet }: Props) {
 
       {/* Deposit rows */}
       {lpDeposits.map(d => {
-        const color   = tierColors[d.lock_tier] ?? 'var(--color-ink-soft)'
         const daysLeft = d.locked_until
           ? Math.max(0, Math.ceil((new Date(d.locked_until).getTime() - Date.now()) / 86_400_000))
           : 0
@@ -128,9 +116,6 @@ export function LiquidityTab({ wallet }: Props) {
             <div className="text-right shrink-0">
               <div className="text-[16px] font-atx-display font-medium text-peri-deep tabular-nums">
                 ${d.usdc_amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-              </div>
-              <div className="text-[11px] font-semibold tabular-nums" style={{ color }}>
-                {tierMultipliers[d.lock_tier] ?? '1.0×'}
               </div>
             </div>
           </a>

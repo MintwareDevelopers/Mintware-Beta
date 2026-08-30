@@ -47,7 +47,7 @@ export function InviteTab({ wallet, refCode, stats, referralRecords, isLoading }
             Grow your network,<br /><span className="text-gradient-accent">earn more rewards.</span>
           </div>
           <div className="text-[13px] text-white/60 leading-[1.55] mb-[22px] max-w-[320px]">
-            Every active referral raises your Sharing score — and multiplies your reward allocation.
+            Every active referral raises your Sharing score — the most-weighted signal in your Attribution.
           </div>
           <div className="flex items-center gap-[14px] rounded-2xl bg-white/[0.06] border border-white/15 p-[14px_18px]">
             <div className="text-[36px] font-atx-display font-medium text-coral2 leading-[1] tracking-[-1px] shrink-0 tabular-nums">

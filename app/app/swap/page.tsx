@@ -4,14 +4,14 @@
 // /swap — cross-chain LI.FI swap, front and centre. Design v2 (Privy-esque).
 //
 //   • The trade core is the real <SwapWidget/> (LI.FI fee-injection).
-//   • Cross-links to the reputation-weighted /vaults product.
+//   • Cross-links to the never-idle /vaults product.
 //
 // Campaigns were shelved (2026-08-12) — this is a plain swap, no campaign
 // context, points, or reward crediting. The human-facing "Attribution score"
 // framing/reputation stat band was removed 2026-08-28 (see
-// attribution_review_2026_08_28 memory) — the vaults cross-link below still
-// accurately describes the real vault-weighted reward mechanic, just without
-// branding this page itself around a personal score.
+// attribution_review_2026_08_28 memory) — the vaults cross-link below describes
+// the never-idle vault (fees shared pro-rata by liquidity), without branding this
+// page itself around a personal score.
 // =============================================================================
 
 import { Suspense } from 'react'
@@ -34,7 +34,7 @@ function SwapContent() {
               Trade like it <span className="text-gradient-accent">counts.</span>
             </h1>
             <p className="text-ink-mid text-[clamp(1rem,1.5vw,1.15rem)] leading-[1.5] mt-5 max-w-[58ch] mx-auto">
-              Best price across chains. Trade here, or provide liquidity in the reputation-weighted vaults.
+              Best price across chains. Trade here, or provide liquidity in the never-idle vaults.
             </p>
           </div>
         </section>
@@ -67,8 +67,8 @@ function SwapContent() {
                 <span className="ml-auto text-[16px] text-coral2-deep">→</span>
               </div>
               <p className="text-[13px] text-ink-mid leading-[1.5]">
-                Reputation-weighted Uniswap V4 vaults — the same position earns more as your
-                Attribution score climbs. In testing on Base.
+                Dual-sided Uniswap V4 vaults — one balance earns three ways at once and stays
+                spendable. Fees shared pro-rata by liquidity. In testing on Base.
               </p>
             </Link>
           </div>

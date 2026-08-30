@@ -5,6 +5,14 @@ page, doc, deck, and post draws from this. **If a page contradicts this document
 wrong.** (Supersedes the 2026-08 "reputation-weighted DeFi" framing — reputation is now a
 *pillar*, not the spine. See §0.)
 
+> **⛔ Reputation-weighted yield is DEAD (do not market it).** "We pay LPs by reputation," "your
+> score multiplies your returns," the Bronze/Silver/Gold reward multipliers, lock-tier yield
+> multipliers, the "up to 1.95×" ceiling, and the 70/15/10/5 reputation-weighted fee split are all
+> **removed** — the mechanism is not done that way. **Vaults pay LPs flat pro-rata by liquidity
+> share** (standard LP economics). Any reputation-weighted reward rail is **undeployed** — never
+> imply it is live. Attribution remains a live product as a *portable on-chain reputation signal*
+> (and the direction for AI-agent reputation), not a vault-yield lever.
+
 > **What's shelved / off-limits publicly:** RWA (real-world assets, wrappers, SPVs, accreditation,
 > "securities dealer") and reward **campaigns** (token-reward / points pools) are both **shelved** —
 > preserved on archive branches, not the product. Never market either.
@@ -32,7 +40,7 @@ version is the hero. They must never be swapped (the mission line is not a produ
 |---|---|---|
 | **Never idle** | *productive* — capital earns three ways at once | Vaults / ULV engine · Swap |
 | **Never locked** | *liquid & spendable* — yield spendable at the point of sale; you spend from yield, not your position | Liquid Sovereign Account (YPN) |
-| **Always yours** | *fairly earned + owned + non-custodial* — the best LPs earn the most; you hold your share and your keys | Attribution (fairness layer) · AI Agents · Privy custody |
+| **Always yours** | *fairly earned + owned + non-custodial* — you're paid pro-rata for the liquidity you bring; you hold your share and your keys | Vaults (pro-rata LP) · AI Agents · Privy custody |
 
 Every page on the platform is demonstrating **one** of these three. That is the continuity test:
 *which clause is this page proving?* If a section proves none of them, cut it.
@@ -81,17 +89,18 @@ spend.
 - ⚠ AI Attribution is **not** part of the LSA story — keep it out of YPN copy.
 
 ### Always yours — *fairly earned + owned + non-custodial*
-The LPs who bring real, committed liquidity earn the biggest share — reputation, not wallet size,
-decides. You own your LP position and hold your own keys.
-- Surfaces: **Attribution** (the fairness layer) · **AI Agents** (even autonomous agents earn by
-  contribution) · **Privy** (non-custodial).
-- Attribution is **live** (max score **925**, 100+ chains, EAS-attested on Base). Agents are **live**
-  (Base, ERC-8004 + AIAttribution).
-- ⚠ **Scope reputation-weighting honestly.** The Attribution- + lock-tier-weighted reward split
-  (70/15/10/5 = LPs / referrers / protocol / bonus) applies to the **Growth vault only** today. The
-  **matched vault pays community fees pro-rata to deposit size**, not by reputation. Do **not** imply
-  reputation-weighting is universal / "everywhere you trade." Don't coin **"AWY / Attribution-Weighted
-  Yield"** as an acronym until it's earned in the wild — ship the mechanism in plain English.
+The LPs who provide liquidity are paid **pro-rata by their share of the pool** — bring more liquidity,
+earn a bigger share, standard LP economics. You own your LP position and hold your own keys.
+- Surfaces: **Vaults** (pro-rata LP) · **AI Agents** (autonomous agents scored + paid by contribution) ·
+  **Privy** (non-custodial). **Attribution** is a live, portable on-chain reputation signal — not a
+  vault-yield lever.
+- Attribution is **live** (max score **925**, 100+ chains). Agents are **live** (Base, ERC-8004 +
+  AIAttribution).
+- ⚠ **Vaults pay flat pro-rata by liquidity share — full stop.** Reputation-weighted yield is **dead**:
+  do **not** say "we pay by reputation," "your score multiplies your returns," Bronze/Silver/Gold reward
+  multipliers, lock-tier yield multipliers, "up to 1.95×," or the 70/15/10/5 reputation-weighted split.
+  Any reputation-weighting reward rail is **undeployed** — never imply it is live. Don't coin **"AWY /
+  Attribution-Weighted Yield"** at all.
 
 ---
 
@@ -173,8 +182,8 @@ Secondary audiences (they appear, they don't lead the homepage):
 |---|---|---|
 | `/` (home) | **The whole thread** | Hero: *Never idle. Never locked. Always yours.* → the three proofs become the page's three bands → scorer as the "always yours / fairly earned" proof. |
 | `/yield-payment-network` (LSA) | **Never locked** | Spendable yield; the blended model; the epic tech; coming-soon waitlist. (Already aligned.) |
-| `/vaults` + `/defi` | **Never idle** | The engine — three income streams on one balance; reputation share + ownership as the "always yours" tie-in; vaults "coming / testnet"; security framing. |
-| `/attribution` | **Always yours** | Reputation as the fairness layer — honestly scoped to the Growth vault; 925 / EAS / 100+ chains. |
+| `/vaults` + `/defi` | **Never idle** | The engine — three income streams on one balance; fees shared pro-rata by liquidity + ownership as the "always yours" tie-in; vaults "coming / testnet"; security framing. |
+| `/agents` (Attribution) | **Always yours** | Reputation as a portable on-chain signal — 925 / 100+ chains; direction is AI-agent reputation (ERC-8004 / x402), not human vault-yield weighting. |
 | `/agents` | **Always yours** (extension) | Even autonomous agents earn by contribution. |
 | `/teams` | Secondary hero (protocols) | Deep, sticky, fairly-shared launch liquidity (matched vault, blended seeding, on-chain proof-of-commitment). |
 | `/about` | **The mission** | *Liquidity should be a public good* — the banner, the why, the founder's belief. |

@@ -6,12 +6,10 @@
 // products, and — in the "How it works" band — the live Attribution scorer:
 // paste any wallet (or a sample) and its live score reveals inline, then the
 // signals that feed it. Closes on a gentle "Stay in the loop" capture.
-// Live wiring kept: Privy launch, /score fetch, wallet lookup (→ /{address}),
-// WaitlistForm.
+// Live wiring kept: Privy launch, /score fetch, WaitlistForm.
 // =============================================================================
 
 import React, { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { getAddress } from 'viem'
 import { scoreApiUrl } from '@/lib/web2/api'
@@ -32,7 +30,7 @@ const SAMPLE_ADDRS = [
 const STATS = [
   { n: '925', k: 'Max score' },
   { n: '100+', k: 'Chains indexed' },
-  { n: 'EAS', k: 'Attested on Base' },
+  { n: '6', k: 'Signals scored' },
   { n: 'Free', k: 'Always' },
 ]
 
@@ -82,11 +80,9 @@ interface ScoreData {
 
 // ─── Score card — the live Attribution scorer. /score fetch, ring + count-up ──
 function ScoreCard() {
-  const router = useRouter()
   const [input, setInput] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [data, setData] = useState<ScoreData | null>(null)
-  const [addr, setAddr] = useState('')
   const [open, setOpen] = useState(false)
   const [shown, setShown] = useState(0)
   const reqId = useRef(0)
@@ -103,7 +99,7 @@ function ScoreCard() {
       if (!res.ok) throw new Error('not found')
       const d = (await res.json()) as ScoreData
       if (id !== reqId.current) return
-      setData(d); setAddr(a); setShown(0); setStatus('idle'); setOpen(true)
+      setData(d); setShown(0); setStatus('idle'); setOpen(true)
     } catch {
       if (id !== reqId.current) return
       setStatus('error')
@@ -221,14 +217,13 @@ function ScoreCard() {
             {/* vault CTA inside the modal */}
             <div className="border-t border-hair-soft bg-[rgba(108,108,240,0.06)] px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
               <div className="max-w-[440px]">
-                <div className="font-atx-display font-medium text-[17px] tracking-[-0.01em] leading-tight text-ink">Deposit into a V4 Vault.</div>
-                <div className="text-[13px] text-ink-mid">Your score multiplies your returns.</div>
+                <div className="font-atx-display font-medium text-[17px] tracking-[-0.01em] leading-tight text-ink">Explore the vaults.</div>
+                <div className="text-[13px] text-ink-mid">One balance, earning three ways at once — in testing on Base Sepolia.</div>
               </div>
-              <Link href="/app/vaults" className="glass-pill glass-pill-sm whitespace-nowrap">Deposit →</Link>
+              <Link href="/app/vaults" className="glass-pill glass-pill-sm whitespace-nowrap">See the vaults →</Link>
             </div>
 
             <div className="px-6 py-3.5 flex items-center gap-4 text-[11px] uppercase tracking-[0.05em] font-semibold border-t border-hair-soft">
-              <button onClick={() => router.push(`/${addr}`)} className="text-peri-deep hover:underline cursor-pointer bg-transparent border-0 p-0">See full profile →</button>
               <button onClick={() => setOpen(false)} className="text-ink-soft hover:text-ink-mid cursor-pointer bg-transparent border-0 p-0">Close</button>
             </div>
           </div>
@@ -266,7 +261,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* FLAGSHIP — reputation-weighted V4 vaults · dark pop band */}
+      {/* FLAGSHIP — never-idle V4 vaults · dark pop band */}
       <section className="bg-white border-b border-hair-soft">
         <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-[48px] max-[800px]:py-[36px]">
           <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-ink text-white">
@@ -297,7 +292,7 @@ export default function HomePage() {
       {/* AMBIENT TICKER — evergreen facts, in motion */}
       <div className="border-b border-hair-soft bg-ground-cool">
         <Marquee className="py-3" speed={38} items={
-          ['100+ chains scored', 'EAS-attested on Base', 'MEV-protected Uniswap V4', 'Reputation-weighted fee share', 'Up to 1.95× multiplier', 'Free — no connection needed']
+          ['100+ chains scored', 'In testing on Base Sepolia', 'MEV-protected Uniswap V4', 'Fees shared pro-rata by liquidity', 'Spend the yield, not your position', 'Free — no connection needed']
             .map((t) => (
               <span className="text-[11px] uppercase tracking-[0.16em] font-medium text-ink-mid px-5">
                 <span className="text-peri mr-5">◆</span>{t}
@@ -328,7 +323,7 @@ export default function HomePage() {
                   <span className="text-[10px] uppercase tracking-[0.1em] text-ink-soft">For tokens &amp; treasuries</span>
                 </div>
                 <p className="text-[14px] leading-[1.5] text-ink-mid mt-2.5">
-                  MEV-protected, auto-managed LP on Uniswap V4. Your Attribution score and lock tier lift your fee share up to 1.95× over the wallet beside you.
+                  MEV-protected, auto-managed LP on Uniswap V4. Fees are shared pro-rata by the liquidity you provide — and your yield stays spendable while the position keeps working.
                 </p>
               </div>
               <div className="p-6 bg-ground-cool">
@@ -340,17 +335,11 @@ export default function HomePage() {
                 <div className="mt-3">
                   <Bdr k="Swap fees + MEV" v="8.5%" />
                   <Bdr k="Idle-capital yield" v="+0.6%" />
-                  <div className="flex items-center justify-between py-2 border-b border-hair-soft text-[12px] text-ink-mid">
-                    <span className="flex items-center gap-2">
-                      Your multiplier
-                      <span className={hotChip}>Builder · 82</span>
-                    </span>
-                    <span className="tabular-nums">×1.3</span>
-                  </div>
+                  <Bdr k="Your share" v="pro-rata by liquidity" />
                 </div>
                 <div className="flex items-center justify-between pt-3">
                   <span className="text-[10px] uppercase tracking-[0.14em] font-semibold text-ink-soft">Example APY</span>
-                  <span className="font-atx-display font-medium text-[24px] tracking-tight text-coral2-deep tabular-nums"><CountUp value={10.4} decimals={1} suffix="%" /></span>
+                  <span className="font-atx-display font-medium text-[24px] tracking-tight text-coral2-deep tabular-nums"><CountUp value={9.1} decimals={1} suffix="%" /></span>
                 </div>
               </div>
               <button onClick={() => launchApp('/app/vaults')} className="mt-auto p-5 flex justify-center border-t border-hair-soft cursor-pointer">
@@ -457,7 +446,7 @@ export default function HomePage() {
             </div>
           </div>
           <div className="text-[12px] text-ink-mid mt-6 tracking-[0.01em]">
-            <b className="text-peri-deep">↳</b> All six roll into one multiplier — the same ×1.3 you saw on the vault. Nothing you do on-chain is wasted.
+            <b className="text-peri-deep">↳</b> All six roll into one Attribution score — a portable, on-chain reputation. Free to check, yours to build.
           </div>
         </div>
       </section>

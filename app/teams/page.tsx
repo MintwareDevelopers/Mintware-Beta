@@ -133,7 +133,7 @@ export default function TeamsLandingPage() {
               </div>
               <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-3">
                 A standard LP position — provide one or both sides yourself, no locking, no matching. MEV-protected,
-                auto-managed range, and your Attribution score lifts your fee share up to 1.95×. Built for
+                auto-managed range, and fees shared pro-rata by the liquidity you provide. Built for
                 <b className="text-ink"> ongoing or treasury liquidity</b>.
               </p>
               <Link href="/vaults" className="inline-block mt-4 text-[12px] uppercase tracking-[0.06em] font-semibold text-peri-deep no-underline hover:underline">See the LP side →</Link>
@@ -221,7 +221,7 @@ export default function TeamsLandingPage() {
             {[
               ['Every backer gets a link', 'A referral link is deterministic from any wallet — no signup. Share it, and the liquidity it brings is attributed to you.'],
               ['It builds Sharing — the heaviest signal', 'Referrals feed your Sharing score: up to 400 of 925 Attribution points, the single most-weighted signal. A real network is the hardest thing to fake.'],
-              ['A bigger score pays everywhere', 'That higher score lifts your reputation multiplier across the platform — up to 1.95× on the fees you earn. Widen the pool, earn more on your own position.'],
+              ['A deeper pool fills better', 'Every backer you bring widens the pool — tighter spreads and better fills for your token, and more fees flowing to the community that showed up.'],
             ].map(([k, d]) => (
               <div key={k} className="soft-card p-6">
                 <div className="font-atx-display text-[15px] font-medium leading-tight text-ink">{k}</div>

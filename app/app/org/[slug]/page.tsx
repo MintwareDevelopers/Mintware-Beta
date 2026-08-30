@@ -120,7 +120,7 @@ export default function OrgHome({ params }: { params: Promise<{ slug: string }> 
                       <div className="font-atx-display font-semibold text-[16px] text-ink group-hover:text-peri-deep transition-colors">Vaults</div>
                       <span className="text-[9.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft rounded-full border border-hair px-2 py-0.5 shrink-0">Both assets</span>
                     </div>
-                    <p className="text-[12.5px] text-ink-mid mt-2 leading-[1.5]">Provide both assets as liquidity. Earns trading fees plus reputation-weighted rewards — deeper upside, with LP exposure.</p>
+                    <p className="text-[12.5px] text-ink-mid mt-2 leading-[1.5]">Provide both assets as liquidity. Earns trading fees plus recaptured MEV, shared pro-rata by liquidity — deeper upside, with LP exposure.</p>
                     <div className="text-[12.5px] font-semibold text-peri-deep mt-3">Open Vaults →</div>
                   </Link>
                 </div>

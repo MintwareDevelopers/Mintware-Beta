@@ -5,7 +5,7 @@
 // screens the situation and routes to the right model so every path flows well:
 //   • Full or matched   → fund your token (± the quote); the community matches the rest  → vault/create
 //   • Single-sided      → stage one asset, earn, opt-in pair on a match (staged buffer)  → /liquidity/staged
-//   • Just deposit      → add to a live reputation-weighted pool                          → /vaults
+//   • Just deposit      → add to a live never-idle pool                                   → /vaults
 
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
@@ -38,7 +38,7 @@ const MODELS = [
   {
     tag: 'Ready now',
     title: 'Deposit into a live pool',
-    body: 'Just want in? Add liquidity to an active, reputation-weighted vault and start capturing fees + MEV right away.',
+    body: 'Just want in? Add liquidity to an active vault and start capturing fees + MEV right away — shared pro-rata by the liquidity you provide.',
     href: '/app/vaults',
     cta: 'Browse live vaults →',
     tone: 'peri' as const,

@@ -91,7 +91,7 @@ export default function AppVaultsPage() {
       <div className="border-b border-hair-soft bg-ground-cool">
         <div className="max-w-[1100px] mx-auto px-6 py-8 max-[800px]:px-4 flex items-end justify-between gap-4 flex-wrap">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-peri-deep">DeFi surface · reputation-weighted yield</div>
+            <div className="text-[11px] uppercase tracking-[0.14em] font-semibold text-peri-deep">DeFi surface · never-idle liquidity</div>
             <h1 className="font-atx-display font-semibold tracking-[-0.03em] text-[clamp(26px,3.4vw,38px)] mt-2 text-ink">Vaults</h1>
           </div>
           <Link href="/vaults" className="text-[12px] font-semibold text-peri-deep no-underline hover:underline">How vaults work →</Link>

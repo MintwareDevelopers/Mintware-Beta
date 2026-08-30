@@ -14,7 +14,6 @@ const FEATURES = [
   { key: 'vaults', href: '/vaults', label: 'Vaults' },
   { key: 'ypn', href: '/yield-payment-network', label: 'Liquid Sovereign Account' },
   { key: 'cards', href: '/cards', label: 'Cards' },
-  { key: 'attribution', href: '/attribution', label: 'Attribution' },
   { key: 'agents', href: '/agents', label: 'Agents' },
   { key: 'teams', href: '/teams', label: 'For Teams' },
 ] as const
