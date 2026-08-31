@@ -91,7 +91,7 @@ function Model() {
       <h3>3 · Always yours — non-custodial, provable</h3>
       <p>You interact with the vault contracts directly; keys stay with you via Privy. Rewards settle as signed Merkle roots you claim yourself — the oracle never takes custody. On-chain guards (over-allocation caps, no-claims-after-sweep, a guardian kill-switch) enforce the rules, not a promise.</p>
       <Claim>Never idle. Never locked. <b>Always yours.</b></Claim>
-      <Note k="Reputation weighting is not everywhere">Reputation- and referral-weighting applies to the <b>Growth (pair) vault</b> reward path only. The matched-liquidity vault pays strictly <b>pro-rata</b>. We flag which is which throughout.</Note>
+      <Note k="Vaults pay pro-rata">Both the <b>Growth (pair) vault</b> and the matched-liquidity vault pay LPs <b>pro-rata by liquidity share</b>. The reputation-weighted reward rail is a dropped direction — not a live payout path.</Note>
     </>
   )
 }
@@ -192,7 +192,7 @@ function Vaults({ nav }: { nav: Nav }) {
 
       <h2>Fee split</h2>
       <p>Position/swap fees split <b>60% LP / 30% treasury / 10% buyback-and-burn</b> by default — configurable, but <code>MAX_NON_LP_FEE_BPS = 4000</code> guarantees LPs always keep <b>≥ 60%</b>, and rounding favors LPs. If <code>buybackSink == 0</code>, the buyback cut folds into treasury.</p>
-      <p>The <b>LP leg</b> routes one of two ways: if a <code>weightedDistributor</code> is set, LP rewards are <b>reputation + referral weighted</b> (computed off-chain); otherwise a legacy MasterChef-style per-share accumulator pays flat. This is why reputation-weighting is a <b>Growth-vault-only</b> property.</p>
+      <p>The <b>LP leg</b> pays LP rewards <b>pro-rata by liquidity share</b> via a per-share accumulator — every depositor earns in proportion to the liquidity they provide.</p>
 
       <h2>Lock tiers &amp; redemption</h2>
       <table className={TABLE}>
@@ -205,7 +205,7 @@ function Vaults({ nav }: { nav: Nav }) {
         </tbody>
       </table>
       <p>Early exit pays a penalty to treasury by elapsed fraction: <b>&lt; 20% → 2.0%</b>, <b>20–50% → 1.0%</b>, <b>50–80% → 0.5%</b>. Redemption is async: <code>requestRedeem</code> (after a 24h <code>MIN_HOLD</code>) → a 7-day <code>NOTICE_PERIOD</code> → <code>executeRedeem</code>.</p>
-      <Note k="Reward routing">Vaults pay LPs <b>pro-rata by liquidity share</b> today. A reputation-weighted reward rail (the <Ln to="rewards" nav={nav}>weighted distributor</Ln>) is <b>built but undeployed</b> — not a live payout path. See also <Ln to="matched" nav={nav}>Matched liquidity</Ln>.</Note>
+      <Note k="Reward routing">Vaults pay LPs <b>pro-rata by liquidity share</b> — every LP earns in proportion to their share of the pool. See also <Ln to="matched" nav={nav}>Matched liquidity</Ln>.</Note>
     </>
   )
 }
@@ -264,7 +264,7 @@ function Matched({ nav }: { nav: Nav }) {
 
       <h2>Fees are pro-rata</h2>
       <p>Community fees are strictly <b>pro-rata to quote contribution</b>. While the position is locked, <code>teamFeesRedirected</code> excludes the team: the <b>team earns 0%</b> and the <b>community earns 100%</b> of fees for the duration of the lock.</p>
-      <Note k="No reputation-weighting on payouts">Both the <Ln to="vaults" nav={nav}>Growth (pair) vault</Ln> and the matched vault pay LPs <b>pro-rata by liquidity share</b>. Any reputation-weighted reward rail is built but <b>undeployed</b> — not a live payout path.</Note>
+      <Note k="Pro-rata payouts">Both the <Ln to="vaults" nav={nav}>Growth (pair) vault</Ln> and the matched vault pay LPs <b>pro-rata by liquidity share</b>.</Note>
     </>
   )
 }
@@ -274,6 +274,7 @@ function Rewards() {
       <div className={EY}>How it works · Rewards · Epochs</div>
       <h1>Rewards — epochs &amp; distribution</h1>
       <p className={SUB}>Off-chain owns the weighting math and the Merkle tree; on-chain enforces provenance and no-over-allocation. Canonical distributor: <code>MintwareWeightedDistributor.sol</code>.</p>
+      <Note k="Dropped direction">The reputation-weighted distribution rail is <b>dropped</b> — not a live or planned payout path. Vaults pay LPs <b>pro-rata by liquidity share</b>. The distributor contract is retained but unused; the mechanics below are documented for reference only.</Note>
 
       <h2>Separation of duties</h2>
       <p>The design deliberately splits responsibilities. <b>Off-chain</b> computes the weighting formula and builds the Merkle tree. <b>On-chain</b> enforces only two things: provenance (a valid oracle signature) and that a signed root can never allocate more than the funded pot. The distributor is multi-tenant by <code>vaultId</code>.</p>
@@ -287,7 +288,7 @@ sweep:      after expiry, unclaimed → funder`}</Spec>
 
       <h2>The weighting formula (off-chain)</h2>
       <p>In <code>lib/rewards/vault/weightedDistribution.ts</code> there are <b>two pots</b>. The BASE pot is swap fees, paid pro-rata by a base weight. Referral does <b>not</b> enter the base weight:</p>
-      <Spec><b>baseWeight</b>{' = liquidityUnits × durationMultiplier × attrMultiplier × lockTierMultiplier\n\n'}<span className="g">durationMultiplier</span>{'  ≥180d 1.3 · ≥90d 1.2 · ≥30d 1.1 · else 1.0\n'}<span className="g">attrMultiplier</span>{'      pct ≥67 1.5 · ≥34 1.25 · else 1.0\n'}<span className="g">lockTierMultiplier</span>{'  flex 1.0 · committed 1.1 · aligned 1.25 · core 1.5'}</Spec>
+      <Spec><b>baseWeight</b>{' = liquidityUnits × durationMultiplier × lockTierMultiplier\n\n'}<span className="g">durationMultiplier</span>{'  ≥180d 1.3 · ≥90d 1.2 · ≥30d 1.1 · else 1.0\n'}<span className="g">lockTierMultiplier</span>{'  flex 1.0 · committed 1.1 · aligned 1.25 · core 1.5'}</Spec>
       <p>The MARGIN pot is a protocol top-up funding referral bonuses:</p>
       <Spec>{`referee boost   = +10% on own base
 referrer earns  = 20% × referredLP.base × (refereePercentile / 100)`}</Spec>
