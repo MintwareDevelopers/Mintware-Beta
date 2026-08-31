@@ -80,6 +80,14 @@ abstract contract MWTimelockedRiskParams {
         uint256 oldVal = _readRiskParam(param);
         if (_riskParamInstant(param, v, v2)) {
             _writeRiskParam(param, v, v2);
+            // AUDIT (L1): a safety-instant change SUPERSEDES any queued (now-stale) change for this param
+            // — drop it so a pre-existing loosening can't later be confirmed to silently revert this
+            // tightening. "Safety never waits" must also mean safety is durable.
+            RiskParamChange memory stale = pendingRiskParam[param];
+            if (stale.eta != 0) {
+                delete pendingRiskParam[param];
+                emit RiskParamCancelled(param, stale.value, stale.value2);
+            }
             emit RiskParamConfirmed(param, oldVal, v, v2);
             return;
         }

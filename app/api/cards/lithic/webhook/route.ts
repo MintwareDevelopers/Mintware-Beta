@@ -22,11 +22,12 @@ export const dynamic = 'force-dynamic'
  *  https://docs.lithic.com/reference/cardauthorizationapprovalrequestwebhook). Chosen for the
  *  closest honest semantic fit, not to game merchant-facing messaging. */
 function asaResultFor(reason: string): string {
-  if (reason === 'over_role_daily_cap') return 'VELOCITY_EXCEEDED'
+  if (reason === 'over_role_daily_cap' || reason === 'over_per_tx_cap') return 'VELOCITY_EXCEEDED'
   if (reason === 'unknown_card' || reason === 'card_not_open' || reason === 'member_not_active') {
     return 'CARD_PAUSED'
   }
-  // insufficient_equity, edge_unreachable, edge_auth_unconfigured, edge_<status>, lookup failures, etc.
+  // insufficient_equity, insufficient_buffer (card spend buffer), edge_unreachable,
+  // edge_auth_unconfigured, edge_<status>, lookup failures, etc.
   return 'INSUFFICIENT_FUNDS'
 }
 
@@ -90,13 +91,33 @@ export const POST = createHandler(async (req: NextRequest, ctx) => {
       decision: decision.approved ? 'approved' : 'declined',
       decline_reason: decision.approved ? null : decision.reason,
       edge_hold_id: decision.approved ? (decision.holdId ?? null) : null,
+      auth_mode: decision.approved ? (decision.mode ?? null) : null, // capture honors this (audit fix H2)
       latency_ms: latencyMs,
     })
-    // A duplicate webhook delivery (same provider_event_ref) hits the unique index and no-ops here —
-    // that's fine, the ASA response below is still correct either way. Any OTHER insert failure is
-    // logged but must never block the ASA response itself (the decision already happened).
-    if (logErr && !logErr.message?.includes('duplicate')) {
+    // Duplicate delivery (unique index) — prefer the SQL error CODE (23505) over a brittle message
+    // substring (re-audit R9).
+    const isDup = (logErr as { code?: string } | null)?.code === '23505' || !!logErr?.message?.includes('duplicate')
+    if (logErr && isDup) {
+      // decideCardSwipe ran again and, in buffer mode, reserved a SECOND hold for this same swipe (C1).
+      // The original delivery already holds it — undo this call's double-reserve.
+      if (decision.approved && decision.mode === 'buffer' && decision.orgCardId) {
+        await ctx.supabase.rpc('release_card_buffer', {
+          p_org_card_id: decision.orgCardId,
+          p_amount: centsToAtomicUsdc(amountCents).toString(),
+        })
+      }
+    } else if (logErr) {
       ctx.log.warn('cards.lithic', 'spend feed log failed', { error: logErr.message })
+      // A NON-duplicate insert failure on a BUFFER approval orphans the reservation — there'd be no swipe
+      // row for capture to ever release against (re-audit R2). FAIL CLOSED: release the hold and DECLINE,
+      // rather than approve an untracked spend that leaks reserved_atomic forever.
+      if (decision.approved && decision.mode === 'buffer' && decision.orgCardId) {
+        await ctx.supabase.rpc('release_card_buffer', {
+          p_org_card_id: decision.orgCardId,
+          p_amount: centsToAtomicUsdc(amountCents).toString(),
+        })
+        return ctx.json({ result: asaResultFor('insufficient_buffer') }, 200)
+      }
     }
   }
 

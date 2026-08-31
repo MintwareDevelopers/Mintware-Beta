@@ -20,8 +20,13 @@ function fakeSupabase(opts: {
   memberError?: boolean
   swipeEvents?: Array<{ amount_atomic_usdc: string }> // prior APPROVED swipes today (card_swipe_events)
   swipeEventsError?: boolean
+  reserve?: string // reserve_card_buffer RPC result: 'ok' | 'over_cap' | 'insufficient' | 'no_buffer'
 }) {
   return {
+    rpc: async (fn: string) => {
+      if (fn === 'reserve_card_buffer') return { data: opts.reserve ?? 'no_buffer', error: null }
+      return { data: null, error: null }
+    },
     from(table: string) {
       const chain = {
         select: () => chain,
@@ -296,6 +301,66 @@ describe('decideCardSwipe', () => {
         })
         expect(res).toMatchObject({ approved: false, reason: 'over_headroom_soft_cap' })
       })
+    })
+  })
+
+  // ─── Card spend buffer mode — atomic reservation replaces live-NAV on the card rail (audit fix C1) ──
+  describe('card spend buffer mode', () => {
+    afterEach(() => { delete process.env.CARD_BUFFER_ENABLED })
+
+    it('OFF by default: reservation is not attempted — the swipe uses edge-auth', async () => {
+      // flag unset → default path. declineEdge proves edge-auth ran, not the buffer reservation.
+      const res = await decideCardSwipe({
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'ok' }),
+        provider: 'lithic', providerCardToken: CARD_TOKEN,
+        amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-off', edge: declineEdge, standingTier: 'none',
+      })
+      expect(res).toMatchObject({ approved: false, reason: 'insufficient_equity' })
+    })
+
+    it('ON: a successful atomic reserve approves in buffer mode WITHOUT edge-auth or a holdId', async () => {
+      process.env.CARD_BUFFER_ENABLED = 'true'
+      const edge: EdgeAuthorizer = { authorize: vi.fn(async () => ({ approved: true, holdId: 'unused' })) }
+      const res = await decideCardSwipe({
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'ok' }),
+        provider: 'lithic', providerCardToken: CARD_TOKEN,
+        amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-ok', edge, standingTier: 'none',
+      })
+      expect(res).toMatchObject({ approved: true, mode: 'buffer' })
+      expect((res as { holdId?: string }).holdId).toBeUndefined()
+      expect(edge.authorize).not.toHaveBeenCalled()
+    })
+
+    it('ON: reserve returning "insufficient" declines insufficient_buffer', async () => {
+      process.env.CARD_BUFFER_ENABLED = 'true'
+      const res = await decideCardSwipe({
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'insufficient' }),
+        provider: 'lithic', providerCardToken: CARD_TOKEN,
+        amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-low', edge: approveEdge, standingTier: 'none',
+      })
+      expect(res).toMatchObject({ approved: false, reason: 'insufficient_buffer' })
+    })
+
+    it('ON: reserve returning "over_cap" declines over_per_tx_cap', async () => {
+      process.env.CARD_BUFFER_ENABLED = 'true'
+      const res = await decideCardSwipe({
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'over_cap' }),
+        provider: 'lithic', providerCardToken: CARD_TOKEN,
+        amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-cap', edge: approveEdge, standingTier: 'none',
+      })
+      expect(res).toMatchObject({ approved: false, reason: 'over_per_tx_cap' })
+    })
+
+    it('ON but "no_buffer" for this card → falls through to edge-auth (mode:edge)', async () => {
+      process.env.CARD_BUFFER_ENABLED = 'true'
+      const edge: EdgeAuthorizer = { authorize: vi.fn(async () => ({ approved: true, holdId: 'h' })) }
+      const res = await decideCardSwipe({
+        supabase: fakeSupabase({ card: OPEN_CARD, member: ACTIVE_CONTRIBUTOR, reserve: 'no_buffer' }),
+        provider: 'lithic', providerCardToken: CARD_TOKEN,
+        amountAtomicUsdc: 50_000_000n, ref: 'evt-buf-none', edge, standingTier: 'none',
+      })
+      expect(res).toMatchObject({ approved: true, mode: 'edge', holdId: 'h' })
+      expect(edge.authorize).toHaveBeenCalledOnce()
     })
   })
 })
