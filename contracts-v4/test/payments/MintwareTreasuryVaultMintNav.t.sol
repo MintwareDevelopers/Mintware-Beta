@@ -16,6 +16,7 @@ import {MintwareTreasuryVault}     from "../../src/payments/MintwareTreasuryVaul
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {MockReadyOracle}  from "../mocks/MockReadyOracle.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
 /// @notice AUDIT R2-H1 regression. Round-1 H1 priced BOTH mint and redeem against the solvency-aware
@@ -68,13 +69,21 @@ contract MintwareTreasuryVaultMintNavTest is Test {
         adapter = new MockYieldAdapter(address(usdc));
         vault   = new MintwareTreasuryVault(address(pm), key, address(usdc), address(adapter), owner, teamAddr);
 
-        vm.prank(owner);
+        vm.startPrank(owner);
         vault.setGateway(gateway);
+        // FIX 2a: deployToLP requires a ready oracle — wire a live-tick stand-in (min(spot,oracle)==spot, so
+        // the spot-invariance assertions are unchanged). FIX 3: arm the smallest coverage floor (1 bps); the
+        // $10 junior buffer below covers the $20k deploy at that floor and is negligible vs the $100k senior.
+        vault.setJitHook(address(new MockReadyOracle(IPoolManager(address(pm)), key)));
+        vault.setMinCoverage(1);
+        vm.stopPrank();
 
         team.mint(teamAddr, TEAM_COMMIT);
+        usdc.mint(teamAddr, 10 ether); // tiny junior USDC buffer to satisfy the FIX-3 coverage floor
         vm.startPrank(teamAddr);
         team.approve(address(vault), type(uint256).max);
-        vault.commitTeam(TEAM_COMMIT, 0, 365 days);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.commitTeam(TEAM_COMMIT, 10 ether, 365 days);
         vm.stopPrank();
 
         // THIN baseline liquidity so a team dump can crater the mark below deployed par.

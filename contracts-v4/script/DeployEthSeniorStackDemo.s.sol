@@ -44,7 +44,7 @@ contract DeployEthSeniorStackDemo is Script {
     /// Deterministic CREATE2 factory (Arachnid) — deploys the hook without consuming the deployer nonce.
     address constant C2_FACTORY    = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     /// JIT hook permission bits: beforeInitialize | beforeSwap | afterSwap.
-    uint160 constant JIT_HOOK_FLAGS = 0x20C8;
+    uint160 constant JIT_HOOK_FLAGS = 0x20C0;
     // 1:1 at tick 0. Right for the 6dp/6dp USDC/team pool; a coarse placeholder for the 6dp/18dp
     // WETH/USDC settlement pool (fine — the mock demo never runs a live settlement swap).
     uint160 constant INIT_SQRT_PRICE = 79228162514264337593543950336;

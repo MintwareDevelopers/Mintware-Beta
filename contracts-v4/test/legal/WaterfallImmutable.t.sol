@@ -18,6 +18,7 @@ import {PoolProfile}                   from "../../src/vaults/VaultTypes.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {MockReadyOracle}  from "../mocks/MockReadyOracle.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
 /// @title  LEGAL FACT 2 — the waterfall is immutable, with no admin override
@@ -76,12 +77,18 @@ contract WaterfallImmutableTreasuryTest is Test {
         vm.startPrank(owner);
         v.setGateway(gateway);
         v.setProtocolTreasury(protocol);
+        // FIX 2a: deployToLP requires a ready oracle — wire a live-tick stand-in (valuation == spot). FIX 3:
+        // arm the smallest coverage floor (1 bps); the $10 junior buffer below covers the deploys at that floor.
+        v.setJitHook(address(new MockReadyOracle(IPoolManager(address(pm)), key)));
+        v.setMinCoverage(1);
         vm.stopPrank();
 
         team.mint(teamAddr, TEAM_COMMIT);
+        usdc.mint(teamAddr, 10 * ONE_USDC); // tiny junior USDC buffer to satisfy the FIX-3 coverage floor
         vm.startPrank(teamAddr);
         team.approve(address(v), type(uint256).max);
-        v.commitTeam(TEAM_COMMIT, 0, LOCK_DUR);
+        usdc.approve(address(v), type(uint256).max);
+        v.commitTeam(TEAM_COMMIT, 10 * ONE_USDC, LOCK_DUR);
         vm.stopPrank();
 
         // Baseline external depth so the vault's seniority swaps land at realistic prices.
@@ -142,10 +149,13 @@ contract WaterfallImmutableTreasuryTest is Test {
         // Plumbing addresses.
         v.setProtocolTreasury(makeAddr("proto2"));
         v.setRentFunder(makeAddr("rent"));
-        v.setJitHook(makeAddr("jit"));            // set-once
+        // jitHook is already wired (to the oracle stand-in) in setUp — it is set-once, another plumbing
+        // address whose value is not a payout ratio; re-setting is intentionally rejected.
+        vm.expectRevert(MintwareTreasuryVault.AlreadySet.selector);
+        v.setJitHook(makeAddr("jit"));
         // Risk parameters — none is a payout ratio. Tightening ones apply instantly.
         v.setIdleBufferTarget(9_000);             // raise (safer)  → instant
-        v.setMinCoverage(200);                    // raise from 0   → instant
+        v.setMinCoverage(200);                    // raise (safer)  → instant
         v.setJitCap(100);                         // lower (safer)  → instant
         v.setMaxBurnPerBlock(1_000_000 * ONE_USDC);
         v.setJitMaxCumulativeLoss(1_000_000 * ONE_USDC);
@@ -194,12 +204,21 @@ contract WaterfallImmutableTreasuryTest is Test {
         assertGt(team.balanceOf(teamAddr), teamTokBefore, "junior not releasable after senior covered");
     }
 
-    /// FACT 2 — community paid first, automatically, at par; the junior absorbs the loss. On a fresh stack
-    /// with a junior USDC first-loss buffer, after IL leaves Aave + the LP unwind short of full par, the
-    /// senior is STILL made whole at par and the JUNIOR buffer absorbs the shortfall. The waterfall runs in
-    /// code on redemption — senior before junior — with no admin action. (Mirrors the proven buffered-
-    /// absorption scenario; here it is the legal senior-first proof.)
-    function test_community_paid_first_at_par_junior_absorbs_loss() public {
+    /// FACT 2 — community paid FIRST, automatically, by code; the junior absorbs first-loss. AUDIT R6-2
+    /// (airtight-conservative posture): the senior redeems the HONEST REALIZABLE FLOOR — the deployed LP
+    /// valued at its USDC LEG ONLY (the team-token sale is upside RETAINED in the vault, never a redeemable
+    /// promise) + the junior USDC buffer, capped at par. `par WHILE COVERED, pro-rata haircut in the tail`:
+    /// in a DEEP crash (team ~10% of par here) the floor + junior fall just short of par, so the senior takes
+    /// a small conservative haircut rather than the OLD mid-mark "always par" — which OVERSTATED what a later
+    /// redeemer could realize (the mid mark counts the team leg at a price that liquidating it would move),
+    /// re-opening the first-redeemer run the R6-2 fix closes. The legal invariant this guard locks is the
+    /// WATERFALL ORDER + NO-OVERSTATEMENT, code-enforced, no admin: senior paid FIRST, junior buffer absorbs
+    /// the loss it can, senior never paid ABOVE realizable/par, floor covers the large majority of par.
+    /// ⚠ NOTE the deliberate change from the pre-fix behavior: with junior first-loss capital PRESENT the
+    /// senior is NOT made whole to the last cent at par in a deep tail — the conservative NAV excludes the
+    /// team-sale upside from the redeemable amount (retained in the vault) by design (see `_redeemNav` /
+    /// `seniorRealizableAssets` and `MintwareTreasuryRedemptionOrder` R6-2).
+    function test_community_paid_first_conservativeFloor_junior_absorbs_loss() public {
         // Fresh isolated stack WITH a 30k junior USDC first-loss buffer.
         PoolManager pm2 = new PoolManager(address(this));
         TestSwapRouter sr2 = new TestSwapRouter(IPoolManager(address(pm2)));
@@ -217,6 +236,10 @@ contract WaterfallImmutableTreasuryTest is Test {
         vm.startPrank(owner);
         v2.setGateway(gateway);
         v2.setProtocolTreasury(protocol);
+        // FIX 2a/3: ready-oracle stand-in (valuation == spot) + smallest coverage floor (the 30k buffer
+        // below covers the 50k deploy at 1 bps many times over).
+        v2.setJitHook(address(new MockReadyOracle(IPoolManager(address(pm2)), key2)));
+        v2.setMinCoverage(1);
         vm.stopPrank();
 
         uint256 buffer = 30_000 * ONE_USDC;
@@ -270,13 +293,19 @@ contract WaterfallImmutableTreasuryTest is Test {
         sr2.swapTo(key2, teamIs0_2, 100_000_000 * ONE_USDC, uint160(sq));
         vm.stopPrank();
 
-        // Community redeems FULL par (paid first); the junior USDC buffer absorbs the shortfall.
-        uint256 bufBefore = v2.juniorUsdcBuffer();
+        // Community redeems FIRST; the junior USDC buffer absorbs the loss it can. AUDIT R6-2: the payout is
+        // the honest conservative floor (LP usd leg + junior buffer, capped at par), never the mid mark.
+        uint256 realBefore = v2.seniorRealizableAssets(); // the honest floor the senior is entitled to
+        uint256 bufBefore  = v2.juniorUsdcBuffer();
         uint256 sh = v2.seniorShares(u);
         vm.prank(u);
         uint256 out = v2.redeemSenior(sh, 0);
 
-        assertApproxEqAbs(out, 100_000 * ONE_USDC, 5, "senior not made whole at par (community-first broken)");
+        // Senior redeems its honest conservative floor: never ABOVE par (no overstatement), still covering the
+        // large majority of par, with the junior buffer visibly absorbing the loss (junior-first, code-enforced).
+        assertApproxEqAbs(out, realBefore, 5, "senior did not redeem its honest conservative floor");
+        assertLe(out, 100_000 * ONE_USDC + 5, "senior redeemed ABOVE par (overstated realizable)");
+        assertGt(out, 90_000 * ONE_USDC, "conservative floor should still cover the large majority of par");
         assertLt(v2.juniorUsdcBuffer(), bufBefore, "junior buffer did not absorb the loss (junior-first broken)");
     }
 }

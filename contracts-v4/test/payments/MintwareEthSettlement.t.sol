@@ -84,6 +84,11 @@ contract MintwareEthSettlementTest is Test {
         // AUDIT H4: pin the settlement rail (now required before any settlement can pay out).
         vm.prank(owner);
         settle.setSettlementRail(rail);
+        // AUDIT R5-M(settle): batchSettleEth now FAILS CLOSED until the aggregate window cap is armed. Arm a
+        // generous cap (effectively unlimited) with a 1-day window so the functional cases behave as before;
+        // the windowed-cap sub-test tightens the cap on top of this (a lower cap at the same window = instant).
+        vm.prank(owner);
+        settle.setSettlementWindowCap(type(uint128).max, 1 days);
         // Fresh oracle pinned at spot (tick 0) -> the band brackets the current price.
         oracle.set(0, true);
 

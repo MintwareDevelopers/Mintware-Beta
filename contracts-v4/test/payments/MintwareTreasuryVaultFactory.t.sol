@@ -21,6 +21,7 @@ import {MintwarePaymentGateway}           from "../../src/payments/MintwarePayme
 import {MintwareTreasuryVaultRegistry}    from "../../src/payments/MintwareTreasuryVaultRegistry.sol";
 import {MintwareTreasuryVaultFactory}     from "../../src/payments/MintwareTreasuryVaultFactory.sol";
 import {
+    MintwareTreasuryVaultDeployer,
     MintwareTreasuryJitHookDeployer,
     MintwareTreasuryGatewayDeployer
 } from "../../src/payments/MintwareTreasuryDeployers.sol";
@@ -43,6 +44,7 @@ contract MintwareTreasuryVaultFactoryTest is Test {
     MockERC20 internal usdc; // shared 6dp settlement asset
 
     MintwareTreasuryVaultRegistry   internal registry;
+    MintwareTreasuryVaultDeployer   internal vaultDeployer;
     MintwareTreasuryJitHookDeployer internal hookDeployer;
     MintwareTreasuryGatewayDeployer internal gwDeployer;
     MintwareTreasuryVaultFactory    internal factory;
@@ -69,13 +71,15 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         usdc       = new MockERC20("USD Coin", "USDC", 6);
 
         // Factory stack. Owner/admin = this test → it may call createVault + wire the deployers.
-        registry     = new MintwareTreasuryVaultRegistry(address(this));
-        hookDeployer = new MintwareTreasuryJitHookDeployer(address(this));
-        gwDeployer   = new MintwareTreasuryGatewayDeployer(address(this));
-        factory      = new MintwareTreasuryVaultFactory(
-            address(pm), address(registry), address(hookDeployer), address(gwDeployer), address(this)
+        registry      = new MintwareTreasuryVaultRegistry(address(this));
+        vaultDeployer = new MintwareTreasuryVaultDeployer(address(this));
+        hookDeployer  = new MintwareTreasuryJitHookDeployer(address(this));
+        gwDeployer    = new MintwareTreasuryGatewayDeployer(address(this));
+        factory       = new MintwareTreasuryVaultFactory(
+            address(pm), address(registry), address(vaultDeployer), address(hookDeployer), address(gwDeployer), address(this)
         );
         registry.setFactory(address(factory));
+        vaultDeployer.setFactory(address(factory));
         hookDeployer.setFactory(address(factory));
         gwDeployer.setFactory(address(factory));
     }
@@ -96,7 +100,7 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         });
         bytes memory args = abi.encode(address(pm), ctorKey, address(usdc), predicted, address(factory));
         (address minedHook, bytes32 salt) =
-            HookMiner.find(address(hookDeployer), uint160(0x20C8), type(MintwareTreasuryJitHook).creationCode, args);
+            HookMiner.find(address(hookDeployer), uint160(0x20C0), type(MintwareTreasuryJitHook).creationCode, args);
 
         MintwareTreasuryVaultFactory.CreateParams memory p = MintwareTreasuryVaultFactory.CreateParams({
             usdc: address(usdc), teamToken: address(teamTok), adapter: address(adp),
@@ -147,6 +151,15 @@ contract MintwareTreasuryVaultFactoryTest is Test {
         usdc.approve(address(c.vault), type(uint256).max);
         c.vault.depositUSDC(10_000 * ONE, 0, user);
         vm.stopPrank();
+
+        // FIX 2a: warm the factory-made hook's truncated oracle (initializes on the first swap) so the
+        // deployToLP calls below — which now require a ready oracle — proceed. Buy-team swap (USDC in ⇒ no
+        // JIT). The factory already armed the coverage floor (FIX 3, minCoverage = 10_000) at createVault.
+        usdc.mint(address(this), 200 * ONE);
+        c.team.mint(address(this), 200 * ONE);
+        usdc.approve(address(swapRouter), type(uint256).max);
+        c.team.approve(address(swapRouter), type(uint256).max);
+        swapRouter.swap(c.key, !_sellTeamZeroForOne(c.team), 100 * ONE);
     }
 
     function _sellTeamZeroForOne(MockERC20 teamTok) internal view returns (bool) {

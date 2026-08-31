@@ -31,6 +31,13 @@ contract MintwareMultiVenueYieldAdapterTest is Test {
         // vault = this test contract (sole authorized caller).
         router = new MintwareMultiVenueYieldAdapter(address(usdc), address(this), owner);
 
+        // Trust the three vetted child venues (deliberate curation) so they can be wired.
+        vm.startPrank(owner);
+        router.setVenueTrust(address(aave), true);
+        router.setVenueTrust(address(morpho), true);
+        router.setVenueTrust(address(euler), true);
+        vm.stopPrank();
+
         IYieldAdapter[] memory v = new IYieldAdapter[](3);
         v[0] = aave; v[1] = morpho; v[2] = euler;
         uint16[] memory w = new uint16[](3);
@@ -56,6 +63,8 @@ contract MintwareMultiVenueYieldAdapterTest is Test {
     }
 
     function test_partial_weights_leave_idle_buffer() public {
+        vm.prank(owner);
+        router.setMaxVenueWeightBps(10_000); // this test exercises a 60% weight; opt into concentration
         IYieldAdapter[] memory v = new IYieldAdapter[](2);
         v[0] = aave; v[1] = morpho;
         uint16[] memory w = new uint16[](2);
@@ -114,6 +123,8 @@ contract MintwareMultiVenueYieldAdapterTest is Test {
 
     function test_withdraw_serves_idle_first() public {
         // 90% weighted -> 10k idle; withdraw 5k should come straight from idle without touching venues.
+        vm.prank(owner);
+        router.setMaxVenueWeightBps(10_000); // exercises a 90% weight; opt into concentration
         IYieldAdapter[] memory v = new IYieldAdapter[](1);
         v[0] = aave;
         uint16[] memory w = new uint16[](1);
@@ -139,6 +150,8 @@ contract MintwareMultiVenueYieldAdapterTest is Test {
     function test_rebalance_realigns_to_new_weights() public {
         _deposit(100_000e6); // 50/30/20
         // Re-weight to 20/20/60 and rebalance.
+        vm.prank(owner);
+        router.setMaxVenueWeightBps(10_000); // exercises a 60% weight; opt into concentration
         IYieldAdapter[] memory v = new IYieldAdapter[](3);
         v[0] = aave; v[1] = morpho; v[2] = euler;
         uint16[] memory w = new uint16[](3);
@@ -165,6 +178,8 @@ contract MintwareMultiVenueYieldAdapterTest is Test {
     }
 
     function test_setVenues_rejects_weight_overflow() public {
+        vm.prank(owner);
+        router.setMaxVenueWeightBps(10_000); // isolate the Σ>BPS overflow check from the per-venue cap
         IYieldAdapter[] memory v = new IYieldAdapter[](2);
         v[0] = aave; v[1] = morpho;
         uint16[] memory w = new uint16[](2);
@@ -186,20 +201,42 @@ contract MintwareMultiVenueYieldAdapterTest is Test {
 
     // ── per-venue risk cap (Phase 1) ────────────────────────────────────────────────
 
-    function test_default_cap_is_no_cap() public view {
-        assertEq(router.maxVenueWeightBps(), 10_000, "default = BPS (opt-in, no cap)");
+    function test_default_cap_is_nonzero() public view {
+        assertEq(router.maxVenueWeightBps(), 5_000, "default = 5000 (no single venue above 50%)");
     }
 
-    function test_default_cap_allows_full_single_venue() public {
-        // Backward-compat: with the default cap, a 100% single-venue allocation is still allowed.
+    function test_default_cap_blocks_full_single_venue() public {
+        // FIX 1: the default cap (50%) now BLOCKS a 100% single-venue allocation — concentration is opt-in.
         IYieldAdapter[] memory v = new IYieldAdapter[](1);
         v[0] = aave;
         uint16[] memory w = new uint16[](1);
         w[0] = 10_000;
         vm.prank(owner);
-        router.setVenues(v, w); // no revert
+        vm.expectRevert(MintwareMultiVenueYieldAdapter.VenueWeightCapExceeded.selector);
+        router.setVenues(v, w);
+
+        // Raising the cap back to BPS re-enables single-venue concentration (deliberate).
+        vm.prank(owner);
+        router.setMaxVenueWeightBps(10_000);
+        vm.prank(owner);
+        router.setVenues(v, w); // now allowed
         (, uint16 wb) = router.venueAt(0);
         assertEq(wb, 10_000);
+    }
+
+    function test_default_maxYieldBps() public view {
+        assertEq(router.maxYieldBps(), 2_000, "default bounded yield band = 20%");
+    }
+
+    function test_setVenues_rejects_untrusted_venue() public {
+        MockVenueAdapter rogue = new MockVenueAdapter(IERC20(address(usdc)));
+        IYieldAdapter[] memory v = new IYieldAdapter[](1);
+        v[0] = rogue;
+        uint16[] memory w = new uint16[](1);
+        w[0] = 1_000;
+        vm.prank(owner);
+        vm.expectRevert(MintwareMultiVenueYieldAdapter.VenueNotTrusted.selector);
+        router.setVenues(v, w);
     }
 
     function test_setMaxVenueWeightBps_sets_and_emits() public {
