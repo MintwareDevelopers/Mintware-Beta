@@ -22,6 +22,10 @@ export type VenueRate = {
   apyBps: number
   /** false = skip this round (paused / full / de-listed). Defaults to true. */
   available?: boolean
+  /** Optional per-venue cap (bps) tighter than the global `maxVenueBps` — the effective cap is the min of
+   *  the two. Lets a caller risk-tier ONE venue (e.g. the risk gate throttling an elevated-risk venue)
+   *  without lowering everyone's cap. Omit for the normal (global-cap) behaviour. */
+  maxBpsOverride?: number
 }
 
 export type RateRouteOptions = {
@@ -69,7 +73,12 @@ export function computeBestRateWeights(venues: VenueRate[], opts: RateRouteOptio
   let remaining = budget
   for (const v of pool) {
     if (remaining <= 0) break
-    const w = Math.min(maxVenueBps, remaining)
+    // effective cap = min(global cap, this venue's optional tighter override). A non-finite override is
+    // ignored (falls back to the global cap) so a garbage value can never produce a NaN weight.
+    const cap = Number.isFinite(v.maxBpsOverride as number)
+      ? Math.min(maxVenueBps, Math.max(0, v.maxBpsOverride as number))
+      : maxVenueBps
+    const w = Math.min(cap, remaining)
     if (w <= 0) continue
     out.push({ key: v.key, weightBps: w })
     remaining -= w
