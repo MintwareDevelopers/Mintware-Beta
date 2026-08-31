@@ -28,6 +28,11 @@ pub struct RedisStore {
     nav: NavSnapshot,
     max_nav_age_secs: u64,
     hold_ttl_secs: u64,
+    /// Pre-audit #6 spend-safety guard — mirrors `MemStore` (both OFF by default → back-compatible).
+    /// Threaded into `RESERVE_LUA` (ARGV[9]/[10]) so this shared-store path decides identically to the
+    /// in-memory `portfolio::PortfolioGuard` path when the gates are set.
+    min_liquidity_reserve_usdc: Usdc,
+    breaker_open: bool,
 }
 
 impl RedisStore {
@@ -49,12 +54,24 @@ impl RedisStore {
             nav,
             max_nav_age_secs,
             hold_ttl_secs,
+            min_liquidity_reserve_usdc: 0,
+            breaker_open: false,
         })
     }
 
     /// Update the cached NAV (the refresher calls this each poll).
     pub fn set_nav(&mut self, nav: NavSnapshot) {
         self.nav = nav;
+    }
+
+    /// Size the always-liquid hot buffer (Pre-audit #6). 0 = off. Mirrors `MemStore::set_liquidity_reserve`.
+    pub fn set_liquidity_reserve(&mut self, reserve_usdc: Usdc) {
+        self.min_liquidity_reserve_usdc = reserve_usdc;
+    }
+
+    /// Trip / reset the system-wide spend circuit-breaker. Mirrors `MemStore::set_breaker`.
+    pub fn set_breaker(&mut self, open: bool) {
+        self.breaker_open = open;
     }
 
     /// Publish a user's share balance to the shared store (from the chain indexer).
@@ -115,6 +132,8 @@ impl RedisStore {
             .arg(idle.to_string())
             .arg(now_secs.to_string())
             .arg(self.hold_ttl_secs.to_string())
+            .arg(if self.breaker_open { "1" } else { "0" })
+            .arg(self.min_liquidity_reserve_usdc.to_string())
             .invoke_async(&mut self.conn)
             .await?;
 
@@ -151,6 +170,8 @@ fn status_to_decision(status: &str, amount: Usdc) -> Decision {
         "insufficient_equity" => Decision::Decline(Decline::InsufficientEquity),
         "daily_cap_exceeded" => Decision::Decline(Decline::DailyCapExceeded),
         "insufficient_liquidity" => Decision::Decline(Decline::InsufficientLiquidity),
+        "reserve_floor_breached" => Decision::Decline(Decline::ReserveFloorBreached),
+        "circuit_breaker_open" => Decision::Decline(Decline::CircuitBreakerOpen),
         _ => Decision::Decline(Decline::InsufficientEquity),
     }
 }
@@ -168,6 +189,8 @@ mod tests {
         assert_eq!(status_to_decision("insufficient_equity", 5), Decision::Decline(Decline::InsufficientEquity));
         assert_eq!(status_to_decision("daily_cap_exceeded", 5), Decision::Decline(Decline::DailyCapExceeded));
         assert_eq!(status_to_decision("insufficient_liquidity", 5), Decision::Decline(Decline::InsufficientLiquidity));
+        assert_eq!(status_to_decision("reserve_floor_breached", 5), Decision::Decline(Decline::ReserveFloorBreached));
+        assert_eq!(status_to_decision("circuit_breaker_open", 5), Decision::Decline(Decline::CircuitBreakerOpen));
         assert_eq!(status_to_decision("???", 5), Decision::Decline(Decline::InsufficientEquity));
     }
 

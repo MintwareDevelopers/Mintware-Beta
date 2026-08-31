@@ -12,17 +12,21 @@
 //! Redis instance is available; the RACE-SAFETY LOGIC below is proven here with an embedded Lua
 //! interpreter + a mock Redis (see tests), which is the part that actually needs proving.
 //!
-//! PARITY TODO (Pre-audit #6): the LIVE `MemStore` path enforces two extra spend-safety gates that
-//! this dormant Redis path does NOT yet mirror — the always-liquid hot-buffer reserve floor
-//! (`reserve_floor_breached`) and the system-wide circuit-breaker (`circuit_breaker_open`), both in
-//! `portfolio::PortfolioGuard`. When this Redis increment-3 path is switched on, thread the same two
-//! knobs through ARGV (breaker flag + reserve amount) and add the equivalent early-halt +
-//! `idle_buffer - reserve` clamp here, so the two backends decide identically.
+//! PARITY (Pre-audit #6): the Redis `RESERVE_LUA` path now MIRRORS the two spend-safety gates the LIVE
+//! `MemStore` / `portfolio::PortfolioGuard` path enforces — the system-wide circuit-breaker
+//! (`circuit_breaker_open`, checked FIRST) and the always-liquid hot-buffer reserve floor
+//! (`reserve_floor_breached`, checked after the absolute-liquidity floor) — threaded through
+//! ARGV[9]/[10]. The mlua tests below prove the two backends decide identically across an input grid
+//! (`parity_lua_matches_in_memory_across_input_grid`).
 
-/// Atomic reserve. ARGV: [hold_id, user, amount, equity_usd, daily_cap, idle_buffer, now, ttl].
-/// Returns `{amount, status}` where status ∈ ok | duplicate | zero_amount | insufficient_equity |
-/// daily_cap_exceeded | insufficient_liquidity. Prunes expired holds first (decrementing counters),
-/// so `available` is computed against a live view — then reserves iff the charge clears every bound.
+/// Atomic reserve. ARGV: [hold_id, user, amount, equity_usd, daily_cap, idle_buffer, now, ttl,
+/// breaker, reserve] — `breaker` is 0/1 (system-wide halt) and `reserve` is the always-liquid
+/// hot-buffer floor in USDC; both default to 0 when the arg is absent (i.e. pre-guard behavior).
+/// Returns `{amount, status}` where status ∈ ok | duplicate | circuit_breaker_open | zero_amount |
+/// insufficient_equity | daily_cap_exceeded | insufficient_liquidity | reserve_floor_breached.
+/// Prunes expired holds first (decrementing counters), so `available` is computed against a live view —
+/// then reserves iff the charge clears every bound. Decline priority mirrors
+/// `portfolio::authorize_portfolio` EXACTLY: breaker → zero → equity → cap → liquidity → reserve-floor.
 pub const RESERVE_LUA: &str = r#"
 local ns = 'ea:'
 local hold_id = ARGV[1]
@@ -33,6 +37,12 @@ local cap     = tonumber(ARGV[5])
 local idle    = tonumber(ARGV[6])
 local now     = tonumber(ARGV[7])
 local ttl     = tonumber(ARGV[8])
+local breaker = tonumber(ARGV[9] or '0')
+local reserve = tonumber(ARGV[10] or '0')
+
+-- 0. circuit-breaker: a system-wide stress trip halts EVERY authorization FIRST — mirrors
+-- authorize_portfolio, which returns CircuitBreakerOpen before any other check. No state is mutated.
+if breaker == 1 then return { '0', 'circuit_breaker_open' } end
 
 local gheld_k = ns .. 'gheld'
 local uheld_k = ns .. 'uheld:' .. user
@@ -69,11 +79,18 @@ local spent = tonumber(redis.call('GET', spent_k) or '0')
 
 local per_user = equity - uheld
 local cap_room = cap - spent - uheld
-local liq      = idle - gheld
+local liq      = idle - gheld            -- raw settleable liquidity net of all active holds
 
 if amount > per_user then return { '0', 'insufficient_equity' } end
 if amount > cap_room then return { '0', 'daily_cap_exceeded' } end
 if amount > liq      then return { '0', 'insufficient_liquidity' } end
+
+-- hot-buffer reserve floor: there IS raw liquidity, but spending it would draw usable liquidity below
+-- the always-liquid reserve → decline before par can break. Mirrors authorize_portfolio's
+-- ReserveFloorBreached, which is checked AFTER the absolute-liquidity floor (so the absolute floor wins
+-- when the charge also exceeds raw liquidity).
+local usable = liq - reserve
+if amount > usable then return { '0', 'reserve_floor_breached' } end
 
 -- 4. reserve: bump counters, write the hold, index it by expiry.
 local expiry = now + ttl
@@ -220,10 +237,24 @@ mod tests {
         (ret.get::<String>(1).unwrap(), ret.get::<String>(2).unwrap())
     }
 
-    // reserve with: equity, cap, idle, now, ttl fixed; amount/user/hold vary.
+    // reserve with: equity, cap, idle, now, ttl fixed; amount/user/hold vary. 8-arg form (no guard) —
+    // exercises the back-compat default where the script reads breaker/reserve as 0 when the args are
+    // absent, so every pre-existing test proves behavior is UNCHANGED with the gates off.
     #[allow(clippy::too_many_arguments)] // a test helper — explicit args read clearer than a struct here
     fn reserve(lua: &Lua, s: &Rc<RefCell<MockRedis>>, hold: &str, user: &str, amount: u128, equity: u128, cap: u128, idle: u128, now: u64) -> (String, String) {
         eval(lua, s, RESERVE_LUA, &[hold, user, &amount.to_string(), &equity.to_string(), &cap.to_string(), &idle.to_string(), &now.to_string(), "600"])
+    }
+
+    // reserve with the two Pre-audit #6 guard knobs threaded through ARGV[9]/[10].
+    #[allow(clippy::too_many_arguments)]
+    fn reserve_g(lua: &Lua, s: &Rc<RefCell<MockRedis>>, hold: &str, user: &str, amount: u128, equity: u128, cap: u128, idle: u128, now: u64, breaker: u8, reserve: u128) -> (String, String) {
+        eval(lua, s, RESERVE_LUA, &[hold, user, &amount.to_string(), &equity.to_string(), &cap.to_string(), &idle.to_string(), &now.to_string(), "600", &breaker.to_string(), &reserve.to_string()])
+    }
+
+    /// Seed a raw counter directly into the mock (to place a user under pre-existing holds/spend when
+    /// exercising the availability math, without threading a full reserve/settle sequence first).
+    fn set_counter(s: &Rc<RefCell<MockRedis>>, key: &str, val: u128) {
+        s.borrow_mut().call("SET", &[key.to_string(), val.to_string()]);
     }
 
     #[test]
@@ -312,5 +343,144 @@ mod tests {
         // full equity available again.
         let (_, c) = reserve(&lua, &s, "hr2", "gina", 1_000_000_000, 1_000_000_000, 100_000_000_000, 10_000_000_000, 1000);
         assert_eq!(c, "ok");
+    }
+
+    // ── Pre-audit #6: circuit-breaker + hot-buffer reserve floor (mirror of portfolio::PortfolioGuard) ──
+
+    #[test]
+    fn breaker_open_declines_even_a_trivially_valid_charge() {
+        // A rich, liquid, uncapped user — normally a trivial approve — is halted while the system-wide
+        // breaker is open (breaker=1), with the DISTINCT circuit_breaker_open reason, checked FIRST.
+        let lua = Lua::new();
+        let s = Rc::new(RefCell::new(MockRedis::default()));
+        let (_, st) = reserve_g(&lua, &s, "b1", "ivy", 1_000_000, 1_000_000_000, 100_000_000_000, 10_000_000_000, 1000, 1, 0);
+        assert_eq!(st, "circuit_breaker_open");
+        // No state mutated: with the breaker closed the SAME charge (fresh id) approves.
+        let (_, ok) = reserve_g(&lua, &s, "b2", "ivy", 1_000_000, 1_000_000_000, 100_000_000_000, 10_000_000_000, 1000, 0, 0);
+        assert_eq!(ok, "ok");
+    }
+
+    #[test]
+    fn reserve_floor_clamps_available_with_a_distinct_reason() {
+        // $500 raw idle liquidity, huge equity + uncapped so LIQUIDITY is the binding dimension. Reserve
+        // $200 as an always-liquid hot buffer → only $300 usable.
+        let lua = Lua::new();
+        let s = Rc::new(RefCell::new(MockRedis::default()));
+        // Up to the usable $300 approves.
+        let (_, ok) = reserve_g(&lua, &s, "r_ok", "jae", 300_000_000, 1_000_000_000_000, 100_000_000_000_000, 500_000_000, 1000, 0, 200_000_000);
+        assert_eq!(ok, "ok");
+        // At the boundary +1 it would eat the reserve → reserve_floor_breached (there IS raw liquidity,
+        // so it is NOT the generic insufficient_liquidity). Fresh mock so the $300 hold above doesn't count.
+        let s2 = Rc::new(RefCell::new(MockRedis::default()));
+        let (_, floor) = reserve_g(&lua, &s2, "r_over", "jae", 300_000_001, 1_000_000_000_000, 100_000_000_000_000, 500_000_000, 1000, 0, 200_000_000);
+        assert_eq!(floor, "reserve_floor_breached");
+        // Above the RAW liquidity ($500) it is the absolute-liquidity reason, not the reserve reason.
+        let s3 = Rc::new(RefCell::new(MockRedis::default()));
+        let (_, liq) = reserve_g(&lua, &s3, "r_liq", "jae", 500_000_001, 1_000_000_000_000, 100_000_000_000_000, 500_000_000, 1000, 0, 200_000_000);
+        assert_eq!(liq, "insufficient_liquidity");
+    }
+
+    #[test]
+    fn breaker0_reserve0_is_identical_to_the_pre_guard_path() {
+        // With both gates off the 10-arg guard form must decide EXACTLY as the legacy 8-arg form, for a
+        // spread of binding dimensions (approve, equity, cap, liquidity, zero).
+        let lua = Lua::new();
+        let cases: &[(u128, u128, u128, u128)] = &[
+            // (amount, equity, cap, idle)
+            (100_000_000, 1_000_000_000, 100_000_000_000, 10_000_000_000), // approve
+            (1_000_000_001, 1_000_000_000, 100_000_000_000, 10_000_000_000), // insufficient_equity
+            (501_000_000, 10_000_000_000, 500_000_000, 10_000_000_000), // daily_cap_exceeded
+            (2_000_000, 10_000_000_000, 10_000_000_000, 1_000_000), // insufficient_liquidity
+            (0, 1_000_000_000, 100_000_000_000, 10_000_000_000), // zero_amount
+        ];
+        for (i, &(amt, eq, cap, idle)) in cases.iter().enumerate() {
+            let s_legacy = Rc::new(RefCell::new(MockRedis::default()));
+            let s_guard = Rc::new(RefCell::new(MockRedis::default()));
+            let hold = format!("c{i}");
+            let (la, ls) = reserve(&lua, &s_legacy, &hold, "kai", amt, eq, cap, idle, 1000);
+            let (ga, gs) = reserve_g(&lua, &s_guard, &hold, "kai", amt, eq, cap, idle, 1000, 0, 0);
+            assert_eq!((ls.as_str(), la.as_str()), (gs.as_str(), ga.as_str()), "case {i} diverged with gates off");
+        }
+    }
+
+    /// The real proof: run the Lua `RESERVE_LUA` decision and the in-memory `authorize_portfolio`
+    /// decision on the SAME scalar inputs and assert they agree, across a grid of
+    /// (equity, uheld, cap, spent, idle, gheld, breaker, reserve, amount).
+    #[test]
+    fn parity_lua_matches_in_memory_across_input_grid() {
+        use crate::ledger::{Account, Decision};
+        use crate::nav::{NavSnapshot, VaultCollateral};
+        use crate::portfolio::{authorize_portfolio, Leg, PortfolioGuard};
+        use crate::types::decline_code;
+
+        const NOW: u64 = 1_000_000; // > 86_400 so the spent epoch key is non-trivial
+
+        // The authoritative in-memory decision as a status string (aligned to `decline_code`). A single
+        // USDC 1:1 vault with virtual_offset 0 makes equity(shares) == shares exactly, and settleable
+        // == idle_buffer, so the scalar inputs map cleanly onto one portfolio leg.
+        #[allow(clippy::too_many_arguments)] // the scalar inputs read clearer flat than boxed in a struct
+        fn inmem_status(equity: u128, uheld: u128, cap: u128, spent: u128, idle: u128, gheld: u128, breaker: u8, reserve: u128, amount: u128) -> String {
+            let nav = NavSnapshot {
+                total_assets: 1,
+                total_shares: 1,
+                virtual_offset: 0, // asset_amount(shares) = shares*1/1 = shares → equity == shares (USDC identity)
+                idle_buffer: idle, // settleable_usd() == idle_buffer for USDC
+                observed_at_secs: NOW, // fresh (age 0)
+                collateral: VaultCollateral::Usdc,
+            };
+            let leg = Leg { nav, shares: equity, vault_global_holds_usdc: gheld };
+            let acct = Account { shares: 0, active_holds_usdc: uheld, daily_spent_usdc: spent, daily_cap_usdc: cap };
+            let guard = PortfolioGuard { breaker_open: breaker == 1, min_liquidity_reserve_usdc: reserve };
+            match authorize_portfolio(std::slice::from_ref(&leg), &acct, amount, NOW, u64::MAX, &guard) {
+                Decision::Approve { .. } => "ok".to_string(),
+                Decision::Decline(r) => decline_code(r).to_string(),
+            }
+        }
+
+        let equities: [u128; 3] = [0, 500_000_000, 1_000_000_000];
+        let uhelds:   [u128; 2] = [0, 300_000_000];
+        let caps:     [u128; 2] = [400_000_000, 100_000_000_000];
+        let spents:   [u128; 2] = [0, 300_000_000];
+        let idles:    [u128; 3] = [1_000_000, 400_000_000, 10_000_000_000];
+        let ghelds:   [u128; 2] = [0, 300_000_000];
+        let breakers: [u8; 2] = [0, 1];
+        let reserves: [u128; 3] = [0, 200_000_000, 10_000_000_000];
+        let amounts:  [u128; 4] = [0, 1, 250_000_000, 500_000_001];
+
+        let lua = Lua::new();
+        let user = "zoe";
+        let epoch = NOW / 86_400;
+        let spent_key = format!("ea:spent:{user}:{epoch}");
+        let mut combos = 0usize;
+        let mut id = 0usize;
+
+        for &equity in &equities {
+        for &uheld in &uhelds {
+        for &cap in &caps {
+        for &spent in &spents {
+        for &idle in &idles {
+        for &gheld in &ghelds {
+        for &breaker in &breakers {
+        for &reserve in &reserves {
+        for &amount in &amounts {
+            // Fresh mock per combo, pre-seeded with the user's existing holds/spend counters.
+            let s = Rc::new(RefCell::new(MockRedis::default()));
+            set_counter(&s, "ea:gheld", gheld);
+            set_counter(&s, &format!("ea:uheld:{user}"), uheld);
+            set_counter(&s, &spent_key, spent);
+
+            id += 1;
+            let hold = format!("p{id}"); // fresh id → idempotency never fires
+            let (_, lua_status) = reserve_g(&lua, &s, &hold, user, amount, equity, cap, idle, NOW, breaker, reserve);
+            let mem_status = inmem_status(equity, uheld, cap, spent, idle, gheld, breaker, reserve, amount);
+            assert_eq!(
+                lua_status, mem_status,
+                "parity divergence: equity={equity} uheld={uheld} cap={cap} spent={spent} idle={idle} gheld={gheld} breaker={breaker} reserve={reserve} amount={amount}"
+            );
+            combos += 1;
+        }}}}}}}}}
+
+        assert_eq!(combos, 3 * 2 * 2 * 2 * 3 * 2 * 2 * 3 * 4, "grid size");
+        assert_eq!(combos, 3456);
     }
 }
