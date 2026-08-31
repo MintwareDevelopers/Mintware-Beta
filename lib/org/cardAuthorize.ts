@@ -60,7 +60,7 @@ export async function sumApprovedTodayAtomic(
  *  org_cards row (i.e. every outcome except unknown_card / card_lookup_failed) — the webhook route
  *  uses them to log the decision to card_swipe_events without a second lookup. */
 export type CardAuthDecision =
-  | { approved: true; holdId?: string; orgId: string; orgCardId: string; memberWallet: string }
+  | { approved: true; holdId?: string; mode?: 'buffer' | 'edge'; orgId: string; orgCardId: string; memberWallet: string }
   | { approved: false; reason: string; orgId?: string; orgCardId?: string; memberWallet?: string }
 
 /** `spentTodayAtomic` — the member's cumulative APPROVED spend so far this UTC day, which the role
@@ -151,9 +151,34 @@ export async function decideCardSwipe(params: {
     return { approved: false, reason: 'over_headroom_soft_cap', ...identity }
   }
 
-  // 3) Suspenders — live NAV hold via edge-auth. Fail CLOSED when unconfigured (same posture as
-  //    lib/x402/config.ts#getFacilitator and the pay route's relayer gate) — a card is a live-money
-  //    surface, never default-approve because a downstream service is missing.
+  // 3) Suspenders — two modes:
+  //
+  //    (a) CARD SPEND BUFFER (docs/developers/card-spend-buffer-spec.md §1,§8): a Visa/Mastercard ASA
+  //        authorization has a hard ~6s window and cannot survive a live, multi-RPC, AMM-priced NAV
+  //        read — and that price is manipulable in the same block. So when the buffer feature is on
+  //        AND this card has a buffer, the decision is a FLAT, deterministic read of the pre-funded
+  //        buffer balance, which REPLACES the edge-auth NAV hold on the card rail (that hold is exactly
+  //        the computation that can't meet card latency). No holdId — the buffer IS the reserve.
+  //        (Agent-initiated x402 spend is a different rail with no such clock and keeps its live-NAV
+  //        path — it never enters this function.) Flag-gated: OFF by default → path (b) unchanged.
+  if (process.env.CARD_BUFFER_ENABLED === 'true') {
+    // ATOMIC check-and-hold (audit fix C1): reserve_card_buffer debits an on-DB reservation ledger under
+    // a row lock, so concurrent/sequential swipes can't both pass against one balance. It reads the
+    // per-tx cap + available (= balance − reserved) from the row itself. 'no_buffer' → this card has no
+    // buffer, fall through to edge-auth.
+    const { data: reserve } = await supabase.rpc('reserve_card_buffer', {
+      p_org_card_id: card.id,
+      p_amount: amountAtomicUsdc.toString(),
+    })
+    if (reserve === 'ok') return { approved: true, mode: 'buffer', ...identity }
+    if (reserve === 'over_cap') return { approved: false, reason: 'over_per_tx_cap', ...identity }
+    if (reserve === 'insufficient') return { approved: false, reason: 'insufficient_buffer', ...identity }
+    // 'no_buffer' / null → fall through to the default edge-auth path.
+  }
+
+  //    (b) default: live NAV hold via edge-auth. Fail CLOSED when unconfigured (same posture as
+  //        lib/x402/config.ts#getFacilitator and the pay route's relayer gate) — a card is a live-money
+  //        surface, never default-approve because a downstream service is missing.
   if (!edge) return { approved: false, reason: 'edge_auth_unconfigured', ...identity }
 
   const res = await edge.authorize({
@@ -162,5 +187,5 @@ export async function decideCardSwipe(params: {
     ref,
   })
   if (!res.approved) return { approved: false, reason: res.reason ?? 'insufficient_equity', ...identity }
-  return { approved: true, holdId: res.holdId, ...identity }
+  return { approved: true, holdId: res.holdId, mode: 'edge', ...identity }
 }

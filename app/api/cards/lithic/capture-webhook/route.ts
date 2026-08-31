@@ -25,6 +25,8 @@ import type { NextRequest } from 'next/server'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { verifyCaptureRequest } from '@/lib/cards/lithic'
 import { settleSwipeEvent, CARD_HIGH_VALUE_THRESHOLD } from '@/lib/org/settleSwipe'
+import { syncBufferBalance } from '@/lib/org/bufferMonitor'
+import { refillCardBuffer } from '@/lib/org/bufferRefill'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 120
@@ -53,20 +55,57 @@ export const POST = createHandler(async (req: NextRequest, ctx) => {
   }
 
   const txn = verified.event
-  // `card_transaction.updated` also fires for PENDING/DECLINED lifecycle changes — only SETTLED means
-  // the network actually cleared the charge and it's time to move money.
-  if (txn.status !== 'SETTLED') return ctx.json({ ok: true, ignored: true, status: txn.status }, 200)
   const token = txn.token
   if (!token) return ctx.json({ ok: true, ignored: true }, 200)
+
+  // `card_transaction.updated` fires across the lifecycle. Two terminal outcomes matter to a buffer
+  // reservation: SETTLED = the charge cleared (realize the hold); a REVERSAL = the auth will NEVER
+  // capture (free the hold — audit re-audit R1: without this, every voided/expired pre-auth leaks
+  // reserved_atomic forever and eventually starves a funded buffer). Anything else is acked + ignored.
+  const status = String(txn.status ?? '')
+  const REVERSAL_STATUSES = new Set(['VOIDED', 'EXPIRED', 'AUTHORIZATION_EXPIRED', 'REVERSED', 'DECLINED'])
+  const isSettled = status === 'SETTLED'
+  const isReversal = REVERSAL_STATUSES.has(status)
+  if (!isSettled && !isReversal) return ctx.json({ ok: true, ignored: true, status }, 200)
 
   // Match back to the swipe the ASA webhook authorized (provider_event_ref = the same transaction token).
   const { data: swipe } = await ctx.supabase
     .from('card_swipe_events')
-    .select('id, org_id, decision, settled, amount_atomic_usdc')
+    .select('id, org_id, org_card_id, decision, settled, amount_atomic_usdc, auth_mode')
     .eq('provider', 'lithic').eq('provider_event_ref', token).maybeSingle()
   if (!swipe) { ctx.log.info('cards.lithic', 'capture for an unknown/foreign transaction — ignored', { token }); return ctx.json({ ok: true, ignored: true }, 200) }
   if (swipe.decision !== 'approved') return ctx.json({ ok: true, ignored: true, reason: 'not_approved' }, 200)
-  if (swipe.settled) return ctx.json({ ok: true, already_settled: true }, 200) // idempotent — duplicate delivery
+  if (swipe.settled) return ctx.json({ ok: true, already_settled: true }, 200) // fast idempotency path
+
+  // ── Buffer mode (docs/developers/card-spend-buffer-spec.md §5) ──
+  // Branch on HOW THE SWIPE WAS AUTHORIZED (auth_mode), not on whether a buffer row exists now (audit H2).
+  if (swipe.auth_mode === 'buffer' && swipe.org_card_id) {
+    // Claim the terminal transition ATOMICALLY (re-audit R6): a conditional settled=false→true update, so
+    // concurrent/duplicate capture deliveries can't both release the hold (a double-release would re-open
+    // the C1 over-approval). Only the row-update winner proceeds.
+    const { data: claimed } = await ctx.supabase
+      .from('card_swipe_events')
+      .update({ settled: true, settled_at: new Date().toISOString() })
+      .eq('id', swipe.id).eq('settled', false).select('id')
+    if (!claimed || claimed.length === 0) return ctx.json({ ok: true, already_settled: true }, 200) // lost the race
+
+    // Release the auth reservation on EITHER terminal outcome (re-audit R1): a capture realizes it,
+    // a reversal frees it. release_card_buffer floors at 0 so a stray extra release is harmless.
+    await ctx.supabase.rpc('release_card_buffer', { p_org_card_id: swipe.org_card_id, p_amount: String(swipe.amount_atomic_usdc) })
+
+    if (isReversal) {
+      ctx.log.info('cards.lithic', 'buffer auth reversed — reservation released', { eventId: swipe.id, status })
+      return ctx.json({ ok: true, reversed: true, mode: 'buffer', status }, 200)
+    }
+    // SETTLED: the buffer already paid the merchant — reconcile from chain + enqueue a refill (no settleSpend).
+    await syncBufferBalance({ supabase: ctx.supabase, orgId: swipe.org_id, orgCardId: swipe.org_card_id, log: ctx.log })
+    const refill = await refillCardBuffer({ supabase: ctx.supabase, orgId: swipe.org_id, orgCardId: swipe.org_card_id, trigger: 'reactive', log: ctx.log })
+    ctx.log.info('cards.lithic', 'buffer capture reconciled', { eventId: swipe.id, refilled: refill.ok })
+    return ctx.json({ ok: true, settled: true, mode: 'buffer', refilled: refill.ok, refillReason: refill.ok ? undefined : refill.reason }, 200)
+  }
+
+  // Edge mode: a reversal doesn't touch the vault settle path (settleSpend only realizes on SETTLED).
+  if (isReversal) return ctx.json({ ok: true, ignored: true, status }, 200)
 
   // Valve 1: off by default.
   if (process.env.LITHIC_AUTO_SETTLE_ENABLED !== 'true') {
