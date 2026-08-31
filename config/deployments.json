@@ -43,18 +43,20 @@
         "verified": "2026-08-19"
       },
       "ULVVault": {
-        "address": null,
+        "address": "0x6c0D6460b7Eb094864F6b557506f5519B0c75132",
         "chainId": 84532,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0x6c0d\u20265132 \u2014 full address not in repo. Complete from the broadcast record.",
-        "verified": null
+        "note": "ULV engine vault (in testing, empty, unaudited). Recovered from contracts-v4/test/fork/ULVDeploymentFork.t.sol; on-chain probe 2026-08-31: codesize 23915 (deployed).",
+        "verified": "2026-08-31",
+        "source": "fork-test + on-chain probe"
       },
       "ULVHook": {
-        "address": null,
+        "address": "0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8",
         "chainId": 84532,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0x9f3c\u20260AC8 \u2014 full address not in repo. Complete from the broadcast record.",
-        "verified": null
+        "note": "ULV V4 hook (in testing, empty, unaudited). Recovered from contracts-v4/test/fork/ULVDeploymentFork.t.sol; on-chain probe 2026-08-31: codesize 7572 (deployed).",
+        "verified": "2026-08-31",
+        "source": "fork-test + on-chain probe"
       },
       "MintwareYieldVault": {
         "address": "0x09cda8519737a60fd16d263f94fb56237cdb7e42",

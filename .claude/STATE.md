@@ -166,10 +166,10 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `MWAmAuction` | testnet · base-sepolia | `0x11d7bda166a62ac9edb65152f8cf035c219c5e00` | testnet |
 | `MwTreasuryAddress` | testnet · base-sepolia | `0xcf2EA99639C038a475B710b2Be82b974D777C306` | testnet |
 | `SocialPairVault` | testnet · base-sepolia | `0x983c11b4afb39766ada3a69c66addbc73b456f6e` | testnet |
-| `ULVHook` | testnet · base-sepolia | ⚠ **address missing** | testnet |
-| `ULVVault` | testnet · base-sepolia | ⚠ **address missing** | testnet |
+| `ULVHook` | testnet · base-sepolia | `0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8` | testnet |
+| `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | testnet |
 
-**21 recorded with a full address, 2 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**23 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
 **24 of 32 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
