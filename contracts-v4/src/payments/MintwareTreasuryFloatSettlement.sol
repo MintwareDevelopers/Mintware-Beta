@@ -856,6 +856,9 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
             uint256 residualWeth = weth.balanceOf(address(this)) - wethBefore;
             if (residualWeth > 0) {
                 uint256 wstBack = _swapExactIn(_stakeKey(), !wstEthIsCurrency0Stake, residualWeth);
+                // AUDIT R5-L(float leg-3): bound the residual re-hop against the truncated stake reference,
+                // symmetric with leg 1's `_enforceLidoFloor` — a sandwiched stake pool cannot grief the sweep.
+                _enforceLidoFloorReverse(residualWeth, wstBack);
                 netWstSpent = wstBack >= wstEthIn ? 0 : wstEthIn - wstBack;
             }
         }
@@ -910,6 +913,20 @@ contract MintwareTreasuryFloatSettlement is IUnlockCallback, MWGuardianPausable,
         uint256 rate = lidoRateSource.stEthPerToken();            // WETH per wstETH, 1e18
         uint256 floorWeth = FullMath.mulDiv(wstIn, rate * (BPS - lidoBandBps) / BPS, WAD);
         if (wethOut < floorWeth) revert LidoRateFloorBreached(wethOut, floorWeth);
+    }
+
+    /// @dev AUDIT R5-L(float leg-3): the REVERSE Lido floor for the residual re-hop `WETH→wstETH`. Symmetric
+    ///      with `_enforceLidoFloor` (leg 1): the realized `wstOut` for `wethIn` must be at least the Lido
+    ///      reference minus `lidoBandBps`, else a sandwiched stake pool could grief the residual sweep and
+    ///      convert backing at a bad rate on the way BACK to wstETH. Leg 1 used a full-range limit + this
+    ///      arithmetic floor; the leg-3 re-hop (also full-range) had NO floor — closed here for symmetry.
+    ///      `wethIn` (input) plays the role `wstIn`/`wethOut` do in the forward check; `expected wstOut =
+    ///      wethIn * WAD / rate`, floored by the band.
+    function _enforceLidoFloorReverse(uint256 wethIn, uint256 wstOut) private view {
+        if (address(lidoRateSource) == address(0) || wethIn < 1e6) return;
+        uint256 rate = lidoRateSource.stEthPerToken();            // WETH per wstETH, 1e18
+        uint256 floorWst = FullMath.mulDiv(wethIn, WAD * (BPS - lidoBandBps) / BPS, rate);
+        if (wstOut < floorWst) revert LidoRateFloorBreached(wstOut, floorWst);
     }
 
     // ── oracle-bounded limit (carried from MintwareEthSettlement) ───────────────────────

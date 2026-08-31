@@ -116,8 +116,17 @@ contract MintwareTreasuryNavResidualsTest is MintwareTreasuryJitStackTest {
 
         _depositSenior(carol, 10 * ONE);
 
-        // Impair HARD: a very large team dump to crash the LP's recoverable USDC below deployed par.
-        _impairPoolAndSweep(500_000_000 * ONE);
+        // Impair the LP below deployed par (recoverable < deployed) with a large — but not spot→MIN_TICK —
+        // dump, so the truncated oracle can still settle to the crashed spot within its catch-up window (a
+        // 500M dump pins spot at the tick floor, where the oracle can never catch down and the anti-manip
+        // recover floor legitimately cannot realize the LP — a liveness edge, not the R6 property under test).
+        _impairPoolAndSweep(50_000_000 * ONE);
+
+        // Settle the truncated oracle to the crashed spot so the bounded recover realizes the (impaired) MTM;
+        // R6 is a settled-redemption property, not a flash-crash-window one (see _settleOracleToSpot).
+        _settleOracleToSpot();
+        // Clear any JIT slice the dump stranded (the bounded sweep can leave one outstanding under impairment).
+        if (vault.jitBorrowed() != 0) vault.forceSettleJit();
 
         uint256 parBefore  = vault.totalSeniorAssets();
         uint256 realBefore = vault.seniorRealizableAssets();
@@ -133,8 +142,15 @@ contract MintwareTreasuryNavResidualsTest is MintwareTreasuryJitStackTest {
             "PROBE2 VACUOUS: LP not impaired below deployed par"
         );
 
+        // Settle the oracle to spot BEFORE EACH redemption: a redemption's own recover sells team and moves
+        // spot, so the lagging oracle must be re-settled or the NEXT redeemer's bounded recover clamps — an
+        // artifact of the anti-manipulation swap floor, not the R6 waterfall. Re-settling makes each redeemer's
+        // recover realize the MTM the fair floor is computed from, isolating the pro-rata property under test.
+        _settleOracleToSpot();
         (uint256 psAlice,,, bool aRev) = _redeemAll(alice);
+        _settleOracleToSpot();
         (uint256 psUser,,,  bool uRev) = _redeemAll(user);
+        _settleOracleToSpot();
 
         // Instrumentation: the vault state IMMEDIATELY before the tail (carol) redeems.
         emit log_named_uint("PROBE2 [pre-carol] seniorRealizable ", vault.seniorRealizableAssets());

@@ -17,6 +17,7 @@ import {MWTimelockedRiskParams} from "../../src/lib/MWTimelockedRiskParams.sol";
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {MockReadyOracle}  from "../mocks/MockReadyOracle.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
 /// @title  MintwareTreasuryVault unit tests (self-held V4 position)
@@ -65,7 +66,9 @@ contract MintwareTreasuryVaultTest is Test {
         usdc = new MockERC20("USD Coin", "USDC", 6);
         team = new MockERC20("Team Token", "TEAM", 6);
 
-        S = _spawn(0, 2_000_000 * int256(ONE_USDC));
+        // $10 junior USDC buffer: satisfies the FIX-3 coverage floor (1 bps) for the ≤$50k deploys below.
+        // Negligible vs the $100k senior — excluded from the senior NAV, so par/haircut assertions are intact.
+        S = _spawn(10 * ONE_USDC, 2_000_000 * int256(ONE_USDC));
 
         // fund + deposit alice ($100k senior) on the primary stack.
         _deposit(S, alice, 100_000 * ONE_USDC);
@@ -93,6 +96,12 @@ contract MintwareTreasuryVaultTest is Test {
         vm.startPrank(owner);
         s.v.setGateway(gateway);
         s.v.setProtocolTreasury(protocol);
+        // FIX 2a: deployToLP now requires a ready oracle — wire a minimal ready-oracle stand-in (live tick ⇒
+        // min(spot,oracle) == pure spot, so every valuation assertion below is unchanged). FIX 3: deployToLP
+        // now requires a non-zero coverage floor. Set the smallest floor (1 bps) so a tiny junior USDC buffer
+        // is enough to permit these tests' deploys, without materially changing the tranche economics.
+        s.v.setJitHook(address(new MockReadyOracle(IPoolManager(address(s.pm)), s.key)));
+        s.v.setMinCoverage(1);
         vm.stopPrank();
 
         team.mint(teamAddr, TEAM_COMMIT);
@@ -219,9 +228,16 @@ contract MintwareTreasuryVaultTest is Test {
         // Crash the ONLY price in the system with a real team dump.
         _dumpTeam(S, 600_000 * ONE_USDC);
 
-        assertEq(S.v.convertToAssets(aliceShares), navBefore, "senior NAV moved with the pool price");
-        assertEq(S.v.previewWithdraw(1_000 * ONE_USDC), pvBefore, "previewWithdraw moved with the price");
-        assertEq(S.v.totalSeniorAssets(), 100_000 * ONE_USDC, "senior par not preserved at deposit value");
+        // AUDIT R6-2: the MINT/claim side stays PRICE-FREE at par (a deposit is always $1; a flash or genuine
+        // crash never lifts the claim) — `convertToAssets` and `totalSeniorAssets` are unchanged. The REDEEM
+        // side is honestly CONSERVATIVE: it values the impaired LP at its USDC-leg floor (the team leg's
+        // sell-through is upside left in the vault, never a redeemable promise), so a redeemer can NEVER exit
+        // above what is realizable — which is what made the old mark-based "always par" an overstatement that
+        // broke under redemption order (see MintwareTreasuryRedemptionOrder R6). So previewWithdraw needs
+        // >= the pre-crash shares per USDC (fewer would mean an over-par redemption).
+        assertEq(S.v.convertToAssets(aliceShares), navBefore, "mint/claim NAV must stay price-free at par");
+        assertGe(S.v.previewWithdraw(1_000 * ONE_USDC), pvBefore, "redeem NAV must stay conservative (never over-par) under a crash");
+        assertEq(S.v.totalSeniorAssets(), 100_000 * ONE_USDC, "senior par claim not preserved at deposit value");
     }
 
     // ── junior is first-loss: after a crash the team recovers LESS than committed ────
@@ -256,8 +272,10 @@ contract MintwareTreasuryVaultTest is Test {
 
     // ── AUDIT H1: under impairment (junior wiped), redemptions HAIRCUT pro-rata — no first-redeemer run ──
     function test_H1_impaired_redemptions_haircut_prorata_no_run() public {
-        // Fresh stack, NO junior USDC buffer — the only backstop is the team token, which we then wipe.
-        Stack memory s = _spawn(0, 2_000_000 * int256(ONE_USDC));
+        // Near-zero junior USDC buffer ($10): the only meaningful backstop is the team token, which we then
+        // wipe. The $10 satisfies the FIX-3 coverage floor to permit the deploy; it is far too small to lift
+        // the impaired realizable NAV back to par, so the tail haircut is unchanged.
+        Stack memory s = _spawn(10 * ONE_USDC, 2_000_000 * int256(ONE_USDC));
         address bob = makeAddr("bob");
         _deposit(s, alice, 100_000 * ONE_USDC);
         _deposit(s, bob,   100_000 * ONE_USDC); // two EQUAL senior holders
@@ -390,8 +408,8 @@ contract MintwareTreasuryVaultTest is Test {
     }
 
     // ── the senior is NEVER settled below par: burnForPayment reverts rather than underpay ─
-    function test_burnForPayment_reverts_not_underpays_when_junior_wiped() public {
-        Stack memory s = _spawn(0, 200_000 * int256(ONE_USDC));
+    function test_burnForPayment_settles_honest_floor_when_junior_wiped() public {
+        Stack memory s = _spawn(10 * ONE_USDC, 200_000 * int256(ONE_USDC)); // $10 buffer just satisfies FIX-3 floor
         _deposit(s, makeAddr("payUser"), 100_000 * ONE_USDC);
         address u = makeAddr("payUser");
 
@@ -401,17 +419,24 @@ contract MintwareTreasuryVaultTest is Test {
         s.v.deployToLP(50_000 * ONE_USDC, jt);
         _dumpTeam(s, 8_000_000 * ONE_USDC); // crash the pool to ~0 (junior wiped)
 
-        // Drain the Aave adapter so the senior claim cannot be honored from any source.
+        // Drain the Aave adapter so nothing but the conservative realizable floor backs the senior claim.
         uint256 adapterBal = usdc.balanceOf(address(s.a));
         vm.prank(address(s.a));
         usdc.transfer(address(0xdead), adapterBal);
 
-        uint256 shares = s.v.seniorShares(u);
-        uint256 rcvBefore = usdc.balanceOf(receiver);
+        // AUDIT R6-2: with the airtight-conservative NAV the senior claim is priced at what is REALIZABLE, so
+        // burnForPayment settles the merchant at that honest floor (here a tiny fraction of par) rather than
+        // crediting the old mark-based par. The safety property this test guards — the receiver is NEVER paid
+        // MORE than the backing — holds by construction (paid <= realizable), now WITHOUT relying on a revert.
+        uint256 shares      = s.v.seniorShares(u);
+        uint256 realizable  = s.v.seniorRealizableAssets();
+        uint256 rcvBefore   = usdc.balanceOf(receiver);
         vm.prank(gateway);
-        vm.expectRevert();
-        s.v.burnForPayment(u, shares, receiver);
-        assertEq(usdc.balanceOf(receiver), rcvBefore, "receiver was paid despite exhausted backing");
+        uint256 paid = s.v.burnForPayment(u, shares, receiver);
+
+        assertEq(usdc.balanceOf(receiver) - rcvBefore, paid, "receiver credited the settled amount");
+        assertLe(paid, realizable, "receiver paid ABOVE the realizable backing (over-payment)");
+        assertLt(paid, 100_000 * ONE_USDC, "receiver credited full par against a wiped position");
     }
 
     // ── junior USDC buffer (Case B): stable first-loss coverage ─────────────────────
@@ -447,10 +472,21 @@ contract MintwareTreasuryVaultTest is Test {
         uint256 bufBefore = s.v.juniorUsdcBuffer();
         uint256 shares = s.v.seniorShares(u);
 
+        // Snapshot the conservative realizable BEFORE redeeming — the honest floor the senior is entitled to.
+        uint256 realizableBefore = s.v.seniorRealizableAssets();
+
         vm.prank(u);
         uint256 out = s.v.redeemSenior(shares, 0);
 
-        assertApproxEqAbs(out, 100_000 * ONE_USDC, 5, "senior not made whole at par");
+        // AUDIT R6-2: the buffer absorbs the shortfall between the senior claim and the CONSERVATIVELY
+        // realizable assets (Aave idle + free buffer + the LP's USDC LEG + the junior USDC buffer). The senior
+        // redeems that honest floor — slightly BELOW the old mark-based par, because the team leg's
+        // sell-through is treated as UPSIDE that stays in the vault, never counted into the redeemable
+        // promise. It is NEVER above par (no overstatement) and still covers the large majority of par
+        // (idle + buffer + usd leg), and the buffer visibly absorbed part of the gap.
+        assertApproxEqAbs(out, realizableBefore, 5, "senior did not redeem its honest conservative floor");
+        assertLe(out, 100_000 * ONE_USDC + 5, "senior redeemed ABOVE par (overstated realizable)");
+        assertGt(out, 90_000 * ONE_USDC, "idle + buffer + usd leg should still cover most of par");
         assertLt(s.v.juniorUsdcBuffer(), bufBefore, "buffer did not absorb the shortfall");
         assertLe(
             s.v.deployedFromSenior(),
@@ -459,8 +495,9 @@ contract MintwareTreasuryVaultTest is Test {
         );
     }
 
-    /// Past the WHOLE junior stack (LP + USDC buffer) the senior is STILL never underpaid — it reverts.
-    function test_senior_reverts_when_buffer_also_exhausted() public {
+    /// Past the WHOLE junior stack (LP + USDC buffer) the senior is STILL never OVER-paid — it settles at the
+    /// conservative realizable floor (AUDIT R6-2), and the finite USDC buffer is drawn only up to its share.
+    function test_senior_settles_conservative_floor_when_buffer_also_exhausted() public {
         Stack memory s = _spawn(1_000 * ONE_USDC, 200_000 * int256(ONE_USDC));
         address u = makeAddr("junU3");
         _deposit(s, u, 100_000 * ONE_USDC);
@@ -471,18 +508,22 @@ contract MintwareTreasuryVaultTest is Test {
         s.v.deployToLP(50_000 * ONE_USDC, jt);
         _dumpTeam(s, 8_000_000 * ONE_USDC); // wipe the LP
 
-        // Drain Aave so nothing but the tiny $1k buffer is left — still not enough for full par.
+        // Drain Aave so nothing but the tiny $1k buffer + the LP's realizable leg is left — far below par.
         uint256 adapterBal = usdc.balanceOf(address(s.a));
         vm.prank(address(s.a));
         usdc.transfer(address(0xdead), adapterBal);
 
-        uint256 shares = s.v.seniorShares(u);
-        uint256 rcvBefore = usdc.balanceOf(receiver);
+        uint256 shares     = s.v.seniorShares(u);
+        uint256 realizable = s.v.seniorRealizableAssets();
+        uint256 rcvBefore  = usdc.balanceOf(receiver);
         vm.prank(gateway);
-        vm.expectRevert();
-        s.v.burnForPayment(u, shares, receiver);
-        assertEq(usdc.balanceOf(receiver), rcvBefore, "receiver paid despite exhausted junior stack");
-        assertEq(s.v.juniorUsdcBuffer(), 1_000 * ONE_USDC, "buffer not restored on revert");
+        uint256 paid = s.v.burnForPayment(u, shares, receiver);
+
+        // Honest floor: paid = what is realizable, never above it, and far below par (no over-payment beyond
+        // backing — the property this test guards, now enforced by conservative pricing, not a revert).
+        assertEq(usdc.balanceOf(receiver) - rcvBefore, paid, "receiver credited the settled amount");
+        assertLe(paid, realizable, "receiver paid ABOVE the realizable backing (over-payment)");
+        assertLt(paid, 100_000 * ONE_USDC, "receiver credited full par against a wiped position");
     }
 
     /// Unused buffer is returned to the team at unlock (first-loss payoff: team keeps what it didn't lose).

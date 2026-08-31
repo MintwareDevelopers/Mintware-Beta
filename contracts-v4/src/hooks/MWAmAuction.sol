@@ -249,9 +249,15 @@ contract MWAmAuction is Ownable, ReentrancyGuard {
                 emit RentCharged(id, top.manager, rentDue);
             } else {
                 // AUDIT M7: the sink rejected the push — roll back the charge so the swap proceeds. The
-                // manager keeps its deposit (not depleted); the sink simply earns no rent this block.
+                // manager keeps its deposit (not depleted); the sink earns no rent THIS block.
+                // AUDIT R5-L(am-AMM): also roll `lastCharged` BACK to `last` so the un-charged window is
+                // DEFERRED, not permanently skipped. Advancing it (as before) meant that on sink recovery
+                // the outage-window rent was gone forever — an LP-comp loss whenever the sink (pair vault)
+                // was guardian-paused / mid-JIT. Restoring the clock lets that rent accrue and charge on
+                // recovery. (Rent can only grow monotonically; `rentOwed` recomputes from `last` next poke.)
                 top.deposit = uint128(uint256(top.deposit) + rentDue);
                 topBid[id].deposit = top.deposit;
+                lastCharged[id] = last;
                 rentDue  = 0;
                 depleted = false;
             }

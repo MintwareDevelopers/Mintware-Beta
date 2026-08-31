@@ -17,6 +17,7 @@ import {MintwarePaymentGateway}    from "../../src/payments/MintwarePaymentGatew
 
 import {MockERC20}        from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {MockReadyOracle}  from "../mocks/MockReadyOracle.sol";
 import {TestSwapRouter}   from "../helpers/TestSwapRouter.sol";
 
 /// @notice "Make v2 real" SMOKE — mirrors the `DeployTreasuryV2.s.sol` assembly against a REAL in-test
@@ -74,6 +75,10 @@ contract DeployTreasuryV2SmokeTest is Test {
         gateway = new MintwarePaymentGateway(address(vault), address(usdc), circleCpn, deployer);
         vault.setGateway(address(gateway));
         vault.setProtocolTreasury(circleCpn);
+        // FIX 2a: deployToLP requires a ready oracle — wire a live-tick stand-in. FIX 3: arm the smallest
+        // coverage floor (1 bps); the tiny junior buffer committed below covers the $200 deploy at that floor.
+        vault.setJitHook(address(new MockReadyOracle(IPoolManager(address(pm)), key)));
+        vault.setMinCoverage(1);
 
         // Deep baseline pool liquidity so the module's seniority swaps have depth.
         usdc.mint(deployer, 100_000_000 * ONE);
@@ -100,11 +105,14 @@ contract DeployTreasuryV2SmokeTest is Test {
 
     /// The whole v2 lifecycle in one flow, through the deploy-assembled stack.
     function test_fullLifecycle_deposit_deploy_swap_accrue_settle() public {
-        // 1. Team commits the junior reserve (activates the vault).
+        // 1. Team commits the junior reserve (activates the vault) — incl. a tiny USDC buffer so the $200
+        //    deploy below clears the FIX-3 coverage floor (1 bps).
         team.mint(teamAddr, 1_000_000 * ONE);
+        usdc.mint(teamAddr, 1 * ONE);
         vm.startPrank(teamAddr);
         team.approve(address(vault), type(uint256).max);
-        vault.commitTeam(1_000_000 * ONE, 0, 365 days);
+        usdc.approve(address(vault), type(uint256).max);
+        vault.commitTeam(1_000_000 * ONE, 1 * ONE, 365 days);
         vm.stopPrank();
 
         // 2. Community deposit: $1,000 senior.

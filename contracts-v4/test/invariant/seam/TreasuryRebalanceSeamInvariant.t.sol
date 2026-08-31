@@ -16,6 +16,7 @@ import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiqui
 import {MintwareTreasuryVault} from "../../../src/payments/MintwareTreasuryVault.sol";
 import {MockERC20}             from "../../mocks/MockERC20.sol";
 import {MockYieldAdapter}      from "../../mocks/MockYieldAdapter.sol";
+import {MockReadyOracle}       from "../../mocks/MockReadyOracle.sol";
 
 /// @notice GROUP D (D3) — idle↔active conservation under rebalance, on a REAL Uniswap-V4 pool. The
 ///         existing gate suite fuzzes `deployToLP`/`recoverFromLP` but asserts coverage BOUNDS, never that
@@ -226,6 +227,13 @@ contract TreasuryRebalanceSeamInvariantTest is StdInvariant, Test {
         team.approve(address(vault), type(uint256).max);
         usdc.approve(address(vault), type(uint256).max);
         vault.commitTeam(5_000_000e6, JUNIOR_USDC_SEED, LOCK_DUR);
+        vm.stopPrank();
+        // FIX 2a: deployToLP requires a ready oracle — wire a live-tick stand-in (recover limit tracks spot,
+        // matching this seam's "oracle-bounded team→USDC swap" model). FIX 3: arm the smallest coverage floor;
+        // the $50k junior USDC seed covers every handler deploy at 1 bps.
+        vm.startPrank(owner);
+        vault.setJitHook(address(new MockReadyOracle(IPoolManager(address(pm)), key)));
+        vault.setMinCoverage(1);
         vm.stopPrank();
         ceilingSeed = JUNIOR_USDC_SEED; // junior first-loss USDC can legitimately back the senior
 

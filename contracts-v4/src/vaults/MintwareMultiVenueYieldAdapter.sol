@@ -45,14 +45,37 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
 
     Venue[] private _venues;
 
-    /// @notice Max weight (bps) any single venue may be assigned in `setVenues` — the on-chain
-    ///         venue-risk cap. Defaults to `BPS` (no cap; opt-in). Set it below `BPS` to force
-    ///         diversification so no single (possibly exotic, higher-yield) venue can dominate the
-    ///         allocation — turning "trust the curator not to over-concentrate" into an enforced rule.
+    /// @notice Max weight (bps) any single venue may be assigned in `setVenues` — a DEPOSIT-ROUTING
+    ///         concentration cap ONLY. It bounds how much fresh capital is routed to one venue; it does
+    ///         **NOT** bound that venue's self-reported NAV (that is the principal-clamp below). Defaults
+    ///         to a non-zero `5_000` (no single venue above 50%) so a fresh deploy is diversified by
+    ///         default; set it lower to force wider diversification, or up to `BPS` to opt back into
+    ///         single-venue concentration.
     uint16 public maxVenueWeightBps;
+
+    /// @notice Real underlying principal the router has DEPLOYED into each child (keyed by adapter address),
+    ///         moved by `_deploy` / `withdraw` / `rebalance`. This is the clamp ceiling for that child's
+    ///         self-reported NAV: a child can never mark the senior NAV up beyond the principal the router
+    ///         actually sent it (+ a bounded yield band). A malicious/mis-reporting child holding $0 of real
+    ///         principal contributes ~$0 to NAV no matter what it claims — closing the phantom-NAV lie that
+    ///         the weight cap does not gate.
+    mapping(address => uint256) public deployedPrincipal;
+
+    /// @notice Upper bound (bps of a child's deployed principal) by which its self-reported value may exceed
+    ///         that principal before the router stops believing it — the "bounded yield band". Default
+    ///         `2_000` (20%). A report above `principal + band` is treated as an over-statement and clamped
+    ///         to the ceiling. Governable so a legitimately higher-yield venue can be given more headroom.
+    uint16 public maxYieldBps;
+
+    /// @notice Per-child allowlist. A venue MUST be explicitly trusted (`setVenueTrust`) before it can be
+    ///         wired via `setVenues`, so pairing an unvetted (possibly NAV-lying) child is a DELIBERATE
+    ///         curator act rather than a silent default. Belt to the principal-clamp's suspenders.
+    mapping(address => bool) public trustedVenue;
 
     event VaultSet(address indexed vault);
     event MaxVenueWeightSet(uint16 maxWeightBps);
+    event MaxYieldBpsSet(uint16 maxYieldBps);
+    event VenueTrustSet(address indexed venue, bool trusted);
     event VenuesSet(uint256 count, uint16 totalWeightBps);
     event Rebalanced(uint256 pulled, uint256 redeployed);
     event Supplied(uint256 amount, uint256 deployed);
@@ -65,6 +88,7 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
     error EmptyVenues();
     error InvalidCap();
     error VenueWeightCapExceeded();
+    error VenueNotTrusted();
 
     modifier onlyVault() {
         if (msg.sender != vault) revert OnlyVault();
@@ -78,7 +102,8 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
         if (asset_ == address(0)) revert ZeroAddress();
         asset = IERC20(asset_);
         vault = vault_;
-        maxVenueWeightBps = BPS; // no cap by default (backward-compatible); curator opts in below BPS
+        maxVenueWeightBps = 5_000; // non-zero default: no single venue above 50% of fresh deposits
+        maxYieldBps = 2_000;       // default bounded yield band = 20% of deployed principal per child
     }
 
     // ── admin / curation ─────────────────────────────────────────────────────────
@@ -98,6 +123,24 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
         emit MaxVenueWeightSet(cap);
     }
 
+    /// @notice Set the bounded yield band (bps of principal) a child's self-report may exceed its deployed
+    ///         principal by before it is clamped. `[0, BPS]`. Lower = stricter (a compromised/lying child
+    ///         can inflate NAV by at most this fraction of what it actually holds). Applies immediately to
+    ///         `totalAssets` / `maxWithdrawable`.
+    function setMaxYieldBps(uint16 bps) external onlyOwner {
+        if (bps > BPS) revert InvalidCap();
+        maxYieldBps = bps;
+        emit MaxYieldBpsSet(bps);
+    }
+
+    /// @notice Allow/deny a child adapter for wiring via `setVenues`. Trusting a venue is the deliberate
+    ///         curation act; the principal-clamp still bounds even a trusted-then-compromised child's NAV.
+    function setVenueTrust(address venue, bool trusted) external onlyOwner {
+        if (venue == address(0)) revert ZeroAddress();
+        trustedVenue[venue] = trusted;
+        emit VenueTrustSet(venue, trusted);
+    }
+
     /// @notice Set the venue set + target weights (curator's allocation call). `Σ weightBps ≤ 10_000`; any
     ///         shortfall is deliberately held idle in the router as an instant-withdraw buffer. Replacing the
     ///         set does NOT move funds — call `rebalance()` after to align holdings to the new weights.
@@ -107,6 +150,7 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
         delete _venues;
         for (uint256 i; i < adapters.length; ++i) {
             if (address(adapters[i]) == address(0)) revert ZeroAddress();
+            if (!trustedVenue[address(adapters[i])]) revert VenueNotTrusted();
             if (weightsBps[i] > maxVenueWeightBps) revert VenueWeightCapExceeded();
             total += weightsBps[i];
             _venues.push(Venue({adapter: adapters[i], weightBps: weightsBps[i]}));
@@ -130,7 +174,7 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
             IYieldAdapter a = _venues[i].adapter;
             uint256 max = a.maxWithdrawable();
             if (max == 0) continue;
-            try a.withdraw(max) returns (uint256 got) { pulled += got; } catch {}
+            try a.withdraw(max) returns (uint256 got) { pulled += got; _reducePrincipal(address(a), got); } catch {}
         }
         uint256 deployed = _deploy(asset.balanceOf(address(this)));
         emit Rebalanced(pulled, deployed);
@@ -159,7 +203,7 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
             if (room < want) want = room;
             if (want == 0) continue;
             asset.forceApprove(address(v.adapter), want);
-            try v.adapter.deposit(want) { deployed += want; } catch {}
+            try v.adapter.deposit(want) { deployed += want; deployedPrincipal[address(v.adapter)] += want; } catch {}
             asset.forceApprove(address(v.adapter), 0);
         }
     }
@@ -182,6 +226,7 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
             uint256 pull = need < room ? need : room;
             try a.withdraw(pull) returns (uint256 got) {
                 need = need > got ? need - got : 0;
+                _reducePrincipal(address(a), got);
             } catch {}
         }
 
@@ -193,18 +238,31 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
     }
 
     /// @inheritdoc IYieldAdapter
+    /// @dev PRINCIPAL-CLAMPED NAV. Each child contributes `min(self-reported, deployedPrincipal + band)` —
+    ///      the router never trusts a child's mark above the principal it actually sent that child plus a
+    ///      bounded yield band. A lying/compromised child holding $0 of real principal contributes ~$0 no
+    ///      matter what it claims, so it cannot inflate the senior NAV this feeds. The clamp is an UPPER
+    ///      bound only: a child reporting a real LOSS (below principal) still surfaces the lower value.
     function totalAssets() external view override returns (uint256 total) {
         uint256 n = _venues.length;
-        // AUDIT L3: saturating add (like maxWithdrawable/maxSuppliable) so a single misbehaving child
-        // reporting type(uint256).max can't overflow-revert the NAV read and brick every vault path.
-        for (uint256 i; i < n; ++i) total = _satAdd(total, _venues[i].adapter.totalAssets());
+        // AUDIT L3: saturating add so a single misbehaving child can't overflow-revert the NAV read.
+        for (uint256 i; i < n; ++i) {
+            IYieldAdapter a = _venues[i].adapter;
+            total = _satAdd(total, _clampChild(address(a), a.totalAssets()));
+        }
         total = _satAdd(total, asset.balanceOf(address(this))); // idle buffer counts
     }
 
     /// @inheritdoc IYieldAdapter
+    /// @dev Same principal-clamp as `totalAssets` — a child's claimed headroom is bounded by the principal
+    ///      it actually holds (+ band), so an over-stated `maxWithdrawable` cannot promise capital a child
+    ///      cannot pay.
     function maxWithdrawable() external view override returns (uint256 total) {
         uint256 n = _venues.length;
-        for (uint256 i; i < n; ++i) total = _satAdd(total, _venues[i].adapter.maxWithdrawable());
+        for (uint256 i; i < n; ++i) {
+            IYieldAdapter a = _venues[i].adapter;
+            total = _satAdd(total, _clampChild(address(a), a.maxWithdrawable()));
+        }
         total = _satAdd(total, asset.balanceOf(address(this)));
     }
 
@@ -226,5 +284,24 @@ contract MintwareMultiVenueYieldAdapter is IYieldAdapter, Ownable, ReentrancyGua
     ///      answer, and callers already treat these as best-effort ceilings.
     function _satAdd(uint256 a, uint256 b) private pure returns (uint256) {
         unchecked { return b > type(uint256).max - a ? type(uint256).max : a + b; }
+    }
+
+    /// @dev Clamp a child's self-reported value to `min(reported, deployedPrincipal + boundedYield)`, where
+    ///      `boundedYield = deployedPrincipal * maxYieldBps / BPS`. Upper bound only — a report BELOW
+    ///      principal (a real loss) passes through unchanged. This is the load-bearing anti-phantom-NAV
+    ///      invariant: a child's NAV contribution never exceeds the principal the router deployed into it
+    ///      plus the bounded yield band, so self-reported NAV can never be fabricated out of thin air.
+    function _clampChild(address a, uint256 reported) private view returns (uint256) {
+        uint256 p = deployedPrincipal[a];
+        uint256 ceiling = _satAdd(p, (p * maxYieldBps) / BPS);
+        return reported < ceiling ? reported : ceiling;
+    }
+
+    /// @dev Reduce a child's tracked principal by the amount just withdrawn from it (floored at 0). Pulling
+    ///      out yield on top of principal simply zeroes the tracked principal — conservative (never negative,
+    ///      never over-counts the clamp ceiling).
+    function _reducePrincipal(address a, uint256 got) private {
+        uint256 p = deployedPrincipal[a];
+        deployedPrincipal[a] = got >= p ? 0 : p - got;
     }
 }

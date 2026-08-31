@@ -965,15 +965,17 @@ contract MintwareDeFiPairVault is MintwarePairVault, IUnlockCallback {
         // Per-block cap stays in the vault (it owns `_jitBlock`/`_jitWithdrawnThisBlock`). Passing
         // `cap = _jitCap(type(uint256).max)` = min(per-swap, remaining per-block) reproduces the exact
         // `_jitCap(want)` clamp inside the library (`min(want, cap)`). The library returns the amount
-        // actually withdrawn (`got`) so we record it against the per-block counter — even on the L==0
-        // undo path (the withdraw physically happened), matching the pre-extraction ordering.
+        // actually withdrawn (`got`).
         uint256 cap = _jitCap(type(uint256).max);
         MWJitLib.JitState memory s = _loadJit();
         uint256 got;
         (s, L, got) = MWJitLib.open(
             _jitCtx(), s, zeroForOne, outputBudget, poolKey.tickSpacing, JIT_WIDTH_SPACINGS, JIT_SALT, cap
         );
-        if (got > 0) _recordJitWithdraw(got);
+        // Grief fix: only count a JIT withdraw against the per-block cap when the open actually STOOD (L>0).
+        // On the L==0 undo path the library re-idles `got` (the position was never formed), so charging it
+        // to the per-block counter would let a benign no-op swap exhaust the JIT budget for the block.
+        if (L > 0 && got > 0) _recordJitWithdraw(got);
         _storeJit(s);
         if (L > 0) emit JitOpened(zeroForOne, got, L, s.jitTickLower, s.jitTickUpper);
     }

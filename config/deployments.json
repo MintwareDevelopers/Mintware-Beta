@@ -43,18 +43,20 @@
         "verified": "2026-08-19"
       },
       "ULVVault": {
-        "address": null,
+        "address": "0x6c0D6460b7Eb094864F6b557506f5519B0c75132",
         "chainId": 84532,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0x6c0d\u20265132 \u2014 full address not in repo. Complete from the broadcast record.",
-        "verified": null
+        "note": "ULV engine vault (in testing, empty, unaudited). Recovered from contracts-v4/test/fork/ULVDeploymentFork.t.sol; on-chain probe 2026-08-31: codesize 23915 (deployed).",
+        "verified": "2026-08-31",
+        "source": "fork-test + on-chain probe"
       },
       "ULVHook": {
-        "address": null,
+        "address": "0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8",
         "chainId": 84532,
         "status": "testnet",
-        "note": "GAP: rules cite a truncated 0x9f3c\u20260AC8 \u2014 full address not in repo. Complete from the broadcast record.",
-        "verified": null
+        "note": "ULV V4 hook (in testing, empty, unaudited). Recovered from contracts-v4/test/fork/ULVDeploymentFork.t.sol; on-chain probe 2026-08-31: codesize 7572 (deployed).",
+        "verified": "2026-08-31",
+        "source": "fork-test + on-chain probe"
       },
       "MintwareYieldVault": {
         "address": "0x09cda8519737a60fd16d263f94fb56237cdb7e42",
@@ -159,6 +161,22 @@
         "status": "testnet",
         "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
         "verified": "2026-08-21"
+      },
+      "SocialPairVault": {
+        "address": "0x983c11b4afb39766ada3a69c66addbc73b456f6e",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Retail deposit target — NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS, written to by the /app/vault/[id] deposit path. On-chain probe 2026-08-30: ~18KB code, token0()=Base Sepolia USDC (0x036CbD53...), owner=0x7fD88B02... (Mintware). A dual-sided pair vault. ~18KB runtime < current MintwareDeFiPairVault (23.5KB), so it likely PREDATES the current build — redeploy + re-record before relying on it for real value.",
+        "verified": "2026-08-30",
+        "source": "on-chain probe"
+      },
+      "MwTreasuryAddress": {
+        "address": "0xcf2EA99639C038a475B710b2Be82b974D777C306",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "NEXT_PUBLIC_MW_TREASURY_ADDRESS (client display). On-chain probe 2026-08-30: ~3.6KB code present; exact role not re-confirmed — verify + label before relying on it.",
+        "verified": "2026-08-30",
+        "source": "on-chain probe"
       }
     }
   }
