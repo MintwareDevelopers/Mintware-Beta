@@ -164,10 +164,12 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `MintwareTreasuryVaultRegistry` | testnet · base-sepolia | `0x0f6a05666c554671bbffa2079778ae47ec3f30e4` | testnet |
 | `MintwareYieldVault` | testnet · base-sepolia | `0x09cda8519737a60fd16d263f94fb56237cdb7e42` | testnet |
 | `MWAmAuction` | testnet · base-sepolia | `0x11d7bda166a62ac9edb65152f8cf035c219c5e00` | testnet |
+| `MwTreasuryAddress` | testnet · base-sepolia | `0xcf2EA99639C038a475B710b2Be82b974D777C306` | testnet |
+| `SocialPairVault` | testnet · base-sepolia | `0x983c11b4afb39766ada3a69c66addbc73b456f6e` | testnet |
 | `ULVHook` | testnet · base-sepolia | ⚠ **address missing** | testnet |
 | `ULVVault` | testnet · base-sepolia | ⚠ **address missing** | testnet |
 
-**19 recorded with a full address, 2 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**21 recorded with a full address, 2 flagged as a GAP** (truncated in the rules — complete from the broadcast).
 **24 of 32 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
