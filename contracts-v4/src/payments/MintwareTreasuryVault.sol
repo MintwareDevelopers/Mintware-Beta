@@ -239,6 +239,9 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     event PaymentBurn(address indexed user, address indexed receiver, uint256 shares, uint256 assets);
     event DeployedToLP(uint256 usdc, uint256 teamTokenUsed);
     event RecoveredFromLP(uint256 usdcWanted, uint256 usdcReturned, uint256 teamTokenReturned);
+    /// @notice USDC recovered at the seam BEYOND the retired senior par — proceeds of the junior team-leg
+    ///         sale — credited to the junior first-loss buffer (never the senior claim). See `_recoverFromLP`.
+    event JuniorUsdcRecovered(uint256 amount);
     event FeesAccrued(uint256 total, uint256 toSenior, uint256 toJunior, uint256 toProtocol);
     event JuniorRedeemed(address indexed team, uint256 teamTokens, uint256 usdc);
     event IdleTargetSet(uint16 bps);
@@ -1155,7 +1158,27 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
 
         // NOTE: recovered USDC is left ON HAND — the payment waterfall (`_pullUSDC`) needs it there; the
         // owner rebalance (`recoverFromLP`) re-idles it into Aave.
-        emit RecoveredFromLP(usdcWanted, usdcReturned, teamBack);
+        emit RecoveredFromLP(usdcWanted, usdcReturned, teamBack); // total recovered (pre-attribution)
+
+        // AUDIT (D3a seam senior-inflation): `usdcReturned` can EXCEED the senior par retired here (`dec`).
+        // Owner `recoverFromLP` is usually called with `usdcWanted <= deployedFromSenior` (no excess), but
+        // NOTHING bounds it — and the REDEMPTION waterfall (`_pullUSDC`) deliberately requests
+        // `f * recoverableUSDC()`, a fraction of the FULL mid-mark INCLUDING the volatile TEAM leg, which
+        // routinely exceeds the deployed par. When it does, this seam unwinds a slice and SELLS its junior
+        // team leg to USDC (seniority = junior spent first); the write-down of `deployedFromSenior` is
+        // clamped at the par, so `usdcReturned - dec` is pure team-leg SALE proceeds. Leaving that in the
+        // free senior buffer would count JUNIOR first-loss capital as senior NAV — `totalSeniorAssets()`
+        // rises above senior capital-in (D3a inflation; the exact value minted at the idle<->active seam
+        // the invariant caught). Earmark it to the junior USDC first-loss buffer instead: it is the team's
+        // own liquidated junior capital, excluded from every senior view (`_freeSeniorBuffer`) and returned
+        // to the team on `redeemJunior` once the senior is fully covered. The senior claim never absorbs it.
+        if (usdcReturned > dec) {
+            uint256 juniorGain = usdcReturned - dec;
+            juniorUsdcBuffer += juniorGain;
+            emit JuniorUsdcRecovered(juniorGain);
+            usdcReturned -= juniorGain; // report only the senior-attributable USDC (owner re-idles that
+                                        // into Aave; the junior surplus stays on-hand, earmarked to junior)
+        }
     }
 
     /// @dev The always-liquid hot-buffer reserve target in USDC = `hotBufferBps` of the senior base. Kept
