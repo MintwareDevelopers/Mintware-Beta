@@ -7,7 +7,8 @@ import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "./interfaces/IERC8004Registry.sol";
 
-/// @title  AIAttribution v2
+/// @title  AIAttribution  — v3 is the ONLY live deployment (Base mainnet 0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421).
+///         ⚠ This source header historically read "v2"; reconcile this file's version against the deployed v3 bytecode before relying on it.
 /// @notice Mintware trust + attribution layer for AI agents.
 ///         ERC-8004 native — permissionless at launch, registry-enforced when ecosystem matures.
 ///         Primary key: agent wallet address. ERC-8004 tokenId is an optional linked field.

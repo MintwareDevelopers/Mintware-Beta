@@ -473,7 +473,7 @@ function Contracts() {
           <tr><td><b>Hooks</b></td><td><code>MWHookCoordinator</code>, <code>MWOracleGuard</code>, <code>MWDynamicFee</code>, am-AMM auction</td></tr>
           <tr><td><b>Vaults</b></td><td><code>MintwareDeFiPairVault</code> (canonical), <code>MintwareMatchedLiquidityVault</code>, <code>AaveV3YieldAdapter</code>, <code>MintwareVaultFactory</code>, <code>MintwareVaultRegistry</code>, shared base — <i>deprecated:</i> <code>MintwareDeFiVault4626</code>, <code>FeeVault</code></td></tr>
           <tr><td><b>Libs</b></td><td><code>MWJitLib</code>, <code>MWIdleLib</code>, <code>MWPositionLib</code>, <code>MWGuardianPausable</code>, <code>MWTimelockedOracleSigner</code></td></tr>
-          <tr><td><b>Rewards</b></td><td><code>MintwareWeightedDistributor</code>, soulbound <code>MintwareAttributionToken</code></td></tr>
+          <tr><td><b>Rewards</b></td><td><code>MintwareWeightedDistributor</code></td></tr>
           <tr><td><b>Payments / YPN</b></td><td><code>MintwarePaymentGateway</code>, <code>MintwareYieldVault</code>, <code>MintwareTreasuryVault</code></td></tr>
           <tr><td><b>Off-chain (Rust)</b></td><td><code>services/edge-auth</code> (55 tests), <code>services/relayer</code></td></tr>
         </tbody>
