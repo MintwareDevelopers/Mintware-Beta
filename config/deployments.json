@@ -159,6 +159,22 @@
         "status": "testnet",
         "note": "Audit-hardened ETH senior tranche DEMO stack (2026-08-21, PR #350). TESTNET + MOCK + UNAUDITED. Deploy: DeployEthSeniorStackDemo.s.sol; deployer 0x9c64...933AD.",
         "verified": "2026-08-21"
+      },
+      "SocialPairVault": {
+        "address": "0x983c11b4afb39766ada3a69c66addbc73b456f6e",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "Retail deposit target — NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS, written to by the /app/vault/[id] deposit path. On-chain probe 2026-08-30: ~18KB code, token0()=Base Sepolia USDC (0x036CbD53...), owner=0x7fD88B02... (Mintware). A dual-sided pair vault. ~18KB runtime < current MintwareDeFiPairVault (23.5KB), so it likely PREDATES the current build — redeploy + re-record before relying on it for real value.",
+        "verified": "2026-08-30",
+        "source": "on-chain probe"
+      },
+      "MwTreasuryAddress": {
+        "address": "0xcf2EA99639C038a475B710b2Be82b974D777C306",
+        "chainId": 84532,
+        "status": "testnet",
+        "note": "NEXT_PUBLIC_MW_TREASURY_ADDRESS (client display). On-chain probe 2026-08-30: ~3.6KB code present; exact role not re-confirmed — verify + label before relying on it.",
+        "verified": "2026-08-30",
+        "source": "on-chain probe"
       }
     }
   }
