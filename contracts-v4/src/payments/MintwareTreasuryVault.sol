@@ -601,8 +601,16 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         // SEPARATELY, so junior backs senior par whether or not anything is deployed. Sum = physically
         // realizable senior assets (Aave idle + on-hand senior + LP recoverable + junior); `_redeemNav` caps
         // at par so it never over-values. The proportional `_pullUSDC` draws each redeemer's fair share of it.
+        // AUDIT R6-2 (redemption-order fairness, High): value the deployed LP leg at the CONSERVATIVE
+        // USDC-LEG-ONLY floor, NOT the mid-price `recoverableUSDC()` mark. The mark counts the team leg at
+        // mid, but liquidating it means SELLING into the pool (`_swapTeamToUsdc`), whose proceeds collapse
+        // toward 0 in a thin/impaired pool. Pricing the senior redeem NAV off the mark let early redeemers
+        // exit at a value the LAST redeemer — forced to liquidate the LP — could not realize (a ~38%
+        // order-dependent tail shortfall; see MintwareTreasuryRedemptionOrder R6). The USDC leg IS
+        // realizable without a sale, so the floor never overstates ⇒ the proportional `_pullUSDC` becomes
+        // order-independent. Any team the unwind sells is upside that stays in the vault.
         uint256 deployedLegs = deployedFromSenior + jitBorrowed;
-        uint256 recov = recoverableUSDC();   // the vault's OWN LP position only (never the hook's JIT slice)
+        uint256 recov = recoverableFloorUSDC();   // the vault's OWN LP position only (never the hook's JIT slice)
         if (recov < deployedLegs) deployedLegs = recov;
         return adapter.totalAssets() + _freeSeniorBuffer() + deployedLegs + juniorUsdcBuffer;
     }
@@ -696,6 +704,20 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
         // (structural gate), so in normal operation this revert is unreachable.
         if (!oReady) revert OracleNotReady();
         return MWTreasuryPositionLib.recoverableUSDC(_posCtx(), oTick, oReady);
+    }
+
+    /// @notice AUDIT R6-2 — CONSERVATIVE senior-realizable FLOOR of the LP in USDC: the USDC LEG ONLY (no
+    ///         team leg), which a burn hands over WITHOUT a sale, so it is realizable independent of pool
+    ///         depth. `recoverableUSDC()` above marks the team leg at MID, but liquidating it means selling
+    ///         into the pool (proceeds → ~0 in a thin/impaired pool); pricing the senior redeem NAV off the
+    ///         mid mark let an early redeemer exit at a value the tail could not realize (the R6 first-
+    ///         redeemer run, LP-liquidation dimension). Same manipulation gate as `recoverableUSDC()`: a
+    ///         LIVE position (`positionLiquidity>0`) must never be valued off a not-ready oracle.
+    function recoverableFloorUSDC() public view returns (uint256) {
+        if (positionLiquidity == 0) return 0;
+        (int24 oTick, bool oReady) = _oracleTick();
+        if (!oReady) revert OracleNotReady();
+        return MWTreasuryPositionLib.recoverableFloorUSDC(_posCtx(), oTick, oReady);
     }
 
     /// @notice Junior USDC first-loss buffer as bps of the deployed-at-risk senior. `>= 10_000` = fully
@@ -1184,35 +1206,46 @@ contract MintwareTreasuryVault is MintwarePairVault, IUnlockCallback, IYieldVaul
     function _pullUSDC(uint256 need, uint256 shareNum, uint256 shareDen) internal returns (uint256 paid) {
         if (need == 0) return 0;
 
-        // 1) Draw at most this redeemer's FAIR SHARE of senior-own realizable (Aave idle + on-hand senior +
-        //    LP recoverable, EXCLUDING junior). Capping the senior-own draw at `f × seniorOwn` (rather than
-        //    taking all available) is what shares the fungible adapter/LP across redeemers so the tail isn't
-        //    starved — every redeemer leaves the others their share.
-        uint256 ownTarget = need;
-        if (shareDen != 0) {
-            uint256 seniorOwn = adapter.totalAssets() + _freeSeniorBuffer() + recoverableUSDC();
-            uint256 fairOwn   = (seniorOwn * shareNum) / shareDen;
-            if (ownTarget > fairOwn) ownTarget = fairOwn; // never draw more than the fair senior-own share
-        }
+        // AUDIT R6-2 (redemption-order fairness, High). PROPORTIONAL realization: a redeemer holding fraction
+        // f = shareNum/shareDen draws their FAIR SHARE of EACH senior bucket in turn — fungible liquid (free
+        // senior buffer + Aave idle), then the LP REALIZED at its usd leg (never its mid mark), then the
+        // junior first-loss. Capping the LIQUID draw at `f × liquid` (NOT liquid-first for the whole `need`)
+        // is the fix: it stops an early redeemer from draining the fungible buffer past their share and
+        // dumping the LP-liquidation gap (mark > sell-through) on whoever redeems last (the first-redeemer
+        // run, LP dimension — pre-fix the tail got 0.67 vs a 0.99 floor). Each redeemer instead unwinds their
+        // OWN pro-rata LP slice, so that gap is socialized. `f × junior` (unchanged) shares the first-loss the
+        // same way. Non-redemption callers pass shareNum == shareDen (f = 1 ⇒ each cap = the whole bucket).
         uint256 freeOnHand = _freeSeniorBuffer();
-        if (freeOnHand < ownTarget) {
-            uint256 short = ownTarget - freeOnHand;
-            uint256 got = adapter.withdraw(short);                     // best-effort
-            if (got < short && positionLiquidity != 0) {
-                _recoverFromLP(short - got);                           // unwind LP (senior's own leg)
-            }
+
+        // 1) fair share of fungible liquid (free senior buffer + Aave idle).
+        uint256 liquid     = adapter.totalAssets() + freeOnHand;
+        uint256 fairLiquid = shareDen == 0 ? liquid : (liquid * shareNum) / shareDen;
+        uint256 want       = need < fairLiquid ? need : fairLiquid;
+        if (freeOnHand < want) {
+            adapter.withdraw(want - freeOnHand);                       // best-effort
             freeOnHand = _freeSeniorBuffer();
         }
 
-        // 2) Junior first-loss absorbs the ACTUAL residual (need − what senior-own provided, incl. any LP
-        //    slippage), capped at this redeemer's pro-rata share `f × juniorUsdcBuffer`. Computed AFTER the
-        //    senior-own pass so junior makes the redeemer whole up to their fair first-loss (a lone senior is
-        //    fully covered: f = 1 ⇒ cap = the whole buffer), while a finite buffer is still shared across many.
+        // 2) fair share of the LP, REALIZED — unwind this redeemer's OWN pro-rata LIQUIDITY slice and take
+        //    its actual proceeds (usd leg + oracle-bounded team sale). Requesting `f × recoverableUSDC()`
+        //    (f × the mark) makes `recover` burn exactly `f × positionLiquidity` (see the lib), so the
+        //    mark-vs-liquidation gap is shared across redeemers instead of dumped on the tail. Any team
+        //    proceeds beyond `need` stay on-hand as senior buffer (upside), never over-paying this redeemer.
+        if (freeOnHand < need && positionLiquidity != 0) {
+            uint256 mark   = recoverableUSDC();
+            uint256 fairLp = shareDen == 0 ? mark : (mark * shareNum) / shareDen;
+            if (fairLp != 0) {
+                _recoverFromLP(fairLp);                                // burns f × liquidity; realizes its proceeds
+                freeOnHand = _freeSeniorBuffer();
+            }
+        }
+
+        // 3) fair share of the junior first-loss for any residual.
         if (freeOnHand < need && juniorUsdcBuffer != 0) {
             uint256 fairJunior = shareDen == 0 ? juniorUsdcBuffer : (juniorUsdcBuffer * shareNum) / shareDen;
             if (fairJunior > juniorUsdcBuffer) fairJunior = juniorUsdcBuffer;
             uint256 stillShort = need - freeOnHand;
-            uint256 draw = stillShort < fairJunior ? stillShort : fairJunior;
+            uint256 draw       = stillShort < fairJunior ? stillShort : fairJunior;
             if (draw != 0) {
                 juniorUsdcBuffer -= draw;                              // un-earmark ⇒ flows into free buffer
                 emit JuniorUsdcAbsorbed(draw);

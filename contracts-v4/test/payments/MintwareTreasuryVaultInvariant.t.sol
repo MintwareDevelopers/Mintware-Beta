@@ -67,7 +67,7 @@ contract TreasuryVaultHandler is Test {
     uint256 public totalUsdcOut;      // USDC that left to a NON-system address (rail/team/protocol)
     uint256 public successfulBurns;   // gateway payments that settled (non-vacuity witness)
     bool    public juniorRedeemedEarly; // set true iff a redeemJunior ever succeeded pre-cliff
-    bool    public exercisedIlWithDeploy; // senior par was deployed while the mark was sub-par
+    bool    public exercisedIlWithDeploy; // senior par deployed while the LP's conservative FLOOR was sub-par
 
     struct Cfg {
         MintwareTreasuryVault vault;
@@ -109,6 +109,17 @@ contract TreasuryVaultHandler is Test {
     }
 
     function nActors() external view returns (uint256) { return actors.length; }
+
+    /// @dev Latch the IL-with-deploy witness iff a LIVE senior LP position's CONSERVATIVE realizable FLOOR
+    ///      (usd leg only, no team sale) is below the senior par deployed into it — the genuine sub-par-floor
+    ///      regime the R6-2 fix guards. try/catch so a transient not-ready oracle never reverts the caller.
+    function _recordIlWitness() internal {
+        uint256 dep = vault.deployedFromSenior();
+        if (dep == 0) return;
+        try vault.recoverableFloorUSDC() returns (uint256 floor_) {
+            if (floor_ < dep) exercisedIlWithDeploy = true;
+        } catch {}
+    }
 
     function _actor(uint256 seed) internal view returns (address) {
         return actors[bound(seed, 0, actors.length - 1)];
@@ -156,7 +167,7 @@ contract TreasuryVaultHandler is Test {
         uint256 amt = bound(seed, 1_000_000, room);
         uint256 maxTeam = vault.juniorTokens();
         vm.prank(owner);
-        try vault.deployToLP(amt, maxTeam) {} catch {}
+        try vault.deployToLP(amt, maxTeam) { _recordIlWitness(); } catch {}
     }
 
     // ── owner recovers a bounded amount (<= deployed) ────────────────────────────────
@@ -193,8 +204,20 @@ contract TreasuryVaultHandler is Test {
         // A large notional so the swap actually reaches the band edge; the clamp caps it there.
         uint256 amountIn = 400_000_000 * 1e6; // $400M notional, refunded past the limit
         try swapRouter.swapTo(key, zeroForOne, amountIn, limit) {
-            // IL witness: a dump with senior par deployed exercises the sub-par coverage regime.
-            if (dump && vault.deployedFromSenior() > 0) exercisedIlWithDeploy = true;
+            // IL witness (AUDIT R6-2). GENUINE sub-par-deployed state = the LP's CONSERVATIVE realizable
+            // FLOOR (`recoverableFloorUSDC()`, the USDC leg a burn returns with NO team sale) has fallen
+            // BELOW the senior par deployed into it (`deployedFromSenior`). In THAT state the honest floor no
+            // longer covers the deployed par, so the senior redemption depends on the team-sale upside +
+            // junior buffer, and the pre-fix mid-`recoverableUSDC()` mark would have OVERSTATED realization —
+            // exactly the R6-2 first-redeemer-run regime the proportional waterfall must socialize. Checked on
+            // BOTH swap directions (the state is a price-level property, not a dump event) and captured via
+            // `_recordIlWitness`, which is ALSO called after every `deployToLP` (a deploy at an already-impaired
+            // spot enters the state immediately). NOTE the harness's designed solvent band keeps the mid MARK
+            // `deployedFromSenior > recoverableUSDC()` UNREACHABLE (a full-range position stays ≥ ~1.15× par
+            // across the ≤3× in-band move); the FLOOR condition is the honest, reachable analogue of the same
+            // "sub-par deployed" scenario and is the one the fix actually acts on. try/catch: an OracleNotReady
+            // transient must never perturb the fuzz (the witness only latches on a verified sub-par floor).
+            _recordIlWitness();
         } catch {}
         // Phase 3: each swap ALSO pushes am-AMM rent (as production does inside beforeSwap→poke), routed
         // like fees. Folded into the swap handler (not a standalone selector) so the fuzz selector
@@ -479,7 +502,7 @@ contract MintwareTreasuryVaultInvariantTest is StdInvariant, Test {
     /// @notice Non-vacuity: the fuzz actually SETTLED payments and exercised IL with senior par deployed.
     function afterInvariant() public view {
         assertGt(handler.successfulBurns(), 0, "fuzz never settled a gateway payment");
-        assertTrue(handler.exercisedIlWithDeploy(), "IL scenario never exercised (senior par deployed sub-par)");
+        assertTrue(handler.exercisedIlWithDeploy(), "IL scenario never exercised (senior par deployed sub-par floor)");
     }
 
     // ── HEADLINE: the junior STACK (LP-recoverable + stable USDC buffer) covers the senior par ──────

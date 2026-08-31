@@ -51,6 +51,23 @@ contract MintwareTreasuryRedemptionOrderTest is MintwareTreasuryJitStackTest {
         return ts == 0 ? 0 : (nav * WAD) / ts;
     }
 
+    /// @notice AUDIT R6-2 REGRESSION — the exact counterexample the fuzz caught (junior buffer consumed by
+    ///         the dump's JIT settle → senior left against a team-heavy impaired LP marked ~2× its
+    ///         liquidation value). Pre-fix the LAST redeemer got 0.6666/share vs a 0.9935 floor (a 33%
+    ///         order-dependent shortfall); the USDC-leg-only realizable floor removes the overstatement so
+    ///         every redeemer clears the floor regardless of order. Deterministic (no fuzz) so it can never
+    ///         be masked by a lucky seed again.
+    function test_R6_impairedTail_lastRedeemerNotShortchanged() public {
+        _run(
+            0x004714d8e4dbb3f403c368452bee910cd2723802f4201a82f649a11f933899cf,
+            133606,
+            2,
+            type(uint256).max - 63,
+            132870856210,
+            0x0000000000000a35ba3d9bc0329809cee1eb75cdbd755bc296ecc98f9d28c639
+        );
+    }
+
     function testFuzz_redemptionOrderIndependence(
         uint256 aAmt,
         uint256 bAmt,
@@ -59,6 +76,17 @@ contract MintwareTreasuryRedemptionOrderTest is MintwareTreasuryJitStackTest {
         uint256 dump,
         uint256 orderSeed
     ) public {
+        _run(aAmt, bAmt, cAmt, deployAmt, dump, orderSeed);
+    }
+
+    function _run(
+        uint256 aAmt,
+        uint256 bAmt,
+        uint256 cAmt,
+        uint256 deployAmt,
+        uint256 dump,
+        uint256 orderSeed
+    ) internal {
         address A = makeAddr("A");
         address B = makeAddr("B");
         address C = makeAddr("C"); // the potential dust tail

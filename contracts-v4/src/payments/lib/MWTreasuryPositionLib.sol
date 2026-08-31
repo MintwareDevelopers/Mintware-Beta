@@ -111,6 +111,11 @@ library MWTreasuryPositionLib {
         uint256 rec = _recoverable(c, oTick, oReady);
         if (rec == 0 || liq == 0 || usdcWanted == 0) return abi.encode(uint256(0), uint256(0), uint128(0));
 
+        // `lrem = liq × give / rec` burns the liquidity slice whose MARKED value is `give`. The redemption
+        // waterfall exploits this to realize a redeemer's exact PRO-RATA liquidity slice: it passes
+        // `usdcWanted = f × recoverableUSDC()` (f × the mark) ⇒ `lrem = f × liq` ⇒ the redeemer unwinds
+        // their own share and receives its ACTUAL proceeds (usd leg + oracle-bounded team sale), so the
+        // mark-vs-liquidation gap is shared, not dumped on the tail (AUDIT R6-2; see `_pullUSDC`).
         uint256 give = usdcWanted < rec ? usdcWanted : rec;
         uint128 lrem = uint128(FullMath.mulDiv(liq, give, rec));
         if (lrem == 0) return abi.encode(uint256(0), uint256(0), uint128(0));
@@ -166,6 +171,37 @@ library MWTreasuryPositionLib {
         return _recoverable(c, oTick, oReady);
     }
 
+    /// @notice AUDIT R6-2 — CONSERVATIVE senior-realizable FLOOR of the position in USDC: the position's
+    ///         USDC LEG ONLY, valued at whichever of {spot, oracle} yields the SMALLER USDC leg. The team
+    ///         leg is EXCLUDED. Why: `recoverableUSDC` (above) marks the WHOLE position (USDC leg + team
+    ///         leg at min(spot,oracle) MID price). But physically realizing the team leg means SELLING it
+    ///         through the pool (`_swapTeamToUsdc`, oracle-band-clamped), whose proceeds depend on live
+    ///         external liquidity and collapse toward ZERO in a thin/impaired pool. Marking it at mid
+    ///         therefore OVERSTATES what the senior can realize — so an early redeemer exits at the mid
+    ///         mark from liquid buffers while the LAST redeemer, forced to liquidate the LP, eats the whole
+    ///         mark-vs-liquidation gap (the R6 first-redeemer run, LP-liquidation dimension). The USDC leg,
+    ///         by contrast, is handed to the vault directly on `modifyLiquidity(-liq)` with NO sale, so it
+    ///         is realizable independent of pool depth. Any team the unwind DOES sell is upside that stays
+    ///         in the vault. Manipulation-resistant: the floor is `min(usdcLeg at spot, usdcLeg at oracle)` (a
+    ///         spot pump can only LOWER it, never inflate it above the oracle-anchored value). Redemptions
+    ///         price against `min(par, seniorRealizableAssets)`, and `seniorRealizableAssets` uses THIS for
+    ///         the deployed LP leg — see `MintwareTreasuryVault.seniorRealizableAssets`/`_pullUSDC`.
+    function recoverableFloorUSDC(Ctx memory c, int24 oTick, bool oReady) external view returns (uint256) {
+        if (c.positionLiquidity == 0) return 0;
+        (uint160 spotSqrt,,,) = c.pm.getSlot0(c.key.toId());
+        // Pick the price that MINIMIZES the USDC leg (conservative). USDC leg = amt0 (usdc=currency0),
+        // which DECREASES in price ⇒ use the HIGHER price; or amt1 (usdc=currency1), which INCREASES in
+        // price ⇒ use the LOWER price. When the oracle is ready it bounds the manipulable spot in the
+        // inflating direction; when not ready this floor is used only for display (redeem/settle revert
+        // upstream via `recoverableUSDC`'s OracleNotReady gate), so spot alone is acceptable here.
+        uint160 valSqrt = spotSqrt;
+        if (oReady) {
+            uint160 oSqrt = TickMath.getSqrtPriceAtTick(oTick);
+            if (c.usdcIsCurrency0 ? (oSqrt > valSqrt) : (oSqrt < valSqrt)) valSqrt = oSqrt;
+        }
+        return _usdcLegAt(c, valSqrt);
+    }
+
     // ── internals ────────────────────────────────────────────────────────────────
 
     function _recoverable(Ctx memory c, int24 oTick, bool oReady) private view returns (uint256) {
@@ -183,6 +219,24 @@ library MWTreasuryPositionLib {
         if (!oReady) return vSpot;
         uint256 vOracle = _valueAt(c, TickMath.getSqrtPriceAtTick(oTick));
         return vSpot < vOracle ? vSpot : vOracle;
+    }
+
+    /// @dev The position's USDC-side leg (raw USDC amount, rounded DOWN) at `sqrtP` — the part a burn hands
+    ///      over with NO sale. Mirrors `_valueAt`'s leg split but returns ONLY the USDC side, un-priced.
+    function _usdcLegAt(Ctx memory c, uint160 sqrtP) private pure returns (uint256) {
+        uint160 sL = TickMath.getSqrtPriceAtTick(c.tickLower);
+        uint160 sU = TickMath.getSqrtPriceAtTick(c.tickUpper);
+        uint256 amt0;
+        uint256 amt1;
+        if (sqrtP <= sL) {
+            amt0 = SqrtPriceMath.getAmount0Delta(sL, sU, c.positionLiquidity, false);
+        } else if (sqrtP < sU) {
+            amt0 = SqrtPriceMath.getAmount0Delta(sqrtP, sU, c.positionLiquidity, false);
+            amt1 = SqrtPriceMath.getAmount1Delta(sL, sqrtP, c.positionLiquidity, false);
+        } else {
+            amt1 = SqrtPriceMath.getAmount1Delta(sL, sU, c.positionLiquidity, false);
+        }
+        return c.usdcIsCurrency0 ? amt0 : amt1;
     }
 
     /// @dev Value the whole position in USDC at an arbitrary `sqrtP` (USDC leg at par + team leg priced).
