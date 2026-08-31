@@ -6,7 +6,7 @@ import { createHandler } from '@/lib/web2/routeHandler'
 import type { LockTier } from '@/lib/web2/vault/types'
 import { buildVaultDepositMessage } from '@/lib/web3/signedActionMessages'
 import { LOCK_TIER_INDEX, PAIR_VAULT_ABI } from '@/lib/web3/vault/pairVaultAbi'
-import { createPublicClient, decodeFunctionData, http, parseUnits, recoverMessageAddress } from 'viem'
+import { createPublicClient, decodeEventLog, decodeFunctionData, http, parseUnits, recoverMessageAddress } from 'viem'
 
 // token0 (USDC) decimals — the `usdc_amount` field records the USDC side of the pair deposit.
 const TOKEN0_DECIMALS = Number(process.env.NEXT_PUBLIC_VAULT_TOKEN0_DECIMALS ?? 6)
@@ -84,15 +84,37 @@ export const POST = createHandler(async (req, ctx) => {
   const [amount0Wei, amount1Wei, , tierIndex] = decoded.args
   if (amount0Wei !== parseUnits(String(usdc_amount), TOKEN0_DECIMALS)) return ctx.json({ error: 'Deposit amount mismatch' }, 403)
   if (Number(tierIndex) !== LOCK_TIER_INDEX[lock_tier]) return ctx.json({ error: 'Deposit tier mismatch' }, 403)
-  const token1Amount = Number(amount1Wei) / 10 ** TOKEN1_DECIMALS
-  ctx.log.info('vault/deposit', 'pair deposit verified', { tx_hash, usdc_amount, token1Amount })
+  // Read the Deposited event for the ACTUAL used token1 + shares minted. `sharesMinted` is a V4
+  // liquidity unit — a pro-rata claim on BOTH tokens — so it (not the USDC side alone) is the correct
+  // basis for the reward-weighting cron. amount0Desired/amount1Desired in calldata are only ceilings;
+  // the event carries what the pool actually took.
+  let sharesMinted = 0n
+  let token1UsedWei = 0n
+  for (const lg of receipt.logs) {
+    if ((lg.address ?? '').toLowerCase() !== vaultAddress) continue
+    try {
+      const ev = decodeEventLog({ abi: PAIR_VAULT_ABI, data: lg.data, topics: lg.topics, eventName: 'Deposited' })
+      if ((ev.args.lp as string).toLowerCase() === walletLower) {
+        sharesMinted = ev.args.sharesMinted as bigint
+        token1UsedWei = ev.args.amount1 as bigint
+        break
+      }
+    } catch { /* not the Deposited event — skip */ }
+  }
+  const token1Amount = Number(token1UsedWei) / 10 ** TOKEN1_DECIMALS
+  if (sharesMinted === 0n) {
+    // Shouldn't happen (a verified deposit() always emits Deposited) — log loudly but don't drop the
+    // deposit; fall back to the USDC-wei basis so the position still carries weight.
+    ctx.log.warn('vault/deposit', 'Deposited event not found in receipt — falling back to usdc basis', { tx_hash })
+  }
+  ctx.log.info('vault/deposit', 'pair deposit verified', { tx_hash, usdc_amount, token1Amount, sharesMinted: sharesMinted.toString() })
 
   const lockDays    = LOCK_DAYS[lock_tier]
   const lockedUntil = lockDays ? new Date(Date.now() + lockDays * 86_400_000).toISOString() : null
 
   const { data: deposit, error: depErr } = await ctx.supabase
     .from('lp_deposits')
-    .insert({ vault_id, wallet: walletLower, usdc_amount, lock_tier, locked_until: lockedUntil, status: 'active', tx_hash })
+    .insert({ vault_id, wallet: walletLower, usdc_amount, token1_amount: token1Amount, lock_tier, locked_until: lockedUntil, status: 'active', tx_hash })
     .select('id').single()
 
   if (depErr) {
@@ -111,14 +133,21 @@ export const POST = createHandler(async (req, ctx) => {
   // Mirror the deposit into vault_lp_positions — the source of truth the weighted
   // epoch cron reads to compute reward weights (lp_deposits is the per-tx ledger;
   // this is the per-wallet aggregate). Accumulate liquidity_units across deposits.
-  // (liquidity_units = USDC contributed; the cron applies lock-tier + attribution
-  // multipliers on top.) Best-effort: a failure here must not fail the deposit.
+  // liquidity_units == vault SHARES (V4 liquidity, a pro-rata claim on BOTH tokens) —
+  // sharesMinted from the Deposited event, so a depositor's token1 side is counted, not
+  // just the USDC side; the cron applies lock-tier + attribution multipliers on top.
+  // Accumulated as an integer via BigInt to keep uint256-scale precision (numeric holds it).
+  // Best-effort: a failure here must not fail the deposit.
   try {
     const { data: existingPos } = await ctx.supabase
       .from('vault_lp_positions')
       .select('liquidity_units')
       .eq('vault_id', vault_id).eq('wallet', walletLower).maybeSingle()
-    const newUnits = Number(existingPos?.liquidity_units ?? 0) + usdc_amount
+    const prevUnits = (() => {
+      try { return BigInt(String(existingPos?.liquidity_units ?? '0').split('.')[0]) } catch { return 0n }
+    })()
+    const unitsToAdd = sharesMinted > 0n ? sharesMinted : parseUnits(String(usdc_amount), TOKEN0_DECIMALS)
+    const newUnits = (prevUnits + unitsToAdd).toString()
     await ctx.supabase.from('vault_lp_positions').upsert(
       { vault_id, wallet: walletLower, liquidity_units: newUnits, lock_tier, status: 'active' },
       { onConflict: 'vault_id,wallet', ignoreDuplicates: false },

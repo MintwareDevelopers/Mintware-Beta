@@ -4,8 +4,8 @@
 // Auth: bearer-token (CRON_SECRET). This route makes the production oracle key
 // sign an AttributionSnapshot, so it MUST NOT be publicly callable — an open
 // endpoint is a free signing-oracle over the crown-jewel key (audit C3). The
-// only caller is the server-side epoch processor (vaultEpochProcessor.ts),
-// which forwards the bearer token; there is no client/wallet flow to preserve.
+// only callers are the server-side reward cron(s) that forward the bearer token
+// (the weighted epoch-close rail); there is no client/wallet flow to preserve.
 
 import { createHandler } from '@/lib/web2/routeHandler'
 import { createWalletClient, http } from 'viem'
