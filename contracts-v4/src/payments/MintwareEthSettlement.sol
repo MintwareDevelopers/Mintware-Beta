@@ -183,6 +183,8 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
     error RailMismatch();
     error SettlementCapExceeded();
     error SettlementWindowCapExceeded();
+    error SettlementWindowCapNotSet(); // AUDIT R5-M(settle): batchSettleEth fails closed until the aggregate
+                                       // windowed cap is armed (mirrors rebalanceFloat R4-M1 + the RailNotSet pin)
     error MinUsdcOutTooLow(uint256 supplied, uint256 required);
     error BadParam();
 
@@ -490,9 +492,17 @@ contract MintwareEthSettlement is IUnlockCallback, Ownable, Pausable, Reentrancy
         // AUDIT H4: per-call ceiling (defense in depth over the pin) — 0 = off.
         if (maxSettlePerCall != 0 && totalUsdc > maxSettlePerCall) revert SettlementCapExceeded();
 
+        // AUDIT R5-M(settle): FAIL CLOSED — a rogue/compromised relayer must not be able to force-convert
+        // UNBOUNDED backing to the pinned rail (fabricating charges) just because the aggregate cap defaults
+        // OFF. The per-call cap + rail-pin stop theft-to-attacker and cap ONE call, but only the WINDOWED cap
+        // bounds TOTAL extraction across repeated calls. So settlement is disabled until the window cap is
+        // ARMED — mirrors `rebalanceFloat`'s R4-M1(a) posture and the `RailNotSet` pin. An operator arms it
+        // (owner-only, instant when enabling from off) exactly as they pin the rail.
+        if (maxSettlePerWindow == 0 || settleWindow == 0) revert SettlementWindowCapNotSet();
+
         // AUDIT R2-M2: cumulative/windowed ceiling — bounds TOTAL extraction across repeated calls, not just
         // one call. Roll the window forward lazily, then accumulate and check.
-        if (maxSettlePerWindow != 0) {
+        {
             if (block.timestamp >= _windowStart + settleWindow) {
                 _windowStart     = block.timestamp;
                 _settledInWindow = 0;

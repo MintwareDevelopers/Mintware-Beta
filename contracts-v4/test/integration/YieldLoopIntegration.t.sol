@@ -69,6 +69,13 @@ contract YieldLoopIntegration is Test {
         vm.prank(curator);
         router.setVault(address(vault));
 
+        // Curator trusts the three vetted child venues (deliberate) before wiring them.
+        vm.startPrank(curator);
+        router.setVenueTrust(address(aave), true);
+        router.setVenueTrust(address(morpho), true);
+        router.setVenueTrust(address(euler), true);
+        vm.stopPrank();
+
         // Curator's opening allocation: 50 / 30 / 20 across aave / morpho / euler.
         _setWeights(_venues(aave, morpho, euler), _w3(5000, 3000, 2000));
 
@@ -215,8 +222,11 @@ contract YieldLoopIntegration is Test {
         MintwareMultiVenueYieldAdapter r2 =
             new MintwareMultiVenueYieldAdapter(address(usdc), address(0), curator);
         MintwareYieldVault v2 = new MintwareYieldVault(address(usdc), address(r2), vaultOwner);
-        vm.prank(curator);
+        vm.startPrank(curator);
         r2.setVault(address(v2));
+        r2.setVenueTrust(address(c1), true);
+        r2.setVenueTrust(address(c2), true);
+        vm.stopPrank();
 
         IYieldAdapter[] memory vs = new IYieldAdapter[](2);
         vs[0] = c1; vs[1] = c2;

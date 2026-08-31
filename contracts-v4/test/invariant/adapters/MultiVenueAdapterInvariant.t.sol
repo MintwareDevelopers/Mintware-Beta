@@ -110,6 +110,11 @@ contract MultiVenueAdapterInvariantTest is StdInvariant, Test {
         vm.prank(owner);
         router.setVault(address(handler));
 
+        // Trust the three vetted child venues before wiring them (deliberate curation).
+        vm.startPrank(owner);
+        for (uint256 i; i < 3; ++i) router.setVenueTrust(address(venues[i]), true);
+        vm.stopPrank();
+
         IYieldAdapter[] memory a = new IYieldAdapter[](3);
         uint16[] memory w = new uint16[](3);
         for (uint256 i; i < 3; ++i) { a[i] = IYieldAdapter(address(venues[i])); w[i] = 3000; }
@@ -134,11 +139,14 @@ contract MultiVenueAdapterInvariantTest is StdInvariant, Test {
         assertLe(handler.gOut(), handler.gIn() + handler.gYield(), "A4: Sigma out > Sigma in + yield");
     }
 
-    /// A4 conservation: reported NAV is EXACTLY the net capital in the system — the weighted floor-splits
-    /// and un-deployed idle remainder neither create nor destroy value.
-    function invariant_A4_multivenue_conserves() public view {
+    /// A4 conservation (FIX 1 — principal-clamped NAV): reported NAV NEVER EXCEEDS the net capital in the
+    /// system. The principal-clamp caps each child's contribution at its deployed principal + a bounded yield
+    /// band, so the router can never OVER-report (the phantom-NAV defense); it may under-report only when a
+    /// child's real yield exceeds the band (a rebalance re-bases the principal and recaptures it). Combined
+    /// with `no_free_value` (Σout ≤ Σin+yield) this is the full secure-NAV posture: value is never conjured.
+    function invariant_A4_multivenue_neverInflates() public view {
         uint256 net = handler.gIn() + handler.gYield() - handler.gOut();
-        assertEq(router.totalAssets(), net, "A4: totalAssets != Sigma in + yield - out");
+        assertLe(router.totalAssets(), net, "A4: totalAssets must never exceed Sigma in + yield - out");
     }
 
     /// A4 liveness: the best-effort router withdraw never reverts, even with venues paused/hostile.

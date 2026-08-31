@@ -141,6 +141,9 @@ contract EthSeniorInvariantsTest is StdInvariant, Test {
         vm.startPrank(owner);
         settle.setOracleSource(address(oracle));
         settle.setSettlementRail(rail);
+        // AUDIT R5-M(settle): batchSettleEth fails closed until the aggregate window cap is armed. Arm a
+        // generous, effectively-unlimited cap so the invariant sequence behaves as before the fail-closed gate.
+        settle.setSettlementWindowCap(type(uint128).max, 3650 days);
         vm.stopPrank();
         oracle.set(0, true);
 
