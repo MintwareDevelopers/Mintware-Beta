@@ -4,24 +4,25 @@ import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
 
 // =============================================================================
-// /teams — marketing landing for the Matched Liquidity vault (team-facing).
-// Design v2 (Privy-esque). Grounded strictly in the deployed contract:
-// contracts-v4/src/vaults/MintwareMatchedLiquidityVault.sol
-//   · team commits T; community matches quote up to a value cap
-//   · threshold within window → activate; 50/50 team(LOCKED)/community(FREE)
-//   · MIN_LOCK_DURATION 90d hard cliff (90–730d); NO team early-unlock path
-//   · guardian pause can FREEZE but never RELEASE team funds early
-//   · during lock, fees accrue PER COMMUNITY LIQUIDITY UNIT — team earns 0%
-//     (deposit-pro-rata, NOT reputation-weighted — do not claim AWY here)
-//   · MIN_COMMUNITY_DEPOSITORS = 3 (anti self-dealing)
-// Trust claim uses the contract's words: "a restriction on withdrawal, not a
-// transfer of ownership." Never "community-owned." Undeployed → testnet-honest.
+// /teams — marketing landing, TREASURY-FIRST reframe (2026-09).
+// The pivot: a team's treasury that earns real DeFi yield while every dollar
+// stays spendable in real time — payroll, vendors, cards. "Spend the yield,
+// not the position." Voice + design match app/page.tsx (homepage) and
+// app/deck/deckMarkup.ts (investor deck).
+//
+// Honesty (hard rules — legal): everything is testnet · Base Sepolia · UNAUDITED.
+// Never "deposit / savings / guaranteed / fixed APY / risk-free". Non-custodial
+// throughout. External audit gates real value. No "reputation = yield" framing —
+// rewards/fees are pro-rata, never reputation-weighted. Figures are illustrative.
+//
+// Matched-liquidity (community-matched token launch) is still a real product but
+// is DEMOTED to a single secondary card, never the headline.
 // =============================================================================
 
 export const metadata: Metadata = {
-  title: 'For Teams — Prove it, don’t say it | Mintware',
+  title: 'For Teams — A treasury that earns while it spends | Mintware',
   description:
-    'Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock your fee share flows to the people who backed you. Trust us becomes check the contract.',
+    'Your treasury shouldn’t have to choose between earning and being spendable. Mintware makes it productive — earning real DeFi yield — while it stays fully spendable in real time: payroll, vendors, cards. Never idle. Never locked. Always yours.',
 }
 
 const TWITTER = 'https://x.com/Mintware_Fi'
@@ -41,34 +42,27 @@ function Head({ n, label }: { n: string; label: string }) {
 }
 
 // ── data ─────────────────────────────────────────────────────────────────────
-const FLOW: [string, string][] = [
-  ['You commit your token', 'Deposit your project token into the vault and pick a lock term — 90 days to 2 years.'],
-  ['Your community matches it', 'Backers deposit the quote asset (USDC, WETH…) up to a value cap, first-come, until the match is filled.'],
-  ['Threshold met → it activates', 'If the community fills the minimum within the funding window, the matched liquidity deploys as one Uniswap V4 position.'],
-  ['Two halves, one locked', 'The position splits 50/50 by liquidity — your half is locked for the full term, the community half stays free to redeem.'],
-  ['You can’t pull it — by design', 'There is no team early-unlock path in the contract. A guardian can freeze the vault, but can never release your locked liquidity early.'],
+// The three income streams, on one balance (matches homepage ENGINES + deck slide 4).
+const ENGINES: [string, string, string][] = [
+  ['01', 'Best-rate lending', 'Idle treasury is routed to the venue paying the most — and re-routed as rates move. Never parked in one place, earning less than it could.'],
+  ['02', 'Just-in-time market-making', 'The balance provides just-in-time depth on Uniswap V4 exactly when trades need it, and earns the swap fees for it.'],
+  ['03', 'Recaptured MEV', 'The value bots usually skim off trades is caught and handed back to the pool — not left to the searchers.'],
 ]
 
-const LOCK_STATS: [string, string][] = [
-  ['≥ 90 days', 'Hard cliff — selectable up to 2 years'],
-  ['0', 'Team early-exit paths in the contract'],
-  ['50 / 50', 'Team (locked) / community (free) split'],
-  ['≥ 3', 'Independent backers required to activate'],
+// Treasury OS — the operator controls. Every spend is recorded to the on-chain treasury.
+const TREASURY_OS: [string, string][] = [
+  ['Role-capped cards', 'Issue cards that draw on the treasury, each bounded by a role — owner, manager, contributor, vendor. The cap is a daily spend ceiling enforced on every swipe, not a suggestion.'],
+  ['Payroll & vendor payouts', 'Run a CSV payroll batch or a one-off vendor payment straight from the treasury. Route to any chain via Circle CCTP.'],
+  ['A spend ledger you can audit', 'Every spend across every rail lands in one ledger — with caps, categories, and a memo per line. Cumulative caps are checked before money moves.'],
+  ['Passkey multisig', 'The treasury sits behind a passkey multisig. On accept, every member gets a soulbound on-chain membership — the actor on each line is provable.'],
 ]
 
-const TRUST: [string, string][] = [
-  ['Locked, not signed over', 'Your liquidity never changes owner. What’s restricted is your ability to withdraw it before the cliff — a restriction on withdrawal, not a transfer of ownership.'],
-  ['No early-unlock path', 'There is no function anywhere in the contract that lets a team pull locked liquidity early. It isn’t gated — it’s absent.'],
-  ['Guardian kill-switch', 'A guardian can pause the vault if something looks wrong. It can freeze funds — but it can never release team liquidity ahead of the cliff.'],
-  ['Anti-self-dealing floor', 'Activation requires a minimum of three independent community backers, so a team can’t quietly match its own launch.'],
-  ['Fee redirection on-chain', 'The community’s share accrues inside the contract, per unit of community liquidity — no off-chain merkle, no discretion, no rounding drift.'],
-]
-
-const TREASURY: [string, string][] = [
-  ['Spendable while earning', 'Member balances redeem at par while the treasury covers them, and stay instantly spendable — cards, x402, cross-chain. The treasury earns the spread while the money sits ready. Never idle, never locked.'],
-  ['Your team, by role', 'Invite by email and pick a preset — owner, manager, contributor, vendor. Each is a daily spend cap. On accept, every member gets a soulbound on-chain membership.'],
-  ['Pay vendors & run payroll', 'One payment or a CSV batch, straight from the treasury and authorized against live solvency. Route to any chain via Circle CCTP.'],
-  ['Proof of reserves, public', 'A live treasury page — NAV, coverage, members, backed on-chain — plus an embeddable badge. Your community verifies solvency without asking.'],
+// Why it holds — the tranche structure + non-custodial posture.
+const SAFETY: [string, string][] = [
+  ['Senior sits at par', 'Community / senior capital is redeemable at par while the treasury covers it, and stays instantly spendable. The senior NAV is price-free — it doesn’t swing with the market.'],
+  ['Junior absorbs the volatility', 'Team / junior capital is first-loss: it takes the hit before senior ever does. The order is fixed in the contract — the code covers senior first, with no admin override.'],
+  ['Honest in the tail', 'Par while covered; a conservative, pro-rata haircut only in a deep-crash tail — no first-redeemer run. That’s what makes “stays spendable” honest rather than a marketing line.'],
+  ['Non-custodial by construction', 'The team’s keys, the team’s contracts. No deposit desk, no lockup, no counterparty holding the cash — Mintware is the software, not the bank.'],
 ]
 
 export default function TeamsLandingPage() {
@@ -79,17 +73,20 @@ export default function TeamsLandingPage() {
       {/* ── HERO ── */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[96px] max-[800px]:py-[60px]">
-          <div className={ey}>For teams · matched liquidity</div>
-          <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[16ch] [text-wrap:balance]">
-            Prove it. <span className="text-gradient-accent">Don’t say it.</span>
+          <div className={ey}>For teams · the treasury</div>
+          <h1 className="font-atx-display font-semibold text-ink mt-6 tracking-[-0.04em] leading-[1.02] text-[clamp(2.2rem,5.4vw,3.9rem)] max-w-[18ch] [text-wrap:balance]">
+            A treasury that earns <span className="text-gradient-accent">while it spends.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            Lock your launch liquidity alongside your community — verifiably, on-chain, for at least 90 days with no early-exit path. During the lock, your fee share flows to the people who backed you. “Trust us” becomes “check the contract.”
+            Your treasury shouldn’t have to choose between earning and being spendable. Mintware makes it productive — earning real DeFi yield — while it stays fully spendable in real time: payroll, vendors, cards. Never idle. Never locked. Always yours.
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
+            <Link href="/app/team" className="glass-pill-primary">See the treasury →</Link>
             <a href="#how" className="glass-pill">How it works ↓</a>
-            <Link href="/defi" className="glass-pill">See the LP side →</Link>
           </div>
+          <p className="text-[11px] text-ink-soft leading-[1.5] mt-6 max-w-[60ch]">
+            For crypto-native teams, DAOs, and on-chain startups. In testing on Base Sepolia — testnet, not yet audited; nothing here is a deposit, an offer, or a guaranteed return.
+          </p>
         </div>
       </section>
 
@@ -97,181 +94,67 @@ export default function TeamsLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="01" label="The problem" />
-          <h2 className={h2}>Every launch asks the same thing: <span className="text-gradient-accent">trust us.</span></h2>
+          <h2 className={h2}>Idle treasury pays an <span className="text-gradient-accent">idle-cash tax.</span></h2>
           <p className={lead}>
-            Most tokens launch with liquidity concentrated in a few insider wallets, rented mercenary capital that
-            leaves within a week, and a team that can pull the floor at any moment. The community is asked to believe it
-            won’t happen. Belief isn’t a mechanism — and it’s exactly what gets retail hurt.
+            A team holds its treasury in USDC. It has to stay liquid — payroll on Friday, a vendor invoice today, a
+            card swipe this afternoon — so it sits in a wallet earning close to nothing. The moment capital has to
+            stay usable, yield gets in the way. Every team pays that tax, month after month, on money that should be
+            working the whole time it waits.
           </p>
         </div>
       </section>
 
-      {/* ── 02 · Two models ── */}
-      <section className="bg-ground-cool border-b border-hair-soft">
-        <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="02" label="Two ways to bring liquidity" />
-          <h2 className={h2}>Matched, or a <span className="text-gradient-accent">traditional LP.</span></h2>
-          <p className={lead}>
-            Not every team wants a locked, community-matched launch. Mintware runs the same reputation engine
-            under two vault models — pick the one that fits.
-          </p>
-          <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
-            <div className="rounded-2xl bg-white border border-hair p-6" style={{ borderTop: '4px solid var(--color-coral2)' }}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-atx-display text-[19px] font-medium text-ink">Matched Liquidity</span>
-                <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-coral2-deep rounded-full border border-[rgba(232,138,103,0.4)] px-2 py-0.5">You’re reading this ↓</span>
-              </div>
-              <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-3">
-                Your team locks its token; the community matches it in USDC. A hard ≥ 90-day cliff, no early exit,
-                and during the lock the fees flow to your backers. Built for launches where <b className="text-ink">trust is the bottleneck</b>.
-              </p>
-            </div>
-            <div className="rounded-2xl bg-white border border-hair p-6" style={{ borderTop: '4px solid var(--color-peri)' }}>
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-atx-display text-[19px] font-medium text-ink">Growth Vault</span>
-                <span className="text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Traditional LP</span>
-              </div>
-              <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-3">
-                A standard LP position — provide one or both sides yourself, no locking, no matching. MEV-protected,
-                auto-managed range, and your Attribution score lifts your fee share up to 1.95×. Built for
-                <b className="text-ink"> ongoing or treasury liquidity</b>.
-              </p>
-              <Link href="/vaults" className="inline-block mt-4 text-[12px] uppercase tracking-[0.06em] font-semibold text-peri-deep no-underline hover:underline">See the LP side →</Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── 03 · How it works · dark pop + animated flow ── */}
+      {/* ── 02 · How it works · dark pop ── */}
       <section id="how" className="bg-white border-b border-hair-soft scroll-mt-[62px]">
         <div className={`${wrap} py-[48px] max-[800px]:py-[36px]`}>
           <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-ink text-white">
             <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 120% at 10% 0%, rgba(108,108,240,0.34), transparent 60%), radial-gradient(50% 130% at 100% 100%, rgba(244,161,131,0.14), transparent 62%)' }} />
             <div className="grain absolute inset-0 opacity-40" aria-hidden />
             <div className="relative px-10 max-[800px]:px-6 py-[64px] max-[800px]:py-[48px]">
-          <div className="flex items-baseline gap-3">
-            <span className="text-[12px] font-semibold text-pas-peri tabular-nums">03</span>
-            <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">How matched liquidity works</span>
-          </div>
-          <h2 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
-            You lock. Your community matches. <span className="text-gradient-accent">The contract holds both.</span>
-          </h2>
-          <p className="text-[16px] leading-[1.55] text-white/70 max-w-[60ch] mt-4">A dual-sided pair vault — your token on one side, the community’s stable or ETH on the other. Both go in once; the contract does the rest.</p>
-          <div className="grid grid-cols-5 gap-3 mt-8 max-[900px]:grid-cols-1">
-            {FLOW.map(([k, d], i) => (
-              <div key={k} className="rounded-2xl bg-white/[0.06] border border-white/15 p-5 flex flex-col gap-2.5">
-                <span className="text-[11px] text-pas-peri font-semibold tabular-nums">0{i + 1}</span>
-                <div className="font-atx-display text-[15px] font-medium leading-tight text-white">{k}</div>
-                <div className="text-[12px] text-white/60 leading-[1.45]">{d}</div>
-                {i < FLOW.length - 1 && <span aria-hidden className="flow-dash-h h-[2px] w-8 mt-auto rounded-full opacity-70 max-[900px]:hidden" />}
+              <div className="flex items-baseline gap-3">
+                <span className="text-[12px] font-semibold text-pas-peri tabular-nums">02</span>
+                <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">How it works</span>
               </div>
-            ))}
-          </div>
+              <h2 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
+                Deposit once. Earn three ways. <span className="text-gradient-accent">Spend from the yield.</span>
+              </h2>
+              <p className="text-[16px] leading-[1.55] text-white/70 max-w-[62ch] mt-4">
+                Your treasury goes into a Uniswap V4 vault that earns three ways on one balance. When you pay, you spend the yield — a payment is a <b className="text-white">hold</b> against the earning position, authorized in ~milliseconds off live NAV. It is not a withdrawal. On settlement, exactly enough is settled on-chain to cover the payment; principal keeps compounding and the position never unwinds.
+              </p>
+              <div className="grid grid-cols-3 gap-3 mt-8 max-[820px]:grid-cols-1">
+                {ENGINES.map(([n, k, d]) => (
+                  <div key={k} className="rounded-2xl bg-white/[0.06] border border-white/15 p-5 flex flex-col gap-2.5">
+                    <span className="text-[11px] text-pas-peri font-semibold tabular-nums font-mono">{n}</span>
+                    <div className="font-atx-display text-[16px] font-medium leading-tight text-white">{k}</div>
+                    <div className="text-[12.5px] text-white/60 leading-[1.5]">{d}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 rounded-2xl bg-white/[0.07] border border-white/15 px-6 py-5 flex items-center gap-4 flex-wrap">
+                <span className="inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.1em] font-semibold text-white rounded-full border border-white/20 px-3 py-1.5">
+                  <span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block" />Proven on-chain
+                </span>
+                <span className="text-[14px] text-white/80 leading-[1.5] flex-1 min-w-[240px]">
+                  <b className="text-white">Spend the yield, not the position.</b> A real card swipe authorized off live NAV and settled on-chain — <span className="font-mono text-white font-bold">$2.00 · 12→10 USDC</span> — position never unwound. That’s the whole loop, working.
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── 04 · The lock ── */}
-      <section className="bg-white border-b border-hair-soft">
-        <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="04" label="The lock · the proof" />
-          <h2 className={h2}>A restriction on withdrawal, <span className="text-gradient-accent">not a transfer of ownership.</span></h2>
-          <p className={lead}>
-            Your liquidity stays yours. What changes is that you provably can’t withdraw it before the cliff. The term is
-            yours to pick — from 90 days up to two years — and once set, there is deliberately no path to unwind it early.
-          </p>
-          <div className="grid grid-cols-4 gap-3 mt-8 max-[720px]:grid-cols-2">
-            {LOCK_STATS.map(([n, d]) => (
-              <div key={d} className="rounded-2xl bg-ground-cool border border-hair p-5" style={{ borderTop: '3px solid var(--color-peri)' }}>
-                <div className="font-atx-display text-[clamp(24px,3.4vw,34px)] font-medium tracking-[-1px] text-peri-deep leading-none tabular-nums">{n}</div>
-                <div className="text-[12px] text-ink-mid leading-[1.45] mt-2.5">{d}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── 05 · What backers earn ── */}
+      {/* ── 03 · Treasury OS ── */}
       <section className="bg-ground-cool border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="05" label="What backers earn" />
-          <h2 className={h2}>During the lock, <span className="text-gradient-accent">your fees are theirs.</span></h2>
+          <Head n="03" label="Treasury OS · the controls" />
+          <h2 className={h2}>The controls a team <span className="text-gradient-accent">actually runs on.</span></h2>
           <p className={lead}>
-            While your side is locked, every swap fee it would have earned — net of the Mintware protocol cut — flows to
-            the community instead, accrued on-chain per unit of community liquidity. You give up short-term fees to buy
-            long-term trust. That’s the trade, and the contract enforces it exactly: during the lock, the team earns 0%.
-          </p>
-          <p className="text-[12px] text-ink-soft mt-4">
-            <b className="text-peri-deep">↳</b> Community fees today are shared pro-rata to liquidity provided. Reputation-weighting for backers is on the roadmap — we’ll say so here when it ships, not before.
-          </p>
-        </div>
-      </section>
-
-      {/* ── 06 · Referrals ── */}
-      <section className="bg-white border-b border-hair-soft">
-        <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="06" label="Referrals · grow the pool" />
-          <h2 className={h2}>Let your backers <span className="text-gradient-accent">bring their backers.</span></h2>
-          <p className={lead}>
-            Matched liquidity is only as deep as the community you can rally — and your community has a community.
-            Referrals turn every backer into a channel for more.
-          </p>
-          <div className="grid grid-cols-3 gap-3 mt-8 max-[760px]:grid-cols-1">
-            {[
-              ['Every backer gets a link', 'A referral link is deterministic from any wallet — no signup. Share it, and the liquidity it brings is attributed to you.'],
-              ['It builds Sharing — the heaviest signal', 'Referrals feed your Sharing score: up to 400 of 925 Attribution points, the single most-weighted signal. A real network is the hardest thing to fake.'],
-              ['A bigger score pays everywhere', 'That higher score lifts your reputation multiplier across the platform — up to 1.95× on the fees you earn. Widen the pool, earn more on your own position.'],
-            ].map(([k, d]) => (
-              <div key={k} className="soft-card p-6">
-                <div className="font-atx-display text-[15px] font-medium leading-tight text-ink">{k}</div>
-                <p className="text-[13px] text-ink-mid leading-[1.5] mt-2.5">{d}</p>
-              </div>
-            ))}
-          </div>
-          <p className="text-[12px] text-ink-soft mt-4">
-            <b className="text-peri-deep">↳</b> Teams can reward backers through referrals — every wallet brought in pays a referral reward, so widening the pool pays twice. A 24-hour anti-abuse gate keeps referrals real, not farmed.
-          </p>
-        </div>
-      </section>
-
-      {/* ── 07 · Trust ── */}
-      <section className="bg-ground-cool border-b border-hair-soft">
-        <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="07" label="Trust · enforced by code" />
-          <h2 className={h2}>You don’t have to trust us. <span className="text-gradient-accent">Neither does your community.</span></h2>
-          <div className="soft-card mt-8 overflow-hidden">
-            {TRUST.map(([k, d], i) => (
-              <div key={k} className={`flex items-start gap-4 px-6 py-4 ${i < TRUST.length - 1 ? 'border-b border-hair-soft' : ''}`}>
-                <span className="w-[8px] h-[8px] rounded-full bg-peri inline-block mt-1.5 shrink-0" />
-                <div className="flex-1 min-w-0 flex gap-4 max-[640px]:flex-col max-[640px]:gap-1">
-                  <div className="font-atx-display text-[15px] font-medium w-[190px] shrink-0 max-[640px]:w-auto text-ink">{k}</div>
-                  <div className="text-[13px] text-ink-mid leading-[1.5]">{d}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <p className="text-[10.5px] text-ink-soft leading-[1.5] mt-4">
-            Built for MEME / EMERGING launches and gated as such at deploy. The matched-liquidity vault is invariant-tested
-            and ships on Base Sepolia testnet first; live mainnet launches land at Phase 2. Independent audit pending.
-          </p>
-        </div>
-      </section>
-
-      {/* ── 08 · Beyond the launch · the treasury ── */}
-      <section className="bg-white border-b border-hair-soft">
-        <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="08" label="Beyond the launch · your treasury" />
-          <h2 className={h2}>The capital doesn’t have to sit idle. <span className="text-gradient-accent">Or lock you out.</span></h2>
-          <p className={lead}>
-            The money your team runs on lives in a Mintware treasury that keeps earning while it stays spendable —
-            cards, payroll, vendors, cross-chain — with a public page anyone can verify. Community capital is senior —
-            redeemable at par while the treasury covers it; your team’s capital is the junior tranche that absorbs
-            losses first and earns the spread. The order is fixed in the contract: the code pays the community first,
-            automatically — no admin override.
+            The earning treasury is the engine. On top of it sits the operating layer your team uses every day — cards,
+            payroll, vendor pay, and a ledger that reconciles it all. Cap enforcement and settlement are real, on-chain
+            events, not a dashboard mock.
           </p>
           <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
-            {TREASURY.map(([k, d], i) => (
+            {TREASURY_OS.map(([k, d], i) => (
               <div key={k} className="rounded-2xl bg-white border border-hair p-6" style={{ borderTop: `4px solid ${i % 2 === 0 ? 'var(--color-peri)' : 'var(--color-coral2)'}` }}>
                 <div className="font-atx-display text-[17px] font-medium text-ink">{k}</div>
                 <p className="text-[13.5px] text-ink-mid leading-[1.5] mt-2.5">{d}</p>
@@ -280,12 +163,69 @@ export default function TeamsLandingPage() {
           </div>
           <div className="flex flex-wrap gap-3 mt-8">
             <Link href="/app/org/new" className="glass-pill-primary">Create your treasury →</Link>
-            <Link href="/app" className="glass-pill">Open the app →</Link>
+            <Link href="/app/team" className="glass-pill">Open the treasury terminal →</Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 04 · Safety · why it holds ── */}
+      <section className="bg-white border-b border-hair-soft">
+        <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
+          <Head n="04" label="Why it holds" />
+          <h2 className={h2}>Spendable-while-earning, <span className="text-gradient-accent">without hand-waving the risk.</span></h2>
+          <p className={lead}>
+            Keeping a balance spendable and earning at the same time only works if the structure is honest about who
+            absorbs a bad day. Mintware splits the treasury into two tranches and fixes their order in the contract.
+          </p>
+          <div className="grid grid-cols-2 gap-3 mt-8 max-[820px]:grid-cols-1">
+            {SAFETY.map(([k, d], i) => (
+              <div key={k} className="soft-card p-6" style={{ borderTop: `3px solid ${i % 2 === 0 ? 'var(--color-peri)' : 'var(--color-coral2)'}` }}>
+                <div className="font-atx-display text-[16px] font-medium text-ink">{k}</div>
+                <p className="text-[13px] text-ink-mid leading-[1.5] mt-2.5">{d}</p>
+              </div>
+            ))}
           </div>
           <p className="text-[10.5px] text-ink-soft leading-[1.5] mt-4">
-            In testing on testnet, not yet audited — figures read live from the recorded vault; nothing here is an offer.
-            External audit gates real value.
+            All of this is in testing on Base Sepolia — testnet and not yet audited. Nothing here is a deposit, a savings
+            product, or a guaranteed or fixed return, and figures shown are illustrative, not a projection. External
+            audit gates real value.
           </p>
+        </div>
+      </section>
+
+      {/* ── 05 · Proof ── */}
+      <section className="bg-ground-cool border-b border-hair-soft">
+        <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
+          <Head n="05" label="Proof · on-chain" />
+          <h2 className={h2}>Every claim here has an <span className="text-gradient-accent">on-chain receipt.</span></h2>
+          <p className={lead}>
+            The earn → hold → settle loop isn’t a slide. It has already run on-chain — deposit, earn, and a real
+            settlement — and you can verify the last run yourself.
+          </p>
+          <Link href="/proof" className="inline-flex items-center gap-2.5 mt-6 rounded-full border border-hair bg-white pl-3 pr-3.5 py-2.5 text-[12.5px] text-ink-mid no-underline hover:border-[rgba(76,76,214,0.4)] transition-colors">
+            <span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block shrink-0" />
+            <span className="whitespace-nowrap">Last settle</span>
+            <span className="font-mono text-ink font-bold whitespace-nowrap">$2.00 · 12→10 USDC</span>
+            <span className="text-peri-deep font-semibold whitespace-nowrap">verify on-chain →</span>
+          </Link>
+        </div>
+      </section>
+
+      {/* ── secondary · community-matched launch (demoted, single card) ── */}
+      <section className="bg-white border-b border-hair-soft">
+        <div className={`${wrap} py-[56px] max-[800px]:py-[40px]`}>
+          <div className="rounded-2xl bg-ground-cool border border-hair p-6 flex items-start gap-5 max-[640px]:flex-col">
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Also — launching a token</div>
+              <div className="font-atx-display text-[16px] font-medium text-ink mt-1.5">Community-matched launch liquidity</div>
+              <p className="text-[13px] text-ink-mid leading-[1.5] mt-2">
+                Bringing a token to market too? Teams can also launch with community-matched liquidity — your token on
+                one side, the community’s stablecoin on the other, in a locked dual-sided vault. A separate product from
+                the treasury; fees are shared pro-rata to liquidity provided, never reputation-weighted.
+              </p>
+            </div>
+            <Link href="/vaults" className="glass-pill whitespace-nowrap shrink-0">See launch vaults →</Link>
+          </div>
         </div>
       </section>
 
@@ -293,8 +233,13 @@ export default function TeamsLandingPage() {
       <section className="bg-white border-b border-hair-soft">
         <div className="mx-auto max-w-[1100px] px-6 max-[800px]:px-4 py-[72px] max-[800px]:py-[52px] mw-reveal">
           <GradientPanel tone="coral" className="p-10 max-[800px]:p-6 flex items-center justify-between flex-wrap gap-5">
-            <div className="font-atx-display font-medium text-ink text-[clamp(1.4rem,2.4vw,2rem)] tracking-[-0.02em] leading-[1.1] max-w-[28ch] [text-wrap:balance]">
-              Launching a token? Prove your commitment from day one.
+            <div className="max-w-[34ch]">
+              <div className="font-atx-display font-medium text-ink text-[clamp(1.4rem,2.4vw,2rem)] tracking-[-0.02em] leading-[1.1] [text-wrap:balance]">
+                Put your treasury to work — without ever locking it up.
+              </div>
+              <p className="text-[13px] text-ink-mid leading-[1.5] mt-3">
+                Early access is opening to a first cohort of crypto-native treasuries. Tell us about yours.
+              </p>
             </div>
             <a href={TWITTER} target="_blank" rel="noopener noreferrer" className="glass-pill-primary">Talk to us →</a>
           </GradientPanel>
