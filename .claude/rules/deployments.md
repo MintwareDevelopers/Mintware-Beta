@@ -42,6 +42,7 @@
 | `NEXT_PUBLIC_MW_TREASURY_ADDRESS` | Public | Set after contract deploy |
 | `TEAM_HARD_GATE` | Server-only | `true` turns ON the Phase-2 User/Team hard gate (`proxy.ts` → `lib/auth/gate.ts`). Unset/`false` = soft-gate showcase, middleware is a pass-through (default). |
 | `PRIVY_APP_SECRET` | Server-only | Privy app secret for server-side session verification (`lib/auth/session.ts#verifyPrivySession`). Required for the hard gate to be a real security boundary; unset → verification fails closed. |
+| `DECK_PASSWORD` | Server-only | Password for the private investor deck at `/deck` (`lib/deck/gate.ts`). `POST /api/deck/unlock` validates it and sets an http-only cookie holding a hash-derived token; the `/deck` server component renders the deck only when the cookie matches. **Unset ⇒ gate closed to everyone (fail-closed).** Set on Vercel + `.env.local` to open it; share the value with investors out-of-band. |
 
 ### x402 (agent pay-per-call — `lib/x402/*`)
 
