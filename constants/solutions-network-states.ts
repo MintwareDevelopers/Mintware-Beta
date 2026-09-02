@@ -7,7 +7,7 @@
 // ANGLE: Mintware is the financial rail for a network state — a SHARED TREASURY
 // that earns DeFi yield while staying spendable at par by members (YPN),
 // NON-CUSTODIAL (members hold their own keys), with REPUTATION-WEIGHTED
-// membership/access (Attribution), settled in native USDC (Circle / Arc).
+// membership/access (Attribution), settled in native USDC (Circle).
 // The quantified case: idle community capital that could earn × real-world spend
 // moving on-chain = exactly the gap YPN fills.
 //
@@ -24,7 +24,7 @@
 export const NS_META = {
   title: 'For Network States & Settlements — Mintware',
   description:
-    'The financial rail for a network state: a shared treasury that earns DeFi yield while staying spendable at par by members, non-custodial, with reputation-weighted membership, settled in native USDC on Circle / Arc. Vision, proven on testnet.',
+    'The financial rail for a network state: a shared treasury that earns DeFi yield while staying spendable at par by members, non-custodial, with reputation-weighted membership, settled in native USDC on Circle. Vision, proven on testnet.',
 } as const
 
 export const NS_HERO = {
@@ -124,7 +124,7 @@ export const NS_SOLUTION = {
     {
       k: 'Native USDC settlement',
       tone: 'coral',
-      v: 'Payments settle in USDC on Circle / Arc rails, bridged across chains via CCTP, with real-world card spend through a regulated card partner. Mintware never touches fiat — licensed partners carry that leg.',
+      v: 'Payments settle in USDC on Circle rails, bridged across chains via CCTP, with real-world card spend through a regulated card partner. Mintware never touches fiat — licensed partners carry that leg.',
     },
   ],
 } as const
@@ -143,7 +143,7 @@ export const NS_MECHANICS = {
     ['Spend without unwinding', 'A card swipe or payout is a hold against the earning position, then a settle — the underlying stays deployed the entire time.'],
   ],
   note:
-    'In testing on Base Sepolia and Circle’s Arc testnet — testnet, unaudited, no real value. These are design properties of autonomous contracts, not a deposit, a guarantee, or investment advice; an external audit is the gate before real value.',
+    'In testing on Base Sepolia — testnet, unaudited, no real value. These are design properties of autonomous contracts, not a deposit, a guarantee, or investment advice; an external audit is the gate before real value.',
 } as const
 
 // ─── Why us / trust. ─────────────────────────────────────────────────────────
@@ -162,7 +162,7 @@ export const NS_TRUST = {
   points: [
     ['Non-custodial', 'Members hold their keys. Funds live in the user’s wallet or in autonomous contracts — never on a Mintware balance sheet.'],
     ['Proven end-to-end', 'Deposit → earn → authorize → spend, plus a native USDC bridge, all executed on testnet with real hashes you can open in a block explorer.'],
-    ['Built on Circle / Arc rails', 'USDC-native settlement plus CCTP bridging ($126B+ moved across 17 chains) on Circle’s infrastructure; Circle’s USDC-native Arc L1 was announced in 2025. Card spend runs via a regulated partner (sandbox today). We build on their rails — we don’t claim their licences.'],
+    ['Built on Circle rails', 'USDC-native settlement plus CCTP bridging ($126B+ moved across 17 chains) on Circle’s infrastructure. Card spend runs via a regulated partner (sandbox today). We build on their rails — we don’t claim their licences.'],
   ],
   proofCta: { label: 'See the on-chain proof →', href: '/proof' },
   mathCta: { label: 'Read the math →', href: '/the-math' },

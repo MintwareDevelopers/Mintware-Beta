@@ -11,14 +11,14 @@
 // Visa terminals in sub-400ms. Principal is never touched — only yield moves.
 //
 // HONESTY: this is COMING SOON / in development. The ULV is in testing on
-// testnet; card settlement over Circle CPN + Privy on Arc, sub-350ms, Visa —
+// testnet; card settlement over Circle CPN + Privy, sub-350ms, Visa —
 // all DESIGNED, not shipped. No "Launch app" CTA. Verbs stay "designed to" /
 // "built to"; numbers (4–8% APY, sub-400ms) are targets, not guarantees.
 // =============================================================================
 
 export const YPN_STATUS = {
   label: 'Coming soon',
-  note: 'The Liquid Sovereign Account is in active development. The Unified Liquidity Vault is in testing on testnet; card settlement over Circle + Privy on Arc is designed, not yet live. Nothing here is live or an offer to deposit.',
+  note: 'The Liquid Sovereign Account is in active development. The Unified Liquidity Vault is in testing on testnet; card settlement over Circle + Privy is designed, not yet live. Nothing here is live or an offer to deposit.',
 } as const
 
 export const YPN_HERO = {
@@ -153,14 +153,14 @@ export const YPN_MATRIX = {
   ],
 } as const
 
-// ─── Settlement stack (CircleTechBadge) — Arc · Circle · Privy · Visa ───────
+// ─── Settlement stack (CircleTechBadge) — USDC · Circle · Privy · Visa ───────
 export const YPN_CIRCLE = {
   eyebrow: 'Settlement stack',
-  title: 'Native on Arc. Settled by Circle. Spent on Visa.',
-  body: 'Built on Arc using USDC for gas, payments authorize via Privy and settle in sub-350ms through Circle for instant spending at 100M+ Visa and Apple Pay terminals — with zero off-ramp fees or extra tokens.',
+  title: 'USDC-native. Settled by Circle. Spent on Visa.',
+  body: 'USDC end to end — payments authorize via Privy and settle in sub-350ms over Circle’s rails for instant spending at 100M+ Visa and Apple Pay terminals, with zero off-ramp fees or extra tokens.',
   stack: [
-    { name: 'Arc', role: 'Native chain using USDC for gas.' },
-    { name: 'Circle', role: 'Payment network with sub-350ms settlement.' },
+    { name: 'USDC', role: 'One dollar, on-chain — never off-ramped.' },
+    { name: 'Circle', role: 'CCTP bridging + sub-350ms settlement.' },
     { name: 'Privy', role: 'Passkey identity for card spending power.' },
     { name: 'Visa', role: 'Accepted at 100M+ terminals globally.' },
   ],
@@ -253,7 +253,7 @@ export const YPN_TECH = {
   titleAccent: 'done right.',
   intro: 'None of this works without the engineering. Here’s the part we’re proud of.',
   items: [
-    { k: 'Arc smart contracts', v: 'Native USDC gas and card authorization in sub-150ms.' },
+    { k: 'Payment gateway', v: 'On-chain card authorization + spend settlement in sub-150ms.' },
     { k: 'The ULV engine',      v: 'Just-in-time liquidity on every swap — capital is never idle.' },
     { k: 'MEV / LVR recapture', v: 'Value that normally leaks to arbitrageurs, returned to depositors.' },
     { k: 'Proven',              v: 'Invariant-fuzzed to 256×128k; payment core deployed and on-chain-verified on Base Sepolia.' },
