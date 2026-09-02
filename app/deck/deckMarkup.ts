@@ -232,9 +232,41 @@ export const DECK_HTML = `<!doctype html>
   <div class="kicker">Non-custodial and openly staged — capped launch first, the marquee audit as value grows. <b>Every claim has an on-chain receipt.</b></div>
 </section>
 
-<!-- 12 · ASK -->
-<section class="slide peri">
+<!-- 12 · TEAM & ADVISORS -->
+<section class="slide">
   <span class="num mono">12</span>
+  <div class="label">Team &amp; advisors</div>
+  <h2>Web3 operators, backed by a <span class="grad">dealmaking bench.</span></h2>
+  <div class="grid2" style="margin-top:20px">
+    <div class="card" style="display:flex; gap:13px; align-items:flex-start">
+      <div style="width:38px;height:38px;border-radius:10px;flex-shrink:0;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:14px">NR</div>
+      <div><div style="font-weight:600;font-size:14.5px">Nic Robinson</div><div style="font-size:10.5px;font-weight:700;color:var(--peri-deep);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 5px">Founder &amp; CEO</div><p style="font-size:11.5px;color:var(--ink-mid);line-height:1.45">Founder of Nicolas Robinson Ministries — Gospel events across 12 nations, 50+ cities, 5 continents. Web3 operator across RWA, network-state &amp; decentralized tech.</p></div>
+    </div>
+    <div class="card" style="display:flex; gap:13px; align-items:flex-start">
+      <div style="width:38px;height:38px;border-radius:10px;flex-shrink:0;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:14px">CB</div>
+      <div><div style="font-weight:600;font-size:14.5px">Craig Barton</div><div style="font-size:10.5px;font-weight:700;color:var(--peri-deep);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 5px">Growth &amp; Business Development</div><p style="font-size:11.5px;color:var(--ink-mid);line-height:1.45">Head of BD at Incentiv (account-abstraction L1) &amp; Head of Growth at GlitchD Labs (rollup infra). Founder of a live consumer move-to-earn app.</p></div>
+    </div>
+  </div>
+  <div class="label" style="margin:22px 0 12px">Advisors</div>
+  <div class="grid3">
+    <div class="card" style="display:flex; gap:11px; align-items:flex-start">
+      <div style="width:34px;height:34px;border-radius:9px;flex-shrink:0;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:13px">CS</div>
+      <div><div style="font-weight:600;font-size:13.5px">Curtis Smith</div><div style="font-size:10px;font-weight:700;color:var(--peri-deep);text-transform:uppercase;letter-spacing:.04em;margin:2px 0 5px">Co-CEO, Firma Labs</div><p style="font-size:11px;color:var(--ink-mid);line-height:1.4">Co-CEO of Firma Labs — our incubator &amp; backer. Co-founder, Christ Is King.</p></div>
+    </div>
+    <div class="card" style="display:flex; gap:11px; align-items:flex-start">
+      <div style="width:34px;height:34px;border-radius:9px;flex-shrink:0;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:13px">ES</div>
+      <div><div style="font-weight:600;font-size:13.5px">Eric Skeldon</div><div style="font-size:10px;font-weight:700;color:var(--peri-deep);text-transform:uppercase;letter-spacing:.04em;margin:2px 0 5px">Founder, Kingdom Broker</div><p style="font-size:11px;color:var(--ink-mid);line-height:1.4">M&amp;A + business-brokerage — exits, valuations, a 2,500+ buyer network.</p></div>
+    </div>
+    <div class="card" style="display:flex; gap:11px; align-items:flex-start">
+      <div style="width:34px;height:34px;border-radius:9px;flex-shrink:0;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk';font-weight:700;font-size:13px">GL</div>
+      <div><div style="font-weight:600;font-size:13.5px">Greg Lovett</div><div style="font-size:10px;font-weight:700;color:var(--peri-deep);text-transform:uppercase;letter-spacing:.04em;margin:2px 0 5px">COO / CFO, Nobody Studios</div><p style="font-size:11px;color:var(--ink-mid);line-height:1.4">Ops &amp; finance at a venture studio — fundraising, structure, scale.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 13 · ASK -->
+<section class="slide peri">
+  <span class="num mono">13</span>
   <div class="label">The ask</div>
   <h2>Raise <span class="grad">$250K for 10%</span> — angel / pre-seed, on a SAFE.</h2>
   <p class="lede" style="margin-top:16px">The product is built and Firma is anchoring. This small round buys ~12 months of a lean team of 4 to reach a <b>capped, live launch</b> and real demand — then we raise the seed at a higher cap.</p>
@@ -246,9 +278,9 @@ export const DECK_HTML = `<!doctype html>
   <div class="kicker"><b>Terms:</b> SAFE, $2.5M post-money cap (≈10%), with Firma Labs anchoring. Next round: a $1.5–2.5M seed → name-brand audit, higher caps, scale.</div>
 </section>
 
-<!-- 13 · USE OF FUNDS -->
+<!-- 14 · USE OF FUNDS -->
 <section class="slide cool">
-  <span class="num mono">13</span>
+  <span class="num mono">14</span>
   <div class="label">Use of funds</div>
   <h2>Where the <span class="grad">$250K</span> goes.</h2>
   <div style="display:flex; height:46px; border-radius:9px; overflow:hidden; margin-top:26px">
@@ -264,9 +296,9 @@ export const DECK_HTML = `<!doctype html>
   <div class="kicker">≈10 months of runway to a <b>capped launch + the first design partners</b> — then we raise the seed.</div>
 </section>
 
-<!-- 14 · VISION -->
+<!-- 15 · VISION -->
 <section class="slide" style="min-height:420px; justify-content:center">
-  <span class="num mono">14</span>
+  <span class="num mono">15</span>
   <div class="logo" style="margin-bottom:24px"><svg width="34" height="34" viewBox="0 0 100 100" style="border-radius:10px;box-shadow:0 5px 14px -3px rgba(108,108,240,.6)"><defs><linearGradient id="mwv" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A82F4"/><stop offset="1" stop-color="#6C6CF0"/></linearGradient></defs><rect width="100" height="100" rx="22" fill="url(#mwv)"/><ellipse cx="50" cy="55.5" rx="35" ry="7" fill="#fff"/><path d="M32,55.5 A18,18 0 0 1 68,55.5 Z" fill="#fff"/></svg>Mintware</div>
   <h2 style="font-size:clamp(1.9rem,4vw,3rem)">Win the treasury. Then give <span class="grad">every balance on earth</span> the same superpower.</h2>
   <p class="lede" style="margin-top:18px">A world where no dollar ever sits idle and no dollar is ever locked — for teams, for people, for agents. <b>Never idle. Never locked. Always yours.</b></p>
