@@ -2,7 +2,7 @@
 
 // /vaults — PURELY EDUCATIONAL (marketing tier). Design v2 (Privy-esque).
 // Explains the tech: the Unified Liquidity Vault, the two ways to LP, idle-capital
-// yield, reputation-weighted fees. Functional browse/deposit live in /app/vaults.
+// yield, pro-rata fees. Functional browse/deposit live in /app/vaults.
 
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
@@ -16,8 +16,8 @@ const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
 
 const HEAD = ['Liquidity that ', 'never sits idle.'] as const
-const SUB = 'Managed liquidity on Uniswap v4. One balance earns three ways at once — Aave lending, swap fees, and recaptured MEV — with an auto-managed range and zero rebalancing. LPs who bring real, committed liquidity earn the biggest share.'
-const BULLETS = ['Three income streams — Aave lending + swap fees + recaptured MEV', 'Auto-managed range — no rebalancing', 'MEV-protected — bot value routed back to LPs', 'The best LPs earn more — reputation + lock tier, up to 1.95×']
+const SUB = 'Managed liquidity on Uniswap v4. One balance earns three ways at once — Aave lending, swap fees, and recaptured MEV — with an auto-managed range and zero rebalancing. You earn your pro-rata share of everything the pool makes.'
+const BULLETS = ['Three income streams — Aave lending + swap fees + recaptured MEV', 'Auto-managed range — no rebalancing', 'MEV-protected — bot value routed back to LPs', 'Paid pro-rata — you earn your share of all three streams, by the size of your stake']
 const FEATURED: [string, string, string][] = [['Social Blue-Chip', 'ETH / USDC', '11.0%'], ['Degen Emerging', 'ARB / USDC', '18.4%']]
 
 // The two ways to LP.
@@ -29,7 +29,7 @@ const TYPES: { tag: string; name: string; who: string; accent: string; points: s
       'Deposit one side of the pair — or both. The vault balances it and issues you shares.',
       'Idle capital earns lending yield in Aave; the V4 hook pulls just-in-time liquidity for each swap.',
       'MEV-protected, auto-managed range — no rebalancing, no active management.',
-      'Your Attribution score + lock tier lift your fee share up to 1.95× vs. the wallet beside you.',
+      'You earn your pro-rata share of every fee and recaptured MEV the pool makes — by the size of your position.',
     ],
   },
   {
@@ -50,7 +50,7 @@ function VaultsComingSoon() {
       <div className="text-center max-w-[380px] px-6">
         <div className="font-atx-display text-[24px] font-semibold tracking-[-0.02em] text-ink mb-2">Vaults — Coming Soon</div>
         <div className="text-[14px] text-ink-mid leading-[1.6] mb-6">
-          Social LP vaults with Attribution-weighted rewards — earn more from your on-chain reputation.
+          Managed Uniswap v4 LP vaults — one balance earning lending, swap fees, and recaptured MEV at once.
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-4 py-1.5 text-[12px] font-semibold tracking-[0.06em] uppercase">Phase 2</span>
       </div>
@@ -128,7 +128,7 @@ export default function VaultsPage() {
           </h2>
           <p className="text-[clamp(15px,1.7vw,18px)] leading-[1.55] text-ink-mid max-w-[62ch] mt-4">
             Every vault runs the same Unified Liquidity engine — idle capital in Aave, JIT liquidity per swap,
-            reputation-weighted fees. Only who provides the two sides changes.
+            fees split pro-rata by your share. Only who provides the two sides changes.
           </p>
 
           <div className="grid grid-cols-2 gap-4 mt-9 max-[820px]:grid-cols-1">
@@ -155,7 +155,7 @@ export default function VaultsPage() {
         </div>
       </section>
 
-      {/* ── reputation = yield deep-dive ── */}
+      {/* ── the value deep-dive (three income streams · pro-rata · spendable) ── */}
       <VaultAmplify />
 
       {/* ── closing CTA ── */}
@@ -164,7 +164,7 @@ export default function VaultsPage() {
           <GradientPanel tone="lavender" className="p-10 max-[800px]:p-6 flex items-center justify-between gap-6 flex-wrap">
             <div className="max-w-[46ch]">
               <div className="font-atx-display text-[clamp(1.4rem,2.4vw,2rem)] font-semibold tracking-[-0.02em] leading-[1.1] text-ink [text-wrap:balance]">
-                Put your reputation <span className="text-gradient-accent">to work.</span>
+                Put your capital <span className="text-gradient-accent">to work.</span>
               </div>
               <p className="text-[15px] text-ink-mid mt-2.5">Browse the live vaults, or open your own — deposits run in the app.</p>
             </div>
