@@ -210,25 +210,25 @@ export default function HomePage() {
       {/* ⑥ THE HANDSHAKE — honesty as confidence */}
       <section className="bg-white border-b border-hair-soft">
         <div className="mx-auto max-w-[1120px] px-7 max-[640px]:px-[18px] py-[92px] max-[640px]:py-[60px]">
-          <GradientPanel tone="lavender" className="p-[52px] max-[820px]:p-8 grid grid-cols-[1.1fr_0.9fr] gap-10 items-center max-[820px]:grid-cols-1 max-[820px]:gap-6">
-            <div>
-              <div className={ey}>Early access</div>
-              <h2 className="font-atx-display font-semibold text-ink tracking-[-0.03em] leading-[1.1] text-[clamp(1.6rem,2.8vw,2.3rem)] mt-3 [text-wrap:balance]">
-                Every claim here has an <span className="text-gradient-accent">on-chain receipt.</span>
-              </h2>
-              <Link href="/proof" className="inline-flex items-center gap-2.5 mt-4 rounded-full border border-hair bg-white/70 pl-3 pr-3.5 py-2 text-[12.5px] text-ink-mid no-underline hover:border-[rgba(76,76,214,0.4)] hover:bg-white transition-colors">
-                <span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block shrink-0" />
-                <span className="whitespace-nowrap">Last settle</span>
-                <span className="font-mono text-ink font-bold whitespace-nowrap">$2.00 · 12→10 USDC</span>
-                <span className="text-peri-deep font-semibold whitespace-nowrap">proof →</span>
-              </Link>
-            </div>
-            <div>
-              <div className="font-semibold mb-3 text-[15px] text-ink">Get in before it opens.</div>
+          <GradientPanel tone="lavender" className="p-[56px] max-[820px]:p-9 max-[640px]:p-7 flex flex-col items-center text-center">
+            <div className={ey}>Early access</div>
+            <h2 className="font-atx-display font-semibold text-ink tracking-[-0.03em] leading-[1.08] text-[clamp(1.9rem,3.4vw,2.6rem)] mt-3 [text-wrap:balance] max-w-[15ch]">
+              Get in before it <span className="text-gradient-accent">opens.</span>
+            </h2>
+            <p className="text-[15px] text-ink-mid leading-[1.6] mt-4 max-w-[46ch]">
+              Live and provable — every claim here has an <span className="text-ink font-semibold">on-chain receipt.</span>
+            </p>
+            <Link href="/proof" className="group inline-flex items-center gap-2.5 mt-5 rounded-full border border-hair bg-white/70 pl-3 pr-3.5 py-2 text-[12.5px] text-ink-mid no-underline hover:border-[rgba(76,76,214,0.4)] hover:bg-white transition-colors">
+              <span className="w-[7px] h-[7px] rounded-full bg-mw-live inline-block shrink-0" />
+              <span className="text-ink-soft">Last settle</span>
+              <span className="font-mono text-ink font-bold">$2.00 · 12→10 USDC</span>
+              <span className="text-peri-deep font-semibold group-hover:translate-x-0.5 transition-transform">proof →</span>
+            </Link>
+            <div className="w-full max-w-[440px] mt-7">
               <WaitlistForm />
-              <div className="text-[12px] text-ink-soft mt-3 leading-[1.5]">
-                Non-custodial · in testing on Base Sepolia · not a deposit or guaranteed return. <Link href="/legal" className="text-peri-deep font-semibold no-underline hover:underline">Legal →</Link>
-              </div>
+            </div>
+            <div className="text-[12px] text-ink-soft mt-4 leading-[1.5] max-w-[52ch]">
+              Non-custodial · in testing on Base Sepolia · not a deposit or guaranteed return. <Link href="/legal" className="text-peri-deep font-semibold no-underline hover:underline">Legal →</Link>
             </div>
           </GradientPanel>
         </div>
