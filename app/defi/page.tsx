@@ -7,15 +7,18 @@ import { FeeSplitDonut } from '@/components/ui2/FeeSplitDonut'
 
 // =============================================================================
 // /defi — marketing landing for the DeFi vault surface. Design v2 (Privy-esque).
-// Footer-linked. Grounded in docs/vaults/overview.md + phase3 architecture:
-// reputation-weighted fee share, five-stage V4 hook engine, 70/15/10/5 split,
-// lock tiers, non-custodial trust. Narrative only — calculators live on /vaults.
+// Footer-linked. Grounded in .claude/rules/vaults.md + the homepage story:
+// the Unified Liquidity Vault (one balance earns three ways — best-rate lending,
+// swap fees, recaptured MEV), a five-stage V4 hook engine, dual-sided / matched
+// liquidity, a pro-rata 60/30/10 split, and a balance that stays spendable while
+// it earns. Rewards are PRO-RATA by your share — never reputation- or
+// lock-multiplier-weighted. Narrative only — calculators live on /vaults.
 // =============================================================================
 
 export const metadata: Metadata = {
-  title: 'DeFi — Reputation is yield | Mintware',
+  title: 'DeFi — One balance, three income streams | Mintware',
   description:
-    'MEV-protected, auto-managed Uniswap V4 vaults where your Attribution score lifts your fee share. Same deposit, stronger on-chain history, more yield — something no capital-only vault can offer.',
+    'MEV-protected, auto-managed Uniswap v4 vaults where one balance earns three ways at once — best-rate lending, swap fees, and recaptured MEV — while it stays spendable. No idle capital, no rebalancing.',
 }
 
 const ey = 'text-[12px] uppercase tracking-[0.12em] font-semibold text-peri-deep'
@@ -33,47 +36,48 @@ function Head({ n, label }: { n: string; label: string }) {
 }
 
 // ── data ─────────────────────────────────────────────────────────────────────
-const REP_TIERS: [string, string, string][] = [
-  ['Bronze', '0–33 percentile', '1.00×'],
-  ['Silver', '34–66 percentile', '1.25×'],
-  ['Gold', '67–100 percentile', '1.50×'],
+// The three income streams — one balance earns all of them at once.
+const STREAMS: [string, string][] = [
+  ['Best-rate lending', 'Idle capital is routed to the venue paying the most — and re-routed as rates move. Never parked, earning less than it could.'],
+  ['Swap fees', 'Your liquidity is JIT-provisioned into each Uniswap v4 swap exactly when it’s needed, and earns the fee for it.'],
+  ['Recaptured MEV', 'The value bots usually skim off trades is caught and handed back to the pool — to LPs, not searchers.'],
 ]
 
 const HOOK = [
-  ['MEV Protection', 'TWAP verify + sandwich guard — value stays with LPs, not bots.'],
-  ['Dynamic Fee', 'The fee auto-tunes to volatility and depth so LPs capture more.'],
-  ['Idle Capital', 'Un-ranged liquidity is routed to yield instead of sitting idle.'],
-  ['Attribution Split', 'Fees split 70/15/10/5; your LP share is weighted by reputation.'],
-  ['FeeVault', 'Accrues per 7-day epoch, claimable — no manual compounding.'],
+  ['Idle → yield', 'Un-ranged capital is routed to the best-paying lending venue instead of sitting in the pool.'],
+  ['JIT on swap', 'The V4 hook sees each trade, sizes just-enough liquidity, executes, and returns the rest — atomically.'],
+  ['MEV recaptured', 'A truncated-oracle guard + dynamic fee neutralize sandwiches; the arb value goes back to the pool.'],
+  ['Fees + MEV split', 'Every swap’s fees and recaptured MEV are captured and split on-chain — pro-rata by your share.'],
+  ['Auto-compound', 'Earnings accrue to your position automatically — no manual claiming, no rebalancing.'],
 ]
 
-const LOCK_TIERS: [string, string, string, string][] = [
-  ['Flex', 'No lock', '1.00×', 'Withdraw anytime — redeems instantly, no penalty'],
-  ['Committed', '30 days', '1.15×', 'Early exit ≤2%, tapering to 0% near unlock'],
-  ['Aligned', '90 days', '1.30×', 'Early exit ≤2%, tapering to 0% near unlock'],
-  ['Core', '180 days', '1.50×', 'Early exit ≤2%, tapering to 0% near unlock'],
+// How a matched vault forms — team + community make the market together.
+const MATCHED: [string, string, string][] = [
+  ['01', 'Team locks its token', 'One side of the pair is the team’s own token, cliff-locked on-chain for ≥90 days.'],
+  ['02', 'Community matches USDC', 'The other side is funded by the community in USDC — real, two-sided depth, not a promise.'],
+  ['03', 'Senior / junior tranches', 'Community capital sits senior at par; team capital is junior and absorbs the swings first.'],
+  ['04', 'Depth from day one', 'Tighter spreads and better fills the moment it’s live, because the liquidity is actually there.'],
 ]
 
 const SPLIT: [string, string, string][] = [
-  ['70%', 'to LPs', 'Weighted by your Attribution reputation.'],
-  ['15%', 'to referrers', 'The LP who brought the liquidity.'],
-  ['10%', 'to protocol', 'Treasury — funds the platform.'],
-  ['5%', 'to bonus pool', 'A rolling pot redistributed to reputation-weighted LPs each epoch.'],
+  ['60%', 'to LPs', 'Split pro-rata — your share of the pool, and nothing else, sets what you earn.'],
+  ['30%', 'to treasury', 'Funds the protocol and its operations.'],
+  ['10%', 'to buybacks', 'Recycled back into the ecosystem via on-chain buybacks.'],
 ]
 
-const LOOP = [
-  'Refer an LP',
-  'Their TVL sticks — you earn on sustained liquidity',
-  'Your Sharing signal rises',
-  'Your Attribution rises',
-  'Your fee-share multiplier rises — permanently',
+const SPEND = [
+  'Your capital sits in the vault, earning all three streams',
+  'It stays spendable as USDC — nothing is locked away',
+  'Spend on the card or over the wire',
+  'A payment is a hold against the earning balance, not a withdrawal',
+  'Settled to the cent — your position keeps working',
 ]
 
 const TRUST = [
   ['Non-custodial', 'You hold ERC-4626 shares. No one — not the team — can move your principal.'],
   ['Guardian kill-switch', 'A guardian can pause deposits and swaps in one call if anything looks wrong — a circuit breaker, not a promise.'],
   ['MEV-resistant hook', 'A truncated-oracle price guard and deviation-priced dynamic fee neutralize sandwich attacks — with no reliance on trader identity.'],
-  ['Fee split on-chain', 'The 70/15/10/5 split lives in the FeeVault; any change emits a public event, never a silent tweak.'],
+  ['Fee split on-chain', 'The 60/30/10 split is enforced by the vault contract; any change emits a public event, never a silent tweak.'],
   ['Withdrawal queue', 'A 7-day on-chain notice — visible, enforced by the contract, no discretion.'],
   ['Invariant-tested', 'Core accounting invariants are fuzz-tested across stateful runs — verified, not asserted. Independent audit pending before mainnet.'],
 ]
@@ -91,7 +95,7 @@ export default function DefiLandingPage() {
             One deposit. <span className="text-gradient-accent">Three income streams.</span>
           </h1>
           <p className="text-ink-mid text-[clamp(1rem,1.6vw,1.2rem)] leading-[1.5] mt-6 max-w-[62ch]">
-            MEV-protected, auto-managed liquidity on Uniswap v4 — one balance earning three ways at once: best-rate lending routed across venues, swap fees, and recaptured MEV, with no rebalancing. Your lock tier lifts your fee share, so a longer commitment earns a larger share than the wallet beside it.
+            MEV-protected, auto-managed liquidity on Uniswap v4 — one balance earning three ways at once: best-rate lending routed across venues, swap fees, and recaptured MEV, with no rebalancing. And it never locks away — the balance stays spendable as USDC while it earns.
           </p>
           <div className="flex flex-wrap gap-3 mt-9">
             <Link href="/vaults" className="glass-pill-primary">Open the vaults →</Link>
@@ -103,17 +107,17 @@ export default function DefiLandingPage() {
       {/* ── 01 · The wedge ── */}
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="01" label="The wedge · reputation = yield" />
-          <h2 className={h2}>Everyone else pays LPs by size. <span className="text-gradient-accent">We pay by reputation.</span></h2>
-          <p className={lead}>Your Attribution tier sets a fee-share multiplier on the exact same position — so the wallet that showed up for years out-earns the one that showed up yesterday.</p>
+          <Head n="01" label="The wedge · never idle" />
+          <h2 className={h2}>Everyone else leaves capital half-used. <span className="text-gradient-accent">Here every dollar earns three ways at once.</span></h2>
+          <p className={lead}>One balance runs the Unified Liquidity Vault: best-rate lending, swap fees, and recaptured MEV — all stacked on the same capital, so nothing sits idle between trades.</p>
           <div className="grid grid-cols-3 gap-3 mt-8 max-[560px]:grid-cols-1">
-            {REP_TIERS.map(([name, pct, mult], i) => {
-              const gold = i === 2
+            {STREAMS.map(([name, desc], i) => {
+              const hot = i === 2
               return (
-                <div key={name} className={gold ? 'rounded-2xl p-6 text-white' : 'soft-card p-6'} style={gold ? { background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri-deep))' } : undefined}>
-                  <div className={`text-[11px] uppercase tracking-[0.12em] font-semibold ${gold ? 'text-white/80' : 'text-ink-soft'}`}>{name}</div>
-                  <div className="font-atx-display text-[clamp(30px,4vw,44px)] font-medium tracking-[-1px] mt-2 tabular-nums">{mult}</div>
-                  <div className={`text-[10px] uppercase tracking-[0.1em] mt-1 ${gold ? 'text-white/70' : 'text-ink-soft'}`}>{pct}</div>
+                <div key={name} className={hot ? 'rounded-2xl p-6 text-white' : 'soft-card p-6'} style={hot ? { background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri-deep))' } : undefined}>
+                  <div className={`text-[11px] uppercase tracking-[0.12em] font-semibold ${hot ? 'text-white/80' : 'text-peri-deep'}`}>{`Stream ${i + 1}`}</div>
+                  <div className={`font-atx-display text-[clamp(19px,2.4vw,24px)] font-medium tracking-[-0.01em] mt-2 leading-[1.15] ${hot ? 'text-white' : 'text-ink'}`}>{name}</div>
+                  <div className={`text-[12.5px] leading-[1.5] mt-2.5 ${hot ? 'text-white/75' : 'text-ink-mid'}`}>{desc}</div>
                 </div>
               )
             })}
@@ -127,30 +131,27 @@ export default function DefiLandingPage() {
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="02" label="Deposit once · the vault does the rest" />
           <h2 className={h2}>One deposit. <span className="text-gradient-accent">A five-stage V4 hook engine.</span></h2>
-          <p className={lead}>You provide liquidity once. Every swap that touches the pool runs your capital through a hook stack that protects it, optimizes it, and pays you — automatically.</p>
+          <p className={lead}>You provide liquidity once. Every swap that touches the pool runs your capital through a hook stack that keeps it earning, protects it, and pays you — automatically.</p>
           <FlowDiagram className="mt-8" steps={HOOK.map(([k, d]) => ({ label: k, sub: d }))} />
         </div>
       </section>
 
-      {/* ── 03 · Two levers ── */}
+      {/* ── 03 · Dual-sided / matched liquidity ── */}
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
-          <Head n="03" label="The second lever · commitment" />
-          <h2 className={h2}>Reputation is who you are. <span className="text-gradient-accent">Lock tier is how long you commit.</span></h2>
-          <p className={lead}>Two independent levers raise the same fee share. Longer locks earn a higher multiplier — and the early-exit penalty tapers to zero as you approach unlock, so leaving early is never a cliff.</p>
+          <Head n="03" label="Dual-sided · matched liquidity" />
+          <h2 className={h2}>Liquidity isn’t a solo act. <span className="text-gradient-accent">Teams and their community make the market together.</span></h2>
+          <p className={lead}>A matched vault pairs a team’s own token with community USDC — cliff-locked, senior/junior tranched, and deep from the first swap. Two economic sides, one pool.</p>
           <div className="grid grid-cols-4 gap-3 mt-8 max-[720px]:grid-cols-2">
-            {LOCK_TIERS.map(([name, dur, mult, exit]) => (
-              <div key={name} className="rounded-2xl bg-ground-cool border border-hair p-5 flex flex-col gap-3" style={{ borderTop: '3px solid var(--color-peri)' }}>
-                <div>
-                  <div className="font-atx-display text-[17px] font-medium text-ink">{name}</div>
-                  <div className="text-[11px] text-ink-soft mt-0.5">{dur}</div>
-                </div>
-                <div className="font-atx-display text-[28px] font-medium leading-none text-peri-deep tabular-nums">{mult}</div>
-                <div className="text-[10px] text-ink-soft leading-[1.5] mt-auto">{exit}</div>
+            {MATCHED.map(([step, name, desc]) => (
+              <div key={step} className="rounded-2xl bg-ground-cool border border-hair p-5 flex flex-col gap-3" style={{ borderTop: '3px solid var(--color-peri)' }}>
+                <div className="font-atx-display text-[22px] font-medium leading-none text-peri-deep tabular-nums">{step}</div>
+                <div className="font-atx-display text-[15px] font-medium text-ink leading-[1.2]">{name}</div>
+                <div className="text-[11px] text-ink-mid leading-[1.5] mt-auto">{desc}</div>
               </div>
             ))}
           </div>
-          <p className="text-[12px] text-ink-soft mt-4"><b className="text-peri-deep">↳</b> Reputation × lock stack to a combined ceiling of <b className="text-ink">1.95×</b> on your fee share.</p>
+          <p className="text-[12px] text-ink-soft mt-4"><b className="text-peri-deep">↳</b> Every backer earns their <b className="text-ink">pro-rata</b> share of all three income streams — by the size of their stake, and nothing else.</p>
         </div>
       </section>
 
@@ -159,7 +160,7 @@ export default function DefiLandingPage() {
         <div className={`${wrap} py-[72px] max-[800px]:py-[52px]`}>
           <Head n="04" label="Where the fees go" />
           <h2 className={h2}>Every swap fee, <span className="text-gradient-accent">split on-chain.</span></h2>
-          <p className={lead}>No black box. The split lives in the FeeVault contract, and any change to it emits a public event.</p>
+          <p className={lead}>No black box. The split is enforced by the vault contract, and any change to it emits a public event. Each project can set its own template — this is the default.</p>
           <div className="grid grid-cols-[auto_1fr] gap-8 items-center mt-8 max-[640px]:grid-cols-1 max-[640px]:gap-5">
             <div className="soft-card p-7 max-[640px]:justify-self-start">
               <FeeSplitDonut />
@@ -179,7 +180,7 @@ export default function DefiLandingPage() {
         </div>
       </section>
 
-      {/* ── 05 · Referral loop · dark pop ── */}
+      {/* ── 05 · Earning here, spendable there · dark pop ── */}
       <section className="bg-white border-b border-hair-soft">
         <div className={`${wrap} py-[48px] max-[800px]:py-[36px]`}>
           <div className="relative overflow-hidden rounded-[var(--radius-panel)] bg-ink text-white">
@@ -188,18 +189,18 @@ export default function DefiLandingPage() {
             <div className="relative px-10 max-[800px]:px-6 py-[64px] max-[800px]:py-[48px]">
           <div className="flex items-baseline gap-3">
             <span className="text-[12px] font-semibold text-pas-peri tabular-nums">05</span>
-            <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">Referrals · the compounding loop</span>
+            <span className="text-[12px] uppercase tracking-[0.12em] font-semibold text-white/55">The Liquid Sovereign Account · spend the yield</span>
           </div>
           <h2 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.04] text-[clamp(1.7rem,3.4vw,2.6rem)] mt-3.5 text-white [text-wrap:balance]">
-            Refer liquidity. Build reputation. <span className="text-gradient-accent">Earn more forever.</span>
+            Earning here. <span className="text-gradient-accent">Spendable there.</span>
           </h2>
-          <p className="text-[16px] leading-[1.55] text-white/70 max-w-[62ch] mt-4">Other protocols pay a flat bounty. Here, referring an LP feeds your reputation — so you’re paid twice: in fees now, and in a higher multiplier on every future deposit.</p>
+          <p className="text-[16px] leading-[1.55] text-white/70 max-w-[62ch] mt-4">Most yield locks your capital away. Here the balance keeps earning while it stays spendable as USDC — on a card or over the wire. A spend is a hold against the earning position, never an unwind.</p>
           <div className="grid grid-cols-5 gap-3 mt-8 max-[900px]:grid-cols-1">
-            {LOOP.map((s, i) => (
+            {SPEND.map((s, i) => (
               <div key={s} className="rounded-2xl bg-white/[0.06] border border-white/15 p-5 flex flex-col gap-2.5">
                 <span className="w-[8px] h-[8px] rounded-full bg-pas-peri inline-block" />
                 <div className="font-atx-display text-[13.5px] font-medium leading-tight text-white">{s}</div>
-                {i < LOOP.length - 1 && <span aria-hidden className="flow-dash-h h-[2px] w-8 mt-auto rounded-full opacity-70 max-[900px]:hidden" />}
+                {i < SPEND.length - 1 && <span aria-hidden className="flow-dash-h h-[2px] w-8 mt-auto rounded-full opacity-70 max-[900px]:hidden" />}
               </div>
             ))}
           </div>
@@ -225,7 +226,7 @@ export default function DefiLandingPage() {
             ))}
           </div>
           <p className="text-[10.5px] text-ink-soft leading-[1.5] mt-4">
-            The V4 hook + ERC-4626 vault + FeeVault are deployed and indexed on Base Sepolia testnet; mainnet deposits land at Phase 2 public launch.
+            The V4 hook + ERC-4626 vault are in testing on Base Sepolia — empty and unaudited. Mainnet deposits are gated on an external audit; figures on this page are illustrative, not a projection or guarantee.
           </p>
         </div>
       </section>

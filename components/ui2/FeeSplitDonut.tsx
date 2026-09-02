@@ -1,16 +1,16 @@
 'use client'
 
-// FeeSplitDonut — the 70/15/10/5 fee split as a donut with a center callout and
+// FeeSplitDonut — the 60/30/10 fee split as a donut with a center callout and
 // a legend. Design v2 — hex literals mirror the v2 tokens (recharts needs
-// concrete colors). Purely presentational; the split is fixed by the protocol.
+// concrete colors). Purely presentational; each project sets its own template,
+// and LPs are paid pro-rata by their share of the pool.
 
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
 
 const SLICES = [
-  { name: 'LPs (community)',   value: 70, color: '#6C6CF0' },
-  { name: 'Referrers',         value: 15, color: '#F4A183' },
-  { name: 'Protocol treasury', value: 10, color: '#9A9AA8' },
-  { name: 'Attribution bonus', value: 5,  color: '#D14343' },
+  { name: 'LPs (pro-rata)',    value: 60, color: '#6C6CF0' },
+  { name: 'Protocol treasury', value: 30, color: '#F4A183' },
+  { name: 'Buybacks',          value: 10, color: '#9A9AA8' },
 ]
 
 export function FeeSplitDonut() {
@@ -35,7 +35,7 @@ export function FeeSplitDonut() {
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 grid place-content-center text-center pointer-events-none">
-          <div className="font-atx-display text-[30px] font-medium leading-none text-peri-deep tabular-nums">70%</div>
+          <div className="font-atx-display text-[30px] font-medium leading-none text-peri-deep tabular-nums">60%</div>
           <div className="text-[10px] uppercase tracking-[0.1em] text-ink-soft mt-1">to LPs</div>
         </div>
       </div>
