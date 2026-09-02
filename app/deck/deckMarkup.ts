@@ -66,6 +66,25 @@ export const DECK_HTML = `<!doctype html>
   .ph .tag{font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; display:block; margin-bottom:5px; opacity:.85}
 
   .banner{max-width:1000px; margin:0 auto 20px; font-size:12.5px; color:var(--ink-mid); background:var(--tint-lav); border:1px solid var(--hair); border-radius:12px; padding:12px 18px; display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+
+  /* live-proof links out to the running product (open in a new tab) */
+  .vlink{display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:700; color:var(--peri-deep); text-decoration:none; border-bottom:1.5px solid rgba(76,76,214,.32); padding-bottom:1px; transition:border-color .15s}
+  .vlink:hover{border-bottom-color:var(--peri-deep)}
+  .vrow{display:flex; gap:18px; flex-wrap:wrap; margin-top:16px}
+  .receipt{display:flex; gap:9px; align-items:baseline}
+  .receipt .rv{font-family:'Space Grotesk'; font-weight:700; font-size:19px; letter-spacing:-.02em; color:var(--ink)}
+  .receipt .rl{font-size:12px; color:var(--ink-soft)}
+
+  /* print — one clean page per slide (⎙ / Save PDF) */
+  @media print{
+    html,body{background:#fff}
+    .stage{padding:0}
+    .banner{display:none}
+    .slide{break-inside:avoid; page-break-after:always; box-shadow:none; border:1px solid var(--hair); margin:0 auto 0; min-height:auto; page-break-inside:avoid}
+    .slide:last-child{page-break-after:auto}
+    .num{display:none}
+    .vlink{border-bottom:none; color:var(--ink-mid)}
+  }
 </style>
 
 <div class="stage">
@@ -122,9 +141,13 @@ export const DECK_HTML = `<!doctype html>
     <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">02</div><h3 style="margin-top:8px">Hold</h3><p>A card swipe or payout authorizes in ~milliseconds as a hold against live vault NAV. The position keeps earning.</p></div>
     <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700;font-size:13px">03</div><h3 style="margin-top:8px">Settle</h3><p>On settlement, exactly enough shares burn to pay the merchant on-chain. The rest never moved.</p></div>
   </div>
-  <div class="card" style="margin-top:20px; display:flex; gap:14px; align-items:center; flex-wrap:wrap">
+  <div class="card" style="margin-top:20px; display:flex; gap:14px 18px; align-items:center; flex-wrap:wrap">
     <span class="pill"><span class="dot"></span>Proven on-chain</span>
-    <span style="font-size:14px; color:var(--ink-mid)">A real card swipe authorized off live NAV and settled on-chain — <span class="mono" style="color:var(--ink);font-weight:700">$2.00 · balance 12→10 USDC</span> — position never unwound. That’s the whole loop, working.</span>
+    <span style="font-size:14px; color:var(--ink-mid); flex:1 1 300px">A real card swipe authorized off live NAV and settled on-chain — <span class="mono" style="color:var(--ink);font-weight:700">$2.00 · balance 12→10 USDC</span> — position never unwound. That’s the whole loop, working.</span>
+    <div class="vrow" style="flex-basis:100%; margin-top:2px">
+      <a class="vlink" href="https://mintware.finance/proof" target="_blank" rel="noopener">Verify the full run on-chain →</a>
+      <a class="vlink" href="https://mintware.finance/the-math" target="_blank" rel="noopener">See the yield model →</a>
+    </div>
   </div>
 </section>
 
@@ -177,7 +200,14 @@ export const DECK_HTML = `<!doctype html>
   <div class="grid3" style="margin-top:20px">
     <div class="card"><h3>Incubated &amp; backed</h3><p>Firma Labs is incubating Mintware and backing this round — an ecosystem partner bringing capital and distribution, not just a check.</p></div>
     <div class="card"><div class="stat mono">1</div><div class="statlab">on-chain settle loop, proven live</div></div>
-    <div class="card"><div class="stat mono grad">LIVE</div><div class="statlab">x402 pay-per-call surface, in production</div></div>
+    <div class="card"><div class="stat mono grad">LIVE</div><div class="statlab">x402 pay-per-call surface, <a class="vlink" style="font-size:12px; border-bottom:none; color:var(--peri-deep); text-transform:none; letter-spacing:0" href="https://mintware.finance/agents" target="_blank" rel="noopener">in production →</a></div></div>
+  </div>
+  <div class="vrow" style="margin-top:22px; align-items:center; gap:14px 22px">
+    <div class="receipt"><span class="rv mono">502</span><span class="rl">Forge tests green · 0 fail</span></div>
+    <div class="receipt"><span class="rv mono">7 / 7</span><span class="rl">solvency + MEV invariants</span></div>
+    <div class="receipt"><span class="rv mono">109</span><span class="rl">Rust service tests</span></div>
+    <div class="receipt"><span class="rv mono">~10 ms</span><span class="rl">edge decision off live NAV</span></div>
+    <a class="vlink" href="https://mintware.finance/proof" target="_blank" rel="noopener">Every receipt →</a>
   </div>
   <div class="kicker">A founding design-partner cohort is forming — the working demo turns discovery calls into commitments from crypto-native treasuries.</div>
 </section>
@@ -229,7 +259,7 @@ export const DECK_HTML = `<!doctype html>
       <div class="check"><span style="color:var(--peri-deep);font-weight:700;flex-shrink:0">→</span><span><b>First real users</b> — the focus of this round.</span></div>
     </div>
   </div>
-  <div class="kicker">Non-custodial and openly staged — capped launch first, the marquee audit as value grows. <b>Every claim has an on-chain receipt.</b></div>
+  <div class="kicker">Non-custodial and openly staged — capped launch first, the marquee audit as value grows. <b>Every claim has an <a class="vlink" style="font-size:15px" href="https://mintware.finance/proof" target="_blank" rel="noopener">on-chain receipt →</a></b></div>
 </section>
 
 <!-- 12 · TEAM & ADVISORS -->
@@ -307,5 +337,12 @@ export const DECK_HTML = `<!doctype html>
 
 </div>
 
-<script>(function(){function h(){try{parent.postMessage({mwDeckHeight:document.documentElement.scrollHeight},'*')}catch(e){}}window.addEventListener('load',h);window.addEventListener('resize',h);if(window.ResizeObserver){try{new ResizeObserver(h).observe(document.body)}catch(e){}}setTimeout(h,200);setTimeout(h,800);setTimeout(h,2000);})();</script>
+<script>(function(){
+  var slides=Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  function post(){try{parent.postMessage({mwDeckHeight:document.documentElement.scrollHeight,mwDeckSlides:slides.map(function(s){return Math.round(s.getBoundingClientRect().top+window.scrollY)}),mwDeckCount:slides.length},'*')}catch(e){}}
+  window.addEventListener('load',post);window.addEventListener('resize',post);
+  if(window.ResizeObserver){try{new ResizeObserver(post).observe(document.body)}catch(e){}}
+  window.addEventListener('message',function(e){var d=e.data||{};if(d&&d.mwDeckPrint){try{window.focus();window.print()}catch(err){}}});
+  setTimeout(post,200);setTimeout(post,800);setTimeout(post,2000);
+})();</script>
 </body></html>`
