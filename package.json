@@ -124,7 +124,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^7.0.0",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/chai": "^5.2.3",
     "@types/node": "^22",
