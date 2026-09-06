@@ -210,6 +210,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `NEXT_PUBLIC_SUPABASE_REALTIME`
 - `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_V1_MODE_ENABLED`
 - `NEXT_PUBLIC_VAULTS_LOCKED`
 - `NEXT_PUBLIC_VAULT_ADDRESS`
 - `NEXT_PUBLIC_VAULT_CHAIN_ID`
@@ -283,6 +284,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/teams` | `app/teams/page.tsx` |
 | `/terms` | `app/terms/page.tsx` |
 | `/the-math` | `app/the-math/page.tsx` |
+| `/v2` | `app/v2/page.tsx` |
 | `/vaults` | `app/(rewards)/vaults/page.tsx` |
 | `/yield-payment-network` | `app/yield-payment-network/page.tsx` |
 <!-- /AUTO:pages -->
