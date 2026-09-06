@@ -299,9 +299,9 @@ export const DECK_HTML = `<!doctype html>
   <span class="num mono">13</span>
   <div class="label">The ask</div>
   <h2>Raise <span class="grad">$250K for 10%</span> — angel / pre-seed, on a SAFE.</h2>
-  <p class="lede" style="margin-top:16px">The product is built and Firma is anchoring. This small round buys ~12 months of a lean team of 4 to reach a <b>capped, live launch</b> and real demand — then we raise the seed at a higher cap.</p>
+  <p class="lede" style="margin-top:16px">The product is built and Firma is anchoring. This small round buys ~20 months of a lean team of 2 to reach a <b>capped, live launch</b> and real demand — then we raise the seed at a higher cap.</p>
   <div class="grid3" style="margin-top:20px">
-    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700">01</div><h3 style="margin-top:6px">Runway</h3><p>4-person team, ~12 months, lean comp — build, ship, sell.</p></div>
+    <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700">01</div><h3 style="margin-top:6px">Runway</h3><p>2-person team, ~20 months, lean comp — build, ship, sell.</p></div>
     <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700">02</div><h3 style="margin-top:6px">Guarded launch</h3><p>A competitive audit + bounty → capped mainnet, real bounded value.</p></div>
     <div class="card"><div class="mono" style="color:var(--peri-deep);font-weight:700">03</div><h3 style="margin-top:6px">Traction + community</h3><p>Firma live, public demo, first design-partner treasuries.</p></div>
   </div>
@@ -314,16 +314,16 @@ export const DECK_HTML = `<!doctype html>
   <div class="label">Use of funds</div>
   <h2>Where the <span class="grad">$250K</span> goes.</h2>
   <div style="display:flex; height:46px; border-radius:9px; overflow:hidden; margin-top:26px">
-    <div style="flex:0 0 84%; background:var(--peri); display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Space Mono',monospace; font-weight:700; font-size:13px">84%</div>
+    <div style="flex:0 0 82%; background:var(--peri); display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Space Mono',monospace; font-weight:700; font-size:13px">82%</div>
     <div style="flex:0 0 12%; background:var(--coral); display:flex; align-items:center; justify-content:center; color:#fff; font-family:'Space Mono',monospace; font-weight:700; font-size:13px">12%</div>
-    <div style="flex:0 0 4%; background:#9a8cf0"></div>
+    <div style="flex:0 0 6%; background:#9a8cf0"></div>
   </div>
   <div class="grid3" style="margin-top:26px">
-    <div class="card"><div class="stat mono" style="color:var(--peri-deep)">$210K</div><div style="font-weight:600; font-size:15px; margin-top:4px">Team &amp; runway</div><p style="font-size:12.5px; color:var(--ink-mid); margin-top:6px; line-height:1.5">4 people at ~$5k/mo — ~10 months to build, ship, and sell.</p></div>
+    <div class="card"><div class="stat mono" style="color:var(--peri-deep)">$205K</div><div style="font-weight:600; font-size:15px; margin-top:4px">Team &amp; runway</div><p style="font-size:12.5px; color:var(--ink-mid); margin-top:6px; line-height:1.5">2 people at ~$5k/mo — ~20 months to build, ship, and sell.</p></div>
     <div class="card"><div class="stat mono" style="color:var(--coral-deep)">$30K</div><div style="font-weight:600; font-size:15px; margin-top:4px">Security &amp; audit</div><p style="font-size:12.5px; color:var(--ink-mid); margin-top:6px; line-height:1.5">A competitive audit + Immunefi bounty, before real value moves.</p></div>
-    <div class="card"><div class="stat mono" style="color:#6E5FD0">$10K</div><div style="font-weight:600; font-size:15px; margin-top:4px">Community &amp; growth</div><p style="font-size:12.5px; color:var(--ink-mid); margin-top:6px; line-height:1.5">Public demo, content, and the first design-partner treasuries.</p></div>
+    <div class="card"><div class="stat mono" style="color:#6E5FD0">$15K</div><div style="font-weight:600; font-size:15px; margin-top:4px">Community &amp; growth</div><p style="font-size:12.5px; color:var(--ink-mid); margin-top:6px; line-height:1.5">Public demo, content, and the first design-partner treasuries.</p></div>
   </div>
-  <div class="kicker">≈10 months of runway to a <b>capped launch + the first design partners</b> — then we raise the seed.</div>
+  <div class="kicker">≈20 months of runway to a <b>capped launch + the first design partners</b> — then we raise the seed.</div>
 </section>
 
 <!-- 15 · VISION -->
