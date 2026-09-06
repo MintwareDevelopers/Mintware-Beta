@@ -170,7 +170,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | testnet |
 
 **23 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
-**24 of 32 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
+**26 of 34 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
 ---
@@ -267,6 +267,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/deck` | `app/deck/page.tsx` |
 | `/defi` | `app/defi/page.tsx` |
 | `/docs` | `app/docs/page.tsx` |
+| `/earn/[pool]` | `app/earn/[pool]/page.tsx` |
 | `/explorer` | `app/explorer/page.tsx` |
 | `/legal` | `app/legal/page.tsx` |
 | `/org/[slug]` | `app/org/[slug]/page.tsx` |
