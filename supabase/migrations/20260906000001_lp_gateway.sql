@@ -14,9 +14,10 @@ CREATE TABLE IF NOT EXISTS gateway_positions (
   pool_address  text          NOT NULL,
   chain_id      integer       NOT NULL,
   shares        numeric(78,0) NOT NULL DEFAULT 0,
-  -- entry-NAV share model (no fee-growth checkpointing): quote-asset-atomic NAV per share,
-  -- marked to market at deposit time. Cost basis for the withdraw/IL read, never a par claim.
-  entry_nav     numeric(78,0) NOT NULL,
+  -- Entry-NAV share model (no fee-growth checkpointing). `entry_nav` holds the depositor's cumulative
+  -- COST BASIS in quote-asset atomic units (Σ deposited − Σ withdrawn), marked at deposit time — the
+  -- reference for the unrealized-PnL / IL read on the dashboard. Never a par claim.
+  entry_nav     numeric(78,0) NOT NULL DEFAULT 0,
   created_at    timestamptz   NOT NULL DEFAULT now(),
   updated_at    timestamptz,
   UNIQUE (user_wallet, pool_address, chain_id)
