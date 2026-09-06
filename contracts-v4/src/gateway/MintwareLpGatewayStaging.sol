@@ -18,9 +18,13 @@ contract MintwareLpGatewayStaging is ReentrancyGuard {
 
     IERC20 public immutable quoteAsset;
     IYieldAdapter public immutable adapter;
+    // Set once at construction to the deployer (the factory). Only it may wire the controller, so a
+    // front-runner can't claim the un-set controller seat between deploy and setController (finding M1).
+    address public immutable deployer;
     address public controller;
 
     error NotController();
+    error NotDeployer();
     error AlreadySet();
     error ZeroAddress();
     error ZeroAmount();
@@ -38,9 +42,11 @@ contract MintwareLpGatewayStaging is ReentrancyGuard {
         if (address(quoteAsset_) == address(0) || address(adapter_) == address(0)) revert ZeroAddress();
         quoteAsset = quoteAsset_;
         adapter = adapter_;
+        deployer = msg.sender;
     }
 
     function setController(address controller_) external {
+        if (msg.sender != deployer) revert NotDeployer();
         if (controller != address(0)) revert AlreadySet();
         if (controller_ == address(0)) revert ZeroAddress();
         controller = controller_;

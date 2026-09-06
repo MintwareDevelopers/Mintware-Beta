@@ -47,7 +47,7 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         address stub = address(new Stub());
         pm = new MintwareLpGatewayPositionManager(
             IPoolManager(stub), IPositionManager(stub), IPermit2Minimal(stub),
-            key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink
+            key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink, 2000
         );
         staging.setController(address(pm));
 
@@ -79,6 +79,7 @@ contract MintwareLpGatewayPositionManagerTest is Test {
 
     function test_withdraw_idle_returnsValue() public {
         uint256 s = _deposit(alice, 100_000e6);
+        vm.roll(block.number + 1); // withdraw in a later block (same-block guard)
         vm.prank(alice);
         (uint256 q, uint256 p) = pm.withdraw(s / 2);
         assertApproxEqAbs(q, 50_000e6, 2);
@@ -92,6 +93,7 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         usdg.mint(address(adapter), 100_000e6); // donation
         uint256 sBob = _deposit(bob, 100_000e6);
         assertGt(sBob, 0);
+        vm.roll(block.number + 1); // withdraw in a later block (same-block guard)
         vm.prank(bob);
         (uint256 q,) = pm.withdraw(sBob);
         assertApproxEqRel(q, 100_000e6, 0.01e18); // recovers ~his deposit; cannot steal the donation
@@ -121,9 +123,41 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         pm.withdraw(s + 1);
     }
 
-    function test_setHarvestRecipient_onlyOwner() public {
+    // harvestRecipient is now immutable — no setter exists (owner can't redirect the fee stream).
+    function test_harvestRecipient_immutable() public view {
+        assertEq(pm.harvestRecipient(), harvestSink);
+    }
+
+    // Same-block guard: a single address cannot deposit and withdraw in the same block (kills the
+    // atomic round-trip pattern). A later block is fine (see test_withdraw_idle_returnsValue).
+    function test_sameBlock_depositThenWithdraw_reverts() public {
+        uint256 s = _deposit(alice, 100_000e6);
+        vm.prank(alice);
+        vm.expectRevert(MintwareLpGatewayPositionManager.SameBlockAction.selector);
+        pm.withdraw(s);
+    }
+
+    function test_sameBlock_twoDeposits_reverts() public {
+        _deposit(alice, 50_000e6);
+        vm.prank(alice);
+        vm.expectRevert(MintwareLpGatewayPositionManager.SameBlockAction.selector);
+        pm.deposit(50_000e6);
+    }
+
+    // The deviation band is validated at construction (>0, <=5000). Full breaker behaviour needs a real
+    // pool (the fork test) — the Stub keeps tokenId==0 so _checkAndAnchor is a no-op here.
+    function test_maxDeviationBps_set() public view {
+        assertEq(pm.maxDeviationBps(), 2000);
+    }
+
+    function test_pokePrice_onlyOwner() public {
         vm.prank(alice);
         vm.expectRevert();
-        pm.setHarvestRecipient(bob);
+        pm.pokePrice();
+    }
+
+    function test_pokePrice_revertsWhenUndeployed() public {
+        vm.expectRevert(MintwareLpGatewayPositionManager.NotDeployed.selector);
+        pm.pokePrice();
     }
 }

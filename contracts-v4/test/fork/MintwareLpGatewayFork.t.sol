@@ -60,7 +60,8 @@ contract MintwareLpGatewayForkTest is Test {
             int24(vm.envInt("LP_TICK_UPPER")),
             staging,
             address(this),
-            address(this)
+            address(this),
+            2000
         );
         staging.setController(address(pm));
     }

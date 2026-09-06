@@ -27,6 +27,18 @@ contract MintwareLpGatewayStagingTest is Test {
         staging.setController(stranger);
     }
 
+    // M1: only the deployer (the factory) may wire the controller — a front-runner can't claim the
+    // un-set controller seat between deploy and setController.
+    function test_setController_onlyDeployer() public {
+        MintwareLpGatewayStaging fresh = new MintwareLpGatewayStaging(IERC20(address(usdg)), adapter);
+        vm.prank(stranger);
+        vm.expectRevert(MintwareLpGatewayStaging.NotDeployer.selector);
+        fresh.setController(stranger);
+        // The deployer (this test) still can.
+        fresh.setController(address(this));
+        assertEq(fresh.controller(), address(this));
+    }
+
     function test_stage_onlyController() public {
         vm.prank(stranger);
         vm.expectRevert(MintwareLpGatewayStaging.NotController.selector);

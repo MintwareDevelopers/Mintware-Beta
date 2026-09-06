@@ -63,6 +63,25 @@ records the run.
 `LP_GATEWAY_HARVEST_ENABLED` · `LP_GATEWAY_DEPLOY_ENABLED` · `LP_GATEWAY_DEPLOY_THRESHOLD_ATOMIC` ·
 `LP_GATEWAY_PERF_FEE_BPS` (default 1000 = 10%). The paired↔quote **router executor**
 (`LP_GATEWAY_ROUTER_ADDRESS`) is the one code seam still to wire before harvest/deploy auto-run.
+`LP_MAX_DEVIATION_BPS` (deploy-time, default `2000`) sizes the flash-manipulation breaker (below).
+
+## Self-audit hardening (in the contracts — see `lp-gateway-v1-audit.md`)
+Four findings from the V1 blockchain self-audit are fixed on-chain:
+- **C1 (spot-NAV flash manipulation).** The deployed LP leg is spot-priced and a hookless meme pool has
+  no on-chain TWAP. Defense is layered: a **deposit/withdraw deviation breaker** (`maxDeviationBps`,
+  default 20% of sqrtPrice) that reverts when live spot deviates from a per-block-anchored reference — a
+  single-block flash pump can't move NAV without tripping it — plus a **same-block guard** (one address
+  can't deposit+withdraw in a block) and the **capped deploy ratio** (most capital stays idle in Morpho,
+  which is spot-immune). If sharp *legitimate* volatility ever locks the breaker against a stale anchor,
+  the owner calls **`pokePrice()`** to re-anchor (moves no funds). Residual: a patient cross-block
+  manipulator on a THIN pool isn't fully stopped on-chain — **deep-pool curation is the backstop**, and
+  mainnet stays audit-gated.
+- **M1 (staging controller front-run).** `setController` is now deployer-only (the factory), so no one
+  can claim the un-set controller seat between deploy and wiring.
+- **M2 (adapter reuse).** The factory rejects reusing one yield adapter across two gateways (which would
+  pool their staged capital and cross-contaminate NAV). Each gateway gets its own adapter.
+- **Owner fee-redirect.** `harvestRecipient` is now **immutable** — the owner can never repoint the fee
+  stream after deploy.
 
 ## IL control (the two knobs that diminish impermanent loss)
 We are NOT locked into a pool's range — the gateway picks its own. Two levers, minimized by default:

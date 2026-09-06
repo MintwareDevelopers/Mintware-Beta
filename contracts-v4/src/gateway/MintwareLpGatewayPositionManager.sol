@@ -62,7 +62,18 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     int24 public immutable tickUpper;
 
     uint256 public tokenId; // 0 until the first deploy mints the aggregate position
-    address public harvestRecipient;
+    // Fee recipient is fixed at construction — the owner can never redirect the harvested fee stream to
+    // a fresh address after the fact (removes the owner-fee-redirect finding). Set via the factory.
+    address public immutable harvestRecipient;
+
+    // Flash-manipulation breaker (finding C1). The deployed LP leg is spot-priced, and a hookless pool
+    // has no on-chain TWAP — so we anchor a reference sqrtPrice on each action and reject a deposit/
+    // withdraw whose live spot deviates from it by more than `maxDeviationBps`. A single-block flash
+    // pump moves far from the prior-block anchor → revert. See _checkAndAnchor for the full rationale.
+    uint16 public immutable maxDeviationBps;
+    uint160 internal _refSqrtPrice;
+    uint64 internal _refBlock;
+    mapping(address => uint256) internal _lastActionBlock; // no deposit+withdraw in one block per user
 
     mapping(address => uint256) public sharesOf;
     uint256 public totalShares;
@@ -73,12 +84,15 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     error QuoteNotInPool();
     error InsufficientShares();
     error NotDeployed();
+    error PriceDeviation();
+    error SameBlockAction();
+    error BadDeviationBand();
 
     event Deposited(address indexed user, uint256 quoteIn, uint256 sharesMinted);
     event Withdrawn(address indexed user, uint256 sharesBurned, uint256 quoteOut, uint256 pairedOut);
     event Deployed(uint256 indexed tokenId, uint256 quoteUsed, uint256 pairedUsed, uint128 liquidity);
     event Harvested(uint256 quoteFees, uint256 pairedFees, address indexed recipient);
-    event HarvestRecipientSet(address indexed recipient);
+    event PriceAnchored(uint160 sqrtPriceX96, uint256 blockNumber);
 
     constructor(
         IPoolManager poolManager_,
@@ -90,13 +104,18 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         int24 tickUpper_,
         MintwareLpGatewayStaging staging_,
         address owner_,
-        address harvestRecipient_
+        address harvestRecipient_,
+        uint16 maxDeviationBps_
     ) Ownable(owner_) {
         if (
             address(poolManager_) == address(0) || address(positionManager_) == address(0)
                 || address(permit2_) == address(0) || address(staging_) == address(0)
                 || address(quoteAsset_) == address(0) || harvestRecipient_ == address(0)
         ) revert ZeroAddress();
+        // Band on the spot-vs-anchor sqrtPrice deviation: must be a real, non-trivial guard (>0) and
+        // not so wide it never fires (<=50%). 2000 bps (20% sqrtPrice ≈ 44% price move between anchors)
+        // is the sane meme-pool default the factory passes.
+        if (maxDeviationBps_ == 0 || maxDeviationBps_ > 5000) revert BadDeviationBand();
 
         address c0 = Currency.unwrap(poolKey_.currency0);
         address c1 = Currency.unwrap(poolKey_.currency1);
@@ -114,16 +133,59 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         tickLower = tickLower_;
         tickUpper = tickUpper_;
         harvestRecipient = harvestRecipient_;
+        maxDeviationBps = maxDeviationBps_;
     }
 
     function poolKey() external view returns (PoolKey memory) {
         return _poolKey;
     }
 
-    function setHarvestRecipient(address recipient) external onlyOwner {
-        if (recipient == address(0)) revert ZeroAddress();
-        harvestRecipient = recipient;
-        emit HarvestRecipientSet(recipient);
+    /// @notice Owner escape hatch for the flash-manip breaker: re-anchor the reference sqrtPrice to the
+    ///         current spot. Only needed if a sharp but LEGITIMATE price move (real meme volatility)
+    ///         locks out deposit/withdraw against a stale anchor. Moves no funds; only resets the ref.
+    function pokePrice() external onlyOwner {
+        if (tokenId == 0) revert NotDeployed();
+        (uint160 spot,,,) = poolManager.getSlot0(_poolKey.toId());
+        _refSqrtPrice = spot;
+        _refBlock = uint64(block.number);
+        emit PriceAnchored(spot, block.number);
+    }
+
+    /// @dev Flash-manipulation breaker for the spot-priced LP leg (finding C1). Reverts a deposit/
+    ///      withdraw whose live spot sqrtPrice deviates beyond `maxDeviationBps` from the reference
+    ///      anchored on an earlier action (a prior block once the anchor updates below). A single-block
+    ///      flash pump moves spot far from that reference → revert. The reference re-anchors once per
+    ///      block on any deposit/withdraw (and on the owner's deploy/harvest via _anchorPrice), so it
+    ///      tracks legit drift; pokePrice() is the owner's re-anchor after a sharp-volatility lockout.
+    ///      Residual (documented): a patient CROSS-block manipulator on a THIN pool is not fully stopped
+    ///      here — deep-pool curation + a capped deploy fraction are the economic backstop, and mainnet
+    ///      is audit-gated. Hookless pools carry no on-chain TWAP, so this self-anchored breaker is the
+    ///      available tool. No-op until the first deploy (idle-only NAV is Morpho, offset-defended).
+    function _checkAndAnchor() internal {
+        if (tokenId == 0) return;
+        (uint160 spot,,,) = poolManager.getSlot0(_poolKey.toId());
+        uint160 ref = _refSqrtPrice;
+        if (ref != 0) {
+            uint256 diff = spot > ref ? spot - ref : ref - spot;
+            if (diff * 10_000 > uint256(ref) * maxDeviationBps) revert PriceDeviation();
+        }
+        if (block.number > _refBlock) {
+            _refSqrtPrice = spot;
+            _refBlock = uint64(block.number);
+            emit PriceAnchored(spot, block.number);
+        }
+    }
+
+    /// @dev Anchor-only (no deviation check) for the owner's deploy/harvest — trusted, honest-price ops
+    ///      whose job is to keep the reference fresh so the breaker never goes stale on an active gateway.
+    function _anchorPrice() internal {
+        if (tokenId == 0) return;
+        (uint160 spot,,,) = poolManager.getSlot0(_poolKey.toId());
+        if (block.number > _refBlock) {
+            _refSqrtPrice = spot;
+            _refBlock = uint64(block.number);
+            emit PriceAnchored(spot, block.number);
+        }
     }
 
     // ── depositor entry ──────────────────────────────────────────────────────────────────────
@@ -132,6 +194,9 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     ///         entry-NAV shares in the aggregate gateway position. Not a deposit/savings product.
     function deposit(uint256 quoteAmount) external nonReentrant returns (uint256 sharesMinted) {
         if (quoteAmount == 0) revert ZeroAmount();
+        if (_lastActionBlock[msg.sender] == block.number) revert SameBlockAction();
+        _lastActionBlock[msg.sender] = block.number;
+        _checkAndAnchor(); // flash-manip breaker on the spot-priced LP leg (no-op until deployed)
         // Price at the NAV BEFORE this deposit lands, so the depositor buys in at the live mark.
         uint256 navBefore = totalNav();
         sharesMinted = SeniorSharesMath.toShares(quoteAmount, totalShares, navBefore, VIRTUAL, Math.Rounding.Floor);
@@ -157,6 +222,9 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         uint256 bal = sharesOf[msg.sender];
         if (shares == 0) revert ZeroAmount();
         if (shares > bal) revert InsufficientShares();
+        if (_lastActionBlock[msg.sender] == block.number) revert SameBlockAction();
+        _lastActionBlock[msg.sender] = block.number;
+        _checkAndAnchor(); // flash-manip breaker — a pumped spot vs the prior-block anchor reverts here
 
         uint256 ts = totalShares;
         // Offset-consistent claim value (quote terms) — MUST match the deposit formula, or a
@@ -247,6 +315,7 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         }
         if (pairedLeft > 0) pairedAsset.safeTransfer(msg.sender, pairedLeft);
 
+        _anchorPrice(); // keep the breaker's reference fresh at this honest owner-set price
         emit Deployed(tokenId, quoteUsed, pairedUsed, liquidity);
     }
 
@@ -260,6 +329,7 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         (quoteFees, pairedFees) = _decreaseAndTake(0, address(this), deadline);
         if (quoteFees > 0) quoteAsset.safeTransfer(harvestRecipient, quoteFees);
         if (pairedFees > 0) pairedAsset.safeTransfer(harvestRecipient, pairedFees);
+        _anchorPrice(); // keep the breaker's reference fresh
         emit Harvested(quoteFees, pairedFees, harvestRecipient);
     }
 

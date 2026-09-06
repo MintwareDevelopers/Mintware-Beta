@@ -41,12 +41,14 @@ contract DeployLpGateway is Script {
         int24 tickUpper = int24(vm.envInt("LP_TICK_UPPER"));
         address owner = vm.envAddress("LP_OWNER"); // getOracleSigner('root') seat — cron owner
         address harvestRecipient = vm.envAddress("LP_HARVEST_RECIPIENT");
+        // Flash-manipulation band (sqrtPrice deviation, bps) for the spot-priced LP leg; default 2000.
+        uint16 maxDeviationBps = uint16(vm.envOr("LP_MAX_DEVIATION_BPS", uint256(2000)));
 
         vm.startBroadcast();
 
         MintwareLpGatewayStaging staging = new MintwareLpGatewayStaging(quoteAsset, adapter);
         MintwareLpGatewayPositionManager pm = new MintwareLpGatewayPositionManager(
-            poolManager, positionManager, permit2, key, quoteAsset, tickLower, tickUpper, staging, owner, harvestRecipient
+            poolManager, positionManager, permit2, key, quoteAsset, tickLower, tickUpper, staging, owner, harvestRecipient, maxDeviationBps
         );
         staging.setController(address(pm));
 

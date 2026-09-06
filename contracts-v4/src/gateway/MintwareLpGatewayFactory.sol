@@ -32,10 +32,19 @@ contract MintwareLpGatewayFactory is Ownable {
 
     mapping(bytes32 => Instance) public instanceForPool; // poolId → instance
     bytes32[] public poolIds;
+    // An adapter instance is a single Morpho/4626 position; sharing one across two gateways would pool
+    // their staged capital and cross-contaminate NAV (finding M2). Each gateway MUST get its own freshly
+    // deployed adapter — this guard makes reuse through the factory impossible.
+    mapping(address => bool) public adapterUsed;
+
+    // Default flash-manipulation band the factory hands the position manager (20% sqrtPrice ≈ 44% price
+    // move between anchors) — a sane meme-pool value; per-pool override is a createGateway argument.
+    uint16 public constant DEFAULT_MAX_DEVIATION_BPS = 2000;
 
     error AlreadyExists();
     error NotFound();
     error ZeroAddress();
+    error AdapterReused();
 
     event GatewayCreated(
         bytes32 indexed poolId, address staging, address positionManager, address quoteAsset, address gatewayOwner
@@ -59,14 +68,18 @@ contract MintwareLpGatewayFactory is Ownable {
         int24 tickLower,
         int24 tickUpper,
         address gatewayOwner,
-        address harvestRecipient
+        address harvestRecipient,
+        uint16 maxDeviationBps
     ) external onlyOwner returns (address stagingAddr, address pmAddr) {
         bytes32 poolId = PoolId.unwrap(key.toId());
         if (instanceForPool[poolId].positionManager != address(0)) revert AlreadyExists();
+        if (adapterUsed[address(adapter)]) revert AdapterReused();
+        adapterUsed[address(adapter)] = true;
 
+        uint16 band = maxDeviationBps == 0 ? DEFAULT_MAX_DEVIATION_BPS : maxDeviationBps;
         MintwareLpGatewayStaging staging = new MintwareLpGatewayStaging(quoteAsset, adapter);
         MintwareLpGatewayPositionManager pm = new MintwareLpGatewayPositionManager(
-            poolManager, positionManager, permit2, key, quoteAsset, tickLower, tickUpper, staging, gatewayOwner, harvestRecipient
+            poolManager, positionManager, permit2, key, quoteAsset, tickLower, tickUpper, staging, gatewayOwner, harvestRecipient, band
         );
         staging.setController(address(pm));
 

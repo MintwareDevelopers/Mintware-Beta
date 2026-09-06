@@ -5,7 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MintwareLpGatewayFactory} from "../../src/gateway/MintwareLpGatewayFactory.sol";
 import {MintwareLpGatewayStaging} from "../../src/gateway/MintwareLpGatewayStaging.sol";
-import {IPermit2Minimal} from "../../src/gateway/MintwareLpGatewayPositionManager.sol";
+import {MintwareLpGatewayPositionManager, IPermit2Minimal} from "../../src/gateway/MintwareLpGatewayPositionManager.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
 import {IYieldAdapter} from "../../src/vaults/IYieldAdapter.sol";
@@ -47,7 +47,7 @@ contract MintwareLpGatewayFactoryTest is Test {
 
     function test_createGateway_isolatedInstance() public {
         PoolKey memory key = _key(3000);
-        (address s, address p) = factory.createGateway(key, IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink);
+        (address s, address p) = factory.createGateway(key, IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
         assertTrue(s != address(0) && p != address(0));
         assertEq(MintwareLpGatewayStaging(s).controller(), p);
         assertEq(factory.poolCount(), 1);
@@ -55,30 +55,48 @@ contract MintwareLpGatewayFactoryTest is Test {
         assertEq(rs, s);
         assertEq(rp, p);
         assertTrue(active);
+        assertTrue(factory.adapterUsed(address(adapter)));
     }
 
     function test_createGateway_onlyOwner() public {
         vm.prank(stranger);
         vm.expectRevert();
-        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink);
+        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
     }
 
     function test_createGateway_duplicateReverts() public {
-        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink);
+        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+        MockYieldAdapter adapter2 = new MockYieldAdapter(address(usdg));
+        // A duplicate POOL reverts on AlreadyExists regardless of the (fresh) adapter.
         vm.expectRevert(MintwareLpGatewayFactory.AlreadyExists.selector);
-        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink);
+        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter2, -22980, 22980, gwOwner, sink, 2000);
+    }
+
+    // M2: reusing one adapter instance across two different pools would pool their staged capital and
+    // cross-contaminate NAV — the factory rejects it. Each gateway needs its own adapter.
+    function test_createGateway_adapterReuse_reverts() public {
+        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+        vm.expectRevert(MintwareLpGatewayFactory.AdapterReused.selector);
+        factory.createGateway(_key(500), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+    }
+
+    // A zero band falls back to the factory default (kept easy for the curator).
+    function test_createGateway_zeroBand_usesDefault() public {
+        (, address p) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 0);
+        assertEq(MintwareLpGatewayPositionManager(p).maxDeviationBps(), factory.DEFAULT_MAX_DEVIATION_BPS());
     }
 
     function test_twoPools_isolated() public {
-        (, address p1) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink);
-        (, address p2) = factory.createGateway(_key(500), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink);
+        MockYieldAdapter adapterB = new MockYieldAdapter(address(usdg));
+        (, address p1) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+        (, address p2) = factory.createGateway(_key(500), IERC20(address(usdg)), adapterB, -22980, 22980, gwOwner, sink, 2000);
         assertTrue(p1 != p2);
         assertEq(factory.poolCount(), 2);
     }
 
     function test_deactivate() public {
         PoolKey memory key = _key(3000);
-        factory.createGateway(key, IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink);
+        factory.createGateway(key, IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
         factory.deactivate(PoolId.unwrap(key.toId()));
         (,, bool active) = factory.instanceForPool(PoolId.unwrap(key.toId()));
         assertFalse(active);
