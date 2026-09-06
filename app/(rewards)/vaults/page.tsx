@@ -10,6 +10,8 @@ import Link from 'next/link'
 import { VaultAmplify } from '@/components/vaults/VaultAmplify'
 import { ULVMechanics } from '@/components/vaults/ULVMechanics'
 import { SwapWalkthrough } from '@/components/vaults/SwapWalkthrough'
+import { useV2Mode } from "@/components/web2/V2ModeProvider"
+import { V1MarketingStub } from "@/components/web2/V1MarketingStub"
 
 const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 
@@ -58,7 +60,7 @@ function VaultsComingSoon() {
   )
 }
 
-export default function VaultsPage() {
+function VaultsPageV2() {
   return (
     <div className="font-atx-display bg-white min-h-screen text-ink overflow-x-clip">
       {VAULTS_LOCKED && <VaultsComingSoon />}
@@ -177,4 +179,9 @@ export default function VaultsPage() {
       </section>
     </div>
   )
+}
+
+
+export default function VaultsPage() {
+  return useV2Mode() ? <VaultsPageV2 /> : <V1MarketingStub topic="Earn" headline="Curated pools, one deposit." blurb="Deposit USDG into a screened Robinhood Chain pool. It earns while staged, then earns a share of the pool trading fees, and you spend the fees, not your principal." live={true} />
 }

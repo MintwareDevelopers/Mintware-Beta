@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
+import { cookies } from "next/headers"
+import { isV2FromCookie, V2_COOKIE } from "@/lib/v2/gate"
+import { V1MarketingStub } from "@/components/web2/V1MarketingStub"
 
 // =============================================================================
 // /teams — marketing landing for the Matched Liquidity vault (team-facing).
@@ -71,7 +74,7 @@ const TREASURY: [string, string][] = [
   ['Proof of reserves, public', 'A live treasury page — NAV, coverage, members, backed on-chain — plus an embeddable badge. Your community verifies solvency without asking.'],
 ]
 
-export default function TeamsLandingPage() {
+function TeamsLandingPageV2() {
   return (
     <div className="font-atx-display bg-white text-ink min-h-screen overflow-x-clip">
       <V2Nav active="teams" />
@@ -302,4 +305,10 @@ export default function TeamsLandingPage() {
       </section>
     </div>
   )
+}
+
+
+export default async function TeamsLandingPage() {
+  const isV2 = isV2FromCookie((await cookies()).get(V2_COOKIE)?.value)
+  return isV2 ? <TeamsLandingPageV2 /> : <V1MarketingStub topic="Team treasuries" headline="Treasuries that earn while staying spendable." blurb="A treasury that earns real yield while every dollar stays spendable for payroll, vendors, and cards. Where we are headed." live={false} />
 }
