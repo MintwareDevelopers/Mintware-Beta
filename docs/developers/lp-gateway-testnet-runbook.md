@@ -78,6 +78,25 @@ Note: IL can be *diminished*, never *eliminated*, for a fee-earning LP — earni
 in-range, which requires two-sided exposure. The thesis is that the high meme fee flow out-earns the
 residual IL; "no par claim" stays honest. Managed rebalancing + a fee-funded IL reserve are phase-2.
 
+## Flip on the V1/V2 split (serve V1, gate V2 for investors)
+The whole site defaults to the V2 vision until you flip it. On Vercel:
+```
+NEXT_PUBLIC_V1_MODE_ENABLED = true     # default visitors now get V1 (the live LP Gateway) everywhere
+V2_PASSWORD                 = <share with investors out-of-band>
+```
+Then: a normal visitor lands on the LP Gateway (homepage, `/app`, and every marketing page render their
+V1 face; "Launch app" → the gateway, no V2 modal). An investor opens **`/v2`**, types the password → the
+whole site flips to the full V2 vision (treasury OS, YPN, cards, agents) for their session. With the flag
+OFF (default) nothing changes — V2 shows everywhere, exactly as today.
+
+## Curate pools (auto-surfaced → one-click approve)
+- The `/cron/gateway-discover` cron auto-ingests the top-30 hottest RH-Chain pools (GeckoTerminal) as
+  **pending candidates** with a risk score — visible at `GET /api/gateway/curate`, ranked safest-first.
+- Set `LP_GATEWAY_CURATOR_SECRET` on Vercel to enable curation. Approve/reject via `POST /api/gateway/curate`
+  (bearer = that secret). An approve carrying the deployed gateway addresses registers the live instance in
+  one call. The risk score RANKS the queue; it never certifies safety (no honeypot/hook sim) — every pool
+  is a human decision.
+
 ## What stays gated for MAINNET (not testnet)
 Real USDG + the Morpho Steakhouse vault (via `MintwareERC4626YieldAdapter`) instead of the mock rig, a
 real meme pool, the router executor, and an external audit before real value.
