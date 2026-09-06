@@ -22,6 +22,11 @@ export type DeployOutcome =
   | { ok: true; deployTx: `0x${string}`; quoteDeployedAtomic: bigint; pairedDeployedAtomic: bigint }
   | { ok: false; status: number; error: string; reason: Reason }
 
+const deployRatioBps = () => {
+  const n = Number(process.env.LP_GATEWAY_DEPLOY_RATIO_BPS ?? '5000') // default 50% deployed / 50% idle
+  return Number.isInteger(n) && n >= 1 && n <= 10_000 ? n : 5000
+}
+
 export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Logger }): Promise<DeployOutcome> {
   const { log } = opts
   if (process.env.LP_GATEWAY_DEPLOY_ENABLED !== 'true') {
@@ -49,9 +54,13 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
   }
   const wallet = createWalletClient({ account, chain: publicClient.chain, transport: http(cfg.rpcUrl) })
 
+  // IL control: deploy only a FRACTION of staged into the IL-bearing LP; the rest stays idle in Morpho,
+  // earning lending yield with ZERO impermanent loss. LP_GATEWAY_DEPLOY_RATIO_BPS (default 5000 = 50%)
+  // is the knob — lower it for a more conservative (lower-IL) posture on a volatile meme pool.
+  const deployable = (staged * BigInt(deployRatioBps())) / 10_000n
   // Split the deployable amount: half stays quote, half zaps to the paired leg (balanced-range target).
-  const quoteToDeploy = staged / 2n
-  const zap = await swapQuoteToPaired({ cfg, account, wallet, publicClient, quoteAmount: staged - quoteToDeploy, log })
+  const quoteToDeploy = deployable / 2n
+  const zap = await swapQuoteToPaired({ cfg, account, wallet, publicClient, quoteAmount: deployable - quoteToDeploy, log })
   if (zap.pairedOut <= 0n) {
     // Fail-closed: without the paired leg deploy() can't proceed. The seam is honest, not a bad swap.
     return { ok: false, status: 200, error: 'paired-leg zap not available', reason: 'zap_unwired' }

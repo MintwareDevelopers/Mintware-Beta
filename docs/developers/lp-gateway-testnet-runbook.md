@@ -64,6 +64,20 @@ records the run.
 `LP_GATEWAY_PERF_FEE_BPS` (default 1000 = 10%). The paired↔quote **router executor**
 (`LP_GATEWAY_ROUTER_ADDRESS`) is the one code seam still to wire before harvest/deploy auto-run.
 
+## IL control (the two knobs that diminish impermanent loss)
+We are NOT locked into a pool's range — the gateway picks its own. Two levers, minimized by default:
+- **Range width** — set at deploy via `LP_TICK_LOWER`/`LP_TICK_UPPER`. Default **±22980 ticks (~10x-up /
+  −90%-down)** for meme pools: low IL, no out-of-range cliff, no rebalancing. Widen to ±887220
+  (full-range, lowest IL, least fee-efficient) or tighten for more fee capture. A fixed range per
+  gateway instance — redeploy to change it.
+- **Deploy ratio** — `LP_GATEWAY_DEPLOY_RATIO_BPS` (default **5000 = 50%**). Only this fraction of staged
+  capital enters the IL-bearing LP; the rest stays idle in Morpho earning lending yield with **zero IL**.
+  Lower it for a more conservative posture.
+
+Note: IL can be *diminished*, never *eliminated*, for a fee-earning LP — earning swap fees requires being
+in-range, which requires two-sided exposure. The thesis is that the high meme fee flow out-earns the
+residual IL; "no par claim" stays honest. Managed rebalancing + a fee-funded IL reserve are phase-2.
+
 ## What stays gated for MAINNET (not testnet)
 Real USDG + the Morpho Steakhouse vault (via `MintwareERC4626YieldAdapter`) instead of the mock rig, a
 real meme pool, the router executor, and an external audit before real value.

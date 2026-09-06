@@ -34,8 +34,12 @@ contract SetupLpGatewayTestnet is Script {
         IPoolManager poolManager = IPoolManager(vm.envOr("LP_POOL_MANAGER", V4_POOL_MANAGER));
         IPositionManager positionManager = IPositionManager(vm.envOr("LP_POSITION_MANAGER", V4_POSITION_MANAGER));
         IPermit2Minimal permit2 = IPermit2Minimal(vm.envOr("LP_PERMIT2", PERMIT2));
-        int24 tickLower = int24(vm.envOr("LP_TICK_LOWER", int256(-6000)));
-        int24 tickUpper = int24(vm.envOr("LP_TICK_UPPER", int256(6000)));
+        // IL control: WIDE default range for a volatile meme pool — ±22980 ticks ≈ a 10x-up / −90%-down
+        // price swing before the position falls out of range. Much lower IL + no out-of-range cliff + no
+        // rebalancing vs a tight range. Aligned to tickSpacing 60. Env-override for full-range (±887220,
+        // the lowest-IL / least-fee-efficient extreme) or a tighter, higher-fee band.
+        int24 tickLower = int24(vm.envOr("LP_TICK_LOWER", int256(-22980)));
+        int24 tickUpper = int24(vm.envOr("LP_TICK_UPPER", int256(22980)));
 
         vm.startBroadcast();
         address deployer = msg.sender;
