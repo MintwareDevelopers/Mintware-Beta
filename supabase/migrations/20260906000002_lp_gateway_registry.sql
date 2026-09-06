@@ -34,6 +34,12 @@ CREATE TABLE IF NOT EXISTS gateway_pool_requests (
   quote_asset      text,
   requester_wallet text,
   status           text        NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  source           text        NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'auto')),
+  -- auto-surfaced candidate metrics: risk_score RANKS the queue (lower = look first); it is NOT a
+  -- safety certificate (no honeypot/hook check) — every candidate still needs a human approve.
+  risk_score       integer,
+  risk_signals     jsonb,
+  hotness          jsonb,
   curator_note     text,
   reviewed_by      text,
   created_at       timestamptz NOT NULL DEFAULT now(),
