@@ -2,6 +2,7 @@ import { isAddress } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { readGatewayPosition } from '@/lib/gateway/positionReader'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
+import { resolveRouteInstance } from '@/lib/gateway/registry'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,13 +15,16 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json({ success: false, error: 'address_required' }, 400)
   }
 
+  const inst = await resolveRouteInstance(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'))
+  if (!inst) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
+
   // Cost basis + buffer come from the DB (populated by the deposit/harvest flows); absent ⇒ null PnL.
   const { data: pos } = await ctx.supabase
     .from('gateway_positions')
     .select('id, entry_nav, shares')
     .eq('user_wallet', address)
-    .eq('pool_address', cfg.poolAddress)
-    .eq('chain_id', cfg.chainId)
+    .eq('pool_address', inst.poolAddress)
+    .eq('chain_id', inst.chainId)
     .maybeSingle()
 
   let bufferBalanceAtomic = 0n
@@ -39,7 +43,7 @@ export const GET = createHandler(async (req, ctx) => {
   try {
     view = await readGatewayPosition({
       client,
-      positionManager: cfg.positionManager,
+      positionManager: inst.positionManager,
       user: address as `0x${string}`,
       costBasisAtomic: pos?.entry_nav != null ? BigInt(String(pos.entry_nav)) : null,
       bufferBalanceAtomic,

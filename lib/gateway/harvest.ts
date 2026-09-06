@@ -12,8 +12,11 @@ import { getServiceClient } from '@/lib/web2/supabase'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
+import { listActiveInstances } from '@/lib/gateway/registry'
 import { skimPerformanceFee, proRataBufferCredits, type SharePosition } from '@/lib/gateway/harvestMath'
 import { swapPairedToQuote } from '@/lib/gateway/routerSwap'
+
+export type HarvestInstance = { positionManager: `0x${string}`; poolAddress: string; chainId: number }
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
 type Logger = {
@@ -33,8 +36,31 @@ const perfFeeBps = () => {
   return Number.isInteger(n) && n >= 0 && n <= 10_000 ? n : 1000
 }
 
-export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Logger }): Promise<HarvestOutcome> {
-  const { supabase, log } = opts
+/** Harvest EVERY active gateway (registry + single-env fallback). The cron entry point. */
+export async function harvestAll(opts: { supabase: SupabaseClient; log?: Logger }): Promise<{ harvested: number; results: HarvestOutcome[] }> {
+  if (process.env.LP_GATEWAY_HARVEST_ENABLED !== 'true') {
+    return { harvested: 0, results: [{ ok: false, status: 503, error: 'gateway harvest is not enabled', reason: 'disabled' }] }
+  }
+  const cfg = gatewayConfig()
+  if (!cfg) return { harvested: 0, results: [{ ok: false, status: 503, error: 'gateway_not_configured', reason: 'config' }] }
+  const active = await listActiveInstances(opts.supabase, cfg.chainId)
+  const targets: HarvestInstance[] = active.length
+    ? active.map((i) => ({ positionManager: i.positionManager, poolAddress: i.poolAddress, chainId: i.chainId }))
+    : cfg.positionManager && cfg.poolAddress
+      ? [{ positionManager: cfg.positionManager, poolAddress: cfg.poolAddress, chainId: cfg.chainId }]
+      : []
+  const results: HarvestOutcome[] = []
+  let harvested = 0
+  for (const instance of targets) {
+    const r = await harvestGateway({ supabase: opts.supabase, log: opts.log, instance })
+    results.push(r)
+    if (r.ok) harvested++
+  }
+  return { harvested, results }
+}
+
+export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Logger; instance: HarvestInstance }): Promise<HarvestOutcome> {
+  const { supabase, log, instance } = opts
   if (process.env.LP_GATEWAY_HARVEST_ENABLED !== 'true') {
     return { ok: false, status: 503, error: 'gateway harvest is not enabled', reason: 'disabled' }
   }
@@ -58,13 +84,13 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   let pairedFees = 0n
   try {
     collectTx = await wallet.writeContract({
-      address: cfg.positionManager, abi: LP_GATEWAY_ABI, functionName: 'harvest',
+      address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'harvest',
       args: [BigInt(Math.floor(Date.now() / 1000) + 600)], account, chain: publicClient.chain, gas: 900_000n,
     })
     const receipt = await publicClient.waitForTransactionReceipt({ hash: collectTx })
     if (receipt.status !== 'success') return { ok: false, status: 502, error: 'harvest_reverted', reason: 'tx' }
     for (const lg of receipt.logs) {
-      if (lg.address.toLowerCase() !== cfg.positionManager.toLowerCase()) continue
+      if (lg.address.toLowerCase() !== instance.positionManager.toLowerCase()) continue
       try {
         const ev = decodeEventLog({ abi: LP_GATEWAY_ABI, data: lg.data, topics: lg.topics })
         if (ev.eventName === 'Harvested') {
@@ -93,7 +119,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   const grossAtomic = quoteFees + swappedQuote
   if (grossAtomic <= 0n) {
     await supabase.from('harvest_events').insert({
-      pool_address: cfg.poolAddress, chain_id: cfg.chainId, collect_tx: collectTx, swap_tx: swapTx,
+      pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
       amount_harvested_atomic: '0', fee_skimmed_atomic: '0', amount_credited_atomic: '0',
     })
     return { ok: false, status: 200, error: 'nothing harvested', reason: 'nothing' }
@@ -104,8 +130,8 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   const { data: rows } = await supabase
     .from('gateway_positions')
     .select('id, user_wallet, shares')
-    .eq('pool_address', cfg.poolAddress)
-    .eq('chain_id', cfg.chainId)
+    .eq('pool_address', instance.poolAddress)
+    .eq('chain_id', instance.chainId)
   const positions: (SharePosition & { id: string })[] = ((rows ?? []) as Array<{ id: string; user_wallet: string; shares: unknown }>)
     .map((r) => ({ id: String(r.id), user: String(r.user_wallet), shares: big(r.shares) }))
     .filter((p) => p.shares > 0n)
@@ -134,7 +160,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   }
 
   await supabase.from('harvest_events').insert({
-    pool_address: cfg.poolAddress, chain_id: cfg.chainId, collect_tx: collectTx, swap_tx: swapTx,
+    pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
     amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(),
     amount_credited_atomic: credited.toString(),
   })

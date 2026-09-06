@@ -12,7 +12,10 @@ import { getServiceClient } from '@/lib/web2/supabase'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { LP_GATEWAY_ABI, LP_STAGING_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
+import { listActiveInstances } from '@/lib/gateway/registry'
 import { swapQuoteToPaired } from '@/lib/gateway/routerSwap'
+
+export type DeployInstance = { positionManager: `0x${string}`; staging: `0x${string}` }
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
 type Logger = { info: (t: string, m: string, c?: Record<string, unknown>) => void; warn: (t: string, m: string, c?: Record<string, unknown>) => void; error: (t: string, m: string, c?: Record<string, unknown>) => void }
@@ -27,17 +30,40 @@ const deployRatioBps = () => {
   return Number.isInteger(n) && n >= 1 && n <= 10_000 ? n : 5000
 }
 
-export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Logger }): Promise<DeployOutcome> {
-  const { log } = opts
+/** Deploy staged capital for EVERY active gateway (registry + single-env fallback). Cron entry point. */
+export async function deployAll(opts: { supabase: SupabaseClient; log?: Logger }): Promise<{ deployed: number; results: DeployOutcome[] }> {
+  if (process.env.LP_GATEWAY_DEPLOY_ENABLED !== 'true') {
+    return { deployed: 0, results: [{ ok: false, status: 503, error: 'gateway deploy is not enabled', reason: 'disabled' }] }
+  }
+  const cfg = gatewayConfig()
+  if (!cfg) return { deployed: 0, results: [{ ok: false, status: 503, error: 'gateway_not_configured', reason: 'config' }] }
+  const active = await listActiveInstances(opts.supabase, cfg.chainId)
+  const targets: DeployInstance[] = active.length
+    ? active.map((i) => ({ positionManager: i.positionManager, staging: i.staging }))
+    : cfg.positionManager && cfg.staging
+      ? [{ positionManager: cfg.positionManager, staging: cfg.staging }]
+      : []
+  const results: DeployOutcome[] = []
+  let deployed = 0
+  for (const instance of targets) {
+    const r = await deployGateway({ supabase: opts.supabase, log: opts.log, instance })
+    results.push(r)
+    if (r.ok) deployed++
+  }
+  return { deployed, results }
+}
+
+export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Logger; instance: DeployInstance }): Promise<DeployOutcome> {
+  const { log, instance } = opts
   if (process.env.LP_GATEWAY_DEPLOY_ENABLED !== 'true') {
     return { ok: false, status: 503, error: 'gateway deploy is not enabled', reason: 'disabled' }
   }
   const cfg = gatewayConfig()
-  if (!cfg || !cfg.staging) return { ok: false, status: 503, error: 'gateway_not_configured', reason: 'config' }
+  if (!cfg) return { ok: false, status: 503, error: 'gateway_not_configured', reason: 'config' }
 
   const publicClient = gatewayPublicClient(cfg)
   const staged = (await publicClient.readContract({
-    address: cfg.staging, abi: LP_STAGING_ABI, functionName: 'stagedAssets',
+    address: instance.staging, abi: LP_STAGING_ABI, functionName: 'stagedAssets',
   })) as bigint
 
   const threshold = BigInt(process.env.LP_GATEWAY_DEPLOY_THRESHOLD_ATOMIC ?? '0')
@@ -68,7 +94,7 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
 
   try {
     const deployTx = await wallet.writeContract({
-      address: cfg.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deploy',
+      address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deploy',
       args: [quoteToDeploy, zap.pairedOut, BigInt(Math.floor(Date.now() / 1000) + 600)],
       account, chain: publicClient.chain, gas: 1_200_000n,
     })
