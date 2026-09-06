@@ -8,6 +8,26 @@ export const LP_GATEWAY_ABI = [
   { type: 'function', stateMutability: 'view', name: 'totalNav', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'tokenId', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'harvestRecipient', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', stateMutability: 'view', name: 'quoteAsset', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', stateMutability: 'view', name: 'pairedAsset', inputs: [], outputs: [{ type: 'address' }] },
+  {
+    type: 'function',
+    stateMutability: 'view',
+    name: 'poolKey',
+    inputs: [],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'currency0', type: 'address' },
+          { name: 'currency1', type: 'address' },
+          { name: 'fee', type: 'uint24' },
+          { name: 'tickSpacing', type: 'int24' },
+          { name: 'hooks', type: 'address' },
+        ],
+      },
+    ],
+  },
   { type: 'function', stateMutability: 'nonpayable', name: 'deposit', inputs: [{ name: 'quoteAmount', type: 'uint256' }], outputs: [{ name: 'sharesMinted', type: 'uint256' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'withdraw', inputs: [{ name: 'shares', type: 'uint256' }], outputs: [{ name: 'quoteOut', type: 'uint256' }, { name: 'pairedOut', type: 'uint256' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'harvest', inputs: [{ name: 'deadline', type: 'uint256' }], outputs: [{ name: 'quoteFees', type: 'uint256' }, { name: 'pairedFees', type: 'uint256' }] },
