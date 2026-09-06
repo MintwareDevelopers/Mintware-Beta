@@ -159,25 +159,39 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         if (shares > bal) revert InsufficientShares();
 
         uint256 ts = totalShares;
+        // Offset-consistent claim value (quote terms) — MUST match the deposit formula, or a
+        // donation-inflated raw pro-rata claim would over-withdraw. The virtual offset stays locked.
+        uint256 claimValue = SeniorSharesMath.toAssets(shares, totalNav(), ts, VIRTUAL, Math.Rounding.Floor);
+
         // Effects before interactions.
         sharesOf[msg.sender] = bal - shares;
         totalShares = ts - shares;
 
-        // Pro-rata slice of the idle reserve.
-        uint256 idleShare = FullMath.mulDiv(staging.stagedAssets(), shares, ts);
-        if (idleShare > 0) {
-            quoteOut = staging.unstage(idleShare); // best-effort; returns actual pulled to this contract
-            if (quoteOut > 0) quoteAsset.safeTransfer(msg.sender, quoteOut);
+        // Idle reserve first (pure quote).
+        uint256 fromIdle = Math.min(claimValue, staging.stagedAssets());
+        if (fromIdle > 0) {
+            uint256 got = staging.unstage(fromIdle); // best-effort; returns actual to this contract
+            if (got > 0) {
+                quoteAsset.safeTransfer(msg.sender, got);
+                quoteOut = got;
+            }
         }
 
-        // Pro-rata slice of the deployed LP position (both legs).
-        if (tokenId != 0) {
-            uint128 liq = positionManager.getPositionLiquidity(tokenId);
-            uint128 liqShare = uint128(FullMath.mulDiv(liq, shares, ts));
-            if (liqShare > 0) {
-                (uint256 gotQuote, uint256 gotPaired) = _decreaseAndTake(liqShare, msg.sender, block.timestamp);
-                quoteOut += gotQuote;
-                pairedOut += gotPaired;
+        // Remainder from the deployed LP: remove the liquidity worth `remaining` in quote value; the
+        // depositor receives BOTH legs (IL-exposed, no par claim).
+        uint256 remaining = claimValue > quoteOut ? claimValue - quoteOut : 0;
+        if (remaining > 0 && tokenId != 0) {
+            uint256 deployed = _deployedQuoteValue();
+            if (deployed > 0) {
+                uint128 liq = positionManager.getPositionLiquidity(tokenId);
+                uint256 want = FullMath.mulDiv(liq, remaining, deployed);
+                uint128 liqToRemove = want >= liq ? liq : uint128(want);
+                if (liqToRemove > 0) {
+                    (uint256 gotQuote, uint256 gotPaired) =
+                        _decreaseAndTake(liqToRemove, msg.sender, block.timestamp);
+                    quoteOut += gotQuote;
+                    pairedOut += gotPaired;
+                }
             }
         }
 
