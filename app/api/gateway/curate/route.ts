@@ -3,6 +3,18 @@ import { registerInstance } from '@/lib/gateway/registry'
 
 export const dynamic = 'force-dynamic'
 
+// Public: the pending curation queue, ranked by risk score (lowest = look first), for the dashboard.
+export const GET = createHandler(async (_req, ctx) => {
+  const { data } = await ctx.supabase
+    .from('gateway_pool_requests')
+    .select('id, pool_address, chain_id, pair_label, quote_asset, source, risk_score, risk_signals, hotness, created_at')
+    .eq('status', 'pending')
+    .order('risk_score', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+    .limit(100)
+  return ctx.json({ success: true, queue: data ?? [] })
+})
+
 // Curator-only (bearer). Approve or reject a pool request. Easy curation: one call resolves the queue,
 // and an approve that carries the deployed gateway addresses ALSO registers the live instance in one
 // shot (operator deploys via the factory, then approves-with-addresses). Fail-closed: the bearer secret

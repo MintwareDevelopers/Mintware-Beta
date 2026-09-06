@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { cookies } from 'next/headers'
 import { Plus_Jakarta_Sans, DM_Mono, Space_Grotesk, JetBrains_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { Providers } from '@/components/web2/providers'
@@ -6,6 +7,8 @@ import { Toaster } from 'sonner'
 import { CommandPalette } from '@/components/web2/CommandPalette'
 import { MwFooter } from '@/components/web2/MwFooter'
 import { ScrollProgress, RevealObserver } from '@/components/web2/motion'
+import { V2ModeProvider } from '@/components/web2/V2ModeProvider'
+import { isV2FromCookie, V2_COOKIE } from '@/lib/v2/gate'
 import './globals.css'
 
 const jakarta = Plus_Jakarta_Sans({
@@ -67,7 +70,8 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const isV2 = isV2FromCookie((await cookies()).get(V2_COOKIE)?.value)
   return (
     <html lang="en">
       <body className={`${jakarta.variable} ${dmMono.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased`}>
@@ -77,19 +81,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ScrollProgress />
         <RevealObserver />
         <Providers>
-          {children}
-          <MwFooter />
-          <CommandPalette />
-          <Toaster
-            position="bottom-right"
-            toastOptions={{
-              style: {
-                fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
-                fontSize: 13,
-                borderRadius: 12,
-              },
-            }}
-          />
+          <V2ModeProvider isV2={isV2}>
+            {children}
+            <MwFooter />
+            <CommandPalette />
+            <Toaster
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  fontFamily: 'var(--font-jakarta, "Plus Jakarta Sans", sans-serif)',
+                  fontSize: 13,
+                  borderRadius: 12,
+                },
+              }}
+            />
+          </V2ModeProvider>
         </Providers>
         <Analytics />
       </body>
