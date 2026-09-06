@@ -265,6 +265,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/vault/create` | `app/app/vault/create/page.tsx` |
 | `/app/vaults` | `app/app/vaults/page.tsx` |
 | `/cards` | `app/cards/page.tsx` |
+| `/curate` | `app/curate/page.tsx` |
 | `/deck` | `app/deck/page.tsx` |
 | `/defi` | `app/defi/page.tsx` |
 | `/docs` | `app/docs/page.tsx` |
