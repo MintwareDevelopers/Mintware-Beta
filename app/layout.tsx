@@ -80,8 +80,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <script dangerouslySetInnerHTML={{ __html: "document.documentElement.classList.add('js-motion')" }} />
         <ScrollProgress />
         <RevealObserver />
-        <Providers>
-          <V2ModeProvider isV2={isV2}>
+        <V2ModeProvider isV2={isV2}>
+          <Providers>
             {children}
             <MwFooter />
             <CommandPalette />
@@ -95,8 +95,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 },
               }}
             />
-          </V2ModeProvider>
-        </Providers>
+          </Providers>
+        </V2ModeProvider>
         <Analytics />
       </body>
     </html>

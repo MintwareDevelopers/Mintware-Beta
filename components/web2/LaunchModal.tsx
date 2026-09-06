@@ -11,6 +11,7 @@ import { createContext, useContext, useState, useCallback, type ReactNode } from
 import { useRouter } from 'next/navigation'
 import { useMintwarePrivy } from './providers'
 import { persistAppMode, appModeHome, type AppMode } from './AppMode'
+import { useV2Mode } from './V2ModeProvider'
 
 const LaunchCtx = createContext<{ launch: (dest?: string) => void } | null>(null)
 
@@ -42,9 +43,15 @@ export function LaunchModalProvider({ children }: { children: ReactNode }) {
   const [step, setStep] = useState<Step>('context')
   const privy = useMintwarePrivy()
   const router = useRouter()
+  const isV2 = useV2Mode()
 
-  // Every launch reopens at the context gate (Individual / Team).
-  const launch = useCallback(() => { setStep('context'); setOpen(true) }, [])
+  // V1 (default): Launch goes straight to the live LP Gateway app — no context modal. V2 (unlocked):
+  // the vision's Individual/Team context gate.
+  const launch = useCallback(() => {
+    if (!isV2) { router.push('/app'); return }
+    setStep('context')
+    setOpen(true)
+  }, [isV2, router])
 
   // Connect-first: prompt Privy when signed out, so a choice both ENTERS and CONNECTS in one click.
   function connectIfNeeded() {
