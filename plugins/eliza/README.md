@@ -23,7 +23,7 @@ The oracle watcher runs every 60 seconds, detects on-chain WETH activity from re
 
 ### Capital parking + x402
 
-`PARK_USDC` / `UNPARK_USDC` move USDC in and out of the Mintware yield vault — capital earns yield but stays fully spendable in place (it never locks). Once parked, the agent spends it per compute/API call with `PAY_X402`, which signs an EIP-3009 authorization and settles in USDC; use `QUOTE_X402` first to preview cost, and `SHOW_TREASURY` to see parked vs. spendable balances. The vault, USDC token, and RPC default to the live Arc-testnet YPN stack and are overridable via runtime settings (`MINTWARE_PARK_VAULT`, `MINTWARE_PARK_USDC`, `MINTWARE_PARK_RPC`, `MINTWARE_PARK_CHAIN_ID`).
+`PARK_USDC` / `UNPARK_USDC` move USDC in and out of the Mintware yield vault — capital earns yield but stays fully spendable in place (it never locks). Once parked, the agent spends it per compute/API call with `PAY_X402`, which signs an EIP-3009 authorization and settles in USDC; use `QUOTE_X402` first to preview cost, and `SHOW_TREASURY` to see parked vs. spendable balances. The vault, USDC token, and RPC default to the live Base-Sepolia YPN stack and are overridable via runtime settings (`MINTWARE_PARK_VAULT`, `MINTWARE_PARK_USDC`, `MINTWARE_PARK_RPC`, `MINTWARE_PARK_CHAIN_ID`).
 
 ---
 
@@ -162,10 +162,10 @@ Scores update within ~60 seconds of submitting a `CLAIM_PENDING_ACTIONS` transac
 | Variable | Required | Description |
 |---|---|---|
 | `AGENT_PRIVATE_KEY` | Required for write actions | 0x-prefixed private key for the agent wallet |
-| `MINTWARE_PARK_VAULT` | Optional | ERC-4626 yield vault address (default: Arc-testnet `0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421`) |
-| `MINTWARE_PARK_USDC` | Optional | USDC token address on the parking network (default: Arc-testnet `0x3600000000000000000000000000000000000000`) |
+| `MINTWARE_PARK_VAULT` | Optional | ERC-4626 yield vault address (default: Base Sepolia `0x09Cda8519737a60FD16D263f94fb56237CDb7E42`) |
+| `MINTWARE_PARK_USDC` | Optional | USDC token address on the parking network (default: Base Sepolia `0x036CbD53842c5426634e7929541eC2318f3dCF7e`) |
 | `MINTWARE_PARK_RPC` | Optional | JSON-RPC endpoint for parking reads/writes (default: `https://rpc.testnet.arc.io`) |
-| `MINTWARE_PARK_CHAIN_ID` | Optional | Chain ID for parking transactions (default: `5042002`, Arc testnet) |
+| `MINTWARE_PARK_CHAIN_ID` | Optional | Chain ID for parking transactions (default: `84532`, Base Sepolia) |
 
 `GET_ATTRIBUTION_SCORE`, `SHOW_TREASURY`, and `QUOTE_X402` work without a private key — they read from public REST/RPC. `PARK_USDC`, `UNPARK_USDC`, and `PAY_X402` require `AGENT_PRIVATE_KEY`.
 
