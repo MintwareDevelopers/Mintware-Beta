@@ -140,7 +140,7 @@ export async function discoverAndIngest(opts: {
   supabase: SupabaseClient
   chainId: number
   log?: Logger
-}): Promise<{ scanned: number; ingested: number; skipped: number }> {
+}): Promise<{ scanned: number; ingested: number; skipped: number; pruned: number }> {
   const { supabase, chainId, log } = opts
   const network = process.env.LP_GATEWAY_GT_NETWORK ?? 'robinhood'
   const usdgAddress = process.env.LP_GATEWAY_USDG?.toLowerCase()
@@ -152,17 +152,18 @@ export async function discoverAndIngest(opts: {
     })
     if (!res.ok) {
       log?.warn('gateway.discover', 'geckoterminal fetch failed', { status: res.status })
-      return { scanned: 0, ingested: 0, skipped: 0 }
+      return { scanned: 0, ingested: 0, skipped: 0, pruned: 0 }
     }
     const json = (await res.json()) as { data?: GtPool[] }
     pools = (json.data ?? []).slice(0, 30)
   } catch (e) {
     log?.warn('gateway.discover', 'geckoterminal error', { error: String(e) })
-    return { scanned: 0, ingested: 0, skipped: 0 }
+    return { scanned: 0, ingested: 0, skipped: 0, pruned: 0 }
   }
 
   let ingested = 0
   let skipped = 0
+  const kept: string[] = [] // pool_addresses that are current, eligible candidates this run (for pruning)
   for (const p of pools) {
     const c = poolToCandidate(p, { usdgAddress })
     if (c.verdict === 'ineligible' || !c.poolAddress) {
@@ -209,7 +210,25 @@ export async function discoverAndIngest(opts: {
     } else {
       await supabase.from('gateway_pool_requests').insert(row)
     }
+    kept.push(c.poolAddress)
     ingested++
   }
-  return { scanned: pools.length, ingested, skipped }
+
+  // Prune so the feed stays LIVE: drop auto pending candidates that fell out of the current top-30.
+  // Only touches auto+pending rows for this chain (never a manual request, never a curator decision),
+  // and only when we actually got a fresh set (kept>0) so a transient GeckoTerminal blip can't wipe it.
+  let pruned = 0
+  if (kept.length > 0) {
+    const inList = `(${kept.map((a) => `"${a}"`).join(',')})`
+    const { data: del } = await supabase
+      .from('gateway_pool_requests')
+      .delete()
+      .eq('status', 'pending')
+      .eq('source', 'auto')
+      .eq('chain_id', chainId)
+      .not('pool_address', 'in', inList)
+      .select('id')
+    pruned = del?.length ?? 0
+  }
+  return { scanned: pools.length, ingested, skipped, pruned }
 }
