@@ -1,10 +1,14 @@
-import { V1AppHome } from '@/components/web2/V1AppHome'
+import { V1Shell } from '@/components/web2/v1/V1Shell'
+import { V1Discover } from '@/components/web2/v1/V1Discover'
 
-// The live V1 platform (LP Gateway), reachable from the Launch chooser's "V1 · Live" track. This is a
-// dedicated door so V1 is always reachable regardless of the site-wide V2 default — the marketing pages
-// and the V2 app surfaces are untouched. See components/web2/LaunchModal.tsx (the track chooser).
-export const metadata = { title: 'Mintware — LP Gateway' }
+// The live V1 platform — Discover (curated pools). Reached from the Launch chooser's "V1 · Live" track;
+// dark "app mode" shell, distinct from the light marketing site. See components/web2/v1/V1Shell.tsx.
+export const metadata = { title: 'Mintware — Discover' }
 
-export default function V1Platform() {
-  return <V1AppHome />
+export default function V1Page() {
+  return (
+    <V1Shell>
+      <V1Discover />
+    </V1Shell>
+  )
 }
