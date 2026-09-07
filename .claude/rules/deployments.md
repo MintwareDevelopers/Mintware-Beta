@@ -42,6 +42,9 @@
 | `NEXT_PUBLIC_MW_TREASURY_ADDRESS` | Public | Set after contract deploy |
 | `TEAM_HARD_GATE` | Server-only | `true` turns ON the Phase-2 User/Team hard gate (`proxy.ts` → `lib/auth/gate.ts`). Unset/`false` = soft-gate showcase, middleware is a pass-through (default). |
 | `PRIVY_APP_SECRET` | Server-only | Privy app secret for server-side session verification (`lib/auth/session.ts#verifyPrivySession`). Required for the hard gate to be a real security boundary; unset → verification fails closed. |
+| `ORACLE_SIGNER_PROVIDER` | Server-only | `privy` (verified in prod 2026-09-07 via `GET /api/oracle/signer-check`, bearer `ADMIN_SECRET`) → every `getOracleSigner(role)` resolves a Privy server wallet; `env-key`/unset → raw `*_PRIVATE_KEY` env. Prod `root` = `0x7fD8…7E06` (card/x402/treasury seat). |
+| `GATEWAY_ORACLE_PRIVY_WALLET_ID` / `GATEWAY_ORACLE_PRIVY_ADDRESS` | Server-only | **LP Gateway owner seat** (`getOracleSigner('gateway')` — `deploy`/`harvest`/`circuitBreaker`). A DEDICATED Privy wallet (`0x18AE…663c`, the rig owner) with NO fallback to any shared key (re-audit A-3). Set on prod+preview 2026-09-07. Unset ⇒ gateway crons fail closed (`*_signer_unavailable`). |
+| `ADMIN_SECRET` | Server-only | Bearer for the `(admin)/oracle/*` diagnostics (route group is stripped: `/api/oracle/...`). Set on prod 2026-09-07; unset ⇒ those routes 500 `MISSING_SECRET`. |
 | `DECK_PASSWORD` | Server-only | Password for the private investor deck at `/deck` (`lib/deck/gate.ts`). `POST /api/deck/unlock` validates it and sets an http-only cookie holding a hash-derived token; the `/deck` server component renders the deck only when the cookie matches. **Unset ⇒ gate closed to everyone (fail-closed).** Set on Vercel + `.env.local` to open it; share the value with investors out-of-band. |
 
 ### x402 (agent pay-per-call — `lib/x402/*`)

@@ -37,7 +37,7 @@ export async function runCircuitBreaker(opts: { supabase: SupabaseClient; log?: 
 
   let account
   try {
-    account = await getOracleSigner('root')
+    account = await getOracleSigner('gateway') // dedicated gateway-owner seat (re-audit A-3)
   } catch (e) {
     opts.log?.warn('gateway.breaker', 'oracle signer unavailable', { error: String(e) })
     return { paused: 0 }

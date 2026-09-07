@@ -1,6 +1,6 @@
 // LP-gateway pair/deploy orchestration — moves staged (Morpho-earning) quote capital into the target
-// V4 pool once a threshold is reached. Owner-gated on-chain (getOracleSigner('root') is the position
-// manager's owner); the paired leg is acquired by zapping via the MW router seam. YIELD/PRINCIPAL note:
+// V4 pool once a threshold is reached. Owner-gated on-chain (getOracleSigner('gateway') is the position
+// manager's owner — a DEDICATED Privy seat, not the shared root); the paired leg is acquired by zapping via the MW router seam. YIELD/PRINCIPAL note:
 // this deploys PRINCIPAL from staging into the LP (that's the product) — it never spends principal on a
 // buffer; the yield-first rule governs the buffer path (harvest.ts), not this.
 //
@@ -84,7 +84,7 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
 
   let account
   try {
-    account = await getOracleSigner('root')
+    account = await getOracleSigner('gateway') // dedicated gateway-owner seat (re-audit A-3), never the shared root
   } catch (e) {
     log?.error('gateway.deploy', 'oracle signer unavailable', { error: String(e) })
     return { ok: false, status: 503, error: 'deploy_signer_unavailable', reason: 'signer' }

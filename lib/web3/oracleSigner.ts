@@ -39,6 +39,7 @@ const ROLE_PRIVY_ENV: Record<OracleRole, PrivyEnv> = {
   weight: { walletId: 'WEIGHT_ORACLE_PRIVY_WALLET_ID', address: 'WEIGHT_ORACLE_PRIVY_ADDRESS' },
   range:  { walletId: 'RANGE_ORACLE_PRIVY_WALLET_ID',  address: 'RANGE_ORACLE_PRIVY_ADDRESS' },
   agent:  { walletId: 'AGENT_ORACLE_PRIVY_WALLET_ID',  address: 'AGENT_ORACLE_PRIVY_ADDRESS' },
+  gateway: { walletId: 'GATEWAY_ORACLE_PRIVY_WALLET_ID', address: 'GATEWAY_ORACLE_PRIVY_ADDRESS' },
 }
 
 function usePrivy(): boolean {

@@ -90,14 +90,16 @@ const POOL_MANAGER_ABI = [
 
 // ── preflight: Privy env ──
 const { PRIVY_APP_ID, PRIVY_APP_SECRET } = process.env
-const walletId = process.env.ROOT_ORACLE_PRIVY_WALLET_ID
-const privyAddress = process.env.ROOT_ORACLE_PRIVY_ADDRESS
+// The gateway owner is the DEDICATED `gateway` signer seat (re-audit A-3 key hardening) — the same wallet
+// the app's crons resolve via getOracleSigner('gateway'). ROOT_* is accepted as a legacy fallback only.
+const walletId = process.env.GATEWAY_ORACLE_PRIVY_WALLET_ID ?? process.env.ROOT_ORACLE_PRIVY_WALLET_ID
+const privyAddress = process.env.GATEWAY_ORACLE_PRIVY_ADDRESS ?? process.env.ROOT_ORACLE_PRIVY_ADDRESS
 if ((process.env.ORACLE_SIGNER_PROVIDER ?? '').toLowerCase() !== 'privy') {
   die('set ORACLE_SIGNER_PROVIDER=privy (this deploy is Privy-signed by design — no raw key).')
 }
 if (!PRIVY_APP_ID || !PRIVY_APP_SECRET) die('missing PRIVY_APP_ID / PRIVY_APP_SECRET.')
 if (!walletId || !privyAddress) {
-  die('missing ROOT_ORACLE_PRIVY_WALLET_ID / ROOT_ORACLE_PRIVY_ADDRESS — run provision-privy-oracle-wallet.mjs first.')
+  die('missing GATEWAY_ORACLE_PRIVY_WALLET_ID / GATEWAY_ORACLE_PRIVY_ADDRESS — run provision-privy-oracle-wallet.mjs first.')
 }
 
 let PrivyClient, createViemAccount

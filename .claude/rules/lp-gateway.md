@@ -53,7 +53,10 @@ capped deploy are the economic backstop; mainnet is audit-gated.
   Krystal-parity Discover UI (`TokenPair` real icons, APR column, every row → `/earn/[pool]`). Est. APR is
   labeled an estimate, never a projection/guarantee (hard copy line).
 - **Crons** (`app/api/(rewards)/cron/gateway-{discover,harvest,deploy}`) — flag-gated OFF + fail-closed;
-  discover scheduled every 3h; deploy has idempotency (L-02). Money-moving crons sign via `getOracleSigner('root')`.
+  discover scheduled every 3h; deploy has idempotency (L-02). Money-moving crons sign via
+  **`getOracleSigner('gateway')`** — a DEDICATED Privy seat (`GATEWAY_ORACLE_PRIVY_WALLET_ID/_ADDRESS`, no
+  shared-key fallback) that is the rig's owner (`0x18AE…663c`). Prod's shared `root` is a different wallet
+  (`0x7fD8…7E06`, card/x402/treasury) and must never own a gateway (re-audit A-3 key hardening).
 - **Routes** (`app/api/gateway/{discover,sparklines,instances,position,positions,leaderboard,deposit,withdraw,curate,request,meta}`) — all
   `createHandler`. `deposit`/`withdraw` require **signed-message auth + tx-hash idempotency** (M-04). `curate`
   bearer **fails closed** when `LP_GATEWAY_CURATOR_SECRET` unset (`?? ''`, not a literal — C-01). Swap seams

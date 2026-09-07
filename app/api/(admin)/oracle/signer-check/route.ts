@@ -17,7 +17,7 @@ import type { OracleRole } from '@/lib/web3/oracleKeys'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES: OracleRole[] = ['root', 'weight', 'range', 'agent']
+const ROLES: OracleRole[] = ['root', 'weight', 'range', 'agent', 'gateway']
 const TEST_MESSAGE = 'mintware-oracle-signer-check'
 
 type RoleReport =
