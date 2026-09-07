@@ -222,8 +222,12 @@ hardened contracts were redeployed to Robinhood testnet (2026-09-07). **LP-path 
 (2026-09-07)**: a live `deploy() → withdraw()` round-trip against the real Uniswap V4 pool minted a real
 position, `totalNav` picked up the LP leg, and withdraw did **pro-rata idle+LP sourcing**, ran the
 **fee-sweep** (H-02), and **conserved value** (out + locked offset-dust = pre-withdraw NAV — donation-safety
-intact). Still requiring the swap seam wired (a documented fork-test step): **fee-generation** and
-**spot-price-manipulation** assertions (i.e. observing the conservative min/max mark diverge under a pump).
+intact). **Swap-seam validation now DONE** (`contracts-v4/test/fork/MintwareLpGatewayHardeningFork.t.sol`, run with
+`LP_FORK_RPC_URL=<RH testnet>`): a fork test drives **real swaps** through `PoolSwapTest` against the live
+V4 stack and asserts, all passing — **H-02** harvest routes fees to the recipient with principal liquidity
+untouched, **H-02** a withdrawal that touches the LP sweeps the position's fees to the buffer (not the
+withdrawer), and **H-03** a single-block pump can't inflate a withdrawal claim (the conservative mark holds
+it below the pumped spot NAV). Self-skips without the RPC so CI stays green.
 
 | ID | Fix shipped |
 |---|---|
