@@ -15,6 +15,11 @@ import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { listActiveInstances } from '@/lib/gateway/registry'
 import { skimPerformanceFee, proRataBufferCredits, type SharePosition } from '@/lib/gateway/harvestMath'
 import { swapPairedToQuote } from '@/lib/gateway/routerSwap'
+import { harvestDestination } from '@/lib/gateway/opsConfig'
+
+const ERC20_APPROVE_ABI = [
+  { type: 'function', stateMutability: 'nonpayable', name: 'approve', inputs: [{ name: 's', type: 'address' }, { name: 'v', type: 'uint256' }], outputs: [{ type: 'bool' }] },
+] as const
 
 export type HarvestInstance = { positionManager: `0x${string}`; poolAddress: string; chainId: number }
 
@@ -151,6 +156,35 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
 
   // 3) skim the performance fee, split the rest pro-rata by share
   const { feeAtomic, netAtomic } = skimPerformanceFee(grossAtomic, perfFeeBps())
+
+  // 3a) restake destination (item 14): compound the net back into Morpho instead of crediting buffers —
+  //     lifts NAV pro-rata for ALL holders (no share mint). The oracle seat holds the net; approve the
+  //     PM + call compoundQuote. Requires the compoundQuote-capable contract (redeploy) — off until then.
+  if (harvestDestination() === 'restake') {
+    const recordRestake = (credited: bigint) =>
+      supabase.from('harvest_events').insert({
+        pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
+        amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(), amount_credited_atomic: credited.toString(),
+      })
+    if (netAtomic <= 0n) {
+      await recordRestake(0n)
+      return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: 0n, recipients: 0 }
+    }
+    try {
+      const quoteAsset = (await publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset' })) as `0x${string}`
+      const ah = await wallet.writeContract({ address: quoteAsset, abi: ERC20_APPROVE_ABI, functionName: 'approve', args: [instance.positionManager, netAtomic], account, chain: publicClient.chain })
+      await publicClient.waitForTransactionReceipt({ hash: ah })
+      const ch = await wallet.writeContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'compoundQuote', args: [netAtomic], account, chain: publicClient.chain, gas: 400_000n })
+      const rc = await publicClient.waitForTransactionReceipt({ hash: ch })
+      if (rc.status !== 'success') return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx' }
+    } catch (e) {
+      log?.error('gateway.harvest', 'restake/compound failed', { error: String(e) })
+      return { ok: false, status: 502, error: 'compound_failed', reason: 'tx' }
+    }
+    await recordRestake(netAtomic)
+    return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: netAtomic, recipients: 0 }
+  }
+
   const { data: rows } = await supabase
     .from('gateway_positions')
     .select('id, user_wallet, shares')

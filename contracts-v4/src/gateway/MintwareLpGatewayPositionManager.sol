@@ -83,6 +83,10 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     mapping(address => uint256) public sharesOf;
     uint256 public totalShares;
 
+    // Owner circuit-breaker (item 13). Blocks NEW deposits only — withdraw is ALWAYS allowed, so a pause
+    // can never trap depositor funds. Set by the operator (or the keeper on a sustained out-of-range alert).
+    bool public paused;
+
     error ZeroAmount();
     error ZeroShares();
     error ZeroAddress();
@@ -93,12 +97,15 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     error BadDeviationBand();
     error MinLiquidityNotMet();
     error RenounceDisabled();
+    error DepositsPaused();
 
     event Deposited(address indexed user, uint256 quoteIn, uint256 sharesMinted);
     event Withdrawn(address indexed user, uint256 sharesBurned, uint256 quoteOut, uint256 pairedOut);
     event Deployed(uint256 indexed tokenId, uint256 quoteUsed, uint256 pairedUsed, uint128 liquidity);
     event Harvested(uint256 quoteFees, uint256 pairedFees, address indexed recipient);
     event PriceAnchored(uint160 sqrtPriceX96, uint256 blockNumber);
+    event PausedSet(bool paused);
+    event Compounded(uint256 quoteAmount);
 
     constructor(
         IPoolManager poolManager_,
@@ -195,6 +202,7 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     /// @notice Deposit quote-asset; it stages into the yield reserve (earns immediately) and mints
     ///         entry-NAV shares in the aggregate gateway position. Not a deposit/savings product.
     function deposit(uint256 quoteAmount) external nonReentrant returns (uint256 sharesMinted) {
+        if (paused) revert DepositsPaused(); // circuit-breaker: no new capital while paused (withdraw stays open)
         if (quoteAmount == 0) revert ZeroAmount();
         if (_lastActionBlock[msg.sender] == block.number) revert SameBlockAction();
         _lastActionBlock[msg.sender] = block.number;
@@ -363,6 +371,27 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         if (quoteFees > 0) quoteAsset.safeTransfer(harvestRecipient, quoteFees);
         if (pairedFees > 0) pairedAsset.safeTransfer(harvestRecipient, pairedFees);
         if (quoteFees != 0 || pairedFees != 0) emit Harvested(quoteFees, pairedFees, harvestRecipient);
+    }
+
+    // ── owner: circuit-breaker + compound ─────────────────────────────────────────────────────
+
+    /// @notice Owner circuit-breaker (item 13): pause/unpause NEW deposits. Withdraw is NEVER gated, so a
+    ///         pause can't trap funds — it only stops fresh capital entering a degrading/out-of-range pool.
+    ///         Flipped by the operator, or by the keeper on a sustained out-of-range alert.
+    function setPaused(bool p) external onlyOwner {
+        paused = p;
+        emit PausedSet(p);
+    }
+
+    /// @notice Owner-gated compound (item 14 restake destination): stage `amount` quote back into the yield
+    ///         reserve, lifting NAV pro-rata for ALL shareholders with NO share mint and NO paired leg —
+    ///         pure accretion. The caller (harvest recipient / oracle seat) supplies the net harvested fees.
+    function compoundQuote(uint256 amount) external onlyOwner nonReentrant {
+        if (amount == 0) revert ZeroAmount();
+        quoteAsset.safeTransferFrom(msg.sender, address(this), amount);
+        quoteAsset.forceApprove(address(staging), amount);
+        staging.stage(amount);
+        emit Compounded(amount);
     }
 
     // ── NAV (quote-asset terms) ──────────────────────────────────────────────────────────────
