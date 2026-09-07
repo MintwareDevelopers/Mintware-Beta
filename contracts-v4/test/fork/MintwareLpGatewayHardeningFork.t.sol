@@ -45,6 +45,7 @@ contract MintwareLpGatewayHardeningForkTest is Test {
     MockERC20 internal paired; // 18dp
     PoolKey internal key;
     PoolSwapTest internal swapper;
+    MockYieldAdapter internal adapter; // field (not a setUp local) so tests can simulate adapter illiquidity
 
     address internal RECIP = address(0xFEE5);
     address internal alice = address(0xA11CE);
@@ -70,7 +71,7 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         quote = a;
         paired = b;
 
-        MockYieldAdapter adapter = new MockYieldAdapter(address(quote));
+        adapter = new MockYieldAdapter(address(quote));
         key = PoolKey({
             currency0: Currency.wrap(address(c0)),
             currency1: Currency.wrap(address(c1)),
@@ -184,5 +185,74 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         // conservative amount (not zeroed).
         assertLt(valueOut, navSpot, "conservative mark held the claim below the pumped spot NAV (no inflation)");
         assertGt(valueOut, navFair / 2, "conservative claim is still a real payout, not zeroed");
+    }
+
+    // ── Real-funds re-audit regressions ──────────────────────────────────────────────────────
+
+    // A-2: a full LP drain used to BRICK the instance — `_sweepFees` on the emptied position reverted
+    // CannotUpdateEmptyPosition, so harvest/deploy (and every adapter-short withdraw) reverted forever.
+    // A PLAIN full exit leaves dust liquidity (conservative mark + floor rounding size the removal a hair
+    // under `liq`), which does not trip the empty-position revert. The exact-zero state is reached the way
+    // the audit described: an adapter SHORTFALL pushes `remaining` past the LP so the whole position is
+    // removed. Now: drain → harvest is a harmless no-op → liquidity restored → deposit + redeploy succeed.
+    function test_fork_A2_fullDrainThenHarvestAndRedeploySucceed() public {
+        if (!live) return;
+        uint256 b0 = block.number;
+        IPositionManager posm = IPositionManager(address(pm.positionManager()));
+        adapter.setWithdrawableCap(10_000e18); // idle shortfall → the exit takes the ENTIRE LP (liq → 0)
+        uint256 s = pm.sharesOf(alice);
+        vm.prank(alice);
+        pm.withdraw(s);
+        assertEq(posm.getPositionLiquidity(pm.tokenId()), 0, "LP fully drained (exact zero)");
+        vm.roll(b0 + 1);
+
+        (uint256 qf, uint256 pf) = pm.harvest(block.timestamp); // pre-fix: reverted CannotUpdateEmptyPosition
+        assertEq(qf + pf, 0, "nothing to sweep on an emptied position");
+
+        adapter.setWithdrawableCap(type(uint256).max); // liquidity restored
+        vm.prank(alice);
+        pm.deposit(100_000e18);
+        vm.roll(b0 + 2);
+        pm.deploy(50_000e18, 50_000e18, 0, block.timestamp); // pre-fix: reverted
+        assertGt(posm.getPositionLiquidity(pm.tokenId()), 0, "redeployed into the same position");
+    }
+
+    // A-3 (size): after the balanced setUp deploy ~2/3 of NAV is LP-exposed, above MAX_DEPLOY_BPS (50%),
+    // so ANY further deploy must revert — "most capital stays idle" is an on-chain invariant a
+    // compromised owner key cannot override.
+    function test_fork_A3_deployCapBlocksOverExposure() public {
+        if (!live) return;
+        vm.expectRevert(MintwareLpGatewayPositionManager.DeployCapExceeded.selector);
+        pm.deploy(1e18, 1e18, 0, block.timestamp);
+    }
+
+    // A-3 (price): a deploy while spot is far from the clamped-follower reference reverts, so a
+    // sandwiched deploy cannot mint at a manipulated composition. Drain first so the size cap passes
+    // and only the band gates the next deploy.
+    function test_fork_A3_deployPriceBandBlocksSandwich() public {
+        if (!live) return;
+        uint256 s = pm.sharesOf(alice);
+        vm.prank(alice);
+        pm.withdraw(s);
+        vm.roll(block.number + 1);
+        vm.prank(alice);
+        pm.deposit(100_000e18);
+        _swap(false, -40_000e18); // pump spot far from the reference in one block
+        vm.roll(block.number + 1);
+        vm.expectRevert(MintwareLpGatewayPositionManager.DeployPriceOutOfBand.selector);
+        pm.deploy(10_000e18, 10_000e18, 0, block.timestamp);
+    }
+
+    // A-1 (with an LP leg): the adapter goes illiquid on a DEPLOYED position. A full exit delivers the
+    // liquid idle + the whole LP; the UNSERVED idle is re-credited as shares — never stranded ownerless.
+    function test_fork_A1_withdrawAdapterShort_reCreditsUnserved() public {
+        if (!live) return;
+        adapter.setWithdrawableCap(10_000e18); // idle is 50k; only 10k is liquid
+        uint256 s = pm.sharesOf(alice);
+        vm.prank(alice);
+        pm.withdraw(s);
+        assertGt(pm.sharesOf(alice), 0, "unserved value re-credited as shares (pre-fix: 0)");
+        assertGt(pm.totalShares(), 0, "the stuck idle still has an owner");
+        assertApproxEqRel(pm.totalNav(), 40_000e18, 0.05e18, "remaining NAV ~= the unserved idle (50k - 10k)");
     }
 }

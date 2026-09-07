@@ -47,6 +47,10 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
 
     uint256 private constant VIRTUAL = 1e6;
     uint256 private constant Q96 = 0x1000000000000000000000000;
+    // Hard ceiling on the TOTAL deployed fraction of NAV (re-audit A-3). The off-chain "capped deploy fraction"
+    // was per-run and converged to ~100%; this makes "most capital stays idle" an on-chain invariant a
+    // compromised owner key cannot override. Constant (not owner-settable) by design.
+    uint16 public constant MAX_DEPLOY_BPS = 5000;
 
     IPoolManager public immutable poolManager;
     IPositionManager public immutable positionManager;
@@ -98,6 +102,10 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     error MinLiquidityNotMet();
     error RenounceDisabled();
     error DepositsPaused();
+    error DeployCapExceeded(); // A-3: total deployed would exceed MAX_DEPLOY_BPS of NAV
+    error DeployPriceOutOfBand(); // A-3: spot too far from the clamped-follower reference (sandwich guard)
+    error HookedPoolUnsupported(); // A-6: the no-callback / conservative-mark model assumes a hookless pool
+    error BadTicks(); // A-8: tickLower >= tickUpper or not aligned to tickSpacing
 
     event Deposited(address indexed user, uint256 quoteIn, uint256 sharesMinted);
     event Withdrawn(address indexed user, uint256 sharesBurned, uint256 quoteOut, uint256 pairedOut);
@@ -134,6 +142,17 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         address c1 = Currency.unwrap(poolKey_.currency1);
         bool q0 = c0 == address(quoteAsset_);
         if (!q0 && c1 != address(quoteAsset_)) revert QuoteNotInPool();
+        // Re-audit A-6/A-8 invariants. Hookless only: a hook that reverts in before/afterRemoveLiquidity or
+        // returns an afterAddLiquidity delta would brick every LP withdraw / deploy, and the reentrancy and
+        // conservative-mark reasoning both assume no callbacks. Native-ETH pools (paired == address(0)) are
+        // unsupported (safeTransferFrom/balanceOf on address(0) revert). Ticks must be ordered + aligned or
+        // the first deploy reverts TickMisaligned with capital already staged.
+        if (address(poolKey_.hooks) != address(0)) revert HookedPoolUnsupported();
+        if ((q0 ? c1 : c0) == address(0)) revert ZeroAddress();
+        if (
+            tickLower_ >= tickUpper_ || tickLower_ % poolKey_.tickSpacing != 0
+                || tickUpper_ % poolKey_.tickSpacing != 0
+        ) revert BadTicks();
 
         poolManager = poolManager_;
         positionManager = positionManager_;
@@ -285,8 +304,26 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
             }
         }
 
+        // Re-audit A-1: if sourcing under-delivered (adapter illiquid/paused and/or the LP exhausted), the old
+        // code burned ALL the shares anyway and silently stranded the unserved value (unrecoverable for a sole
+        // holder). Instead, re-credit the shares for the UNSERVED portion: the withdrawer takes what can be
+        // delivered now and KEEPS their claim on the rest — no loss, no brick (M-01 preserved). The paired
+        // leg is valued at spot for the delivered-value comparison.
+        uint256 sharesBurned = shares;
+        {
+            uint256 delivered = quoteOut + (pairedOut > 0 ? _pairedToQuote(pairedOut, _spot()) : 0);
+            if (delivered < claimValue) {
+                uint256 reCredit = FullMath.mulDiv(shares, claimValue - delivered, claimValue);
+                if (reCredit > 0) {
+                    sharesOf[msg.sender] += reCredit;
+                    totalShares += reCredit;
+                    sharesBurned = shares - reCredit;
+                }
+            }
+        }
+
         _anchorFollow(); // advance the clamped-follower reference
-        emit Withdrawn(msg.sender, shares, quoteOut, pairedOut);
+        emit Withdrawn(msg.sender, sharesBurned, quoteOut, pairedOut);
     }
 
     // ── owner: deploy staged capital into the pool ───────────────────────────────────────────
@@ -301,6 +338,16 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     {
         if (quoteToDeploy == 0 && pairedAmount == 0) revert ZeroAmount();
 
+        // Re-audit A-3 (size): cap the TOTAL deployed fraction of NAV at MAX_DEPLOY_BPS. Checked on the
+        // requested quote (conservative — the best-effort unstage can only return less). Bounds what a
+        // compromised owner key can push into the pool, and keeps "most capital idle" true across repeated
+        // deploys (the off-chain per-run fraction converged to ~100%).
+        {
+            uint256 nav = totalNav();
+            uint256 deployedNow = tokenId == 0 ? 0 : _deployedQuoteValueAt(_spot());
+            if (deployedNow + quoteToDeploy > (nav * MAX_DEPLOY_BPS) / 10_000) revert DeployCapExceeded();
+        }
+
         // Sweep the existing position's accrued fees to the buffer BEFORE increasing, so the INCREASE never
         // folds trading fees into the re-stage / paired-return below (finding H-02). No-op on first deploy.
         _sweepFees(deadline);
@@ -312,6 +359,18 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
             quoteIsCurrency0 ? (quoteGot, pairedAmount) : (pairedAmount, quoteGot);
 
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(_poolKey.toId());
+        // Re-audit A-3 (price): mint only while spot is within the follower band of the clamped reference, so
+        // a sandwiched deploy can't mint at a manipulated composition. No reference exists before the first
+        // deploy (the first deploy sets the anchor) — there the caller's `minLiquidity` is the guard, which
+        // the cron now computes for real rather than passing 0.
+        {
+            uint160 ref = _refSqrtPrice;
+            if (ref != 0) {
+                uint160 band = uint160((uint256(ref) * maxDeviationBps) / 10_000);
+                uint160 diff = sqrtPriceX96 > ref ? sqrtPriceX96 - ref : ref - sqrtPriceX96;
+                if (diff > band) revert DeployPriceOutOfBand();
+            }
+        }
         uint160 sqrtA = TickMath.getSqrtPriceAtTick(tickLower);
         uint160 sqrtB = TickMath.getSqrtPriceAtTick(tickUpper);
         uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(sqrtPriceX96, sqrtA, sqrtB, amount0, amount1);
@@ -367,6 +426,11 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     ///      or increase (deploy) so those paths never hand the position's fees to a depositor (finding H-02).
     function _sweepFees(uint256 deadline) internal returns (uint256 quoteFees, uint256 pairedFees) {
         if (tokenId == 0) return (0, 0);
+        // Re-audit A-2: a zero-delta update against an EMPTIED position reverts CannotUpdateEmptyPosition in
+        // v4-core, and DECREASE never burns the NFT — so after a full LP drain this would brick deploy,
+        // harvest, and every adapter-short withdraw forever. A full decrease already collected all fees, so
+        // there is nothing to sweep: return instead of calling into the pool.
+        if (positionManager.getPositionLiquidity(tokenId) == 0) return (0, 0);
         (quoteFees, pairedFees) = _decreaseAndTake(0, address(this), deadline);
         if (quoteFees > 0) quoteAsset.safeTransfer(harvestRecipient, quoteFees);
         if (pairedFees > 0) pairedAsset.safeTransfer(harvestRecipient, pairedFees);

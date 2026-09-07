@@ -20,7 +20,7 @@ export type DeployInstance = { positionManager: `0x${string}`; staging: `0x${str
 type SupabaseClient = ReturnType<typeof getServiceClient>
 type Logger = { info: (t: string, m: string, c?: Record<string, unknown>) => void; warn: (t: string, m: string, c?: Record<string, unknown>) => void; error: (t: string, m: string, c?: Record<string, unknown>) => void }
 
-type Reason = 'disabled' | 'config' | 'signer' | 'below_threshold' | 'zap_unwired' | 'tx' | 'duplicate'
+type Reason = 'disabled' | 'config' | 'signer' | 'below_threshold' | 'zap_unwired' | 'min_liquidity_unset' | 'tx' | 'duplicate'
 export type DeployOutcome =
   | { ok: true; deployTx: `0x${string}`; quoteDeployedAtomic: bigint; pairedDeployedAtomic: bigint }
   | { ok: false; status: number; error: string; reason: Reason }
@@ -94,13 +94,40 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
   // IL control: deploy only a FRACTION of staged into the IL-bearing LP; the rest stays idle in Morpho,
   // earning lending yield with ZERO impermanent loss. LP_GATEWAY_DEPLOY_RATIO_BPS (default 5000 = 50%)
   // is the knob — lower it for a more conservative (lower-IL) posture on a volatile meme pool.
-  const deployable = (staged * BigInt(deployRatioBps())) / 10_000n
+  // Re-audit A-3 (F-06): the old `staged × ratio` was PER-RUN, so successive windows converged to ~100%
+  // deployed (50% → 75% → 87.5% …) — the "capped fraction" was a floor, not a cap. Target the TOTAL
+  // deployed fraction of NAV instead: deployable = ratio·NAV − alreadyDeployed (≥ 0). The contract now
+  // also enforces a hard MAX_DEPLOY_BPS on-chain; this keeps the cron from submitting a tx that would
+  // revert and honours a tighter operator ratio.
+  const totalNav = (await publicClient.readContract({
+    address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'totalNav',
+  })) as bigint
+  const deployedNow = totalNav > staged ? totalNav - staged : 0n
+  const target = (totalNav * BigInt(deployRatioBps())) / 10_000n
+  const deployable = target > deployedNow ? target - deployedNow : 0n
+  if (deployable <= 0n) {
+    return { ok: false, status: 200, error: 'deployed fraction is already at/above the target ratio', reason: 'below_threshold' }
+  }
   // Split the deployable amount: half stays quote, half zaps to the paired leg (balanced-range target).
   const quoteToDeploy = deployable / 2n
   const zap = await swapQuoteToPaired({ cfg, account, wallet, publicClient, quoteAmount: deployable - quoteToDeploy, log })
   if (zap.pairedOut <= 0n) {
     // Fail-closed: without the paired leg deploy() can't proceed. The seam is honest, not a bad swap.
     return { ok: false, status: 200, error: 'paired-leg zap not available', reason: 'zap_unwired' }
+  }
+
+  // Re-audit A-3: NEVER deploy with minLiquidity = 0 — that switches the M-03 sandwich floor off entirely
+  // (the prior "fixed" status was the on-chain hook only; this caller defaulted it to 0). Fail closed until
+  // the operator sets a real floor. The on-chain follower band now guards every deploy after the first;
+  // the first deploy is exactly the one this floor protects. Checked BEFORE the window claim so a refusal
+  // never locks the window.
+  const minLiquidity = BigInt(process.env.LP_GATEWAY_DEPLOY_MIN_LIQUIDITY ?? '0')
+  if (minLiquidity <= 0n) {
+    return {
+      ok: false, status: 200,
+      error: 'LP_GATEWAY_DEPLOY_MIN_LIQUIDITY is unset/0 — refusing to deploy without a slippage floor',
+      reason: 'min_liquidity_unset',
+    }
   }
 
   // L-02 idempotency claim: reserve this pool's deploy window BEFORE submitting the tx. If another run

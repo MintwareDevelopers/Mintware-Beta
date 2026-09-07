@@ -198,14 +198,12 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         pm.compoundQuote(1e6);
     }
 
-    // ── AUDIT PoC (F1) ─────────────────────────────────────────────────────────────────────────
-    // In the idle-only state (before any deploy, tokenId == 0) there is NO LP leg to cover an idle
-    // shortfall. If the yield adapter is illiquid/paused (totalAssets reports full principal but
-    // withdraw returns partial — exactly a paused Morpho), withdraw burns the FULL share amount but
-    // delivers only the partial value. The unserved remainder is left in the adapter, now owned by
-    // nobody (totalShares == 0). The withdrawer silently loses it. Expected to FAIL-as-in-"demonstrates
-    // the loss" until fixed: assertions below encode the buggy outcome.
-    function test_audit_F1_idleOnlyWithdraw_adapterIlliquid_burnsSharesForUnservedValue() public {
+    // ── Re-audit A-1 REGRESSION ────────────────────────────────────────────────────────────────
+    // Idle-only state (tokenId == 0), adapter illiquid/paused (totalAssets reports full principal but
+    // withdraw returns partial — exactly a paused Morpho). Before the fix, withdraw burned ALL shares and
+    // stranded the unserved 70k ownerless. After the fix, the withdrawer receives the liquid 30k and is
+    // RE-CREDITED shares for the unserved 70k — then recovers it once the adapter is liquid again. No loss.
+    function test_audit_A1_idleOnlyWithdraw_adapterIlliquid_reCreditsUnservedShares() public {
         uint256 shares = _deposit(alice, 100_000e6);
         assertEq(pm.totalNav(), 100_000e6);
 
@@ -214,7 +212,10 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         assertEq(pm.totalNav(), 100_000e6); // NAV still reports the full principal
 
         uint256 balBefore = usdg.balanceOf(alice);
-        vm.roll(block.number + 1);
+        // Anchor rolls to a captured baseline: two same-address actions need two DISTINCT advanced blocks,
+        // and a relative `block.number + 1` re-evaluated inside the test landed on block 2 both times.
+        uint256 b0 = block.number;
+        vm.roll(b0 + 1);
         vm.prank(alice);
         (uint256 quoteOut, uint256 pairedOut) = pm.withdraw(shares); // withdraw ALL shares
 
@@ -222,9 +223,19 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         assertEq(quoteOut, 30_000e6);
         assertEq(pairedOut, 0);
         assertEq(usdg.balanceOf(alice) - balBefore, 30_000e6);
-        // … but ALL her shares were burned, and 70k is stranded in the adapter with no owner.
+        // … and is RE-CREDITED exactly the shares for the unserved 70k (claim 100k, delivered 30k → 70%).
+        assertEq(pm.sharesOf(alice), 70_000e6);
+        assertEq(pm.totalShares(), 70_000e6);
+        assertEq(usdg.balanceOf(address(adapter)), 70_000e6); // still hers, via the re-credited shares
+
+        // Adapter becomes liquid again → she withdraws the remainder and recovers everything. No loss.
+        adapter.setWithdrawableCap(type(uint256).max);
+        vm.roll(b0 + 2);
+        vm.prank(alice);
+        (uint256 q2,) = pm.withdraw(70_000e6);
+        assertEq(q2, 70_000e6);
+        assertEq(usdg.balanceOf(alice) - balBefore, 100_000e6); // 30k + 70k = full principal back
         assertEq(pm.sharesOf(alice), 0);
         assertEq(pm.totalShares(), 0);
-        assertEq(usdg.balanceOf(address(adapter)), 70_000e6);
     }
 }
