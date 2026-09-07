@@ -20,7 +20,7 @@ export type DeployInstance = { positionManager: `0x${string}`; staging: `0x${str
 type SupabaseClient = ReturnType<typeof getServiceClient>
 type Logger = { info: (t: string, m: string, c?: Record<string, unknown>) => void; warn: (t: string, m: string, c?: Record<string, unknown>) => void; error: (t: string, m: string, c?: Record<string, unknown>) => void }
 
-type Reason = 'disabled' | 'config' | 'signer' | 'below_threshold' | 'zap_unwired' | 'tx'
+type Reason = 'disabled' | 'config' | 'signer' | 'below_threshold' | 'zap_unwired' | 'tx' | 'duplicate'
 export type DeployOutcome =
   | { ok: true; deployTx: `0x${string}`; quoteDeployedAtomic: bigint; pairedDeployedAtomic: bigint }
   | { ok: false; status: number; error: string; reason: Reason }
@@ -28,6 +28,17 @@ export type DeployOutcome =
 const deployRatioBps = () => {
   const n = Number(process.env.LP_GATEWAY_DEPLOY_RATIO_BPS ?? '5000') // default 50% deployed / 50% idle
   return Number.isInteger(n) && n >= 1 && n <= 10_000 ? n : 5000
+}
+
+// L-02: per-pool-per-window idempotency window. A concurrent/retried cron run within the same window
+// claims the SAME (position_manager, chain, window_key) row — the UNIQUE index makes the second claim
+// conflict, so at most ONE deploy tx fires per pool per window and a retry can't compound-deploy.
+const deployWindowSecs = () => {
+  const n = Number(process.env.LP_GATEWAY_DEPLOY_WINDOW_SECS ?? '3600') // default 1h
+  return Number.isInteger(n) && n >= 1 ? n : 3600
+}
+export function deployWindowKey(nowMs: number, windowSecs: number): number {
+  return Math.floor(Math.floor(nowMs / 1000) / windowSecs)
 }
 
 /** Deploy staged capital for EVERY active gateway (registry + single-env fallback). Cron entry point. */
@@ -92,14 +103,52 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
     return { ok: false, status: 200, error: 'paired-leg zap not available', reason: 'zap_unwired' }
   }
 
+  // L-02 idempotency claim: reserve this pool's deploy window BEFORE submitting the tx. If another run
+  // already claimed it (UNIQUE conflict, 23505), no-op instead of compound-deploying. Requires a
+  // service client (always supplied by the cron); without one we can't guard, so we warn and proceed.
+  const windowKey = deployWindowKey(Date.now(), deployWindowSecs())
+  if (opts.supabase) {
+    const { error: claimErr } = await opts.supabase.from('gateway_deploy_events').insert({
+      position_manager: instance.positionManager.toLowerCase(),
+      chain_id: cfg.chainId,
+      window_key: windowKey,
+    })
+    if (claimErr) {
+      if (claimErr.code === '23505') {
+        log?.info('gateway.deploy', 'deploy already claimed this window — skipping', {
+          positionManager: instance.positionManager.toLowerCase(), windowKey,
+        })
+        return { ok: false, status: 200, error: 'deploy already attempted this window', reason: 'duplicate' }
+      }
+      log?.error('gateway.deploy', 'deploy claim insert failed', { error: claimErr.message })
+      return { ok: false, status: 500, error: 'deploy_claim_failed', reason: 'tx' }
+    }
+  } else {
+    log?.warn('gateway.deploy', 'no service client — deploy idempotency guard skipped')
+  }
+
   try {
+    // M-03 slippage floor: deploy() reverts if the minted liquidity is below this. Env-configurable
+    // (absolute L units); default 0 = no floor (unchanged), but a real value should be set once the zap
+    // executor is enabled, and the operator's cast path passes one directly. The contract-level revert is
+    // the actual protection — this just threads the caller's floor through.
+    const minLiquidity = BigInt(process.env.LP_GATEWAY_DEPLOY_MIN_LIQUIDITY ?? '0')
     const deployTx = await wallet.writeContract({
       address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deploy',
-      args: [quoteToDeploy, zap.pairedOut, BigInt(Math.floor(Date.now() / 1000) + 600)],
+      args: [quoteToDeploy, zap.pairedOut, minLiquidity, BigInt(Math.floor(Date.now() / 1000) + 600)],
       account, chain: publicClient.chain, gas: 1_200_000n,
     })
     const receipt = await publicClient.waitForTransactionReceipt({ hash: deployTx })
     if (receipt.status !== 'success') return { ok: false, status: 502, error: 'deploy_reverted', reason: 'tx' }
+    // Record the settled tx against the claim (best-effort; the claim row already bounds the window).
+    if (opts.supabase) {
+      await opts.supabase
+        .from('gateway_deploy_events')
+        .update({ deploy_tx: deployTx.toLowerCase(), quote_deployed_atomic: quoteToDeploy.toString(), paired_deployed_atomic: zap.pairedOut.toString() })
+        .eq('position_manager', instance.positionManager.toLowerCase())
+        .eq('chain_id', cfg.chainId)
+        .eq('window_key', windowKey)
+    }
     return { ok: true, deployTx, quoteDeployedAtomic: quoteToDeploy, pairedDeployedAtomic: zap.pairedOut }
   } catch (e) {
     log?.error('gateway.deploy', 'deploy tx failed', { error: String(e) })

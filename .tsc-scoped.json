@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "skipLibCheck": true },
+  "include": [
+    "lib/gateway/registry.ts",
+    "lib/gateway/deploy.ts",
+    "lib/gateway/basisMath.ts",
+    "lib/gateway/registry.test.ts",
+    "lib/gateway/basisMath.test.ts",
+    "lib/gateway/deploy.test.ts",
+    "lib/web3/signedActionMessages.ts",
+    "app/api/gateway/deposit/route.ts",
+    "app/api/gateway/withdraw/route.ts",
+    "app/api/gateway/curate/route.ts"
+  ]
+}

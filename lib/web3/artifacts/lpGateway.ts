@@ -31,7 +31,7 @@ export const LP_GATEWAY_ABI = [
   { type: 'function', stateMutability: 'nonpayable', name: 'deposit', inputs: [{ name: 'quoteAmount', type: 'uint256' }], outputs: [{ name: 'sharesMinted', type: 'uint256' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'withdraw', inputs: [{ name: 'shares', type: 'uint256' }], outputs: [{ name: 'quoteOut', type: 'uint256' }, { name: 'pairedOut', type: 'uint256' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'harvest', inputs: [{ name: 'deadline', type: 'uint256' }], outputs: [{ name: 'quoteFees', type: 'uint256' }, { name: 'pairedFees', type: 'uint256' }] },
-  { type: 'function', stateMutability: 'nonpayable', name: 'deploy', inputs: [{ name: 'quoteToDeploy', type: 'uint256' }, { name: 'pairedAmount', type: 'uint256' }, { name: 'deadline', type: 'uint256' }], outputs: [] },
+  { type: 'function', stateMutability: 'nonpayable', name: 'deploy', inputs: [{ name: 'quoteToDeploy', type: 'uint256' }, { name: 'pairedAmount', type: 'uint256' }, { name: 'minLiquidity', type: 'uint128' }, { name: 'deadline', type: 'uint256' }], outputs: [] },
   {
     type: 'event',
     name: 'Deposited',

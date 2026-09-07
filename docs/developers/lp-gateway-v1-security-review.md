@@ -212,3 +212,36 @@ against the trust it adds).
 3. **External audit remains the gate.** This pass substantially raised the bar and confirmed the core
    mechanics are sound, but on a hookless pool the on-chain breaker is not the control — deep-pool
    curation, a capped deploy fraction, honest disclosure, and Privy key custody are.
+
+---
+
+## Remediation status (2026-09-07 — same branch)
+
+Every finding above was addressed. Contract changes require a fresh testnet redeploy + a fork run to
+validate the LP-path behaviour (the Stub-based unit tests can't exercise a real pool); the 29 gateway
+Forge tests + 49 gateway Vitest tests are green.
+
+| ID | Fix shipped |
+|---|---|
+| **C-01** | curate `bearerSecret: … ?? ''` — fails closed (500) when unset, no `CRON_SECRET` fallback. |
+| **H-01** | `registry.verifyInstanceOnChain` reads the candidate PM's `quoteAsset()`/`poolKey()` and rejects `quote_asset_mismatch` / `quote_not_in_pool` / `pool_mismatch` before writing a `gateway_instances` row. |
+| **H-02** | `_sweepFees` (0-liquidity collect → `harvestRecipient`) is now called at the top of the withdraw LP branch and of `deploy`, so a user's decrease/increase returns **principal only** — the position's fees always route to the buffer. |
+| **H-03** | **Clamped-follower reference** (tracks spot ≤ `maxDeviationBps`/block) + **directional conservative NAV** (withdraw marks the LP leg at `min(spot,ref)`, deposit at `max`); default band **tightened 2000→500 bps**. A single-block pump can neither inflate a claim nor cheapen entry. |
+| **M-01** | Withdrawals no longer revert on price (conservative mark replaces the deviation-revert) → they never brick. `renounceOwnership()` disabled. |
+| **M-02** | `pokePrice()` **removed** — no unbounded owner re-anchor; the follower + `_anchorFollow` (bounded step) keep the reference honest, so a compromised key can't neutralise the mark. |
+| **M-03** | `deploy()` takes a `minLiquidity` floor and reverts `MinLiquidityNotMet` below it (cron threads `LP_GATEWAY_DEPLOY_MIN_LIQUIDITY`; the runbook `cast` path passes one). |
+| **M-04** | `deposit`/`withdraw` routes now require **signed-message auth** (owner records own tx via `ctx.user`) + **`gateway_deposit_events` UNIQUE(tx_hash)** idempotency → no replay basis corruption. |
+| **M-06** | Withdraw sources the idle reserve **pro-rata** (`claimValue·idle/nav`), not idle-first → no first-mover / bank-run advantage. |
+| **L-02** | `deploy` cron reserves a `gateway_deploy_events` (position, window) row before submitting; a UNIQUE conflict no-ops a retry. |
+| **L-03** | `position` route no longer discloses `bufferBalanceAtomic` to arbitrary callers (owner-authenticated). |
+| **L-04** | `deploy` revokes the residual Permit2 allowance after the mint (`_revokePermit`). |
+| **L-06** | Factory is `Ownable2Step`; PM `renounceOwnership` disabled. |
+| **L-09** | `discovery` validates GeckoTerminal input (`isAddress`, finite-metric guards, label cap). |
+| **I-02** | `.mjs` asserts `getChainId()` == configured and that PoolManager/PositionManager/Permit2 have on-chain code before deploying. |
+| **M-05** | Partial: fees now provably reach the buffer on every path (H-02); the *full* on-chain segregated-settlement re-architecture is a documented pre-mainnet item. |
+| **M-07** | Documented accepted risk (USDG freeze is inherent to Paxos USDG; no owner rescue hatch added, to preserve the trust model). |
+| **I-01** | Deferred: a factory-level `adapter.asset()==quote` check needs a common adapter getter (`IYieldAdapter` lacks one, mocks use `underlying()`) — isolation leans on the production adapter's one-time `onlyVault`; documented as curation-gated. |
+| **L-01/L-05/L-07/L-08** | Low residuals: withdraw decrease keeps `min=0` deliberately (non-bricking priority — value is protected by the conservative mark); L-05/L-07 hold for standard fee-free USDG; L-08 mooted by the bounded follower. Documented. |
+
+**Still gating mainnet:** the full M-05 fee-settlement architecture, an external audit, and the standing
+curation + deep-pool + capped-deploy posture.

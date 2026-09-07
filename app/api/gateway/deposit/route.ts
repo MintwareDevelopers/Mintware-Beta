@@ -1,22 +1,29 @@
-import { isAddress, isHex, decodeEventLog } from 'viem'
+import { isHex, decodeEventLog } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { resolveRouteInstance } from '@/lib/gateway/registry'
+import { nextDepositBasis } from '@/lib/gateway/basisMath'
 
 export const dynamic = 'force-dynamic'
 
 // Non-custodial: the depositor's own wallet sends deposit() (mints shares in the position manager).
 // This route VERIFIES that client tx on-chain and mirrors the result into gateway_positions so the
 // harvest cron knows the depositor set + shares, and the dashboard has a cost basis. No custody.
+//
+// M-04 (security review 2026-09-06): auth is signed-message (action-bound) so ONLY the position owner
+// can record their own tx (the on-chain Deposited event's user must equal the recovered signer), and
+// the entry_nav cost-basis update is idempotent per tx_hash (gateway_deposit_events UNIQUE) so a
+// replayed txHash can't inflate the basis.
 export const POST = createHandler(async (req, ctx) => {
   const cfg = gatewayConfig()
   if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
 
-  const body = (await req.json().catch(() => ({}))) as { address?: string; txHash?: string; pool?: string }
-  const address = body.address?.toLowerCase()
+  const body = (await req.clone().json().catch(() => ({}))) as { txHash?: string; pool?: string }
+  // Trust the SIGNER (ctx.user), never a caller-supplied address — the recovered wallet is the only
+  // identity allowed to record a position, and it must match the on-chain event's user below.
+  const address = ctx.user!.address
   const txHash = body.txHash
-  if (!address || !isAddress(address)) return ctx.json({ success: false, error: 'address_required' }, 400)
   if (!txHash || !isHex(txHash)) return ctx.json({ success: false, error: 'txHash_required' }, 400)
 
   const inst = await resolveRouteInstance(ctx.supabase, cfg, body.pool ?? null)
@@ -61,6 +68,23 @@ export const POST = createHandler(async (req, ctx) => {
     args: [address as `0x${string}`],
   })) as bigint
 
+  // Idempotency gate: claim this tx in the event ledger BEFORE mutating the basis. A UNIQUE(tx_hash)
+  // conflict (23505) means the tx was already recorded → the additive basis update is skipped so a
+  // replay can't inflate entry_nav. Any other insert error is a hard failure.
+  const { error: evErr } = await ctx.supabase.from('gateway_deposit_events').insert({
+    tx_hash: txHash.toLowerCase(),
+    address,
+    kind: 'deposit',
+    pool_address: inst.poolAddress,
+    chain_id: inst.chainId,
+    quote_in: quoteIn.toString(),
+  })
+  const alreadyRecorded = evErr?.code === '23505'
+  if (evErr && !alreadyRecorded) {
+    ctx.log.error('gateway.deposit', 'event insert failed', { error: evErr.message })
+    return ctx.json({ success: false, error: 'record_failed' }, 500)
+  }
+
   const { data: existing } = await ctx.supabase
     .from('gateway_positions')
     .select('entry_nav')
@@ -68,8 +92,10 @@ export const POST = createHandler(async (req, ctx) => {
     .eq('pool_address', inst.poolAddress)
     .eq('chain_id', inst.chainId)
     .maybeSingle()
-  const costBasis = (existing?.entry_nav != null ? BigInt(String(existing.entry_nav)) : 0n) + quoteIn
+  const priorBasis = existing?.entry_nav != null ? BigInt(String(existing.entry_nav)) : 0n
+  const costBasis = nextDepositBasis(priorBasis, quoteIn, alreadyRecorded)
 
+  // Shares are always synced from the on-chain truth (idempotent regardless of replay).
   const { error } = await ctx.supabase.from('gateway_positions').upsert(
     {
       user_wallet: address,
@@ -86,5 +112,5 @@ export const POST = createHandler(async (req, ctx) => {
     return ctx.json({ success: false, error: 'record_failed' }, 500)
   }
 
-  return ctx.json({ success: true, sharesMinted, shares: onChainShares, costBasisAtomic: costBasis })
-})
+  return ctx.json({ success: true, sharesMinted, shares: onChainShares, costBasisAtomic: costBasis, idempotentReplay: alreadyRecorded })
+}, { auth: 'signed-message', action: 'mintware-gateway-deposit' })

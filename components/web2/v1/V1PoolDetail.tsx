@@ -11,9 +11,10 @@ import Link from 'next/link'
 import { createWalletClient, createPublicClient, custom, http, parseUnits } from 'viem'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
+import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 
-type Meta = { positionManager: `0x${string}`; poolAddress: string; chainId: number; rpcUrl: string; usdg: `0x${string}` | null; live: boolean }
+type Meta = { positionManager: `0x${string}`; poolAddress: string; chainId: number; rpcUrl: string; usdg: `0x${string}` | null; feePips: number | null; dynamicFee: boolean; live: boolean }
 type Metrics = { pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; live: boolean }
 type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null }
 type Status = 'idle' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'done'
@@ -70,9 +71,18 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   }, [address, slug])
   useEffect(refreshPosition, [refreshPosition])
 
+  // Buffer is owner-gated (audit L-03): revealed only after the wallet signs. Position value below is public.
+  const { buffer: bufAtomic, revealed, revealing, reveal } = useGatewayBuffer(address, slug)
+  // Real trailing yield, Meteora-style: 24h fees ÷ TVL, annualized. 24h fees = 24h volume × fee tier.
+  const feeRate = meta?.feePips != null ? meta.feePips / 1e6 : null
+  const dayFeesUsd = feeRate != null && m ? m.vol24Usd * feeRate : null
+  const estAprPct = feeRate != null && m && m.tvlUsd > 0 ? (m.vol24Usd * feeRate) / m.tvlUsd * 365 * 100 : null
+  const feeTierLabel = meta?.feePips != null ? `${(meta.feePips / 1e4).toFixed(2)}%` : meta?.dynamicFee ? 'Dynamic' : '—'
+  const aprLabel = estAprPct != null ? `~${estAprPct < 1 ? estAprPct.toFixed(2) : estAprPct.toFixed(1)}%` : null
+
   const busy = status !== 'idle' && status !== 'done'
   const working = num(pos?.positionValueAtomic)
-  const buffer = num(pos?.bufferBalanceAtomic)
+  const buffer = num(bufAtomic)
   const hasPos = working + buffer > 0
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -162,8 +172,8 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           </div>
         </div>
         <div className="rounded-[12px] px-4 py-2.5 text-right" style={PANEL}>
-          <div className="font-mono font-bold text-[22px]" style={{ color: '#8A82F4' }}>{m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(1)}×` : '—'}</div>
-          <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>24h Vol / TVL</div>
+          <div className="font-mono font-bold text-[22px]" style={{ color: '#8A82F4' }}>{aprLabel ?? (m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(1)}×` : '—')}</div>
+          <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{aprLabel ? 'Est. APR · trailing 24h' : '24h Vol / TVL'}</div>
         </div>
       </div>
 
@@ -194,6 +204,9 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="mt-6 flex flex-col">
             <Meta2 k="Current Pool Price" v={m?.priceQuotePerBase != null ? `1 ${base} ≈ ${m.priceQuotePerBase < 0.01 ? m.priceQuotePerBase.toPrecision(3) : m.priceQuotePerBase.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${quote}` : '—'} />
             <Meta2 k="24h Volume" v={m ? usd(m.vol24Usd) : '—'} />
+            <Meta2 k="Fee tier" v={feeTierLabel} />
+            <Meta2 k="24h Fees (est)" v={dayFeesUsd != null ? usd(dayFeesUsd) : '—'} />
+            <Meta2 k="Est. APR · trailing 24h" v={aprLabel ?? '—'} />
             <Meta2 k="Activity (Vol / TVL)" v={m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(2)}×` : '—'} />
             <Meta2 k="24h Trades" v={m?.txCount24 != null ? m.txCount24.toLocaleString() : '—'} />
             <Meta2 k="Pool age" v={m?.poolAgeDays != null ? `${m.poolAgeDays}d` : '—'} />
@@ -228,7 +241,21 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="rounded-[16px] p-5" style={PANEL}>
             <div className="grid grid-cols-2 gap-4">
               <Sum k="Position value" v={usdg(pos?.positionValueAtomic)} />
-              <Sum k="Spendable buffer" v={usdg(pos?.bufferBalanceAtomic)} accent />
+              {revealed ? (
+                <Sum k="Spendable buffer" v={usdg(bufAtomic)} accent />
+              ) : (
+                <div>
+                  <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Spendable buffer</div>
+                  <button
+                    onClick={reveal}
+                    disabled={revealing || !isConnected}
+                    className="font-mono font-bold text-[15px] mt-1 cursor-pointer disabled:cursor-default text-left"
+                    style={{ color: '#8A82F4' }}
+                  >
+                    {!isConnected ? 'Connect to view' : revealing ? 'Verifying…' : 'Verify to view →'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -279,11 +306,8 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         </div>
       </div>
 
-      <p className="text-[12px] mt-6 leading-[1.55] max-w-[80ch]" style={{ color: '#63636F' }}>
-        In testing on Robinhood Chain — testnet, not yet audited. This is a liquidity position, not a
-        deposit, a savings product, or a guaranteed or fixed return: its value moves with the pool price and
-        is subject to impermanent loss, and a withdrawal returns your pro-rata share at the current price.
-        Metrics are live from GeckoTerminal. External audit gates real value.{' '}
+      <p className="text-[12px] mt-6" style={{ color: '#63636F' }}>
+        Robinhood testnet · metrics live from GeckoTerminal ·{' '}
         <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>

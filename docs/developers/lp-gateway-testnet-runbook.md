@@ -66,7 +66,8 @@ cast send $POSITION_MANAGER "deposit(uint256)" 1000000000 --private-key $KEY --r
 
 ## 5. Deploy staged capital into the pool
 The router zap is unwired (deploy-gated seam), so supply the paired leg manually (the deployer holds
-tPONS). Approve tPONS to the PositionManager (Permit2) and call `deploy(quoteToDeploy, pairedAmount, deadline)`
+tPONS). Approve tPONS to the PositionManager (Permit2) and call `deploy(quoteToDeploy, pairedAmount, minLiquidity, deadline)`
+(pass a real `minLiquidity` slippage floor — 0 only for a first bootstrap into a fresh pool)
 as the **owner**. This mints the aggregate V4 position — the pool now has real liquidity.
 
 ## 6. Generate swaps → harvest

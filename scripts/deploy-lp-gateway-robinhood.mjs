@@ -38,7 +38,7 @@ const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3'
 const ZERO = '0x0000000000000000000000000000000000000000'
 const TICK_LOWER = Number(process.env.LP_TICK_LOWER ?? -22980)
 const TICK_UPPER = Number(process.env.LP_TICK_UPPER ?? 22980)
-const MAX_DEV_BPS = Number(process.env.LP_MAX_DEVIATION_BPS ?? 2000)
+const MAX_DEV_BPS = Number(process.env.LP_MAX_DEVIATION_BPS ?? 500) // clamped-follower per-block step (H-03)
 const FEE = 3000
 const TICK_SPACING = 60
 const SQRT_PRICE_1 = 79228162514264337593543950336n // Q96 = sqrtPrice for tick 0 (price 1.0)
@@ -117,6 +117,25 @@ const chain = {
 }
 const pub = createPublicClient({ chain, transport: http(RPC) })
 const wallet = createWalletClient({ account, chain, transport: http(RPC) })
+
+// chain preflight (I-02) — a mismatched RPC / chain id must NEVER deploy to the wrong network.
+const cid = await pub.getChainId()
+if (cid !== CHAIN_ID) {
+  die(`RPC chain id ${cid} != expected ${CHAIN_ID} — LP_GATEWAY_RPC_URL / LP_GATEWAY_CHAIN_ID mismatch; refusing to deploy.`)
+}
+
+// dependency preflight (I-02) — every external contract we call must actually exist on this chain.
+// A zero-code address (wrong network, or a typo'd constant) would otherwise silently mis-deploy.
+for (const [label, addr] of [
+  ['POOL_MANAGER', POOL_MANAGER],
+  ['POSITION_MANAGER', POSITION_MANAGER],
+  ['PERMIT2', PERMIT2],
+]) {
+  const code = await pub.getBytecode({ address: addr })
+  if (!code || code === '0x') {
+    die(`${label} ${addr} has no on-chain code on chain ${CHAIN_ID} — wrong address or wrong network; refusing to deploy.`)
+  }
+}
 
 // gas preflight — fail early with a clear faucet nudge rather than mid-deploy
 const bal = await pub.getBalance({ address: privyAddress })

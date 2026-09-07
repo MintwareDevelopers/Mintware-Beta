@@ -28,7 +28,7 @@ export const GET = createHandler(async (_req, ctx) => {
       .from('gateway_instances')
       .select('pool_address')
       .eq('chain_id', cfg.chainId)
-    liveSet = new Set((data ?? []).map((r) => String(r.pool_address).toLowerCase()))
+    liveSet = new Set((data ?? []).map((r: { pool_address: string }) => String(r.pool_address).toLowerCase()))
   }
 
   const pools = eligible

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
 
 const require402Spy = vi.fn()
 vi.mock('@/lib/x402/require402', () => ({
@@ -19,7 +20,7 @@ import { POST } from '@/app/api/x402/scores/route'
 
 const addr = (c: string) => '0x' + c.repeat(40)
 const call = (body: unknown) =>
-  POST(new Request('http://localhost/api/x402/scores', {
+  POST(new NextRequest('http://localhost/api/x402/scores', {
     method: 'POST',
     body: JSON.stringify(body),
     headers: { 'content-type': 'application/json' },

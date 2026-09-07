@@ -109,11 +109,10 @@ export function V1Swap() {
         </button>
       </div>
 
-      <p className="text-[12px] mt-4 leading-[1.55] text-center" style={{ color: '#63636F' }}>
-        Live swap routing turns on with the first deployed pool.{' '}
-        <Link href="/v1" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Browse pools →</Link>
-        <br />Testnet, unaudited. Not investment advice.{' '}
-        <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
+      <p className="text-[12px] mt-4 text-center" style={{ color: '#63636F' }}>
+        Routing goes live with the first deployed pool ·{' '}
+        <Link href="/v1" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Browse pools →</Link>{' '}
+        · <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>
   )

@@ -1,5 +1,6 @@
 import { createHandler } from '@/lib/web2/routeHandler'
 import { registerInstance } from '@/lib/gateway/registry'
+import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,19 +73,48 @@ export const POST = createHandler(
       const chainId = Number(request?.chain_id ?? inst.chainId ?? 0)
       const poolAddress = String(request?.pool_address ?? inst.poolAddress ?? '')
       if (!chainId || !poolAddress) return ctx.json({ success: false, error: 'pool_and_chain_required' }, 400)
-      const reg = await registerInstance(ctx.supabase, {
-        poolAddress,
-        chainId,
-        pairLabel: (request?.pair_label as string) ?? inst.pairLabel ?? null,
-        positionManager: inst.positionManager,
-        staging: inst.staging,
-        quoteAsset: inst.quoteAsset,
-        pairedAsset: inst.pairedAsset ?? null,
-        tickLower: inst.tickLower ?? null,
-        tickUpper: inst.tickUpper ?? null,
-        createdBy: b.curator ?? null,
+
+      // H-01: the row is the deposit-routing trust root, so we do NOT trust the supplied positionManager
+      // on the curator's word — verify it on-chain against the approved pool + quote asset. This requires
+      // the gateway chain to be configured AND the registered chain to match it (that's the chain we can
+      // read). Fail closed when we can't verify.
+      const cfg = gatewayConfig()
+      if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
+      if (chainId !== cfg.chainId) {
+        ctx.log.warn('gateway.curate', 'register chain mismatch — cannot verify on-chain', {
+          requested: chainId, configured: cfg.chainId,
+        })
+        return ctx.json({ success: false, error: 'chain_not_verifiable' }, 400)
+      }
+
+      const reg = await registerInstance(
+        ctx.supabase,
+        {
+          poolAddress,
+          chainId,
+          pairLabel: (request?.pair_label as string) ?? inst.pairLabel ?? null,
+          positionManager: inst.positionManager,
+          staging: inst.staging,
+          quoteAsset: inst.quoteAsset,
+          pairedAsset: inst.pairedAsset ?? null,
+          tickLower: inst.tickLower ?? null,
+          tickUpper: inst.tickUpper ?? null,
+          createdBy: b.curator ?? null,
+        },
+        { client: gatewayPublicClient(cfg) },
+      )
+      if (!reg.ok) {
+        ctx.log.warn('gateway.curate', 'instance registration rejected', {
+          pool: poolAddress, chainId, positionManager: inst.positionManager.toLowerCase(),
+          curator: b.curator ?? null, reason: reg.error,
+        })
+        const failedVerify = reg.error?.startsWith('onchain_verify_failed')
+        return ctx.json({ success: false, error: failedVerify ? 'onchain_verify_failed' : 'register_failed', detail: reg.error }, failedVerify ? 400 : 500)
+      }
+      ctx.log.info('gateway.curate', 'instance registered (on-chain verified)', {
+        pool: poolAddress, chainId, positionManager: inst.positionManager.toLowerCase(),
+        quoteAsset: inst.quoteAsset.toLowerCase(), curator: b.curator ?? null,
       })
-      if (!reg.ok) return ctx.json({ success: false, error: 'register_failed', detail: reg.error }, 500)
       registered = true
     }
     await resolve('approved')

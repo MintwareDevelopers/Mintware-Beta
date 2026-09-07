@@ -4,8 +4,29 @@
 // USDG-quoted) as pending requests. It NEVER auto-approves — every candidate lands as pending for a
 // human. The score only ranks the queue. Already-resolved requests + already-live pools are skipped.
 
+import { isAddress } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
 import { computeRisk, type PoolSignals } from '@/lib/gateway/riskScore'
+
+// ── Untrusted-input guards (audit L-09) ──────────────────────────────────────────────────────────
+// Everything below flows verbatim from GeckoTerminal, an external API we don't control. Coerce it so
+// a malformed/hostile payload can never write NaN/Infinity into a metric, an over-long or control-char
+// label into a queue row, or a non-address into the pool_address (curation) key.
+
+/** Number() that never yields NaN/Infinity — a non-finite result coerces to `fallback` (default 0). */
+function safeNum(v: unknown, fallback = 0): number {
+  const n = Number(v)
+  return Number.isFinite(n) ? n : fallback
+}
+
+const MAX_LABEL_LEN = 64
+
+/** Strip control chars (incl. newlines/zero-width breakers) and cap length — the label is displayed
+ *  and persisted, so it must be bounded, printable text. */
+function sanitizeLabel(name: unknown): string {
+  // eslint-disable-next-line no-control-regex
+  return String(name ?? '').replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/g, '').trim().slice(0, MAX_LABEL_LEN)
+}
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
 type Logger = { info: (t: string, m: string, c?: Record<string, unknown>) => void; warn: (t: string, m: string, c?: Record<string, unknown>) => void }
@@ -47,9 +68,9 @@ export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string } = {
   const a = pool.attributes ?? {}
   const dexId = pool.relationships?.dex?.data?.id ?? ''
   const protocol = dexId.includes('v4') ? 'v4' : dexId.includes('v3') ? 'v3' : dexId.includes('v2') ? 'v2' : 'unknown'
-  const tvlUsd = Number(a.reserve_in_usd ?? 0)
-  const vol24Usd = Number(a.volume_usd?.h24 ?? 0)
-  const name = String(a.name ?? '')
+  const tvlUsd = safeNum(a.reserve_in_usd)
+  const vol24Usd = safeNum(a.volume_usd?.h24)
+  const name = sanitizeLabel(a.name)
 
   const usdg = opts.usdgAddress?.toLowerCase()
   const base = tokenAddr(pool.relationships?.base_token?.data?.id)
@@ -59,7 +80,7 @@ export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string } = {
   const created = a.pool_created_at ? Date.parse(a.pool_created_at) : NaN
   const poolAgeDays = Number.isFinite(created) ? Math.floor((Date.now() - created) / 86_400_000) : null
   const tx = a.transactions?.h24
-  const txCount24 = tx ? Number(tx.buys ?? 0) + Number(tx.sells ?? 0) : null
+  const txCount24 = tx ? safeNum(tx.buys) + safeNum(tx.sells) : null
 
   const signals: PoolSignals = {
     protocol: protocol as PoolSignals['protocol'],
@@ -71,9 +92,13 @@ export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string } = {
     txCount24,
   }
   const risk = computeRisk(signals)
-  const price = Number(a.base_token_price_quote_token ?? 0)
+  const price = safeNum(a.base_token_price_quote_token)
+  // Only accept a syntactically valid EVM address; anything else ⇒ '' so discoverAndIngest skips it
+  // (it guards on `!c.poolAddress`) and never writes a bogus curation key.
+  const rawAddr = String(a.address ?? '').toLowerCase()
+  const poolAddress = isAddress(rawAddr) ? rawAddr : ''
   return {
-    poolAddress: String(a.address ?? '').toLowerCase(),
+    poolAddress,
     pairLabel: name,
     tvlUsd,
     vol24Usd,

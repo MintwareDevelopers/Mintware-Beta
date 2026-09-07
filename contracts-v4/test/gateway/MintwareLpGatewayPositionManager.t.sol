@@ -102,7 +102,7 @@ contract MintwareLpGatewayPositionManagerTest is Test {
     function test_deploy_onlyOwner() public {
         vm.prank(alice);
         vm.expectRevert();
-        pm.deploy(1, 1, block.timestamp);
+        pm.deploy(1, 1, 0, block.timestamp);
     }
 
     function test_harvest_onlyOwner() public {
@@ -144,20 +144,15 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         pm.deposit(50_000e6);
     }
 
-    // The deviation band is validated at construction (>0, <=5000). Full breaker behaviour needs a real
-    // pool (the fork test) — the Stub keeps tokenId==0 so _checkAndAnchor is a no-op here.
+    // The deviation band (clamped-follower per-block step) is validated at construction (>0, <=5000). Full
+    // follower + conservative-mark behaviour needs a real pool (the fork test) — the Stub keeps tokenId==0.
     function test_maxDeviationBps_set() public view {
         assertEq(pm.maxDeviationBps(), 2000);
     }
 
-    function test_pokePrice_onlyOwner() public {
-        vm.prank(alice);
-        vm.expectRevert();
-        pm.pokePrice();
-    }
-
-    function test_pokePrice_revertsWhenUndeployed() public {
-        vm.expectRevert(MintwareLpGatewayPositionManager.NotDeployed.selector);
-        pm.pokePrice();
+    // renounceOwnership is disabled — it would strip the operator and freeze the deployed position (M-01/L-06).
+    function test_renounceOwnership_disabled() public {
+        vm.expectRevert(MintwareLpGatewayPositionManager.RenounceDisabled.selector);
+        pm.renounceOwnership();
     }
 }

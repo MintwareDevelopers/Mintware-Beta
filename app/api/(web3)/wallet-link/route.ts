@@ -2,6 +2,8 @@
 // Links a Solana wallet to a proven EVM wallet owner (dual-signature).
 // Auth: inline EVM signed-message + Ed25519 Solana signature
 
+export const dynamic = 'force-dynamic'
+
 import { createHandler } from '@/lib/web2/routeHandler'
 import { solanaEnabled } from '@/lib/web3/featureFlags'
 import { PublicKey }     from '@solana/web3.js'

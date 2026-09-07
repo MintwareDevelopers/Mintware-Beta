@@ -2,11 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { poolToCandidate } from './discovery'
 
 const USDG = '0x00000000000000000000000000000000000usdg1'
+const POOL = '0x1111111111111111111111111111111111111111'
 
 function gtPool(over: Record<string, unknown> = {}, rel: Record<string, unknown> = {}) {
   return {
     attributes: {
-      address: '0xPOOL',
+      address: POOL,
       name: 'PONS / USDG',
       reserve_in_usd: '8100000',
       volume_usd: { h24: '29700000' },
@@ -26,7 +27,7 @@ function gtPool(over: Record<string, unknown> = {}, rel: Record<string, unknown>
 describe('poolToCandidate', () => {
   it('maps a hot v4 USDG pool → eligible review candidate', () => {
     const c = poolToCandidate(gtPool(), { usdgAddress: USDG })
-    expect(c.poolAddress).toBe('0xpool')
+    expect(c.poolAddress).toBe(POOL)
     expect(c.verdict).toBe('review')
     expect(c.signals.protocol).toBe('v4')
     expect(c.signals.usdgQuoted).toBe(true)
@@ -63,5 +64,41 @@ describe('poolToCandidate', () => {
     expect(c.signals.poolAgeDays).toBe(2)
     // a 2-day-old pool picks up the "very new" penalty
     expect(c.score).toBeGreaterThan(0)
+  })
+})
+
+// Untrusted-input hardening (audit L-09) — GeckoTerminal payloads are external, never trusted.
+describe('poolToCandidate — untrusted input validation', () => {
+  it('rejects a non-address pool address (→ empty, so ingest skips it)', () => {
+    expect(poolToCandidate(gtPool({ address: '0xPOOL' })).poolAddress).toBe('')
+    expect(poolToCandidate(gtPool({ address: 'not-an-address' })).poolAddress).toBe('')
+    expect(poolToCandidate(gtPool({ address: undefined })).poolAddress).toBe('')
+    // a valid address is preserved (lowercased)
+    expect(poolToCandidate(gtPool({ address: POOL.toUpperCase().replace('0X', '0x') })).poolAddress).toBe(POOL)
+  })
+
+  it('coerces non-finite / garbage numeric metrics to 0 — never NaN or Infinity', () => {
+    const c = poolToCandidate(gtPool({ reserve_in_usd: 'not-a-number', volume_usd: { h24: 'NaN' }, base_token_price_quote_token: 'x' }), { usdgAddress: USDG })
+    expect(Number.isFinite(c.tvlUsd)).toBe(true)
+    expect(c.tvlUsd).toBe(0)
+    expect(Number.isFinite(c.vol24Usd)).toBe(true)
+    expect(c.vol24Usd).toBe(0)
+    // tvl 0 ⇒ ratio null (guarded), never NaN/Infinity
+    expect(c.signals.volTvlRatio).toBeNull()
+    // bad price ⇒ null, not NaN
+    expect(c.priceQuotePerBase).toBeNull()
+  })
+
+  it('coerces garbage transaction counts to a finite total', () => {
+    const c = poolToCandidate(gtPool({ transactions: { h24: { buys: 'oops', sells: undefined } } }), { usdgAddress: USDG })
+    expect(c.signals.txCount24).toBe(0)
+  })
+
+  it('strips control chars from the pair label and caps its length', () => {
+    // NUL, newline, zero-width space, BOM — all removed; normal ASCII kept (space is NOT a control char)
+    const dirty = 'AB' + '\u0000' + 'CD' + '\n' + 'EF' + '\u200B' + '\uFEFF' + 'GH'
+    expect(poolToCandidate(gtPool({ name: dirty })).pairLabel).toBe('ABCDEFGH')
+    const long = 'Z'.repeat(200)
+    expect(poolToCandidate(gtPool({ name: long })).pairLabel.length).toBe(64)
   })
 })

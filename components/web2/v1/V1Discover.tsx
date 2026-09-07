@@ -162,10 +162,8 @@ export function V1Discover() {
         )}
       </div>
 
-      <p className="text-[12px] mt-5 leading-[1.55] max-w-[76ch]" style={{ color: '#63636F' }}>
-        Live metrics from GeckoTerminal; the risk score ranks the queue, it does not certify safety — every
-        pool is a human curation decision. In testing on Robinhood Chain — testnet, not yet audited. A
-        liquidity position is not a deposit or a guaranteed return and is subject to impermanent loss.{' '}
+      <p className="text-[12px] mt-5" style={{ color: '#63636F' }}>
+        Robinhood testnet · metrics live from GeckoTerminal · the score ranks, humans curate.{' '}
         <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>

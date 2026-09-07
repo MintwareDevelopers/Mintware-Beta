@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
+import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
 
 type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null }
 
@@ -40,7 +41,10 @@ export function V1Portfolio() {
       .finally(() => setLoading(false))
   }, [address])
 
-  const buffer = num(pos?.bufferBalanceAtomic)
+  // Buffer is owner-gated (audit L-03): the public position fetch no longer returns it — the wallet
+  // reveals its own balance with a signature. Position value below stays public/immediate.
+  const { buffer: bufAtomic, revealed, revealing, reveal } = useGatewayBuffer(address)
+  const buffer = num(bufAtomic)
   const working = num(pos?.positionValueAtomic)
   const total = buffer + working
   const hasPosition = total > 0
@@ -71,10 +75,26 @@ export function V1Portfolio() {
           <div className="p-7 max-[640px]:p-5 flex justify-between gap-6 flex-wrap items-start">
             <div>
               <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>Spendable now</div>
-              <div className="font-mono font-bold tracking-[-0.02em] leading-none text-[clamp(2.4rem,7vw,3.4rem)] mt-2.5">
-                {loading ? '—' : usdg(pos?.bufferBalanceAtomic)}
-                <span className="text-[0.36em] font-normal ml-1.5" style={{ color: '#63636F' }}>USDG</span>
-              </div>
+              {revealed ? (
+                <div className="font-mono font-bold tracking-[-0.02em] leading-none text-[clamp(2.4rem,7vw,3.4rem)] mt-2.5">
+                  {usdg(bufAtomic)}
+                  <span className="text-[0.36em] font-normal ml-1.5" style={{ color: '#63636F' }}>USDG</span>
+                </div>
+              ) : (
+                <div className="mt-2.5">
+                  <button
+                    onClick={reveal}
+                    disabled={revealing}
+                    className="font-mono font-bold tracking-[-0.02em] leading-none text-[clamp(1.6rem,4.5vw,2.2rem)] cursor-pointer disabled:cursor-default"
+                    style={{ color: '#8A82F4' }}
+                  >
+                    {revealing ? 'Verifying…' : 'Verify wallet to view →'}
+                  </button>
+                  <div className="text-[12px] mt-1.5 max-w-[36ch] leading-[1.5]" style={{ color: '#63636F' }}>
+                    Your spendable balance is private — sign a message to prove this wallet is yours and reveal it.
+                  </div>
+                </div>
+              )}
               <p className="text-[13px] mt-3 max-w-[36ch] leading-[1.5]" style={{ color: '#9B9BAD' }}>
                 Your liquid buffer — kept topped up by yield, ready to spend. Spending it never unwinds your position.
               </p>
@@ -98,7 +118,7 @@ export function V1Portfolio() {
             <span className="flex-1" style={{ background: 'rgba(138,130,244,0.18)' }} />
           </div>
           <div className="flex gap-7 flex-wrap px-7 max-[640px]:px-5 py-4">
-            <Legend color="#8A82F4" label="Spendable buffer" v={usdg(pos?.bufferBalanceAtomic)} />
+            <Legend color="#8A82F4" label="Spendable buffer" v={revealed ? usdg(bufAtomic) : 'Hidden'} />
             <Legend color="rgba(138,130,244,0.35)" label="Working & earning" v={usdg(pos?.positionValueAtomic)} />
           </div>
 
@@ -112,9 +132,8 @@ export function V1Portfolio() {
         </div>
       )}
 
-      <p className="text-[12px] mt-5 leading-[1.55] max-w-[74ch]" style={{ color: '#63636F' }}>
-        In testing on Robinhood Chain — testnet, not yet audited. Not a deposit or a guaranteed return; the
-        working balance is a liquidity position subject to impermanent loss.{' '}
+      <p className="text-[12px] mt-5" style={{ color: '#63636F' }}>
+        Robinhood testnet.{' '}
         <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>
