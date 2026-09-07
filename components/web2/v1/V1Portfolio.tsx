@@ -69,10 +69,41 @@ export function V1Portfolio() {
     return (
       <div>
         <Header />
-        <div className="mt-6 rounded-[16px] p-8 flex flex-col items-start gap-4" style={CARD}>
-          <p className="text-[15px] max-w-[44ch] leading-[1.55]" style={{ color: '#9B9BAD' }}>Connect your wallet to see your profile, working balance, and positions.</p>
-          <button onClick={connect} className="text-[13.5px] font-semibold px-5 py-2.5 rounded-full text-white cursor-pointer" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', boxShadow: '0 4px 14px rgba(108,108,240,0.35)' }}>Connect Wallet</button>
+
+        {/* value hero — sell the money-home before connect, no bare button */}
+        <div className="mt-6 rounded-[18px] p-8 max-[640px]:p-5 relative overflow-hidden" style={{ background: 'linear-gradient(135deg,#191830,#12121C)', border: '1px solid rgba(138,130,244,0.22)' }}>
+          <div className="absolute -top-16 -right-10 w-[240px] h-[240px] rounded-full" style={{ background: 'radial-gradient(circle,rgba(138,130,244,0.2),transparent 70%)' }} />
+          <div className="relative max-w-[48ch]">
+            <h2 className="font-atx-display font-semibold text-[clamp(1.5rem,3.6vw,2rem)] tracking-[-0.03em] leading-[1.1]">Money that never sits still.</h2>
+            <p className="text-[14.5px] leading-[1.6] mt-3" style={{ color: '#9B9BAD' }}>
+              Deposit USDG — it earns from block one, provides liquidity to a curated pool, and a spendable
+              buffer fills from the yield. <b style={{ color: '#F4F4FA' }}>Spend the buffer without unwinding your position.</b>
+            </p>
+            <button onClick={connect} className="mt-5 text-[14px] font-semibold px-5 py-3 rounded-[14px] text-white cursor-pointer" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', boxShadow: '0 6px 20px rgba(108,108,240,0.35)' }}>Connect wallet to open your account</button>
+          </div>
         </div>
+
+        {/* what you'll track — preview tiles (locked, no fake numbers) */}
+        <div className="grid gap-3 mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
+          {[['Working & earning', 'your live LP value'], ['Spendable buffer', 'fills from the yield'], ['Net vs deposit', 'your P&L'], ['Positions', 'across curated pools']].map(([k, sub]) => (
+            <div key={k} className="rounded-[14px] p-4" style={CARD}>
+              <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{k}</div>
+              <div className="font-mono font-bold text-[20px] mt-1.5" style={{ color: '#3A3A46' }}>——</div>
+              <div className="text-[11.5px] mt-0.5" style={{ color: '#63636F' }}>{sub}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* the loop */}
+        <div className="rounded-[16px] p-6 mt-4" style={CARD}>
+          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>How your account works</div>
+          <div className="grid gap-4 mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
+            <Step n="01" t="Earns while staged" d="Idle USDG earns lending yield in Morpho from the moment you deposit." />
+            <Step n="02" t="Provides liquidity" d="A capped share is paired into a curated pool and earns trading fees." />
+            <Step n="03" t="Spend the yield" d="Fees fill your spendable buffer — your position is never unwound." />
+          </div>
+        </div>
+
         <Foot />
       </div>
     )
@@ -224,6 +255,18 @@ function Stat({ k, v, tone }: { k: string; v: string; tone?: 'up' | 'down' }) {
     <div className="rounded-[14px] p-4" style={CARD}>
       <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{k}</div>
       <div className="font-mono font-bold text-[20px] mt-1.5" style={{ color: tone === 'up' ? '#34D399' : tone === 'down' ? '#F0736E' : '#F4F4FA' }}>{v}</div>
+    </div>
+  )
+}
+
+function Step({ n, t, d }: { n: string; t: string; d: string }) {
+  return (
+    <div className="flex gap-3">
+      <span className="font-mono text-[12px] font-bold shrink-0" style={{ color: '#8A82F4' }}>{n}</span>
+      <span>
+        <span className="font-semibold text-[13.5px]">{t}</span>
+        <div className="text-[12.5px] mt-0.5 leading-[1.5]" style={{ color: '#9B9BAD' }}>{d}</div>
+      </span>
     </div>
   )
 }
