@@ -294,6 +294,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/the-math` | `app/the-math/page.tsx` |
 | `/v1` | `app/v1/page.tsx` |
 | `/v1/portfolio` | `app/v1/portfolio/page.tsx` |
+| `/v1/referrals` | `app/v1/referrals/page.tsx` |
 | `/v1/swap` | `app/v1/swap/page.tsx` |
 | `/v2` | `app/v2/page.tsx` |
 | `/vaults` | `app/(rewards)/vaults/page.tsx` |

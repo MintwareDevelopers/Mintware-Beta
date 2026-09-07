@@ -18,6 +18,7 @@ const NAV = [
   { label: 'Discover', href: '/v1' },
   { label: 'Swap', href: '/v1/swap' },
   { label: 'Portfolio', href: '/v1/portfolio' },
+  { label: 'Referrals', href: '/v1/referrals' },
 ]
 
 export function V1Shell({ children }: { children: React.ReactNode }) {

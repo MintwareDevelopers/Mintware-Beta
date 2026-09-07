@@ -11,6 +11,7 @@ const V1_LINKS = [
   { href: '/v1', label: 'Discover' },
   { href: '/v1/swap', label: 'Swap' },
   { href: '/v1/portfolio', label: 'Portfolio' },
+  { href: '/v1/referrals', label: 'Referrals' },
   { href: '/legal', label: 'Legal & disclosures' },
 ]
 
