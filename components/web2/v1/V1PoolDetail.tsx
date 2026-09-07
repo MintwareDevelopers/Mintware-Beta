@@ -16,7 +16,8 @@ import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 
 type Meta = { positionManager: `0x${string}`; poolAddress: string; chainId: number; rpcUrl: string; usdg: `0x${string}` | null; feePips: number | null; dynamicFee: boolean; inRange?: boolean | null; currentTick?: number | null; live: boolean }
 type Metrics = { pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; live: boolean }
-type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null }
+type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
+type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; history?: Snapshot[] }
 type Status = 'idle' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'done'
 
 const ERC20_ABI = [
@@ -267,12 +268,25 @@ export function V1PoolDetail({ slug }: { slug: string }) {
               )}
             </div>
             {hasPos && pos?.costBasisAtomic != null && (
-              <div className="mt-4 pt-4 flex justify-between items-baseline text-[13px]" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                <span style={{ color: '#9B9BAD' }}>Net vs your deposit <span style={{ color: '#63636F' }}>({usdg(pos.costBasisAtomic)} in)</span></span>
+              <div className="mt-4 pt-4 flex flex-col gap-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex justify-between items-baseline text-[13px]">
+                  <span style={{ color: '#9B9BAD' }}>Net vs your deposit <span style={{ color: '#63636F' }}>({usdg(pos.costBasisAtomic)} in)</span></span>
+                  {(() => {
+                    const up = num(pos.unrealizedPnlAtomic) >= 0
+                    return <span className="font-mono font-bold" style={{ color: up ? '#34D399' : '#F0736E' }}>{up ? '+' : ''}{usdg(pos.unrealizedPnlAtomic)}</span>
+                  })()}
+                </div>
                 {(() => {
-                  const pnl = num(pos.unrealizedPnlAtomic)
-                  const up = pnl >= 0
-                  return <span className="font-mono font-bold" style={{ color: up ? '#34D399' : '#F0736E' }}>{up ? '+' : ''}{usdg(pos.unrealizedPnlAtomic)}</span>
+                  const wk = (pos.history ?? []).find((h) => Date.now() - Date.parse(h.takenAt) >= 7 * 864e5)
+                  if (!wk) return null
+                  const d7 = num(pos.positionValueAtomic) - num(wk.positionValueAtomic)
+                  const up = d7 >= 0
+                  return (
+                    <div className="flex justify-between items-baseline text-[12px]">
+                      <span style={{ color: '#63636F' }}>Change · 7d</span>
+                      <span className="font-mono" style={{ color: up ? '#34D399' : '#F0736E' }}>{up ? '+' : ''}${Math.abs(d7).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )
                 })()}
               </div>
             )}

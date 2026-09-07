@@ -20,6 +20,10 @@
     {
       "path": "/api/cron/gateway-discover",
       "schedule": "0 */3 * * *"
+    },
+    {
+      "path": "/api/cron/gateway-snapshot",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
