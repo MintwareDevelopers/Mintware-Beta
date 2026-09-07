@@ -44,8 +44,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS harvest_events_collect_tx_uidx ON harvest_even
 -- Alternate buffer source: a card buffer funded from harvested LP-gateway fees instead of the
 -- member's treasury-vault senior shares. Nullable + additive — the existing treasury card flow
 -- (member_wallet + on-chain refillBuffer) is unchanged when this is null.
-ALTER TABLE card_spend_buffers
-  ADD COLUMN IF NOT EXISTS gateway_position_id uuid REFERENCES gateway_positions(id) ON DELETE SET NULL;
+-- Guarded: card_spend_buffers is created by its own (card-buffer) migration. Only add the link column
+-- when that table already exists, so this migration is portable when applied out of order / standalone.
+DO $$
+BEGIN
+  IF to_regclass('public.card_spend_buffers') IS NOT NULL THEN
+    ALTER TABLE card_spend_buffers
+      ADD COLUMN IF NOT EXISTS gateway_position_id uuid REFERENCES gateway_positions(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 alter table if exists public.gateway_positions enable row level security;
 alter table if exists public.harvest_events    enable row level security;
