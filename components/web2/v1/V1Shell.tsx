@@ -9,6 +9,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
+import { MintwareMark } from '@/components/ui2/MintwareMark'
 import { shortAddr } from '@/lib/web2/api'
 import { V1DisclaimerGate } from './V1DisclaimerGate'
 
@@ -33,7 +34,7 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
       >
         <div className="mx-auto max-w-[1200px] px-6 max-[640px]:px-4 h-[58px] flex items-center gap-6 max-[640px]:gap-3">
           <Link href="/v1" className="flex items-center gap-2.5 no-underline shrink-0" style={{ color: '#F4F4FA' }}>
-            <span className="w-[22px] h-[22px] rounded-[6px_6px_8px_8px]" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)' }} />
+            <MintwareMark size={24} />
             <span className="font-bold text-[16px] tracking-[-0.01em]">Mintware</span>
           </Link>
 
