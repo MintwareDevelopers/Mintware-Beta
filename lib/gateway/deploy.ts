@@ -155,11 +155,7 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
   }
 
   try {
-    // M-03 slippage floor: deploy() reverts if the minted liquidity is below this. Env-configurable
-    // (absolute L units); default 0 = no floor (unchanged), but a real value should be set once the zap
-    // executor is enabled, and the operator's cast path passes one directly. The contract-level revert is
-    // the actual protection — this just threads the caller's floor through.
-    const minLiquidity = BigInt(process.env.LP_GATEWAY_DEPLOY_MIN_LIQUIDITY ?? '0')
+    // M-03 slippage floor (absolute L units) — validated non-zero above; deploy() reverts below it.
     const deployTx = await wallet.writeContract({
       address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deploy',
       args: [quoteToDeploy, zap.pairedOut, minLiquidity, BigInt(Math.floor(Date.now() / 1000) + 600)],

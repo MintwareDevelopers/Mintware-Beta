@@ -135,3 +135,23 @@ Virtual-offset inflation defense · directional conservative marks (every pump/d
 **Tests before funds:** fork tests for adapter-shortfall withdraw, full-drain→redeploy, the INCREASE path, Permit2 revoke, and the real 4626 adapter composed; convert the A-1 audit PoC into a regression test asserting the *fix*.
 
 **Then the bounded rollout:** hard exposure cap · deep pools only · tiny first amount · monitor harvest / out-of-range / breaker trips · scale on clean operation.
+
+---
+
+## 8. Remediation status (2026-09-07 — branch `fix/lp-gateway-realfunds-audit`)
+
+Verified by **33/33 Forge unit** + **7/7 fork tests on Robinhood testnet**, incl. 5 new regressions.
+
+| ID | Status | Fix |
+|---|---|---|
+| **A-1** | ✅ fixed | `withdraw` re-credits shares for the UNSERVED value when the adapter under-delivers (delivered valued at spot vs `claimValue`) — take what's liquid now, keep the claim on the rest. Regression: unit (100k → 30k + 70k re-credited → recovers all) + fork (with LP leg). |
+| **A-2** | ✅ fixed | `_sweepFees` early-returns when position liquidity == 0 (a full decrease already collected all fees). Regression: fork exact-zero drain → `harvest` no-op → deposit + `deploy` succeed. |
+| **A-3** | ✅ fixed (contract + cron) | Contract: `MAX_DEPLOY_BPS = 5000` hard cap on **total** deployed fraction of NAV (constant) + spot-vs-follower band check in `deploy`. Cron: refuses `minLiquidity = 0` (fail-closed, pre-claim) and targets `ratio·NAV − deployed` instead of per-run `staged × ratio`. Regressions: fork `DeployCapExceeded` + `DeployPriceOutOfBand`. |
+| **A-6 / A-8** | ✅ fixed | Constructor rejects hooked pools, native-ETH pairs, and unordered/misaligned ticks. |
+| **A-4** | ⏳ open (own-funds tolerable) | Buffer ledger rebuild (event-indexed, on-chain-share-weighted, atomic). **Required before any third-party depositor.** |
+| **A-5** | ⏳ ops | Real deployment must use `MintwareERC4626YieldAdapter` (never the drainable mock); wire `setVault`; compose the real adapter in the gateway test harness. |
+| **A-7** | ⏳ open | Registry: verify against `factory.instanceForPool` + block active-upsert. |
+| **A-3 key** | ⏳ ops | Dedicated Privy-enclaved gateway owner key (not the shared root); assert `ORACLE_SIGNER_PROVIDER=privy` in prod. |
+| M-07 | ⏳ verify | Confirm the RH-chain USDG implementation (native Paxos vs bridged). |
+
+**Remaining before ANY own funds:** A-5 (real adapter + setVault), the A-3 key hardening, M-07 verification, and the bounded-rollout gates in §7. A-4 and A-7 gate *third-party* funds.

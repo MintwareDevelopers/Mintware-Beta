@@ -253,3 +253,26 @@ it below the pumped spot NAV). Self-skips without the RPC so CI stays green.
 
 **Still gating mainnet:** the full M-05 fee-settlement architecture, an external audit, and the standing
 curation + deep-pool + capped-deploy posture.
+
+## Real-funds re-audit (2026-09-07, Fable 5.1) — supersedes parts of the table above
+
+A second, independent three-pass review before putting a bounded amount of **our own funds** in found
+four HIGHs the first review missed or over-claimed; full report:
+[`lp-gateway-v1-realfunds-audit-findings.md`](lp-gateway-v1-realfunds-audit-findings.md). Fixed and verified
+(33/33 unit + 7/7 fork) on `fix/lp-gateway-realfunds-audit`:
+
+- **A-1** `withdraw` burned 100% of shares but under-delivered when the adapter was illiquid (remainder
+  stranded, unrecoverable for a sole holder) → unserved value is now re-credited as shares.
+- **A-2** a full LP drain permanently bricked the instance (`_sweepFees` reverted `CannotUpdateEmptyPosition`)
+  → early-return on zero liquidity.
+- **A-3** `deploy` was unbounded and unpriced, the cron passed `minLiquidity = 0`, and the "capped deploy
+  fraction" converged to ~100% → on-chain `MAX_DEPLOY_BPS` total-fraction cap + follower band check; cron
+  fails closed on a zero floor and targets `ratio·NAV − deployed`.
+- **A-6/A-8** constructor now rejects hooked pools, native-ETH pairs, misaligned ticks.
+
+**Verdicts above amended:** **M-03 "fixed"** was the on-chain hook only (the cron disabled it) · **M-01
+"withdrawals never brick"** held only while the adapter fully served and the LP was non-empty · the
+**"capped deploy fraction"** H-03 backstop did not exist · **L-07** FoT would revert, not mis-mint · **I-01**
+is implementable (the production adapter exposes `asset()`). **Still open:** A-4 (buffer ledger — gates
+third-party funds), A-5 (real adapter, never the mock), A-7 (registry vs factory), the dedicated owner key,
+M-07 USDG verification.
