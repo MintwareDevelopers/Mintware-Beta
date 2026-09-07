@@ -2,6 +2,13 @@
 
 > **Status (2026-09-07):** **LIVE on Robinhood Chain testnet (46630)**, hardened + self-audited + firm-grade
 > reviewed, merged to `main`. **Testnet + mock tokens + UNAUDITED** — external audit gates real mainnet value.
+> **Real-funds re-audit (Fable 5.1, 2026-09-07 — [`docs/developers/lp-gateway-v1-realfunds-audit-findings.md`](../../docs/developers/lp-gateway-v1-realfunds-audit-findings.md)):**
+> 4 HIGHs found + fixed on the `2026-09-07c` rig — A-1 withdraw re-credits unserved shares (adapter illiquid ⇒
+> nothing stranded), A-2 empty-position brick, A-3 on-chain `MAX_DEPLOY_BPS=5000` cap on TOTAL deployed/NAV +
+> follower band in `deploy` + cron fail-closed on `minLiquidity=0`, A-5 the staging adapter is now the PRODUCTION
+> `MintwareERC4626YieldAdapter` (`onlyVault`) — the earlier rigs ran a `MockYieldAdapter` anyone could drain.
+> **Still gating even OWN funds:** dedicated enclaved owner key (verify prod signer = Privy), USDG impl
+> verification, bounded rollout. **Gating third-party funds:** A-4 buffer ledger (never written), A-7 registry.
 > Deploy truth: [`config/deployments.json`](../../config/deployments.json) (`robinhood-testnet`) + `STATE.md`.
 > Explainer: [`docs/developers/lp-gateway.md`](../../docs/developers/lp-gateway.md).
 
@@ -66,8 +73,12 @@ capped deploy are the economic backstop; mainnet is audit-gated.
 ## Deploy, tests, framing
 - **Deploy:** pure-Privy, no raw key — `scripts/deploy-lp-gateway-robinhood.mjs` (`pnpm deploy:lp-gateway:robinhood`).
   Runbook: [`../../docs/developers/lp-gateway-testnet-runbook.md`](../../docs/developers/lp-gateway-testnet-runbook.md).
-- **Tests:** 32 gateway Forge (staging/PM/factory) + `MintwareLpGatewayHardeningFork.t.sol` (real
-  `PoolSwapTest` swaps prove H-02/H-03, self-skips without `LP_FORK_RPC_URL`) + gateway Vitest (`lib/gateway/*`).
+- **Tests:** 44 gateway Forge (staging/PM/factory + `MintwareLpGatewayRealAdapter.t.sol` — the gateway composed
+  with the PRODUCTION 4626 adapter: onlyVault drain-block, one-time setVault, A-1 re-credit vs per-block cap +
+  stalled source, fee-net NAV) + `MintwareLpGatewayHardeningFork.t.sol` (7 — real `PoolSwapTest` swaps prove
+  H-02/H-03 + the A-1/A-2/A-3 regressions, on the real adapter; self-skips without `LP_FORK_RPC_URL`) + gateway
+  Vitest (`lib/gateway/*`). Foundry gotcha: anchor `vm.roll` to a captured `b0` — a relative `block.number + 1`
+  re-evaluated mid-test can land on the same block twice and trip `SameBlockAction`.
 - **Hard copy lines** (same as the rest of the stack): idle-buffer, **never** "spend the fees" undersell or
   "100% spendable" overclaim; no **deposit / savings / guaranteed / fixed-APY**; testnet-honest; a liquidity
   position carries impermanent loss; external audit gates real value. `riskScore` never certifies safety.

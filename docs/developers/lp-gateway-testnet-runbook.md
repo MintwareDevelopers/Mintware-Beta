@@ -11,7 +11,11 @@ are test tokens with no value.
 - V4 **PositionManager** `0x58daec3116aae6D93017bAAea7749052E8a04fA7` — embeds the PoolManager + Permit2.
 - **Permit2** `0x000000000022D473030F116dDEE9F6B43aC78BA3` — canonical.
 - ⚠ No USDG / Morpho vault / meme pool on testnet — so the setup script deploys a **mock rig** (mock
-  USDG + mock paired token + mock yield adapter + a fresh V4 pool). Mainnet uses the real USDG + Morpho.
+  USDG + mock paired token + a mock ERC-4626 yield *source* + a fresh V4 pool) behind the **production
+  yield adapter** (`MintwareERC4626YieldAdapter`: `onlyVault`, one-time `setVault`, fee-net best-effort
+  exits). Re-audit A-5: the earlier rigs ran the test `MockYieldAdapter`, whose `withdraw` had no access
+  control — anyone could drain the staged reserve; never point value at such a rig. Mainnet swaps only
+  the *source* (the curated Morpho vault, via `LP_GATEWAY_YIELD_SOURCE`) and the real Paxos USDG.
 
 ## 1. Provision + fund the Privy signer (no raw key)
 The recommended path is **pure-Privy**: the Privy ROOT server wallet signs every deploy tx, so no raw
@@ -32,9 +36,11 @@ ORACLE_SIGNER_PROVIDER=privy PRIVY_APP_ID=... PRIVY_APP_SECRET=... \
 ROOT_ORACLE_PRIVY_WALLET_ID=... ROOT_ORACLE_PRIVY_ADDRESS=0x... \
 pnpm deploy:lp-gateway:robinhood
 ```
-`scripts/deploy-lp-gateway-robinhood.mjs` deploys tUSDG (6dp) + tPONS (18dp) + a mock yield adapter,
+`scripts/deploy-lp-gateway-robinhood.mjs` deploys tUSDG (6dp) + tPONS (18dp) + a `MockERC4626` yield
+source (or uses `LP_GATEWAY_YIELD_SOURCE`, asset-checked) + the `MintwareERC4626YieldAdapter`,
 **initializes a fresh V4 pool** (hookless, 0.30% / tickSpacing 60, price 1.0), deploys the gateway
-(owner + harvestRecipient = **the Privy signer**), wires `setController`, mints 1M of each token to the
+(owner + harvestRecipient = **the Privy signer**), wires `setController` **and the adapter's one-time
+`setVault(staging)`** (asserting both read back), mints 1M of each token to the
 signer, and prints the exact `LP_GATEWAY_*` env block. It gas-preflights and fails closed with a faucet
 nudge if the signer is unfunded.
 
@@ -62,7 +68,8 @@ Or via cast:
 cast send $TUSDG "approve(address,uint256)" $POSITION_MANAGER 1000000000 --private-key $KEY --rpc-url $RPC
 cast send $POSITION_MANAGER "deposit(uint256)" 1000000000 --private-key $KEY --rpc-url $RPC   # 1,000 tUSDG
 ```
-`totalNav()` should read back ~the deposit; the idle USDG is earning in the mock adapter.
+`totalNav()` should read back ~the deposit; the idle USDG sits as 4626 shares held by the adapter (only the
+staging can move them — `adapter.withdraw` from any other caller reverts `OnlyVault`).
 
 ## 5. Deploy staged capital into the pool
 The router zap is unwired (deploy-gated seam), so supply the paired leg manually (the deployer holds

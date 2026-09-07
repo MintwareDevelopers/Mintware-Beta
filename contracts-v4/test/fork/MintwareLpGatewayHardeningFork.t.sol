@@ -18,7 +18,8 @@ import {IYieldAdapter} from "../../src/vaults/IYieldAdapter.sol";
 import {MintwareLpGatewayStaging} from "../../src/gateway/MintwareLpGatewayStaging.sol";
 import {MintwareLpGatewayPositionManager, IPermit2Minimal} from "../../src/gateway/MintwareLpGatewayPositionManager.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
-import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {MockERC4626} from "../mocks/MockERC4626.sol";
+import {MintwareERC4626YieldAdapter} from "../../src/vaults/MintwareERC4626YieldAdapter.sol";
 
 /// @notice Fork validation of the firm-grade HARDENING (findings H-02 / H-03 / M-06) against the REAL
 ///         Uniswap V4 stack (Robinhood Chain testnet by default). Deploys its own mock rig + a fresh pool,
@@ -45,7 +46,10 @@ contract MintwareLpGatewayHardeningForkTest is Test {
     MockERC20 internal paired; // 18dp
     PoolKey internal key;
     PoolSwapTest internal swapper;
-    MockYieldAdapter internal adapter; // field (not a setUp local) so tests can simulate adapter illiquidity
+    // Re-audit A-5: the PRODUCTION adapter (onlyVault, one-time setVault) over a 4626 source — not the
+    // access-control-free MockYieldAdapter. Field so tests can degrade it (per-block cap = illiquidity).
+    MintwareERC4626YieldAdapter internal adapter;
+    MockERC4626 internal yieldSource;
 
     address internal RECIP = address(0xFEE5);
     address internal alice = address(0xA11CE);
@@ -71,7 +75,8 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         quote = a;
         paired = b;
 
-        adapter = new MockYieldAdapter(address(quote));
+        yieldSource = new MockERC4626(IERC20(address(quote)));
+        adapter = new MintwareERC4626YieldAdapter(address(quote), address(yieldSource), address(0), address(this));
         key = PoolKey({
             currency0: Currency.wrap(address(c0)),
             currency1: Currency.wrap(address(c1)),
@@ -82,6 +87,7 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         poolManager.initialize(key, SQRT_1);
 
         staging = new MintwareLpGatewayStaging(IERC20(address(quote)), adapter);
+        adapter.setVault(address(staging)); // one-time: the staging is the only address that may move funds
         pm = new MintwareLpGatewayPositionManager(
             poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500
         );
@@ -199,7 +205,7 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         if (!live) return;
         uint256 b0 = block.number;
         IPositionManager posm = IPositionManager(address(pm.positionManager()));
-        adapter.setWithdrawableCap(10_000e18); // idle shortfall → the exit takes the ENTIRE LP (liq → 0)
+        adapter.setPerBlockWithdrawCap(10_000e18); // idle shortfall → the exit takes the ENTIRE LP (liq → 0)
         uint256 s = pm.sharesOf(alice);
         vm.prank(alice);
         pm.withdraw(s);
@@ -209,7 +215,7 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         (uint256 qf, uint256 pf) = pm.harvest(block.timestamp); // pre-fix: reverted CannotUpdateEmptyPosition
         assertEq(qf + pf, 0, "nothing to sweep on an emptied position");
 
-        adapter.setWithdrawableCap(type(uint256).max); // liquidity restored
+        adapter.setPerBlockWithdrawCap(0); // liquidity restored (0 = uncapped)
         vm.prank(alice);
         pm.deposit(100_000e18);
         vm.roll(b0 + 2);
@@ -247,7 +253,7 @@ contract MintwareLpGatewayHardeningForkTest is Test {
     // liquid idle + the whole LP; the UNSERVED idle is re-credited as shares — never stranded ownerless.
     function test_fork_A1_withdrawAdapterShort_reCreditsUnserved() public {
         if (!live) return;
-        adapter.setWithdrawableCap(10_000e18); // idle is 50k; only 10k is liquid
+        adapter.setPerBlockWithdrawCap(10_000e18); // idle is 50k; only 10k can leave this block
         uint256 s = pm.sharesOf(alice);
         vm.prank(alice);
         pm.withdraw(s);
