@@ -12,6 +12,7 @@ import { ULVMechanics } from '@/components/vaults/ULVMechanics'
 import { SwapWalkthrough } from '@/components/vaults/SwapWalkthrough'
 import { useV2Mode } from "@/components/web2/V2ModeProvider"
 import { V1MarketingStub } from "@/components/web2/V1MarketingStub"
+import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 const VAULTS_LOCKED = process.env.NEXT_PUBLIC_VAULTS_LOCKED === 'true'
 
@@ -114,6 +115,8 @@ function VaultsPageV2() {
           </div>
         </div>
       </section>
+
+      <LiveTodayStrip />
 
       {/* ── the mechanism (tech · ULV · idle-capital yield) ── */}
       <div id="how" className="scroll-mt-[62px]"><ULVMechanics /></div>

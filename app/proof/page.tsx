@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { MwNav } from '@/components/web2/MwNav'
-import { LATEST_RUN, STAGED_LIQUIDITY_RUN, CARD_RAIL, FORMAL_VERIFICATION, SECURITY_AUDIT, SECURITY_AUDIT_R2, SECURITY_AUDIT_R4, SECURITY_AUDIT_R5, EXPLOIT_REDTEAM, AUDIT_MATRIX, txUrl, addrUrl, shortHash, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
+import { LATEST_RUN, STAGED_LIQUIDITY_RUN, LP_GATEWAY_RUN, CARD_RAIL, FORMAL_VERIFICATION, SECURITY_AUDIT, SECURITY_AUDIT_R2, SECURITY_AUDIT_R4, SECURITY_AUDIT_R5, EXPLOIT_REDTEAM, AUDIT_MATRIX, txUrl, addrUrl, shortHash, chainLabel, type Decision, type ProofLeg } from '@/lib/proof/latestRun'
 
 const KIND: Record<Decision['kind'], string> = {
   ok: 'text-mw-green bg-[rgba(22,163,74,0.10)]',
@@ -138,6 +138,50 @@ export default function ProofPage() {
             so the loop is self-contained. The real <span className="font-mono">AaveV3YieldAdapter</span> +{' '}
             <span className="font-mono">MintwareDeFiPairVault</span> implement the same interfaces (Forge-tested).{' '}
             <Link href="/app/liquidity/staged" className="text-peri-deep no-underline hover:underline">Try it live →</Link>
+          </p>
+        </div>
+
+        {/* Third proven flow — LP Gateway on Robinhood Chain testnet */}
+        <div className="mt-14 pt-2 border-t border-hair">
+          <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep font-atx-display mt-8">
+            {LP_GATEWAY_RUN.eyebrow}
+          </div>
+          <h2 className="font-atx-display font-bold text-[clamp(1.7rem,4.4vw,2.5rem)] leading-[1.06] tracking-[-0.03em] mt-3">
+            {LP_GATEWAY_RUN.title}<br /><span className="text-gradient-accent">{LP_GATEWAY_RUN.titleAccent}</span>
+          </h2>
+          <p className="text-ink-mid text-[clamp(0.98rem,2vw,1.12rem)] leading-[1.5] max-w-[62ch] mt-4">
+            {LP_GATEWAY_RUN.subtitle}
+          </p>
+          <div className="mt-8 flex flex-col gap-4">
+            {LP_GATEWAY_RUN.legs.map((leg) => <LegCard key={leg.n} leg={leg} />)}
+          </div>
+          <div className="mt-6 overflow-x-auto rounded-[16px] border border-hair shadow-card">
+            <table className="w-full border-collapse text-[13px] min-w-[520px]">
+              <thead>
+                <tr className="bg-ground-cool">
+                  {['Contract', 'Network', 'Address'].map((h) => (
+                    <th key={h} className="text-left font-atx-display text-[10px] uppercase tracking-[0.1em] font-semibold text-ink-soft px-4 py-3 border-b border-hair">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {LP_GATEWAY_RUN.contracts.map((c) => (
+                  <tr key={c.address} className="border-b border-hair-soft last:border-0">
+                    <td className="px-4 py-3">{c.name}</td>
+                    <td className="px-4 py-3 text-ink-mid">{chainLabel(c.chain)}</td>
+                    <td className="px-4 py-3">
+                      <a href={addrUrl(c.chain, c.address)} target="_blank" rel="noopener" className="font-mono text-[12px] text-peri-deep no-underline hover:underline">{c.short}</a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[12px] text-ink-soft mt-4 max-w-[64ch]">
+            Mock USDG + a hookless Uniswap v4 pool make the loop self-contained; the position manager, staging
+            reserve, and flash-manipulation breaker are the real product bytecode (Forge-tested). Testnet,
+            unaudited — the hashes are real, the dollars are not.{' '}
+            <Link href="/legal" className="text-peri-deep no-underline hover:underline">Legal →</Link>
           </p>
         </div>
 
@@ -554,7 +598,7 @@ function LegCard({ leg }: { leg: ProofLeg }) {
                 className="font-mono text-[12px] rounded-lg px-2.5 py-1 no-underline text-peri-deep bg-[rgba(108,108,240,0.10)] hover:bg-[rgba(108,108,240,0.18)]">
                 {shortHash(t.hash)}
               </a>
-              <span className="text-[11px] text-ink-soft">{t.chain === 'arc' ? 'arcscan' : 'basescan'} ↗{t.note ? ` · ${t.note}` : ''}</span>
+              <span className="text-[11px] text-ink-soft">{t.chain === 'arc' ? 'arcscan' : t.chain === 'robinhood' ? 'blockscout' : 'basescan'} ↗{t.note ? ` · ${t.note}` : ''}</span>
             </div>
           ))}
         </div>

@@ -7,6 +7,7 @@ import { FeeSplitDonut } from '@/components/ui2/FeeSplitDonut'
 import { cookies } from "next/headers"
 import { isV2FromCookie, V2_COOKIE } from "@/lib/v2/gate"
 import { V1MarketingStub } from "@/components/web2/V1MarketingStub"
+import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 // =============================================================================
 // /defi — marketing landing for the DeFi vault surface. Design v2 (Privy-esque).
@@ -106,6 +107,8 @@ function DefiLandingPageV2() {
           </div>
         </div>
       </section>
+
+      <LiveTodayStrip />
 
       {/* ── 01 · The wedge ── */}
       <section className="bg-white border-b border-hair-soft">

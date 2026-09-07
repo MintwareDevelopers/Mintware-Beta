@@ -2,17 +2,24 @@
 // After each fresh live run, update THIS file (dates, hashes, deltas, test counts) and the page reflects it.
 // Everything here is testnet + unaudited; the hashes are real, the dollars are valueless test USDC.
 
-export type Chain = 'arc' | 'base-sepolia'
+export type Chain = 'arc' | 'base-sepolia' | 'robinhood'
 
+// Block-explorer base per chain. Robinhood Chain testnet runs Blockscout at explorer.testnet.chain.robinhood.com.
+const EXPLORER: Record<Chain, string> = {
+  arc: 'https://testnet.arcscan.app',
+  'base-sepolia': 'https://sepolia.basescan.org',
+  robinhood: 'https://explorer.testnet.chain.robinhood.com',
+}
 export function txUrl(chain: Chain, hash: string): string {
-  return chain === 'arc'
-    ? `https://testnet.arcscan.app/tx/${hash}`
-    : `https://sepolia.basescan.org/tx/${hash}`
+  return `${EXPLORER[chain]}/tx/${hash}`
 }
 export function addrUrl(chain: Chain, addr: string): string {
-  return chain === 'arc'
-    ? `https://testnet.arcscan.app/address/${addr}`
-    : `https://sepolia.basescan.org/address/${addr}`
+  return `${EXPLORER[chain]}/address/${addr}`
+}
+
+// Human label for a chain (used in the contracts table + per-leg tx footers).
+export function chainLabel(chain: Chain): string {
+  return chain === 'arc' ? 'Arc' : chain === 'robinhood' ? 'Robinhood' : 'Base Sepolia'
 }
 /** Middle-truncate a 66-char hash for display: 0x1234…abcd */
 export function shortHash(h: string): string {
@@ -218,6 +225,63 @@ export const STAGED_LIQUIDITY_RUN: ProofFlow = {
     { name: 'Staged token (sUSD)', chain: 'base-sepolia', short: '0xE236…8401', address: S_TOKEN },
     { name: 'Yield adapter', chain: 'base-sepolia', short: '0xe412…0B5F', address: S_ADAPTER },
     { name: 'Pair vault', chain: 'base-sepolia', short: '0xB014…D2F7', address: S_VAULT },
+  ],
+}
+
+// ── Third proven flow: the LP Gateway on Robinhood Chain testnet ─────────────────────────────────
+// Deposit USDG; it earns as curated-pool liquidity while a spendable buffer (funded by the yield, not
+// the whole position) stays liquid. Stood up + a real deposit taken, every tx signed by a Privy server
+// wallet (no raw key). Mock USDG + hookless v4 pool; testnet, unaudited. See config/deployments.json.
+
+const LPG_PM = '0x537A7fd1113066e13Ed41c337eDC085794cE24c0'
+const LPG_STAGING = '0x2e11a1019c03622404888EE9FaE443D9E14F4DF9'
+const LPG_USDG = '0xAD77283eE63f563f3200d7bC26c8eAB19e0Cc6d4'
+const LPG_ADAPTER = '0x8AC1ab49d9C8eB8adC9EDd8D6380220598007b38'
+
+export const LP_GATEWAY_RUN: ProofFlow = {
+  date: '2026-09-06',
+  eyebrow: 'LP Gateway · Robinhood Chain testnet',
+  title: 'Deploy, then a real deposit —',
+  titleAccent: 'signed by a server wallet.',
+  subtitle:
+    'The LP Gateway stood up on Robinhood Chain testnet and took a live deposit — every transaction signed by a Privy server wallet, with no raw key anywhere. Deposit USDG; it earns as curated-pool liquidity while a spendable buffer stays liquid.',
+  legs: [
+    {
+      n: 1,
+      title: 'Deploy the gateway',
+      where: 'Robinhood testnet · signed by Privy 0x18AE…663c',
+      status: 'proven',
+      statusLabel: 'Proven on Robinhood testnet',
+      desc: 'The staging reserve, the position manager (with its flash-manipulation breaker), a fresh Uniswap v4 pool, and the mock USDG + adapter rig were all deployed and wired by a Privy server wallet — no private key ever left the enclave.',
+      deltas: [
+        { k: 'Deploy signer', after: 'Privy server wallet (no raw key)' },
+        { k: 'Flash-manip breaker', after: 'armed · 20% band' },
+        { k: 'Fee recipient', after: 'immutable' },
+      ],
+    },
+    {
+      n: 2,
+      title: 'Deposit and stage',
+      where: 'Robinhood testnet · MintwareLpGatewayPositionManager 0x537A…24c0',
+      status: 'proven',
+      statusLabel: 'Proven on Robinhood testnet',
+      desc: '1,000 test USDG was approved and deposited. It staged into the yield adapter (earning from the first block) and minted 1:1 entry-NAV shares — the whole loop, on-chain.',
+      deltas: [
+        { k: 'totalNav', before: '0', after: '1,000 USDG' },
+        { k: 'Shares minted', before: '0', after: '1,000' },
+        { k: 'Staged (earning)', before: '0', after: '1,000 USDG' },
+      ],
+      txs: [
+        { label: 'Approve', chain: 'robinhood', hash: '0xe72fb8ff4a2af7a9fa02fea159bd4a57b7a979992e11c30df516c383103f4fb4' },
+        { label: 'Deposit', chain: 'robinhood', hash: '0x9fae3835917ad5f42187c10883aa683ae5f0fc26c4fed22368032592937b134c', note: 'totalNav → 1,000' },
+      ],
+    },
+  ],
+  contracts: [
+    { name: 'Position manager', chain: 'robinhood', short: '0x537A…24c0', address: LPG_PM },
+    { name: 'Staging reserve', chain: 'robinhood', short: '0x2e11…4DF9', address: LPG_STAGING },
+    { name: 'Test USDG', chain: 'robinhood', short: '0xAD77…C6d4', address: LPG_USDG },
+    { name: 'Yield adapter', chain: 'robinhood', short: '0x8AC1…7b38', address: LPG_ADAPTER },
   ],
 }
 

@@ -70,6 +70,7 @@ function Overview({ nav }: { nav: Nav }) {
           <tr><td><b>AI Agents</b></td><td>ERC-8004 identity + agent reputation (behavior + contribution + interpretability − risk)</td><td>Live — Base mainnet</td></tr>
           <tr><td><b>Swap</b></td><td>LI.FI cross-chain routing</td><td>Live</td></tr>
           <tr><td><b>Vaults (ULV engine)</b></td><td>JIT-liquidity Uniswap V4 vaults with an Aave idle sink</td><td>Built &amp; tested — in testing on Base Sepolia</td></tr>
+          <tr><td><b>LP Gateway</b></td><td>Deposit USDG → earns as curated-pool liquidity while a spendable buffer stays liquid</td><td>Deployed &amp; deposit proven — Robinhood Chain testnet (mock, unaudited)</td></tr>
           <tr><td><b>Liquid Sovereign Account</b></td><td>USDC that earns yield and stays spendable</td><td>Coming — payment core on Base Sepolia</td></tr>
         </tbody>
       </table>

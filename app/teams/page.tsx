@@ -5,6 +5,7 @@ import { GradientPanel } from '@/components/ui2/GradientPanel'
 import { cookies } from "next/headers"
 import { isV2FromCookie, V2_COOKIE } from "@/lib/v2/gate"
 import { V1MarketingStub } from "@/components/web2/V1MarketingStub"
+import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 // =============================================================================
 // /teams — marketing landing for the Matched Liquidity vault (team-facing).
@@ -95,6 +96,8 @@ function TeamsLandingPageV2() {
           </div>
         </div>
       </section>
+
+      <LiveTodayStrip />
 
       {/* ── 01 · The problem ── */}
       <section className="bg-white border-b border-hair-soft">

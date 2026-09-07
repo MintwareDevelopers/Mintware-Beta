@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { shortAddr } from '@/lib/web2/api'
 import { useV2Mode } from '@/components/web2/V2ModeProvider'
 import { V1MarketingStub } from '@/components/web2/V1MarketingStub'
+import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 const LABEL = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
 const NUM = 'text-[12px] font-semibold text-peri-deep tabular-nums'
@@ -268,6 +269,8 @@ function AgentsPageV2() {
           </a>
         </div>
       </section>
+
+      <LiveTodayStrip />
 
       {/* ── The agent parking account + 402 payment engine (built · Arc testnet) — the primary story ── */}
       <section id="parking" className="border-b border-hair-soft bg-ground-cool scroll-mt-20">

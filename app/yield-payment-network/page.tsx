@@ -13,6 +13,7 @@ import { YPN_ETHOS, YPN_LIQUIDITY, YPN_TECH, YPN_ETH_SENIOR, YPN_STANDING } from
 import { cookies } from "next/headers"
 import { isV2FromCookie, V2_COOKIE } from "@/lib/v2/gate"
 import { V1MarketingStub } from "@/components/web2/V1MarketingStub"
+import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 // =============================================================================
 // /yield-payment-network — PUBLIC marketing surface for the Liquid Sovereign
@@ -34,6 +35,8 @@ function YieldPaymentNetworkPageV2() {
     <div className="min-h-screen bg-white text-ink overflow-x-clip">
       <V2Nav active="ypn" />
       <YpnHero />
+
+      <LiveTodayStrip />
 
       <CoreMechanismSection />
       <PillarArchitectureDiagram />

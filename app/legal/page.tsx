@@ -111,6 +111,10 @@ const DISCLOSURES: { title: string; body: string }[] = [
     body: 'Smart contracts can contain bugs, be exploited, or behave unexpectedly; bridges, oracles, and third-party protocols add further risk. You could lose some or all of the value you interact with. Because Mintware is non-custodial, you are solely responsible for your wallet, keys, and transactions — we cannot recover, reverse, or freeze them.',
   },
   {
+    title: 'Providing liquidity carries impermanent loss',
+    body: 'The LP Gateway is non-custodial software, in testing on Robinhood Chain testnet with unaudited code and no real assets. Supplying liquidity to a pool is not a deposit, a savings account, or a guaranteed or fixed return: the position’s value moves with the pool price and can suffer impermanent loss, and you could lose some or all of the value you interact with. Any amount you can spend comes from the yield the position earns — a buffer, not a promised balance, and not your whole position. An external audit is the gate before real value.',
+  },
+  {
     title: 'A protected position is a priority claim, not a guarantee',
     body: 'Where a vault pairs a protected position with a first-loss position, protection means the protected side is paid first — a fixed order in the contract code, not a settable parameter and not a promise that it will always be made whole. Parameters affecting the size of protection are bounded and publicly disclosed on-chain (changes that loosen protection are delayed 48h and logged; changes that tighten it apply immediately). In an extreme loss event the first-loss balance could still be exhausted before the protected side is fully covered. First-loss capital is the team’s own and is restricted on-chain to team-controlled addresses; it is never sold to depositors or outside investors as an investment.',
   },
