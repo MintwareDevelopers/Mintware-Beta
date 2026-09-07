@@ -14,6 +14,8 @@ import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
 import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
 import { Sparkline } from '@/components/web2/v1/Sparkline'
+import { V1EditProfile } from '@/components/web2/v1/V1EditProfile'
+import { V1WalletCoins } from '@/components/web2/v1/V1WalletCoins'
 import { shortAddr } from '@/lib/web2/api'
 
 type PoolPosition = {
@@ -42,10 +44,11 @@ export function V1Portfolio() {
   const { address, isConnected, walletType, disconnect } = useMintwareIdentity()
   const privy = useMintwarePrivy()
   const connect = () => privy.login({ loginMethods: ['wallet', 'email'], walletChainType: 'ethereum-only' })
-  const { meta } = useProfileMeta(address)
+  const { meta, refetch: refetchMeta } = useProfileMeta(address)
   const [positions, setPositions] = useState<PoolPosition[]>([])
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
 
   useEffect(() => {
     if (!address) { setPositions([]); return }
@@ -111,6 +114,7 @@ export function V1Portfolio() {
 
   return (
     <div>
+      {editOpen && address && <V1EditProfile wallet={address} meta={meta} onClose={() => setEditOpen(false)} onSaved={refetchMeta} />}
       <Header />
 
       {/* 1 · identity */}
@@ -135,7 +139,7 @@ export function V1Portfolio() {
               <span style={{ color: '#9B9BAD' }}>{address ? shortAddr(address) : ''}</span>
               <span style={{ color: copied ? '#34D399' : '#63636F' }}>{copied ? '✓' : '⧉'}</span>
             </button>
-            <Link href="/app/account" className="text-[12.5px] no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Edit profile ↗</Link>
+            <button onClick={() => setEditOpen(true)} className="text-[12.5px] font-semibold cursor-pointer" style={{ color: '#8A82F4' }}>Edit profile</button>
             <button onClick={disconnect} className="text-[12.5px] font-semibold cursor-pointer" style={{ color: '#63636F' }}>Disconnect</button>
           </div>
         </div>
@@ -171,6 +175,9 @@ export function V1Portfolio() {
         <Stat k="Deposited" v={loading ? '—' : fmt(totalDeposited)} />
         <Stat k="Pools" v={loading ? '—' : String(positions.length)} />
       </div>
+
+      {/* 3b · coins held */}
+      <div className="mt-4"><V1WalletCoins address={address ?? undefined} /></div>
 
       {/* 4 · positions */}
       <div className="flex items-center justify-between mt-7 mb-3">
