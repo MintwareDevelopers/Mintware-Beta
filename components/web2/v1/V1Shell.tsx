@@ -10,6 +10,7 @@ import { usePathname } from 'next/navigation'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
+import { V1Footer } from '@/components/web2/v1/V1Footer'
 import { shortAddr } from '@/lib/web2/api'
 import { V1DisclaimerGate } from './V1DisclaimerGate'
 
@@ -86,6 +87,8 @@ export function V1Shell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main className="mx-auto max-w-[1200px] px-6 max-[640px]:px-4 py-9 max-[640px]:py-6">{children}</main>
+
+      <V1Footer />
     </div>
   )
 }

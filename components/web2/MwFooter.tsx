@@ -40,6 +40,9 @@ const SOLUTIONS_LINKS = [
 export function MwFooter() {
   const pathname = usePathname()
   if (pathname?.startsWith('/app/team')) return null   // treasury terminal has its own shell
+  // The V1 app (LP Gateway) is a dark surface with its own <V1Footer> in V1Shell — the light marketing
+  // footer must not render under it. Covers /v1, /v1/*, and the /earn/[pool] deposit pages.
+  if (pathname?.startsWith('/v1') || pathname?.startsWith('/earn')) return null
   return (
     <footer className="bg-ground-cool border-t border-hair-soft">
       <div className="mx-auto max-w-[1180px] px-6 max-[800px]:px-4 py-9 flex items-center justify-between flex-wrap gap-5">
