@@ -14,7 +14,7 @@ import { useMintwarePrivy } from '@/components/web2/providers'
 import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 
-type Meta = { positionManager: `0x${string}`; poolAddress: string; chainId: number; rpcUrl: string; usdg: `0x${string}` | null; feePips: number | null; dynamicFee: boolean; live: boolean }
+type Meta = { positionManager: `0x${string}`; poolAddress: string; chainId: number; rpcUrl: string; usdg: `0x${string}` | null; feePips: number | null; dynamicFee: boolean; inRange?: boolean | null; currentTick?: number | null; live: boolean }
 type Metrics = { pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; live: boolean }
 type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null }
 type Status = 'idle' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'done'
@@ -172,6 +172,11 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">
             <Tag>Uniswap V4</Tag><Tag>Curated</Tag><Tag>Robinhood Testnet</Tag>
             <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={meta?.live ? { color: '#34D399', background: 'rgba(52,211,153,0.12)' } : { color: '#9B9BAD', background: 'rgba(255,255,255,0.06)' }}>{meta?.live ? 'Live' : 'Curating'}</span>
+            {meta?.inRange != null && (
+              <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={meta.inRange ? { color: '#34D399', background: 'rgba(52,211,153,0.12)' } : { color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>
+                {meta.inRange ? 'In range · earning fees' : 'Out of range · fees paused'}
+              </span>
+            )}
           </div>
         </div>
         <div className="rounded-[12px] px-4 py-2.5 text-right" style={PANEL}>
