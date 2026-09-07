@@ -202,7 +202,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         </div>
       )}
 
-      <div className="grid gap-5 mt-6" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(320px,1fr)' }}>
+      <div className="grid gap-5 mt-6 grid-cols-1 min-[900px]:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)]">
         {/* LEFT: pool info */}
         <div className="rounded-[16px] p-6 min-[900px]:order-1 order-2" style={PANEL}>
           <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>Total Value Locked</div>
