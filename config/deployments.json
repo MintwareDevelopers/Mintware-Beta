@@ -178,6 +178,43 @@
         "verified": "2026-08-30",
         "source": "on-chain probe"
       }
+    },
+    "robinhood-testnet": {
+      "LpGatewayPositionManager": {
+        "address": "0x537A7fd1113066e13Ed41c337eDC085794cE24c0",
+        "chainId": 46630,
+        "status": "testnet",
+        "note": "LP Gateway V1 (self-audited: C1 flash breaker + M1/M2/owner-fee, PR #465). Pure-Privy deploy 2026-09-06 (no raw key), owner+harvestRecipient=Privy 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c. Full loop proven on-chain (deposit 1000 tUSDG -> staged -> 1:1 shares; totalNav 1000). MOCK rig + hookless V4 pool; TESTNET, UNAUDITED. Deploy: scripts/deploy-lp-gateway-robinhood.mjs.",
+        "verified": "2026-09-06"
+      },
+      "LpGatewayStaging": {
+        "address": "0x2e11a1019c03622404888EE9FaE443D9E14F4DF9",
+        "chainId": 46630,
+        "status": "testnet",
+        "note": "LP Gateway staging reserve (idle USDG earns in the adapter). controller=PositionManager; deployer=Privy 0x18AE...663c (deployer-only setController, M1).",
+        "verified": "2026-09-06"
+      },
+      "LpGateway_tUSDG": {
+        "address": "0xAD77283eE63f563f3200d7bC26c8eAB19e0Cc6d4",
+        "chainId": 46630,
+        "status": "testnet",
+        "note": "MOCK USDG (6dp) for the LP gateway rig. No value. Real USDG (Paxos) + Morpho gate mainnet.",
+        "verified": "2026-09-06"
+      },
+      "LpGateway_tPONS": {
+        "address": "0xb810C3D4dA4129593E51301A914EB488CBf7800c",
+        "chainId": 46630,
+        "status": "testnet",
+        "note": "MOCK PONS (18dp) paired token for the LP gateway rig. No value.",
+        "verified": "2026-09-06"
+      },
+      "LpGateway_MockYieldAdapter": {
+        "address": "0x8AC1ab49d9C8eB8adC9EDd8D6380220598007b38",
+        "chainId": 46630,
+        "status": "testnet",
+        "note": "MOCK yield adapter (stands in for the Morpho Steakhouse USDG ERC-4626 vault on mainnet).",
+        "verified": "2026-09-06"
+      }
     }
   }
 }
