@@ -35,6 +35,10 @@ const perfFeeBps = () => {
   const n = Number(process.env.LP_GATEWAY_PERF_FEE_BPS ?? '1000') // default 10%
   return Number.isInteger(n) && n >= 0 && n <= 10_000 ? n : 1000
 }
+// Dust guard (Krystal precedent — "don't burn gas harvesting dust"). Min collectable QUOTE fees, in
+// atomic units, below which harvest is skipped BEFORE any tx (we pre-simulate the collect via eth_call).
+// Default 1 USDG (6dp). Set 0 to disable the floor.
+const harvestMinAtomic = () => big(process.env.LP_GATEWAY_HARVEST_MIN_ATOMIC ?? '1000000')
 
 /** Harvest EVERY active gateway (registry + single-env fallback). The cron entry point. */
 export async function harvestAll(opts: { supabase: SupabaseClient; log?: Logger }): Promise<{ harvested: number; results: HarvestOutcome[] }> {
@@ -76,6 +80,26 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     return { ok: false, status: 503, error: 'harvest_signer_unavailable', reason: 'signer' }
   }
   const wallet = createWalletClient({ account, chain: publicClient.chain, transport: http(cfg.rpcUrl) })
+
+  // 0) gas-saving dust guard: pre-simulate the collect (eth_call as the owner, no gas, no state change)
+  //    to read the collectable fees, and skip the real tx when the quote leg is below the floor and there
+  //    is no paired leg worth swapping. Fails OPEN (proceeds) if the simulate itself errors — it's an
+  //    optimization, not a safety gate.
+  try {
+    const sim = await publicClient.simulateContract({
+      address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'harvest',
+      args: [BigInt(Math.floor(Date.now() / 1000) + 600)], account,
+    })
+    const [eq, ep] = ((sim as { result?: readonly [bigint, bigint] }).result ?? [0n, 0n]) as readonly [bigint, bigint]
+    if (eq < harvestMinAtomic() && ep === 0n) {
+      log?.info('gateway.harvest', 'below harvest floor — skipped (no gas spent)', {
+        expectedQuote: eq.toString(), floor: harvestMinAtomic().toString(), pool: instance.poolAddress,
+      })
+      return { ok: false, status: 200, error: 'below harvest floor — skipped to save gas', reason: 'nothing' }
+    }
+  } catch (e) {
+    log?.warn('gateway.harvest', 'pre-harvest simulate failed; proceeding', { error: String(e) })
+  }
 
   // 1) collect fees (zero-liquidity-delta) → harvestRecipient (the oracle seat). Idempotent-safe: a
   //    revert (no fees) just yields zero, and the collect tx keys the harvest_events unique index.
