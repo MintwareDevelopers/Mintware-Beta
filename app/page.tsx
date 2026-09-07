@@ -19,6 +19,7 @@ import { V2Nav } from '@/components/ui2/V2Nav'
 import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
 import { useV2Mode } from '@/components/web2/V2ModeProvider'
 import { HomeV1 } from '@/components/web2/HomeV1'
+import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 const ey = 'text-[12px] uppercase tracking-[0.13em] font-semibold text-peri-deep'
 
@@ -65,6 +66,9 @@ function HomeV2() {
           </div>
         </div>
       </section>
+
+      {/* Tasteful, additive V1 pointer — the first live product, bridging to /v1. Never replaces content. */}
+      <LiveTodayStrip />
 
       {/* ② WHAT WE ARE — Uniswap V4 vaults for everyone (comes out swinging, states it directly) */}
       <section className="bg-ground-cool border-b border-hair-soft">
