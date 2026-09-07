@@ -47,7 +47,7 @@ capped deploy are the economic backstop; mainnet is audit-gated.
   labeled an estimate, never a projection/guarantee (hard copy line).
 - **Crons** (`app/api/(rewards)/cron/gateway-{discover,harvest,deploy}`) — flag-gated OFF + fail-closed;
   discover scheduled every 3h; deploy has idempotency (L-02). Money-moving crons sign via `getOracleSigner('root')`.
-- **Routes** (`app/api/gateway/{discover,instances,position,deposit,withdraw,curate,request,meta}`) — all
+- **Routes** (`app/api/gateway/{discover,sparklines,instances,position,deposit,withdraw,curate,request,meta}`) — all
   `createHandler`. `deposit`/`withdraw` require **signed-message auth + tx-hash idempotency** (M-04). `curate`
   bearer **fails closed** when `LP_GATEWAY_CURATOR_SECRET` unset (`?? ''`, not a literal — C-01). Swap seams
   (`routerSwap.ts`, `v4SwapExec.ts`) fail-closed no-ops until a router is wired.
