@@ -12,10 +12,11 @@ import { createWalletClient, createPublicClient, custom, http, parseUnits } from
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
+import { TokenPair } from '@/components/web2/v1/TokenPair'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 
 type Meta = { positionManager: `0x${string}`; poolAddress: string; chainId: number; rpcUrl: string; usdg: `0x${string}` | null; feePips: number | null; dynamicFee: boolean; inRange?: boolean | null; currentTick?: number | null; live: boolean }
-type Metrics = { pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; live: boolean }
+type Metrics = { pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; live: boolean }
 type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
 type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; history?: Snapshot[] }
 type Status = 'idle' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'done'
@@ -172,7 +173,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       <div className="flex items-start justify-between gap-4 mt-3 flex-wrap">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="w-9 h-9 rounded-full" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)' }} />
+            <TokenPair baseLogo={m?.baseLogo ?? null} quoteLogo={m?.quoteLogo ?? null} baseSymbol={m?.baseSymbol ?? base} quoteSymbol={m?.quoteSymbol ?? quote} size={36} ring="#0B0B14" />
             <h1 className="font-atx-display font-semibold tracking-[-0.03em] text-[28px]">{pairLabel}</h1>
           </div>
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">

@@ -37,8 +37,19 @@ function sanitizeLabel(name: unknown): string {
   return String(name ?? '').replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/g, '').trim().slice(0, MAX_LABEL_LEN)
 }
 
+/** Only pass through a plain https image URL (a token logo from GeckoTerminal/CoinGecko CDNs); anything
+ *  else ⇒ null so a hostile/malformed payload can never inject a non-image or data:/js: URL into an <img>
+ *  src (L-09). The page falls back to token initials when this is null. */
+function safeImg(v: unknown): string | null {
+  const s = String(v ?? '')
+  return /^https:\/\/[^\s"'<>]+$/i.test(s) ? s : null
+}
+
 type SupabaseClient = ReturnType<typeof getServiceClient>
 type Logger = { info: (t: string, m: string, c?: Record<string, unknown>) => void; warn: (t: string, m: string, c?: Record<string, unknown>) => void }
+
+/** A GeckoTerminal token object from the `?include=base_token,quote_token` sideload. */
+type GtToken = { id?: string; attributes?: { symbol?: string; image_url?: string | null } }
 
 type GtPool = {
   attributes?: {
@@ -67,13 +78,22 @@ export type PoolCandidate = {
   score: number
   verdict: 'ineligible' | 'review'
   reasons: string[]
+  // ── display enrichment (Meteora/Krystal parity) — from the token sideload + the pair name ──
+  baseSymbol: string
+  quoteSymbol: string
+  baseLogo: string | null   // token logo URL (https-guarded) or null → the UI shows initials
+  quoteLogo: string | null
+  feePct: number | null     // fee tier parsed from the pair name (e.g. 0.7) — null when the name omits it
+  // Trailing est. fee APR = feeRate × 24h volume ÷ TVL, annualized (%). The list-level estimate (the
+  // detail page recomputes it from the on-chain fee). Never a projection/guarantee — labeled "est." in UI.
+  estFeeAprPct: number | null
 }
 
 const tokenAddr = (id?: string) => (id ? id.split('_').pop()?.toLowerCase() : undefined)
 
 /** Pure: map one GeckoTerminal pool → a scored candidate. `usdgAddress` (when known) is matched against
  *  the pool's legs; otherwise USDG is detected from the pair name. */
-export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string } = {}): PoolCandidate {
+export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string; tokensById?: Map<string, GtToken> } = {}): PoolCandidate {
   const a = pool.attributes ?? {}
   const dexId = pool.relationships?.dex?.data?.id ?? ''
   const protocol = dexId.includes('v4') ? 'v4' : dexId.includes('v3') ? 'v3' : dexId.includes('v2') ? 'v2' : 'unknown'
@@ -85,6 +105,20 @@ export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string } = {
   const base = tokenAddr(pool.relationships?.base_token?.data?.id)
   const quote = tokenAddr(pool.relationships?.quote_token?.data?.id)
   const usdgQuoted = usdg ? base === usdg || quote === usdg : /(^|[^a-z])usdg([^a-z]|$)/i.test(name)
+
+  // ── token display (logos + symbols): prefer the sideloaded token objects, fall back to the pair name ──
+  const baseTok = pool.relationships?.base_token?.data?.id ? opts.tokensById?.get(pool.relationships.base_token.data.id) : undefined
+  const quoteTok = pool.relationships?.quote_token?.data?.id ? opts.tokensById?.get(pool.relationships.quote_token.data.id) : undefined
+  const [nameBase, nameQuote] = name.split('/').map((s) => s.replace(/\s*\d.*$/, '').trim()) // "MEME / USDG 0.7%" → ["MEME","USDG"]
+  const baseSymbol = sanitizeLabel(baseTok?.attributes?.symbol) || nameBase || 'TOKEN'
+  const quoteSymbol = sanitizeLabel(quoteTok?.attributes?.symbol) || nameQuote || 'USDG'
+  const baseLogo = safeImg(baseTok?.attributes?.image_url)
+  const quoteLogo = safeImg(quoteTok?.attributes?.image_url)
+
+  // Fee tier from the pair name (GeckoTerminal appends it, e.g. "…0.7%"); powers the list-level est. APR.
+  const feeMatch = name.match(/(\d+(?:\.\d+)?)\s*%/)
+  const feePct = feeMatch ? safeNum(feeMatch[1]) : null
+  const estFeeAprPct = feePct != null && tvlUsd > 0 ? (feePct / 100) * vol24Usd / tvlUsd * 365 * 100 : null
 
   const created = a.pool_created_at ? Date.parse(a.pool_created_at) : NaN
   const poolAgeDays = Number.isFinite(created) ? Math.floor((Date.now() - created) / 86_400_000) : null
@@ -115,6 +149,12 @@ export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string } = {
     score: risk.score,
     verdict: risk.verdict,
     reasons: risk.reasons,
+    baseSymbol,
+    quoteSymbol,
+    baseLogo,
+    quoteLogo,
+    feePct,
+    estFeeAprPct,
   }
 }
 
@@ -126,7 +166,7 @@ export async function fetchHotPools(opts: { usdgAddress?: string; limit?: number
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 6000) // never hang the caller on a slow upstream
   try {
-    const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/${network}/pools?sort=h24_volume_usd_desc`, {
+    const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/${network}/pools?sort=h24_volume_usd_desc&include=base_token,quote_token`, {
       headers: { accept: 'application/json' },
       signal: ctrl.signal,
     })
@@ -134,8 +174,10 @@ export async function fetchHotPools(opts: { usdgAddress?: string; limit?: number
       opts.log?.warn('gateway.discover', 'geckoterminal fetch failed', { status: res.status })
       return []
     }
-    const json = (await res.json()) as { data?: GtPool[] }
-    return (json.data ?? []).slice(0, opts.limit ?? 30).map((p) => poolToCandidate(p, { usdgAddress }))
+    const json = (await res.json()) as { data?: GtPool[]; included?: GtToken[] }
+    // Sideloaded token objects (logos + symbols), keyed by their JSON:API id for O(1) lookup per pool.
+    const tokensById = new Map<string, GtToken>((json.included ?? []).filter((t) => t.id).map((t) => [t.id as string, t]))
+    return (json.data ?? []).slice(0, opts.limit ?? 30).map((p) => poolToCandidate(p, { usdgAddress, tokensById }))
   } catch (e) {
     opts.log?.warn('gateway.discover', 'geckoterminal error', { error: String(e) })
     return []

@@ -40,7 +40,11 @@ capped deploy are the economic backstop; mainnet is audit-gated.
   the browse feed) + `discoverAndIngest` (persisted curator queue; **prunes** to the current top-30; validates
   input, L-09). A pool identifier is a **20-byte address OR a 32-byte v4 poolId** (`normalizePoolId` — v4
   pools have no address; **never `isAddress()`-gate them or the whole feed empties**, PR #470). `riskScore.ts`
-  **ranks, never certifies** (verdict always `'review'`).
+  **ranks, never certifies** (verdict always `'review'`). `fetchHotPools` also sideloads token logos +
+  symbols (`?include=base_token,quote_token`, https-guarded via `safeImg`) and parses the fee tier from the
+  pair name → a list-level **est. fee APR** (feeRate × 24h vol ÷ TVL, annualized). These feed the Meteora/
+  Krystal-parity Discover UI (`TokenPair` real icons, APR column, every row → `/earn/[pool]`). Est. APR is
+  labeled an estimate, never a projection/guarantee (hard copy line).
 - **Crons** (`app/api/(rewards)/cron/gateway-{discover,harvest,deploy}`) — flag-gated OFF + fail-closed;
   discover scheduled every 3h; deploy has idempotency (L-02). Money-moving crons sign via `getOracleSigner('root')`.
 - **Routes** (`app/api/gateway/{discover,instances,position,deposit,withdraw,curate,request,meta}`) — all
