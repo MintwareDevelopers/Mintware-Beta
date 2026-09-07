@@ -291,6 +291,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/terms` | `app/terms/page.tsx` |
 | `/the-math` | `app/the-math/page.tsx` |
 | `/v1` | `app/v1/page.tsx` |
+| `/v1/portfolio` | `app/v1/portfolio/page.tsx` |
 | `/v2` | `app/v2/page.tsx` |
 | `/vaults` | `app/(rewards)/vaults/page.tsx` |
 | `/yield-payment-network` | `app/yield-payment-network/page.tsx` |
