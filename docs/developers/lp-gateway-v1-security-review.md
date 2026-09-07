@@ -217,9 +217,13 @@ against the trust it adds).
 
 ## Remediation status (2026-09-07 — same branch)
 
-Every finding above was addressed. Contract changes require a fresh testnet redeploy + a fork run to
-validate the LP-path behaviour (the Stub-based unit tests can't exercise a real pool); the 29 gateway
-Forge tests + 49 gateway Vitest tests are green.
+Every finding above was addressed. The 29 gateway Forge tests + 49 gateway Vitest tests are green, and the
+hardened contracts were redeployed to Robinhood testnet (2026-09-07). **LP-path proven on-chain
+(2026-09-07)**: a live `deploy() → withdraw()` round-trip against the real Uniswap V4 pool minted a real
+position, `totalNav` picked up the LP leg, and withdraw did **pro-rata idle+LP sourcing**, ran the
+**fee-sweep** (H-02), and **conserved value** (out + locked offset-dust = pre-withdraw NAV — donation-safety
+intact). Still requiring the swap seam wired (a documented fork-test step): **fee-generation** and
+**spot-price-manipulation** assertions (i.e. observing the conservative min/max mark diverge under a pump).
 
 | ID | Fix shipped |
 |---|---|
