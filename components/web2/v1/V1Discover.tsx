@@ -1,12 +1,16 @@
 'use client'
 
-// Discover — the V1 app home (Meteora-style): a scannable table of the hottest Robinhood-Chain pools
-// that pass our criteria, live from /api/gateway/discover (real GeckoTerminal metrics + our risk score).
-// Live-depositable pools link to /earn/[pool]; the rest show as "Curating" (screened, not yet live).
-// Dark app skin. Honest — real metrics only (TVL / 24h vol / activity), no APY/guaranteed framing.
+// Discover — the V1 app home (Meteora × Krystal parity): a scannable table of the hottest Robinhood-Chain
+// pools that pass our screen, live from /api/gateway/discover (real GeckoTerminal metrics + our risk score).
+// Real paired token icons, 24h price-trend sparklines, est. fee APR, sortable columns, and a curated
+// "screened picks" spotlight. Every row → /earn/[pool]; live pools are depositable, the rest are "Curating".
+// Honest: real metrics only, est. APR labeled an estimate, no APY/guaranteed framing; the score ranks,
+// humans curate.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { TokenPair } from '@/components/web2/v1/TokenPair'
+import { Sparkline } from '@/components/web2/v1/Sparkline'
 
 type Pool = {
   poolAddress: string
@@ -17,15 +21,26 @@ type Pool = {
   poolAgeDays: number | null
   riskScore: number
   reasons: string[]
+  baseSymbol: string
+  quoteSymbol: string
+  baseLogo: string | null
+  quoteLogo: string | null
+  feePct: number | null
+  estFeeAprPct: number | null
   live: boolean
 }
 
 type Tab = 'all' | 'live' | 'new'
+type SortKey = 'vol' | 'apr' | 'tvl' | 'activity' | 'trust'
 
 const usd = (n: number) =>
   n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}k` : `$${n.toFixed(0)}`
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`
 const slug = (p: Pool) => encodeURIComponent((p.pairLabel || p.poolAddress).replace(/\s*\/\s*/g, '-').toLowerCase())
+// est. fee APR: big meme-pool numbers read like Krystal/Meteora (9,307%); small ones keep a decimal.
+const aprFmt = (n: number | null) => (n == null ? '—' : n >= 1000 ? `${Math.round(n).toLocaleString('en-US')}%` : `${n.toFixed(1)}%`)
+// strip the trailing fee off the GeckoTerminal name so the row shows a clean pair; the fee gets its own chip.
+const pairName = (p: Pool) => (p.baseSymbol && p.quoteSymbol ? `${p.baseSymbol} / ${p.quoteSymbol}` : (p.pairLabel || short(p.poolAddress)).replace(/\s*\d[\d.]*\s*%\s*$/, ''))
 
 function risk(score: number): { label: string; color: string } {
   if (score < 20) return { label: 'Low', color: '#34D399' }
@@ -33,12 +48,23 @@ function risk(score: number): { label: string; color: string } {
   return { label: 'High', color: '#F0736E' }
 }
 
-const COLS = '1.8fr 1fr 1fr 0.9fr 1.1fr 1.1fr'
+const sortVal = (p: Pool, k: SortKey): number => {
+  if (k === 'apr') return p.estFeeAprPct ?? -1
+  if (k === 'tvl') return p.tvlUsd
+  if (k === 'activity') return p.volTvlRatio ?? -1
+  if (k === 'trust') return -p.riskScore // lower risk first
+  return p.vol24Usd
+}
+const SORTS: [SortKey, string][] = [['vol', '24h Vol'], ['apr', 'Est. APR'], ['tvl', 'TVL'], ['activity', 'Activity'], ['trust', 'Trust']]
+
+const COLS = '1.9fr 0.85fr 0.85fr 0.85fr 0.85fr 0.7fr 0.9fr 0.9fr'
 
 export function V1Discover() {
   const [pools, setPools] = useState<Pool[]>([])
+  const [series, setSeries] = useState<Record<string, number[]>>({})
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('all')
+  const [sortKey, setSortKey] = useState<SortKey>('vol')
 
   useEffect(() => {
     fetch('/api/gateway/discover')
@@ -48,11 +74,29 @@ export function V1Discover() {
       .finally(() => setLoading(false))
   }, [])
 
+  // Sparklines are fetched separately (own 15-min cache) once we know which pools are on screen.
+  const addrKey = pools.map((p) => p.poolAddress).join(',')
+  useEffect(() => {
+    if (!addrKey) return
+    fetch(`/api/gateway/sparklines?pools=${encodeURIComponent(addrKey)}`)
+      .then((r) => r.json())
+      .then((d) => setSeries(d?.success && d.series ? d.series : {}))
+      .catch(() => {})
+  }, [addrKey])
+
   const shown = useMemo(() => {
-    if (tab === 'live') return pools.filter((p) => p.live)
-    if (tab === 'new') return pools.filter((p) => p.poolAgeDays != null && p.poolAgeDays < 7)
-    return pools
-  }, [pools, tab])
+    let list = pools
+    if (tab === 'live') list = list.filter((p) => p.live)
+    else if (tab === 'new') list = list.filter((p) => p.poolAgeDays != null && p.poolAgeDays < 7)
+    return [...list].sort((a, b) => (b.live ? 1 : 0) - (a.live ? 1 : 0) || sortVal(b, sortKey) - sortVal(a, sortKey))
+  }, [pools, tab, sortKey])
+
+  // Curated "screened picks" spotlight (Krystal's bucket pattern): the lowest-risk, most-established of the
+  // feed — a different lens than the hot-by-volume table. Live pools always float to the front.
+  const spotlight = useMemo(() => {
+    const score = (p: Pool) => (p.live ? 1e6 : 0) + (100 - p.riskScore) + Math.min(p.tvlUsd / 1e6, 10)
+    return [...pools].sort((a, b) => score(b) - score(a)).slice(0, 3)
+  }, [pools])
 
   const totalTvl = pools.reduce((s, p) => s + p.tvlUsd, 0)
   const totalVol = pools.reduce((s, p) => s + p.vol24Usd, 0)
@@ -78,18 +122,78 @@ export function V1Discover() {
         <Stat k="Network" v="Robinhood Testnet" />
       </div>
 
-      {/* tabs */}
-      <div className="flex gap-1.5 mt-7">
-        {([['all', 'All'], ['live', 'Live'], ['new', 'New']] as [Tab, string][]).map(([t, label]) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className="px-3.5 py-1.5 rounded-full text-[13px] font-semibold cursor-pointer transition-colors"
-            style={tab === t ? { background: 'rgba(255,255,255,0.09)', color: '#F4F4FA' } : { color: '#9B9BAD' }}
-          >
-            {label}
-          </button>
-        ))}
+      {/* spotlight — curated screened picks */}
+      {!loading && spotlight.length > 0 && (
+        <div className="mt-7">
+          <div className="text-[11px] uppercase tracking-[0.08em] font-semibold mb-2.5" style={{ color: '#63636F' }}>
+            Screened picks <span style={{ color: '#4A4A55' }}>· lowest-risk, most-established of the feed</span>
+          </div>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))' }}>
+            {spotlight.map((p) => {
+              const r = risk(p.riskScore)
+              return (
+                <Link
+                  key={p.poolAddress}
+                  href={`/earn/${slug(p)}`}
+                  className="rounded-[14px] p-4 no-underline transition-transform hover:-translate-y-0.5"
+                  style={{ background: '#12121C', border: '1px solid rgba(255,255,255,0.07)', color: '#F4F4FA', display: 'block' }}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <TokenPair baseLogo={p.baseLogo} quoteLogo={p.quoteLogo} baseSymbol={p.baseSymbol} quoteSymbol={p.quoteSymbol} size={26} ring="#12121C" />
+                    <span className="font-semibold text-[14px] truncate">{pairName(p)}</span>
+                    <span className="ml-auto text-[10.5px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={p.live ? { color: '#34D399', background: 'rgba(52,211,153,0.14)' } : { color: r.color, background: `${r.color}1A` }}>
+                      {p.live ? 'Live' : r.label}
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between mt-3">
+                    <div>
+                      <div className="font-mono font-bold text-[19px]" style={{ color: p.estFeeAprPct != null ? '#34D399' : '#F4F4FA' }}>{aprFmt(p.estFeeAprPct)}</div>
+                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#63636F' }}>Est. Fee APR</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-mono text-[13px]">{usd(p.tvlUsd)}</div>
+                      <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#63636F' }}>TVL</div>
+                    </div>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* controls: tabs + sort */}
+      <div className="flex items-center justify-between gap-3 mt-7 flex-wrap">
+        <div className="flex gap-1.5">
+          {([['all', 'All'], ['live', 'Live'], ['new', 'New']] as [Tab, string][]).map(([t, label]) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className="px-3.5 py-1.5 rounded-full text-[13px] font-semibold cursor-pointer transition-colors"
+              style={tab === t ? { background: 'rgba(255,255,255,0.09)', color: '#F4F4FA' } : { color: '#9B9BAD' }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] uppercase tracking-[0.06em] font-semibold mr-0.5" style={{ color: '#63636F' }}>Sort</span>
+          {SORTS.map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setSortKey(k)}
+              className="px-2.5 py-1 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
+              style={sortKey === k ? { background: 'rgba(138,130,244,0.16)', color: '#C9C6FF' } : { color: '#9B9BAD' }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* quality-filter note (Krystal's "showing pools ≥…" honesty line) */}
+      <div className="text-[11.5px] mt-2.5" style={{ color: '#4A4A55' }}>
+        Showing screened <span style={{ color: '#63636F' }}>Uniswap v4 · USDG-quoted</span> pools, risk-ranked — never auto-approved.
       </div>
 
       {/* table */}
@@ -97,6 +201,8 @@ export function V1Discover() {
         <div className="grid items-center px-5 py-3 text-[11px] uppercase tracking-[0.07em] font-semibold"
           style={{ gridTemplateColumns: COLS, color: '#63636F', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <span>Pool</span>
+          <span className="text-center max-[900px]:hidden">24h Trend</span>
+          <span className="text-right">Est. APR</span>
           <span className="text-right">24h Vol</span>
           <span className="text-right">TVL</span>
           <span className="text-right max-[820px]:hidden">Activity</span>
@@ -114,15 +220,29 @@ export function V1Discover() {
         ) : (
           shown.map((p) => {
             const r = risk(p.riskScore)
-            const row = (
-              <>
+            return (
+              <Link
+                key={p.poolAddress}
+                href={`/earn/${slug(p)}`}
+                className="grid items-center px-5 py-4 no-underline transition-colors"
+                style={{ gridTemplateColumns: COLS, color: '#F4F4FA', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
                 <span className="flex items-center gap-3 min-w-0">
-                  <span className="w-8 h-8 rounded-full shrink-0" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)' }} />
+                  <TokenPair baseLogo={p.baseLogo} quoteLogo={p.quoteLogo} baseSymbol={p.baseSymbol} quoteSymbol={p.quoteSymbol} ring="#12121C" />
                   <span className="min-w-0">
-                    <span className="font-semibold text-[15px] truncate block">{p.pairLabel || short(p.poolAddress)}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold text-[15px] truncate">{pairName(p)}</span>
+                      {p.feePct != null && (
+                        <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-[6px] shrink-0" style={{ color: '#9B9BAD', background: 'rgba(255,255,255,0.06)' }}>{p.feePct}%</span>
+                      )}
+                    </span>
                     <span className="font-mono text-[11px]" style={{ color: '#63636F' }}>{short(p.poolAddress)}</span>
                   </span>
                 </span>
+                <span className="flex justify-center max-[900px]:hidden"><Sparkline series={series[p.poolAddress]} /></span>
+                <span className="text-right font-mono text-[14px] font-semibold" style={{ color: p.estFeeAprPct != null ? '#34D399' : '#63636F' }}>{aprFmt(p.estFeeAprPct)}</span>
                 <span className="text-right font-mono text-[14px]">{usd(p.vol24Usd)}</span>
                 <span className="text-right font-mono text-[14px]">{usd(p.tvlUsd)}</span>
                 <span className="text-right font-mono text-[13.5px] max-[820px]:hidden" style={{ color: '#9B9BAD' }}>
@@ -133,37 +253,22 @@ export function V1Discover() {
                     {r.label} · {p.riskScore}
                   </span>
                 </span>
-                <span className="text-right">
+                <span className="text-right whitespace-nowrap">
                   {p.live ? (
-                    <span className="text-[13.5px] font-semibold" style={{ color: '#8A82F4' }}>Deposit USDG →</span>
+                    <span className="text-[13.5px] font-semibold" style={{ color: '#8A82F4' }}>Deposit →</span>
                   ) : (
-                    <span className="text-[12px] font-semibold px-2.5 py-1 rounded-full" style={{ color: '#9B9BAD', background: 'rgba(255,255,255,0.05)' }}>Curating</span>
+                    <span className="text-[12px] font-semibold" style={{ color: '#63636F' }}>Curating <span style={{ color: '#8A82F4' }}>›</span></span>
                   )}
                 </span>
-              </>
-            )
-            const cls = 'grid items-center px-5 py-4'
-            const style = { gridTemplateColumns: COLS, color: '#F4F4FA', borderBottom: '1px solid rgba(255,255,255,0.05)' }
-            return p.live ? (
-              <Link
-                key={p.poolAddress}
-                href={`/earn/${slug(p)}`}
-                className={`${cls} no-underline transition-colors`}
-                style={style}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-              >
-                {row}
               </Link>
-            ) : (
-              <div key={p.poolAddress} className={cls} style={style}>{row}</div>
             )
           })
         )}
       </div>
 
       <p className="text-[12px] mt-5" style={{ color: '#63636F' }}>
-        Robinhood testnet · metrics live from GeckoTerminal · the score ranks, humans curate.{' '}
+        Robinhood testnet · metrics live from GeckoTerminal · est. APR = trailing-24h fees ÷ TVL, annualized
+        (an estimate, not a projection) · the score ranks, humans curate.{' '}
         <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
       </p>
     </div>

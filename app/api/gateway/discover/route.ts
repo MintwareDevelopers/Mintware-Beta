@@ -43,6 +43,12 @@ export const GET = createHandler(async (_req, ctx) => {
       txCount24: p.signals.txCount24,
       riskScore: p.score,
       reasons: p.reasons,
+      baseSymbol: p.baseSymbol,
+      quoteSymbol: p.quoteSymbol,
+      baseLogo: p.baseLogo,
+      quoteLogo: p.quoteLogo,
+      feePct: p.feePct,
+      estFeeAprPct: p.estFeeAprPct,
       live: liveSet.has(p.poolAddress),
     }))
     .sort((a, b) => (b.live ? 1 : 0) - (a.live ? 1 : 0) || b.vol24Usd - a.vol24Usd)
