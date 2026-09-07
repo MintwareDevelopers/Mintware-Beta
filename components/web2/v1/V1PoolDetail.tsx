@@ -49,6 +49,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const [wpct, setWpct] = useState(100)
   const [status, setStatus] = useState<Status>('idle')
   const [err, setErr] = useState('')
+  const [alert, setAlert] = useState<{ sinceIso: string } | null>(null)
 
   const decoded = useMemo(() => decodeURIComponent(slug).toLowerCase(), [slug])
   const pairLabel = m?.pairLabel ?? decoded.replace(/-/g, ' / ').toUpperCase()
@@ -62,6 +63,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     fetch('/api/gateway/discover').then((r) => r.json()).then((d) => {
       const list: Metrics[] = d?.success && Array.isArray(d.pools) ? d.pools : []
       setM(list.find((p) => norm(p.pairLabel) === decoded || norm(p.pairLabel) === slug.toLowerCase()) ?? null)
+    }).catch(() => {})
+    fetch(`/api/gateway/alerts?pool=${encodeURIComponent(slug)}`).then((r) => r.json()).then((d) => {
+      const oor = (d?.alerts ?? []).find((a: { kind: string; firing: boolean; sinceIso: string }) => a.kind === 'out_of_range' && a.firing)
+      setAlert(oor ? { sinceIso: oor.sinceIso } : null)
     }).catch(() => {})
   }, [slug, decoded])
 
@@ -185,6 +190,16 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{aprLabel ? 'Est. Fee APR · 24h' : '24h Vol / TVL'}</div>
         </div>
       </div>
+
+      {alert && (
+        <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px] flex items-start gap-2.5" style={{ background: 'rgba(240,180,94,0.1)', border: '1px solid rgba(240,180,94,0.25)', color: '#F0B45E' }}>
+          <span>⚠</span>
+          <span>
+            <span style={{ fontWeight: 600 }}>Out of range ~{Math.max(1, Math.round((Date.now() - Date.parse(alert.sinceIso)) / 36e5))}h — LP fees paused.</span>{' '}
+            <span style={{ color: '#9B9BAD' }}>Your USDG is still earning in Morpho; the LP leg resumes automatically when price re-enters the range.</span>
+          </span>
+        </div>
+      )}
 
       <div className="grid gap-5 mt-6" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(320px,1fr)' }}>
         {/* LEFT: pool info */}
