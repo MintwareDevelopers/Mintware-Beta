@@ -4,7 +4,6 @@
 // USDG-quoted) as pending requests. It NEVER auto-approves — every candidate lands as pending for a
 // human. The score only ranks the queue. Already-resolved requests + already-live pools are skipped.
 
-import { isAddress } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
 import { computeRisk, type PoolSignals } from '@/lib/gateway/riskScore'
 
@@ -20,6 +19,16 @@ function safeNum(v: unknown, fallback = 0): number {
 }
 
 const MAX_LABEL_LEN = 64
+
+/** A pool's on-chain identifier is EITHER a 20-byte EVM address (a v2/v3 pool contract) OR a 32-byte
+ *  Uniswap v4 poolId — v4 pools have no address of their own, so GeckoTerminal returns the poolId here.
+ *  Accept both shapes; anything else ⇒ '' so the candidate is skipped and no bogus curation key is ever
+ *  written (L-09). Using the plain hex shape (not viem `isAddress`, which is 20-byte only) is what lets
+ *  the v4-only gateway actually surface v4 pools instead of dropping every one of them. */
+function normalizePoolId(v: unknown): string {
+  const s = String(v ?? '').toLowerCase()
+  return /^0x[0-9a-f]{40}$/.test(s) || /^0x[0-9a-f]{64}$/.test(s) ? s : ''
+}
 
 /** Strip control chars (incl. newlines/zero-width breakers) and cap length — the label is displayed
  *  and persisted, so it must be bounded, printable text. */
@@ -93,10 +102,9 @@ export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string } = {
   }
   const risk = computeRisk(signals)
   const price = safeNum(a.base_token_price_quote_token)
-  // Only accept a syntactically valid EVM address; anything else ⇒ '' so discoverAndIngest skips it
+  // Accept a 20-byte address OR a 32-byte v4 poolId; anything else ⇒ '' so discoverAndIngest skips it
   // (it guards on `!c.poolAddress`) and never writes a bogus curation key.
-  const rawAddr = String(a.address ?? '').toLowerCase()
-  const poolAddress = isAddress(rawAddr) ? rawAddr : ''
+  const poolAddress = normalizePoolId(a.address)
   return {
     poolAddress,
     pairLabel: name,

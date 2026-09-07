@@ -38,7 +38,9 @@ capped deploy are the economic backstop; mainnet is audit-gated.
   (`quoteAsset()`/`poolKey()` must match the approved pool) before writing a `gateway_instances` row (**H-01**).
 - **`discovery.ts`** — `fetchHotPools` (live GeckoTerminal read, network slug **`robinhood` = MAINNET**, powers
   the browse feed) + `discoverAndIngest` (persisted curator queue; **prunes** to the current top-30; validates
-  input, L-09). `riskScore.ts` **ranks, never certifies** (verdict always `'review'`).
+  input, L-09). A pool identifier is a **20-byte address OR a 32-byte v4 poolId** (`normalizePoolId` — v4
+  pools have no address; **never `isAddress()`-gate them or the whole feed empties**, PR #470). `riskScore.ts`
+  **ranks, never certifies** (verdict always `'review'`).
 - **Crons** (`app/api/(rewards)/cron/gateway-{discover,harvest,deploy}`) — flag-gated OFF + fail-closed;
   discover scheduled every 3h; deploy has idempotency (L-02). Money-moving crons sign via `getOracleSigner('root')`.
 - **Routes** (`app/api/gateway/{discover,instances,position,deposit,withdraw,curate,request,meta}`) — all
