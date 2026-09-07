@@ -314,6 +314,37 @@ single-token: StandardMerkleTree.of([[wallet, amount]], ['address','uint256'])`}
     </>
   )
 }
+function LpGateway({ nav }: { nav: Nav }) {
+  return (
+    <>
+      <div className={EY}>How it works · LP Gateway</div>
+      <h1>The LP Gateway</h1>
+      <p className={SUB}>Put idle USDG to work in a curated Robinhood Chain pool — it earns while a spendable buffer stays liquid. You spend from the buffer, never your position. Mintware&rsquo;s first live product surface.</p>
+      <Note k="Status — live on testnet">Live on <b>Robinhood Chain testnet (46630)</b>, hardened and reviewed (self-audit + a firm-grade multi-auditor pass). <b>Testnet, mock tokens, unaudited</b> — an external audit gates real value on mainnet. A separate surface: it touches none of the vault / YPN contracts.</Note>
+
+      <h2>The loop</h2>
+      <Pipe items={[
+        ['Deposit', 'USDG → shares', 'Entry-NAV shares, marked at deposit. No par claim.'],
+        ['Stage & earn', 'Morpho adapter', 'The USDG earns immediately while it waits.'],
+        ['Deploy', 'Uniswap V4 pool', 'A capped fraction becomes curated-pool liquidity; the rest stays idle, IL-free.'],
+        ['Harvest', 'fees only', 'Trading fees collected without touching principal → a spendable buffer.'],
+        ['Spend', 'from the buffer', 'You spend the yield, not your position. Principal stays working.'],
+      ]} />
+
+      <h2>Honest by construction</h2>
+      <p>A liquidity position is <b>not a deposit, a savings account, or a guaranteed or fixed return</b> — its value moves with the pool price and is subject to <b>impermanent loss</b>. You spend from a buffer funded by the yield, never a promised balance. IL can be <i>diminished</i> (a wide range + a capped deploy fraction), never <i>eliminated</i> for a fee-earning LP.</p>
+
+      <h2>Safe on a hookless pool (no TWAP)</h2>
+      <p>The deployed leg is spot-priced, and hookless meme pools have no on-chain oracle — so manipulation resistance is built in. A <b>clamped-follower reference</b> tracks spot at a bounded step per block, and NAV is marked <b>conservatively by direction</b>: a withdrawal values the LP leg at <code>min(spot, ref)</code>, a deposit at <code>max</code>. A single-block price pump can neither inflate a withdrawal claim nor cheapen a deposit — and nothing reverts on price, so <b>withdrawals never brick</b>. Fees always route to the buffer (never a withdrawer), and redemption is pro-rata across idle and LP. Deep-pool curation is the economic backstop.</p>
+
+      <h2>Many pools, curated</h2>
+      <p>The Discover feed shows the hottest real Robinhood Chain pools <b>live from GeckoTerminal</b>, risk-scored. The score <b>ranks the queue; it never certifies safety</b> — every pool is a human decision. A pool becomes depositable only once a curator approves it and a gateway is deployed for it. So: <b>browse everything live, deposit into the curated subset.</b></p>
+
+      <Note k="Where">The live product is at <code>/v1</code>. Manipulation-resistance details: <Ln to="security" nav={nav}>Security</Ln>. Deploy status: <Ln to="contracts" nav={nav}>Contracts &amp; status</Ln>.</Note>
+    </>
+  )
+}
+
 function LSA() {
   return (
     <>
@@ -490,6 +521,7 @@ const GROUPS: { group: string; items: { id: string; label: string; star?: boolea
     { id: 'model', label: 'The model' },
   ]},
   { group: 'How it works', items: [
+    { id: 'lpgateway', label: 'LP Gateway — live', star: true },
     { id: 'attribution', label: 'Attribution — the score' },
     { id: 'vaults', label: 'Vaults — the ULV engine' },
     { id: 'mev', label: 'MEV — the am-AMM engine' },
@@ -510,7 +542,7 @@ const GROUPS: { group: string; items: { id: string; label: string; star?: boolea
 ]
 
 const CONTENT: Record<string, (p: { nav: Nav }) => ReactNode> = {
-  overview: Overview, model: Model, attribution: Attribution, vaults: Vaults, mev: Mev,
+  overview: Overview, model: Model, lpgateway: LpGateway, attribution: Attribution, vaults: Vaults, mev: Mev,
   matched: Matched, rewards: Rewards, lsa: LSA, agentpay: AgentPay, security: Security,
   wallets: Wallets, contracts: Contracts,
 }
