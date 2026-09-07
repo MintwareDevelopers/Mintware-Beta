@@ -155,11 +155,11 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `EthSeniorDemo_Settlement` | testnet · base-sepolia | `0x6d0a1520e47bAE8F5304859a6a0193dDa567A9E0` | testnet |
 | `EthSeniorDemo_TreasuryVault` | testnet · base-sepolia | `0xb84776B8CB27C924A3B4e704C0FF826CB4A98A1c` | testnet |
 | `EthSeniorDemo_YieldAdapter` | testnet · base-sepolia | `0xd01EcCF90Ac339B836c85e800ca11235D48F916f` | testnet |
-| `LpGateway_MockYieldAdapter` | testnet · robinhood-testnet | `0x8AC1ab49d9C8eB8adC9EDd8D6380220598007b38` | testnet |
-| `LpGateway_tPONS` | testnet · robinhood-testnet | `0xb810C3D4dA4129593E51301A914EB488CBf7800c` | testnet |
-| `LpGateway_tUSDG` | testnet · robinhood-testnet | `0xAD77283eE63f563f3200d7bC26c8eAB19e0Cc6d4` | testnet |
-| `LpGatewayPositionManager` | testnet · robinhood-testnet | `0x537A7fd1113066e13Ed41c337eDC085794cE24c0` | testnet |
-| `LpGatewayStaging` | testnet · robinhood-testnet | `0x2e11a1019c03622404888EE9FaE443D9E14F4DF9` | testnet |
+| `LpGateway_MockYieldAdapter` | testnet · robinhood-testnet | `0x3a60a763dd5eEE6E1c7e07521c49f4322C747220` | testnet |
+| `LpGateway_tPONS` | testnet · robinhood-testnet | `0xec32F8B81F72f985050018dbe40D62D9AdAdB39b` | testnet |
+| `LpGateway_tUSDG` | testnet · robinhood-testnet | `0x0178b219F8963194724F46C57479DBf490Eb95BE` | testnet |
+| `LpGatewayPositionManager` | testnet · robinhood-testnet | `0x39B84eB9c5BecAdF4F724235c756Bc04F972BD2a` | testnet |
+| `LpGatewayStaging` | testnet · robinhood-testnet | `0x4c78f068A391AD81a0f4587Da6Ab415A9234b91E` | testnet |
 | `MintwareEthSettlement` | testnet · base-sepolia | `0x20140811123db9C00CA1dF1023BA4fE758B98c5F` | testnet |
 | `MintwareStagedLiquidityRouter` | testnet · base-sepolia | `0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3` | testnet |
 | `MintwareTreasuryGatewayDeployer` | testnet · base-sepolia | `0xfbf781676fe93cd8d8d8e17716461c29f549a644` | testnet |
