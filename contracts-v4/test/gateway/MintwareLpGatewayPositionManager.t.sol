@@ -197,4 +197,34 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         vm.expectRevert();
         pm.compoundQuote(1e6);
     }
+
+    // ── AUDIT PoC (F1) ─────────────────────────────────────────────────────────────────────────
+    // In the idle-only state (before any deploy, tokenId == 0) there is NO LP leg to cover an idle
+    // shortfall. If the yield adapter is illiquid/paused (totalAssets reports full principal but
+    // withdraw returns partial — exactly a paused Morpho), withdraw burns the FULL share amount but
+    // delivers only the partial value. The unserved remainder is left in the adapter, now owned by
+    // nobody (totalShares == 0). The withdrawer silently loses it. Expected to FAIL-as-in-"demonstrates
+    // the loss" until fixed: assertions below encode the buggy outcome.
+    function test_audit_F1_idleOnlyWithdraw_adapterIlliquid_burnsSharesForUnservedValue() public {
+        uint256 shares = _deposit(alice, 100_000e6);
+        assertEq(pm.totalNav(), 100_000e6);
+
+        // Simulate the adapter going illiquid: only 30k withdrawable, totalAssets still 100k.
+        adapter.setWithdrawableCap(30_000e6);
+        assertEq(pm.totalNav(), 100_000e6); // NAV still reports the full principal
+
+        uint256 balBefore = usdg.balanceOf(alice);
+        vm.roll(block.number + 1);
+        vm.prank(alice);
+        (uint256 quoteOut, uint256 pairedOut) = pm.withdraw(shares); // withdraw ALL shares
+
+        // Alice received only the liquid 30k …
+        assertEq(quoteOut, 30_000e6);
+        assertEq(pairedOut, 0);
+        assertEq(usdg.balanceOf(alice) - balBefore, 30_000e6);
+        // … but ALL her shares were burned, and 70k is stranded in the adapter with no owner.
+        assertEq(pm.sharesOf(alice), 0);
+        assertEq(pm.totalShares(), 0);
+        assertEq(usdg.balanceOf(address(adapter)), 70_000e6);
+    }
 }
