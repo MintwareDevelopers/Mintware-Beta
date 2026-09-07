@@ -41,6 +41,12 @@ const slug = (p: Pool) => encodeURIComponent((p.pairLabel || p.poolAddress).repl
 const aprFmt = (n: number | null) => (n == null ? '—' : n >= 1000 ? `${Math.round(n).toLocaleString('en-US')}%` : `${n.toFixed(1)}%`)
 // strip the trailing fee off the GeckoTerminal name so the row shows a clean pair; the fee gets its own chip.
 const pairName = (p: Pool) => (p.baseSymbol && p.quoteSymbol ? `${p.baseSymbol} / ${p.quoteSymbol}` : (p.pairLabel || short(p.poolAddress)).replace(/\s*\d[\d.]*\s*%\s*$/, ''))
+// Earnings simulator: est. fees/yr on a deposit = amount × pool fee-APR × ~50% (only ~half is deployed as
+// liquidity; the idle half earns Morpho lending, not counted here). Matches the /earn/[pool] page math.
+// An estimate off the trailing-24h fee rate, gross of impermanent loss — never a promise.
+const DEPLOYED_SHARE = 0.5
+const projFeesYr = (p: Pool, amount: number) => (p.estFeeAprPct != null && amount > 0 ? amount * (p.estFeeAprPct / 100) * DEPLOYED_SHARE : null)
+const projFmt = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(0)}`)
 
 function risk(score: number): { label: string; color: string } {
   if (score < 20) return { label: 'Low', color: '#34D399' }
@@ -65,6 +71,8 @@ export function V1Discover() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('all')
   const [sortKey, setSortKey] = useState<SortKey>('vol')
+  const [simStr, setSimStr] = useState('1,000') // earnings-simulator deposit amount (USDG)
+  const sim = Number(simStr.replace(/[^0-9.]/g, '')) || 0
 
   useEffect(() => {
     fetch('/api/gateway/discover')
@@ -149,6 +157,7 @@ export function V1Discover() {
                     <div>
                       <div className="font-mono font-bold text-[19px]" style={{ color: p.estFeeAprPct != null ? '#34D399' : '#F4F4FA' }}>{aprFmt(p.estFeeAprPct)}</div>
                       <div className="text-[10px] uppercase tracking-[0.05em] font-semibold" style={{ color: '#63636F' }}>Est. Fee APR</div>
+                      {(() => { const y = projFeesYr(p, sim); return y != null ? <div className="font-mono text-[11px] mt-1" style={{ color: '#7E7E8C' }}>≈ {projFmt(y)}/yr on ${simStr}</div> : null })()}
                     </div>
                     <div className="text-right">
                       <div className="font-mono text-[13px]">{usd(p.tvlUsd)}</div>
@@ -194,6 +203,39 @@ export function V1Discover() {
       {/* quality-filter note (Krystal's "showing pools ≥…" honesty line) */}
       <div className="text-[11.5px] mt-2.5" style={{ color: '#4A4A55' }}>
         Showing screened <span style={{ color: '#63636F' }}>Uniswap v4 · USDG-quoted</span> pools, risk-ranked — never auto-approved.
+      </div>
+
+      {/* earnings simulator */}
+      <div className="mt-4 rounded-[12px] px-4 py-3 flex items-center gap-x-3 gap-y-2 flex-wrap" style={{ background: '#12121C', border: '1px solid rgba(138,130,244,0.2)' }}>
+        <span className="text-[12.5px] font-semibold" style={{ color: '#C9C6FF' }}>Earnings simulator</span>
+        <span className="text-[13px]" style={{ color: '#9B9BAD' }}>If I deposit</span>
+        <span className="inline-flex items-center rounded-[10px] px-2.5 py-1.5" style={{ background: '#0E0E16', border: '1px solid rgba(255,255,255,0.1)' }}>
+          <span className="mr-1 text-[13px]" style={{ color: '#63636F' }}>$</span>
+          <input
+            inputMode="decimal"
+            aria-label="Deposit amount to simulate"
+            value={simStr}
+            onChange={(e) => setSimStr(e.target.value.replace(/[^0-9.,]/g, ''))}
+            className="bg-transparent outline-none font-mono font-semibold text-[14.5px] w-[84px]"
+            style={{ color: '#F4F4FA' }}
+          />
+          <span className="ml-1 text-[12px]" style={{ color: '#63636F' }}>USDG</span>
+        </span>
+        <div className="flex gap-1.5">
+          {['100', '1,000', '10,000'].map((v) => (
+            <button
+              key={v}
+              onClick={() => setSimStr(v)}
+              className="px-2.5 py-1 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
+              style={simStr.replace(/[^0-9.]/g, '') === v.replace(/[^0-9.]/g, '') ? { background: 'rgba(138,130,244,0.16)', color: '#C9C6FF' } : { color: '#9B9BAD' }}
+            >
+              ${v}
+            </button>
+          ))}
+        </div>
+        <span className="text-[11.5px] max-[720px]:w-full min-[721px]:ml-auto" style={{ color: '#4A4A55' }}>
+          → est. fees/yr per pool below · ~50% deployed, gross of IL · an estimate, not a projection
+        </span>
       </div>
 
       {/* table */}
@@ -242,7 +284,10 @@ export function V1Discover() {
                   </span>
                 </span>
                 <span className="flex justify-center max-[900px]:hidden"><Sparkline series={series[p.poolAddress]} /></span>
-                <span className="text-right font-mono text-[14px] font-semibold" style={{ color: p.estFeeAprPct != null ? '#34D399' : '#63636F' }}>{aprFmt(p.estFeeAprPct)}</span>
+                <span className="text-right leading-tight">
+                  <span className="font-mono text-[14px] font-semibold block" style={{ color: p.estFeeAprPct != null ? '#34D399' : '#63636F' }}>{aprFmt(p.estFeeAprPct)}</span>
+                  {(() => { const y = projFeesYr(p, sim); return y != null ? <span className="font-mono text-[11px] block mt-0.5" style={{ color: '#7E7E8C' }}>≈ {projFmt(y)}/yr</span> : null })()}
+                </span>
                 <span className="text-right font-mono text-[14px]">{usd(p.vol24Usd)}</span>
                 <span className="text-right font-mono text-[14px]">{usd(p.tvlUsd)}</span>
                 <span className="text-right font-mono text-[13.5px] max-[820px]:hidden" style={{ color: '#9B9BAD' }}>
