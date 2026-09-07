@@ -191,7 +191,7 @@ export function V1Discover() {
             <button
               key={k}
               onClick={() => setSortKey(k)}
-              className="px-2.5 py-1 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
+              className="px-2.5 py-1 max-[640px]:py-1.5 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
               style={sortKey === k ? { background: 'rgba(138,130,244,0.16)', color: '#C9C6FF' } : { color: '#9B9BAD' }}
             >
               {label}
@@ -226,7 +226,7 @@ export function V1Discover() {
             <button
               key={v}
               onClick={() => setSimStr(v)}
-              className="px-2.5 py-1 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
+              className="px-2.5 py-1 max-[640px]:py-1.5 rounded-full text-[12px] font-semibold cursor-pointer transition-colors"
               style={simStr.replace(/[^0-9.]/g, '') === v.replace(/[^0-9.]/g, '') ? { background: 'rgba(138,130,244,0.16)', color: '#C9C6FF' } : { color: '#9B9BAD' }}
             >
               ${v}
@@ -239,15 +239,17 @@ export function V1Discover() {
       </div>
 
       {/* table */}
-      <div className="mt-3 rounded-[16px] overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.07)', background: '#12121C' }}>
-        <div className="grid items-center px-5 py-3 text-[11px] uppercase tracking-[0.07em] font-semibold"
+      {/* the wide table keeps its columns and scrolls inside its own rounded box on mobile — the page never
+          scrolls sideways, and the Pool identity column stays readable (min-w floor + horizontal scroll) */}
+      <div className="mt-3 rounded-[16px] overflow-x-auto" style={{ border: '1px solid rgba(255,255,255,0.07)', background: '#12121C' }}>
+        <div className="grid items-center px-5 py-3 text-[11px] uppercase tracking-[0.07em] font-semibold min-w-[840px]"
           style={{ gridTemplateColumns: COLS, color: '#63636F', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <span>Pool</span>
-          <span className="text-center max-[900px]:hidden">24h Trend</span>
+          <span className="text-center">24h Trend</span>
           <span className="text-right">Est. APR</span>
           <span className="text-right">24h Vol</span>
           <span className="text-right">TVL</span>
-          <span className="text-right max-[820px]:hidden">Activity</span>
+          <span className="text-right">Activity</span>
           <span className="text-center">Trust</span>
           <span className="text-right">&nbsp;</span>
         </div>
@@ -266,7 +268,7 @@ export function V1Discover() {
               <Link
                 key={p.poolAddress}
                 href={`/earn/${slug(p)}`}
-                className="grid items-center px-5 py-4 no-underline transition-colors"
+                className="grid items-center px-5 py-4 no-underline transition-colors min-w-[840px]"
                 style={{ gridTemplateColumns: COLS, color: '#F4F4FA', borderBottom: '1px solid rgba(255,255,255,0.05)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
@@ -283,14 +285,14 @@ export function V1Discover() {
                     <span className="font-mono text-[11px]" style={{ color: '#63636F' }}>{short(p.poolAddress)}</span>
                   </span>
                 </span>
-                <span className="flex justify-center max-[900px]:hidden"><Sparkline series={series[p.poolAddress]} /></span>
+                <span className="flex justify-center"><Sparkline series={series[p.poolAddress]} /></span>
                 <span className="text-right leading-tight">
                   <span className="font-mono text-[14px] font-semibold block" style={{ color: p.estFeeAprPct != null ? '#34D399' : '#63636F' }}>{aprFmt(p.estFeeAprPct)}</span>
                   {(() => { const y = projFeesYr(p, sim); return y != null ? <span className="font-mono text-[11px] block mt-0.5" style={{ color: '#7E7E8C' }}>≈ {projFmt(y)}/yr</span> : null })()}
                 </span>
                 <span className="text-right font-mono text-[14px]">{usd(p.vol24Usd)}</span>
                 <span className="text-right font-mono text-[14px]">{usd(p.tvlUsd)}</span>
-                <span className="text-right font-mono text-[13.5px] max-[820px]:hidden" style={{ color: '#9B9BAD' }}>
+                <span className="text-right font-mono text-[13.5px]" style={{ color: '#9B9BAD' }}>
                   {p.volTvlRatio != null ? `${p.volTvlRatio.toFixed(1)}×` : '—'}
                 </span>
                 <span className="flex justify-center">
