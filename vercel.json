@@ -16,6 +16,14 @@
     {
       "path": "/api/cron/farcaster-weekly-cast",
       "schedule": "0 2 * * 1"
+    },
+    {
+      "path": "/api/cron/gateway-discover",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/gateway-snapshot",
+      "schedule": "0 6 * * *"
     }
   ]
 }

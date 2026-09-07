@@ -155,4 +155,46 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         vm.expectRevert(MintwareLpGatewayPositionManager.RenounceDisabled.selector);
         pm.renounceOwnership();
     }
+
+    // Circuit-breaker (item 13): pause blocks NEW deposits but NEVER withdraw — funds can't be trapped.
+    function test_pause_blocksDeposit_allowsWithdraw() public {
+        uint256 s = _deposit(alice, 100_000e6);
+        pm.setPaused(true);
+        vm.prank(bob);
+        vm.expectRevert(MintwareLpGatewayPositionManager.DepositsPaused.selector);
+        pm.deposit(50_000e6);
+        // withdraw still works while paused
+        vm.roll(block.number + 1);
+        vm.prank(alice);
+        (uint256 q,) = pm.withdraw(s / 2);
+        assertApproxEqAbs(q, 50_000e6, 2);
+        // unpause restores deposits
+        pm.setPaused(false);
+        vm.roll(block.number + 1);
+        assertGt(_deposit(bob, 50_000e6), 0);
+    }
+
+    function test_setPaused_onlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        pm.setPaused(true);
+    }
+
+    // compoundQuote (item 14): lifts NAV pro-rata with NO share mint — every holder's value rises.
+    function test_compoundQuote_liftsNavNoMint() public {
+        _deposit(alice, 100_000e6);
+        uint256 tsBefore = pm.totalShares();
+        uint256 navBefore = pm.totalNav();
+        usdg.mint(address(this), 5_000e6);
+        usdg.approve(address(pm), 5_000e6);
+        pm.compoundQuote(5_000e6);
+        assertEq(pm.totalShares(), tsBefore); // no mint
+        assertApproxEqAbs(pm.totalNav(), navBefore + 5_000e6, 2); // NAV up by the compounded amount
+    }
+
+    function test_compoundQuote_onlyOwner() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        pm.compoundQuote(1e6);
+    }
 }

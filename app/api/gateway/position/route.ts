@@ -49,6 +49,16 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json({ success: false, error: 'chain_read_failed' }, 502)
   }
 
+  // Historical value/PnL series (Krystal item 8) — written by the gateway-snapshot cron.
+  const { data: snaps } = await ctx.supabase
+    .from('gateway_position_snapshots')
+    .select('taken_at, position_value_atomic, pnl_atomic')
+    .eq('user_wallet', address)
+    .eq('pool_address', inst.poolAddress)
+    .eq('chain_id', inst.chainId)
+    .order('taken_at', { ascending: false })
+    .limit(60)
+
   return ctx.json({
     success: true,
     position: {
@@ -60,6 +70,12 @@ export const GET = createHandler(async (req, ctx) => {
       bufferBalanceAtomic: null,
       // Unharvested fees need a V4 fee-growth read — deferred to a later pass (phase-1 shows realized).
       unharvestedFeesAtomic: null,
+      // Historical value/PnL series (Krystal item 8) — on-chain-derived, not private; newest first.
+      history: (snaps ?? []).map((s: { taken_at: string; position_value_atomic: unknown; pnl_atomic: unknown }) => ({
+        takenAt: s.taken_at,
+        positionValueAtomic: String(s.position_value_atomic ?? '0'),
+        pnlAtomic: String(s.pnl_atomic ?? '0'),
+      })),
     },
   })
 })

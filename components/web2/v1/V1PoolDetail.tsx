@@ -14,9 +14,10 @@ import { useMintwarePrivy } from '@/components/web2/providers'
 import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 
-type Meta = { positionManager: `0x${string}`; poolAddress: string; chainId: number; rpcUrl: string; usdg: `0x${string}` | null; feePips: number | null; dynamicFee: boolean; live: boolean }
+type Meta = { positionManager: `0x${string}`; poolAddress: string; chainId: number; rpcUrl: string; usdg: `0x${string}` | null; feePips: number | null; dynamicFee: boolean; inRange?: boolean | null; currentTick?: number | null; live: boolean }
 type Metrics = { pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; live: boolean }
-type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null }
+type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
+type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; history?: Snapshot[] }
 type Status = 'idle' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'done'
 
 const ERC20_ABI = [
@@ -48,6 +49,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const [wpct, setWpct] = useState(100)
   const [status, setStatus] = useState<Status>('idle')
   const [err, setErr] = useState('')
+  const [alert, setAlert] = useState<{ sinceIso: string } | null>(null)
 
   const decoded = useMemo(() => decodeURIComponent(slug).toLowerCase(), [slug])
   const pairLabel = m?.pairLabel ?? decoded.replace(/-/g, ' / ').toUpperCase()
@@ -61,6 +63,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     fetch('/api/gateway/discover').then((r) => r.json()).then((d) => {
       const list: Metrics[] = d?.success && Array.isArray(d.pools) ? d.pools : []
       setM(list.find((p) => norm(p.pairLabel) === decoded || norm(p.pairLabel) === slug.toLowerCase()) ?? null)
+    }).catch(() => {})
+    fetch(`/api/gateway/alerts?pool=${encodeURIComponent(slug)}`).then((r) => r.json()).then((d) => {
+      const oor = (d?.alerts ?? []).find((a: { kind: string; firing: boolean; sinceIso: string }) => a.kind === 'out_of_range' && a.firing)
+      setAlert(oor ? { sinceIso: oor.sinceIso } : null)
     }).catch(() => {})
   }, [slug, decoded])
 
@@ -78,6 +84,9 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const dayFeesUsd = feeRate != null && m ? m.vol24Usd * feeRate : null
   const estAprPct = feeRate != null && m && m.tvlUsd > 0 ? (m.vol24Usd * feeRate) / m.tvlUsd * 365 * 100 : null
   const feeTierLabel = meta?.feePips != null ? `${(meta.feePips / 1e4).toFixed(2)}%` : meta?.dynamicFee ? 'Dynamic' : '—'
+  // Fee-tier band (Krystal cost/vol read): ≤0.05 low · 0.05–0.30 standard · >0.30 high.
+  const feePct = meta?.feePips != null ? meta.feePips / 1e4 : null
+  const feeBand = feePct == null ? '' : feePct <= 0.05 ? ' · low' : feePct <= 0.3 ? ' · standard' : ' · high'
   const aprLabel = estAprPct != null ? `~${estAprPct < 1 ? estAprPct.toFixed(2) : estAprPct.toFixed(1)}%` : null
 
   const busy = status !== 'idle' && status !== 'done'
@@ -169,13 +178,28 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">
             <Tag>Uniswap V4</Tag><Tag>Curated</Tag><Tag>Robinhood Testnet</Tag>
             <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={meta?.live ? { color: '#34D399', background: 'rgba(52,211,153,0.12)' } : { color: '#9B9BAD', background: 'rgba(255,255,255,0.06)' }}>{meta?.live ? 'Live' : 'Curating'}</span>
+            {meta?.inRange != null && (
+              <span className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={meta.inRange ? { color: '#34D399', background: 'rgba(52,211,153,0.12)' } : { color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>
+                {meta.inRange ? 'In range · earning fees' : 'Out of range · fees paused'}
+              </span>
+            )}
           </div>
         </div>
         <div className="rounded-[12px] px-4 py-2.5 text-right" style={PANEL}>
           <div className="font-mono font-bold text-[22px]" style={{ color: '#8A82F4' }}>{aprLabel ?? (m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(1)}×` : '—')}</div>
-          <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{aprLabel ? 'Est. APR · trailing 24h' : '24h Vol / TVL'}</div>
+          <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{aprLabel ? 'Est. Fee APR · 24h' : '24h Vol / TVL'}</div>
         </div>
       </div>
+
+      {alert && (
+        <div className="mt-5 rounded-[12px] px-4 py-3 text-[13px] flex items-start gap-2.5" style={{ background: 'rgba(240,180,94,0.1)', border: '1px solid rgba(240,180,94,0.25)', color: '#F0B45E' }}>
+          <span>⚠</span>
+          <span>
+            <span style={{ fontWeight: 600 }}>Out of range ~{Math.max(1, Math.round((Date.now() - Date.parse(alert.sinceIso)) / 36e5))}h — LP fees paused.</span>{' '}
+            <span style={{ color: '#9B9BAD' }}>Your USDG is still earning in Morpho; the LP leg resumes automatically when price re-enters the range.</span>
+          </span>
+        </div>
+      )}
 
       <div className="grid gap-5 mt-6" style={{ gridTemplateColumns: 'minmax(0,1.3fr) minmax(320px,1fr)' }}>
         {/* LEFT: pool info */}
@@ -204,9 +228,9 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="mt-6 flex flex-col">
             <Meta2 k="Current Pool Price" v={m?.priceQuotePerBase != null ? `1 ${base} ≈ ${m.priceQuotePerBase < 0.01 ? m.priceQuotePerBase.toPrecision(3) : m.priceQuotePerBase.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${quote}` : '—'} />
             <Meta2 k="24h Volume" v={m ? usd(m.vol24Usd) : '—'} />
-            <Meta2 k="Fee tier" v={feeTierLabel} />
+            <Meta2 k="Fee tier" v={feeTierLabel + feeBand} />
             <Meta2 k="24h Fees (est)" v={dayFeesUsd != null ? usd(dayFeesUsd) : '—'} />
-            <Meta2 k="Est. APR · trailing 24h" v={aprLabel ?? '—'} />
+            <Meta2 k="Est. Fee APR · 24h, gross of IL" v={aprLabel ?? '—'} />
             <Meta2 k="Activity (Vol / TVL)" v={m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(2)}×` : '—'} />
             <Meta2 k="24h Trades" v={m?.txCount24 != null ? m.txCount24.toLocaleString() : '—'} />
             <Meta2 k="Pool age" v={m?.poolAgeDays != null ? `${m.poolAgeDays}d` : '—'} />
@@ -229,6 +253,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           {/* explorers */}
           {meta && (
             <div className="flex gap-3 mt-5 flex-wrap text-[12.5px]">
+              <a href={`https://robinhoodchain.blockscout.com/address/${meta.poolAddress}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Explorer ↗</a>
               <a href={`https://www.geckoterminal.com/robinhood/pools/${meta.poolAddress}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>GeckoTerminal ↗</a>
               <a href={`https://dexscreener.com/robinhood/${meta.poolAddress}`} target="_blank" rel="noreferrer" className="no-underline" style={{ color: '#8A82F4', fontWeight: 600 }}>DEXScreener ↗</a>
             </div>
@@ -257,6 +282,29 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                 </div>
               )}
             </div>
+            {hasPos && pos?.costBasisAtomic != null && (
+              <div className="mt-4 pt-4 flex flex-col gap-1.5" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex justify-between items-baseline text-[13px]">
+                  <span style={{ color: '#9B9BAD' }}>Net vs your deposit <span style={{ color: '#63636F' }}>({usdg(pos.costBasisAtomic)} in)</span></span>
+                  {(() => {
+                    const up = num(pos.unrealizedPnlAtomic) >= 0
+                    return <span className="font-mono font-bold" style={{ color: up ? '#34D399' : '#F0736E' }}>{up ? '+' : ''}{usdg(pos.unrealizedPnlAtomic)}</span>
+                  })()}
+                </div>
+                {(() => {
+                  const wk = (pos.history ?? []).find((h) => Date.now() - Date.parse(h.takenAt) >= 7 * 864e5)
+                  if (!wk) return null
+                  const d7 = num(pos.positionValueAtomic) - num(wk.positionValueAtomic)
+                  const up = d7 >= 0
+                  return (
+                    <div className="flex justify-between items-baseline text-[12px]">
+                      <span style={{ color: '#63636F' }}>Change · 7d</span>
+                      <span className="font-mono" style={{ color: up ? '#34D399' : '#F0736E' }}>{up ? '+' : ''}${Math.abs(d7).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
           </div>
 
           {/* deposit / withdraw */}
@@ -274,6 +322,17 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                   <div className="flex justify-between text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}><span>Enter amount</span><span>USDG</span></div>
                   <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} disabled={busy} className="bg-transparent outline-none font-mono font-bold text-[26px] w-full mt-2" style={{ color: '#F4F4FA' }} />
                 </div>
+                {Number(amount) > 0 && estAprPct != null && (
+                  <div className="mt-3 rounded-[12px] p-3" style={INNER}>
+                    <div className="flex justify-between text-[12.5px]">
+                      <span style={{ color: '#9B9BAD' }}>Est. fees / yr at current pace</span>
+                      <span className="font-mono font-bold" style={{ color: '#34D399' }}>~{usd(Number(amount) * (estAprPct / 100) * 0.5)}</span>
+                    </div>
+                    <div className="text-[11px] mt-1.5 leading-[1.5]" style={{ color: '#63636F' }}>
+                      On the ~50% deployed as liquidity, at the trailing-24h fee rate — an estimate, not a projection. The rest earns Morpho lending; fees are gross of impermanent loss.
+                    </div>
+                  </div>
+                )}
                 <button onClick={deposit} disabled={busy} className="w-full mt-3.5 text-[14px] font-semibold py-3.5 rounded-[14px] cursor-pointer disabled:cursor-default" style={busy ? { background: 'rgba(255,255,255,0.06)', color: '#9B9BAD' } : { background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', color: '#fff', boxShadow: '0 6px 20px rgba(108,108,240,0.35)' }}>{depBtn}</button>
                 <div className="flex justify-between mt-4 text-[12.5px]" style={{ color: '#9B9BAD' }}><span>Locks anything?</span><span style={{ color: '#34D399', fontWeight: 600 }}>No — withdraw anytime</span></div>
               </>

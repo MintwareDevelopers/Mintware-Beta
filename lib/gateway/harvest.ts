@@ -15,6 +15,11 @@ import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { listActiveInstances } from '@/lib/gateway/registry'
 import { skimPerformanceFee, proRataBufferCredits, type SharePosition } from '@/lib/gateway/harvestMath'
 import { swapPairedToQuote } from '@/lib/gateway/routerSwap'
+import { harvestDestination } from '@/lib/gateway/opsConfig'
+
+const ERC20_APPROVE_ABI = [
+  { type: 'function', stateMutability: 'nonpayable', name: 'approve', inputs: [{ name: 's', type: 'address' }, { name: 'v', type: 'uint256' }], outputs: [{ type: 'bool' }] },
+] as const
 
 export type HarvestInstance = { positionManager: `0x${string}`; poolAddress: string; chainId: number }
 
@@ -35,6 +40,10 @@ const perfFeeBps = () => {
   const n = Number(process.env.LP_GATEWAY_PERF_FEE_BPS ?? '1000') // default 10%
   return Number.isInteger(n) && n >= 0 && n <= 10_000 ? n : 1000
 }
+// Dust guard (Krystal precedent — "don't burn gas harvesting dust"). Min collectable QUOTE fees, in
+// atomic units, below which harvest is skipped BEFORE any tx (we pre-simulate the collect via eth_call).
+// Default 1 USDG (6dp). Set 0 to disable the floor.
+const harvestMinAtomic = () => big(process.env.LP_GATEWAY_HARVEST_MIN_ATOMIC ?? '1000000')
 
 /** Harvest EVERY active gateway (registry + single-env fallback). The cron entry point. */
 export async function harvestAll(opts: { supabase: SupabaseClient; log?: Logger }): Promise<{ harvested: number; results: HarvestOutcome[] }> {
@@ -76,6 +85,26 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     return { ok: false, status: 503, error: 'harvest_signer_unavailable', reason: 'signer' }
   }
   const wallet = createWalletClient({ account, chain: publicClient.chain, transport: http(cfg.rpcUrl) })
+
+  // 0) gas-saving dust guard: pre-simulate the collect (eth_call as the owner, no gas, no state change)
+  //    to read the collectable fees, and skip the real tx when the quote leg is below the floor and there
+  //    is no paired leg worth swapping. Fails OPEN (proceeds) if the simulate itself errors — it's an
+  //    optimization, not a safety gate.
+  try {
+    const sim = await publicClient.simulateContract({
+      address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'harvest',
+      args: [BigInt(Math.floor(Date.now() / 1000) + 600)], account,
+    })
+    const [eq, ep] = ((sim as { result?: readonly [bigint, bigint] }).result ?? [0n, 0n]) as readonly [bigint, bigint]
+    if (eq < harvestMinAtomic() && ep === 0n) {
+      log?.info('gateway.harvest', 'below harvest floor — skipped (no gas spent)', {
+        expectedQuote: eq.toString(), floor: harvestMinAtomic().toString(), pool: instance.poolAddress,
+      })
+      return { ok: false, status: 200, error: 'below harvest floor — skipped to save gas', reason: 'nothing' }
+    }
+  } catch (e) {
+    log?.warn('gateway.harvest', 'pre-harvest simulate failed; proceeding', { error: String(e) })
+  }
 
   // 1) collect fees (zero-liquidity-delta) → harvestRecipient (the oracle seat). Idempotent-safe: a
   //    revert (no fees) just yields zero, and the collect tx keys the harvest_events unique index.
@@ -127,6 +156,35 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
 
   // 3) skim the performance fee, split the rest pro-rata by share
   const { feeAtomic, netAtomic } = skimPerformanceFee(grossAtomic, perfFeeBps())
+
+  // 3a) restake destination (item 14): compound the net back into Morpho instead of crediting buffers —
+  //     lifts NAV pro-rata for ALL holders (no share mint). The oracle seat holds the net; approve the
+  //     PM + call compoundQuote. Requires the compoundQuote-capable contract (redeploy) — off until then.
+  if (harvestDestination() === 'restake') {
+    const recordRestake = (credited: bigint) =>
+      supabase.from('harvest_events').insert({
+        pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
+        amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(), amount_credited_atomic: credited.toString(),
+      })
+    if (netAtomic <= 0n) {
+      await recordRestake(0n)
+      return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: 0n, recipients: 0 }
+    }
+    try {
+      const quoteAsset = (await publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset' })) as `0x${string}`
+      const ah = await wallet.writeContract({ address: quoteAsset, abi: ERC20_APPROVE_ABI, functionName: 'approve', args: [instance.positionManager, netAtomic], account, chain: publicClient.chain })
+      await publicClient.waitForTransactionReceipt({ hash: ah })
+      const ch = await wallet.writeContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'compoundQuote', args: [netAtomic], account, chain: publicClient.chain, gas: 400_000n })
+      const rc = await publicClient.waitForTransactionReceipt({ hash: ch })
+      if (rc.status !== 'success') return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx' }
+    } catch (e) {
+      log?.error('gateway.harvest', 'restake/compound failed', { error: String(e) })
+      return { ok: false, status: 502, error: 'compound_failed', reason: 'tx' }
+    }
+    await recordRestake(netAtomic)
+    return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: netAtomic, recipients: 0 }
+  }
+
   const { data: rows } = await supabase
     .from('gateway_positions')
     .select('id, user_wallet, shares')

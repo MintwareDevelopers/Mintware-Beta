@@ -10,6 +10,12 @@ export const LP_GATEWAY_ABI = [
   { type: 'function', stateMutability: 'view', name: 'harvestRecipient', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', stateMutability: 'view', name: 'quoteAsset', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', stateMutability: 'view', name: 'pairedAsset', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', stateMutability: 'view', name: 'poolManager', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', stateMutability: 'view', name: 'tickLower', inputs: [], outputs: [{ type: 'int24' }] },
+  { type: 'function', stateMutability: 'view', name: 'tickUpper', inputs: [], outputs: [{ type: 'int24' }] },
+  { type: 'function', stateMutability: 'view', name: 'paused', inputs: [], outputs: [{ type: 'bool' }] },
+  { type: 'function', stateMutability: 'nonpayable', name: 'setPaused', inputs: [{ name: 'p', type: 'bool' }], outputs: [] },
+  { type: 'function', stateMutability: 'nonpayable', name: 'compoundQuote', inputs: [{ name: 'amount', type: 'uint256' }], outputs: [] },
   {
     type: 'function',
     stateMutability: 'view',
