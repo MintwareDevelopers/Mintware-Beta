@@ -10,7 +10,7 @@ import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
 
-type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null }
+type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null }
 
 function usdg(atomic: string | null | undefined): string {
   if (atomic == null) return '$0.00'
@@ -121,6 +121,15 @@ export function V1Portfolio() {
             <Legend color="#8A82F4" label="Spendable buffer" v={revealed ? usdg(bufAtomic) : 'Hidden'} />
             <Legend color="rgba(138,130,244,0.35)" label="Working & earning" v={usdg(pos?.positionValueAtomic)} />
           </div>
+
+          {hasPosition && pos?.costBasisAtomic != null && (
+            <div className="flex justify-between items-baseline px-7 max-[640px]:px-5 py-3.5 text-[13px]" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <span style={{ color: '#9B9BAD' }}>Net vs your deposit <span style={{ color: '#63636F' }}>({usdg(pos.costBasisAtomic)} in)</span></span>
+              <span className="font-mono font-bold" style={{ color: num(pos.unrealizedPnlAtomic) >= 0 ? '#34D399' : '#F0736E' }}>
+                {num(pos.unrealizedPnlAtomic) >= 0 ? '+' : ''}{usdg(pos.unrealizedPnlAtomic)}
+              </span>
+            </div>
+          )}
 
           {!hasPosition && !loading && (
             <div className="px-7 max-[640px]:px-5 py-4 text-[13.5px]" style={{ color: '#9B9BAD', borderTop: '1px solid rgba(255,255,255,0.06)' }}>

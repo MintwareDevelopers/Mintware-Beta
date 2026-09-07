@@ -16,7 +16,7 @@ import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 
 type Meta = { positionManager: `0x${string}`; poolAddress: string; chainId: number; rpcUrl: string; usdg: `0x${string}` | null; feePips: number | null; dynamicFee: boolean; live: boolean }
 type Metrics = { pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; live: boolean }
-type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null }
+type Position = { positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null }
 type Status = 'idle' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'done'
 
 const ERC20_ABI = [
@@ -176,7 +176,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         </div>
         <div className="rounded-[12px] px-4 py-2.5 text-right" style={PANEL}>
           <div className="font-mono font-bold text-[22px]" style={{ color: '#8A82F4' }}>{aprLabel ?? (m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(1)}×` : '—')}</div>
-          <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{aprLabel ? 'Est. APR · 24h, gross of IL' : '24h Vol / TVL'}</div>
+          <div className="text-[10.5px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{aprLabel ? 'Est. Fee APR · 24h' : '24h Vol / TVL'}</div>
         </div>
       </div>
 
@@ -209,7 +209,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             <Meta2 k="24h Volume" v={m ? usd(m.vol24Usd) : '—'} />
             <Meta2 k="Fee tier" v={feeTierLabel + feeBand} />
             <Meta2 k="24h Fees (est)" v={dayFeesUsd != null ? usd(dayFeesUsd) : '—'} />
-            <Meta2 k="Est. APR · 24h, gross of IL" v={aprLabel ?? '—'} />
+            <Meta2 k="Est. Fee APR · 24h, gross of IL" v={aprLabel ?? '—'} />
             <Meta2 k="Activity (Vol / TVL)" v={m?.volTvlRatio != null ? `${m.volTvlRatio.toFixed(2)}×` : '—'} />
             <Meta2 k="24h Trades" v={m?.txCount24 != null ? m.txCount24.toLocaleString() : '—'} />
             <Meta2 k="Pool age" v={m?.poolAgeDays != null ? `${m.poolAgeDays}d` : '—'} />
@@ -261,6 +261,16 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                 </div>
               )}
             </div>
+            {hasPos && pos?.costBasisAtomic != null && (
+              <div className="mt-4 pt-4 flex justify-between items-baseline text-[13px]" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ color: '#9B9BAD' }}>Net vs your deposit <span style={{ color: '#63636F' }}>({usdg(pos.costBasisAtomic)} in)</span></span>
+                {(() => {
+                  const pnl = num(pos.unrealizedPnlAtomic)
+                  const up = pnl >= 0
+                  return <span className="font-mono font-bold" style={{ color: up ? '#34D399' : '#F0736E' }}>{up ? '+' : ''}{usdg(pos.unrealizedPnlAtomic)}</span>
+                })()}
+              </div>
+            )}
           </div>
 
           {/* deposit / withdraw */}
