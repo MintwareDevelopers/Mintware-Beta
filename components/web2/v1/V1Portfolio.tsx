@@ -1,10 +1,10 @@
 'use client'
 
-// Portfolio — the V1 account/profile surface. Three sections: (1) identity (avatar + name + bio + socials,
-// borrowed from the V2 profile via useProfileMeta), (2) wallet (address + connection + total working
-// value), (3) LP positions ACROSS pools (the /api/gateway/positions aggregate — one card per pool). Dark
-// app skin. Honest: real chain-derived figures only, no fabricated numbers; the spendable buffer stays
-// owner-gated (per-pool signature reveal).
+// Portfolio — the V1 account/profile "money home". Borrows the V2 identity layer (avatar + bio + socials,
+// via useProfileMeta) and pairs it with REAL V1 data (no mocks): a working-balance hero, a stats strip, and
+// per-pool position cards (value + net PnL + value sparkline + owner-gated spendable buffer). Cross-pool via
+// /api/gateway/positions. Dark app skin. Honest: chain-derived figures only; buffer stays private (per-pool
+// signed reveal, L-03).
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
@@ -12,6 +12,8 @@ import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
 import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
+import { TokenPair } from '@/components/web2/v1/TokenPair'
+import { Sparkline } from '@/components/web2/v1/Sparkline'
 import { shortAddr } from '@/lib/web2/api'
 
 type PoolPosition = {
@@ -21,14 +23,20 @@ type PoolPosition = {
   positionValueAtomic: string | null
   costBasisAtomic: string | null
   unrealizedPnlAtomic: string | null
+  valueSeries?: number[]
 }
 
 const CARD = { background: '#12121C', border: '1px solid rgba(255,255,255,0.07)' }
 const INNER = { background: '#0E0E16', border: '1px solid rgba(255,255,255,0.06)' }
 
-const usdg = (a: string | null | undefined) => (a == null ? '$0.00' : `$${(Number(BigInt(a)) / 1e6).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-const num = (a: string | null | undefined) => (a == null ? 0 : Number(BigInt(a)) / 1e6)
+const num = (a: string | null | undefined): number => { if (a == null) return 0; try { return Number(BigInt(a)) / 1e6 } catch { return 0 } }
+const usdg = (a: string | null | undefined) => `$${num(a).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const fmt = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 const slugOf = (p: PoolPosition) => encodeURIComponent((p.pairLabel || p.poolAddress).replace(/\s*\/\s*/g, '-').toLowerCase())
+const pairParts = (label: string | null) => {
+  const [b, q] = (label || 'TOKEN / USDG').split('/').map((s) => s.replace(/\s*\d.*$/, '').trim())
+  return { base: b || 'TOKEN', quote: q || 'USDG' }
+}
 
 export function V1Portfolio() {
   const { address, isConnected, walletType, disconnect } = useMintwareIdentity()
@@ -51,20 +59,18 @@ export function V1Portfolio() {
 
   const totalWorking = useMemo(() => positions.reduce((s, p) => s + num(p.positionValueAtomic), 0), [positions])
   const totalPnl = useMemo(() => positions.reduce((s, p) => s + num(p.unrealizedPnlAtomic), 0), [positions])
+  const totalDeposited = useMemo(() => positions.reduce((s, p) => s + num(p.costBasisAtomic), 0), [positions])
 
   const name = meta?.displayName || meta?.basename || (address ? shortAddr(address) : '')
   const avatarLetter = address ? address.charAt(2).toUpperCase() : '?'
-  const copyAddr = async () => {
-    if (!address) return
-    try { await navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* clipboard blocked */ }
-  }
+  const copyAddr = async () => { if (!address) return; try { await navigator.clipboard.writeText(address); setCopied(true); setTimeout(() => setCopied(false), 1500) } catch { /* blocked */ } }
 
   if (!isConnected) {
     return (
       <div>
         <Header />
         <div className="mt-6 rounded-[16px] p-8 flex flex-col items-start gap-4" style={CARD}>
-          <p className="text-[15px] max-w-[44ch] leading-[1.55]" style={{ color: '#9B9BAD' }}>Connect your wallet to see your profile, positions, and spendable buffer.</p>
+          <p className="text-[15px] max-w-[44ch] leading-[1.55]" style={{ color: '#9B9BAD' }}>Connect your wallet to see your profile, working balance, and positions.</p>
           <button onClick={connect} className="text-[13.5px] font-semibold px-5 py-2.5 rounded-full text-white cursor-pointer" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', boxShadow: '0 4px 14px rgba(108,108,240,0.35)' }}>Connect Wallet</button>
         </div>
         <Foot />
@@ -76,46 +82,66 @@ export function V1Portfolio() {
     <div>
       <Header />
 
-      {/* 1 · identity + wallet */}
-      <div className="mt-6 rounded-[16px] p-6 max-[640px]:p-5" style={CARD}>
-        <div className="flex items-start gap-4 flex-wrap">
-          <span className="w-[60px] h-[60px] rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)' }}>
-            {meta?.avatar?.ref ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={meta.avatar.ref} alt={name} width={60} height={60} style={{ objectFit: 'cover', width: '100%', height: '100%' }} />
-            ) : (
-              <span className="font-bold text-[24px] text-white">{avatarLetter}</span>
-            )}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="font-atx-display font-semibold text-[20px] tracking-[-0.02em] truncate">{name}</span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ color: '#9B9BAD', background: 'rgba(255,255,255,0.06)' }}>{walletType === 'privy-embedded' ? 'Embedded' : 'External'}</span>
-            </div>
-            {meta?.bio && <p className="text-[13.5px] mt-1.5 leading-[1.55] max-w-[52ch]" style={{ color: '#9B9BAD' }}>{meta.bio}</p>}
-            <Socials socials={meta?.socials} />
-            {/* wallet row */}
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
-              <button onClick={copyAddr} className="inline-flex items-center gap-1.5 font-mono text-[12.5px] px-2.5 py-1.5 rounded-[10px] cursor-pointer" style={INNER} title="Copy address">
-                <span style={{ color: '#9B9BAD' }}>{address ? shortAddr(address) : ''}</span>
-                <span style={{ color: copied ? '#34D399' : '#63636F' }}>{copied ? '✓' : '⧉'}</span>
-              </button>
-              <Link href="/app/account" className="text-[12.5px] no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Edit profile ↗</Link>
-              <button onClick={disconnect} className="text-[12.5px] font-semibold cursor-pointer" style={{ color: '#63636F' }}>Disconnect</button>
-            </div>
+      {/* 1 · identity */}
+      <div className="mt-6 flex items-start gap-4 flex-wrap">
+        <span className="w-[56px] h-[56px] rounded-full overflow-hidden flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)' }}>
+          {meta?.avatar?.ref ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={meta.avatar.ref} alt={name} width={56} height={56} style={{ objectFit: 'cover', width: '100%', height: '100%' }} />
+          ) : (
+            <span className="font-bold text-[22px] text-white">{avatarLetter}</span>
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="font-atx-display font-semibold text-[20px] tracking-[-0.02em] truncate">{name}</span>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0" style={{ color: '#9B9BAD', background: 'rgba(255,255,255,0.06)' }}>{walletType === 'privy-embedded' ? 'Embedded' : 'External'}</span>
           </div>
-          {/* portfolio total */}
-          <div className="text-right shrink-0 max-[560px]:text-left max-[560px]:w-full max-[560px]:mt-2">
-            <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Working & earning</div>
-            <div className="font-mono font-bold text-[26px] tracking-[-0.02em]">{loading ? '—' : usdg(String(BigInt(Math.round(totalWorking * 1e6))))}</div>
-            {totalPnl !== 0 && (
-              <div className="text-[12.5px] font-mono font-semibold" style={{ color: totalPnl >= 0 ? '#34D399' : '#F0736E' }}>{totalPnl >= 0 ? '+' : ''}${Math.abs(totalPnl).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} net</div>
-            )}
+          {meta?.bio && <p className="text-[13.5px] mt-1.5 leading-[1.55] max-w-[52ch]" style={{ color: '#9B9BAD' }}>{meta.bio}</p>}
+          <Socials socials={meta?.socials} />
+          <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+            <button onClick={copyAddr} className="inline-flex items-center gap-1.5 font-mono text-[12.5px] px-2.5 py-1.5 rounded-[10px] cursor-pointer" style={INNER} title="Copy address">
+              <span style={{ color: '#9B9BAD' }}>{address ? shortAddr(address) : ''}</span>
+              <span style={{ color: copied ? '#34D399' : '#63636F' }}>{copied ? '✓' : '⧉'}</span>
+            </button>
+            <Link href="/app/account" className="text-[12.5px] no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Edit profile ↗</Link>
+            <button onClick={disconnect} className="text-[12.5px] font-semibold cursor-pointer" style={{ color: '#63636F' }}>Disconnect</button>
           </div>
         </div>
       </div>
 
-      {/* 2 · positions across pools */}
+      {/* 2 · working-balance hero */}
+      <div className="mt-6 rounded-[18px] p-7 max-[640px]:p-5 relative overflow-hidden" style={{ background: 'linear-gradient(135deg,#191830,#12121C)', border: '1px solid rgba(138,130,244,0.22)' }}>
+        <div className="absolute -top-16 -right-10 w-[220px] h-[220px] rounded-full" style={{ background: 'radial-gradient(circle,rgba(138,130,244,0.18),transparent 70%)' }} />
+        <div className="relative">
+          <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#9B9BAD' }}>Working &amp; earning</div>
+          <div className="font-mono font-bold tracking-[-0.02em] leading-none text-[clamp(2.4rem,7vw,3.4rem)] mt-2">
+            {loading ? '—' : fmt(totalWorking)}
+          </div>
+          <div className="flex items-center gap-3 mt-3 flex-wrap">
+            {totalPnl !== 0 && (
+              <span className="font-mono text-[13.5px] font-semibold px-2.5 py-1 rounded-full" style={{ color: totalPnl >= 0 ? '#34D399' : '#F0736E', background: totalPnl >= 0 ? 'rgba(52,211,153,0.12)' : 'rgba(240,115,110,0.12)' }}>
+                {totalPnl >= 0 ? '+' : ''}{fmt(Math.abs(totalPnl))} net
+              </span>
+            )}
+            <span className="text-[13px] max-w-[46ch]" style={{ color: '#9B9BAD' }}>Your positions earn trading fees; a spendable buffer fills from the yield — spend it without unwinding.</span>
+          </div>
+          <div className="flex gap-2.5 mt-5 flex-wrap">
+            <Link href="/v1" className="text-[13.5px] font-semibold px-5 py-2.5 rounded-full text-white no-underline" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', boxShadow: '0 6px 20px rgba(108,108,240,0.35)' }}>+ Add USDG</Link>
+            <Link href="/v1/leaderboard" className="text-[13.5px] font-semibold px-5 py-2.5 rounded-full no-underline" style={{ color: '#F4F4FA', border: '1px solid rgba(255,255,255,0.12)' }}>Leaderboard →</Link>
+          </div>
+        </div>
+      </div>
+
+      {/* 3 · stats strip */}
+      <div className="grid gap-3 mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))' }}>
+        <Stat k="Total at work" v={loading ? '—' : fmt(totalWorking)} />
+        <Stat k="Net vs deposit" v={loading ? '—' : `${totalPnl >= 0 ? '+' : ''}${fmt(totalPnl)}`} tone={totalPnl > 0 ? 'up' : totalPnl < 0 ? 'down' : undefined} />
+        <Stat k="Deposited" v={loading ? '—' : fmt(totalDeposited)} />
+        <Stat k="Pools" v={loading ? '—' : String(positions.length)} />
+      </div>
+
+      {/* 4 · positions */}
       <div className="flex items-center justify-between mt-7 mb-3">
         <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>Your positions</div>
         <Link href="/v1" className="text-[13px] font-semibold no-underline" style={{ color: '#8A82F4' }}>+ Add to a pool</Link>
@@ -143,26 +169,32 @@ export function V1Portfolio() {
 function PositionCard({ p, address }: { p: PoolPosition; address?: string }) {
   const { buffer: bufAtomic, revealed, revealing, reveal } = useGatewayBuffer(address, p.poolAddress)
   const pnl = num(p.unrealizedPnlAtomic)
+  const { base, quote } = pairParts(p.pairLabel)
   const label = (p.pairLabel || p.poolAddress).replace(/\s*\d[\d.]*\s*%\s*$/, '')
   return (
     <div className="rounded-[16px] p-5 max-[640px]:p-4" style={CARD}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <Link href={`/earn/${slugOf(p)}`} className="font-semibold text-[15.5px] no-underline" style={{ color: '#F4F4FA' }}>{label} <span style={{ color: '#8A82F4' }}>›</span></Link>
-        {p.costBasisAtomic != null && (
-          <span className="font-mono text-[12.5px] font-semibold" style={{ color: pnl >= 0 ? '#34D399' : '#F0736E' }}>{pnl >= 0 ? '+' : ''}{usdg(p.unrealizedPnlAtomic)} <span style={{ color: '#63636F', fontWeight: 400 }}>net</span></span>
-        )}
+        <Link href={`/earn/${slugOf(p)}`} className="flex items-center gap-2.5 no-underline min-w-0" style={{ color: '#F4F4FA' }}>
+          <TokenPair baseLogo={null} quoteLogo={null} baseSymbol={base} quoteSymbol={quote} size={26} ring="#12121C" />
+          <span className="font-semibold text-[15.5px] truncate">{label} <span style={{ color: '#8A82F4' }}>›</span></span>
+        </Link>
+        {(p.valueSeries?.length ?? 0) >= 3 && <span className="shrink-0"><Sparkline series={p.valueSeries} width={80} height={26} /></span>}
       </div>
-      <div className="grid grid-cols-2 gap-4 mt-4">
+      <div className="grid grid-cols-3 max-[560px]:grid-cols-2 gap-4 mt-4">
         <div>
-          <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Position value</div>
-          <div className="font-mono font-bold text-[19px] mt-1">{usdg(p.positionValueAtomic)}</div>
+          <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Value</div>
+          <div className="font-mono font-bold text-[18px] mt-1">{usdg(p.positionValueAtomic)}</div>
         </div>
         <div>
+          <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Net vs deposit</div>
+          <div className="font-mono font-bold text-[18px] mt-1" style={{ color: p.costBasisAtomic == null ? '#63636F' : pnl >= 0 ? '#34D399' : '#F0736E' }}>{p.costBasisAtomic == null ? '—' : `${pnl >= 0 ? '+' : ''}${usdg(p.unrealizedPnlAtomic)}`}</div>
+        </div>
+        <div className="max-[560px]:col-span-2">
           <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Spendable buffer</div>
           {revealed ? (
-            <div className="font-mono font-bold text-[19px] mt-1" style={{ color: '#34D399' }}>{usdg(bufAtomic)}</div>
+            <div className="font-mono font-bold text-[18px] mt-1" style={{ color: '#34D399' }}>{usdg(bufAtomic)}</div>
           ) : (
-            <button onClick={reveal} disabled={revealing} className="font-mono font-bold text-[15px] mt-1 cursor-pointer disabled:cursor-default text-left" style={{ color: '#8A82F4' }}>{revealing ? 'Verifying…' : 'Verify to view →'}</button>
+            <button onClick={reveal} disabled={revealing} className="font-mono font-bold text-[14px] mt-1 cursor-pointer disabled:cursor-default text-left" style={{ color: '#8A82F4' }}>{revealing ? 'Verifying…' : 'Verify to view →'}</button>
           )}
         </div>
       </div>
@@ -183,6 +215,15 @@ function Socials({ socials }: { socials?: { twitter?: string | null; farcaster?:
       {items.map(([label, href]) => (
         <a key={label} href={href} target="_blank" rel="noreferrer" className="text-[11.5px] font-semibold px-2.5 py-1 rounded-full no-underline" style={{ color: '#9B9BAD', background: 'rgba(255,255,255,0.05)' }}>{label} ↗</a>
       ))}
+    </div>
+  )
+}
+
+function Stat({ k, v, tone }: { k: string; v: string; tone?: 'up' | 'down' }) {
+  return (
+    <div className="rounded-[14px] p-4" style={CARD}>
+      <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{k}</div>
+      <div className="font-mono font-bold text-[20px] mt-1.5" style={{ color: tone === 'up' ? '#34D399' : tone === 'down' ? '#F0736E' : '#F4F4FA' }}>{v}</div>
     </div>
   )
 }

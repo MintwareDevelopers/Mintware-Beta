@@ -67,5 +67,25 @@ export const GET = createHandler(async (req, ctx) => {
     )
   ).filter((p): p is NonNullable<typeof p> => p !== null)
 
-  return ctx.json({ success: true, positions })
+  // Value history for per-pool sparklines (Krystal item 8) — one query for the wallet, grouped by pool.
+  // On-chain-derived series, not private; oldest→newest so the sparkline reads left-to-right.
+  const { data: snaps } = await ctx.supabase
+    .from('gateway_position_snapshots')
+    .select('pool_address, taken_at, position_value_atomic')
+    .eq('user_wallet', address)
+    .order('taken_at', { ascending: true })
+    .limit(600)
+  const seriesByPool = new Map<string, number[]>()
+  for (const s of (snaps ?? []) as { pool_address: string; position_value_atomic: unknown }[]) {
+    const k = String(s.pool_address).toLowerCase()
+    const v = Number(s.position_value_atomic ?? 0) / 1e6
+    if (!Number.isFinite(v)) continue
+    const arr = seriesByPool.get(k) ?? []
+    arr.push(v)
+    seriesByPool.set(k, arr)
+  }
+
+  const withHistory = positions.map((p) => ({ ...p, valueSeries: seriesByPool.get(p.poolAddress.toLowerCase()) ?? [] }))
+
+  return ctx.json({ success: true, positions: withHistory })
 })
