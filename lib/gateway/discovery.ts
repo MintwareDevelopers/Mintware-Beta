@@ -16,6 +16,7 @@ type GtPool = {
     name?: string
     reserve_in_usd?: string | number
     pool_created_at?: string
+    base_token_price_quote_token?: string | number
     volume_usd?: { h24?: string | number }
     transactions?: { h24?: { buys?: number; sells?: number } }
   }
@@ -31,6 +32,7 @@ export type PoolCandidate = {
   pairLabel: string
   tvlUsd: number
   vol24Usd: number
+  priceQuotePerBase: number | null // 1 base ≈ N quote (current pool price)
   signals: PoolSignals
   score: number
   verdict: 'ineligible' | 'review'
@@ -69,11 +71,13 @@ export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string } = {
     txCount24,
   }
   const risk = computeRisk(signals)
+  const price = Number(a.base_token_price_quote_token ?? 0)
   return {
     poolAddress: String(a.address ?? '').toLowerCase(),
     pairLabel: name,
     tvlUsd,
     vol24Usd,
+    priceQuotePerBase: Number.isFinite(price) && price > 0 ? price : null,
     signals,
     score: risk.score,
     verdict: risk.verdict,
