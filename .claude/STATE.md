@@ -155,11 +155,12 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `EthSeniorDemo_Settlement` | testnet · base-sepolia | `0x6d0a1520e47bAE8F5304859a6a0193dDa567A9E0` | testnet |
 | `EthSeniorDemo_TreasuryVault` | testnet · base-sepolia | `0xb84776B8CB27C924A3B4e704C0FF826CB4A98A1c` | testnet |
 | `EthSeniorDemo_YieldAdapter` | testnet · base-sepolia | `0xd01EcCF90Ac339B836c85e800ca11235D48F916f` | testnet |
-| `LpGateway_MockYieldAdapter` | testnet · robinhood-testnet | `0xfe745a613c608b648c33c56a05da25263144644a` | testnet |
-| `LpGateway_tPONS` | testnet · robinhood-testnet | `0xb2477b7a45aad4499bf3841f71fff3585ac46628` | testnet |
-| `LpGateway_tUSDG` | testnet · robinhood-testnet | `0x0ed57008f00317d259a8334de5097f77f433daee` | testnet |
-| `LpGatewayPositionManager` | testnet · robinhood-testnet | `0xd488feb1e6c2f302cf10ff8b6855b1cecd39b53e` | testnet |
-| `LpGatewayStaging` | testnet · robinhood-testnet | `0xe3ad5ae56c0d2c2e2c9c0aa6f68c07c79c1ec20f` | testnet |
+| `LpGateway_ERC4626YieldAdapter` | testnet · robinhood-testnet | `0x762e6b2e43cad6388d2e0d61d7d92255acdb79b6` | testnet |
+| `LpGateway_MockERC4626YieldSource` | testnet · robinhood-testnet | `0x81f08bd8f178e9b66d18825661b1fbcb2de025dd` | testnet |
+| `LpGateway_tPONS` | testnet · robinhood-testnet | `0xe45c490d229940252386c3a970c39a77b8f06442` | testnet |
+| `LpGateway_tUSDG` | testnet · robinhood-testnet | `0x48e87f9585a7200ffebc1df553e362853e6bed08` | testnet |
+| `LpGatewayPositionManager` | testnet · robinhood-testnet | `0x24ff5d2bb29b5448bdf96db0fcdf0553ebda3b11` | testnet |
+| `LpGatewayStaging` | testnet · robinhood-testnet | `0x8dafbb933c04014c616c551df83faf3bae8589ea` | testnet |
 | `MintwareEthSettlement` | testnet · base-sepolia | `0x20140811123db9C00CA1dF1023BA4fE758B98c5F` | testnet |
 | `MintwareStagedLiquidityRouter` | testnet · base-sepolia | `0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3` | testnet |
 | `MintwareTreasuryGatewayDeployer` | testnet · base-sepolia | `0xfbf781676fe93cd8d8d8e17716461c29f549a644` | testnet |
@@ -174,7 +175,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `ULVHook` | testnet · base-sepolia | `0x9f3c27B16e152f8dbf2A16Ce7DA4045Bd6100AC8` | testnet |
 | `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | testnet |
 
-**28 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
+**29 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
 **27 of 35 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
