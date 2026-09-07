@@ -17,9 +17,11 @@ export const GET = createHandler(async (_req, ctx) => {
 
 // Curator-only (bearer). Approve or reject a pool request. Easy curation: one call resolves the queue,
 // and an approve that carries the deployed gateway addresses ALSO registers the live instance in one
-// shot (operator deploys via the factory, then approves-with-addresses). Fail-closed: the bearer secret
-// falls back to an unmatchable literal when LP_GATEWAY_CURATOR_SECRET is unset, so curation is off until
-// it's deliberately configured.
+// shot (operator deploys via the factory, then approves-with-addresses). Fail-closed: when
+// LP_GATEWAY_CURATOR_SECRET is unset the bearer secret is EMPTY, which the route handler rejects with a
+// 500 (MISSING_SECRET) — curation is off until deliberately configured. (Do NOT fall back to a non-empty
+// literal or to CRON_SECRET: a non-empty fallback is a source-visible working credential; an `undefined`
+// fallback would silently accept CRON_SECRET. `?? ''` is the one value that fails closed here.)
 export const POST = createHandler(
   async (req, ctx) => {
     const b = (await req.clone().json().catch(() => ({}))) as {
@@ -88,5 +90,5 @@ export const POST = createHandler(
     await resolve('approved')
     return ctx.json({ success: true, action: 'approved', registered })
   },
-  { auth: 'bearer-token', bearerSecret: process.env.LP_GATEWAY_CURATOR_SECRET ?? 'unset-curator-secret-fail-closed' },
+  { auth: 'bearer-token', bearerSecret: process.env.LP_GATEWAY_CURATOR_SECRET ?? '' },
 )
