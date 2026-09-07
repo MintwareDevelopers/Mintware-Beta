@@ -181,35 +181,35 @@
     },
     "robinhood-testnet": {
       "LpGatewayPositionManager": {
-        "address": "0x39B84eB9c5BecAdF4F724235c756Bc04F972BD2a",
+        "address": "0xd488feb1e6c2f302cf10ff8b6855b1cecd39b53e",
         "chainId": 46630,
         "status": "testnet",
-        "note": "LP Gateway V1 (HARDENED per the firm-grade review — clamped-follower + conservative NAV, fee-sweep, pro-rata withdraw, minLiquidity, renounce-disabled; earlier self-audit C1/M1/M2/owner-fee). Pure-Privy REDEPLOY 2026-09-07 (band 500 bps), owner+harvestRecipient=Privy 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c. Deposit smoke proven (1000 tUSDG -> staged -> 1:1 shares; totalNav 1000). MOCK rig + hookless V4 pool; TESTNET, UNAUDITED. See docs/developers/lp-gateway-v1-security-review.md. Deploy: scripts/deploy-lp-gateway-robinhood.mjs.",
+        "note": "LP Gateway V1 (HARDENED per the firm-grade review — clamped-follower + conservative NAV, fee-sweep, pro-rata withdraw, minLiquidity, renounce-disabled; earlier self-audit C1/M1/M2/owner-fee). Pure-Privy REDEPLOY 2026-09-07b (band 500 bps), owner+harvestRecipient=Privy 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c. This redeploy ADDS the on-chain paused circuit-breaker (setPaused — blocks deposits, never withdraw) + compoundQuote (Krystal items 13/14), which the prior rig 0x39B84eB9c5BecAdF4F724235c756Bc04F972BD2a predated (SUPERSEDED). MOCK rig + hookless V4 pool; TESTNET, UNAUDITED. Deposit smoke to be re-run on this rig. See docs/developers/lp-gateway-v1-security-review.md. Deploy: scripts/deploy-lp-gateway-robinhood.mjs.",
         "verified": "2026-09-07"
       },
       "LpGatewayStaging": {
-        "address": "0x4c78f068A391AD81a0f4587Da6Ab415A9234b91E",
+        "address": "0xe3ad5ae56c0d2c2e2c9c0aa6f68c07c79c1ec20f",
         "chainId": 46630,
         "status": "testnet",
         "note": "LP Gateway staging reserve (idle USDG earns in the adapter). controller=PositionManager; deployer=Privy 0x18AE...663c (deployer-only setController, M1).",
         "verified": "2026-09-07"
       },
       "LpGateway_tUSDG": {
-        "address": "0x0178b219F8963194724F46C57479DBf490Eb95BE",
+        "address": "0x0ed57008f00317d259a8334de5097f77f433daee",
         "chainId": 46630,
         "status": "testnet",
         "note": "MOCK USDG (6dp) for the LP gateway rig. No value. Real USDG (Paxos) + Morpho gate mainnet.",
         "verified": "2026-09-07"
       },
       "LpGateway_tPONS": {
-        "address": "0xec32F8B81F72f985050018dbe40D62D9AdAdB39b",
+        "address": "0xb2477b7a45aad4499bf3841f71fff3585ac46628",
         "chainId": 46630,
         "status": "testnet",
         "note": "MOCK PONS (18dp) paired token for the LP gateway rig. No value.",
         "verified": "2026-09-07"
       },
       "LpGateway_MockYieldAdapter": {
-        "address": "0x3a60a763dd5eEE6E1c7e07521c49f4322C747220",
+        "address": "0xfe745a613c608b648c33c56a05da25263144644a",
         "chainId": 46630,
         "status": "testnet",
         "note": "MOCK yield adapter (stands in for the Morpho Steakhouse USDG ERC-4626 vault on mainnet).",
