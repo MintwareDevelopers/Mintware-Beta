@@ -27,6 +27,7 @@ Supabase · Foundry · Rust services. pnpm.
 | Referral system, ref codes, Supabase tables | `.claude/rules/referrals.md` |
 | Contracts — live Forge stack (vaults, AIAttribution v3) | `.claude/rules/smart-contracts.md` |
 | Vaults — dual-sided pair vault / ULV, V4 hook | `.claude/rules/vaults.md` |
+| **LP Gateway (V1)** — live LP-gateway product: stage→earn→deploy→harvest→buffer, `/v1`, curation | `.claude/rules/lp-gateway.md` |
 | Payments — YPN, settlement, edge-auth/relayer, Arc | `.claude/rules/payments-ypn.md` |
 | AI agents — ERC-8004, Attribution, x402 parking account | `.claude/rules/agents.md` |
 | Supabase schema, migrations, constraints | `.claude/rules/schema.md` |
