@@ -13,18 +13,34 @@ are test tokens with no value.
 - ⚠ No USDG / Morpho vault / meme pool on testnet — so the setup script deploys a **mock rig** (mock
   USDG + mock paired token + mock yield adapter + a fresh V4 pool). Mainnet uses the real USDG + Morpho.
 
-## 1. Fund a deployer key
-Add network 46630 (RPC above), then get gas from the faucet.
+## 1. Provision + fund the Privy signer (no raw key)
+The recommended path is **pure-Privy**: the Privy ROOT server wallet signs every deploy tx, so no raw
+key exists anywhere and the same seat that runs the harvest/deploy crons stands the rig up.
 
-## 2. Stand up the rig
+```bash
+# a) create the Privy root server wallet (prints the public id + address)
+PRIVY_APP_ID=... PRIVY_APP_SECRET=... node scripts/provision-privy-oracle-wallet.mjs
+# b) add network 46630 (RPC above) and fund ROOT_ORACLE_PRIVY_ADDRESS from the faucet
+#    https://faucet.testnet.chain.robinhood.com/
+```
+
+## 2. Stand up the rig (pure-Privy)
 ```bash
 export PATH="$HOME/.foundry/bin:$PATH"
-forge script contracts-v4/script/SetupLpGatewayTestnet.s.sol \
-  --rpc-url https://rpc.testnet.chain.robinhood.com --broadcast --private-key $DEPLOYER_KEY
+pnpm forge:build     # produce contracts-v4/out artifacts the deploy reads
+ORACLE_SIGNER_PROVIDER=privy PRIVY_APP_ID=... PRIVY_APP_SECRET=... \
+ROOT_ORACLE_PRIVY_WALLET_ID=... ROOT_ORACLE_PRIVY_ADDRESS=0x... \
+pnpm deploy:lp-gateway:robinhood
 ```
-Deploys tUSDG (6dp) + tPONS (18dp) + a mock yield adapter, **initializes a fresh V4 pool** (hookless,
-0.30% / tickSpacing 60, price 1.0), deploys the gateway (owner + harvestRecipient = deployer), and mints
-1M of each token to the deployer. It logs every address.
+`scripts/deploy-lp-gateway-robinhood.mjs` deploys tUSDG (6dp) + tPONS (18dp) + a mock yield adapter,
+**initializes a fresh V4 pool** (hookless, 0.30% / tickSpacing 60, price 1.0), deploys the gateway
+(owner + harvestRecipient = **the Privy signer**), wires `setController`, mints 1M of each token to the
+signer, and prints the exact `LP_GATEWAY_*` env block. It gas-preflights and fails closed with a faucet
+nudge if the signer is unfunded.
+
+> Raw-key alternative (only if you don't want Privy): the equivalent Foundry script is
+> `contracts-v4/script/SetupLpGatewayTestnet.s.sol` (`forge script … --broadcast --private-key $DEPLOYER_KEY`)
+> — same rig, but a raw key signs. The pure-Privy path above is preferred.
 
 ## 3. Apply the migration + set env
 ```bash

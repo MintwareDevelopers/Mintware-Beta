@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --coverage",
     "test:all": "pnpm test && pnpm forge:test",
     "forge:build": "forge build",
+    "deploy:lp-gateway:robinhood": "node scripts/deploy-lp-gateway-robinhood.mjs",
     "forge:test": "forge test -vv",
     "forge:test:gas": "forge test -vv --gas-report",
     "forge:coverage": "forge coverage",
