@@ -6,6 +6,9 @@ import { V2Nav } from '@/components/ui2/V2Nav'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { shortAddr } from '@/lib/web2/api'
+import { useV2Mode } from '@/components/web2/V2ModeProvider'
+import { V1MarketingStub } from '@/components/web2/V1MarketingStub'
+import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 const LABEL = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
 const NUM = 'text-[12px] font-semibold text-peri-deep tabular-nums'
@@ -226,7 +229,7 @@ const ULV_ROLES = [
 const warnPill = 'text-[10px] font-semibold uppercase tracking-[0.06em] px-2 py-[3px] rounded-full border border-[rgba(209,67,67,0.3)] text-[#D14343]'
 const okPill = 'text-[10px] font-semibold uppercase tracking-[0.06em] px-2 py-[3px] rounded-full border border-hair text-ink-mid'
 
-export default function AgentsPage() {
+function AgentsPageV2() {
   const router = useRouter()
   const [rows, setRows] = useState<AgentRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -266,6 +269,8 @@ export default function AgentsPage() {
           </a>
         </div>
       </section>
+
+      <LiveTodayStrip />
 
       {/* ── The agent parking account + 402 payment engine (built · Arc testnet) — the primary story ── */}
       <section id="parking" className="border-b border-hair-soft bg-ground-cool scroll-mt-20">
@@ -585,4 +590,9 @@ export default function AgentsPage() {
 
     </div>
   )
+}
+
+
+export default function AgentsPage() {
+  return useV2Mode() ? <AgentsPageV2 /> : <V1MarketingStub topic="AI agents" headline="A balance that earns while your agent spends it." blurb="An x402 parking account where idle USDC earns while it pays per call. Part of the vision; the live product today is the LP gateway." live={false} />
 }

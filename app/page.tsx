@@ -17,8 +17,15 @@ import { useLaunch } from '@/components/web2/LaunchModal'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
+import { useV2Mode } from '@/components/web2/V2ModeProvider'
+import { HomeV1 } from '@/components/web2/HomeV1'
 
 const ey = 'text-[12px] uppercase tracking-[0.13em] font-semibold text-peri-deep'
+
+// V1 (default) shows the live LP Gateway front; V2 (unlocked) shows the full vision below.
+export default function HomePage() {
+  return useV2Mode() ? <HomeV2 /> : <HomeV1 />
+}
 
 const ENGINES = [
   { n: '01', t: 'Best-rate lending', d: 'Idle capital is routed to the venue paying the most — and re-routed as rates move. Never parked in one place, earning less than it could.' },
@@ -32,7 +39,7 @@ const DOORS = [
   { glyph: '🤖', t: 'Agents', d: 'An x402 parking account: idle USDC earns while it pays per call. Your agent’s balance is never dead weight between requests.', tag: '◆ x402 loop live', tagLive: true, go: 'Wire up an agent →', href: '/agents' },
 ]
 
-export default function HomePage() {
+function HomeV2() {
   const { isConnected } = useMintwareIdentity()
   const { launch: launchApp } = useLaunch()
   const launchLabel = isConnected ? 'Go to the app →' : 'Launch app →'

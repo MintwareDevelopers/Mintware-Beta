@@ -120,6 +120,13 @@ export default function TheMath() {
           investment advice.</b>
         </div>
 
+        {/* what's shipped today grounds the model */}
+        <p className="mt-3 text-[12.5px] text-ink-soft leading-[1.5] max-w-[68ch]">
+          What’s live right now: the <a href="/proof" className="text-peri-deep no-underline hover:underline">LP Gateway</a> is
+          deployed and proven on Robinhood Chain testnet (deposit → earn as curated-pool liquidity) — the engine
+          below is what runs under it.
+        </p>
+
         {/* why it's grounded, not vapor */}
         <h2 className="font-atx-display font-bold text-[clamp(1.3rem,2.8vw,1.7rem)] tracking-[-0.02em] mt-10 mb-3">Grounded, not vapor</h2>
         <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-3">

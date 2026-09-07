@@ -4,6 +4,10 @@ import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
 import { FlowDiagram } from '@/components/ui2/FlowDiagram'
 import { FeeSplitDonut } from '@/components/ui2/FeeSplitDonut'
+import { cookies } from "next/headers"
+import { isV2FromCookie, V2_COOKIE } from "@/lib/v2/gate"
+import { V1MarketingStub } from "@/components/web2/V1MarketingStub"
+import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 // =============================================================================
 // /defi — marketing landing for the DeFi vault surface. Design v2 (Privy-esque).
@@ -82,7 +86,7 @@ const TRUST = [
   ['Invariant-tested', 'Core accounting invariants are fuzz-tested across stateful runs — verified, not asserted. Independent audit pending before mainnet.'],
 ]
 
-export default function DefiLandingPage() {
+function DefiLandingPageV2() {
   return (
     <div className="font-atx-display bg-white text-ink min-h-screen overflow-x-clip">
       <V2Nav active="defi" />
@@ -103,6 +107,8 @@ export default function DefiLandingPage() {
           </div>
         </div>
       </section>
+
+      <LiveTodayStrip />
 
       {/* ── 01 · The wedge ── */}
       <section className="bg-white border-b border-hair-soft">
@@ -244,4 +250,10 @@ export default function DefiLandingPage() {
       </section>
     </div>
   )
+}
+
+
+export default async function DefiLandingPage() {
+  const isV2 = isV2FromCookie((await cookies()).get(V2_COOKIE)?.value)
+  return isV2 ? <DefiLandingPageV2 /> : <V1MarketingStub topic="DeFi" headline="Earn on the pools. Spend the fees." blurb="LP into a curated Robinhood Chain pool, earn trading fees, and spend the fees, never your principal. No range to pick, no rebalancing." live={true} />
 }

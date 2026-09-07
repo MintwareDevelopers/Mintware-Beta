@@ -1,4 +1,3 @@
-import { NextResponse } from 'next/server'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { syncTradeSignals } from '@/lib/rewards/universal/indexer'
 
@@ -10,10 +9,7 @@ export const GET = createHandler(async (_req, ctx) => {
 
   if (!contractAddress) {
     ctx.log.error('universal-trade-signals', 'UNIVERSAL_TRADE_SIGNAL_HOOK_ADDRESS not set')
-    return NextResponse.json(
-      { success: false, error: 'UNIVERSAL_TRADE_SIGNAL_HOOK_ADDRESS not set' },
-      { status: 500 }
-    )
+    return ctx.json({ success: false, error: 'UNIVERSAL_TRADE_SIGNAL_HOOK_ADDRESS not set' }, 500)
   }
 
   const initialWindow = process.env.UNIVERSAL_TRADE_SIGNAL_INITIAL_BLOCK_WINDOW

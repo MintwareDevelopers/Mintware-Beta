@@ -320,6 +320,68 @@ export function buildCampaignManageViewMessage(input: {
   )
 }
 
+// LP Gateway — owner-only read of the off-chain spendable-buffer balance (audit L-03). The wallet
+// signs this exact payload; the server (POST /api/gateway/position) rebuilds it, recovers the signer,
+// and returns the buffer for THAT address only, so no caller can read another wallet's private buffer.
+export function buildGatewayBufferMessage(input: {
+  address: string
+  issuedAt: number
+  pool?: string | null
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-gateway-buffer',
+      address: normalizeAddress(input.address),
+      issuedAt: input.issuedAt,
+      pool: input.pool ?? null,
+    },
+    null,
+    2,
+  )
+}
+
+// LP-gateway deposit/withdraw record (M-04). The depositor's own wallet sends the on-chain tx; this
+// signed message authorizes THIS wallet to record THAT tx's cost-basis effect (action-bound + tx-bound,
+// so a captured signature can't be replayed for another action or another tx). The route additionally
+// makes the entry_nav update idempotent per tx_hash.
+export function buildGatewayDepositMessage(input: {
+  address: string
+  txHash: string
+  pool?: string | null
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-gateway-deposit',
+      address: normalizeAddress(input.address),
+      txHash: input.txHash.toLowerCase(),
+      pool: input.pool ? input.pool.toLowerCase() : null,
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
+
+export function buildGatewayWithdrawMessage(input: {
+  address: string
+  txHash: string
+  pool?: string | null
+  issuedAt: number
+}): string {
+  return JSON.stringify(
+    {
+      action: 'mintware-gateway-withdraw',
+      address: normalizeAddress(input.address),
+      txHash: input.txHash.toLowerCase(),
+      pool: input.pool ? input.pool.toLowerCase() : null,
+      issuedAt: input.issuedAt,
+    },
+    null,
+    2,
+  )
+}
+
 export function buildWalletConnectMessage(input: {
   address: string
   issuedAt: number

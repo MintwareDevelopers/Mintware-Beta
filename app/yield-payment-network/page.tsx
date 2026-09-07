@@ -10,6 +10,10 @@ import { CircleTechBadge } from '@/components/marketing/ypn/CircleTechBadge'
 import { CoreMechanismSection } from '@/components/marketing/ypn/CoreMechanismSection'
 import { AppConversionCTA } from '@/components/marketing/ypn/AppConversionCTA'
 import { YPN_ETHOS, YPN_LIQUIDITY, YPN_TECH, YPN_ETH_SENIOR, YPN_STANDING } from '@/constants/ypn-landing'
+import { cookies } from "next/headers"
+import { isV2FromCookie, V2_COOKIE } from "@/lib/v2/gate"
+import { V1MarketingStub } from "@/components/web2/V1MarketingStub"
+import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
 
 // =============================================================================
 // /yield-payment-network — PUBLIC marketing surface for the Liquid Sovereign
@@ -26,11 +30,13 @@ export const metadata: Metadata = {
     'Cash that earns while you spend it. USDC in a Uniswap v4 Unified Liquidity Vault earns institutional yield (best-venue lending + v4 MEV) and stays 100% spendable at Visa terminals in sub-400ms — you spend from yield, not your position. Coming soon.',
 }
 
-export default function YieldPaymentNetworkPage() {
+function YieldPaymentNetworkPageV2() {
   return (
     <div className="min-h-screen bg-white text-ink overflow-x-clip">
       <V2Nav active="ypn" />
       <YpnHero />
+
+      <LiveTodayStrip />
 
       <CoreMechanismSection />
       <PillarArchitectureDiagram />
@@ -166,4 +172,10 @@ export default function YieldPaymentNetworkPage() {
       <AppConversionCTA />
     </div>
   )
+}
+
+
+export default async function YieldPaymentNetworkPage() {
+  const isV2 = isV2FromCookie((await cookies()).get(V2_COOKIE)?.value)
+  return isV2 ? <YieldPaymentNetworkPageV2 /> : <V1MarketingStub topic="The Yield Payment Network" headline="Spendable while it earns." blurb="Spend the yield, not the position; cards and settlement over a balance that never stops earning. On the roadmap." live={false} />
 }
