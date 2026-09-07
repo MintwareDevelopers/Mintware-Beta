@@ -14,6 +14,7 @@ import { V1DisclaimerGate } from './V1DisclaimerGate'
 
 const NAV = [
   { label: 'Discover', href: '/v1' },
+  { label: 'Swap', href: '/v1/swap' },
   { label: 'Portfolio', href: '/v1/portfolio' },
 ]
 

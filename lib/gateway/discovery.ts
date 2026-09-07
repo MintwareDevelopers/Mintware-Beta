@@ -81,6 +81,32 @@ export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string } = {
   }
 }
 
+/** Read-only: fetch the hottest pools (by 24h volume) for the network and map each to a scored
+ *  candidate — no DB writes. Powers the Discover surface (live browse of real RH-Chain pools). */
+export async function fetchHotPools(opts: { usdgAddress?: string; limit?: number; log?: Logger } = {}): Promise<PoolCandidate[]> {
+  const network = process.env.LP_GATEWAY_GT_NETWORK ?? 'robinhood'
+  const usdgAddress = (opts.usdgAddress ?? process.env.LP_GATEWAY_USDG)?.toLowerCase()
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 6000) // never hang the caller on a slow upstream
+  try {
+    const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/${network}/pools?sort=h24_volume_usd_desc`, {
+      headers: { accept: 'application/json' },
+      signal: ctrl.signal,
+    })
+    if (!res.ok) {
+      opts.log?.warn('gateway.discover', 'geckoterminal fetch failed', { status: res.status })
+      return []
+    }
+    const json = (await res.json()) as { data?: GtPool[] }
+    return (json.data ?? []).slice(0, opts.limit ?? 30).map((p) => poolToCandidate(p, { usdgAddress }))
+  } catch (e) {
+    opts.log?.warn('gateway.discover', 'geckoterminal error', { error: String(e) })
+    return []
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export async function discoverAndIngest(opts: {
   supabase: SupabaseClient
   chainId: number
