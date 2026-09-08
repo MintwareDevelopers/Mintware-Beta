@@ -34,8 +34,10 @@ record (files, diffs-in-words, verification commands and outputs, residuals) lin
 
 ## Left for a human (with steps in the linked records)
 
-1. **Apply migrations** (Supabase): `20260908000001_gateway_registry_history.sql`, `20260908000002_gateway_fee_ledger.sql`,
-   `20260908000010_profile_avatars_storage.sql` (bucket fallback steps in profile-leaderboard.md).
+1. ~~**Apply migrations**~~ ✅ **applied 2026-09-08** via the SQL Editor (`20260908000001_gateway_registry_history`,
+   `20260908000002_gateway_fee_ledger`, `20260908000010_profile_avatars_storage`). Verified from the app side: all six
+   tables + two views answer, `record_gateway_harvest(p_log, p_credits)` is callable (rejects an incomplete log on
+   NOT NULL, transaction rolled back), bucket `avatars` exists (public, 2 MB, png/jpeg/webp).
 2. **Vercel env** (prod + preview): `LP_GATEWAY_USDG` (the feed is EMPTY until set — fail-closed), `LP_GATEWAY_PM_CODEHASHES`
    (or `LP_GATEWAY_FACTORY`), `LP_GATEWAY_CURATORS` (curator wallet addresses that will sign in the browser),
    `LP_GATEWAY_POOL_ADDRESS` = the 32-byte poolId, optional `LP_GATEWAY_MULTICALL3`, `UPSTASH_REDIS_REST_URL/_TOKEN`.
