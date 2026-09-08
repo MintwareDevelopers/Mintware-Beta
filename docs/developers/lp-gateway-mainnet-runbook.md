@@ -31,12 +31,19 @@
    the dry-run; keep ≥ 0.02 ETH for crons). Never fund it from — or with — the shared root seat.
 2. **Choose the pool** per the curation policy §2/§5 (two-person sign-off, recorded in
    [`audits/closeout/mainnet-path.md`](audits/closeout/mainnet-path.md)).
-3. **Choose the yield source.** The intended one is Morpho's **Steakhouse USDG** vault on Robinhood Chain
-   (`0xBeEff033F34C046626B8D0A041844C5d1A5409dd`, curator `0x9023…D2Fb`, ≈ 443 M USDG). On 2026-09-08 it reported
-   **`maxDeposit == 0` for every address — its supply cap is full**, which makes every gateway `deposit` /
-   `compoundQuote` / `deploy` re-stage revert (DOA, no loss). Either wait for the curator to raise the cap
-   (re-run the preflight until `maxDeposit(signer) > 0`) or pick another Morpho USDG vault on 4663 with capacity.
-   No other ERC-4626 (policy R6).
+3. **Choose the yield source — or run idle.** The intended one is Morpho's **Steakhouse USDG** vault on Robinhood
+   Chain (`0xBeEff033F34C046626B8D0A041844C5d1A5409dd`, curator `0x9023…D2Fb`, ≈ 443 M USDG). As of 2026-09-08
+   **every** USDG Morpho Vault V2 on this chain (39 enumerated exhaustively — see
+   [`audits/closeout/mainnet-yield-sources.md`](audits/closeout/mainnet-yield-sources.md)) reports
+   `maxDeposit == 0`, and nothing else exists on-chain to fall back to. Two options:
+   - **Wait** for a curator to raise a cap (re-run the preflight until `maxDeposit(signer) > 0`), or a new vault
+     to appear via the factory. No other ERC-4626 (policy R6).
+   - **Run idle instead of waiting.** `LP_GATEWAY_IDLE_MODE=true` + `LP_GATEWAY_DEPOSIT_CAP` deploys
+     `MintwareIdleYieldAdapter` — the gateway accepts deposits and holds them, fully liquid, earning ZERO yield,
+     with no external-protocol dependency at all, up to an owner-adjustable on-chain cap. This is the honest way
+     to start bounded real funds before a real yield source exists; the "earns immediately" framing does not
+     apply while idle mode is on — say "held ready, not yet earning" instead. Swap in a real adapter later
+     (new staging + a fresh deploy — the adapter isn't hot-swappable on a live instance) once one exists.
 4. **Fresh artifacts.** `export PATH="$HOME/.foundry/bin:$PATH" && pnpm forge:build` from the repo root. The deploy
    script refuses if any gateway source is newer than its artifact or if the PositionManager artifact lacks the
    round-2 surface (`poke`, `depositWithMin`, `withdrawWithMin`, `deployedPrincipal`, `MAX_DEPLOY_BPS`).
@@ -49,6 +56,9 @@ GATEWAY_ORACLE_PRIVY_WALLET_ID=…    GATEWAY_ORACLE_PRIVY_ADDRESS=0x18AE027cF10
 LP_GATEWAY_RPC_URL=https://rpc.mainnet.chain.robinhood.com     # default
 LP_GATEWAY_USDG=0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168     # default; anything else FAILS
 LP_GATEWAY_YIELD_SOURCE=0xBeEff033F34C046626B8D0A041844C5d1A5409dd
+#  --- OR, no real yield source exists / you don't want to wait (see §1.3): ---
+# LP_GATEWAY_IDLE_MODE=true
+# LP_GATEWAY_DEPOSIT_CAP=10000000000                # required in idle mode; atomic USDG (6dp) — 10000000000 = 10,000 USDG
 LP_GATEWAY_POOL_ID=0x4be9657ec9002e528f4f17a5c43edc525a07f888f7b180c2afbf75e096c4f38a   # 32-byte v4 poolId
 #  (or, if PositionManager.poolKeys has no entry: LP_GATEWAY_POOL_CURRENCY0/1, LP_GATEWAY_POOL_FEE, LP_GATEWAY_POOL_TICK_SPACING)
 LP_GATEWAY_MIN_POOL_LIQUIDITY=8000000000000000000   # absolute L — REQUIRED; ≤ ~50 % of the live in-range L the preflight prints
@@ -212,7 +222,7 @@ blindly (the predicted-vs-landed address warning tells you if the seat's nonce m
 | `LP_GATEWAY_USDG` | `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` — the discover feed matches USDG by **address** only when this is set (O-7) |
 | `LP_GATEWAY_POSITION_MANAGER` / `LP_GATEWAY_STAGING` | the deployed addresses |
 | `LP_GATEWAY_POOL_ADDRESS` | the 32-byte poolId (what the registry keys by) |
-| `LP_GATEWAY_YIELD_SOURCE` | the Morpho vault |
+| `LP_GATEWAY_YIELD_SOURCE` | the Morpho vault (real-source path only — unset entirely in idle mode) |
 | **`LP_GATEWAY_HARVEST_DESTINATION=restake`** | **mandatory** — `compoundQuote` the net back into the yield source. The buffer-credit path (`card_spend_buffers`) is the un-fixed A-4/O-4 ledger; never enable it on mainnet. Restake needs the harvest **recipient = the gateway seat** (the cron approves + compounds from the seat). With a cold `LP_GATEWAY_HARVEST_RECIPIENT`, harvesting still lands fees there but compounding is a manual `compoundQuote` from the owner. |
 | `GATEWAY_ORACLE_PRIVY_WALLET_ID` / `GATEWAY_ORACLE_PRIVY_ADDRESS` | the gateway seat (already set for testnet — confirm it's the same seat that deployed) |
 | `LP_GATEWAY_DEPLOY_MIN_LIQUIDITY` | set from the smoke's computed `minLiquidity` (§6) — the cron refuses `0` |
@@ -308,7 +318,10 @@ Start with the smoke amounts. Raise the **own-funds cap** only when ALL hold for
 | 3 | > 10 000 USDG | **external audit** of the converged stack; nothing here authorizes it |
 
 Third-party deposits remain blocked at every step (O-1 → O-6). A cap is a decision recorded in the closeout file,
-not a config flag.
+not a config flag — in idle mode it is ALSO an on-chain flag (`adapter.depositCap()`), and both must move
+together: recording a new step without raising `depositCap` leaves the cap tighter than the decision; raising
+`depositCap` without recording the decision leaves no paper trail for why. Raise it with
+`adapter.setDepositCap(newCapAtomic)` from the gateway seat.
 
 ## 9. Incident playbook
 

@@ -13,6 +13,12 @@
 //                (impl non-zero — Paxos UUPS, M-07); paused()==false; signer + harvest recipient not frozen.
 //   source     · LP_GATEWAY_YIELD_SOURCE (a Morpho / ERC-4626 vault) has code; asset()==USDG; totalAssets()>0;
 //                maxDeposit(signer)>0; previewRedeem works; prints name / symbol / total assets.
+//                OR: LP_GATEWAY_IDLE_MODE=true — no real yield source exists yet on this chain at all (every
+//                USDG Morpho Vault V2 is at maxDeposit==0, nothing else is deployed here; see
+//                docs/developers/audits/closeout/mainnet-yield-sources.md). Requires LP_GATEWAY_DEPOSIT_CAP
+//                (an explicit, required bound — even 0 is valid, "unset" is not) and deploys a
+//                MintwareIdleYieldAdapter that just custodies USDG with zero yield instead of wrapping a real
+//                4626. Opt-in only; the default stays the real-source path above.
 //   pool       · the target v4 pool key resolves (LP_GATEWAY_POOL_ID via PositionManager.poolKeys, or the
 //                explicit LP_GATEWAY_POOL_CURRENCY0/1 + FEE + TICK_SPACING + HOOKS) and is initialized on the
 //                canonical PoolManager; hooks == 0x0 [A-6]; USDG is one currency; paired != 0x0 [A-8];
@@ -129,6 +135,12 @@ export function resolveConfig(env = process.env) {
   const rpc = env.LP_GATEWAY_RPC_URL ?? RH_MAINNET_RPC
   const usdg = env.LP_GATEWAY_USDG ?? PAXOS_USDG_RH_MAINNET
   const yieldSource = env.LP_GATEWAY_YIELD_SOURCE ?? ''
+  // Idle mode (2026-09-08): NO real ERC-4626 yield source exists yet for USDG on this chain at all — every
+  // Morpho USDG Vault V2 reports maxDeposit==0 and nothing else is deployed here (see
+  // docs/developers/audits/closeout/mainnet-yield-sources.md). Explicit opt-in only — the default stays the
+  // real-source path so a forgotten env var can never silently swap in the zero-yield fallback.
+  const idleMode = (env.LP_GATEWAY_IDLE_MODE ?? '').toLowerCase() === 'true'
+  const depositCap = env.LP_GATEWAY_DEPOSIT_CAP ? BigInt(env.LP_GATEWAY_DEPOSIT_CAP) : null
   const signer = env.GATEWAY_ORACLE_PRIVY_ADDRESS ?? ''
   const harvestRecipient = env.LP_GATEWAY_HARVEST_RECIPIENT ?? signer
   const poolId = env.LP_GATEWAY_POOL_ID ?? ''
@@ -148,8 +160,8 @@ export function resolveConfig(env = process.env) {
   const tickUpper = env.LP_TICK_UPPER != null ? Number(env.LP_TICK_UPPER) : null
   const maxDeviationBps = Number(env.LP_MAX_DEVIATION_BPS ?? 500)
   return {
-    chainId, rpc, usdg, yieldSource, signer, harvestRecipient, poolId, explicitKey, minPoolLiquidity, minPoolUsdg,
-    allowAdminToken, tickLower, tickUpper, maxDeviationBps,
+    chainId, rpc, usdg, yieldSource, idleMode, depositCap, signer, harvestRecipient, poolId, explicitKey,
+    minPoolLiquidity, minPoolUsdg, allowAdminToken, tickLower, tickUpper, maxDeviationBps,
   }
 }
 
@@ -213,9 +225,16 @@ export async function runPreflight(env = process.env, { log = console.log } = {}
     }
   }
 
-  // ── 3. yield source (Morpho / ERC-4626 over USDG) ──
-  if (!isAddress(cfg.yieldSource)) {
-    fail('source', 'LP_GATEWAY_YIELD_SOURCE set', 'unset / not an address — the curated Morpho USDG vault (see runbook)')
+  // ── 3. yield source (Morpho / ERC-4626 over USDG) — OR idle mode, if no real source exists yet ──
+  if (cfg.idleMode) {
+    info('source', 'IDLE MODE — LP_GATEWAY_IDLE_MODE=true', 'no external yield source; staged USDG is held at rest, earning nothing, via MintwareIdleYieldAdapter (see docs/developers/audits/closeout/mainnet-yield-sources.md)')
+    if (isAddress(cfg.yieldSource)) info('source', 'LP_GATEWAY_YIELD_SOURCE is set but IGNORED in idle mode', cfg.yieldSource)
+    // The whole point of idle mode today is "no external audit yet" — a deposit cap is REQUIRED, not optional;
+    // an unset cap is a silent-unlimited footgun the real-source path doesn't have (Morpho's own maxDeposit is
+    // the bound there). 0 is a valid, deliberately-closed cap; only "unset" or "not a positive integer" fails.
+    expect(cfg.depositCap != null && cfg.depositCap >= 0n, 'source', 'LP_GATEWAY_DEPOSIT_CAP set (bounds total value at risk while unaudited)', cfg.depositCap != null ? `${fmtUsdg(cfg.depositCap)} USDG` : 'unset — required in idle mode, even 0 (closed) is valid, "unset" is not')
+  } else if (!isAddress(cfg.yieldSource)) {
+    fail('source', 'LP_GATEWAY_YIELD_SOURCE set', 'unset / not an address — the curated Morpho USDG vault (see runbook), or set LP_GATEWAY_IDLE_MODE=true + LP_GATEWAY_DEPOSIT_CAP to launch with no yield source at all')
   } else {
     const n = await codeLen(cfg.yieldSource)
     expect(n > 0, 'source', 'has code', `${cfg.yieldSource} · ${n} bytes`)

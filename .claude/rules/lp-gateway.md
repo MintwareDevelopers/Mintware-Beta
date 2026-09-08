@@ -13,6 +13,12 @@
 > **Still gating OWN funds:** the bounded rollout itself (hard exposure cap, deep pools only, tiny first
 > amount, monitoring). **Gating third-party funds:** A-4 buffer ledger (never written), A-7 registry, external audit.
 > Deploy truth: [`config/deployments.json`](../../config/deployments.json) (`robinhood-testnet`) + `STATE.md`.
+> **Mainnet yield source (2026-09-08):** no real ERC-4626 USDG vault exists on Robinhood mainnet with open
+> capacity — see [`docs/developers/audits/closeout/mainnet-yield-sources.md`](../../docs/developers/audits/closeout/mainnet-yield-sources.md).
+> `contracts-v4/src/vaults/MintwareIdleYieldAdapter.sol` is the zero-yield fallback (`LP_GATEWAY_IDLE_MODE=true`
+> in `scripts/deploy-lp-gateway-mainnet.mjs` / the preflight) — custodies USDG under the same access-control
+> pattern with no external dependency, gated by an owner-adjustable `LP_GATEWAY_DEPOSIT_CAP`. Using it means the
+> "earns immediately" framing does not hold for that instance; say "held ready, not yet earning" instead.
 > Explainer: [`docs/developers/lp-gateway.md`](../../docs/developers/lp-gateway.md).
 
 ## What V1 is (one loop)

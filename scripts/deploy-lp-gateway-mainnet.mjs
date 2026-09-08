@@ -15,10 +15,13 @@
 //
 // What it stands up (3 contracts, 2–3 wiring txs):
 //   MintwareERC4626YieldAdapter(USDG, source, vault=0, owner=signer)
+//     — OR, in idle mode (LP_GATEWAY_IDLE_MODE=true, see below): MintwareIdleYieldAdapter(USDG, vault=0,
+//       owner=signer, depositCap) — no external yield source, zero-yield custody only, deposit-capped.
 //     → MintwareLpGatewayStaging(USDG, adapter)
 //     → MintwareLpGatewayPositionManager(PoolManager, PositionManager, Permit2, poolKey, USDG, tickLower,
 //         tickUpper, staging, owner=signer, harvestRecipient, band=LP_MAX_DEVIATION_BPS (default 500))
-//     → staging.setController(pm) · adapter.setVault(staging) · [adapter.setPerBlockWithdrawCap(cap)]
+//     → staging.setController(pm) · adapter.setVault(staging) · [adapter.setPerBlockWithdrawCap(cap)] (real
+//       source) or nothing further (idle mode — the cap is set at construction)
 //
 // Usage (repo root; secrets ONLY via an env file, never on the command line):
 //   export PATH="$HOME/.foundry/bin:$PATH" && pnpm forge:build       # fresh artifacts (checked below)
@@ -28,8 +31,9 @@
 //
 // Env (see docs/developers/lp-gateway-mainnet-runbook.md for the full table):
 //   ORACLE_SIGNER_PROVIDER=privy · PRIVY_APP_ID · PRIVY_APP_SECRET · GATEWAY_ORACLE_PRIVY_WALLET_ID ·
-//   GATEWAY_ORACLE_PRIVY_ADDRESS · LP_GATEWAY_USDG · LP_GATEWAY_YIELD_SOURCE · LP_GATEWAY_POOL_ID (or the
-//   explicit LP_GATEWAY_POOL_CURRENCY0/1 + FEE + TICK_SPACING) · LP_GATEWAY_MIN_POOL_LIQUIDITY ·
+//   GATEWAY_ORACLE_PRIVY_ADDRESS · LP_GATEWAY_USDG · LP_GATEWAY_YIELD_SOURCE (or LP_GATEWAY_IDLE_MODE=true +
+//   LP_GATEWAY_DEPOSIT_CAP — see the "idle mode" note above) · LP_GATEWAY_POOL_ID (or the explicit
+//   LP_GATEWAY_POOL_CURRENCY0/1 + FEE + TICK_SPACING) · LP_GATEWAY_MIN_POOL_LIQUIDITY ·
 //   [LP_GATEWAY_MIN_POOL_USDG] · [LP_GATEWAY_HARVEST_RECIPIENT] · [LP_TICK_LOWER / LP_TICK_UPPER] ·
 //   [LP_MAX_DEVIATION_BPS] · [LP_ADAPTER_PER_BLOCK_CAP] · [LP_GATEWAY_RPC_URL]
 //
@@ -86,7 +90,13 @@ function artifact(name, srcRel) {
   }
   return { abi: j.abi, bytecode }
 }
-const ADAPTER = artifact('MintwareERC4626YieldAdapter', 'vaults/MintwareERC4626YieldAdapter.sol')
+// Idle mode (2026-09-08): no real ERC-4626 USDG yield source exists on this chain yet at all — see
+// docs/developers/audits/closeout/mainnet-yield-sources.md. Opt-in only (LP_GATEWAY_IDLE_MODE=true); default
+// stays the real-source path so a forgotten env var can never silently swap in the zero-yield fallback.
+const IDLE_MODE = (process.env.LP_GATEWAY_IDLE_MODE ?? '').toLowerCase() === 'true'
+const ADAPTER = IDLE_MODE
+  ? artifact('MintwareIdleYieldAdapter', 'vaults/MintwareIdleYieldAdapter.sol')
+  : artifact('MintwareERC4626YieldAdapter', 'vaults/MintwareERC4626YieldAdapter.sol')
 const STAGING = artifact('MintwareLpGatewayStaging', 'gateway/MintwareLpGatewayStaging.sol')
 const PM = artifact('MintwareLpGatewayPositionManager', 'gateway/MintwareLpGatewayPositionManager.sol')
 // the round-2 audit surface MUST be in the bytecode we ship — a pre-fix artifact is a silent regression
@@ -128,7 +138,13 @@ if (!pre.ok) {
 const { poolKey, tickLower, tickUpper, paired, quoteIsCurrency0 } = pre.resolved
 if (!poolKey || tickLower == null || tickUpper == null) die('preflight could not resolve the pool key / tick range — nothing to deploy.')
 const USDG = getAddress(process.env.LP_GATEWAY_USDG ?? PAXOS_USDG_RH_MAINNET) // preflight already asserted == Paxos
-const SOURCE = getAddress(process.env.LP_GATEWAY_YIELD_SOURCE ?? '')
+const SOURCE = IDLE_MODE ? null : getAddress(process.env.LP_GATEWAY_YIELD_SOURCE ?? '')
+// Required in idle mode, even 0 (closed until raised) is a valid value — "unset" is the only thing rejected,
+// so a forgotten cap can never read as unlimited. undefined (ignored) on the real-source path.
+if (IDLE_MODE && process.env.LP_GATEWAY_DEPOSIT_CAP == null) {
+  die('LP_GATEWAY_IDLE_MODE=true requires LP_GATEWAY_DEPOSIT_CAP (atomic USDG units, 6dp) — even 0 is valid, unset is not.')
+}
+const DEPOSIT_CAP = IDLE_MODE ? BigInt(process.env.LP_GATEWAY_DEPOSIT_CAP) : undefined
 const HARVEST_RECIPIENT = getAddress(process.env.LP_GATEWAY_HARVEST_RECIPIENT ?? signer)
 const BAND = Number(process.env.LP_MAX_DEVIATION_BPS ?? 500)
 const PER_BLOCK_CAP = process.env.LP_ADAPTER_PER_BLOCK_CAP ? BigInt(process.env.LP_ADAPTER_PER_BLOCK_CAP) : 0n
@@ -136,7 +152,11 @@ const poolId = poolIdOf(poolKey)
 
 console.log('Plan:')
 console.log(`  USDG (quote)         ${USDG}`)
-console.log(`  yield source (4626)  ${SOURCE}`)
+if (IDLE_MODE) {
+  console.log(`  yield source         NONE — IDLE MODE (MintwareIdleYieldAdapter, zero yield, deposit cap ${DEPOSIT_CAP} atomic)`)
+} else {
+  console.log(`  yield source (4626)  ${SOURCE}`)
+}
 console.log(`  pool                 ${poolKey.currency0} / ${poolKey.currency1} · fee ${poolKey.fee} · spacing ${poolKey.tickSpacing} · hooks ${poolKey.hooks}`)
 console.log(`  poolId               ${poolId}`)
 console.log(`  paired token         ${paired}  (USDG is currency${quoteIsCurrency0 ? '0' : '1'})`)
@@ -157,7 +177,7 @@ const predicted = {
 console.log(`Predicted addresses (signer nonce ${nonce0}):`)
 console.log(`  adapter ${predicted.adapter}\n  staging ${predicted.staging}\n  pm      ${predicted.pm}\n`)
 
-const adapterArgs = [USDG, SOURCE, ZERO, signer]
+const adapterArgs = IDLE_MODE ? [USDG, ZERO, signer, DEPOSIT_CAP] : [USDG, SOURCE, ZERO, signer]
 const stagingArgs = (adapter) => [USDG, adapter]
 const pmArgs = (staging) => [POOL_MANAGER, POSITION_MANAGER, PERMIT2, poolKey, USDG, tickLower, tickUpper, staging, signer, HARVEST_RECIPIENT, BAND]
 
@@ -175,7 +195,7 @@ if (DRY_RUN) {
     }
   }
   console.log('Simulating contract creations (eth_estimateGas from the signer):')
-  await sim('MintwareERC4626YieldAdapter', ADAPTER.abi, ADAPTER.bytecode, adapterArgs)
+  await sim(IDLE_MODE ? 'MintwareIdleYieldAdapter' : 'MintwareERC4626YieldAdapter', ADAPTER.abi, ADAPTER.bytecode, adapterArgs)
   // staging + pm constructors reference the not-yet-existing predecessors: the staging ctor only stores the
   // adapter; the pm ctor only stores staging — neither calls into them, so simulation against predicted
   // addresses is faithful.
@@ -238,23 +258,28 @@ const assertEq = (label, got, want) => {
 }
 
 console.log('Deploying (3 contracts) …')
-const adapter = await deploy('MintwareERC4626YieldAdapter', ADAPTER, adapterArgs, predicted.adapter)
+const adapter = await deploy(IDLE_MODE ? 'MintwareIdleYieldAdapter' : 'MintwareERC4626YieldAdapter', ADAPTER, adapterArgs, predicted.adapter)
 const staging = await deploy('MintwareLpGatewayStaging', STAGING, stagingArgs(adapter), predicted.staging)
 const pm = await deploy('MintwareLpGatewayPositionManager', PM, pmArgs(staging), predicted.pm)
 
 console.log('\nWiring …')
 await send('staging.setController(pm)', { address: staging, abi: STAGING.abi, functionName: 'setController', args: [pm] })
 await send('adapter.setVault(staging)', { address: adapter, abi: ADAPTER.abi, functionName: 'setVault', args: [staging] })
-if (PER_BLOCK_CAP > 0n) {
+if (!IDLE_MODE && PER_BLOCK_CAP > 0n) {
   await send(`adapter.setPerBlockWithdrawCap(${PER_BLOCK_CAP})`, { address: adapter, abi: ADAPTER.abi, functionName: 'setPerBlockWithdrawCap', args: [PER_BLOCK_CAP] })
 }
 
 console.log('\nPost-wire assertions (every trust edge read back from chain) …')
 assertEq('adapter.vault()', await read(adapter, ADAPTER.abi, 'vault'), staging)
 assertEq('adapter.asset()', await read(adapter, ADAPTER.abi, 'asset'), USDG)
-assertEq('adapter.yieldSource()', await read(adapter, ADAPTER.abi, 'yieldSource'), SOURCE)
 assertEq('adapter.owner()', await read(adapter, ADAPTER.abi, 'owner'), signer)
-assertEq('adapter.perBlockWithdrawCap()', await read(adapter, ADAPTER.abi, 'perBlockWithdrawCap'), PER_BLOCK_CAP)
+if (IDLE_MODE) {
+  assertEq('adapter.depositCap()', await read(adapter, ADAPTER.abi, 'depositCap'), DEPOSIT_CAP)
+  assertEq('adapter.totalAssets()', await read(adapter, ADAPTER.abi, 'totalAssets'), 0n)
+} else {
+  assertEq('adapter.yieldSource()', await read(adapter, ADAPTER.abi, 'yieldSource'), SOURCE)
+  assertEq('adapter.perBlockWithdrawCap()', await read(adapter, ADAPTER.abi, 'perBlockWithdrawCap'), PER_BLOCK_CAP)
+}
 assertEq('staging.controller()', await read(staging, STAGING.abi, 'controller'), pm)
 assertEq('staging.deployer()', await read(staging, STAGING.abi, 'deployer'), signer)
 assertEq('pm.quoteAsset()', await read(pm, PM.abi, 'quoteAsset'), USDG)
@@ -281,15 +306,18 @@ try {
   die(`pm.poke() simulation failed: ${String(e?.shortMessage ?? e)}`)
 }
 
-console.log('\n✓ LP Gateway V1 deployed + wired on Robinhood Chain MAINNET. Idle only — no deposits, no position yet.\n')
+console.log(`\n✓ LP Gateway V1 deployed + wired on Robinhood Chain MAINNET. Idle only — no deposits, no position yet.${IDLE_MODE ? ' IDLE MODE: zero-yield adapter, deposit cap ' + DEPOSIT_CAP + ' atomic.' : ''}\n`)
 printEnvBlock({ adapter, staging, pm }, '')
+const adapterRecord = IDLE_MODE
+  ? { LpGateway_IdleYieldAdapter: { address: adapter, chainId: CHAIN_ID, status: 'mainnet-bounded', note: `MintwareIdleYieldAdapter — ZERO YIELD, no external source (none exists for USDG on this chain yet; see docs/developers/audits/closeout/mainnet-yield-sources.md). depositCap ${DEPOSIT_CAP} atomic (owner-adjustable, this IS the bound on total value at risk while unaudited). onlyVault=staging (set once); owner=gateway seat.`, verified: new Date().toISOString().slice(0, 10) } }
+  : { LpGateway_ERC4626YieldAdapter: { address: adapter, chainId: CHAIN_ID, status: 'mainnet-bounded', note: `MintwareERC4626YieldAdapter over ${SOURCE} (asset USDG). onlyVault=staging (set once); per-block cap ${PER_BLOCK_CAP === 0n ? 'uncapped' : PER_BLOCK_CAP.toString()}; owner=gateway seat.`, verified: new Date().toISOString().slice(0, 10) } }
 console.log(`
 config/deployments.json → "robinhood-mainnet" (record by hand; the script never edits it):
 ${JSON.stringify({
   'robinhood-mainnet': {
-    LpGatewayPositionManager: { address: pm, chainId: CHAIN_ID, status: 'mainnet-bounded', note: `LP Gateway V1 mainnet instance — pool ${poolId} (${poolKey.currency0}/${poolKey.currency1} fee ${poolKey.fee} spacing ${poolKey.tickSpacing}), quote USDG ${USDG}, ticks [${tickLower}, ${tickUpper}], band ${BAND}, owner=gateway seat ${signer}, harvestRecipient ${HARVEST_RECIPIENT}. UNAUDITED externally — bounded OWN funds only per docs/developers/lp-gateway-mainnet-runbook.md.`, verified: new Date().toISOString().slice(0, 10) },
+    LpGatewayPositionManager: { address: pm, chainId: CHAIN_ID, status: 'mainnet-bounded', note: `LP Gateway V1 mainnet instance — pool ${poolId} (${poolKey.currency0}/${poolKey.currency1} fee ${poolKey.fee} spacing ${poolKey.tickSpacing}), quote USDG ${USDG}, ticks [${tickLower}, ${tickUpper}], band ${BAND}, owner=gateway seat ${signer}, harvestRecipient ${HARVEST_RECIPIENT}. UNAUDITED externally — bounded OWN funds only per docs/developers/lp-gateway-mainnet-runbook.md.${IDLE_MODE ? ' IDLE MODE: no yield source, hard-capped at ' + DEPOSIT_CAP + ' atomic USDG.' : ''}`, verified: new Date().toISOString().slice(0, 10) },
     LpGatewayStaging: { address: staging, chainId: CHAIN_ID, status: 'mainnet-bounded', note: `controller=PositionManager; deployer=gateway seat ${signer}; the adapter's one-time vault.`, verified: new Date().toISOString().slice(0, 10) },
-    LpGateway_ERC4626YieldAdapter: { address: adapter, chainId: CHAIN_ID, status: 'mainnet-bounded', note: `MintwareERC4626YieldAdapter over ${SOURCE} (asset USDG). onlyVault=staging (set once); per-block cap ${PER_BLOCK_CAP === 0n ? 'uncapped' : PER_BLOCK_CAP.toString()}; owner=gateway seat.`, verified: new Date().toISOString().slice(0, 10) },
+    ...adapterRecord,
   },
 }, null, 2)}
 `)
@@ -303,7 +331,11 @@ function printEnvBlock(a, suffix) {
   console.log(`  LP_GATEWAY_POSITION_MANAGER  = ${a.pm}`)
   console.log(`  LP_GATEWAY_STAGING           = ${a.staging}`)
   console.log(`  LP_GATEWAY_POOL_ADDRESS      = ${poolId}`)
-  console.log(`  LP_GATEWAY_YIELD_SOURCE      = ${SOURCE}`)
+  if (IDLE_MODE) {
+    console.log(`  (no LP_GATEWAY_YIELD_SOURCE — idle mode: zero yield, deposit cap ${DEPOSIT_CAP} atomic set on-chain in the adapter, raise/lower it later with adapter.setDepositCap())`)
+  } else {
+    console.log(`  LP_GATEWAY_YIELD_SOURCE      = ${SOURCE}`)
+  }
   console.log(`  LP_GATEWAY_HARVEST_DESTINATION = restake`)
   console.log(`  GATEWAY_ORACLE_PRIVY_WALLET_ID = <the gateway seat's Privy wallet id>`)
   console.log(`  GATEWAY_ORACLE_PRIVY_ADDRESS   = ${signer}`)

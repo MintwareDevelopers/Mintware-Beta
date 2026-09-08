@@ -268,3 +268,15 @@ managing per-market allocation caps, so they are not dormant — just not yet re
 (b) watch for a new, curated USDG Vault V2 instance to appear via the same factory
 (`0x0FBad98595b0186dA120E41f77C102beb49f803c`) with `maxDeposit > 0` and a real (non-anonymous) curator behind
 it.
+
+**Update (2026-09-08, same day):** a third lever now exists — **run idle instead of waiting.**
+`contracts-v4/src/vaults/MintwareIdleYieldAdapter.sol` implements `IYieldAdapter` with no external call in the
+hot path at all: it just custodies USDG under `onlyVault` access control, delivers zero yield, and never has a
+solvency dependency on anything external (so none of this doc's findings apply to it — there is nothing here to
+enumerate). `scripts/deploy-lp-gateway-mainnet.mjs` and the preflight both support it behind
+`LP_GATEWAY_IDLE_MODE=true` (opt-in; the default stays the real-source path above). It requires an explicit,
+owner-adjustable `LP_GATEWAY_DEPOSIT_CAP` — the on-chain bound for "accept a small amount of real value while
+the platform has no external audit yet," separate from and in addition to the position manager's own
+`MAX_DEPLOY_BPS` cap. See the mainnet runbook §1.3 / §8. The honest cost is real: the product's "earns
+immediately" claim does not hold while idle mode is on, and that has to be reflected in copy wherever this
+instance is shown, not just in this doc.
