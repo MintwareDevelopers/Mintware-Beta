@@ -143,10 +143,11 @@ npx vitest run                                                                  
    `0x0a8544c0222d3d6a729cd8aa81fbe9f64174fa14`, tUSDG `0x2a8c32e291bc90ceb8ae058b6a684be0312bb848`, poolId
    `0x07340da7f228f72fd2a624571c34b0f217b5f3a8e2b2826373f4afffe0a0dfa2`, PM code hash
    `0x89a53e8da35d43715c50cd1354bbc376624ab6bfc56fccb96097db2baefc00f4`; smoke passed (deposit · compound · pause ·
-   withdraw). Remaining ops: repoint Vercel `LP_GATEWAY_POSITION_MANAGER` / `_STAGING` / `_POOL_ADDRESS` / `_USDG` /
-   `LP_GATEWAY_PM_CODEHASHES`, set `LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE=false` **on the testnet rig only**, redeploy,
-   register the row via a curator-signed `POST /api/gateway/curate` approve (prod `gateway_instances` was empty — rig 'e'
-   was never registered; the app ran on the env fallback).
+   withdraw). **Ops complete 2026-09-08:** Vercel `LP_GATEWAY_*` (PM / staging / poolId / USDG / PM code hash) repointed on
+   production + preview, `LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE=false` set for the testnet rig, production redeployed, and
+   the instance registered via a curator-signed approve (`verification: codehash` — the F-5 seat checks passed against the
+   live rig). `/api/gateway/meta` now serves rig 'g' with `source: registry`, `live: true` — the first time the registry,
+   not the env fallback, is the live trust root (prod `gateway_instances` had been empty; rig 'e' was never registered).
 2. Apply the `gateway_alerts` migration in prod (F-8) if it is still missing.
 3. Before any third-party depositor: `compoundQuote` linear unlock (XR-4), owner paired-leg accounting (Q5), a second
    signer on `acceptHarvestRecipient` / `deploy` size (Q6), third-party share policy per `economic-models.md` §3.4, and
