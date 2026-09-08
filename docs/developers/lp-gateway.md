@@ -13,8 +13,10 @@ the "never idle, never locked, always yours" thesis — the vision made shippabl
    live NAV on deposit — no par claim, no guaranteed return).
 2. **Stage & earn** — the USDG **stages into a Morpho-style ERC-4626 yield adapter and earns immediately.**
    Idle capital is never idle.
-3. **Deploy** — the operator deploys a **capped fraction** (default 50%) of staged capital as liquidity into
-   an **existing, curated third-party Uniswap V4 pool.** The rest stays idle in Morpho, earning, IL-free.
+3. **Deploy** — the operator deploys at most **half of depositor principal, measured at cost** (`MAX_DEPLOY_BPS`
+   on `deployedPrincipal`, an on-chain constant that never moves with price — so a drawdown can never re-open the
+   cap) as liquidity into an **existing, curated third-party Uniswap V4 pool.** The rest stays idle in Morpho,
+   earning, IL-free. The operator supplies the paired leg from its own capital.
 4. **Harvest** — trading fees are collected via a **zero-liquidity-delta call that never touches principal**
    and credited to a **yield-first spendable buffer.**
 5. **Spend** — you spend from the buffer — the yield the position earns — **not your position.** The principal
@@ -31,9 +33,15 @@ So a naive spot-NAV is flash-manipulable. The gateway defends this without an or
 
 - **Clamped-follower reference** — a reference sqrt-price that tracks spot by at most a bounded step per block.
   A single-block flash pump can only nudge it one step, never onto the manipulated price.
-- **Directional conservative NAV** — a *withdrawal* values the LP leg at `min(spot, reference)` and a *deposit*
-  at `max(spot, reference)`. A pump can't inflate a withdrawal claim or cheapen a deposit — and nothing reverts
-  on price, so **withdrawals never brick.**
+- **Pure pro-rata exit** — a *withdrawal* takes the holder's share fraction of the idle reserve **and** of the
+  position's liquidity. No price is read to size it, so a pump or dump changes only the composition of the LP
+  slice, never its size (round-2 audit F-01: the earlier `min(spot, reference)` withdraw mark was redundant once
+  sourcing was pro-rata and silently under-paid honest withdrawers). Each leg is best-effort and independently
+  re-credited as shares if it can't be delivered (illiquid Morpho; a paused/blacklisting paired token; a frozen fee
+  recipient) — so **withdrawals never brick and nothing is stranded.** `withdrawWithMin` bounds both legs.
+- **Conservative entry mark** — a *deposit* values the LP leg at `max(spot, reference)` so a dumped spot can't
+  cheapen entry; `depositWithMin` bounds a pump ahead of the deposit; anyone can `poke()` the follower one bounded
+  step so the mark can't go stale on a quiet day.
 - **Fees always route to the buffer** — every principal decrease/increase sweeps the position's accrued fees to
   the buffer *first*, so a withdrawer can never pocket the pool's fees.
 - **Pro-rata redemption** — a withdrawal takes its proportional slice of idle **and** LP, not idle-first (no

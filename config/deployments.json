@@ -1,13 +1,13 @@
 {
   "_doc": "THE ONE committed source of deploy truth for Mintware. A deploy is NOT done until it is recorded here. No entry = NOT deployed (do not infer deployment from prose in a rule/doc/memory). Read by scripts/context-sync.mjs to generate the AUTO:build-status block in .claude/STATE.md. Fields per contract: address (checksummed; null if the full address isn't yet recorded), chainId, status (live|testnet|deprecated), note, verified (ISO date the address was last confirmed on-chain).",
-  "_reconcile": "When you deploy (or deprecate) a contract, update this file IN THE SAME PR (CONTEXT-MAP reconcile-on-change). Prefer copying the address straight from the Foundry broadcast record. If you only have a truncated address, set address:null and put the partial in note \u2014 an explicit gap beats a fake-precise ghost.",
+  "_reconcile": "When you deploy (or deprecate) a contract, update this file IN THE SAME PR (CONTEXT-MAP reconcile-on-change). Prefer copying the address straight from the Foundry broadcast record. If you only have a truncated address, set address:null and put the partial in note — an explicit gap beats a fake-precise ghost.",
   "mainnet": {
     "base": {
       "AIAttribution": {
         "address": "0x11Ef2c7D84b755f02f3652ca8b16e6E81A96C421",
         "chainId": 8453,
         "status": "live",
-        "note": "v3 \u2014 the ONLY mainnet contract. v2 (0xb9FB965...) deprecated.",
+        "note": "v3 — the ONLY mainnet contract. v2 (0xb9FB965...) deprecated.",
         "verified": "2026-08-08"
       }
     }
@@ -25,7 +25,7 @@
         "address": "0x09Cda8519737a60FD16D263f94fb56237CDb7E42",
         "chainId": 84532,
         "status": "testnet",
-        "note": "a MintwareYieldVault instance holding mock WETH \u2014 the SPEND/collateral vault, NOT a fee-earning ETH LP",
+        "note": "a MintwareYieldVault instance holding mock WETH — the SPEND/collateral vault, NOT a fee-earning ETH LP",
         "verified": "2026-08-19"
       },
       "MintwareTreasuryVaultFactory": {
@@ -181,46 +181,46 @@
     },
     "robinhood-testnet": {
       "LpGatewayPositionManager": {
-        "address": "0x24ff5d2bb29b5448bdf96db0fcdf0553ebda3b11",
+        "address": "0xbb2c14c7d0401331f8da7bb619cdab77162a91f3",
         "chainId": 46630,
         "status": "testnet",
-        "note": "LP Gateway V1 — REAL-FUNDS RE-AUDIT REMEDIATED (Fable 5.1, 2026-09-07; docs/developers/lp-gateway-v1-realfunds-audit-findings.md). Pure-Privy REDEPLOY 2026-09-07c, owner+harvestRecipient=Privy 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c, band 500 bps. This code carries A-1 (withdraw re-credits UNSERVED shares when the adapter under-delivers — nothing stranded), A-2 (_sweepFees no-op on an emptied position — full drain can't brick harvest/deploy), A-3 (on-chain MAX_DEPLOY_BPS=5000 cap on TOTAL deployed/NAV, constant + spot-vs-follower band check in deploy), A-6/A-8 (ctor rejects hooked pools / native-ETH / misaligned ticks) on top of the firm-grade hardening (clamped-follower + conservative NAV, fee-sweep, pro-rata, minLiquidity, renounce-disabled, setPaused, compoundQuote). Staging adapter is now the PRODUCTION MintwareERC4626YieldAdapter (A-5). Prior rigs 0xd488…b53e (2026-09-07b) / 0x39B8…BD2a SUPERSEDED — both ran the drainable MockYieldAdapter and pre-fix code. MOCK tokens + hookless V4 pool; TESTNET, UNAUDITED. Smoke PASSED 2026-09-07 (deposit 1000 1:1; compoundQuote(5) → 1005 no mint; setPaused blocks deposit not withdraw; withdraw 50% → 502.5); on-chain checks: MAX_DEPLOY_BPS()==5000, adapter.vault()==staging, adapter.withdraw from stranger AND from PM reverts OnlyVault (0x8d1af8bd). Deploy: scripts/deploy-lp-gateway-robinhood.mjs · smoke: scripts/smoke-lp-gateway-robinhood.mjs.",
-        "verified": "2026-09-07"
+        "note": "LP Gateway V1 — ROUND-2 AUDIT REMEDIATED (Hacken-style ×2 + red-team ×2, 2026-09-08; docs/developers/audits/2026-09-08-consolidated.md). Pure-Privy REDEPLOY 2026-09-08 (rig 'd'), owner+harvestRecipient=gateway seat 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c, band 500 bps. New in this code: PURE PRO-RATA exit on both legs (the withdraw-side min(spot,ref) mark was retired — redundant under pro-rata sourcing and it under-paid honest exits, C-1), best-effort LP leg via lpLegExit self-call + LpLegUnavailable re-credit (paused/blacklisting paired token or frozen recipient no longer brick exits, C-2), COST-BASIS deploy cap (deployedPrincipal; a drawdown can't re-open MAX_DEPLOY_BPS, C-3), spot cached once as re-credit weight (C-4), idle shortfall never sourced from the LP (C-5), depositWithMin/withdrawWithMin (C-6), permissionless poke() (C-7) — on top of the 07c re-audit fixes (A-1/A-2/A-3/A-5/A-6). Prior rig 0x24ff5d2bb29b5448bdf96db0fcdf0553ebda3b11 (07c) SUPERSEDED. MOCK tokens + hookless V4 pool; TESTNET, UNAUDITED externally. Smoke PASSED 2026-09-08 (deposit 1000 1:1; compoundQuote(5) → 1005 no mint; setPaused blocks deposit not withdraw; withdraw 50% → 502.5); on-chain deployedPrincipal()==0, MAX_DEPLOY_BPS()==5000, poke() present. Deploy: scripts/deploy-lp-gateway-robinhood.mjs · smoke: scripts/smoke-lp-gateway-robinhood.mjs.",
+        "verified": "2026-09-08"
       },
       "LpGatewayStaging": {
-        "address": "0x8dafbb933c04014c616c551df83faf3bae8589ea",
+        "address": "0xb29890858435f1daaff76f77e7a60def077139a8",
         "chainId": 46630,
         "status": "testnet",
         "note": "LP Gateway staging reserve (idle USDG earns as 4626 shares held by the adapter). controller=PositionManager; deployer=Privy 0x18AE...663c (deployer-only setController, M1). It is the adapter's one-time `vault` — the only address that can move funds through the adapter.",
-        "verified": "2026-09-07"
+        "verified": "2026-09-08"
       },
       "LpGateway_ERC4626YieldAdapter": {
-        "address": "0x762e6b2e43cad6388d2e0d61d7d92255acdb79b6",
+        "address": "0x4dd9454ff94662437ae59536d1cccd0d0aa42812",
         "chainId": 46630,
         "status": "testnet",
         "note": "PRODUCTION MintwareERC4626YieldAdapter (re-audit A-5): onlyVault (=staging, set once), fee-net NAV via previewRedeem, best-effort redeem-based exits, optional per-block withdraw cap (uncapped here). owner=Privy 0x18AE...663c. Replaces the MockYieldAdapter (0xfe74…644a, SUPERSEDED — its withdraw had NO access control; never point value at a rig using it).",
-        "verified": "2026-09-07"
+        "verified": "2026-09-08"
       },
       "LpGateway_MockERC4626YieldSource": {
-        "address": "0x81f08bd8f178e9b66d18825661b1fbcb2de025dd",
+        "address": "0xf191938727c4911a28f0e46cd064463cc07e1b86",
         "chainId": 46630,
         "status": "testnet",
         "note": "MOCK ERC-4626 yield SOURCE (OZ ERC4626 over tUSDG; no drain path) behind the production adapter — stands in for the curated Morpho USDG vault on mainnet (set via LP_GATEWAY_YIELD_SOURCE at deploy).",
-        "verified": "2026-09-07"
+        "verified": "2026-09-08"
       },
       "LpGateway_tUSDG": {
-        "address": "0x48e87f9585a7200ffebc1df553e362853e6bed08",
+        "address": "0xe86df24dc98120e87792d16de13d75335064add2",
         "chainId": 46630,
         "status": "testnet",
         "note": "MOCK USDG (6dp) for the LP gateway rig. No value. Real USDG (Paxos) + Morpho gate mainnet.",
-        "verified": "2026-09-07"
+        "verified": "2026-09-08"
       },
       "LpGateway_tPONS": {
-        "address": "0xe45c490d229940252386c3a970c39a77b8f06442",
+        "address": "0xdfdf70ce1dfc949a207d97482f8104029d8f1698",
         "chainId": 46630,
         "status": "testnet",
         "note": "MOCK PONS (18dp) paired token for the LP gateway rig. No value.",
-        "verified": "2026-09-07"
+        "verified": "2026-09-08"
       }
     }
   }
