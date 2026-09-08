@@ -39,7 +39,12 @@ record (files, diffs-in-words, verification commands and outputs, residuals) lin
 2. **Vercel env** (prod + preview): `LP_GATEWAY_USDG` (the feed is EMPTY until set — fail-closed), `LP_GATEWAY_PM_CODEHASHES`
    (or `LP_GATEWAY_FACTORY`), `LP_GATEWAY_CURATORS` (curator wallet addresses that will sign in the browser),
    `LP_GATEWAY_POOL_ADDRESS` = the 32-byte poolId, optional `LP_GATEWAY_MULTICALL3`, `UPSTASH_REDIS_REST_URL/_TOKEN`.
-3. **Privy authorization keys / per-wallet policies** so the `gateway` and `root` seats are separated at the credential level (O-6).
+3. **Privy authorization keys** (O-6, code support shipped — `<ROLE>_ORACLE_PRIVY_AUTH_KEY`): in the Privy dashboard →
+   *Wallet API → Authorization keys*, generate TWO keypairs (one per seat); attach each as an **owner** of the matching
+   server wallet (`gateway` = `0x18AE…663c`, `root` = `0x7fD8…7E06`); set `GATEWAY_ORACLE_PRIVY_AUTH_KEY` and
+   `ROOT_ORACLE_PRIVY_AUTH_KEY` on Vercel prod+preview (and the gateway one in `.env.robinhood.local` for the deploy/smoke
+   scripts); redeploy; confirm `GET /api/oracle/signer-check` still resolves both seats. From then on `PRIVY_APP_SECRET`
+   alone cannot sign for either wallet.
 4. **Mainnet**: fund the gateway seat on 4663; choose a Morpho USDG vault with capacity (Steakhouse USDG currently
    `maxDeposit == 0`); second-person sign-off on the pool; `preflight → dry-run → deploy → record → smoke` per the runbook.
 5. **External audit** of the converged stack before any third-party funds.

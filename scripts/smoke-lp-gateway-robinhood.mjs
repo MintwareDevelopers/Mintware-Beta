@@ -47,7 +47,11 @@ const { PRIVY_APP_ID, PRIVY_APP_SECRET, ROOT_ORACLE_PRIVY_WALLET_ID: walletId, R
 if (!PRIVY_APP_ID || !PRIVY_APP_SECRET || !walletId || !signer) die('missing Privy env (APP_ID/SECRET/WALLET_ID/ADDRESS)')
 const { PrivyClient } = await import('@privy-io/server-auth')
 const { createViemAccount } = await import('@privy-io/server-auth/viem')
-const privy = new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET)
+// O-6: pass the seat's wallet-API authorization key when the dashboard has one enabled for this wallet.
+const authKey = process.env.GATEWAY_ORACLE_PRIVY_AUTH_KEY ?? process.env.ROOT_ORACLE_PRIVY_AUTH_KEY ?? ''
+const privy = authKey
+  ? new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET, { walletApi: { authorizationPrivateKey: authKey } })
+  : new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET)
 const account = await createViemAccount({ walletId, address: signer, privy })
 
 const chain = { id: CHAIN_ID, name: `robinhood-${CHAIN_ID}`, nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [RPC] } } }

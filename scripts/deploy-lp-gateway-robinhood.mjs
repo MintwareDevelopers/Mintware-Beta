@@ -110,7 +110,11 @@ try {
   die('@privy-io/server-auth not installed — run `pnpm add @privy-io/server-auth`.')
 }
 
-const privy = new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET)
+// O-6: pass the seat's wallet-API authorization key when the dashboard has one enabled for this wallet.
+const authKey = process.env.GATEWAY_ORACLE_PRIVY_AUTH_KEY ?? process.env.ROOT_ORACLE_PRIVY_AUTH_KEY ?? ''
+const privy = authKey
+  ? new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET, { walletApi: { authorizationPrivateKey: authKey } })
+  : new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET)
 const account = await createViemAccount({ walletId, address: privyAddress, privy })
 
 const chain = {
