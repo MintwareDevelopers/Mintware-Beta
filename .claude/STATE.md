@@ -62,7 +62,8 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   re-audit → Hacken-style + red team → **round-3 real-world exploit replay, 2026-09-08**) — every finding fixed or
   explicitly accepted; the trail is `docs/developers/audits/` (start at `round3/README.md`) and the external-audit
   scope package is `docs/developers/lp-gateway-external-audit-scope.md`. Round-3 rig **'g'** (PM `0xa52d…0a63`, deployed + smoke-passed
-  2026-09-08) carries every round-3 fix; the Vercel `LP_GATEWAY_*` repoint + registry row follow the PR merge. Mainnet blocked on a
+  2026-09-08) is LIVE: Vercel repointed, registered in `gateway_instances` (code-hash + seat verified), `/api/gateway/meta`
+  serves it with `source: registry` — the registry is now the live trust root, not the env fallback. Mainnet blocked on a
   Morpho USDG vault with capacity (all 39 at `maxDeposit == 0`). Rule: `.claude/rules/lp-gateway.md`.
 - **Marketing:** `/`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
   `/agents`, `/about`, `/docs`.
