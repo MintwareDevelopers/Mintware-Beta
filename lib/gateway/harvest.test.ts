@@ -52,9 +52,13 @@ vi.mock('viem', async (orig) => ({
 const indexMock = vi.fn()
 const pendingMock = vi.fn()
 const markMock = vi.fn()
+const claimMock = vi.fn(async () => undefined)
+const releaseMock = vi.fn(async () => undefined)
 vi.mock('@/lib/gateway/ledger', () => ({
   indexHarvestLogs: (a: unknown) => indexMock(a),
   listPendingRestake: (...a: unknown[]) => pendingMock(...a),
+  claimRestake: (...a: unknown[]) => claimMock(...(a as [])),
+  releaseRestake: (...a: unknown[]) => releaseMock(...(a as [])),
   markRestaked: (...a: unknown[]) => markMock(...a),
 }))
 
@@ -68,12 +72,22 @@ function fakeDb() {
     const rows = (tables[table] ??= [])
     let op: 'select' | 'insert' | 'update' = 'select'
     let payload: Row | undefined
+    let returning = false
+    let inIds: unknown[] | null = null
     const b = {
-      select: () => b, eq: () => b,
+      select: () => { if (op !== 'select') returning = true; return b },
+      eq: () => b,
+      // round-3 F-3: the two-phase restake does `.update().in('id', ids).eq('settlement', …).select('id')` and
+      // verifies the returned row count == ids.length — echo one row per id so the transition "succeeds".
+      in: (_c: string, vs: unknown[]) => { inIds = vs; return b },
       insert: (p: Row) => { op = 'insert'; payload = p; touched.add(`${table}:insert`); return b },
       update: (p: Row) => { op = 'update'; payload = p; touched.add(`${table}:update`); return b },
       maybeSingle: async () => ({ data: null, error: null }),
-      then: (res: (v: unknown) => unknown) => { if (op === 'insert') rows.push(payload!); return Promise.resolve({ data: op === 'select' ? rows : null, error: null }).then(res) },
+      then: (res: (v: unknown) => unknown) => {
+        if (op === 'insert') rows.push(payload!)
+        const data = op === 'select' ? rows : op === 'update' && returning ? (inIds ?? []).map((id) => ({ id })) : null
+        return Promise.resolve({ data, error: null }).then(res)
+      },
     }
     return b
   }
@@ -84,7 +98,7 @@ const okIndex = (over: Partial<Record<string, unknown>> = {}) => ({ ok: true, fr
 
 beforeEach(() => {
   writes.length = 0
-  indexMock.mockReset(); pendingMock.mockReset(); markMock.mockReset()
+  indexMock.mockReset(); pendingMock.mockReset(); markMock.mockReset(); claimMock.mockClear(); releaseMock.mockClear()
   process.env.LP_GATEWAY_HARVEST_ENABLED = 'true'
   process.env.LP_GATEWAY_PERF_FEE_BPS = '1000'
   delete process.env.LP_GATEWAY_HARVEST_DESTINATION
@@ -109,7 +123,10 @@ describe('harvestGateway', () => {
     expect(indexMock).toHaveBeenCalledWith(expect.objectContaining({ settlement: 'pending', minToBlock: 500n }))
     expect(writes.map((w) => w.functionName)).toEqual(['harvest', 'approve', 'compoundQuote'])
     expect(writes[2].args).toEqual([10_800_000n])
+    // round-3 F-3: logs are CLAIMED (pending→restaking) before the compound tx is sent, MARKED after it mines
+    expect(claimMock).toHaveBeenCalledWith(expect.anything(), ['log-1', 'log-2'])
     expect(markMock).toHaveBeenCalledWith(expect.anything(), ['log-1', 'log-2'], COMPOUND_TX)
+    expect(releaseMock).not.toHaveBeenCalled()
     expect(touched.has('card_spend_buffers:update')).toBe(false)
     expect(tables.harvest_events[0]).toMatchObject({ collect_tx: COLLECT_TX, amount_harvested_atomic: '10000000', fee_skimmed_atomic: '1000000', amount_credited_atomic: '10800000' })
   })

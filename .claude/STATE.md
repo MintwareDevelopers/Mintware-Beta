@@ -56,6 +56,14 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
     boundary `lib/auth/requireTeam` (permission guard), and role-gated NAV — all flag-gated on
     `TEAM_HARD_GATE` (default off = showcase). Deploy-gated remainder: `@privy-io/server-auth`
     install + `PRIVY_APP_SECRET` + Privy-dashboard org/metadata setup.
+- **LP Gateway V1** (`/v1`, `/earn/[pool]`, `/curate`) — the first live product surface: stage USDG → earn in
+  a Morpho-shaped ERC-4626 adapter → owner deploys a capped fraction as Uniswap v4 LP → harvest fees. **Live on
+  Robinhood Chain TESTNET (46630) with mock tokens; UNAUDITED externally.** Three internal audit rounds (real-funds
+  re-audit → Hacken-style + red team → **round-3 real-world exploit replay, 2026-09-08**) — every finding fixed or
+  explicitly accepted; the trail is `docs/developers/audits/` (start at `round3/README.md`) and the external-audit
+  scope package is `docs/developers/lp-gateway-external-audit-scope.md`. ⚠ The deployed testnet rig runs the
+  **pre-round-3 bytecode** until it is redeployed + `LP_GATEWAY_*` repointed (round3 README §5). Mainnet blocked on a
+  Morpho USDG vault with capacity (all 39 at `maxDeposit == 0`). Rule: `.claude/rules/lp-gateway.md`.
 - **Marketing:** `/`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
   `/agents`, `/about`, `/docs`.
 - **Org treasury (new, testnet)** — the multi-tenant treasury MVP built ON the org layer

@@ -137,6 +137,10 @@ export type PoolCandidate = {
   tvlUsd: number
   vol24Usd: number
   priceQuotePerBase: number | null // 1 base ≈ N quote (current pool price)
+  // Token addresses behind `priceQuotePerBase` (lower-cased 20-byte, or null when GeckoTerminal did not resolve them).
+  // Round-3 XR-2: the deploy cron uses these to orient the external price against the pool's own quote/paired legs.
+  baseToken: string | null
+  quoteToken: string | null
   signals: PoolSignals
   score: number
   verdict: 'ineligible' | 'review'
@@ -221,6 +225,8 @@ export function poolToCandidate(pool: GtPool, opts: { usdgAddress?: string; toke
     tvlUsd,
     vol24Usd,
     priceQuotePerBase: Number.isFinite(price) && price > 0 ? price : null,
+    baseToken: base ?? null,
+    quoteToken: quote ?? null,
     signals,
     score: risk.score,
     verdict: risk.verdict,

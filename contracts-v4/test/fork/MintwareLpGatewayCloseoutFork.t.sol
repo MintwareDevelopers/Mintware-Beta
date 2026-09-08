@@ -182,9 +182,11 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         assertGt(pOut, 0, "the LP slice's paired leg was delivered");
         assertApproxEqRel(uint256(liqBefore - _liq()), uint256(liqBefore) / 2, 0.0001e18, "exactly her pro-rata LP slice");
         assertEq(quote.balanceOf(address(src)), idleBefore, "idle reserve untouched - unstage never called");
-        // claim = 50k idle (last known) + 100k LP; delivered = 100k LP → 2/3 of the requested shares burned, 1/3 back.
+        // claim = 50k idle (last known, HAIRCUT 20% → 40k, round-3 R3-1) + 100k LP; delivered = 100k LP → 100/140 = 5/7 of
+        // the requested shares burned, 2/7 back. The blind exiter keeps FEWER shares than a live read would give — the
+        // haircut is what stops an outage-time exit from offloading a source loss onto remaining holders.
         uint256 burned = sA - pm.sharesOf(alice);
-        assertApproxEqRel(burned, (sA / 2) * 2 / 3, 0.005e18, "burned = shares x delivered / (lpEntitled + lastKnownIdle)");
+        assertApproxEqRel(burned, (sA / 2) * 5 / 7, 0.005e18, "burned = shares x delivered / (lpEntitled + 0.8 x lastKnownIdle)");
         assertApproxEqRel(qOut + pOut, 100_000e18, 0.005e18, "LP slice ~ 100k at par");
 
         // source recovers → the rest exits; total received ≈ the whole pre-outage NAV. No loss.
@@ -217,7 +219,8 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         assertEq(pm.deployedPrincipal(), 0);
         assertGt(pm.sharesOf(alice), 0, "idle claim re-credited");
         assertEq(pm.totalShares(), pm.sharesOf(alice), "she is still the sole holder");
-        assertApproxEqRel(pm.sharesOf(alice), sA / 3, 0.005e18, "1/3 of the claim (100k of 300k) was undeliverable");
+        // 80k (haircut last-known idle, R3-1) of a 280k claim was undeliverable → 2/7 of the shares re-credited.
+        assertApproxEqRel(pm.sharesOf(alice), sA * 2 / 7, 0.005e18, "2/7 of the claim (80k of 280k) was undeliverable");
 
         src.setRevertPreview(false);
         _roll(1);
@@ -256,8 +259,13 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         uint256 wB = _wealth(bob);
         vm.prank(bob);
         pm.withdraw(sB);
-        // Bob (50% holder, 100k deposit) gets his half of idle (50k) + his half of the LP (≈100k at par) = ≈150k.
-        assertApproxEqRel(_wealth(bob) - wB, 150_000e18, 0.01e18, "Bob's pro-rata value intact after Alice's outage exit");
+        // Bob (50% holder, 100k deposit) gets AT LEAST his half of idle (50k) + his half of the LP (≈100k at par) = 150k.
+        // Round-3 R3-1: Alice's BLIND exit was haircut (idle claim 40k not 50k → she kept 2/7 of her half = 1/7 of all
+        // shares), so Bob's fraction of the 200k left is 7/9 ≈ 155.6k. The 5.6k is the haircut Alice chose to bear by
+        // exiting during the outage instead of waiting — it can only ever flow TO the remaining holders, never from them.
+        uint256 gotB = _wealth(bob) - wB;
+        assertGe(gotB, 150_000e18 * 999 / 1000, "Bob never loses from a co-depositor's outage exit");
+        assertApproxEqRel(gotB, uint256(200_000e18) * 7 / 9, 0.01e18, "Bob's share of what is left = 7/9 of 200k");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════════

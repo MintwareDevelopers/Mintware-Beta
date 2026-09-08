@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { indexHarvestLogs, readSharesAtBlock, listPendingRestake, markRestaked, reconcileSeat, type LedgerClient } from './ledger'
+import { indexHarvestLogs, readSharesAtBlock, listPendingRestake, claimRestake, markRestaked, reconcileSeat, type LedgerClient } from './ledger'
 
 // ── fixtures ───────────────────────────────────────────────────────────────────────────────────
 const PM = '0x24ff5d2bb29b5448bdf96db0fcdf0553ebda3b11' as const
@@ -30,10 +30,18 @@ function fakeDb(seed: Record<string, Row[]> = {}) {
     let payload: Row | Row[] | undefined
     let conflict: string[] | null = null
     let ignoreDup = false
-    const hit = () => rows.filter((r) => filters.every(([c, v]) => String(r[c]).toLowerCase() === String(v).toLowerCase()))
+    let returning = false // `.select()` chained AFTER a write ⇒ return the affected rows (PostgREST semantics)
+    const hit = () => rows.filter((r) => filters.every(([c, v]) =>
+      Array.isArray(v)
+        ? v.some((x) => String(r[c]).toLowerCase() === String(x).toLowerCase())
+        : String(r[c]).toLowerCase() === String(v).toLowerCase()))
     const exec = async () => {
       if (op === 'select') return { data: hit(), error: null }
-      if (op === 'update') { for (const r of hit()) Object.assign(r, payload as Row); return { data: null, error: null } }
+      if (op === 'update') {
+        const touched = hit()
+        for (const r of touched) Object.assign(r, payload as Row)
+        return { data: returning ? touched.map((r) => ({ ...r })) : null, error: null }
+      }
       if (op === 'upsert') {
         for (const r of Array.isArray(payload) ? payload : [payload as Row]) {
           const ex = conflict ? rows.find((e) => conflict!.every((c) => String(e[c]).toLowerCase() === String(r[c]).toLowerCase())) : undefined
@@ -45,8 +53,9 @@ function fakeDb(seed: Record<string, Row[]> = {}) {
       return { data: null, error: null }
     }
     const b = {
-      select: () => b,
+      select: () => { if (op !== 'select') returning = true; return b },
       eq: (c: string, v: unknown) => { filters.push([c, v]); return b },
+      in: (c: string, vs: unknown[]) => { filters.push([c, vs]); return b },
       insert: (p: Row | Row[]) => { op = 'insert'; payload = p; return b },
       update: (p: Row) => { op = 'update'; payload = p; return b },
       upsert: (p: Row | Row[], o?: { onConflict?: string; ignoreDuplicates?: boolean }) => {
@@ -206,6 +215,12 @@ describe('indexHarvestLogs — on-chain-share-weighted credit (A-4 / R-3 / HO-6)
     expect(tables.gateway_harvest_logs[0]).toMatchObject({ settlement: 'pending', net_quote_atomic: '9000000' })
     const pending = await listPendingRestake(db, INST)
     expect(pending).toEqual({ ids: ['log-1'], netAtomic: 9_000_000n })
+    // round-3 F-3: two-phase — the run CLAIMS the logs before sending the compound tx, then MARKS them after it mines.
+    // A mark without a claim is refused (row-count verified), so a crashed run can never be double-compounded.
+    await expect(markRestaked(db, pending.ids, TX2)).rejects.toThrow(/mark: expected 1 rows, updated 0/)
+    await claimRestake(db, pending.ids)
+    expect(tables.gateway_harvest_logs[0]).toMatchObject({ settlement: 'restaking' })
+    expect(await listPendingRestake(db, INST)).toEqual({ ids: [], netAtomic: 0n }) // claimed logs leave the pending pool
     await markRestaked(db, pending.ids, TX2)
     expect(tables.gateway_harvest_logs[0]).toMatchObject({ settlement: 'restake', settle_tx: TX2 })
     expect(await listPendingRestake(db, INST)).toEqual({ ids: [], netAtomic: 0n })

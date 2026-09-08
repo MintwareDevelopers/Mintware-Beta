@@ -271,15 +271,70 @@ export async function listPendingRestake(supabase: SupabaseClient, inst: LedgerI
 }
 
 /** Mark pending logs as compounded on-chain (guarded: only rows still pending flip). */
-export async function markRestaked(supabase: SupabaseClient, ids: string[], settleTx: string): Promise<void> {
-  if (ids.length === 0) return
-  for (const id of ids) {
-    await supabase
-      .from('gateway_harvest_logs')
-      .update({ settlement: 'restake', settle_tx: settleTx.toLowerCase(), settled_at: new Date().toISOString() })
-      .eq('id', id)
-      .eq('settlement', 'pending')
+// Round-3 audit F-3: the old `markRestaked` was row-by-row and ignored write errors — after `compoundQuote`
+// MINED, a failed mark left the logs `pending`, so the next run compounded the same net AGAIN from the seat wallet
+// (Mintware over-pays depositors; not a user-loss, but an unbounded operator leak on every retry). Now:
+//   1. `claimRestake` moves pending → `restaking` in ONE statement BEFORE the on-chain compound and verifies the
+//      row count (anything else ⇒ throw, nothing sent);
+//   2. `markRestaked` finalises `restaking` → `restake` + settle_tx in ONE statement and verifies the count;
+//   3. `releaseRestake` puts `restaking` back to `pending` if the compound itself failed (no tx mined).
+// A process crash between 1 and 2 leaves rows in `restaking` — surfaced by `listStuckRestaking` for the operator
+// (they carry no settle_tx, so the compound status is checkable on-chain) and NEVER re-selected by
+// `listPendingRestake`, so a retry can't double-compound.
+export class LedgerWriteError extends Error {
+  constructor(public readonly stage: 'claim' | 'mark' | 'release', message: string) {
+    super(`[ledger] ${stage}: ${message}`)
   }
+}
+
+async function transitionRestake(
+  supabase: SupabaseClient,
+  ids: string[],
+  from: 'pending' | 'restaking',
+  patch: Record<string, unknown>,
+  stage: 'claim' | 'mark' | 'release',
+): Promise<void> {
+  if (ids.length === 0) return
+  const { data, error } = await supabase
+    .from('gateway_harvest_logs')
+    .update(patch)
+    .in('id', ids)
+    .eq('settlement', from)
+    .select('id')
+  if (error) throw new LedgerWriteError(stage, error.message)
+  const n = Array.isArray(data) ? data.length : 0
+  if (n !== ids.length) throw new LedgerWriteError(stage, `expected ${ids.length} rows, updated ${n}`)
+}
+
+/** Step 1 — reserve the pending logs for this compound run (before any tx is sent). */
+export async function claimRestake(supabase: SupabaseClient, ids: string[]): Promise<void> {
+  await transitionRestake(supabase, ids, 'pending', { settlement: 'restaking' }, 'claim')
+}
+
+/** Step 3 (failure) — the compound never mined; hand the logs back to the pending pool. */
+export async function releaseRestake(supabase: SupabaseClient, ids: string[]): Promise<void> {
+  await transitionRestake(supabase, ids, 'restaking', { settlement: 'pending' }, 'release')
+}
+
+/** Step 2 (success) — the compound mined in `settleTx`; finalise the claimed logs. */
+export async function markRestaked(supabase: SupabaseClient, ids: string[], settleTx: string): Promise<void> {
+  await transitionRestake(
+    supabase,
+    ids,
+    'restaking',
+    { settlement: 'restake', settle_tx: settleTx.toLowerCase(), settled_at: new Date().toISOString() },
+    'mark',
+  )
+}
+
+/** Operator view: logs claimed by a run that never finalised (crash between compound and mark). */
+export async function listStuckRestaking(supabase: SupabaseClient): Promise<Array<{ id: string; position_manager: string; chain_id: number }>> {
+  const { data, error } = await supabase
+    .from('gateway_harvest_logs')
+    .select('id, position_manager, chain_id')
+    .eq('settlement', 'restaking')
+  if (error) throw new LedgerWriteError('claim', error.message)
+  return (data ?? []) as Array<{ id: string; position_manager: string; chain_id: number }>
 }
 
 export type SeatReconciliation = {

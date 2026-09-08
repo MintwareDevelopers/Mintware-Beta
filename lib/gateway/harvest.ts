@@ -28,7 +28,7 @@ import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { listActiveInstances } from '@/lib/gateway/registry'
 import { skimPerformanceFee } from '@/lib/gateway/harvestMath'
 import { swapPairedToQuote } from '@/lib/gateway/routerSwap'
-import { indexHarvestLogs, listPendingRestake, markRestaked, type IndexOutcome, type LedgerClient } from '@/lib/gateway/ledger'
+import { indexHarvestLogs, listPendingRestake, claimRestake, releaseRestake, markRestaked, type IndexOutcome, type LedgerClient } from '@/lib/gateway/ledger'
 
 const ERC20_APPROVE_ABI = [
   { type: 'function', stateMutability: 'nonpayable', name: 'approve', inputs: [{ name: 's', type: 'address' }, { name: 'v', type: 'uint256' }], outputs: [{ type: 'bool' }] },
@@ -241,19 +241,48 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
       await record(0n)
       return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: 0n, recipients: 0, destination, index }
     }
-    let ch: `0x${string}`
+    // Round-3 audit F-3 — two-phase settlement so a mined compound can never be compounded twice:
+    // claim (pending → restaking, count-verified) → compound → mark (restaking → restake + tx, count-verified);
+    // a compound that never mined releases the claim. A crash between compound and mark leaves `restaking` rows
+    // that are excluded from the pending pool and surfaced to the operator (listStuckRestaking).
+    try {
+      await claimRestake(supabase, pending.ids)
+    } catch (e) {
+      log?.error('gateway.harvest', 'restake claim failed — nothing sent', { error: String(e) })
+      return { ok: false, status: 500, error: 'restake_claim_failed', reason: 'tx', index }
+    }
+    let ch: `0x${string}` | undefined
+    let mined = false
     try {
       const quoteAsset = (await publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset' })) as `0x${string}`
       const ah = await wallet.writeContract({ address: quoteAsset, abi: ERC20_APPROVE_ABI, functionName: 'approve', args: [instance.positionManager, amount], account, chain: publicClient.chain })
       await publicClient.waitForTransactionReceipt({ hash: ah })
       ch = await wallet.writeContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'compoundQuote', args: [amount], account, chain: publicClient.chain, gas: 400_000n })
       const rc = await publicClient.waitForTransactionReceipt({ hash: ch })
-      if (rc.status !== 'success') return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx', index }
+      mined = rc.status === 'success'
+      if (!mined) {
+        await releaseRestake(supabase, pending.ids).catch((e) => log?.error('gateway.harvest', 'restake release failed after revert', { error: String(e) }))
+        return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx', index }
+      }
     } catch (e) {
       log?.error('gateway.harvest', 'restake/compound failed', { error: String(e) })
-      return { ok: false, status: 502, error: 'compound_failed', reason: 'tx', index }
+      // Only release if we KNOW nothing was sent; an ambiguous send (compound hash obtained, receipt unknown —
+      // e.g. the receipt wait timed out) stays `restaking` for the operator to resolve on-chain rather than
+      // risk a double compound.
+      if (ch === undefined) {
+        await releaseRestake(supabase, pending.ids).catch((e2) => log?.error('gateway.harvest', 'restake release failed', { error: String(e2) }))
+        return { ok: false, status: 502, error: 'compound_failed', reason: 'tx', index }
+      }
+      log?.error('gateway.harvest', 'compound sent but receipt unknown — rows left in `restaking`, operator must finalise', { settleTx: ch })
+      return { ok: false, status: 502, error: 'compound_receipt_unknown', reason: 'tx', index }
     }
-    await markRestaked(supabase, pending.ids, ch)
+    try {
+      await markRestaked(supabase, pending.ids, ch)
+    } catch (e) {
+      // The compound MINED. Do not release (that would re-compound). Leave `restaking` + loud error.
+      log?.error('gateway.harvest', 'compound mined but ledger mark failed — rows left in `restaking`, operator must finalise', { error: String(e), settleTx: ch })
+      return { ok: false, status: 500, error: 'restake_mark_failed', reason: 'tx', index }
+    }
     await record(amount)
     return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: amount, recipients: 0, destination, index }
   }

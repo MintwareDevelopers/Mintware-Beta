@@ -34,6 +34,7 @@ import {MintwareERC4626YieldAdapter} from "../../src/vaults/MintwareERC4626Yield
 import {MockERC20} from "../mocks/MockERC20.sol";
 import {MockERC4626} from "../mocks/MockERC4626.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
+import {MockSlot0PoolManager} from "../mocks/MockSlot0PoolManager.sol";
 
 interface IPermit2AllowanceView {
     function allowance(address user, address token, address spender)
@@ -100,6 +101,7 @@ contract HackenLpGatewayUnitTest is Test {
     MockYieldAdapter adapter;
     MintwareLpGatewayStaging staging;
     address stub;
+    address slot0Pm;
 
     function setUp() public {
         usdg = new MockERC20("USD Global", "USDG", 6);
@@ -107,6 +109,7 @@ contract HackenLpGatewayUnitTest is Test {
         adapter = new MockYieldAdapter(address(usdg));
         staging = new MintwareLpGatewayStaging(IERC20(address(usdg)), adapter);
         stub = address(new Stub());
+        slot0Pm = address(new MockSlot0PoolManager()); // round-3: the PM ctor reads slot0 (XR-2 anchor); build it OUTSIDE expectRevert windows
     }
 
     function _key(address c0, address c1, address hooks) internal pure returns (PoolKey memory) {
@@ -116,7 +119,7 @@ contract HackenLpGatewayUnitTest is Test {
 
     function _new(PoolKey memory key, int24 tl, int24 tu) internal returns (MintwareLpGatewayPositionManager) {
         return new MintwareLpGatewayPositionManager(
-            IPoolManager(stub), IPositionManager(stub), IPermit2Minimal(stub), key, IERC20(address(usdg)), tl, tu, staging, address(this), address(0x5151), 500
+            IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), key, IERC20(address(usdg)), tl, tu, staging, address(this), address(0x5151), 500
         );
     }
 
@@ -148,11 +151,11 @@ contract HackenLpGatewayUnitTest is Test {
         PoolKey memory k = _key(address(usdg), address(pons), address(0));
         vm.expectRevert(MintwareLpGatewayPositionManager.BadDeviationBand.selector);
         new MintwareLpGatewayPositionManager(
-            IPoolManager(stub), IPositionManager(stub), IPermit2Minimal(stub), k, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 0
+            IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), k, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 0
         );
         vm.expectRevert(MintwareLpGatewayPositionManager.BadDeviationBand.selector);
         new MintwareLpGatewayPositionManager(
-            IPoolManager(stub), IPositionManager(stub), IPermit2Minimal(stub), k, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 5001
+            IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), k, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 5001
         );
     }
 

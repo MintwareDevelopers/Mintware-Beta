@@ -16,6 +16,7 @@ import {MintwareLpGatewayPositionManager, IPermit2Minimal} from "../../src/gatew
 import {MintwareERC4626YieldAdapter} from "../../src/vaults/MintwareERC4626YieldAdapter.sol";
 import {MockERC4626} from "../mocks/MockERC4626.sol";
 import {RTMintableERC20, RTFlaky4626} from "./RedTeamOnchainTokens.sol";
+import {MockSlot0PoolManager} from "../mocks/MockSlot0PoolManager.sol";
 
 contract Stub {}
 
@@ -56,7 +57,7 @@ contract RedTeamOnchainUnitTest is Test {
         });
         stub = address(new Stub());
         pm = new MintwareLpGatewayPositionManager(
-            IPoolManager(stub), IPositionManager(stub), IPermit2Minimal(stub),
+            IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub),
             key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink, 500
         );
         staging.setController(address(pm));
@@ -165,19 +166,24 @@ contract RedTeamOnchainUnitTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════════════════
 
     /// A source whose EXIT FEE can be raised transiently: previewRedeem (NAV) halves → a new depositor mints
-    /// 2x shares → fee back to 0 → they own half of everyone's idle. SUCCEEDS only against a source that can
-    /// change fee-net NAV without moving deposits (curator-trust; Morpho does not do this).
-    function test_RT_5d_transientExitFee_mintsCheapShares_SUCCEEDS() public {
-        _dep(alice, 100_000e6);
+    /// 2x shares → fee back to 0 → they own half of everyone's idle. ORIGINALLY SUCCEEDED (accepted as curator-trust;
+    /// Morpho does not do this). FIXED as a side effect of round-3 XR-3: a deposit must grow the fee-net reserve by
+    /// ≥ amount·(1 − STAGE_TOLERANCE_BPS), and while the exit fee is up mallory's own 100k stage only credits 50k →
+    /// `StageShortfall`. No cheap shares can be minted against a fee-depressed NAV; alice is untouched.
+    function test_RT_5d_transientExitFee_mintsCheapShares_FIXED() public {
+        uint256 sA = _dep(alice, 100_000e6);
         src.setExitFeeBps(5_000); // 50% exit fee → NAV marks at 50k
         assertApproxEqAbs(pm.totalNav(), 50_000e6, 2);
-        uint256 sM = _dep(mallory, 100_000e6);
-        console2.log("mallory shares for 100k (alice holds 100k shares)", sM);
+        usdg.mint(mallory, 100_000e6);
+        vm.prank(mallory);
+        usdg.approve(address(pm), type(uint256).max);
+        vm.prank(mallory);
+        vm.expectRevert(MintwareLpGatewayPositionManager.StageShortfall.selector);
+        pm.deposit(100_000e6);
+        assertEq(pm.sharesOf(mallory), 0, "no shares minted against the fee-depressed mark");
         src.setExitFeeBps(0);
         _roll(1);
-        uint256 got = _wd(mallory, sM);
-        console2.log("mallory exits with", got);
-        assertGt(got, 130_000e6, "mallory extracted >30k from alice via the fee flip");
+        assertApproxEqAbs(_wd(alice, sA), 100_000e6, 2, "alice's principal intact");
     }
 
     /// Source `maxDeposit == 0` / supply cap hit: deposits revert (DOS, no loss); withdraw unaffected. FAILS.
@@ -280,7 +286,7 @@ contract RedTeamOnchainUnitTest is Test {
     /// Factory adapter reuse → AdapterReused; a non-owner cannot create gateways. FAILS.
     function test_RT_7b_factoryAdapterReuse_and_curation_FAILS() public {
         MintwareLpGatewayFactory f =
-            new MintwareLpGatewayFactory(IPoolManager(stub), IPositionManager(stub), IPermit2Minimal(stub), address(this));
+            new MintwareLpGatewayFactory(IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub), address(this));
         MintwareERC4626YieldAdapter a1 =
             new MintwareERC4626YieldAdapter(address(usdg), address(src), address(0), address(this));
         f.createGateway(key, IERC20(address(usdg)), IYieldAdapter(address(a1)), -600, 600, address(this), harvestSink, 0);

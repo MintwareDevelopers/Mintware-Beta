@@ -4,7 +4,7 @@
 // insert/update/upsert/delete, thenable execution, a UNIQUE-conflict emulation (23505) per table.
 
 type Row = Record<string, unknown>
-type Filter = { kind: 'eq' | 'is' | 'notin'; col: string; val: unknown }
+type Filter = { kind: 'eq' | 'in' | 'is' | 'notin'; col: string; val: unknown }
 
 export type FakeDb = {
   tables: Record<string, Row[]>
@@ -17,6 +17,7 @@ export type FakeDb = {
 
 function matches(row: Row, f: Filter): boolean {
   if (f.kind === 'eq') return String(row[f.col]).toLowerCase() === String(f.val).toLowerCase()
+  if (f.kind === 'in') return (f.val as unknown[]).some((v) => String(row[f.col]).toLowerCase() === String(v).toLowerCase())
   if (f.kind === 'is') return f.val === null ? row[f.col] == null : row[f.col] === f.val
   // not-in: val is the PostgREST list literal `("a","b")`
   const list = String(f.val).replace(/^\(|\)$/g, '').split(',').map((s) => s.replace(/"/g, '').trim().toLowerCase())
@@ -38,6 +39,7 @@ class Builder {
   order() { return this }
   limit() { return this }
   eq(col: string, val: unknown) { this.filters.push({ kind: 'eq', col, val }); return this }
+  in(col: string, vals: unknown[]) { this.filters.push({ kind: 'in', col, val: vals }); return this }
   is(col: string, val: unknown) { this.filters.push({ kind: 'is', col, val }); return this }
   not(col: string, _op: string, val: unknown) { this.filters.push({ kind: 'notin', col, val }); return this }
   insert(row: Row | Row[]) { this.op = 'insert'; this.payload = row; return this }

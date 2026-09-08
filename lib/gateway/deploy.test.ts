@@ -104,3 +104,51 @@ describe('computeDeployMinLiquidity (O-9 spot-computed floor)', () => {
     expect(narrow.minLiquidity > wide.minLiquidity).toBe(true) // same amounts, tighter range ⇒ more L
   })
 })
+
+// ── Round-3 XR-2 / X-7: first-deploy price sanity helpers ────────────────────────────────────────────────────
+import { bandDeviationBps, pairedPriceInQuote, externalPairedPriceInQuote, referenceDeviationBps, requireRefPrice } from './deploy'
+
+const Q96n = 1n << 96n
+describe('first-deploy price sanity (round-3 XR-2 / X-7)', () => {
+  it('bandDeviationBps mirrors the contract band metric (|spot − ref| in bps of ref, √price units)', () => {
+    expect(bandDeviationBps(Q96n, Q96n)).toBe(0)
+    expect(bandDeviationBps(21_000n, 20_000n)).toBe(500)
+    expect(bandDeviationBps(19_000n, 20_000n)).toBe(500)
+    expect(bandDeviationBps((Q96n * 105n) / 100n, Q96n)).toBeGreaterThanOrEqual(499) // bigint floor on an inexact 5%
+    expect(bandDeviationBps(Q96n, 0n)).toBe(Number.MAX_SAFE_INTEGER) // no reference ⇒ fail closed
+  })
+
+  it('pairedPriceInQuote — concrete: price 4 quote per paired', () => {
+    // raw c1/c0 = 4 with quote = currency1 (18dp both) ⇒ 1 paired (c0) = 4 quote
+    expect(pairedPriceInQuote({ sqrtPriceX96: Q96n * 2n, quoteIsCurrency0: false, quoteDecimals: 18, pairedDecimals: 18 })).toBeCloseTo(4, 9)
+    // same pool, quote = currency0 ⇒ 1 paired (c1) = 1/4 quote
+    expect(pairedPriceInQuote({ sqrtPriceX96: Q96n * 2n, quoteIsCurrency0: true, quoteDecimals: 18, pairedDecimals: 18 })).toBeCloseTo(0.25, 9)
+    // decimals: 6dp quote as currency1, 18dp paired as currency0 at raw c1/c0 = 1e-12 (= human 1:1)
+    const sqrt1em12 = BigInt(Math.round(1e-6 * 2 ** 48)) * (Q96n >> 48n) // √1e-12 = 1e-6, scaled by 2^96
+    expect(pairedPriceInQuote({ sqrtPriceX96: sqrt1em12, quoteIsCurrency0: false, quoteDecimals: 6, pairedDecimals: 18 })).toBeCloseTo(1, 3)
+  })
+
+  it('externalPairedPriceInQuote orients GeckoTerminal price by which leg is USDG; anything else ⇒ null (fail closed)', () => {
+    const usdg = '0x' + '11'.repeat(20)
+    const meme = '0x' + '22'.repeat(20)
+    expect(externalPairedPriceInQuote({ priceQuotePerBase: 4, baseToken: meme, quoteToken: usdg }, usdg)).toBe(4)
+    expect(externalPairedPriceInQuote({ priceQuotePerBase: 4, baseToken: usdg, quoteToken: meme }, usdg)).toBeCloseTo(0.25, 12)
+    expect(externalPairedPriceInQuote({ priceQuotePerBase: 4, baseToken: meme, quoteToken: '0x' + '33'.repeat(20) }, usdg)).toBeNull()
+    expect(externalPairedPriceInQuote({ priceQuotePerBase: null, baseToken: meme, quoteToken: usdg }, usdg)).toBeNull()
+    expect(externalPairedPriceInQuote({ priceQuotePerBase: 0, baseToken: meme, quoteToken: usdg }, usdg)).toBeNull()
+  })
+
+  it('referenceDeviationBps: 4× mispricing (the Cork PoC) is 30_000 bps; a 3% drift is 300; garbage ⇒ MAX', () => {
+    expect(referenceDeviationBps(4, 1)).toBe(30_000)
+    expect(referenceDeviationBps(1.03, 1)).toBe(300)
+    expect(referenceDeviationBps(NaN, 1)).toBe(Number.MAX_SAFE_INTEGER)
+    expect(referenceDeviationBps(1, 0)).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
+  it('requireRefPrice defaults ON; only an explicit "false" waives it', () => {
+    expect(requireRefPrice({})).toBe(true)
+    expect(requireRefPrice({ LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE: 'no' })).toBe(true)
+    expect(requireRefPrice({ LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE: 'false' })).toBe(false)
+    expect(requireRefPrice({ LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE: ' FALSE ' })).toBe(false)
+  })
+})

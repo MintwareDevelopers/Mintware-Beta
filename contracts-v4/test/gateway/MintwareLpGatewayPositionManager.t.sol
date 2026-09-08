@@ -12,6 +12,7 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {MockSlot0PoolManager} from "../mocks/MockSlot0PoolManager.sol";
 
 /// @dev Idle-path (tokenId == 0) unit tests never call V4; a non-zero address satisfies the ctor guard.
 ///      The deployed round-trip (mint / harvest / deployed-NAV) is proven in the fork harness.
@@ -46,7 +47,7 @@ contract MintwareLpGatewayPositionManagerTest is Test {
 
         address stub = address(new Stub());
         pm = new MintwareLpGatewayPositionManager(
-            IPoolManager(stub), IPositionManager(stub), IPermit2Minimal(stub),
+            IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub),
             key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink, 2000
         );
         staging.setController(address(pm));

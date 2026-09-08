@@ -20,6 +20,8 @@ const FACTORY = '0x00000000000000000000000000000000000fac70' as const
 const EVIL_PM = '0x00000000000000000000000000000000000000e1' as const
 const EVIL_STAGING = '0x000000000000000000000000000000000000dead' as const
 const ZERO = '0x0000000000000000000000000000000000000000' as const
+const SEAT = '0x000000000000000000000000000000000000005e' as const // our gateway seat (owner + fee recipient)
+const ADAPTER = '0x0000000000000000000000000000000000000ada' as const
 
 const poolKey: GatewayPoolKey = { currency0: QUOTE, currency1: PAIRED, fee: 3000, tickSpacing: 60, hooks: ZERO }
 const POOL_ID = computePoolId(poolKey)
@@ -53,6 +55,10 @@ function mockChain(over: {
       if (functionName === 'controller') return over.stagingController ?? PM
       if (functionName === 'quoteAsset') return over.stagingQuote ?? QUOTE
     }
+    // round-3 F-5 seat identity reads (only hit when the trust config carries `seat`, i.e. the env builder)
+    if (functionName === 'owner' || functionName === 'harvestRecipient') return SEAT
+    if (functionName === 'adapter') return ADAPTER
+    if (a === ADAPTER.toLowerCase() && functionName === 'vault') return STAGING
     // the candidate PM
     if (functionName === 'quoteAsset') return over.pmQuote ?? QUOTE
     if (functionName === 'poolKey') return over.pmPoolKey ?? poolKey
@@ -92,7 +98,11 @@ describe('registryTrustConfigFromEnv', () => {
     expect(c.expectedQuoteAsset).toBe(QUOTE)
   })
   it('is empty (⇒ fail closed) when nothing is set', () => {
-    expect(registryTrustConfigFromEnv({})).toEqual({ factory: null, pmCodeHashes: [], expectedQuoteAsset: null })
+    // round-3 F-5: `seat` is always present; a null owner makes verify fail closed (owner_env_unset)
+    expect(registryTrustConfigFromEnv({})).toEqual({
+      factory: null, pmCodeHashes: [], expectedQuoteAsset: null,
+      seat: { expectedOwner: null, allowedHarvestRecipients: [] },
+    })
   })
 })
 
@@ -272,6 +282,9 @@ const liveRow = (over: Row = {}): Row => ({ id: 'live', pool_address: POOL_ID, c
 describe('registerInstance — verified, read-before-write, logged (O-3 d/e)', () => {
   beforeEach(() => {
     delete process.env.LP_GATEWAY_FACTORY
+    delete process.env.LP_GATEWAY_OWNER
+    delete process.env.GATEWAY_ORACLE_PRIVY_ADDRESS
+    delete process.env.LP_GATEWAY_HARVEST_RECIPIENTS
     delete process.env.LP_GATEWAY_PM_CODEHASHES
     delete process.env.LP_GATEWAY_USDG
   })
@@ -308,9 +321,10 @@ describe('registerInstance — verified, read-before-write, logged (O-3 d/e)', (
     expect(tables.gateway_instances).toHaveLength(0)
   })
 
-  it('resolves the trust root from env (LP_GATEWAY_PM_CODEHASHES + LP_GATEWAY_USDG) when none is passed', async () => {
+  it('resolves the trust root from env (LP_GATEWAY_PM_CODEHASHES + LP_GATEWAY_USDG + LP_GATEWAY_OWNER) when none is passed', async () => {
     process.env.LP_GATEWAY_PM_CODEHASHES = PM_CODEHASH
     process.env.LP_GATEWAY_USDG = QUOTE
+    process.env.LP_GATEWAY_OWNER = SEAT // round-3 F-5: the env-built trust root also pins the seat
     const { client, tables } = fakeDb()
     const res = await registerInstance(client, base, { client: mockChain() })
     expect(res).toEqual({ ok: true, verification: 'codehash' })

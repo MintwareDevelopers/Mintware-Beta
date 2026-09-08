@@ -65,7 +65,12 @@ contract MintwareLpGatewayStaging is ReentrancyGuard {
     // reverts for a liquidity reason, so a deploy/redemption caller can fall back.
     function unstage(uint256 amount) external onlyController nonReentrant returns (uint256 returned) {
         if (amount == 0) revert ZeroAmount();
-        returned = adapter.withdraw(amount);
+        // Round-3 X-3: measure what actually landed instead of trusting the adapter's return value — a source that
+        // over-reports by 1 wei would brick every withdraw here, one that under-reports would strand the difference
+        // in this contract forever (outside `stagedAssets`, outside NAV, no sweep).
+        uint256 before = quoteAsset.balanceOf(address(this));
+        adapter.withdraw(amount);
+        returned = quoteAsset.balanceOf(address(this)) - before;
         if (returned > 0) quoteAsset.safeTransfer(controller, returned);
         emit Unstaged(amount, returned);
     }

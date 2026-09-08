@@ -8,6 +8,9 @@ export const LP_GATEWAY_ABI = [
   { type: 'function', stateMutability: 'view', name: 'totalNav', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'deployedPrincipal', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'poke', inputs: [], outputs: [] },
+  // Round-3 XR-2: the follower is anchored at creation and the FIRST deploy is banded; the cron pre-flights this.
+  { type: 'function', stateMutability: 'view', name: 'referencePrice', inputs: [], outputs: [{ name: 'sqrtPriceX96', type: 'uint160' }, { name: 'atBlock', type: 'uint64' }, { name: 'entryHighSqrtPriceX96', type: 'uint160' }] },
+  { type: 'function', stateMutability: 'view', name: 'maxDeviationBps', inputs: [], outputs: [{ type: 'uint16' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'depositWithMin', inputs: [{ name: 'quoteAmount', type: 'uint256' }, { name: 'minSharesOut', type: 'uint256' }], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'withdrawWithMin', inputs: [{ name: 'shares', type: 'uint256' }, { name: 'minQuoteOut', type: 'uint256' }, { name: 'minPairedOut', type: 'uint256' }], outputs: [{ name: 'quoteOut', type: 'uint256' }, { name: 'pairedOut', type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'tokenId', inputs: [], outputs: [{ type: 'uint256' }] },

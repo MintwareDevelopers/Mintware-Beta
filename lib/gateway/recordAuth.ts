@@ -38,8 +38,11 @@ export function bindSignedRecord(body: Record<string, unknown>, now = Date.now()
   if (signedTx !== txHash || signedPool !== pool) return { ok: false, error: 'auth_payload_mismatch' }
 
   // Single-use inside the freshness window (per process; the UNIQUE tx_hash ledger is the durable gate).
-  const sig = String(body.authSignature ?? '')
-  const key = keccak256(toBytes(sig.toLowerCase()))
+  // Round-3 audit F-2: keying on the SIGNATURE let the EIP-2 high-`s` twin (and v∈{0,1} vs 27/28) of an already
+  // used signature pass as "new" — viem recovers both to the same signer. Key on the signed MESSAGE instead: the
+  // canonical authMessage (address + action + issuedAt + txHash + pool) is what a replay re-presents, however
+  // the signature bytes are re-encoded.
+  const key = keccak256(toBytes(String(body.authMessage ?? '')))
   sweep(now)
   const exp = seen.get(key)
   if (exp != null && exp > now) return { ok: false, error: 'auth_replayed' }

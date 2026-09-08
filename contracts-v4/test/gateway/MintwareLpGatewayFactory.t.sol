@@ -17,6 +17,7 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {MockSlot0PoolManager} from "../mocks/MockSlot0PoolManager.sol";
 
 contract Stub {}
 
@@ -37,7 +38,7 @@ contract MintwareLpGatewayFactoryTest is Test {
         adapter = new MockYieldAdapter(address(usdg));
         address stub = address(new Stub());
         factory = new MintwareLpGatewayFactory(
-            IPoolManager(stub), IPositionManager(stub), IPermit2Minimal(stub), address(this)
+            IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub), address(this)
         );
     }
 
