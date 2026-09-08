@@ -19,7 +19,7 @@ Seven passes, each with its own report and runnable PoCs:
 | Exploit replay · vault / share accounting | [`exploit-replay-vault.md`](exploit-replay-vault.md) | `contracts-v4/test/audit3/ExploitReplayVault{Unit,Fork}.t.sol` |
 | Exploit replay · integration / external calls | [`exploit-replay-integration.md`](exploit-replay-integration.md) | `contracts-v4/test/audit3/ExploitReplayIntegration{Base,A,B}.t.sol` |
 | Exploit replay · off-chain / infra | [`exploit-replay-offchain.md`](exploit-replay-offchain.md) | `lib/gateway/__audit3__/*.test.ts` |
-| Stateful invariant fuzzing | [`invariant-fuzzing.md`](invariant-fuzzing.md) | `contracts-v4/test/audit3/Invariant*.t.sol` |
+| Stateful invariant fuzzing (run three times: on `c11d8fd3`, on the first fix set, on the final source) | [`invariant-fuzzing.md`](invariant-fuzzing.md) | `contracts-v4/test/audit3/Invariant*.t.sol` |
 | Economic models (scope §8 Q1–Q5, invariant 15) | [`economic-models.md`](economic-models.md) | `contracts-v4/test/audit3/Econ*.t.sol`, `scripts/audit3/econ_models.py` |
 | Deployed-periphery + USDG equivalence (scope §8 Q7/Q8) | [`equivalence-checks.md`](equivalence-checks.md) | read-only bytecode / source diffs |
 | Independent line-by-line (Fable) | [`fable-independent-review.md`](fable-independent-review.md) | `contracts-v4/test/audit3/Round3StaleIdleLossFork.t.sol` |
@@ -52,6 +52,7 @@ Severity is for third-party depositors; own-funds severity in brackets where dif
 | **R3-1** | **`lastKnownIdle` only conservative for yield.** A loss realised in the source *while unreadable* left the fallback stale-high; an outage-time exiter was re-credited against the inflated figure and offloaded part of the loss onto remaining holders (fork: **+5k / −5k on a 20k loss**). (fable-independent-review) | **Medium** | ✅ `OUTAGE_HAIRCUT_BPS = 2000` on the fallback (blind exiter keeps ≤ what a live read would give; waiting is exact) — `CloseoutFork` C-10 expectations updated |
 | **R3-INV-1** | **Exit weight at the high mark over-credited an exiter whose LP leg FAILED** (found by the invariant re-run against my E-2 fix): idle cash paid in full while the failed-LP re-credit was sized at the high mark → the exiter cashed idle out at `nav_w/ts` instead of `nav_spot/ts` (6 dp fork: bob +1,665 / alice −1,665 per exit, repeatable every 2 blocks under a paused paired token). | **Medium** (precondition: LP leg failure + spot below the mark) | ✅ per-leg re-credit weights: idle shortfall against the LP marked HIGH, failed LP leg against the LP marked LOW (`min(spot, ref)`), everything back when nothing was delivered — `InvariantForkRegressions` R3-INV-1 flipped |
 | **R3-INV-2** | **Quote parked by the deferred re-stage sat outside NAV** (a consequence of my R3-2 fix): entries priced cheap, exits forfeited their slice (fork: a later depositor gained 6.5k of a 19.9k parked amount). | Low | ✅ `_idle()` counts the PM's own quote; `deploy` consumes parked quote first; `_withdraw` pays it first (even during a source outage) |
+| **R3-INV-3** | **Unset entry-memory bucket read as sqrtPrice 0** (found by the second invariant re-run): `_marksHigher(0, b)` returned true on quote-is-currency0 pools, so a gateway created in an EVEN period marked the LP leg at its range-edge maximum for the first period — deposits under-minted ~42 %, the shortfall accruing to existing holders (6 dp fork: bob 38.7k vs 66.7k shares). Not exploitable for profit by the depositor; a depositor-side DoS/over-charge window of ≤ 300 blocks. | Medium (bounded window) | ✅ zero is "unset, never a price" on both sides of `_marksHigher` — `InvariantForkRegressions` R3-INV-3 flipped; the fork campaign now also runs green in the even-period window (`A3_FORK_PERIOD_PARITY=even`) |
 | **E-2** | **Exit re-credit weighted at spot.** Under an idle shortfall (Morpho illiquid) the withdrawer's own dump shrank the LP leg's weight → **+3.5 % (one step) / +59 % (4×) more shares re-credited**; sim net +571 / +8.9k, co-depositors −0.8 % / −12.9 %. (economic-models Q4) | **Medium** (precondition: adapter shortfall) | ✅ exit weight = `_holderMark(spot)` — `EconExit` flipped |
 | **XR-3 / F2** | **Gateway is an unchecked depositor into the 4626.** Against an empty offset-less source: seed 1 wei + donate → the gateway's first deposit mints 0 source shares, the PM still mints full shares, the seeder redeems everything (**100 % of the first deposit**); OZ offset-0: a 0.61:1 grief; Morpho offset-12: immune. (exploit-replay-vault XR-3, invariant-fuzzing F2) | Medium-Low (curation-gated) | ✅ `StageShortfall` (reserve must grow by ≥ amount − 50 bps); also closes RT-5d (transient exit-fee cheap mint) and makes entry-fee sources > 0.5 % DOA (L-05 no longer a live risk) |
 | **R3-2** | **Capped source DoS'd every deploy.** Leftover quote after the mint was re-staged unconditionally; with Morpho at `maxDeposit == 0` (the live mainnet state) the re-stage reverted even though the LP add had succeeded. | Low (availability) | ✅ `try/catch` re-stage, `RestageDeferred`; dust stays in the PM (outside NAV) until the next deploy picks it up |
@@ -138,10 +139,14 @@ npx vitest run                                                                  
 
 ## 5. Left for a human
 
-1. **Redeploy the testnet rig** with the round-3 bytecode (`pnpm deploy:lp-gateway:robinhood`), repoint Vercel
-   `LP_GATEWAY_POSITION_MANAGER` / `_STAGING` / `_POOL_ADDRESS` / `LP_GATEWAY_PM_CODEHASHES`, set
-   `LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE=false` **on the testnet rig only**, redeploy, smoke. Until then the live rig
-   is the pre-round-3 contract and none of §2's FIXED rows apply to it.
+1. ~~Redeploy the testnet rig~~ **Done 2026-09-08: rig 'g'** — PM `0xa52d4ffaefa586251cb36d1e05588daa89ab0a63`, staging
+   `0x0a8544c0222d3d6a729cd8aa81fbe9f64174fa14`, tUSDG `0x2a8c32e291bc90ceb8ae058b6a684be0312bb848`, poolId
+   `0x07340da7f228f72fd2a624571c34b0f217b5f3a8e2b2826373f4afffe0a0dfa2`, PM code hash
+   `0x89a53e8da35d43715c50cd1354bbc376624ab6bfc56fccb96097db2baefc00f4`; smoke passed (deposit · compound · pause ·
+   withdraw). Remaining ops: repoint Vercel `LP_GATEWAY_POSITION_MANAGER` / `_STAGING` / `_POOL_ADDRESS` / `_USDG` /
+   `LP_GATEWAY_PM_CODEHASHES`, set `LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE=false` **on the testnet rig only**, redeploy,
+   register the row via a curator-signed `POST /api/gateway/curate` approve (prod `gateway_instances` was empty — rig 'e'
+   was never registered; the app ran on the env fallback).
 2. Apply the `gateway_alerts` migration in prod (F-8) if it is still missing.
 3. Before any third-party depositor: `compoundQuote` linear unlock (XR-4), owner paired-leg accounting (Q5), a second
    signer on `acceptHarvestRecipient` / `deploy` size (Q6), third-party share policy per `economic-models.md` §3.4, and

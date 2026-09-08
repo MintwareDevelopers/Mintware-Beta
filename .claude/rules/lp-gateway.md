@@ -60,7 +60,9 @@ source-layer inflation XR-3, also makes entry-fee sources DOA); **outage haircut
 source is unreadable — R3-1); exit weight = holder mark (E-2); liquidity slice never exceeds the position (E-4);
 tolerant re-stage on a capped source (R3-2, `RestageDeferred`; parked quote counts as idle, is paid out first on exit
 and consumed first on deploy — R3-INV-2); exit re-credit is PER LEG (idle shortfall at the high mark, a failed LP leg at
-`min(spot, ref)`, everything back when nothing was delivered — R3-INV-1); staging measures `unstage` by balance-diff (X-3).
+`min(spot, ref)`, everything back when nothing was delivered — R3-INV-1); an unset memory bucket is never a price
+(R3-INV-3); staging measures `unstage` by balance-diff (X-3). **Method lesson:** the fuzz harness was re-run after EVERY
+fix set and each re-run found a real residual in the previous fix — never ship a contract fix without a fresh campaign.
 Off-chain: deploy cron pre-flights the band (`poke` + retry) and an external reference price (`ref_price_*`,
 fail-closed unless `LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE=false`); two-phase restake ledger (claim → compound →
 mark); replay set keyed on the signed message; registry pins `owner()`/`harvestRecipient()`/adapter binding;
@@ -68,7 +70,8 @@ mark); replay set keyed on the signed message; registry pins `owner()`/`harvestR
 `20260908000003`). Still open/accepted: `compoundQuote` sandwich (Low, owner is sole depositor), owner paired-leg
 subsidy accounting (design, before third-party funds), read-only-reentrancy view windows (never read PM views from
 a gateway callback), USDG issuer upgrade authority (single key behind a 24 h timelock — disclose + monitor).
-⚠ The live testnet rig runs the PRE-round-3 bytecode — redeploy + repoint `LP_GATEWAY_*` before relying on any of this.
+Rig **'g'** (PM `0xa52d4ffaefa586251cb36d1e05588daa89ab0a63`, staging `0x0a85…fa14`, tUSDG `0x2a8c…b848`, poolId
+`0x07340da7…dfa2`, PM code hash `0x89a53e8d…00f4`) is the round-3 deployment (smoke passed 2026-09-08); rig 'e' is superseded.
 
 ## Off-chain ([`lib/gateway/*`](../../lib/gateway/), [`app/api/gateway/*`](../../app/api/gateway/))
 - **`registry.ts`** — the deposit-routing trust root. `registerInstance` **verifies the candidate PM on-chain**

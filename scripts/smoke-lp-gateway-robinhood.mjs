@@ -19,10 +19,12 @@ const OUT = join(__dirname, '..', 'contracts-v4', 'out')
 
 const CHAIN_ID = Number(process.env.LP_GATEWAY_CHAIN_ID ?? 46630)
 const RPC = process.env.LP_GATEWAY_RPC_URL ?? 'https://rpc.testnet.chain.robinhood.com'
-// The 2026-09-08 rig (e) — audit close-out (rotation, tolerant source read) on top of round-2 fixes; env-overridable.
+// The 2026-09-08 rig (g) — round-3 exploit-replay fixes on top of the close-out rig; env-overridable.
+// NB: Robinhood's block.number is the L1 block (~12 s) — several txs land in one block, so a deposit followed too
+// quickly by a withdraw trips SameBlockAction (by design); re-run if that happens.
 // tUSDG was minted 1M to the Privy signer at deploy.
-const PM = (process.env.LP_GATEWAY_POSITION_MANAGER ?? '0x259a9f1cdcf8d2172964d151366b2c7c9ea6f442').toLowerCase()
-const TUSDG = (process.env.LP_GATEWAY_TUSDG ?? '0xd2af3d6e58d0caec184548e465e10fa63968ebfd').toLowerCase()
+const PM = (process.env.LP_GATEWAY_POSITION_MANAGER ?? '0xa52d4ffaefa586251cb36d1e05588daa89ab0a63').toLowerCase()
+const TUSDG = (process.env.LP_GATEWAY_TUSDG ?? '0x2a8c32e291bc90ceb8ae058b6a684be0312bb848').toLowerCase()
 
 const DEPOSIT = 1000n * 10n ** 6n // 1,000 tUSDG (6dp)
 const COMPOUND = 5n * 10n ** 6n // 5 tUSDG compounded (no share mint)

@@ -372,8 +372,11 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     /// @dev True when marking the LP leg at `a` values it HIGHER (holder-favourable) than at `b`; `b == 0` = unset.
     ///      sqrtPriceX96 = √(currency1 / currency0). Quote as currency0 ⇒ paired (currency1) is dearer in quote when
     ///      sqrtPrice is LOWER (`_pairedToQuote` divides by it twice); quote as currency1 ⇒ dearer when HIGHER.
+    ///      Zero is "unset", never a price (round-3 R3-INV-3: an unset bucket compared as sqrtPrice 0 marked the LP leg
+    ///      at its range-edge maximum on quote-is-currency0 pools for the first entry period after creation).
     function _marksHigher(uint160 a, uint160 b) internal view returns (bool) {
-        if (b == 0) return a != 0;
+        if (a == 0) return false;
+        if (b == 0) return true;
         return quoteIsCurrency0 ? a < b : a > b;
     }
 

@@ -61,8 +61,8 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   Robinhood Chain TESTNET (46630) with mock tokens; UNAUDITED externally.** Three internal audit rounds (real-funds
   re-audit → Hacken-style + red team → **round-3 real-world exploit replay, 2026-09-08**) — every finding fixed or
   explicitly accepted; the trail is `docs/developers/audits/` (start at `round3/README.md`) and the external-audit
-  scope package is `docs/developers/lp-gateway-external-audit-scope.md`. ⚠ The deployed testnet rig runs the
-  **pre-round-3 bytecode** until it is redeployed + `LP_GATEWAY_*` repointed (round3 README §5). Mainnet blocked on a
+  scope package is `docs/developers/lp-gateway-external-audit-scope.md`. Round-3 rig **'g'** (PM `0xa52d…0a63`, deployed + smoke-passed
+  2026-09-08) carries every round-3 fix; the Vercel `LP_GATEWAY_*` repoint + registry row follow the PR merge. Mainnet blocked on a
   Morpho USDG vault with capacity (all 39 at `maxDeposit == 0`). Rule: `.claude/rules/lp-gateway.md`.
 - **Marketing:** `/`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
   `/agents`, `/about`, `/docs`.
