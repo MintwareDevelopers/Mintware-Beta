@@ -19,9 +19,10 @@ const OUT = join(__dirname, '..', 'contracts-v4', 'out')
 
 const CHAIN_ID = Number(process.env.LP_GATEWAY_CHAIN_ID ?? 46630)
 const RPC = process.env.LP_GATEWAY_RPC_URL ?? 'https://rpc.testnet.chain.robinhood.com'
-// The 2026-09-07b rig (env-overridable). tUSDG was minted 1M to the Privy signer at deploy.
-const PM = (process.env.LP_GATEWAY_POSITION_MANAGER ?? '0xd488feb1e6c2f302cf10ff8b6855b1cecd39b53e').toLowerCase()
-const TUSDG = (process.env.LP_GATEWAY_TUSDG ?? '0x0ed57008f00317d259a8334de5097f77f433daee').toLowerCase()
+// The 2026-09-07c rig — re-audit fixes A-1/A-2/A-3/A-6 + PRODUCTION ERC4626 adapter (A-5); env-overridable.
+// tUSDG was minted 1M to the Privy signer at deploy.
+const PM = (process.env.LP_GATEWAY_POSITION_MANAGER ?? '0x24ff5d2bb29b5448bdf96db0fcdf0553ebda3b11').toLowerCase()
+const TUSDG = (process.env.LP_GATEWAY_TUSDG ?? '0x48e87f9585a7200ffebc1df553e362853e6bed08').toLowerCase()
 
 const DEPOSIT = 1000n * 10n ** 6n // 1,000 tUSDG (6dp)
 const COMPOUND = 5n * 10n ** 6n // 5 tUSDG compounded (no share mint)
@@ -118,4 +119,4 @@ console.log(`    tUSDG returned to signer: ${u6(q1 - q0)}`)
 if (q1 <= q0) die('withdraw returned no value')
 ok('withdraw returned value — position never locked')
 
-console.log('\n✓ SMOKE PASSED — rig 0xd488…b53e live: deposit · compound · pause · withdraw all on-chain.\n')
+console.log(`\n✓ SMOKE PASSED — rig ${PM.slice(0, 6)}…${PM.slice(-4)} live: deposit · compound · pause · withdraw all on-chain.\n`)

@@ -16,7 +16,9 @@
 //   node scripts/deploy-lp-gateway-robinhood.mjs
 //
 // Optional env: LP_GATEWAY_RPC_URL (default RH testnet), LP_GATEWAY_CHAIN_ID (default 46630),
-//   LP_TICK_LOWER/LP_TICK_UPPER (default ±22980, multiples of 60), LP_MAX_DEVIATION_BPS (default 2000).
+//   LP_TICK_LOWER/LP_TICK_UPPER (default ±22980, multiples of 60), LP_MAX_DEVIATION_BPS (default 500),
+//   LP_GATEWAY_YIELD_SOURCE (an existing ERC-4626 over the quote asset; default = deploy MockERC4626),
+//   LP_ADAPTER_PER_BLOCK_CAP (adapter per-block withdraw bound, atomic units; default uncapped).
 //
 // It prints the exact Vercel env block (LP_GATEWAY_*) to paste after a successful run.
 
@@ -88,14 +90,16 @@ const POOL_MANAGER_ABI = [
 
 // ── preflight: Privy env ──
 const { PRIVY_APP_ID, PRIVY_APP_SECRET } = process.env
-const walletId = process.env.ROOT_ORACLE_PRIVY_WALLET_ID
-const privyAddress = process.env.ROOT_ORACLE_PRIVY_ADDRESS
+// The gateway owner is the DEDICATED `gateway` signer seat (re-audit A-3 key hardening) — the same wallet
+// the app's crons resolve via getOracleSigner('gateway'). ROOT_* is accepted as a legacy fallback only.
+const walletId = process.env.GATEWAY_ORACLE_PRIVY_WALLET_ID ?? process.env.ROOT_ORACLE_PRIVY_WALLET_ID
+const privyAddress = process.env.GATEWAY_ORACLE_PRIVY_ADDRESS ?? process.env.ROOT_ORACLE_PRIVY_ADDRESS
 if ((process.env.ORACLE_SIGNER_PROVIDER ?? '').toLowerCase() !== 'privy') {
   die('set ORACLE_SIGNER_PROVIDER=privy (this deploy is Privy-signed by design — no raw key).')
 }
 if (!PRIVY_APP_ID || !PRIVY_APP_SECRET) die('missing PRIVY_APP_ID / PRIVY_APP_SECRET.')
 if (!walletId || !privyAddress) {
-  die('missing ROOT_ORACLE_PRIVY_WALLET_ID / ROOT_ORACLE_PRIVY_ADDRESS — run provision-privy-oracle-wallet.mjs first.')
+  die('missing GATEWAY_ORACLE_PRIVY_WALLET_ID / GATEWAY_ORACLE_PRIVY_ADDRESS — run provision-privy-oracle-wallet.mjs first.')
 }
 
 let PrivyClient, createViemAccount
@@ -163,10 +167,33 @@ async function send(label, params) {
 
 console.log(`\nDeploying LP Gateway mock rig on Robinhood chain ${CHAIN_ID} …\n`)
 
-// 1) mock tokens + adapter
+// 1) mock tokens + the PRODUCTION yield adapter over a 4626 source.
+// Re-audit A-5: the previous rig used `MockYieldAdapter`, whose `withdraw` had NO access control — anyone
+// could drain the staged reserve. The rig now runs `MintwareERC4626YieldAdapter` (onlyVault, one-time
+// setVault, best-effort fee-net exits) — the exact contract a real deployment uses — in front of a 4626
+// source: `LP_GATEWAY_YIELD_SOURCE` if set (must be a 4626 over tUSDG), else a fresh `MockERC4626` (OZ
+// ERC-4626; no test-only drain path). Mainnet = the real Paxos USDG + the curated Morpho vault here.
 const usdg = await deploy('MockERC20 tUSDG', 'MockERC20', 'MockERC20', ['USD Global', 'USDG', 6])
 const pons = await deploy('MockERC20 tPONS', 'MockERC20', 'MockERC20', ['Pons', 'PONS', 18])
-const adapter = await deploy('MockYieldAdapter', 'MockYieldAdapter', 'MockYieldAdapter', [usdg])
+let yieldSource = process.env.LP_GATEWAY_YIELD_SOURCE
+if (yieldSource) {
+  const code = await pub.getBytecode({ address: yieldSource })
+  if (!code || code === '0x') die(`LP_GATEWAY_YIELD_SOURCE ${yieldSource} has no code on chain ${CHAIN_ID}.`)
+  const srcAsset = await pub.readContract({
+    address: yieldSource, functionName: 'asset',
+    abi: [{ type: 'function', stateMutability: 'view', name: 'asset', inputs: [], outputs: [{ type: 'address' }] }],
+  })
+  if (srcAsset.toLowerCase() !== usdg.toLowerCase()) {
+    die(`LP_GATEWAY_YIELD_SOURCE asset() ${srcAsset} != quote ${usdg} — a mis-wired source mis-accounts funds; refusing.`)
+  }
+  console.log(`  ${'yield source (env)'.padEnd(30)} ${yieldSource}`)
+} else {
+  yieldSource = await deploy('MockERC4626 yield source', 'MockERC4626', 'MockERC4626', [usdg])
+}
+// vault = 0 at construction (the staging doesn't exist yet); wired ONCE in step 4. Owner = the Privy signer.
+const adapter = await deploy('ERC4626YieldAdapter', 'MintwareERC4626YieldAdapter', 'MintwareERC4626YieldAdapter', [
+  usdg, yieldSource, ZERO, privyAddress,
+])
 
 // 2) fresh hookless V4 pool (sorted currencies, 0.30% / spacing 60, price 1.0)
 const [c0, c1] = usdg.toLowerCase() < pons.toLowerCase() ? [usdg, pons] : [pons, usdg]
@@ -180,8 +207,25 @@ const pm = await deploy('LpGatewayPositionManager', 'MintwareLpGatewayPositionMa
 ])
 
 // 4) wire controller (deployer-only setController — the Privy signer deployed the staging, so this passes)
+//    + wire the adapter's ONE-TIME vault to the staging (A-5) — until this lands every deposit fails closed
+//    (OnlyVault); after it, the staging is the only address that can ever move funds through the adapter.
 const stagingArt = artifact('MintwareLpGatewayStaging')
+const adapterArt = artifact('MintwareERC4626YieldAdapter')
 await send('staging.setController(pm)', { address: staging, abi: stagingArt.abi, functionName: 'setController', args: [pm] })
+await send('adapter.setVault(staging)', { address: adapter, abi: adapterArt.abi, functionName: 'setVault', args: [staging] })
+const perBlockCap = process.env.LP_ADAPTER_PER_BLOCK_CAP // optional drain bound, atomic units (0/unset = uncapped)
+if (perBlockCap && BigInt(perBlockCap) > 0n) {
+  await send(`adapter.setPerBlockWithdrawCap(${perBlockCap})`, {
+    address: adapter, abi: adapterArt.abi, functionName: 'setPerBlockWithdrawCap', args: [BigInt(perBlockCap)],
+  })
+}
+
+// 4b) post-wire assertions — the two trust edges of the rig must read back exactly as intended.
+const wiredVault = await pub.readContract({ address: adapter, abi: adapterArt.abi, functionName: 'vault' })
+const wiredController = await pub.readContract({ address: staging, abi: stagingArt.abi, functionName: 'controller' })
+if (wiredVault.toLowerCase() !== staging.toLowerCase()) die(`adapter.vault() ${wiredVault} != staging ${staging}`)
+if (wiredController.toLowerCase() !== pm.toLowerCase()) die(`staging.controller() ${wiredController} != pm ${pm}`)
+console.log('  ✓ adapter.vault == staging · staging.controller == pm')
 
 // 5) fund the signer with mock tokens to exercise deposit + the manual paired leg on deploy()
 const erc20 = artifact('MockERC20').abi
@@ -197,6 +241,7 @@ console.log(`  LP_GATEWAY_CHAIN_ID         = ${CHAIN_ID}`)
 console.log(`  LP_GATEWAY_RPC_URL          = ${RPC}`)
 console.log('\nMock rig addresses (testnet, no value):')
 console.log(`  tUSDG   = ${usdg}`)
-console.log(`  tPONS   = ${pons}`)
-console.log(`  adapter = ${adapter}`)
+console.log(`  tPONS        = ${pons}`)
+console.log(`  yield source = ${yieldSource}`)
+console.log(`  adapter      = ${adapter}  (MintwareERC4626YieldAdapter — onlyVault=staging)`)
 console.log('\nNext: apply the migration, then deposit → deploy → harvest per the runbook.\n')

@@ -1,6 +1,6 @@
 // LP-gateway harvest orchestration — the yield-first buffer income path. Collects pool fees on-chain
-// (zero-liquidity-delta, principal untouched) via the position manager's owner (getOracleSigner('root'),
-// the SAME seat the card flow uses), converts the paired leg to the quote asset via the MW meta-router,
+// (zero-liquidity-delta, principal untouched) via the position manager's owner (getOracleSigner('gateway'),
+// a DEDICATED Privy seat — re-audit A-3: never the shared root the card/x402 flows use), converts the paired leg to the quote asset via the MW meta-router,
 // skims the performance fee, and credits each depositor's spend buffer pro-rata to shares at harvest
 // time. YIELD-FIRST + no principal-spend: this only ever moves harvested FEE income, never LP shares.
 //
@@ -79,7 +79,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   const publicClient = gatewayPublicClient(cfg)
   let account
   try {
-    account = await getOracleSigner('root') // the position manager's owner seat
+    account = await getOracleSigner('gateway') // the position manager's owner seat — dedicated, never the shared root
   } catch (e) {
     log?.error('gateway.harvest', 'oracle signer unavailable', { error: String(e) })
     return { ok: false, status: 503, error: 'harvest_signer_unavailable', reason: 'signer' }

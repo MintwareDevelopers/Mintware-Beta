@@ -17,9 +17,12 @@
 //   weight — attribution snapshots (FeeVault / weighted epoch weighting)
 //   range  — signed LP-range rebalance proposals (SocialVault / base vault)
 //   agent  — AI-agent action attestations (AIAttribution)
+//   gateway — LP Gateway V1 owner seat (deploy / harvest / setPaused on MintwareLpGatewayPositionManager).
+//             Re-audit A-3 key hardening: a DEDICATED seat with NO fallback to any shared key — the gateway
+//             owner can move principal into an LP, so it must never share a key with card/x402/treasury.
 // =============================================================================
 
-export type OracleRole = 'root' | 'weight' | 'range' | 'agent'
+export type OracleRole = 'root' | 'weight' | 'range' | 'agent' | 'gateway'
 
 /**
  * Ordered env-var candidates per role. First non-empty wins. The fallback stays
@@ -31,6 +34,7 @@ const ROLE_ENV: Record<OracleRole, string[]> = {
   weight: ['WEIGHT_ORACLE_PRIVATE_KEY', 'DISTRIBUTOR_PRIVATE_KEY'],
   range:  ['RANGE_ORACLE_PRIVATE_KEY',  'ORACLE_PRIVATE_KEY'],
   agent:  ['AGENT_ORACLE_PRIVATE_KEY',  'ORACLE_PRIVATE_KEY'],
+  gateway: ['GATEWAY_ORACLE_PRIVATE_KEY'], // deliberately NO shared-key fallback (fails closed)
 }
 
 /**
