@@ -1,8 +1,9 @@
-import { isHex, decodeEventLog } from 'viem'
+import { decodeEventLog } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
-import { resolveRouteInstance } from '@/lib/gateway/registry'
+import { resolveInstanceStrict } from '@/lib/gateway/routeInstance'
+import { bindSignedRecord } from '@/lib/gateway/recordAuth'
 import { nextWithdrawBasis } from '@/lib/gateway/basisMath'
 
 export const dynamic = 'force-dynamic'
@@ -14,17 +15,25 @@ export const dynamic = 'force-dynamic'
 // M-04 (security review 2026-09-06): signed-message (action-bound) so only the owner records their own
 // tx (the Withdrawn event's user must equal the recovered signer), and the proportional basis reduction
 // is idempotent per tx_hash (gateway_deposit_events UNIQUE) so a replayed txHash can't deflate it twice.
+// O-10 (round-2): signed txHash/pool strict-compared to the body; single-use signature (`bindSignedRecord`).
+// O-2: strict pool resolution (404 on a miss while the registry is populated).
 export const POST = createHandler(async (req, ctx) => {
   const cfg = gatewayConfig()
   if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
 
-  const body = (await req.clone().json().catch(() => ({}))) as { txHash?: string; pool?: string }
+  const body = (await req.clone().json().catch(() => ({}))) as Record<string, unknown>
   const address = ctx.user!.address
-  const txHash = body.txHash
-  if (!txHash || !isHex(txHash)) return ctx.json({ success: false, error: 'txHash_required' }, 400)
+  const bound = bindSignedRecord(body)
+  if (!bound.ok) {
+    if (bound.error === 'txHash_required') return ctx.json({ success: false, error: 'txHash_required' }, 400)
+    if (bound.error === 'auth_replayed') return ctx.json({ success: false, error: 'auth_replayed' }, 409)
+    return ctx.json({ success: false, error: 'auth_payload_mismatch' }, 401)
+  }
+  const { txHash, pool } = bound.bound
 
-  const inst = await resolveRouteInstance(ctx.supabase, cfg, body.pool ?? null)
-  if (!inst) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
+  const r = await resolveInstanceStrict(ctx.supabase, cfg, pool)
+  if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
+  const inst = r.inst
 
   const client = gatewayPublicClient(cfg)
   let receipt
@@ -70,7 +79,7 @@ export const POST = createHandler(async (req, ctx) => {
   // withdraw was already recorded → the proportional reduction is skipped so a replay can't deflate the
   // basis repeatedly (which would fabricate a growing "loss" on the dashboard).
   const { error: evErr } = await ctx.supabase.from('gateway_deposit_events').insert({
-    tx_hash: txHash.toLowerCase(),
+    tx_hash: txHash,
     address,
     kind: 'withdraw',
     pool_address: inst.poolAddress,
@@ -102,6 +111,9 @@ export const POST = createHandler(async (req, ctx) => {
       .update({ shares: onChainShares.toString(), entry_nav: newBasis.toString(), updated_at: new Date().toISOString() })
       .eq('id', existing.id)
   }
+  // No row ⇒ the deposit was never recorded (O-1 legacy). Deliberately NOT creating one here: entry_nav
+  // is NOT NULL DEFAULT 0, so a synthetic row would fabricate a "gain" equal to the whole position. The
+  // Portfolio is chain-first and shows the position (basis unknown) regardless.
 
   return ctx.json({ success: true, sharesBurned, quoteOut, pairedOut, shares: onChainShares, costBasisAtomic: newBasis, idempotentReplay: alreadyRecorded })
 }, { auth: 'signed-message', action: 'mintware-gateway-withdraw' })

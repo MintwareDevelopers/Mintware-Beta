@@ -48,6 +48,9 @@ contract MintwareLpGatewayFactory is Ownable2Step {
     error NotFound();
     error ZeroAddress();
     error AdapterReused();
+    error AdapterAssetMismatch(); // C-9b / F-07: adapter.asset() answered, but not with the pool's quote asset
+    error AdapterUnreadable(); // C-9b / F-07: adapter answers neither asset() nor totalAssets() — not an IYieldAdapter
+    error AdapterAlreadyBound(); // C-9b / F-07: adapter.vault() is already wired to some other sink
 
     event GatewayCreated(
         bytes32 indexed poolId, address staging, address positionManager, address quoteAsset, address gatewayOwner
@@ -78,6 +81,7 @@ contract MintwareLpGatewayFactory is Ownable2Step {
         if (instanceForPool[poolId].positionManager != address(0)) revert AlreadyExists();
         if (adapterUsed[address(adapter)]) revert AdapterReused();
         adapterUsed[address(adapter)] = true;
+        _verifyAdapterBinding(adapter, quoteAsset);
 
         uint16 band = maxDeviationBps == 0 ? DEFAULT_MAX_DEVIATION_BPS : maxDeviationBps;
         MintwareLpGatewayStaging staging = new MintwareLpGatewayStaging(quoteAsset, adapter);
@@ -90,6 +94,33 @@ contract MintwareLpGatewayFactory is Ownable2Step {
         poolIds.push(poolId);
         emit GatewayCreated(poolId, address(staging), address(pm), address(quoteAsset), gatewayOwner);
         return (address(staging), address(pm));
+    }
+
+    /// @dev Audit C-9b / Hacken F-07: verify the adapter is actually bound to THIS pool's quote asset before wiring
+    ///      it under a fresh staging, instead of discovering a mis-wire on the first `deposit` (`OnlyVault` /
+    ///      transfer failure — a DOA instance). `IYieldAdapter` has no asset getter, so this is a low-level probe:
+    ///        1. `asset()` (the production `MintwareERC4626YieldAdapter` exposes it). If the adapter ANSWERS, the
+    ///           answer MUST equal `quoteAsset` → else `AdapterAssetMismatch`.
+    ///        2. If it does not implement `asset()` (an older / third-party `IYieldAdapter`, e.g. the Aave adapter
+    ///           whose getter is `underlying()`), fall back to a sanity call: `totalAssets()` must succeed and return
+    ///           a word (its VALUE may be zero — a fresh adapter holds nothing). A contract that answers neither is
+    ///           not an `IYieldAdapter` → `AdapterUnreadable`. An EOA / codeless address fails here too (empty
+    ///           returndata on both probes).
+    ///        3. Best-effort: if the adapter exposes `vault()` and it is ALREADY non-zero, the adapter's one-time
+    ///           sink is wired elsewhere and can never point at the new staging → `AdapterAlreadyBound`.
+    ///      All probes are `staticcall`s — a hostile adapter can't reenter or mutate through them. This is a
+    ///      wiring guard, not a trust guard: the curator still vets the adapter/source (the factory is onlyOwner).
+    function _verifyAdapterBinding(IYieldAdapter adapter, IERC20 quoteAsset) internal view {
+        address a = address(adapter);
+        (bool ok, bytes memory ret) = a.staticcall(abi.encodeWithSignature("asset()"));
+        if (ok && ret.length >= 32) {
+            if (abi.decode(ret, (address)) != address(quoteAsset)) revert AdapterAssetMismatch();
+        } else {
+            (bool ok2, bytes memory ret2) = a.staticcall(abi.encodeWithSelector(IYieldAdapter.totalAssets.selector));
+            if (!ok2 || ret2.length < 32) revert AdapterUnreadable();
+        }
+        (bool ok3, bytes memory ret3) = a.staticcall(abi.encodeWithSignature("vault()"));
+        if (ok3 && ret3.length >= 32 && abi.decode(ret3, (address)) != address(0)) revert AdapterAlreadyBound();
     }
 
     /// @notice Retire a pool's gateway from the active set (deposits/harvest curated off at the app layer).

@@ -48,21 +48,34 @@ nudge if the signer is unfunded.
 > `contracts-v4/script/SetupLpGatewayTestnet.s.sol` (`forge script … --broadcast --private-key $DEPLOYER_KEY`)
 > — same rig, but a raw key signs. The pure-Privy path above is preferred.
 
-## 3. Apply the migration + set env
+## 3. Apply the migrations + set env
 ```bash
-supabase db push   # applies 20260906000001_lp_gateway.sql
+supabase db push   # applies 20260906000001 (positions/harvest) · 20260906000002 (registry) ·
+                   # 20260907000001 (idempotency) · 20260907000002 (snapshots) · 20260907000003 (alerts)
 ```
 On Vercel (Production + Preview), from the script output:
 ```
 LP_GATEWAY_POSITION_MANAGER = <PositionManager>
 LP_GATEWAY_STAGING          = <Staging>
-LP_GATEWAY_POOL_ADDRESS     = <a label/poolId you key the DB by, e.g. tpons-usdg>
+LP_GATEWAY_POOL_ADDRESS     = <the 32-byte v4 poolId — NEVER a label like "tpons-usdg" (audit HO-2/HO-14)>
 LP_GATEWAY_CHAIN_ID         = 46630
 LP_GATEWAY_RPC_URL          = https://rpc.testnet.chain.robinhood.com
+LP_GATEWAY_USDG             = <the rig's tUSDG address; RH mainnet = 0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168>
+LP_GATEWAY_CURATOR_SECRET   = <random bearer for /api/gateway/curate>
+GATEWAY_ORACLE_PRIVY_WALLET_ID / GATEWAY_ORACLE_PRIVY_ADDRESS = <the dedicated gateway seat that owns the rig>
 ```
+`LP_GATEWAY_USDG` is **required for the Discover feed and the curator queue to show anything** — USDG is
+matched by address only; unset means "quote asset unknown", every pool is ineligible and the feed is empty
+(fail-closed, round-2 audit O-7). The full `LP_GATEWAY_*` table (defaults + fail-closed behaviour) lives in
+`.claude/rules/deployments.md`.
 
 ## 4. Deposit (proves stage-and-earn)
-Client flow: approve tUSDG → `positionManager.deposit(amount)` → `POST /api/gateway/deposit {address,txHash}`.
+Client flow: approve tUSDG → `positionManager.deposit(amount)` (or `depositWithMin`) → record it with
+`POST /api/gateway/deposit` — a **wallet-signed** body (`{ address, txHash, authMessage, authSignature,
+issuedAt }`, action `mintware-gateway-deposit`, built with `lib/web3/signedActionMessages.ts`), which the
+route verifies against the mined receipt (`receipt.to`, the deposit event's user, on-chain `sharesOf`) and
+de-duplicates by tx hash. An unsigned `{address, txHash}` body is **rejected (401)** — the older client did
+exactly that (audit HO-1/O-1); check the closeout records for the client's current state.
 Or via cast:
 ```bash
 cast send $TUSDG "approve(address,uint256)" $POSITION_MANAGER 1000000000 --private-key $KEY --rpc-url $RPC
@@ -84,20 +97,26 @@ cron (or call `harvest(deadline)` as owner). Set `LP_GATEWAY_HARVEST_ENABLED=tru
 records the run.
 
 ## Flags (all default OFF / fail-closed)
-`LP_GATEWAY_HARVEST_ENABLED` · `LP_GATEWAY_DEPLOY_ENABLED` · `LP_GATEWAY_DEPLOY_THRESHOLD_ATOMIC` ·
-`LP_GATEWAY_PERF_FEE_BPS` (default 1000 = 10%). The paired↔quote **router executor**
-(`LP_GATEWAY_ROUTER_ADDRESS`) is the one code seam still to wire before harvest/deploy auto-run.
-`LP_MAX_DEVIATION_BPS` (deploy-time, default `2000`) sizes the flash-manipulation breaker (below).
+`LP_GATEWAY_HARVEST_ENABLED` · `LP_GATEWAY_DEPLOY_ENABLED` · `LP_GATEWAY_DEPLOY_THRESHOLD_ATOMIC` (`0` =
+never deploys) · `LP_GATEWAY_DEPLOY_MIN_LIQUIDITY` (`0` = the cron refuses to deploy, A-3) ·
+`LP_GATEWAY_DEPLOY_RATIO_BPS` (default 5000) · `LP_GATEWAY_PERF_FEE_BPS` (default 1000 = 10%) ·
+`LP_GATEWAY_HARVEST_MIN_ATOMIC` (default 1 USDG) · `LP_GATEWAY_HARVEST_DESTINATION` (`buffer` | `restake`
+— use `restake` until the A-4 ledger is event-indexed) · `LP_GATEWAY_CIRCUIT_BREAKER_ENABLED`. The
+paired↔quote **router executor** (`LP_GATEWAY_ROUTER_ADDRESS` + `LP_GATEWAY_QUOTER`) is the one code seam
+still to wire before harvest/deploy auto-run. **Neither harvest nor deploy is on the `vercel.json` schedule** —
+only `gateway-discover` (daily 05:00 UTC) and `gateway-snapshot` (daily 06:00 UTC) are; hit the others
+by hand with `CRON_SECRET`. `LP_MAX_DEVIATION_BPS` (deploy-time, **default `500`** = 5%) sizes the
+clamped-follower step (below). Full table: `.claude/rules/deployments.md`.
 
-## Self-audit hardening (in the contracts — see `lp-gateway-v1-audit.md`)
-Four findings from the V1 blockchain self-audit are fixed on-chain:
-- **C1 (spot-NAV flash manipulation).** The deployed LP leg is spot-priced and a hookless meme pool has
-  no on-chain TWAP. Defense is layered: a **deposit/withdraw deviation breaker** (`maxDeviationBps`,
-  default 20% of sqrtPrice) that reverts when live spot deviates from a per-block-anchored reference — a
-  single-block flash pump can't move NAV without tripping it — plus a **same-block guard** (one address
-  can't deposit+withdraw in a block) and the **capped deploy ratio** (most capital stays idle in Morpho,
-  which is spot-immune). If sharp *legitimate* volatility ever locks the breaker against a stale anchor,
-  the owner calls **`pokePrice()`** to re-anchor (moves no funds). Residual: a patient cross-block
+## Contract hardening (see `lp-gateway-v1-security-review.md` + `audits/2026-09-08-consolidated.md`)
+The V1 self-audit findings, the firm-grade review and the round-2 audit are fixed on-chain:
+- **Spot-NAV flash manipulation.** The deployed LP leg is spot-priced and a hookless meme pool has no
+  on-chain TWAP. Defense is layered: a **clamped-follower reference** that tracks spot by at most
+  `maxDeviationBps` per block (nothing reverts on price — withdrawals never brick), a **conservative entry
+  mark** (`max(spot, ref)` on deposit; `depositWithMin` bounds a pump), a **pure pro-rata exit** on both
+  legs (`withdrawWithMin` bounds it), a **same-block guard**, and the **cost-basis deploy cap** (most capital
+  stays idle in Morpho, which is spot-immune). Anyone can **`poke()`** the follower one bounded step so the
+  mark can't go stale (the older owner-only `pokePrice()` no longer exists). Residual: a patient cross-block
   manipulator on a THIN pool isn't fully stopped on-chain — **deep-pool curation is the backstop**, and
   mainnet stays audit-gated.
 - **M1 (staging controller front-run).** `setController` is now deployer-only (the factory), so no one
@@ -121,24 +140,25 @@ Note: IL can be *diminished*, never *eliminated*, for a fee-earning LP — earni
 in-range, which requires two-sided exposure. The thesis is that the high meme fee flow out-earns the
 residual IL; "no par claim" stays honest. Managed rebalancing + a fee-funded IL reserve are phase-2.
 
-## Flip on the V1/V2 split (serve V1, gate V2 for investors)
-The whole site defaults to the V2 vision until you flip it. On Vercel:
-```
-NEXT_PUBLIC_V1_MODE_ENABLED = true     # default visitors now get V1 (the live LP Gateway) everywhere
-V2_PASSWORD                 = <share with investors out-of-band>
-```
-Then: a normal visitor lands on the LP Gateway (homepage, `/app`, and every marketing page render their
-V1 face; "Launch app" → the gateway, no V2 modal). An investor opens **`/v2`**, types the password → the
-whole site flips to the full V2 vision (treasury OS, YPN, cards, agents) for their session. With the flag
-OFF (default) nothing changes — V2 shows everywhere, exactly as today.
+## V1 is a product, not a site mode (do NOT flip `NEXT_PUBLIC_V1_MODE_ENABLED`)
+`/v1` is reachable at any time and the site links to it (the "Live now" band + the Launch chooser's
+"V1 · Live" track). `NEXT_PUBLIC_V1_MODE_ENABLED` is a **legacy dark-launch flag — leave it OFF**: turning it
+on swaps the ENTIRE public site to V1 faces (it replaced the landing once, 2026-09-07 incident). The
+`/v2` + `V2_PASSWORD` investor gate only matters in that legacy mode. See `.claude/rules/lp-gateway.md`.
 
 ## Curate pools (auto-surfaced → one-click approve)
-- The `/cron/gateway-discover` cron auto-ingests the top-30 hottest RH-Chain pools (GeckoTerminal) as
-  **pending candidates** with a risk score — visible at `GET /api/gateway/curate`, ranked safest-first.
-- Set `LP_GATEWAY_CURATOR_SECRET` on Vercel to enable curation. Approve/reject via `POST /api/gateway/curate`
-  (bearer = that secret). An approve carrying the deployed gateway addresses registers the live instance in
-  one call. The risk score RANKS the queue; it never certifies safety (no honeypot/hook sim) — every pool
-  is a human decision.
+- The `/api/cron/gateway-discover` cron runs **daily at 05:00 UTC** and ingests the top-30 hottest RH-Chain
+  pools (GeckoTerminal, mainnet slug `robinhood`) that are v4 **and USDG-quoted by address** as **pending
+  candidates** with a risk score — visible at `GET /api/gateway/curate`, ranked safest-first. It needs
+  `LP_GATEWAY_USDG`; without it nothing is eligible (fail-closed). A candidate that drops out of the top-30 is
+  pruned only after 72 h unseen (`LP_GATEWAY_DISCOVER_PRUNE_GRACE_HOURS`); approved/rejected/manual rows are
+  never pruned; a failed or malformed upstream read leaves the queue untouched.
+- Set `LP_GATEWAY_CURATOR_SECRET` on Vercel to enable curation (unset ⇒ the route fails closed, 500 — and
+  there is no `NODE_ENV=development` free pass any more; local dev needs `ALLOW_DEV_BEARER_BYPASS=true`).
+  Approve/reject via `POST /api/gateway/curate` (bearer = that secret). An approve carrying the deployed
+  gateway addresses registers the live instance in one call — after `registerInstance` verifies the
+  PositionManager on-chain (`quoteAsset()` / `poolKey()`), which is what makes a pool depositable. The risk
+  score RANKS the queue; it never certifies safety (no honeypot/hook sim) — every pool is a human decision.
 
 ## What stays gated for MAINNET (not testnet)
 Real USDG + the Morpho Steakhouse vault (via `MintwareERC4626YieldAdapter`) instead of the mock rig, a

@@ -103,3 +103,23 @@ tiny first amount · watch harvest / out-of-range / breaker · `LP_GATEWAY_HARVE
 `contracts-v4/test/fork/MintwareLpGatewayAuditRound2Fork.t.sol` **10/10** (F-01a/b, F-02a/b, F-04, RT-1a, RT-2, RT-5a,
 RT-9a, withdrawWithMin) · the auditors' own PoC suites re-run against the fix: F-01a/b, F-02a/b, I-03, RT-2, RT-5a,
 RT-6a/b/c, RT-9a/b **now fail as attacks** (suites updated to assert the fixed behavior).
+
+---
+
+## 6. Close-out status (2026-09-08, same day)
+
+Every item in §2–§4 was actioned in the close-out branch; the per-area records and the human remainder are in
+[`closeout/README.md`](closeout/README.md). Status deltas versus the tables above:
+
+- **Contract:** C-9 (adapter `Ownable2Step`, factory adapter-binding checks), C-10 (tolerant staged read — deposits fail
+  closed, withdraws pay the LP leg), and the `harvestRecipient` timelocked rotation → **fixed**. Fork + audit suites now
+  run in CI.
+- **Off-chain:** O-1, O-2, O-3, O-4, O-5, O-7, O-8, O-9, O-10, O-11, O-12, O-13, O-14 → **fixed** (records linked in the
+  close-out README). **O-6** (one Privy app secret across seats) needs Privy authorization keys / wallet policies —
+  a dashboard step, listed for a human.
+- **Rollout:** read-only mainnet preflight + Privy-signed deploy script with `--dry-run`, pool curation policy, mainnet
+  runbook and risk disclosures exist; real deployment is a human step (fund the seat, pick a Morpho vault with capacity).
+
+**Verdict after close-out:** own funds via direct calls — yes (unchanged); own funds via the UI — **yes once the three
+ops env/migration steps in the close-out README are applied** (the code path is complete and tested); third-party funds —
+gated on the Privy credential separation, the ops steps, and the external audit.

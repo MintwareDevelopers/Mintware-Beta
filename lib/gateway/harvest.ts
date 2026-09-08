@@ -1,11 +1,24 @@
-// LP-gateway harvest orchestration — the yield-first buffer income path. Collects pool fees on-chain
+// LP-gateway harvest orchestration — the yield-first income path. Collects pool fees on-chain
 // (zero-liquidity-delta, principal untouched) via the position manager's owner (getOracleSigner('gateway'),
-// a DEDICATED Privy seat — re-audit A-3: never the shared root the card/x402 flows use), converts the paired leg to the quote asset via the MW meta-router,
-// skims the performance fee, and credits each depositor's spend buffer pro-rata to shares at harvest
-// time. YIELD-FIRST + no principal-spend: this only ever moves harvested FEE income, never LP shares.
+// a DEDICATED Privy seat — re-audit A-3: never the shared root the card/x402 flows use), converts the
+// paired leg to the quote asset via the MW meta-router, then settles the harvested QUOTE income through
+// the event-indexed ledger (lib/gateway/ledger.ts). YIELD-FIRST + no principal-spend: this only ever
+// moves harvested FEE income, never LP shares.
+//
+// Audit closeout 2026-09-08 (O-4 / R-3 / HO-6 / A-4): the credit step no longer weights by DB shares,
+// no longer read-modify-writes `card_spend_buffers`, and no longer looks only at the one collect tx it
+// just sent. Pipeline per instance: collect → convert paired leg → INDEX every `Harvested` log since the
+// persisted cursor (cron harvests AND withdraw/deploy sweeps) → settle:
+//   * 'restake' (DEFAULT until an operator flips it) — compound Σ pending net back into the PM via
+//     `compoundQuote` (lifts NAV pro-rata ON-CHAIN, no DB claim at all), mark logs 'restake';
+//   * 'buffer' — per-depositor credits weighted by on-chain sharesOf/totalShares at the harvest block,
+//     written atomically by `record_gateway_harvest` into `gateway_fee_credits` (an IOU against the seat
+//     wallet; `gateway_fee_balances` / `gateway_fee_ledger_reconciliation` audit it).
+// The card rail never reads any of these tables.
 //
 // DARK-LAUNCHED, fail-closed, OFF by default: no-ops unless LP_GATEWAY_HARVEST_ENABLED === 'true' and
-// the gateway config + oracle signer resolve. Idempotent on the collect tx (harvest_events unique index).
+// the gateway config + oracle signer resolve. Index-only mode (no tx, no signer) runs when
+// LP_GATEWAY_LEDGER_INDEX_ENABLED === 'true' — it only reads chain + writes the ledger.
 
 import { createWalletClient, http, decodeEventLog } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
@@ -13,9 +26,9 @@ import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { listActiveInstances } from '@/lib/gateway/registry'
-import { skimPerformanceFee, proRataBufferCredits, type SharePosition } from '@/lib/gateway/harvestMath'
+import { skimPerformanceFee } from '@/lib/gateway/harvestMath'
 import { swapPairedToQuote } from '@/lib/gateway/routerSwap'
-import { harvestDestination } from '@/lib/gateway/opsConfig'
+import { indexHarvestLogs, listPendingRestake, markRestaked, type IndexOutcome, type LedgerClient } from '@/lib/gateway/ledger'
 
 const ERC20_APPROVE_ABI = [
   { type: 'function', stateMutability: 'nonpayable', name: 'approve', inputs: [{ name: 's', type: 'address' }, { name: 'v', type: 'uint256' }], outputs: [{ type: 'bool' }] },
@@ -30,10 +43,30 @@ type Logger = {
   error: (tag: string, msg: string, ctx?: Record<string, unknown>) => void
 }
 
-type Reason = 'disabled' | 'config' | 'signer' | 'tx' | 'nothing' | 'duplicate'
+type Reason = 'disabled' | 'config' | 'signer' | 'tx' | 'nothing' | 'duplicate' | 'index'
 export type HarvestOutcome =
-  | { ok: true; collectTx: `0x${string}`; grossAtomic: bigint; feeAtomic: bigint; creditedAtomic: bigint; recipients: number }
-  | { ok: false; status: number; error: string; reason: Reason }
+  | {
+      ok: true
+      collectTx: `0x${string}`
+      grossAtomic: bigint
+      feeAtomic: bigint
+      creditedAtomic: bigint
+      recipients: number
+      destination: HarvestDestination
+      index: IndexOutcome | null
+    }
+  | { ok: false; status: number; error: string; reason: Reason; index?: IndexOutcome | null }
+
+export type HarvestDestination = 'buffer' | 'restake'
+
+/** Where harvested net fees go. Audit closeout O-4: **'restake' is the default** — `compoundQuote` lifts NAV
+ *  pro-rata on-chain, so fee income provably reaches depositors with no off-chain claim. 'buffer' (the
+ *  per-depositor IOU ledger) is opt-in: `LP_GATEWAY_HARVEST_DESTINATION=buffer`. Resolved here (not in
+ *  opsConfig.ts, whose 'buffer' default predates the closeout) so the safe default is enforced on the
+ *  money path regardless. */
+export function resolveHarvestDestination(env: Record<string, string | undefined> = process.env): HarvestDestination {
+  return (env.LP_GATEWAY_HARVEST_DESTINATION ?? '').toLowerCase() === 'buffer' ? 'buffer' : 'restake'
+}
 
 const big = (v: unknown) => BigInt(String(v ?? '0'))
 const perfFeeBps = () => {
@@ -45,36 +78,58 @@ const perfFeeBps = () => {
 // Default 1 USDG (6dp). Set 0 to disable the floor.
 const harvestMinAtomic = () => big(process.env.LP_GATEWAY_HARVEST_MIN_ATOMIC ?? '1000000')
 
-/** Harvest EVERY active gateway (registry + single-env fallback). The cron entry point. */
-export async function harvestAll(opts: { supabase: SupabaseClient; log?: Logger }): Promise<{ harvested: number; results: HarvestOutcome[] }> {
-  if (process.env.LP_GATEWAY_HARVEST_ENABLED !== 'true') {
-    return { harvested: 0, results: [{ ok: false, status: 503, error: 'gateway harvest is not enabled', reason: 'disabled' }] }
-  }
-  const cfg = gatewayConfig()
-  if (!cfg) return { harvested: 0, results: [{ ok: false, status: 503, error: 'gateway_not_configured', reason: 'config' }] }
-  const active = await listActiveInstances(opts.supabase, cfg.chainId)
-  const targets: HarvestInstance[] = active.length
+const harvestEnabled = () => process.env.LP_GATEWAY_HARVEST_ENABLED === 'true'
+const indexEnabled = () => process.env.LP_GATEWAY_LEDGER_INDEX_ENABLED === 'true'
+
+function targetsFor(active: Awaited<ReturnType<typeof listActiveInstances>>, cfg: NonNullable<ReturnType<typeof gatewayConfig>>): HarvestInstance[] {
+  return active.length
     ? active.map((i) => ({ positionManager: i.positionManager, poolAddress: i.poolAddress, chainId: i.chainId }))
     : cfg.positionManager && cfg.poolAddress
       ? [{ positionManager: cfg.positionManager, poolAddress: cfg.poolAddress, chainId: cfg.chainId }]
       : []
-  const results: HarvestOutcome[] = []
-  let harvested = 0
-  for (const instance of targets) {
-    const r = await harvestGateway({ supabase: opts.supabase, log: opts.log, instance })
-    results.push(r)
-    if (r.ok) harvested++
+}
+
+/** Harvest EVERY active gateway (registry + single-env fallback). The cron entry point.
+ *  Modes: harvest (collect + index + settle) when LP_GATEWAY_HARVEST_ENABLED; index-only (no tx, no
+ *  signer) when only LP_GATEWAY_LEDGER_INDEX_ENABLED; else disabled. */
+export async function harvestAll(opts: { supabase: SupabaseClient; log?: Logger }): Promise<{ harvested: number; indexed: number; results: HarvestOutcome[]; indexResults: IndexOutcome[] }> {
+  if (!harvestEnabled() && !indexEnabled()) {
+    return { harvested: 0, indexed: 0, indexResults: [], results: [{ ok: false, status: 503, error: 'gateway harvest is not enabled', reason: 'disabled' }] }
   }
-  return { harvested, results }
+  const cfg = gatewayConfig()
+  if (!cfg) return { harvested: 0, indexed: 0, indexResults: [], results: [{ ok: false, status: 503, error: 'gateway_not_configured', reason: 'config' }] }
+  const targets = targetsFor(await listActiveInstances(opts.supabase, cfg.chainId), cfg)
+  const results: HarvestOutcome[] = []
+  const indexResults: IndexOutcome[] = []
+  let harvested = 0
+  let indexed = 0
+  for (const instance of targets) {
+    if (harvestEnabled()) {
+      const r = await harvestGateway({ supabase: opts.supabase, log: opts.log, instance })
+      results.push(r)
+      if (r.ok) harvested++
+      if ('index' in r && r.index) { indexResults.push(r.index); if (r.index.ok) indexed++ }
+    } else {
+      // index-only: sweeps from withdraw/deploy still get credited without the cron ever sending a tx
+      const idx = await indexHarvestLogs({
+        supabase: opts.supabase, client: gatewayPublicClient(cfg) as unknown as LedgerClient, instance, log: opts.log,
+        settlement: resolveHarvestDestination() === 'buffer' ? 'credited' : 'pending',
+      })
+      indexResults.push(idx)
+      if (idx.ok) indexed++
+    }
+  }
+  return { harvested, indexed, results, indexResults }
 }
 
 export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Logger; instance: HarvestInstance }): Promise<HarvestOutcome> {
   const { supabase, log, instance } = opts
-  if (process.env.LP_GATEWAY_HARVEST_ENABLED !== 'true') {
+  if (!harvestEnabled()) {
     return { ok: false, status: 503, error: 'gateway harvest is not enabled', reason: 'disabled' }
   }
   const cfg = gatewayConfig()
   if (!cfg) return { ok: false, status: 503, error: 'gateway_not_configured', reason: 'config' }
+  const destination = resolveHarvestDestination()
 
   const publicClient = gatewayPublicClient(cfg)
   let account
@@ -89,7 +144,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   // 0) gas-saving dust guard: pre-simulate the collect (eth_call as the owner, no gas, no state change)
   //    to read the collectable fees, and skip the real tx when the quote leg is below the floor and there
   //    is no paired leg worth swapping. Fails OPEN (proceeds) if the simulate itself errors — it's an
-  //    optimization, not a safety gate.
+  //    optimization, not a safety gate. Even when skipped, the ledger still indexes prior sweeps.
   try {
     const sim = await publicClient.simulateContract({
       address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'harvest',
@@ -100,7 +155,10 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
       log?.info('gateway.harvest', 'below harvest floor — skipped (no gas spent)', {
         expectedQuote: eq.toString(), floor: harvestMinAtomic().toString(), pool: instance.poolAddress,
       })
-      return { ok: false, status: 200, error: 'below harvest floor — skipped to save gas', reason: 'nothing' }
+      const index = await indexHarvestLogs({
+        supabase, client: publicClient as unknown as LedgerClient, instance, log, settlement: destination === 'buffer' ? 'credited' : 'pending',
+      })
+      return { ok: false, status: 200, error: 'below harvest floor — skipped to save gas', reason: 'nothing', index }
     }
   } catch (e) {
     log?.warn('gateway.harvest', 'pre-harvest simulate failed; proceeding', { error: String(e) })
@@ -109,6 +167,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   // 1) collect fees (zero-liquidity-delta) → harvestRecipient (the oracle seat). Idempotent-safe: a
   //    revert (no fees) just yields zero, and the collect tx keys the harvest_events unique index.
   let collectTx: `0x${string}`
+  let collectBlock: bigint | undefined
   let quoteFees = 0n
   let pairedFees = 0n
   try {
@@ -118,6 +177,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     })
     const receipt = await publicClient.waitForTransactionReceipt({ hash: collectTx })
     if (receipt.status !== 'success') return { ok: false, status: 502, error: 'harvest_reverted', reason: 'tx' }
+    collectBlock = receipt.blockNumber != null ? BigInt(receipt.blockNumber) : undefined
     for (const lg of receipt.logs) {
       if (lg.address.toLowerCase() !== instance.positionManager.toLowerCase()) continue
       try {
@@ -133,7 +193,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     return { ok: false, status: 502, error: 'harvest_failed', reason: 'tx' }
   }
 
-  // idempotency: never record/credit the same collect twice
+  // idempotency on the RUN: never record the same collect twice (the ledger has its own per-log key)
   const { data: dupe } = await supabase.from('harvest_events').select('id').eq('collect_tx', collectTx).maybeSingle()
   if (dupe) return { ok: false, status: 200, error: 'already recorded', reason: 'duplicate' }
 
@@ -146,82 +206,64 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     swapTx = swap.txHash
   }
   const grossAtomic = quoteFees + swappedQuote
-  if (grossAtomic <= 0n) {
+  const { feeAtomic } = skimPerformanceFee(grossAtomic, perfFeeBps())
+
+  // 3) INDEX — every Harvested log since the cursor (this collect + any withdraw/deploy sweeps), weighed at
+  //    each harvest block and written atomically. `minToBlock` guarantees the receipt we just waited on is
+  //    in range even with confirmations > 0.
+  const index = await indexHarvestLogs({
+    supabase, client: publicClient as unknown as LedgerClient, instance, log,
+    settlement: destination === 'buffer' ? 'credited' : 'pending', minToBlock: collectBlock,
+  })
+  if (!index.ok) {
+    log?.error('gateway.harvest', 'ledger index failed — nothing settled this run (safe to retry)', { error: index.error, pool: instance.poolAddress })
     await supabase.from('harvest_events').insert({
       pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
-      amount_harvested_atomic: '0', fee_skimmed_atomic: '0', amount_credited_atomic: '0',
+      amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: '0', amount_credited_atomic: '0',
     })
-    return { ok: false, status: 200, error: 'nothing harvested', reason: 'nothing' }
+    return { ok: false, status: 502, error: `ledger_index_failed:${index.error}`, reason: 'index', index }
   }
 
-  // 3) skim the performance fee, split the rest pro-rata by share
-  const { feeAtomic, netAtomic } = skimPerformanceFee(grossAtomic, perfFeeBps())
+  const record = (credited: bigint) =>
+    supabase.from('harvest_events').insert({
+      pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
+      amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(), amount_credited_atomic: credited.toString(),
+    })
 
-  // 3a) restake destination (item 14): compound the net back into Morpho instead of crediting buffers —
-  //     lifts NAV pro-rata for ALL holders (no share mint). The oracle seat holds the net; approve the
-  //     PM + call compoundQuote. Requires the compoundQuote-capable contract (redeploy) — off until then.
-  if (harvestDestination() === 'restake') {
-    const recordRestake = (credited: bigint) =>
-      supabase.from('harvest_events').insert({
-        pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
-        amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(), amount_credited_atomic: credited.toString(),
-      })
-    if (netAtomic <= 0n) {
-      await recordRestake(0n)
-      return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: 0n, recipients: 0 }
+  // 4a) RESTAKE (default): compound Σ pending net (all un-settled logs, not just this collect) + the
+  //     swapped paired leg back into the PM — lifts NAV pro-rata for ALL holders on-chain, no share mint.
+  //     The paired-leg proceeds are not part of any Harvested log's quote_fees, so they ride along here.
+  if (destination === 'restake') {
+    const pending = await listPendingRestake(supabase, instance)
+    const { netAtomic: swappedNet } = skimPerformanceFee(swappedQuote, perfFeeBps())
+    const amount = pending.netAtomic + swappedNet
+    if (amount <= 0n) {
+      await record(0n)
+      return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: 0n, recipients: 0, destination, index }
     }
+    let ch: `0x${string}`
     try {
       const quoteAsset = (await publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset' })) as `0x${string}`
-      const ah = await wallet.writeContract({ address: quoteAsset, abi: ERC20_APPROVE_ABI, functionName: 'approve', args: [instance.positionManager, netAtomic], account, chain: publicClient.chain })
+      const ah = await wallet.writeContract({ address: quoteAsset, abi: ERC20_APPROVE_ABI, functionName: 'approve', args: [instance.positionManager, amount], account, chain: publicClient.chain })
       await publicClient.waitForTransactionReceipt({ hash: ah })
-      const ch = await wallet.writeContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'compoundQuote', args: [netAtomic], account, chain: publicClient.chain, gas: 400_000n })
+      ch = await wallet.writeContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'compoundQuote', args: [amount], account, chain: publicClient.chain, gas: 400_000n })
       const rc = await publicClient.waitForTransactionReceipt({ hash: ch })
-      if (rc.status !== 'success') return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx' }
+      if (rc.status !== 'success') return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx', index }
     } catch (e) {
       log?.error('gateway.harvest', 'restake/compound failed', { error: String(e) })
-      return { ok: false, status: 502, error: 'compound_failed', reason: 'tx' }
+      return { ok: false, status: 502, error: 'compound_failed', reason: 'tx', index }
     }
-    await recordRestake(netAtomic)
-    return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: netAtomic, recipients: 0 }
+    await markRestaked(supabase, pending.ids, ch)
+    await record(amount)
+    return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: amount, recipients: 0, destination, index }
   }
 
-  const { data: rows } = await supabase
-    .from('gateway_positions')
-    .select('id, user_wallet, shares')
-    .eq('pool_address', instance.poolAddress)
-    .eq('chain_id', instance.chainId)
-  const positions: (SharePosition & { id: string })[] = ((rows ?? []) as Array<{ id: string; user_wallet: string; shares: unknown }>)
-    .map((r) => ({ id: String(r.id), user: String(r.user_wallet), shares: big(r.shares) }))
-    .filter((p) => p.shares > 0n)
-  const credits = proRataBufferCredits(netAtomic, positions)
-
-  // 4) credit each depositor's linked card spend buffer (yield-first income). A depositor with no linked
-  //    buffer still has their share recorded in harvest_events aggregate; their spendable home follows the
-  //    individual-spend-UI decision (phase-1: x402-only). Never burns shares here.
-  let credited = 0n
-  const byUser = new Map(positions.map((p) => [p.user, p.id]))
-  for (const c of credits) {
-    if (c.creditAtomic <= 0n) continue
-    const posId = byUser.get(c.user)
-    if (!posId) continue
-    const { data: buf } = await supabase
-      .from('card_spend_buffers')
-      .select('id, buffer_balance_atomic')
-      .eq('gateway_position_id', posId)
-      .maybeSingle()
-    if (!buf?.id) continue
-    await supabase
-      .from('card_spend_buffers')
-      .update({ buffer_balance_atomic: (big(buf.buffer_balance_atomic) + c.creditAtomic).toString(), updated_at: new Date().toISOString() })
-      .eq('id', buf.id)
-    credited += c.creditAtomic
+  // 4b) BUFFER (opt-in): the index step already wrote every per-depositor credit atomically. Nothing moves
+  //     on-chain; the net stays in the seat wallet as the IOU backing (reconcile via reconcileSeat). The
+  //     swapped paired-leg proceeds are NOT credited per-user here (residual — see closeout record).
+  await record(index.creditedAtomic)
+  return {
+    ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: index.creditedAtomic,
+    recipients: index.recorded, destination, index,
   }
-
-  await supabase.from('harvest_events').insert({
-    pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
-    amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(),
-    amount_credited_atomic: credited.toString(),
-  })
-
-  return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: credited, recipients: credits.length }
 }

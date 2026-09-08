@@ -115,6 +115,14 @@ const DISCLOSURES: { title: string; body: string }[] = [
     body: 'The LP Gateway is non-custodial software, in testing on Robinhood Chain testnet with unaudited code and no real assets. Supplying liquidity to a pool is not a deposit, a savings account, or a guaranteed or fixed return: the position’s value moves with the pool price and can suffer impermanent loss, and you could lose some or all of the value you interact with. Any amount you can spend comes from the yield the position earns — a buffer, not a promised balance, and not your whole position. An external audit is the gate before real value.',
   },
   {
+    title: 'The stablecoin issuer can freeze or wipe balances',
+    body: 'The LP Gateway’s quote asset on Robinhood Chain is USDG, issued by Paxos. USDG’s contract lets its issuer pause transfers, freeze any address, and wipe a frozen balance — powers that belong to the issuer, not Mintware, and that we cannot override or reverse. If an address holding gateway funds at rest (the yield source, the pool, or a gateway contract) were frozen or wiped, that value could become inaccessible or be permanently lost. This is the same risk any USDG holder carries; it applies to funds routed through the gateway exactly as to funds held directly, and it is one reason exposure stays bounded.',
+  },
+  {
+    title: 'A paired token’s own controls can delay the liquidity leg',
+    body: 'Each pool pairs USDG with a third-party token Mintware does not control. Some tokens give an owner the power to pause transfers, blacklist or freeze addresses, mint supply, or upgrade the code. If such a control is used against the pool or a gateway address, the deployed-liquidity leg of a withdrawal may not be able to execute until it is lifted; the idle leg still pays out, and the claim on the blocked leg is kept as shares rather than lost, but no software can make a paused token move. We screen pools to avoid paired tokens with these controls — a heuristic and a human judgement, not a guarantee, and a token’s controls can change after listing.',
+  },
+  {
     title: 'A protected position is a priority claim, not a guarantee',
     body: 'Where a vault pairs a protected position with a first-loss position, protection means the protected side is paid first — a fixed order in the contract code, not a settable parameter and not a promise that it will always be made whole. Parameters affecting the size of protection are bounded and publicly disclosed on-chain (changes that loosen protection are delayed 48h and logged; changes that tighten it apply immediately). In an extreme loss event the first-loss balance could still be exhausted before the protected side is fully covered. First-loss capital is the team’s own and is restricted on-chain to team-controlled addresses; it is never sold to depositors or outside investors as an investment.',
   },

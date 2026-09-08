@@ -111,6 +111,56 @@ contract MintwareERC4626YieldAdapterTest is Test {
         a.setVault(makeAddr("attacker"));
     }
 
+    // ── C-9a (Hacken F-06 / RT-7d): two-step, non-renounceable ownership ───────────
+
+    /// `transferOwnership` alone hands over NOTHING — the pending owner can't touch the cap until they accept,
+    /// and the current owner keeps every power in the meantime (a typo'd address can't strand the lever).
+    function test_ownership_twoStep_pendingOwnerPowerless_untilAccept() public {
+        address next = makeAddr("nextOwner");
+        vm.prank(owner);
+        adapter.transferOwnership(next);
+        assertEq(adapter.owner(), owner, "still the old owner");
+        assertEq(adapter.pendingOwner(), next);
+
+        vm.prank(next);
+        vm.expectRevert();
+        adapter.setPerBlockWithdrawCap(1); // pending owner has no powers yet
+
+        vm.prank(owner);
+        adapter.setPerBlockWithdrawCap(5); // current owner still does
+        assertEq(adapter.perBlockWithdrawCap(), 5);
+
+        vm.prank(next);
+        adapter.acceptOwnership();
+        assertEq(adapter.owner(), next);
+        vm.prank(owner);
+        vm.expectRevert();
+        adapter.setPerBlockWithdrawCap(0); // the old owner is out
+        vm.prank(next);
+        adapter.setPerBlockWithdrawCap(0);
+        assertEq(adapter.perBlockWithdrawCap(), 0);
+    }
+
+    /// Renounce is disabled: it would freeze `perBlockWithdrawCap` forever with no key able to lift it.
+    function test_renounceOwnership_disabled() public {
+        vm.prank(owner);
+        vm.expectRevert(MintwareERC4626YieldAdapter.RenounceDisabled.selector);
+        adapter.renounceOwnership();
+        assertEq(adapter.owner(), owner);
+    }
+
+    /// `setVault` one-time semantics survive the ownership handoff: a NEW owner still can't re-point the sink.
+    function test_setVault_stays_one_time_across_owner_handoff() public {
+        address next = makeAddr("nextOwner");
+        vm.prank(owner);
+        adapter.transferOwnership(next);
+        vm.prank(next);
+        adapter.acceptOwnership();
+        vm.prank(next);
+        vm.expectRevert(MintwareERC4626YieldAdapter.VaultAlreadySet.selector);
+        adapter.setVault(next);
+    }
+
     function test_constructor_rejects_asset_mismatch() public {
         MockERC20 other = new MockERC20("Other", "OTH", 18);
         MockERC4626 wrongSource = new MockERC4626(IERC20(address(other))); // underlying != usdc

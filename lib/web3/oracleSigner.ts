@@ -72,7 +72,15 @@ async function getPrivyOracleSigner(role: OracleRole): Promise<LocalAccount> {
   // Imported dynamically so @privy-io/server-auth is only loaded when Privy mode is active.
   const { PrivyClient }       = await import('@privy-io/server-auth')
   const { createViemAccount } = await import('@privy-io/server-auth/viem')
-  const privy = new PrivyClient(appId, appSecret)
+  // Round-2 audit O-6: PRIVY_APP_SECRET alone reaches EVERY server wallet, so address-level seat separation
+  // (root vs gateway) was not credential-level. Once a wallet has an authorization keypair enabled in the
+  // Privy dashboard, signing REQUIRES the matching private key — each role carries its own
+  // `<ROLE>_ORACLE_PRIVY_AUTH_KEY`, so a leaked app secret can no longer move the gateway's funds, and a
+  // leaked gateway key can't reach the card/x402 seat. Optional until the dashboard toggle is on.
+  const authKey = process.env[`${role.toUpperCase()}_ORACLE_PRIVY_AUTH_KEY`] ?? ''
+  const privy = authKey
+    ? new PrivyClient(appId, appSecret, { walletApi: { authorizationPrivateKey: authKey } })
+    : new PrivyClient(appId, appSecret)
   // The ESM/CJS dual .d.ts declarations of PrivyClient are structurally identical but nominally
   // distinct (private `api` member), so tsc rejects a direct pass. The runtime value IS a valid
   // PrivyClient from the same package — cast through `unknown` to the exact expected param type.

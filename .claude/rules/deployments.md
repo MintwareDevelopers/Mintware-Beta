@@ -41,9 +41,12 @@
 | `NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS` | Public | Gates V4 contract reads |
 | `NEXT_PUBLIC_MW_TREASURY_ADDRESS` | Public | Set after contract deploy |
 | `TEAM_HARD_GATE` | Server-only | `true` turns ON the Phase-2 User/Team hard gate (`proxy.ts` → `lib/auth/gate.ts`). Unset/`false` = soft-gate showcase, middleware is a pass-through (default). |
+| `ALLOW_DEV_BEARER_BYPASS` | Server-only (dev boxes ONLY) | Round-2 audit O-12. `createHandler`'s `auth:'bearer-token'` used to fall OPEN whenever the secret was unset on any `NODE_ENV=development` box (curate/register-class routes unauthenticated locally). It now **fails closed everywhere** (500 `MISSING_SECRET`); set this to `'true'` **and** run with `NODE_ENV=development` to opt back into the local bypass (logged as a warning on every request). Ignored in production/test. Never set on Vercel. |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` (or `KV_REST_API_URL` / `_TOKEN`) | Server-only | Turns every declared `createHandler` `rateLimit` ON. **Unset in prod today ⇒ declared limits are NO-OPS (fail-open)** — `lib/web2/routeHandler.ts` now logs `[routeHandler] rate limiting INACTIVE …` ONCE at boot so the cold-start log says so. Only routes with an in-memory per-IP floor (`/api/gateway/discover`, `/api/gateway/sparklines`) throttle without it (O-8). |
 | `PRIVY_APP_SECRET` | Server-only | Privy app secret for server-side session verification (`lib/auth/session.ts#verifyPrivySession`). Required for the hard gate to be a real security boundary; unset → verification fails closed. |
 | `ORACLE_SIGNER_PROVIDER` | Server-only | `privy` (verified in prod 2026-09-07 via `GET /api/oracle/signer-check`, bearer `ADMIN_SECRET`) → every `getOracleSigner(role)` resolves a Privy server wallet; `env-key`/unset → raw `*_PRIVATE_KEY` env. Prod `root` = `0x7fD8…7E06` (card/x402/treasury seat). |
 | `GATEWAY_ORACLE_PRIVY_WALLET_ID` / `GATEWAY_ORACLE_PRIVY_ADDRESS` | Server-only | **LP Gateway owner seat** (`getOracleSigner('gateway')` — `deploy`/`harvest`/`circuitBreaker`). A DEDICATED Privy wallet (`0x18AE…663c`, the rig owner) with NO fallback to any shared key (re-audit A-3). Set on prod+preview 2026-09-07. Unset ⇒ gateway crons fail closed (`*_signer_unavailable`). |
+| `<ROLE>_ORACLE_PRIVY_AUTH_KEY` (e.g. `GATEWAY_ORACLE_PRIVY_AUTH_KEY`, `ROOT_ORACLE_PRIVY_AUTH_KEY`) | Server-only | Round-2 O-6 **credential-level seat separation**. The wallet-API **authorization private key** for that seat's Privy server wallet (created in the Privy dashboard → Wallet API → Authorization keys, then attached to the wallet as its owner). Once a wallet has an authorization keypair, Privy refuses to sign without it — so `PRIVY_APP_SECRET` alone can no longer move that seat's funds. `getOracleSigner(role)` passes it as `walletApi.authorizationPrivateKey` when set. Give `gateway` and `root` DIFFERENT keys. Optional until the dashboard toggle is on; after that, unset ⇒ that seat fails closed (`signer_unavailable`). |
 | `LP_GATEWAY_USDG` | Server-only | Quote-asset address the discover feed / registry match against. **RH mainnet (4663) USDG = `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`** — Paxos-NATIVE UUPS proxy, verified 2026-09-07 against Paxos' docs + on-chain (re-audit M-07). Issuer can freeze **and wipe** balances (asset-protection role) — bounded exposure + disclosure. Testnet rig uses mock tUSDG (see `deployments.json`). |
 | `ADMIN_SECRET` | Server-only | Bearer for the `(admin)/oracle/*` diagnostics (route group is stripped: `/api/oracle/...`). Set on prod 2026-09-07; unset ⇒ those routes 500 `MISSING_SECRET`. |
 | `DECK_PASSWORD` | Server-only | Password for the private investor deck at `/deck` (`lib/deck/gate.ts`). `POST /api/deck/unlock` validates it and sets an http-only cookie holding a hash-derived token; the `/deck` server component renders the deck only when the cookie matches. **Unset ⇒ gate closed to everyone (fail-closed).** Set on Vercel + `.env.local` to open it; share the value with investors out-of-band. |
@@ -101,6 +104,46 @@ a real card rail can't survive a live AMM-NAV read in the ~6s ASA window (spec �
 | `CARD_BUFFER_ENABLED` | Server-only | `'true'` makes `decideCardSwipe` use the FLAT buffer check (`lib/cards/bufferPolicy.authorizeAgainstBuffer` against `card_spend_buffers.buffer_balance_atomic`) INSTEAD of the live-NAV `edge.authorize` on the card rail, for any card that has a buffer row. Unset/other → the edge-auth path is byte-for-byte unchanged. |
 | `CARD_BUFFER_REFILL_ENABLED` | Server-only | `'true'` lets `lib/org/bufferRefill.refillCardBuffer` submit the on-chain `MintwarePaymentGateway.refillBuffer` (redeem the member's own senior shares → their registered buffer wallet, via `getOracleSigner('root')` in the RELAYER seat). Unset → the orchestrator no-ops (`reason:'disabled'`). Also gated per-card by `auto_refill_enabled` + a registered buffer + a live permit + the refill-rate breaker. |
 | `CARD_BUFFER_TUNE_WINDOW_SECS` / `_ALPHA_BPS` / `_MIN_SAMPLES` | Server-only | Adaptive sizing (`lib/org/bufferTuner.tuneBufferSizing`, run by the refill cron — spec §5.3). Observation window (default 30d), EMA blend rate toward the measured distribution (default `3000` = 30%), and the min settled-swipe sample count before it tunes (default `5`). No capital — only re-shapes the target. |
+
+### LP Gateway (V1) — Robinhood Chain (`lib/gateway/*`, `app/api/gateway/*`, gateway crons, deploy scripts)
+
+**One home for every `LP_GATEWAY_*` var** (round-2 audit O-14 #7 — ~24 were undocumented). Generated by
+`grep -rn 'process.env.LP_GATEWAY' lib app scripts` on 2026-09-08; re-run that grep when you add one. All
+money-moving knobs default **OFF / fail-closed**. `LP_GATEWAY_USDG` (quote asset) is in the main table above.
+
+| Variable | Read by | Default | Meaning · fail-closed behaviour |
+|---|---|---|---|
+| `LP_GATEWAY_CHAIN_ID` | `lib/gateway/chain.ts`, deploy + smoke scripts | — (scripts: `46630`) | Chain id of the live rig. **`gatewayConfig()` returns `null` without it** → every gateway route/cron answers `503 gateway_not_configured`. |
+| `LP_GATEWAY_RPC_URL` | `chain.ts`, scripts | — (scripts: RH testnet RPC) | JSON-RPC for server reads + signer submits. Required with `CHAIN_ID` (same `null` ⇒ 503). ⚠ echoed by `/api/gateway/meta` (HO-13) — never put a keyed provider URL here. |
+| `LP_GATEWAY_POSITION_MANAGER` | `chain.ts`, smoke | — | The single-env fallback PM instance (pre-registry). See the depositable rule in `lp-gateway.md` — the registry (`gateway_instances`, on-chain-verified) is the trust root; this env is the bootstrap/last-resort. |
+| `LP_GATEWAY_STAGING` | `chain.ts` | — | Staging (Morpho earn reserve) paired with the env PM. |
+| `LP_GATEWAY_POOL_ADDRESS` | `chain.ts` | — | The env PM's pool key. Must be the **32-byte v4 poolId** (or 20-byte address), never a label — the label convention was the root cause of HO-2. |
+| `LP_GATEWAY_USDG` | `discovery.ts`, `meta` route, registry | **unset in prod (2026-09-08)** | USDG address the Discover feed / curator queue / registry match **by ADDRESS**. **Unset ⇒ quote asset UNKNOWN ⇒ every pool ineligible ⇒ Discover feed EMPTY + curator queue ingests nothing (fail-closed, O-7; never matched by pair name any more).** Set it (RH mainnet `0x5fc5360D…1d168`, testnet = the rig's tUSDG) to light the feed. Route response carries `usdgConfigured:false` while unset. |
+| `LP_GATEWAY_GT_NETWORK` | `discovery.ts`, `sparkline.ts` | `robinhood` (= RH **mainnet** on GeckoTerminal) | GeckoTerminal network slug. Shape-checked (`[a-z0-9-]`) — an invalid value falls back to `robinhood`. |
+| `LP_GATEWAY_DISCOVER_PRUNE_GRACE_HOURS` | `discovery.ts` | `72` | An auto+pending candidate that drops out of the top-30 is pruned only after this many hours unseen (three daily runs). Curator-decided (`approved`/`rejected`) and `manual` rows are **never** pruned. |
+| `LP_GATEWAY_CURATOR_SECRET` | `app/api/gateway/curate` | — | Bearer for `POST /api/gateway/curate`. **Unset ⇒ 500 `MISSING_SECRET`** (fails closed; no dev bypass without `ALLOW_DEV_BEARER_BYPASS`). |
+| `LP_GATEWAY_HARVEST_ENABLED` | `harvest.ts` | OFF | `'true'` lets the harvest cron collect fees. Unset ⇒ `503 disabled`. ⚠ Not scheduled in `vercel.json` (see crons). |
+| `LP_GATEWAY_HARVEST_MIN_ATOMIC` | `harvest.ts` | `1000000` (1 USDG) | Dust floor — skip a harvest whose collectable quote fees are below it. `0` disables the floor. |
+| `LP_GATEWAY_HARVEST_DESTINATION` | `opsConfig.ts` | `buffer` | `buffer` = credit depositors' spendable buffers (the A-4 ledger — **not safe for third-party funds until event-indexed**, O-4) · `restake` = compound into Morpho, lifting NAV pro-rata (the recommended setting today). |
+| `LP_GATEWAY_PERF_FEE_BPS` | `harvest.ts` | `1000` (10%) | Performance fee skimmed from harvested fees. Clamped 0–10000. |
+| `LP_GATEWAY_DEPLOY_ENABLED` | `deploy.ts` | OFF | `'true'` lets the deploy cron move staged capital into the LP. Unset ⇒ `503 disabled`. ⚠ Not scheduled in `vercel.json`. |
+| `LP_GATEWAY_DEPLOY_THRESHOLD_ATOMIC` | `deploy.ts` | `0` | Min staged balance before a deploy. **`0` ⇒ never deploys** (`below_threshold`). Malformed ⇒ throws → 500 (fail-closed, no reason code — HO-16). |
+| `LP_GATEWAY_DEPLOY_RATIO_BPS` | `deploy.ts` | `5000` | Target deployed fraction of (staged + deployedPrincipal), cost-basis (C-3). On-chain `MAX_DEPLOY_BPS` is the hard cap regardless. |
+| `LP_GATEWAY_DEPLOY_MIN_LIQUIDITY` | `deploy.ts` | `0` | Absolute-`L` slippage floor passed to `deploy()`. **`0` ⇒ the cron REFUSES to deploy** (A-3). One global value for all pools — O-9 (per-pool compute-from-spot) is still open. |
+| `LP_GATEWAY_DEPLOY_WINDOW_SECS` | `deploy.ts` | `3600` | Idempotency window for the deploy claim (L-02). |
+| `LP_GATEWAY_CIRCUIT_BREAKER_ENABLED` | `opsConfig.ts` | OFF | `'true'` lets a sustained out-of-range alert auto-`setPaused(true)` (blocks deposits, never withdraw). Never auto-unpauses. |
+| `LP_GATEWAY_ALERT_DEBOUNCE_SECS` | `alerts.ts` | `21600` (6 h) | Min gap between repeat alerts of one kind per instance. |
+| `LP_GATEWAY_ROUTER_ADDRESS` / `LP_GATEWAY_QUOTER` | `routerSwap.ts`, `v4SwapExec.ts` | — | The paired↔quote swap executor + quoter. **Unset ⇒ swap seams are fail-closed no-ops** (harvest leaves paired fees unconverted; deploy can't acquire the paired leg). Also needs `NEXT_PUBLIC_MW_ROUTER_ENABLED=true`. |
+| `LP_GATEWAY_SWAP_SLIPPAGE_BPS` | `v4SwapExec.ts` | `100` (1%) | Slippage bound for the executor swap. Clamped 1–5000. |
+| `LP_GATEWAY_YIELD_SOURCE` | `scripts/deploy-lp-gateway-robinhood.mjs` (deploy-time) | — (mock `MockERC4626` deployed) | Real ERC-4626 yield source (the curated Morpho vault on mainnet). Code + `asset()` checked at deploy; unset on testnet ⇒ a mock source behind the **production** adapter. |
+| `LP_GATEWAY_TUSDG` | `scripts/smoke-lp-gateway-robinhood.mjs` | rig default | Smoke-test token override. Test-only. |
+| `LP_TICK_LOWER` / `LP_TICK_UPPER` / `LP_MAX_DEVIATION_BPS` | deploy script (deploy-time, immutable per instance) | `±22980` / `500` | Range width and the clamped-follower per-block step (H-03). **Default is 500 bps (5%)**, not the "2000" older docs cited. |
+| `LP_FORK_RPC_URL` | Forge fork tests | — | Self-skips the fork suites when unset (CI stays green). |
+| `GATEWAY_ORACLE_PRIVY_WALLET_ID` / `_ADDRESS` | `getOracleSigner('gateway')` | — | See the main table — the dedicated owner seat; no `root` fallback in app code. ⚠ The deploy script still falls back to `ROOT_*` silently (HO-14, open). |
+
+**Cron truth (`vercel.json`, 2026-09-08):** `gateway-discover` = **daily `0 5 * * *`** (NOT "every 3h"),
+`gateway-snapshot` = daily `0 6 * * *`. **`gateway-harvest` and `gateway-deploy` are NOT scheduled** — they
+exist as bearer routes and run only when hit manually with `CRON_SECRET` (and their `*_ENABLED` flag on).
 
 ### Arc / parking account (idle-USDC-earns-in-place)
 

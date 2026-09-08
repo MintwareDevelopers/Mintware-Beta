@@ -1,31 +1,73 @@
-import { describe, it, expect, vi } from 'vitest'
-import { computePoolId, verifyInstanceOnChain, registerInstance, type GatewayPoolKey } from './registry'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { keccak256 } from 'viem'
+import {
+  computePoolId,
+  verifyInstanceOnChain,
+  registerInstance,
+  deactivateInstance,
+  registryTrustConfigFromEnv,
+  type GatewayPoolKey,
+  type RegistryTrustConfig,
+  type ReadClient,
+} from './registry'
 
-const QUOTE = '0x1111111111111111111111111111111111111111' as const
+// ── fixtures ───────────────────────────────────────────────────────────────────────────────────
+const QUOTE = '0x1111111111111111111111111111111111111111' as const // the platform USDG (env)
 const PAIRED = '0x2222222222222222222222222222222222222222' as const
-const PM = '0x00000000000000000000000000000000000000abc' as const
+const PM = '0x00000000000000000000000000000000000000ab' as const
+const STAGING = '0x0000000000000000000000000000000000000dad' as const
+const FACTORY = '0x00000000000000000000000000000000000fac70' as const
+const EVIL_PM = '0x00000000000000000000000000000000000000e1' as const
+const EVIL_STAGING = '0x000000000000000000000000000000000000dead' as const
+const ZERO = '0x0000000000000000000000000000000000000000' as const
 
-const poolKey: GatewayPoolKey = {
-  currency0: QUOTE,
-  currency1: PAIRED,
-  fee: 3000,
-  tickSpacing: 60,
-  hooks: '0x0000000000000000000000000000000000000000',
-}
+const poolKey: GatewayPoolKey = { currency0: QUOTE, currency1: PAIRED, fee: 3000, tickSpacing: 60, hooks: ZERO }
 const POOL_ID = computePoolId(poolKey)
 
-// A mock read-only client returning the position manager's on-chain view.
-function mockClient(over: { quoteAsset?: string; poolKey?: GatewayPoolKey; throwOn?: string } = {}) {
-  return {
-    readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
-      if (over.throwOn === functionName) throw new Error('rpc down')
-      if (functionName === 'quoteAsset') return (over.quoteAsset ?? QUOTE) as `0x${string}`
-      if (functionName === 'poolKey') return over.poolKey ?? poolKey
-      throw new Error(`unexpected read: ${functionName}`)
-    }),
-  }
+const PM_CODE = '0x6080604052deadbeef' as const
+const PM_CODEHASH = keccak256(PM_CODE)
+
+const trustFactory: RegistryTrustConfig = { factory: FACTORY, pmCodeHashes: [], expectedQuoteAsset: QUOTE }
+const trustCodehash: RegistryTrustConfig = { factory: null, pmCodeHashes: [PM_CODEHASH], expectedQuoteAsset: QUOTE }
+
+/** A mock chain: the candidate PM, its staging, the factory, and the code at the PM. Every field
+ *  overridable so each invariant can be violated in isolation. */
+function mockChain(over: {
+  pmQuote?: string
+  pmPoolKey?: GatewayPoolKey
+  pmStaging?: string
+  stagingController?: string
+  stagingQuote?: string
+  factoryInstance?: { staging: string; positionManager: string; active: boolean }
+  code?: `0x${string}`
+  throwOn?: string
+  noGetCode?: boolean
+} = {}): ReadClient & { readContract: ReturnType<typeof vi.fn> } {
+  const readContract = vi.fn(async ({ address, functionName }: { address: string; functionName: string }) => {
+    if (over.throwOn === functionName) throw new Error('rpc down')
+    const a = address.toLowerCase()
+    if (a === FACTORY) {
+      if (functionName === 'instanceForPool') return over.factoryInstance ?? { staging: STAGING, positionManager: PM, active: true }
+    }
+    if (a === STAGING || a === EVIL_STAGING) {
+      if (functionName === 'controller') return over.stagingController ?? PM
+      if (functionName === 'quoteAsset') return over.stagingQuote ?? QUOTE
+    }
+    // the candidate PM
+    if (functionName === 'quoteAsset') return over.pmQuote ?? QUOTE
+    if (functionName === 'poolKey') return over.pmPoolKey ?? poolKey
+    if (functionName === 'staging') return over.pmStaging ?? STAGING
+    throw new Error(`unexpected read: ${functionName}@${address}`)
+  })
+  const client: ReadClient & { readContract: ReturnType<typeof vi.fn> } = { readContract }
+  if (!over.noGetCode) client.getCode = async () => over.code ?? PM_CODE
+  return client
 }
 
+const baseVerify = (client: ReadClient, trust: RegistryTrustConfig = trustFactory) =>
+  verifyInstanceOnChain({ client, positionManager: PM, staging: STAGING, expectedPoolAddress: POOL_ID, trust })
+
+// ── computePoolId ──────────────────────────────────────────────────────────────────────────────
 describe('computePoolId', () => {
   it('is deterministic and 32 bytes', () => {
     expect(computePoolId(poolKey)).toBe(POOL_ID)
@@ -37,89 +79,302 @@ describe('computePoolId', () => {
   })
 })
 
-describe('verifyInstanceOnChain (H-01)', () => {
-  it('accepts a manager that fronts the approved pool + quote asset (case-insensitive)', async () => {
-    const v = await verifyInstanceOnChain({
-      client: mockClient(),
-      positionManager: PM,
-      expectedQuoteAsset: QUOTE.toUpperCase(),
-      expectedPoolAddress: POOL_ID.toUpperCase(),
+// ── env parsing ────────────────────────────────────────────────────────────────────────────────
+describe('registryTrustConfigFromEnv', () => {
+  it('parses factory, code-hash allowlist and USDG; drops malformed entries', () => {
+    const c = registryTrustConfigFromEnv({
+      LP_GATEWAY_FACTORY: FACTORY.toUpperCase().replace('0X', '0x'),
+      LP_GATEWAY_PM_CODEHASHES: ` ${PM_CODEHASH.toUpperCase().replace('0X', '0x')} , junk, 0x12`,
+      LP_GATEWAY_USDG: QUOTE,
     })
+    expect(c.factory).toBe(FACTORY)
+    expect(c.pmCodeHashes).toEqual([PM_CODEHASH])
+    expect(c.expectedQuoteAsset).toBe(QUOTE)
+  })
+  it('is empty (⇒ fail closed) when nothing is set', () => {
+    expect(registryTrustConfigFromEnv({})).toEqual({ factory: null, pmCodeHashes: [], expectedQuoteAsset: null })
+  })
+})
+
+// ── verifyInstanceOnChain ──────────────────────────────────────────────────────────────────────
+describe('verifyInstanceOnChain — trust root (O-3 / A-7)', () => {
+  it('FACTORY path: accepts when instanceForPool(poolId) == {staging, pm, active}', async () => {
+    const v = await baseVerify(mockChain())
     expect(v.ok).toBe(true)
-    if (v.ok) expect(v.poolId).toBe(POOL_ID)
+    if (v.ok) {
+      expect(v.poolId).toBe(POOL_ID)
+      expect(v.verification).toBe('factory')
+      expect(v.quoteAsset.toLowerCase()).toBe(QUOTE)
+    }
   })
 
-  it('rejects a quote-asset mismatch (substituted manager)', async () => {
+  it('FACTORY path: accepts a tuple-shaped instanceForPool return', async () => {
+    const v = await baseVerify(mockChain({ factoryInstance: [STAGING, PM, true] as never }))
+    expect(v.ok).toBe(true)
+  })
+
+  it('LOOKALIKE PM (R-2): a contract that echoes quoteAsset()/poolKey()/staging() but is NOT the factory instance is rejected', async () => {
+    // the factory says the pool's real PM is `PM`; the candidate is EVIL_PM echoing everything
+    const client = mockChain({ stagingController: EVIL_PM })
+    const v = await verifyInstanceOnChain({ client, positionManager: EVIL_PM, staging: STAGING, expectedPoolAddress: POOL_ID, trust: trustFactory })
+    expect(v).toEqual({ ok: false, error: 'factory_pm_mismatch' })
+  })
+
+  it('FACTORY path: rejects a staging that differs from the factory record', async () => {
+    const v = await baseVerify(mockChain({ factoryInstance: { staging: EVIL_STAGING, positionManager: PM, active: true } }))
+    expect(v).toEqual({ ok: false, error: 'factory_staging_mismatch' })
+  })
+
+  it('FACTORY path: rejects a factory-deactivated instance', async () => {
+    const v = await baseVerify(mockChain({ factoryInstance: { staging: STAGING, positionManager: PM, active: false } }))
+    expect(v).toEqual({ ok: false, error: 'factory_inactive' })
+  })
+
+  it('FACTORY path: fails closed when the factory read errors', async () => {
+    const v = await baseVerify(mockChain({ throwOn: 'instanceForPool' }))
+    expect(v).toEqual({ ok: false, error: 'factory_read_failed' })
+  })
+
+  it('CODEHASH path (direct deploy): accepts when keccak256(code) is allowlisted', async () => {
+    const v = await baseVerify(mockChain(), trustCodehash)
+    expect(v.ok).toBe(true)
+    if (v.ok) {
+      expect(v.verification).toBe('codehash')
+      expect(v.meta).toEqual({ codeHash: PM_CODEHASH })
+    }
+  })
+
+  it('CODEHASH path: rejects an un-allowlisted bytecode (the lookalike)', async () => {
+    const v = await baseVerify(mockChain({ code: '0x6080deadbeef00' }), trustCodehash)
+    expect(v).toEqual({ ok: false, error: 'codehash_not_allowlisted' })
+  })
+
+  it('CODEHASH path: rejects an EOA / empty code', async () => {
+    expect(await baseVerify(mockChain({ code: '0x' }), trustCodehash)).toEqual({ ok: false, error: 'no_code_at_pm' })
+  })
+
+  it('CODEHASH path: fails closed when the client cannot read code', async () => {
+    expect(await baseVerify(mockChain({ noGetCode: true }), trustCodehash)).toEqual({ ok: false, error: 'codehash_unavailable' })
+  })
+
+  it('FAILS CLOSED when neither factory nor code-hash allowlist is configured (no silent trust)', async () => {
+    const client = mockChain()
+    const v = await baseVerify(client, { factory: null, pmCodeHashes: [], expectedQuoteAsset: QUOTE })
+    expect(v).toEqual({ ok: false, error: 'trust_root_unconfigured' })
+    expect(client.readContract).not.toHaveBeenCalled()
+  })
+
+  it('FAILS CLOSED when LP_GATEWAY_USDG is unset — the quote is never taken from the request', async () => {
+    const v = await baseVerify(mockChain(), { ...trustFactory, expectedQuoteAsset: null })
+    expect(v).toEqual({ ok: false, error: 'quote_env_unset' })
+  })
+
+  it('rejects a PM quoting in a "fake USDG" even when internally consistent (quote compared to ENV)', async () => {
+    const FAKE = '0xfa4efa4efa4efa4efa4efa4efa4efa4efa4efa4e' as const
+    const fakeKey = { ...poolKey, currency0: FAKE }
     const v = await verifyInstanceOnChain({
-      client: mockClient({ quoteAsset: '0x9999999999999999999999999999999999999999' }),
-      positionManager: PM,
-      expectedQuoteAsset: QUOTE,
-      expectedPoolAddress: POOL_ID,
+      client: mockChain({ pmQuote: FAKE, pmPoolKey: fakeKey, stagingQuote: FAKE }),
+      positionManager: PM, staging: STAGING, expectedPoolAddress: computePoolId(fakeKey), trust: trustFactory,
     })
     expect(v).toEqual({ ok: false, error: 'quote_asset_mismatch' })
   })
 
-  it('rejects when the on-chain poolKey does not hash to the approved pool', async () => {
+  it('rejects a HOOKED pool key', async () => {
+    const hooked = { ...poolKey, hooks: '0x00000000000000000000000000000000000000c0' as const }
     const v = await verifyInstanceOnChain({
-      client: mockClient(),
-      positionManager: PM,
-      expectedQuoteAsset: QUOTE,
-      expectedPoolAddress: '0x' + 'de'.repeat(32), // a different, arbitrary pool id
+      client: mockChain({ pmPoolKey: hooked }), positionManager: PM, staging: STAGING,
+      expectedPoolAddress: computePoolId(hooked), trust: trustFactory,
     })
+    expect(v).toEqual({ ok: false, error: 'hooked_pool_rejected' })
+  })
+
+  it('rejects when the on-chain poolKey does not hash to the approved pool', async () => {
+    const v = await verifyInstanceOnChain({ client: mockChain(), positionManager: PM, staging: STAGING, expectedPoolAddress: '0x' + 'de'.repeat(32), trust: trustFactory })
     expect(v).toEqual({ ok: false, error: 'pool_mismatch' })
   })
 
   it('rejects when the quote asset is not a leg of the pool', async () => {
-    // manager reports quote==QUOTE, but its poolKey has neither leg equal to QUOTE
     const otherKey: GatewayPoolKey = { ...poolKey, currency0: PAIRED, currency1: '0x3333333333333333333333333333333333333333' }
     const v = await verifyInstanceOnChain({
-      client: mockClient({ poolKey: otherKey }),
-      positionManager: PM,
-      expectedQuoteAsset: QUOTE,
-      expectedPoolAddress: computePoolId(otherKey),
+      client: mockChain({ pmPoolKey: otherKey }), positionManager: PM, staging: STAGING,
+      expectedPoolAddress: computePoolId(otherKey), trust: trustFactory,
     })
     expect(v).toEqual({ ok: false, error: 'quote_not_in_pool' })
   })
 
-  it('fails closed on an RPC read error', async () => {
+  it('rejects when pm.staging() != the supplied staging', async () => {
+    expect(await baseVerify(mockChain({ pmStaging: EVIL_STAGING }))).toEqual({ ok: false, error: 'staging_mismatch' })
+  })
+
+  it('rejects when staging.controller() != the PM', async () => {
+    expect(await baseVerify(mockChain({ stagingController: EVIL_PM }))).toEqual({ ok: false, error: 'staging_controller_mismatch' })
+  })
+
+  it('rejects when staging.quoteAsset() != LP_GATEWAY_USDG', async () => {
+    expect(await baseVerify(mockChain({ stagingQuote: PAIRED }))).toEqual({ ok: false, error: 'staging_quote_mismatch' })
+  })
+
+  it('fails closed on an RPC read error (PM reads)', async () => {
+    expect(await baseVerify(mockChain({ throwOn: 'poolKey' }))).toEqual({ ok: false, error: 'onchain_read_failed' })
+  })
+
+  it('fails closed on an RPC read error (staging reads)', async () => {
+    expect(await baseVerify(mockChain({ throwOn: 'controller' }))).toEqual({ ok: false, error: 'staging_read_failed' })
+  })
+
+  it('is case-insensitive on every address input', async () => {
     const v = await verifyInstanceOnChain({
-      client: mockClient({ throwOn: 'poolKey' }),
-      positionManager: PM,
-      expectedQuoteAsset: QUOTE,
-      expectedPoolAddress: POOL_ID,
+      client: mockChain(), positionManager: PM.toUpperCase().replace('0X', '0x') as `0x${string}`,
+      staging: STAGING.toUpperCase().replace('0X', '0x') as `0x${string}`,
+      expectedPoolAddress: POOL_ID.toUpperCase(), trust: trustFactory,
     })
-    expect(v).toEqual({ ok: false, error: 'onchain_read_failed' })
+    expect(v.ok).toBe(true)
   })
 })
 
-describe('registerInstance verification gate (H-01)', () => {
-  function mockSupabase() {
-    const upsert = vi.fn(async () => ({ error: null }))
-    return { client: { from: vi.fn(() => ({ upsert })) } as never, upsert }
+// ── registerInstance / deactivateInstance ──────────────────────────────────────────────────────
+type Row = Record<string, unknown>
+/** Minimal in-memory supabase for gateway_instances + gateway_instance_history. */
+function fakeDb(seed: Row[] = []) {
+  const tables: Record<string, Row[]> = { gateway_instances: seed.map((r) => ({ ...r })), gateway_instance_history: [] }
+  const calls: { table: string; op: string; payload?: unknown }[] = []
+  let seq = 0
+  function from(table: string) {
+    const rows = (tables[table] ??= [])
+    const filters: [string, unknown][] = []
+    let op: 'select' | 'insert' | 'update' | 'upsert' = 'select'
+    let payload: Row | undefined
+    const hit = () => rows.filter((r) => filters.every(([c, v]) => String(r[c]).toLowerCase() === String(v).toLowerCase()))
+    const exec = async () => {
+      calls.push({ table, op, payload })
+      if (op === 'select') return { data: hit(), error: null }
+      if (op === 'insert') { rows.push({ id: `row-${++seq}`, ...payload }); return { data: null, error: null } }
+      if (op === 'update') { for (const r of hit()) Object.assign(r, payload); return { data: null, error: null } }
+      throw new Error('upsert is forbidden — the registry must never upsert (O-3 d)')
+    }
+    const b = {
+      select: () => b,
+      eq: (c: string, v: unknown) => { filters.push([c, v]); return b },
+      insert: (p: Row) => { op = 'insert'; payload = p; return b },
+      update: (p: Row) => { op = 'update'; payload = p; return b },
+      upsert: (p: Row) => { op = 'upsert'; payload = p; return b },
+      maybeSingle: async () => { const r = await exec(); return { data: (r.data as Row[])?.[0] ?? null, error: null } },
+      then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => exec().then(res, rej),
+    }
+    return b
   }
-  const base = {
-    poolAddress: POOL_ID,
-    chainId: 4663,
-    positionManager: PM,
-    staging: '0x0000000000000000000000000000000000000dad',
-    quoteAsset: QUOTE,
-    pairedAsset: PAIRED,
-  }
+  return { client: { from } as never, tables, calls }
+}
 
-  it('writes the row when on-chain verification passes', async () => {
-    const { client, upsert } = mockSupabase()
-    const res = await registerInstance(client, base, { client: mockClient() })
-    expect(res.ok).toBe(true)
-    expect(upsert).toHaveBeenCalledOnce()
+const base = { poolAddress: POOL_ID, chainId: 4663, positionManager: PM, staging: STAGING, pairedAsset: PAIRED, createdBy: '0xc0ffee' }
+const liveRow = (over: Row = {}): Row => ({ id: 'live', pool_address: POOL_ID, chain_id: 4663, position_manager: PM, staging: STAGING, quote_asset: QUOTE, status: 'active', ...over })
+
+describe('registerInstance — verified, read-before-write, logged (O-3 d/e)', () => {
+  beforeEach(() => {
+    delete process.env.LP_GATEWAY_FACTORY
+    delete process.env.LP_GATEWAY_PM_CODEHASHES
+    delete process.env.LP_GATEWAY_USDG
   })
 
-  it('does NOT write the row when verification fails (substitution blocked)', async () => {
-    const { client, upsert } = mockSupabase()
-    const res = await registerInstance(client, base, {
-      client: mockClient({ quoteAsset: '0x9999999999999999999999999999999999999999' }),
-    })
-    expect(res.ok).toBe(false)
-    expect(res.error).toBe('onchain_verify_failed:quote_asset_mismatch')
-    expect(upsert).not.toHaveBeenCalled()
+  it('inserts a verified row (never upserts) and writes a history entry with the evidence', async () => {
+    const { client, tables, calls } = fakeDb()
+    const res = await registerInstance(client, base, { client: mockChain(), trust: trustFactory })
+    expect(res).toEqual({ ok: true, verification: 'factory' })
+    expect(calls.map((c) => c.op)).not.toContain('upsert')
+    const row = tables.gateway_instances[0]
+    expect(row).toMatchObject({ position_manager: PM, staging: STAGING, quote_asset: QUOTE, status: 'active', verification: 'factory', verified_by: '0xc0ffee' })
+    expect(tables.gateway_instance_history).toHaveLength(1)
+    expect(tables.gateway_instance_history[0]).toMatchObject({ action: 'register', position_manager: PM, verification: 'factory', actor: '0xc0ffee' })
+  })
+
+  it('writes the ENV/on-chain quote asset, ignoring a curator-supplied quoteAsset', async () => {
+    const { client, tables } = fakeDb()
+    await registerInstance(client, { ...base, quoteAsset: '0xfa4efa4efa4efa4efa4efa4efa4efa4efa4efa4e' }, { client: mockChain(), trust: trustFactory })
+    expect(tables.gateway_instances[0].quote_asset).toBe(QUOTE)
+  })
+
+  it('does NOT write when verification fails (substitution blocked) and logs the refusal', async () => {
+    const { client, tables } = fakeDb()
+    const res = await registerInstance(client, base, { client: mockChain({ pmQuote: '0x9999999999999999999999999999999999999999' }), trust: trustFactory })
+    expect(res).toEqual({ ok: false, error: 'onchain_verify_failed:quote_asset_mismatch' })
+    expect(tables.gateway_instances).toHaveLength(0)
+    expect(tables.gateway_instance_history[0]).toMatchObject({ action: 'refused', reason: 'onchain_verify_failed:quote_asset_mismatch' })
+  })
+
+  it('fails closed with NO env trust root configured (reads env when no explicit trust is passed)', async () => {
+    const { client, tables } = fakeDb()
+    const res = await registerInstance(client, base, { client: mockChain() })
+    expect(res).toEqual({ ok: false, error: 'onchain_verify_failed:trust_root_unconfigured' })
+    expect(tables.gateway_instances).toHaveLength(0)
+  })
+
+  it('resolves the trust root from env (LP_GATEWAY_PM_CODEHASHES + LP_GATEWAY_USDG) when none is passed', async () => {
+    process.env.LP_GATEWAY_PM_CODEHASHES = PM_CODEHASH
+    process.env.LP_GATEWAY_USDG = QUOTE
+    const { client, tables } = fakeDb()
+    const res = await registerInstance(client, base, { client: mockChain() })
+    expect(res).toEqual({ ok: true, verification: 'codehash' })
+    expect(tables.gateway_instances[0].verification).toBe('codehash')
+  })
+
+  it('HOT-SWAP BLOCKED (R-2 / HO-3): refuses to write over an ACTIVE row with a different PM, logs it', async () => {
+    const { client, tables } = fakeDb([liveRow()])
+    // a *verified* candidate (the factory has been repointed / a second audited build) — still refused
+    const chain = mockChain({ factoryInstance: { staging: EVIL_STAGING, positionManager: EVIL_PM, active: true }, stagingController: EVIL_PM, pmStaging: EVIL_STAGING })
+    const res = await registerInstance(client, { ...base, positionManager: EVIL_PM, staging: EVIL_STAGING }, { client: chain, trust: trustFactory })
+    expect(res).toEqual({ ok: false, error: 'active_instance_exists' })
+    expect(tables.gateway_instances[0].position_manager).toBe(PM) // untouched
+    expect(tables.gateway_instance_history.at(-1)).toMatchObject({ action: 'refused', reason: 'active_instance_exists', position_manager: EVIL_PM, meta: { existingPositionManager: PM } })
+  })
+
+  it('identical re-register of the active row is an idempotent no-op (no write)', async () => {
+    const { client, tables, calls } = fakeDb([liveRow()])
+    const res = await registerInstance(client, base, { client: mockChain(), trust: trustFactory })
+    expect(res).toEqual({ ok: true, unchanged: true, verification: 'factory' })
+    expect(calls.filter((c) => c.op !== 'select')).toHaveLength(0)
+    expect(tables.gateway_instance_history).toHaveLength(0)
+  })
+
+  it('re-activates a DEACTIVATED row with new addresses via a status-guarded update', async () => {
+    const { client, tables, calls } = fakeDb([liveRow({ status: 'inactive', position_manager: EVIL_PM })])
+    const res = await registerInstance(client, base, { client: mockChain(), trust: trustFactory })
+    expect(res).toEqual({ ok: true, verification: 'factory' })
+    expect(calls.find((c) => c.op === 'update')).toBeTruthy()
+    expect(tables.gateway_instances[0]).toMatchObject({ status: 'active', position_manager: PM, deactivated_at: null })
+    expect(tables.gateway_instance_history.at(-1)).toMatchObject({ action: 'register', prev_position_manager: EVIL_PM })
+  })
+
+  it('operator attestation path: explicit + logged, never silent; still needs LP_GATEWAY_USDG', async () => {
+    const { client, tables } = fakeDb()
+    expect(await registerInstance(client, base, { operatorAttestation: { by: 'operator:nic', reason: 'backfill' } })).toEqual({ ok: false, error: 'quote_env_unset' })
+    process.env.LP_GATEWAY_USDG = QUOTE
+    expect(await registerInstance(client, base, { operatorAttestation: { by: '', reason: '' } })).toEqual({ ok: false, error: 'attestation_incomplete' })
+    const res = await registerInstance(client, base, { operatorAttestation: { by: 'operator:nic', reason: 'direct-deploy rig 2026-09-07b' } })
+    expect(res).toEqual({ ok: true, verification: 'operator_attested' })
+    expect(tables.gateway_instances[0]).toMatchObject({ verification: 'operator_attested', verification_meta: { attestedBy: 'operator:nic', reason: 'direct-deploy rig 2026-09-07b' } })
+  })
+
+  it('rejects malformed addresses before any chain read', async () => {
+    const { client } = fakeDb()
+    const chain = mockChain()
+    const res = await registerInstance(client, { ...base, positionManager: 'not-an-address' }, { client: chain, trust: trustFactory })
+    expect(res).toEqual({ ok: false, error: 'bad_address' })
+    expect(chain.readContract).not.toHaveBeenCalled()
+  })
+})
+
+describe('deactivateInstance — the explicit, logged step before any replacement', () => {
+  it('flips an active row to inactive with who/why and logs it', async () => {
+    const { client, tables } = fakeDb([liveRow()])
+    const res = await deactivateInstance(client, { poolAddress: POOL_ID, chainId: 4663, by: '0xc0ffee', reason: 'migrating to factory rig' })
+    expect(res).toEqual({ ok: true })
+    expect(tables.gateway_instances[0]).toMatchObject({ status: 'inactive', deactivated_by: '0xc0ffee', deactivate_reason: 'migrating to factory rig' })
+    expect(tables.gateway_instance_history[0]).toMatchObject({ action: 'deactivate', prev_position_manager: PM, actor: '0xc0ffee' })
+  })
+  it('requires a reason; refuses unknown / already-inactive rows', async () => {
+    const { client } = fakeDb([liveRow({ status: 'inactive' })])
+    expect(await deactivateInstance(client, { poolAddress: POOL_ID, chainId: 4663, by: 'x', reason: ' ' })).toEqual({ ok: false, error: 'reason_required' })
+    expect(await deactivateInstance(client, { poolAddress: POOL_ID, chainId: 4663, by: 'x', reason: 'r' })).toEqual({ ok: false, error: 'not_active' })
+    expect(await deactivateInstance(client, { poolAddress: '0x' + 'ff'.repeat(32), chainId: 4663, by: 'x', reason: 'r' })).toEqual({ ok: false, error: 'not_found' })
   })
 })

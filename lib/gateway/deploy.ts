@@ -14,20 +14,64 @@ import { LP_GATEWAY_ABI, LP_STAGING_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { listActiveInstances } from '@/lib/gateway/registry'
 import { swapQuoteToPaired } from '@/lib/gateway/routerSwap'
+import { readCurrentTick, type GatewayPoolKey } from '@/lib/gateway/poolState'
+import { getSqrtPriceAtTick, getLiquidityForAmounts, isInRange, applyToleranceBps } from '@/lib/gateway/v4Math'
 
 export type DeployInstance = { positionManager: `0x${string}`; staging: `0x${string}` }
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
 type Logger = { info: (t: string, m: string, c?: Record<string, unknown>) => void; warn: (t: string, m: string, c?: Record<string, unknown>) => void; error: (t: string, m: string, c?: Record<string, unknown>) => void }
 
-type Reason = 'disabled' | 'config' | 'signer' | 'below_threshold' | 'zap_unwired' | 'min_liquidity_unset' | 'tx' | 'duplicate'
+type Reason =
+  | 'disabled' | 'config' | 'signer' | 'below_threshold' | 'zap_unwired' | 'tx' | 'duplicate'
+  | 'min_liquidity_unset' // kept for callers that match on it: the computed floor came out 0
+  | 'out_of_range' // spot is outside the gateway's fixed range — a balanced two-leg deploy is not what the cron intended
+  | 'price_unreadable' // slot0 / pool coordinates unreadable — no honest floor can be set
 export type DeployOutcome =
-  | { ok: true; deployTx: `0x${string}`; quoteDeployedAtomic: bigint; pairedDeployedAtomic: bigint }
+  | { ok: true; deployTx: `0x${string}`; quoteDeployedAtomic: bigint; pairedDeployedAtomic: bigint; minLiquidity: bigint }
   | { ok: false; status: number; error: string; reason: Reason }
 
 const deployRatioBps = () => {
   const n = Number(process.env.LP_GATEWAY_DEPLOY_RATIO_BPS ?? '5000') // default 50% deployed / 50% idle
   return Number.isInteger(n) && n >= 1 && n <= 10_000 ? n : 5000
+}
+
+// O-9 / HO-8: the sandwich floor is computed PER POOL from spot, not one global absolute-L env value.
+export const DEFAULT_DEPLOY_TOL_BPS = 100 // 1% below the liquidity the amounts fund at the current spot
+const deployTolBps = () => {
+  const n = Number(process.env.LP_GATEWAY_DEPLOY_TOL_BPS ?? String(DEFAULT_DEPLOY_TOL_BPS))
+  return Number.isInteger(n) && n >= 0 && n < 10_000 ? n : DEFAULT_DEPLOY_TOL_BPS
+}
+
+export type MinLiquidityInput = {
+  sqrtPriceX96: bigint // live slot0
+  tickLower: number
+  tickUpper: number
+  quoteIsCurrency0: boolean
+  quoteToDeploy: bigint
+  pairedOut: bigint
+  tolBps?: number // default DEFAULT_DEPLOY_TOL_BPS
+  envFloor?: bigint // optional operator floor (LP_GATEWAY_DEPLOY_MIN_LIQUIDITY) — max(computed, env)
+}
+export type MinLiquidityResult =
+  | { ok: true; minLiquidity: bigint; expectedLiquidity: bigint; envFloorApplied: boolean }
+  | { ok: false; reason: 'out_of_range' | 'min_liquidity_unset' }
+
+/** Mirror of the contract's own `LiquidityAmounts.getLiquidityForAmounts(spot, A, B, amount0, amount1)`
+ *  (the exact L `deploy()` mints), haircut by `tolBps`. Out of range ⇒ refuse (a one-sided mint is not
+ *  the balanced deploy the cron sized); computed 0 ⇒ refuse (never switch the M-03 floor off). The env
+ *  value is only ever an ADDITIONAL floor — it can raise the bar, never lower it. */
+export function computeDeployMinLiquidity(i: MinLiquidityInput): MinLiquidityResult {
+  const sqrtA = getSqrtPriceAtTick(i.tickLower)
+  const sqrtB = getSqrtPriceAtTick(i.tickUpper)
+  if (!isInRange(i.sqrtPriceX96, sqrtA, sqrtB)) return { ok: false, reason: 'out_of_range' }
+  const [amount0, amount1] = i.quoteIsCurrency0 ? [i.quoteToDeploy, i.pairedOut] : [i.pairedOut, i.quoteToDeploy]
+  const expectedLiquidity = getLiquidityForAmounts(i.sqrtPriceX96, sqrtA, sqrtB, amount0, amount1)
+  const computed = applyToleranceBps(expectedLiquidity, i.tolBps ?? DEFAULT_DEPLOY_TOL_BPS)
+  if (computed <= 0n) return { ok: false, reason: 'min_liquidity_unset' }
+  const env = i.envFloor ?? 0n
+  const envFloorApplied = env > computed
+  return { ok: true, minLiquidity: envFloorApplied ? env : computed, expectedLiquidity, envFloorApplied }
 }
 
 // L-02: per-pool-per-window idempotency window. A concurrent/retried cron run within the same window
@@ -117,18 +161,47 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
     return { ok: false, status: 200, error: 'paired-leg zap not available', reason: 'zap_unwired' }
   }
 
-  // Re-audit A-3: NEVER deploy with minLiquidity = 0 — that switches the M-03 sandwich floor off entirely
-  // (the prior "fixed" status was the on-chain hook only; this caller defaulted it to 0). Fail closed until
-  // the operator sets a real floor. The on-chain follower band now guards every deploy after the first;
-  // the first deploy is exactly the one this floor protects. Checked BEFORE the window claim so a refusal
-  // never locks the window.
-  const minLiquidity = BigInt(process.env.LP_GATEWAY_DEPLOY_MIN_LIQUIDITY ?? '0')
-  if (minLiquidity <= 0n) {
-    return {
-      ok: false, status: 200,
-      error: 'LP_GATEWAY_DEPLOY_MIN_LIQUIDITY is unset/0 — refusing to deploy without a slippage floor',
-      reason: 'min_liquidity_unset',
+  // Re-audit A-3 + round-2 O-9 (HO-8): the M-03 sandwich floor is computed PER POOL from the live spot —
+  // the exact liquidity the contract will mint for (quoteToDeploy, pairedOut) at this price, haircut by
+  // LP_GATEWAY_DEPLOY_TOL_BPS (default 1%). A single global absolute-L env value cannot be right for
+  // every pool (L depends on decimals, price and range); it now survives only as an OPTIONAL extra floor
+  // (max(computed, env)). Fail-closed: unreadable price, out-of-range spot, or a computed 0 ⇒ refuse.
+  // Checked BEFORE the window claim so a refusal never locks the window.
+  let floor: MinLiquidityResult
+  try {
+    const pm = (functionName: 'poolKey' | 'poolManager' | 'tickLower' | 'tickUpper' | 'quoteAsset') =>
+      publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName })
+    const [poolKey, poolManager, tickLower, tickUpper, quoteAsset] = (await Promise.all([
+      pm('poolKey'), pm('poolManager'), pm('tickLower'), pm('tickUpper'), pm('quoteAsset'),
+    ])) as [GatewayPoolKey, `0x${string}`, number | bigint, number | bigint, `0x${string}`]
+    const slot0 = await readCurrentTick({ client: publicClient, poolManager, poolKey })
+    if (!slot0 || slot0.sqrtPriceX96 <= 0n) {
+      return { ok: false, status: 200, error: 'pool price unreadable — refusing to deploy without a real slippage floor', reason: 'price_unreadable' }
     }
+    floor = computeDeployMinLiquidity({
+      sqrtPriceX96: slot0.sqrtPriceX96,
+      tickLower: Number(tickLower),
+      tickUpper: Number(tickUpper),
+      quoteIsCurrency0: quoteAsset.toLowerCase() === poolKey.currency0.toLowerCase(),
+      quoteToDeploy,
+      pairedOut: zap.pairedOut,
+      tolBps: deployTolBps(),
+      envFloor: BigInt(process.env.LP_GATEWAY_DEPLOY_MIN_LIQUIDITY ?? '0'),
+    })
+  } catch (e) {
+    log?.error('gateway.deploy', 'pool coordinates unreadable', { error: String(e) })
+    return { ok: false, status: 200, error: 'pool coordinates unreadable — refusing to deploy without a real slippage floor', reason: 'price_unreadable' }
+  }
+  if (!floor.ok) {
+    return floor.reason === 'out_of_range'
+      ? { ok: false, status: 200, error: 'spot is outside the gateway range — a balanced deploy would be one-sided; skipped', reason: 'out_of_range' }
+      : { ok: false, status: 200, error: 'computed minLiquidity is 0 — refusing to deploy without a slippage floor', reason: 'min_liquidity_unset' }
+  }
+  const minLiquidity = floor.minLiquidity
+  if (floor.envFloorApplied) {
+    log?.warn('gateway.deploy', 'LP_GATEWAY_DEPLOY_MIN_LIQUIDITY exceeds the spot-computed floor — env floor applied (deploy reverts if the pool cannot mint it)', {
+      computed: floor.expectedLiquidity.toString(), env: minLiquidity.toString(),
+    })
   }
 
   // L-02 idempotency claim: reserve this pool's deploy window BEFORE submitting the tx. If another run
@@ -156,7 +229,7 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
   }
 
   try {
-    // M-03 slippage floor (absolute L units) — validated non-zero above; deploy() reverts below it.
+    // M-03 slippage floor (absolute L units) — spot-computed per pool above; deploy() reverts below it.
     const deployTx = await wallet.writeContract({
       address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deploy',
       args: [quoteToDeploy, zap.pairedOut, minLiquidity, BigInt(Math.floor(Date.now() / 1000) + 600)],
@@ -173,7 +246,7 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
         .eq('chain_id', cfg.chainId)
         .eq('window_key', windowKey)
     }
-    return { ok: true, deployTx, quoteDeployedAtomic: quoteToDeploy, pairedDeployedAtomic: zap.pairedOut }
+    return { ok: true, deployTx, quoteDeployedAtomic: quoteToDeploy, pairedDeployedAtomic: zap.pairedOut, minLiquidity }
   } catch (e) {
     log?.error('gateway.deploy', 'deploy tx failed', { error: String(e) })
     return { ok: false, status: 502, error: 'deploy_failed', reason: 'tx' }

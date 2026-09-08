@@ -51,25 +51,46 @@ with admin controls (pause/blacklist/proxy) must be excluded by curation; the ad
 - **`registry.ts`** — the deposit-routing trust root. `registerInstance` **verifies the candidate PM on-chain**
   (`quoteAsset()`/`poolKey()` must match the approved pool) before writing a `gateway_instances` row (**H-01**).
 - **`discovery.ts`** — `fetchHotPools` (live GeckoTerminal read, network slug **`robinhood` = MAINNET**, powers
-  the browse feed) + `discoverAndIngest` (persisted curator queue; **prunes** to the current top-30; validates
-  input, L-09). A pool identifier is a **20-byte address OR a 32-byte v4 poolId** (`normalizePoolId` — v4
-  pools have no address; **never `isAddress()`-gate them or the whole feed empties**, PR #470). `riskScore.ts`
-  **ranks, never certifies** (verdict always `'review'`). `fetchHotPools` also sideloads token logos +
-  symbols (`?include=base_token,quote_token`, https-guarded via `safeImg`) and parses the fee tier from the
-  pair name → a list-level **est. fee APR** (feeRate × 24h vol ÷ TVL, annualized). These feed the Meteora/
-  Krystal-parity Discover UI (`TokenPair` real icons, APR column, every row → `/earn/[pool]`). Est. APR is
-  labeled an estimate, never a projection/guarantee (hard copy line).
-- **Crons** (`app/api/(rewards)/cron/gateway-{discover,harvest,deploy}`) — flag-gated OFF + fail-closed;
-  discover scheduled every 3h; deploy has idempotency (L-02). Money-moving crons sign via
-  **`getOracleSigner('gateway')`** — a DEDICATED Privy seat (`GATEWAY_ORACLE_PRIVY_WALLET_ID/_ADDRESS`, no
-  shared-key fallback) that is the rig's owner (`0x18AE…663c`). Prod's shared `root` is a different wallet
-  (`0x7fD8…7E06`, card/x402/treasury) and must never own a gateway (re-audit A-3 key hardening).
-- **Routes** (`app/api/gateway/{discover,sparklines,instances,position,positions,leaderboard,deposit,withdraw,curate,request,meta}`) — all
-  `createHandler`. `deposit`/`withdraw` require **signed-message auth + tx-hash idempotency** (M-04). `curate`
-  bearer **fails closed** when `LP_GATEWAY_CURATOR_SECRET` unset (`?? ''`, not a literal — C-01). Swap seams
-  (`routerSwap.ts`, `v4SwapExec.ts`) fail-closed no-ops until a router is wired.
-- Migrations: `20260906000001` (positions/harvest) · `_002` (registry) · `20260907000001` (idempotency).
-  All **deny-all RLS**.
+  the browse feed) + `discoverAndIngest` (persisted curator queue; validates input, L-09). A pool identifier
+  is a **20-byte address OR a 32-byte v4 poolId** (`normalizePoolId` — v4 pools have no address; **never
+  `isAddress()`-gate them or the whole feed empties**, PR #470). `riskScore.ts` **ranks, never certifies**
+  (verdict always `'review'`). **Round-2 O-7 hardening (2026-09-08, closeout `discovery-hygiene.md`):**
+  everything GeckoTerminal returns is untrusted → the risk score sees only **clamped numerics** (`normalizeSignals`
+  — name/symbol/URL text can never move it); **USDG is matched by ADDRESS only** against `LP_GATEWAY_USDG` —
+  **unset ⇒ quote unknown ⇒ every pool ineligible ⇒ feed EMPTY (fail-closed) + `usdgConfigured:false`**, never by
+  pair name; token logos pass only **https + GT/CoinGecko CDN hosts** (`safeImg`); the fee tier comes from the
+  pool's fee field, else a name suffix only if ≤ 10% (`parseFeePct`); **est. fee APR is bounded** (n/a below $1k
+  TVL or above 10,000%); the upstream read has an **8 s AbortController timeout + 2 bounded retries** (5xx/network
+  only, never a 429) and **validates payload shape** (`fetchGtPools`) so the cron never 500s; **prune** only
+  touches auto+pending rows unseen for `LP_GATEWAY_DISCOVER_PRUNE_GRACE_HOURS` (72 h) — curator decisions and
+  manual rows are never evicted, and a failed read prunes nothing. **Honest residual:** the numbers themselves
+  (TVL/age/tx) are upstream-asserted — a wash-traded fake can still score 0; that is why the verdict is a human
+  gate and the UI chip must not read as certification. Est. APR is labeled an estimate, never a
+  projection/guarantee (hard copy line).
+- **Crons** (`app/api/(rewards)/cron/gateway-{discover,snapshot,harvest,deploy}`) — flag-gated OFF + fail-closed.
+  **Schedule truth (`vercel.json`): `discover` daily `0 5 * * *`, `snapshot` daily `0 6 * * *`; `harvest` and
+  `deploy` are NOT scheduled** (bearer routes, run by hand). Deploy has idempotency (L-02). Money-moving crons
+  sign via **`getOracleSigner('gateway')`** — a DEDICATED Privy seat (`GATEWAY_ORACLE_PRIVY_WALLET_ID/_ADDRESS`,
+  no shared-key fallback in app code) that is the rig's owner (`0x18AE…663c`). Prod's shared `root` is a
+  different wallet (`0x7fD8…7E06`, card/x402/treasury) and must never own a gateway (re-audit A-3 key hardening).
+- **Routes** (`app/api/gateway/{discover,sparklines,instances,position,positions,leaderboard,alerts,deposit,withdraw,curate,request,meta}`) — all
+  `createHandler`. `deposit`/`withdraw` **routes** require **signed-message auth + tx-hash idempotency** (M-04 —
+  the route half; the `/earn/[pool]` client sends the signed body as of the O-1 closeout — verify in
+  `V1PoolDetail.tsx`, it POSTed an unsigned body until 2026-09-08). `curate` bearer **fails
+  closed** when `LP_GATEWAY_CURATOR_SECRET` unset (`?? ''`, not a literal — C-01; and no `NODE_ENV=development`
+  free pass any more — O-12, `ALLOW_DEV_BEARER_BYPASS`). **O-8:** `sparklines` validates ids (20/32-byte hex)
+  before keying, caps **≤ 12 ids/request** (`truncated:true` beyond — the client should batch), caches **per id**
+  (LRU 500 + TTL, misses remembered, in-flight coalesced) and returns **429 from an in-memory per-IP floor even
+  without Upstash**; `discover` has the same floor + `.eq('status','active')` for `live` (HO-11). Both declare
+  `rateLimit`; the other public GETs (`instances`, `position(s)`, `leaderboard`, `meta`, `alerts`) still don't
+  (HO-15, their owners). Swap seams (`routerSwap.ts`, `v4SwapExec.ts`) fail-closed no-ops until a router is wired.
+- **Depositable rule:** a pool is depositable only when `gateway_instances` holds an **`active`**, on-chain-verified
+  (H-01) row for its **poolId** — the Discover `live` flag and `/earn/[pool]` must resolve through the registry, never
+  through a pair label. The single-env `LP_GATEWAY_POSITION_MANAGER` fallback is bootstrap-only (O-2 closeout;
+  see the registry agent's record for its final gating).
+- Migrations: `20260906000001` (positions/harvest) · `_002` (registry) · `20260907000001` (idempotency) ·
+  `_002` (position snapshots) · `_003` (alerts). All **deny-all RLS**. **Env vars:** every `LP_GATEWAY_*` var is
+  tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
 
 ## Surfaces & the V1/V2 model
 - **`/v1`** ([`app/v1/page.tsx`](../../app/v1/page.tsx)) = the live product (`V1Shell` + `V1Discover` — the
@@ -89,8 +110,14 @@ with admin controls (pause/blacklist/proxy) must be excluded by curation; the ad
   H-02/H-03 + the A-1/A-2/A-3 regressions, on the real adapter; self-skips without `LP_FORK_RPC_URL`) +
   `MintwareLpGatewayAuditRound2Fork.t.sol` (10 — round-2 F-01/F-02/F-04, RT-1a/2/5a/9a regressions with real
   third-party depth) + the auditors' own PoC suites under `contracts-v4/test/audit/` (kept green as evidence, asserting
-  post-fix behavior) + gateway Vitest (`lib/gateway/*`, incl. `__audit__/` PoCs). Foundry gotcha: anchor `vm.roll` to a captured `b0` — a relative `block.number + 1`
-  re-evaluated mid-test can land on the same block twice and trip `SameBlockAction`.
+  post-fix behavior) + gateway Vitest (`lib/gateway/*`, incl. `__audit__/` PoCs; the O-7/O-8/O-12 closeout added
+  `discovery` 35 · `riskScore` 12 · `sparkline` 10 · `sparklines/route` 4 · `discover/route` 3 ·
+  `cron/gateway-discover/route` 8 · `routeHandler.bearerBypass` 5 — 77 cases, and flipped
+  `__audit__/redteamOffchainDiscovery` (6) to assert the fixed behavior). ⚠ The sparkline/discover PoCs inside the
+  SHARED `__audit__/hackenOffchain.test.ts` (HO-5, HO-7) and `redteamOffchainPublicRoutes.test.ts` (R-5 sparklines)
+  now **fail-as-attacks** and need flipping by whoever consolidates those files. Foundry gotcha: anchor `vm.roll`
+  to a captured `b0` — a relative `block.number + 1` re-evaluated mid-test can land on the same block twice and
+  trip `SameBlockAction`.
 - **Hard copy lines** (same as the rest of the stack): idle-buffer, **never** "spend the fees" undersell or
   "100% spendable" overclaim; no **deposit / savings / guaranteed / fixed-APY**; testnet-honest; a liquidity
   position carries impermanent loss; external audit gates real value. `riskScore` never certifies safety.

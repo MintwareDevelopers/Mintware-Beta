@@ -36,7 +36,10 @@ type SortKey = 'vol' | 'apr' | 'tvl' | 'activity' | 'trust'
 const usd = (n: number) =>
   n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(0)}k` : `$${n.toFixed(0)}`
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`
-const slug = (p: Pool) => encodeURIComponent((p.pairLabel || p.poolAddress).replace(/\s*\/\s*/g, '-').toLowerCase())
+// Audit O-2 / HO-2: /earn/[pool] is keyed by the pool's registry id (the 20-/32-byte v4 poolId from
+// GeckoTerminal), NEVER the pair label — a label slug could not match the registry and every page fell
+// back to the single env gateway. The label is display-only.
+const slug = (p: Pool) => encodeURIComponent(p.poolAddress.toLowerCase())
 // est. fee APR: big meme-pool numbers read like Krystal/Meteora (9,307%); small ones keep a decimal.
 const aprFmt = (n: number | null) => (n == null ? '—' : n >= 1000 ? `${Math.round(n).toLocaleString('en-US')}%` : `${n.toFixed(1)}%`)
 // strip the trailing fee off the GeckoTerminal name so the row shows a clean pair; the fee gets its own chip.

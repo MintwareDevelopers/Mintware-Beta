@@ -5,6 +5,7 @@ import {IERC20}          from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626}        from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {SafeERC20}       from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable}         from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step}    from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 import {IYieldAdapter} from "./IYieldAdapter.sol";
@@ -31,7 +32,12 @@ import {IYieldAdapter} from "./IYieldAdapter.sol";
 ///             (wrong underlying) can't silently mis-account funds (a Bunni-class guard).
 ///           • Supply-only into the 4626 ⇒ no borrow / no leverage; the only loss vector is the yield
 ///             source's own solvency, which is out of our control (same as the Aave adapter).
-contract MintwareERC4626YieldAdapter is IYieldAdapter, Ownable, ReentrancyGuard {
+///           • **Ownership is two-step and non-renounceable** (audit C-9a / Hacken F-06 / RT-7d). The owner
+///             holds the `perBlockWithdrawCap` lever, which can throttle every exit of the vault/gateway that
+///             sits on top of this adapter — so a one-step typo'd `transferOwnership` or a `renounceOwnership`
+///             would either hand that lever to a stranger or freeze the cap forever. `Ownable2Step` requires
+///             the new owner to `acceptOwnership`; renounce is disabled. `setVault` stays ONE-TIME.
+contract MintwareERC4626YieldAdapter is IYieldAdapter, Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     IERC20   public immutable asset;       // the underlying this adapter idles (USDC on Arc)
@@ -54,6 +60,7 @@ contract MintwareERC4626YieldAdapter is IYieldAdapter, Ownable, ReentrancyGuard 
     error ZeroAddress();
     error AssetMismatch();
     error VaultAlreadySet();
+    error RenounceDisabled();
 
     modifier onlyVault() {
         if (msg.sender != vault) revert OnlyVault();
@@ -74,6 +81,14 @@ contract MintwareERC4626YieldAdapter is IYieldAdapter, Ownable, ReentrancyGuard 
     }
 
     // ── admin ──────────────────────────────────────────────────────────────────
+
+    /// @notice Disabled — renouncing would freeze `perBlockWithdrawCap` at whatever it is (a cap of 1 would
+    ///         soft-lock every exit forever with no key able to lift it). Ownership moves via the two-step
+    ///         `transferOwnership` → `acceptOwnership` handoff instead (C-9a / F-06).
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceDisabled();
+    }
+
     function setVault(address vault_) external onlyOwner {
         if (vault_ == address(0)) revert ZeroAddress();
         if (vault != address(0)) revert VaultAlreadySet(); // one-time — the withdraw sink must be immutable

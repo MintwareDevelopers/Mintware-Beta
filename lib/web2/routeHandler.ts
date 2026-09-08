@@ -159,12 +159,19 @@ function getRedis(): Redis | null {
   } else {
     _redis = null
     console.warn(
-      '[routeHandler] rate limiter INACTIVE — no Redis env found ' +
-        '(set UPSTASH_REDIS_REST_URL/_TOKEN or KV_REST_API_URL/_TOKEN). Declared limits are no-ops.'
+      '[routeHandler] rate limiting INACTIVE — no Redis env found ' +
+        '(set UPSTASH_REDIS_REST_URL/_TOKEN or KV_REST_API_URL/_TOKEN). ' +
+        'Every declared `rateLimit` is a NO-OP (fails OPEN); only routes with an in-memory floor still throttle.'
     )
   }
   return _redis
 }
+
+// Resolve ONCE at boot (module load) so the ACTIVE/INACTIVE line is always in the cold-start log —
+// previously it only fired lazily when the first `rateLimit`-declaring handler was built, so an
+// instance serving only unlimited routes never said anything (round-2 audit O-8 / HO-15). Skipped in
+// Vitest to keep suite output deterministic; the lazy path still resolves on first use there.
+if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) getRedis()
 
 // ---------------------------------------------------------------------------
 // createHandler
@@ -253,11 +260,16 @@ export function createHandler(
       const secret = opts.bearerSecret ?? process.env.CRON_SECRET ?? ''
       const header = req.headers.get('authorization')
       if (!secret) {
-        if (process.env.NODE_ENV !== 'development') {
-          log.error('auth', 'Bearer secret env var not set in production')
+        // Round-2 audit O-12: an unset secret used to fall OPEN on any `NODE_ENV=development` box,
+        // which left curate/register-class routes (bearer = LP_GATEWAY_CURATOR_SECRET) unauthenticated
+        // in local dev. Now it fails CLOSED everywhere unless the operator opts in EXPLICITLY with
+        // ALLOW_DEV_BEARER_BYPASS=true — and even then only in development, never in prod/test.
+        const devBypass = process.env.NODE_ENV === 'development' && process.env.ALLOW_DEV_BEARER_BYPASS === 'true'
+        if (!devBypass) {
+          log.error('auth', 'Bearer secret not set — failing closed (set the secret, or ALLOW_DEV_BEARER_BYPASS=true in development only)')
           return errorResponse('Server misconfigured', 500, 'MISSING_SECRET')
         }
-        // In development with no secret set — allow through
+        log.warn('auth', 'Bearer secret unset — DEV BYPASS active (ALLOW_DEV_BEARER_BYPASS=true, NODE_ENV=development)')
       } else if (!constantTimeEqual(header ?? '', `Bearer ${secret}`)) {
         log.warn('auth', 'Bearer token mismatch')
         return errorResponse('Unauthorized', 401, 'UNAUTHORIZED')

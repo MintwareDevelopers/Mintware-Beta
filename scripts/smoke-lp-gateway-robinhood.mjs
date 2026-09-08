@@ -19,10 +19,10 @@ const OUT = join(__dirname, '..', 'contracts-v4', 'out')
 
 const CHAIN_ID = Number(process.env.LP_GATEWAY_CHAIN_ID ?? 46630)
 const RPC = process.env.LP_GATEWAY_RPC_URL ?? 'https://rpc.testnet.chain.robinhood.com'
-// The 2026-09-08 rig (d) — round-2 audit fixes (pro-rata exit, best-effort LP leg, cost-basis cap) on top of 07c; env-overridable.
+// The 2026-09-08 rig (e) — audit close-out (rotation, tolerant source read) on top of round-2 fixes; env-overridable.
 // tUSDG was minted 1M to the Privy signer at deploy.
-const PM = (process.env.LP_GATEWAY_POSITION_MANAGER ?? '0xbb2c14c7d0401331f8da7bb619cdab77162a91f3').toLowerCase()
-const TUSDG = (process.env.LP_GATEWAY_TUSDG ?? '0xe86df24dc98120e87792d16de13d75335064add2').toLowerCase()
+const PM = (process.env.LP_GATEWAY_POSITION_MANAGER ?? '0x259a9f1cdcf8d2172964d151366b2c7c9ea6f442').toLowerCase()
+const TUSDG = (process.env.LP_GATEWAY_TUSDG ?? '0xd2af3d6e58d0caec184548e465e10fa63968ebfd').toLowerCase()
 
 const DEPOSIT = 1000n * 10n ** 6n // 1,000 tUSDG (6dp)
 const COMPOUND = 5n * 10n ** 6n // 5 tUSDG compounded (no share mint)
@@ -47,7 +47,11 @@ const { PRIVY_APP_ID, PRIVY_APP_SECRET, ROOT_ORACLE_PRIVY_WALLET_ID: walletId, R
 if (!PRIVY_APP_ID || !PRIVY_APP_SECRET || !walletId || !signer) die('missing Privy env (APP_ID/SECRET/WALLET_ID/ADDRESS)')
 const { PrivyClient } = await import('@privy-io/server-auth')
 const { createViemAccount } = await import('@privy-io/server-auth/viem')
-const privy = new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET)
+// O-6: pass the seat's wallet-API authorization key when the dashboard has one enabled for this wallet.
+const authKey = process.env.GATEWAY_ORACLE_PRIVY_AUTH_KEY ?? process.env.ROOT_ORACLE_PRIVY_AUTH_KEY ?? ''
+const privy = authKey
+  ? new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET, { walletApi: { authorizationPrivateKey: authKey } })
+  : new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET)
 const account = await createViemAccount({ walletId, address: signer, privy })
 
 const chain = { id: CHAIN_ID, name: `robinhood-${CHAIN_ID}`, nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [RPC] } } }
