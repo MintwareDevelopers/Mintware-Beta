@@ -31,6 +31,10 @@ record (files, diffs-in-words, verification commands and outputs, residuals) lin
 | §1 | Mainnet deployment path | ✅ read-only preflight (41 checks) + Privy-signed deploy script with `--dry-run`; pool curation policy; mainnet runbook; risk-disclosure paragraphs | [mainnet-path.md](mainnet-path.md) |
 | §6 | True PFP upload | ✅ Supabase Storage, magic-byte MIME sniff, content-bound signature, ≤2 MB | profile-leaderboard.md |
 | — | Off-chain audit PoC suites | ✅ flipped to assert post-fix behavior (kept as evidence) | [offchain-pocs-flipped.md](offchain-pocs-flipped.md) |
+| O-6 | One `PRIVY_APP_SECRET` reaches every server wallet — `root`/`gateway` separation was address-level only | ✅ per-seat wallet-API authorization keys, attached as required wallet owners on prod, re-verified | item 3 below |
+| §4 | Mainnet: which USDG yield source has capacity | ✅ exhaustively checked (all 39 vaults) — **none does**; documented as the standing blocker | [mainnet-yield-sources.md](mainnet-yield-sources.md) |
+| §5 | External audit scope | ✅ audit-firm-ready scope/RFP package, measured LOC/toolchain/test inventory | [`../../lp-gateway-external-audit-scope.md`](../../lp-gateway-external-audit-scope.md) |
+| — | Prod deploy break: `opengraph-image` crossed the Vercel Edge Function 1 MB cap (next 16.2.12) | ✅ moved off edge runtime (`next/og` doesn't require it) — now static, no size class applies | this file, §"Ops" below |
 
 ## Left for a human (with steps in the linked records)
 
@@ -38,18 +42,41 @@ record (files, diffs-in-words, verification commands and outputs, residuals) lin
    `20260908000002_gateway_fee_ledger`, `20260908000010_profile_avatars_storage`). Verified from the app side: all six
    tables + two views answer, `record_gateway_harvest(p_log, p_credits)` is callable (rejects an incomplete log on
    NOT NULL, transaction rolled back), bucket `avatars` exists (public, 2 MB, png/jpeg/webp).
-2. **Vercel env** (prod + preview): `LP_GATEWAY_USDG` (the feed is EMPTY until set — fail-closed), `LP_GATEWAY_PM_CODEHASHES`
-   (or `LP_GATEWAY_FACTORY`), `LP_GATEWAY_CURATORS` (curator wallet addresses that will sign in the browser),
-   `LP_GATEWAY_POOL_ADDRESS` = the 32-byte poolId, optional `LP_GATEWAY_MULTICALL3`, `UPSTASH_REDIS_REST_URL/_TOKEN`.
-3. **Privy authorization keys** (O-6, code support shipped — `<ROLE>_ORACLE_PRIVY_AUTH_KEY`): in the Privy dashboard →
-   *Wallet API → Authorization keys*, generate TWO keypairs (one per seat); attach each as an **owner** of the matching
-   server wallet (`gateway` = `0x18AE…663c`, `root` = `0x7fD8…7E06`); set `GATEWAY_ORACLE_PRIVY_AUTH_KEY` and
-   `ROOT_ORACLE_PRIVY_AUTH_KEY` on Vercel prod+preview (and the gateway one in `.env.robinhood.local` for the deploy/smoke
-   scripts); redeploy; confirm `GET /api/oracle/signer-check` still resolves both seats. From then on `PRIVY_APP_SECRET`
-   alone cannot sign for either wallet.
-4. **Mainnet**: fund the gateway seat on 4663; choose a Morpho USDG vault with capacity (Steakhouse USDG currently
-   `maxDeposit == 0`); second-person sign-off on the pool; `preflight → dry-run → deploy → record → smoke` per the runbook.
-5. **External audit** of the converged stack before any third-party funds.
+2. ~~**Vercel env**~~ ✅ **done 2026-09-08**: `LP_GATEWAY_USDG`, `LP_GATEWAY_PM_CODEHASHES`, `LP_GATEWAY_CURATORS`
+   (set to the gateway seat `0x18AE…663c`), `LP_GATEWAY_POSITION_MANAGER`/`STAGING`/`POOL_ADDRESS` (= the real 32-byte
+   poolId) all set on prod+preview against rig **e** (`0x259a…f442`); `UPSTASH_REDIS_REST_URL/_TOKEN` were already set.
+   `LP_GATEWAY_MULTICALL3` left at its canonical default (unset).
+3. ~~**Privy authorization keys**~~ ✅ **done 2026-09-08** (O-6). Two P-256 keypairs generated in the Privy dashboard
+   (*Keys and quorums*): `lp-gateway-seat-owner` and `root-seat-owner-2` (a first `root-seat-owner` attempt was
+   closed before its private key was copied — Privy never shows it again — and is orphaned/unused, harmless).
+   Private keys stored ONLY as `GATEWAY_ORACLE_PRIVY_AUTH_KEY` / `ROOT_ORACLE_PRIVY_AUTH_KEY` on Vercel prod+preview
+   (+ the gateway one in `.env.robinhood.local`, root in `.env.local`) — never displayed in any tool output or chat.
+   Sequenced to avoid an outage: keys generated + env set first (harmless — unused code path on `main` at the time);
+   only AFTER PR #479 merged, deployed, and `/api/oracle/signer-check` confirmed both seats resolving with the new
+   code, each key was attached as the wallet's **Owner** in the Privy dashboard (`0x18AE…663c` → `lp-gateway-seat-owner`;
+   the "Execution Wallet" `0x7fD8…7E06` → `root-seat-owner-2`). Re-verified immediately after each: both `root` and
+   `gateway` still resolve (`ok:true`, `matchesExpected:true`) on prod. `PRIVY_APP_SECRET` alone can no longer sign
+   for either wallet — Privy requires the matching authorization signature per wallet.
+4. **Mainnet**: fund the gateway seat (`0x18AE…663c`) with ETH on chain 4663; **yield-source capacity is the
+   real blocker** — [`mainnet-yield-sources.md`](mainnet-yield-sources.md) enumerated ALL 39 USDG vaults on Robinhood
+   Chain (not just the 2 known ones) and every single one currently returns `maxDeposit == 0` — there is no USDG
+   yield source with open capacity today, and no T-bill/RWA alternative has deployed on this chain yet. Re-run the
+   preflight periodically (or when Robinhood/Morpho announce a cap raise) to check; second-person sign-off on the
+   pool; `preflight → dry-run → deploy → record → smoke` per the runbook once a source clears.
+5. **External audit** of the converged stack before any third-party funds. Scope package ready:
+   [`../../lp-gateway-external-audit-scope.md`](../../lp-gateway-external-audit-scope.md) — freeze the target commit
+   on `main`, tag it `audit/lp-gateway-v1-freeze`, hand the firm that SHA.
+
+## Ops: production deploy break + fix (2026-09-08, same day)
+
+The auto-deploy of PR #479's merge (`74f9b9b1`) failed at the Vercel platform level — not a code bug in this round:
+`The Edge Function "opengraph-image" size is 1.07 MB and your plan size limit is 1 MB.` `app/opengraph-image.tsx`
+hadn't been touched since PR #354; the growth is in `next/og`'s own edge bundle (Satori + resvg), which grew just
+enough between `next` 16.1.6 and 16.2.12 (O-13) to cross the cap. Fix: `next/og`'s `ImageResponse` doesn't require
+the edge runtime — switched the route to `runtime = 'nodejs'`; since the image has no dynamic params it now
+prerenders fully static (`ƒ` → `○`), so no Edge Function size class applies at all. Verified with a clean-cache
+production build, pushed as a direct fast-forward to `main` (`865d504c`) given the live outage, redeployed,
+re-verified `/api/gateway/meta`, `/api/oracle/signer-check`, and `/opengraph-image` (`200 image/png`) on prod.
 
 ## Residuals (accepted, documented)
 Adapter per-block cap is an instant owner lever (delay, not loss) · `lastKnownIdle` staleness during a source outage
