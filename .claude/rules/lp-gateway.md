@@ -33,15 +33,19 @@ not your position."* The smallest concrete slice of "never idle, never locked, a
 
 **Hardening (firm-grade review — see [`../../docs/developers/lp-gateway-v1-security-review.md`](../../docs/developers/lp-gateway-v1-security-review.md)):**
 hookless meme pools have **no on-chain TWAP**, so manipulation resistance is a **clamped-follower reference**
-(tracks spot ≤ `maxDeviationBps`/block) + **directional conservative NAV** (withdraw marks the LP leg at
-`min(spot,ref)`, deposit at `max`) — a single-block pump can't inflate a claim or cheapen entry, and nothing
-reverts on price so **withdrawals never brick** (H-03/M-01). `_sweepFees` runs before every principal
-decrease/increase so the position's fees always route to the buffer, never a withdrawer (**H-02**). Withdraw
-sources idle **pro-rata** (M-06). `deploy` takes a `minLiquidity` floor (M-03). `harvestRecipient` immutable
-(no owner fee-redirect); `renounceOwnership` disabled; **no `pokePrice`** (M-02). ⚠ The other chat added an
-owner **`paused` circuit-breaker** (blocks deposits, never withdraw) + **`compoundQuote`** — on their branch,
-verify before relying. **Residual:** a patient CROSS-block manipulator on a THIN pool — deep-pool curation +
-capped deploy are the economic backstop; mainnet is audit-gated.
+(tracks spot ≤ `maxDeviationBps`/block; anyone may `poke()` it one bounded step) + a **conservative ENTRY mark**
+(deposit values the LP leg at `max(spot,ref)`; `depositWithMin` bounds a pump). **Withdraw is PURE PRO-RATA on
+both legs** (share fraction of idle AND of liquidity — no price read sizes it; `withdrawWithMin` bounds it) with
+each leg **best-effort + re-credited as shares** if undeliverable (illiquid Morpho, paused/blacklisting paired
+token, frozen recipient) — **withdrawals never brick, nothing is stranded** (round-2 audit F-01/F-02, RT-2/5/6;
+the earlier withdraw-side `min(spot,ref)` mark was retired: redundant under pro-rata and it under-paid honest
+exits). `_sweepFees` runs before every principal decrease/increase so fees route to the buffer, never a
+withdrawer (**H-02**). **`MAX_DEPLOY_BPS` caps depositor principal AT COST** (`deployedPrincipal`, never moves
+with price — RT-9a: a marked-value cap re-opened after every drawdown). `deploy` takes a `minLiquidity` floor
+(M-03) + a follower band check (A-3). `harvestRecipient` immutable; `renounceOwnership` disabled; owner
+`setPaused` (blocks deposits, never withdraw) + `compoundQuote`. **Residuals (ops, not code):** paired tokens
+with admin controls (pause/blacklist/proxy) must be excluded by curation; the adapter owner can throttle exits
+(delay, not loss); `block.number` on Robinhood Chain = L1 block (~12 s). Mainnet is audit-gated.
 
 ## Off-chain ([`lib/gateway/*`](../../lib/gateway/), [`app/api/gateway/*`](../../app/api/gateway/))
 - **`registry.ts`** — the deposit-routing trust root. `registerInstance` **verifies the candidate PM on-chain**
@@ -82,8 +86,10 @@ capped deploy are the economic backstop; mainnet is audit-gated.
 - **Tests:** 44 gateway Forge (staging/PM/factory + `MintwareLpGatewayRealAdapter.t.sol` — the gateway composed
   with the PRODUCTION 4626 adapter: onlyVault drain-block, one-time setVault, A-1 re-credit vs per-block cap +
   stalled source, fee-net NAV) + `MintwareLpGatewayHardeningFork.t.sol` (7 — real `PoolSwapTest` swaps prove
-  H-02/H-03 + the A-1/A-2/A-3 regressions, on the real adapter; self-skips without `LP_FORK_RPC_URL`) + gateway
-  Vitest (`lib/gateway/*`). Foundry gotcha: anchor `vm.roll` to a captured `b0` — a relative `block.number + 1`
+  H-02/H-03 + the A-1/A-2/A-3 regressions, on the real adapter; self-skips without `LP_FORK_RPC_URL`) +
+  `MintwareLpGatewayAuditRound2Fork.t.sol` (10 — round-2 F-01/F-02/F-04, RT-1a/2/5a/9a regressions with real
+  third-party depth) + the auditors' own PoC suites under `contracts-v4/test/audit/` (kept green as evidence, asserting
+  post-fix behavior) + gateway Vitest (`lib/gateway/*`, incl. `__audit__/` PoCs). Foundry gotcha: anchor `vm.roll` to a captured `b0` — a relative `block.number + 1`
   re-evaluated mid-test can land on the same block twice and trip `SameBlockAction`.
 - **Hard copy lines** (same as the rest of the stack): idle-buffer, **never** "spend the fees" undersell or
   "100% spendable" overclaim; no **deposit / savings / guaranteed / fixed-APY**; testnet-honest; a liquidity

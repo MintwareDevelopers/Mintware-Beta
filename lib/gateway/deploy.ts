@@ -94,17 +94,18 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
   // IL control: deploy only a FRACTION of staged into the IL-bearing LP; the rest stays idle in Morpho,
   // earning lending yield with ZERO impermanent loss. LP_GATEWAY_DEPLOY_RATIO_BPS (default 5000 = 50%)
   // is the knob — lower it for a more conservative (lower-IL) posture on a volatile meme pool.
-  // Re-audit A-3 (F-06): the old `staged × ratio` was PER-RUN, so successive windows converged to ~100%
-  // deployed (50% → 75% → 87.5% …) — the "capped fraction" was a floor, not a cap. Target the TOTAL
-  // deployed fraction of NAV instead: deployable = ratio·NAV − alreadyDeployed (≥ 0). The contract now
-  // also enforces a hard MAX_DEPLOY_BPS on-chain; this keeps the cron from submitting a tx that would
-  // revert and honours a tighter operator ratio.
-  const totalNav = (await publicClient.readContract({
-    address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'totalNav',
+  // Re-audit A-3 (F-06) + red-team RT-9a: the old `staged × ratio` was PER-RUN (converged to ~100% deployed),
+  // and a NAV-based target re-opened after every drawdown — a dumping paired token let the honest top-up
+  // rule cycle 2/3 of principal into the pool. Target the fraction of PRINCIPAL AT COST instead:
+  // deployable = ratio·(staged + deployedPrincipal) − deployedPrincipal. Cost basis never falls with price,
+  // so a drawdown NEVER triggers a top-up. Mirrors the contract's own MAX_DEPLOY_BPS check (which would
+  // revert anyway) and honours a tighter operator ratio.
+  const deployedPrincipal = (await publicClient.readContract({
+    address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deployedPrincipal',
   })) as bigint
-  const deployedNow = totalNav > staged ? totalNav - staged : 0n
-  const target = (totalNav * BigInt(deployRatioBps())) / 10_000n
-  const deployable = target > deployedNow ? target - deployedNow : 0n
+  const principal = staged + deployedPrincipal
+  const target = (principal * BigInt(deployRatioBps())) / 10_000n
+  const deployable = target > deployedPrincipal ? target - deployedPrincipal : 0n
   if (deployable <= 0n) {
     return { ok: false, status: 200, error: 'deployed fraction is already at/above the target ratio', reason: 'below_threshold' }
   }

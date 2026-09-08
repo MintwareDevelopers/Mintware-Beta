@@ -155,3 +155,19 @@ Verified by **33/33 Forge unit** + **7/7 fork tests on Robinhood testnet**, incl
 | M-07 | ✅ verified (2026-09-07) | **RH-mainnet USDG `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` (chain 4663, 6dp, ~674M supply) is Paxos-NATIVE issuance, not an Arbitrum-bridged token.** Evidence: (1) exact match to the "Robinhood Mainnet" row in [Paxos' official USDG mainnet table](https://docs.paxos.com/guides/stablecoin/usdg/mainnet) (supply-control address `0xdf5F…25D4`); (2) on-chain it is a UUPS proxy (EIP-1967 impl `0x6818…6f8f`, admin slot zero — matches the [paxosglobal/usdg-contract](https://github.com/paxosglobal/usdg-contract) `UUPSUpgradeable` design) exposing `owner()`, `paused()`, `isFrozen(address)`, AccessControl `DEFAULT_ADMIN_ROLE`; (3) Arbitrum `L2GatewayToken` probes (`l1Address()`, `l2Gateway()`) revert. Paxos' "LayerZero OFT model" is the cross-chain transport (separate OFT wrapper `0x0d54…28d1`), not a bridge-minted token. (A byte-for-byte compare of the RH implementation against the Ethereum-mainnet USDG implementation was NOT completed — public ETH RPCs were unreachable from the audit host; Blockscout is Cloudflare-gated. Optional follow-up, not a gap in the verdict.) **Issuer-risk amendment:** the earlier "USDG freeze ⇒ no permanent loss" line is too soft — `ASSET_PROTECTION_ROLE` can freeze **and wipe** a balance; a wipe of the PM / staging / Morpho-vault address is a permanent loss. Same class of risk as USDC blacklisting; accepted for any USDG holder, but it must appear in the risk disclosure and is a reason to keep exposure bounded. Set `LP_GATEWAY_USDG` to this address for the mainnet discover/registry match. |
 
 **Remaining before ANY own funds:** A-5 (real adapter + setVault), the A-3 key hardening, M-07 verification, and the bounded-rollout gates in §7. A-4 and A-7 gate *third-party* funds.
+
+
+---
+
+## 9. Round 2 — Hacken-style + red team (2026-09-08)
+
+Full consolidated report: [`audits/2026-09-08-consolidated.md`](audits/2026-09-08-consolidated.md). Contract layer: 7
+findings (2 High, 1 Med-High, 3 Med, 1 Low) — **all fixed + regression-tested** (pure pro-rata exit; best-effort LP
+leg; cost-basis deploy cap; cached spot; `depositWithMin`/`withdrawWithMin`; `poke()`). The auditors' own PoCs re-run
+against the fix now fail as attacks. Off-chain layer: 14 items, **open** — O-1 unsigned UI deposit record, O-2
+slug→env-PM misrouting, O-3 registry lookalike/active-upsert (A-7), O-4 DB-weighted harvest ledger (A-4), O-5 CSP blocks
+the RPC, O-6 one Privy app secret across seats, plus feed hardening / rate limits / docs drift.
+
+**Verdict after round 2:** bounded OWN funds via direct contract calls — **yes**, on a deep pool whose paired token has
+no admin controls, with `LP_GATEWAY_HARVEST_DESTINATION=restake`. Own funds via the UI — **not yet** (O-1/O-2/O-5).
+Third-party funds — **no** (O-1…O-6 + external audit).

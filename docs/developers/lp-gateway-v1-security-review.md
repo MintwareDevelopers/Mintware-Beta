@@ -276,3 +276,31 @@ four HIGHs the first review missed or over-claimed; full report:
 is implementable (the production adapter exposes `asset()`). **Still open:** A-4 (buffer ledger — gates
 third-party funds), A-5 (real adapter, never the mock), A-7 (registry vs factory), the dedicated owner key,
 M-07 USDG verification.
+
+## Round 2 — Hacken-style + red-team audit (2026-09-08)
+
+Four independent passes (Hacken-methodology contracts + off-chain; red-team on-chain + off-chain/ops), each with runnable
+PoCs. Consolidated report: [`audits/2026-09-08-consolidated.md`](audits/2026-09-08-consolidated.md). Contract findings,
+all **fixed + regression-tested** (`test/fork/MintwareLpGatewayAuditRound2Fork.t.sol`, 10/10 on Robinhood testnet):
+
+- **C-1 HIGH** — the withdraw-side `min(spot, ref)` mark (H-03 above) was **redundant under pro-rata sourcing (M-06) and
+  harmful**: when spot ran ahead of the follower a withdrawer got only `R/S` of their liquidity slice with no re-credit;
+  a sole holder stranded 33% of a deposit after a legit rally, a remaining holder pumping in the victim's block netted
+  +14%. → Withdraw is now **pure pro-rata on both legs**; the mark is retired. **Amends H-03:** the conservative mark
+  survives only on the deposit side.
+- **C-2 HIGH** — "withdrawals never brick" (M-01) was false in the deployed state: a paused/blacklisting paired token or a
+  USDG freeze of `harvestRecipient` reverted every exit, idle leg included. → LP leg is best-effort (`lpLegExit` self-call
+  in `try`), idle always pays, the LP slice is re-credited (`LpLegUnavailable`).
+- **C-3 MED-HIGH** — `MAX_DEPLOY_BPS` capped *marked* value; a dumping paired token re-opened it after every drawdown
+  (67% of principal cycled in, 53% extracted by the honest cron rule). → Cap is on **cost basis** (`deployedPrincipal`);
+  the cron targets the same base. **Amends A-3.**
+- **C-4 / C-5 MED** — re-credit re-read spot after external calls (hook-token dump inside the exit minted shares);
+  idle shortfall was sourced from the LP (first mover took the whole position). → Spot cached once as a weight only;
+  LP removal is the pro-rata slice only.
+- **C-6 MED** — no user slippage bounds. → `depositWithMin` / `withdrawWithMin`; **the UI must adopt them** before
+  third-party deposits. **C-7 LOW** — stale follower blocked deploy → permissionless bounded `poke()`.
+
+Off-chain findings (O-1…O-14 in the consolidated report) are **open**: unsigned UI deposit record (HO-1), slug→env-PM
+fallback misrouting (HO-2/R-1), registry lookalike + active upsert (A-7 deepened), DB-weighted harvest ledger (A-4
+end-to-end), CSP blocks the RPC (HO-3), single `PRIVY_APP_SECRET` across seats (HO-5). They gate the UI money path and
+third-party funds, not bounded own funds via direct calls.
