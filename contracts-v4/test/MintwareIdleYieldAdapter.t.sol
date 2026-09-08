@@ -76,7 +76,7 @@ contract MintwareIdleYieldAdapterTest is Test {
 
     /// A plain donation only ever inflates NAV for whoever is credited by the caller above (the position
     /// manager's share math) -- it can never be used to bypass the deposit cap on a REAL `deposit()` call,
-    /// since the cap check reads the live balance at call time, after the donation is already counted.
+    /// since the cap gates TRACKED principal (`suppliedPrincipal`), not the live balance a donation moves.
     function test_donation_is_counted_in_totalAssets_but_cannot_bypass_the_cap() public {
         address donor = makeAddr("donor"); // an outsider, not the vault
         usdg.mint(donor, CAP);
@@ -84,8 +84,26 @@ contract MintwareIdleYieldAdapterTest is Test {
         usdg.transfer(address(adapter), CAP);
         assertEq(adapter.totalAssets(), CAP, "donation counted like any other balance");
 
+        // a deposit that would ALSO exceed the cap on tracked principal still reverts normally
         vm.expectRevert(MintwareIdleYieldAdapter.DepositCapExceeded.selector);
-        adapter.deposit(1); // the cap is already full from the donation alone
+        adapter.deposit(CAP + 1);
+    }
+
+    /// The other direction, closed by the fix (round-3 tooling sweep — Slither's hand-triage AND an
+    /// independent Aderyn pass both flagged the OLD `balanceOf`-gated version): a donation must NOT be able to
+    /// GRIEF the cap shut for the vault's own legitimate deposits. Donate the whole cap, then deposit the whole
+    /// cap through the vault anyway — it succeeds, because the cap only ever gates `suppliedPrincipal`.
+    function test_donation_cannot_grief_the_deposit_cap_closed() public {
+        address donor = makeAddr("donor");
+        usdg.mint(donor, CAP);
+        vm.prank(donor);
+        usdg.transfer(address(adapter), CAP); // balance is now AT the cap, entirely from a non-vault donor
+        assertEq(adapter.maxSuppliable(), CAP, "donation does not touch tracked headroom at all");
+
+        adapter.deposit(CAP); // the vault's own deposit still has its full CAP of room
+        assertEq(adapter.suppliedPrincipal(), CAP, "tracked principal reflects only the vault's own deposit");
+        assertEq(adapter.totalAssets(), 2 * CAP, "NAV includes the donation on top of the tracked deposit");
+        assertEq(adapter.maxSuppliable(), 0, "now genuinely at cap, from the vault's OWN deposits only");
     }
 
     // ── deposit cap: the on-chain bound for "small amount, no external audit yet" ────────────────────────
@@ -116,6 +134,21 @@ contract MintwareIdleYieldAdapterTest is Test {
         assertEq(adapter.maxSuppliable(), CAP - 3_000e6);
         adapter.deposit(CAP - 3_000e6);
         assertEq(adapter.maxSuppliable(), 0);
+    }
+
+    /// suppliedPrincipal is a running total (deposits minus withdrawals), not a per-transaction snapshot: it
+    /// must never underflow when a withdrawal draws down more than the tracker holds (e.g. a donation-inflated
+    /// balance lets a holder's withdrawal exceed what THEY personally supplied) — the tracker floors at 0 and
+    /// the full cap reopens rather than reverting or wrapping around.
+    function test_suppliedPrincipal_floors_at_zero_on_an_oversized_withdrawal() public {
+        adapter.deposit(3_000e6);
+        address donor = makeAddr("donor2");
+        usdg.mint(donor, 5_000e6);
+        vm.prank(donor);
+        usdg.transfer(address(adapter), 5_000e6); // balance now 8,000e6, tracked principal still 3,000e6
+        adapter.withdraw(8_000e6); // draws down the donation too — more than suppliedPrincipal
+        assertEq(adapter.suppliedPrincipal(), 0, "floored, not underflowed");
+        assertEq(adapter.maxSuppliable(), CAP, "the full cap is available again");
     }
 
     /// Lowering the cap below the current balance blocks further deposits but never touches existing funds --

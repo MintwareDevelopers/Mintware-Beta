@@ -1,0 +1,27 @@
+# Echidna campaign config — LP gateway idle rig.
+#
+# Run from the REPO ROOT (paths and remappings are root-relative, matching foundry.toml):
+#   echidna contracts-v4/test/echidna/EchidnaLpGatewayIdle.sol \
+#     --contract EchidnaLpGatewayIdle --config contracts-v4/test/echidna/echidna-idle.yaml
+#
+# Compilation note: the project builds with via-IR, and a whole-project `forge build --build-info`
+# (crytic-compile's default foundry platform) OOMs on this repo. We therefore drive solc DIRECTLY over
+# just the harness's import closure, with the same solc version / optimizer / via-IR settings foundry.toml
+# pins — so the bytecode under test is compiled exactly as production is.
+testMode: property
+testLimit: 500000
+seqLen: 100
+shrinkLimit: 20000
+codeSize: 0xffffffff # the harness initcode is > the Shanghai limit; it is a test rig, never deployed
+corpusDir: contracts-v4/test/echidna/corpus-idle
+coverage: true
+allContracts: false
+balanceAddr: 0xffffffffffffffffffff
+balanceContract: 0
+cryticArgs:
+  - "--compile-force-framework"
+  - "solc"
+  - "--solc-remaps"
+  - "@uniswap/v4-core/=contracts-v4/lib/v4-core/ @uniswap/v4-periphery/=contracts-v4/lib/v4-periphery/ @openzeppelin/contracts/=contracts-v4/lib/openzeppelin-contracts/contracts/ forge-std/=contracts-v4/lib/forge-std/src/ solmate/=contracts-v4/lib/v4-core/lib/solmate/ openzeppelin-contracts/=contracts-v4/lib/v4-core/lib/openzeppelin-contracts/ permit2/=contracts-v4/lib/v4-periphery/lib/permit2/"
+  - "--solc-args"
+  - "--optimize --optimize-runs 200 --via-ir"

@@ -114,7 +114,9 @@ Three runs on `next@16.2.12`, logs in the session scratchpad (`build-*discovery-
    "__resetLeaderboardCache" is not a valid Route export field.` (Next.js forbids non-route exports from `route.ts`; I removed
    the same kind of test hook from `discover/route.ts` for this reason.)
 
-**Decision:** the upgrade is **kept** — the webpack compile (the part the upgrade can break) passed; the only failure is a
-concurrent edit that fails identically on 16.1.6. **Lead action:** have the leaderboard owner drop that export (or move the reset
-hook to a lib module), then re-run `NODE_OPTIONS=--max-old-space-size=8192 npx next build --webpack` once for the final proof.
-If the lead prefers the letter of the rule, reverting is `pnpm add next@16.1.6 --save-exact` (nothing else in the tree changed).
+**Decision:** the upgrade is **kept** — the webpack compile (the part the upgrade can break) passed; the only failure was a
+concurrent edit that failed identically on 16.1.6. **Resolved (round-3 reconciliation, 2026-09-08):** the reset hook now lives
+in `lib/gateway/leaderboardCache.ts` (a plain lib module — `leaderboardCache`/`resetLeaderboardCache`), imported by
+`app/api/gateway/leaderboard/route.ts` and re-exported under the `__resetLeaderboardCache` name only from
+`route.test.ts`, never from `route.ts` itself. `grep __resetLeaderboardCache app/ lib/` confirms no route file exports it —
+the Next.js route-type break this section describes no longer applies.

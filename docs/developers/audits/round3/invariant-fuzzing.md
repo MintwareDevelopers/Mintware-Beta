@@ -34,7 +34,7 @@ below the §0 line is the ORIGINAL pre-fix analysis, kept as-is.**
 | **F3-b** cost basis 1–2 wei over the cap via over-delivery | **ACCEPTED** (wei-level) | `test_R3_F3b_…_ACCEPTED`: still 2 wei over on the pinned sequence, bounded by one source share; B6 tolerance `+ srcP` on the `dp` increment |
 | **R3-INV-1** exit weight favoured the exiter when the LP leg was undelivered | **FIXED** (second pass) | `test_R3_INV1_lpLegDeferred_exitWeightAboveSpot_idleLegPricedAtLowMark_FIXED`: same sequence, bob now burns **18,985,019,568** shares for 24,999,958,333 raw of idle cash worth **18,985,010,765** shares at spot (pre-fix **16,666,666,666**) — the 8,803 excess is exactly the virtual-offset term `fair·V·(nav_w−nav_s)/(nav_s·nav_w)`, pool-favourable; bob's spot claim + cash ≤ his whole pre-exit claim; alice 131,682,613,421 → 131,682,619,826 (not diluted). B2 now also asserts the **exact per-leg re-credit shadow** on every fuzzed exit (0 violations, 318 LP-leg exits witnessed incl. 118 deferred) |
 | **R3-INV-2** deferred re-stage parked quote OUTSIDE NAV | **FIXED** (second pass) | `test_R3_R32_restageDeferred_leftoverParked_insideNav_paidFirst_consumedFirst_FIXED`: 14,333,618,375 raw parked → `totalNav == staged + parked + LP`; an OUTAGE exit (source unreadable, paired paused) still delivers **5,594,219,258** raw of idle from the parked quote; bob's 50k entry mints 38,232,164,235 shares against the parked-inclusive NAV (43,207,457,132 if parked were outside it); the 1k deploy consumes parked quote first and bob's claim moves by **286,567,531** raw = his share of the owner-donated paired leg only (pre-fix ≥ 4,979,971,247 = his ⅓ of the parked quote). Witness: 4 + 1 exits paid from parked quote, 1 + 1 deploys consumed parked quote |
-| **R3-INV-3** unset entry bucket read as the extreme mark | **NEW residual — MEDIUM (bounded window)** | `test_R3_INV3_entryMemoryUnsetBucket_zeroHolderMark_quoteIsCurrency0_depositsUnderMinted_RESIDUAL` (§0.4); campaign in the window (`A3_FORK_PERIOD_PARITY=even`): **B8 fails on both pairings** with 2–3-call shrunk sequences, every other invariant green |
+| **R3-INV-3** unset entry bucket read as the extreme mark | **FIXED** (third pass) | `test_R3_INV3_entryMemoryUnsetBucket_zeroHolderMark_quoteIsCurrency0_depositsUnderMinted_FIXED` (§0.4); `_marksHigher(a, b)` now returns `false` when `a == 0` (zero is "unset", never a price) on both sides; campaign re-run in the same window (`A3_FORK_PERIOD_PARITY=even`): **B8 green on both pairings** |
 | zero-value exit (harness) | detector gap, closed | fee-source A4 fired on `deposit(16,384) · withdraw(16,383) · withdraw(1)` — the last share is worth 0 and the per-leg rule returns it; `test_R3_zeroValueExit_nothingDelivered_allSharesReturned` pins it as SPECIFIED behaviour (value-neutral, < 1 raw unit) |
 
 ### 0.2 Campaign results on the fixed source (second pass)
@@ -68,7 +68,7 @@ Suite B (real v4, Robinhood-testnet fork) — **10 / 10 green on both pairings**
 | B3 | last-holder clean state | PASS | PASS | PASS |
 | B6 | cost-basis cap (+ `srcP` for F3-b), `dp` only in deploy/withdraw by the LIQUIDITY fraction, principal (idle incl. parked + LP-at-cost) conserved, leftover parked only when the source had no room | PASS | PASS | FAIL (F3-b) |
 | B7 | follower: ≤ band/block, once/block, anchored from creation, untouched by swaps | PASS | PASS | PASS |
-| **B8** | **holder mark == spec mark `max(spot, ref, populated entry memory)` on every deposit / exit** (new) | PASS | PASS | — (**FAIL in the R3-INV-3 window**, `A3_FORK_PERIOD_PARITY=even`) |
+| **B8** | **holder mark == spec mark `max(spot, ref, populated entry memory)` on every deposit / exit** (new) | PASS | PASS | — (was FAIL in the R3-INV-3 window before the `_marksHigher` fix; now green in that window too) |
 | B9 | revert set exact incl. `StageShortfall` / source-cap / `DeployNotTwoSided` / band on first deploy / **`WrappedError` for a paused paired token inside a v4 take** | PASS | PASS | PASS |
 | B10 | H-02 fee ordering + principal slice exact (idle = source unstage + parked quote) | PASS | PASS | PASS |
 | B16 | value out ≤ spot claim (6×18) | PASS | PASS | PASS |
@@ -133,7 +133,7 @@ frame reverts, block clock in sync** (all asserted by the witness).
   the START of the next ODD period before constructing the PM (`A3_FORK_PERIOD_PARITY=even` builds inside the
   window); the regressions do the same via `_buildAt(dec, evenPeriod, forceQ0)`.
 
-### 0.4 Residuals — R3-INV-1 / R3-INV-2 FIXED (flipped), R3-INV-3 NEW (real, pinned)
+### 0.4 Residuals — R3-INV-1 / R3-INV-2 / R3-INV-3 all FIXED (flipped)
 
 **R3-INV-1 — FIXED.** `_withdraw`'s re-credit is now per leg: an undelivered idle remainder is re-credited against
 the claim at the HIGH mark `w` (`shares·(fromIdle − idleGot)/(fromIdle + lpEntitled_w)`); a FAILED LP leg against
@@ -150,34 +150,32 @@ priced into every NAV; `_withdraw` pays the idle leg from the parked quote FIRST
 outage) and unstages only the remainder while readable; `deploy` consumes parked quote first. Flipped test:
 `test_R3_R32_restageDeferred_leftoverParked_insideNav_paidFirst_consumedFirst_FIXED` (numbers in §0.1).
 
-**R3-INV-3 — an UNSET entry-memory bucket is read as the extreme holder mark on a quote-is-currency0 pool —
-MEDIUM (bounded window, deterministic, no attacker needed).** `_marksHigher(a, b)` returns `quoteIsCurrency0 ? a < b :
-a > b` and guards only `b == 0`. `_entryHigh()` does `h = _entryHighA; if (_marksHigher(_entryHighB, h)) h =
-_entryHighB;` — with bucket B still 0 (never written) and A set, `0 < A` is TRUE on a q0 pool and `_entryHigh()`
-returns **0**; `_holderMark(spot)` then runs `_marksHigher(0, m)` → `0 < m` → **mark 0**. sqrtPrice 0 puts the
-position past its all-quote range edge, so `_deployedQuoteValueAt(0)` = the position's MAXIMUM possible quote
-content (2.08× spot value on the ±23,040-tick range: **208,216,667,870 vs 99,999,999,998** raw in the pinned test).
-Window: a gateway created in an EVEN period (`block.number / ENTRY_MEMORY_BLOCKS` — the constructor writes bucket A
-only) on a pool where `quote < paired`, from creation until the first follower step in the next period (≤ 300 blocks
-≈ 1 h at the L1 cadence); once B is written it can never be 0 again, and an ODD-period creation writes B first and
-takes the `b == 0` guard (`test_R3_INV3_oddCreationPeriod_noZeroMarkWindow`). ~¼ of gateways (parity × address
-order) have the window; it bites only if a deploy happens inside it.
+**R3-INV-3 — FIXED.** As originally found: an UNSET entry-memory bucket was read as the extreme holder mark on a
+quote-is-currency0 pool, MEDIUM, bounded window, deterministic, no attacker needed. `_marksHigher(a, b)` returned
+`quoteIsCurrency0 ? a < b : a > b` and guarded only `b == 0`. `_entryHigh()` does `h = _entryHighA; if
+(_marksHigher(_entryHighB, h)) h = _entryHighB;` — with bucket B still 0 (never written) and A set, `0 < A` was TRUE
+on a q0 pool and `_entryHigh()` returned **0**; `_holderMark(spot)` then ran `_marksHigher(0, m)` → `0 < m` → **mark
+0**. sqrtPrice 0 puts the position past its all-quote range edge, so `_deployedQuoteValueAt(0)` = the position's
+MAXIMUM possible quote content (2.08× spot value on the ±23,040-tick range: **208,216,667,870 vs 99,999,999,998**
+raw in the pinned test). Window: a gateway created in an EVEN period (`block.number / ENTRY_MEMORY_BLOCKS` — the
+constructor writes bucket A only) on a pool where `quote < paired`, from creation until the first follower step in
+the next period (≤ 300 blocks ≈ 1 h at the L1 cadence); once B is written it can never be 0 again, and an ODD-period
+creation writes B first and takes the `b == 0` guard (`test_R3_INV3_oddCreationPeriod_noZeroMarkWindow`). ~¼ of
+gateways (parity × address order) had the window; it would have bitten only if a deploy happened inside it.
 
-Shrunk sequence (`test_R3_INV3_entryMemoryUnsetBucket_zeroHolderMark_quoteIsCurrency0_depositsUnderMinted_RESIDUAL`,
-6-dp quote, real v4, even creation period, `referencePrice().entryHigh == 0` right after construction):
-`deposit(alice, 100,000e6)` · `deploy(50,000e6, 50,000e18)` · `deposit(bob, 100,000e6)` → bob is minted
-**38,727,404,218** shares where the spec mark (spot = ref, no price move) mints **66,666,888,888** (−42 %); his spot
-claim for 100,000 USDG is **69,790,248,337** raw and alice, who did nothing, gains **30,209,449,569** raw. A client
-that sets `minSharesOut` off `totalNav()` (spot) is refused `SlippageExceeded` instead — a deposit DoS for the window
-rather than a loss. The exit weight is 0 in the window too (E-2 re-credit for an undelivered idle leg is sized against
-the maximum LP mark — exiter-unfavourable, pool-favourable). Campaign-level reproduction: `A3_FORK_PERIOD_PARITY=even`
-→ **B8 fails on both pairings** (2–3-call sequences: `deposit · deploy · deposit/withdraw`), 128 zero-mark deposits /
-166 zero-mark exits in the witness, everything else green. Fix direction (not applied — `src/` out of scope): make
-`_marksHigher` treat `a == 0` as "not a price" (`if (a == 0) return false;` before the `b == 0` case), or have
-`_entryHigh()` / `_holderMark()` skip unset buckets; the harness's `_specMark` is the reference semantics and B8 will
-go green on the even parity when the fix lands (also flip the `_RESIDUAL` test and drop the `even` guard in the
-witness). Related, not a finding: the constructor's `_recordEntryHigh(s)` writes ONE bucket, so the "current +
-previous period" memory is half-populated for the first period on every gateway regardless of parity.
+Shrunk sequence (`test_R3_INV3_entryMemoryUnsetBucket_zeroHolderMark_quoteIsCurrency0_depositsUnderMinted_FIXED`,
+6-dp quote, real v4, even creation period, `referencePrice().entryHigh` now anchored non-zero right after
+construction): `deposit(alice, 100,000e6)` · `deploy(50,000e6, 50,000e18)` · `deposit(bob, 100,000e6)` — pre-fix, bob
+was minted **38,727,404,218** shares where the spec mark (spot = ref, no price move) mints **66,666,888,888**
+(−42 %); his spot claim for 100,000 USDG was **69,790,248,337** raw and alice, who did nothing, gained
+**30,209,449,569** raw. Post-fix, bob is minted exactly the spec amount and alice's claim is unchanged (dust only).
+The fix: `_marksHigher` now returns `false` whenever `a == 0` — zero is "unset, never a price" on BOTH sides, not
+just when comparing against an unset `b` — before the existing `b == 0` case. Campaign-level confirmation:
+`A3_FORK_PERIOD_PARITY=even` → **B8 now green on both pairings** (previously failed on 2–3-call sequences:
+`deposit · deploy · deposit/withdraw`). Related, not a finding: the constructor's `_recordEntryHigh(s)` writes ONE
+bucket, so the "current + previous period" memory is half-populated for the first period on every gateway
+regardless of parity — this is expected/by-design, not a gap, since the anchored `_refSqrtPrice` already covers
+that half-populated window via `_holderMark`'s max-over-spot/ref/memory.
 
 **Invariant 15 guard exercised.** `test_R3_INV15_outOfRangeDeploy_allQuoteMint_refused_DeployNotTwoSided`: pool
 pushed past the all-quote edge, follower walked into band with 40 permissionless `poke()`s, `deploy(10k, 0)` and
@@ -202,7 +200,10 @@ witness prefix, `A3_WITNESS_STOP`, `last*` violation diagnostics, witness assert
 0 re-credit violations of any class), `InvariantRegressions.t.sol` (flipped to `_FIXED`; **2nd pass:** +
 `test_R3_zeroValueExit_…`), `InvariantForkRegressions.t.sol` (flipped to `_FIXED` / `_ACCEPTED`, invariant-15 test;
 **2nd pass:** R3-INV-1 and R3-INV-2 flipped to `_FIXED`, `_buildAt(dec, evenPeriod, forceQ0)` parity/ordering
-control, + `test_R3_INV3_…_RESIDUAL` and its odd-period boundary test). `contracts-v4/src` untouched by this pass.
+control, + `test_R3_INV3_…` and its odd-period boundary test; **3rd pass:** R3-INV-3 flipped to `_FIXED` after the
+`_marksHigher` fix landed, `A3_FORK_PERIOD_PARITY=even` campaign re-confirmed green). `contracts-v4/src` untouched
+by the documentation-only edits in this file; the R3-INV-3 fix itself is one line in `_marksHigher` (see the PM
+source and `round3/README.md` §2).
 
 ---
 
@@ -214,7 +215,7 @@ control, + `test_R3_INV3_…_RESIDUAL` and its odd-period boundary test). `contr
 | `contracts-v4/test/audit3/InvariantIdleOnly.t.sol` | **Suite A** — idle-only rig (Stub v4, PRODUCTION `MintwareERC4626YieldAdapter` over the flaky source). `IdleOnlyHandler` + `InvariantIdleOnlyTest` (fee-free) + `InvariantIdleOnlyFeeSourceTest` (10 bps exit fee). 8 invariants + a 3,000-call deterministic replay witness |
 | `contracts-v4/test/audit3/InvariantForkLP.t.sol` | **Suite B** — real v4 on the Robinhood-testnet fork (self-skips without `LP_FORK_RPC_URL`). `ForkLpHandler` + `InvariantForkLP18Test` (18×18) + `InvariantForkLP6x18Test` (6-dp quote = USDG shape). 9 invariants + an 800-call replay witness |
 | `contracts-v4/test/audit3/InvariantRegressions.t.sol` | Shrunk Suite-A counterexamples as concrete tests: F1-a (exact numbers), F1-a cycle drain, F1-b, F2, F3 |
-| `contracts-v4/test/audit3/InvariantForkRegressions.t.sol` | Shrunk Suite-B counterexamples on the real v4 stack: F1-c (6 dp, deployed state), F3-b (cap exceeded), R3-INV-1 + R3-INV-2 (flipped `_FIXED`), R3-INV-3 (`_RESIDUAL` + odd-period boundary), invariant-15 guard |
+| `contracts-v4/test/audit3/InvariantForkRegressions.t.sol` | Shrunk Suite-B counterexamples on the real v4 stack: F1-c (6 dp, deployed state), F3-b (cap exceeded), R3-INV-1 + R3-INV-2 + R3-INV-3 (all flipped `_FIXED`, R3-INV-3 incl. its odd-period boundary test), invariant-15 guard |
 
 Run (repo root, `foundry.toml` is here):
 

@@ -25,16 +25,23 @@ import {IYieldAdapter} from "./IYieldAdapter.sol";
 ///         none. Same safety discipline as `MintwareERC4626YieldAdapter`/`AaveV3YieldAdapter` everywhere it
 ///         still applies:
 ///           • `onlyVault` supply/withdraw; `setVault` is ONE-TIME (a re-settable sink could be drained).
-///           • `withdraw` is best-effort per the `IYieldAdapter` contract, but since funds are NEVER deployed
-///             anywhere else, "best-effort" always equals "full" here -- the only clamp is our own balance.
+///           • `withdraw` never reverts, per the `IYieldAdapter` contract -- normally that means full delivery
+///             up to the balance (nothing is ever deployed elsewhere), but the quote asset can be USDG, whose
+///             issuer can freeze an address (M-07): a raw-call transfer (not `SafeERC20`, which cannot be
+///             `try/catch`-wrapped) serves 0 on ANY failure instead of reverting, so a freeze degrades to a
+///             re-credit (A-1) rather than bricking the whole exit including the unrelated LP leg (round-3 IA-10).
 ///           • Ownable2Step, renounce disabled (the owner holds the deposit-cap lever below).
 ///           • **`depositCap`** is the on-chain bound for "accept a small amount of real value while there is
-///             no external audit yet" (owner-adjustable). `deposit` measured against the CURRENT balance
-///             reverts once the cap is hit -- the same failure mode a capped real ERC-4626 source already
-///             produces here (`ERC4626ExceededMaxDeposit`), so callers up the stack (staging, the position
-///             manager's `deploy` re-stage try/catch) need no new handling for it. Starts at whatever the
-///             deployer passes; **0 leaves it closed** until the owner opens it explicitly -- a forgotten cap
-///             fails closed, never open.
+///             no external audit yet" (owner-adjustable). `deposit` reverts once the cap is hit -- the same
+///             failure mode a capped real ERC-4626 source already produces here (`ERC4626ExceededMaxDeposit`),
+///             so callers up the stack (staging, the position manager's `deploy` re-stage try/catch) need no
+///             new handling for it. Starts at whatever the deployer passes; **0 leaves it closed** until the
+///             owner opens it explicitly -- a forgotten cap fails closed, never open. Round-3 tooling sweep
+///             (Slither's hand-triage AND an independent Aderyn pass both caught this): the cap is checked
+///             against `suppliedPrincipal` -- cumulative vault-initiated deposits minus withdrawals -- NOT the
+///             live `balanceOf`, so an outsider can no longer grief deposits closed by donating up to the cap.
+///             A donation still counts fully toward `totalAssets()`/NAV; it just no longer touches the cap in
+///             either direction.
 contract MintwareIdleYieldAdapter is IYieldAdapter, Ownable2Step, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -43,9 +50,18 @@ contract MintwareIdleYieldAdapter is IYieldAdapter, Ownable2Step, ReentrancyGuar
     /// @notice The only address allowed to supply/withdraw. Owner-settable ONCE (deploy chicken-and-egg).
     address public vault;
 
-    /// @notice Hard ceiling on total assets this adapter will ever hold. Owner-adjustable; explicit
+    /// @notice Hard ceiling on cumulative principal the VAULT may ever supply (see `suppliedPrincipal` --
+    ///         donations are NOT gated by this and do not count against it). Owner-adjustable; explicit
     ///         `type(uint256).max` removes the bound -- there is no implicit "unlimited" default.
     uint256 public depositCap;
+
+    /// @notice Cumulative principal actually supplied by the vault (deposits minus withdrawals), tracked
+    ///         separately from `asset.balanceOf(this)` so a plain donation can never move the deposit-cap gate
+    ///         in EITHER direction: it can't bypass the cap (donations were never able to), and it can no
+    ///         longer be used to GRIEF the cap closed either -- gating on raw balance let anyone freeze
+    ///         deposits by donating up to `depositCap`. Donations still count fully toward `totalAssets()` /
+    ///         `maxWithdrawable()`, i.e. toward depositor NAV; they simply stop mattering to the cap.
+    uint256 public suppliedPrincipal;
 
     event VaultSet(address indexed vault);
     event DepositCapSet(uint256 cap);
@@ -101,25 +117,37 @@ contract MintwareIdleYieldAdapter is IYieldAdapter, Ownable2Step, ReentrancyGuar
     // ── IYieldAdapter ────────────────────────────────────────────────────────────
 
     /// @inheritdoc IYieldAdapter
-    /// @dev Reverts `DepositCapExceeded` once `balance + amount` would exceed `depositCap` -- checked against
-    ///      the CURRENT on-chain balance (not a separately tracked total), so a plain donation to this
-    ///      contract only ever helps existing holders' NAV, never bypasses the cap on a real deposit.
+    /// @dev Reverts `DepositCapExceeded` once `suppliedPrincipal + amount` would exceed `depositCap` -- checked
+    ///      against TRACKED principal, not the live balance, so a plain donation to this contract can neither
+    ///      bypass the cap (it never could) nor grief it closed for everyone else (it now cannot).
     function deposit(uint256 amount) external override onlyVault nonReentrant {
         if (amount == 0) return;
-        uint256 bal = asset.balanceOf(address(this));
-        if (bal + amount > depositCap) revert DepositCapExceeded();
+        if (suppliedPrincipal + amount > depositCap) revert DepositCapExceeded();
         asset.safeTransferFrom(vault, address(this), amount);
+        suppliedPrincipal += amount;
         emit Supplied(amount);
     }
 
     /// @inheritdoc IYieldAdapter
-    /// @dev Never reverts for a liquidity reason (per the interface contract) -- trivially true here since
-    ///      nothing is ever deployed elsewhere; the only clamp is our own balance.
+    /// @dev Never reverts for ANY reason (per the interface contract), matching `MintwareERC4626YieldAdapter`
+    ///      exactly. Round-3 adversarial pass (IA-10): the quote asset here is USDG, whose issuer can freeze an
+    ///      address (M-07) -- a bare `safeTransfer` would then revert this call, and since neither
+    ///      `MintwareLpGatewayStaging.unstage` nor the position manager's idle leg wrap that call in try/catch,
+    ///      an availability failure here used to brick the WHOLE exit including the unrelated, unfrozen LP leg
+    ///      (defeating the A-1 / M-01 "withdrawals never brick" design the rest of the stack was built around).
+    ///      `SafeERC20.safeTransfer` cannot itself be wrapped in `try/catch` -- it is an internal library call
+    ///      inlined here, with no external-call boundary -- so this uses a raw low-level call instead, tolerant
+    ///      of both bool-returning and void-returning ERC-20s, and serves 0 on ANY failure so the PM re-credits
+    ///      shares (A-1) instead of reverting. `suppliedPrincipal` is only reduced on an ACTUAL delivery, floored
+    ///      at 0 -- a delivered withdrawal can legitimately exceed tracked principal (e.g. one holder draws down
+    ///      NAV a donation inflated for everyone), which must never underflow the tracker.
     function withdraw(uint256 amount) external override onlyVault nonReentrant returns (uint256 withdrawn) {
         uint256 bal = asset.balanceOf(address(this));
         withdrawn = amount < bal ? amount : bal;
         if (withdrawn == 0) return 0;
-        asset.safeTransfer(vault, withdrawn);
+        (bool ok, bytes memory ret) = address(asset).call(abi.encodeCall(IERC20.transfer, (vault, withdrawn)));
+        if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) return 0; // frozen/paused/non-compliant token
+        suppliedPrincipal = withdrawn >= suppliedPrincipal ? 0 : suppliedPrincipal - withdrawn;
         emit Withdrawn(amount, withdrawn);
     }
 
@@ -135,10 +163,10 @@ contract MintwareIdleYieldAdapter is IYieldAdapter, Ownable2Step, ReentrancyGuar
     }
 
     /// @inheritdoc IYieldAdapter
-    /// @dev Remaining room under `depositCap`, so a caller can check headroom the same way it would against a
-    ///      real ERC-4626 source's `maxDeposit`.
+    /// @dev Remaining room under `depositCap` against TRACKED principal (see `suppliedPrincipal`), so a caller
+    ///      can check headroom the same way it would against a real ERC-4626 source's `maxDeposit` -- and a
+    ///      donation-inflated balance never makes this read 0 when the cap actually has room.
     function maxSuppliable() external view override returns (uint256) {
-        uint256 bal = asset.balanceOf(address(this));
-        return bal >= depositCap ? 0 : depositCap - bal;
+        return suppliedPrincipal >= depositCap ? 0 : depositCap - suppliedPrincipal;
     }
 }
