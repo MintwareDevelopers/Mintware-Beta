@@ -1,6 +1,10 @@
 import { ImageResponse } from 'next/og'
 
-export const runtime = 'edge'
+// Node.js runtime (not edge): `next/og` doesn't require edge, and the Vercel Edge Function bundle
+// (Satori + resvg) has a 1 MB size cap this route has since crossed on next 16.2.12 (was fine on
+// 16.1.6) — the JSX below is pure CSS with no embedded assets, so the growth is in next/og's own
+// runtime, not this file. Node functions don't have that cap.
+export const runtime = 'nodejs'
 export const alt = 'Mintware — On-chain reputation, reputation-weighted yield'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
