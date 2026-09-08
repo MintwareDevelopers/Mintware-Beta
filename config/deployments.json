@@ -181,45 +181,45 @@
     },
     "robinhood-testnet": {
       "LpGatewayPositionManager": {
-        "address": "0x259a9f1cdcf8d2172964d151366b2c7c9ea6f442",
+        "address": "0xa52d4ffaefa586251cb36d1e05588daa89ab0a63",
         "chainId": 46630,
         "status": "testnet",
-        "note": "LP Gateway V1 — AUDIT CLOSE-OUT rig 'e' (2026-09-08; docs/developers/audits/closeout/README.md). Pure-Privy REDEPLOY, owner+harvestRecipient=gateway seat 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c, band 500 bps. Adds to rig 'd' (round-2: pro-rata exit, best-effort LP leg, cost-basis cap, depositWithMin/withdrawWithMin, poke): C-10 tolerant staged read (sourceReadable/lastKnownIdle — a reverting Morpho source no longer bricks NAV; deposits fail closed, withdraws pay the LP leg), harvestRecipient 48h-timelocked rotation (propose/accept/cancel), factory adapter-binding checks, adapter Ownable2Step. Prior rigs 0xbb2c14c7d0401331f8da7bb619cdab77162a91f3 ('d'), 0x24ff…3b11 ('c'), 0xd488…b53e, 0x39B8…BD2a SUPERSEDED. MOCK tokens + hookless V4 pool; TESTNET, UNAUDITED externally. Smoke PASSED 2026-09-08 (deposit 1000 1:1; compoundQuote(5) → 1005 no mint; setPaused blocks deposit not withdraw; withdraw 50% → 502.5). Vercel prod+preview: LP_GATEWAY_POSITION_MANAGER/STAGING/POOL_ADDRESS(=32-byte poolId)/USDG(=tUSDG)/PM_CODEHASHES repointed. Deploy: scripts/deploy-lp-gateway-robinhood.mjs · smoke: scripts/smoke-lp-gateway-robinhood.mjs · mainnet path: scripts/{preflight,deploy}-lp-gateway-mainnet.mjs.",
+        "note": "LP Gateway V1 — ROUND-3 rig 'g' (2026-09-08; docs/developers/audits/round3/README.md). Pure-Privy REDEPLOY, owner+harvestRecipient=gateway seat 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c, band 500 bps. Adds to rig 'e': entry-mark MEMORY (ENTRY_MEMORY_BLOCKS=300), single virtual offset on exit (fuzz F1), pool-initialised ctor check + follower anchored at creation (first deploy banded), DeployNotTwoSided, StageShortfall (50 bps), OUTAGE_HAIRCUT_BPS=2000, per-leg re-credit weights, tolerant re-stage with parked quote counted as idle, staging balance-diff, referencePrice() view. PM runtime code hash 0x89a53e8da35d43715c50cd1354bbc376624ab6bfc56fccb96097db2baefc00f4; v4 poolId 0x07340da7f228f72fd2a624571c34b0f217b5f3a8e2b2826373f4afffe0a0dfa2 (tUSDG/tPONS 0.30%/60, price 1.0; currency0 = tUSDG). Rig 'g' = final round-3 source incl. the R3-INV-3 comparator fix (quote IS currency0 here, the orientation that fix guards). Prior rigs 'f' 0xd87eaa9e4a8872d32e0a51581f6a73a46fb805cb (pre-R3-INV-3 bytecode) and 'e' 0x259a9f1cdcf8d2172964d151366b2c7c9ea6f442 (pre-round-3) SUPERSEDED. MOCK tokens + hookless V4 pool; TESTNET, UNAUDITED externally. Smoke PASSED 2026-09-08 (deposit 1000 1:1; compoundQuote(5) no mint; setPaused blocks deposit not withdraw; withdraw 50%). Deploy: scripts/deploy-lp-gateway-robinhood.mjs · smoke: scripts/smoke-lp-gateway-robinhood.mjs.",
         "verified": "2026-09-08"
       },
       "LpGatewayStaging": {
-        "address": "0x24f69ca370e85e7f18799161bc6b0267d6ac00cc",
+        "address": "0x0a8544c0222d3d6a729cd8aa81fbe9f64174fa14",
         "chainId": 46630,
         "status": "testnet",
-        "note": "LP Gateway staging reserve (idle USDG earns as 4626 shares held by the adapter). controller=PositionManager; deployer=Privy 0x18AE...663c (deployer-only setController, M1). It is the adapter's one-time `vault` — the only address that can move funds through the adapter.",
+        "note": "Round-3 rig 'g' staging (controller = PM 0xa52d…0a63; unstage measured by balance-diff).",
         "verified": "2026-09-08"
       },
       "LpGateway_ERC4626YieldAdapter": {
-        "address": "0xd6866f00684b2ea1219bc6d91caf61dbd591bc94",
+        "address": "0x4e1b4e63dd41b810f64ac320bea9085ded0b7b8a",
         "chainId": 46630,
         "status": "testnet",
-        "note": "PRODUCTION MintwareERC4626YieldAdapter (re-audit A-5): onlyVault (=staging, set once), fee-net NAV via previewRedeem, best-effort redeem-based exits, optional per-block withdraw cap (uncapped here). owner=Privy 0x18AE...663c. Replaces the MockYieldAdapter (0xfe74…644a, SUPERSEDED — its withdraw had NO access control; never point value at a rig using it).",
+        "note": "Round-3 rig 'g' production MintwareERC4626YieldAdapter (onlyVault=staging, one-time setVault, Ownable2Step; owner = gateway seat).",
         "verified": "2026-09-08"
       },
       "LpGateway_MockERC4626YieldSource": {
-        "address": "0x804ae0d2fa81ab9cafe12b1a60e88bdbe201ac72",
+        "address": "0x44221c452c26faa74c79025d28abea53d0992afd",
         "chainId": 46630,
         "status": "testnet",
-        "note": "MOCK ERC-4626 yield SOURCE (OZ ERC4626 over tUSDG; no drain path) behind the production adapter — stands in for the curated Morpho USDG vault on mainnet (set via LP_GATEWAY_YIELD_SOURCE at deploy).",
+        "note": "Round-3 rig 'g' MockERC4626 yield source over tUSDG (OZ ERC-4626; testnet stand-in for the curated Morpho vault).",
         "verified": "2026-09-08"
       },
       "LpGateway_tUSDG": {
-        "address": "0xd2af3d6e58d0caec184548e465e10fa63968ebfd",
+        "address": "0x2a8c32e291bc90ceb8ae058b6a684be0312bb848",
         "chainId": 46630,
         "status": "testnet",
-        "note": "MOCK USDG (6dp) for the LP gateway rig. No value. Real USDG (Paxos) + Morpho gate mainnet.",
+        "note": "Round-3 rig 'g' mock USDG (6dp) — quote asset; set as LP_GATEWAY_USDG on the testnet env.",
         "verified": "2026-09-08"
       },
       "LpGateway_tPONS": {
-        "address": "0x4b60b01014227795b660c105e38993104ec4a629",
+        "address": "0x4494bbcb351a263097978f314057875e5ec5b9a7",
         "chainId": 46630,
         "status": "testnet",
-        "note": "MOCK PONS (18dp) paired token for the LP gateway rig. No value.",
+        "note": "Round-3 rig 'g' mock paired token (18dp).",
         "verified": "2026-09-08"
       }
     }

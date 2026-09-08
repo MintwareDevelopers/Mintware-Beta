@@ -43,7 +43,14 @@ const ROLE_PRIVY_ENV: Record<OracleRole, PrivyEnv> = {
 }
 
 function usePrivy(): boolean {
-  return (process.env.ORACLE_SIGNER_PROVIDER ?? 'env-key').toLowerCase() === 'privy'
+  // Round-3 audit F-6: a TYPO in ORACLE_SIGNER_PROVIDER ("privvy", "Privy " …) used to fall through to env-key
+  // mode silently — the `gateway` seat then failed closed (no raw key) but `range`/`agent` would sign with the
+  // shared, git-exposed ORACLE_PRIVATE_KEY. Only the two documented values are accepted; anything else throws
+  // at first use (every signer path is behind this), so a misconfiguration is loud, not a silent downgrade.
+  const raw = (process.env.ORACLE_SIGNER_PROVIDER ?? 'env-key').trim().toLowerCase()
+  if (raw === 'privy') return true
+  if (raw === 'env-key') return false
+  throw new Error(`[oracleSigner] ORACLE_SIGNER_PROVIDER must be "privy" or "env-key" (got "${raw}") — refusing to pick a signer.`)
 }
 
 /**

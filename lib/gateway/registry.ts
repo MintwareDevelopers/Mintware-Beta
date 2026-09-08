@@ -92,11 +92,32 @@ export type RegistryTrustConfig = {
   pmCodeHashes: string[]
   /** `LP_GATEWAY_USDG` — the platform quote asset. The ONLY quote a registry row may carry. */
   expectedQuoteAsset: `0x${string}` | null
+  /**
+   * Round-3 audit F-5 — IDENTITY checks beyond bytecode. A code-hash allowlist is per-BUILD, not per-instance: an
+   * attacker can deploy the audited bytecode with their own constructor args (owner, staging, pool) and the hash
+   * matches by definition. The staging one-controller invariant happened to stop the PoC, but nothing asserted
+   * WHO owns the PM or where its fees go. `undefined` = caller opted out (hand-built test configs);
+   * `registryTrustConfigFromEnv` ALWAYS populates it, with `expectedOwner: null` when the env is unset →
+   * `owner_env_unset` (fail closed) at verify time.
+   */
+  seat?: {
+    /** `LP_GATEWAY_OWNER` ?? `GATEWAY_ORACLE_PRIVY_ADDRESS` — the only address allowed to own a registered PM. */
+    expectedOwner: `0x${string}` | null
+    /** `LP_GATEWAY_HARVEST_RECIPIENTS` (comma) ∪ {expectedOwner} — where a registered PM may route fees. */
+    allowedHarvestRecipients: string[]
+  }
 }
 
 export function registryTrustConfigFromEnv(env: Record<string, string | undefined> = process.env): RegistryTrustConfig {
   const f = env.LP_GATEWAY_FACTORY
   const q = env.LP_GATEWAY_USDG
+  const o = env.LP_GATEWAY_OWNER ?? env.GATEWAY_ORACLE_PRIVY_ADDRESS
+  const expectedOwner = o && isAddress(o, { strict: false }) ? (o.toLowerCase() as `0x${string}`) : null
+  const recipients = (env.LP_GATEWAY_HARVEST_RECIPIENTS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => isAddress(s, { strict: false }))
+  if (expectedOwner && !recipients.includes(expectedOwner)) recipients.push(expectedOwner)
   // strict:false — every value is lower-cased for comparison, so checksum casing is irrelevant here
   return {
     factory: f && isAddress(f, { strict: false }) ? (f.toLowerCase() as `0x${string}`) : null,
@@ -105,8 +126,21 @@ export function registryTrustConfigFromEnv(env: Record<string, string | undefine
       .map((s) => s.trim().toLowerCase())
       .filter((s) => /^0x[0-9a-f]{64}$/.test(s)),
     expectedQuoteAsset: q && isAddress(q, { strict: false }) ? (q.toLowerCase() as `0x${string}`) : null,
+    seat: { expectedOwner, allowedHarvestRecipients: recipients },
   }
 }
+
+/** Round-3 F-5 identity reads: PM owner + fee recipient, staging → adapter → vault binding. */
+export const LP_PM_SEAT_ABI = [
+  { type: 'function', stateMutability: 'view', name: 'owner', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', stateMutability: 'view', name: 'harvestRecipient', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+export const LP_STAGING_ADAPTER_ABI = [
+  { type: 'function', stateMutability: 'view', name: 'adapter', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+export const LP_ADAPTER_VAULT_ABI = [
+  { type: 'function', stateMutability: 'view', name: 'vault', inputs: [], outputs: [{ type: 'address' }] },
+] as const
 
 export type VerificationKind = 'factory' | 'codehash' | 'operator_attested'
 
@@ -176,6 +210,34 @@ export async function verifyInstanceOnChain(opts: {
   }
   if (stagingController !== pm) return { ok: false, error: 'staging_controller_mismatch' }
   if (stagingQuote !== wantQuote) return { ok: false, error: 'staging_quote_mismatch' }
+
+  // (d) Round-3 F-5 — IDENTITY, not just bytecode: who owns this PM, where do its fees go, and is the staging's
+  //     adapter really bound to this staging. A bytecode-identical PM with attacker constructor args passes the
+  //     code-hash root by definition; these reads are what actually pin the instance to OUR seat.
+  if (trust.seat !== undefined) {
+    const seat = trust.seat
+    if (!seat.expectedOwner) return { ok: false, error: 'owner_env_unset' }
+    let pmOwner: string
+    let pmRecipient: string
+    let stagingAdapter: string
+    let adapterVault: string
+    try {
+      pmOwner = String(await client.readContract({ address: pm, abi: LP_PM_SEAT_ABI, functionName: 'owner' })).toLowerCase()
+      pmRecipient = String(await client.readContract({ address: pm, abi: LP_PM_SEAT_ABI, functionName: 'harvestRecipient' })).toLowerCase()
+      stagingAdapter = String(await client.readContract({ address: stagingWant, abi: LP_STAGING_ADAPTER_ABI, functionName: 'adapter' })).toLowerCase()
+    } catch {
+      return { ok: false, error: 'seat_read_failed' }
+    }
+    if (pmOwner !== seat.expectedOwner) return { ok: false, error: 'owner_mismatch' }
+    if (!seat.allowedHarvestRecipients.includes(pmRecipient)) return { ok: false, error: 'recipient_not_allowlisted' }
+    if (stagingAdapter === zeroAddress) return { ok: false, error: 'adapter_unbound' }
+    try {
+      adapterVault = String(await client.readContract({ address: stagingAdapter as `0x${string}`, abi: LP_ADAPTER_VAULT_ABI, functionName: 'vault' })).toLowerCase()
+    } catch {
+      return { ok: false, error: 'seat_read_failed' }
+    }
+    if (adapterVault !== stagingWant) return { ok: false, error: 'adapter_vault_mismatch' }
+  }
 
   // (a) TRUST ROOT — factory first (the curated, onlyOwner deployer of audited bytecode); else the
   //     operator's code-hash allowlist for directly-deployed rigs.

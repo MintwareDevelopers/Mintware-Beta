@@ -315,9 +315,12 @@ quote-asset terms at a fixed price unless stated.
     `deploy` before `_increaseCalls`), `_sweepFees` runs first, so accrued fees reach `harvestRecipient` and never a
     withdrawer or the re-stage. Property on a fork with real swaps: `withdrawer_out == principal slice` and
     `Δrecipient == accrued fees`, for partial and full exits, including when `_sweepFees` early-returns at zero liquidity.
-11. **`lastKnownIdle` is conservative.** During a source outage the idle entitlement is sized off the last
-    successful read; yield accrued since is invisible, so a withdrawer burns *more* shares per unit delivered, never
-    fewer; no path lets a stale `lastKnownIdle` *over*-state idle relative to the live reserve after the source returns.
+11. **`lastKnownIdle` is conservative — with the haircut.** During a source outage the idle entitlement is sized off
+    `lastKnownIdle · (1 − OUTAGE_HAIRCUT_BPS)` (20 %). Round 3 (R3-1) showed the un-haircut fallback is only conservative
+    for YIELD: a loss realised in the unreadable source left it stale-HIGH and an outage-time exiter offloaded part of the
+    loss onto remaining holders (fork PoC: +5k / −5k on a 20k loss). Property now: a stale fallback never over-states
+    idle by more than the haircut relative to the live reserve after the source returns; a blind exiter keeps ≤ the
+    shares a live read would give.
 
 **Access control and one-way switches**
 
@@ -334,6 +337,27 @@ quote-asset terms at a fixed price unless stated.
     `compoundQuote`, `setPaused`, rotation, `setPerBlockWithdrawCap` on the adapter, `createGateway`/`deactivate`) and
     show none moves depositor principal to an owner-controlled address other than via AMM economics bounded by the
     50 % cost-basis cap and the follower band (RT-9b/9c/9d). Quantify the worst case for a compromised seat.
+17. **Entry-mark memory (round 3, XR-1 / E-1).** `_navDepositStrict` marks the LP leg at `_holderMark(spot)` = the
+    holder-favourable extreme over spot, the follower AND the two entry-memory buckets (current + previous
+    `ENTRY_MEMORY_BLOCKS = 300` period; the older bucket is only ever replaced, never expired). Properties: a same-block
+    dump + `poke()` cannot cheapen entry; a dump held for less than one full period cannot; the memory is direction-aware
+    (`_marksHigher`: sqrtPrice-DOWN is holder-favourable when quote is currency0). Attack surface: the bucket rotation
+    boundary (an attacker who starts a walk in period k and holds until k+2), and whether recording the FOLLOWER (not
+    spot) into the memory leaves any single-block primitive.
+18. **Single virtual offset on exit (round 3, fuzz F1).** `claimTotal = toAssets(shares, idle + lpVal_w, ts, VIRTUAL)`,
+    capped at what exists; legs split by un-offset weights; `liqToRemove = min(liq, liq·lpEntitled/lpVal)`. Property: a
+    fully-delivered exit re-credits exactly 0 shares and `sharesBurned == shares`; deposit-then-withdraw cycles never
+    net the cycler a positive amount at 6 dp or 18 dp.
+19. **Two-sided deploy (round 3, invariant 15).** On every successful `deploy`, `pairedUsedValue(spot) ∈ [½, 2] ×
+    quoteUsed`. Property: no owner-reachable sequence mints an all-quote (or all-paired) position; the compromised-seat
+    worst case is bounded to the in-band, two-sided sandwich (economically ≤ ~5 % griefing at the seat's own expense).
+20. **Stage delta (round 3, XR-3).** Every `deposit` grows `stagedAssets` by ≥ `amount·(1 − 50 bps)` or reverts
+    `StageShortfall`; against an empty offset-less 4626 the first gateway deposit cannot be zeroed; entry-fee sources
+    above 50 bps are DOA rather than silently diluting (closes L-05 as a live risk).
+21. **Anchored at creation (round 3, XR-2 / X-7).** Construction reverts `PoolNotInitialized` on an uninitialised pool
+    and anchors the follower at creation; the follower runs from creation; the first deploy is banded like every later
+    one. Off-chain, the deploy cron additionally refuses when spot deviates from an external reference by more than
+    `LP_GATEWAY_DEPLOY_REF_MAX_DEV_BPS` (default 500) and fails closed without a reference on mainnet.
 16. **Value conservation at 6 dp × 18 dp.** For the real decimal pairing (USDG 6 dp quote, 18 dp paired), NAV, exit
     amounts and re-credits round in the contract's favour and never create value; `_pairedToQuote` does not overflow
     for realistic `sqrtPriceX96 × amount` (RT-x).
@@ -344,7 +368,11 @@ quote-asset terms at a fixed price unless stated.
 
 | Residual | Status | Where documented |
 |---|---|---|
-| **Patient cross-block manipulation on a thin pool** (H-03 / RT-1e / C-6) — the follower bounds per-block movement; over many blocks it is capital-expensive, not impossible | Accepted; controlled by curation (min depth R5, max gateway share R8), `depositWithMin`/`withdrawWithMin`, the deploy cap | policy §6, consolidated §4 |
+| **Patient cross-block manipulation on a thin pool** (H-03 / RT-1e / C-6) — round 3 turned this into a runnable, profitable PoC at every policy depth (XR-1: 7 blocks, cost/gain 1:6; E-1: atomic one-step + `poke`). **Fixed** by the entry-mark memory (a held dump must now survive 1–2 h of dip-buyers); the DEPLOY side is protected by the cron's external-reference check + R8 (in-band sandwich unprofitable below ~6 % share) | Fixed (deposit) / accepted (deploy, economic) | round3 `README.md`, `economic-models.md` §1/§3 |
+| **Round-3 economics (Q3):** depth (R5) does NOT enter the attacker's gain/cost ratio (≈ s/φ); R8's share cap and arbitrage PRESENCE do. Policy: third-party share ≤ 0.5 % of R until the round-3 contract fixes are live, then 2 %; require a second venue (arb presence) for third-party pools | Policy | `economic-models.md` §3.4 |
+| **`compoundQuote` harvest sandwich** (XR-4): a 2-block hold captures ~90 % of a compound; Low while the owner is the sole depositor — add a linear unlock before third-party depositors | Open (Low) | `exploit-replay-vault.md` §3.4 |
+| **Read-only reentrancy windows** (X-1): `totalNav`/`totalShares`/`sharesOf` read 1.67–2× inside a callback; no on-chain consumer exists — hard rule: never read PM views from a gateway callback; add `nonReentrantView` before share tokenisation | Info / must-not-integrate | `exploit-replay-integration.md` |
+| **USDG upgrade authority is one key** (`0x3af3…024b`, sole proposer/executor of a 24 h `TimelockController` on RH and ETH) — can rewrite balances after 24 h; pause/freeze/wipe live without upgrade | Issuer risk — disclose, monitor `CallScheduled`/`Upgraded` | `equivalence-checks.md` |
 | **Paired-token admin controls** (pause/blacklist/upgrade/hooks) can freeze the LP leg until the third party relents; funds are re-credited, not lost | Accepted; excluded by policy R4 + two-person review; `LpLegUnavailable` monitored | policy §2/§6, runbook §7/§9 |
 | **USDG issuer freeze / wipe** (M-07) — a wipe of a holder-at-rest is permanent loss | Accepted; disclosed; exposure bounded | realfunds §2/§8, `/legal`, `/risk-disclosures` |
 | **Adapter `perBlockWithdrawCap`** is an instant, unbounded owner lever (delay, not loss — A-1 re-credits) | Accepted (same seat as PM owner); follow-up: floor or timelock decreases before third-party funds | closeout `contracts-residuals.md` C-9a |

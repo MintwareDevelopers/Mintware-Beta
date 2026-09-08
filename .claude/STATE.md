@@ -56,6 +56,14 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
     boundary `lib/auth/requireTeam` (permission guard), and role-gated NAV — all flag-gated on
     `TEAM_HARD_GATE` (default off = showcase). Deploy-gated remainder: `@privy-io/server-auth`
     install + `PRIVY_APP_SECRET` + Privy-dashboard org/metadata setup.
+- **LP Gateway V1** (`/v1`, `/earn/[pool]`, `/curate`) — the first live product surface: stage USDG → earn in
+  a Morpho-shaped ERC-4626 adapter → owner deploys a capped fraction as Uniswap v4 LP → harvest fees. **Live on
+  Robinhood Chain TESTNET (46630) with mock tokens; UNAUDITED externally.** Three internal audit rounds (real-funds
+  re-audit → Hacken-style + red team → **round-3 real-world exploit replay, 2026-09-08**) — every finding fixed or
+  explicitly accepted; the trail is `docs/developers/audits/` (start at `round3/README.md`) and the external-audit
+  scope package is `docs/developers/lp-gateway-external-audit-scope.md`. Round-3 rig **'g'** (PM `0xa52d…0a63`, deployed + smoke-passed
+  2026-09-08) carries every round-3 fix; the Vercel `LP_GATEWAY_*` repoint + registry row follow the PR merge. Mainnet blocked on a
+  Morpho USDG vault with capacity (all 39 at `maxDeposit == 0`). Rule: `.claude/rules/lp-gateway.md`.
 - **Marketing:** `/`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
   `/agents`, `/about`, `/docs`.
 - **Org treasury (new, testnet)** — the multi-tenant treasury MVP built ON the org layer
@@ -155,12 +163,12 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `EthSeniorDemo_Settlement` | testnet · base-sepolia | `0x6d0a1520e47bAE8F5304859a6a0193dDa567A9E0` | testnet |
 | `EthSeniorDemo_TreasuryVault` | testnet · base-sepolia | `0xb84776B8CB27C924A3B4e704C0FF826CB4A98A1c` | testnet |
 | `EthSeniorDemo_YieldAdapter` | testnet · base-sepolia | `0xd01EcCF90Ac339B836c85e800ca11235D48F916f` | testnet |
-| `LpGateway_ERC4626YieldAdapter` | testnet · robinhood-testnet | `0xd6866f00684b2ea1219bc6d91caf61dbd591bc94` | testnet |
-| `LpGateway_MockERC4626YieldSource` | testnet · robinhood-testnet | `0x804ae0d2fa81ab9cafe12b1a60e88bdbe201ac72` | testnet |
-| `LpGateway_tPONS` | testnet · robinhood-testnet | `0x4b60b01014227795b660c105e38993104ec4a629` | testnet |
-| `LpGateway_tUSDG` | testnet · robinhood-testnet | `0xd2af3d6e58d0caec184548e465e10fa63968ebfd` | testnet |
-| `LpGatewayPositionManager` | testnet · robinhood-testnet | `0x259a9f1cdcf8d2172964d151366b2c7c9ea6f442` | testnet |
-| `LpGatewayStaging` | testnet · robinhood-testnet | `0x24f69ca370e85e7f18799161bc6b0267d6ac00cc` | testnet |
+| `LpGateway_ERC4626YieldAdapter` | testnet · robinhood-testnet | `0x4e1b4e63dd41b810f64ac320bea9085ded0b7b8a` | testnet |
+| `LpGateway_MockERC4626YieldSource` | testnet · robinhood-testnet | `0x44221c452c26faa74c79025d28abea53d0992afd` | testnet |
+| `LpGateway_tPONS` | testnet · robinhood-testnet | `0x4494bbcb351a263097978f314057875e5ec5b9a7` | testnet |
+| `LpGateway_tUSDG` | testnet · robinhood-testnet | `0x2a8c32e291bc90ceb8ae058b6a684be0312bb848` | testnet |
+| `LpGatewayPositionManager` | testnet · robinhood-testnet | `0xa52d4ffaefa586251cb36d1e05588daa89ab0a63` | testnet |
+| `LpGatewayStaging` | testnet · robinhood-testnet | `0x0a8544c0222d3d6a729cd8aa81fbe9f64174fa14` | testnet |
 | `MintwareEthSettlement` | testnet · base-sepolia | `0x20140811123db9C00CA1dF1023BA4fE758B98c5F` | testnet |
 | `MintwareStagedLiquidityRouter` | testnet · base-sepolia | `0x36fa7d533dC94A9b0648EeEC935e127d7F5533e3` | testnet |
 | `MintwareTreasuryGatewayDeployer` | testnet · base-sepolia | `0xfbf781676fe93cd8d8d8e17716461c29f549a644` | testnet |

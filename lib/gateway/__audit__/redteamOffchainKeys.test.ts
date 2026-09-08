@@ -32,12 +32,11 @@ describe('oracleKeys fallback chains (env-key mode)', () => {
 })
 
 describe('ORACLE_SIGNER_PROVIDER is a single GLOBAL switch', () => {
-  it('unset/typo ("Privy ", "privy-server") ⇒ env-key mode for EVERY role, including gateway', async () => {
+  it('FIXED (round-3 F-6): a typo ("privy-server") no longer downgrades to env-key — every role refuses to sign', async () => {
     vi.stubEnv('ORACLE_SIGNER_PROVIDER', 'privy-server')
     vi.stubEnv('GATEWAY_ORACLE_PRIVATE_KEY', FAKE_DIST)
     const { getOracleSigner } = await import('@/lib/web3/oracleSigner')
-    const acct = await getOracleSigner('gateway')
-    // resolved from a RAW env key even though the operator believes prod is Privy-enclaved
-    expect(acct.address.toLowerCase()).toBe('0x1563915e194d8cfba1943570603f7606a3115508') // address of 0x22…22 (public test vector)
+    // used to resolve from the RAW env key while the operator believed prod was Privy-enclaved
+    await expect(getOracleSigner('gateway')).rejects.toThrow(/ORACLE_SIGNER_PROVIDER must be "privy" or "env-key"/)
   })
 })

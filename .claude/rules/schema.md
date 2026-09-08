@@ -129,3 +129,8 @@ Source of truth: `docs/schema.sql`
   `lib/x402/permitStore.ts`; never browser-read. The permit is verified against the SAME scheme the
   card flow uses (`lib/org/spendPermit.ts` — domain `Mintware Payment Gateway`/`2.0`, typehash
   `DelegatedSpendPermit(address user,uint256 maxDailySpendUSDC,uint256 nonce,uint256 deadline)`).
+- `20260908000003_gateway_ledger_view_security.sql` — **security (round-3 F-1/F-7):** the two gateway fee-ledger
+  views (`gateway_fee_balances`, `gateway_fee_ledger_reconciliation`) were owner-executed views over deny-all tables
+  and therefore **readable with the public anon key**; now `security_invoker = on` + `REVOKE ALL` from `PUBLIC`/
+  `anon`/`authenticated`, and `EXECUTE` on `record_gateway_harvest` revoked from `PUBLIC` (service role only).
+  Rule: every view over an RLS table must be `security_invoker` — a plain view runs as its owner and bypasses RLS.
