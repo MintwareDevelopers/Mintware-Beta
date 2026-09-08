@@ -1,0 +1,176 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { encodeEventTopics, encodeAbiParameters } from 'viem'
+import { privateKeyToAccount } from 'viem/accounts'
+import { buildGatewayDepositMessage, buildGatewayWithdrawMessage } from '@/lib/web3/signedActionMessages'
+import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
+import { fakeSupabase } from '@/lib/gateway/__audit__/fakeSupabase'
+import { _resetReplayGuard } from '@/lib/gateway/recordAuth'
+
+// O-1 + O-10 closeout for the record routes: the exact body the UI now sends (signed message + tx
+// hash + poolId) is accepted; the signed txHash/pool are strict-compared to the body; a re-presented
+// signature is refused; strict pool resolution (O-2) applies.
+
+const state = vi.hoisted(() => ({
+  supabase: null as unknown,
+  cfg: null as unknown,
+  receipt: null as unknown,
+  sharesOf: 0n,
+}))
+vi.mock('@/lib/web2/supabase', () => ({ getServiceClient: () => state.supabase }))
+vi.mock('@/lib/gateway/chain', () => ({
+  gatewayConfig: () => state.cfg,
+  gatewayPublicClient: () => ({
+    getTransactionReceipt: async () => { if (!state.receipt) throw new Error('not found'); return state.receipt },
+    readContract: async ({ functionName }: { functionName: string }) => { if (functionName === 'sharesOf') return state.sharesOf; throw new Error(functionName) },
+  }),
+}))
+
+// throwaway test key (hardhat #0 — public, worthless)
+const wallet = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80')
+const USER = wallet.address.toLowerCase()
+const REG_PM = '0x00000000000000000000000000000000000000aa'
+const POOL_ID = '0x' + 'ab'.repeat(32)
+const TX = ('0x' + 'aa'.repeat(32)) as `0x${string}`
+const cfg = { chainId: 46630, rpcUrl: 'http://rpc.test', positionManager: null, staging: null, poolAddress: null }
+const registryRow = { pool_address: POOL_ID, chain_id: 46630, position_manager: REG_PM, staging: '0x' + '11'.repeat(20), quote_asset: '0x' + '22'.repeat(20), status: 'active' }
+
+function depositedLog(user: string, quoteIn: bigint, shares: bigint) {
+  return {
+    address: REG_PM,
+    topics: encodeEventTopics({ abi: LP_GATEWAY_ABI, eventName: 'Deposited', args: { user: user as `0x${string}` } }),
+    data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [quoteIn, shares]),
+  }
+}
+function withdrawnLog(user: string, burned: bigint, quoteOut: bigint, pairedOut: bigint) {
+  return {
+    address: REG_PM,
+    topics: encodeEventTopics({ abi: LP_GATEWAY_ABI, eventName: 'Withdrawn', args: { user: user as `0x${string}` } }),
+    data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [burned, quoteOut, pairedOut]),
+  }
+}
+
+async function signedDeposit(over: { txHash?: string; pool?: string | null; bodyTx?: string; bodyPool?: string | null } = {}) {
+  const issuedAt = Date.now()
+  const authMessage = buildGatewayDepositMessage({ address: wallet.address, txHash: over.txHash ?? TX, pool: over.pool === undefined ? POOL_ID : over.pool, issuedAt })
+  const authSignature = await wallet.signMessage({ message: authMessage })
+  return { address: wallet.address, txHash: over.bodyTx ?? over.txHash ?? TX, pool: over.bodyPool === undefined ? (over.pool === undefined ? POOL_ID : over.pool) : over.bodyPool, authMessage, authSignature, issuedAt }
+}
+function post(path: string, body: unknown) {
+  return new Request(`https://mw.test${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }) as never
+}
+
+beforeEach(() => {
+  _resetReplayGuard()
+  state.cfg = cfg
+  state.sharesOf = 1_000_000n
+  state.receipt = { status: 'success', to: REG_PM, logs: [depositedLog(USER, 1_000_000n, 1_000_000n)] }
+  state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] }, uniques: { gateway_deposit_events: [['tx_hash']] } }).client
+})
+
+describe('POST /api/gateway/deposit — the UI body is now accepted and recorded (O-1)', () => {
+  it('signed { address, txHash, pool=poolId, authMessage, authSignature, issuedAt } → 200, gateway_positions written', async () => {
+    const { POST } = await import('./route')
+    const res = await POST(post('/api/gateway/deposit', await signedDeposit()))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.success).toBe(true)
+    expect(json.shares).toBe('1000000')
+    expect(json.costBasisAtomic).toBe('1000000')
+    expect(json.idempotentReplay).toBe(false)
+  })
+  it('the OLD unsigned UI body is still refused (401) — nothing regressed', async () => {
+    const { POST } = await import('./route')
+    const res = await POST(post('/api/gateway/deposit', { address: wallet.address, txHash: TX, pool: POOL_ID }))
+    expect(res.status).toBe(401)
+  })
+})
+
+describe('O-10 — signed txHash/pool bound to the body; single-use signature', () => {
+  it('body txHash ≠ signed txHash → 401 auth_payload_mismatch', async () => {
+    const { POST } = await import('./route')
+    const res = await POST(post('/api/gateway/deposit', await signedDeposit({ bodyTx: '0x' + 'bb'.repeat(32) })))
+    expect(res.status).toBe(401)
+    expect((await res.json()).error).toBe('auth_payload_mismatch')
+  })
+  it('body pool ≠ signed pool → 401 auth_payload_mismatch', async () => {
+    const { POST } = await import('./route')
+    const res = await POST(post('/api/gateway/deposit', await signedDeposit({ bodyPool: '0x' + 'cd'.repeat(32) })))
+    expect(res.status).toBe(401)
+  })
+  it('case differences are normalised (checksummed body vs lowercased signature is fine)', async () => {
+    const { POST } = await import('./route')
+    const b = await signedDeposit()
+    const res = await POST(post('/api/gateway/deposit', { ...b, txHash: TX.toUpperCase().replace('0X', '0x'), pool: POOL_ID.toUpperCase().replace('0X', '0x') }))
+    expect(res.status).toBe(200)
+  })
+  it('the same signature presented twice → second is 409 auth_replayed (and the tx ledger stays single-row)', async () => {
+    const { POST } = await import('./route')
+    const b = await signedDeposit()
+    expect((await POST(post('/api/gateway/deposit', b))).status).toBe(200)
+    const res = await POST(post('/api/gateway/deposit', b))
+    expect(res.status).toBe(409)
+    expect((await res.json()).error).toBe('auth_replayed')
+  })
+  it('a FRESH signature for an already-recorded tx is an idempotent replay (basis not inflated)', async () => {
+    const { POST } = await import('./route')
+    expect((await POST(post('/api/gateway/deposit', await signedDeposit()))).status).toBe(200)
+    const res = await POST(post('/api/gateway/deposit', await signedDeposit()))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.idempotentReplay).toBe(true)
+    expect(json.costBasisAtomic).toBe('1000000') // not 2,000,000
+  })
+})
+
+describe('O-2 — strict pool resolution on the record path', () => {
+  it('a label slug that misses the registry → 404 pool_not_live (never recorded against the env rig)', async () => {
+    const { POST } = await import('./route')
+    const res = await POST(post('/api/gateway/deposit', await signedDeposit({ pool: 'pons-usdg' })))
+    expect(res.status).toBe(404)
+    expect((await res.json()).error).toBe('pool_not_live')
+  })
+  it('receipt.to ≠ the resolved PM → wrong_contract', async () => {
+    state.receipt = { status: 'success', to: '0x' + '77'.repeat(20), logs: [] }
+    const { POST } = await import('./route')
+    const res = await POST(post('/api/gateway/deposit', await signedDeposit()))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe('wrong_contract')
+  })
+})
+
+describe('POST /api/gateway/withdraw — same binding, records the exit', () => {
+  it('signed withdraw body → 200 and the basis is reduced proportionally', async () => {
+    state.supabase = fakeSupabase({
+      tables: {
+        gateway_instances: [registryRow],
+        gateway_positions: [{ id: 'p1', user_wallet: USER, pool_address: POOL_ID, chain_id: 46630, shares: '1000000', entry_nav: '1000000' }],
+      },
+      uniques: { gateway_deposit_events: [['tx_hash']] },
+    }).client
+    state.sharesOf = 500_000n
+    state.receipt = { status: 'success', to: REG_PM, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n)] }
+    const issuedAt = Date.now()
+    const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
+    const authSignature = await wallet.signMessage({ message: authMessage })
+    const { POST } = await import('../withdraw/route')
+    const res = await POST(post('/api/gateway/withdraw', { address: wallet.address, txHash: TX, pool: POOL_ID, authMessage, authSignature, issuedAt }))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.sharesBurned).toBe('500000')
+    expect(json.costBasisAtomic).toBe('500000')
+  })
+  it('a deposit-action signature cannot be replayed on the withdraw route (action binding held)', async () => {
+    const { POST } = await import('../withdraw/route')
+    const res = await POST(post('/api/gateway/withdraw', await signedDeposit()))
+    expect(res.status).toBe(401)
+  })
+  it('signed pool ≠ body pool → 401 on withdraw too', async () => {
+    const issuedAt = Date.now()
+    const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
+    const authSignature = await wallet.signMessage({ message: authMessage })
+    const { POST } = await import('../withdraw/route')
+    const res = await POST(post('/api/gateway/withdraw', { address: wallet.address, txHash: TX, pool: 'pons-usdg', authMessage, authSignature, issuedAt }))
+    expect(res.status).toBe(401)
+    expect((await res.json()).error).toBe('auth_payload_mismatch')
+  })
+})

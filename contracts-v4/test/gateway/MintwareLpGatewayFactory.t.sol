@@ -7,8 +7,10 @@ import {MintwareLpGatewayFactory} from "../../src/gateway/MintwareLpGatewayFacto
 import {MintwareLpGatewayStaging} from "../../src/gateway/MintwareLpGatewayStaging.sol";
 import {MintwareLpGatewayPositionManager, IPermit2Minimal} from "../../src/gateway/MintwareLpGatewayPositionManager.sol";
 import {MockERC20} from "../mocks/MockERC20.sol";
+import {MockERC4626} from "../mocks/MockERC4626.sol";
 import {MockYieldAdapter} from "../mocks/MockYieldAdapter.sol";
 import {IYieldAdapter} from "../../src/vaults/IYieldAdapter.sol";
+import {MintwareERC4626YieldAdapter} from "../../src/vaults/MintwareERC4626YieldAdapter.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -92,6 +94,71 @@ contract MintwareLpGatewayFactoryTest is Test {
         (, address p2) = factory.createGateway(_key(500), IERC20(address(usdg)), adapterB, -22980, 22980, gwOwner, sink, 2000);
         assertTrue(p1 != p2);
         assertEq(factory.poolCount(), 2);
+    }
+
+    // ── C-9b (Hacken F-07): the factory verifies the adapter binding before wiring it ─────────────────
+
+    /// Branch 1 — the adapter ANSWERS `asset()` (production `MintwareERC4626YieldAdapter`) with the pool's quote
+    /// → accepted.
+    function test_adapterBinding_productionAdapter_matchingAsset_passes() public {
+        MockERC4626 src = new MockERC4626(IERC20(address(usdg)));
+        MintwareERC4626YieldAdapter prod =
+            new MintwareERC4626YieldAdapter(address(usdg), address(src), address(0), address(this));
+        (address s,) = factory.createGateway(
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(prod)), -22980, 22980, gwOwner, sink, 0
+        );
+        assertTrue(s != address(0));
+    }
+
+    /// Branch 1 — `asset()` answers with a DIFFERENT token than the pool quotes in → AdapterAssetMismatch.
+    /// Pre-fix: the instance deployed fine and every deposit reverted (DOA). Note: `adapterUsed` is written
+    /// before the probe, but the whole tx reverts so the adapter is NOT burned.
+    function test_adapterBinding_productionAdapter_wrongAsset_reverts() public {
+        MockERC4626 srcPons = new MockERC4626(IERC20(address(pons)));
+        MintwareERC4626YieldAdapter wrong =
+            new MintwareERC4626YieldAdapter(address(pons), address(srcPons), address(0), address(this));
+        vm.expectRevert(MintwareLpGatewayFactory.AdapterAssetMismatch.selector);
+        factory.createGateway(
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(wrong)), -22980, 22980, gwOwner, sink, 0
+        );
+        assertFalse(factory.adapterUsed(address(wrong)), "revert rolled back the adapterUsed mark");
+    }
+
+    /// Branch 2 — an older `IYieldAdapter` with NO `asset()` (MockYieldAdapter exposes `underlying()`): the
+    /// fallback sanity call `totalAssets()` succeeds → accepted (its value is 0 for a fresh adapter — fine).
+    function test_adapterBinding_legacyAdapter_noAssetGetter_fallsBackToTotalAssets() public {
+        assertEq(adapter.totalAssets(), 0, "fresh legacy adapter holds nothing - zero is accepted");
+        (address s,) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 0);
+        assertTrue(s != address(0));
+    }
+
+    /// Branch 2 — a contract that answers NEITHER `asset()` nor `totalAssets()` is not an adapter → AdapterUnreadable.
+    function test_adapterBinding_notAnAdapter_reverts() public {
+        address notAdapter = address(new Stub());
+        vm.expectRevert(MintwareLpGatewayFactory.AdapterUnreadable.selector);
+        factory.createGateway(
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(notAdapter), -22980, 22980, gwOwner, sink, 0
+        );
+    }
+
+    /// Codeless address (EOA): both probes return empty data → AdapterUnreadable (was: DOA instance).
+    function test_adapterBinding_eoa_reverts() public {
+        vm.expectRevert(MintwareLpGatewayFactory.AdapterUnreadable.selector);
+        factory.createGateway(
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(0xE0A)), -22980, 22980, gwOwner, sink, 0
+        );
+    }
+
+    /// Branch 3 — the adapter's ONE-TIME `vault()` is already wired elsewhere: it can never point at the new
+    /// staging, so the instance would be DOA → AdapterAlreadyBound.
+    function test_adapterBinding_vaultAlreadyWired_reverts() public {
+        MockERC4626 src = new MockERC4626(IERC20(address(usdg)));
+        MintwareERC4626YieldAdapter bound =
+            new MintwareERC4626YieldAdapter(address(usdg), address(src), address(0xD0D0), address(this));
+        vm.expectRevert(MintwareLpGatewayFactory.AdapterAlreadyBound.selector);
+        factory.createGateway(
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(bound)), -22980, 22980, gwOwner, sink, 0
+        );
     }
 
     function test_deactivate() public {

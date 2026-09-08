@@ -123,9 +123,125 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         pm.withdraw(s + 1);
     }
 
-    // harvestRecipient is now immutable — no setter exists (owner can't redirect the fee stream).
-    function test_harvestRecipient_immutable() public view {
+    // harvestRecipient is set at construction; the ONLY way to change it is the 48h timelocked rotation below
+    // (F-02 rec. 3). There is no instant setter — the owner can't redirect the fee stream on the spot.
+    function test_harvestRecipient_setAtConstruction() public view {
         assertEq(pm.harvestRecipient(), harvestSink);
+        assertEq(pm.pendingHarvestRecipient(), address(0));
+        assertEq(pm.harvestRecipientEta(), 0);
+        assertEq(pm.HARVEST_RECIPIENT_DELAY(), 48 hours);
+    }
+
+    // ── F-02 rec. 3: timelocked harvestRecipient rotation ─────────────────────────────────────
+
+    // via-IR may CSE `block.timestamp` across `vm.warp` (same trap as `block.number`/`vm.roll`), so every
+    // rotation test warps to an ABSOLUTE anchor first and does its clock math on that literal.
+    uint256 constant T0 = 1_700_000_000;
+
+    function test_harvestRecipientRotation_happyPath_after48h() public {
+        address next = address(0x9999);
+        vm.warp(T0);
+        uint256 t0 = T0;
+        vm.expectEmit(true, true, false, true);
+        emit MintwareLpGatewayPositionManager.HarvestRecipientProposed(harvestSink, next, t0 + 48 hours);
+        pm.proposeHarvestRecipient(next);
+        assertEq(pm.harvestRecipient(), harvestSink, "unchanged until accepted");
+        assertEq(pm.pendingHarvestRecipient(), next);
+        assertEq(pm.harvestRecipientEta(), t0 + 48 hours);
+
+        vm.warp(t0 + 48 hours);
+        vm.expectEmit(true, true, false, false);
+        emit MintwareLpGatewayPositionManager.HarvestRecipientRotated(harvestSink, next);
+        pm.acceptHarvestRecipient();
+        assertEq(pm.harvestRecipient(), next);
+        assertEq(pm.pendingHarvestRecipient(), address(0), "rotation state cleared");
+        assertEq(pm.harvestRecipientEta(), 0);
+    }
+
+    /// The invariant a compromised owner key cannot break: proposing does nothing for 48h. One second early → revert.
+    function test_harvestRecipientRotation_earlyAccept_reverts() public {
+        address next = address(0x9999);
+        vm.warp(T0);
+        uint256 t0 = T0;
+        pm.proposeHarvestRecipient(next);
+        vm.expectRevert(MintwareLpGatewayPositionManager.RotationNotReady.selector);
+        pm.acceptHarvestRecipient();
+        vm.warp(t0 + 48 hours - 1);
+        vm.expectRevert(MintwareLpGatewayPositionManager.RotationNotReady.selector);
+        pm.acceptHarvestRecipient();
+        assertEq(pm.harvestRecipient(), harvestSink, "still the original recipient");
+    }
+
+    function test_harvestRecipientRotation_cancel() public {
+        address next = address(0x9999);
+        vm.warp(T0);
+        pm.proposeHarvestRecipient(next);
+        vm.expectEmit(true, false, false, false);
+        emit MintwareLpGatewayPositionManager.HarvestRecipientRotationCancelled(next);
+        pm.cancelHarvestRecipientRotation();
+        assertEq(pm.pendingHarvestRecipient(), address(0));
+        assertEq(pm.harvestRecipientEta(), 0);
+        vm.warp(T0 + 48 hours);
+        vm.expectRevert(MintwareLpGatewayPositionManager.NoPendingRotation.selector);
+        pm.acceptHarvestRecipient(); // a cancelled proposal can't be accepted later
+        assertEq(pm.harvestRecipient(), harvestSink);
+    }
+
+    /// Re-proposing overwrites the pending address AND restarts the 48h clock — no way to "pre-arm" a rotation.
+    function test_harvestRecipientRotation_reproposeRestartsClock() public {
+        vm.warp(T0);
+        uint256 t0 = T0;
+        pm.proposeHarvestRecipient(address(0x9999));
+        vm.warp(t0 + 47 hours);
+        pm.proposeHarvestRecipient(address(0x8888));
+        assertEq(pm.harvestRecipientEta(), t0 + 47 hours + 48 hours);
+        vm.warp(t0 + 48 hours);
+        vm.expectRevert(MintwareLpGatewayPositionManager.RotationNotReady.selector);
+        pm.acceptHarvestRecipient();
+        vm.warp(t0 + 47 hours + 48 hours);
+        pm.acceptHarvestRecipient();
+        assertEq(pm.harvestRecipient(), address(0x8888));
+    }
+
+    function test_harvestRecipientRotation_guards() public {
+        vm.expectRevert(MintwareLpGatewayPositionManager.NoPendingRotation.selector);
+        pm.acceptHarvestRecipient();
+        vm.expectRevert(MintwareLpGatewayPositionManager.NoPendingRotation.selector);
+        pm.cancelHarvestRecipientRotation();
+        vm.expectRevert(MintwareLpGatewayPositionManager.ZeroAddress.selector);
+        pm.proposeHarvestRecipient(address(0));
+        // owner-only on all three
+        vm.startPrank(alice);
+        vm.expectRevert();
+        pm.proposeHarvestRecipient(alice);
+        vm.expectRevert();
+        pm.acceptHarvestRecipient();
+        vm.expectRevert();
+        pm.cancelHarvestRecipientRotation();
+        vm.stopPrank();
+        // a pending (not yet accepted) OWNER has no rotation powers either (Ownable2Step)
+        pm.transferOwnership(bob);
+        vm.prank(bob);
+        vm.expectRevert();
+        pm.proposeHarvestRecipient(bob);
+    }
+
+    // ── C-10: `lastKnownIdle` bookkeeping on the happy path (the outage behaviour lives in
+    //    MintwareLpGatewaySourceOutage.t.sol + MintwareLpGatewayCloseoutFork.t.sol) ────────────────
+
+    function test_lastKnownIdle_tracksReserve() public {
+        assertEq(pm.lastKnownIdle(), 0);
+        assertTrue(pm.sourceReadable());
+        uint256 s = _deposit(alice, 100_000e6);
+        assertEq(pm.lastKnownIdle(), 100_000e6, "refreshed post-stage");
+        usdg.mint(address(this), 5_000e6);
+        usdg.approve(address(pm), 5_000e6);
+        pm.compoundQuote(5_000e6);
+        assertEq(pm.lastKnownIdle(), 105_000e6, "refreshed after compound");
+        vm.roll(block.number + 1);
+        vm.prank(alice);
+        pm.withdraw(s / 2);
+        assertApproxEqRel(pm.lastKnownIdle(), 52_500e6, 0.001e18, "refreshed after the idle leg left");
     }
 
     // Same-block guard: a single address cannot deposit and withdraw in the same block (kills the

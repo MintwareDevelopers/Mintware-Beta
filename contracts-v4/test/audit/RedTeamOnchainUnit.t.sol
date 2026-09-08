@@ -191,21 +191,26 @@ contract RedTeamOnchainUnitTest is Test {
         assertApproxEqAbs(_wd(alice, s), 100_000e6, 2, "exit path intact");
     }
 
-    /// Source `previewRedeem` reverts (a bricked/paused source): `stagedAssets()` reverts → deposit AND
-    /// withdraw AND totalNav all revert — the PM never try/catches the staged read (A-8 noted, not fixed).
-    /// SUCCEEDS as an availability brick for as long as the source misbehaves (no loss).
-    function test_RT_5f_sourcePreviewReverts_everythingBricks_SUCCEEDS() public {
+    /// Source `previewRedeem` reverts (a bricked/paused source). ORIGINALLY SUCCEEDED as a total availability brick:
+    /// `stagedAssets()` reverted → deposit AND withdraw AND totalNav all reverted (A-8 noted, not fixed).
+    /// FIXED (consolidated C-10, closeout 2026-09-08): the PM's staged read is tolerant — `totalNav` falls back to
+    /// `lastKnownIdle` (flagged via `sourceReadable()`), deposits fail CLOSED (`SourceUnavailable` — an entry that
+    /// can't be priced never mints), and an idle-only withdraw with nothing deliverable refuses with state untouched
+    /// instead of burning shares against a zero claim. The deployed-state LP-only exit is proven in
+    /// `test/fork/MintwareLpGatewayCloseoutFork.t.sol`. Recovers fully when the source does. No loss either way.
+    function test_RT_5f_sourcePreviewReverts_availabilityPreserved_FIXED() public {
         uint256 s = _dep(alice, 100_000e6);
         src.setRevertPreview(true);
-        vm.expectRevert();
-        pm.totalNav();
+        assertFalse(pm.sourceReadable());
+        assertEq(pm.totalNav(), 100_000e6, "view served from lastKnownIdle (pre-fix: revert)");
         vm.prank(bob);
-        vm.expectRevert();
-        pm.deposit(1e6);
+        vm.expectRevert(MintwareLpGatewayPositionManager.SourceUnavailable.selector);
+        pm.deposit(1e6); // fail closed, not blind
         _roll(1);
         vm.prank(alice);
-        vm.expectRevert();
-        pm.withdraw(s);
+        vm.expectRevert(MintwareLpGatewayPositionManager.SourceUnavailable.selector);
+        pm.withdraw(s); // nothing deliverable (no LP) → refuse, shares intact
+        assertEq(pm.sharesOf(alice), s, "claim intact");
         src.setRevertPreview(false);
         assertApproxEqAbs(_wd(alice, s), 100_000e6, 2, "recovers when the source does");
     }

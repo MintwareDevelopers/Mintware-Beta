@@ -2,15 +2,17 @@ import { isAddress } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { readGatewayPosition } from '@/lib/gateway/positionReader'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
-import { listActiveInstances } from '@/lib/gateway/registry'
+import { listResolvableInstances } from '@/lib/gateway/routeInstance'
 
 export const dynamic = 'force-dynamic'
 
 // GET — PUBLIC (auth:'none'). The cross-pool aggregate: every LP-gateway position a wallet holds, for the
-// Portfolio view. Reads the wallet's `gateway_positions` rows, joins the live `gateway_instances` for the
-// positionManager + pair label, and reads each on-chain value in parallel (fail-soft per pool). Like the
-// single-pool GET, it discloses only chain-derivable figures (shares/value/cost basis/PnL) — the off-chain
-// spendable-buffer stays private and is read per-pool via the owner-signed POST /api/gateway/position (L-03).
+// Portfolio view. CHAIN-FIRST (audit O-1 / HO-1): enumerate every resolvable instance (active registry
+// rows, or the env rig while the registry is empty), read `sharesOf` for the wallet on each, and surface
+// every pool with shares > 0. The wallet's `gateway_positions` rows are ENRICHMENT only (cost basis +
+// whether the deposit was recorded) — a depositor whose record call failed still sees their position.
+// Like the single-pool GET, it discloses only chain-derivable figures; the off-chain spendable buffer
+// stays private and is read per-pool via the owner-signed POST /api/gateway/position (L-03).
 export const GET = createHandler(async (req, ctx) => {
   const cfg = gatewayConfig()
   if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
@@ -20,34 +22,34 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json({ success: false, error: 'address_required' }, 400)
   }
 
-  // The wallet's positions across all pools (cost basis + shares live in the DB).
+  const instances = await listResolvableInstances(ctx.supabase, cfg)
+  if (instances.length === 0) return ctx.json({ success: true, positions: [] })
+
+  // DB enrichment: cost basis per pool (may be absent when a record call never landed).
   const { data: rows } = await ctx.supabase
     .from('gateway_positions')
     .select('pool_address, chain_id, entry_nav, shares')
     .eq('user_wallet', address)
+  const basisByPool = new Map<string, { entry_nav: unknown }>()
+  for (const r of (rows ?? []) as { pool_address: string; chain_id: number; entry_nav: unknown }[]) {
+    basisByPool.set(`${String(r.pool_address).toLowerCase()}:${Number(r.chain_id)}`, r)
+  }
 
-  const posRows = (rows ?? []) as { pool_address: string; chain_id: number; entry_nav: unknown; shares: unknown }[]
-  if (posRows.length === 0) return ctx.json({ success: true, positions: [] })
-
-  // Live instances (pool → positionManager + label) so we only surface pools still curated/deployed.
-  const instances = await listActiveInstances(ctx.supabase, cfg.chainId)
-  const byPool = new Map(instances.map((i) => [i.poolAddress.toLowerCase(), i]))
   const client = gatewayPublicClient(cfg)
 
   const positions = (
     await Promise.all(
-      posRows.map(async (row) => {
-        const inst = byPool.get(String(row.pool_address).toLowerCase())
-        if (!inst) return null // pool no longer active/registered — skip
+      instances.map(async (inst) => {
+        const row = basisByPool.get(`${inst.poolAddress}:${inst.chainId}`)
         try {
           const view = await readGatewayPosition({
             client,
             positionManager: inst.positionManager,
             user: address as `0x${string}`,
-            costBasisAtomic: row.entry_nav != null ? BigInt(String(row.entry_nav)) : null,
+            costBasisAtomic: row?.entry_nav != null ? BigInt(String(row.entry_nav)) : null,
             bufferBalanceAtomic: 0n,
           })
-          if (BigInt(view.shares) <= 0n) return null // fully withdrawn — omit
+          if (BigInt(view.shares) <= 0n) return null // nothing on-chain in this pool — omit
           return {
             poolAddress: inst.poolAddress,
             pairLabel: inst.pairLabel,
@@ -56,6 +58,9 @@ export const GET = createHandler(async (req, ctx) => {
             positionValueAtomic: view.positionValueAtomic,
             costBasisAtomic: view.costBasisAtomic,
             unrealizedPnlAtomic: view.unrealizedPnlAtomic,
+            recorded: row != null, // false ⇒ chain shows shares but no record row (O-1) — cost basis unknown
+            source: inst.source,
+            live: inst.live,
             // Off-chain private data — owner-gated on POST /api/gateway/position (L-03).
             bufferBalanceAtomic: null,
           }

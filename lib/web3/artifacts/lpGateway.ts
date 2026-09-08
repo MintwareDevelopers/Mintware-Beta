@@ -12,6 +12,17 @@ export const LP_GATEWAY_ABI = [
   { type: 'function', stateMutability: 'nonpayable', name: 'withdrawWithMin', inputs: [{ name: 'shares', type: 'uint256' }, { name: 'minQuoteOut', type: 'uint256' }, { name: 'minPairedOut', type: 'uint256' }], outputs: [{ name: 'quoteOut', type: 'uint256' }, { name: 'pairedOut', type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'tokenId', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'harvestRecipient', inputs: [], outputs: [{ type: 'address' }] },
+  // Timelocked harvest-recipient rotation (audit closeout 2026-09-08, F-02 rec. 3): propose → 48h → accept.
+  { type: 'function', stateMutability: 'view', name: 'pendingHarvestRecipient', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', stateMutability: 'view', name: 'harvestRecipientEta', inputs: [], outputs: [{ type: 'uint64' }] },
+  { type: 'function', stateMutability: 'view', name: 'HARVEST_RECIPIENT_DELAY', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', stateMutability: 'nonpayable', name: 'proposeHarvestRecipient', inputs: [{ name: 'recipient', type: 'address' }], outputs: [] },
+  { type: 'function', stateMutability: 'nonpayable', name: 'acceptHarvestRecipient', inputs: [], outputs: [] },
+  { type: 'function', stateMutability: 'nonpayable', name: 'cancelHarvestRecipientRotation', inputs: [], outputs: [] },
+  // C-10: yield-source outage tolerance. `totalNav` falls back to `lastKnownIdle` while `sourceReadable()` is
+  // false — surfaces should flag the figure as STALE then; deposits revert `SourceUnavailable` until it recovers.
+  { type: 'function', stateMutability: 'view', name: 'sourceReadable', inputs: [], outputs: [{ type: 'bool' }] },
+  { type: 'function', stateMutability: 'view', name: 'lastKnownIdle', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'quoteAsset', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', stateMutability: 'view', name: 'pairedAsset', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', stateMutability: 'view', name: 'poolManager', inputs: [], outputs: [{ type: 'address' }] },
@@ -59,6 +70,31 @@ export const LP_GATEWAY_ABI = [
       { name: 'sharesBurned', type: 'uint256', indexed: false },
       { name: 'quoteOut', type: 'uint256', indexed: false },
       { name: 'pairedOut', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'IdleLegUnavailable',
+    inputs: [
+      { name: 'user', type: 'address', indexed: true },
+      { name: 'idleEntitledLastKnown', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'HarvestRecipientProposed',
+    inputs: [
+      { name: 'current', type: 'address', indexed: true },
+      { name: 'proposed', type: 'address', indexed: true },
+      { name: 'eta', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'HarvestRecipientRotated',
+    inputs: [
+      { name: 'previous', type: 'address', indexed: true },
+      { name: 'current', type: 'address', indexed: true },
     ],
   },
   {

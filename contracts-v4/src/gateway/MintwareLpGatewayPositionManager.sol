@@ -72,9 +72,8 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     /// @notice Quote principal currently in the LP at COST (what `deploy` pulled from staging, reduced pro-rata
     ///         as shares exit). Never moves with price — the base of the MAX_DEPLOY_BPS cap (RT-9a).
     uint256 public deployedPrincipal;
-    // Fee recipient is fixed at construction — the owner can never redirect the harvested fee stream to
-    // a fresh address after the fact (removes the owner-fee-redirect finding). Set via the factory.
-    address public immutable harvestRecipient;
+    /// @notice Minimum delay between proposing a new harvest recipient and it taking effect (F-02 rec. 3).
+    uint256 public constant HARVEST_RECIPIENT_DELAY = 48 hours;
 
     // Manipulation-resistant valuation for the spot-priced LP leg (findings C1 / H-03). Hookless pools have
     // no on-chain TWAP, so we keep a CLAMPED-FOLLOWER reference sqrtPrice (`_refSqrtPrice`) that tracks spot
@@ -97,6 +96,24 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     // can never trap depositor funds. Set by the operator (or the keeper on a sustained out-of-range alert).
     bool public paused;
 
+    // ── storage appended AFTER `paused` (audit closeout 2026-09-08) so the slots above — in particular
+    //    `_refSqrtPrice` at slot 7, which test/audit/RedTeamOnchainFork probes via vm.load — do not shift. ──
+
+    // Harvest fee recipient (F-02 rec. 3 / consolidated §4). Was `immutable` — which meant a USDG issuer freeze of
+    // the operator hot wallet (F-02b) had NO on-chain recovery. It is now rotatable, but ONLY through a 48h
+    // timelock: `proposeHarvestRecipient` → wait `HARVEST_RECIPIENT_DELAY` → `acceptHarvestRecipient`. Every
+    // sweep in that window still pays the CURRENT recipient, so a compromised owner key cannot redirect an
+    // in-flight fee stream instantly — the operator has 48h to see the `HarvestRecipientProposed` event and
+    // cancel / rotate the key. (Packs with `paused` in the same slot.)
+    address public harvestRecipient;
+    address public pendingHarvestRecipient;
+    uint64 public harvestRecipientEta; // earliest timestamp `acceptHarvestRecipient` succeeds (0 = no rotation)
+
+    /// @notice The idle (staged) quote balance from the LAST SUCCESSFUL read of `staging.stagedAssets()` (C-10 /
+    ///         RT-5f). Refreshed by every state-changing path that reads the reserve. Used ONLY when the yield
+    ///         source stops answering, to size the idle entitlement a withdrawer is re-credited for — see `_withdraw`.
+    uint256 public lastKnownIdle;
+
     error ZeroAmount();
     error ZeroShares();
     error ZeroAddress();
@@ -114,6 +131,9 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     error BadTicks(); // A-8: tickLower >= tickUpper or not aligned to tickSpacing
     error SlippageExceeded(); // depositWithMin / withdrawWithMin bound not met (RT-1a / F-01)
     error NotSelf(); // lpLegExit is an internal-only self-call surface
+    error SourceUnavailable(); // C-10: the yield source can't be read — entry can't be priced / nothing to deliver
+    error RotationNotReady(); // harvest-recipient rotation: 48h delay not elapsed
+    error NoPendingRotation(); // harvest-recipient rotation: nothing proposed
 
     event Deposited(address indexed user, uint256 quoteIn, uint256 sharesMinted);
     event Withdrawn(address indexed user, uint256 sharesBurned, uint256 quoteOut, uint256 pairedOut);
@@ -125,6 +145,12 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     /// @dev The LP leg of a withdrawal could not execute (paired token paused/blacklisted, recipient frozen, …).
     ///      The withdrawer received the idle leg and was re-credited shares for the LP leg (F-02 / RT-6).
     event LpLegUnavailable(address indexed user, uint128 liquidityRequested);
+    /// @dev The yield source could not be read during a withdrawal (C-10). Only the LP leg was delivered; the idle
+    ///      entitlement (sized off `lastKnownIdle`) was re-credited as shares.
+    event IdleLegUnavailable(address indexed user, uint256 idleEntitledLastKnown);
+    event HarvestRecipientProposed(address indexed current, address indexed proposed, uint256 eta);
+    event HarvestRecipientRotated(address indexed previous, address indexed current);
+    event HarvestRecipientRotationCancelled(address indexed proposed);
 
     constructor(
         IPoolManager poolManager_,
@@ -189,6 +215,69 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         revert RenounceDisabled();
     }
 
+    // ── owner: timelocked harvest-recipient rotation (F-02 rec. 3) ───────────────────────────
+
+    /// @notice Propose a new harvest recipient. Takes effect only via `acceptHarvestRecipient` after
+    ///         `HARVEST_RECIPIENT_DELAY` (48h). Until then every sweep keeps paying the current recipient — an
+    ///         in-flight fee stream can never be redirected instantly. Re-proposing overwrites + restarts the clock.
+    function proposeHarvestRecipient(address recipient) external onlyOwner {
+        if (recipient == address(0)) revert ZeroAddress();
+        uint64 eta = uint64(block.timestamp + HARVEST_RECIPIENT_DELAY);
+        pendingHarvestRecipient = recipient;
+        harvestRecipientEta = eta;
+        emit HarvestRecipientProposed(harvestRecipient, recipient, eta);
+    }
+
+    /// @notice Finalise a proposed rotation once the delay has elapsed. Owner-only (the same seat that proposed).
+    function acceptHarvestRecipient() external onlyOwner {
+        address next = pendingHarvestRecipient;
+        if (next == address(0)) revert NoPendingRotation();
+        if (block.timestamp < harvestRecipientEta) revert RotationNotReady();
+        address prev = harvestRecipient;
+        harvestRecipient = next;
+        delete pendingHarvestRecipient;
+        delete harvestRecipientEta;
+        emit HarvestRecipientRotated(prev, next);
+    }
+
+    /// @notice Abort a pending rotation — the operator's reaction to a proposal they did not make.
+    function cancelHarvestRecipientRotation() external onlyOwner {
+        address pending = pendingHarvestRecipient;
+        if (pending == address(0)) revert NoPendingRotation();
+        delete pendingHarvestRecipient;
+        delete harvestRecipientEta;
+        emit HarvestRecipientRotationCancelled(pending);
+    }
+
+    // ── C-10: tolerant staged read ────────────────────────────────────────────────────────────
+
+    /// @dev Read the idle reserve WITHOUT letting a misbehaving yield source (a 4626 whose `previewRedeem` /
+    ///      `totalAssets` reverts — RT-5f) brick the caller. Returns `(false, 0)` on failure; callers decide:
+    ///      deposits REVERT (`SourceUnavailable` — an entry that can't be priced must not mint), withdrawals go
+    ///      LP-leg-only and re-credit the idle leg off `lastKnownIdle`, views fall back to `lastKnownIdle`.
+    function _idle() internal view returns (bool ok, uint256 idle) {
+        try staging.stagedAssets() returns (uint256 v) {
+            return (true, v);
+        } catch {
+            return (false, 0);
+        }
+    }
+
+    /// @dev Strict read for paths that must not proceed blind (deposit, and the post-stage refresh). Also
+    ///      refreshes `lastKnownIdle`, so every successful state-changing read keeps the fallback current.
+    function _syncIdle() internal returns (uint256 idle) {
+        bool ok;
+        (ok, idle) = _idle();
+        if (!ok) revert SourceUnavailable();
+        lastKnownIdle = idle;
+    }
+
+    /// @notice Whether the yield source currently answers a NAV read. Off-chain surfaces should show
+    ///         `totalNav` as STALE (it falls back to `lastKnownIdle`) while this is false.
+    function sourceReadable() external view returns (bool ok) {
+        (ok,) = _idle();
+    }
+
     /// @dev Clamped-follower reference. Moves `_refSqrtPrice` toward current spot by at most
     ///      `maxDeviationBps` per block, so it tracks a legitimate trend over a few blocks while a
     ///      single-block flash pump can only nudge it one step (never onto the manipulated price). Called
@@ -247,8 +336,10 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         if (_lastActionBlock[msg.sender] == block.number) revert SameBlockAction();
         _lastActionBlock[msg.sender] = block.number;
         // Conservative entry NAV (LP leg marked at max(spot, ref)) so a deflated spot can't cheapen entry
-        // and dilute existing holders (finding H-03). No revert — the conservative mark is the defense.
-        uint256 navBefore = _navDeposit();
+        // and dilute existing holders (finding H-03). No revert on PRICE — the conservative mark is the defense.
+        // C-10: the idle leg IS strict here — an unreadable yield source means the entry can't be priced, and
+        // minting blind would let a depositor buy in at a stale/zero idle mark. `_syncIdle` reverts SourceUnavailable.
+        uint256 navBefore = _navDepositStrict();
         sharesMinted = SeniorSharesMath.toShares(quoteAmount, totalShares, navBefore, VIRTUAL, Math.Rounding.Floor);
         if (sharesMinted == 0) revert ZeroShares();
         if (sharesMinted < minSharesOut) revert SlippageExceeded();
@@ -256,6 +347,7 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         quoteAsset.safeTransferFrom(msg.sender, address(this), quoteAmount);
         quoteAsset.forceApprove(address(staging), quoteAmount);
         staging.stage(quoteAmount);
+        _syncIdle(); // refresh the C-10 fallback with the post-stage reserve
 
         sharesOf[msg.sender] += sharesMinted;
         totalShares += sharesMinted;
@@ -303,7 +395,16 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
 
         uint256 ts = totalShares;
         bool lastHolder = shares == ts; // the final exit also clears the virtual-offset dust (A-2 clean state)
-        uint256 idle = staging.stagedAssets();
+        // C-10 / RT-5f: the staged read is TOLERANT. If the yield source answers, use (and remember) the live
+        // value. If it doesn't, size the idle ENTITLEMENT off `lastKnownIdle` — the last value every successful
+        // state-changing path refreshed — but never call `unstage` (it would revert through the same source), so
+        // the idle leg is "delivered 0 of a claim we sized last time" and the re-credit below hands those shares
+        // back. The LP leg still pays. Nothing bricks; the only thing a withdrawer can lose is the yield that
+        // accrued in the reserve since the last successful read (they burn marginally more shares per unit
+        // delivered than a live read would) — and they can simply wait for the source to recover instead.
+        (bool idleOk, uint256 idle) = _idle();
+        if (idleOk) lastKnownIdle = idle;
+        else idle = lastKnownIdle;
         uint160 spot;
         uint128 liq;
         uint256 lpSpotVal;
@@ -319,20 +420,27 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         uint128 liqToRemove = lastHolder
             ? liq
             : uint128(SeniorSharesMath.toAssets(shares, liq, ts, VIRTUAL, Math.Rounding.Floor));
+        // Source down AND no LP leg to deliver → there is nothing this exit can pay; refuse rather than burn
+        // shares against a zero claim (the re-credit needs `claim > 0`). State untouched; retry when readable.
+        if (!idleOk && liqToRemove == 0) revert SourceUnavailable();
 
         // Effects before interactions.
         sharesOf[msg.sender] = bal - shares;
         totalShares = ts - shares;
 
-        // Idle leg — best-effort (adapter may be illiquid/paused); shortfall re-credited below.
+        // Idle leg — best-effort (adapter may be illiquid/paused); shortfall re-credited below. Skipped entirely
+        // when the source is unreadable (C-10) — `unstage` would revert through it.
         uint256 idleGot;
-        if (fromIdle > 0) {
+        if (fromIdle > 0 && idleOk) {
             idleGot = staging.unstage(fromIdle);
             if (idleGot > 0) {
                 quoteAsset.safeTransfer(msg.sender, idleGot);
                 quoteOut = idleGot;
+                (bool ok2, uint256 idleAfter) = _idle(); // reserve shrank — keep the C-10 fallback current
+                if (ok2) lastKnownIdle = idleAfter;
             }
         }
+        if (!idleOk) emit IdleLegUnavailable(msg.sender, fromIdle);
 
         // LP leg — best-effort via a self-call so a third-party token failure can't take the idle leg down with
         // it. Fees are swept to the recipient FIRST inside the leg (H-02) so the decrease returns principal only.
@@ -406,7 +514,8 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         // only return less). A marked-value cap re-opened after every drawdown, letting a dumping paired token
         // plus the honest top-up rule cycle 2/3 of principal into the pool; cost basis never falls with price.
         {
-            uint256 principal = staging.stagedAssets() + deployedPrincipal;
+            // Strict read (C-10): a deploy against an unreadable source can't size the cap → SourceUnavailable.
+            uint256 principal = _syncIdle() + deployedPrincipal;
             if (deployedPrincipal + quoteToDeploy > (principal * MAX_DEPLOY_BPS) / 10_000) revert DeployCapExceeded();
         }
 
@@ -468,6 +577,7 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
             staging.stage(quoteLeft);
         }
         if (pairedLeft > 0) pairedAsset.safeTransfer(msg.sender, pairedLeft);
+        _syncIdle(); // the reserve just shrank by `quoteUsed` — keep the C-10 fallback current
 
         _anchorFollow(); // advance the clamped-follower reference at this owner-set price
         emit Deployed(tokenId, quoteUsed, pairedUsed, liquidity);
@@ -518,6 +628,7 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         quoteAsset.safeTransferFrom(msg.sender, address(this), amount);
         quoteAsset.forceApprove(address(staging), amount);
         staging.stage(amount);
+        _syncIdle(); // keep the C-10 fallback current
         emit Compounded(amount);
     }
 
@@ -525,16 +636,23 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
 
     /// @notice Spot NAV (quote terms) — for display + as the follower's input. Deposit/withdraw price off
     ///         the direction-conservative marks (max/min of spot vs the follower), not this.
+    ///         C-10: never reverts on an unreadable yield source — the idle leg falls back to `lastKnownIdle`
+    ///         (check `sourceReadable()`; treat the figure as STALE while it is false).
     function totalNav() public view returns (uint256) {
-        if (tokenId == 0) return staging.stagedAssets(); // no spot read until deployed
-        return staging.stagedAssets() + _deployedQuoteValueAt(_spot());
+        (bool ok, uint256 idle) = _idle();
+        if (!ok) idle = lastKnownIdle;
+        if (tokenId == 0) return idle; // no spot read until deployed
+        return idle + _deployedQuoteValueAt(_spot());
     }
 
     /// @dev NAV that MINTS deposit shares: LP leg at max(spot, ref) so a deflated spot can't cheapen entry.
-    function _navDeposit() internal view returns (uint256) {
-        if (tokenId == 0) return staging.stagedAssets(); // idle-only until deployed — no spot read
+    ///      STRICT on the idle leg (C-10): reverts `SourceUnavailable` rather than mint against a stale reserve.
+    ///      Not a view — refreshes `lastKnownIdle` as a side effect of the successful read.
+    function _navDepositStrict() internal returns (uint256) {
+        uint256 idle = _syncIdle();
+        if (tokenId == 0) return idle; // idle-only until deployed — no spot read
         uint160 spot = _spot();
-        return staging.stagedAssets() + Math.max(_deployedQuoteValueAt(spot), _deployedQuoteValueAt(_refOrSpot(spot)));
+        return idle + Math.max(_deployedQuoteValueAt(spot), _deployedQuoteValueAt(_refOrSpot(spot)));
     }
 
     /// @dev Deployed-leg quote value with BOTH the composition and the paired-leg valuation taken at

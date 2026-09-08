@@ -1,0 +1,180 @@
+// harvestGateway orchestration (audit closeout O-4 / A-4). Mocks: chain client, signer, wallet client,
+// router seam, and the ledger indexer; real viem event codec. Locks: restake is the DEFAULT, the buffer
+// path never touches card_spend_buffers and credits come from the ledger, index failure = nothing settled.
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { encodeEventTopics, encodeAbiParameters } from 'viem'
+import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
+
+const PM = '0x24ff5d2bb29b5448bdf96db0fcdf0553ebda3b11' as const
+const SEAT = '0x18ae000000000000000000000000000000000663' as const
+const POOL = '0x' + 'ab'.repeat(32)
+const COLLECT_TX = ('0x' + '11'.repeat(32)) as `0x${string}`
+const COMPOUND_TX = ('0x' + '33'.repeat(32)) as `0x${string}`
+const GROSS = 10_000_000n
+
+const writes: Array<{ functionName: string; args?: unknown[] }> = []
+const publicClient = {
+  chain: { id: 46630 },
+  readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
+    if (functionName === 'quoteAsset') return '0x5fc5360d0400a0fd4f2af552add042d716f1d168'
+    throw new Error(`unexpected read ${functionName}`)
+  }),
+  simulateContract: vi.fn(async () => ({ result: [GROSS, 0n] })),
+  waitForTransactionReceipt: vi.fn(async ({ hash }: { hash: string }) => ({
+    status: 'success',
+    blockNumber: 500n,
+    logs: hash === COLLECT_TX ? [{
+      address: PM,
+      topics: encodeEventTopics({ abi: LP_GATEWAY_ABI, eventName: 'Harvested', args: { recipient: SEAT } }),
+      data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [GROSS, 0n]),
+    }] : [],
+  })),
+}
+
+vi.mock('@/lib/gateway/chain', () => ({
+  gatewayConfig: () => ({ chainId: 46630, rpcUrl: 'https://rpc.example', positionManager: null, staging: null, poolAddress: null }),
+  gatewayPublicClient: () => publicClient,
+}))
+vi.mock('@/lib/web3/oracleSigner', () => ({ getOracleSigner: async () => ({ address: SEAT }) }))
+vi.mock('@/lib/gateway/routerSwap', () => ({
+  swapPairedToQuote: async () => ({ quoteOut: 0n, txHash: null }),
+  swapQuoteToPaired: async () => ({ pairedOut: 0n, txHash: null }),
+}))
+vi.mock('viem', async (orig) => ({
+  ...(await orig<typeof import('viem')>()),
+  createWalletClient: () => ({
+    writeContract: async (a: { functionName: string; args?: unknown[] }) => {
+      writes.push({ functionName: a.functionName, args: a.args })
+      return a.functionName === 'compoundQuote' ? COMPOUND_TX : a.functionName === 'approve' ? ('0x' + '22'.repeat(32)) : COLLECT_TX
+    },
+  }),
+}))
+const indexMock = vi.fn()
+const pendingMock = vi.fn()
+const markMock = vi.fn()
+vi.mock('@/lib/gateway/ledger', () => ({
+  indexHarvestLogs: (a: unknown) => indexMock(a),
+  listPendingRestake: (...a: unknown[]) => pendingMock(...a),
+  markRestaked: (...a: unknown[]) => markMock(...a),
+}))
+
+import { harvestGateway, harvestAll, resolveHarvestDestination } from './harvest'
+
+type Row = Record<string, unknown>
+function fakeDb() {
+  const tables: Record<string, Row[]> = { harvest_events: [], card_spend_buffers: [{ id: 'buf', buffer_balance_atomic: '0' }], gateway_positions: [], gateway_instances: [] }
+  const touched = new Set<string>()
+  function from(table: string) {
+    const rows = (tables[table] ??= [])
+    let op: 'select' | 'insert' | 'update' = 'select'
+    let payload: Row | undefined
+    const b = {
+      select: () => b, eq: () => b,
+      insert: (p: Row) => { op = 'insert'; payload = p; touched.add(`${table}:insert`); return b },
+      update: (p: Row) => { op = 'update'; payload = p; touched.add(`${table}:update`); return b },
+      maybeSingle: async () => ({ data: null, error: null }),
+      then: (res: (v: unknown) => unknown) => { if (op === 'insert') rows.push(payload!); return Promise.resolve({ data: op === 'select' ? rows : null, error: null }).then(res) },
+    }
+    return b
+  }
+  return { client: { from } as never, tables, touched }
+}
+
+const okIndex = (over: Partial<Record<string, unknown>> = {}) => ({ ok: true, fromBlock: 1n, toBlock: 500n, harvestLogs: 1, recorded: 1, duplicates: 0, newDepositors: 0, creditedAtomic: 9_000_000n, unallocatedAtomic: 0n, ...over })
+
+beforeEach(() => {
+  writes.length = 0
+  indexMock.mockReset(); pendingMock.mockReset(); markMock.mockReset()
+  process.env.LP_GATEWAY_HARVEST_ENABLED = 'true'
+  process.env.LP_GATEWAY_PERF_FEE_BPS = '1000'
+  delete process.env.LP_GATEWAY_HARVEST_DESTINATION
+  delete process.env.LP_GATEWAY_LEDGER_INDEX_ENABLED
+})
+
+describe('resolveHarvestDestination', () => {
+  it("defaults to 'restake' (unset / unknown values); only an explicit 'buffer' opts into the IOU ledger", () => {
+    expect(resolveHarvestDestination({})).toBe('restake')
+    expect(resolveHarvestDestination({ LP_GATEWAY_HARVEST_DESTINATION: 'nonsense' })).toBe('restake')
+    expect(resolveHarvestDestination({ LP_GATEWAY_HARVEST_DESTINATION: 'BUFFER' })).toBe('buffer')
+  })
+})
+
+describe('harvestGateway', () => {
+  it('RESTAKE (default): collect → index as pending → compound Σ pending net on-chain → mark restaked; no DB credit, no buffer write', async () => {
+    indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+    pendingMock.mockResolvedValue({ ids: ['log-1', 'log-2'], netAtomic: 9_000_000n + 1_800_000n }) // this collect + an older withdraw sweep
+    const { client, tables, touched } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r).toMatchObject({ ok: true, destination: 'restake', creditedAtomic: 10_800_000n, collectTx: COLLECT_TX })
+    expect(indexMock).toHaveBeenCalledWith(expect.objectContaining({ settlement: 'pending', minToBlock: 500n }))
+    expect(writes.map((w) => w.functionName)).toEqual(['harvest', 'approve', 'compoundQuote'])
+    expect(writes[2].args).toEqual([10_800_000n])
+    expect(markMock).toHaveBeenCalledWith(expect.anything(), ['log-1', 'log-2'], COMPOUND_TX)
+    expect(touched.has('card_spend_buffers:update')).toBe(false)
+    expect(tables.harvest_events[0]).toMatchObject({ collect_tx: COLLECT_TX, amount_harvested_atomic: '10000000', fee_skimmed_atomic: '1000000', amount_credited_atomic: '10800000' })
+  })
+
+  it('BUFFER (opt-in): credits come from the ledger index (on-chain shares); card_spend_buffers is never written', async () => {
+    process.env.LP_GATEWAY_HARVEST_DESTINATION = 'buffer'
+    indexMock.mockResolvedValue(okIndex({ creditedAtomic: 9_000_000n, recorded: 1 }))
+    const { client, tables, touched } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r).toMatchObject({ ok: true, destination: 'buffer', creditedAtomic: 9_000_000n, recipients: 1 })
+    expect(indexMock).toHaveBeenCalledWith(expect.objectContaining({ settlement: 'credited' }))
+    expect(writes.map((w) => w.functionName)).toEqual(['harvest']) // no compound
+    expect(pendingMock).not.toHaveBeenCalled()
+    expect(touched.has('card_spend_buffers:update')).toBe(false)
+    expect([...touched].filter((t) => t.startsWith('gateway_positions'))).toEqual([]) // DB shares never consulted
+    expect(tables.harvest_events[0]).toMatchObject({ amount_credited_atomic: '9000000' })
+  })
+
+  it('index failure ⇒ nothing settled (no compound, no credit), run recorded with 0 credited, safe to retry', async () => {
+    indexMock.mockResolvedValue({ ...okIndex(), ok: false, error: 'record_failed', recorded: 0, creditedAtomic: 0n })
+    const { client, tables } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r).toMatchObject({ ok: false, reason: 'index', error: 'ledger_index_failed:record_failed' })
+    expect(writes.map((w) => w.functionName)).toEqual(['harvest'])
+    expect(pendingMock).not.toHaveBeenCalled()
+    expect(tables.harvest_events[0]).toMatchObject({ amount_credited_atomic: '0' })
+  })
+
+  it('below the dust floor: no tx, but prior sweeps are still indexed', async () => {
+    publicClient.simulateContract.mockResolvedValueOnce({ result: [1n, 0n] } as never)
+    indexMock.mockResolvedValue(okIndex({ harvestLogs: 1, creditedAtomic: 0n }))
+    const { client } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r).toMatchObject({ ok: false, reason: 'nothing' })
+    expect(writes).toHaveLength(0)
+    expect(indexMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails closed when disabled', async () => {
+    delete process.env.LP_GATEWAY_HARVEST_ENABLED
+    const { client } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r).toMatchObject({ ok: false, reason: 'disabled', status: 503 })
+    expect(indexMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('harvestAll — index-only mode', () => {
+  it('with only LP_GATEWAY_LEDGER_INDEX_ENABLED, indexes every instance without a signer or a tx', async () => {
+    delete process.env.LP_GATEWAY_HARVEST_ENABLED
+    process.env.LP_GATEWAY_LEDGER_INDEX_ENABLED = 'true'
+    indexMock.mockResolvedValue(okIndex())
+    const { client, tables } = fakeDb()
+    tables.gateway_instances.push({ id: 'i1', pool_address: POOL, chain_id: 46630, position_manager: PM, staging: '0x' + 'dd'.repeat(20), quote_asset: '0x' + '11'.repeat(20), status: 'active' })
+    const r = await harvestAll({ supabase: client })
+    expect(r).toMatchObject({ harvested: 0, indexed: 1 })
+    expect(r.indexResults).toHaveLength(1)
+    expect(writes).toHaveLength(0)
+    expect(indexMock).toHaveBeenCalledWith(expect.objectContaining({ settlement: 'pending', instance: expect.objectContaining({ positionManager: PM }) }))
+  })
+  it('both flags off ⇒ disabled, nothing indexed', async () => {
+    delete process.env.LP_GATEWAY_HARVEST_ENABLED
+    const { client } = fakeDb()
+    const r = await harvestAll({ supabase: client })
+    expect(r.results[0]).toMatchObject({ reason: 'disabled' })
+    expect(indexMock).not.toHaveBeenCalled()
+  })
+})

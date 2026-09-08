@@ -55,16 +55,38 @@ LP-path (deploy → real swaps → harvest → withdraw) is proven on-chain in
 
 ## Many pools, curated (not one)
 The gateway is a **factory** of isolated per-pool instances. The public **Discover feed** (`/api/gateway/discover`)
-shows the hottest real Robinhood Chain pools **live from GeckoTerminal**, risk-scored, refreshed on a cron —
-this is a *browse* surface and needs no deploys. A pool becomes **depositable** only once a curator approves it
-and a gateway is deployed for it (each pool = its own on-chain instance). The **risk score ranks the queue; it
-never certifies safety** — every pool is a human decision. So: **browse everything live, deposit into the
-curated subset.**
+shows the hottest real Robinhood Chain pools **live from GeckoTerminal** (3-minute server cache), risk-scored —
+this is a *browse* surface and needs no deploys. The curator queue behind it is refilled by the
+`gateway-discover` cron **once a day (05:00 UTC)**. The **risk score ranks the queue; it never certifies
+safety** — every pool is a human decision. So: **browse everything live, deposit into the curated subset.**
+
+**What "depositable" means, precisely.** A pool is depositable only when the registry (`gateway_instances`)
+holds an **active** row for that exact **v4 poolId**, written by `registerInstance` after the candidate
+PositionManager was **verified on-chain** (`quoteAsset()` and `poolKey()` must match the approved pool).
+Approval alone is not enough; a deployed-but-unregistered instance is not enough; a pair *label* is never
+a key. The Discover `live` chip is computed from active registry rows only, and `/earn/[pool]` must resolve
+its deposit target through the registry — the single-env `LP_GATEWAY_POSITION_MANAGER` fallback is a
+bootstrap device, not a routing rule (round-2 audit O-2).
+
+**The feed is fail-closed on its quote asset.** Eligibility is "Uniswap v4 **and** USDG-quoted", and USDG is
+matched **by address** against `LP_GATEWAY_USDG` — never by the pair name (a hostile upstream can name any
+pool "X / USDG"). With that variable unset the quote asset is *unknown*, every pool is ineligible, and the feed
+is empty (the response says `usdgConfigured:false`). Everything else GeckoTerminal returns is treated as
+untrusted too: the score reads only clamped numbers, logos render only from GeckoTerminal/CoinGecko CDNs, the
+fee tier and the est. fee APR are bounded (an absurd APR shows as n/a), the upstream read has a timeout and
+bounded retries, and the queue is never pruned on a failed read or on a single hostile top-30 (a candidate
+must go unseen for 72 h first; curator decisions are never pruned). One honest residual remains: the
+*numbers* (TVL, age, tx count) are upstream-asserted, so a wash-traded fake pool can still score well — which
+is exactly why the score is a ranking for a human, not a certification.
 
 ## Where it lives
 - **Product:** `/v1` (the Discover feed) · `/earn/[pool]` (deposit) · `/curate` (curator queue).
 - **Contracts:** `contracts-v4/src/gateway/` (PositionManager, Staging, Factory).
-- **Off-chain:** `lib/gateway/*` + `app/api/gateway/*` (all `createHandler`, deny-all RLS).
+- **Off-chain:** `lib/gateway/*` + `app/api/gateway/*` (all `createHandler`, deny-all RLS). The deposit and
+  withdraw **routes** require a wallet-signed message plus a tx-hash idempotency key (review item M-04); the
+  `/earn/[pool]` client has to send that signed body for a deposit to be *recorded* — it does as of the
+  round-2 closeout (audit O-1; until 2026-09-08 it POSTed an unsigned body the route rejected). Every `LP_GATEWAY_*` env var is documented in
+  `.claude/rules/deployments.md`.
 - **Deploy:** pure-Privy `scripts/deploy-lp-gateway-robinhood.mjs` — see the
   [testnet runbook](./lp-gateway-testnet-runbook.md).
 - **Agent/context rule:** `.claude/rules/lp-gateway.md`.

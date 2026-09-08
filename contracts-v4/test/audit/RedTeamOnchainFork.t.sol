@@ -240,7 +240,10 @@ contract RedTeamOnchainForkTest is Test {
         // _refSqrtPrice is internal; read via vm.load. `forge inspect … storage-layout`: _owner=0, _pendingOwner=1
         // (ReentrancyGuard is transient here), _poolKey=2..4, tokenId=5, _refSqrtPrice(uint160)+_refBlock(uint64)=6.
         // `_standard` asserts the probe against the first anchor.
-        bytes32 raw = vm.load(address(g.pm), bytes32(uint256(7))); // slot 7 after `deployedPrincipal` (RT-9a fix) was added
+        // Slot 7 after `deployedPrincipal` (RT-9a fix) was added. The 2026-09-08 closeout (harvestRecipient rotation +
+        // C-10 `lastKnownIdle`) APPENDED its storage after `paused` (slots 11-13) precisely so this probe stays valid —
+        // verified with `forge inspect … storage-layout`; `_standard` re-asserts it against the first anchor.
+        bytes32 raw = vm.load(address(g.pm), bytes32(uint256(7)));
         return uint160(uint256(raw));
     }
 

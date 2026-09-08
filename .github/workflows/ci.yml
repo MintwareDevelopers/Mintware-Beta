@@ -67,6 +67,12 @@ jobs:
   forge-tests:
     name: Foundry
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # LP-gateway fork suites (test/fork/MintwareLpGateway*, test/audit/RedTeamOnchainFork, HackenContracts) fork
+      # Robinhood Chain TESTNET (46630) — a PUBLIC RPC, no secret. Locally they self-skip when this is unset; in CI
+      # it is set so the real-V4 proofs (H-02/H-03, F-01/F-02, RT-*, C-10, recipient rotation) actually run.
+      LP_FORK_RPC_URL: https://rpc.testnet.chain.robinhood.com
     steps:
       - uses: actions/checkout@v7
         with:
@@ -81,8 +87,45 @@ jobs:
           # calls) are now fixed in this repo, so the full non-fork suite is green on 1.8.0.
           version: "1.8.0"
 
-      - name: Forge tests
+      # The whole suite WITHOUT the fork env — exactly what a contributor gets locally (fork harnesses
+      # self-skip). This is the step that must stay green regardless of any third-party RPC.
+      - name: Forge tests (non-fork, full suite)
+        env:
+          LP_FORK_RPC_URL: ""
         run: forge test -vv
+
+      # Preflight the public RPC so an outage reports as ONE clear line, not 50 opaque fork errors.
+      - name: Check Robinhood testnet RPC is reachable
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -sS --max-time 15 -X POST "$LP_FORK_RPC_URL" \
+                 -H 'content-type: application/json' \
+                 -d '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' | grep -q '"result"'; then
+              echo "RPC reachable: $LP_FORK_RPC_URL"; exit 0
+            fi
+            echo "attempt $i: RPC not answering, retrying in $((i*10))s…"; sleep $((i*10))
+          done
+          echo "::error title=Robinhood testnet RPC down::$LP_FORK_RPC_URL did not answer eth_chainId after 5 attempts — the LP-gateway fork suites cannot run. Re-run the job once the public RPC is back (nothing in the repo is at fault)."
+          exit 1
+
+      # The LP-gateway fork suites against the REAL Uniswap V4 stack, retried in a 3-attempt outer loop so a
+      # flaky public RPC doesn't fail the job (forge's own `--fork-retries` only applies with `--rpc-url`,
+      # which would fork EVERY test — these harnesses `vm.createSelectFork` themselves). A GENUINE test
+      # failure still fails the job (continue-on-error is deliberately NOT set). `MintwareLpGatewayForkTest`
+      # (the operator-runbook harness) is excluded on purpose: it needs the live rig's `LP_QUOTE_ASSET` etc.
+      - name: Forge tests (LP-gateway fork suites, Robinhood testnet)
+        run: |
+          set +e
+          for attempt in 1 2 3; do
+            forge test -vv \
+              --match-contract 'MintwareLpGateway(Hardening|AuditRound2|Closeout)Fork|RedTeamOnchainFork|HackenLpGateway'
+            rc=$?
+            [ $rc -eq 0 ] && exit 0
+            echo "::warning::fork suites exit=$rc on attempt $attempt/3 — retrying in $((attempt*20))s (public RPC flake?)"
+            sleep $((attempt*20))
+          done
+          echo "::error title=LP-gateway fork suites failed::3 attempts against $LP_FORK_RPC_URL failed. If the log shows RPC/transport errors the public RPC is degraded — re-run; if it shows [FAIL] assertions, it's a real regression."
+          exit 1
 
   rust-tests:
     name: Rust (YPN off-chain)

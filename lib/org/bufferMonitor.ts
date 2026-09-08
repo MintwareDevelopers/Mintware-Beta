@@ -17,7 +17,7 @@ type Logger = { warn: (t: string, m: string, c?: Record<string, unknown>) => voi
 
 export type SyncResult =
   | { ok: true; balanceAtomic: bigint }
-  | { ok: false; reason: 'config' | 'no_buffer' | 'chain' | 'read' }
+  | { ok: false; reason: 'config' | 'no_buffer' | 'chain' | 'read' | 'gateway_funded' }
 
 /**
  * Reconcile the cached buffer balance from chain. The buffer address is derived from ON-CHAIN
@@ -43,10 +43,18 @@ export async function syncBufferBalance(opts: {
 
   const { data: buf } = await supabase
     .from('card_spend_buffers')
-    .select('id, member_wallet')
+    .select('id, member_wallet, gateway_position_id')
     .eq('org_card_id', orgCardId)
     .maybeSingle()
   if (!buf?.member_wallet) return { ok: false, reason: 'no_buffer' }
+  // LP-gateway-funded buffers are NOT backed by the treasury card buffer wallet: their balance is an
+  // off-chain ledger claim (lib/gateway/ledger.ts — gateway_fee_credits), so an on-chain treasury read
+  // would silently overwrite it with 0 (audit closeout O-4 / R-3 / HO-6: "the monitor erases gateway
+  // credits"). Refuse to sync — this cache is never authoritative for a gateway-funded row.
+  if ((buf as { gateway_position_id?: string | null }).gateway_position_id) {
+    log?.warn('cards.buffer', 'gateway-funded buffer — on-chain treasury sync skipped (would overwrite ledger credit)', { orgCardId })
+    return { ok: false, reason: 'gateway_funded' }
+  }
 
   const rpcUrl = rpcForChain(org.treasury_chain_id)
   const chain = viemChainFor(org.treasury_chain_id)

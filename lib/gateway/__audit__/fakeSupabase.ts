@@ -11,6 +11,8 @@ export type FakeDb = {
   /** optional UNIQUE keys per table → insert conflicts return { code: '23505' } */
   uniques?: Record<string, string[][]>
   calls: { table: string; op: string; payload?: unknown; filters: Filter[] }[]
+  /** optional Postgres-function emulation for `supabase.rpc(fn, args)` (e.g. record_gateway_harvest) */
+  rpc?: (fn: string, args: Record<string, unknown>, db: FakeDb) => Promise<{ data: unknown; error: { message: string } | null }>
 }
 
 function matches(row: Row, f: Filter): boolean {
@@ -28,6 +30,7 @@ class Builder {
   private filters: Filter[] = []
   private single = false
   private conflictCols: string[] | null = null
+  private ignoreDuplicates = false
   constructor(private db: FakeDb, private table: string) {
     db.tables[table] ??= []
   }
@@ -39,9 +42,10 @@ class Builder {
   not(col: string, _op: string, val: unknown) { this.filters.push({ kind: 'notin', col, val }); return this }
   insert(row: Row | Row[]) { this.op = 'insert'; this.payload = row; return this }
   update(patch: Row) { this.op = 'update'; this.payload = patch; return this }
-  upsert(row: Row, opts?: { onConflict?: string }) {
+  upsert(row: Row | Row[], opts?: { onConflict?: string; ignoreDuplicates?: boolean }) {
     this.op = 'upsert'; this.payload = row
     this.conflictCols = opts?.onConflict ? opts.onConflict.split(',').map((s) => s.trim()) : null
+    this.ignoreDuplicates = !!opts?.ignoreDuplicates
     return this
   }
   delete() { this.op = 'delete'; return this }
@@ -74,13 +78,15 @@ class Builder {
       return { data: h, error: null }
     }
     if (this.op === 'upsert') {
-      const r = this.payload as Row
-      const existing = this.conflictCols
-        ? rows.find((e) => this.conflictCols!.every((c) => String(e[c]).toLowerCase() === String(r[c]).toLowerCase()))
-        : undefined
-      if (existing) Object.assign(existing, r)
-      else rows.push({ id: `row-${++idSeq}`, ...r })
-      return { data: [r], error: null }
+      const list = (Array.isArray(this.payload) ? this.payload : [this.payload]) as Row[]
+      for (const r of list) {
+        const existing = this.conflictCols
+          ? rows.find((e) => this.conflictCols!.every((c) => String(e[c]).toLowerCase() === String(r[c]).toLowerCase()))
+          : undefined
+        if (existing) { if (!this.ignoreDuplicates) Object.assign(existing, r) }
+        else rows.push({ id: `row-${++idSeq}`, ...r })
+      }
+      return { data: list, error: null }
     }
     // delete
     const h = hit()
@@ -91,6 +97,13 @@ class Builder {
 
 export function fakeSupabase(seed: Partial<FakeDb> = {}) {
   const db: FakeDb = { tables: {}, uniques: {}, calls: [], ...seed }
-  const client = { from: (table: string) => new Builder(db, table) }
+  const client = {
+    from: (table: string) => new Builder(db, table),
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      db.calls.push({ table: `rpc:${fn}`, op: 'rpc', payload: args, filters: [] })
+      if (!db.rpc) return { data: null, error: { message: `rpc ${fn} not emulated` } }
+      return db.rpc(fn, args, db)
+    },
+  }
   return { db, client: client as unknown as never }
 }

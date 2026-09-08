@@ -25,6 +25,9 @@ type PoolPosition = {
   positionValueAtomic: string | null
   costBasisAtomic: string | null
   unrealizedPnlAtomic: string | null
+  recorded?: boolean // false ⇒ chain shows the position but its deposit was never recorded (basis unknown)
+  source?: 'registry' | 'env-fallback'
+  live?: boolean
   valueSeries?: number[]
 }
 
@@ -34,7 +37,8 @@ const INNER = { background: '#0E0E16', border: '1px solid rgba(255,255,255,0.06)
 const num = (a: string | null | undefined): number => { if (a == null) return 0; try { return Number(BigInt(a)) / 1e6 } catch { return 0 } }
 const usdg = (a: string | null | undefined) => `$${num(a).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmt = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
-const slugOf = (p: PoolPosition) => encodeURIComponent((p.pairLabel || p.poolAddress).replace(/\s*\/\s*/g, '-').toLowerCase())
+// Audit O-2: /earn/[pool] is keyed by the registry pool id, never the pair label (see V1Discover).
+const slugOf = (p: PoolPosition) => encodeURIComponent(p.poolAddress.toLowerCase())
 const pairParts = (label: string | null) => {
   const [b, q] = (label || 'TOKEN / USDG').split('/').map((s) => s.replace(/\s*\d.*$/, '').trim())
   return { base: b || 'TOKEN', quote: q || 'USDG' }
@@ -216,7 +220,11 @@ function PositionCard({ p, address }: { p: PoolPosition; address?: string }) {
           <TokenPair baseLogo={null} quoteLogo={null} baseSymbol={base} quoteSymbol={quote} size={26} ring="#12121C" />
           <span className="font-semibold text-[15.5px] truncate">{label} <span style={{ color: '#8A82F4' }}>›</span></span>
         </Link>
-        {(p.valueSeries?.length ?? 0) >= 3 && <span className="shrink-0"><Sparkline series={p.valueSeries} width={80} height={26} /></span>}
+        <span className="flex items-center gap-2 shrink-0">
+          {p.source === 'env-fallback' && <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full" style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>Dev rig</span>}
+          {p.recorded === false && <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full" title="Read from chain; the deposit was never recorded here, so cost basis is unknown." style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>Unrecorded</span>}
+          {(p.valueSeries?.length ?? 0) >= 3 && <Sparkline series={p.valueSeries} width={80} height={26} />}
+        </span>
       </div>
       <div className="grid grid-cols-3 max-[560px]:grid-cols-2 gap-4 mt-4">
         <div>
@@ -290,7 +298,7 @@ function Header() {
 function Foot() {
   return (
     <p className="text-[12px] mt-6" style={{ color: '#63636F' }}>
-      Robinhood testnet · position values are chain-derived; your spendable buffer is private (owner-signed reveal).{' '}
+      Robinhood testnet · positions and values are read from chain (the dashboard record only adds cost basis); your spendable buffer is private (owner-signed reveal).{' '}
       <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
     </p>
   )

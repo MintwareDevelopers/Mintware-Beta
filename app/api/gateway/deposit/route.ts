@@ -1,8 +1,9 @@
-import { isHex, decodeEventLog } from 'viem'
+import { decodeEventLog } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
-import { resolveRouteInstance } from '@/lib/gateway/registry'
+import { resolveInstanceStrict } from '@/lib/gateway/routeInstance'
+import { bindSignedRecord } from '@/lib/gateway/recordAuth'
 import { nextDepositBasis } from '@/lib/gateway/basisMath'
 
 export const dynamic = 'force-dynamic'
@@ -15,19 +16,28 @@ export const dynamic = 'force-dynamic'
 // can record their own tx (the on-chain Deposited event's user must equal the recovered signer), and
 // the entry_nav cost-basis update is idempotent per tx_hash (gateway_deposit_events UNIQUE) so a
 // replayed txHash can't inflate the basis.
+// O-10 (round-2): the signed payload's txHash/pool are strict-compared to the body and a signature is
+// single-use inside the freshness window (`bindSignedRecord`). O-2: pool resolution is strict (404 on a
+// miss — never the env rig while the registry is populated).
 export const POST = createHandler(async (req, ctx) => {
   const cfg = gatewayConfig()
   if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
 
-  const body = (await req.clone().json().catch(() => ({}))) as { txHash?: string; pool?: string }
+  const body = (await req.clone().json().catch(() => ({}))) as Record<string, unknown>
   // Trust the SIGNER (ctx.user), never a caller-supplied address — the recovered wallet is the only
   // identity allowed to record a position, and it must match the on-chain event's user below.
   const address = ctx.user!.address
-  const txHash = body.txHash
-  if (!txHash || !isHex(txHash)) return ctx.json({ success: false, error: 'txHash_required' }, 400)
+  const bound = bindSignedRecord(body)
+  if (!bound.ok) {
+    if (bound.error === 'txHash_required') return ctx.json({ success: false, error: 'txHash_required' }, 400)
+    if (bound.error === 'auth_replayed') return ctx.json({ success: false, error: 'auth_replayed' }, 409)
+    return ctx.json({ success: false, error: 'auth_payload_mismatch' }, 401)
+  }
+  const { txHash, pool } = bound.bound
 
-  const inst = await resolveRouteInstance(ctx.supabase, cfg, body.pool ?? null)
-  if (!inst) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
+  const r = await resolveInstanceStrict(ctx.supabase, cfg, pool)
+  if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
+  const inst = r.inst
 
   const client = gatewayPublicClient(cfg)
   let receipt
@@ -72,7 +82,7 @@ export const POST = createHandler(async (req, ctx) => {
   // conflict (23505) means the tx was already recorded → the additive basis update is skipped so a
   // replay can't inflate entry_nav. Any other insert error is a hard failure.
   const { error: evErr } = await ctx.supabase.from('gateway_deposit_events').insert({
-    tx_hash: txHash.toLowerCase(),
+    tx_hash: txHash,
     address,
     kind: 'deposit',
     pool_address: inst.poolAddress,

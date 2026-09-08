@@ -1,5 +1,40 @@
 import { describe, it, expect } from 'vitest'
-import { skimPerformanceFee, proRataBufferCredits, type SharePosition } from './harvestMath'
+import { skimPerformanceFee, proRataBufferCredits, proRataByOnchainShares, type SharePosition } from './harvestMath'
+
+describe('proRataByOnchainShares (ledger split — denominator is the ON-CHAIN total)', () => {
+  it('splits by sharesOf / totalShares and reports rounding dust as unallocated (never re-assigned)', () => {
+    const r = proRataByOnchainShares(10n, [{ user: 'a', shares: 1n }, { user: 'b', shares: 1n }, { user: 'c', shares: 1n }], 3n)
+    expect(r.credits).toEqual([{ user: 'a', creditAtomic: 3n }, { user: 'b', creditAtomic: 3n }, { user: 'c', creditAtomic: 3n }])
+    expect(r.allocatedAtomic).toBe(9n)
+    expect(r.unallocatedAtomic).toBe(1n)
+  })
+  it("an unknown holder's slice stays unallocated — known holders can never absorb it", () => {
+    // total is 4 on-chain but we only know one holder with 3
+    const r = proRataByOnchainShares(4_000_000n, [{ user: 'carol', shares: 3n }], 4n)
+    expect(r.credits).toEqual([{ user: 'carol', creditAtomic: 3_000_000n }])
+    expect(r.unallocatedAtomic).toBe(1_000_000n)
+  })
+  it('zero-share holders (fully withdrawn on-chain) get nothing', () => {
+    const r = proRataByOnchainShares(9n, [{ user: 'alice', shares: 0n }, { user: 'bob', shares: 5n }], 5n)
+    expect(r.credits).toEqual([{ user: 'bob', creditAtomic: 9n }])
+    expect(r.unallocatedAtomic).toBe(0n)
+  })
+  it('Σ credits ≤ net for arbitrary inputs', () => {
+    const holders = [{ user: 'a', shares: 7n }, { user: 'b', shares: 13n }, { user: 'c', shares: 999n }]
+    const net = 1_000_000_001n
+    const r = proRataByOnchainShares(net, holders, 1019n)
+    expect(r.allocatedAtomic + r.unallocatedAtomic).toBe(net)
+    expect(r.allocatedAtomic <= net).toBe(true)
+  })
+  it('empty / zero inputs allocate nothing; net is fully unallocated', () => {
+    expect(proRataByOnchainShares(0n, [{ user: 'a', shares: 1n }], 1n)).toEqual({ credits: [], allocatedAtomic: 0n, unallocatedAtomic: 0n })
+    expect(proRataByOnchainShares(5n, [], 1n)).toEqual({ credits: [], allocatedAtomic: 0n, unallocatedAtomic: 5n })
+    expect(proRataByOnchainShares(5n, [{ user: 'a', shares: 1n }], 0n)).toEqual({ credits: [], allocatedAtomic: 0n, unallocatedAtomic: 5n })
+  })
+  it('refuses to over-credit when Σ sharesOf > totalShares (inconsistent reads)', () => {
+    expect(() => proRataByOnchainShares(10n, [{ user: 'a', shares: 3n }, { user: 'b', shares: 3n }], 4n)).toThrow()
+  })
+})
 
 describe('skimPerformanceFee', () => {
   it('skims bps and leaves the remainder for the buffer', () => {

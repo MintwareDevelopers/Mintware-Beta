@@ -51,3 +51,43 @@ export function proRataBufferCredits(
   if (dust > 0n && maxIdx >= 0) credits[maxIdx].creditAtomic += dust
   return credits
 }
+
+export type OnchainSplit = {
+  credits: BufferCredit[]
+  /** Σ credits (≤ netAtomic) */
+  allocatedAtomic: bigint
+  /** netAtomic − allocated: floor rounding + the slice owned by holders NOT in `holders` (unknown wallets).
+   *  Stays in the seat wallet, tracked on the harvest log as `unallocated_atomic` — never re-assigned. */
+  unallocatedAtomic: bigint
+}
+
+/** Ledger split (audit closeout O-4 / A-4): weight each known holder by their ON-CHAIN `sharesOf` over the
+ *  ON-CHAIN `totalShares`, both read at the harvest block. Unlike `proRataBufferCredits`, the denominator is
+ *  the contract's total — NOT the sum of the holders we happen to know — so a wallet we failed to discover
+ *  can never inflate the others' credits; its slice (and rounding dust) is reported as `unallocatedAtomic`.
+ *  Floor-divides; Σ credits ≤ net always. Zero-share holders get nothing. */
+export function proRataByOnchainShares(
+  netAtomic: bigint,
+  holders: readonly SharePosition[],
+  totalShares: bigint,
+): OnchainSplit {
+  if (netAtomic <= 0n || totalShares <= 0n || holders.length === 0) {
+    return { credits: [], allocatedAtomic: 0n, unallocatedAtomic: netAtomic > 0n ? netAtomic : 0n }
+  }
+  const credits: BufferCredit[] = []
+  let allocated = 0n
+  for (const h of holders) {
+    if (h.shares <= 0n) continue
+    // a holder can never claim more than the whole (defensive: a lying mock / reorg mid-read)
+    const shares = h.shares > totalShares ? totalShares : h.shares
+    const credit = (netAtomic * shares) / totalShares
+    if (credit <= 0n) continue
+    credits.push({ user: h.user, creditAtomic: credit })
+    allocated += credit
+  }
+  if (allocated > netAtomic) {
+    // only reachable if Σ sharesOf > totalShares (inconsistent reads): refuse to over-credit
+    throw new Error('proRataByOnchainShares: Σ sharesOf exceeds totalShares')
+  }
+  return { credits, allocatedAtomic: allocated, unallocatedAtomic: netAtomic - allocated }
+}

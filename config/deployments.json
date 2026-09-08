@@ -181,42 +181,42 @@
     },
     "robinhood-testnet": {
       "LpGatewayPositionManager": {
-        "address": "0xbb2c14c7d0401331f8da7bb619cdab77162a91f3",
+        "address": "0x259a9f1cdcf8d2172964d151366b2c7c9ea6f442",
         "chainId": 46630,
         "status": "testnet",
-        "note": "LP Gateway V1 — ROUND-2 AUDIT REMEDIATED (Hacken-style ×2 + red-team ×2, 2026-09-08; docs/developers/audits/2026-09-08-consolidated.md). Pure-Privy REDEPLOY 2026-09-08 (rig 'd'), owner+harvestRecipient=gateway seat 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c, band 500 bps. New in this code: PURE PRO-RATA exit on both legs (the withdraw-side min(spot,ref) mark was retired — redundant under pro-rata sourcing and it under-paid honest exits, C-1), best-effort LP leg via lpLegExit self-call + LpLegUnavailable re-credit (paused/blacklisting paired token or frozen recipient no longer brick exits, C-2), COST-BASIS deploy cap (deployedPrincipal; a drawdown can't re-open MAX_DEPLOY_BPS, C-3), spot cached once as re-credit weight (C-4), idle shortfall never sourced from the LP (C-5), depositWithMin/withdrawWithMin (C-6), permissionless poke() (C-7) — on top of the 07c re-audit fixes (A-1/A-2/A-3/A-5/A-6). Prior rig 0x24ff5d2bb29b5448bdf96db0fcdf0553ebda3b11 (07c) SUPERSEDED. MOCK tokens + hookless V4 pool; TESTNET, UNAUDITED externally. Smoke PASSED 2026-09-08 (deposit 1000 1:1; compoundQuote(5) → 1005 no mint; setPaused blocks deposit not withdraw; withdraw 50% → 502.5); on-chain deployedPrincipal()==0, MAX_DEPLOY_BPS()==5000, poke() present. Deploy: scripts/deploy-lp-gateway-robinhood.mjs · smoke: scripts/smoke-lp-gateway-robinhood.mjs.",
+        "note": "LP Gateway V1 — AUDIT CLOSE-OUT rig 'e' (2026-09-08; docs/developers/audits/closeout/README.md). Pure-Privy REDEPLOY, owner+harvestRecipient=gateway seat 0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c, band 500 bps. Adds to rig 'd' (round-2: pro-rata exit, best-effort LP leg, cost-basis cap, depositWithMin/withdrawWithMin, poke): C-10 tolerant staged read (sourceReadable/lastKnownIdle — a reverting Morpho source no longer bricks NAV; deposits fail closed, withdraws pay the LP leg), harvestRecipient 48h-timelocked rotation (propose/accept/cancel), factory adapter-binding checks, adapter Ownable2Step. Prior rigs 0xbb2c14c7d0401331f8da7bb619cdab77162a91f3 ('d'), 0x24ff…3b11 ('c'), 0xd488…b53e, 0x39B8…BD2a SUPERSEDED. MOCK tokens + hookless V4 pool; TESTNET, UNAUDITED externally. Smoke PASSED 2026-09-08 (deposit 1000 1:1; compoundQuote(5) → 1005 no mint; setPaused blocks deposit not withdraw; withdraw 50% → 502.5). Vercel prod+preview: LP_GATEWAY_POSITION_MANAGER/STAGING/POOL_ADDRESS(=32-byte poolId)/USDG(=tUSDG)/PM_CODEHASHES repointed. Deploy: scripts/deploy-lp-gateway-robinhood.mjs · smoke: scripts/smoke-lp-gateway-robinhood.mjs · mainnet path: scripts/{preflight,deploy}-lp-gateway-mainnet.mjs.",
         "verified": "2026-09-08"
       },
       "LpGatewayStaging": {
-        "address": "0xb29890858435f1daaff76f77e7a60def077139a8",
+        "address": "0x24f69ca370e85e7f18799161bc6b0267d6ac00cc",
         "chainId": 46630,
         "status": "testnet",
         "note": "LP Gateway staging reserve (idle USDG earns as 4626 shares held by the adapter). controller=PositionManager; deployer=Privy 0x18AE...663c (deployer-only setController, M1). It is the adapter's one-time `vault` — the only address that can move funds through the adapter.",
         "verified": "2026-09-08"
       },
       "LpGateway_ERC4626YieldAdapter": {
-        "address": "0x4dd9454ff94662437ae59536d1cccd0d0aa42812",
+        "address": "0xd6866f00684b2ea1219bc6d91caf61dbd591bc94",
         "chainId": 46630,
         "status": "testnet",
         "note": "PRODUCTION MintwareERC4626YieldAdapter (re-audit A-5): onlyVault (=staging, set once), fee-net NAV via previewRedeem, best-effort redeem-based exits, optional per-block withdraw cap (uncapped here). owner=Privy 0x18AE...663c. Replaces the MockYieldAdapter (0xfe74…644a, SUPERSEDED — its withdraw had NO access control; never point value at a rig using it).",
         "verified": "2026-09-08"
       },
       "LpGateway_MockERC4626YieldSource": {
-        "address": "0xf191938727c4911a28f0e46cd064463cc07e1b86",
+        "address": "0x804ae0d2fa81ab9cafe12b1a60e88bdbe201ac72",
         "chainId": 46630,
         "status": "testnet",
         "note": "MOCK ERC-4626 yield SOURCE (OZ ERC4626 over tUSDG; no drain path) behind the production adapter — stands in for the curated Morpho USDG vault on mainnet (set via LP_GATEWAY_YIELD_SOURCE at deploy).",
         "verified": "2026-09-08"
       },
       "LpGateway_tUSDG": {
-        "address": "0xe86df24dc98120e87792d16de13d75335064add2",
+        "address": "0xd2af3d6e58d0caec184548e465e10fa63968ebfd",
         "chainId": 46630,
         "status": "testnet",
         "note": "MOCK USDG (6dp) for the LP gateway rig. No value. Real USDG (Paxos) + Morpho gate mainnet.",
         "verified": "2026-09-08"
       },
       "LpGateway_tPONS": {
-        "address": "0xdfdf70ce1dfc949a207d97482f8104029d8f1698",
+        "address": "0x4b60b01014227795b660c105e38993104ec4a629",
         "chainId": 46630,
         "status": "testnet",
         "note": "MOCK PONS (18dp) paired token for the LP gateway rig. No value.",
