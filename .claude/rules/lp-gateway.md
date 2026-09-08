@@ -7,8 +7,11 @@
 > nothing stranded), A-2 empty-position brick, A-3 on-chain `MAX_DEPLOY_BPS=5000` cap on TOTAL deployed/NAV +
 > follower band in `deploy` + cron fail-closed on `minLiquidity=0`, A-5 the staging adapter is now the PRODUCTION
 > `MintwareERC4626YieldAdapter` (`onlyVault`) — the earlier rigs ran a `MockYieldAdapter` anyone could drain.
-> **Still gating even OWN funds:** dedicated enclaved owner key (verify prod signer = Privy), USDG impl
-> verification, bounded rollout. **Gating third-party funds:** A-4 buffer ledger (never written), A-7 registry.
+> Key hardening DONE (prod `ORACLE_SIGNER_PROVIDER=privy` verified; dedicated `gateway` signer role, see Off-chain).
+> **USDG verified (M-07):** RH-mainnet USDG `0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168` is Paxos-NATIVE (UUPS,
+> matches Paxos' official table) — issuer can freeze **and wipe** balances → bounded exposure + disclosure.
+> **Still gating OWN funds:** the bounded rollout itself (hard exposure cap, deep pools only, tiny first
+> amount, monitoring). **Gating third-party funds:** A-4 buffer ledger (never written), A-7 registry, external audit.
 > Deploy truth: [`config/deployments.json`](../../config/deployments.json) (`robinhood-testnet`) + `STATE.md`.
 > Explainer: [`docs/developers/lp-gateway.md`](../../docs/developers/lp-gateway.md).
 
