@@ -186,8 +186,9 @@ unrelated).
   sign via **`getOracleSigner('gateway')`** — a DEDICATED Privy seat (`GATEWAY_ORACLE_PRIVY_WALLET_ID/_ADDRESS`,
   no shared-key fallback in app code) that is the rig's owner (`0x18AE…663c`). Prod's shared `root` is a
   different wallet (`0x7fD8…7E06`, card/x402/treasury) and must never own a gateway (re-audit A-3 key hardening).
-- **Routes** (`app/api/gateway/{discover,sparklines,instances,position,positions,leaderboard,alerts,deposit,withdraw,curate,request,meta}`) — all
-  `createHandler`. `deposit`/`withdraw` **routes** require **signed-message auth + tx-hash idempotency** (M-04 —
+- **Routes** (`app/api/gateway/{discover,sparklines,instances,position,positions,leaderboard,alerts,deposit,withdraw,curate,request,meta,fee-reconciliation}`) — all
+  `createHandler`. `fee-reconciliation` is bearer-gated (`ADMIN_SECRET`) — an operator-only read of the
+  already-durable per-log paired-fee ledger (V1-07 above). `deposit`/`withdraw` **routes** require **signed-message auth + tx-hash idempotency** (M-04 —
   the route half; the `/earn/[pool]` client sends the signed body as of the O-1 closeout — verify in
   `V1PoolDetail.tsx`, it POSTed an unsigned body until 2026-09-08). `curate` bearer **fails
   closed** when `LP_GATEWAY_CURATOR_SECRET` unset (`?? ''`, not a literal — C-01; and no `NODE_ENV=development`
@@ -200,14 +201,31 @@ unrelated).
   until a router is wired) to convert harvested paired-token fees back to quote — unrelated to deploy. **The
   deploy-side seam (`swapQuoteToPaired`) is GONE (earn-vs-lp decision)**: `deploy()` executes that swap
   in-contract now, so `lib/gateway/deploy.ts` only SIZES the call (`swapAmount`/`minPairedOut` from live pool
-  state via `quoteToPairedAtSpot`), it no longer runs any swap of its own.
+  state via `quoteToPairedAtSpot`), it no longer runs any swap of its own. **V1-07 (independent Codex audit,
+  round-4, 2026-09-09): "paired-token fees are never converted."** True — but the raw harvested paired amount
+  is NOT lost or unrecorded: `lib/gateway/ledger.ts#indexHarvestLogs` already writes every `Harvested` log's
+  `pairedFees` into `gateway_harvest_logs.paired_fees_atomic` (per-log, comprehensive — includes withdraw/
+  deploy sweeps, not just cron collects), and `gateway_fee_ledger_reconciliation.gross_paired_atomic` sums it
+  per pool. **Reconciled by documentation, not code** — a first attempt at this fix (session 2026-09-09,
+  caught by Codex's own live watch before it was committed) added a SECOND, redundant tracking column on
+  `harvest_events` with an actual unit-mismatch bug (conflating quote-denominated swap output with
+  paired-token-denominated input); reverted in favor of pointing at the ledger that already exists. **Still
+  genuinely open:** nothing reads `gateway_fee_ledger_reconciliation` through any API/UI today — the data is
+  durably tracked but not yet EXPOSED to an operator or depositor. That, plus the actual swap execution
+  (`routerSwap.ts`'s TODO), remain the real V1-07 remediation work.
 - **Depositable rule:** a pool is depositable only when `gateway_instances` holds an **`active`**, on-chain-verified
   (H-01) row for its **poolId** — the Discover `live` flag and `/earn/[pool]` must resolve through the registry, never
   through a pair label. The single-env `LP_GATEWAY_POSITION_MANAGER` fallback is bootstrap-only (O-2 closeout;
   see the registry agent's record for its final gating).
 - Migrations: `20260906000001` (positions/harvest) · `_002` (registry) · `20260907000001` (idempotency) ·
-  `_002` (position snapshots) · `_003` (alerts). All **deny-all RLS**. **Env vars:** every `LP_GATEWAY_*` var is
-  tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
+  `_002` (position snapshots) · `_003` (alerts) · `20260908000002` (event-indexed fee ledger —
+  `gateway_harvest_logs`/`gateway_fee_credits`/`gateway_fee_payouts` + the `gateway_fee_balances`/
+  `gateway_fee_ledger_reconciliation` views; **this is where paired-token fee history is ALREADY durably
+  tracked** — see V1-07 below, don't re-add it elsewhere) · `_003` (fee-ledger view security — **applied
+  to prod, live-verified**) · `20260909000001` (cost-basis atomic writes — **not yet applied to prod**, see
+  round-4 above) · `_002` (registry multi-row-per-pool history, Finding D). All **deny-all RLS**. **Env
+  vars:** every `LP_GATEWAY_*` var is tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) —
+  Robinhood Chain".
 
 ## Surfaces & the V1/V2 model
 - **`/v1`** ([`app/v1/page.tsx`](../../app/v1/page.tsx)) = the live product (`V1Shell` + `V1Discover` — the
