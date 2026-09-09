@@ -70,6 +70,11 @@ export const GET = createHandler(async (req, ctx) => {
           ok: true as const,
           position: {
             poolAddress: inst.poolAddress,
+            // V1-01 pass-2 residual fix (independent Codex audit, 2026-09-09): a pool can have more
+            // than one PositionManager in its history (a retired one + a replacement) — the pool
+            // address alone can no longer identify WHICH generation this position belongs to. Carried
+            // through so the Portfolio can build a link that resolves to the right one specifically.
+            positionManager: inst.positionManager,
             pairLabel: inst.pairLabel,
             chainId: inst.chainId,
             shares: view.shares,

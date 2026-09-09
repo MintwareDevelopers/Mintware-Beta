@@ -22,6 +22,10 @@ import { shortAddr } from '@/lib/web2/api'
 
 type PoolPosition = {
   poolAddress: string
+  // V1-01 pass-2 residual fix (independent Codex audit, 2026-09-09): a pool can have more than one
+  // PositionManager in its history — poolAddress alone no longer identifies WHICH one this position is
+  // in, so the link must carry this too (see slugOf below).
+  positionManager?: string
   pairLabel: string | null
   shares: string
   positionValueAtomic: string | null
@@ -41,7 +45,12 @@ const num = (a: string | null | undefined): number => { if (a == null) return 0;
 const usdg = (a: string | null | undefined) => `$${num(a).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmt = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`)
 // Audit O-2: /earn/[pool] is keyed by the registry pool id, never the pair label (see V1Discover).
-const slugOf = (p: PoolPosition) => encodeURIComponent(p.poolAddress.toLowerCase())
+// V1-01 pass-2 residual fix: append `?pm=` when known so the link resolves to THIS SPECIFIC
+// PositionManager generation, not whichever one happens to be active for the pool right now.
+const slugOf = (p: PoolPosition) => {
+  const base = encodeURIComponent(p.poolAddress.toLowerCase())
+  return p.positionManager ? `${base}?pm=${encodeURIComponent(p.positionManager.toLowerCase())}` : base
+}
 const pairParts = (label: string | null) => {
   const [b, q] = (label || 'TOKEN / USDG').split('/').map((s) => s.replace(/\s*\d.*$/, '').trim())
   return { base: b || 'TOKEN', quote: q || 'USDG' }

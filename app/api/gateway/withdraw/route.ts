@@ -30,12 +30,6 @@ export const POST = createHandler(async (req, ctx) => {
   }
   const { txHash, pool } = bound.bound
 
-  // V1-01 fix: a retired (deactivated) instance must still resolve for withdrawal — a depositor's
-  // shares don't stop existing when the operator retires the pool from new-deposit eligibility.
-  const r = await resolveInstanceStrict(ctx.supabase, cfg, pool, { includeInactive: true })
-  if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
-  const inst = r.inst
-
   const client = gatewayPublicClient(cfg)
   let receipt
   try {
@@ -44,6 +38,21 @@ export const POST = createHandler(async (req, ctx) => {
     return ctx.json({ success: false, error: 'tx_not_found' }, 404)
   }
   if (receipt.status !== 'success') return ctx.json({ success: false, error: 'tx_reverted' }, 400)
+
+  // V1-01 fix: a retired (deactivated) instance must still resolve for withdrawal — a depositor's
+  // shares don't stop existing when the operator retires the pool from new-deposit eligibility.
+  //
+  // V1-01 pass-2 residual fix (independent Codex audit, 2026-09-09): resolve by the EXACT PM the
+  // receipt itself names (`receipt.to`), not just the pool. If this pool has since been re-registered
+  // with a newer PM, a plain pool-only lookup would resolve to that NEW instance — and since the tx
+  // actually went to the OLD one, the wrong_contract check below would then reject a completely
+  // legitimate withdrawal from a real, still-registered (if retired) instance. Deriving the wanted PM
+  // from the receipt itself (not a client-supplied param) means this can't be spoofed either — it's
+  // exactly the contract this specific transaction targeted, verified on-chain, not a caller's claim.
+  const r = await resolveInstanceStrict(ctx.supabase, cfg, pool, { includeInactive: true, positionManager: receipt.to })
+  if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
+  const inst = r.inst
+
   if (receipt.to?.toLowerCase() !== inst.positionManager.toLowerCase()) {
     return ctx.json({ success: false, error: 'wrong_contract' }, 400)
   }

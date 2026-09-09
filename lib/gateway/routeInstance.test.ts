@@ -142,3 +142,31 @@ describe('resolveInstanceStrict — registry empty (env fallback allowed, tagged
     expect(list[0].source).toBe('env-fallback')
   })
 })
+
+describe('resolveInstanceStrict — positionManager (V1-01 pass-2 residual fix: superseded-PM exit routing)', () => {
+  const OLD_PM = REG_PM // retired — this pool's original instance
+  const NEW_PM = REG_PM2 // active — the pool was re-registered with a different PM
+  const db = () => fakeSupabase({ tables: { gateway_instances: [
+    row(POOL_ID, OLD_PM, 'inactive'),
+    row(POOL_ID, NEW_PM, 'active'),
+  ] } })
+
+  it('a bare poolId lookup resolves the CURRENT active row (unchanged default)', async () => {
+    const r = await resolveInstanceStrict(db().client, cfg, POOL_ID, { includeInactive: true })
+    expect(r.ok && r.inst.positionManager).toBe(NEW_PM)
+  })
+  it('naming the OLD (retired) PM explicitly resolves IT specifically, not the active one', async () => {
+    const r = await resolveInstanceStrict(db().client, cfg, POOL_ID, { includeInactive: true, positionManager: OLD_PM })
+    expect(r.ok).toBe(true)
+    if (r.ok) { expect(r.inst.positionManager).toBe(OLD_PM); expect(r.inst.live).toBe(false) }
+  })
+  it('naming the NEW (active) PM explicitly still resolves it too (not just a retired-only lookup)', async () => {
+    const r = await resolveInstanceStrict(db().client, cfg, POOL_ID, { positionManager: NEW_PM })
+    expect(r.ok).toBe(true)
+    if (r.ok) { expect(r.inst.positionManager).toBe(NEW_PM); expect(r.inst.live).toBe(true) }
+  })
+  it('naming a PM that never fronted this pool is a 404, not a silent fallback to the active one', async () => {
+    const r = await resolveInstanceStrict(db().client, cfg, POOL_ID, { includeInactive: true, positionManager: '0x' + 'ff'.repeat(20) })
+    expect(r).toEqual({ ok: false, status: 404, error: 'pool_not_live' })
+  })
+})

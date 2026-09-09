@@ -38,7 +38,10 @@ export const GET = createHandler(async (req, ctx) => {
   // V1-01 fix: metadata for a retired pool must still resolve (its `live:false` already tells the UI
   // deposits are closed) — a depositor visiting their own pool's page shouldn't 404 just because the
   // operator retired it for NEW deposits.
-  const r = await resolveInstanceStrict(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), { includeInactive: true })
+  // V1-01 pass-2 residual fix: an optional `?pm=` names the EXACT PositionManager generation to
+  // resolve — set by a Portfolio link for a superseded PM, so its own page still shows correctly
+  // instead of silently describing the pool's CURRENT (different) active instance.
+  const r = await resolveInstanceStrict(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), { includeInactive: true, positionManager: req.nextUrl.searchParams.get('pm') })
   if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
   const inst = r.inst
 

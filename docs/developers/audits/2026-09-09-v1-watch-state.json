@@ -1,0 +1,24 @@
+{
+  "last_commit": "0e7b4f2b",
+  "checked_at": "2026-09-09T22:52:48Z",
+  "files": {
+    "components/web2/v1/V1Swap.tsx": "7f1d44467a2bcb7533d8d744e9bdf4df32aad99035d5a170ea4c91aa3dfaaf6f",
+    "package.json": "8f2ff01e8c68043a796c31ad3c16c9375e563f64136e690ced4ad9dafec08e87",
+    "pnpm-lock.yaml": "09896290bcaaae5b6ee35a537627e60875657ef0e8648037b0f0dc091514ee76",
+    "eslint.config.mjs": "156be374bbc75fc5c66df58fb28f1abf67b89ece644ed04f519178194e2a0791",
+    "components/web2/v1/V1PoolDetail.tsx": "cdb1050777a9363b4f37aa8025bfcc475ab198ed6373763c7bd6e41d5b3c6371",
+    "components/web2/v1/V1Portfolio.tsx": "8c7734658707d58e4aa37b17d8e9d627cfb667f7e86258d3dd50d534b49af38b",
+    "lib/gateway/positionReader.ts": "b99e6fbab0d81f058680e2d239ec184838958011ddeb95fa6dedc9bd0eb10dd0",
+    "lib/gateway/positionReader.test.ts": "2e2ba63e9eb758b89562d97becf5e7b2cf906324c405520885b18c2b1ad3c0e7",
+    "app/api/gateway/position/route.ts": "6cb85df3bacded43cde5d1d61a944ad8a317bb96ee6e80254dc6c7006d557385",
+    "app/api/gateway/positions/route.ts": "df34633cbfd244e588b660fb2dc593cbe4af5a9f686915dade318f4377436d0e",
+    "app/api/gateway/positions/route.test.ts": "15c2b9933eb584e06154b071407e203f97bb5f8e16f30606996a8976ecd6f32a",
+    "app/api/gateway/meta/route.ts": "7b0e0f43898eadb65cd07ca68728331e45bcf72d04495eba0508bff18b85cd0e",
+    "lib/gateway/routeInstance.ts": "140df09c7fff8a9cad2de5d4db0553f74043c101623be8f7f5faa4f58a3bb5ad",
+    "app/api/gateway/withdraw/route.ts": "e8ad1f3f24b800e6c4cdf2886ce48c3a7f3d26c92f0804df9f6c3547604bd5a5"
+  },
+  "lint": "105 errors,125 warnings; exit 1",
+  "targeted_tests": "13 passed; three files",
+  "new_flag": "Exact-PM selector bypasses env bootstrap fallback; reproduced",
+  "resolved_flag": "Privy-disabled signer lookup corrected in source at 8852b0ab; wallet E2E still unverified"
+}

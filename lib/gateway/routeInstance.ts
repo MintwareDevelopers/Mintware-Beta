@@ -10,19 +10,24 @@
 //     matches `LP_GATEWAY_POOL_ADDRESS` (or no pool was requested), tagged `source: 'env-fallback'`;
 //   · `live` is derived from an active registry hit; the env rig is never "live".
 //
-// KNOWN RESIDUAL (documented, not silently left): resolution is keyed by POOL ID alone. If a pool is
-// retired and later re-registered with a DIFFERENT PositionManager (a full PM migration, not just a
-// pause — see the V1 pass-2 fix on `registerInstance` in registry.ts), a bare poolId lookup here always
-// returns the CURRENT active row, never a superseded one — even with `includeInactive`, since an active
-// hit short-circuits before that check runs. A depositor of the SUPERSEDED PM can still be found via
-// `listAllInstances`/`listResolvableInstances` (their position stays enumerable — the portfolio and
-// `/api/gateway/instances` show it), but a route resolving purely by poolId (withdraw/position/meta)
-// will resolve to the NEW PM, not theirs — `withdraw`'s own `receipt.to` check would then correctly
-// reject their tx as `wrong_contract` rather than silently misroute it, so this fails SAFE, just not
-// USABLE for that specific compound scenario. Simple retirement (no later re-registration — by far the
-// more common real case) is fully fixed end-to-end by the change below. Fully closing the compound case
-// would need routes to resolve by (pool, positionManager) once a receipt names a specific PM, not by
-// pool alone — flagged as a follow-up, not implemented in this pass.
+// FIXED (2026-09-09, same day, follow-up to the residual below): a bare poolId lookup still resolves
+// the CURRENT active row when one exists (unchanged — that's the right default for every caller that
+// doesn't care which generation). But `opts.positionManager`, when given alongside a pool, matches an
+// EXACT (pool, PM) pair across every row regardless of status, short-circuiting before the active-wins
+// logic runs at all — a depositor of a superseded PM is now genuinely reachable through withdraw/
+// position/meta, not just enumerable. `positions`/`listResolvableInstances` now surface each position's
+// own `positionManager`; the Portfolio's per-pool link carries it as a `?pm=` param; `/earn/[pool]`
+// threads it back into meta/position/withdraw. See app/api/gateway/withdraw/route.ts (derives the PM
+// straight from the tx receipt itself, so it's never a caller-supplied claim) and
+// components/web2/v1/V1Portfolio.tsx / V1PoolDetail.tsx.
+//
+// Residual still open, narrower than before: `gateway_positions` (the cost-basis DB row) is keyed by
+// (user_wallet, pool_address, chain_id) — NOT positionManager. A wallet that deposited into BOTH a
+// retired and a replacement PM for the SAME pool would have its cost basis co-mingled across the two
+// generations in that one row (on-chain shares/values stay correct either way — this only affects the
+// displayed basis/PnL number). A real schema change (adding position_manager to that table's identity,
+// migrating existing rows, updating the atomic deposit/withdraw RPCs) would be needed to fully close
+// this; not implemented here given how narrow the case is — flagged, not silently left.
 //
 // 2026-09-09 fix (independent Codex audit, V1-01): deposit ELIGIBILITY and exit/read DISCOVERY are two
 // different questions and must not share one active-only lookup. `deactivateInstance`'s own doc comment
@@ -134,11 +139,24 @@ export async function resolveInstanceStrict(
   supabase: SupabaseClient,
   cfg: GatewayConfig,
   poolParam?: string | null,
-  opts: { includeInactive?: boolean } = {},
+  opts: { includeInactive?: boolean; positionManager?: string | null } = {},
 ): Promise<ResolveResult> {
   const all = await listAllInstances(supabase, cfg.chainId)
   const active = all.filter((i) => i.status === 'active')
   const raw = (poolParam ?? '').trim().toLowerCase()
+  // V1-01 pass-2 residual fix (independent Codex audit, 2026-09-09): naming an EXACT (pool, PM) pair
+  // sidesteps the "active always wins" ambiguity below entirely — a bare poolId lookup has no way to
+  // pick out a SUPERSEDED PM once its pool has a newer active instance (see the header comment's
+  // documented residual). Any caller that has a specific PM to name (a withdraw route reading it off
+  // the transaction receipt, a portfolio link built from a position that carries its own PM identity)
+  // gets it regardless of active/inactive status — this check runs first and short-circuits.
+  const wantPm = (opts.positionManager ?? '').trim().toLowerCase()
+  if (wantPm && raw) {
+    const id = normalizePoolId(raw)
+    const pool = id || raw
+    const hit = all.find((i) => i.poolAddress.toLowerCase() === pool && i.positionManager.toLowerCase() === wantPm)
+    return hit ? { ok: true, inst: fromRegistry(hit) } : { ok: false, status: 404, error: 'pool_not_live' }
+  }
 
   if (all.length > 0) {
     if (!raw) {

@@ -95,9 +95,9 @@ function depositedLog(user: string, quoteIn: bigint, shares: bigint) {
     data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [quoteIn, shares]),
   }
 }
-function withdrawnLog(user: string, burned: bigint, quoteOut: bigint, pairedOut: bigint) {
+function withdrawnLog(user: string, burned: bigint, quoteOut: bigint, pairedOut: bigint, pm: string = REG_PM) {
   return {
-    address: REG_PM,
+    address: pm,
     topics: encodeEventTopics({ abi: LP_GATEWAY_ABI, eventName: 'Withdrawn', args: { user: user as `0x${string}` } }),
     data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }], [burned, quoteOut, pairedOut]),
   }
@@ -243,6 +243,65 @@ describe('POST /api/gateway/withdraw — same binding, records the exit', () => 
     const json = await res.json()
     expect(res.status).toBe(200)
     expect(json.costBasisAtomic).toBe('500000') // correct — NOT 750000, which the live-read bug produced
+  })
+  // V1-01 pass-2 residual — FIXED 2026-09-09 (independent Codex audit). This pool has been through a
+  // full PM migration: an OLD (retired) instance and a NEW (active, different address) one both
+  // registered for the SAME pool id. Codex's own suggested regression: prove a withdrawal against
+  // EITHER generation resolves to its own contract, rather than the pool-only lookup always handing
+  // both callers the CURRENT active PM (which would reject the old PM's real withdrawal as
+  // wrong_contract, since the tx it actually sent went to a different address than what got resolved).
+  it('FIXED: withdrawing from the OLD (retired) PM resolves to it, not the pool\'s current active PM', async () => {
+    const OLD_PM = '0x' + '55'.repeat(20)
+    const NEW_PM = REG_PM
+    state.supabase = fakeSupabase({
+      tables: {
+        gateway_instances: [
+          { ...registryRow, position_manager: OLD_PM, status: 'inactive' },
+          { ...registryRow, position_manager: NEW_PM, status: 'active' },
+        ],
+        gateway_positions: [{ id: 'p1', user_wallet: USER, pool_address: POOL_ID, chain_id: 46630, shares: '1000000', entry_nav: '1000000' }],
+      },
+      uniques: { gateway_deposit_events: [['tx_hash']] },
+      rpc: gatewayPositionRpc,
+    }).client
+    state.sharesOf = 500_000n
+    // The tx this user actually sent went to the OLD PM — receipt.to says so.
+    state.receipt = { status: 'success', to: OLD_PM, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n, OLD_PM)] }
+    const issuedAt = Date.now()
+    const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
+    const authSignature = await wallet.signMessage({ message: authMessage })
+    const { POST } = await import('../withdraw/route')
+    const res = await POST(post('/api/gateway/withdraw', { address: wallet.address, txHash: TX, pool: POOL_ID, authMessage, authSignature, issuedAt }))
+    const json = await res.json()
+    // Must NOT be wrong_contract — the old PM is a real, still-registered (if retired) instance, and
+    // this withdrawal genuinely happened against it.
+    expect(res.status).toBe(200)
+    expect(json.sharesBurned).toBe('500000')
+  })
+  it('FIXED: withdrawing from the NEW (active, replacement) PM for the same pool also resolves correctly', async () => {
+    const OLD_PM = '0x' + '55'.repeat(20)
+    const NEW_PM = REG_PM
+    state.supabase = fakeSupabase({
+      tables: {
+        gateway_instances: [
+          { ...registryRow, position_manager: OLD_PM, status: 'inactive' },
+          { ...registryRow, position_manager: NEW_PM, status: 'active' },
+        ],
+        gateway_positions: [{ id: 'p1', user_wallet: USER, pool_address: POOL_ID, chain_id: 46630, shares: '1000000', entry_nav: '1000000' }],
+      },
+      uniques: { gateway_deposit_events: [['tx_hash']] },
+      rpc: gatewayPositionRpc,
+    }).client
+    state.sharesOf = 500_000n
+    state.receipt = { status: 'success', to: NEW_PM, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n, NEW_PM)] }
+    const issuedAt = Date.now()
+    const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
+    const authSignature = await wallet.signMessage({ message: authMessage })
+    const { POST } = await import('../withdraw/route')
+    const res = await POST(post('/api/gateway/withdraw', { address: wallet.address, txHash: TX, pool: POOL_ID, authMessage, authSignature, issuedAt }))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.sharesBurned).toBe('500000')
   })
   it('a deposit-action signature cannot be replayed on the withdraw route (action binding held)', async () => {
     const { POST } = await import('../withdraw/route')

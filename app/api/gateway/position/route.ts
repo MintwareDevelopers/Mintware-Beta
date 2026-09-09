@@ -35,7 +35,8 @@ export const GET = createHandler(async (req, ctx) => {
   }
 
   // V1-01 fix: a retired pool must still resolve for a chain-derived position read.
-  const r = await resolveInstanceStrict(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), { includeInactive: true })
+  // V1-01 pass-2 residual fix: an optional `?pm=` names the EXACT PositionManager generation.
+  const r = await resolveInstanceStrict(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), { includeInactive: true, positionManager: req.nextUrl.searchParams.get('pm') })
   if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
   const inst = r.inst
 

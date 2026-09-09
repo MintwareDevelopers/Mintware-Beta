@@ -24,6 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem'
 import { useAccount } from 'wagmi'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
@@ -99,6 +100,13 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   // The route param is the pool's registry key (poolId). Legacy label slugs still render metrics but
   // can never resolve a deposit target (meta 404s) — the page says so instead of guessing.
   const decoded = useMemo(() => decodeURIComponent(slug).toLowerCase(), [slug])
+  // V1-01 pass-2 residual fix (independent Codex audit, 2026-09-09): an optional `?pm=` names the
+  // EXACT PositionManager generation to resolve (set by the Portfolio's link for a superseded PM) —
+  // without it, meta/position resolve to whichever PM is currently active for this pool, which is the
+  // right default when arriving from Discover/browsing but wrong for exiting an old, retired instance.
+  const searchParams = useSearchParams()
+  const pmParam = searchParams.get('pm')
+  const pmQuery = pmParam ? `&pm=${encodeURIComponent(pmParam)}` : ''
   const pairLabel = m?.pairLabel ?? meta?.pairLabel ?? (decoded.startsWith('0x') ? 'Pool' : decoded.replace(/-/g, ' / ').toUpperCase())
   const [base, quote] = useMemo(() => {
     const parts = pairLabel.split('/').map((s) => s.trim().replace(/\s*\d[\d.]*\s*%\s*$/, ''))
@@ -107,7 +115,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
 
   useEffect(() => {
     setMetaState('loading')
-    fetch(`/api/gateway/meta?pool=${encodeURIComponent(slug)}`).then(async (r) => {
+    fetch(`/api/gateway/meta?pool=${encodeURIComponent(slug)}${pmQuery}`).then(async (r) => {
       const d = await r.json().catch(() => null)
       if (r.ok && d?.success) { setMeta(d.meta); setMetaState('ok') }
       else { setMeta(null); setMetaState(r.status === 404 ? 'not_live' : 'unavailable') }
@@ -120,20 +128,20 @@ export function V1PoolDetail({ slug }: { slug: string }) {
       const oor = (d?.alerts ?? []).find((a: { kind: string; firing: boolean; sinceIso: string }) => a.kind === 'out_of_range' && a.firing)
       setAlert(oor ? { sinceIso: oor.sinceIso } : null)
     }).catch(() => {})
-  }, [slug, decoded])
+  }, [slug, decoded, pmQuery])
 
   // Chain-first position read (+ the live pool state the dry quotes need). Returns the payload so the
   // money path can price off a FRESH read rather than stale render state.
   const fetchPosition = useCallback(async (): Promise<PositionResponse | null> => {
     if (!address) { setPos(null); return null }
     try {
-      const r = await fetch(`/api/gateway/position?address=${address}&pool=${encodeURIComponent(slug)}`)
+      const r = await fetch(`/api/gateway/position?address=${address}&pool=${encodeURIComponent(slug)}${pmQuery}`)
       const d = await r.json()
       if (!d?.success) { setPos(null); return null }
       setPos(d.position)
       return { position: d.position, poolState: d.poolState ?? null }
     } catch { setPos(null); return null }
-  }, [address, slug])
+  }, [address, slug, pmQuery])
   useEffect(() => { void fetchPosition() }, [fetchPosition])
 
   // Real trailing yield, Meteora-style: 24h fees ÷ TVL, annualized. 24h fees = 24h volume × fee tier.
