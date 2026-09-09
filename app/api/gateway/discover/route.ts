@@ -1,5 +1,5 @@
 import { createHandler } from '@/lib/web2/routeHandler'
-import { fetchHotPools, type PoolCandidate } from '@/lib/gateway/discovery'
+import { fetchHotPools, discoverUsdgEnv, type PoolCandidate } from '@/lib/gateway/discovery'
 import { gatewayConfig } from '@/lib/gateway/chain'
 import { createTokenBucket } from '@/lib/gateway/sparkline'
 
@@ -10,8 +10,11 @@ export const dynamic = 'force-dynamic'
 // already live-depositable (an ACTIVE gateway instance exists) vs still curating. Cached ~3 min to respect
 // GT rate limits; concurrent refreshes coalesce into one upstream read.
 // Honest: metrics are real (TVL / 24h vol / activity); no APY/guaranteed framing. Deposits gate to live pools.
-// Fail-closed (O-7): with `LP_GATEWAY_USDG` unset the quote asset is unknown → every pool is ineligible
-// → the feed is EMPTY and `usdgConfigured:false` says why. Set the env; never match by name.
+// Fail-closed (O-7): with `LP_GATEWAY_DISCOVER_USDG`/`LP_GATEWAY_USDG` unset the quote asset is unknown →
+// every pool is ineligible → the feed is EMPTY and `usdgConfigured:false` says why. Set the env; never
+// match by name. `LP_GATEWAY_DISCOVER_USDG` is Discover's OWN address (falls back to `LP_GATEWAY_USDG`) —
+// separate from registry's `LP_GATEWAY_USDG` (which must match whatever the DEPLOYED rig actually uses
+// on-chain, today the testnet mock tUSDG) because the browse feed reads real MAINNET GeckoTerminal data.
 
 const TTL_MS = 3 * 60_000
 let cache: { at: number; pools: PoolCandidate[] } | null = null
@@ -25,7 +28,7 @@ export const GET = createHandler(async (req, ctx) => {
   if (!ipBucket.take(ip)) return ctx.json({ success: false, error: 'Too many requests', code: 'RATE_LIMITED' }, 429)
 
   const cfg = gatewayConfig()
-  const usdgConfigured = /^0x[0-9a-fA-F]{40}$/.test(process.env.LP_GATEWAY_USDG ?? '')
+  const usdgConfigured = /^0x[0-9a-fA-F]{40}$/.test(discoverUsdgEnv() ?? '')
 
   if (!cache || Date.now() - cache.at > TTL_MS) {
     if (!refreshing) {

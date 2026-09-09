@@ -36,12 +36,15 @@ vi.mock('@/lib/gateway/discovery', () => ({
       baseSymbol: 'X', quoteSymbol: 'USDG', baseLogo: null, quoteLogo: null, feePct: null, estFeeAprPct: null,
     }]
   },
+  // 2026-09-09 fix: discover has its OWN address (falls back to LP_GATEWAY_USDG) — mirrors the real
+  // discoverUsdgEnv() so route.ts's usdgConfigured stays test-covered after the split.
+  discoverUsdgEnv: () => process.env.LP_GATEWAY_DISCOVER_USDG ?? process.env.LP_GATEWAY_USDG,
 }))
 
 const req = (ip: string) => new NextRequest('https://mintware.test/api/gateway/discover', { headers: { 'x-forwarded-for': ip } })
 
 beforeEach(() => { state.instances = []; state.filters = []; state.hotCalls = 0; vi.resetModules() })
-afterEach(() => { delete process.env.LP_GATEWAY_USDG })
+afterEach(() => { delete process.env.LP_GATEWAY_USDG; delete process.env.LP_GATEWAY_DISCOVER_USDG })
 
 describe('/api/gateway/discover', () => {
   it('HO-11: a DEACTIVATED instance is not "live"; an active one is; usdgConfigured reflects the env', async () => {

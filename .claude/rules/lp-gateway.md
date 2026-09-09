@@ -162,9 +162,16 @@ unrelated).
   `isAddress()`-gate them or the whole feed empties**, PR #470). `riskScore.ts` **ranks, never certifies**
   (verdict always `'review'`). **Round-2 O-7 hardening (2026-09-08, closeout `discovery-hygiene.md`):**
   everything GeckoTerminal returns is untrusted → the risk score sees only **clamped numerics** (`normalizeSignals`
-  — name/symbol/URL text can never move it); **USDG is matched by ADDRESS only** against `LP_GATEWAY_USDG` —
-  **unset ⇒ quote unknown ⇒ every pool ineligible ⇒ feed EMPTY (fail-closed) + `usdgConfigured:false`**, never by
-  pair name; token logos pass only **https + GT/CoinGecko CDN hosts** (`safeImg`); the fee tier comes from the
+  — name/symbol/URL text can never move it); **USDG is matched by ADDRESS only** against
+  `LP_GATEWAY_DISCOVER_USDG` (a **DEDICATED var, added 2026-09-09** — falls back to `LP_GATEWAY_USDG` if
+  unset) — **unset (and the fallback also wrong) ⇒ quote unknown ⇒ every pool ineligible ⇒ feed EMPTY
+  (fail-closed) + `usdgConfigured:false`**, never by pair name. ⚠ **2026-09-09 incident:** `LP_GATEWAY_USDG`
+  is registry's var (must equal the DEPLOYED rig's on-chain quote asset — today the testnet mock tUSDG) and
+  was repointed to it on 2026-09-08 for that reason, which silently emptied Discover (a testnet mock
+  address matches zero real mainnet GeckoTerminal pools). Fixed by splitting into its own var — set
+  `LP_GATEWAY_DISCOVER_USDG` to the real mainnet USDG (`0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168`)
+  explicitly; `LP_GATEWAY_USDG` stays whatever registry needs, unchanged. See `deployments.md`. Token logos
+  pass only **https + GT/CoinGecko CDN hosts** (`safeImg`); the fee tier comes from the
   pool's fee field, else a name suffix only if ≤ 10% (`parseFeePct`); **est. fee APR is bounded** (n/a below $1k
   TVL or above 10,000%); the upstream read has an **8 s AbortController timeout + 2 bounded retries** (5xx/network
   only, never a 429) and **validates payload shape** (`fetchGtPools`) so the cron never 500s; **prune** only

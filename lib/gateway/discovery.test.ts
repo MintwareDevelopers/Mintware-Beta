@@ -30,7 +30,7 @@ function gtPool(over: Record<string, unknown> = {}, rel: Record<string, unknown>
   }
 }
 
-const ENV_KEYS = ['LP_GATEWAY_USDG', 'LP_GATEWAY_GT_NETWORK', 'LP_GATEWAY_DISCOVER_PRUNE_GRACE_HOURS'] as const
+const ENV_KEYS = ['LP_GATEWAY_USDG', 'LP_GATEWAY_DISCOVER_USDG', 'LP_GATEWAY_GT_NETWORK', 'LP_GATEWAY_DISCOVER_PRUNE_GRACE_HOURS'] as const
 const saved: Record<string, string | undefined> = {}
 beforeEach(() => { for (const k of ENV_KEYS) { saved[k] = process.env[k]; delete process.env[k] } })
 afterEach(() => {
@@ -293,6 +293,19 @@ describe('fetchHotPools', () => {
     expect(pools[0].verdict).toBe('review')
     expect(pools[0].baseSymbol).toBe('PONS')
     expect(pools[0].baseLogo).toBe('https://assets.geckoterminal.com/p.png')
+  })
+  it('2026-09-09 fix: LP_GATEWAY_DISCOVER_USDG takes precedence over LP_GATEWAY_USDG (they can diverge — registry vs. mainnet browse)', async () => {
+    process.env.LP_GATEWAY_USDG = '0x' + '99'.repeat(20) // e.g. a testnet rig's mock quote asset — wrong for browsing
+    process.env.LP_GATEWAY_DISCOVER_USDG = USDG
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [gtPool()] }) })))
+    const pools = await fetchHotPools()
+    expect(pools[0].verdict).toBe('review') // matched against DISCOVER_USDG, not the diverged LP_GATEWAY_USDG
+  })
+  it('LP_GATEWAY_DISCOVER_USDG unset falls back to LP_GATEWAY_USDG (single-var case still works)', async () => {
+    process.env.LP_GATEWAY_USDG = USDG
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [gtPool()] }) })))
+    const pools = await fetchHotPools()
+    expect(pools[0].verdict).toBe('review')
   })
 })
 

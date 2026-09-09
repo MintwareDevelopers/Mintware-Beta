@@ -6,8 +6,11 @@
 //
 // Round-2 audit O-7 (R-4 feed poisoning) — everything GeckoTerminal returns is UNTRUSTED:
 //   • the risk score sees only clamped numerics (riskScore.ts) — never name/symbol/url text;
-//   • USDG-quotedness is decided by ADDRESS against `LP_GATEWAY_USDG` only. Unset ⇒ quote UNKNOWN ⇒
-//     every pool ineligible (fail-closed) + a warning. Never by the pair name;
+//   • USDG-quotedness is decided by ADDRESS against `LP_GATEWAY_DISCOVER_USDG` (falls back to
+//     `LP_GATEWAY_USDG`) only — a DEDICATED var, separate from registry's `LP_GATEWAY_USDG` (2026-09-09
+//     fix: the two diverged once registry needed the deployed rig's mock quote asset, silently emptying
+//     this feed — see `discoverUsdgEnv()`). Unset ⇒ quote UNKNOWN ⇒ every pool ineligible (fail-closed) +
+//     a warning. Never by the pair name;
 //   • token logos pass only when https AND on an allowlisted CDN host (else null → UI initials);
 //   • the fee tier is read from the pool's own fee field when present and only accepted from the pair
 //     name when it lands on a sane tier (≤ MAX_FEE_PCT); est. APR is bounded (n/a above MAX_EST_APR_PCT
@@ -314,13 +317,26 @@ export async function fetchGtPools(opts: {
   return { ok: false, status: lastStatus, pools: [], tokens: [], attempts: retries + 1, error: lastError || 'exhausted' }
 }
 
+/** `LP_GATEWAY_USDG` is dual-purposed by registry.ts (must equal the ACTUALLY-DEPLOYED rig's on-chain
+ *  quote asset — today the testnet mock `tUSDG`) and by discovery.ts (must equal the REAL mainnet
+ *  Paxos USDG to match live GeckoTerminal mainnet pool data — `LP_GATEWAY_GT_NETWORK` reads MAINNET
+ *  data even while the deployed rig is testnet). Those diverged on 2026-09-08 when the shared var was
+ *  repointed to the rig's tUSDG for registry verification, which silently emptied the Discover feed
+ *  (every real mainnet pool is "not USDG-quoted" against a testnet mock address that appears on no
+ *  mainnet pool at all). `LP_GATEWAY_DISCOVER_USDG` is discovery's OWN address, independent of
+ *  whatever registry needs — falls back to `LP_GATEWAY_USDG` only so a single var still works once a
+ *  real rig's quote asset IS the real mainnet USDG (same value, no divergence). */
+export function discoverUsdgEnv(): string | undefined {
+  return process.env.LP_GATEWAY_DISCOVER_USDG ?? process.env.LP_GATEWAY_USDG
+}
+
 /** Resolve the configured USDG address (20-byte, lowercased) or undefined — and warn ONCE per call site
  *  when it is unset, because that makes every pool ineligible (fail-closed, O-7). */
 function resolveUsdg(explicit: string | undefined, log?: Logger): string | undefined {
-  const raw = explicit ?? process.env.LP_GATEWAY_USDG
+  const raw = explicit ?? discoverUsdgEnv()
   const addr = normalizePoolId(raw)
   if (!addr || addr.length !== 42) {
-    log?.warn('gateway.discover', 'LP_GATEWAY_USDG unset/invalid — quote asset unknown; NO pool is eligible until it is set (fail-closed, never matched by name)', {
+    log?.warn('gateway.discover', 'LP_GATEWAY_DISCOVER_USDG/LP_GATEWAY_USDG unset/invalid — quote asset unknown; NO pool is eligible until it is set (fail-closed, never matched by name)', {
       configured: !!raw,
     })
     return undefined

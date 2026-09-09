@@ -47,7 +47,11 @@ vi.mock('@/lib/gateway/chain', () => ({
   gatewayConfig: () => state.cfg,
   gatewayPublicClient: () => ({ readContract: (a: unknown) => state.readContract(a) }),
 }))
-vi.mock('@/lib/gateway/discovery', () => ({ fetchHotPools: (...a: unknown[]) => state.fetchHotPools(...a) }))
+vi.mock('@/lib/gateway/discovery', () => ({
+  fetchHotPools: (...a: unknown[]) => state.fetchHotPools(...a),
+  // 2026-09-09 fix: discover route now imports discoverUsdgEnv() directly — mirror its real fallback.
+  discoverUsdgEnv: () => process.env.LP_GATEWAY_DISCOVER_USDG ?? process.env.LP_GATEWAY_USDG,
+}))
 
 const FALLBACK_PM = '0x24ff5d2bb29b5448bdf96db0fcdf0553ebda3b11'
 const CFG_WITH_FALLBACK = { chainId: 46630, rpcUrl: 'http://rpc.test', positionManager: FALLBACK_PM, staging: null, poolAddress: 'pons-usdg' }
