@@ -55,6 +55,25 @@ runs = 1024
 optimizer      = false
 via_ir         = false
 
+# Halmos profile — Halmos re-runs `forge build` itself before every symbolic-execution pass, and a
+# plain build strips the full AST that Halmos needs to resolve some expressions. Inherits everything
+# from default; only adds ast output. Run with `FOUNDRY_PROFILE=halmos halmos ...`.
+#
+# ⚠ KNOWN UNRESOLVED (2026-09-09): even with ast=true and a clean build-info directory, halmos 0.2.6
+# fails EVERY check_* in LpGatewayFormalProofs.t.sol with `IndexError: pop from empty list` (not a real
+# counterexample — an internal halmos error, seen alongside `WARNING Skipped VmContractHelperN.json due
+# to parsing failure: KeyError: 'ast'` for many forge-std internals). Tried: (1) plain rebuild, (2) this
+# dedicated profile forcing ast=true, (3) removing a stale partial build-info file left by an earlier
+# non-ast build, (4) disabling via_ir/optimizer for this profile — REVERTED, that broke the whole build
+# instead (contracts-v4/src/payments/lib/MWTreasuryPositionLib.sol genuinely needs via_ir, "stack too
+# deep" otherwise; via_ir cannot be off project-wide). Root cause not found — likely a halmos/via-IR AST
+# incompatibility at this codebase's size, not a cache/staleness issue. Formal proof considered BLOCKED
+# on this host for now; the same properties (F1, R3-INV-3, invariant-15) are still exercised — as fuzz
+# SAMPLES rather than exhaustive proofs — by the passing Foundry test suite. Revisit in CI/Linux or a
+# newer halmos release rather than re-attempting the same workarounds.
+[profile.halmos]
+ast = true
+
 [fmt]
 line_length    = 100
 tab_width      = 4

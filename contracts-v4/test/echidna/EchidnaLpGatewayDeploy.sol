@@ -30,16 +30,36 @@ import {GwActor} from "./EchidnaLpGatewayIdle.sol";
 ///         `deploy`, share conservation) and NOT for pool economics — those stay with the Foundry fork suite.
 ///         Any counterexample from here must be re-derived against real v4 before it is called a finding.
 ///
-/// @dev    ⚠ TODO(needs review) — EARN-VS-LP DECISION (2026-09-08), THIS RIG'S DEPLOY PATH IS CURRENTLY INERT.
+/// @dev    ⚠ EARN-VS-LP DECISION (2026-09-08) LEFT THIS RIG'S DEPLOY PATH INERT — since folded, see below.
 ///         `deploy()` now sources the paired leg by SWAPPING part of the staged quote through the pool itself
 ///         (`poolManager.unlock` -> `swap`/`sync`/`settle`/`take`). `MockSlot0PoolManager` answers `getSlot0`
-///         and reverts on everything else by design, so every deploy from this harness now reverts: with
+///         and reverts on everything else by design, so every deploy from THIS harness still reverts: with
 ///         `swapAmount > 0` the unlock reverts, and with `swapAmount == 0` there is no paired leg at all and
-///         invariant 15 refuses the all-quote mint. The properties keyed on a SUCCESSFUL deploy (D1, D3, D6)
-///         are therefore VACUOUS here until the stand-in is given a swap engine — or until this rig is folded
-///         into the Foundry fork suite, which runs against the real pool and needs no stand-in. D2/D4/D5 still
-///         hold trivially. Deliberately NOT papered over with a hand-written swap mock: an unverified fake swap
-///         engine inside an audit harness would produce confident-looking results nobody has checked.
+///         invariant 15 refuses the all-quote mint. D1/D3/D6 (keyed on a SUCCESSFUL deploy) stay vacuous HERE
+///         — deliberately not papered over with a hand-written swap mock, since an unverified fake swap engine
+///         inside an audit harness would produce confident-looking results nobody has checked.
+///
+///         ✅ FOLDED (2026-09-08) into `contracts-v4/test/audit3/InvariantForkLP.t.sol` instead, per the
+///         suggestion above — that suite runs the REAL v4 stack (`vm.createSelectFork` against the Robinhood
+///         Chain PoolManager/PositionManager), so a zapping deploy's `unlock`/swap genuinely executes rather
+///         than reverting. Property mapping (its handler tracks these on every call, not just at exit):
+///           D1 (cap admitted at deploy)      → `invariant_B6_costBasisCap` (`capViolations`, checked from the
+///                                              deploy handler's PRE-state exactly like this rig's `deployLp`)
+///           D2 (continuous cap bound)         → same invariant, the `idleAfter + dpAfter` post-check
+///           D3 (dp moves only lawfully)       → same invariant's `pm.deployedPrincipal() == h.dpShadow()`
+///                                              exact-match, re-verified after EVERY handler call (stronger
+///                                              than this rig's per-action check alone)
+///           D4 (shares conserved)             → `invariant_B0_sharesAndSolvency`
+///           D5 (follower band)                → `invariant_B7_followerBand`
+///           D6 (dp zero iff empty)            → `invariant_B3_lastHolderCleanState` (asserts liquidity AND
+///                                              deployedPrincipal both hit zero together on a full exit) plus
+///                                              the same `dpShadow` exact-match from D3, which would catch a
+///                                              stranded cost basis at ANY partial exit, not just the last one.
+///         **Not yet live-run in this repo** — that fork suite self-skips without `LP_FORK_RPC_URL` set to a
+///         real Robinhood Chain RPC (no such URL is committed or available in a dev session by design); this
+///         is an operator/CI step (set the env, run `forge test --match-contract InvariantForkLP`), not a
+///         code gap. This rig stays in the tree as the Echidna/Medusa entry point for D2/D4/D5 (still exact
+///         here) and as a cheap non-forked smoke test of the gateway's own state machine.
 ///
 ///         Properties:
 ///           D1 `echidna_deploy_cap_at_deploy`   the cap the contract CHECKS: no deploy ever admitted more than

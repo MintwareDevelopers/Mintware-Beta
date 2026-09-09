@@ -444,3 +444,45 @@ haircut on `lastKnownIdle`, `DeployNotTwoSided`, deferred re-stage. Re-running e
 
 > **Superseded by §0 (2026-09-08):** the deltas above were applied, the F1 fix landed in the same source, and both
 > campaigns were re-run — see §0 for the post-fix verdicts, the two harness corrections, and the residuals.
+
+## 8. Earn-vs-lp decision (2026-09-08, later same day) — `deploy()` re-signature + Echidna fold-in
+
+The earn-vs-lp decision ([`../../lp-gateway-earn-vs-lp-decision.md`](../../lp-gateway-earn-vs-lp-decision.md))
+deleted the owner-supplied paired leg and re-signed `deploy` to
+`deploy(quoteToDeploy, swapAmount, minPairedOut, minLiquidity, deadline)`, where `swapAmount` is QUOTE the
+contract itself zaps into the paired leg via an in-contract `poolManager.unlock`/swap. Suite B's handler
+(`ForkLpHandler.deploy` in `InvariantForkLP.t.sol`) was updated for the new signature: a zap's exact mint
+output depends on a real pool swap this harness does not re-derive, so `_predictMint` returns the sentinel
+`UNPREDICTABLE` for `swapAmount > 0` rather than fabricate a shadow value — every OTHER prediction on the
+deploy path (cap, band, source outage, paused/frozen third-party tokens) stays exact for both zapping and
+non-zapping deploys, and B0/B3/B6/B7 (see §5) are re-verified after every call regardless of whether that
+call's own mint was predictable.
+
+**Echidna deploy-rig fold-in.** `EchidnaLpGatewayDeploy.sol` (`contracts-v4/test/echidna/`) went vacuous for
+its swap-dependent properties (D1/D3/D6, in its own header's numbering) the same way: its `MockSlot0PoolManager`
+stand-in has no swap engine, so every deploy from that rig now reverts on `unlock`. Rather than bolt an
+unverified fake swap engine onto an audit harness, those three properties are folded into this suite instead
+(the rig's own header already suggested this as the alternative) — they were already covered here as part of
+the round-3 work above, just not previously cross-referenced to the Echidna rig's numbering:
+
+| Echidna property | Suite B analog | Note |
+|---|---|---|
+| D1 — cap admitted at deploy (pre-state check) | `invariant_B6_costBasisCap` (`capViolations`) | same pre-state predicate, exercised against REAL swaps |
+| D2 — continuous cap bound | same invariant, post-deploy `idleAfter + dpAfter` check | |
+| D3 — `deployedPrincipal` moves only lawfully | same invariant's `pm.deployedPrincipal() == h.dpShadow()` | checked after EVERY handler call, not just deploy — stronger than the Echidna rig's per-action check |
+| D4 — shares conserved | `invariant_B0_sharesAndSolvency` | |
+| D5 — follower band | `invariant_B7_followerBand` | |
+| D6 — dp zero iff position empty | `invariant_B3_lastHolderCleanState` + the D3 `dpShadow` exact-match | B3 asserts liquidity and `deployedPrincipal` both hit zero together on a full exit; the `dpShadow` equality (re-checked every call) would also catch a stranded cost basis on any PARTIAL exit, which the Echidna property as stated does not |
+
+The Echidna rig's header comment was updated in place to record this mapping and point future readers here
+instead of treating D1/D3/D6 as an open gap. It stays in the tree as the cheap non-forked Echidna/Medusa entry
+point for D2/D4/D5 (still exact there) and as a fast smoke test of the gateway's own state machine independent
+of pool economics.
+
+**Not live-run in this repo as part of this note** — Suite B needs `LP_FORK_RPC_URL` set to a real Robinhood
+Chain RPC (`vm.createSelectFork`); no such URL is committed to the repo or available in a standard dev session
+by design (see [`../../../.claude/rules/deployments.md`](../../../.claude/rules/deployments.md) — the fork
+suites self-skip without it, by design, so CI stays green). Running it for real
+(`LP_FORK_RPC_URL=<rpc> forge test --match-contract InvariantForkLP -vv`, from `contracts-v4/`) against the
+current source, specifically exercising the `swapAmount > 0` path added by the earn-vs-lp decision, is an
+operator/CI step this closure recommends but has not itself performed.

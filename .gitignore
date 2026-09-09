@@ -70,3 +70,6 @@ oracle-watcher/node_modules/
 subgraph/node_modules/
 .aidesigner/*
 !.aidesigner/.gitkeep
+
+# Slither/crytic-compile export cache (build artifact, not source)
+crytic-export/
