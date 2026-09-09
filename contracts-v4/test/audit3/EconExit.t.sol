@@ -15,17 +15,21 @@ import {MintwareLpGatewayPositionManager} from "../../src/gateway/MintwareLpGate
 ///
 ///         Run: LP_FORK_RPC_URL=https://rpc.testnet.chain.robinhood.com forge test --match-contract EconExit -vv
 contract EconExitTest is EconBase {
+    /// Earn-vs-lp decision (2026-09-08): `deploy` has no owner-supplied paired leg -- it stages 200k of the
+    /// depositors' own quote and zaps half of it into paired in-contract. 150k each (was 100k each) reproduces
+    /// the IDENTICAL post-state the old owner-funded rig produced -- idle 100k, LP 200k, NAV 300k, bob f = 0.5 --
+    /// with the paired leg funded by the depositors rather than by Mintware. Every figure below is unchanged.
     function _rig() internal {
         _addExternalLiquidity(2_200_000e18);
         vm.prank(alice);
-        pm.deposit(100_000e18);
+        pm.deposit(150_000e18);
         vm.prank(bob);
-        pm.deposit(100_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp); // idle 100k, LP 200k, NAV 300k; bob f = 0.5
+        pm.deposit(150_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp); // idle 100k, LP 200k, NAV 300k; bob f = 0.5
         _roll(1);
     }
 
-    /// Bob's fair claim = 150k (100k principal + half the owner's 100k paired subsidy).
+    /// Bob's fair claim = 150k -- his own 150k deposit; there is no subsidy in it any more.
     function _bobExit(bool dump, uint256 sqFactor) internal returns (uint256 bobValue, uint256 recredited, uint256 aliceNav) {
         _rig();
         adapter.setPerBlockWithdrawCap(1); // Morpho illiquid: the idle leg serves ~0 (X = f*idle = 50k undelivered)

@@ -280,3 +280,14 @@ the platform has no external audit yet," separate from and in addition to the po
 `MAX_DEPLOY_BPS` cap. See the mainnet runbook §1.3 / §8. The honest cost is real: the product's "earns
 immediately" claim does not hold while idle mode is on, and that has to be reflected in copy wherever this
 instance is shown, not just in this doc.
+
+**Update (2026-09-08, round-3 idle-adapter adversarial pass — IA-11):** `LP_GATEWAY_DEPOSIT_CAP` alone was
+found to bound only the adapter's own idle leg — `deploy()` reopens headroom every time it moves capital into
+the LP, so the real ceiling on total depositor value at risk converged to *2×* the configured cap, not 1×. The
+fix landed at the source: `MintwareLpGatewayPositionManager` now carries its own `principalCap`, bounding
+`idle + deployedPrincipal + deployedPairedValue` (the owner's paired-leg subsidy on every deploy included)
+directly — a live, monotone-with-real-value figure that genuinely IS the total-value-at-risk bound this
+paragraph describes, not a documentation workaround. `LP_GATEWAY_PRINCIPAL_CAP` (required on both the idle and
+real-adapter paths; defaults to `LP_GATEWAY_DEPOSIT_CAP` in idle mode) is the env var; see
+[`deployments.md`](../../../.claude/rules/deployments.md) and
+[`idle-adapter-adversarial.md`](../round3/idle-adapter-adversarial.md).

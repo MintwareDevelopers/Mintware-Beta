@@ -19,7 +19,9 @@
 //       owner=signer, depositCap) — no external yield source, zero-yield custody only, deposit-capped.
 //     → MintwareLpGatewayStaging(USDG, adapter)
 //     → MintwareLpGatewayPositionManager(PoolManager, PositionManager, Permit2, poolKey, USDG, tickLower,
-//         tickUpper, staging, owner=signer, harvestRecipient, band=LP_MAX_DEVIATION_BPS (default 500))
+//         tickUpper, staging, owner=signer, harvestRecipient, band=LP_MAX_DEVIATION_BPS (default 500),
+//         principalCap=LP_GATEWAY_PRINCIPAL_CAP — IA-11: the real ceiling on total value at risk, idle mode
+//         defaults it to LP_GATEWAY_DEPOSIT_CAP; the real-adapter path requires it explicitly)
 //     → staging.setController(pm) · adapter.setVault(staging) · [adapter.setPerBlockWithdrawCap(cap)] (real
 //       source) or nothing further (idle mode — the cap is set at construction)
 //
@@ -32,7 +34,8 @@
 // Env (see docs/developers/lp-gateway-mainnet-runbook.md for the full table):
 //   ORACLE_SIGNER_PROVIDER=privy · PRIVY_APP_ID · PRIVY_APP_SECRET · GATEWAY_ORACLE_PRIVY_WALLET_ID ·
 //   GATEWAY_ORACLE_PRIVY_ADDRESS · LP_GATEWAY_USDG · LP_GATEWAY_YIELD_SOURCE (or LP_GATEWAY_IDLE_MODE=true +
-//   LP_GATEWAY_DEPOSIT_CAP — see the "idle mode" note above) · LP_GATEWAY_POOL_ID (or the explicit
+//   LP_GATEWAY_DEPOSIT_CAP — see the "idle mode" note above) · LP_GATEWAY_PRINCIPAL_CAP (required on the
+//   real-adapter path; defaults to LP_GATEWAY_DEPOSIT_CAP in idle mode — IA-11) · LP_GATEWAY_POOL_ID (or the explicit
 //   LP_GATEWAY_POOL_CURRENCY0/1 + FEE + TICK_SPACING) · LP_GATEWAY_MIN_POOL_LIQUIDITY ·
 //   [LP_GATEWAY_MIN_POOL_USDG] · [LP_GATEWAY_HARVEST_RECIPIENT] · [LP_TICK_LOWER / LP_TICK_UPPER] ·
 //   [LP_MAX_DEVIATION_BPS] · [LP_ADAPTER_PER_BLOCK_CAP] · [LP_GATEWAY_RPC_URL]
@@ -145,6 +148,21 @@ if (IDLE_MODE && process.env.LP_GATEWAY_DEPOSIT_CAP == null) {
   die('LP_GATEWAY_IDLE_MODE=true requires LP_GATEWAY_DEPOSIT_CAP (atomic USDG units, 6dp) — even 0 is valid, unset is not.')
 }
 const DEPOSIT_CAP = IDLE_MODE ? BigInt(process.env.LP_GATEWAY_DEPOSIT_CAP) : undefined
+// IA-11: PM-level ceiling on idle + deployedPrincipal + deployedPairedValue (see the contract's own NatSpec on
+// `principalCap`) -- the adapter's depositCap only ever bounded the idle leg; the owner's paired-leg subsidy on
+// every deploy was completely uncounted, and repeated deploy/refill cycles could reopen the adapter's own cap
+// indefinitely. In idle mode this MUST mirror LP_GATEWAY_DEPOSIT_CAP exactly (two caps drifting apart defeats
+// the point of either one) -- default to it unless explicitly overridden. On the real-adapter path there is no
+// adapter-side cap to mirror, so it is REQUIRED explicitly -- even 0 is valid, unset is not (same fail-closed
+// convention as LP_GATEWAY_DEPOSIT_CAP above).
+let PRINCIPAL_CAP
+if (process.env.LP_GATEWAY_PRINCIPAL_CAP != null) {
+  PRINCIPAL_CAP = BigInt(process.env.LP_GATEWAY_PRINCIPAL_CAP)
+} else if (IDLE_MODE) {
+  PRINCIPAL_CAP = DEPOSIT_CAP
+} else {
+  die('LP_GATEWAY_PRINCIPAL_CAP is required (atomic USDG units, 6dp) — even 0 is valid, unset is not.')
+}
 const HARVEST_RECIPIENT = getAddress(process.env.LP_GATEWAY_HARVEST_RECIPIENT ?? signer)
 const BAND = Number(process.env.LP_MAX_DEVIATION_BPS ?? 500)
 const PER_BLOCK_CAP = process.env.LP_ADAPTER_PER_BLOCK_CAP ? BigInt(process.env.LP_ADAPTER_PER_BLOCK_CAP) : 0n
@@ -164,6 +182,7 @@ console.log(`  tick range           [${tickLower}, ${tickUpper}]`)
 console.log(`  owner                ${signer}`)
 console.log(`  harvestRecipient     ${HARVEST_RECIPIENT}${HARVEST_RECIPIENT === signer ? ' (= signer)' : ' (separate address)'}`)
 console.log(`  maxDeviationBps      ${BAND}`)
+console.log(`  principalCap         ${PRINCIPAL_CAP} atomic (idle + deployedPrincipal + deployedPairedValue ceiling)`)
 console.log(`  adapter per-block cap ${PER_BLOCK_CAP === 0n ? 'uncapped' : PER_BLOCK_CAP.toString() + ' atomic'}\n`)
 
 // ── 2. predicted addresses (CREATE from the signer's next nonces) — lets the dry-run simulate the PM constructor
@@ -179,7 +198,7 @@ console.log(`  adapter ${predicted.adapter}\n  staging ${predicted.staging}\n  p
 
 const adapterArgs = IDLE_MODE ? [USDG, ZERO, signer, DEPOSIT_CAP] : [USDG, SOURCE, ZERO, signer]
 const stagingArgs = (adapter) => [USDG, adapter]
-const pmArgs = (staging) => [POOL_MANAGER, POSITION_MANAGER, PERMIT2, poolKey, USDG, tickLower, tickUpper, staging, signer, HARVEST_RECIPIENT, BAND]
+const pmArgs = (staging) => [POOL_MANAGER, POSITION_MANAGER, PERMIT2, poolKey, USDG, tickLower, tickUpper, staging, signer, HARVEST_RECIPIENT, BAND, PRINCIPAL_CAP]
 
 // ── 3. dry-run: eth_estimateGas each creation (runs the constructors — AssetMismatch / HookedPoolUnsupported /
 //       BadTicks / ZeroAddress all surface here) + print the wiring calldata. Sends nothing. ──
@@ -288,6 +307,7 @@ assertEq('pm.staging()', await read(pm, PM.abi, 'staging'), staging)
 assertEq('pm.owner()', await read(pm, PM.abi, 'owner'), signer)
 assertEq('pm.harvestRecipient()', await read(pm, PM.abi, 'harvestRecipient'), HARVEST_RECIPIENT)
 assertEq('pm.MAX_DEPLOY_BPS()', await read(pm, PM.abi, 'MAX_DEPLOY_BPS'), 5000)
+assertEq('pm.principalCap()', await read(pm, PM.abi, 'principalCap'), PRINCIPAL_CAP)
 assertEq('pm.maxDeviationBps()', await read(pm, PM.abi, 'maxDeviationBps'), BAND)
 assertEq('pm.deployedPrincipal()', await read(pm, PM.abi, 'deployedPrincipal'), 0n)
 assertEq('pm.tokenId()', await read(pm, PM.abi, 'tokenId'), 0n)

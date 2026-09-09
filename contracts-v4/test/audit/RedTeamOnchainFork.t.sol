@@ -194,11 +194,22 @@ contract RedTeamOnchainForkTest is Test {
         g.staging = new MintwareLpGatewayStaging(IERC20(address(g.quote)), g.adapterUsed);
         if (adapterOverride == address(0)) g.adapter.setVault(address(g.staging));
         g.pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), g.key, IERC20(address(g.quote)), tl, tu, g.staging, address(this), RECIP, BAND
+            poolManager, posm, IPermit2Minimal(PERMIT2), g.key, IERC20(address(g.quote)), tl, tu, g.staging, address(this), RECIP, BAND,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         g.staging.setController(address(g.pm));
 
         _fund(address(this), 10_000_000 * 10 ** quoteDec, 1e32); // issuer-scale paired inventory for the dump loops
+
+        // Earn-vs-LP decision (2026-09-08): `deploy()` sources the paired leg by swapping part of the user's
+        // own quote through THIS pool, in-contract. A freshly-initialised pool has nothing to swap into, so
+        // every rig needs third-party depth first — which is also the only kind of pool the gateway is ever
+        // meant to target (an existing, curated, already-liquid one). Best-effort: a deliberately hostile
+        // paired token (fee-on-transfer, blacklisting) may refuse to seed, and that refusal is itself the
+        // scenario those tests are about.
+        try lpHelper.modifyLiquidity(
+            g.key, ModifyLiquidityParams({tickLower: tl, tickUpper: tu, liquidityDelta: int256(2_200_000e18), salt: 0}), ""
+        ) {} catch {}
     }
 
     function _fund(address who, uint256 q, uint256 p) internal {
@@ -215,13 +226,21 @@ contract RedTeamOnchainForkTest is Test {
     }
 
     /// alice deposits, owner deploys a balanced position, roll one block.
+    ///
+    /// Earn-vs-LP decision (2026-09-08): there is no owner-supplied paired leg any more — `deploy()` stages
+    /// `dq + dp` of the USER's quote and zaps `dp` of it into the paired token through the pool. Alice
+    /// therefore deposits `aliceDep + dp`, which reproduces the EXACT post-state the old owner-funded call
+    /// produced (idle `aliceDep - dq`, LP `dq` quote + `dp` paired, NAV `aliceDep + dp`) — the only
+    /// difference is that alice now HOLDS shares for the paired leg she funded, so her share count is
+    /// `aliceDep + dp` rather than `aliceDep`.
     function _standard(uint256 aliceDep, uint256 dq, uint256 dp) internal {
-        _fund(alice, aliceDep, 0);
+        _fund(alice, aliceDep + dp, 0);
         vm.prank(alice);
-        g.pm.deposit(aliceDep);
-        uint160 spotAtDeploy = _spot();
-        g.pm.deploy(dq, dp, 0, block.timestamp);
-        assertEq(_ref(), spotAtDeploy, "storage-slot probe of _refSqrtPrice matches the first anchor");
+        g.pm.deposit(aliceDep + dp);
+        g.pm.deploy(dq + dp, dp, 0, 0, block.timestamp);
+        // The zap moves spot inside the follower band before the deploy's own `_anchorFollow`, so the
+        // reference lands on the POST-swap spot (it used to land on the untouched pre-deploy spot).
+        assertEq(_ref(), _spot(), "storage-slot probe of _refSqrtPrice matches the deploy-time anchor");
         _roll(1);
     }
 
@@ -513,7 +532,7 @@ contract RedTeamOnchainForkTest is Test {
         _fund(bob, 100_000e18, 0);
         vm.prank(bob);
         uint256 sBob = g.pm.deposit(100_000e18);
-        _standard(100_000e18, 50_000e18, 50_000e18); // NAV 250k / 200k shares
+        _standard(100_000e18, 50_000e18, 50_000e18); // NAV 250k / 250k shares (alice funded the paired leg herself)
         uint256 fairBob = (g.pm.totalNav() * sBob) / g.pm.totalShares();
 
         uint256 pBefore = IERC20(g.paired).balanceOf(address(this));
@@ -538,7 +557,7 @@ contract RedTeamOnchainForkTest is Test {
         _fund(mallory, 100_000e18, 0);
         vm.prank(mallory);
         uint256 sM = g.pm.deposit(100_000e18); // holder leg (B)
-        _standard(100_000e18, 50_000e18, 50_000e18); // NAV 250k / 200k shares
+        _standard(100_000e18, 50_000e18, 50_000e18); // NAV 250k / 250k shares (alice funded the paired leg herself)
         uint256 fairM = (g.pm.totalNav() * sM) / g.pm.totalShares();
         _fund(mallory2, 100_000e18, 0);
 
@@ -572,7 +591,7 @@ contract RedTeamOnchainForkTest is Test {
         _fund(mallory, 200_000e18, 0);
         vm.prank(mallory);
         uint256 sM = g.pm.deposit(100_000e18);
-        _standard(100_000e18, 50_000e18, 50_000e18); // NAV 250k / 200k shares
+        _standard(100_000e18, 50_000e18, 50_000e18); // NAV 250k / 250k shares (alice funded the paired leg herself)
         uint256 fairM = (g.pm.totalNav() * sM) / g.pm.totalShares();
         uint256 fairA = (g.pm.totalNav() * g.pm.sharesOf(alice)) / g.pm.totalShares();
 
@@ -613,7 +632,7 @@ contract RedTeamOnchainForkTest is Test {
         RTHookAttacker atk = new RTHookAttacker(g.pm, swapper, g.key, hook, IERC20(address(g.quote)));
         _fund(address(atk), 100_000e18, 0);
         atk.deposit(100_000e18);
-        _standard(100_000e18, 50_000e18, 50_000e18); // alice 100k, atk 100k, LP 100k, idle 150k → NAV 250k
+        _standard(100_000e18, 50_000e18, 50_000e18); // alice 150k, atk 100k, LP 100k, idle 150k → NAV 250k
         uint256 sAtk = g.pm.sharesOf(address(atk));
         uint256 fairAtk = (g.pm.totalNav() * sAtk) / g.pm.totalShares();
         uint128 liqBefore = _gatewayLiq();
@@ -665,20 +684,20 @@ contract RedTeamOnchainForkTest is Test {
     /// the cron's `minLiquidity` (not exercised here, passed as 0) narrows it further. Low.
     function test_RT_3a_deploySandwichWithinBand_marginal_SUCCEEDS() public {
         if (!live) return;
-        _standard(100_000e18, 20_000e18, 20_000e18); // 40k LP / 140k NAV = 28% deployed — room for another deploy
+        _standard(100_000e18, 20_000e18, 20_000e18); // 40k LP / 120k NAV — room for another deploy
         _fund(mallory, 1_000_000e18, 1_000_000e18);
         uint256 navBefore = g.pm.totalNav();
         uint256 mQ = g.quote.balanceOf(mallory);
         (uint256 sold, uint256 got) = _pushToDeviation(mallory, true, 200e18, 450);
         console2.log("deviation bps before deploy", _devBps());
         assertLe(_devBps(), BAND, "inside the band, deploy will pass");
-        g.pm.deploy(10_000e18, 10_000e18, 0, block.timestamp); // owner deploy lands at the pushed price
+        g.pm.deploy(20_000e18, 10_000e18, 0, 0, block.timestamp); // owner deploy lands at the pushed price
         _swapAs(mallory, false, got); // reverse
         int256 pnl = int256(g.quote.balanceOf(mallory)) - int256(mQ);
         console2.log("attacker PnL (quote wei, negative = loss)", pnl);
         console2.log("sold in the push (quote)", sold / 1e18);
         _logQ("NAV before", navBefore);
-        _logQ("NAV after sandwich (incl. owner's 10k paired)", g.pm.totalNav());
+        _logQ("NAV after sandwich (the zapped 10k is the depositor's own quote)", g.pm.totalNav());
         assertGt(pnl, 0, "in-band deploy sandwich is (barely) profitable at 30 bps");
         assertLt(pnl, int256(20_000e18) / 500, "...but bounded to <20 bps of the 20k deployed by the band");
     }
@@ -694,7 +713,7 @@ contract RedTeamOnchainForkTest is Test {
         for (uint256 i = 0; i < 3; i++) {
             (, uint256 got) = _pushToDeviation(mallory, true, 200e18, BAND + 60);
             vm.expectRevert(MintwareLpGatewayPositionManager.DeployPriceOutOfBand.selector);
-            g.pm.deploy(10_000e18, 10_000e18, 0, block.timestamp);
+            g.pm.deploy(20_000e18, 10_000e18, 0, 0, block.timestamp);
             blocked++;
             _swapAs(mallory, false, got);
             _roll(1);
@@ -705,7 +724,7 @@ contract RedTeamOnchainForkTest is Test {
         assertEq(blocked, 3);
         assertLt(cost, 500e18, "griefing 3 deploy attempts cost the attacker < 500 quote");
         // and the owner deploys fine the moment the griefer stops
-        g.pm.deploy(10_000e18, 10_000e18, 0, block.timestamp);
+        g.pm.deploy(20_000e18, 10_000e18, 0, 0, block.timestamp);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -734,10 +753,10 @@ contract RedTeamOnchainForkTest is Test {
         g.pm.deposit(100_000e18);
         _roll(1);
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployPriceOutOfBand.selector);
-        g.pm.deploy(20_000e18, 20_000e18, 0, block.timestamp);
+        g.pm.deploy(40_000e18, 20_000e18, 0, 0, block.timestamp);
         uint256 used = _walkFollower(60);
         console2.log("blocks to re-anchor after the drain", used);
-        g.pm.deploy(20_000e18, 20_000e18, 0, block.timestamp);
+        g.pm.deploy(40_000e18, 20_000e18, 0, 0, block.timestamp);
         assertGt(_gatewayLiq(), 0, "redeployed after walking the follower");
         _roll(1);
         g.pm.harvest(block.timestamp);
@@ -757,8 +776,12 @@ contract RedTeamOnchainForkTest is Test {
         _fund(mallory, 100_000e18, 0);
         vm.prank(mallory);
         uint256 sM = g.pm.deposit(100_000e18);
-        _standard(100_000e18, 50_000e18, 50_000e18); // NAV 250k: idle 150k, LP 100k; alice & mallory 50/50
+        // Earn-vs-lp decision: alice deposits 150k (she funds the zapped paired leg), so the state is the SAME
+        // -- NAV 250k = idle 150k + LP 100k -- but the share split is mallory 100k / alice 150k, i.e. 40/60
+        // rather than 50/50. Every claim below is therefore pinned to the share fraction, not to "half".
+        _standard(100_000e18, 50_000e18, 50_000e18); // NAV 250k: idle 150k, LP 100k; mallory 40% / alice 60%
         uint128 liqBefore = _gatewayLiq();
+        uint256 tsBefore = g.pm.totalShares();
         uint256 idle = g.staging.stagedAssets();
         uint256 lpVal = g.pm.totalNav() - idle;
         g.src.setFailWithdrawals(true); // paused Morpho
@@ -767,7 +790,12 @@ contract RedTeamOnchainForkTest is Test {
         (uint256 q, uint256 p) = g.pm.withdraw(sM);
         uint160 s = _spot();
         _logQ("first mover took (LP only, idle frozen)", _worth(q, p, s));
-        assertApproxEqRel(liqBefore - _gatewayLiq(), uint256(liqBefore) / 2, 0.0001e18, "FAILS: exactly her pro-rata 50% of the LP (+-0.01%)");
+        assertApproxEqRel(
+            liqBefore - _gatewayLiq(),
+            FullMath.mulDiv(liqBefore, sM, tsBefore + 1e6),
+            0.0001e18,
+            "FAILS: exactly her pro-rata slice of the LP (+-0.01%)"
+        );
         // re-credit = shares x (unserved idle claim / total claim) = sM x (idle/2) / (idle/2 + lp/2) = sM x idle/(idle+lp)
         uint256 expectedReCredit = FullMath.mulDiv(sM, idle, idle + lpVal);
         assertApproxEqRel(g.pm.sharesOf(mallory), expectedReCredit, 0.001e18, "re-credited for the idle shortfall only (A-1)");
@@ -801,8 +829,10 @@ contract RedTeamOnchainForkTest is Test {
         uint256 malTotal = _worth(q + qm, p + pm2, s);
         _logQ("alice total recovered", aliceTotal);
         _logQ("mallory total recovered", malTotal);
-        assertApproxEqRel(aliceTotal, 125_000e18, 0.001e18, "alice's value preserved (~125k incl. her slice of the owner's paired)");
-        assertApproxEqRel(malTotal, 125_000e18, 0.001e18, "first mover got exactly her share, no more");
+        // 60/40 on a 250k NAV: alice put in 150k and gets 150k, mallory put in 100k and gets 100k. Nobody's
+        // entry order changed anybody's outcome, which is the whole claim.
+        assertApproxEqRel(aliceTotal, 150_000e18, 0.001e18, "alice's value preserved (exactly her 150k deposit)");
+        assertApproxEqRel(malTotal, 100_000e18, 0.001e18, "first mover got exactly her share, no more");
         assertLe(g.pm.totalShares(), 1);
     }
 
@@ -827,7 +857,8 @@ contract RedTeamOnchainForkTest is Test {
         g.adapterUsed = IYieldAdapter(address(hostile));
         g.staging = new MintwareLpGatewayStaging(IERC20(address(q)), g.adapterUsed);
         g.pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), g.key, IERC20(address(q)), TL, TU, g.staging, address(this), RECIP, BAND
+            poolManager, posm, IPermit2Minimal(PERMIT2), g.key, IERC20(address(q)), TL, TU, g.staging, address(this), RECIP, BAND,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         g.staging.setController(address(g.pm));
         _fund(address(this), 10_000_000e18, 10_000_000e18);
@@ -835,7 +866,7 @@ contract RedTeamOnchainForkTest is Test {
         _fund(mallory, 100_000e18, 0);
         vm.prank(mallory);
         uint256 sM = g.pm.deposit(100_000e18);
-        _standard(100_000e18, 50_000e18, 50_000e18); // idle 150k (real), LP 100k, NAV 250k, 200k shares
+        _standard(100_000e18, 50_000e18, 50_000e18); // idle 150k (real), LP 100k, NAV 250k, 250k shares
         uint256 fairM = (g.pm.totalNav() * sM) / g.pm.totalShares();
         hostile.setReportedExtra(150_000e18); // source now claims 300k idle → NAV 400k
         vm.prank(mallory);
@@ -884,7 +915,7 @@ contract RedTeamOnchainForkTest is Test {
         vm.expectRevert();
         g.pm.harvest(block.timestamp);
         vm.expectRevert();
-        g.pm.deploy(1_000e18, 1_000e18, 0, block.timestamp);
+        g.pm.deploy(2_000e18, 1_000e18, 0, 0, block.timestamp);
         _fund(bob, 10_000e18, 0);
         vm.prank(bob);
         uint256 sBob = g.pm.deposit(10_000e18);
@@ -948,7 +979,7 @@ contract RedTeamOnchainForkTest is Test {
         _fund(bob, 100_000e18, 0);
         vm.prank(bob);
         uint256 sBob = g.pm.deposit(100_000e18);
-        _standard(100_000e18, 50_000e18, 50_000e18); // idle 150k, LP 100k, NAV 250k; alice & bob 50/50
+        _standard(100_000e18, 50_000e18, 50_000e18); // idle 150k, LP 100k, NAV 250k; alice 60% (she funds the zap) / bob 40%
         uint256 idle = g.staging.stagedAssets();
         uint256 lpVal = g.pm.totalNav() - idle;
         uint128 liqBefore = _gatewayLiq();
@@ -974,12 +1005,15 @@ contract RedTeamOnchainForkTest is Test {
         vm.prank(alice);
         (uint256 q2, uint256 p2) = g.pm.withdraw(s2);
         uint160 sp = _spot();
-        assertApproxEqRel(_worth(q + q2, p + p2, sp), 125_000e18, 0.001e18, "alice's full claim recovered");
+        assertApproxEqRel(_worth(q + q2, p + p2, sp), 150_000e18, 0.001e18, "alice's full claim recovered (her whole 150k deposit)");
         assertEq(_gatewayLiq(), 0);
     }
 
-    /// Fee-on-transfer paired: `deploy` computes liquidity from the nominal `pairedAmount` but the PM holds
-    /// less → SETTLE_PAIR under-funded → deploy always reverts (DOA, no loss). Idle deposit/withdraw fine.
+    /// Fee-on-transfer paired: the in-contract zap (earn-vs-lp decision) takes the swap output from the pool
+    /// but the FoT skim means the PM holds less than the swap reported, so liquidity is computed off a balance
+    /// the PM does not have → SETTLE_PAIR under-funded → deploy always reverts (DOA, no loss). (Such a token
+    /// also refuses to seed third-party depth in `_buildRig`, which is the same refusal one step earlier.)
+    /// Idle deposit/withdraw fine.
     function test_RT_6d_feeOnTransferPaired_deployDOA_noLoss_FAILS() public {
         if (!live) return;
         RTFeeOnTransferERC20 fot = new RTFeeOnTransferERC20("FoT", "FOT", 18, 100);
@@ -988,7 +1022,7 @@ contract RedTeamOnchainForkTest is Test {
         vm.prank(alice);
         uint256 s = g.pm.deposit(100_000e18);
         vm.expectRevert();
-        g.pm.deploy(50_000e18, 50_000e18, 0, block.timestamp);
+        g.pm.deploy(100_000e18, 50_000e18, 0, 0, block.timestamp);
         _roll(1);
         vm.prank(alice);
         (uint256 q,) = g.pm.withdraw(s);
@@ -1001,11 +1035,20 @@ contract RedTeamOnchainForkTest is Test {
 
     /// Crash-cycle vs the deploy cap. First pass: MAX_DEPLOY_BPS was on MARKED value — crash the paired token →
     /// the LP marks near zero → the cap re-opens → more idle quote is deployed into the same dying pool → crash
-    /// again; the HONEST cron rule (`deployable = 50%·NAV − deployed`, half of it from staging) cycled >60% of
-    /// principal into the pool (SUCCEEDS). FAILS now: the cap is on `deployedPrincipal` (quote at COST) against
-    /// (staged + deployedPrincipal), which never falls with price — the first re-opened deploy that would push
-    /// principal past 50% reverts `DeployCapExceeded`. Quantified: the issuer's extraction is bounded by the
-    /// quote actually deployed (<= 50% of principal), and alice keeps >= 50% of her principal in the reserve.
+    /// again; the HONEST cron rule cycled >60% of principal into the pool (SUCCEEDS). FAILS now: the guard is on
+    /// `deployedPrincipal` (quote at COST) against (staged + deployedPrincipal), which never falls with price —
+    /// the first re-opened deploy reverts `DeployCapExceeded`.
+    ///
+    /// ⚠ RE-BASED for the earn-vs-lp decision (2026-09-08). TWO of this test's premises were deleted with the
+    /// owner-subsidy design and this test can no longer assert them:
+    ///   • MAX_DEPLOY_BPS is now 10000 (100%) — there is no "half stays in the reserve" policy, so the old
+    ///     `staged >= 50% of principal` bound is GONE BY DESIGN, not by regression. What survives (and is the
+    ///     load-bearing half) is that the guard is measured at COST, so a crash never re-opens headroom.
+    ///   • The issuer no longer supplies the paired leg at all, so it can no longer inject paired into the
+    ///     position and dump it back out; the extraction surface is now only the trading it does against a
+    ///     position funded entirely with depositor quote.
+    /// TODO(needs review): the residual numeric ceilings below ("extraction < the honest first deploy's IL")
+    /// were derived on the 50%-cap rig and should be re-measured on a live fork before they are cited again.
     function test_RT_9a_crashCycle_honestCron_bypassesTotalDeployCap_FAILS() public {
         if (!live) return;
         _buildRig(address(0), 18, SQRT_1, FULL_TL, FULL_TU, address(0)); // full range: stays in range through crashes
@@ -1026,10 +1069,13 @@ contract RedTeamOnchainForkTest is Test {
             uint256 target = nav / 2;
             uint256 room = target > deployedNow ? target - deployedNow : 0;
             if (room < 1_000e18) break;
-            uint256 quoteToDeploy = room / 2; // cron: half from staging, half zapped to paired (issuer-side here)
-            uint256 pairedAmt = _q2p(quoteToDeploy, _spot());
+            // The cron now stages the WHOLE amount and zaps half of it into the paired leg in-contract; the
+            // "issuer-side paired" of the old call site simply has no equivalent.
+            uint256 quoteToDeploy = room; // half funds the mint's quote leg, half is swapped into paired
             (bool ok, bytes memory ret) = address(g.pm).call(
-                abi.encodeWithSelector(g.pm.deploy.selector, quoteToDeploy, pairedAmt, uint128(0), block.timestamp)
+                abi.encodeWithSelector(
+                    g.pm.deploy.selector, quoteToDeploy, quoteToDeploy / 2, uint256(0), uint128(0), block.timestamp
+                )
             );
             if (!ok) {
                 assertEq(bytes4(ret), MintwareLpGatewayPositionManager.DeployCapExceeded.selector, "the re-opened deploy is refused by the cost-basis cap");
@@ -1039,10 +1085,10 @@ contract RedTeamOnchainForkTest is Test {
             }
             cumQuoteDeployed += quoteToDeploy;
             cycles++;
-            // invariant: principal at cost in the LP never exceeds 50% of (staged + deployedPrincipal)
+            // invariant: principal at cost in the LP never exceeds principal at cost (the 100% overdraw guard)
             uint256 dp = g.pm.deployedPrincipal();
-            assertLe(dp, (g.staging.stagedAssets() + dp) / 2, "deployedPrincipal <= 50% of principal after every deploy");
-            uint256 lpBefore = nav - staged + quoteToDeploy + _p2q(pairedAmt, _spot());
+            assertLe(dp, g.staging.stagedAssets() + dp, "deployedPrincipal <= principal at cost after every deploy");
+            uint256 lpBefore = nav - staged + quoteToDeploy;
             // issuer dumps until the paired price is /16 — then walks the follower (anyone can, ~28 blocks)
             uint256 p0 = _pairedPrice();
             for (uint256 k = 0; k < 400 && _pairedPrice() > p0 / 16; k++) {
@@ -1064,20 +1110,22 @@ contract RedTeamOnchainForkTest is Test {
         _logQ("honest first deploy's IL from the /16 crash", firstDeployIL);
         console2.log("cycles executed", cycles, "cap reverts", capReverts);
         assertGt(capReverts, 0, "FAILS: the crash-cycle's re-opened deploy reverts DeployCapExceeded");
-        assertLe(cumQuoteDeployed, 50_000e18, "cumulative principal deployed never exceeds the 50% cap");
-        assertLe(dpEnd, (g.staging.stagedAssets() + dpEnd) / 2, "deployedPrincipal never exceeds 50% of (staged + deployedPrincipal)");
-        assertGe(g.staging.stagedAssets(), 50_000e18, "alice keeps >= 50% of principal in the idle reserve");
+        assertLe(cumQuoteDeployed, 100_000e18, "cumulative principal deployed never exceeds what was deposited");
+        assertLe(dpEnd, g.staging.stagedAssets() + dpEnd, "deployedPrincipal never exceeds principal at cost");
         assertLe(issuerGain, cumQuoteDeployed, "extraction bounded by the quote actually deployed (at cost)");
-        assertLt(issuerGain, 50_000e18, "the issuer can no longer walk away with >50% of depositor principal");
-        // Quantified: everything the issuer drains across the whole cycle is no more than the IL the honest
-        // first (capped) deploy alone took from the /16 crash — the cycle adds nothing the cap did not already allow.
+        // The crash cycle adds nothing the FIRST deploy did not already expose: every later deploy is refused
+        // by the cost-basis guard, so there is no compounding — which is the claim that survives the decision.
         assertLe(issuerGain, firstDeployIL, "total extraction <= the honest first deploy's IL");
     }
 
-    /// Same loop as a compromised owner (deploys the FULL room each cycle, issuer-controlled paired). First
-    /// pass: >65% of principal pushed into the pool despite the cap (SUCCEEDS). FAILS now: the first deploy
-    /// takes the full 50% at cost; every re-opened deploy after a crash reverts `DeployCapExceeded` — the
-    /// key-compromise persona's worst case is bounded at half of principal, the other half stays in the reserve.
+    /// Same loop as a compromised owner (deploys the FULL room each cycle). First pass: >65% of principal
+    /// pushed into the pool despite the cap (SUCCEEDS). FAILS now: every re-opened deploy after a crash reverts
+    /// `DeployCapExceeded`, because the guard is measured at COST and a crash cannot re-open it.
+    ///
+    /// ⚠ RE-BASED for the earn-vs-lp decision (2026-09-08), same two premises as RT-9a: MAX_DEPLOY_BPS is 100%
+    /// (so "half stays in the reserve" is gone by design — a compromised key's worst case is now bounded by
+    /// principal, not by half of it), and the owner supplies no paired token, so it cannot inject and reclaim
+    /// value of its own. TODO(needs review): re-measure the extraction ceiling on a live fork.
     function test_RT_9b_crashCycle_compromisedOwner_worstCaseLoss_FAILS() public {
         if (!live) return;
         _buildRig(address(0), 18, SQRT_1, FULL_TL, FULL_TU, address(0));
@@ -1094,8 +1142,10 @@ contract RedTeamOnchainForkTest is Test {
             uint256 room = nav / 2 > deployedNow ? nav / 2 - deployedNow : 0;
             if (room < 1_000e18) break;
             uint256 qd = room - 1;
+            // Earn-vs-lp decision: no owner paired argument exists — the compromised owner can only move the
+            // DEPOSITOR's own quote, half of it zapped into paired through the pool.
             (bool ok, bytes memory ret) = address(g.pm).call(
-                abi.encodeWithSelector(g.pm.deploy.selector, qd, _q2p(qd, _spot()), uint128(0), block.timestamp)
+                abi.encodeWithSelector(g.pm.deploy.selector, qd, qd / 2, uint256(0), uint128(0), block.timestamp)
             );
             if (!ok) {
                 assertEq(bytes4(ret), MintwareLpGatewayPositionManager.DeployCapExceeded.selector);
@@ -1106,7 +1156,7 @@ contract RedTeamOnchainForkTest is Test {
             } else {
                 cum += qd;
                 uint256 dp = g.pm.deployedPrincipal();
-                assertLe(dp, (g.staging.stagedAssets() + dp) / 2, "deployedPrincipal <= 50% of principal after every deploy");
+                assertLe(dp, g.staging.stagedAssets() + dp, "deployedPrincipal <= principal at cost after every deploy");
             }
             uint256 p0 = _pairedPrice();
             for (uint256 k = 0; k < 400 && _pairedPrice() > p0 / 16; k++) {
@@ -1123,9 +1173,8 @@ contract RedTeamOnchainForkTest is Test {
         _logQ("owner/issuer quote gain", gain);
         console2.log("cap reverts", capReverts);
         assertGt(capReverts, 0, "FAILS: every re-opened deploy reverts DeployCapExceeded");
-        assertLe(cum, 50_000e18, "at most 50% of principal ever pushed into the pool");
-        assertLe(dpEnd, (g.staging.stagedAssets() + dpEnd) / 2, "deployedPrincipal never exceeds 50% of (staged + deployedPrincipal)");
-        assertGe(g.staging.stagedAssets(), 50_000e18, "alice keeps >= 50% of principal in the idle reserve");
+        assertLe(cum, 100_000e18, "never more than the deposited principal is pushed into the pool");
+        assertLe(dpEnd, g.staging.stagedAssets() + dpEnd, "deployedPrincipal never exceeds principal at cost");
         assertLe(gain, cum, "extraction bounded by the quote actually deployed (at cost)");
     }
 
@@ -1136,31 +1185,31 @@ contract RedTeamOnchainForkTest is Test {
         _standard(100_000e18, 10_000e18, 10_000e18); // NAV 120k: 90k idle + 20k LP
         uint256 navFair = g.pm.totalNav();
         uint256 ownerQ0 = g.quote.balanceOf(address(this));
-        uint256 ownerP0 = IERC20(g.paired).balanceOf(address(this));
         uint256 pGot = _swap(true, 6_000e18); // pump ~2x on the thin gateway-only pool
         uint256 blocks = _walkFollower(40);
         uint256 nav = g.pm.totalNav();
         uint256 staged = g.staging.stagedAssets();
+        // Earn-vs-LP decision: the owner funds nothing. `room` quote goes to the mint and `room` more is
+        // zapped into the paired leg -- both out of the DEPOSITOR's staged capital, which is the whole point:
+        // a compromised key can mis-price the mint, but it cannot add (or later reclaim) value of its own.
         uint256 room = nav / 2 - (nav - staged) - 1;
-        uint256 pairedIn = _q2p(room, _spot());
-        g.pm.deploy(room, pairedIn, 0, block.timestamp);
+        g.pm.deploy(2 * room, room, 0, 0, block.timestamp);
         _swap(false, pGot); // dump against the freshly minted gateway liquidity
         _roll(1);
         _arbBack(SQRT_1); // third party restores fair so the LP is marked honestly (the dump alone leaves spot high)
-        uint160 s = _spot();
         uint256 navAfter = g.pm.totalNav();
-        // the owner's paired contribution is a donation in this design → count it as depositor value at end spot
-        uint256 donation = _p2q(ownerP0 - IERC20(g.paired).balanceOf(address(this)), s);
-        uint256 expectedNoManip = navFair + donation;
+        // There is no owner donation any more (the owner-supplied paired leg was deleted), so the
+        // no-manipulation baseline is simply the pre-attack NAV: every wei in the position is depositor money.
+        uint256 expectedNoManip = navFair;
         uint256 loss = expectedNoManip > navAfter ? expectedNoManip - navAfter : 0;
         int256 ownerQuotePnl = int256(g.quote.balanceOf(address(this))) - int256(ownerQ0);
         console2.log("blocks walked", blocks);
         _logQ("NAV fair before attack", navFair);
-        _logQ("owner paired contributed (valued at end spot)", donation);
+        _logQ("owner paired contributed (structurally zero since the earn-vs-lp decision)", uint256(0));
         _logQ("NAV after pump-deploy-dump", navAfter);
         _logQ("depositor loss vs no-manipulation", loss);
         console2.log("depositor loss bps of pre-attack NAV", (loss * 10_000) / navFair);
-        console2.log("owner quote PnL (wei; excludes the paired it donated)", ownerQuotePnl);
+        console2.log("owner quote PnL (wei; the owner contributes no paired at all now)", ownerQuotePnl);
         assertGt(loss, 0, "a compromised owner can still mis-price its own deploy inside the band");
         assertLt(loss, navFair / 4, "...but the band + cap keep it well under 25% of NAV");
     }
@@ -1196,19 +1245,27 @@ contract RedTeamOnchainForkTest is Test {
         g.staging = new MintwareLpGatewayStaging(IERC20(address(q6)), g.adapterUsed);
         g.adapter.setVault(address(g.staging));
         g.pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), g.key, IERC20(address(q6)), FULL_TL, FULL_TU, g.staging, address(this), RECIP, BAND
+            poolManager, posm, IPermit2Minimal(PERMIT2), g.key, IERC20(address(q6)), FULL_TL, FULL_TU, g.staging, address(this), RECIP, BAND,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         g.staging.setController(address(g.pm));
         _fund(address(this), 10_000_000e6, 1e32);
+        // Earn-vs-lp decision: the in-contract zap needs an already-liquid pool (see `_buildRig`). This rig is
+        // built by hand, so seed its third-party depth by hand too.
+        lpHelper.modifyLiquidity(
+            g.key, ModifyLiquidityParams({tickLower: FULL_TL, tickUpper: FULL_TU, liquidityDelta: int256(1e21), salt: 0}), ""
+        );
 
         _fund(alice, 100_000e6, 0);
         vm.prank(alice);
         uint256 s = g.pm.deposit(100_000e6);
-        uint256 pairedFor50k = _q2p(50_000e6, _spot());
-        g.pm.deploy(50_000e6, pairedFor50k, 0, block.timestamp);
+        // Earn-vs-lp decision: 100k staged, half zapped into the 18dp paired leg in-contract. NAV is
+        // CONSERVED across the deploy now (there is no owner paired leg adding value) -- that conservation
+        // across a 6dp x 18dp zap is exactly the decimal-mix property this test exists to check.
+        g.pm.deploy(100_000e6, 50_000e6, 0, 0, block.timestamp);
         uint256 nav = g.pm.totalNav();
         console2.log("NAV after 6dp/18dp deploy (quote 6dp units)", nav);
-        assertApproxEqRel(nav, 150_000e6, 0.01e18, "NAV ~= 100k principal + 50k owner paired");
+        assertApproxEqRel(nav, 100_000e6, 0.01e18, "NAV ~= the 100k principal; the zap moves value, never creates it");
         _roll(1);
         vm.prank(alice);
         (uint256 q, uint256 p) = g.pm.withdraw(s);

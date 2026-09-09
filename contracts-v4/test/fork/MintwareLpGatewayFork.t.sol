@@ -61,7 +61,8 @@ contract MintwareLpGatewayForkTest is Test {
             staging,
             address(this),
             address(this),
-            2000
+            2000,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
     }

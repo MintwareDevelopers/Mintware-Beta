@@ -7,13 +7,19 @@ import {MintwareLpGatewayPositionManager} from "../../src/gateway/MintwareLpGate
 
 /// @title  Econ invariant 15 -- compromised owner seat: maximum principal extraction under cap + band
 /// @notice Enumerates the owner-reachable transitions and quantifies the worst one. `deploy` is the only
-///         path that moves depositor quote out of the reserve; the cap fixes HOW MUCH (<= 50% at cost) and
+///         path that moves depositor quote out of the reserve; the guard fixes HOW MUCH (never more than
+///         principal at cost -- MAX_DEPLOY_BPS is 10000 since the earn-vs-lp decision) and
 ///         the band fixes AT WHAT PRICE relative to the follower -- but the follower can be walked by the
 ///         owner (or anyone) and the position's RANGE has an all-quote edge. Pump to that edge, walk, deploy
-///         quote only (no paired leg = no owner capital), dump back through the gateway's fresh liquidity:
+///         quote only (an all-quote mint), dump back through the gateway's fresh liquidity:
 ///         the position converts ~52% of the deployed quote into paired bought at the top -> depositors lose
-///         ~26% of principal; the owner books it as quote. RT-9c (mid-range, owner-funded paired leg) was
-///         owner-NEGATIVE; this path is owner-POSITIVE once the fresh deploy is > ~1.6% of pool depth.
+///         ~26% of principal; the owner books it as quote. RT-9c (mid-range) was owner-NEGATIVE; this path is
+///         owner-POSITIVE once the fresh deploy is > ~1.6% of pool depth.
+///
+///         Earn-vs-lp decision (2026-09-08): `deploy` no longer takes an owner-supplied paired token at all,
+///         so "no paired leg = no owner capital" is now the only shape that exists -- the seat can never fund
+///         a position, only mis-shape one out of depositor quote. Every call below passes
+///         `(quoteToDeploy, swapAmount, minPairedOut, minLiquidity, deadline)`.
 ///
 ///         Run: LP_FORK_RPC_URL=https://rpc.testnet.chain.robinhood.com forge test --match-contract EconOwner -vv
 contract EconOwnerTest is EconBase {
@@ -23,7 +29,7 @@ contract EconOwnerTest is EconBase {
         vm.prank(alice);
         pm.deposit(200_000e18);
         if (anchored) {
-            pm.deploy(1_000e18, 1_000e18, 0, block.timestamp); // a live instance with a position
+            pm.deploy(2_000e18, 1_000e18, 0, 0, block.timestamp); // a live instance with a position
             _roll(1);
         }
         navBefore = pm.totalNav();
@@ -41,9 +47,11 @@ contract EconOwnerTest is EconBase {
         assertGe(blocks, 20, "the follower can still be walked to the edge (~24 blocks)");
         uint256 idle0 = staging.stagedAssets();
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployNotTwoSided.selector);
-        pm.deploy(99_000e18, 0, 0, block.timestamp);
+        pm.deploy(99_000e18, 0, 0, 0, block.timestamp); // swapAmount 0 -> a pure all-quote mint
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployNotTwoSided.selector);
-        pm.deploy(99_000e18, 99_000e18, 0, block.timestamp); // paired offered but unused at the edge -> still one-sided
+        // ...and asking for a zap does not help: past the all-quote edge the mint consumes no paired whatever
+        // the swap returns, so the position is still one-sided and the guard still refuses it.
+        pm.deploy(198_000e18, 99_000e18, 0, 0, block.timestamp);
         assertEq(staging.stagedAssets(), idle0, "no depositor quote left the reserve");
         _roll(1);
         _arbToFair();
@@ -59,26 +67,31 @@ contract EconOwnerTest is EconBase {
         (uint256 blocks,) = _pumpAndWalk(false, false);
         assertEq(blocks, 0);
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployPriceOutOfBand.selector);
-        pm.deploy(99_000e18, 0, 0, block.timestamp);
+        pm.deploy(99_000e18, 0, 0, 0, block.timestamp);
         _walkFollower(60, BAND);
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployNotTwoSided.selector);
-        pm.deploy(99_000e18, 0, 0, block.timestamp);
+        pm.deploy(99_000e18, 0, 0, 0, block.timestamp);
         assertEq(pm.tokenId(), 0, "no position was ever minted");
     }
 
-    /// The cost-basis cap still bounds an HONEST seat: a balanced deploy at the cap, then any further deploy is refused,
-    /// and the seat has no path to the remaining idle (RT-9d).
+    /// The cost-basis guard still bounds an HONEST seat: a balanced deploy of the whole principal, then any
+    /// further deploy is refused, and the seat has no path to the reserve except `deploy` itself (RT-9d).
+    ///
+    /// Earn-vs-lp decision: MAX_DEPLOY_BPS is 10000, so the old "and >= 50% of principal stays idle" half of
+    /// this claim is gone BY DESIGN (the held-back buffer was deleted along with the yield that justified it).
+    /// What remains -- and is what the guard is actually for -- is that the seat can never move MORE quote
+    /// than depositors put in, at cost, no matter how the price moves.
     function test_I15_capBoundsRepeat_FAILS() public {
         if (!live) return;
         _addExternalLiquidity(2_200_000e18);
         vm.prank(alice);
         pm.deposit(200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp); // exactly the 50% cap
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp); // the whole principal, half of it zapped
         _roll(1);
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployCapExceeded.selector);
-        pm.deploy(1_000e18, 1_000e18, 0, block.timestamp);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         vm.expectRevert();
         staging.unstage(1e18);
-        assertGe(staging.stagedAssets(), 99_000e18, "alice keeps >= 50% of principal idle in the reserve");
+        assertApproxEqRel(pm.totalNav(), 200_000e18, 0.01e18, "deploying relocates depositor value, never creates or destroys it");
     }
 }

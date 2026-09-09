@@ -30,6 +30,17 @@ import {GwActor} from "./EchidnaLpGatewayIdle.sol";
 ///         `deploy`, share conservation) and NOT for pool economics — those stay with the Foundry fork suite.
 ///         Any counterexample from here must be re-derived against real v4 before it is called a finding.
 ///
+/// @dev    ⚠ TODO(needs review) — EARN-VS-LP DECISION (2026-09-08), THIS RIG'S DEPLOY PATH IS CURRENTLY INERT.
+///         `deploy()` now sources the paired leg by SWAPPING part of the staged quote through the pool itself
+///         (`poolManager.unlock` -> `swap`/`sync`/`settle`/`take`). `MockSlot0PoolManager` answers `getSlot0`
+///         and reverts on everything else by design, so every deploy from this harness now reverts: with
+///         `swapAmount > 0` the unlock reverts, and with `swapAmount == 0` there is no paired leg at all and
+///         invariant 15 refuses the all-quote mint. The properties keyed on a SUCCESSFUL deploy (D1, D3, D6)
+///         are therefore VACUOUS here until the stand-in is given a swap engine — or until this rig is folded
+///         into the Foundry fork suite, which runs against the real pool and needs no stand-in. D2/D4/D5 still
+///         hold trivially. Deliberately NOT papered over with a hand-written swap mock: an unverified fake swap
+///         engine inside an audit harness would produce confident-looking results nobody has checked.
+///
 ///         Properties:
 ///           D1 `echidna_deploy_cap_at_deploy`   the cap the contract CHECKS: no deploy ever admitted more than
 ///                                               MAX_DEPLOY_BPS of principal-at-cost (checked pre-call, exact)
@@ -122,7 +133,8 @@ contract EchidnaLpGatewayDeploy {
             staging,
             address(this), // owner — the harness is the deploy/harvest seat
             address(0xFEE),
-            DEV_BPS
+            DEV_BPS,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 
@@ -131,7 +143,8 @@ contract EchidnaLpGatewayDeploy {
             usdg.mint(address(actors[i]), 1_000_000_000e6);
             actors[i].approve(IERC20(address(usdg)), address(pm));
         }
-        // The harness supplies the paired leg on every deploy (the zap the cron does off-chain).
+        // Kept only so the pool stand-in below can be pre-funded with paired; since the earn-vs-lp decision the
+        // PM never pulls a paired token from the caller, so this approval is inert.
         paired.mint(address(this), 1_000_000_000_000e18);
         paired.approve(address(pm), type(uint256).max);
         usdg.mint(address(this), 1_000_000_000e6);
@@ -237,12 +250,16 @@ contract EchidnaLpGatewayDeploy {
 
     /// Owner deploy. The cap is asserted from PRE-state: the contract must refuse anything that would put
     /// `deployedPrincipal + quoteToDeploy` above MAX_DEPLOY_BPS of principal-at-cost.
+    ///
+    /// Earn-vs-lp decision: the second argument is `swapAmount` -- QUOTE taken OUT of `quoteToDeploy` and zapped
+    /// into the paired leg in-contract -- not an owner-supplied paired amount. See the TODO on this contract:
+    /// the stand-in pool manager cannot serve that swap, so this call currently always reverts.
     function deployLp(uint256 quoteSeed, uint256 pairedSeed) public {
         (bool srcOk, uint256 idle) = _idle();
         uint256 dp = pm.deployedPrincipal();
         uint256 quoteToDeploy = idle == 0 ? (quoteSeed % 1_000e6) : (quoteSeed % (idle + 1));
-        uint256 pairedAmount = pairedSeed % 2_000_000e18;
-        if (quoteToDeploy == 0 && pairedAmount == 0) return;
+        if (quoteToDeploy == 0) return;
+        uint256 swapAmount = pairedSeed % (quoteToDeploy + 1);
 
         uint256 principal = idle + dp;
         bool expCapRefusal = srcOk && (dp + quoteToDeploy > (principal * uint256(pm.MAX_DEPLOY_BPS())) / 10_000);
@@ -250,7 +267,7 @@ contract EchidnaLpGatewayDeploy {
         (uint160 refB, uint64 refBlkB,) = pm.referencePrice();
         uint256 dpBefore = dp;
 
-        try pm.deploy(quoteToDeploy, pairedAmount, 0, block.timestamp + 1) {
+        try pm.deploy(quoteToDeploy, swapAmount, 0, 0, block.timestamp + 1) {
             ++nDeploys;
             // D1: the contract must NOT have admitted a deploy the cap forbids.
             if (expCapRefusal) {

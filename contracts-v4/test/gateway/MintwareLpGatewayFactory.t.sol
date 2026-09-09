@@ -50,7 +50,7 @@ contract MintwareLpGatewayFactoryTest is Test {
 
     function test_createGateway_isolatedInstance() public {
         PoolKey memory key = _key(3000);
-        (address s, address p) = factory.createGateway(key, IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+        (address s, address p) = factory.createGateway(key, IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000, type(uint256).max);
         assertTrue(s != address(0) && p != address(0));
         assertEq(MintwareLpGatewayStaging(s).controller(), p);
         assertEq(factory.poolCount(), 1);
@@ -64,35 +64,35 @@ contract MintwareLpGatewayFactoryTest is Test {
     function test_createGateway_onlyOwner() public {
         vm.prank(stranger);
         vm.expectRevert();
-        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000, type(uint256).max);
     }
 
     function test_createGateway_duplicateReverts() public {
-        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000, type(uint256).max);
         MockYieldAdapter adapter2 = new MockYieldAdapter(address(usdg));
         // A duplicate POOL reverts on AlreadyExists regardless of the (fresh) adapter.
         vm.expectRevert(MintwareLpGatewayFactory.AlreadyExists.selector);
-        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter2, -22980, 22980, gwOwner, sink, 2000);
+        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter2, -22980, 22980, gwOwner, sink, 2000, type(uint256).max);
     }
 
     // M2: reusing one adapter instance across two different pools would pool their staged capital and
     // cross-contaminate NAV — the factory rejects it. Each gateway needs its own adapter.
     function test_createGateway_adapterReuse_reverts() public {
-        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+        factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000, type(uint256).max);
         vm.expectRevert(MintwareLpGatewayFactory.AdapterReused.selector);
-        factory.createGateway(_key(500), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+        factory.createGateway(_key(500), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000, type(uint256).max);
     }
 
     // A zero band falls back to the factory default (kept easy for the curator).
     function test_createGateway_zeroBand_usesDefault() public {
-        (, address p) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 0);
+        (, address p) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 0, type(uint256).max);
         assertEq(MintwareLpGatewayPositionManager(p).maxDeviationBps(), factory.DEFAULT_MAX_DEVIATION_BPS());
     }
 
     function test_twoPools_isolated() public {
         MockYieldAdapter adapterB = new MockYieldAdapter(address(usdg));
-        (, address p1) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
-        (, address p2) = factory.createGateway(_key(500), IERC20(address(usdg)), adapterB, -22980, 22980, gwOwner, sink, 2000);
+        (, address p1) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000, type(uint256).max);
+        (, address p2) = factory.createGateway(_key(500), IERC20(address(usdg)), adapterB, -22980, 22980, gwOwner, sink, 2000, type(uint256).max);
         assertTrue(p1 != p2);
         assertEq(factory.poolCount(), 2);
     }
@@ -106,7 +106,7 @@ contract MintwareLpGatewayFactoryTest is Test {
         MintwareERC4626YieldAdapter prod =
             new MintwareERC4626YieldAdapter(address(usdg), address(src), address(0), address(this));
         (address s,) = factory.createGateway(
-            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(prod)), -22980, 22980, gwOwner, sink, 0
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(prod)), -22980, 22980, gwOwner, sink, 0, type(uint256).max
         );
         assertTrue(s != address(0));
     }
@@ -120,7 +120,7 @@ contract MintwareLpGatewayFactoryTest is Test {
             new MintwareERC4626YieldAdapter(address(pons), address(srcPons), address(0), address(this));
         vm.expectRevert(MintwareLpGatewayFactory.AdapterAssetMismatch.selector);
         factory.createGateway(
-            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(wrong)), -22980, 22980, gwOwner, sink, 0
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(wrong)), -22980, 22980, gwOwner, sink, 0, type(uint256).max
         );
         assertFalse(factory.adapterUsed(address(wrong)), "revert rolled back the adapterUsed mark");
     }
@@ -129,7 +129,7 @@ contract MintwareLpGatewayFactoryTest is Test {
     /// fallback sanity call `totalAssets()` succeeds → accepted (its value is 0 for a fresh adapter — fine).
     function test_adapterBinding_legacyAdapter_noAssetGetter_fallsBackToTotalAssets() public {
         assertEq(adapter.totalAssets(), 0, "fresh legacy adapter holds nothing - zero is accepted");
-        (address s,) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 0);
+        (address s,) = factory.createGateway(_key(3000), IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 0, type(uint256).max);
         assertTrue(s != address(0));
     }
 
@@ -138,7 +138,7 @@ contract MintwareLpGatewayFactoryTest is Test {
         address notAdapter = address(new Stub());
         vm.expectRevert(MintwareLpGatewayFactory.AdapterUnreadable.selector);
         factory.createGateway(
-            _key(3000), IERC20(address(usdg)), IYieldAdapter(notAdapter), -22980, 22980, gwOwner, sink, 0
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(notAdapter), -22980, 22980, gwOwner, sink, 0, type(uint256).max
         );
     }
 
@@ -146,7 +146,7 @@ contract MintwareLpGatewayFactoryTest is Test {
     function test_adapterBinding_eoa_reverts() public {
         vm.expectRevert(MintwareLpGatewayFactory.AdapterUnreadable.selector);
         factory.createGateway(
-            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(0xE0A)), -22980, 22980, gwOwner, sink, 0
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(0xE0A)), -22980, 22980, gwOwner, sink, 0, type(uint256).max
         );
     }
 
@@ -158,13 +158,13 @@ contract MintwareLpGatewayFactoryTest is Test {
             new MintwareERC4626YieldAdapter(address(usdg), address(src), address(0xD0D0), address(this));
         vm.expectRevert(MintwareLpGatewayFactory.AdapterAlreadyBound.selector);
         factory.createGateway(
-            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(bound)), -22980, 22980, gwOwner, sink, 0
+            _key(3000), IERC20(address(usdg)), IYieldAdapter(address(bound)), -22980, 22980, gwOwner, sink, 0, type(uint256).max
         );
     }
 
     function test_deactivate() public {
         PoolKey memory key = _key(3000);
-        factory.createGateway(key, IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000);
+        factory.createGateway(key, IERC20(address(usdg)), adapter, -22980, 22980, gwOwner, sink, 2000, type(uint256).max);
         factory.deactivate(PoolId.unwrap(key.toId()));
         (,, bool active) = factory.instanceForPool(PoolId.unwrap(key.toId()));
         assertFalse(active);

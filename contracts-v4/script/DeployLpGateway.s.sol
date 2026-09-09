@@ -43,12 +43,18 @@ contract DeployLpGateway is Script {
         address harvestRecipient = vm.envAddress("LP_HARVEST_RECIPIENT");
         // Clamped-follower per-block step (sqrtPrice, bps) for the spot-priced LP leg; default 500 (H-03).
         uint16 maxDeviationBps = uint16(vm.envOr("LP_MAX_DEVIATION_BPS", uint256(500)));
+        // IA-11: PM-level ceiling on idle + deployedPrincipal + deployedPairedValue -- the actual bound on total
+        // value at risk (the adapter's own depositCap, if any, only ever bounded the idle leg; the owner's
+        // paired-leg subsidy on every deploy was completely uncounted). Required, no default -- even 0 (closed
+        // until raised via setPrincipalCap) is a valid value, "unset" is not (same fail-closed convention as
+        // the idle adapter's own depositCap).
+        uint256 principalCap = vm.envUint("LP_PRINCIPAL_CAP");
 
         vm.startBroadcast();
 
         MintwareLpGatewayStaging staging = new MintwareLpGatewayStaging(quoteAsset, adapter);
         MintwareLpGatewayPositionManager pm = new MintwareLpGatewayPositionManager(
-            poolManager, positionManager, permit2, key, quoteAsset, tickLower, tickUpper, staging, owner, harvestRecipient, maxDeviationBps
+            poolManager, positionManager, permit2, key, quoteAsset, tickLower, tickUpper, staging, owner, harvestRecipient, maxDeviationBps, principalCap
         );
         staging.setController(address(pm));
 
@@ -56,6 +62,7 @@ contract DeployLpGateway is Script {
 
         console2.log("MintwareLpGatewayStaging       ", address(staging));
         console2.log("MintwareLpGatewayPositionManager", address(pm));
+        console2.log("principalCap (IA-11)           ", principalCap);
         console2.log("set LP_GATEWAY_STAGING / LP_GATEWAY_POSITION_MANAGER to the above in Vercel env");
     }
 }

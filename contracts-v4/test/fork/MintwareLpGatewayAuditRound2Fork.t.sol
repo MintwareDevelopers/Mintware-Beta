@@ -112,7 +112,8 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
         staging = new MintwareLpGatewayStaging(IERC20(address(quote)), adapter);
         adapter.setVault(address(staging));
         pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500
+            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 
@@ -164,11 +165,16 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
         return quote.balanceOf(who) + paired.balanceOf(who); // ~1.0 price, same decimals
     }
 
-    /// Alice deposits 200k; owner deploys 100k quote + 100k paired.
+    /// Alice deposits 300k; owner stages 200k of it and zaps half into the paired leg in-contract.
+    /// Earn-vs-LP decision (2026-09-08): `deploy()` no longer accepts an owner-supplied paired token — the
+    /// paired leg is user quote that changed form through the pool. Depositing 300k (not 200k) reproduces the
+    /// EXACT post-state the old `deposit(200k) + deploy(100k quote, 100k OWNER paired)` produced —
+    /// idle 100k, LP ~100k quote + ~100k paired, NAV ~300k — with the difference that the third 100k is now
+    /// alice's own money instead of a Mintware subsidy.
     function _seed() internal {
         vm.prank(alice);
-        pm.deposit(200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        pm.deposit(300_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         vm.roll(block.number + 1);
     }
 
@@ -193,8 +199,9 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
         assertGt(liqBefore, 0);
         // She receives the whole position (idle + the full LP at the pool's actual composition). Valued at par
         // (paired now trades ABOVE 1.0 after the rally, so par is a strict under-count) she still clears her
-        // 200k deposit plus the owner's 100k paired leg; pre-fix she left 33% of her deposit behind.
-        assertGe(_wealth(alice) - w0, 300_000e18, "at least deposit + owner leg back, even at par");
+        // whole 300k deposit — there is no owner leg in it any more, it is all her own capital; pre-fix she
+        // left 33% of her deposit behind.
+        assertGe(_wealth(alice) - w0, 300_000e18, "at least her whole deposit back, even at par");
         assertLt(_wealth(alice) - w0, navSpot, "par-valued sum is below spot NAV (sanity: paired > 1.0)");
     }
 
@@ -206,7 +213,8 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
         pm.deposit(100_000e18);
         vm.prank(bob);
         pm.deposit(100_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        // 200k staged, half zapped into the paired leg: same ~100k/~100k mint as the old owner-funded call.
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         vm.roll(block.number + 1);
 
         uint128 liqBefore = _liq();
@@ -283,7 +291,10 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
         pm.deposit(100_000e18);
         vm.prank(bob);
         pm.deposit(100_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        // Earn-vs-LP decision: deploy only HALF the staged capital so the 100k idle leg this finding is about
+        // still exists (the old 50% MAX_DEPLOY_BPS used to leave it behind automatically; the cap is now 100%,
+        // so how much stays idle is the caller's `quoteToDeploy`, not a policy).
+        pm.deploy(100_000e18, 50_000e18, 0, 0, block.timestamp);
         vm.roll(block.number + 1);
         adapter.setPerBlockWithdrawCap(10_000e18); // Morpho illiquid: only 10k of the 100k idle leaves this block
 
@@ -303,16 +314,23 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
 
     function test_R2_RT9a_crashDoesNotReopenDeployCap() public {
         if (!live) return;
-        _seed(); // 200k principal, 100k deployed at cost → cap (50%) is full
-        assertEq(pm.deployedPrincipal(), 100_000e18);
+        // Own rig: deploy the WHOLE 200k principal (MAX_DEPLOY_BPS is 10000 since the earn-vs-lp decision, so
+        // "the cap is full" now means "every deposited wei is already at work"), half of it zapped into the
+        // paired leg. What RT-9a proves is unchanged and is the load-bearing half: the guard is measured at
+        // COST (`deployedPrincipal`), so a price crash cannot re-open headroom that principal never had.
+        vm.prank(alice);
+        pm.deposit(200_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
+        vm.roll(block.number + 1);
+        assertApproxEqRel(pm.deployedPrincipal(), 100_000e18, 0.01e18);
         _sellPaired(whale, 900_000e18); // paired token dumps hard → LP marked value collapses
         vm.roll(block.number + 1);
         pm.poke(); // walk the follower so the band check is not what blocks the deploy
         vm.roll(block.number + 1);
-        assertLt(pm.totalNav(), 290_000e18, "marked NAV fell from 300k (sanity)");
-        // Pre-fix: deployed MARKED value fell → the cap re-opened → the honest cron topped up → 2/3 of principal cycled in.
+        assertLt(pm.totalNav(), 190_000e18, "marked NAV fell from 200k (sanity)");
+        // Pre-fix: deployed MARKED value fell → the cap re-opened → the honest cron topped up → principal cycled in.
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployCapExceeded.selector);
-        pm.deploy(10_000e18, 10_000e18, 0, block.timestamp);
+        pm.deploy(20_000e18, 10_000e18, 0, 0, block.timestamp);
     }
 
     // ── RT-1a / F-01c: depositWithMin bounds a same-block pump; poke keeps marks fresh ───────────────
@@ -340,7 +358,7 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
         pm.deposit(200_000e18);
         vm.roll(b0 + 2);
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployPriceOutOfBand.selector);
-        pm.deploy(1e18, 1e18, 0, block.timestamp);
+        pm.deploy(2e18, 1e18, 0, 0, block.timestamp);
         // Anyone walks the follower one bounded step per block; a few blocks later deploy is possible again.
         for (uint256 i = 3; i < 12; i++) {
             vm.roll(b0 + i);
@@ -348,7 +366,7 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
             pm.poke();
         }
         vm.roll(b0 + 12);
-        pm.deploy(5_000e18, 5_000e18, 0, block.timestamp); // no DeployPriceOutOfBand after the walk
+        pm.deploy(10_000e18, 5_000e18, 0, 0, block.timestamp); // no DeployPriceOutOfBand after the walk
     }
 
     // ── RT-2 (structural): full delivery never re-credits shares; spot is read once ──────────────────

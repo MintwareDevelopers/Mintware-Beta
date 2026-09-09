@@ -1,13 +1,22 @@
 # LP Gateway V1 — Earn vs LP: the money-model decision
 
-> **Status:** DECIDED (2026-09-08), **pending build**. This doc is the single reference for the rebuild
-> and for the external auditors. It supersedes the fused "stage → hold 50% → deploy with an owner-supplied
-> paired leg" model that the testnet rigs (a–g) actually ran. **These changes must land BEFORE the external
-> audit** — auditing the owner-subsidy design we are abandoning is wasted spend.
+> **Status:** DECIDED (2026-09-08), **BUILT** (2026-09-08, same day). Both open decisions resolved: the zap
+> swap runs **in-contract/atomic** (not an off-chain keeper); the deploy ratio is a **constant set to 10000**
+> (not an immutable constructor arg). This doc is the single reference for the rebuild and for the external
+> auditors. It supersedes the fused "stage → hold 50% → deploy with an owner-supplied paired leg" model that
+> the testnet rigs (a–g) actually ran. **This landed BEFORE the external audit** — auditing the owner-subsidy
+> design being abandoned would have been wasted spend.
 >
-> One-home updates this decision will force when built (reconcile-on-change): `.claude/rules/lp-gateway.md`,
-> `docs/developers/lp-gateway-external-audit-scope.md` (§1 system description, §6 invariants), and
-> `deployments.md` (the `LP_GATEWAY_*` table). Do not edit those until the build lands; this doc records intent.
+> One-home updates this decision forced, DONE: `.claude/rules/lp-gateway.md`, `deployments.md` (the
+> `LP_GATEWAY_*` table). **Still open:** `docs/developers/lp-gateway-external-audit-scope.md` (§1 system
+> description, §6 invariants) — needs a pass reflecting the new `deploy()` signature + the deleted subsidy
+> path before it's handed to auditors. **Also still open:** whether to retire `MintwareIdleYieldAdapter.sol`
+> (marked "(candidate)" in the table below, never resolved) — the "load-bearing plumbing" quote below still
+> applies to it regardless of the deploy-ratio change, so it was left untouched pending a separate call.
+> **Test suite:** every `deploy()`-touching Forge test is being migrated to the new signature + a
+> seeded-liquidity real-V4 rig (the in-contract swap needs real pool liquidity to trade against, in tests
+> exactly like in production) — see `.claude/rules/lp-gateway.md`'s test-count staleness note for where that
+> stands.
 
 ## The decision in one paragraph
 

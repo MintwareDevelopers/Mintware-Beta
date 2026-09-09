@@ -1,7 +1,26 @@
 # LP Gateway (V1) — the first live product surface
 
-> **Status (2026-09-07):** **LIVE on Robinhood Chain testnet (46630)**, hardened + self-audited + firm-grade
-> reviewed, merged to `main`. **Testnet + mock tokens + UNAUDITED** — external audit gates real mainnet value.
+> **⭐ Earn-vs-LP decision (2026-09-08 — [`docs/developers/lp-gateway-earn-vs-lp-decision.md`](../../docs/developers/lp-gateway-earn-vs-lp-decision.md), fully built): LP and Earn are now two separate products, never fused.**
+> **LP**: the user's ENTIRE committed capital is deployed (no held-back buffer; `MAX_DEPLOY_BPS = 10000`) —
+> `deploy()` swaps part of it INTO the paired leg ATOMICALLY, in-contract, via a real V4 pool swap
+> (`_executeSwap`/`unlockCallback`, the same unlock/settle pattern `MintwareTreasuryFloatSettlement` uses).
+> **Mintware supplies NOTHING to any position and bears NONE of the IL — the owner-funded `pairedAmount` /
+> `safeTransferFrom(msg.sender, …)` path is deleted outright**, not just capped; there is no code path left
+> that accepts an owner-supplied paired token. `deploy`'s signature is now
+> `deploy(quoteToDeploy, swapAmount, minPairedOut, minLiquidity, deadline)`. **Earn**: USDG supplied to a pure
+> lending market (`MintwareERC4626YieldAdapter`, no pairing, no IL) — a genuinely separate, opt-in product,
+> gated on real ERC-4626 capacity (none exists yet on Robinhood mainnet). The old fused model — stage → hold
+> 50% back → "earn while idle" → deploy with an owner-supplied paired leg → A-4 harvest-to-buffer ledger — is
+> retired in full: no held-back buffer, no owner subsidy, no buffer ledger (`resolveHarvestDestination` always
+> returns `'restake'` now). `principalCap` (IA-11) survives as the real absolute TVL-at-risk bound, now simpler
+> since there is no owner-injected value left to bound — see the decision doc's "Codebase impact" table for
+> the full before/after. **Whether to retire `MintwareIdleYieldAdapter` itself is still an open call** (it may
+> still be the right "doorway" custody adapter for the transient window between a deposit and the owner's next
+> `deploy()` when no real Earn source has capacity) — not yet decided or touched.
+>
+> **Status (2026-09-07, historical — read the box above first):** **LIVE on Robinhood Chain testnet (46630)**,
+> hardened + self-audited + firm-grade reviewed, merged to `main`. **Testnet + mock tokens + UNAUDITED** —
+> external audit gates real mainnet value.
 > **Real-funds re-audit (Fable 5.1, 2026-09-07 — [`docs/developers/lp-gateway-v1-realfunds-audit-findings.md`](../../docs/developers/lp-gateway-v1-realfunds-audit-findings.md)):**
 > 4 HIGHs found + fixed on the `2026-09-07c` rig — A-1 withdraw re-credits unserved shares (adapter illiquid ⇒
 > nothing stranded), A-2 empty-position brick, A-3 on-chain `MAX_DEPLOY_BPS=5000` cap on TOTAL deployed/NAV +
@@ -21,18 +40,31 @@
 > "earns immediately" framing does not hold for that instance; say "held ready, not yet earning" instead.
 > Explainer: [`docs/developers/lp-gateway.md`](../../docs/developers/lp-gateway.md).
 
-## What V1 is (one loop)
-A **separate product surface** — touches none of the vault / JIT / YPN-treasury contracts. A user deposits
-**USDG** (not USDC — parameterized everywhere; Robinhood Chain, Paxos USDG, 6dp) → it **stages into a
-Morpho-shaped ERC-4626 adapter and earns immediately** → the owner deploys a **capped fraction** as liquidity
-into an **existing, curated third-party Uniswap V4 pool** → **harvest collects trading fees (never principal)**
-into a **yield-first spendable buffer**. Idle-buffer framing: *"put idle cash to work, spend from the buffer,
-not your position."* The smallest concrete slice of "never idle, never locked, always yours."
+## What V1 is (two products, never fused — earn-vs-lp decision)
+
+**LP** — a **separate product surface** — touches none of the vault / JIT / YPN-treasury contracts. A user
+deposits **USDG** (not USDC — parameterized everywhere; Robinhood Chain, Paxos USDG, 6dp) → it briefly
+**stages** (a doorway, not a feature) → the owner **deploys the FULL committed amount** as liquidity into an
+**existing, curated third-party Uniswap V4 pool**, swapping part of it into the paired leg atomically
+in-contract → **100% of the impermanent loss is the user's; Mintware supplies no capital and bears none of
+it** (enforced on-chain) → **harvest collects trading fees (never principal)**, restaked pro-rata into NAV
+(no buffer). Copy: *"provide liquidity, earn trading fees, carries impermanent loss."*
+
+**Earn** — a genuinely separate, opt-in, no-IL product: USDG supplied to a lending market
+(`MintwareERC4626YieldAdapter`), single-asset in, single-asset out, no pairing. Ships the day a real USDG
+ERC-4626 source has open capacity (none does on Robinhood mainnet today — not a code gap). Copy: *"supply
+USDG, earn interest"* — never call it "LP."
+
+Neither product ever holds capital back "to earn while idle" — that fused model (and the buffer it fed) is
+retired. The through-line stays *"never idle, never locked, always yours"* — now honestly split across two
+products with different risk, instead of one product quietly blending both.
 
 ## Contracts ([`contracts-v4/src/gateway/`](../../contracts-v4/src/gateway/))
 - **`MintwareLpGatewayPositionManager`** — the core. `Ownable2Step`. One aggregate V4 position per pool,
   wrapping the OFFICIAL v4 PositionManager periphery. Entry-NAV shares via **`SeniorSharesMath`** (VIRTUAL=1e6
-  offset, donation-safe). Owner-only `deploy(quote,paired,minLiquidity,deadline)` / `harvest(deadline)`.
+  offset, donation-safe). Owner-only `deploy(quoteToDeploy, swapAmount, minPairedOut, minLiquidity, deadline)`
+  — swaps `swapAmount` of the user's own quote into the paired leg atomically in-contract (earn-vs-lp
+  decision; no owner-supplied paired leg any more) — / `harvest(deadline)`.
 - **`MintwareLpGatewayStaging`** — the Morpho earn reserve. `deployer`-gated `setController` (finding M1).
 - **`MintwareLpGatewayFactory`** — curated (onlyOwner) multi-pool factory; per-pool isolated instances;
   adapter-reuse guard (M2); `Ownable2Step`; `DEFAULT_MAX_DEVIATION_BPS = 500`.
@@ -46,9 +78,11 @@ each leg **best-effort + re-credited as shares** if undeliverable (illiquid Morp
 token, frozen recipient) — **withdrawals never brick, nothing is stranded** (round-2 audit F-01/F-02, RT-2/5/6;
 the earlier withdraw-side `min(spot,ref)` mark was retired: redundant under pro-rata and it under-paid honest
 exits). `_sweepFees` runs before every principal decrease/increase so fees route to the buffer, never a
-withdrawer (**H-02**). **`MAX_DEPLOY_BPS` caps depositor principal AT COST** (`deployedPrincipal`, never moves
-with price — RT-9a: a marked-value cap re-opened after every drawdown). `deploy` takes a `minLiquidity` floor
-(M-03) + a follower band check (A-3). `harvestRecipient` immutable; `renounceOwnership` disabled; owner
+withdrawer (**H-02**). **`MAX_DEPLOY_BPS` is now `10000` (100% — earn-vs-lp decision, no held-back buffer)**;
+the RT-9a cost-basis discipline (`deployedPrincipal` never moves with price) survives as an overdraw guard,
+not a size policy. `deploy` takes a `minLiquidity` floor (M-03) + a `minPairedOut` swap-slippage floor + a
+follower band check (A-3, now bounding both the zap and the mint). `harvestRecipient` immutable;
+`renounceOwnership` disabled; owner
 `setPaused` (blocks deposits, never withdraw) + `compoundQuote`. **Residuals (ops, not code):** paired tokens
 with admin controls (pause/blacklist/proxy) must be excluded by curation; the adapter owner can throttle exits
 (delay, not loss); `block.number` on Robinhood Chain = L1 block (~12 s). Mainnet is audit-gated.
@@ -73,9 +107,10 @@ Off-chain: deploy cron pre-flights the band (`poke` + retry) and an external ref
 fail-closed unless `LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE=false`); two-phase restake ledger (claim → compound →
 mark); replay set keyed on the signed message; registry pins `owner()`/`harvestRecipient()`/adapter binding;
 `ORACLE_SIGNER_PROVIDER` typo throws; ledger views `security_invoker` + revoked from anon (migration
-`20260908000003`). Still open/accepted: `compoundQuote` sandwich (Low, owner is sole depositor), owner paired-leg
-subsidy accounting (design, before third-party funds), read-only-reentrancy view windows (never read PM views from
-a gateway callback), USDG issuer upgrade authority (single key behind a 24 h timelock — disclose + monitor).
+`20260908000003`). Still open/accepted: `compoundQuote` sandwich (Low, owner is sole depositor), read-only-
+reentrancy view windows (never read PM views from a gateway callback), USDG issuer upgrade authority (single
+key behind a 24 h timelock — disclose + monitor). **The owner paired-leg subsidy design residual is CLOSED**
+(earn-vs-lp decision, 2026-09-08) — deleted outright, not just bounded; see the status box at the top.
 Rig **'g'** (PM `0xa52d4ffaefa586251cb36d1e05588daa89ab0a63`, staging `0x0a85…fa14`, tUSDG `0x2a8c…b848`, poolId
 `0x07340da7…dfa2`, PM code hash `0x89a53e8d…00f4`) is the round-3 deployment (smoke passed 2026-09-08); rig 'e' is superseded.
 
@@ -115,7 +150,11 @@ Rig **'g'** (PM `0xa52d4ffaefa586251cb36d1e05588daa89ab0a63`, staging `0x0a85…
   (LRU 500 + TTL, misses remembered, in-flight coalesced) and returns **429 from an in-memory per-IP floor even
   without Upstash**; `discover` has the same floor + `.eq('status','active')` for `live` (HO-11). Both declare
   `rateLimit`; the other public GETs (`instances`, `position(s)`, `leaderboard`, `meta`, `alerts`) still don't
-  (HO-15, their owners). Swap seams (`routerSwap.ts`, `v4SwapExec.ts`) fail-closed no-ops until a router is wired.
+  (HO-15, their owners). Harvest still uses a swap seam (`routerSwap.ts#swapPairedToQuote`, fail-closed no-op
+  until a router is wired) to convert harvested paired-token fees back to quote — unrelated to deploy. **The
+  deploy-side seam (`swapQuoteToPaired`) is GONE (earn-vs-lp decision)**: `deploy()` executes that swap
+  in-contract now, so `lib/gateway/deploy.ts` only SIZES the call (`swapAmount`/`minPairedOut` from live pool
+  state via `quoteToPairedAtSpot`), it no longer runs any swap of its own.
 - **Depositable rule:** a pool is depositable only when `gateway_instances` holds an **`active`**, on-chain-verified
   (H-01) row for its **poolId** — the Discover `live` flag and `/earn/[pool]` must resolve through the registry, never
   through a pair label. The single-env `LP_GATEWAY_POSITION_MANAGER` fallback is bootstrap-only (O-2 closeout;
@@ -134,6 +173,10 @@ Rig **'g'** (PM `0xa52d4ffaefa586251cb36d1e05588daa89ab0a63`, staging `0x0a85…
   ENTIRE public site to V1 faces (it replaced the landing once → an incident, 2026-09-07). Do not flip it.
 
 ## Deploy, tests, framing
+> ⚠ **Test counts below are STALE post earn-vs-lp decision** (2026-09-08) — every `deploy()`-touching test
+> across the gateway suite is being migrated to the new swap-based signature + a seeded-liquidity real-V4 rig
+> (a fresh pool has nothing to swap against); re-run `pnpm forge:test` and update the counts here once that
+> migration lands, per the reconcile-on-change rule.
 - **Deploy:** pure-Privy, no raw key — `scripts/deploy-lp-gateway-robinhood.mjs` (`pnpm deploy:lp-gateway:robinhood`).
   Runbook: [`../../docs/developers/lp-gateway-testnet-runbook.md`](../../docs/developers/lp-gateway-testnet-runbook.md).
 - **Tests:** 44 gateway Forge (staging/PM/factory + `MintwareLpGatewayRealAdapter.t.sol` — the gateway composed
@@ -150,6 +193,13 @@ Rig **'g'** (PM `0xa52d4ffaefa586251cb36d1e05588daa89ab0a63`, staging `0x0a85…
   now **fail-as-attacks** and need flipping by whoever consolidates those files. Foundry gotcha: anchor `vm.roll`
   to a captured `b0` — a relative `block.number + 1` re-evaluated mid-test can land on the same block twice and
   trip `SameBlockAction`.
-- **Hard copy lines** (same as the rest of the stack): idle-buffer, **never** "spend the fees" undersell or
-  "100% spendable" overclaim; no **deposit / savings / guaranteed / fixed-APY**; testnet-honest; a liquidity
-  position carries impermanent loss; external audit gates real value. `riskScore` never certifies safety.
+- **Harvest destination:** `resolveHarvestDestination()` (`lib/gateway/harvest.ts`) now ALWAYS returns
+  `'restake'` (earn-vs-lp decision — the A-4 per-depositor buffer-credit ledger is dropped; LP-Gateway V1
+  never grows a protocol-custodied buffer). The `'buffer'` branch's code + `ledger.ts` credit machinery are
+  left in place as dead code rather than ripped out (avoids a DB schema/migration pass in the same change) —
+  it is simply unreachable now.
+- **Hard copy lines** (same as the rest of the stack): **no more "idle-buffer" framing** (earn-vs-lp decision
+  — LP never idles capital, Earn never pairs); **never** "spend the fees" undersell or "100% spendable"
+  overclaim; no **deposit / savings / guaranteed / fixed-APY**; testnet-honest; a liquidity position carries
+  impermanent loss (100% the user's, never Mintware's); external audit gates real value. `riskScore` never
+  certifies safety.

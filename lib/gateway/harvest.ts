@@ -59,13 +59,15 @@ export type HarvestOutcome =
 
 export type HarvestDestination = 'buffer' | 'restake'
 
-/** Where harvested net fees go. Audit closeout O-4: **'restake' is the default** — `compoundQuote` lifts NAV
- *  pro-rata on-chain, so fee income provably reaches depositors with no off-chain claim. 'buffer' (the
- *  per-depositor IOU ledger) is opt-in: `LP_GATEWAY_HARVEST_DESTINATION=buffer`. Resolved here (not in
- *  opsConfig.ts, whose 'buffer' default predates the closeout) so the safe default is enforced on the
- *  money path regardless. */
-export function resolveHarvestDestination(env: Record<string, string | undefined> = process.env): HarvestDestination {
-  return (env.LP_GATEWAY_HARVEST_DESTINATION ?? '').toLowerCase() === 'buffer' ? 'buffer' : 'restake'
+/** Where harvested net fees go. **Earn-vs-LP decision (docs/developers/lp-gateway-earn-vs-lp-decision.md,
+ *  2026-09-08): the A-4 buffer ledger is DROPPED — LP-Gateway V1 never grows a protocol-custodied buffer, so
+ *  this ALWAYS returns 'restake' now regardless of `LP_GATEWAY_HARVEST_DESTINATION`.** `'buffer'` stays in
+ *  the `HarvestDestination` type only because the 4b code path below and `ledger.ts`'s credit-writing
+ *  machinery are unchanged (kept as dead code rather than ripped out, to avoid touching the DB
+ *  schema/migrations in the same pass) — it is simply never reachable from here any more. `compoundQuote`
+ *  lifts NAV pro-rata on-chain, so fee income provably reaches depositors with no off-chain claim. */
+export function resolveHarvestDestination(_env: Record<string, string | undefined> = process.env): HarvestDestination {
+  return 'restake'
 }
 
 const big = (v: unknown) => BigInt(String(v ?? '0'))

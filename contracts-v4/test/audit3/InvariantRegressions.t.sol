@@ -66,7 +66,8 @@ contract InvariantRegressionsTest is Test {
         // Post-fix: the constructor reads slot0 (XR-2) — the idle rig passes the slot0 stand-in as the pool manager.
         pm = new MintwareLpGatewayPositionManager(
             IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub),
-            key, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 2000
+            key, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 2000,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
         blk = block.number;

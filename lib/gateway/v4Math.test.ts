@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   Q96, MIN_TICK, MAX_TICK, MIN_SQRT_PRICE, MAX_SQRT_PRICE,
   getSqrtPriceAtTick, getLiquidityForAmounts, getAmountsForLiquidity, isInRange, applyToleranceBps,
+  quoteToPairedAtSpot,
 } from './v4Math'
 
 // Relative error of a bigint vs a float reference.
@@ -99,5 +100,35 @@ describe('applyToleranceBps', () => {
     expect(() => applyToleranceBps(1n, -1)).toThrow()
     expect(() => applyToleranceBps(1n, 10_000)).toThrow()
     expect(() => applyToleranceBps(1n, 1.5)).toThrow()
+  })
+})
+
+describe('quoteToPairedAtSpot (earn-vs-lp decision: sizes the in-contract zap off-chain)', () => {
+  it('at price 1.0 (Q96 itself), 1 quote ≈ 1 paired regardless of which currency is which', () => {
+    const gotC0 = quoteToPairedAtSpot(1_000_000n, Q96, true)
+    const gotC1 = quoteToPairedAtSpot(1_000_000n, Q96, false)
+    expect(relErr(gotC0, 1_000_000)).toBeLessThan(1e-9)
+    expect(relErr(gotC1, 1_000_000)).toBeLessThan(1e-9)
+  })
+
+  it('is the exact mirror-inverse of the contract-side conversion (round-trip ≈ identity)', () => {
+    // sqrtP for a real, non-trivial tick (not exactly 1.0) — round-tripping quote→paired→quote should
+    // return (approximately, modulo integer floor rounding) the original amount.
+    const sqrtP = getSqrtPriceAtTick(12000)
+    const quote = 12_345_678_901n
+    const paired = quoteToPairedAtSpot(quote, sqrtP, true)
+    // Inverse direction: treat `paired` as the new "quote" of the opposite currency and convert back.
+    const back = quoteToPairedAtSpot(paired, sqrtP, false)
+    expect(relErr(back, Number(quote))).toBeLessThan(1e-6)
+  })
+
+  it('zero in ⇒ zero out; scales linearly with the input amount', () => {
+    expect(quoteToPairedAtSpot(0n, Q96, true)).toBe(0n)
+    const sqrtP = getSqrtPriceAtTick(-6000)
+    const a = quoteToPairedAtSpot(1_000_000n, sqrtP, false)
+    const b = quoteToPairedAtSpot(2_000_000n, sqrtP, false)
+    // 1e-4, not 1e-9: at these small integer magnitudes, floor-rounding in the two chained mulDiv calls is a
+    // real, expected source of relative error -- the point of this test is linear scaling, not exactness.
+    expect(relErr(b, Number(a) * 2)).toBeLessThan(1e-4)
   })
 })

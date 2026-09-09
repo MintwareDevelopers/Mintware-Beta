@@ -13,11 +13,17 @@ import {MintwareLpGatewayPositionManager} from "../../src/gateway/MintwareLpGate
 ///         Run: LP_FORK_RPC_URL=https://rpc.testnet.chain.robinhood.com forge test --match-contract EconFollower -vv
 contract EconFollowerTest is EconBase {
     /// Harness depth: 2.2M external L (R ~ 2.35M with the gateway) ; gateway 100k/100k -> share s = q/R = 4.3%.
+    ///
+    /// Earn-vs-lp decision (2026-09-08): `deploy` takes no owner-supplied paired leg -- it stages `2q` of the
+    /// USER's quote and zaps `q` of it into paired in-contract. Alice therefore deposits `aliceDep + q`, which
+    /// reproduces the identical post-state the old owner-funded call produced (idle `aliceDep - q`,
+    /// LP `q` quote + `q` paired, NAV `aliceDep + q`); only her share count grows, since she now owns the
+    /// paired leg she funded.
     function _harness(uint256 aliceDep, uint256 q) internal {
         _addExternalLiquidity(2_200_000e18);
         vm.prank(alice);
-        pm.deposit(aliceDep);
-        pm.deploy(q, q, 0, block.timestamp);
+        pm.deposit(aliceDep + q);
+        pm.deploy(2 * q, q, 0, 0, block.timestamp);
         _roll(1);
     }
 
@@ -98,8 +104,8 @@ contract EconFollowerTest is EconBase {
         // gateway q = 5k -> L_g = 5k/0.683 = 7,318 ; external = 250k - 7,318 so R = 250k exactly
         _addExternalLiquidity(242_682e18);
         vm.prank(alice);
-        pm.deposit(10_000e18);
-        pm.deploy(5_000e18, 5_000e18, 0, block.timestamp);
+        pm.deposit(15_000e18); // 10k + the 5k that funds the paired leg (no owner subsidy any more)
+        pm.deploy(10_000e18, 5_000e18, 0, 0, block.timestamp);
         _roll(1);
         uint256 navFair = pm.totalNav(); // 15k
         uint256 w0 = _wealth(mallory, SQRT_1);
@@ -175,7 +181,7 @@ contract EconFollowerTest is EconBase {
         _addExternalLiquidity(2_200_000e18);
         vm.prank(alice);
         pm.deposit(600_000e18);
-        pm.deploy(10_000e18, 10_000e18, 0, block.timestamp); // anchor
+        pm.deploy(20_000e18, 10_000e18, 0, 0, block.timestamp); // anchor
         _roll(1);
         uint256 R = uint256(_poolLiq());
         uint256 qDeploy = R / 10; // 10% share for the fresh deploy
@@ -187,17 +193,20 @@ contract EconFollowerTest is EconBase {
         assertGt(_devBps(), BAND, "two steps out: a deploy would revert DeployPriceOutOfBand...");
         pm.poke(); // ...but a poke moves the reference one step -> spot is now inside the band
         assertLe(_devBps(), BAND, "same-block poke widened the effective band to two steps");
-        pm.deploy(qDeploy, qDeploy, 0, block.timestamp); // owner deploy lands at the pushed price
+        // 2 x qDeploy staged, half zapped into paired: the same total VALUE the old owner-funded
+        // `deploy(qDeploy quote, qDeploy owner paired)` put into the position, now 100% depositor-funded.
+        pm.deploy(2 * qDeploy, qDeploy, 0, 0, block.timestamp); // owner deploy lands at the pushed price
         _swapExactIn(mallory, false, pGot); // reverse on the deeper pool
-        uint256 ownerPairedUsed = ownerP0 - paired.balanceOf(address(this));
+        assertEq(paired.balanceOf(address(this)), ownerP0, "the owner seat contributed no paired at all (earn-vs-lp)");
         _roll(1);
         _arbToFair();
 
         int256 pnl = int256(_wealth(mallory, SQRT_1)) - int256(w0);
-        // the deployed quote moves idle -> LP (NAV-neutral); only the owner's paired leg is new value (at fair 1.0)
-        uint256 contributed = navBefore + ownerPairedUsed;
-        _logQ("quote actually deployed (deployedPrincipal delta)", pm.deployedPrincipal() - 10_000e18);
-        _logQ("owner paired used", ownerPairedUsed);
+        // The whole deploy is a relocation of depositor value (idle -> LP, part of it changing form through the
+        // zap), so the no-sandwich baseline is simply the pre-deploy NAV -- there is no owner leg to add in.
+        uint256 contributed = navBefore;
+        uint256 dpNow = pm.deployedPrincipal();
+        _logQ("quote actually deployed (deployedPrincipal delta)", dpNow > 10_000e18 ? dpNow - 10_000e18 : 0);
         uint256 loss = contributed > pm.totalNav() ? contributed - pm.totalNav() : 0;
         _logQ("R", R);
         _logQ("deploy quote (10% of R)", qDeploy);
@@ -205,9 +214,13 @@ contract EconFollowerTest is EconBase {
         _logQ("depositor loss vs no-sandwich", loss);
         console2.log("depositor loss bps of deployed quote", _pct(loss, qDeploy));
         // model (harness, share 0.10, d=0.10 ~ 2 steps): attacker +1,081 ; depositor loss 2,175 ; break-even dL/L = 2*phi/d = 6%
+        // TODO(needs review): the 2,175 model figure was derived on the owner-funded rig. The zap now pays the
+        // pool's own 0.30% swap fee on `qDeploy` INSIDE the deploy, which is a new depositor-borne cost the
+        // closed form in scripts/audit3/econ_models.py does not contain -- re-derive it before citing this
+        // number, and widen or re-centre the tolerance to whatever the fork actually measures.
         assertGt(pnl, 0, "profitable at 10% share only because the poke doubled the band");
         assertLt(pnl, int256(qDeploy) / 100, "...and bounded to <1% of the deploy");
-        assertApproxEqRel(loss, 2_175e18, 0.25e18, "depositor loss ~ model 2.2k (0.9% of the deploy)");
+        assertApproxEqRel(loss, 2_175e18, 0.5e18, "depositor loss ~ model 2.2k, plus the zap's own swap fee");
     }
 
     function test_Q3_deploySandwich_twoStepsViaPoke_2pctShare_FAILS() public {
@@ -215,13 +228,13 @@ contract EconFollowerTest is EconBase {
         _addExternalLiquidity(2_200_000e18);
         vm.prank(alice);
         pm.deposit(600_000e18);
-        pm.deploy(10_000e18, 10_000e18, 0, block.timestamp);
+        pm.deploy(20_000e18, 10_000e18, 0, 0, block.timestamp);
         _roll(1);
         uint256 qDeploy = uint256(_poolLiq()) / 50; // 2% share (R8 at deploy)
         uint256 w0 = _wealth(mallory, SQRT_1);
         (, uint256 pGot) = _swapToSqrt(mallory, true, _sqrtForPairedSqrt(SQ_UP_2STEP));
         pm.poke();
-        pm.deploy(qDeploy, qDeploy, 0, block.timestamp);
+        pm.deploy(2 * qDeploy, qDeploy, 0, 0, block.timestamp);
         _swapExactIn(mallory, false, pGot);
         _roll(1);
         _arbToFair();

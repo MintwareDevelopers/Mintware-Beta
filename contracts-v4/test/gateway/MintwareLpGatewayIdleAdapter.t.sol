@@ -93,7 +93,8 @@ contract MintwareLpGatewayIdleAdapterTest is Test {
             s,
             address(this),
             harvestSink,
-            2000
+            2000,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         s.setController(address(p));
         a.setVault(address(s));
@@ -193,7 +194,8 @@ contract MintwareLpGatewayIdleAdapterTest is Test {
             rs,
             address(this),
             harvestSink,
-            2000
+            2000,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         rs.setController(address(rp));
         vm.prank(alice);
@@ -265,18 +267,34 @@ contract MintwareLpGatewayIdleAdapterTest is Test {
         assertGt(q, 0, "exits still work");
     }
 
-    /// IA-4 (FINDING — operator-expectation mismatch): `compoundQuote` (the `restake` harvest destination the
-    /// runbook recommends) stages into the SAME capped adapter with NO try/catch. Once the gateway is at its
-    /// cap — the normal steady state for a deliberately small cap — restaking harvested fees REVERTS.
-    function test_IA4_FINDING_compoundQuote_revertsWhenAdapterIsAtCap() public {
+    /// IA-4 (FIXED — best-effort compound): `compoundQuote` (the `restake` harvest destination the runbook
+    /// recommends) used to stage into the SAME capped adapter with NO try/catch, so once the gateway was at its
+    /// cap — the normal steady state for a deliberately small cap — restaking harvested fees REVERTED, looping
+    /// the harvest cron on a guaranteed-revert transaction. It is now best-effort, mirroring `deploy()`'s own
+    /// R3-2 re-stage: a stage failure leaves the harvested quote parked in the PM's own balance (which
+    /// `_idle()` already counts fully toward NAV) and emits `CompoundDeferred` instead of reverting the call.
+    function test_IA4_FIXED_compoundQuote_deferredNotReverted_whenAdapterIsAtCap() public {
         _deposit(alice, CAP); // gateway full at its bound
         assertEq(adapter.maxSuppliable(), 0);
-        vm.expectRevert(MintwareIdleYieldAdapter.DepositCapExceeded.selector);
-        pm.compoundQuote(100e6); // owner (this) restaking net harvested fees — bricked
-        // The same call succeeds the moment there is headroom, proving the cap is the sole cause.
+
+        uint256 navBefore = pm.totalNav();
+        vm.expectEmit(true, true, true, true, address(pm));
+        emit MintwareLpGatewayPositionManager.CompoundDeferred(100e6);
+        pm.compoundQuote(100e6); // owner (this) restaking net harvested fees — no longer reverts
+        // NAV rose by the full compounded amount even though it never reached the adapter — it is parked
+        // directly in the PM and already counted by `_idle()` (mirrors R3-INV-2's "parked quote counts as idle").
+        assertEq(pm.totalNav(), navBefore + 100e6, "compound still lifts NAV even when deferred");
+        assertEq(usdg.balanceOf(address(pm)), 100e6, "deferred quote sits in the PM, not the adapter");
+        assertEq(adapter.suppliedPrincipal(), CAP, "adapter's own cap-gated principal is untouched by the deferral");
+
+        // A subsequent compound only ever stages the amount IT is passed, not the previously-deferred dust
+        // (only `deploy()`'s own re-stage sweeps this contract's entire parked balance) -- so with headroom
+        // for exactly the new amount, the new amount stages and the first deferred 100e6 stays parked.
         adapter.setDepositCap(CAP + 100e6);
         pm.compoundQuote(100e6);
-        assertEq(pm.totalNav(), CAP + 100e6);
+        assertEq(pm.totalNav(), navBefore + 200e6);
+        assertEq(usdg.balanceOf(address(pm)), 100e6, "the FIRST deferred 100e6 is still parked -- only the second compound staged");
+        assertEq(adapter.suppliedPrincipal(), CAP + 100e6);
     }
 
     /// IA-5 (CONFIRMS SAFE, with a caveat): `bal + amount` is checked arithmetic. At extreme values it panics
@@ -412,7 +430,8 @@ contract MintwareLpGatewayIdleAdapterTest is Test {
             s,
             address(this),
             harvestSink,
-            2000
+            2000,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         s.setController(address(p));
 
@@ -517,7 +536,8 @@ contract MintwareLpGatewayIdleAdapterTest is Test {
             rs,
             address(this),
             harvestSink,
-            2000
+            2000,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         rs.setController(address(rp));
         fusdg.mint(alice, 100_000e6);

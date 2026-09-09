@@ -71,7 +71,8 @@ contract Round3StaleIdleLossForkTest is Test {
         staging = new MintwareLpGatewayStaging(IERC20(address(quote)), adapter);
         adapter.setVault(address(staging));
         pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500
+            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 
@@ -95,20 +96,23 @@ contract Round3StaleIdleLossForkTest is Test {
         return quote.balanceOf(who) + paired.balanceOf(who); // price ~1.0, same decimals
     }
 
-    /// Alice + Bob 100k each. Owner deploys 100k quote + 100k paired (cap-full). Idle = 100k, LP ~ 200k.
+    /// Alice + Bob 150k each. Owner stages 200k and zaps half into paired in-contract. Idle = 100k, LP ~ 200k.
+    /// (Earn-vs-lp decision, 2026-09-08: there is no owner-supplied paired leg any more, so reaching the same
+    /// 100k-idle / 200k-LP / 300k-NAV state takes 300k of depositor capital instead of 200k + a 100k subsidy.
+    /// Both are still exactly 50% holders, which is all the fair-split arithmetic below depends on.)
     /// Then the source LOSES 20% of the idle (20k) and simultaneously goes unreadable. Alice exits during the
     /// outage; the source recovers; Bob exits. Compare with the fair split (both should share the 20k loss).
     function test_R3_staleIdle_lossDuringOutage_outageExiterOffloadsLoss() public {
         if (!live) return;
         vm.prank(alice);
-        pm.deposit(100_000e18);
+        pm.deposit(150_000e18);
         vm.prank(bob);
-        pm.deposit(100_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        pm.deposit(150_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         uint256 b0 = block.number;
         vm.roll(b0 + 1);
 
-        uint256 navBefore = pm.totalNav(); // ~300k: 100k idle + 200k LP (owner leg included)
+        uint256 navBefore = pm.totalNav(); // ~300k: 100k idle + 200k LP, every wei of it depositor capital
         // A loss inside the source (bad debt realised): 20k of the 100k idle is gone. Then the source goes dark.
         vm.prank(address(source));
         quote.transfer(sink, 20_000e18);

@@ -13,28 +13,42 @@ product; a liquidity position carries impermanent loss.
 
 ## 1. System description and trust model
 
+> ⚠ **Rewritten 2026-09-08 for the earn-vs-lp decision** (`docs/developers/lp-gateway-earn-vs-lp-decision.md`)
+> — the paragraph below describes the CURRENT `deploy()`, built the same day the decision was made. LP and
+> Earn are now two separate products, never fused: this whole document is scoped to **LP** (this contract).
+> Earn (`MintwareERC4626YieldAdapter`, pure lending, no pairing, no IL) is a genuinely separate product,
+> gated on real capacity, out of scope here until it ships.
+
 **One paragraph.** A depositor puts **USDG** (Paxos, 6 dp) into a per-pool gateway (`MintwareLpGatewayPositionManager`,
 "PM") and receives **entry-NAV shares** (symmetric virtual-offset math, `SeniorSharesMath`, `VIRTUAL = 1e6`). The
-USDG is immediately **staged** into a single-controller reserve (`MintwareLpGatewayStaging`) that holds it as shares of
-an ERC-4626 yield source (Morpho on Robinhood Chain) through a fee-aware adapter (`MintwareERC4626YieldAdapter`), so
-idle capital earns from block one. The gateway **owner** may `deploy` at most **50 % of depositor principal at cost**
-(`MAX_DEPLOY_BPS = 5000`, a constant) plus its *own* paired-token leg as one aggregate position in an **existing,
-hookless, curated Uniswap v4 pool**, through the official v4 `PositionManager` periphery and Permit2. `harvest`
-collects accrued fees with a zero-liquidity-delta decrease (principal untouched) to a **48 h-timelock-rotatable
-`harvestRecipient`**; `compoundQuote` lets the owner stage net fees back (NAV up, no mint). `withdraw` is **pure
-pro-rata** on both legs (share fraction of the idle reserve and of position liquidity — no price read sizes it),
-each leg is **best-effort** and any undelivered fraction is **re-credited as shares**; a position's fees are swept to
-the recipient *before* any principal decrease/increase (H-02). NAV marks the LP leg at spot, with a **clamped-follower
-reference** (≤ `maxDeviationBps` of √price per block, default 500) that bounds entry pricing (`max(spot, ref)` on
-deposit) and the deploy band; `poke()` is permissionless. `setPaused` blocks *new deposits only*; withdraw is never
-gated. A curated `MintwareLpGatewayFactory` (Ownable2Step) spins up isolated (staging, PM) pairs per pool.
+USDG briefly **stages** (a transient doorway between a deposit and the owner's next `deploy()` — not an "earn
+while idle" product; there is no held-back buffer). The gateway **owner** may `deploy` the **ENTIRE staged
+balance** (`MAX_DEPLOY_BPS = 10000`, a constant — now purely an overdraw guard, not a size policy) as one
+aggregate position in an **existing, hookless, curated Uniswap v4 pool**, through the official v4
+`PositionManager` periphery and Permit2. **The paired leg is acquired by swapping part of that SAME staged
+USDG — `swapAmount` of `quoteToDeploy` — ATOMICALLY, in-contract, against the pool itself** (`_executeSwap` /
+`unlockCallback`, the standard V4 unlock/settle round-trip); **there is no code path left that accepts an
+owner- or caller-supplied paired token** — the old `pairedAmount`/`safeTransferFrom(msg.sender, …)` branch is
+deleted outright, not merely bounded, so "Mintware supplies no capital to any position and bears none of the
+IL" is enforced on-chain, not promised. `minPairedOut` floors that swap's own slippage; the existing
+clamped-follower band bounds both the swap and the mint against a sandwich. `harvest` collects accrued fees
+with a zero-liquidity-delta decrease (principal untouched) to a **48 h-timelock-rotatable `harvestRecipient`**;
+`compoundQuote` lets the owner stage net fees back (NAV up, no mint) — this is now the ONLY harvest
+destination (the A-4 per-depositor buffer ledger is dropped). `withdraw` is **pure pro-rata** on both legs
+(share fraction of the idle reserve and of position liquidity — no price read sizes it), each leg is
+**best-effort** and any undelivered fraction is **re-credited as shares**; a position's fees are swept to the
+recipient *before* any principal decrease/increase (H-02). NAV marks the LP leg at spot, with a
+**clamped-follower reference** (≤ `maxDeviationBps` of √price per block, default 500) that bounds entry
+pricing (`max(spot, ref)` on deposit) and the deploy band; `poke()` is permissionless. `setPaused` blocks *new
+deposits only*; withdraw is never gated. A curated `MintwareLpGatewayFactory` (Ownable2Step) spins up isolated
+(staging, PM) pairs per pool.
 
 **Trust model — who can move money.**
 
 | Actor | Can | Cannot |
 |---|---|---|
 | **Depositor** (any EOA/contract) | `deposit`/`depositWithMin`, `withdraw`/`withdrawWithMin` of *own* shares, `poke()` | touch another holder's shares; withdraw in the same block as its own deposit (`SameBlockAction`) |
-| **PM owner** = the Privy **`gateway`** server-wallet seat `0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c` (Ownable2Step, renounce disabled) | `deploy` (≤ cap, inside the follower band, with caller `minLiquidity`), `harvest`, `compoundQuote`, `setPaused`, propose/accept/cancel the harvest recipient (48 h), two-step ownership transfer | sweep principal (no such function exists — verified in every round: RT-9d, A-3 §3 Q4); redirect an in-flight fee stream instantly; disable the deploy cap (constant); revert or block withdrawals |
+| **PM owner** = the Privy **`gateway`** server-wallet seat `0x18AE027cF105393BF9Fe6a9F0d06A761D2a0663c` (Ownable2Step, renounce disabled) | `deploy` (≤ cap, inside the follower band, with caller `minPairedOut`/`minLiquidity` floors), `harvest`, `compoundQuote`, `setPaused`, `setPrincipalCap`, propose/accept/cancel the harvest recipient (48 h), two-step ownership transfer | sweep principal (no such function exists — verified in every round: RT-9d, A-3 §3 Q4); **supply a paired-token leg from any balance but the depositors' own staged USDG (no such code path exists any more — earn-vs-lp decision)**; redirect an in-flight fee stream instantly; disable the deploy cap (constant); revert or block withdrawals |
 | **Adapter owner** (same seat today) | `setPerBlockWithdrawCap` (instant, unbounded), one-time `setVault` | move funds (only `vault` = staging can `deposit`/`withdraw`) |
 | **Staging `deployer`** (the factory or the deploy script signer) | one-time `setController` | anything after it is set |
 | **Factory owner** (same seat) | `createGateway` (curation), `deactivate` (flag only) | reach into an instance |
@@ -291,9 +305,11 @@ quote-asset terms at a fixed price unless stated.
 **Deploy cap and follower**
 
 6. **Cost-basis cap is monotone and un-reopenable.** `deployedPrincipal` increases only in `deploy` (by the quote
-   actually used), decreases only in `_withdraw` (pro-rata by burned shares), never with price. Invariant:
-   `deployedPrincipal + quoteToDeploy ≤ 0.5·(stagedAssets + deployedPrincipal)` at every successful `deploy`,
-   including after a drawdown (RT-9a), a source-yield jump, or the owner's own paired-leg subsidy.
+   actually used), decreases only in `_withdraw` (pro-rata by burned shares), never with price. **Earn-vs-LP
+   decision (2026-09-08): `MAX_DEPLOY_BPS = 10000` now (was `5000`)** — the invariant is
+   `deployedPrincipal + quoteToDeploy ≤ 1.0·(stagedAssets + deployedPrincipal)` (an overdraw guard, not a size
+   policy), and there is no owner paired-leg subsidy left to interact with it — the paired leg is 100% of the
+   SAME `quoteToDeploy` a depositor supplied, converted by an in-contract swap (`deployedPairedValue`).
 7. **Follower band bounds.** `_refSqrtPrice` moves at most `ref·maxDeviationBps/10_000` per `block.number`
    (L1 block), in the direction of spot, only once per block, and never reverts; `deploy` reverts
    `DeployPriceOutOfBand` whenever `|spot − ref| > band` once a reference exists; no function (owner or not) can set
@@ -351,6 +367,8 @@ quote-asset terms at a fixed price unless stated.
 19. **Two-sided deploy (round 3, invariant 15).** On every successful `deploy`, `pairedUsedValue(spot) ∈ [½, 2] ×
     quoteUsed`. Property: no owner-reachable sequence mints an all-quote (or all-paired) position; the compromised-seat
     worst case is bounded to the in-band, two-sided sandwich (economically ≤ ~5 % griefing at the seat's own expense).
+    **Earn-vs-LP decision:** this now backstops a badly-chosen `swapAmount` (the owner's own sizing input) rather
+    than a hostile owner-injected paired token — the failure mode (a lopsided, range-edge position) is identical.
 20. **Stage delta (round 3, XR-3).** Every `deposit` grows `stagedAssets` by ≥ `amount·(1 − 50 bps)` or reverts
     `StageShortfall`; against an empty offset-less 4626 the first gateway deposit cannot be zeroed; entry-fee sources
     above 50 bps are DOA rather than silently diluting (closes L-05 as a live risk).
@@ -378,12 +396,12 @@ quote-asset terms at a fixed price unless stated.
 | **Adapter `perBlockWithdrawCap`** is an instant, unbounded owner lever (delay, not loss — A-1 re-credits) | Accepted (same seat as PM owner); follow-up: floor or timelock decreases before third-party funds | closeout `contracts-residuals.md` C-9a |
 | **`lastKnownIdle` staleness** during an outage under-pays the withdrawer marginally (conservative direction) | Accepted | closeout C-10 residual |
 | **Recipient rotation is owner-accepted, not recipient-accepted**; a frozen recipient still blocks `harvest`/`deploy` for up to 48 h | Accepted by design (the window *is* the safety margin) | closeout rotation residual |
-| **Owner paired-leg contribution is a depositor subsidy** (every deploy adds owner capital to depositor NAV); fine for own funds, an accounting hole for third-party depositors | Open design question (A-9 / red-team §5.3) — **please opine** | redteam-onchain §5 |
+| **~~Owner paired-leg contribution is a depositor subsidy~~ — CLOSED (earn-vs-lp decision, 2026-09-08)**: the owner-funded `deploy()` path is deleted outright, not bounded; the paired leg is 100% the depositor's own quote, converted by an in-contract swap. No accounting question remains — there is no owner capital in any position. | Fixed | `lp-gateway-earn-vs-lp-decision.md` |
 | **Reverting-preview 4626 source** (C-10) tolerated on withdraw, refused on deposit/deploy | Accepted; source = Morpho only (R6) | closeout C-10 |
 | **Factory 945 B under EIP-170**; live rig was deployed directly, not via the factory | Known; next PM feature needs a deployer split | closeout "Bytecode size" |
 | **Fee-net entry vs par mint** (L-05), **`DECREASE` with `amount0Min = amount1Min = 0`** (L-01; user floor is `withdrawWithMin` instead) | Accepted lows | security-review remediation table |
 | **Single Privy `PRIVY_APP_SECRET` reaches both `root` and `gateway` wallets** (O-6) — separation is address-level today | **Open**, human step (Privy authorization keys / per-wallet policies) | closeout README §"Left for a human" |
-| **Off-chain**: A-4/O-4 fee ledger rebuilt (event-indexed, on-chain-share-weighted) but `LP_GATEWAY_HARVEST_DESTINATION=restake` is mandatory on mainnet; buffer-credit path never enabled | Fixed + policy | closeout `registry-ledger.md` |
+| **Off-chain**: A-4/O-4 fee ledger rebuilt (event-indexed, on-chain-share-weighted), then **dropped outright (earn-vs-lp decision, 2026-09-08)** — `resolveHarvestDestination()` always returns `'restake'` now regardless of env, not just "mandatory by policy"; the buffer-credit code path is unreachable (left as dead code, not deleted, to avoid a DB schema pass in the same change) | Fixed (was policy, now structural) | `lp-gateway-earn-vs-lp-decision.md` |
 | Hardhat/campaign/RWA surfaces referenced in older rules | Removed / shelved — ignore | `.claude/STATE.md` |
 
 ---
@@ -398,10 +416,12 @@ quote-asset terms at a fixed price unless stated.
    the reference by 2× on the reference pool (§4.5 depth) and on a pool at the policy minimum (250 k USDG virtual
    reserve), versus the maximum extractable via (a) entry-mark cheapening for a deposit and (b) an in-band deploy
    sandwich. Recommend a band and, if warranted, a time-based variant.
-2. **`MAX_DEPLOY_BPS = 5000` calibration.** Given IL exposure on a ±22 980-tick range (≈ −90 % / +10×), the
-   owner-subsidised paired leg, and the RT-9 drawdown-cycle attack (now closed by the cost-basis base), is 50 % of
-   principal at cost the right constant? Should the cap also bound the *paired* leg or total LP value relative to NAV
-   (Hacken F-03 showed a balanced deploy is ~66.7 % of NAV)? Is a constant preferable to an owner-timelocked parameter?
+2. ~~`MAX_DEPLOY_BPS = 5000` calibration~~ — **superseded (earn-vs-lp decision, 2026-09-08): `MAX_DEPLOY_BPS =
+   10000`, a constant (the "immutable per-instance arg" alternative was considered and rejected).** The
+   held-back-buffer policy this question was about is retired outright — LP deploys 100% of committed
+   capital by design, not by calibration. Open instead: given IL exposure on a ±22 980-tick range (≈ −90 % /
+   +10×) and NO held-back buffer any more, is the fixed wide range itself the right default, or should V1 also
+   expose a narrower/user-chosen range (Krystal parity, noted as a stretch goal in the decision doc)?
 3. **Thin-pool manipulation cost model.** Produce a closed-form or simulated model: attacker capital `K`, pool
    in-range liquidity `L`, gateway share `s` of pool USDG, fee tier `φ`, band `b`, blocks `n` → maximum extraction from
    co-depositors via the deposit-side mark and the deploy band. Validate the policy thresholds (R5 depth ≥ 250 k USDG,
@@ -409,8 +429,11 @@ quote-asset terms at a fixed price unless stated.
 4. **Pro-rata exit composition risk.** With pure pro-rata sourcing the withdrawer receives a paired-token slice at
    whatever spot rules; is there a residual sandwich the `withdrawWithMin` floors do not cover (e.g. via the re-credit
    weight)? RT-1b/1c/1d failed against the current code — try harder.
-5. **Owner-subsidy accounting** (§7): should the owner's paired leg be tracked as a separate claim (owner shares)
-   before third-party depositors are admitted, and what is the cleanest on-chain shape?
+5. ~~Owner-subsidy accounting~~ — **moot (earn-vs-lp decision): there is no owner paired leg left to
+   account for.** Open instead: with the in-contract zap now the sole paired-leg source, is `swapAmount`
+   best left as an off-chain-computed, caller-supplied parameter (current design — simpler contract, the
+   cron sizes it from live pool state), or should the contract compute an on-chain "optimal zap" itself
+   (more contract surface, no off-chain sizing dependency)?
 
 **Operational / key management**
 

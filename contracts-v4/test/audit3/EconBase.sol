@@ -108,7 +108,8 @@ abstract contract EconBase is Test {
         staging = new MintwareLpGatewayStaging(IERC20(address(quote)), adapter);
         adapter.setVault(address(staging));
         pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, BAND
+            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, BAND,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 

@@ -38,7 +38,6 @@ vi.mock('@/lib/gateway/chain', () => ({
 vi.mock('@/lib/web3/oracleSigner', () => ({ getOracleSigner: async () => ({ address: SEAT }) }))
 vi.mock('@/lib/gateway/routerSwap', () => ({
   swapPairedToQuote: async () => ({ quoteOut: 0n, txHash: null }),
-  swapQuoteToPaired: async () => ({ pairedOut: 0n, txHash: null }),
 }))
 vi.mock('viem', async (orig) => ({
   ...(await orig<typeof import('viem')>()),
@@ -106,10 +105,10 @@ beforeEach(() => {
 })
 
 describe('resolveHarvestDestination', () => {
-  it("defaults to 'restake' (unset / unknown values); only an explicit 'buffer' opts into the IOU ledger", () => {
+  it("Earn-vs-LP decision (2026-09-08): ALWAYS 'restake' now -- the A-4 buffer ledger is dropped, so even an explicit 'buffer' no longer opts into it", () => {
     expect(resolveHarvestDestination({})).toBe('restake')
     expect(resolveHarvestDestination({ LP_GATEWAY_HARVEST_DESTINATION: 'nonsense' })).toBe('restake')
-    expect(resolveHarvestDestination({ LP_GATEWAY_HARVEST_DESTINATION: 'BUFFER' })).toBe('buffer')
+    expect(resolveHarvestDestination({ LP_GATEWAY_HARVEST_DESTINATION: 'BUFFER' })).toBe('restake')
   })
 })
 
@@ -131,17 +130,16 @@ describe('harvestGateway', () => {
     expect(tables.harvest_events[0]).toMatchObject({ collect_tx: COLLECT_TX, amount_harvested_atomic: '10000000', fee_skimmed_atomic: '1000000', amount_credited_atomic: '10800000' })
   })
 
-  it('BUFFER (opt-in): credits come from the ledger index (on-chain shares); card_spend_buffers is never written', async () => {
+  it("Earn-vs-LP decision (2026-09-08): setting LP_GATEWAY_HARVEST_DESTINATION='buffer' no longer does anything -- the A-4 buffer path is dropped, so harvest still restakes", async () => {
     process.env.LP_GATEWAY_HARVEST_DESTINATION = 'buffer'
-    indexMock.mockResolvedValue(okIndex({ creditedAtomic: 9_000_000n, recorded: 1 }))
+    indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+    pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
     const { client, tables, touched } = fakeDb()
     const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
-    expect(r).toMatchObject({ ok: true, destination: 'buffer', creditedAtomic: 9_000_000n, recipients: 1 })
-    expect(indexMock).toHaveBeenCalledWith(expect.objectContaining({ settlement: 'credited' }))
-    expect(writes.map((w) => w.functionName)).toEqual(['harvest']) // no compound
-    expect(pendingMock).not.toHaveBeenCalled()
+    expect(r).toMatchObject({ ok: true, destination: 'restake', creditedAtomic: 9_000_000n })
+    expect(indexMock).toHaveBeenCalledWith(expect.objectContaining({ settlement: 'pending' }))
+    expect(writes.map((w) => w.functionName)).toEqual(['harvest', 'approve', 'compoundQuote']) // still restakes, never a buffer credit
     expect(touched.has('card_spend_buffers:update')).toBe(false)
-    expect([...touched].filter((t) => t.startsWith('gateway_positions'))).toEqual([]) // DB shares never consulted
     expect(tables.harvest_events[0]).toMatchObject({ amount_credited_atomic: '9000000' })
   })
 

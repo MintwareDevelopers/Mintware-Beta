@@ -58,7 +58,8 @@ contract MintwareLpGatewayRealAdapterTest is Test {
         stub = address(new Stub());
         pm = new MintwareLpGatewayPositionManager(
             IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub),
-            key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink, 2000
+            key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink, 2000,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 
@@ -172,7 +173,7 @@ contract MintwareLpGatewayRealAdapterTest is Test {
         MintwareLpGatewayFactory factory =
             new MintwareLpGatewayFactory(IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub), address(this));
         (address stagingAddr, address pmAddr) =
-            factory.createGateway(key, IERC20(address(usdg)), IYieldAdapter(address(fa)), -600, 600, address(this), harvestSink, 2000);
+            factory.createGateway(key, IERC20(address(usdg)), IYieldAdapter(address(fa)), -600, 600, address(this), harvestSink, 2000, type(uint256).max);
         MintwareLpGatewayPositionManager fpm = MintwareLpGatewayPositionManager(pmAddr);
 
         vm.prank(alice);
@@ -253,7 +254,8 @@ contract MintwareLpGatewayRealAdapterTest is Test {
         fa.setVault(address(fs));
         MintwareLpGatewayPositionManager fpm = new MintwareLpGatewayPositionManager(
             IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub),
-            key, IERC20(address(usdg)), -600, 600, fs, address(this), harvestSink, 2000
+            key, IERC20(address(usdg)), -600, 600, fs, address(this), harvestSink, 2000,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         fs.setController(address(fpm));
 

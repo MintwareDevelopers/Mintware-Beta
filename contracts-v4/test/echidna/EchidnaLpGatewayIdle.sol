@@ -160,7 +160,8 @@ contract EchidnaLpGatewayIdle {
             staging,
             address(this), // owner: the harness drives setPaused / compoundQuote
             address(0xFEE), // harvest recipient
-            DEV_BPS
+            DEV_BPS,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 

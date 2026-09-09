@@ -41,6 +41,10 @@ const ZERO = '0x0000000000000000000000000000000000000000'
 const TICK_LOWER = Number(process.env.LP_TICK_LOWER ?? -22980)
 const TICK_UPPER = Number(process.env.LP_TICK_UPPER ?? 22980)
 const MAX_DEV_BPS = Number(process.env.LP_MAX_DEVIATION_BPS ?? 500) // clamped-follower per-block step (H-03)
+// IA-11: PM-level ceiling on idle + deployedPrincipal + deployedPairedValue -- unlike the adapter's own
+// depositCap (idle leg only), this bounds TOTAL value at risk including the owner's paired-leg subsidy on every
+// deploy. Testnet rig, so default to uncapped unless the operator explicitly wants to test the cap itself.
+const PRINCIPAL_CAP = process.env.LP_GATEWAY_PRINCIPAL_CAP ? BigInt(process.env.LP_GATEWAY_PRINCIPAL_CAP) : (2n ** 256n - 1n)
 const FEE = 3000
 const TICK_SPACING = 60
 const SQRT_PRICE_1 = 79228162514264337593543950336n // Q96 = sqrtPrice for tick 0 (price 1.0)
@@ -207,7 +211,7 @@ await send('initialize V4 pool', { address: POOL_MANAGER, abi: POOL_MANAGER_ABI,
 // 3) staging + position manager (owner + harvestRecipient = the Privy signer)
 const staging = await deploy('LpGatewayStaging', 'MintwareLpGatewayStaging', 'MintwareLpGatewayStaging', [usdg, adapter])
 const pm = await deploy('LpGatewayPositionManager', 'MintwareLpGatewayPositionManager', 'MintwareLpGatewayPositionManager', [
-  POOL_MANAGER, POSITION_MANAGER, PERMIT2, poolKey, usdg, TICK_LOWER, TICK_UPPER, staging, privyAddress, privyAddress, MAX_DEV_BPS,
+  POOL_MANAGER, POSITION_MANAGER, PERMIT2, poolKey, usdg, TICK_LOWER, TICK_UPPER, staging, privyAddress, privyAddress, MAX_DEV_BPS, PRINCIPAL_CAP,
 ])
 
 // 4) wire controller (deployer-only setController — the Privy signer deployed the staging, so this passes)

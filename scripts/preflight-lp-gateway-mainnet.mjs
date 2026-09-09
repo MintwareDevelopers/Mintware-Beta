@@ -11,14 +11,24 @@
 //                PositionManager.poolManager() == PoolManager.
 //   USDG       · address == the Paxos-documented RH-mainnet USDG; symbol USDG; decimals 6; EIP-1967 proxy
 //                (impl non-zero — Paxos UUPS, M-07); paused()==false; signer + harvest recipient not frozen.
+//   principal-cap · LP_GATEWAY_PRINCIPAL_CAP set (required on BOTH paths — idle mode defaults it to
+//                LP_GATEWAY_DEPOSIT_CAP, checked to actually match). This, not LP_GATEWAY_DEPOSIT_CAP, is the
+//                bound that genuinely covers total value at risk (idle + deployed + the owner's paired-leg
+//                subsidy on every deploy) — IA-11. Both caps are also asserted <= a 100,000 USDG ceiling
+//                (waivable via LP_GATEWAY_ALLOW_LARGE_CAP=true) — IA-12: a pre-audit deploy's entire safety
+//                story is "a small bounded cap", so neither knob may go unbounded by accident.
 //   source     · LP_GATEWAY_YIELD_SOURCE (a Morpho / ERC-4626 vault) has code; asset()==USDG; totalAssets()>0;
 //                maxDeposit(signer)>0; previewRedeem works; prints name / symbol / total assets.
 //                OR: LP_GATEWAY_IDLE_MODE=true — no real yield source exists yet on this chain at all (every
 //                USDG Morpho Vault V2 is at maxDeposit==0, nothing else is deployed here; see
 //                docs/developers/audits/closeout/mainnet-yield-sources.md). Requires LP_GATEWAY_DEPOSIT_CAP
-//                (an explicit, required bound — even 0 is valid, "unset" is not) and deploys a
+//                (an explicit, required bound — even 0 is valid, "unset" is not; only bounds the IDLE leg —
+//                see LP_GATEWAY_PRINCIPAL_CAP above) and deploys a
 //                MintwareIdleYieldAdapter that just custodies USDG with zero yield instead of wrapping a real
-//                4626. Opt-in only; the default stays the real-source path above.
+//                4626. Opt-in only; the default stays the real-source path above. A real
+//                LP_GATEWAY_YIELD_SOURCE configured AT THE SAME TIME as idle mode is a FAIL — the two express
+//                opposite intents and idle mode would otherwise silently discard the configured source — unless
+//                acknowledged via LP_GATEWAY_IDLE_MODE_IGNORES_SOURCE=true — IA-13.
 //   pool       · the target v4 pool key resolves (LP_GATEWAY_POOL_ID via PositionManager.poolKeys, or the
 //                explicit LP_GATEWAY_POOL_CURRENCY0/1 + FEE + TICK_SPACING + HOOKS) and is initialized on the
 //                canonical PoolManager; hooks == 0x0 [A-6]; USDG is one currency; paired != 0x0 [A-8];
@@ -140,7 +150,23 @@ export function resolveConfig(env = process.env) {
   // docs/developers/audits/closeout/mainnet-yield-sources.md). Explicit opt-in only — the default stays the
   // real-source path so a forgotten env var can never silently swap in the zero-yield fallback.
   const idleMode = (env.LP_GATEWAY_IDLE_MODE ?? '').toLowerCase() === 'true'
+  // IA-13: idle mode + a configured real yield source is a contradiction (idle mode SILENTLY discards it and
+  // deploys a zero-yield adapter in its place) — require an explicit acknowledgement rather than let it pass
+  // as an INFO row an operator can miss at 2am.
+  const idleModeIgnoresSource = (env.LP_GATEWAY_IDLE_MODE_IGNORES_SOURCE ?? '').toLowerCase() === 'true'
   const depositCap = env.LP_GATEWAY_DEPOSIT_CAP ? BigInt(env.LP_GATEWAY_DEPOSIT_CAP) : null
+  // IA-12: neither cap had an upper bound, so a fat-fingered huge value (or three extra zeros on a real one)
+  // read PASS under rows whose own text is "bounds total value at risk". Pre-audit mainnet's entire safety
+  // story is "a small bounded cap" — assert a ceiling unless explicitly overridden.
+  const allowLargeCap = (env.LP_GATEWAY_ALLOW_LARGE_CAP ?? '').toLowerCase() === 'true'
+  // IA-11: the ADAPTER's depositCap only ever bounded the idle leg — the PM's own principalCap (idle +
+  // deployedPrincipal + deployedPairedValue) is the one that genuinely bounds total value at risk, including
+  // the owner's paired-leg subsidy on every deploy. In idle mode it defaults to depositCap (the deploy script's
+  // own fallback, mirrored here so the preflight validates the SAME value that will actually be used); on the
+  // real-adapter path there is no adapter-side cap to default from, so it must be set explicitly.
+  const principalCap = env.LP_GATEWAY_PRINCIPAL_CAP != null
+    ? BigInt(env.LP_GATEWAY_PRINCIPAL_CAP)
+    : (idleMode && depositCap != null ? depositCap : null)
   const signer = env.GATEWAY_ORACLE_PRIVY_ADDRESS ?? ''
   const harvestRecipient = env.LP_GATEWAY_HARVEST_RECIPIENT ?? signer
   const poolId = env.LP_GATEWAY_POOL_ID ?? ''
@@ -160,10 +186,16 @@ export function resolveConfig(env = process.env) {
   const tickUpper = env.LP_TICK_UPPER != null ? Number(env.LP_TICK_UPPER) : null
   const maxDeviationBps = Number(env.LP_MAX_DEVIATION_BPS ?? 500)
   return {
-    chainId, rpc, usdg, yieldSource, idleMode, depositCap, signer, harvestRecipient, poolId, explicitKey,
+    chainId, rpc, usdg, yieldSource, idleMode, idleModeIgnoresSource, depositCap, principalCap, allowLargeCap,
+    signer, harvestRecipient, poolId, explicitKey,
     minPoolLiquidity, minPoolUsdg, allowAdminToken, tickLower, tickUpper, maxDeviationBps,
   }
 }
+
+// IA-12: pre-audit mainnet's entire safety story for either cap is "a small bounded amount" — 100,000 USDG is
+// generous headroom over the runbook's own step-1 decision (≤ 1,000 USDG) while still catching a fat-fingered
+// value (an extra zero, or a raw uint256 max) before it ever reaches a signed transaction.
+const DEFAULT_CAP_CEILING = 100_000n * 10n ** 6n
 
 /**
  * Run every read-only check. Returns `{ ok, rows, resolved }` — `resolved` carries the on-chain-derived facts
@@ -225,14 +257,56 @@ export async function runPreflight(env = process.env, { log = console.log } = {}
     }
   }
 
+  // ── 2b. PM-level principal cap (IA-11) — the actual ceiling on idle + deployedPrincipal +
+  //        deployedPairedValue, required on BOTH paths. LP_GATEWAY_DEPOSIT_CAP (idle mode only, checked below)
+  //        was never enough on its own: it bounds only the idle leg, and the owner's paired-leg subsidy on
+  //        every `deploy()` was completely uncounted against anything.
+  expect(
+    cfg.principalCap != null && cfg.principalCap >= 0n,
+    'principal-cap',
+    'LP_GATEWAY_PRINCIPAL_CAP set (bounds TOTAL value at risk — idle + deployed + owner paired-leg subsidy)',
+    cfg.principalCap != null
+      ? `${fmtUsdg(cfg.principalCap)} USDG`
+      : 'unset — required (idle mode defaults it to LP_GATEWAY_DEPOSIT_CAP; the real-adapter path has no default)',
+  )
+  if (cfg.idleMode && cfg.principalCap != null && cfg.depositCap != null && cfg.principalCap !== cfg.depositCap) {
+    fail('principal-cap', 'LP_GATEWAY_PRINCIPAL_CAP == LP_GATEWAY_DEPOSIT_CAP in idle mode', `principalCap ${fmtUsdg(cfg.principalCap)} != depositCap ${fmtUsdg(cfg.depositCap)} USDG — the two caps have drifted apart, which defeats the point of either one`)
+  }
+  // IA-12: neither cap had an upper bound — a fat-fingered huge value read PASS under a row whose own text is
+  // "bounds total value at risk". Assert a ceiling unless the operator explicitly opts out.
+  for (const [label, val] of [['LP_GATEWAY_DEPOSIT_CAP', cfg.depositCap], ['LP_GATEWAY_PRINCIPAL_CAP', cfg.principalCap]]) {
+    if (val == null) continue
+    expect(
+      allowLargeCap || val <= DEFAULT_CAP_CEILING,
+      'principal-cap',
+      `${label} <= ${fmtUsdg(DEFAULT_CAP_CEILING)} USDG ceiling (pre-audit safety story is "a small bounded cap")`,
+      allowLargeCap ? `${fmtUsdg(val)} USDG — ceiling waived via LP_GATEWAY_ALLOW_LARGE_CAP=true` : `${fmtUsdg(val)} USDG`,
+    )
+  }
+
   // ── 3. yield source (Morpho / ERC-4626 over USDG) — OR idle mode, if no real source exists yet ──
   if (cfg.idleMode) {
     info('source', 'IDLE MODE — LP_GATEWAY_IDLE_MODE=true', 'no external yield source; staged USDG is held at rest, earning nothing, via MintwareIdleYieldAdapter (see docs/developers/audits/closeout/mainnet-yield-sources.md)')
-    if (isAddress(cfg.yieldSource)) info('source', 'LP_GATEWAY_YIELD_SOURCE is set but IGNORED in idle mode', cfg.yieldSource)
+    // IA-13: idle mode + a configured real yield source is a genuine contradiction — the two variables express
+    // opposite intents, and idle mode SILENTLY discards the source rather than using it. That used to be an
+    // INFO row (which can never fail the preflight); it is now a FAIL unless explicitly acknowledged, because
+    // it is the highest-consequence ambiguity in idle mode and distinguishable from every legitimate case
+    // (idle mode with the variable unset).
+    if (isAddress(cfg.yieldSource)) {
+      if (cfg.idleModeIgnoresSource) {
+        info('source', 'LP_GATEWAY_YIELD_SOURCE is set but IGNORED in idle mode (acknowledged via LP_GATEWAY_IDLE_MODE_IGNORES_SOURCE=true)', cfg.yieldSource)
+      } else {
+        fail(
+          'source',
+          'LP_GATEWAY_IDLE_MODE=true AND LP_GATEWAY_YIELD_SOURCE set',
+          `contradictory: ${cfg.yieldSource} would be IGNORED and a zero-yield adapter deployed instead. Unset LP_GATEWAY_YIELD_SOURCE, or set LP_GATEWAY_IDLE_MODE_IGNORES_SOURCE=true to acknowledge.`,
+        )
+      }
+    }
     // The whole point of idle mode today is "no external audit yet" — a deposit cap is REQUIRED, not optional;
     // an unset cap is a silent-unlimited footgun the real-source path doesn't have (Morpho's own maxDeposit is
     // the bound there). 0 is a valid, deliberately-closed cap; only "unset" or "not a positive integer" fails.
-    expect(cfg.depositCap != null && cfg.depositCap >= 0n, 'source', 'LP_GATEWAY_DEPOSIT_CAP set (bounds total value at risk while unaudited)', cfg.depositCap != null ? `${fmtUsdg(cfg.depositCap)} USDG` : 'unset — required in idle mode, even 0 (closed) is valid, "unset" is not')
+    expect(cfg.depositCap != null && cfg.depositCap >= 0n, 'source', 'LP_GATEWAY_DEPOSIT_CAP set (bounds the idle leg only — see LP_GATEWAY_PRINCIPAL_CAP below for total value at risk)', cfg.depositCap != null ? `${fmtUsdg(cfg.depositCap)} USDG` : 'unset — required in idle mode, even 0 (closed) is valid, "unset" is not')
   } else if (!isAddress(cfg.yieldSource)) {
     fail('source', 'LP_GATEWAY_YIELD_SOURCE set', 'unset / not an address — the curated Morpho USDG vault (see runbook), or set LP_GATEWAY_IDLE_MODE=true + LP_GATEWAY_DEPOSIT_CAP to launch with no yield source at all')
   } else {

@@ -5,10 +5,13 @@
 
 export type HarvestDestination = 'buffer' | 'restake'
 
-/** Where harvested net fees go: 'buffer' (default — credit each depositor's spendable buffer, the
- *  "spend from yield" model) or 'restake' (compound back into Morpho, lifting NAV pro-rata). */
+/** Superseded — the actual money-path resolver is `lib/gateway/harvest.ts#resolveHarvestDestination` (the
+ *  one every consumer actually calls); this one is unused in production. **Earn-vs-LP decision
+ *  (docs/developers/lp-gateway-earn-vs-lp-decision.md, 2026-09-08): the A-4 buffer ledger is dropped —
+ *  LP-Gateway V1 never grows a buffer** — so this now always agrees with that resolver ('restake') rather
+ *  than keep a stale, contradictory 'buffer' default alive here. */
 export function harvestDestination(): HarvestDestination {
-  return (process.env.LP_GATEWAY_HARVEST_DESTINATION ?? 'buffer').toLowerCase() === 'restake' ? 'restake' : 'buffer'
+  return 'restake'
 }
 
 /** Circuit breaker (item 13): auto-PAUSE new deposits on a sustained out-of-range alert. Never

@@ -20,12 +20,12 @@ surrounding system, its docs, and the operator's mental model assume it does dif
 
 | # | Sev | Title | Status |
 |---|---|---|---|
-| **IA-10** | **MEDIUM** | `withdraw` has no try/catch — a frozen adapter **bricks the whole exit**, taking the LP leg down with it. Regresses the `IYieldAdapter` "never reverts" contract and the PM's M-01 / A-1 / F-02 design. | **REAL — fix recommended** |
-| **IA-11** | **MEDIUM** | `depositCap` bounds the **idle leg only**, not total value at risk. `deploy()` reopens headroom, so the real ceiling is **2 × cap**. Directly contradicts the deployment record + the preflight row text. | **REAL — doc + guard fix** |
-| **IA-4** | **MEDIUM** | `compoundQuote` (the runbook's **mandatory** `restake` destination) has no try/catch and **reverts whenever the adapter is at cap** — the normal steady state for a deliberately small cap. Stuck harvest loop + repeated wasted gas. | **REAL — fix recommended** |
-| **IA-3** | **LOW** | Donation griefing: anyone can shut the deposit door for everyone by donating the remaining headroom. Cost = the headroom; recovery = owner-only cap raise. | REAL, bounded |
-| **IA-12** | **LOW** | Preflight has **no upper bound** on `LP_GATEWAY_DEPOSIT_CAP` — a fat-fingered `2^256-1` reads `PASS` under a row that claims to "bound total value at risk". | REAL (operator-error class) |
-| **IA-13** | **LOW** | Idle mode + a configured real `LP_GATEWAY_YIELD_SOURCE` is an **INFO row only** — it cannot fail the preflight, so the real source is silently ignored and a zero-yield adapter ships. | REAL (operator-error class) |
+| **IA-10** | **MEDIUM** | `withdraw` has no try/catch — a frozen adapter **bricks the whole exit**, taking the LP leg down with it. Regresses the `IYieldAdapter` "never reverts" contract and the PM's M-01 / A-1 / F-02 design. | **FIXED** — raw low-level call, serves 0 on any failure instead of reverting (`MintwareIdleYieldAdapter.sol` `withdraw`) |
+| **IA-11** | **MEDIUM** | `depositCap` bounds the **idle leg only**, not total value at risk. `deploy()` reopens headroom, so the real ceiling is **2 × cap**. Directly contradicts the deployment record + the preflight row text. | **FIXED (stronger than recommended)** — new on-chain `MintwareLpGatewayPositionManager.principalCap` bounds `idle + deployedPrincipal + deployedPairedValue` directly (not just the doc/halved-cap workaround); `deposit`/`deploy` revert `PrincipalCapExceeded` above it |
+| **IA-4** | **MEDIUM** | `compoundQuote` (the runbook's **mandatory** `restake` destination) has no try/catch and **reverts whenever the adapter is at cap** — the normal steady state for a deliberately small cap. Stuck harvest loop + repeated wasted gas. | **FIXED** — `try staging.stage(amount) {} catch { emit CompoundDeferred(amount); }`, mirroring `deploy()`'s R3-2 re-stage; deferred quote stays parked in the PM, already counted by `_idle()` |
+| **IA-3** | **LOW** | Donation griefing: anyone can shut the deposit door for everyone by donating the remaining headroom. Cost = the headroom; recovery = owner-only cap raise. | **FIXED** — cap is checked against tracked `suppliedPrincipal` (cumulative vault-initiated deposits minus withdrawals), not live `balanceOf`; a donation no longer moves the cap gate in either direction |
+| **IA-12** | **LOW** | Preflight has **no upper bound** on `LP_GATEWAY_DEPOSIT_CAP` — a fat-fingered `2^256-1` reads `PASS` under a row that claims to "bound total value at risk". | **FIXED** — both `LP_GATEWAY_DEPOSIT_CAP` and `LP_GATEWAY_PRINCIPAL_CAP` are asserted ≤ 100,000 USDG unless `LP_GATEWAY_ALLOW_LARGE_CAP=true` |
+| **IA-13** | **LOW** | Idle mode + a configured real `LP_GATEWAY_YIELD_SOURCE` is an **INFO row only** — it cannot fail the preflight, so the real source is silently ignored and a zero-yield adapter ships. | **FIXED** — now a `FAIL` unless acknowledged via `LP_GATEWAY_IDLE_MODE_IGNORES_SOURCE=true` |
 | **IA-14** | **INFO** | Two independent, differently-behaved readers of `LP_GATEWAY_DEPOSIT_CAP`. `''` → preflight `FAIL`, deploy `0n`. Direction is fail-closed. | Informational |
 | **IA-15** | **INFO** | `setDepositCap` is instant with no timelock and no on-chain ceiling — the *only* exposure bound, while the strictly less consequential harvest-recipient lever got a 48 h timelock. | Informational |
 | IA-1, IA-2, IA-5, IA-6, IA-7, IA-8, IA-9, IA-F1, IA-F2 | — | **Confirmed safe** with tests (see below). | No action |
@@ -434,20 +434,28 @@ $ node scripts/__audit__/idle-mode-env-poc.mjs
 
 ## Verdict
 
+**Update (2026-09-08, post-fix pass):** all four recommended pre-deploy actions below have since landed —
+**IA-10** (raw-call `withdraw`, already committed with the round-3 tooling-sweep reconciliation), **IA-3**
+(donation-proof `suppliedPrincipal` tracking, same commit), **IA-11** (the *stronger* fix, not the documentation
+workaround: an on-chain PM-level `principalCap` bounding `idle + deployedPrincipal + deployedPairedValue`
+directly, so the operator's configured cap now genuinely IS the total-value-at-risk bound, no halving needed),
+**IA-4** (`compoundQuote` now best-effort — `try staging.stage(amount) {} catch { emit CompoundDeferred(amount); }`,
+mirroring `deploy()`'s own R3-2 re-stage), and both preflight gaps (**IA-12**'s 100,000 USDG cap ceiling,
+waivable via `LP_GATEWAY_ALLOW_LARGE_CAP=true`; **IA-13**'s idle-mode/real-source contradiction now a `FAIL`
+unless acknowledged via `LP_GATEWAY_IDLE_MODE_IGNORES_SOURCE=true`). See the Findings table above for exact
+locations. The verdict below is the pre-fix analysis, kept for context.
+
 **Safe to deploy at a small bounded cap as written** — no fund-loss, access-control, or arithmetic bug was
-found, and the isolation-only test suite's claims all hold up under composition. The three MEDIUMs are
-composition and honesty problems rather than exploits: **IA-11** means the operator must set `depositCap` to
-**half** the exposure they actually intend to authorise (or the strings must be corrected), **IA-4** means the
-mandatory `restake` harvest destination will start failing on a loop the moment the instance is full, and
-**IA-10** means a USDG issuer freeze costs access to the LP leg as well as the frozen quote. IA-10 is the one
-worth fixing in the contract before real funds; IA-11 and IA-4 can ship as documented known behaviour if the
-operator is told the real numbers.
+found, and the isolation-only test suite's claims all hold up under composition. The three MEDIUMs were
+composition and honesty problems rather than exploits: **IA-11** meant the operator had to set `depositCap` to
+**half** the exposure they actually intended to authorise (or the strings had to be corrected), **IA-4** meant
+the mandatory `restake` harvest destination would start failing on a loop the moment the instance is full, and
+**IA-10** meant a USDG issuer freeze cost access to the LP leg as well as the frozen quote.
 
-**Recommended pre-deploy actions, in order:**
+**Recommended pre-deploy actions, in order — ALL DONE:**
 
-1. Fix IA-10 (`try`/`catch` around the transfer) — ~6 lines, restores the `IYieldAdapter` contract.
-2. Correct the IA-11 strings in `deploy-lp-gateway-mainnet.mjs:312` and `preflight-…:235`, and halve the
-   configured cap for the recorded step-1 own-funds decision.
-3. Fix IA-4 (exclude compounded fees from the cap, or make the compound best-effort).
-4. Turn IA-13 into a `FAIL` and add IA-12's cap ceiling — both are one-line preflight changes and both guard
-   the 2am path.
+1. ✅ Fix IA-10 (`try`/`catch` around the transfer) — ~6 lines, restores the `IYieldAdapter` contract.
+2. ✅ IA-11 — fixed at the root with an on-chain `principalCap` rather than merely correcting the strings /
+   halving the configured cap.
+3. ✅ Fix IA-4 (best-effort compound, deferred rather than reverted).
+4. ✅ Turn IA-13 into a `FAIL` and add IA-12's cap ceiling.

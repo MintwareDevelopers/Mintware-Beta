@@ -100,7 +100,8 @@ contract CoverageGapRevertPathsTest is Test {
             staging_,
             owner_,
             harvestRecipient_,
-            500
+            500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
     }
 
@@ -316,7 +317,7 @@ contract CoverageGapRevertPathsTest is Test {
             IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), address(this)
         );
         PoolKey memory key = _key(address(usdg), address(pons));
-        factory.createGateway(key, IERC20(address(usdg)), adapter, -600, 600, gwOwner, sink, 2000);
+        factory.createGateway(key, IERC20(address(usdg)), adapter, -600, 600, gwOwner, sink, 2000, type(uint256).max);
         bytes32 poolId = PoolId.unwrap(key.toId());
 
         vm.prank(stranger);

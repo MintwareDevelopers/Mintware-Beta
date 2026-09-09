@@ -11,8 +11,9 @@ import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
-import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
+import {PoolModifyLiquidityTest} from "@uniswap/v4-core/src/test/PoolModifyLiquidityTest.sol";
 
 import {IYieldAdapter} from "../../src/vaults/IYieldAdapter.sol";
 import {MintwareLpGatewayStaging} from "../../src/gateway/MintwareLpGatewayStaging.sol";
@@ -46,6 +47,7 @@ contract MintwareLpGatewayHardeningForkTest is Test {
     MockERC20 internal paired; // 18dp
     PoolKey internal key;
     PoolSwapTest internal swapper;
+    PoolModifyLiquidityTest internal seeder;
     // Re-audit A-5: the PRODUCTION adapter (onlyVault, one-time setVault) over a 4626 source — not the
     // access-control-free MockYieldAdapter. Field so tests can degrade it (per-block cap = illiquidity).
     MintwareERC4626YieldAdapter internal adapter;
@@ -53,6 +55,7 @@ contract MintwareLpGatewayHardeningForkTest is Test {
 
     address internal RECIP = address(0xFEE5);
     address internal alice = address(0xA11CE);
+    address internal seederLp = address(0x5EED);
     int24 internal constant TL = -22980;
     int24 internal constant TU = 22980;
 
@@ -89,13 +92,36 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         staging = new MintwareLpGatewayStaging(IERC20(address(quote)), adapter);
         adapter.setVault(address(staging)); // one-time: the staging is the only address that may move funds
         pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500
+            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 
         swapper = new PoolSwapTest(poolManager);
 
-        // fund alice (depositor) + this test (deploy paired + swaps)
+        // Earn-vs-LP decision (2026-09-08): `deploy()` sources the paired leg by swapping part of the user's
+        // own quote IN-CONTRACT, so the pool must already hold THIRD-PARTY depth for that swap to trade
+        // against — exactly the "existing, curated, already-liquid pool" the gateway is only ever meant to
+        // target. Seed it far above anything this file moves so the seed is never a binding constraint.
+        seeder = new PoolModifyLiquidityTest(poolManager);
+        quote.mint(seederLp, 10_000_000e18);
+        paired.mint(seederLp, 10_000_000e18);
+        vm.startPrank(seederLp);
+        quote.approve(address(seeder), type(uint256).max);
+        paired.approve(address(seeder), type(uint256).max);
+        seeder.modifyLiquidity(
+            key,
+            ModifyLiquidityParams({
+                tickLower: TL - key.tickSpacing,
+                tickUpper: TU + key.tickSpacing,
+                liquidityDelta: 10_000_000e18,
+                salt: bytes32(0)
+            }),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        // fund alice (depositor) + this test (swaps)
         quote.mint(alice, 1_000_000e18);
         quote.mint(address(this), 1_000_000e18);
         paired.mint(address(this), 1_000_000e18);
@@ -106,9 +132,11 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         paired.approve(address(swapper), type(uint256).max);
 
         // alice deposits, owner deploys a balanced position → the pool now has the gateway's liquidity.
+        // 100k staged, half of it zapped into the paired leg: the SAME ~50k-quote / ~50k-paired mint the old
+        // owner-funded `deploy(50k quote, 50k owner paired)` produced, but now 100% user-funded.
         vm.prank(alice);
         pm.deposit(100_000e18);
-        pm.deploy(50_000e18, 50_000e18, 0, block.timestamp);
+        pm.deploy(100_000e18, 50_000e18, 0, 0, block.timestamp);
         vm.roll(block.number + 1);
     }
 
@@ -205,12 +233,17 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         if (!live) return;
         uint256 b0 = block.number;
         IPositionManager posm = IPositionManager(address(pm.positionManager()));
+        // Earn-vs-LP decision: setUp now deploys 100% of the staged quote (no held-back buffer), so the idle
+        // leg this regression needs has to be created explicitly rather than left over by a 50% cap.
+        vm.prank(alice);
+        pm.deposit(50_000e18);
+        vm.roll(b0 + 1);
         adapter.setPerBlockWithdrawCap(10_000e18); // idle shortfall → the exit takes the ENTIRE LP (liq → 0)
         uint256 s = pm.sharesOf(alice);
         vm.prank(alice);
         pm.withdraw(s);
         assertEq(posm.getPositionLiquidity(pm.tokenId()), 0, "LP fully drained (exact zero)");
-        vm.roll(b0 + 1);
+        vm.roll(b0 + 2);
 
         (uint256 qf, uint256 pf) = pm.harvest(block.timestamp); // pre-fix: reverted CannotUpdateEmptyPosition
         assertEq(qf + pf, 0, "nothing to sweep on an emptied position");
@@ -218,18 +251,20 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         adapter.setPerBlockWithdrawCap(0); // liquidity restored (0 = uncapped)
         vm.prank(alice);
         pm.deposit(100_000e18);
-        vm.roll(b0 + 2);
-        pm.deploy(50_000e18, 50_000e18, 0, block.timestamp); // pre-fix: reverted
+        vm.roll(b0 + 3);
+        pm.deploy(100_000e18, 50_000e18, 0, 0, block.timestamp); // pre-fix: reverted
         assertGt(posm.getPositionLiquidity(pm.tokenId()), 0, "redeployed into the same position");
     }
 
-    // A-3 (size): after the balanced setUp deploy ~2/3 of NAV is LP-exposed, above MAX_DEPLOY_BPS (50%),
-    // so ANY further deploy must revert — "most capital stays idle" is an on-chain invariant a
-    // compromised owner key cannot override.
+    // A-3 (size): MAX_DEPLOY_BPS is 10000 (100%) since the earn-vs-lp decision — there is no held-back
+    // buffer policy any more, so this is now purely the OVERDRAW guard: a deploy may never pull more quote
+    // than the instance's total principal at cost (idle + deployedPrincipal). setUp already deployed the
+    // whole 100k, so asking for another 100k is a plain overdraw and must revert — a compromised owner key
+    // still cannot conjure principal that was never deposited.
     function test_fork_A3_deployCapBlocksOverExposure() public {
         if (!live) return;
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployCapExceeded.selector);
-        pm.deploy(1e18, 1e18, 0, block.timestamp);
+        pm.deploy(100_000e18, 50_000e18, 0, 0, block.timestamp);
     }
 
     // A-3 (price): a deploy while spot is far from the clamped-follower reference reverts, so a
@@ -246,13 +281,19 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         _swap(false, -40_000e18); // pump spot far from the reference in one block
         vm.roll(block.number + 1);
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployPriceOutOfBand.selector);
-        pm.deploy(10_000e18, 10_000e18, 0, block.timestamp);
+        pm.deploy(20_000e18, 10_000e18, 0, 0, block.timestamp);
     }
 
     // A-1 (with an LP leg): the adapter goes illiquid on a DEPLOYED position. A full exit delivers the
     // liquid idle + the whole LP; the UNSERVED idle is re-credited as shares — never stranded ownerless.
     function test_fork_A1_withdrawAdapterShort_reCreditsUnserved() public {
         if (!live) return;
+        // Earn-vs-LP decision: setUp deploys 100% of the staged quote, so stage the 50k idle leg this
+        // regression is about explicitly (it used to be the 50% the old cap held back).
+        uint256 b0 = block.number;
+        vm.prank(alice);
+        pm.deposit(50_000e18);
+        vm.roll(b0 + 1);
         adapter.setPerBlockWithdrawCap(10_000e18); // idle is 50k; only 10k can leave this block
         uint256 s = pm.sharesOf(alice);
         vm.prank(alice);

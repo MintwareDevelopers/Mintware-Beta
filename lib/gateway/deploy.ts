@@ -1,21 +1,25 @@
-// LP-gateway pair/deploy orchestration — moves staged (Morpho-earning) quote capital into the target
-// V4 pool once a threshold is reached. Owner-gated on-chain (getOracleSigner('gateway') is the position
-// manager's owner — a DEDICATED Privy seat, not the shared root); the paired leg is acquired by zapping via the MW router seam. YIELD/PRINCIPAL note:
-// this deploys PRINCIPAL from staging into the LP (that's the product) — it never spends principal on a
-// buffer; the yield-first rule governs the buffer path (harvest.ts), not this.
+// LP-gateway deploy orchestration — moves the FULL staged (quote) balance into the target V4 pool once a
+// threshold is reached. Owner-gated on-chain (getOracleSigner('gateway') is the position manager's owner —
+// a DEDICATED Privy seat, not the shared root).
+//
+// **Earn-vs-LP decision (docs/developers/lp-gateway-earn-vs-lp-decision.md, 2026-09-08):** the paired leg is
+// no longer acquired off-chain and supplied by the owner — `deploy()` itself swaps part of the user's own
+// staged quote into the paired leg, atomically, in-contract. This cron's job is now just to SIZE the call
+// (`quoteToDeploy`, `swapAmount`, `minPairedOut`, `minLiquidity`) from live pool state and submit it; it
+// executes no swap of its own. There is also no held-back buffer any more — the "deploy fraction" ratio
+// (`LP_GATEWAY_DEPLOY_RATIO_BPS`) is retired; every run deploys the entire staged balance above the threshold.
 //
 // DARK-LAUNCHED, fail-closed, OFF by default: no-ops unless LP_GATEWAY_DEPLOY_ENABLED === 'true' and the
-// config + staging address + oracle signer resolve. Also no-ops (safely) while the zap seam is unwired.
+// config + staging address + oracle signer resolve.
 
-import { createWalletClient, http } from 'viem'
+import { createWalletClient, http, decodeEventLog } from 'viem'
 import { getServiceClient } from '@/lib/web2/supabase'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { LP_GATEWAY_ABI, LP_STAGING_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { listActiveInstances, computePoolId } from '@/lib/gateway/registry'
-import { swapQuoteToPaired } from '@/lib/gateway/routerSwap'
 import { readCurrentTick, type GatewayPoolKey } from '@/lib/gateway/poolState'
-import { getSqrtPriceAtTick, getLiquidityForAmounts, isInRange, applyToleranceBps, Q96 } from '@/lib/gateway/v4Math'
+import { getSqrtPriceAtTick, getLiquidityForAmounts, isInRange, applyToleranceBps, quoteToPairedAtSpot, Q96 } from '@/lib/gateway/v4Math'
 import { fetchHotPools, type PoolCandidate } from '@/lib/gateway/discovery'
 
 export type DeployInstance = { positionManager: `0x${string}`; staging: `0x${string}` }
@@ -24,7 +28,7 @@ type SupabaseClient = ReturnType<typeof getServiceClient>
 type Logger = { info: (t: string, m: string, c?: Record<string, unknown>) => void; warn: (t: string, m: string, c?: Record<string, unknown>) => void; error: (t: string, m: string, c?: Record<string, unknown>) => void }
 
 type Reason =
-  | 'disabled' | 'config' | 'signer' | 'below_threshold' | 'zap_unwired' | 'tx' | 'duplicate'
+  | 'disabled' | 'config' | 'signer' | 'below_threshold' | 'tx' | 'duplicate'
   | 'min_liquidity_unset' // kept for callers that match on it: the computed floor came out 0
   | 'out_of_range' // spot is outside the gateway's fixed range — a balanced two-leg deploy is not what the cron intended
   | 'price_unreadable' // slot0 / pool coordinates unreadable — no honest floor can be set
@@ -37,16 +41,19 @@ export type DeployOutcome =
   | { ok: true; deployTx: `0x${string}`; quoteDeployedAtomic: bigint; pairedDeployedAtomic: bigint; minLiquidity: bigint }
   | { ok: false; status: number; error: string; reason: Reason }
 
-const deployRatioBps = () => {
-  const n = Number(process.env.LP_GATEWAY_DEPLOY_RATIO_BPS ?? '5000') // default 50% deployed / 50% idle
-  return Number.isInteger(n) && n >= 1 && n <= 10_000 ? n : 5000
-}
-
 // O-9 / HO-8: the sandwich floor is computed PER POOL from spot, not one global absolute-L env value.
 export const DEFAULT_DEPLOY_TOL_BPS = 100 // 1% below the liquidity the amounts fund at the current spot
 const deployTolBps = () => {
   const n = Number(process.env.LP_GATEWAY_DEPLOY_TOL_BPS ?? String(DEFAULT_DEPLOY_TOL_BPS))
   return Number.isInteger(n) && n >= 0 && n < 10_000 ? n : DEFAULT_DEPLOY_TOL_BPS
+}
+
+// Earn-vs-LP decision: bounds the in-contract zap's OWN slippage floor (minPairedOut) — the same knob that
+// used to gate the off-chain executor's swap (routerSwap.ts), now gating the on-chain one instead.
+export const DEFAULT_SWAP_SLIPPAGE_BPS = 100 // 1%
+const swapSlippageBps = () => {
+  const n = Number(process.env.LP_GATEWAY_SWAP_SLIPPAGE_BPS ?? String(DEFAULT_SWAP_SLIPPAGE_BPS))
+  return Number.isInteger(n) && n >= 0 && n < 10_000 ? n : DEFAULT_SWAP_SLIPPAGE_BPS
 }
 
 export type MinLiquidityInput = {
@@ -55,7 +62,8 @@ export type MinLiquidityInput = {
   tickUpper: number
   quoteIsCurrency0: boolean
   quoteToDeploy: bigint
-  pairedOut: bigint
+  pairedOut: bigint // an ESTIMATE now (quoteToPairedAtSpot), not a realized off-chain swap output — the
+  // real swap runs on-chain, inside the same deploy() call this floor gates.
   tolBps?: number // default DEFAULT_DEPLOY_TOL_BPS
   envFloor?: bigint // optional operator floor (LP_GATEWAY_DEPLOY_MIN_LIQUIDITY) — max(computed, env)
 }
@@ -193,34 +201,15 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
   }
   const wallet = createWalletClient({ account, chain: publicClient.chain, transport: http(cfg.rpcUrl) })
 
-  // IL control: deploy only a FRACTION of staged into the IL-bearing LP; the rest stays idle in Morpho,
-  // earning lending yield with ZERO impermanent loss. LP_GATEWAY_DEPLOY_RATIO_BPS (default 5000 = 50%)
-  // is the knob — lower it for a more conservative (lower-IL) posture on a volatile meme pool.
-  // Re-audit A-3 (F-06) + red-team RT-9a: the old `staged × ratio` was PER-RUN (converged to ~100% deployed),
-  // and a NAV-based target re-opened after every drawdown — a dumping paired token let the honest top-up
-  // rule cycle 2/3 of principal into the pool. Target the fraction of PRINCIPAL AT COST instead:
-  // deployable = ratio·(staged + deployedPrincipal) − deployedPrincipal. Cost basis never falls with price,
-  // so a drawdown NEVER triggers a top-up. Mirrors the contract's own MAX_DEPLOY_BPS check (which would
-  // revert anyway) and honours a tighter operator ratio.
-  const deployedPrincipal = (await publicClient.readContract({
-    address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deployedPrincipal',
-  })) as bigint
-  const principal = staged + deployedPrincipal
-  const target = (principal * BigInt(deployRatioBps())) / 10_000n
-  const deployable = target > deployedPrincipal ? target - deployedPrincipal : 0n
-  if (deployable <= 0n) {
-    return { ok: false, status: 200, error: 'deployed fraction is already at/above the target ratio', reason: 'below_threshold' }
-  }
-  // Split the deployable amount: half stays quote, half zaps to the paired leg (balanced-range target).
-  const quoteToDeploy = deployable / 2n
-  const zap = await swapQuoteToPaired({ cfg, account, wallet, publicClient, quoteAmount: deployable - quoteToDeploy, log })
-  if (zap.pairedOut <= 0n) {
-    // Fail-closed: without the paired leg deploy() can't proceed. The seam is honest, not a bad swap.
-    return { ok: false, status: 200, error: 'paired-leg zap not available', reason: 'zap_unwired' }
+  // Earn-vs-LP decision: no held-back buffer any more — deploy the ENTIRE staged balance (subject only to
+  // the dust threshold already checked above). The old ratio-of-principal-at-cost target is retired.
+  const quoteToDeploy = staged
+  if (quoteToDeploy <= 0n) {
+    return { ok: false, status: 200, error: 'nothing staged to deploy', reason: 'below_threshold' }
   }
 
   // Re-audit A-3 + round-2 O-9 (HO-8): the M-03 sandwich floor is computed PER POOL from the live spot —
-  // the exact liquidity the contract will mint for (quoteToDeploy, pairedOut) at this price, haircut by
+  // the exact liquidity the contract will mint for (quoteForMint, pairedOut) at this price, haircut by
   // LP_GATEWAY_DEPLOY_TOL_BPS (default 1%). A single global absolute-L env value cannot be right for
   // every pool (L depends on decimals, price and range); it now survives only as an OPTIONAL extra floor
   // (max(computed, env)). Fail-closed: unreadable price, out-of-range spot, or a computed 0 ⇒ refuse.
@@ -232,6 +221,8 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
   let quoteIsCurrency0: boolean
   let poolKey: GatewayPoolKey
   let quoteAsset: `0x${string}`
+  let swapAmount: bigint
+  let minPairedOut: bigint
   try {
     const pm = (functionName: 'poolKey' | 'poolManager' | 'tickLower' | 'tickUpper' | 'quoteAsset' | 'referencePrice' | 'maxDeviationBps') =>
       publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName })
@@ -248,13 +239,22 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
     }
     spotSqrtPriceX96 = slot0.sqrtPriceX96
     quoteIsCurrency0 = quoteAsset.toLowerCase() === poolKey.currency0.toLowerCase()
+
+    // Earn-vs-LP decision: size the in-contract zap. A straight half-split targets a roughly-balanced
+    // two-sided mint for the gateway's fixed, roughly-centered wide range (±22980 ticks by default) — the
+    // SAME assumption the old off-chain zap made. `minPairedOut` floors the swap's own slippage at the
+    // theoretical spot-price output, haircut by LP_GATEWAY_SWAP_SLIPPAGE_BPS.
+    swapAmount = quoteToDeploy / 2n
+    const expectedPairedOut = quoteToPairedAtSpot(swapAmount, slot0.sqrtPriceX96, quoteIsCurrency0)
+    minPairedOut = applyToleranceBps(expectedPairedOut, swapSlippageBps())
+
     floor = computeDeployMinLiquidity({
       sqrtPriceX96: slot0.sqrtPriceX96,
       tickLower: Number(tickLower),
       tickUpper: Number(tickUpper),
       quoteIsCurrency0,
-      quoteToDeploy,
-      pairedOut: zap.pairedOut,
+      quoteToDeploy: quoteToDeploy - swapAmount,
+      pairedOut: expectedPairedOut,
       tolBps: deployTolBps(),
       envFloor: BigInt(process.env.LP_GATEWAY_DEPLOY_MIN_LIQUIDITY ?? '0'),
     })
@@ -346,23 +346,42 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
 
   try {
     // M-03 slippage floor (absolute L units) — spot-computed per pool above; deploy() reverts below it.
+    // Earn-vs-LP decision: `swapAmount`/`minPairedOut` replace the old owner-supplied `pairedAmount` — the
+    // contract executes the zap itself.
     const deployTx = await wallet.writeContract({
       address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deploy',
-      args: [quoteToDeploy, zap.pairedOut, minLiquidity, BigInt(Math.floor(Date.now() / 1000) + 600)],
+      args: [quoteToDeploy, swapAmount, minPairedOut, minLiquidity, BigInt(Math.floor(Date.now() / 1000) + 600)],
       account, chain: publicClient.chain, gas: 1_200_000n,
     })
     const receipt = await publicClient.waitForTransactionReceipt({ hash: deployTx })
     if (receipt.status !== 'success') return { ok: false, status: 502, error: 'deploy_reverted', reason: 'tx' }
+
+    // The real paired amount is only known once the in-contract swap has run — decode it from the
+    // `Deployed` event rather than reporting the pre-tx estimate.
+    let pairedDeployedAtomic = minPairedOut // conservative fallback if the event can't be found/decoded
+    for (const rawLog of receipt.logs) {
+      if (rawLog.address.toLowerCase() !== instance.positionManager.toLowerCase()) continue
+      try {
+        const decoded = decodeEventLog({ abi: LP_GATEWAY_ABI, data: rawLog.data, topics: rawLog.topics })
+        if (decoded.eventName === 'Deployed') {
+          pairedDeployedAtomic = (decoded.args as { pairedUsed: bigint }).pairedUsed
+          break
+        }
+      } catch {
+        // not the Deployed event (or not decodable with this ABI) — keep scanning
+      }
+    }
+
     // Record the settled tx against the claim (best-effort; the claim row already bounds the window).
     if (opts.supabase) {
       await opts.supabase
         .from('gateway_deploy_events')
-        .update({ deploy_tx: deployTx.toLowerCase(), quote_deployed_atomic: quoteToDeploy.toString(), paired_deployed_atomic: zap.pairedOut.toString() })
+        .update({ deploy_tx: deployTx.toLowerCase(), quote_deployed_atomic: quoteToDeploy.toString(), paired_deployed_atomic: pairedDeployedAtomic.toString() })
         .eq('position_manager', instance.positionManager.toLowerCase())
         .eq('chain_id', cfg.chainId)
         .eq('window_key', windowKey)
     }
-    return { ok: true, deployTx, quoteDeployedAtomic: quoteToDeploy, pairedDeployedAtomic: zap.pairedOut, minLiquidity }
+    return { ok: true, deployTx, quoteDeployedAtomic: quoteToDeploy, pairedDeployedAtomic, minLiquidity }
   } catch (e) {
     log?.error('gateway.deploy', 'deploy tx failed', { error: String(e) })
     return { ok: false, status: 502, error: 'deploy_failed', reason: 'tx' }

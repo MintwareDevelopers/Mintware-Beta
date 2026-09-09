@@ -47,7 +47,8 @@ contract PmMarksHarness is MintwareLpGatewayPositionManager {
             MintwareLpGatewayStaging(address(0x3333)),
             address(0x4444),
             address(0x5555),
-            500
+            500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         )
     {}
 

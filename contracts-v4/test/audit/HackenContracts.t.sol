@@ -119,7 +119,8 @@ contract HackenLpGatewayUnitTest is Test {
 
     function _new(PoolKey memory key, int24 tl, int24 tu) internal returns (MintwareLpGatewayPositionManager) {
         return new MintwareLpGatewayPositionManager(
-            IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), key, IERC20(address(usdg)), tl, tu, staging, address(this), address(0x5151), 500
+            IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), key, IERC20(address(usdg)), tl, tu, staging, address(this), address(0x5151), 500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
     }
 
@@ -151,11 +152,13 @@ contract HackenLpGatewayUnitTest is Test {
         PoolKey memory k = _key(address(usdg), address(pons), address(0));
         vm.expectRevert(MintwareLpGatewayPositionManager.BadDeviationBand.selector);
         new MintwareLpGatewayPositionManager(
-            IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), k, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 0
+            IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), k, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 0,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         vm.expectRevert(MintwareLpGatewayPositionManager.BadDeviationBand.selector);
         new MintwareLpGatewayPositionManager(
-            IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), k, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 5001
+            IPoolManager(slot0Pm), IPositionManager(stub), IPermit2Minimal(stub), k, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 5001,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
     }
 
@@ -251,7 +254,8 @@ contract HackenLpGatewayForkTest is Test {
         staging = new MintwareLpGatewayStaging(IERC20(address(quote)), adapter);
         adapter.setVault(address(staging));
         pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500
+            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 
@@ -268,6 +272,11 @@ contract HackenLpGatewayForkTest is Test {
             paired.approve(address(lpHelper), type(uint256).max);
             vm.stopPrank();
         }
+
+        // Earn-vs-lp decision (2026-09-08): `deploy` sources the paired leg by swapping the depositor's own quote
+        // through THIS pool, so every rig needs third-party depth to trade against -- the "deep curated pool" the
+        // docs already require. Tests that want a DEEPER pool still add more on top with `_addExternalLiquidity`.
+        _addExternalLiquidity(1_500_000e18);
     }
 
     /// Third-party depth in the same range (the "deep curated pool" the docs rely on).
@@ -338,9 +347,11 @@ contract HackenLpGatewayForkTest is Test {
     function test_F01a_staleRefRally_soleHolderExitsWhole_noLeftover_FIXED() public {
         if (!live) return;
         _rig();
-        _addExternalLiquidity(1_500_000e18); // deep pool: gateway will be ~10% of depth
-        _deposit(alice, 200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp); // 100k ≤ 50% of 200k → passes the cap
+        _addExternalLiquidity(1_500_000e18); // extra depth on top of the rig's own: gateway ~10% of the pool
+        // Earn-vs-lp decision: alice funds the paired leg herself (300k in, 200k staged with half zapped), which
+        // reproduces the same idle 100k / LP 200k / NAV 300k position the old owner-funded call produced.
+        _deposit(alice, 300_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp); // well within the 100% overdraw guard
         vm.roll(block.number + 1);
         uint128 liqBefore = _liq();
         assertGt(liqBefore, 0);
@@ -387,9 +398,10 @@ contract HackenLpGatewayForkTest is Test {
         if (!live) return;
         _rig();
         _addExternalLiquidity(1_500_000e18);
-        _deposit(alice, 100_000e18);
-        _deposit(bob, 100_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp); // 100k of 200k NAV → cap passes
+        // 150k each (was 100k): the depositors fund the paired leg now. Still exactly 50/50 holders.
+        _deposit(alice, 150_000e18);
+        _deposit(bob, 150_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp); // 200k of 300k principal at cost
         vm.roll(block.number + 1);
         // let the follower settle on 1.0 (deploy anchored it there already)
 
@@ -438,8 +450,8 @@ contract HackenLpGatewayForkTest is Test {
         if (!live) return;
         _rig();
         _addExternalLiquidity(1_500_000e18);
-        _deposit(alice, 200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        _deposit(alice, 300_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         vm.roll(block.number + 1);
 
         _sellPaired(bob, 600_000e18); // crash, no gateway action → ref stays at 1.0
@@ -461,8 +473,8 @@ contract HackenLpGatewayForkTest is Test {
         if (!live) return;
         uint256 b0 = block.number; // absolute baselines (via-IR may CSE `block.number` across `vm.roll`)
         _rig();
-        _deposit(alice, 200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp); // idle 100k, LP 200k (100k quote + 100k paired @1.0)
+        _deposit(alice, 300_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp); // idle 100k, LP 200k (100k quote + ~100k paired @1.0)
         vm.roll(b0 + 1);
         assertGt(staging.maxUnstageable(), 90_000e18, "idle quote is liquid and available");
         uint256 idle = staging.stagedAssets();
@@ -504,8 +516,8 @@ contract HackenLpGatewayForkTest is Test {
         if (!live) return;
         uint256 b0 = block.number; // absolute baselines (via-IR may CSE `block.number` across `vm.roll`)
         _rig();
-        _deposit(alice, 200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        _deposit(alice, 300_000e18); // +100k: the depositor funds the paired leg since the earn-vs-lp decision
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         vm.roll(b0 + 1);
         _buyPaired(bob, 10_000e18); // accrue some fees
         _sellPaired(bob, 5_000e18);
@@ -545,25 +557,27 @@ contract HackenLpGatewayForkTest is Test {
 
     // ── F-03 · deploy cap is on quote PRINCIPAL AT COST (by design) ─────────────────────────
 
-    /// F-03 — BY DESIGN. After one balanced deploy the LP-exposed fraction of marked NAV is ~66.7%
-    /// (> MAX_DEPLOY_BPS 50%): the cap bounds depositor quote PRINCIPAL AT COST (`deployedPrincipal` vs
-    /// staged + deployedPrincipal), not the marked LP value — the paired leg is OWNER capital added on top,
-    /// so it is not depositor exposure. Cost basis never falls with price, which is what stops the RT-9a
-    /// crash-cycle from re-opening the cap (see RedTeamOnchainFork RT-9a/9b).
-    function test_F03_deployCap_isQuoteLegOnly_exposureExceeds50pct() public {
+    /// F-03 — RE-BASED for the earn-vs-lp decision (2026-09-08). The original answer was "the LP-exposed
+    /// fraction of marked NAV exceeds MAX_DEPLOY_BPS, and that is fine, because the paired leg is OWNER capital
+    /// added on top and therefore not depositor exposure." BOTH halves of that are now false: MAX_DEPLOY_BPS is
+    /// 10000 (the held-back-buffer policy was deleted with the yield that justified it), and the paired leg is
+    /// depositor quote that changed form through the in-contract zap, so it IS depositor exposure — the whole
+    /// position is. What survives, and is the part that stops the RT-9a crash-cycle from re-opening headroom, is
+    /// that `deployedPrincipal` measures the quote leg AT COST and never falls with price.
+    function test_F03_deployGuard_isQuoteLegAtCost_wholePositionIsDepositorExposure() public {
         if (!live) return;
         _rig();
         _deposit(alice, 200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         uint256 nav = pm.totalNav();
         uint256 deployed = nav - staging.stagedAssets();
         emit log_named_uint("deployed bps of NAV", deployed * 10_000 / nav);
-        assertGt(deployed * 10_000 / nav, 6_000, "F-03: >60% of marked NAV is LP-exposed after a balanced deploy");
-        assertEq(pm.deployedPrincipal(), 100_000e18, "...but depositor principal at cost in the LP is exactly 50%");
-        // Any further quote deploy is blocked — the cap is on principal at cost, already at its 50% ceiling.
+        assertGt(deployed * 10_000 / nav, 9_000, "essentially all of NAV is LP-exposed -- and all of it is depositor capital");
+        assertApproxEqRel(pm.deployedPrincipal(), 100_000e18, 0.01e18, "deployedPrincipal counts only the QUOTE leg, at cost");
+        // Any further deploy is blocked: with the whole principal already at work there is nothing left to pull.
         vm.roll(block.number + 1);
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployCapExceeded.selector);
-        pm.deploy(1e18, 0, 0, block.timestamp);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
     }
 
     // ── F-04 · stale follower blocks deploy until walked ────────────────────────────────────
@@ -576,14 +590,14 @@ contract HackenLpGatewayForkTest is Test {
         if (!live) return;
         _rig();
         _addExternalLiquidity(1_500_000e18);
-        _deposit(alice, 200_000e18);
-        pm.deploy(20_000e18, 20_000e18, 0, block.timestamp); // small: 40k/240k ≈ 17% LP-exposed
+        _deposit(alice, 220_000e18); // +20k: the depositor funds the zapped paired leg
+        pm.deploy(40_000e18, 20_000e18, 0, 0, block.timestamp); // small: 40k LP of a 220k NAV ≈ 18% LP-exposed
         vm.roll(block.number + 1);
         _buyPaired(bob, 400_000e18); // legit rally, > band
         uint256 b0 = block.number;
         vm.roll(b0 + 3);
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployPriceOutOfBand.selector);
-        pm.deploy(10_000e18, 10_000e18, 0, block.timestamp);
+        pm.deploy(20_000e18, 10_000e18, 0, 0, block.timestamp);
         // walk the follower with owner harvests (one step per block; absolute baselines — see F-01a note)
         uint256 steps;
         for (uint256 i; i < 12; i++) {
@@ -591,7 +605,9 @@ contract HackenLpGatewayForkTest is Test {
             pm.harvest(block.timestamp);
             steps++;
             (bool ok,) = address(pm).call(
-                abi.encodeWithSelector(pm.deploy.selector, uint256(10_000e18), uint256(10_000e18), uint128(0), block.timestamp)
+                abi.encodeWithSelector(
+                    pm.deploy.selector, uint256(20_000e18), uint256(10_000e18), uint256(0), uint128(0), block.timestamp
+                )
             );
             if (ok) break;
         }
@@ -606,8 +622,8 @@ contract HackenLpGatewayForkTest is Test {
     function test_VS_permit2AllowanceRevokedAfterDeploy() public {
         if (!live) return;
         _rig();
-        _deposit(alice, 200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        _deposit(alice, 300_000e18); // +100k: the depositor funds the paired leg since the earn-vs-lp decision
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         (uint160 aq,,) = IPermit2AllowanceView(PERMIT2).allowance(address(pm), address(quote), address(posm));
         (uint160 ap,,) = IPermit2AllowanceView(PERMIT2).allowance(address(pm), address(paired), address(posm));
         assertEq(aq, 0);
@@ -620,8 +636,8 @@ contract HackenLpGatewayForkTest is Test {
     function test_VS_pairedTokenReentrancyBlocked() public {
         if (!live) return;
         _rig();
-        _deposit(alice, 200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        _deposit(alice, 300_000e18); // +100k: the depositor funds the paired leg since the earn-vs-lp decision
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         vm.roll(block.number + 1);
         paired.setReenterTarget(address(pm));
         uint256 s = pm.sharesOf(alice);
@@ -637,9 +653,10 @@ contract HackenLpGatewayForkTest is Test {
         if (!live) return;
         _rig();
         _addExternalLiquidity(1_500_000e18);
-        _deposit(alice, 100_000e18);
-        _deposit(bob, 100_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        // 150k each: the depositors fund the paired leg. Still exactly 50/50 holders.
+        _deposit(alice, 150_000e18);
+        _deposit(bob, 150_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         vm.roll(block.number + 1);
         uint128 liqBefore = _liq();
         _sellPaired(alice, 300_000e18); // alice dumps then withdraws
@@ -655,8 +672,8 @@ contract HackenLpGatewayForkTest is Test {
         if (!live) return;
         _rig();
         _addExternalLiquidity(1_500_000e18);
-        _deposit(alice, 200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        _deposit(alice, 300_000e18); // +100k: the depositor funds the paired leg since the earn-vs-lp decision
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         vm.roll(block.number + 1);
         uint256 navFair = pm.totalNav();
         _sellPaired(bob, 400_000e18);

@@ -64,7 +64,8 @@ contract SetupLpGatewayTestnet is Script {
         // 3) the gateway (owner + harvestRecipient = deployer for the testnet run).
         MintwareLpGatewayStaging staging = new MintwareLpGatewayStaging(IERC20(address(usdg)), adapter);
         MintwareLpGatewayPositionManager pm = new MintwareLpGatewayPositionManager(
-            poolManager, positionManager, permit2, key, IERC20(address(usdg)), tickLower, tickUpper, staging, deployer, deployer, 500
+            poolManager, positionManager, permit2, key, IERC20(address(usdg)), tickLower, tickUpper, staging, deployer, deployer, 500,
+            type(uint256).max // IA-11 principal cap: uncapped on this throwaway mock testnet rig
         );
         staging.setController(address(pm));
 

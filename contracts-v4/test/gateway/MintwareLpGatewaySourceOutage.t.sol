@@ -51,7 +51,8 @@ contract MintwareLpGatewaySourceOutageTest is Test {
         address stub = address(new Stub());
         pm = new MintwareLpGatewayPositionManager(
             IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub),
-            key, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 500
+            key, IERC20(address(usdg)), -600, 600, staging, address(this), address(0x5151), 500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
         for (uint256 i; i < 2; i++) {
@@ -128,7 +129,10 @@ contract MintwareLpGatewaySourceOutageTest is Test {
         _dep(alice, 100_000e6);
         src.setRevertPreview(true);
         vm.expectRevert(MintwareLpGatewayPositionManager.SourceUnavailable.selector);
-        pm.deploy(10_000e6, 0, 0, block.timestamp);
+        // Earn-vs-LP decision (2026-09-08): swapAmount = 0 (nothing zapped into the paired leg). The cap sizing
+        // reads the reserve FIRST, so this reverts `SourceUnavailable` long before the in-contract swap — the
+        // mock pool manager is never asked to trade.
+        pm.deploy(10_000e6, 0, 0, 0, block.timestamp);
         // stage() itself succeeds (a 4626 deposit never touches previewRedeem) — it is the post-stage `_syncIdle`
         // refresh that trips, so the WHOLE tx reverts and nothing is stranded half-staged.
         vm.expectRevert(MintwareLpGatewayPositionManager.SourceUnavailable.selector);

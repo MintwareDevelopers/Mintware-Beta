@@ -48,7 +48,8 @@ contract MintwareLpGatewayPositionManagerTest is Test {
         address stub = address(new Stub());
         pm = new MintwareLpGatewayPositionManager(
             IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub),
-            key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink, 2000
+            key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink, 2000,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 
@@ -103,7 +104,10 @@ contract MintwareLpGatewayPositionManagerTest is Test {
     function test_deploy_onlyOwner() public {
         vm.prank(alice);
         vm.expectRevert();
-        pm.deploy(1, 1, 0, block.timestamp);
+        // Earn-vs-LP decision (2026-09-08): deploy(quoteToDeploy, swapAmount, minPairedOut, minLiquidity,
+        // deadline) — no owner-supplied paired leg any more. Values are irrelevant here: `onlyOwner` reverts
+        // before any pool interaction, so this mock rig never reaches the in-contract swap.
+        pm.deploy(2, 1, 0, 0, block.timestamp);
     }
 
     function test_harvest_onlyOwner() public {

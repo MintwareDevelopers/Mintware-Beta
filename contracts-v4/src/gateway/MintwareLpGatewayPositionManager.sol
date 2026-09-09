@@ -9,10 +9,13 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IUnlockCallback} from "@uniswap/v4-core/src/interfaces/callback/IUnlockCallback.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
@@ -30,30 +33,70 @@ interface IPermit2Minimal {
 }
 
 /// @title  MintwareLpGatewayPositionManager
-/// @notice Phase-1 LP gateway: one aggregate Uniswap V4 position per pool, wrapping the OFFICIAL V4
-///         PositionManager periphery. Depositors get entry-NAV shares (mark-to-market at deposit; no
-///         fee-growth checkpoint accounting). Idle quote-asset earns in the staging reserve (Morpho)
-///         until the owner deploys it into the pool's existing range. Harvest collects fees via a
-///         zero-liquidity-delta call — principal is never touched — for the yield-first spend buffer.
-/// @dev    Deliberately thin: all position math is Uniswap's audited periphery (PositionManager +
-///         LiquidityAmounts) and pool state is read via StateLibrary. NAV values the deployed leg at
-///         the current pool (spot) price — an LP position is IL-exposed by construction, so this is
-///         the honest mark; NO par or guaranteed-value claim is made or implied anywhere.
-///         Separate product surface: touches none of the vault / JIT / YPN-treasury contracts.
-contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
+/// @notice The **LP** product (docs/developers/lp-gateway-earn-vs-lp-decision.md, 2026-09-08): one aggregate
+///         Uniswap V4 position per pool, wrapping the OFFICIAL V4 PositionManager periphery. Depositors get
+///         entry-NAV shares (mark-to-market at deposit; no fee-growth checkpoint accounting). Quote-asset
+///         (USDG) briefly sits in the staging reserve — a doorway, not a feature — between a user's deposit
+///         and the owner's next `deploy()`, which converts the FULL committed amount (no held-back buffer;
+///         MAX_DEPLOY_BPS = 10000) into a two-sided position by swapping part of it INTO the paired leg
+///         atomically, in-contract. Harvest collects fees via a zero-liquidity-delta call — principal is
+///         never touched.
+/// @dev    Deliberately thin: all LP-position math is Uniswap's audited periphery (PositionManager +
+///         LiquidityAmounts) and pool state is read via StateLibrary; the ONLY swap logic this contract owns
+///         is the zap (`deploy()`'s quote→paired conversion + its leftover-paired cleanup swap), executed via
+///         the standard V4 unlock/settle round-trip. NAV values the deployed leg at the current pool (spot)
+///         price — an LP position is IL-exposed by construction, and **100% of that IL is the user's** —
+///         Mintware supplies no capital to any position and bears none of it. This is the honest mark; NO par
+///         or guaranteed-value claim is made or implied anywhere. Earn (lending, no IL, no pairing) is a
+///         SEPARATE product (`MintwareERC4626YieldAdapter`), never fused with this one. Separate product
+///         surface: touches none of the vault / JIT / YPN-treasury contracts.
+contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnlockCallback {
     using SafeERC20 for IERC20;
     using StateLibrary for IPoolManager;
     using PoolIdLibrary for PoolKey;
 
     uint256 private constant VIRTUAL = 1e6;
     uint256 private constant Q96 = 0x1000000000000000000000000;
-    // Hard ceiling on the fraction of depositor PRINCIPAL (cost basis, not marked value) that may sit in the LP
-    // (re-audit A-3; red-team RT-9a). The off-chain "capped deploy fraction" was per-run and converged to
-    // ~100%; a cap on MARKED value re-opened after every drawdown (a dumping paired token let the honest
-    // top-up rule cycle 2/3 of principal into the pool). Cost basis never falls with price, so "at most half
-    // of what depositors put in is ever LP-exposed" is an on-chain invariant a compromised owner key cannot
-    // override. Constant (not owner-settable) by design.
-    uint16 public constant MAX_DEPLOY_BPS = 5000;
+    // Bound on the fraction of depositor PRINCIPAL (cost basis, not marked value) that may sit in the LP at
+    // once (re-audit A-3; red-team RT-9a). **Earn-vs-LP decision (docs/developers/lp-gateway-earn-vs-lp-
+    // decision.md, 2026-09-08): the "hold half back" SIZE POLICY is retired** — LP is now a single, separate
+    // product where the user's ENTIRE committed capital is deployed (no held-back buffer to "earn" on while
+    // idle; Earn is its own opt-in, no-IL lending product, gated on real ERC-4626 capacity, never fused with
+    // LP). `MAX_DEPLOY_BPS = 10000` (100%) so this constant now only guards against overdrawing MORE quote
+    // than total principal — an accounting sanity check, not a risk-sizing lever. Cost basis never falls with
+    // price, so the guard itself stays meaningful even though the ratio it bounds no longer is. Constant (not
+    // owner-settable) by design.
+    uint16 public constant MAX_DEPLOY_BPS = 10_000;
+
+    /// @notice IA-11 hardening: the honest ceiling on TOTAL depositor-relevant value this gateway will ever
+    ///         hold at once, in the SAME cost-basis terms as `deployedPrincipal` (never moves with price).
+    ///         `MAX_DEPLOY_BPS` above answers a DIFFERENT question ("what fraction of CURRENT principal may sit
+    ///         in the illiquid/IL-exposed LP leg") and was never a size cap — deploying reduces idle and grows
+    ///         `deployedPrincipal` by the same amount, so MAX_DEPLOY_BPS's own denominator (idle + deployedPrincipal)
+    ///         reopens headroom every time capital moves into the LP, letting repeated deploy-then-refill cycles
+    ///         admit unbounded cumulative depositor quote over time; and the owner's PAIRED-leg top-up in
+    ///         `deploy()` (subsidised from the owner's own balance, matched against the depositor's quote leg)
+    ///         was NEVER counted against anything at all, adding free, unbounded NAV on every deploy. `deposit`
+    ///         and `deploy` both now revert `PrincipalCapExceeded` rather than push
+    ///         `idle + deployedPrincipal + deployedPairedValue` above this — a live, monotone-with-real-value
+    ///         figure, not a per-cycle fraction, so no sequence of deploy/refill/redeploy can ever exceed it.
+    ///         Owner-adjustable like the idle adapter's own `depositCap` (mirrors it 1:1 for an idle-mode rig,
+    ///         wired from the SAME `LP_GATEWAY_DEPOSIT_CAP` env value by the deploy script) — 0 at construction
+    ///         closes growth until explicitly raised, matching that adapter's fail-closed default. Lowering it
+    ///         only blocks further growth; it never forces a withdrawal or touches funds already held.
+    ///         **Earn-vs-LP decision (2026-09-08):** the owner-subsidy path this paragraph describes is now
+    ///         DELETED outright (see `deployedPairedValue` below) — `principalCap` remains as the real,
+    ///         absolute TVL-at-risk bound regardless, since it is still the only thing standing between "an
+    ///         unaudited pilot" and "no size limit at all."
+    uint256 public principalCap;
+    /// @notice Cost-basis quote-equivalent value of the paired leg currently in the LP. **Earn-vs-LP decision
+    ///         (2026-09-08):** no longer an owner subsidy — the owner-funded `deploy()` path is deleted
+    ///         outright, so every wei this tracks is 100% USER USDG that changed form through the in-contract
+    ///         zap swap. Mirrors `deployedPrincipal`'s discipline exactly: priced once at deploy time (never
+    ///         re-marked with price), incremented in `deploy()`, decremented pro-rata by the SAME liquidity
+    ///         fraction as `deployedPrincipal` on every withdrawal. Still bounded by `principalCap` (IA-11) —
+    ///         a rounding/consistency guard now rather than a defense against unbounded owner-injected value.
+    uint256 public deployedPairedValue;
 
     IPoolManager public immutable poolManager;
     IPositionManager public immutable positionManager;
@@ -164,6 +207,9 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     error PoolNotInitialized(); // XR-2 / X-7: gateways are created only for pools that already exist (anchor at creation)
     error StageShortfall(); // XR-3: the source credited less than STAGE_TOLERANCE_BPS allows — principal would be eaten
     error DeployNotTwoSided(); // invariant 15: minted amounts are one-sided beyond MIN_TWO_SIDED_BPS
+    error PrincipalCapExceeded(); // IA-11: idle + deployedPrincipal + deployedPairedValue would exceed principalCap
+    error OnlyPoolManager(); // unlockCallback is only ever legitimately called by the pool manager itself
+    error SwapExceedsQuote(); // earn-vs-lp decision: deploy()'s swapAmount can never exceed quoteToDeploy
 
     event Deposited(address indexed user, uint256 quoteIn, uint256 sharesMinted);
     event Withdrawn(address indexed user, uint256 sharesBurned, uint256 quoteOut, uint256 pairedOut);
@@ -171,7 +217,14 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
     event Harvested(uint256 quoteFees, uint256 pairedFees, address indexed recipient);
     event PriceAnchored(uint160 sqrtPriceX96, uint256 blockNumber);
     event PausedSet(bool paused);
+    event PrincipalCapSet(uint256 cap);
     event Compounded(uint256 quoteAmount);
+    /// @dev IA-4: the yield source (idle-adapter `depositCap` or a real 4626's supply cap) was full, so the
+    ///      harvested quote stayed parked in this contract's own balance instead of being staged — `_idle()`
+    ///      already counts it, so NAV was still lifted for every holder; the next `deploy()` (whose re-stage
+    ///      sweeps this contract's ENTIRE quote balance, not just its own leftover) picks it up once headroom
+    ///      exists. Purely informational for the harvest cron.
+    event CompoundDeferred(uint256 amount);
     /// @dev The LP leg of a withdrawal could not execute (paired token paused/blacklisted, recipient frozen, …).
     ///      The withdrawer received the idle leg and was re-credited shares for the LP leg (F-02 / RT-6).
     event LpLegUnavailable(address indexed user, uint128 liquidityRequested);
@@ -196,7 +249,8 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         MintwareLpGatewayStaging staging_,
         address owner_,
         address harvestRecipient_,
-        uint16 maxDeviationBps_
+        uint16 maxDeviationBps_,
+        uint256 principalCap_
     ) Ownable(owner_) {
         if (
             address(poolManager_) == address(0) || address(positionManager_) == address(0)
@@ -236,6 +290,8 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         tickUpper = tickUpper_;
         harvestRecipient = harvestRecipient_;
         maxDeviationBps = maxDeviationBps_;
+        principalCap = principalCap_;
+        emit PrincipalCapSet(principalCap_);
 
         // Round-3 XR-2 (Cork) / X-7: v4 `initialize` is permissionless and nothing used to check the pool existed,
         // so the FIRST deploy had no reference and anchored the follower at whatever spot an attacker had set. A
@@ -452,6 +508,10 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         // mints 0 source shares — the reserve does not grow, the PM would still mint full shares, and the seeder
         // redeems everything. Require the reserve to have grown by ~the amount (tolerance for source rounding).
         if (idleAfter < idleBefore + quoteAmount - (quoteAmount * STAGE_TOLERANCE_BPS) / 10_000) revert StageShortfall();
+        // IA-11: bound TOTAL depositor-relevant value at risk, not just what fits in the idle leg right now. A
+        // prior deploy can have reopened the idle adapter's own cap (it only gates its own custody) without
+        // this gateway's total exposure having gone down at all -- so re-check the live cost-basis total here.
+        if (idleAfter + deployedPrincipal + deployedPairedValue > principalCap) revert PrincipalCapExceeded();
 
         sharesOf[msg.sender] += sharesMinted;
         totalShares += sharesMinted;
@@ -575,6 +635,10 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
                 // position's liquidity (F1: no per-leg offset here either).
                 uint256 dp = deployedPrincipal;
                 deployedPrincipal = lastHolder ? 0 : dp - FullMath.mulDiv(dp, liqToRemove, liq);
+                // IA-11: the user's swapped-form paired value leaves with the SAME fraction, so a full exit
+                // correctly frees the whole cap back up rather than leaving stale "phantom" value at risk behind.
+                uint256 dpv = deployedPairedValue;
+                deployedPairedValue = lastHolder ? 0 : dpv - FullMath.mulDiv(dpv, liqToRemove, liq);
             } catch {
                 lpFailed = true;
                 emit LpLegUnavailable(msg.sender, liqToRemove);
@@ -635,20 +699,30 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
 
     // ── owner: deploy staged capital into the pool ───────────────────────────────────────────
 
-    /// @notice Owner-gated: pull `quoteToDeploy` from the staging reserve, take `pairedAmount` of the
-    ///         paired leg from the caller (the pair/deploy cron zaps it via the MW router off-chain),
-    ///         and add both to the aggregate V4 position. Mirrors the staged router's owner-only pair().
-    function deploy(uint256 quoteToDeploy, uint256 pairedAmount, uint128 minLiquidity, uint256 deadline)
+    /// @notice Owner-gated: pull `quoteToDeploy` from the staging reserve, swap `swapAmount` of it INTO the
+    ///         paired leg ATOMICALLY via the pool itself (in-contract, no keeper custody of user funds
+    ///         mid-swap), and add both legs to the aggregate V4 position.
+    /// @dev    **Earn-vs-LP decision (docs/developers/lp-gateway-earn-vs-lp-decision.md, 2026-09-08):**
+    ///         Mintware supplies NOTHING to any position — the paired leg is 100% user USDG that changed
+    ///         form through this swap. The old owner-funded path (`pairedAsset.safeTransferFrom(msg.sender,
+    ///         …)`, a `pairedAmount` the CALLER supplied) is deleted outright; there is no code path left
+    ///         that accepts an owner-supplied paired token, so "Mintware never provides the pair, never eats
+    ///         IL" is enforced on-chain, not promised. `swapAmount` (how much of `quoteToDeploy` to convert)
+    ///         is caller-computed off-chain (the deploy cron sizes it for the target ratio at current price)
+    ///         and bounded on-chain by `minPairedOut` (the swap's own slippage floor) — the swap itself is
+    ///         further bounded by the SAME clamped-follower band that already gated the mint composition, so
+    ///         neither the swap nor the mint can be sandwiched independently of the other.
+    function deploy(uint256 quoteToDeploy, uint256 swapAmount, uint256 minPairedOut, uint128 minLiquidity, uint256 deadline)
         external
         onlyOwner
         nonReentrant
     {
-        if (quoteToDeploy == 0 && pairedAmount == 0) revert ZeroAmount();
+        if (quoteToDeploy == 0) revert ZeroAmount();
+        if (swapAmount > quoteToDeploy) revert SwapExceedsQuote();
 
-        // Re-audit A-3 / RT-9a (size): cap the fraction of depositor PRINCIPAL in the LP — at COST, not marked
-        // value — at MAX_DEPLOY_BPS. Checked on the requested quote (conservative — the best-effort unstage can
-        // only return less). A marked-value cap re-opened after every drawdown, letting a dumping paired token
-        // plus the honest top-up rule cycle 2/3 of principal into the pool; cost basis never falls with price.
+        // Re-audit A-3 / RT-9a: guards against overdrawing more quote than total principal. With
+        // MAX_DEPLOY_BPS = 10000 (earn-vs-lp decision — no held-back buffer) this is now purely an accounting
+        // sanity check, not a risk-sizing lever; cost basis (not marked value) keeps it meaningful regardless.
         {
             // Strict read (C-10): a deploy against an unreadable source can't size the cap → SourceUnavailable.
             uint256 principal = _syncIdle() + deployedPrincipal;
@@ -656,41 +730,54 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         }
 
         // Sweep the existing position's accrued fees to the buffer BEFORE increasing, so the INCREASE never
-        // folds trading fees into the re-stage / paired-return below (finding H-02). No-op on first deploy.
+        // folds trading fees into the re-stage below (finding H-02). No-op on first deploy.
         _sweepFees(deadline);
 
         // R3-INV-2: quote parked by an earlier deferred re-stage is consumed before touching the reserve.
-        uint256 quoteGot;
-        if (quoteToDeploy > 0) {
-            uint256 fromParked = Math.min(quoteAsset.balanceOf(address(this)), quoteToDeploy);
-            quoteGot = fromParked + (quoteToDeploy > fromParked ? staging.unstage(quoteToDeploy - fromParked) : 0);
-        }
-        if (pairedAmount > 0) pairedAsset.safeTransferFrom(msg.sender, address(this), pairedAmount);
-
-        (uint256 amount0, uint256 amount1) =
-            quoteIsCurrency0 ? (quoteGot, pairedAmount) : (pairedAmount, quoteGot);
+        uint256 fromParked = Math.min(quoteAsset.balanceOf(address(this)), quoteToDeploy);
+        uint256 quoteGot = fromParked + (quoteToDeploy > fromParked ? staging.unstage(quoteToDeploy - fromParked) : 0);
 
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(_poolKey.toId());
-        // Re-audit A-3 (price): mint only while spot is within the follower band of the clamped reference, so
-        // a sandwiched deploy can't mint at a manipulated composition. No reference exists before the first
-        // deploy (the first deploy sets the anchor) — there the caller's `minLiquidity` is the guard, which
-        // the cron now computes for real rather than passing 0.
+        // Re-audit A-3 (price): both the swap AND the mint execute only while spot is within the follower
+        // band of the clamped reference, so a sandwiched deploy can't manipulate either leg. `sellQuoteLimit`
+        // bounds the quote→paired zap; `sellPairedLimit` (the opposite direction) bounds the leftover
+        // paired→quote cleanup swap near the end of this function.
+        uint160 sellQuoteLimit = quoteIsCurrency0 ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
+        uint160 sellPairedLimit = quoteIsCurrency0 ? TickMath.MAX_SQRT_PRICE - 1 : TickMath.MIN_SQRT_PRICE + 1;
         {
             uint160 ref = _refSqrtPrice;
             if (ref != 0) {
                 uint160 band = uint160((uint256(ref) * maxDeviationBps) / 10_000);
                 uint160 diff = sqrtPriceX96 > ref ? sqrtPriceX96 - ref : ref - sqrtPriceX96;
                 if (diff > band) revert DeployPriceOutOfBand();
+                uint160 lower = ref > band ? ref - band : TickMath.MIN_SQRT_PRICE + 1;
+                uint256 upperWide = uint256(ref) + uint256(band);
+                uint160 upper = upperWide >= uint256(TickMath.MAX_SQRT_PRICE) - 1 ? TickMath.MAX_SQRT_PRICE - 1 : uint160(upperWide);
+                // Selling quote pushes price DOWN if quote is currency0 (zeroForOne), else UP — mirror image
+                // for selling paired.
+                sellQuoteLimit = quoteIsCurrency0 ? lower : upper;
+                sellPairedLimit = quoteIsCurrency0 ? upper : lower;
             }
         }
+
+        uint256 pairedGot;
+        if (swapAmount > 0) {
+            pairedGot = _executeSwap(quoteIsCurrency0, swapAmount, sellQuoteLimit);
+            if (pairedGot < minPairedOut) revert SlippageExceeded();
+        }
+        uint256 quoteForMint = quoteGot - swapAmount;
+
+        (uint256 amount0, uint256 amount1) = quoteIsCurrency0 ? (quoteForMint, pairedGot) : (pairedGot, quoteForMint);
+
+        (sqrtPriceX96,,,) = poolManager.getSlot0(_poolKey.toId()); // re-read: the swap above may have moved it
         uint160 sqrtA = TickMath.getSqrtPriceAtTick(tickLower);
         uint160 sqrtB = TickMath.getSqrtPriceAtTick(tickUpper);
         uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(sqrtPriceX96, sqrtA, sqrtB, amount0, amount1);
         if (liquidity == 0) revert ZeroShares();
         if (liquidity < minLiquidity) revert MinLiquidityNotMet(); // caller's slippage floor (finding M-03)
 
-        _permit(quoteAsset, quoteGot);
-        _permit(pairedAsset, pairedAmount);
+        _permit(quoteAsset, quoteForMint);
+        _permit(pairedAsset, pairedGot);
 
         uint256 quoteBefore = quoteAsset.balanceOf(address(this));
         uint256 pairedBefore = pairedAsset.balanceOf(address(this));
@@ -707,23 +794,29 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         _revokePermit(quoteAsset);
         _revokePermit(pairedAsset);
 
-        // Re-stage any unused quote; return any unused paired to the caller.
         uint256 quoteLeft = quoteAsset.balanceOf(address(this));
         uint256 pairedLeft = pairedAsset.balanceOf(address(this));
         uint256 quoteUsed = quoteBefore > quoteLeft ? quoteBefore - quoteLeft : 0;
         uint256 pairedUsed = pairedBefore > pairedLeft ? pairedBefore - pairedLeft : 0;
-        // Round-3 invariant 15 (owner worst case): the position must be TWO-SIDED on what was actually minted. A
-        // compromised seat could otherwise walk the follower to the range edge and mint an all-quote position
-        // (paired returned to itself), then dump into it — 25.8 % of NAV in the economic model. Checked on USED
-        // amounts, not offered ones, so returning the paired leg to the caller cannot satisfy it.
-        {
-            uint256 pairedUsedVal = _pairedToQuote(pairedUsed, sqrtPriceX96);
-            if (
-                pairedUsedVal < (quoteUsed * MIN_TWO_SIDED_BPS) / 10_000
-                    || quoteUsed < (pairedUsedVal * MIN_TWO_SIDED_BPS) / 10_000
-            ) revert DeployNotTwoSided();
-        }
+        // Round-3 invariant 15: the position must be TWO-SIDED on what was actually minted. Now a backstop
+        // against a badly-chosen `swapAmount` rather than a hostile owner-injected paired token, but the
+        // failure mode (a lopsided, range-edge position) is identical, so the same guard still applies.
+        uint256 pairedUsedVal = _pairedToQuote(pairedUsed, sqrtPriceX96);
+        if (
+            pairedUsedVal < (quoteUsed * MIN_TWO_SIDED_BPS) / 10_000
+                || quoteUsed < (pairedUsedVal * MIN_TWO_SIDED_BPS) / 10_000
+        ) revert DeployNotTwoSided();
         deployedPrincipal += quoteUsed; // cost basis (RT-9a)
+        // Cost basis, same discipline as deployedPrincipal — now USER value that changed form via the
+        // in-contract swap (earn-vs-lp decision), never an owner subsidy.
+        deployedPairedValue += pairedUsedVal;
+
+        // Leftover paired (the mint consumed slightly less than the swap produced) is swapped straight BACK
+        // to quote — Mintware never returns a paired-token balance to anyone; every leftover wei stays priced
+        // in NAV as quote, exactly like leftover quote already was.
+        if (pairedLeft > 0) {
+            quoteLeft += _executeSwap(!quoteIsCurrency0, pairedLeft, sellPairedLimit);
+        }
         if (quoteLeft > 0) {
             // R3-2: re-staging leftover quote reverts while the source is at its supply cap (Morpho `maxDeposit == 0`
             // — the live mainnet state), which used to DoS every deploy even though the LP add had succeeded.
@@ -735,11 +828,72 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
                 emit RestageDeferred(quoteLeft);
             }
         }
-        if (pairedLeft > 0) pairedAsset.safeTransfer(msg.sender, pairedLeft);
-        _syncIdle(); // the reserve just shrank by `quoteUsed` — keep the C-10 fallback current
+        uint256 idleNow = _syncIdle(); // the reserve just shrank by `quoteUsed` — keep the C-10 fallback current
+        // IA-11 (principalCap remains the real absolute TVL-at-risk bound, per the earn-vs-lp decision): the
+        // quote leg just RELOCATED (idle down, deployedPrincipal up by the same amount — net zero change to
+        // the total) and `deployedPairedValue` grew by exactly the user's own converted value — never more
+        // than what left `quoteGot` — so this check is now mostly a rounding/consistency guard rather than a
+        // defense against unbounded owner-injected value, but it costs nothing to keep.
+        if (idleNow + deployedPrincipal + deployedPairedValue > principalCap) revert PrincipalCapExceeded();
 
         _anchorFollow(); // advance the clamped-follower reference at this owner-set price
         emit Deployed(tokenId, quoteUsed, pairedUsed, liquidity);
+    }
+
+    // ── in-contract zap swap (earn-vs-lp decision: the ONLY paired-leg source) ────────────────
+
+    // Transient state for the `unlock`/`unlockCallback` round-trip (mirrors the proven pattern in
+    // `MintwareTreasuryFloatSettlement.sol`). Set immediately before `poolManager.unlock`, read immediately
+    // after it returns, then zeroed — never holds a value outside a single `_executeSwap` call.
+    bool private _swapZeroForOne;
+    uint256 private _swapAmountIn;
+    uint160 private _swapPriceLimit;
+    uint256 private _swapAmountOut;
+
+    /// @dev Pool-manager callback for our own swap unlock. Guarded to the pool manager only; nothing else can
+    ///      ever reach `_swapAmountIn`/`_swapPriceLimit` since they are only ever non-zero for the duration of
+    ///      the single `poolManager.unlock` call inside `_executeSwap`.
+    function unlockCallback(bytes calldata) external override returns (bytes memory) {
+        if (msg.sender != address(poolManager)) revert OnlyPoolManager();
+        _swapAmountOut = _swapExactIn(_swapZeroForOne, _swapAmountIn, _swapPriceLimit);
+        return "";
+    }
+
+    /// @dev Exact-input swap on THIS gateway's own pool, price-limited, executed via the standard V4
+    ///      unlock/settle round-trip. `amountIn` must already be held by this contract (pulled from staging /
+    ///      the mint's own leftover balance before this is called — never a caller-supplied token).
+    function _executeSwap(bool zeroForOne, uint256 amountIn, uint160 priceLimit) private returns (uint256 out) {
+        if (amountIn == 0) return 0;
+        _swapZeroForOne = zeroForOne;
+        _swapAmountIn = amountIn;
+        _swapPriceLimit = priceLimit;
+        poolManager.unlock("");
+        out = _swapAmountOut;
+        _swapZeroForOne = false;
+        _swapAmountIn = 0;
+        _swapPriceLimit = 0;
+        _swapAmountOut = 0;
+    }
+
+    function _swapExactIn(bool zeroForOne, uint256 amountIn, uint160 priceLimit) private returns (uint256 out) {
+        BalanceDelta delta = poolManager.swap(
+            _poolKey,
+            SwapParams({zeroForOne: zeroForOne, amountSpecified: -int256(amountIn), sqrtPriceLimitX96: priceLimit}),
+            ""
+        );
+        int128 d0 = delta.amount0();
+        int128 d1 = delta.amount1();
+        if (d0 < 0) _paySwap(_poolKey.currency0, uint256(uint128(-d0)));
+        else if (d0 > 0) poolManager.take(_poolKey.currency0, address(this), uint256(uint128(d0)));
+        if (d1 < 0) _paySwap(_poolKey.currency1, uint256(uint128(-d1)));
+        else if (d1 > 0) poolManager.take(_poolKey.currency1, address(this), uint256(uint128(d1)));
+        out = zeroForOne ? (d1 > 0 ? uint256(uint128(d1)) : 0) : (d0 > 0 ? uint256(uint128(d0)) : 0);
+    }
+
+    function _paySwap(Currency currency, uint256 amount) private {
+        poolManager.sync(currency);
+        IERC20(Currency.unwrap(currency)).safeTransfer(address(poolManager), amount);
+        poolManager.settle();
     }
 
     // ── owner: harvest fees (zero-liquidity-delta) → yield-first buffer ───────────────────────
@@ -779,14 +933,42 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard {
         emit PausedSet(p);
     }
 
+    /// @notice Raise or lower the ceiling on `idle + deployedPrincipal + deployedPairedValue` (IA-11). Takes
+    ///         effect immediately — lowering it below the current total simply blocks further growth (a new
+    ///         `deposit` or `deploy`), it never forces a withdrawal or touches funds already held. Mirrors the
+    ///         idle adapter's `setDepositCap`; for an idle-mode rig, keep both in sync with the same
+    ///         `LP_GATEWAY_DEPOSIT_CAP` value so the two caps never drift apart.
+    function setPrincipalCap(uint256 cap) external onlyOwner {
+        principalCap = cap;
+        emit PrincipalCapSet(cap);
+    }
+
     /// @notice Owner-gated compound (item 14 restake destination): stage `amount` quote back into the yield
     ///         reserve, lifting NAV pro-rata for ALL shareholders with NO share mint and NO paired leg —
     ///         pure accretion. The caller (harvest recipient / oracle seat) supplies the net harvested fees.
+    /// @dev    Round-3 idle-adapter adversarial pass, IA-4: a capped yield source (the idle adapter's own
+    ///         `depositCap`, or a real 4626 at its supply cap) makes `staging.stage` revert `DepositCapExceeded` /
+    ///         `ERC4626ExceededMaxDeposit` the moment the source is full — the deliberately-small-cap steady
+    ///         state this compound path exists to feed. `deploy()`'s own re-stage got the identical best-effort
+    ///         treatment for the identical reason (R3-2). Compounding is pure accretion to EXISTING holders, not
+    ///         new depositor exposure, so it is semantically correct — not merely convenient — for it never to
+    ///         need the cap at all: on a stage failure the harvested quote simply stays parked in this contract's
+    ///         own balance, which `_idle()` already counts fully toward NAV (R3-INV-2's "parked quote counts as
+    ///         idle" applies verbatim here), so the compound still lifts NAV pro-rata for every holder — it just
+    ///         does so without moving into the source. This call itself only ever stages the amount IT was
+    ///         passed, not any previously-deferred dust; the next `deploy()` (whose own re-stage sweeps this
+    ///         contract's ENTIRE quote balance once headroom exists, not just its own leftover) is what actually
+    ///         picks up anything left parked here. Nothing is ever stranded and no retry loop or repeated
+    ///         wasted-gas revert is needed from the harvest cron.
     function compoundQuote(uint256 amount) external onlyOwner nonReentrant {
         if (amount == 0) revert ZeroAmount();
         quoteAsset.safeTransferFrom(msg.sender, address(this), amount);
         quoteAsset.forceApprove(address(staging), amount);
-        staging.stage(amount);
+        try staging.stage(amount) {}
+        catch {
+            quoteAsset.forceApprove(address(staging), 0);
+            emit CompoundDeferred(amount);
+        }
         _syncIdle(); // keep the C-10 fallback current
         emit Compounded(amount);
     }

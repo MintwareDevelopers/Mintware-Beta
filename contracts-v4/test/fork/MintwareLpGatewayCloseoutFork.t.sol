@@ -80,7 +80,8 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         staging = new MintwareLpGatewayStaging(IERC20(address(quote)), adapter);
         adapter.setVault(address(staging));
         pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500
+            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), TL, TU, staging, address(this), RECIP, 500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
 
@@ -139,13 +140,18 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         return quote.balanceOf(who) + paired.balanceOf(who);
     }
 
-    /// Alice deposits 200k; owner deploys 100k quote + 100k paired → NAV ≈ 100k idle + 200k LP.
+    /// Alice deposits 300k; owner stages 200k and zaps half of it into the paired leg in-contract
+    /// → NAV ≈ 100k idle + 200k LP, the SAME post-state the old `deposit(200k) + deploy(100k quote,
+    /// 100k OWNER paired)` produced. Earn-vs-LP decision (2026-09-08): there is no owner-supplied paired
+    /// leg any more, so the third 100k is alice's own capital rather than a Mintware subsidy.
     function _seed() internal {
         vm.prank(alice);
-        pm.deposit(200_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        pm.deposit(300_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         _roll(1);
-        assertEq(pm.lastKnownIdle(), 100_000e18, "fallback tracks the post-deploy reserve");
+        // Approx, not exact: the zap pays the pool's own swap fee, so the mint consumes a hair less quote
+        // than 100k and the remainder is re-staged.
+        assertApproxEqRel(pm.lastKnownIdle(), 100_000e18, 0.01e18, "fallback tracks the post-deploy reserve");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -158,7 +164,7 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
     function test_CF_C10_partialExitDuringOutage_lpPays_idleReCredited_noLoss() public {
         if (!live) return;
         _seed();
-        uint256 navBefore = pm.totalNav(); // ≈ 300k (200k deposit + the owner's 100k paired leg)
+        uint256 navBefore = pm.totalNav(); // ≈ 300k, every wei of it alice's own deposit
         uint256 idleBefore = staging.stagedAssets();
         uint256 w0 = _wealth(alice);
         uint256 sA = pm.sharesOf(alice);
@@ -236,11 +242,14 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
     /// Co-depositor fairness during an outage: Alice's LP-only exit doesn't touch Bob's idle or LP slice.
     function test_CF_C10_outageExit_doesNotTouchCoDepositor() public {
         if (!live) return;
+        // 150k each (was 100k each): with no owner paired subsidy, the paired leg must come out of the
+        // depositors' own capital, so reaching the same "100k idle + 200k LP" state needs 300k in total.
+        // Both are still exactly 50% holders, which is all this test's fractions depend on.
         vm.prank(alice);
-        pm.deposit(100_000e18);
+        pm.deposit(150_000e18);
         vm.prank(bob);
-        pm.deposit(100_000e18);
-        pm.deploy(100_000e18, 100_000e18, 0, block.timestamp);
+        pm.deposit(150_000e18);
+        pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         _roll(1);
         uint256 idle0 = staging.stagedAssets();
         uint128 liq0 = _liq();
@@ -259,7 +268,7 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         uint256 wB = _wealth(bob);
         vm.prank(bob);
         pm.withdraw(sB);
-        // Bob (50% holder, 100k deposit) gets AT LEAST his half of idle (50k) + his half of the LP (≈100k at par) = 150k.
+        // Bob (50% holder, 150k deposit) gets AT LEAST his half of idle (50k) + his half of the LP (≈100k at par) = 150k.
         // Round-3 R3-1: Alice's BLIND exit was haircut (idle claim 40k not 50k → she kept 2/7 of her half = 1/7 of all
         // shares), so Bob's fraction of the 200k left is 7/9 ≈ 155.6k. The 5.6k is the haircut Alice chose to bear by
         // exiting during the outage instead of waiting — it can only ever flow TO the remaining holders, never from them.

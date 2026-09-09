@@ -75,7 +75,8 @@ contract MintwareLpGatewayFactory is Ownable2Step {
         int24 tickUpper,
         address gatewayOwner,
         address harvestRecipient,
-        uint16 maxDeviationBps
+        uint16 maxDeviationBps,
+        uint256 principalCap
     ) external onlyOwner returns (address stagingAddr, address pmAddr) {
         bytes32 poolId = PoolId.unwrap(key.toId());
         if (instanceForPool[poolId].positionManager != address(0)) revert AlreadyExists();
@@ -86,7 +87,18 @@ contract MintwareLpGatewayFactory is Ownable2Step {
         uint16 band = maxDeviationBps == 0 ? DEFAULT_MAX_DEVIATION_BPS : maxDeviationBps;
         MintwareLpGatewayStaging staging = new MintwareLpGatewayStaging(quoteAsset, adapter);
         MintwareLpGatewayPositionManager pm = new MintwareLpGatewayPositionManager(
-            poolManager, positionManager, permit2, key, quoteAsset, tickLower, tickUpper, staging, gatewayOwner, harvestRecipient, band
+            poolManager,
+            positionManager,
+            permit2,
+            key,
+            quoteAsset,
+            tickLower,
+            tickUpper,
+            staging,
+            gatewayOwner,
+            harvestRecipient,
+            band,
+            principalCap
         );
         staging.setController(address(pm));
 

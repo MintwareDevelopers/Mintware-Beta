@@ -124,3 +124,19 @@ export function applyToleranceBps(x: bigint, bps: number): bigint {
   if (!Number.isInteger(bps) || bps < 0 || bps >= 10_000) throw new Error(`invalid tolerance bps ${bps}`)
   return (x * BigInt(10_000 - bps)) / 10_000n
 }
+
+/** Earn-vs-LP decision (2026-09-08): mirror of `MintwareLpGatewayPositionManager._pairedToQuote`, INVERTED —
+ *  converts a quote-asset amount to the paired-asset amount it is worth at spot (theoretical, no fee/price-
+ *  impact modeled — apply `applyToleranceBps` on top for a real slippage floor on the contract's own
+ *  in-contract zap swap). `quoteIsCurrency0` mirrors the contract's own immutable of the same name. */
+export function quoteToPairedAtSpot(quoteAmount: bigint, sqrtPriceX96: bigint, quoteIsCurrency0: boolean): bigint {
+  if (quoteAmount <= 0n) return 0n
+  if (quoteIsCurrency0) {
+    // quote = currency0 → paired (currency1): amount · (sqrtP / Q96)^2
+    const inter = mulDiv(quoteAmount, sqrtPriceX96, Q96)
+    return mulDiv(inter, sqrtPriceX96, Q96)
+  }
+  // quote = currency1 → paired (currency0): amount · (Q96 / sqrtP)^2
+  const inter = mulDiv(quoteAmount, Q96, sqrtPriceX96)
+  return mulDiv(inter, Q96, sqrtPriceX96)
+}

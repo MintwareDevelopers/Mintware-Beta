@@ -73,7 +73,6 @@ vi.mock('@/lib/gateway/chain', () => ({
 vi.mock('@/lib/web3/oracleSigner', () => ({ getOracleSigner: async () => ({ address: SEAT }) }))
 vi.mock('@/lib/gateway/routerSwap', () => ({
   swapPairedToQuote: async () => ({ quoteOut: 0n, txHash: null }),
-  swapQuoteToPaired: async () => ({ pairedOut: 0n, txHash: null }),
 }))
 vi.mock('viem', async (orig) => ({
   ...(await orig<typeof import('viem')>()),
@@ -147,8 +146,8 @@ beforeEach(() => {
 })
 
 describe('A-4 _FIXED: stale DB shares are worth nothing; credits are weighed by on-chain sharesOf at the harvest block', () => {
-  it('defense holds (buffer destination): a fully-withdrawn depositor (on-chain 0 shares) is credited NOTHING; the sole real LP gets the whole net; card_spend_buffers is never written', async () => {
-    process.env.LP_GATEWAY_HARVEST_DESTINATION = 'buffer' // opt-in: the per-depositor IOU ledger (the surface the attack targeted)
+  it("earn-vs-lp decision (2026-09-08): LP_GATEWAY_HARVEST_DESTINATION='buffer' no longer opts into anything — the A-4 buffer-credit attack surface this test defended is now UNREACHABLE, not just defended; harvest restakes regardless, so the stale-DB-shares attack has no per-depositor credit path left to target at all", async () => {
+    process.env.LP_GATEWAY_HARVEST_DESTINATION = 'buffer' // now inert — resolveHarvestDestination() always returns 'restake'
     const { db, client } = attackDb()
 
     const out = await harvestGateway({ supabase: client, instance })
@@ -156,33 +155,18 @@ describe('A-4 _FIXED: stale DB shares are worth nothing; credits are weighed by 
     if (!out.ok) return
     expect(out.grossAtomic).toBe(GROSS)
     expect(out.feeAtomic).toBe(1_000_000n)
-    expect(out.destination).toBe('buffer')
-    expect(out.creditedAtomic).toBe(9_000_000n)
-    expect(out.recipients).toBe(1) // ONE credit row, not two
+    expect(out.destination).toBe('restake')
+    expect(out.creditedAtomic).toBe(9_000_000n) // compounded on-chain, not credited to anyone off-chain
+    expect(out.recipients).toBe(0)
 
-    // the attack's payout target is untouched: card_spend_buffers stays at 0 for both linked rows
+    // no per-depositor credit ledger is ever touched any more — Bob's stale-vs-live shares question is moot
+    expect(db.tables.gateway_fee_credits).toHaveLength(0)
+    // and the attack's original payout target was, and remains, untouched
     const alice = db.tables.card_spend_buffers.find((b) => b.id === 'b-alice')!
     const bob = db.tables.card_spend_buffers.find((b) => b.id === 'b-bob')!
-    expect(BigInt(String(alice.buffer_balance_atomic))).toBe(0n) // was 4.5 USDG to a wallet with ZERO on-chain shares
-    expect(BigInt(String(bob.buffer_balance_atomic))).toBe(0n) // no IOU is written into the card rail's table at all
+    expect(BigInt(String(alice.buffer_balance_atomic))).toBe(0n)
+    expect(BigInt(String(bob.buffer_balance_atomic))).toBe(0n)
     expect(db.calls.filter((c) => c.table === 'card_spend_buffers' && c.op !== 'select')).toHaveLength(0)
-
-    // the credit lives in the ledger's own table, weighted by on-chain shares: Bob 9 USDG, Alice absent
-    const credits = db.tables.gateway_fee_credits
-    expect(credits).toHaveLength(1)
-    expect(credits[0]).toMatchObject({ user_wallet: BOB, credit_atomic: '9000000', shares_at_block: '1000000000' })
-    expect(credits.find((c) => c.user_wallet === ALICE)).toBeUndefined()
-    expect(db.tables.gateway_harvest_logs[0]).toMatchObject({ tx_hash: COLLECT_TX, total_shares_at_block: '1000000000', net_quote_atomic: '9000000', settlement: 'credited' })
-
-    // the orchestration DID read sharesOf for every known depositor — pinned to the harvest block
-    const shareReads = publicClient.readContract.mock.calls
-      .map((c) => c[0] as { functionName: string; args?: unknown[]; blockNumber?: bigint })
-      .filter((c) => c.functionName === 'sharesOf' || c.functionName === 'totalShares')
-    expect(shareReads.length).toBeGreaterThanOrEqual(3) // totalShares + sharesOf(alice) + sharesOf(bob)
-    expect(shareReads.every((c) => c.blockNumber === COLLECT_BLOCK)).toBe(true)
-    expect(shareReads.map((c) => String(c.args?.[0] ?? '').toLowerCase()).filter(Boolean).sort()).toEqual([ALICE, BOB].sort())
-    // DB `shares` column is never a weighting input (the position rows are only an address source)
-    expect(db.calls.filter((c) => c.table === 'gateway_positions').every((c) => c.op === 'select')).toBe(true)
   })
 
   it('defense holds (DEFAULT destination = restake): no per-user credit exists at all — Σ pending net is compounded on-chain via compoundQuote', async () => {
@@ -202,8 +186,8 @@ describe('A-4 _FIXED: stale DB shares are worth nothing; credits are weighed by 
     expect(publicClient.readContract.mock.calls.some((c) => (c[0] as { functionName: string }).functionName === 'sharesOf')).toBe(false)
   })
 
-  it('defense holds: the credit write is atomic + idempotent — a re-run over the same log (cursor reset) credits nothing twice', async () => {
-    process.env.LP_GATEWAY_HARVEST_DESTINATION = 'buffer'
+  it('defense holds: the collect/index idempotency guards still work identically now that destination is always restake', async () => {
+    process.env.LP_GATEWAY_HARVEST_DESTINATION = 'buffer' // inert (see the test above) — proves the guards below don't depend on it
     const { db, client } = attackDb()
     const first = await harvestGateway({ supabase: client, instance })
     expect(first.ok).toBe(true)
@@ -217,7 +201,7 @@ describe('A-4 _FIXED: stale DB shares are worth nothing; credits are weighed by 
     expect(again.ok).toBe(true)
     if (!again.ok) return
     expect(again.index).toMatchObject({ harvestLogs: 1, recorded: 0, duplicates: 1, creditedAtomic: 0n })
-    expect(db.tables.gateway_fee_credits).toHaveLength(1) // still exactly one 9 USDG credit for Bob
+    expect(db.tables.gateway_fee_credits).toHaveLength(0) // no credit ledger path exists to double-write any more
   })
 })
 

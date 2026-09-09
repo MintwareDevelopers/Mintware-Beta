@@ -39,27 +39,10 @@ export async function swapPairedToQuote(opts: {
   return { quoteOut: 0n, txHash: null }
 }
 
-// Deploy-side zap: quote (USDG) → paired (PONS) to acquire the second leg before deploy(). Same seam,
-// same fail-safe: no-op { pairedOut: 0n, txHash: null } until the executor is wired — deploy() then
-// simply can't proceed (no paired leg), which is the correct fail-closed behavior, never a bad swap.
-export async function swapQuoteToPaired(opts: {
-  cfg: GatewayConfig
-  account: unknown
-  wallet: unknown
-  publicClient: unknown
-  quoteAmount: bigint
-  log?: Logger
-}): Promise<{ pairedOut: bigint; txHash: string | null }> {
-  const { quoteAmount, log } = opts
-  if (quoteAmount <= 0n) return { pairedOut: 0n, txHash: null }
-  const routerEnabled = process.env.NEXT_PUBLIC_MW_ROUTER_ENABLED === 'true'
-  const executorWired = !!process.env.LP_GATEWAY_ROUTER_ADDRESS
-  if (!routerEnabled || !executorWired) {
-    log?.warn('gateway.deploy', 'zap seam not wired; deploy cannot acquire the paired leg', {
-      quoteAmount: quoteAmount.toString(),
-    })
-    return { pairedOut: 0n, txHash: null }
-  }
-  log?.warn('gateway.deploy', 'router executor configured but zap path not yet implemented', {})
-  return { pairedOut: 0n, txHash: null }
-}
+// Earn-vs-LP decision (docs/developers/lp-gateway-earn-vs-lp-decision.md, 2026-09-08): the deploy-side zap
+// (quote → paired, to acquire the second leg before `deploy()`) that used to live here is GONE. `deploy()`
+// on `MintwareLpGatewayPositionManager` now executes that swap itself, atomically, in-contract — there is
+// no off-chain step left that "acquires the paired leg" for the caller to supply. See
+// `lib/gateway/deploy.ts` (sizes `swapAmount`/`minPairedOut` from live pool state) and the contract's own
+// `_executeSwap`/`unlockCallback`. `swapPairedToQuote` above is UNRELATED and unaffected — it converts
+// harvested paired-token FEES back to quote, a genuinely separate off-chain seam.

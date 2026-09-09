@@ -56,9 +56,11 @@ GATEWAY_ORACLE_PRIVY_WALLET_ID=…    GATEWAY_ORACLE_PRIVY_ADDRESS=0x18AE027cF10
 LP_GATEWAY_RPC_URL=https://rpc.mainnet.chain.robinhood.com     # default
 LP_GATEWAY_USDG=0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168     # default; anything else FAILS
 LP_GATEWAY_YIELD_SOURCE=0xBeEff033F34C046626B8D0A041844C5d1A5409dd
+LP_GATEWAY_PRINCIPAL_CAP=10000000000                # REQUIRED on this path (no default) — IA-11: the real total-value-at-risk bound (idle + deployedPrincipal + deployedPairedValue), atomic USDG (6dp)
 #  --- OR, no real yield source exists / you don't want to wait (see §1.3): ---
 # LP_GATEWAY_IDLE_MODE=true
-# LP_GATEWAY_DEPOSIT_CAP=10000000000                # required in idle mode; atomic USDG (6dp) — 10000000000 = 10,000 USDG
+# LP_GATEWAY_DEPOSIT_CAP=10000000000                # required in idle mode; atomic USDG (6dp) — 10000000000 = 10,000 USDG; bounds the idle leg only
+# LP_GATEWAY_PRINCIPAL_CAP=10000000000               # optional in idle mode — defaults to LP_GATEWAY_DEPOSIT_CAP; keep them equal (IA-11)
 LP_GATEWAY_POOL_ID=0x4be9657ec9002e528f4f17a5c43edc525a07f888f7b180c2afbf75e096c4f38a   # 32-byte v4 poolId
 #  (or, if PositionManager.poolKeys has no entry: LP_GATEWAY_POOL_CURRENCY0/1, LP_GATEWAY_POOL_FEE, LP_GATEWAY_POOL_TICK_SPACING)
 LP_GATEWAY_MIN_POOL_LIQUIDITY=8000000000000000000   # absolute L — REQUIRED; ≤ ~50 % of the live in-range L the preflight prints
@@ -318,10 +320,15 @@ Start with the smoke amounts. Raise the **own-funds cap** only when ALL hold for
 | 3 | > 10 000 USDG | **external audit** of the converged stack; nothing here authorizes it |
 
 Third-party deposits remain blocked at every step (O-1 → O-6). A cap is a decision recorded in the closeout file,
-not a config flag — in idle mode it is ALSO an on-chain flag (`adapter.depositCap()`), and both must move
-together: recording a new step without raising `depositCap` leaves the cap tighter than the decision; raising
-`depositCap` without recording the decision leaves no paper trail for why. Raise it with
-`adapter.setDepositCap(newCapAtomic)` from the gateway seat.
+not a config flag — **two on-chain flags must move together with it**, not just one (round-3 idle-adapter
+adversarial pass, IA-11): in idle mode, `adapter.depositCap()` bounds only the adapter's own idle leg, while
+`pm.principalCap()` is the ceiling that genuinely covers TOTAL value at risk (`idle + deployedPrincipal +
+deployedPairedValue`, including the owner's paired-leg subsidy on every `deploy()`); the two are meant to be
+kept equal in idle mode (the deploy script defaults `LP_GATEWAY_PRINCIPAL_CAP` to `LP_GATEWAY_DEPOSIT_CAP` at
+deploy time if not set explicitly, and the preflight FAILs if they've drifted apart). Recording a new step
+without raising BOTH leaves the cap tighter than the decision, or the two caps out of sync; raising either
+without recording the decision leaves no paper trail for why. Raise them with `adapter.setDepositCap(newCapAtomic)`
+and `pm.setPrincipalCap(newCapAtomic)` (same value, same transaction batch) from the gateway seat.
 
 ## 9. Incident playbook
 

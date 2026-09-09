@@ -55,7 +55,23 @@ export const LP_GATEWAY_ABI = [
   { type: 'function', stateMutability: 'nonpayable', name: 'deposit', inputs: [{ name: 'quoteAmount', type: 'uint256' }], outputs: [{ name: 'sharesMinted', type: 'uint256' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'withdraw', inputs: [{ name: 'shares', type: 'uint256' }], outputs: [{ name: 'quoteOut', type: 'uint256' }, { name: 'pairedOut', type: 'uint256' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'harvest', inputs: [{ name: 'deadline', type: 'uint256' }], outputs: [{ name: 'quoteFees', type: 'uint256' }, { name: 'pairedFees', type: 'uint256' }] },
-  { type: 'function', stateMutability: 'nonpayable', name: 'deploy', inputs: [{ name: 'quoteToDeploy', type: 'uint256' }, { name: 'pairedAmount', type: 'uint256' }, { name: 'minLiquidity', type: 'uint128' }, { name: 'deadline', type: 'uint256' }], outputs: [] },
+  // Earn-vs-LP decision (2026-09-08): `pairedAmount` (owner-supplied) is gone — `deploy()` now swaps
+  // `swapAmount` of `quoteToDeploy` into the paired leg atomically, in-contract; `minPairedOut` bounds that
+  // swap's own slippage.
+  { type: 'function', stateMutability: 'nonpayable', name: 'deploy', inputs: [{ name: 'quoteToDeploy', type: 'uint256' }, { name: 'swapAmount', type: 'uint256' }, { name: 'minPairedOut', type: 'uint256' }, { name: 'minLiquidity', type: 'uint128' }, { name: 'deadline', type: 'uint256' }], outputs: [] },
+  { type: 'function', stateMutability: 'view', name: 'deployedPairedValue', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', stateMutability: 'view', name: 'principalCap', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', stateMutability: 'nonpayable', name: 'setPrincipalCap', inputs: [{ name: 'cap', type: 'uint256' }], outputs: [] },
+  {
+    type: 'event',
+    name: 'Deployed',
+    inputs: [
+      { name: 'tokenId', type: 'uint256', indexed: true },
+      { name: 'quoteUsed', type: 'uint256', indexed: false },
+      { name: 'pairedUsed', type: 'uint256', indexed: false },
+      { name: 'liquidity', type: 'uint128', indexed: false },
+    ],
+  },
   {
     type: 'event',
     name: 'Deposited',

@@ -133,7 +133,8 @@ contract InvariantForkRegressionsTest is Test {
         staging = new MintwareLpGatewayStaging(IERC20(address(quote)), adapter);
         adapter.setVault(address(staging));
         pm = new MintwareLpGatewayPositionManager(
-            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), tl, tu, staging, address(this), RECIP, 500
+            poolManager, posm, IPermit2Minimal(PERMIT2), key, IERC20(address(quote)), tl, tu, staging, address(this), RECIP, 500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         assertEq(pm.ENTRY_MEMORY_BLOCKS(), 300, "entry-period constant drifted - re-pin the parity roll");
         staging.setController(address(pm));
@@ -244,11 +245,15 @@ contract InvariantForkRegressionsTest is Test {
     function test_R3_F1c_deployedState_6dpQuote_fullyPaidExit_keepsZeroShares_FIXED() public {
         if (!live) return;
         _build(6);
+        // Earn-vs-lp decision (2026-09-08): `deploy` takes no owner-supplied paired token -- it stages 200k of
+        // the depositors' own quote and zaps half of it into paired in-contract. 150k each (was 100k each)
+        // reproduces the IDENTICAL position -- idle 100k, LP 200k, NAV 300k, bob exactly 50% -- with the paired
+        // leg funded by depositors. `MAX_DEPLOY_BPS` is 10000 now, so this is simply "the whole LP allocation".
         vm.prank(alice);
-        pm.deposit(100_000e6);
+        pm.deposit(150_000e6);
         vm.prank(bob);
-        pm.deposit(100_000e6);
-        pm.deploy(100_000e6, 100_000e18, 0, block.timestamp); // 50% of principal at cost → cap full
+        pm.deposit(150_000e6);
+        pm.deploy(200_000e6, 100_000e6, 0, 0, block.timestamp);
         _roll();
 
         uint256 ts = pm.totalShares();
@@ -277,8 +282,8 @@ contract InvariantForkRegressionsTest is Test {
         uint256 aliceClaimAfter = Math.mulDiv(pm.sharesOf(alice), navAfter + V, pm.totalShares() + V);
         assertGe(aliceClaimAfter + 4, aliceClaimBefore, "co-depositor's claim untouched");
         // Cost basis left with the LIQUIDITY fraction f = claimTotal/nav_w = (S/ts)*(1 + V/nav_w)/(1 + V/ts): half the
-        // position, skewed from exactly 1/2 by V*(1/nav - 1/ts) (83,333 raw here, nav = 300k > ts = 200k because the
-        // harness owner DONATES the paired leg at deploy, so LP value = 2x cost).
+        // position, skewed from exactly 1/2 by V*(1/nav - 1/ts). Since the earn-vs-lp decision nav == ts (300k each --
+        // the deploy relocates depositor value instead of adding a donated paired leg), so the skew is now ~0.
         assertApproxEqAbs(pm.deployedPrincipal(), 50_000e6, 1e6, "deployedPrincipal ~halved with the slice (offset skew < $1)");
         emit log_named_uint("delivered (raw USDG @ w)", delivered);
         emit log_named_uint("single-offset claim (raw USDG)", fair);
@@ -297,20 +302,24 @@ contract InvariantForkRegressionsTest is Test {
         uint256 srcPrice = Math.ceilDiv(src.totalAssets() + 1, src.totalSupply() + 1);
         assertGt(srcPrice, 2, "offset-0 source price above 2 after the donation");
 
-        uint256 q = (staging.stagedAssets() * pm.MAX_DEPLOY_BPS()) / 10_000; // exactly the cap
+        uint256 q = (staging.stagedAssets() * pm.MAX_DEPLOY_BPS()) / 10_000; // the whole reserve (cap is 100% now)
         uint256 predicted = src.previewRedeem(src.previewWithdraw(q));
-        assertGt(predicted, q, "the cap-sized request is over-delivered by the adapter");
-        pm.deploy(q, 2 * q, 0, block.timestamp);
+        assertGt(predicted, q, "the request is over-delivered by the adapter (the F3 mechanism itself is unchanged)");
+        // Earn-vs-lp decision: `swapAmount` comes OUT of `quoteToDeploy`, so half the pull funds the mint's quote
+        // leg and half is zapped into paired. There is no way to hand the deploy extra paired from outside.
+        pm.deploy(q, q / 2, 0, 0, block.timestamp);
 
         uint256 dp = pm.deployedPrincipal();
-        assertGt(dp, q, "deployedPrincipal rose by MORE than the requested (cap-checked) quote");
-        assertLe(dp - q, srcPrice, "excess is bounded by one source share (F3 over-delivery)");
-        uint256 principal = staging.stagedAssets() + dp;
-        assertGt(dp, (principal * pm.MAX_DEPLOY_BPS()) / 10_000, "cost basis sits ABOVE MAX_DEPLOY_BPS of principal (wei-level, accepted)");
-        assertLe(dp - (principal * pm.MAX_DEPLOY_BPS()) / 10_000, srcPrice, "...by less than one source share");
+        // TODO(needs review): this ACCEPTED finding said "cost basis sits ABOVE MAX_DEPLOY_BPS of principal by up
+        // to one source share". With MAX_DEPLOY_BPS == 10000 that inequality is no longer expressible (nothing can
+        // exceed 100% of principal at cost), and the adapter's over-delivered wei now lands in the deploy's
+        // leftover -> parked/re-staged idle rather than in `deployedPrincipal`. The over-delivery itself (asserted
+        // above, and bounded by `srcPrice`) is unchanged. Re-derive the residual on a live fork before citing it.
+        assertLe(dp, q, "the mint can never consume more quote than the deploy pulled");
+        assertLe(predicted - q, srcPrice, "over-delivery bounded by one source share (F3)");
         emit log_named_uint("requested quote (wei)", q);
+        emit log_named_uint("adapter would over-deliver by (wei)", predicted - q);
         emit log_named_uint("deployedPrincipal after (wei)", dp);
-        emit log_named_uint("cost basis over the cap (wei)", dp - (principal * pm.MAX_DEPLOY_BPS()) / 10_000);
     }
 
     // ── R3-INV-1 FIXED: LP leg deferred + exit weight above spot → idle cash is now priced at the LOW mark ────────
@@ -325,11 +334,13 @@ contract InvariantForkRegressionsTest is Test {
     function test_R3_INV1_lpLegDeferred_exitWeightAboveSpot_idleLegPricedAtLowMark_FIXED() public {
         if (!live) return;
         _build(6);
+        // Earn-vs-lp decision: 150k each + a 200k stage with half zapped reproduces the identical position
+        // (idle 100k, LP 200k, NAV 300k, bob 50%) with no owner-supplied paired leg. See F1c above.
         vm.prank(alice);
-        pm.deposit(100_000e6);
+        pm.deposit(150_000e6);
         vm.prank(bob);
-        pm.deposit(100_000e6);
-        pm.deploy(100_000e6, 100_000e18, 0, block.timestamp);
+        pm.deposit(150_000e6);
+        pm.deploy(200_000e6, 100_000e6, 0, 0, block.timestamp);
         _roll();
 
         // Paired dumps ~40 %: spot moves, the follower/memory keep the pre-dump mark (no gateway action stepped it).
@@ -378,10 +389,15 @@ contract InvariantForkRegressionsTest is Test {
         // fair·V·(nav_w − nav_s)/(nav_s·nav_w) ≈ 8,803 shares ($0.0088) here — pool-favourable and immaterial.
         uint256 offsetTerm = FullMath.mulDiv(fairBurnAtSpot, (navW - navS) * V, navS * navW);
         assertApproxEqAbs(burned - fairBurnAtSpot, offsetTerm, 16, "...and only the virtual-offset term more");
-        // Evidence numbers (lead's run: 18,985,019,568 burned vs 18,985,010,765 fair — 8,803 apart; pre-fix burn
-        // was 16,666,666,667, i.e. 2,318,344,098 shares short of the spot value).
-        assertApproxEqAbs(burned, 18_985_019_568, 64, "burn matches the recorded fixed-source number");
-        assertApproxEqAbs(fairBurnAtSpot, 18_985_010_765, 64, "fair burn matches the recorded number");
+        // TODO(needs review): the pinned raw evidence numbers from the lead's run (18,985,019,568 burned vs
+        // 18,985,010,765 fair, 8,803 apart) were measured on the OWNER-FUNDED rig, where total shares were 200k
+        // against a 300k NAV. Since the earn-vs-lp decision the depositors fund the paired leg themselves, so the
+        // share basis is 300k against the same 300k NAV and both figures move by roughly 1.5x. The RELATION they
+        // were evidence for is fully asserted above (burn >= the spot value of the cash, exceeded only by the
+        // virtual-offset term), so nothing is lost by logging rather than pinning them -- but re-measure and
+        // re-pin them on a live fork if these exact wei are cited again.
+        emit log_named_uint("burned (re-measure and re-pin: basis changed)", burned);
+        emit log_named_uint("fairBurnAtSpot (re-measure and re-pin: basis changed)", fairBurnAtSpot);
 
         // Scope inv. 2 at spot: bob's post-exit claim + cash never exceeds his whole pre-exit claim; alice is whole.
         uint256 navAfterS = staging.stagedAssets() + quote.balanceOf(address(pm)) + _lpVal(spot);
@@ -421,7 +437,7 @@ contract InvariantForkRegressionsTest is Test {
 
         // Band check first: the follower is ~3x away (sqrtPrice), so an immediate deploy is OUT OF BAND (A-3).
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployPriceOutOfBand.selector);
-        pm.deploy(10_000e6, 0, 0, block.timestamp);
+        pm.deploy(10_000e6, 0, 0, 0, block.timestamp);
 
         // Walk the follower onto spot: one 5 % step per block via the permissionless poke.
         for (uint256 i; i < 40; ++i) {
@@ -435,10 +451,11 @@ contract InvariantForkRegressionsTest is Test {
         // Now the band passes and the mint would be ALL QUOTE (paired leg 0) → refused by invariant 15.
         _roll();
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployNotTwoSided.selector);
-        pm.deploy(10_000e6, 0, 0, block.timestamp);
-        // ...also when the owner OFFERS paired: it is not used out of range, and the check is on USED amounts.
+        pm.deploy(10_000e6, 0, 0, 0, block.timestamp); // swapAmount 0 -> a pure all-quote mint
+        // ...also when a ZAP is requested: out of range the mint consumes no paired whatever the swap returns,
+        // and the check is on USED amounts.
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployNotTwoSided.selector);
-        pm.deploy(10_000e6, 10_000e18, 0, block.timestamp);
+        pm.deploy(20_000e6, 10_000e6, 0, 0, block.timestamp);
         assertEq(pm.tokenId(), 0, "no position minted");
         assertEq(pm.deployedPrincipal(), 0);
         assertEq(staging.stagedAssets(), 100_000e6, "staged capital untouched (the failed deploy reverted the unstage)");
@@ -464,8 +481,10 @@ contract InvariantForkRegressionsTest is Test {
         // much headroom under a balance-pegged cap — so close it HARD (absolute 1) to model a source that stays full.
         src.setSupplyCap(1);
         assertEq(src.maxDeposit(address(adapter)), 0);
-        // Deploy 50k quote but only 30k of paired → the balanced mint uses ~30k of each; ~20k quote is left over.
-        pm.deploy(50_000e6, 30_000e18, 0, block.timestamp);
+        // Stage 80k and zap 30k of it into paired → 50k quote for the mint against ~30k paired, so the balanced
+        // mint uses ~30k of each and ~20k quote is left over. (Same composition the old owner-funded
+        // `deploy(50k quote, 30k owner paired)` produced; the paired is now user quote that changed form.)
+        pm.deploy(80_000e6, 30_000e6, 0, 0, block.timestamp);
         uint256 parked = quote.balanceOf(address(pm));
         assertGt(parked, 15_000e6, "leftover parked in the PM (RestageDeferred)");
         assertLt(parked, 25_000e6);
@@ -515,25 +534,25 @@ contract InvariantForkRegressionsTest is Test {
         _roll();
 
         // (d) ...the source re-opens and the next deploy CONSUMES the parked quote first (nothing unstaged for it),
-        //     re-stages the rest, and bob's claim moves only by his share of the deploy's own value change (the
-        //     harness owner DONATES the paired leg) — never by his share of the parked quote.
+        //     re-stages the rest, and bob's claim moves only by his share of the deploy's own (small) value
+        //     change — never by his share of the parked quote.
         src.setSupplyCap(0);
         uint256 stagedBefore = staging.stagedAssets();
         uint256 lpBefore = _lpVal(_spot());
-        pm.deploy(1_000e6, 1_000e18, 0, block.timestamp);
+        pm.deploy(2_000e6, 1_000e6, 0, 0, block.timestamp); // 1k for the mint + 1k zapped: the old (1k, 1k) shape
         assertEq(quote.balanceOf(address(pm)), 0, "leftover re-staged by the next deploy (source open)");
         uint256 stagedAfter = staging.stagedAssets();
-        assertGe(stagedAfter + 2, stagedBefore + parked - 1_000e6, "the deploy's quote came from the parked leftover, not the reserve");
-        assertLe(stagedAfter, stagedBefore + parked - 1_000e6 + 2);
+        assertGe(stagedAfter + 2, stagedBefore + parked - 2_000e6, "the deploy's quote came from the parked leftover, not the reserve");
+        assertLe(stagedAfter, stagedBefore + parked - 2_000e6 + 2);
         uint256 bobClaimAfter = Math.mulDiv(pm.sharesOf(bob), pm.totalNav() + V, pm.totalShares() + V);
         uint256 gain = bobClaimAfter > bobClaimParked ? bobClaimAfter - bobClaimParked : 0;
-        uint256 lpGain = _lpVal(_spot()) - lpBefore; // value the owner's donated paired leg added
-        assertLe(gain, Math.mulDiv(lpGain, pm.sharesOf(bob), pm.totalShares()) + 4, "gain bounded by his share of the donated leg");
+        uint256 lpGain = _lpVal(_spot()) - lpBefore; // value the deploy moved from parked quote into the LP
+        assertLe(gain, Math.mulDiv(lpGain, pm.sharesOf(bob), pm.totalShares()) + 4, "gain bounded by his share of the deploy's own value change");
         assertLt(gain, Math.mulDiv(parked, bobShares, pm.totalShares()) / 10, "NOT his fraction of the parked quote (R3-INV-2 FIXED)");
         emit log_named_uint("parked leftover (raw USDG)", parked);
         emit log_named_uint("bob's claim while parked / after re-stage (raw USDG)", bobClaimParked);
         emit log_named_uint("  ...after re-stage", bobClaimAfter);
-        emit log_named_uint("bob's gain (owner-donated leg only; pre-fix floor 4,979,971,247)", gain);
+        emit log_named_uint("bob's gain (deploy value change only; pre-fix floor 4,979,971,247)", gain);
         emit log_named_uint("pre-fix mint if parked were outside NAV / actual", sharesIfExcluded);
         emit log_named_uint("  ...actual", bobShares);
     }
@@ -561,7 +580,7 @@ contract InvariantForkRegressionsTest is Test {
         vm.prank(alice);
         pm.deposit(100_000e6);
         _roll();
-        pm.deploy(50_000e6, 50_000e18, 0, block.timestamp);
+        pm.deploy(100_000e6, 50_000e6, 0, 0, block.timestamp); // stage 100k, zap half: the old (50k, 50k) shape
         _roll();
         (uint160 ref,, uint160 high1) = pm.referencePrice();
         uint160 spot = _spot();
@@ -593,7 +612,7 @@ contract InvariantForkRegressionsTest is Test {
         vm.prank(alice);
         pm.deposit(100_000e6);
         _roll();
-        pm.deploy(50_000e6, 50_000e18, 0, block.timestamp);
+        pm.deploy(100_000e6, 50_000e6, 0, 0, block.timestamp); // stage 100k, zap half: the old (50k, 50k) shape
         _roll();
         uint160 spot = _spot();
         assertEq(_holderMark(spot), spot, "holder mark == spec mark");

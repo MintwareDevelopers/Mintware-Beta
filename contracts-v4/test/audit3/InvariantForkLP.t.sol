@@ -77,6 +77,14 @@ contract ForkLpHandler is Test {
     uint256 internal constant N = 4;
     bytes4 internal constant ERROR_STRING = 0x08c379a0;
     /// ERC-7751 wrap v4-core puts around a failing token call inside `take`/`settle` (`CustomRevert.bubbleUpAndRevertWith`).
+    /// Earn-vs-lp decision (2026-09-08): the paired leg now comes from an in-contract pool swap whose output
+    /// this harness cannot compute without re-implementing v4's swap math, so a ZAPPING deploy's MINT outcome is
+    /// deliberately unpredicted. Every other prediction on the deploy path (cap, band, source outage, paused /
+    /// frozen third-party tokens) stays exact, and a NON-zapping deploy (swapAmount == 0) stays exactly predicted.
+    /// TODO(needs review): restoring an exact mint prediction needs a swap-output model (a v4 quoter read against
+    /// the same `sqrtPriceLimitX96` the PM uses) -- worth doing before the external audit relies on this harness
+    /// for the zap path.
+    bytes4 internal constant UNPREDICTABLE = 0xfffffffe;
     bytes4 internal constant WRAPPED = bytes4(keccak256("WrappedError(address,bytes4,bytes,bytes)"));
     bytes4 internal constant SRC_CAP = bytes4(keccak256("ERC4626ExceededMaxDeposit(address,uint256,uint256)")); // OZ 4626 supply cap
 
@@ -439,6 +447,7 @@ contract ForkLpHandler is Test {
     }
 
     function _record(string memory action, bytes4 got, bytes4 expect) internal {
+        if (expect == UNPREDICTABLE) return; // zapping deploy: any outcome is admissible (see UNPREDICTABLE)
         if (got != expect) {
             unexpectedReverts++;
             lastUnexpectedAction = action;
@@ -448,6 +457,7 @@ contract ForkLpHandler is Test {
     }
 
     function _recordOk(string memory action, bytes4 expect) internal {
+        if (expect == UNPREDICTABLE) return;
         if (expect != bytes4(0)) {
             expectedRevertButSucceeded++;
             lastExpectedButOkAction = action;
@@ -822,7 +832,10 @@ contract ForkLpHandler is Test {
         uint256 fromParked = Math.min(d.stuck, d.q);
         uint256 rest = d.q - fromParked;
         d.quoteGot = fromParked + (src.failWithdrawals() || rest == 0 ? 0 : Math.min(rest, adapter.maxWithdrawable()));
-        (uint256 a0, uint256 a1) = q0 ? (d.quoteGot, d.p) : (d.p, d.quoteGot);
+        // A zap's paired output is decided by a real pool swap inside `deploy` -- not modellable here.
+        if (d.p > 0) return UNPREDICTABLE;
+        // swapAmount == 0 -> no paired at all: the mint is all-quote and invariant 15 refuses it (or L is 0).
+        (uint256 a0, uint256 a1) = q0 ? (d.quoteGot, uint256(0)) : (uint256(0), d.quoteGot);
         uint128 L = LiquidityAmounts.getLiquidityForAmounts(
             d.spot, TickMath.getSqrtPriceAtTick(tl), TickMath.getSqrtPriceAtTick(tu), a0, a1
         );
@@ -847,8 +860,10 @@ contract ForkLpHandler is Test {
         uint256 capTotal = (principal * pm.MAX_DEPLOY_BPS()) / 10_000;
         uint256 room = capTotal > d.dp ? capTotal - d.dp : 0;
         d.q = bound(qSeed, 0, room + room / 4 + 1);
-        uint256 scale = 10 ** (18 - uint256(quoteDec));
-        d.p = bound(pSeed, 0, 2 * d.q * scale + 1e18);
+        // Earn-vs-lp decision: `d.p` is now `swapAmount` -- QUOTE taken out of `d.q` and zapped into the paired
+        // leg in-contract -- not an owner-supplied paired amount. `swapAmount > quoteToDeploy` is its own revert
+        // (`SwapExceedsQuote`), so bound it just past `d.q` to exercise that edge too.
+        d.p = bound(pSeed, 0, d.q + 1);
         d.spot = _spot();
         (d.ref,) = _refRaw();
         (d.feeQ, d.feeP) = _accruedFees();
@@ -858,7 +873,8 @@ contract ForkLpHandler is Test {
         d.stuck = quote.balanceOf(address(pm));
 
         bytes4 expect;
-        if (d.q == 0 && d.p == 0) expect = MintwareLpGatewayPositionManager.ZeroAmount.selector;
+        if (d.q == 0) expect = MintwareLpGatewayPositionManager.ZeroAmount.selector;
+        else if (d.p > d.q) expect = MintwareLpGatewayPositionManager.SwapExceedsQuote.selector;
         else if (!d.readable) expect = MintwareLpGatewayPositionManager.SourceUnavailable.selector;
         else if (d.dp + d.q > capTotal) expect = MintwareLpGatewayPositionManager.DeployCapExceeded.selector;
         // Third-party token failures, in the order the contract meets them: the H-02 sweep's TAKE of paired fees runs
@@ -866,7 +882,7 @@ contract ForkLpHandler is Test {
         // (ADDRESS_FROZEN → `Error(string)`), then the PM pulls the paired leg itself (TOKEN_PAUSED → `Error(string)`).
         else if (paired.paused() && d.feeP > 0) expect = WRAPPED;
         else if (quote.frozen(recip) && d.feeQ > 0) expect = ERROR_STRING;
-        else if (paired.paused() && d.p > 0) expect = ERROR_STRING;
+        else if (paired.paused() && d.p > 0) expect = UNPREDICTABLE; // the zap's own take/settle of a paused token
         else {
             // Post-fix XR-2: a reference ALWAYS exists (anchored at creation) — the band applies to the first deploy too.
             uint160 diff = d.spot > d.ref ? d.spot - d.ref : d.ref - d.spot;
@@ -877,12 +893,11 @@ contract ForkLpHandler is Test {
             }
         }
 
-        // A paused paired token rejects the handler's own mint too — the PM's pull of the leg fails on the pause
-        // before any balance check, so skipping the mint keeps the prediction intact and the handler frame alive.
-        if (!paired.paused()) paired.mint(address(this), d.p);
+        // No handler-side paired mint any more: the PM never pulls a paired token from the caller.
         Fol memory f = _folPre();
-        (bool ok, bytes memory ret) =
-            address(pm).call(abi.encodeWithSelector(pm.deploy.selector, d.q, d.p, uint128(0), block.timestamp));
+        (bool ok, bytes memory ret) = address(pm).call(
+            abi.encodeWithSelector(pm.deploy.selector, d.q, d.p, uint256(0), uint128(0), block.timestamp)
+        );
         if (!ok) {
             _record("deploy", _sel(ret), expect);
             if (_sel(ret) == MintwareLpGatewayPositionManager.DeployNotTwoSided.selector) nTwoSidedRefusals++;
@@ -1137,7 +1152,8 @@ abstract contract InvariantForkLPBase is Test {
         }
         r.pm = new MintwareLpGatewayPositionManager(
             r.poolManager, r.posm, IPermit2Minimal(PERMIT2), r.key, IERC20(address(r.quote)), r.tl, r.tu, r.staging,
-            address(h), r.recip, BAND
+            address(h), r.recip, BAND,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         assertEq(r.pm.ENTRY_MEMORY_BLOCKS(), ENTRY_MEMORY_BLOCKS, "entry-period constant drifted - re-pin the parity roll");
         r.staging.setController(address(r.pm));
@@ -1283,14 +1299,16 @@ abstract contract InvariantForkLPBase is Test {
         {
             h.deposit(0, 200_000 * 10 ** uint256(_quoteDecimals()), false, 0); // alice
             h.setSourceSupplyCap(2); // hard-closed (absolute 1)
-            h.deploy(60_000 * 10 ** uint256(_quoteDecimals()), 30_000e18, false); // 30k quote + 30k paired minted, ~30k parked
+            // Earn-vs-lp decision: arg 2 is `swapAmount` in QUOTE units, taken out of arg 1. 60k staged with 30k
+            // zapped mints ~30k quote + ~30k paired and parks ~30k -- the same shape as the old (60k, 30k paired).
+            h.deploy(60_000 * 10 ** uint256(_quoteDecimals()), 30_000 * 10 ** uint256(_quoteDecimals()), false);
             assertGt(h.nRestageDeferred(), 0, "prefix: deploy parked its leftover (RestageDeferred)");
             h.withdraw(0, 5_000 * 10 ** uint256(_quoteDecimals()), false); // alice exits a slice: idle leg from parked first
             assertGt(h.nParkedPaid(), 0, "prefix: exit paid from parked quote");
             h.setSourceSupplyCap(3); // tight: room for ~1,000 quote only
             h.deposit(1, 900 * 10 ** uint256(_quoteDecimals()), false, 1); // bob, minMode 1 = exact predicted min
             h.setSourceSupplyCap(0); // uncapped again
-            h.deploy(5_000 * 10 ** uint256(_quoteDecimals()), 5_000e18, false); // consumes parked first, re-stages the rest
+            h.deploy(10_000 * 10 ** uint256(_quoteDecimals()), 5_000 * 10 ** uint256(_quoteDecimals()), false); // consumes parked first, re-stages the rest
             assertGt(h.nDeployFromParked(), 0, "prefix: deploy consumed parked quote");
             assertEq(h.unexpectedReverts() + h.expectedRevertButSucceeded() + h.predictionMismatch(), 0, "prefix: predictions exact");
             assertEq(h.principalSliceViolations() + h.capViolations() + h.reCreditShadowViolations(), 0, "prefix: shadows exact");

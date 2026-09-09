@@ -58,7 +58,8 @@ contract RedTeamOnchainUnitTest is Test {
         stub = address(new Stub());
         pm = new MintwareLpGatewayPositionManager(
             IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub),
-            key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink, 500
+            key, IERC20(address(usdg)), -600, 600, staging, address(this), harvestSink, 500,
+            type(uint256).max // IA-11 principal cap: uncapped -- this test predates/is unrelated to the cap
         );
         staging.setController(address(pm));
         _fund(alice, 10_000_000e6);
@@ -289,14 +290,14 @@ contract RedTeamOnchainUnitTest is Test {
             new MintwareLpGatewayFactory(IPoolManager(address(new MockSlot0PoolManager())), IPositionManager(stub), IPermit2Minimal(stub), address(this));
         MintwareERC4626YieldAdapter a1 =
             new MintwareERC4626YieldAdapter(address(usdg), address(src), address(0), address(this));
-        f.createGateway(key, IERC20(address(usdg)), IYieldAdapter(address(a1)), -600, 600, address(this), harvestSink, 0);
+        f.createGateway(key, IERC20(address(usdg)), IYieldAdapter(address(a1)), -600, 600, address(this), harvestSink, 0, type(uint256).max);
         PoolKey memory key2 = key;
         key2.fee = 10_000;
         vm.expectRevert(MintwareLpGatewayFactory.AdapterReused.selector);
-        f.createGateway(key2, IERC20(address(usdg)), IYieldAdapter(address(a1)), -600, 600, address(this), harvestSink, 0);
+        f.createGateway(key2, IERC20(address(usdg)), IYieldAdapter(address(a1)), -600, 600, address(this), harvestSink, 0, type(uint256).max);
         vm.prank(mallory);
         vm.expectRevert();
-        f.createGateway(key2, IERC20(address(usdg)), IYieldAdapter(address(a1)), -600, 600, mallory, mallory, 0);
+        f.createGateway(key2, IERC20(address(usdg)), IYieldAdapter(address(a1)), -600, 600, mallory, mallory, 0, type(uint256).max);
     }
 
     /// Ownable2Step: a pending owner has no powers until accept; the current owner keeps them; renounce is
