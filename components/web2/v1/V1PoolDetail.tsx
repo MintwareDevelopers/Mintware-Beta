@@ -25,7 +25,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem'
-import { useWallets } from '@privy-io/react-auth'
+import { useAccount } from 'wagmi'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
@@ -82,7 +82,7 @@ function riskChip(score: number) {
 export function V1PoolDetail({ slug }: { slug: string }) {
   const { address, isConnected } = useMintwareIdentity()
   const privy = useMintwarePrivy()
-  const { wallets } = useWallets()
+  const { connector } = useAccount()
   const [meta, setMeta] = useState<Meta | null>(null)
   const [metaState, setMetaState] = useState<'loading' | 'ok' | 'not_live' | 'unavailable'>('loading')
   const [m, setM] = useState<Metrics | null>(null)
@@ -168,13 +168,23 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   // (email/social) wallet or a WalletConnect session never exposes `window.ethereum` at all, and with
   // multiple injected extensions installed, `window.ethereum` can silently be a DIFFERENT account than
   // the one shown as connected — every prior deposit/withdraw/record signature request in that case
-  // either failed outright or prompted the wrong wallet. `useWallets()` (Privy) returns every connected
-  // wallet (embedded included) with its OWN `getEthereumProvider()` — find the one matching the active
-  // identity's address and use THAT, so the transport can never diverge from the displayed identity.
+  // either failed outright or prompted the wrong wallet.
+  //
+  // First attempt used Privy's `useWallets()` directly — caught during review as a real regression:
+  // this app also runs with Privy fully disabled (`components/web2/providers.tsx`, no
+  // NEXT_PUBLIC_PRIVY_APP_ID — plain WagmiProvider, no PrivyProvider ancestor at all), where
+  // `useWallets()` has no context to read from and returns nothing usable even for a genuinely
+  // connected wagmi wallet. Fixed to use wagmi's own active `connector.getProvider()` instead — this is
+  // the common layer present in BOTH configurations (Privy's wagmi integration registers its wallets,
+  // embedded included, as real wagmi connectors too), so it can never diverge from the displayed
+  // identity and never depends on Privy being enabled. `getConnectorClient`/wagmi's typed `switchChain`
+  // aren't used here because Robinhood Chain isn't one of wagmiConfig's configured chains (only
+  // mainnet/base/arbitrum/baseSepolia are, for the swap/vault surfaces) — `ensureChain` below still
+  // does its own raw `wallet_switchEthereumChain`/`wallet_addEthereumChain` dance directly on the
+  // provider, which works regardless of wagmi's own configured-chain list.
   async function getSignerProvider(): Promise<import('viem').EIP1193Provider> {
-    const w = wallets.find((x) => x.address?.toLowerCase() === address?.toLowerCase())
-    if (!w) throw new Error('No connected wallet matches the active account — reconnect and try again.')
-    return (await w.getEthereumProvider()) as unknown as import('viem').EIP1193Provider
+    if (!connector) throw new Error('No connected wallet — reconnect and try again.')
+    return (await connector.getProvider()) as import('viem').EIP1193Provider
   }
   function chainObj(mm: Meta) {
     return { id: mm.chainId, name: 'robinhood', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [mm.rpcUrl] } } } as const

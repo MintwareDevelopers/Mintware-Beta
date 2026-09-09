@@ -35,7 +35,9 @@ export function V1Swap() {
   // wired here at all yet, so the button must never claim otherwise regardless of a pool's live flag.
   // Keep the picker/preview fully interactive; just never enable submission until routing genuinely
   // exists (per the remediation: explicitly unavailable, not a fake "Swap" label on a no-op button).
-  const btn = !to ? 'Select a token' : !hasAmount ? 'Enter an amount' : 'Routing goes live with deployed pools'
+  // V1-06 fix, copy corrected on review: deployment alone doesn't implement execution — say so plainly
+  // rather than implying it's just waiting on pools to go live (a router/quoter still needs building).
+  const btn = !to ? 'Select a token' : !hasAmount ? 'Enter an amount' : 'Swap execution not live yet'
   const btnEnabled = false
 
   return (
@@ -115,7 +117,7 @@ export function V1Swap() {
       </div>
 
       <p className="text-[12px] mt-4 text-center" style={{ color: '#63636F' }}>
-        Routing goes live with the first deployed pool ·{' '}
+        Swap execution isn&rsquo;t built yet — browse and deposit into pools directly for now ·{' '}
         <Link href="/v1" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Browse pools →</Link>{' '}
         · <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
       </p>
