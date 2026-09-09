@@ -61,10 +61,47 @@ describe('resolveInstanceStrict — registry populated', () => {
     const r = await resolveInstanceStrict(two.client, cfg, undefined)
     expect(r).toEqual({ ok: false, status: 404, error: 'pool_required' })
   })
-  it('listResolvableInstances returns only active registry rows (never the env rig)', async () => {
+  // V1-01 fix (independent Codex audit, 2026-09-09): a depositor's shares don't stop existing when a
+  // pool is deactivated — the portfolio must keep enumerating retired instances (never the env rig,
+  // which is still registry-empty-only), just correctly flagged `live: false`. This replaces the OLD
+  // assertion ("only active rows") that was itself the bug — deactivation silently dropped a funded
+  // position from the portfolio with no normal way to see or exit it.
+  it('listResolvableInstances returns BOTH active and retired registry rows (never the env rig)', async () => {
     const list = await listResolvableInstances(db().client, cfg)
-    expect(list.map((i) => i.positionManager)).toEqual([REG_PM])
-    expect(list[0].source).toBe('registry')
+    const byPm = new Map(list.map((i) => [i.positionManager, i]))
+    expect(byPm.get(REG_PM)?.live).toBe(true)
+    expect(byPm.get(REG_PM2)?.live).toBe(false) // retired, but still enumerated
+    expect(list.every((i) => i.source === 'registry')).toBe(true)
+  })
+})
+
+describe('resolveInstanceStrict — includeInactive (V1-01 fix: exit/read discovery ≠ deposit eligibility)', () => {
+  const db = () => fakeSupabase({ tables: { gateway_instances: [row(POOL_ID, REG_PM), row(POOL_ID2, REG_PM2, 'inactive')] } })
+
+  it('without includeInactive, a retired pool still 404s (deposit-route behavior, unchanged)', async () => {
+    const r = await resolveInstanceStrict(db().client, cfg, POOL_ID2)
+    expect(r).toEqual({ ok: false, status: 404, error: 'pool_not_live' })
+  })
+  it('with includeInactive, a retired pool resolves — live:false, but ok:true (withdraw/read routes)', async () => {
+    const r = await resolveInstanceStrict(db().client, cfg, POOL_ID2, { includeInactive: true })
+    expect(r.ok).toBe(true)
+    if (r.ok) {
+      expect(r.inst.positionManager).toBe(REG_PM2)
+      expect(r.inst.live).toBe(false)
+    }
+  })
+  it('with includeInactive, an ACTIVE pool still resolves live:true (no regression)', async () => {
+    const r = await resolveInstanceStrict(db().client, cfg, POOL_ID, { includeInactive: true })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.inst.live).toBe(true)
+  })
+  it('with includeInactive, a pool that never existed is still a 404 (not a blanket bypass)', async () => {
+    const r = await resolveInstanceStrict(db().client, cfg, '0x' + 'ff'.repeat(32), { includeInactive: true })
+    expect(r).toEqual({ ok: false, status: 404, error: 'pool_not_live' })
+  })
+  it('with includeInactive and no pool param, the env-rig/ambiguity rules are unaffected when ≥1 is active', async () => {
+    const r = await resolveInstanceStrict(db().client, cfg, null, { includeInactive: true })
+    expect(r.ok && r.inst.positionManager).toBe(REG_PM) // the sole ACTIVE row, not the retired one
   })
 })
 

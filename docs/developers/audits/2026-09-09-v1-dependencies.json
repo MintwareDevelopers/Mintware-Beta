@@ -1,0 +1,2080 @@
+{
+  "checkedAt": "2026-09-09T20:59:07.920Z",
+  "command": "pnpm audit --prod --json",
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 8,
+      "moderate": 77,
+      "high": 60,
+      "critical": 2
+    },
+    "dependencies": 1401,
+    "devDependencies": 0,
+    "optionalDependencies": 0,
+    "totalDependencies": 1401
+  },
+  "advisories": [
+    {
+      "module": "cookie",
+      "severity": "low",
+      "title": "cookie accepts cookie name, path, and domain with out of bounds characters",
+      "url": "https://github.com/advisories/GHSA-pxg6-pf52-xh8x",
+      "patchedVersions": ">=0.7.0",
+      "findings": [
+        {
+          "version": "0.4.2",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>@sentry/node>cookie"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "tmp",
+      "severity": "low",
+      "title": "tmp allows arbitrary temporary file / directory write via symbolic link `dir` parameter",
+      "url": "https://github.com/advisories/GHSA-52f5-9888-hmc6",
+      "patchedVersions": ">=0.2.4",
+      "findings": [
+        {
+          "version": "0.0.33",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>solc>tmp"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "elliptic",
+      "severity": "low",
+      "title": "Elliptic Uses a Cryptographic Primitive with a Risky Implementation",
+      "url": "https://github.com/advisories/GHSA-848j-6mx2-7j84",
+      "patchedVersions": "<0.0.0",
+      "findings": [
+        {
+          "version": "6.6.1",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>@ethersproject/abi>@ethersproject/hash>@ethersproject/abstract-signer>@ethersproject/abstract-provider>@ethersproject/transactions>@ethersproject/signing-key>elliptic"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "moderate",
+      "title": "Undici has an unbounded decompression chain in HTTP responses on Node.js Fetch API via Content-Encoding leads to resource exhaustion",
+      "url": "https://github.com/advisories/GHSA-g9mf-h72j-4rw9",
+      "patchedVersions": ">=6.23.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "serialize-javascript",
+      "severity": "high",
+      "title": "Serialize JavaScript is Vulnerable to RCE via RegExp.flags and Date.prototype.toISOString()",
+      "url": "https://github.com/advisories/GHSA-5c6j-r48x-rmvq",
+      "patchedVersions": ">=7.0.3",
+      "findings": [
+        {
+          "version": "6.0.2",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>serialize-javascript"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "moderate",
+      "title": "Undici has an HTTP Request/Response Smuggling issue",
+      "url": "https://github.com/advisories/GHSA-2mjp-6q6p-2qxm",
+      "patchedVersions": ">=6.24.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "high",
+      "title": "Undici has Unbounded Memory Consumption in WebSocket permessage-deflate Decompression",
+      "url": "https://github.com/advisories/GHSA-vrm6-8vpv-qv8q",
+      "patchedVersions": ">=6.24.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "high",
+      "title": "Undici has Unhandled Exception in WebSocket Client Due to Invalid server_max_window_bits Validation",
+      "url": "https://github.com/advisories/GHSA-v9p9-hfj2-hcw8",
+      "patchedVersions": ">=6.24.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "moderate",
+      "title": "Undici has CRLF Injection in undici via `upgrade` option",
+      "url": "https://github.com/advisories/GHSA-4992-7rv2-5pvq",
+      "patchedVersions": ">=6.24.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "h3",
+      "severity": "moderate",
+      "title": "h3: SSE Event Injection via Unsanitized Carriage Return (`\\r`) in EventStream Data and Comment Fields (Bypass of CVE Fix)",
+      "url": "https://github.com/advisories/GHSA-4hxc-9384-m385",
+      "patchedVersions": ">=1.15.9",
+      "findings": [
+        {
+          "version": "1.15.6",
+          "paths": [
+            ".>@privy-io/react-auth>@walletconnect/ethereum-provider>@walletconnect/keyvaluestorage>unstorage>h3"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "h3",
+      "severity": "moderate",
+      "title": "h3: Double Decoding in `serveStatic` Bypasses `resolveDotSegments` Path Traversal Protection via `%252e%252e`",
+      "url": "https://github.com/advisories/GHSA-72gr-qfp7-vwhw",
+      "patchedVersions": ">=1.15.9",
+      "findings": [
+        {
+          "version": "1.15.6",
+          "paths": [
+            ".>@privy-io/react-auth>@walletconnect/ethereum-provider>@walletconnect/keyvaluestorage>unstorage>h3"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "socket.io-parser",
+      "severity": "high",
+      "title": "socket.io allows an unbounded number of binary attachments",
+      "url": "https://github.com/advisories/GHSA-677m-j7p3-52f9",
+      "patchedVersions": ">=4.2.6",
+      "findings": [
+        {
+          "version": "4.2.5",
+          "paths": [
+            ".>@metamask/sdk>socket.io-client>socket.io-parser"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "brace-expansion",
+      "severity": "moderate",
+      "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+      "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+      "patchedVersions": ">=1.1.13",
+      "findings": [
+        {
+          "version": "1.1.12",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>glob>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "brace-expansion",
+      "severity": "moderate",
+      "title": "brace-expansion: Zero-step sequence causes process hang and memory exhaustion",
+      "url": "https://github.com/advisories/GHSA-f886-m6hf-6m8v",
+      "patchedVersions": ">=2.0.3",
+      "findings": [
+        {
+          "version": "2.0.2",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "picomatch",
+      "severity": "moderate",
+      "title": "Picomatch: Method Injection in POSIX Character Classes causes incorrect Glob Matching",
+      "url": "https://github.com/advisories/GHSA-3v7f-55p6-f55p",
+      "patchedVersions": ">=2.3.2",
+      "findings": [
+        {
+          "version": "2.3.1",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>chokidar>anymatch>picomatch"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "picomatch",
+      "severity": "high",
+      "title": "Picomatch has a ReDoS vulnerability via extglob quantifiers",
+      "url": "https://github.com/advisories/GHSA-c2c7-rcm5-vvqj",
+      "patchedVersions": ">=2.3.2",
+      "findings": [
+        {
+          "version": "2.3.1",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>chokidar>anymatch>picomatch"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "lodash",
+      "severity": "high",
+      "title": "lodash vulnerable to Code Injection via `_.template` imports key names",
+      "url": "https://github.com/advisories/GHSA-r5fr-rjxr-66jc",
+      "patchedVersions": ">=4.18.0",
+      "findings": [
+        {
+          "version": "4.17.23",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>lodash"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "lodash",
+      "severity": "moderate",
+      "title": "lodash vulnerable to Prototype Pollution via array path bypass in `_.unset` and `_.omit`",
+      "url": "https://github.com/advisories/GHSA-f23m-r3pf-42rh",
+      "patchedVersions": ">=4.18.0",
+      "findings": [
+        {
+          "version": "4.17.23",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>lodash"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "defu",
+      "severity": "high",
+      "title": "defu: Prototype pollution via `__proto__` key in defaults argument",
+      "url": "https://github.com/advisories/GHSA-737v-mqg7-c878",
+      "patchedVersions": ">=6.1.5",
+      "findings": [
+        {
+          "version": "6.1.4",
+          "paths": [
+            ".>@privy-io/react-auth>@walletconnect/ethereum-provider>@walletconnect/keyvaluestorage>unstorage>h3>defu"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono missing validation of cookie name on write path in setCookie()",
+      "url": "https://github.com/advisories/GHSA-26pp-8wgv-hjvm",
+      "patchedVersions": ">=4.12.12",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: Non-breaking space prefix bypass in cookie name handling in getCookie()",
+      "url": "https://github.com/advisories/GHSA-r5rp-j6wh-rvv4",
+      "patchedVersions": ">=4.12.12",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: Path traversal in toSSG() allows writing files outside the output directory",
+      "url": "https://github.com/advisories/GHSA-xf4j-xp2r-rqqx",
+      "patchedVersions": ">=4.12.12",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: Middleware bypass via repeated slashes in serveStatic",
+      "url": "https://github.com/advisories/GHSA-wmmm-f939-6g9c",
+      "patchedVersions": ">=4.12.12",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "follow-redirects",
+      "severity": "moderate",
+      "title": "follow-redirects leaks Custom Authentication Headers to Cross-Domain Redirect Targets",
+      "url": "https://github.com/advisories/GHSA-r4q5-vmmm-2653",
+      "patchedVersions": ">=1.16.0",
+      "findings": [
+        {
+          "version": "1.15.11",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>solc>follow-redirects"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios has a NO_PROXY Hostname Normalization Bypass that Leads to SSRF",
+      "url": "https://github.com/advisories/GHSA-3p68-rc4w-qgx5",
+      "patchedVersions": ">=1.15.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "postcss",
+      "severity": "moderate",
+      "title": "PostCSS has XSS via Unescaped </style> in its CSS Stringify Output",
+      "url": "https://github.com/advisories/GHSA-qx2v-qp2m-jg93",
+      "patchedVersions": ">=8.5.10",
+      "findings": [
+        {
+          "version": "8.4.49",
+          "paths": [
+            ".>@privy-io/react-auth>styled-components>postcss"
+          ]
+        },
+        {
+          "version": "8.5.6",
+          "paths": [
+            ".>autoprefixer>postcss"
+          ]
+        },
+        {
+          "version": "8.4.31",
+          "paths": [
+            ".>next>postcss"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono has incorrect IP matching in ipRestriction() for IPv4-mapped IPv6 addresses",
+      "url": "https://github.com/advisories/GHSA-xpcf-pg52-r92g",
+      "patchedVersions": ">=4.12.12",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: Authentication Bypass via Prototype Pollution Gadget in `validateStatus` Merge Strategy",
+      "url": "https://github.com/advisories/GHSA-w9j2-pvgh-6h63",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "Axios: Incomplete Fix for CVE-2025-62718 — NO_PROXY Protection Bypassed via RFC 1122 Loopback Subnet (127.0.0.0/8) in Axios 1.15.0",
+      "url": "https://github.com/advisories/GHSA-pmwg-cvhr-8vh7",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: Invisible JSON Response Tampering via Prototype Pollution Gadget in `parseReviver`",
+      "url": "https://github.com/advisories/GHSA-3w6x-2g7m-8v23",
+      "patchedVersions": ">=1.15.2",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "low",
+      "title": "Axios: Null Byte Injection via Reverse-Encoding in AxiosURLSearchParams",
+      "url": "https://github.com/advisories/GHSA-xhjh-pmcv-23jw",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: CRLF Injection in multipart/form-data body via unsanitized blob.type in formDataToStream",
+      "url": "https://github.com/advisories/GHSA-445q-vr5w-6q77",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: no_proxy bypass via IP alias allows SSRF",
+      "url": "https://github.com/advisories/GHSA-m7pr-hjqh-92cm",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios' HTTP adapter-streamed uploads bypass maxBodyLength when maxRedirects: 0",
+      "url": "https://github.com/advisories/GHSA-5c9x-8gcm-mpgx",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: HTTP adapter streamed responses bypass maxContentLength",
+      "url": "https://github.com/advisories/GHSA-vf2m-468p-8v99",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "Axios: Prototype Pollution Gadgets - Response Tampering, Data Exfiltration, and Request Hijacking",
+      "url": "https://github.com/advisories/GHSA-pf86-5x62-jrwf",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "Axios: Header Injection via Prototype Pollution",
+      "url": "https://github.com/advisories/GHSA-6chq-wfr3-2hj9",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: XSRF Token Cross-Origin Leakage via Prototype Pollution Gadget in `withXSRFToken` Boolean Coercion",
+      "url": "https://github.com/advisories/GHSA-xx6v-rp6x-q39c",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono has CSS Declaration Injection via Style Object Values in JSX SSR",
+      "url": "https://github.com/advisories/GHSA-qp7p-654g-cw7p",
+      "patchedVersions": ">=4.12.18",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "Axios has prototype pollution read-side gadgets in HTTP adapter that allow credential injection and request hijacking",
+      "url": "https://github.com/advisories/GHSA-q8qp-cvcw-x6jj",
+      "patchedVersions": ">=1.15.2",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "low",
+      "title": "Hono has improper validation of NumericDate claims (exp, nbf, iat) in JWT verify()",
+      "url": "https://github.com/advisories/GHSA-hm8q-7f3q-5f36",
+      "patchedVersions": ">=4.12.18",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono's Cache Middleware ignores Vary: Authorization / Vary: Cookie leading to cross-user cache leakage",
+      "url": "https://github.com/advisories/GHSA-p77w-8qqv-26rm",
+      "patchedVersions": ">=4.12.18",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: bodyLimit() can be bypassed for chunked / unknown-length requests",
+      "url": "https://github.com/advisories/GHSA-9vqf-7f2p-gf9v",
+      "patchedVersions": ">=4.12.16",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "hono/jsx has Unvalidated JSX Tag Names that May Allow HTML Injection",
+      "url": "https://github.com/advisories/GHSA-69xw-7hcm-h432",
+      "patchedVersions": ">=4.12.16",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ws",
+      "severity": "moderate",
+      "title": "ws: Uninitialized memory disclosure",
+      "url": "https://github.com/advisories/GHSA-58qx-3vcg-4xpx",
+      "patchedVersions": ">=8.20.1",
+      "findings": [
+        {
+          "version": "8.18.3",
+          "paths": [
+            ".>@metamask/sdk>socket.io-client>engine.io-client>ws"
+          ]
+        },
+        {
+          "version": "8.19.0",
+          "paths": [
+            ".>@privy-io/react-auth>x402>@solana/transaction-confirmation>@solana/rpc-subscriptions>@solana/rpc-subscriptions-channel-websocket>ws"
+          ]
+        },
+        {
+          "version": "8.18.0",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@walletconnect/ethereum-provider>@reown/appkit>@walletconnect/universal-provider>@walletconnect/utils>viem>ws"
+          ]
+        },
+        {
+          "version": "8.17.1",
+          "paths": [
+            ".>ethers>ws"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios has Unrestricted Cloud Metadata Exfiltration via Header Injection Chain",
+      "url": "https://github.com/advisories/GHSA-fvcv-3m26-pcqx",
+      "patchedVersions": ">=1.15.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "serialize-javascript",
+      "severity": "moderate",
+      "title": "Serialize JavaScript has CPU Exhaustion Denial of Service via crafted array-like objects",
+      "url": "https://github.com/advisories/GHSA-qj8w-gfj5-8c6v",
+      "patchedVersions": ">=7.0.5",
+      "findings": [
+        {
+          "version": "6.0.2",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>serialize-javascript"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "uuid",
+      "severity": "moderate",
+      "title": "uuid: Missing buffer bounds check in v3/v5/v6 when buf is provided",
+      "url": "https://github.com/advisories/GHSA-w5hq-g745-h8pq",
+      "patchedVersions": ">=11.1.1",
+      "findings": [
+        {
+          "version": "8.3.2",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>uuid"
+          ]
+        },
+        {
+          "version": "9.0.1",
+          "paths": [
+            ".>@metamask/sdk>@metamask/providers>@metamask/rpc-errors>@metamask/utils>uuid"
+          ]
+        },
+        {
+          "version": "11.1.0",
+          "paths": [
+            ".>@solana/web3.js>rpc-websockets>uuid"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: IP Restriction bypasses static deny rules for non-canonical IPv6 ",
+      "url": "https://github.com/advisories/GHSA-xrhx-7g5j-rcj5",
+      "patchedVersions": ">=4.12.21",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: Cookie helper does not sanitize sameSite and priority, allowing Set-Cookie injection",
+      "url": "https://github.com/advisories/GHSA-3hrh-pfw6-9m5x",
+      "patchedVersions": ">=4.12.21",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: JWT middleware accepts any Authorization scheme, not only Bearer",
+      "url": "https://github.com/advisories/GHSA-f577-qrjj-4474",
+      "patchedVersions": ">=4.12.21",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: app.mount() strips mount prefix using undecoded path, causing incorrect routing for percent-encoded paths",
+      "url": "https://github.com/advisories/GHSA-2gcr-mfcq-wcc3",
+      "patchedVersions": ">=4.12.21",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: unbounded recursion in toFormData causes DoS via deeply nested request data",
+      "url": "https://github.com/advisories/GHSA-62hf-57xw-28j9",
+      "patchedVersions": ">=1.15.1",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "Axios: Regular Expression Denial of Service (ReDoS) via Cookie Name Injection",
+      "url": "https://github.com/advisories/GHSA-hfxv-24rg-xrqf",
+      "patchedVersions": ">=1.16.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "js-cookie",
+      "severity": "high",
+      "title": "JavaScript Cookie: Per-instance prototype hijack in assign() enables cookie-attribute injection",
+      "url": "https://github.com/advisories/GHSA-qjx8-664m-686j",
+      "patchedVersions": ">=3.0.7",
+      "findings": [
+        {
+          "version": "3.0.5",
+          "paths": [
+            ".>@privy-io/react-auth>js-cookie"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "Allocation of Resources Without Limits or Throttling in Axios",
+      "url": "https://github.com/advisories/GHSA-777c-7fjr-54vf",
+      "patchedVersions": ">=1.16.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "Axios: Proxy-Authorization Credential Leak to Origin Server Across HTTP-to-HTTPS Redirect in Axios Node.js HTTP Adapter",
+      "url": "https://github.com/advisories/GHSA-p92q-9vqr-4j8v",
+      "patchedVersions": ">=1.16.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "Axios: Proxy-Authorization header leaks to redirect target when proxy is re-evaluated to direct connection",
+      "url": "https://github.com/advisories/GHSA-j5f8-grm9-p9fc",
+      "patchedVersions": ">=1.16.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "axios Vulnerable to Credential Theft and Response Hijacking via Prototype Pollution Gadget in Config Merge",
+      "url": "https://github.com/advisories/GHSA-3g43-6gmg-66jw",
+      "patchedVersions": ">=1.15.2",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "high",
+      "title": "axios Vulnerable to Full Man-in-the-Middle via Prototype Pollution Gadget in `config.proxy`",
+      "url": "https://github.com/advisories/GHSA-35jp-ww65-95wh",
+      "patchedVersions": ">=1.16.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "axios has DoS & Header Injection via Prototype Pollution Read-Side Gadgets in axios merge functions",
+      "url": "https://github.com/advisories/GHSA-898c-q2cr-xwhg",
+      "patchedVersions": ">=1.16.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "tmp",
+      "severity": "high",
+      "title": "tmp has Path Traversal via unsanitized prefix/postfix that enables directory escape",
+      "url": "https://github.com/advisories/GHSA-ph9p-34f9-6g65",
+      "patchedVersions": ">=0.2.6",
+      "findings": [
+        {
+          "version": "0.0.33",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>solc>tmp"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "form-data",
+      "severity": "high",
+      "title": "form-data: CRLF injection in form-data via unescaped multipart field names and filenames",
+      "url": "https://github.com/advisories/GHSA-hmw2-7cc7-3qxx",
+      "patchedVersions": ">=4.0.6",
+      "findings": [
+        {
+          "version": "4.0.5",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios>form-data"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "moderate",
+      "title": "undici vulnerable to HTTP header injection via Set-Cookie percent-decoding",
+      "url": "https://github.com/advisories/GHSA-p88m-4jfj-68fv",
+      "patchedVersions": ">=6.27.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "high",
+      "title": "undici WebSocket client vulnerable to denial of service via fragment count bypass",
+      "url": "https://github.com/advisories/GHSA-vxpw-j846-p89q",
+      "patchedVersions": ">=6.27.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "low",
+      "title": "undici vulnerable to Set-Cookie SameSite attribute downgrade via permissive substring matching",
+      "url": "https://github.com/advisories/GHSA-g8m3-5g58-fq7m",
+      "patchedVersions": ">=6.27.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "hono Improperly Handles JSX Attribute Names Allows HTML Injection in hono/jsx SSR",
+      "url": "https://github.com/advisories/GHSA-458j-xx4x-4375",
+      "patchedVersions": ">=4.12.14",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "js-yaml",
+      "severity": "moderate",
+      "title": "JS-YAML: Quadratic-complexity DoS in merge key handling via repeated aliases",
+      "url": "https://github.com/advisories/GHSA-h67p-54hq-rp68",
+      "patchedVersions": ">=4.2.0",
+      "findings": [
+        {
+          "version": "4.1.1",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>js-yaml"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ws",
+      "severity": "high",
+      "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+      "url": "https://github.com/advisories/GHSA-96hv-2xvq-fx4p",
+      "patchedVersions": ">=8.21.0",
+      "findings": [
+        {
+          "version": "8.18.3",
+          "paths": [
+            ".>@metamask/sdk>socket.io-client>engine.io-client>ws"
+          ]
+        },
+        {
+          "version": "8.19.0",
+          "paths": [
+            ".>@privy-io/react-auth>x402>@solana/transaction-confirmation>@solana/rpc-subscriptions>@solana/rpc-subscriptions-channel-websocket>ws"
+          ]
+        },
+        {
+          "version": "8.18.0",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@walletconnect/ethereum-provider>@reown/appkit>@walletconnect/universal-provider>@walletconnect/utils>viem>ws"
+          ]
+        },
+        {
+          "version": "8.17.1",
+          "paths": [
+            ".>ethers>ws"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "ws",
+      "severity": "high",
+      "title": "ws: Memory exhaustion DoS from tiny fragments and data chunks",
+      "url": "https://github.com/advisories/GHSA-96hv-2xvq-fx4p",
+      "patchedVersions": ">=7.5.11",
+      "findings": [
+        {
+          "version": "7.5.10",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>ws"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "adm-zip",
+      "severity": "high",
+      "title": "adm-zip: Crafted ZIP file triggers 4GB memory allocation",
+      "url": "https://github.com/advisories/GHSA-xcpc-8h2w-3j85",
+      "patchedVersions": ">=0.6.0",
+      "findings": [
+        {
+          "version": "0.4.16",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>adm-zip"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+      "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+      "patchedVersions": ">=2.1.2",
+      "findings": [
+        {
+          "version": "2.0.2",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+      "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp",
+      "patchedVersions": ">=1.1.16",
+      "findings": [
+        {
+          "version": "1.1.12",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>glob>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "js-yaml",
+      "severity": "high",
+      "title": "js-yaml: YAML merge-key chains can force quadratic CPU consumption",
+      "url": "https://github.com/advisories/GHSA-52cp-r559-cp3m",
+      "patchedVersions": ">=4.3.0",
+      "findings": [
+        {
+          "version": "4.1.1",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>js-yaml"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "hono: Body Limit Middleware can be bypassed on AWS Lambda by understating `Content-Length`",
+      "url": "https://github.com/advisories/GHSA-rv63-4mwf-qqc2",
+      "patchedVersions": ">=4.12.25",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "hono: Lambda@Edge adapter keeps only the last value of a repeated request header, dropping the rest",
+      "url": "https://github.com/advisories/GHSA-wgpf-jwqj-8h8p",
+      "patchedVersions": ">=4.12.25",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "high",
+      "title": "hono: CORS Middleware reflects any Origin with credentials when `origin` defaults to the wildcard",
+      "url": "https://github.com/advisories/GHSA-88fw-hqm2-52qc",
+      "patchedVersions": ">=4.12.25",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "hono: Path traversal in `serve-static` on Windows via encoded backslash (`%5C`)",
+      "url": "https://github.com/advisories/GHSA-wwfh-h76j-fc44",
+      "patchedVersions": ">=4.12.25",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "hono: AWS Lambda adapter merges multiple `Set-Cookie` headers into one value, dropping cookies on ALB single-header and Lattice",
+      "url": "https://github.com/advisories/GHSA-j6c9-x7qj-28xf",
+      "patchedVersions": ">=4.12.25",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: API Gateway v1 adapter can drop a distinct repeated request header value during de-duplication",
+      "url": "https://github.com/advisories/GHSA-xgm2-5f3f-mvvc",
+      "patchedVersions": ">=4.12.27",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "immutable",
+      "severity": "high",
+      "title": "Immutable.js `List` 32-bit trie overflow → unrecoverable DoS",
+      "url": "https://github.com/advisories/GHSA-v56q-mh7h-f735",
+      "patchedVersions": ">=4.3.9",
+      "findings": [
+        {
+          "version": "4.3.8",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>immutable"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "hono/jsx does not isolate context per request, leading to cross-request data disclosure",
+      "url": "https://github.com/advisories/GHSA-hvrm-45r6-mjfj",
+      "patchedVersions": ">=4.12.27",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: Server-Side XSS via JSX Escaping Bypass in cx() Utility",
+      "url": "https://github.com/advisories/GHSA-w62v-xxxg-mg59",
+      "patchedVersions": ">=4.12.27",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "sharp",
+      "severity": "high",
+      "title": "sharp inherited vulnerabilities in libvips: CVE-2026-33327, CVE-2026-33328, CVE-2026-35590, CVE-2026-35591",
+      "url": "https://github.com/advisories/GHSA-f88m-g3jw-g9cj",
+      "patchedVersions": ">=0.35.0",
+      "findings": [
+        {
+          "version": "0.34.5",
+          "paths": [
+            ".>next>sharp"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "postcss",
+      "severity": "high",
+      "title": "PostCSS: Arbitrary file read and information disclosure via attacker-controlled sourceMappingURL in CSS comments",
+      "url": "https://github.com/advisories/GHSA-6g55-p6wh-862q",
+      "patchedVersions": ">=8.5.12",
+      "findings": [
+        {
+          "version": "8.4.49",
+          "paths": [
+            ".>@privy-io/react-auth>styled-components>postcss"
+          ]
+        },
+        {
+          "version": "8.5.6",
+          "paths": [
+            ".>autoprefixer>postcss"
+          ]
+        },
+        {
+          "version": "8.4.31",
+          "paths": [
+            ".>next>postcss"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "valibot",
+      "severity": "moderate",
+      "title": "Valibot: record() issue paths can make flatten() throw for inherited Object property names",
+      "url": "https://github.com/advisories/GHSA-5qjj-4xww-7phc",
+      "patchedVersions": ">=1.4.2",
+      "findings": [
+        {
+          "version": "1.3.0",
+          "paths": [
+            ".>@hookform/resolvers>valibot"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+      "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+      "patchedVersions": ">=1.1.17",
+      "findings": [
+        {
+          "version": "1.1.12",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>glob>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+      "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+      "patchedVersions": ">=2.1.3",
+      "findings": [
+        {
+          "version": "2.0.2",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "postcss",
+      "severity": "moderate",
+      "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+      "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp",
+      "patchedVersions": ">=8.5.23",
+      "findings": [
+        {
+          "version": "8.4.49",
+          "paths": [
+            ".>@privy-io/react-auth>styled-components>postcss"
+          ]
+        },
+        {
+          "version": "8.5.6",
+          "paths": [
+            ".>autoprefixer>postcss"
+          ]
+        },
+        {
+          "version": "8.4.31",
+          "paths": [
+            ".>next>postcss"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "socket.io-parser",
+      "severity": "high",
+      "title": "Socket.IO: Zero-attachment Memory Exhaustion",
+      "url": "https://github.com/advisories/GHSA-2m8v-j782-fhvr",
+      "patchedVersions": ">=4.2.7",
+      "findings": [
+        {
+          "version": "4.2.5",
+          "paths": [
+            ".>@metamask/sdk>socket.io-client>socket.io-parser"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "moderate",
+      "title": "undici vulnerable to downstream response desynchronization via retry interceptor",
+      "url": "https://github.com/advisories/GHSA-8xcm-r25x-g524",
+      "patchedVersions": ">=6.28.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "moderate",
+      "title": "undici vulnerable to CRLF Injection via blob-like body 'type' property",
+      "url": "https://github.com/advisories/GHSA-m8rv-5g2x-5cg5",
+      "patchedVersions": ">=6.28.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "moderate",
+      "title": "undici vulnerable to cookie attribute injection via unsanitized domain and unparsed setCookie fields",
+      "url": "https://github.com/advisories/GHSA-v3r7-h72x-cjcm",
+      "patchedVersions": ">=6.28.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: ReDoS in CORS middleware via Access-Control-Request-Headers",
+      "url": "https://github.com/advisories/GHSA-8j4g-w8fx-2239",
+      "patchedVersions": ">=4.12.34",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+      "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+      "patchedVersions": ">=2.1.4",
+      "findings": [
+        {
+          "version": "2.0.2",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "brace-expansion",
+      "severity": "high",
+      "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+      "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+      "patchedVersions": ">=1.1.18",
+      "findings": [
+        {
+          "version": "1.1.12",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>glob>minimatch>brace-expansion"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "undici",
+      "severity": "low",
+      "title": "undici vulnerable to HTTP response queue poisoning via keep-alive socket reuse",
+      "url": "https://github.com/advisories/GHSA-35p6-xmwp-9g52",
+      "patchedVersions": ">=6.27.0",
+      "findings": [
+        {
+          "version": "5.29.0",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>undici"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "js-yaml",
+      "severity": "high",
+      "title": "JS-YAML: Quadratic CPU consumption in !!omap resolution (3.x and 4.x) — CVE-2026-59870 fix not backported",
+      "url": "https://github.com/advisories/GHSA-5p4m-2wfm-xmqj",
+      "patchedVersions": ">=4.3.1",
+      "findings": [
+        {
+          "version": "4.1.1",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>js-yaml"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: `memo()` retains SSR output across requests, leading to cross-user data disclosure",
+      "url": "https://github.com/advisories/GHSA-f23p-vx2j-j53r",
+      "patchedVersions": ">=4.12.34",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "low",
+      "title": "Hono: Proxy Helper does not remove response headers listed in the `Connection` header",
+      "url": "https://github.com/advisories/GHSA-79qm-7rj5-m7r9",
+      "patchedVersions": ">=4.12.34",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: Algorithmic Complexity DoS in Language Middleware",
+      "url": "https://github.com/advisories/GHSA-54fx-42gc-7vw4",
+      "patchedVersions": ">=4.12.34",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "image-size",
+      "severity": "high",
+      "title": "image-size: ICNS parser allows denial of service through an infinite loop",
+      "url": "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
+      "patchedVersions": "<0.0.0",
+      "findings": [
+        {
+          "version": "1.2.1",
+          "paths": [
+            ".>@lifi/widget>react-i18next>react-native>@react-native/community-cli-plugin>metro>image-size"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "image-size",
+      "severity": "high",
+      "title": "image-size: JXL and HEIF parsers allow denial of service through infinite loops",
+      "url": "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq",
+      "patchedVersions": "<0.0.0",
+      "findings": [
+        {
+          "version": "1.2.1",
+          "paths": [
+            ".>@lifi/widget>react-i18next>react-native>@react-native/community-cli-plugin>metro>image-size"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "nanoid",
+      "severity": "high",
+      "title": "nanoid: non-secure generators can loop indefinitely with negative size",
+      "url": "https://github.com/advisories/GHSA-28wg-ghj8-5hjv",
+      "patchedVersions": ">=3.3.16",
+      "findings": [
+        {
+          "version": "3.3.11",
+          "paths": [
+            ".>@privy-io/react-auth>styled-components>postcss>nanoid"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "nanoid",
+      "severity": "high",
+      "title": "nanoid: custom generators can loop indefinitely when size is zero",
+      "url": "https://github.com/advisories/GHSA-2v37-7h3g-55p8",
+      "patchedVersions": ">=3.3.18",
+      "findings": [
+        {
+          "version": "3.3.11",
+          "paths": [
+            ".>@privy-io/react-auth>styled-components>postcss>nanoid"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "postcss",
+      "severity": "high",
+      "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+      "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849",
+      "patchedVersions": ">=8.5.18",
+      "findings": [
+        {
+          "version": "8.4.49",
+          "paths": [
+            ".>@privy-io/react-auth>styled-components>postcss"
+          ]
+        },
+        {
+          "version": "8.5.6",
+          "paths": [
+            ".>autoprefixer>postcss"
+          ]
+        },
+        {
+          "version": "8.4.31",
+          "paths": [
+            ".>next>postcss"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: Prototype pollution gadgets can alter axios request construction",
+      "url": "https://github.com/advisories/GHSA-mmx7-hfxf-jppx",
+      "patchedVersions": ">=1.18.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: Deep formToJSON Key Recursion Can Cause Denial of Service",
+      "url": "https://github.com/advisories/GHSA-pmv8-rq9r-6j72",
+      "patchedVersions": ">=1.18.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "decode-uri-component",
+      "severity": "moderate",
+      "title": "decode-uri-component: Denial of service via exponential decoding of malformed percent-encoded input",
+      "url": "https://github.com/advisories/GHSA-vcc3-ghjq-m6fr",
+      "patchedVersions": ">=0.5.0",
+      "findings": [
+        {
+          "version": "0.2.2",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@walletconnect/ethereum-provider>@reown/appkit>@walletconnect/universal-provider>@walletconnect/utils>query-string>decode-uri-component"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "browserslist",
+      "severity": "high",
+      "title": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+      "url": "https://github.com/advisories/GHSA-c83g-rgw3-j3cx",
+      "patchedVersions": ">=4.28.7",
+      "findings": [
+        {
+          "version": "4.28.1",
+          "paths": [
+            ".>autoprefixer>browserslist"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "browserslist",
+      "severity": "high",
+      "title": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)",
+      "url": "https://github.com/advisories/GHSA-73wf-gq98-2v4g",
+      "patchedVersions": ">=4.28.7",
+      "findings": [
+        {
+          "version": "4.28.1",
+          "paths": [
+            ".>autoprefixer>browserslist"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: HTTP/2 streamed uploads bypass `maxBodyLength`",
+      "url": "https://github.com/advisories/GHSA-mwf2-3pr3-8698",
+      "patchedVersions": ">=1.18.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: Nested axios option objects can consume polluted prototype values",
+      "url": "https://github.com/advisories/GHSA-7q8q-rj6j-mhjq",
+      "patchedVersions": ">=1.18.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: Fetch adapter `ReadableStream` uploads bypass `maxBodyLength`",
+      "url": "https://github.com/advisories/GHSA-jqh4-m9w3-8hp9",
+      "patchedVersions": ">=1.18.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "axios",
+      "severity": "moderate",
+      "title": "Axios: Excessive recursion in formDataToJSON can cause denial of service",
+      "url": "https://github.com/advisories/GHSA-42h9-826w-cgv3",
+      "patchedVersions": ">=1.18.0",
+      "findings": [
+        {
+          "version": "1.13.6",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>@base-org/account>@coinbase/cdp-sdk>axios"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "nanoid",
+      "severity": "high",
+      "title": "nanoid: Integer Overflow or Wraparound",
+      "url": "https://github.com/advisories/GHSA-xwg4-73v4-xw9w",
+      "patchedVersions": ">=3.3.12",
+      "findings": [
+        {
+          "version": "3.3.11",
+          "paths": [
+            ".>@privy-io/react-auth>styled-components>postcss>nanoid"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to host confusion via skipped IDN canonicalization on scheme-relative references",
+      "url": "https://github.com/advisories/GHSA-5jgf-p345-68v8",
+      "patchedVersions": ">=3.1.6",
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            ".>@hookform/resolvers>ajv>fast-uri"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to server-side request forgery via malformed IPv6 normalization",
+      "url": "https://github.com/advisories/GHSA-f65p-4m7j-42xc",
+      "patchedVersions": ">=3.1.6",
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            ".>@hookform/resolvers>ajv>fast-uri"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to server-side request forgery via repeated hostname percent-decoding",
+      "url": "https://github.com/advisories/GHSA-fph4-wmhf-6fwf",
+      "patchedVersions": ">=3.1.6",
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            ".>@hookform/resolvers>ajv>fast-uri"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "fast-uri",
+      "severity": "high",
+      "title": "fast-uri vulnerable to host confusion via percent-encoded scheme normalization",
+      "url": "https://github.com/advisories/GHSA-jqff-g426-hqxp",
+      "patchedVersions": ">=3.1.6",
+      "findings": [
+        {
+          "version": "3.1.5",
+          "paths": [
+            ".>@hookform/resolvers>ajv>fast-uri"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "immutable",
+      "severity": "high",
+      "title": "Immutable: Hash-collision algorithmic complexity denial of service in Immutable.Map/Set",
+      "url": "https://github.com/advisories/GHSA-xvcm-6775-5m9r",
+      "patchedVersions": ">=4.3.9",
+      "findings": [
+        {
+          "version": "4.3.8",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>immutable"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "stream-json",
+      "severity": "moderate",
+      "title": "stream-json: pick/ignore/filter/replace filters are O(depth²) on nested input — small crafted JSON blocks the event loop for seconds→minutes (DoS)",
+      "url": "https://github.com/advisories/GHSA-528h-pc64-c93x",
+      "patchedVersions": ">=3.5.0",
+      "findings": [
+        {
+          "version": "1.9.1",
+          "paths": [
+            ".>@solana/web3.js>jayson>stream-json"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "next",
+      "severity": "critical",
+      "title": "Next.js: Unauthenticated Remote Code Execution on windows-hosted servers",
+      "url": "https://github.com/advisories/GHSA-p293-qw3h-jr36",
+      "patchedVersions": ">=16.3.3",
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            ".>next"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "baseline-browser-mapping",
+      "severity": "moderate",
+      "title": "baseline-browser-mapping process termination on invalid input causes denial of service",
+      "url": "https://github.com/advisories/GHSA-w5vr-8v7q-w6rv",
+      "patchedVersions": ">=2.11.0",
+      "findings": [
+        {
+          "version": "2.9.19",
+          "paths": [
+            ".>autoprefixer>browserslist>baseline-browser-mapping"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "sharp",
+      "severity": "high",
+      "title": "sharp: Vulnerabilities in libheif: GHSA-g89c-p67h-r497 and GHSA-2jg2-4ch7-h545",
+      "url": "https://github.com/advisories/GHSA-rgj7-g3m4-5g8c",
+      "patchedVersions": ">=0.35.4",
+      "findings": [
+        {
+          "version": "0.34.5",
+          "paths": [
+            ".>next>sharp"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "js-yaml",
+      "severity": "high",
+      "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+      "url": "https://github.com/advisories/GHSA-2883-xcg3-v3hh",
+      "patchedVersions": ">=3.15.2",
+      "findings": [
+        {
+          "version": "3.15.1",
+          "paths": [
+            ".>@lifi/widget>react-i18next>react-native>babel-jest>babel-plugin-istanbul>@istanbuljs/load-nyc-config>js-yaml"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "js-yaml",
+      "severity": "high",
+      "title": "js-yaml: maxTotalMergeKeys does not limit CPU use for empty merge sources",
+      "url": "https://github.com/advisories/GHSA-2883-xcg3-v3hh",
+      "patchedVersions": ">=4.3.2",
+      "findings": [
+        {
+          "version": "4.1.1",
+          "paths": [
+            ".>@ethereum-attestation-service/eas-sdk>@ethereum-attestation-service/eas-contracts>hardhat>mocha>js-yaml"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: Incomplete fix for CVE-2026-39408: `toSSG()` still writes files outside the output directory",
+      "url": "https://github.com/advisories/GHSA-gqvv-2mrq-wpjv",
+      "patchedVersions": ">=4.13.5",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: Unbounded dot-notation nesting in `parseBody()` can cause memory exhaustion",
+      "url": "https://github.com/advisories/GHSA-g6gw-c38x-mqfc",
+      "patchedVersions": ">=4.13.5",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "hono",
+      "severity": "moderate",
+      "title": "Hono: Query parser reads parameters after the URL fragment, causing cache-key and proxy interpretation differentials",
+      "url": "https://github.com/advisories/GHSA-crvj-82cr-hjcx",
+      "patchedVersions": ">=4.13.5",
+      "findings": [
+        {
+          "version": "4.12.10",
+          "paths": [
+            ".>@privy-io/react-auth>x402>wagmi>@wagmi/connectors>porto>hono"
+          ]
+        }
+      ]
+    },
+    {
+      "module": "next",
+      "severity": "critical",
+      "title": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used",
+      "url": "https://github.com/advisories/GHSA-2xp9-vwfh-vxw4",
+      "patchedVersions": ">=16.3.3",
+      "findings": [
+        {
+          "version": "16.2.12",
+          "paths": [
+            ".>next"
+          ]
+        }
+      ]
+    }
+  ]
+}

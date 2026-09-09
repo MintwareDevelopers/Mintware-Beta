@@ -77,13 +77,21 @@ describe('GET /api/gateway/positions — chain-first', () => {
     expect(positions[0].costBasisAtomic).toBe('900000')
     expect(BigInt(positions[0].unrealizedPnlAtomic) > 0n).toBe(true)
   })
-  it('inactive instances are not enumerated even if the wallet holds shares there', async () => {
+  // V1-01 — FIXED 2026-09-09 (independent Codex audit). This test used to assert the BUG as if it were
+  // intended behavior: a wallet holding 1,000,000 real shares in a since-deactivated pool's PM simply
+  // vanished from the portfolio, with no normal way to see or exit that position (the on-chain shares
+  // were always fine — only the app's own routing silently dropped them). Flipped to assert the fix:
+  // a retired instance still enumerates, correctly flagged `live:false` (no new deposits).
+  it('an inactive instance with a real position IS enumerated (live:false, not invisible)', async () => {
     state.supabase = fakeSupabase({ tables: { gateway_instances: [row(POOL_A, PM_A), row(POOL_B, PM_B, 'inactive')] } }).client
     state.sharesByPm[PM_A] = 1n
     state.sharesByPm[PM_B] = 1_000_000n
     const { GET } = await import('./route')
     const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
-    expect(positions.map((p: { poolAddress: string }) => p.poolAddress)).toEqual([POOL_A])
+    const byPool = new Map(positions.map((p: { poolAddress: string; live: boolean }) => [p.poolAddress, p.live]))
+    expect(byPool.get(POOL_A)).toBe(true)
+    expect(byPool.get(POOL_B)).toBe(false) // retired, but still visible/withdrawable — not omitted
+    expect(positions).toHaveLength(2)
   })
   it('registry empty → the env rig is enumerated (tagged env-fallback, live false)', async () => {
     state.supabase = fakeSupabase().client

@@ -24,7 +24,8 @@ export const GET = createHandler(async (req, ctx) => {
     return ctx.json({ success: false, error: 'address_required' }, 400)
   }
 
-  const r = await resolveInstanceStrict(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'))
+  // V1-01 fix: a retired pool must still resolve for a chain-derived position read.
+  const r = await resolveInstanceStrict(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), { includeInactive: true })
   if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
   const inst = r.inst
 
@@ -117,7 +118,8 @@ export const POST = createHandler(
       // no body pool ⇒ strict resolver picks the single instance or refuses
     }
 
-    const r = await resolveInstanceStrict(ctx.supabase, cfg, pool)
+    // V1-01 fix: an owner's own buffer balance must still be readable for a retired pool.
+    const r = await resolveInstanceStrict(ctx.supabase, cfg, pool, { includeInactive: true })
     if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
     const inst = r.inst
 

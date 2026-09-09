@@ -73,3 +73,8 @@ subgraph/node_modules/
 
 # Slither/crytic-compile export cache (build artifact, not source)
 crytic-export/
+
+# Local V1 audit binaries, browsers, and generated reports
+.audit-tools/
+.audit-output/
+tools/v1-audit/node_modules/

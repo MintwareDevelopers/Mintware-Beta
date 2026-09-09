@@ -30,7 +30,9 @@ export const POST = createHandler(async (req, ctx) => {
   }
   const { txHash, pool } = bound.bound
 
-  const r = await resolveInstanceStrict(ctx.supabase, cfg, pool)
+  // V1-01 fix: a retired (deactivated) instance must still resolve for withdrawal — a depositor's
+  // shares don't stop existing when the operator retires the pool from new-deposit eligibility.
+  const r = await resolveInstanceStrict(ctx.supabase, cfg, pool, { includeInactive: true })
   if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
   const inst = r.inst
 

@@ -153,6 +153,12 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const isDevRig = meta?.source === 'env-fallback'
   const targetOk = !!meta && meta.poolAddress.toLowerCase() === decoded && (meta.source === 'registry' ? meta.live : isDevRig)
   const canDeposit = targetOk && !!meta?.usdg
+  // V1-01 fix (independent Codex audit): a retired instance resolves from the backend now (meta/
+  // position/withdraw no longer 404 a deactivated pool — see routeInstance.ts's `includeInactive`),
+  // but `targetOk` requires `meta.live`, which is deliberately false for a retired row. Withdraw must
+  // NOT share that gate — only deposit eligibility should require `live`; a resolved instance (active
+  // or retired) is always withdrawable.
+  const canWithdraw = !!meta && meta.poolAddress.toLowerCase() === decoded && (meta.source === 'registry' || isDevRig)
   const withMinAvailable = meta?.supportsMin === true
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -263,7 +269,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   async function reviewWithdraw() {
     setErr('')
     if (!requireWallet()) return
-    if (!meta || !targetOk) { setErr('This pool isn’t live.'); return }
+    if (!meta || !canWithdraw) { setErr('This pool isn’t live.'); return }
     setStatus('quote')
     try {
       const fresh = await fetchPosition()

@@ -24,7 +24,10 @@ export const GET = createHandler(async (req, ctx) => {
   const cfg = gatewayConfig()
   if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
 
-  const r = await resolveInstanceStrict(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'))
+  // V1-01 fix: metadata for a retired pool must still resolve (its `live:false` already tells the UI
+  // deposits are closed) — a depositor visiting their own pool's page shouldn't 404 just because the
+  // operator retired it for NEW deposits.
+  const r = await resolveInstanceStrict(ctx.supabase, cfg, req.nextUrl.searchParams.get('pool'), { includeInactive: true })
   if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
   const inst = r.inst
 

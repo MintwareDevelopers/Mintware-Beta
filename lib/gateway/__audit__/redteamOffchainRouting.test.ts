@@ -59,10 +59,16 @@ describe('_FIXED (O-2): the money path resolves STRICTLY — a miss is 404, the 
     // UI links are now keyed by poolId (V1Discover.slug / V1Portfolio.slugOf emit p.poolAddress) — the label is display-only
   })
 
-  it('defense holds: an INACTIVE (deactivated) instance is a 404 — never the env rig', async () => {
+  it('defense holds: an INACTIVE (deactivated) instance is a 404 for DEPOSIT, but stays visible/withdrawable', async () => {
+    // V1-01 fix (independent Codex audit, 2026-09-09): a retired instance no longer falls back to the
+    // env rig in listResolvableInstances (a depositor's shares don't disappear when a pool is retired) —
+    // it enumerates as itself, live:false. Deposit eligibility (the plain resolveInstanceStrict call, no
+    // includeInactive) is UNCHANGED — still a 404. See lib/gateway/routeInstance.test.ts for full coverage.
     const { client } = fakeSupabase({ tables: { gateway_instances: [{ ...activeRow, status: 'inactive' }] } })
     expect(await resolveInstanceStrict(client, cfg, POOL_ID)).toEqual({ ok: false, status: 404, error: 'pool_not_live' })
-    expect(await listResolvableInstances(client, cfg)).toEqual([expect.objectContaining({ source: 'env-fallback', live: false })]) // registry has NO active row ⇒ only the rig, and only as a dev rig
+    const withdrawResolve = await resolveInstanceStrict(client, cfg, POOL_ID, { includeInactive: true })
+    expect(withdrawResolve.ok && withdrawResolve.inst.live).toBe(false)
+    expect(await listResolvableInstances(client, cfg)).toEqual([expect.objectContaining({ source: 'registry', live: false })])
   })
 
   it('defense holds: an attacker-crafted /earn/<anything> is a 404 whether the registry is populated or empty', async () => {

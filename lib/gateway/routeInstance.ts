@@ -9,10 +9,21 @@
 //   · the env fallback is served ONLY while the registry is empty, and only when the requested pool
 //     matches `LP_GATEWAY_POOL_ADDRESS` (or no pool was requested), tagged `source: 'env-fallback'`;
 //   · `live` is derived from an active registry hit; the env rig is never "live".
-// Consumes registry.ts exports as they are today (listActiveInstances) — no registry writes here.
+//
+// 2026-09-09 fix (independent Codex audit, V1-01): deposit ELIGIBILITY and exit/read DISCOVERY are two
+// different questions and must not share one active-only lookup. `deactivateInstance`'s own doc comment
+// promises "withdraw-only resolution keeps working" for a retired row — but nothing ever called
+// `listAllInstances` from the money-path routes, so a deactivated (or superseded-by-reregistration)
+// instance 404'd out of `withdraw`/`position` and silently vanished from the portfolio, even though the
+// depositor's on-chain shares were completely intact and directly withdrawable by calling the contract
+// itself. `includeInactive` opts a caller into resolving retired rows too — `deposit` must NEVER pass
+// it (deposit eligibility stays active-only); every read/exit path now does.
+//
+// Consumes registry.ts exports as they are today (listActiveInstances/listAllInstances) — no registry
+// writes here.
 
 import type { GatewayConfig } from '@/lib/gateway/chain'
-import { listActiveInstances, type GatewayInstance } from '@/lib/gateway/registry'
+import { listActiveInstances, listAllInstances, type GatewayInstance } from '@/lib/gateway/registry'
 import { getServiceClient } from '@/lib/web2/supabase'
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
@@ -54,7 +65,9 @@ function fromRegistry(i: GatewayInstance): ResolvedInstance {
     tickLower: i.tickLower ?? null,
     tickUpper: i.tickUpper ?? null,
     source: 'registry',
-    live: true,
+    // 2026-09-09 fix (V1-01): reflects the row's real status — an inactive row resolved via
+    // `includeInactive` is NOT live (no new deposits), but still fully resolvable for reads/withdraw.
+    live: i.status === 'active',
   }
 }
 
@@ -75,36 +88,73 @@ function fromEnv(cfg: GatewayConfig): ResolvedInstance | null {
   }
 }
 
-/** Every instance the money path may act on: all active registry rows, or — only while the registry is
- *  empty — the single env rig. Used by the Portfolio aggregate + anything that must enumerate. */
+/** Every instance the money path may act on: all active registry rows PLUS every retired (inactive)
+ *  one — a depositor's shares don't stop existing when a pool is deactivated or superseded, so their
+ *  position must stay enumerable and actionable (V1-01). Falls back to the single env rig only while
+ *  the registry is completely empty. Used by the Portfolio aggregate + anything that must enumerate
+ *  every position a wallet could hold. */
 export async function listResolvableInstances(supabase: SupabaseClient, cfg: GatewayConfig): Promise<ResolvedInstance[]> {
-  const active = await listActiveInstances(supabase, cfg.chainId)
-  if (active.length > 0) return active.map(fromRegistry)
+  const all = await listAllInstances(supabase, cfg.chainId)
+  if (all.length > 0) return all.map(fromRegistry)
   const env = fromEnv(cfg)
   return env ? [env] : []
 }
 
-/** Resolve the instance a route should act on for `poolParam` (see header for the rules). */
+/** Resolve the instance a route should act on for `poolParam` (see header for the rules).
+ *
+ *  `opts.includeInactive` (V1-01 fix): when true, a retired (inactive) registry row still resolves
+ *  `ok: true` (with `live: false`) instead of 404ing — for reads and withdrawal, never for deposit
+ *  eligibility. The no-pool-given convenience shortcut ("exactly one instance ⇒ use it") stays scoped
+ *  to ACTIVE rows regardless of this flag: guessing a caller's intent onto a retired pool they didn't
+ *  name is not a safe default, and every read/withdraw caller in this codebase always names its pool. */
 export async function resolveInstanceStrict(
   supabase: SupabaseClient,
   cfg: GatewayConfig,
   poolParam?: string | null,
+  opts: { includeInactive?: boolean } = {},
 ): Promise<ResolveResult> {
   const active = await listActiveInstances(supabase, cfg.chainId)
   const raw = (poolParam ?? '').trim().toLowerCase()
 
   if (active.length > 0) {
     if (!raw) {
-      // No pool requested: unambiguous only when exactly one instance is live.
+      // No pool requested: unambiguous only when exactly one instance is live (active-only, see above).
       return active.length === 1 ? { ok: true, inst: fromRegistry(active[0]) } : { ok: false, status: 404, error: 'pool_required' }
     }
     const id = normalizePoolId(raw)
+    const pool = id || raw
     // Match the registry key exactly (poolId), or a legacy label-keyed row — never a fallback on miss.
-    const hit = active.find((i) => i.poolAddress.toLowerCase() === (id || raw))
-    return hit ? { ok: true, inst: fromRegistry(hit) } : { ok: false, status: 404, error: 'pool_not_live' }
+    const hit = active.find((i) => i.poolAddress.toLowerCase() === pool)
+    if (hit) return { ok: true, inst: fromRegistry(hit) }
+    if (opts.includeInactive) {
+      const all = await listAllInstances(supabase, cfg.chainId)
+      const retired = all.find((i) => i.poolAddress.toLowerCase() === pool)
+      if (retired) return { ok: true, inst: fromRegistry(retired) }
+    }
+    return { ok: false, status: 404, error: 'pool_not_live' }
   }
 
-  // Registry empty → the env rig is the only candidate, and only for its own pool (or no pool).
+  // No ACTIVE instance at all. Before falling to the env rig (below — unchanged, active-empty-only
+  // behavior), give includeInactive one more chance: the registry may still hold a RETIRED row for
+  // exactly the pool being asked about (e.g. the operator retired the ONLY instance there ever was).
+  // This must NOT short-circuit past the env-fallback logic when there's no such match — a truly
+  // empty registry (no rows at all, active or retired) still needs the env rig to work exactly as
+  // before; that's the regression this comment guards against (caught by this file's own test suite).
+  if (opts.includeInactive) {
+    if (!raw) {
+      const all = await listAllInstances(supabase, cfg.chainId)
+      if (all.length === 1) return { ok: true, inst: fromRegistry(all[0]) }
+    } else {
+      const id = normalizePoolId(raw)
+      const pool = id || raw
+      const all = await listAllInstances(supabase, cfg.chainId)
+      const retired = all.find((i) => i.poolAddress.toLowerCase() === pool)
+      if (retired) return { ok: true, inst: fromRegistry(retired) }
+    }
+  }
+
+  // Registry (active + retired) has no match → the env rig is the only remaining candidate, and only
+  // for its own pool (or no pool).
   const env = fromEnv(cfg)
   if (!env) return { ok: false, status: 503, error: 'gateway_not_configured' }
   if (raw && raw !== env.poolAddress && normalizePoolId(raw) !== env.poolAddress) {
