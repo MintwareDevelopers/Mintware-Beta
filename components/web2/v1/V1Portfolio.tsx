@@ -31,6 +31,7 @@ type PoolPosition = {
   source?: 'registry' | 'env-fallback'
   live?: boolean
   valueSeries?: number[]
+  sourceReadable?: boolean // V1-08 fix: false ⇒ this value is a cached NAV (yield-source outage), not fresh
 }
 
 const CARD = { background: '#12121C', border: '1px solid rgba(255,255,255,0.07)' }
@@ -55,14 +56,28 @@ export function V1Portfolio() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  // V1-08 fix (independent Codex audit, 2026-09-09): distinguish "you genuinely have zero positions"
+  // from "we couldn't confirm that right now" — a per-pool RPC failure or a total fetch failure used to
+  // collapse into the exact same empty-list state as a real zero-position wallet, silently understating
+  // (or fully hiding) real funded positions during a chain hiccup.
+  const [fetchFailed, setFetchFailed] = useState(false)
+  const [incomplete, setIncomplete] = useState<string[]>([]) // pool addresses that failed to read, if any
 
   useEffect(() => {
-    if (!address) { setPositions([]); return }
+    if (!address) { setPositions([]); setFetchFailed(false); setIncomplete([]); return }
     setLoading(true)
     fetch(`/api/gateway/positions?address=${address}`)
       .then((r) => r.json())
-      .then((d) => setPositions(d?.success && Array.isArray(d.positions) ? (d.positions as PoolPosition[]) : []))
-      .catch(() => setPositions([]))
+      .then((d) => {
+        if (d?.success && Array.isArray(d.positions)) {
+          setPositions(d.positions as PoolPosition[])
+          setFetchFailed(false)
+          setIncomplete(Array.isArray(d.failedPools) ? d.failedPools : [])
+        } else {
+          setPositions([]); setFetchFailed(true); setIncomplete([])
+        }
+      })
+      .catch(() => { setPositions([]); setFetchFailed(true); setIncomplete([]) })
       .finally(() => setLoading(false))
   }, [address])
 
@@ -151,13 +166,27 @@ export function V1Portfolio() {
         </div>
       </div>
 
+      {/* V1-08 fix: a fetch or per-pool read failure must never look identical to "you have nothing
+          here" — this banner is the difference between the two, shown whenever we couldn't confirm
+          the full picture, rather than silently showing a possibly-understated total as if it were final. */}
+      {!loading && (fetchFailed || incomplete.length > 0) && (
+        <div className="mt-6 rounded-[14px] px-4 py-3 text-[13px] flex items-center gap-2.5" style={{ background: 'rgba(240,180,94,0.1)', border: '1px solid rgba(240,180,94,0.25)', color: '#F0B45E' }}>
+          <span>⚠</span>
+          <span>
+            {fetchFailed
+              ? "Couldn't load your positions right now — this is a read failure, not confirmation you have none. Refresh to retry."
+              : `${incomplete.length} pool${incomplete.length > 1 ? 's' : ''} couldn't be read just now — your total below may understate what you actually hold. Refresh to retry.`}
+          </span>
+        </div>
+      )}
+
       {/* 2 · working-balance hero */}
       <div className="mt-6 rounded-[18px] p-7 max-[640px]:p-5 relative overflow-hidden" style={{ background: 'linear-gradient(135deg,#191830,#12121C)', border: '1px solid rgba(138,130,244,0.22)' }}>
         <div className="absolute -top-16 -right-10 w-[220px] h-[220px] rounded-full" style={{ background: 'radial-gradient(circle,rgba(138,130,244,0.18),transparent 70%)' }} />
         <div className="relative">
           <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#9B9BAD' }}>Working &amp; earning</div>
           <div className="font-mono font-bold tracking-[-0.02em] leading-none text-[clamp(2.4rem,7vw,3.4rem)] mt-2">
-            {loading ? '—' : fmt(totalWorking)}
+            {loading ? '—' : fetchFailed ? '—' : fmt(totalWorking)}
           </div>
           <div className="flex items-center gap-3 mt-3 flex-wrap">
             {totalPnl !== 0 && (
@@ -176,10 +205,10 @@ export function V1Portfolio() {
 
       {/* 3 · stats strip */}
       <div className="grid gap-3 mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))' }}>
-        <Stat k="Total at work" v={loading ? '—' : fmt(totalWorking)} />
-        <Stat k="Net vs deposit" v={loading ? '—' : `${totalPnl >= 0 ? '+' : ''}${fmt(totalPnl)}`} tone={totalPnl > 0 ? 'up' : totalPnl < 0 ? 'down' : undefined} />
-        <Stat k="Deposited" v={loading ? '—' : fmt(totalDeposited)} />
-        <Stat k="Pools" v={loading ? '—' : String(positions.length)} />
+        <Stat k="Total at work" v={loading || fetchFailed ? '—' : fmt(totalWorking)} />
+        <Stat k="Net vs deposit" v={loading || fetchFailed ? '—' : `${totalPnl >= 0 ? '+' : ''}${fmt(totalPnl)}`} tone={totalPnl > 0 ? 'up' : totalPnl < 0 ? 'down' : undefined} />
+        <Stat k="Deposited" v={loading || fetchFailed ? '—' : fmt(totalDeposited)} />
+        <Stat k="Pools" v={loading || fetchFailed ? '—' : String(positions.length)} />
       </div>
 
       {/* 3b · coins held */}
@@ -224,6 +253,7 @@ function PositionCard({ p }: { p: PoolPosition }) {
         <span className="flex items-center gap-2 shrink-0">
           {p.source === 'env-fallback' && <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full" style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>Dev rig</span>}
           {p.recorded === false && <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full" title="Read from chain; the deposit was never recorded here, so cost basis is unknown." style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>Unrecorded</span>}
+          {p.sourceReadable === false && <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full" title="The yield source is temporarily unreadable — this value is a cached figure, not a live read." style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>Stale value</span>}
           {(p.valueSeries?.length ?? 0) >= 3 && <Sparkline series={p.valueSeries} width={80} height={26} />}
         </span>
       </div>

@@ -20,12 +20,13 @@ describe('positionValueAtomic (offset-consistent toAssets)', () => {
   })
 })
 
-function mockClient(shares: bigint, totalShares: bigint, totalNav: bigint) {
+function mockClient(shares: bigint, totalShares: bigint, totalNav: bigint, sourceReadable = true) {
   return {
     readContract: async ({ functionName }: { functionName: string }) => {
       if (functionName === 'sharesOf') return shares
       if (functionName === 'totalShares') return totalShares
       if (functionName === 'totalNav') return totalNav
+      if (functionName === 'sourceReadable') return sourceReadable // V1-08 fix
       throw new Error(`unexpected read: ${functionName}`)
     },
   }

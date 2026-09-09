@@ -28,10 +28,15 @@ export function V1Swap() {
 
   const selected = useMemo(() => pools.find((p) => p.poolAddress === to) ?? null, [pools, to])
   const hasAmount = Number(amount) > 0
-  const routingLive = !!selected?.live // a deployed gateway/quoter exists for this pool
-
-  const btn = !to ? 'Select a token' : !hasAmount ? 'Enter an amount' : routingLive ? 'Swap' : 'Routing goes live with deployed pools'
-  const btnEnabled = !!to && hasAmount && routingLive
+  // V1-06 fix (independent Codex audit, 2026-09-09): `selected.live` means "this pool has an ACTIVE
+  // gateway deposit target" (the registry's deposit-eligibility flag) — it says nothing about whether
+  // an actual swap-execution path exists for it. This component never calls executeV4Swap (the seam
+  // this file's own header comment names) or any router/quoter — there is no real swap capability
+  // wired here at all yet, so the button must never claim otherwise regardless of a pool's live flag.
+  // Keep the picker/preview fully interactive; just never enable submission until routing genuinely
+  // exists (per the remediation: explicitly unavailable, not a fake "Swap" label on a no-op button).
+  const btn = !to ? 'Select a token' : !hasAmount ? 'Enter an amount' : 'Routing goes live with deployed pools'
+  const btnEnabled = false
 
   return (
     <div className="max-w-[460px] mx-auto">

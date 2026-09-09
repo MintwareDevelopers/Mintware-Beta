@@ -24,7 +24,7 @@ export const GET = createHandler(async (req, ctx) => {
   }
 
   const instances = await listResolvableInstances(ctx.supabase, cfg)
-  if (instances.length === 0) return ctx.json({ success: true, positions: [] })
+  if (instances.length === 0) return ctx.json({ success: true, positions: [], complete: true, failedPools: [] })
 
   // DB enrichment: cost basis per pool (may be absent when a record call never landed).
   const { data: rows } = await ctx.supabase
@@ -38,20 +38,27 @@ export const GET = createHandler(async (req, ctx) => {
 
   const client = gatewayPublicClient(cfg)
 
-  const positions = (
-    await Promise.all(
-      instances.map(async (inst) => {
-        const row = basisByPool.get(`${inst.poolAddress}:${inst.chainId}`)
-        try {
-          const view = await readGatewayPosition({
-            client,
-            positionManager: inst.positionManager,
-            user: address as `0x${string}`,
-            costBasisAtomic: row?.entry_nav != null ? BigInt(String(row.entry_nav)) : null,
-            bufferBalanceAtomic: 0n,
-          })
-          if (BigInt(view.shares) <= 0n) return null // nothing on-chain in this pool — omit
-          return {
+  // V1-08 fix (independent Codex audit, 2026-09-09): an RPC read failure for one pool used to return
+  // `null`, indistinguishable from "genuinely zero shares there" once filtered — a wallet with real
+  // funded positions could see them silently vanish (or the total quietly understate) during a chain
+  // hiccup, with nothing in the response saying so. Each outcome now carries which case it is; the
+  // caller gets both the (possibly partial) position list AND an explicit `complete`/`failedPools`
+  // signal instead of a result that looks identical to "you have nothing here."
+  const outcomes = await Promise.all(
+    instances.map(async (inst) => {
+      const row = basisByPool.get(`${inst.poolAddress}:${inst.chainId}`)
+      try {
+        const view = await readGatewayPosition({
+          client,
+          positionManager: inst.positionManager,
+          user: address as `0x${string}`,
+          costBasisAtomic: row?.entry_nav != null ? BigInt(String(row.entry_nav)) : null,
+          bufferBalanceAtomic: 0n,
+        })
+        if (BigInt(view.shares) <= 0n) return { ok: true as const, position: null } // genuinely nothing here
+        return {
+          ok: true as const,
+          position: {
             poolAddress: inst.poolAddress,
             pairLabel: inst.pairLabel,
             chainId: inst.chainId,
@@ -64,14 +71,19 @@ export const GET = createHandler(async (req, ctx) => {
             live: inst.live,
             // Off-chain private data — owner-gated on POST /api/gateway/position (L-03).
             bufferBalanceAtomic: null,
-          }
-        } catch (e) {
-          ctx.log.warn('gateway.positions', 'chain read failed for pool', { pool: inst.poolAddress, error: String(e) })
-          return null
+            // V1-08 fix: false ⇒ cached NAV (yield-source outage), not a fresh read.
+            sourceReadable: view.sourceReadable,
+          },
         }
-      }),
-    )
-  ).filter((p): p is NonNullable<typeof p> => p !== null)
+      } catch (e) {
+        ctx.log.warn('gateway.positions', 'chain read failed for pool', { pool: inst.poolAddress, error: String(e) })
+        return { ok: false as const, poolAddress: inst.poolAddress }
+      }
+    }),
+  )
+  const positions = outcomes.flatMap((o) => (o.ok && o.position ? [o.position] : []))
+  const failedPools = outcomes.filter((o): o is { ok: false; poolAddress: string } => !o.ok).map((o) => o.poolAddress)
+  const complete = failedPools.length === 0
 
   // Value history for per-pool sparklines (Krystal item 8) — one query for the wallet, grouped by pool.
   // On-chain-derived series, not private; oldest→newest so the sparkline reads left-to-right.
@@ -93,5 +105,5 @@ export const GET = createHandler(async (req, ctx) => {
 
   const withHistory = positions.map((p) => ({ ...p, valueSeries: seriesByPool.get(p.poolAddress.toLowerCase()) ?? [] }))
 
-  return ctx.json({ success: true, positions: withHistory })
+  return ctx.json({ success: true, positions: withHistory, complete, failedPools })
 })

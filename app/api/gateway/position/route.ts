@@ -85,6 +85,9 @@ export const GET = createHandler(async (req, ctx) => {
       bufferBalanceAtomic: null,
       // Unharvested fees need a V4 fee-growth read — deferred to a later pass (phase-1 shows realized).
       unharvestedFeesAtomic: null,
+      // V1-08 fix: false ⇒ the yield source is temporarily unreadable and the value above is computed
+      // from a cached NAV (an outage, not a solvency claim) — the UI should label it as such.
+      sourceReadable: view.sourceReadable,
       // Historical value/PnL series (Krystal item 8) — on-chain-derived, not private; newest first.
       history: (snaps ?? []).map((s: { taken_at: string; position_value_atomic: unknown; pnl_atomic: unknown }) => ({
         takenAt: s.taken_at,

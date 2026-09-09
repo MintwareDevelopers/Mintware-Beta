@@ -32,6 +32,12 @@ export type GatewayPositionView = {
   costBasisAtomic: bigint | null
   unrealizedPnlAtomic: bigint | null
   bufferBalanceAtomic: bigint
+  // V1-08 fix (independent Codex audit, 2026-09-09): the contract's own `sourceReadable()` — false
+  // means `totalNav` fell back to a cached `lastKnownIdle` because the yield source is temporarily
+  // unreadable (an outage, not a solvency claim). `positionValueAtomic` above is still computed from
+  // that same (possibly stale) `totalNav`, so callers that want to warn the user of staleness need
+  // this flag; a portfolio silently showing a cached NAV as current was part of V1-08's finding.
+  sourceReadable: boolean
 }
 
 /** toAssets(shares, nav, totalShares) with the contract's virtual offset — floor, matching on-chain. */
@@ -179,11 +185,12 @@ export async function readGatewayPosition(opts: {
   const read = (functionName: string, args?: readonly unknown[]) =>
     client.readContract({ address: positionManager, abi: LP_GATEWAY_ABI, functionName, args })
 
-  const [shares, totalShares, totalNav] = (await Promise.all([
+  const [shares, totalShares, totalNav, sourceReadable] = (await Promise.all([
     read('sharesOf', [user]),
     read('totalShares'),
     read('totalNav'),
-  ])) as [bigint, bigint, bigint]
+    read('sourceReadable'),
+  ])) as [bigint, bigint, bigint, boolean]
 
   const value = positionValueAtomic(shares, totalShares, totalNav)
   const costBasisAtomic = opts.costBasisAtomic ?? null
@@ -195,5 +202,6 @@ export async function readGatewayPosition(opts: {
     costBasisAtomic,
     unrealizedPnlAtomic,
     bufferBalanceAtomic: opts.bufferBalanceAtomic ?? 0n,
+    sourceReadable,
   }
 }

@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem'
+import { useWallets } from '@privy-io/react-auth'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
@@ -81,6 +82,7 @@ function riskChip(score: number) {
 export function V1PoolDetail({ slug }: { slug: string }) {
   const { address, isConnected } = useMintwareIdentity()
   const privy = useMintwarePrivy()
+  const { wallets } = useWallets()
   const [meta, setMeta] = useState<Meta | null>(null)
   const [metaState, setMetaState] = useState<'loading' | 'ok' | 'not_live' | 'unavailable'>('loading')
   const [m, setM] = useState<Metrics | null>(null)
@@ -161,20 +163,30 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   const canWithdraw = !!meta && meta.poolAddress.toLowerCase() === decoded && (meta.source === 'registry' || isDevRig)
   const withMinAvailable = meta?.supportsMin === true
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function injected(): any { return typeof window !== 'undefined' ? (window as any).ethereum : null }
+  // V1-05 fix (independent Codex audit, 2026-09-09): the signer transport must come from the SAME
+  // wallet `useMintwareIdentity()` reports as connected, not always `window.ethereum`. An embedded
+  // (email/social) wallet or a WalletConnect session never exposes `window.ethereum` at all, and with
+  // multiple injected extensions installed, `window.ethereum` can silently be a DIFFERENT account than
+  // the one shown as connected — every prior deposit/withdraw/record signature request in that case
+  // either failed outright or prompted the wrong wallet. `useWallets()` (Privy) returns every connected
+  // wallet (embedded included) with its OWN `getEthereumProvider()` — find the one matching the active
+  // identity's address and use THAT, so the transport can never diverge from the displayed identity.
+  async function getSignerProvider(): Promise<import('viem').EIP1193Provider> {
+    const w = wallets.find((x) => x.address?.toLowerCase() === address?.toLowerCase())
+    if (!w) throw new Error('No connected wallet matches the active account — reconnect and try again.')
+    return (await w.getEthereumProvider()) as unknown as import('viem').EIP1193Provider
+  }
   function chainObj(mm: Meta) {
     return { id: mm.chainId, name: 'robinhood', nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [mm.rpcUrl] } } } as const
   }
-  async function ensureChain(eth: ReturnType<typeof injected>, mm: Meta) {
+  async function ensureChain(eth: Awaited<ReturnType<typeof getSignerProvider>>, mm: Meta) {
     const hex = `0x${mm.chainId.toString(16)}`
     try { await eth.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hex }] }) }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     catch (e) { if ((e as any)?.code === 4902) await eth.request({ method: 'wallet_addEthereumChain', params: [{ chainId: hex, chainName: 'Robinhood Chain Testnet', rpcUrls: [mm.rpcUrl], nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 } }] }); else throw e }
   }
-  function clients(mm: Meta) {
-    const eth = injected()
-    if (!eth) throw new Error('Connect an external EVM wallet to continue (embedded-wallet transactions are coming).')
+  async function clients(mm: Meta) {
+    const eth = await getSignerProvider()
     const chain = chainObj(mm)
     return {
       eth,
@@ -197,7 +209,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   async function record(kind: 'deposit' | 'withdraw', txHash: `0x${string}`, mm: Meta) {
     setStatus('record'); setPending({ kind, txHash }); setErr('')
     try {
-      const { wallet } = clients(mm)
+      const { wallet } = await clients(mm)
       const issuedAt = Date.now()
       const build = kind === 'deposit' ? buildGatewayDepositMessage : buildGatewayWithdrawMessage
       const authMessage = build({ address: address!, txHash, pool: mm.poolAddress, issuedAt })
@@ -249,7 +261,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     if (!meta || !review || review.kind !== 'deposit' || !meta.usdg) return
     setErr('')
     try {
-      const { eth, wallet, pub } = clients(meta)
+      const { eth, wallet, pub } = await clients(meta)
       setStatus('switch'); await ensureChain(eth, meta)
       setStatus('approve')
       const ah = await wallet.writeContract({ address: meta.usdg, abi: ERC20_ABI, functionName: 'approve', args: [meta.positionManager, review.amountAtomic] })
@@ -297,7 +309,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
     if (!meta || !review || review.kind !== 'withdraw') return
     setErr('')
     try {
-      const { eth, wallet, pub } = clients(meta)
+      const { eth, wallet, pub } = await clients(meta)
       setStatus('switch'); await ensureChain(eth, meta)
       setStatus('withdraw')
       const wh = review.withMin

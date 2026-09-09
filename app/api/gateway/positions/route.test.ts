@@ -9,15 +9,20 @@ const state = vi.hoisted(() => ({
   supabase: null as unknown,
   cfg: null as unknown,
   sharesByPm: {} as Record<string, bigint>,
+  failPm: new Set<string>(), // V1-08 fix test hook: simulate an RPC failure for a specific PM
+  sourceReadableOverride: {} as Record<string, boolean>,
 }))
 vi.mock('@/lib/web2/supabase', () => ({ getServiceClient: () => state.supabase }))
 vi.mock('@/lib/gateway/chain', () => ({
   gatewayConfig: () => state.cfg,
   gatewayPublicClient: () => ({
     readContract: async ({ address, functionName }: { address: string; functionName: string }) => {
-      if (functionName === 'sharesOf') return state.sharesByPm[address.toLowerCase()] ?? 0n
+      const pm = address.toLowerCase()
+      if (state.failPm.has(pm)) throw new Error('rpc unavailable')
+      if (functionName === 'sharesOf') return state.sharesByPm[pm] ?? 0n
       if (functionName === 'totalShares') return 2_000_000n
       if (functionName === 'totalNav') return 2_200_000n
+      if (functionName === 'sourceReadable') return state.sourceReadableOverride[pm] ?? true // V1-08 fix: readGatewayPosition now reads this too
       throw new Error(functionName)
     },
   }),
@@ -42,6 +47,8 @@ function req(url: string) {
 beforeEach(() => {
   state.cfg = cfg
   state.sharesByPm = {}
+  state.failPm = new Set()
+  state.sourceReadableOverride = {}
 })
 
 describe('GET /api/gateway/positions — chain-first', () => {
@@ -109,5 +116,39 @@ describe('GET /api/gateway/positions — chain-first', () => {
     const { GET } = await import('./route')
     const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
     expect(positions).toEqual([])
+  })
+
+  // V1-08 — FIXED 2026-09-09 (independent Codex audit). An RPC failure for one pool used to return
+  // `null`, indistinguishable from "genuinely zero shares there" once filtered — a funded position
+  // could silently vanish (or the total silently understate) during a chain hiccup. Now the response
+  // carries an explicit signal distinguishing the two.
+  it('FIXED: an RPC failure for one pool surfaces as failedPools/complete:false — not a silent omission', async () => {
+    state.supabase = fakeSupabase({ tables: { gateway_instances: [row(POOL_A, PM_A), row(POOL_B, PM_B)] } }).client
+    state.sharesByPm[PM_A] = 1_000_000n
+    state.sharesByPm[PM_B] = 500_000n
+    state.failPm.add(PM_B.toLowerCase()) // simulate an RPC outage for just this one pool
+    const { GET } = await import('./route')
+    const body = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
+    // POOL_A still reads fine and is present — the failure doesn't take down the whole response.
+    expect(body.positions.map((p: { poolAddress: string }) => p.poolAddress)).toEqual([POOL_A])
+    // But this is explicitly flagged incomplete — NOT the same shape as "you truly have only one position."
+    expect(body.complete).toBe(false)
+    expect(body.failedPools).toEqual([POOL_B])
+  })
+  it('FIXED: a fully healthy read reports complete:true with an empty failedPools list', async () => {
+    state.supabase = fakeSupabase({ tables: { gateway_instances: [row(POOL_A, PM_A)] } }).client
+    state.sharesByPm[PM_A] = 1_000_000n
+    const { GET } = await import('./route')
+    const body = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
+    expect(body.complete).toBe(true)
+    expect(body.failedPools).toEqual([])
+  })
+  it('FIXED: sourceReadable:false (a yield-source outage) is threaded through per position, not hidden', async () => {
+    state.supabase = fakeSupabase({ tables: { gateway_instances: [row(POOL_A, PM_A)] } }).client
+    state.sharesByPm[PM_A] = 1_000_000n
+    state.sourceReadableOverride[PM_A.toLowerCase()] = false
+    const { GET } = await import('./route')
+    const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
+    expect(positions[0].sourceReadable).toBe(false)
   })
 })
