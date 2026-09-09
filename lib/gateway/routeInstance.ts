@@ -150,8 +150,18 @@ export async function resolveInstanceStrict(
   // documented residual). Any caller that has a specific PM to name (a withdraw route reading it off
   // the transaction receipt, a portfolio link built from a position that carries its own PM identity)
   // gets it regardless of active/inactive status — this check runs first and short-circuits.
+  //
+  // CAUGHT ON REVIEW (2026-09-09, same day): the first version of this check ran unconditionally,
+  // BEFORE the `all.length > 0` gate below — with a genuinely empty registry (bootstrap, env-fallback
+  // territory), `all.find(...)` always came back empty and this returned 404 before ever reaching the
+  // env-fallback logic. That silently broke every withdrawal during the bootstrap phase (withdraw
+  // derives its `positionManager` from the tx receipt unconditionally — see withdraw/route.ts — so
+  // ANY bootstrap withdrawal now supplied one). Scoped to `all.length > 0` — registry search only makes
+  // sense once the registry has actually held a row; a genuinely empty registry falls through to the
+  // env-fallback block below, which now separately validates the wanted PM against the env rig's own
+  // address instead of ignoring it.
   const wantPm = (opts.positionManager ?? '').trim().toLowerCase()
-  if (wantPm && raw) {
+  if (wantPm && raw && all.length > 0) {
     const id = normalizePoolId(raw)
     const pool = id || raw
     const hit = all.find((i) => i.poolAddress.toLowerCase() === pool && i.positionManager.toLowerCase() === wantPm)
@@ -180,6 +190,13 @@ export async function resolveInstanceStrict(
   const env = fromEnv(cfg)
   if (!env) return { ok: false, status: 503, error: 'gateway_not_configured' }
   if (raw && raw !== env.poolAddress && normalizePoolId(raw) !== env.poolAddress) {
+    return { ok: false, status: 404, error: 'pool_not_live' }
+  }
+  // Same bootstrap-regression fix as above: a caller naming a specific PM (withdraw, off the tx
+  // receipt) must still fail closed if it doesn't match the env rig's own PM — silently ignoring a
+  // mismatched `positionManager` here would let a withdraw against a WRONG contract resolve to the
+  // env instance anyway, purely because the pool matched.
+  if (wantPm && env.positionManager.toLowerCase() !== wantPm) {
     return { ok: false, status: 404, error: 'pool_not_live' }
   }
   return { ok: true, inst: env }

@@ -189,26 +189,31 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
     address: instance.staging, abi: LP_STAGING_ABI, functionName: 'stagedAssets',
   })) as bigint
 
-  const threshold = BigInt(process.env.LP_GATEWAY_DEPLOY_THRESHOLD_ATOMIC ?? '0')
-  if (threshold === 0n || staged < threshold) {
-    return { ok: false, status: 200, error: 'staged balance below deploy threshold', reason: 'below_threshold' }
-  }
-
   // V1-03 fix (independent Codex audit, 2026-09-09): `deploy()` on-chain (PM L800) explicitly pulls
   // quote already sitting in the PM's OWN balance FIRST (`fromParked`), before unstaking any more from
   // staging — a deferred re-stage (staging's cap was momentarily full) or fees swept there ahead of a
   // sweep both leave real, immediately-usable quote sitting idle in the PM. Sizing `quoteToDeploy` from
   // `staged` alone under-requested every time that happened: not a fund-safety bug (deploying less than
-  // possible is always safe on-chain), but real value left earning nothing longer than necessary. The
-  // PM's own balance is included in the deploy amount now; the staged-only threshold check above is
-  // unchanged (matches its documented "min STAGED balance" semantics) — this only affects sizing once a
-  // deploy is already happening.
+  // possible is always safe on-chain), but real value left earning nothing longer than necessary.
+  //
+  // CAUGHT ON REVIEW (2026-09-09, Codex live fix-watch, same day): this read used to happen AFTER the
+  // threshold check below, which compared `staged` alone against the threshold. A parked-only scenario
+  // (staged=0, parked>0, any positive threshold under `parked`) returned `below_threshold` without ever
+  // reading `parked` — the exact "quote sitting idle in the PM" scenario V1-03 was about could never
+  // trigger a deploy on its own. Moved the read before the threshold check and sized the check off the
+  // TOTAL deployable idle (`staged + parked`), while keeping `threshold === 0n` as the documented
+  // explicit-disable escape hatch (never deploy on a 0/unset threshold, regardless of how much is idle).
   const quoteAssetAddr = (await publicClient.readContract({
     address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset',
   })) as `0x${string}`
   const parked = (await publicClient.readContract({
     address: quoteAssetAddr, abi: ERC20_BALANCE_ABI, functionName: 'balanceOf', args: [instance.positionManager],
   })) as bigint
+
+  const threshold = BigInt(process.env.LP_GATEWAY_DEPLOY_THRESHOLD_ATOMIC ?? '0')
+  if (threshold === 0n || staged + parked < threshold) {
+    return { ok: false, status: 200, error: 'staged balance below deploy threshold', reason: 'below_threshold' }
+  }
 
   let account
   try {
