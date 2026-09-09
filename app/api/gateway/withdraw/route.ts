@@ -69,11 +69,30 @@ export const POST = createHandler(async (req, ctx) => {
   }
   if (!found) return ctx.json({ success: false, error: 'no_withdraw_event' }, 400)
 
+  // V1-04 fix (independent Codex audit, 2026-09-09): read at THIS WITHDRAWAL'S OWN BLOCK, not at
+  // record time. record_gateway_withdraw_event's proportional-reduction formula
+  // (entry_nav * p_on_chain_shares / (p_on_chain_shares + p_shares_burned)) needs `p_on_chain_shares` to
+  // mean "this user's balance immediately after this specific withdrawal" — a live/current read instead
+  // gives "balance as of whenever this recording call happens to run", which silently includes any OTHER
+  // deposit/withdrawal that landed on-chain in between the withdrawal and its (possibly delayed, possibly
+  // retried) recording. Pinning to `receipt.blockNumber` makes the value depend only on this withdrawal's
+  // own chain history, never on recording timing or interleaved activity. (`sharesMinted` on the deposit
+  // side does NOT need this — record_gateway_deposit_event's entry_nav math is purely additive on
+  // `p_quote_in`, and `shares` there is an intentional live resync column, not a point-in-time value.)
+  // Residual, accepted: two of the SAME user's own transactions landing in the exact same block would
+  // still both read post-block state — an extremely rare case, unlike the cross-block race this closes.
+  // Also accepted: `gateway_positions.shares` gets written from this SAME historical read, so it can be
+  // briefly stale (vs. the user's true current on-chain balance) if another of their txs interleaves
+  // before this one is recorded. That column is documented elsewhere as pure enrichment, never the
+  // authoritative balance — every actual position read (`/api/gateway/position(s)`) re-reads `sharesOf`
+  // live from chain regardless (O-1, chain-first) — so this self-corrects on the next real read; a
+  // second live-tip read just to keep this cosmetic column perfectly fresh wasn't worth the complexity.
   const onChainShares = (await client.readContract({
     address: inst.positionManager,
     abi: LP_GATEWAY_ABI,
     functionName: 'sharesOf',
     args: [address as `0x${string}`],
+    blockNumber: receipt.blockNumber,
   })) as bigint
 
   // Round-4 audit fix (Medium): same atomicity fix as the deposit route (see its comment) — one RPC

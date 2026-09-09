@@ -88,3 +88,10 @@ Read `tools/v1-audit/README.md` for the isolated audit tools, reproducible comma
 ## Suggested prompt to start Claude
 
 > Read `docs/developers/audits/2026-09-09-claude-v1-handoff.md` in `/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build`. Independently review the linked V1 audit, rerun the safe local reproductions, challenge every finding, and inspect the documented gaps. Produce a confirmed/revised/rejected/needs-evidence table with exact code references and remediation priorities. Treat the PoCs as bug demonstrations, not security passes. Review the actual current checkout and distinguish source evidence from live deployment claims.
+
+
+## Second pass — current review takes precedence
+
+Read `docs/developers/audits/2026-09-09-v1-pass2-review.md` and `2026-09-09-v1-pass2-context.md`. A historical service-role JWT appears in commit 3b22a3d5 (credential omitted from reports); confirm revocation rather than assuming removal from HEAD revoked it. Current validity was not tested.
+
+The real-migration SQL reproduction proves record-order dependence remains even with correct historical withdrawal shares. Old-PM discovery after replacement also remains. Concurrent fixes for registry errors, inactive-only fallback and retired cron targeting have regression assertions. The report distinguishes the audited commit from working-tree changes. Fresh Forge and selected Halmos results are recorded there; ignore the initial tool-error PASS summaries.

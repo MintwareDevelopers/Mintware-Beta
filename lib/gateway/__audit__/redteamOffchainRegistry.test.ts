@@ -139,9 +139,16 @@ describe('A-7 _FIXED: the registry trust root is no longer satisfiable by a look
     expect(db.tables.gateway_instances[0]).toMatchObject({ status: 'inactive', deactivated_by: 'ops:0xabc', deactivate_reason: 'rotating rig' })
     const r = await registerInstance(client, { poolAddress: POOL_ID, chainId: 4663, positionManager: EVIL_PM, staging: EVIL_STAGING }, { client: lookalikePm({ code: AUDITED_CODE }), trust: trustCodehash })
     expect(r).toMatchObject({ ok: true, verification: 'codehash' })
-    expect(db.tables.gateway_instances).toHaveLength(1) // re-activated in place, never a second row
-    expect(db.tables.gateway_instances[0]).toMatchObject({ position_manager: EVIL_PM, status: 'active', quote_asset: USDG, verification: 'codehash' })
+    // V1 pass-2 fix (independent Codex audit, 2026-09-09): a DIFFERENT incoming PM now INSERTS a new
+    // row instead of overwriting the retired one in place — "never a second row" was itself the bug
+    // (finding D): it silently destroyed the retired REAL_PM's identity, and with it every depositor's
+    // ability to find/withdraw from it (V1-01's fix has nothing left to find once the row is gone).
+    expect(db.tables.gateway_instances).toHaveLength(2)
+    const retired = db.tables.gateway_instances.find((x) => x.position_manager === REAL_PM)!
+    const active = db.tables.gateway_instances.find((x) => x.position_manager === EVIL_PM)!
+    expect(retired).toMatchObject({ status: 'inactive' }) // still fully present — not overwritten
+    expect(active).toMatchObject({ status: 'active', quote_asset: USDG, verification: 'codehash' })
     expect(db.tables.gateway_instance_history.map((h) => h.action)).toEqual(['deactivate', 'register'])
-    expect(db.tables.gateway_instance_history[1]).toMatchObject({ prev_position_manager: REAL_PM, position_manager: EVIL_PM })
+    expect(db.tables.gateway_instance_history[1]).toMatchObject({ prev_position_manager: REAL_PM, position_manager: EVIL_PM }) // audit trail still records what this replaced, even though nothing was overwritten in-place
   })
 })

@@ -25,7 +25,7 @@ import { getServiceClient } from '@/lib/web2/supabase'
 import { getOracleSigner } from '@/lib/web3/oracleSigner'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
-import { listActiveInstances } from '@/lib/gateway/registry'
+import { listAllInstances } from '@/lib/gateway/registry'
 import { skimPerformanceFee } from '@/lib/gateway/harvestMath'
 import { swapPairedToQuote } from '@/lib/gateway/routerSwap'
 import { indexHarvestLogs, listPendingRestake, claimRestake, releaseRestake, markRestaked, type IndexOutcome, type LedgerClient } from '@/lib/gateway/ledger'
@@ -91,24 +91,31 @@ const harvestMinAtomic = () => big(process.env.LP_GATEWAY_HARVEST_MIN_ATOMIC ?? 
 const harvestEnabled = () => process.env.LP_GATEWAY_HARVEST_ENABLED === 'true'
 const indexEnabled = () => process.env.LP_GATEWAY_LEDGER_INDEX_ENABLED === 'true'
 
-function targetsFor(active: Awaited<ReturnType<typeof listActiveInstances>>, cfg: NonNullable<ReturnType<typeof gatewayConfig>>): HarvestInstance[] {
-  return active.length
-    ? active.map((i) => ({ positionManager: i.positionManager, poolAddress: i.poolAddress, chainId: i.chainId }))
+// V1 pass-2 fix (independent Codex audit, 2026-09-09): targets EVERY registered instance, active or
+// retired — not just active ones. A retired instance's underlying LP position can still be generating
+// fees for its existing depositors (the operator's deposit-eligibility decision is unrelated to whether
+// its position should keep earning/harvesting/indexing), and the index-only mode in particular exists
+// specifically to keep the fee ledger reconciled from withdraw/deploy sweeps — a retired pool's holders
+// still withdraw (V1-01) and those events still need indexing. Falls back to the single env rig only
+// when the registry has never held a row at all (genuine bootstrap — same rule as routeInstance.ts).
+function targetsFor(all: Awaited<ReturnType<typeof listAllInstances>>, cfg: NonNullable<ReturnType<typeof gatewayConfig>>): HarvestInstance[] {
+  return all.length
+    ? all.map((i) => ({ positionManager: i.positionManager, poolAddress: i.poolAddress, chainId: i.chainId }))
     : cfg.positionManager && cfg.poolAddress
       ? [{ positionManager: cfg.positionManager, poolAddress: cfg.poolAddress, chainId: cfg.chainId }]
       : []
 }
 
-/** Harvest EVERY active gateway (registry + single-env fallback). The cron entry point.
- *  Modes: harvest (collect + index + settle) when LP_GATEWAY_HARVEST_ENABLED; index-only (no tx, no
- *  signer) when only LP_GATEWAY_LEDGER_INDEX_ENABLED; else disabled. */
+/** Harvest EVERY registered gateway, active or retired (+ the single-env fallback, bootstrap-only).
+ *  The cron entry point. Modes: harvest (collect + index + settle) when LP_GATEWAY_HARVEST_ENABLED;
+ *  index-only (no tx, no signer) when only LP_GATEWAY_LEDGER_INDEX_ENABLED; else disabled. */
 export async function harvestAll(opts: { supabase: SupabaseClient; log?: Logger }): Promise<{ harvested: number; indexed: number; results: HarvestOutcome[]; indexResults: IndexOutcome[] }> {
   if (!harvestEnabled() && !indexEnabled()) {
     return { harvested: 0, indexed: 0, indexResults: [], results: [{ ok: false, status: 503, error: 'gateway harvest is not enabled', reason: 'disabled' }] }
   }
   const cfg = gatewayConfig()
   if (!cfg) return { harvested: 0, indexed: 0, indexResults: [], results: [{ ok: false, status: 503, error: 'gateway_not_configured', reason: 'config' }] }
-  const targets = targetsFor(await listActiveInstances(opts.supabase, cfg.chainId), cfg)
+  const targets = targetsFor(await listAllInstances(opts.supabase, cfg.chainId), cfg)
   const results: HarvestOutcome[] = []
   const indexResults: IndexOutcome[] = []
   let harvested = 0

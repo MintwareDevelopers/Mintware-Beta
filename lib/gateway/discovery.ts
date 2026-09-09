@@ -385,14 +385,17 @@ export async function discoverAndIngest(opts: {
       skipped++
       continue
     }
-    // already live?
+    // already live (or ever was)? V1 pass-2 fix (2026-09-09): a pool can now have more than one
+    // gateway_instances row (one active + any retired ones from past PM migrations — see registry.ts),
+    // so `.maybeSingle()` here would throw once a pool has been through a retire/re-register cycle.
+    // A plain existence check is also the more correct semantic: don't re-suggest a pool the operator
+    // has already registered (and possibly deliberately retired) as if it were a brand-new candidate.
     const { data: inst } = await supabase
       .from('gateway_instances')
       .select('id')
       .eq('pool_address', c.poolAddress)
       .eq('chain_id', chainId)
-      .maybeSingle()
-    if (inst) {
+    if (inst && inst.length > 0) {
       skipped++
       continue
     }

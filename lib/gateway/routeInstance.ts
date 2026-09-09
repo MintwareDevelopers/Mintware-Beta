@@ -10,6 +10,20 @@
 //     matches `LP_GATEWAY_POOL_ADDRESS` (or no pool was requested), tagged `source: 'env-fallback'`;
 //   · `live` is derived from an active registry hit; the env rig is never "live".
 //
+// KNOWN RESIDUAL (documented, not silently left): resolution is keyed by POOL ID alone. If a pool is
+// retired and later re-registered with a DIFFERENT PositionManager (a full PM migration, not just a
+// pause — see the V1 pass-2 fix on `registerInstance` in registry.ts), a bare poolId lookup here always
+// returns the CURRENT active row, never a superseded one — even with `includeInactive`, since an active
+// hit short-circuits before that check runs. A depositor of the SUPERSEDED PM can still be found via
+// `listAllInstances`/`listResolvableInstances` (their position stays enumerable — the portfolio and
+// `/api/gateway/instances` show it), but a route resolving purely by poolId (withdraw/position/meta)
+// will resolve to the NEW PM, not theirs — `withdraw`'s own `receipt.to` check would then correctly
+// reject their tx as `wrong_contract` rather than silently misroute it, so this fails SAFE, just not
+// USABLE for that specific compound scenario. Simple retirement (no later re-registration — by far the
+// more common real case) is fully fixed end-to-end by the change below. Fully closing the compound case
+// would need routes to resolve by (pool, positionManager) once a receipt names a specific PM, not by
+// pool alone — flagged as a follow-up, not implemented in this pass.
+//
 // 2026-09-09 fix (independent Codex audit, V1-01): deposit ELIGIBILITY and exit/read DISCOVERY are two
 // different questions and must not share one active-only lookup. `deactivateInstance`'s own doc comment
 // promises "withdraw-only resolution keeps working" for a retired row — but nothing ever called
@@ -23,7 +37,7 @@
 // writes here.
 
 import type { GatewayConfig } from '@/lib/gateway/chain'
-import { listActiveInstances, listAllInstances, type GatewayInstance } from '@/lib/gateway/registry'
+import { listAllInstances, type GatewayInstance } from '@/lib/gateway/registry'
 import { getServiceClient } from '@/lib/web2/supabase'
 
 type SupabaseClient = ReturnType<typeof getServiceClient>
@@ -106,17 +120,27 @@ export async function listResolvableInstances(supabase: SupabaseClient, cfg: Gat
  *  `ok: true` (with `live: false`) instead of 404ing — for reads and withdrawal, never for deposit
  *  eligibility. The no-pool-given convenience shortcut ("exactly one instance ⇒ use it") stays scoped
  *  to ACTIVE rows regardless of this flag: guessing a caller's intent onto a retired pool they didn't
- *  name is not a safe default, and every read/withdraw caller in this codebase always names its pool. */
+ *  name is not a safe default, and every read/withdraw caller in this codebase always names its pool.
+ *
+ *  V1 pass-2 fix (independent Codex audit, 2026-09-09): the env-fallback rig is eligible ONLY when the
+ *  registry has NEVER held a row for this chain at all (genuine pre-registry bootstrap) — a single
+ *  `listAllInstances` call decides that now, not `listActiveInstances` on its own. The earlier version
+ *  fell to the env rig whenever there were zero ACTIVE rows, which is also true the moment an operator
+ *  deliberately retires the LAST (or only) registered instance — silently reopening deposits through
+ *  a stale bootstrap `LP_GATEWAY_POSITION_MANAGER`/`POOL_ADDRESS` env config that, in practice, is
+ *  rarely unset even long after the registry takes over. A deliberately-emptied-of-ACTIVE-rows registry
+ *  must 404, never quietly resurrect the pre-registry rig. */
 export async function resolveInstanceStrict(
   supabase: SupabaseClient,
   cfg: GatewayConfig,
   poolParam?: string | null,
   opts: { includeInactive?: boolean } = {},
 ): Promise<ResolveResult> {
-  const active = await listActiveInstances(supabase, cfg.chainId)
+  const all = await listAllInstances(supabase, cfg.chainId)
+  const active = all.filter((i) => i.status === 'active')
   const raw = (poolParam ?? '').trim().toLowerCase()
 
-  if (active.length > 0) {
+  if (all.length > 0) {
     if (!raw) {
       // No pool requested: unambiguous only when exactly one instance is live (active-only, see above).
       return active.length === 1 ? { ok: true, inst: fromRegistry(active[0]) } : { ok: false, status: 404, error: 'pool_required' }
@@ -127,34 +151,14 @@ export async function resolveInstanceStrict(
     const hit = active.find((i) => i.poolAddress.toLowerCase() === pool)
     if (hit) return { ok: true, inst: fromRegistry(hit) }
     if (opts.includeInactive) {
-      const all = await listAllInstances(supabase, cfg.chainId)
       const retired = all.find((i) => i.poolAddress.toLowerCase() === pool)
       if (retired) return { ok: true, inst: fromRegistry(retired) }
     }
     return { ok: false, status: 404, error: 'pool_not_live' }
   }
 
-  // No ACTIVE instance at all. Before falling to the env rig (below — unchanged, active-empty-only
-  // behavior), give includeInactive one more chance: the registry may still hold a RETIRED row for
-  // exactly the pool being asked about (e.g. the operator retired the ONLY instance there ever was).
-  // This must NOT short-circuit past the env-fallback logic when there's no such match — a truly
-  // empty registry (no rows at all, active or retired) still needs the env rig to work exactly as
-  // before; that's the regression this comment guards against (caught by this file's own test suite).
-  if (opts.includeInactive) {
-    if (!raw) {
-      const all = await listAllInstances(supabase, cfg.chainId)
-      if (all.length === 1) return { ok: true, inst: fromRegistry(all[0]) }
-    } else {
-      const id = normalizePoolId(raw)
-      const pool = id || raw
-      const all = await listAllInstances(supabase, cfg.chainId)
-      const retired = all.find((i) => i.poolAddress.toLowerCase() === pool)
-      if (retired) return { ok: true, inst: fromRegistry(retired) }
-    }
-  }
-
-  // Registry (active + retired) has no match → the env rig is the only remaining candidate, and only
-  // for its own pool (or no pool).
+  // The registry has NEVER held a row for this chain (genuine bootstrap) → the env rig is the only
+  // candidate, and only for its own pool (or no pool).
   const env = fromEnv(cfg)
   if (!env) return { ok: false, status: 503, error: 'gateway_not_configured' }
   if (raw && raw !== env.poolAddress && normalizePoolId(raw) !== env.poolAddress) {

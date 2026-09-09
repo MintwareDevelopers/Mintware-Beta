@@ -59,13 +59,23 @@ const state = vi.hoisted(() => ({
   cfg: null as unknown,
   receipt: null as unknown,
   sharesOf: 0n,
+  // V1-04 fix test hook: sharesOf AS OF a specific historical block, keyed by block number (string) —
+  // lets a test simulate "current" shares (state.sharesOf) differing from what the withdrawal's OWN
+  // block would have shown, to prove the RPC is fed the historically-correct value.
+  sharesOfAtBlock: null as Map<string, bigint> | null,
 }))
 vi.mock('@/lib/web2/supabase', () => ({ getServiceClient: () => state.supabase }))
 vi.mock('@/lib/gateway/chain', () => ({
   gatewayConfig: () => state.cfg,
   gatewayPublicClient: () => ({
     getTransactionReceipt: async () => { if (!state.receipt) throw new Error('not found'); return state.receipt },
-    readContract: async ({ functionName }: { functionName: string }) => { if (functionName === 'sharesOf') return state.sharesOf; throw new Error(functionName) },
+    readContract: async ({ functionName, blockNumber }: { functionName: string; blockNumber?: bigint }) => {
+      if (functionName !== 'sharesOf') throw new Error(functionName)
+      if (blockNumber != null && state.sharesOfAtBlock?.has(blockNumber.toString())) {
+        return state.sharesOfAtBlock.get(blockNumber.toString())
+      }
+      return state.sharesOf
+    },
   }),
 }))
 
@@ -203,6 +213,36 @@ describe('POST /api/gateway/withdraw — same binding, records the exit', () => 
     expect(res.status).toBe(200)
     expect(json.sharesBurned).toBe('500000')
     expect(json.costBasisAtomic).toBe('500000')
+  })
+  // V1-04 — FIXED 2026-09-09 (independent Codex audit). Reproduces Codex's own arithmetic trace: a
+  // withdrawal burns half of an original 1,000,000-share position (basis 1,000,000), but ANOTHER
+  // 1,000,000-share deposit lands on-chain (block 501) before this withdrawal (block 500) gets
+  // recorded — "current" shares by the time recording happens are 1,500,000, not the 500,000 that
+  // existed right after the withdrawal itself. Reading sharesOf live (the bug) would size the
+  // proportional reduction against the WRONG, inflated denominator (500k*1.5M/2M = a wrong 750,000
+  // basis — an artifact of the interleaved deposit, not of this withdrawal). Reading at the
+  // withdrawal's OWN block (the fix) gets the correct 500,000/500,000 = 500,000, independent of
+  // when the interleaved deposit happens to be recorded relative to this call.
+  it('FIXED: an interleaved deposit before recording no longer corrupts the withdrawal basis', async () => {
+    state.supabase = fakeSupabase({
+      tables: {
+        gateway_instances: [registryRow],
+        gateway_positions: [{ id: 'p1', user_wallet: USER, pool_address: POOL_ID, chain_id: 46630, shares: '1000000', entry_nav: '1000000' }],
+      },
+      uniques: { gateway_deposit_events: [['tx_hash']] },
+      rpc: gatewayPositionRpc,
+    }).client
+    state.sharesOf = 1_500_000n // "current" (live) shares — includes the LATER interleaved deposit
+    state.sharesOfAtBlock = new Map([['500', 500_000n]]) // shares AS OF the withdrawal's own block
+    state.receipt = { status: 'success', to: REG_PM, blockNumber: 500n, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n)] }
+    const issuedAt = Date.now()
+    const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
+    const authSignature = await wallet.signMessage({ message: authMessage })
+    const { POST } = await import('../withdraw/route')
+    const res = await POST(post('/api/gateway/withdraw', { address: wallet.address, txHash: TX, pool: POOL_ID, authMessage, authSignature, issuedAt }))
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.costBasisAtomic).toBe('500000') // correct — NOT 750000, which the live-read bug produced
   })
   it('a deposit-action signature cannot be replayed on the withdraw route (action binding held)', async () => {
     const { POST } = await import('../withdraw/route')

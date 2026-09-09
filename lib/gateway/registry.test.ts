@@ -352,34 +352,63 @@ describe('registerInstance — verified, read-before-write, logged (O-3 d/e)', (
     expect(tables.gateway_instance_history).toHaveLength(0)
   })
 
-  it('re-activates a DEACTIVATED row with new addresses via a status-guarded update', async () => {
+  // V1 pass-2 fix (independent Codex audit, 2026-09-09, finding D): a DIFFERENT incoming PM than the
+  // retired row's now INSERTS a new row instead of updating the retired one in place — updating in
+  // place silently destroyed the retired PM's own identity, breaking V1-01's fix for its depositors
+  // (nothing left to find via listAllInstances/resolveInstanceStrict(includeInactive) once overwritten).
+  it('a DIFFERENT PM than the retired row inserts a NEW row, preserving the retired one', async () => {
     const { client, tables, calls } = fakeDb([liveRow({ status: 'inactive', position_manager: EVIL_PM })])
     const res = await registerInstance(client, base, { client: mockChain(), trust: trustFactory })
     expect(res).toEqual({ ok: true, verification: 'factory' })
-    expect(calls.find((c) => c.op === 'update')).toBeTruthy()
-    expect(tables.gateway_instances[0]).toMatchObject({ status: 'active', position_manager: PM, deactivated_at: null })
+    expect(calls.find((c) => c.op === 'insert')).toBeTruthy()
+    expect(calls.find((c) => c.op === 'update')).toBeFalsy() // nothing overwritten in place
+    expect(tables.gateway_instances).toHaveLength(2)
+    expect(tables.gateway_instances.find((r) => r.position_manager === EVIL_PM)).toMatchObject({ status: 'inactive' })
+    expect(tables.gateway_instances.find((r) => r.position_manager === PM)).toMatchObject({ status: 'active', deactivated_at: null })
     expect(tables.gateway_instance_history.at(-1)).toMatchObject({ action: 'register', prev_position_manager: EVIL_PM })
   })
+  // The exact SAME PM + staging as an existing retired row is still a genuine in-place reactivation —
+  // there's no identity to lose, it's literally the same instance coming back.
+  it('the EXACT SAME PM + staging as a retired row reactivates it in place (no second row)', async () => {
+    const { client, tables, calls } = fakeDb([liveRow({ status: 'inactive' })]) // liveRow() defaults to PM/STAGING == `base`
+    const res = await registerInstance(client, base, { client: mockChain(), trust: trustFactory })
+    expect(res).toEqual({ ok: true, verification: 'factory' })
+    const instanceCalls = calls.filter((c) => c.table === 'gateway_instances')
+    expect(instanceCalls.find((c) => c.op === 'update')).toBeTruthy()
+    expect(instanceCalls.find((c) => c.op === 'insert')).toBeFalsy() // the history-table insert is a separate table, expected either way
+    expect(tables.gateway_instances).toHaveLength(1)
+    expect(tables.gateway_instances[0]).toMatchObject({ status: 'active', position_manager: PM, deactivated_at: null })
+    expect(tables.gateway_instance_history.at(-1)).toMatchObject({ action: 'register', prev_position_manager: PM })
+  })
 
-  it('round-4 audit fix (Low): a concurrent race that flips the row to active between our read and write is detected as a conflict, not silently reported as success with stale metadata', async () => {
-    const { client: rawBaseClient, tables } = fakeDb([liveRow({ status: 'inactive', position_manager: EVIL_PM })])
-    const baseClient = rawBaseClient as unknown as { from: (t: string) => { maybeSingle: () => Promise<unknown> } }
+  // V1 pass-2 fix (independent Codex audit, 2026-09-09): the read-before-write step now fetches ALL
+  // rows for this pool (no `.maybeSingle()`) so it can tell an active row apart from any number of
+  // retired ones — this race-detection mechanism only still applies to the GUARDED-UPDATE path (an
+  // EXACT reactivation, same PM+staging as the retired row); a DIFFERENT PM now inserts a brand new
+  // row instead (see the tests above), where the database's own partial unique index
+  // (gateway_instances_active_pool_uidx, migration 20260909000002) is the concurrency safety net.
+  it('round-4 audit fix (Low): a concurrent race that flips an EXACT-match retired row to active between our read and write is detected as a conflict, not silently reported as success with stale metadata', async () => {
+    const { client: rawBaseClient, tables } = fakeDb([liveRow({ status: 'inactive' })]) // same PM/staging as `base` — exact-match reactivation
+    const baseClient = rawBaseClient as unknown as { from: (t: string) => { then: (res: (v: unknown) => unknown) => unknown } }
     let fromCalls = 0
     const client = {
       from: (table: string) => {
         const b = baseClient.from(table)
         if (table === 'gateway_instances' && ++fromCalls === 1) {
-          // This IS the read-before-write call. As a side effect, simulate another writer's
-          // concurrent activation landing in the gap between our read and our own write below —
-          // exactly the race window PostgREST's silent zero-row update used to hide.
-          const origMaybeSingle = b.maybeSingle
-          b.maybeSingle = async () => {
-            const r = await origMaybeSingle()
-            // Replace (not mutate in place) — a real read returns a SNAPSHOT, so registerInstance's
-            // `ex` must keep seeing the stale 'inactive' value it already read, exactly like a real
-            // race: the row changes in the DB, but the in-flight caller's local copy doesn't know yet.
-            tables.gateway_instances[0] = { ...tables.gateway_instances[0], status: 'active' }
-            return r
+          // This IS the read-before-write call (a plain SELECT, awaited via `then` — no `.maybeSingle()`
+          // any more). As a side effect, simulate another writer's concurrent activation landing in the
+          // gap between our read and our own write below — exactly the race window PostgREST's silent
+          // zero-row update used to hide.
+          const origThen = b.then
+          b.then = (res: (v: unknown) => unknown) => {
+            return origThen((r) => {
+              // Replace (not mutate in place) — a real read returns a SNAPSHOT, so registerInstance's
+              // `ex`/`activeRow` must keep seeing the stale 'inactive' value it already read, exactly
+              // like a real race: the row changes in the DB, but the in-flight caller's local copy
+              // doesn't know yet.
+              tables.gateway_instances[0] = { ...tables.gateway_instances[0], status: 'active' }
+              return res(r)
+            })
           }
         }
         return b
@@ -388,7 +417,7 @@ describe('registerInstance — verified, read-before-write, logged (O-3 d/e)', (
     const res = await registerInstance(client as never, base, { client: mockChain(), trust: trustFactory })
     expect(res).toEqual({ ok: false, error: 'concurrent_activation_conflict' })
     // The row is left exactly as the OTHER writer left it — our metadata was never applied.
-    expect(tables.gateway_instances[0]).toMatchObject({ status: 'active', position_manager: EVIL_PM })
+    expect(tables.gateway_instances[0]).toMatchObject({ status: 'active', position_manager: PM })
     expect(tables.gateway_instance_history.at(-1)).toMatchObject({ action: 'refused', reason: 'concurrent_activation_conflict' })
   })
 

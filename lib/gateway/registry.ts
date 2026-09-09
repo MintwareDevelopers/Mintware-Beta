@@ -324,10 +324,22 @@ function map(r: Record<string, unknown>): GatewayInstance {
   }
 }
 
+// V1 pass-2 fix (independent Codex audit, 2026-09-09): a genuine Supabase read failure used to be
+// silently coerced into "the registry has zero rows" (`data ?? []`, `error` never checked) — every
+// caller of these two functions (routeInstance.ts's deposit/withdraw/position resolution, the harvest/
+// snapshot/alerts/circuitBreaker/deploy crons, the leaderboard/instances routes) then acted on that FALSE
+// empty signal. For routeInstance.ts specifically this was actively dangerous: a transient DB outage
+// looked identical to "the registry was never populated" and silently reopened the single-env bootstrap
+// fallback rig — potentially serving deposits through a stale/wrong PositionManager during an outage that
+// has nothing to do with that decision. Throwing here instead means every caller now fails the WHOLE
+// operation closed for that DB error (an API route's createHandler wrapper turns it into a 500; a cron
+// tick fails and is retried next schedule) — uniformly safer than quietly treating "the database is
+// unreachable" as "there is nothing registered."
 export async function listActiveInstances(supabase: SupabaseClient, chainId?: number): Promise<GatewayInstance[]> {
   let q = supabase.from('gateway_instances').select('*').eq('status', 'active')
   if (chainId != null) q = q.eq('chain_id', chainId)
-  const { data } = await q
+  const { data, error } = await q
+  if (error) throw new Error(`listActiveInstances: ${error.message ?? 'query failed'}`)
   return (data ?? []).map(map)
 }
 
@@ -335,7 +347,8 @@ export async function listActiveInstances(supabase: SupabaseClient, chainId?: nu
 export async function listAllInstances(supabase: SupabaseClient, chainId?: number): Promise<GatewayInstance[]> {
   let q = supabase.from('gateway_instances').select('*')
   if (chainId != null) q = q.eq('chain_id', chainId)
-  const { data } = await q
+  const { data, error } = await q
+  if (error) throw new Error(`listAllInstances: ${error.message ?? 'query failed'}`)
   return (data ?? []).map(map)
 }
 
@@ -433,22 +446,41 @@ export async function registerInstance(
   }
 
   // (d) READ-BEFORE-WRITE — never write over an ACTIVE row.
-  const { data: existing } = await supabase
+  //
+  // V1 pass-2 fix (independent Codex audit, 2026-09-09): this used to fetch at most ONE row
+  // (`.maybeSingle()`) and, for a retired row with a DIFFERENT incoming PM, UPDATE it in place —
+  // overwriting the retired PM's own identity with the new one. That silently destroyed the exit path
+  // V1-01 just fixed: `listAllInstances`/`resolveInstanceStrict({includeInactive:true})` have nothing
+  // left to find for the OLD PM once its row has been repointed at the new one, even though the old
+  // PM's depositors and their on-chain shares are completely unaffected by this purely off-chain
+  // registry change. Now: fetch every row for this pool (there can be several — one active, plus any
+  // number of retired rows from past migrations, per the relaxed UNIQUE(pool_address, chain_id, status)
+  // WHERE status='active' index in migration 20260909000002). A genuinely NEW position_manager for this
+  // pool inserts a NEW row and leaves every existing row (retired or not) completely untouched. Only an
+  // exact-match reactivation (same PM + staging as an existing retired row) updates that specific row —
+  // there's no identity to lose there, since it's the same instance coming back.
+  const { data: existingRows } = await supabase
     .from('gateway_instances')
     .select('id, position_manager, staging, status')
     .eq('pool_address', pool)
     .eq('chain_id', i.chainId)
-    .maybeSingle()
-  const ex = existing as { id: string; position_manager: string; staging: string; status: string } | null
-  const prevPm = ex ? String(ex.position_manager).toLowerCase() : null // captured BEFORE any write
+  const rows = (existingRows ?? []) as { id: string; position_manager: string; staging: string; status: string }[]
+  const activeRow = rows.find((r) => r.status === 'active') ?? null
+  // Audit-trail context, captured BEFORE any write: prefer the currently active row's PM; when this
+  // pool has no active row (the deactivate-then-register flow — a retired row is what's here), fall
+  // back to whichever row IS present so the history log still records what this registration replaced.
+  const prevPm = (activeRow ?? rows[0])?.position_manager?.toLowerCase() ?? null
 
-  if (ex && ex.status === 'active') {
-    if (String(ex.position_manager).toLowerCase() === pm && String(ex.staging).toLowerCase() === stg) {
+  if (activeRow) {
+    if (String(activeRow.position_manager).toLowerCase() === pm && String(activeRow.staging).toLowerCase() === stg) {
       // identical re-register: idempotent no-op (nothing is overwritten)
       return { ok: true, unchanged: true, verification }
     }
-    return refuse('active_instance_exists', { existingPositionManager: ex.position_manager })
+    return refuse('active_instance_exists', { existingPositionManager: activeRow.position_manager })
   }
+  // No active row. Is this an exact reactivation of a retired instance (same PM + staging), or a
+  // genuinely new/different instance for this pool?
+  const ex = rows.find((r) => String(r.position_manager).toLowerCase() === pm && String(r.staging).toLowerCase() === stg) ?? null
 
   const row = {
     pool_address: pool,
@@ -473,8 +505,9 @@ export async function registerInstance(
 
   let error: { message: string } | null
   if (ex) {
-    // Re-activating a deactivated pool with (possibly) new addresses — guarded so a concurrent
-    // activation can't race us past the read above. Round-4 audit fix (Low): request the updated
+    // Exact reactivation of THIS SAME retired instance (identical PM + staging) — safe to update in
+    // place, no identity is lost. Guarded so a concurrent activation can't race us past the read above.
+    // Round-4 audit fix (Low): request the updated
     // row(s) back via `.select()` so a LOST race is actually detectable — PostgREST returns no error
     // when the WHERE clause matches zero rows, it just updates nothing, so `error` alone can't tell
     // us another writer already flipped `status` to 'active' between our read above and this write
@@ -504,15 +537,19 @@ export async function deactivateInstance(
 ): Promise<{ ok: boolean; error?: string }> {
   const pool = i.poolAddress.toLowerCase()
   if (!i.reason?.trim()) return { ok: false, error: 'reason_required' }
-  const { data: existing } = await supabase
+  // V1 pass-2 fix (2026-09-09): fetch every row for this pool (never `.maybeSingle()`) now that a pool
+  // can have several — one active + any number of retired, per the relaxed unique index — a naive
+  // `.eq('status','active').maybeSingle()` would work too but loses the useful `not_active` distinction
+  // (registered, just not the active one right now) from a genuine `not_found` (never registered at all).
+  const { data: rows } = await supabase
     .from('gateway_instances')
     .select('id, position_manager, status')
     .eq('pool_address', pool)
     .eq('chain_id', i.chainId)
-    .maybeSingle()
-  const ex = existing as { id: string; position_manager: string; status: string } | null
-  if (!ex) return { ok: false, error: 'not_found' }
-  if (ex.status !== 'active') return { ok: false, error: 'not_active' }
+  const all = (rows ?? []) as { id: string; position_manager: string; status: string }[]
+  if (all.length === 0) return { ok: false, error: 'not_found' }
+  const ex = all.find((r) => r.status === 'active') ?? null
+  if (!ex) return { ok: false, error: 'not_active' }
   const { error } = await supabase
     .from('gateway_instances')
     .update({ status: 'inactive', deactivated_at: new Date().toISOString(), deactivated_by: i.by, deactivate_reason: i.reason, updated_at: new Date().toISOString() })

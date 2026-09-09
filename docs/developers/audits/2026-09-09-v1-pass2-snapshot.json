@@ -1,0 +1,14 @@
+{
+  "head": "c9c03dde2db4dd2de6ec657b643aee2b2c45b80e",
+  "sha256": {
+    "lib/gateway/routeInstance.ts": "ec49f11d94bfe8bb5eb9d9f80c95ff5d629e819e3aaf00b6f4a4272243e1d888",
+    "lib/gateway/registry.ts": "307c60b9bf1ac4d0907f4cf4c002b48ef977e09fed957949e3314abb51654038",
+    "lib/gateway/harvest.ts": "b8b2f53fe401e8653d1dad74afd12e772bc994a71db32d30c337603ea72a5c90",
+    "lib/gateway/positionReader.ts": "05490ded5ee7d63cd88e1b67a18c672356ecea98f465ff5919c4a1e05c297b38",
+    "app/api/gateway/withdraw/route.ts": "dda1a1a5057327803edddab2c21eb2f2f8569afe8cc01bab2426cb3624cfce7c",
+    "app/api/gateway/deposit/route.test.ts": "dea5cf55fddd96baeafb86ab0dafaefda7fe59c73a58c2a9921782a06df3b7f5",
+    "tests/audit-v1-pass2-20260909.test.ts": "05c7eff6ca733a8a95f15d967c0a8f965d2e97fd2991396f6e2db38181feda67",
+    "contracts-v4/src/gateway/MintwareLpGatewayPositionManager.sol": "8a34c7028a7c485e7e50d7d967468d1bff17b091b3ae1ce401d5b0b664fc4b20",
+    "supabase/migrations/20260909000001_gateway_position_atomic_writes.sql": "86d14f79811dd8060a380258e7b3dcb6035290007206d350cc397c57cab599c4"
+  }
+}
