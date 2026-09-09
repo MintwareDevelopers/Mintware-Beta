@@ -2,7 +2,7 @@ import { toFunctionSelector } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { resolveInstanceStrict } from '@/lib/gateway/routeInstance'
-import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
+import { LP_GATEWAY_ABI, LP_STAGING_ABI, LP_IDLE_ADAPTER_PROBE_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { readCurrentTick, type GatewayPoolKey } from '@/lib/gateway/poolState'
 
 export const dynamic = 'force-dynamic'
@@ -74,6 +74,28 @@ export const GET = createHandler(async (req, ctx) => {
     ctx.log.warn('gateway.meta', 'paired asset read failed', { error: String(e) })
   }
 
+  // D-4: which yield source backs staging while a deposit briefly waits for the next deploy — the
+  // difference between "earns immediately while staged" and "held ready, not yet earning" copy. Probe
+  // via staticcall (best-effort — a read failure just falls back to 'unknown', never a false claim):
+  // `depositCap()` exists ONLY on MintwareIdleYieldAdapter (the real adapter has `perBlockWithdrawCap`
+  // instead), mirroring the factory's own `_verifyAdapterBinding` probing pattern.
+  let adapterKind: 'idle' | 'real' | 'unknown' = 'unknown'
+  let idleDepositCapAtomic: string | null = null
+  if (inst.staging) {
+    try {
+      const adapterAddr = (await client.readContract({ address: inst.staging, abi: LP_STAGING_ABI, functionName: 'adapter' })) as `0x${string}`
+      try {
+        const cap = (await client.readContract({ address: adapterAddr, abi: LP_IDLE_ADAPTER_PROBE_ABI, functionName: 'depositCap' })) as bigint
+        adapterKind = 'idle'
+        idleDepositCapAtomic = cap.toString()
+      } catch {
+        adapterKind = 'real' // depositCap() reverted/unimplemented -- not the idle adapter's interface
+      }
+    } catch (e) {
+      ctx.log.warn('gateway.meta', 'adapter-kind probe failed', { error: String(e) })
+    }
+  }
+
   // supportsMin: true/false when the bytecode was readable, null = unknown (UI then uses the plain calls).
   let supportsMin: boolean | null = null
   try {
@@ -113,6 +135,8 @@ export const GET = createHandler(async (req, ctx) => {
       source: inst.source, // 'registry' | 'env-fallback' — the UI must not send funds to anything else
       live: inst.live, // derived from an ACTIVE registry row; never hard-coded
       supportsMin, // depositWithMin / withdrawWithMin available on this deployment (C-6)
+      adapterKind, // 'idle' | 'real' | 'unknown' (D-4) — real = earns immediately while staged; idle = held ready, not yet earning
+      idleDepositCapAtomic, // only set when adapterKind === 'idle'
     },
   })
 })

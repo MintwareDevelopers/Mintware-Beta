@@ -91,6 +91,45 @@ describe('GET /api/gateway/meta — strict resolution', () => {
     state.getCode = async () => { throw new Error('rpc') }
     expect((await (await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))).json()).meta.supportsMin).toBeNull()
   })
+  it('D-4: staging.adapter() exposes depositCap() → adapterKind idle, cap surfaced', async () => {
+    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
+    const IDLE_ADAPTER = '0x' + '77'.repeat(20)
+    state.readContract = async (a: unknown) => {
+      const { address, functionName } = a as { address: string; functionName: string }
+      if (functionName === 'quoteAsset') return QUOTE
+      if (functionName === 'adapter') return IDLE_ADAPTER
+      if (functionName === 'depositCap' && address === IDLE_ADAPTER) return 5_000_000n
+      throw new Error('rpc')
+    }
+    const { GET } = await import('./route')
+    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
+    const { meta } = await res.json()
+    expect(meta.adapterKind).toBe('idle')
+    expect(meta.idleDepositCapAtomic).toBe('5000000')
+  })
+  it('D-4: staging.adapter() reverts depositCap() (real adapter shape) → adapterKind real, no cap surfaced', async () => {
+    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
+    const REAL_ADAPTER = '0x' + '88'.repeat(20)
+    state.readContract = async (a: unknown) => {
+      const { functionName } = a as { functionName: string }
+      if (functionName === 'quoteAsset') return QUOTE
+      if (functionName === 'adapter') return REAL_ADAPTER
+      throw new Error('rpc') // depositCap() unimplemented on the real adapter
+    }
+    const { GET } = await import('./route')
+    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
+    const { meta } = await res.json()
+    expect(meta.adapterKind).toBe('real')
+    expect(meta.idleDepositCapAtomic).toBeNull()
+  })
+  it('D-4: staging.adapter() itself unreadable → adapterKind unknown (never a guessed claim)', async () => {
+    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
+    // default beforeEach readContract already throws for everything but quoteAsset
+    const { GET } = await import('./route')
+    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
+    const { meta } = await res.json()
+    expect(meta.adapterKind).toBe('unknown')
+  })
   it('registry quote_asset ≠ contract quoteAsset() → 409, no deposit target advertised', async () => {
     state.supabase = fakeSupabase({ tables: { gateway_instances: [{ ...registryRow, quote_asset: '0x' + '99'.repeat(20) }] } }).client
     const { GET } = await import('./route')

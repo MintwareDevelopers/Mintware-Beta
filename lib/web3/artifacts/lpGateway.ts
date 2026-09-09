@@ -134,4 +134,12 @@ export const LP_GATEWAY_VIRTUAL = 1_000_000n
 export const LP_STAGING_ABI = [
   { type: 'function', stateMutability: 'view', name: 'stagedAssets', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'maxUnstageable', inputs: [], outputs: [{ type: 'uint256' }] },
+  { type: 'function', stateMutability: 'view', name: 'adapter', inputs: [], outputs: [{ type: 'address' }] },
+] as const
+
+// D-4: `depositCap()` exists ONLY on MintwareIdleYieldAdapter (the real MintwareERC4626YieldAdapter has
+// `perBlockWithdrawCap` instead) — a staticcall probe for it is how the off-chain layer tells idle mode
+// from a real yield source, mirroring the factory's own `_verifyAdapterBinding` staticcall pattern.
+export const LP_IDLE_ADAPTER_PROBE_ABI = [
+  { type: 'function', stateMutability: 'view', name: 'depositCap', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const

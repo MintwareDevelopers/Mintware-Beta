@@ -41,6 +41,9 @@ type Meta = {
   usdg: `0x${string}` | null; pairedAsset: `0x${string}` | null; pairedDecimals: number | null
   feePips: number | null; dynamicFee: boolean; inRange?: boolean | null; currentTick?: number | null
   source: 'registry' | 'env-fallback'; live: boolean; supportsMin: boolean | null
+  // D-4: which yield source backs the staging window — 'real' earns immediately while staged, 'idle'
+  // is held ready but not yet earning, 'unknown' when the probe couldn't read it (never guess which).
+  adapterKind?: 'idle' | 'real' | 'unknown'
 }
 type Metrics = { poolAddress: string; pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; live: boolean }
 type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
@@ -578,7 +581,17 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="rounded-[16px] p-5" style={PANEL}>
             <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>The loop</div>
             <div className="flex flex-col gap-3 mt-3">
-              <Loop n="01" t="Briefly staged" d="A short window before the next scheduled deploy — no yield accrues here." />
+              <Loop
+                n="01"
+                t="Briefly staged"
+                d={
+                  meta?.adapterKind === 'real'
+                    ? 'A short window before the next scheduled deploy — already earning yield while it waits.'
+                    : meta?.adapterKind === 'idle'
+                      ? 'A short window before the next scheduled deploy — held ready, not yet earning.'
+                      : 'A short window before the next scheduled deploy.'
+                }
+              />
               <Loop n="02" t="Deployed as liquidity" d="Your full deposit — no held-back reserve — is paired into this pool and earns trading fees." />
               <Loop n="03" t="Fees compound back in" d="Trading fees lift your position's value pro-rata. Withdraw anytime for both legs." />
             </div>
