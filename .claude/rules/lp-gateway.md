@@ -141,9 +141,12 @@ harvest/compound/deploy with a fixed gas literal (new `lib/gateway/gasEstimate.t
 instead of paying gas for a guaranteed revert; the registry's reactivation `update()` now detects a lost
 concurrent-write race instead of silently logging stale metadata as success; deposit/withdraw cost-basis
 writes are now one atomic RPC per direction instead of two separate round-trips (closes a crash-window /
-lost-update race) — **but this needs its OWN migration applied to prod**
-(`20260909000001_gateway_position_atomic_writes.sql`), the same way the RLS one was, or those two routes 500
-until it's applied (on-chain funds are unaffected either way). **Reconciled by documentation, not code:**
+lost-update race) — **migration `20260909000001_gateway_position_atomic_writes.sql` APPLIED + LIVE-VERIFIED
+(2026-09-09, applied by the user the same way as the RLS one)**: confirmed via curl against prod that both
+`record_gateway_deposit_event`/`record_gateway_withdraw_event` are service-role-only (anon gets `42501`) and
+that a real insert + a same-`tx_hash` replay are correctly idempotent (`already_recorded:true`, no
+double-credit); probe rows cleaned up after. `/api/gateway/{deposit,withdraw}` are fully live on this path.
+**Reconciled by documentation, not code:**
 `compoundQuote()`'s deliberate no-principalCap-check design (the class doc comment used to contradict it) and
 `_idle()`'s donation-inflatable raw balance (an accepted, R3-INV-2-required tradeoff). **Still open, no code
 possible:** the sibling `gateway_alerts` migration (`20260907000003`), same root cause as the RLS Critical.

@@ -28,11 +28,15 @@ findings closed by documentation reconciliation for a genuinely design-intention
 the code's own reasoning). Every code fix is compiled and covered by tests — `tsc` clean, full
 vitest 1066/0 fail, full `forge test` 1042/0 fail (4 pre-existing fork-test skips, unrelated).
 
-**⚠️ One fix needs a second migration applied to production**, the same way you applied the Critical's:
-finding #12's atomic-write RPCs (`supabase/migrations/20260909000001_gateway_position_atomic_writes.sql`)
-are not yet live — until applied, `/api/gateway/deposit` and `/api/gateway/withdraw` will 500
-`record_failed` (on-chain funds are unaffected; this only breaks the off-chain cost-basis display
-mirror). Apply it the same way you applied `20260908000003`.
+**✅ Both migrations from this audit are now applied to production and live-verified.** The Critical's
+`20260908000003_gateway_ledger_view_security.sql` and finding #12's
+`20260909000001_gateway_position_atomic_writes.sql` were both applied by the user (same day) and
+confirmed live via direct curl against prod: `record_gateway_deposit_event`/`record_gateway_withdraw_event`
+are service-role-only (anon key → `42501 permission denied`), a real service-role insert works, and a
+replay of the same `tx_hash` is correctly idempotent (`already_recorded:true`, no double-credit). Probe
+rows were cleaned up afterward. `/api/gateway/deposit` and `/api/gateway/withdraw` are fully live on the
+atomic-write path. (The unrelated, pre-existing `gateway_alerts` migration, `20260907000003`, still
+remains unapplied — same root cause, lower severity, not part of this audit's scope.)
 
 **Still open, no code change**: 1 Low, `supabase/migrations/20260907000003_gateway_alerts.sql` —
 same root cause as the Critical (merged, never applied to prod), lower severity; needs the same kind
@@ -124,9 +128,10 @@ regression-tests-proving-the-fix), plus the PoC files the audit itself wrote and
 `gasEstimate.test.ts` (new) wired into `lib/gateway/harvest.ts` + `harvest.test.ts` and
 `lib/gateway/deploy.ts` (#11), `lib/gateway/basisMath.ts` (kept as reference spec, no longer called
 directly) + `app/api/gateway/{deposit,withdraw}/route.ts` + `deposit/route.test.ts` (#12) + new
-migration `supabase/migrations/20260909000001_gateway_position_atomic_writes.sql` (#12, **needs
-manual application to prod**), `lib/gateway/__audit3__/rlsAnonProbe.live.test.ts` (#1's test-side
-fix), `tests/depositAmountCorruption.poc.test.ts` (rewritten from bug-PoC to fix-regression-test).
+migration `supabase/migrations/20260909000001_gateway_position_atomic_writes.sql` (#12, **applied to
+prod + live-verified 2026-09-09** — see Executive summary), `lib/gateway/__audit3__/rlsAnonProbe.live.test.ts`
+(#1's test-side fix), `tests/depositAmountCorruption.poc.test.ts` (rewritten from bug-PoC to
+fix-regression-test).
 
 ## Verification
 
