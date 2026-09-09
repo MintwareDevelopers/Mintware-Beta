@@ -3,8 +3,52 @@ import { encodeEventTopics, encodeAbiParameters } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { buildGatewayDepositMessage, buildGatewayWithdrawMessage } from '@/lib/web3/signedActionMessages'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
-import { fakeSupabase } from '@/lib/gateway/__audit__/fakeSupabase'
+import { fakeSupabase, type FakeDb } from '@/lib/gateway/__audit__/fakeSupabase'
 import { _resetReplayGuard } from '@/lib/gateway/recordAuth'
+
+// Round-4 audit fix: deposit/withdraw now call one atomic RPC per direction
+// (record_gateway_deposit_event / record_gateway_withdraw_event) instead of a two-step insert+upsert —
+// see supabase/migrations/20260909000001_gateway_position_atomic_writes.sql for the real SQL. This
+// emulates the SAME semantics against fakeSupabase's in-memory tables for these route tests.
+function gatewayPositionRpc(fn: string, args: Record<string, unknown>, db: FakeDb) {
+  const tx = String(args.p_tx_hash).toLowerCase()
+  const address = String(args.p_address).toLowerCase()
+  const pool = String(args.p_pool_address).toLowerCase()
+  const chainId = args.p_chain_id
+  const events = (db.tables.gateway_deposit_events ??= [])
+  const positions = (db.tables.gateway_positions ??= [])
+  const alreadyRecorded = events.some((e) => String(e.tx_hash).toLowerCase() === tx)
+
+  if (fn === 'record_gateway_deposit_event') {
+    if (!alreadyRecorded) events.push({ id: `ev-${events.length + 1}`, tx_hash: tx, address, kind: 'deposit', pool_address: pool, chain_id: chainId, quote_in: String(args.p_quote_in) })
+    const quoteIn = BigInt(String(args.p_quote_in))
+    const onChainShares = String(args.p_on_chain_shares)
+    let pos = positions.find((p) => String(p.user_wallet).toLowerCase() === address && String(p.pool_address).toLowerCase() === pool && p.chain_id === chainId)
+    if (!pos) {
+      pos = { id: `pos-${positions.length + 1}`, user_wallet: address, pool_address: pool, chain_id: chainId, shares: onChainShares, entry_nav: alreadyRecorded ? '0' : quoteIn.toString() }
+      positions.push(pos)
+    } else {
+      pos.shares = onChainShares
+      pos.entry_nav = alreadyRecorded ? String(pos.entry_nav ?? '0') : (BigInt(String(pos.entry_nav ?? '0')) + quoteIn).toString()
+    }
+    return Promise.resolve({ data: [{ cost_basis_atomic: pos.entry_nav, already_recorded: alreadyRecorded }], error: null })
+  }
+  if (fn === 'record_gateway_withdraw_event') {
+    if (!alreadyRecorded) events.push({ id: `ev-${events.length + 1}`, tx_hash: tx, address, kind: 'withdraw', pool_address: pool, chain_id: chainId, quote_out: String(args.p_quote_out) })
+    const pos = positions.find((p) => String(p.user_wallet).toLowerCase() === address && String(p.pool_address).toLowerCase() === pool && p.chain_id === chainId)
+    if (!pos) return Promise.resolve({ data: [{ cost_basis_atomic: null, already_recorded: alreadyRecorded, position_found: false }], error: null })
+    const onChainShares = BigInt(String(args.p_on_chain_shares))
+    const sharesBurned = BigInt(String(args.p_shares_burned))
+    pos.shares = onChainShares.toString()
+    if (!alreadyRecorded) {
+      const priorShares = onChainShares + sharesBurned
+      const priorBasis = BigInt(String(pos.entry_nav ?? '0'))
+      pos.entry_nav = onChainShares === 0n || priorShares === 0n ? '0' : ((priorBasis * onChainShares) / priorShares).toString()
+    }
+    return Promise.resolve({ data: [{ cost_basis_atomic: pos.entry_nav, already_recorded: alreadyRecorded, position_found: true }], error: null })
+  }
+  return Promise.resolve({ data: null, error: { message: `rpc ${fn} not emulated` } })
+}
 
 // O-1 + O-10 closeout for the record routes: the exact body the UI now sends (signed message + tx
 // hash + poolId) is accepted; the signed txHash/pool are strict-compared to the body; a re-presented
@@ -64,7 +108,7 @@ beforeEach(() => {
   state.cfg = cfg
   state.sharesOf = 1_000_000n
   state.receipt = { status: 'success', to: REG_PM, logs: [depositedLog(USER, 1_000_000n, 1_000_000n)] }
-  state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] }, uniques: { gateway_deposit_events: [['tx_hash']] } }).client
+  state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] }, uniques: { gateway_deposit_events: [['tx_hash']] }, rpc: gatewayPositionRpc }).client
 })
 
 describe('POST /api/gateway/deposit — the UI body is now accepted and recorded (O-1)', () => {
@@ -146,6 +190,7 @@ describe('POST /api/gateway/withdraw — same binding, records the exit', () => 
         gateway_positions: [{ id: 'p1', user_wallet: USER, pool_address: POOL_ID, chain_id: 46630, shares: '1000000', entry_nav: '1000000' }],
       },
       uniques: { gateway_deposit_events: [['tx_hash']] },
+      rpc: gatewayPositionRpc,
     }).client
     state.sharesOf = 500_000n
     state.receipt = { status: 'success', to: REG_PM, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n)] }

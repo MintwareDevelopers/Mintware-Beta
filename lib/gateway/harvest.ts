@@ -29,6 +29,7 @@ import { listActiveInstances } from '@/lib/gateway/registry'
 import { skimPerformanceFee } from '@/lib/gateway/harvestMath'
 import { swapPairedToQuote } from '@/lib/gateway/routerSwap'
 import { indexHarvestLogs, listPendingRestake, claimRestake, releaseRestake, markRestaked, type IndexOutcome, type LedgerClient } from '@/lib/gateway/ledger'
+import { estimateGasWithFloor, isDeterministicContractRevert } from '@/lib/gateway/gasEstimate'
 
 const ERC20_APPROVE_ABI = [
   { type: 'function', stateMutability: 'nonpayable', name: 'approve', inputs: [{ name: 's', type: 'address' }, { name: 'v', type: 'uint256' }], outputs: [{ type: 'bool' }] },
@@ -167,6 +168,17 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
       return { ok: false, status: 200, error: 'below harvest floor — skipped to save gas', reason: 'nothing', index }
     }
   } catch (e) {
+    // Round-4 audit fix (Medium): a DETERMINISTIC contract-level revert (e.g. `NotDeployed()` for a pool
+    // with no position yet) means the real tx is guaranteed to revert too — short-circuit instead of
+    // paying real gas for a doomed transaction on every single cron tick against that pool.
+    const deterministic = isDeterministicContractRevert(e, ['NotDeployed'])
+    if (deterministic) {
+      log?.info('gateway.harvest', 'pre-harvest simulate hit a deterministic revert — skipped (no gas spent)', { reason: deterministic, pool: instance.poolAddress })
+      const index = await indexHarvestLogs({
+        supabase, client: publicClient as unknown as LedgerClient, instance, log, settlement: destination === 'buffer' ? 'credited' : 'pending',
+      })
+      return { ok: false, status: 200, error: `pre-harvest simulate: ${deterministic}`, reason: 'nothing', index }
+    }
     log?.warn('gateway.harvest', 'pre-harvest simulate failed; proceeding', { error: String(e) })
   }
 
@@ -177,10 +189,12 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   let quoteFees = 0n
   let pairedFees = 0n
   try {
-    collectTx = await wallet.writeContract({
-      address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'harvest',
-      args: [BigInt(Math.floor(Date.now() / 1000) + 600)], account, chain: publicClient.chain, gas: 900_000n,
-    })
+    const harvestArgs = { address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'harvest', args: [BigInt(Math.floor(Date.now() / 1000) + 600)], account } as const
+    // Round-4 audit fix (Medium): estimate for real instead of a fixed 900_000n literal — a paired token
+    // with a legitimately heavier (but never-reverting) transfer cost used to permanently starve this
+    // pool's automated harvest once its real cost exceeded the fixed budget.
+    const { gas } = await estimateGasWithFloor(publicClient, harvestArgs, 900_000n)
+    collectTx = await wallet.writeContract({ ...harvestArgs, chain: publicClient.chain, gas })
     const receipt = await publicClient.waitForTransactionReceipt({ hash: collectTx })
     if (receipt.status !== 'success') return { ok: false, status: 502, error: 'harvest_reverted', reason: 'tx' }
     collectBlock = receipt.blockNumber != null ? BigInt(receipt.blockNumber) : undefined
@@ -264,7 +278,11 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
       const quoteAsset = (await publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset' })) as `0x${string}`
       const ah = await wallet.writeContract({ address: quoteAsset, abi: ERC20_APPROVE_ABI, functionName: 'approve', args: [instance.positionManager, amount], account, chain: publicClient.chain })
       await publicClient.waitForTransactionReceipt({ hash: ah })
-      ch = await wallet.writeContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'compoundQuote', args: [amount], account, chain: publicClient.chain, gas: 400_000n })
+      // Round-4 audit fix (Medium): estimate for real instead of a fixed 400_000n literal — same class of
+      // fixed-budget starvation risk as the harvest collect call above.
+      const compoundArgs = { address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'compoundQuote', args: [amount], account } as const
+      const { gas: compoundGas } = await estimateGasWithFloor(publicClient, compoundArgs, 400_000n)
+      ch = await wallet.writeContract({ ...compoundArgs, chain: publicClient.chain, gas: compoundGas })
       const rc = await publicClient.waitForTransactionReceipt({ hash: ch })
       mined = rc.status === 'success'
       if (!mined) {

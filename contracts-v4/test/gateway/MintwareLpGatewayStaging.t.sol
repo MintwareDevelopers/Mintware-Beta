@@ -74,6 +74,26 @@ contract MintwareLpGatewayStagingTest is Test {
         assertEq(staging.maxUnstageable(), 30_000e6); // still capped: min(70k remaining, 30k cap)
     }
 
+    /// Round-4 audit fix (Medium): `unstage()` used to call `adapter.withdraw()` bare, trusting the
+    /// IYieldAdapter "never reverts" contract with no defensive wrapper of its own — the second
+    /// layer where a misbehaving/future adapter's revert could propagate uncaught. Now wrapped in
+    /// try/catch, matching the belt-and-suspenders pattern already applied one layer up (`_idle()`'s
+    /// own try/catch around `stagedAssets()`).
+    function test_unstage_survivesAdapterRevert_degradesToZero() public {
+        staging.stage(100_000e6);
+        vm.mockCallRevert(
+            address(adapter),
+            abi.encodeWithSelector(MockYieldAdapter.withdraw.selector, uint256(50_000e6)),
+            "adapter stalled"
+        );
+        uint256 got = staging.unstage(50_000e6); // must NOT revert
+        assertEq(got, 0, "adapter reverted -- nothing delivered, but the call itself degrades cleanly");
+
+        vm.clearMockedCalls();
+        uint256 got2 = staging.unstage(50_000e6); // recovers once the adapter is healthy again
+        assertEq(got2, 50_000e6);
+    }
+
     function test_unstage_onlyController() public {
         staging.stage(1_000e6);
         vm.prank(stranger);

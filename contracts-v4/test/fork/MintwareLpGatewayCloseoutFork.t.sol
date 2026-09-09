@@ -361,4 +361,47 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         assertEq(_fees(RECIP), oldBal, "frozen address is out of the fee path");
         assertEq(_fees(NEW_RECIP), qf + pf);
     }
+
+    /// Round-4 audit fix (Medium): unlike `harvest()` (whose entire job IS fee collection, so a frozen
+    /// recipient bricking it is expected — proven above), `deploy()`'s pre-flight fee sweep used to be
+    /// unguarded too, so the SAME frozen `harvestRecipient` also bricked putting NEW staged capital to
+    /// work — nothing to do with fee collection. Now isolated behind `sweepFeesExternal` (self-call +
+    /// try/catch, mirrors `lpLegExit`'s own isolation of its internal sweep): a frozen recipient no
+    /// longer stops deploy(); the accrued fees just stay parked in the position, uncollected, until a
+    /// future successful sweep (harvest, once rotated, or the next deploy after the freeze lifts).
+    function test_CF_deployNoLongerBrickedByFrozenRecipient_feesStayAccruedInstead() public {
+        if (!live) return;
+        _seed(); // establishes the initial position via a first deploy()
+        _accrueFees(20_000e18);
+        _roll(1);
+        quote.setBlacklisted(RECIP, true); // issuer freezes the operator hot wallet, same as above
+
+        // Sanity: harvest() itself is STILL correctly bricked while frozen (unchanged — its whole job is
+        // fee collection, so failing loud there is right, unlike deploy()).
+        vm.expectRevert(bytes("BLACKLISTED"));
+        pm.harvest(block.timestamp);
+
+        // More depositor capital arrives and needs to be put to work — deploy()'s actual job, unrelated
+        // to fee collection.
+        vm.prank(bob);
+        pm.deposit(60_000e18);
+        _roll(1);
+
+        uint256 dpBefore = pm.deployedPrincipal();
+        uint256 recipBefore = _fees(RECIP);
+
+        // FIXED: deploy() no longer reverts just because its pre-flight sweep can't reach the frozen
+        // recipient — the sweep is deferred (caught), and the rest of deploy() proceeds normally.
+        pm.deploy(40_000e18, 20_000e18, 0, 0, block.timestamp);
+
+        assertGt(pm.deployedPrincipal(), dpBefore, "new capital WAS deployed, unblocked by the frozen sweep");
+        assertEq(_fees(RECIP), recipBefore, "the frozen recipient received nothing (sweep deferred, not lost)");
+
+        // The deferred fees aren't gone — once the freeze lifts (or the operator rotates), a later sweep
+        // collects them same as any other accrued-but-uncollected fee.
+        quote.setBlacklisted(RECIP, false);
+        _roll(1);
+        (uint256 qf, uint256 pf) = pm.harvest(block.timestamp);
+        assertGt(qf + pf, 0, "the fees that deploy() couldn't sweep are still there, collected once unfrozen");
+    }
 }

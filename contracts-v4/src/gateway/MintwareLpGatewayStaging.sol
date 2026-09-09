@@ -69,7 +69,13 @@ contract MintwareLpGatewayStaging is ReentrancyGuard {
         // over-reports by 1 wei would brick every withdraw here, one that under-reports would strand the difference
         // in this contract forever (outside `stagedAssets`, outside NAV, no sweep).
         uint256 before = quoteAsset.balanceOf(address(this));
-        adapter.withdraw(amount);
+        // Round-4 audit fix (Medium): `adapter.withdraw()` is documented (IYieldAdapter) to NEVER revert for a
+        // liquidity/availability reason, and the production adapter now genuinely honors that (round-4 High
+        // fix, MintwareERC4626YieldAdapter._withdrawCore). This wrapper is the belt to that suspenders — the
+        // SAME defense-in-depth this codebase already applies one layer up (`_idle()`'s try/catch around
+        // `stagedAssets()`) — so a misbehaving future/alternate adapter implementation can't propagate a revert
+        // into `_withdraw()`'s idle-leg logic through this, the second (and only other) place that could.
+        try adapter.withdraw(amount) {} catch {}
         returned = quoteAsset.balanceOf(address(this)) - before;
         if (returned > 0) quoteAsset.safeTransfer(controller, returned);
         emit Unstaged(amount, returned);

@@ -473,9 +473,17 @@ export async function registerInstance(
 
   let error: { message: string } | null
   if (ex) {
-    // re-activating a deactivated pool with (possibly) new addresses — guarded so a concurrent
-    // activation can't race us past the read above
-    ;({ error } = await supabase.from('gateway_instances').update(row).eq('id', ex.id).eq('status', 'inactive'))
+    // Re-activating a deactivated pool with (possibly) new addresses — guarded so a concurrent
+    // activation can't race us past the read above. Round-4 audit fix (Low): request the updated
+    // row(s) back via `.select()` so a LOST race is actually detectable — PostgREST returns no error
+    // when the WHERE clause matches zero rows, it just updates nothing, so `error` alone can't tell
+    // us another writer already flipped `status` to 'active' between our read above and this write
+    // (e.g. two concurrent curator approvals, or an approval racing an in-flight deactivate). Without
+    // this, we'd fall through and log a 'register' history entry claiming success with metadata that
+    // was never actually persisted.
+    const upd = await supabase.from('gateway_instances').update(row).eq('id', ex.id).eq('status', 'inactive').select('id')
+    error = upd.error
+    if (!error && (upd.data?.length ?? 0) === 0) return refuse('concurrent_activation_conflict')
   } else {
     ;({ error } = await supabase.from('gateway_instances').insert(row))
   }

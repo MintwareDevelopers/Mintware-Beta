@@ -381,6 +381,17 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
     ///      Round-3 R3-INV-2: the idle reserve INCLUDES quote parked in this contract by a deferred re-stage
     ///      (`RestageDeferred`) — it is depositor principal, so it is priced into every NAV, paid out first on exit
     ///      and consumed first on deploy; nothing depositor-owned ever sits outside NAV.
+    /// @dev  Round-4 audit finding (Low, accepted design tradeoff, not fixed): `quoteAsset.balanceOf(address(this))`
+    ///       is an unauthenticated raw balance — anyone can `transfer()` directly to this contract with no
+    ///       `deposit()` call and no shares minted, and that donation counts toward `principalCap`'s
+    ///       `idle + deployedPrincipal + deployedPairedValue` check, which can grief legitimate deposits closed
+    ///       until the owner raises the cap or sweeps the donation away via `deploy()`/`compoundQuote()`. The
+    ///       donor gets no shares and (per the virtual-offset math) can only reclaim a fraction back even
+    ///       holding shares themselves, so this is a real-cost griefing vector, not a free one. Tracking only
+    ///       `staging.stagedAssets()` and dropping the balance term would break the R3-INV-2 invariant this
+    ///       same function already relies on (parked deferred-re-stage dust must stay priced into NAV) — so
+    ///       the mitigation is operational, not on-chain: monitor for principalCap headroom consumed with no
+    ///       matching `Deposited` event, and raise the cap or trigger a sweep.
     function _idle() internal view returns (bool ok, uint256 idle) {
         try staging.stagedAssets() returns (uint256 v) {
             return (true, v + quoteAsset.balanceOf(address(this)));
@@ -727,6 +738,18 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
         quoteAsset.safeTransfer(to, amount);
     }
 
+    /// @dev Round-4 audit fix (Medium): self-call wrapper around `_sweepFees`, isolated so `deploy()`'s
+    ///      pre-flight sweep can `try` it — mirrors how `lpLegExit` already isolates its OWN internal sweep
+    ///      for the withdraw path. Without this, a frozen/blacklisted `harvestRecipient` (the exact scenario
+    ///      the 48h-timelocked recipient-rotation mechanism exists to survive) bricked EVERY deploy — not just
+    ///      harvest — for the whole rotation window, even though deploy's real job (putting staged capital to
+    ///      work) has nothing to do with fee collection. On failure the fees simply stay accrued in the
+    ///      position, uncollected, picked up by the next successful sweep. Self-only.
+    function sweepFeesExternal(uint256 deadline) external returns (uint256 quoteFees, uint256 pairedFees) {
+        if (msg.sender != address(this)) revert NotSelf();
+        return _sweepFees(deadline);
+    }
+
     /// @notice Permissionless follower liveness: advance the clamped reference one bounded step toward spot.
     ///         Adds no attack surface — anyone could already do this with a dust deposit — and keeps entry marks
     ///         and the deploy band from going stale on a quiet day (F-01c / F-04).
@@ -767,8 +790,11 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
         }
 
         // Sweep the existing position's accrued fees to the buffer BEFORE increasing, so the INCREASE never
-        // folds trading fees into the re-stage below (finding H-02). No-op on first deploy.
-        _sweepFees(deadline);
+        // folds trading fees into the re-stage below (finding H-02). No-op on first deploy. Round-4 audit fix
+        // (Medium): isolated behind a self-call + try/catch (`sweepFeesExternal`) — a frozen/blacklisted
+        // harvestRecipient no longer bricks deploy() itself; the fees just stay accrued, uncollected, for the
+        // next successful sweep.
+        try this.sweepFeesExternal(deadline) {} catch {}
 
         // R3-INV-2: quote parked by an earlier deferred re-stage is consumed before touching the reserve.
         uint256 fromParked = Math.min(quoteAsset.balanceOf(address(this)), quoteToDeploy);

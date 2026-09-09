@@ -118,7 +118,7 @@ Rig **'g'** (PM `0xa52d4ffaefa586251cb36d1e05588daa89ab0a63`, staging `0x0a85…
 `0x07340da7…dfa2`, PM code hash `0x89a53e8d…00f4`) is the round-3 deployment (smoke passed 2026-09-08); rig 'e' is superseded.
 
 **Round-4 multi-suite audit (2026-09-09 — [`../../docs/developers/audits/round4/README.md`](../../docs/developers/audits/round4/README.md)):**
-"all V1, anything V1 touches" — 24 confirmed findings (1 Critical, 6 High, 8 Medium, 6 Low, 3 Informational),
+"all V1, anything V1 touches" — 24 confirmed findings (1 Critical, 6 High, 7 Medium, 7 Low, 3 Informational),
 several with PoCs executed against a live testnet fork or the real production Supabase project. **Fixed
 on-chain:** `deploy()`'s post-swap price re-read now re-checked against the deviation band (closes a hostile
 paired-token transfer-hook interleaved-swap manipulation window — V4's `unlock()` lock is global, not
@@ -127,15 +127,28 @@ under-delivers (a routine adapter-liquidity-shortfall event, not an edge case); 
 isolated behind a self-call + try/catch (new `idleLegExit`, mirrors `lpLegExit`) so a frozen withdrawer no
 longer bricks their own exit; `MintwareERC4626YieldAdapter.withdraw()` now genuinely honors `IYieldAdapter`'s
 "never reverts" contract (the whole read-then-redeem sequence, not just `redeem`, moved behind one try/catch
-boundary); `MintwareLpGatewayFactory` now disables `renounceOwnership`, matching every sibling contract.
+boundary); `MintwareLpGatewayFactory` now disables `renounceOwnership`, matching every sibling contract;
+`MintwareLpGatewayStaging.unstage()` now also try/catches `adapter.withdraw()` (defense-in-depth one layer up);
+`deploy()`'s own pre-flight fee sweep is now isolated the same way (new `sweepFeesExternal` self-call) so a
+frozen `harvestRecipient` no longer bricks deploying NEW capital, only fee collection itself.
 **Fixed off-chain:** the D-4 adapter-kind probe (session-introduced) no longer defaults to `'real'` on ANY
 `depositCap()` read failure — needs a positive `perBlockWithdrawCap()` confirmation now; the deposit-amount
 input no longer silently corrupts locale-formatted numbers (`"1,25"` → `"125"`, a 100x-inflated deposit);
 `withdrawLegsQuote()` no longer double-applies the virtual offset per leg (was the stale PRE-round-3-fix
-formula, causing spurious `SlippageExceeded` on typical small withdrawals). **NOT fixed — needs operator
-action:** the Critical RLS-migration-not-applied above, and 6 lower-priority Medium/Low items recorded in the
-round-4 report rather than dropped. Verification: full vitest 1053/0 fail, full forge test 1040/0 fail (4
-pre-existing fork-test skips, unrelated).
+formula, causing spurious `SlippageExceeded` on typical small withdrawals); the gateway crons no longer send
+harvest/compound/deploy with a fixed gas literal (new `lib/gateway/gasEstimate.ts`, real `estimateContractGas`
++ buffer, floor-only-on-failure) and the harvest pre-simulate short-circuits a deterministic `NotDeployed`
+instead of paying gas for a guaranteed revert; the registry's reactivation `update()` now detects a lost
+concurrent-write race instead of silently logging stale metadata as success; deposit/withdraw cost-basis
+writes are now one atomic RPC per direction instead of two separate round-trips (closes a crash-window /
+lost-update race) — **but this needs its OWN migration applied to prod**
+(`20260909000001_gateway_position_atomic_writes.sql`), the same way the RLS one was, or those two routes 500
+until it's applied (on-chain funds are unaffected either way). **Reconciled by documentation, not code:**
+`compoundQuote()`'s deliberate no-principalCap-check design (the class doc comment used to contradict it) and
+`_idle()`'s donation-inflatable raw balance (an accepted, R3-INV-2-required tradeoff). **Still open, no code
+possible:** the sibling `gateway_alerts` migration (`20260907000003`), same root cause as the RLS Critical.
+Verification: full vitest 1066/0 fail, full forge test 1042/0 fail (4 pre-existing fork-test skips,
+unrelated).
 
 ## Off-chain ([`lib/gateway/*`](../../lib/gateway/), [`app/api/gateway/*`](../../app/api/gateway/))
 - **`registry.ts`** — the deposit-routing trust root. `registerInstance` **verifies the candidate PM on-chain**

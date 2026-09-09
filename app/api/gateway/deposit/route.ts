@@ -4,7 +4,6 @@ import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { resolveInstanceStrict } from '@/lib/gateway/routeInstance'
 import { bindSignedRecord } from '@/lib/gateway/recordAuth'
-import { nextDepositBasis } from '@/lib/gateway/basisMath'
 
 export const dynamic = 'force-dynamic'
 
@@ -78,49 +77,27 @@ export const POST = createHandler(async (req, ctx) => {
     args: [address as `0x${string}`],
   })) as bigint
 
-  // Idempotency gate: claim this tx in the event ledger BEFORE mutating the basis. A UNIQUE(tx_hash)
-  // conflict (23505) means the tx was already recorded → the additive basis update is skipped so a
-  // replay can't inflate entry_nav. Any other insert error is a hard failure.
-  const { error: evErr } = await ctx.supabase.from('gateway_deposit_events').insert({
-    tx_hash: txHash,
-    address,
-    kind: 'deposit',
-    pool_address: inst.poolAddress,
-    chain_id: inst.chainId,
-    quote_in: quoteIn.toString(),
+  // Round-4 audit fix (Medium): the idempotency claim (gateway_deposit_events) and the cost-basis
+  // increment (gateway_positions) used to be two separate round-trips — a crash between them silently
+  // stranded the missed increment forever, and two concurrent calls for the same wallet+pool could lose
+  // one's contribution to a lost-update race. Now one atomic RPC (supabase/migrations/
+  // 20260909000001_gateway_position_atomic_writes.sql) does both under a single transaction, with the
+  // increment expressed against the row's CURRENT value at write time rather than a value read earlier.
+  const { data: rpcData, error: rpcErr } = await ctx.supabase.rpc('record_gateway_deposit_event', {
+    p_tx_hash: txHash,
+    p_address: address,
+    p_pool_address: inst.poolAddress,
+    p_chain_id: inst.chainId,
+    p_quote_in: quoteIn.toString(),
+    p_on_chain_shares: onChainShares.toString(),
   })
-  const alreadyRecorded = evErr?.code === '23505'
-  if (evErr && !alreadyRecorded) {
-    ctx.log.error('gateway.deposit', 'event insert failed', { error: evErr.message })
+  if (rpcErr) {
+    ctx.log.error('gateway.deposit', 'record_gateway_deposit_event failed', { error: rpcErr.message })
     return ctx.json({ success: false, error: 'record_failed' }, 500)
   }
-
-  const { data: existing } = await ctx.supabase
-    .from('gateway_positions')
-    .select('entry_nav')
-    .eq('user_wallet', address)
-    .eq('pool_address', inst.poolAddress)
-    .eq('chain_id', inst.chainId)
-    .maybeSingle()
-  const priorBasis = existing?.entry_nav != null ? BigInt(String(existing.entry_nav)) : 0n
-  const costBasis = nextDepositBasis(priorBasis, quoteIn, alreadyRecorded)
-
-  // Shares are always synced from the on-chain truth (idempotent regardless of replay).
-  const { error } = await ctx.supabase.from('gateway_positions').upsert(
-    {
-      user_wallet: address,
-      pool_address: inst.poolAddress,
-      chain_id: inst.chainId,
-      shares: onChainShares.toString(),
-      entry_nav: costBasis.toString(),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_wallet,pool_address,chain_id' },
-  )
-  if (error) {
-    ctx.log.error('gateway.deposit', 'upsert failed', { error: error.message })
-    return ctx.json({ success: false, error: 'record_failed' }, 500)
-  }
+  const row = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as { cost_basis_atomic: string | number; already_recorded: boolean } | undefined
+  const costBasis = row?.cost_basis_atomic != null ? BigInt(String(row.cost_basis_atomic)) : 0n
+  const alreadyRecorded = row?.already_recorded ?? false
 
   return ctx.json({ success: true, sharesMinted, shares: onChainShares, costBasisAtomic: costBasis, idempotentReplay: alreadyRecorded })
 }, { auth: 'signed-message', action: 'mintware-gateway-deposit' })

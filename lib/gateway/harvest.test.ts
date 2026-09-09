@@ -13,7 +13,7 @@ const COMPOUND_TX = ('0x' + '33'.repeat(32)) as `0x${string}`
 const GROSS = 10_000_000n
 let compoundDeferredNextCompound = false
 
-const writes: Array<{ functionName: string; args?: unknown[] }> = []
+const writes: Array<{ functionName: string; args?: unknown[]; gas?: bigint }> = []
 const publicClient = {
   chain: { id: 46630 },
   readContract: vi.fn(async ({ functionName }: { functionName: string }) => {
@@ -21,6 +21,7 @@ const publicClient = {
     throw new Error(`unexpected read ${functionName}`)
   }),
   simulateContract: vi.fn(async () => ({ result: [GROSS, 0n] })),
+  estimateContractGas: vi.fn(async () => 500_000n),
   waitForTransactionReceipt: vi.fn(async ({ hash }: { hash: string }) => ({
     status: 'success',
     blockNumber: 500n,
@@ -47,8 +48,8 @@ vi.mock('@/lib/gateway/routerSwap', () => ({
 vi.mock('viem', async (orig) => ({
   ...(await orig<typeof import('viem')>()),
   createWalletClient: () => ({
-    writeContract: async (a: { functionName: string; args?: unknown[] }) => {
-      writes.push({ functionName: a.functionName, args: a.args })
+    writeContract: async (a: { functionName: string; args?: unknown[]; gas?: bigint }) => {
+      writes.push({ functionName: a.functionName, args: a.args, gas: a.gas })
       return a.functionName === 'compoundQuote' ? COMPOUND_TX : a.functionName === 'approve' ? ('0x' + '22'.repeat(32)) : COLLECT_TX
     },
   }),
@@ -180,6 +181,50 @@ describe('harvestGateway', () => {
     expect(r).toMatchObject({ ok: false, reason: 'nothing' })
     expect(writes).toHaveLength(0)
     expect(indexMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('round-4 audit fix: a deterministic NotDeployed revert on the pre-simulate short-circuits (no real tx sent), instead of falling through to a guaranteed-revert real transaction', async () => {
+    publicClient.simulateContract.mockRejectedValueOnce(new Error('ContractFunctionExecutionError: execution reverted: NotDeployed()'))
+    indexMock.mockResolvedValue(okIndex({ harvestLogs: 0, creditedAtomic: 0n }))
+    const { client } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r).toMatchObject({ ok: false, reason: 'nothing', error: 'pre-harvest simulate: NotDeployed' })
+    expect(writes).toHaveLength(0) // no real tx sent — the old behavior fell through and paid real gas for a guaranteed revert
+    expect(indexMock).toHaveBeenCalledTimes(1) // prior sweeps are still indexed even when skipped
+  })
+
+  it('round-4 audit fix: a TRANSIENT pre-simulate failure (not a deterministic contract revert) still falls through to the real tx, unchanged from before', async () => {
+    publicClient.simulateContract.mockRejectedValueOnce(new Error('HttpRequestError: timeout of 10000ms exceeded'))
+    indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+    pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
+    const { client } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r.ok).toBe(true)
+    expect(writes.map((w) => w.functionName)).toEqual(['harvest', 'approve', 'compoundQuote'])
+  })
+
+  it('round-4 audit fix: harvest() and compoundQuote() gas is a real estimate (buffered), not the old fixed literal, when estimation succeeds', async () => {
+    indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+    pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
+    const { client } = fakeDb()
+    await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    const harvestWrite = writes.find((w) => w.functionName === 'harvest')
+    const compoundWrite = writes.find((w) => w.functionName === 'compoundQuote')
+    // mock estimateContractGas returns 500_000n; buffered +75% = 875_000n — below the old fixed floors
+    // (900_000n / 400_000n), so the floor still wins for harvest but the estimate wins for compound.
+    expect(harvestWrite?.gas).toBe(900_000n) // floor: 875_000n < 900_000n
+    expect(compoundWrite?.gas).toBe(875_000n) // estimate wins: 875_000n > 400_000n
+  })
+
+  it('round-4 audit fix: a legitimately heavier paired-token transfer now gets a real gas budget instead of silently reverting forever under the old fixed floor', async () => {
+    publicClient.estimateContractGas.mockResolvedValueOnce(1_100_000n) // exceeds the old fixed 900_000n floor
+    indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+    pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
+    const { client } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r.ok).toBe(true) // would have needed more gas than the old 900_000n literal ever allowed
+    const harvestWrite = writes.find((w) => w.functionName === 'harvest')
+    expect(harvestWrite?.gas).toBeGreaterThan(900_000n)
   })
 
   it('fails closed when disabled', async () => {

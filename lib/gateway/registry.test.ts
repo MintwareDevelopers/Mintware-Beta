@@ -259,7 +259,10 @@ function fakeDb(seed: Row[] = []) {
       calls.push({ table, op, payload })
       if (op === 'select') return { data: hit(), error: null }
       if (op === 'insert') { rows.push({ id: `row-${++seq}`, ...payload }); return { data: null, error: null } }
-      if (op === 'update') { for (const r of hit()) Object.assign(r, payload); return { data: null, error: null } }
+      // Mimics real Supabase/PostgREST: an update with a WHERE clause that matches zero rows returns
+      // `data: []`, not an error — the production code's `.select('id')` after `.update()` relies on
+      // exactly this shape to detect a lost-race concurrent-write conflict (round-4 audit fix).
+      if (op === 'update') { const matched = hit(); for (const r of matched) Object.assign(r, payload); return { data: matched, error: null } }
       throw new Error('upsert is forbidden — the registry must never upsert (O-3 d)')
     }
     const b = {
@@ -356,6 +359,37 @@ describe('registerInstance — verified, read-before-write, logged (O-3 d/e)', (
     expect(calls.find((c) => c.op === 'update')).toBeTruthy()
     expect(tables.gateway_instances[0]).toMatchObject({ status: 'active', position_manager: PM, deactivated_at: null })
     expect(tables.gateway_instance_history.at(-1)).toMatchObject({ action: 'register', prev_position_manager: EVIL_PM })
+  })
+
+  it('round-4 audit fix (Low): a concurrent race that flips the row to active between our read and write is detected as a conflict, not silently reported as success with stale metadata', async () => {
+    const { client: rawBaseClient, tables } = fakeDb([liveRow({ status: 'inactive', position_manager: EVIL_PM })])
+    const baseClient = rawBaseClient as unknown as { from: (t: string) => { maybeSingle: () => Promise<unknown> } }
+    let fromCalls = 0
+    const client = {
+      from: (table: string) => {
+        const b = baseClient.from(table)
+        if (table === 'gateway_instances' && ++fromCalls === 1) {
+          // This IS the read-before-write call. As a side effect, simulate another writer's
+          // concurrent activation landing in the gap between our read and our own write below —
+          // exactly the race window PostgREST's silent zero-row update used to hide.
+          const origMaybeSingle = b.maybeSingle
+          b.maybeSingle = async () => {
+            const r = await origMaybeSingle()
+            // Replace (not mutate in place) — a real read returns a SNAPSHOT, so registerInstance's
+            // `ex` must keep seeing the stale 'inactive' value it already read, exactly like a real
+            // race: the row changes in the DB, but the in-flight caller's local copy doesn't know yet.
+            tables.gateway_instances[0] = { ...tables.gateway_instances[0], status: 'active' }
+            return r
+          }
+        }
+        return b
+      },
+    }
+    const res = await registerInstance(client as never, base, { client: mockChain(), trust: trustFactory })
+    expect(res).toEqual({ ok: false, error: 'concurrent_activation_conflict' })
+    // The row is left exactly as the OTHER writer left it — our metadata was never applied.
+    expect(tables.gateway_instances[0]).toMatchObject({ status: 'active', position_manager: EVIL_PM })
+    expect(tables.gateway_instance_history.at(-1)).toMatchObject({ action: 'refused', reason: 'concurrent_activation_conflict' })
   })
 
   it('operator attestation path: explicit + logged, never silent; still needs LP_GATEWAY_USDG', async () => {

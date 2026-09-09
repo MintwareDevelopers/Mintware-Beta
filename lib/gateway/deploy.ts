@@ -21,6 +21,7 @@ import { listActiveInstances, computePoolId } from '@/lib/gateway/registry'
 import { readCurrentTick, type GatewayPoolKey } from '@/lib/gateway/poolState'
 import { getSqrtPriceAtTick, getLiquidityForAmounts, isInRange, applyToleranceBps, quoteToPairedAtSpot, Q96 } from '@/lib/gateway/v4Math'
 import { fetchHotPools, type PoolCandidate } from '@/lib/gateway/discovery'
+import { estimateGasWithFloor } from '@/lib/gateway/gasEstimate'
 
 export type DeployInstance = { positionManager: `0x${string}`; staging: `0x${string}` }
 
@@ -348,11 +349,16 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
     // M-03 slippage floor (absolute L units) — spot-computed per pool above; deploy() reverts below it.
     // Earn-vs-LP decision: `swapAmount`/`minPairedOut` replace the old owner-supplied `pairedAmount` — the
     // contract executes the zap itself.
-    const deployTx = await wallet.writeContract({
+    // Round-4 audit fix (Medium): estimate for real instead of a fixed 1_200_000n literal — deploy()'s
+    // in-contract zap swap makes it the single heaviest gateway call, so it's also the most exposed to a
+    // paired token whose real transfer cost drifts above a fixed budget over time.
+    const deployArgs = {
       address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'deploy',
       args: [quoteToDeploy, swapAmount, minPairedOut, minLiquidity, BigInt(Math.floor(Date.now() / 1000) + 600)],
-      account, chain: publicClient.chain, gas: 1_200_000n,
-    })
+      account,
+    } as const
+    const { gas: deployGas } = await estimateGasWithFloor(publicClient, deployArgs, 1_200_000n)
+    const deployTx = await wallet.writeContract({ ...deployArgs, chain: publicClient.chain, gas: deployGas })
     const receipt = await publicClient.waitForTransactionReceipt({ hash: deployTx })
     if (receipt.status !== 'success') return { ok: false, status: 502, error: 'deploy_reverted', reason: 'tx' }
 

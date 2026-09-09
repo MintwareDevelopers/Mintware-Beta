@@ -4,7 +4,6 @@ import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { resolveInstanceStrict } from '@/lib/gateway/routeInstance'
 import { bindSignedRecord } from '@/lib/gateway/recordAuth'
-import { nextWithdrawBasis } from '@/lib/gateway/basisMath'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,45 +74,28 @@ export const POST = createHandler(async (req, ctx) => {
     args: [address as `0x${string}`],
   })) as bigint
 
-  // Idempotency gate: claim this tx BEFORE reducing the basis. A UNIQUE(tx_hash) conflict means the
-  // withdraw was already recorded → the proportional reduction is skipped so a replay can't deflate the
-  // basis repeatedly (which would fabricate a growing "loss" on the dashboard).
-  const { error: evErr } = await ctx.supabase.from('gateway_deposit_events').insert({
-    tx_hash: txHash,
-    address,
-    kind: 'withdraw',
-    pool_address: inst.poolAddress,
-    chain_id: inst.chainId,
-    quote_out: quoteOut.toString(),
+  // Round-4 audit fix (Medium): same atomicity fix as the deposit route (see its comment) — one RPC
+  // does the idempotency claim + proportional basis reduction under a single transaction, with the
+  // reduction expressed against the row's CURRENT value at write time.
+  const { data: rpcData, error: rpcErr } = await ctx.supabase.rpc('record_gateway_withdraw_event', {
+    p_tx_hash: txHash,
+    p_address: address,
+    p_pool_address: inst.poolAddress,
+    p_chain_id: inst.chainId,
+    p_quote_out: quoteOut.toString(),
+    p_on_chain_shares: onChainShares.toString(),
+    p_shares_burned: sharesBurned.toString(),
   })
-  const alreadyRecorded = evErr?.code === '23505'
-  if (evErr && !alreadyRecorded) {
-    ctx.log.error('gateway.withdraw', 'event insert failed', { error: evErr.message })
+  if (rpcErr) {
+    ctx.log.error('gateway.withdraw', 'record_gateway_withdraw_event failed', { error: rpcErr.message })
     return ctx.json({ success: false, error: 'record_failed' }, 500)
   }
-
-  const { data: existing } = await ctx.supabase
-    .from('gateway_positions')
-    .select('id, entry_nav')
-    .eq('user_wallet', address)
-    .eq('pool_address', inst.poolAddress)
-    .eq('chain_id', inst.chainId)
-    .maybeSingle()
-
-  // Reduce cost basis proportionally to the shares burned (fully exit ⇒ 0); unchanged on a replay.
-  const priorBasis = existing?.entry_nav != null ? BigInt(String(existing.entry_nav)) : 0n
-  const newBasis = nextWithdrawBasis(priorBasis, onChainShares, sharesBurned, alreadyRecorded)
-
-  if (existing?.id) {
-    // Shares always sync to on-chain truth; basis stays put on a replay.
-    await ctx.supabase
-      .from('gateway_positions')
-      .update({ shares: onChainShares.toString(), entry_nav: newBasis.toString(), updated_at: new Date().toISOString() })
-      .eq('id', existing.id)
-  }
-  // No row ⇒ the deposit was never recorded (O-1 legacy). Deliberately NOT creating one here: entry_nav
-  // is NOT NULL DEFAULT 0, so a synthetic row would fabricate a "gain" equal to the whole position. The
-  // Portfolio is chain-first and shows the position (basis unknown) regardless.
+  const row = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as { cost_basis_atomic: string | number | null; already_recorded: boolean; position_found: boolean } | undefined
+  // No row ⇒ the deposit was never recorded (O-1 legacy) — the RPC deliberately does not synthesize one
+  // (entry_nav defaults to 0, so a synthetic row would fabricate a "gain" equal to the whole position).
+  // The Portfolio is chain-first and shows the position (basis unknown) regardless.
+  const newBasis = row?.position_found && row.cost_basis_atomic != null ? BigInt(String(row.cost_basis_atomic)) : 0n
+  const alreadyRecorded = row?.already_recorded ?? false
 
   return ctx.json({ success: true, sharesBurned, quoteOut, pairedOut, shares: onChainShares, costBasisAtomic: newBasis, idempotentReplay: alreadyRecorded })
 }, { auth: 'signed-message', action: 'mintware-gateway-withdraw' })
