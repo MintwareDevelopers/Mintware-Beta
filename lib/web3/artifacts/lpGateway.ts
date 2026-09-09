@@ -62,6 +62,12 @@ export const LP_GATEWAY_ABI = [
   { type: 'function', stateMutability: 'view', name: 'deployedPairedValue', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'principalCap', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'nonpayable', name: 'setPrincipalCap', inputs: [{ name: 'cap', type: 'uint256' }], outputs: [] },
+  { type: 'event', name: 'Compounded', inputs: [{ name: 'quoteAmount', type: 'uint256', indexed: false }] },
+  // IA-4: the yield source (idle-adapter depositCap or a real 4626's supply cap) was full, so the
+  // harvested quote stayed parked in the PM's own balance instead of being staged — NAV was still
+  // lifted (the PM's `_idle()` counts its own raw balance), just not yet earning. Purely informational
+  // for the harvest cron; the next deploy's re-stage sweeps it up.
+  { type: 'event', name: 'CompoundDeferred', inputs: [{ name: 'amount', type: 'uint256', indexed: false }] },
   {
     type: 'event',
     name: 'Deployed',

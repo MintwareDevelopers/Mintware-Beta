@@ -54,6 +54,10 @@ export type HarvestOutcome =
       recipients: number
       destination: HarvestDestination
       index: IndexOutcome | null
+      // IA-4: true when the on-chain `compoundQuote` deferred re-staging (the yield source's cap was
+      // full) — NAV was still lifted (the harvested quote sits in the PM's own balance, which its
+      // `_idle()` counts fully), just not yet earning; purely informational, nothing to retry here.
+      compoundDeferred?: boolean
     }
   | { ok: false; status: number; error: string; reason: Reason; index?: IndexOutcome | null }
 
@@ -255,6 +259,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     }
     let ch: `0x${string}` | undefined
     let mined = false
+    let compoundDeferred = false
     try {
       const quoteAsset = (await publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset' })) as `0x${string}`
       const ah = await wallet.writeContract({ address: quoteAsset, abi: ERC20_APPROVE_ABI, functionName: 'approve', args: [instance.positionManager, amount], account, chain: publicClient.chain })
@@ -265,6 +270,20 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
       if (!mined) {
         await releaseRestake(supabase, pending.ids).catch((e) => log?.error('gateway.harvest', 'restake release failed after revert', { error: String(e) }))
         return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx', index }
+      }
+      // IA-4: `compoundQuote` never reverts on a full yield-source cap — it defers the re-stage instead
+      // (`CompoundDeferred`) and the harvested quote just sits in the PM's own balance, which its own
+      // `_idle()` already counts toward NAV. Purely informational: log it so an operator can see the
+      // yield source is at capacity, but there is nothing to retry or release here.
+      for (const lg of rc.logs ?? []) {
+        if (lg.address?.toLowerCase() !== instance.positionManager.toLowerCase()) continue
+        try {
+          const ev = decodeEventLog({ abi: LP_GATEWAY_ABI, data: lg.data, topics: lg.topics })
+          if (ev.eventName === 'CompoundDeferred') compoundDeferred = true
+        } catch { /* not a gateway event */ }
+      }
+      if (compoundDeferred) {
+        log?.warn('gateway.harvest', 'compound deferred re-staging — yield source at capacity; harvested quote parked in the PM, NAV still lifted', { pool: instance.poolAddress, amount: amount.toString() })
       }
     } catch (e) {
       log?.error('gateway.harvest', 'restake/compound failed', { error: String(e) })
@@ -286,7 +305,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
       return { ok: false, status: 500, error: 'restake_mark_failed', reason: 'tx', index }
     }
     await record(amount)
-    return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: amount, recipients: 0, destination, index }
+    return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: amount, recipients: 0, destination, index, compoundDeferred }
   }
 
   // 4b) BUFFER (opt-in): the index step already wrote every per-depositor credit atomically. Nothing moves

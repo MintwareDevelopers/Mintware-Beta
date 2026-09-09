@@ -11,6 +11,7 @@ const POOL = '0x' + 'ab'.repeat(32)
 const COLLECT_TX = ('0x' + '11'.repeat(32)) as `0x${string}`
 const COMPOUND_TX = ('0x' + '33'.repeat(32)) as `0x${string}`
 const GROSS = 10_000_000n
+let compoundDeferredNextCompound = false
 
 const writes: Array<{ functionName: string; args?: unknown[] }> = []
 const publicClient = {
@@ -27,6 +28,10 @@ const publicClient = {
       address: PM,
       topics: encodeEventTopics({ abi: LP_GATEWAY_ABI, eventName: 'Harvested', args: { recipient: SEAT } }),
       data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [GROSS, 0n]),
+    }] : hash === COMPOUND_TX && compoundDeferredNextCompound ? [{
+      address: PM,
+      topics: encodeEventTopics({ abi: LP_GATEWAY_ABI, eventName: 'CompoundDeferred' }),
+      data: encodeAbiParameters([{ type: 'uint256' }], [10_800_000n]),
     }] : [],
   })),
 }
@@ -97,6 +102,7 @@ const okIndex = (over: Partial<Record<string, unknown>> = {}) => ({ ok: true, fr
 
 beforeEach(() => {
   writes.length = 0
+  compoundDeferredNextCompound = false
   indexMock.mockReset(); pendingMock.mockReset(); markMock.mockReset(); claimMock.mockClear(); releaseMock.mockClear()
   process.env.LP_GATEWAY_HARVEST_ENABLED = 'true'
   process.env.LP_GATEWAY_PERF_FEE_BPS = '1000'
@@ -128,6 +134,19 @@ describe('harvestGateway', () => {
     expect(releaseMock).not.toHaveBeenCalled()
     expect(touched.has('card_spend_buffers:update')).toBe(false)
     expect(tables.harvest_events[0]).toMatchObject({ collect_tx: COLLECT_TX, amount_harvested_atomic: '10000000', fee_skimmed_atomic: '1000000', amount_credited_atomic: '10800000' })
+  })
+
+  it('IA-4: compoundQuote defers re-staging (yield source at capacity) — NAV-lifting compound still records, compoundDeferred surfaced for the operator, no release/retry', async () => {
+    compoundDeferredNextCompound = true
+    indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+    pendingMock.mockResolvedValue({ ids: ['log-1', 'log-2'], netAtomic: 9_000_000n + 1_800_000n })
+    const { client, tables } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r).toMatchObject({ ok: true, destination: 'restake', creditedAtomic: 10_800_000n, compoundDeferred: true })
+    // still marks restaked (the compound MINED — NAV rose either way) and still records the harvest event
+    expect(markMock).toHaveBeenCalledWith(expect.anything(), ['log-1', 'log-2'], COMPOUND_TX)
+    expect(releaseMock).not.toHaveBeenCalled()
+    expect(tables.harvest_events[0]).toMatchObject({ amount_credited_atomic: '10800000' })
   })
 
   it("Earn-vs-LP decision (2026-09-08): setting LP_GATEWAY_HARVEST_DESTINATION='buffer' no longer does anything -- the A-4 buffer path is dropped, so harvest still restakes", async () => {
