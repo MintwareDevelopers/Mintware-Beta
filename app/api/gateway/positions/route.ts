@@ -11,8 +11,9 @@ export const dynamic = 'force-dynamic'
 // rows, or the env rig while the registry is empty), read `sharesOf` for the wallet on each, and surface
 // every pool with shares > 0. The wallet's `gateway_positions` rows are ENRICHMENT only (cost basis +
 // whether the deposit was recorded) — a depositor whose record call failed still sees their position.
-// Like the single-pool GET, it discloses only chain-derivable figures; the off-chain spendable buffer
-// stays private and is read per-pool via the owner-signed POST /api/gateway/position (L-03).
+// Like the single-pool GET, it discloses only chain-derivable figures. Earn-vs-LP decision (2026-09-08):
+// the off-chain spendable-buffer reveal (POST /api/gateway/position, L-03) is no longer called by the
+// frontend — the A-4 buffer-credit path is dropped, so it would always answer 0. Left in place as inert.
 export const GET = createHandler(async (req, ctx) => {
   const cfg = gatewayConfig()
   if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)

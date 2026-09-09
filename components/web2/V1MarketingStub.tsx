@@ -31,8 +31,8 @@ export function V1MarketingStub({ topic, headline, blurb, live }: { topic: strin
             <div className="mt-8 soft-card p-[22px] max-w-[440px]">
               <div className="text-[13px] font-semibold text-ink">The live product today</div>
               <p className="text-[13.5px] text-ink-mid mt-1.5 leading-[1.55]">
-                Deposit USDG into a curated Robinhood Chain pool, earn trading fees, and spend the fees —
-                never your principal. That&rsquo;s live now.
+                Deposit USDG into a curated Robinhood Chain pool — your full deposit earns trading fees,
+                compounded back into your position. That&rsquo;s live now.
               </p>
               <button onClick={() => launch()} className="glass-pill-primary mt-4">Launch the app →</button>
             </div>

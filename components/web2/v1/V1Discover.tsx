@@ -44,11 +44,10 @@ const slug = (p: Pool) => encodeURIComponent(p.poolAddress.toLowerCase())
 const aprFmt = (n: number | null) => (n == null ? '—' : n >= 1000 ? `${Math.round(n).toLocaleString('en-US')}%` : `${n.toFixed(1)}%`)
 // strip the trailing fee off the GeckoTerminal name so the row shows a clean pair; the fee gets its own chip.
 const pairName = (p: Pool) => (p.baseSymbol && p.quoteSymbol ? `${p.baseSymbol} / ${p.quoteSymbol}` : (p.pairLabel || short(p.poolAddress)).replace(/\s*\d[\d.]*\s*%\s*$/, ''))
-// Earnings simulator: est. fees/yr on a deposit = amount × pool fee-APR × ~50% (only ~half is deployed as
-// liquidity; the idle half earns Morpho lending, not counted here). Matches the /earn/[pool] page math.
-// An estimate off the trailing-24h fee rate, gross of impermanent loss — never a promise.
-const DEPLOYED_SHARE = 0.5
-const projFeesYr = (p: Pool, amount: number) => (p.estFeeAprPct != null && amount > 0 ? amount * (p.estFeeAprPct / 100) * DEPLOYED_SHARE : null)
+// Earnings simulator: est. fees/yr on a deposit = amount × pool fee-APR (earn-vs-lp decision: 100% of a
+// deposit is deployed as liquidity — no held-back reserve). Matches the /earn/[pool] page math. An estimate
+// off the trailing-24h fee rate, gross of impermanent loss — never a promise.
+const projFeesYr = (p: Pool, amount: number) => (p.estFeeAprPct != null && amount > 0 ? amount * (p.estFeeAprPct / 100) : null)
 const projFmt = (n: number) => (n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(0)}`)
 
 function risk(score: number): { label: string; color: string } {
@@ -118,11 +117,11 @@ export function V1Discover() {
       <div className="text-[12px] uppercase tracking-[0.13em] font-semibold" style={{ color: '#8A82F4' }}>Earn · Robinhood Chain</div>
       <h1 className="font-atx-display font-semibold tracking-[-0.035em] leading-[1.05] text-[clamp(1.7rem,3.4vw,2.4rem)] mt-2.5 max-w-[26ch]">
         Put USDG to work in curated pools —{' '}
-        <span style={{ backgroundImage: 'linear-gradient(100deg,#8A82F4,#F0A183)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>spend from the yield.</span>
+        <span style={{ backgroundImage: 'linear-gradient(100deg,#8A82F4,#F0A183)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>never locked.</span>
       </h1>
       <p className="text-[14.5px] leading-[1.6] mt-3 max-w-[58ch]" style={{ color: '#9B9BAD' }}>
-        Deposit USDG. It earns while staged, then provides liquidity to a pool we&rsquo;ve screened — and a
-        liquid buffer stays spendable. You spend the yield, never your position.
+        Deposit USDG — your full deposit is paired into a pool we&rsquo;ve screened and earns trading fees,
+        compounded back into your position. Withdraw anytime for both legs.
       </p>
 
       {/* stats strip */}
@@ -237,7 +236,7 @@ export function V1Discover() {
           ))}
         </div>
         <span className="text-[11.5px] max-[720px]:w-full min-[721px]:ml-auto" style={{ color: '#4A4A55' }}>
-          → est. fees/yr per pool below · ~50% deployed, gross of IL · an estimate, not a projection
+          → est. fees/yr per pool below · once fully deployed, gross of IL · an estimate, not a projection
         </span>
       </div>
 

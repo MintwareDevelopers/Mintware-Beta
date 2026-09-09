@@ -35,7 +35,7 @@ export function V1Referrals() {
   }
   const share = () => {
     if (!refLink) return
-    const text = encodeURIComponent(`Put idle USDG to work in curated Robinhood-Chain pools with Mintware — earn, and spend from the yield. ${refLink}`)
+    const text = encodeURIComponent(`Put USDG to work in curated Robinhood-Chain pools with Mintware — earn trading fees, compounded back in. ${refLink}`)
     window.open(`https://twitter.com/intent/tweet?text=${text}`, '_blank', 'noopener')
   }
 

@@ -186,5 +186,5 @@ function VaultsPageV2() {
 
 
 export default function VaultsPage() {
-  return useV2Mode() ? <VaultsPageV2 /> : <V1MarketingStub topic="Earn" headline="Curated pools, one deposit." blurb="Deposit USDG into a screened Robinhood Chain pool. It earns while staged, then earns a share of the pool trading fees, and you spend the fees, not your principal." live={true} />
+  return useV2Mode() ? <VaultsPageV2 /> : <V1MarketingStub topic="Earn" headline="Curated pools, one deposit." blurb="Deposit USDG into a screened Robinhood Chain pool — your full deposit is deployed as liquidity and earns a share of the pool's trading fees, compounded back into your position." live={true} />
 }

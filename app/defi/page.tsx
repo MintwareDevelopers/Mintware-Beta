@@ -255,5 +255,5 @@ function DefiLandingPageV2() {
 
 export default async function DefiLandingPage() {
   const isV2 = isV2FromCookie((await cookies()).get(V2_COOKIE)?.value)
-  return isV2 ? <DefiLandingPageV2 /> : <V1MarketingStub topic="DeFi" headline="Earn on the pools. Spend the fees." blurb="LP into a curated Robinhood Chain pool, earn trading fees, and spend the fees, never your principal. No range to pick, no rebalancing." live={true} />
+  return isV2 ? <DefiLandingPageV2 /> : <V1MarketingStub topic="DeFi" headline="Earn on the pools. Never locked." blurb="LP into a curated Robinhood Chain pool with your full deposit — earn trading fees, compounded back into your position. No range to pick, no rebalancing." live={true} />
 }

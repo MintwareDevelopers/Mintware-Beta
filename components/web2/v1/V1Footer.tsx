@@ -67,7 +67,7 @@ export function V1Footer() {
             </div>
             <p className="text-[13.5px] leading-[1.6] mt-3.5 max-w-[34ch]" style={{ color: '#9B9BAD' }}>
               Never idle. Never locked. Always yours. — put USDG to work in curated Robinhood-Chain pools and
-              spend from the yield.
+              earn trading fees, compounded back in.
             </p>
             <span className="inline-flex items-center gap-1.5 mt-4 text-[11.5px] font-semibold px-2.5 py-1 rounded-full" style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.1)' }}>
               <span style={{ width: 6, height: 6, borderRadius: 99, background: '#F0B45E' }} />

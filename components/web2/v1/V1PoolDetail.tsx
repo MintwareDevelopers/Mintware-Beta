@@ -3,7 +3,13 @@
 // /earn/[pool] — dark two-column pool terminal (Meteora DAMM-v2 detail as the standard), adapted to our
 // single-sided USDG model. LEFT: pool-info panel (TVL, curated allocation + fixed range, current price,
 // 24h vol/activity, age/trades, pool id, explorer links, trust score + reasons). RIGHT: position
-// summary + Deposit/Withdraw tabs + a Swap tab link. Idle-buffer-spend copy; no par/guaranteed language.
+// summary + Deposit/Withdraw tabs + a Swap tab link. No par/guaranteed language.
+//
+// Earn-vs-LP decision (2026-09-08, docs/developers/lp-gateway-earn-vs-lp-decision.md): 100% of a deposit is
+// deployed as liquidity once the owner deploys (no held-back reserve; the old ~50%-idle-in-Morpho split and
+// the "spendable buffer" it fed are both gone — harvest always restakes fees into NAV now). Deposit is
+// USDG-only, single-input — no Krystal-style zap from any token yet (tracked as a stretch goal in the
+// decision doc, not built).
 //
 // Money path (round-2 audit closeout, 2026-09-08):
 //   · O-2  — the route param is the pool's registry key (v4 poolId). Funds go ONLY to the position
@@ -21,7 +27,6 @@ import Link from 'next/link'
 import { createWalletClient, createPublicClient, custom, http, parseUnits, formatUnits } from 'viem'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
-import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { buildGatewayDepositMessage, buildGatewayWithdrawMessage } from '@/lib/web3/signedActionMessages'
@@ -125,8 +130,6 @@ export function V1PoolDetail({ slug }: { slug: string }) {
   }, [address, slug])
   useEffect(() => { void fetchPosition() }, [fetchPosition])
 
-  // Buffer is owner-gated (audit L-03): revealed only after the wallet signs. Position value below is public.
-  const { buffer: bufAtomic, revealed, revealing, reveal } = useGatewayBuffer(address, slug)
   // Real trailing yield, Meteora-style: 24h fees ÷ TVL, annualized. 24h fees = 24h volume × fee tier.
   const feeRate = meta?.feePips != null ? meta.feePips / 1e6 : null
   const dayFeesUsd = feeRate != null && m ? m.vol24Usd * feeRate : null
@@ -139,8 +142,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
 
   const busy = status === 'quote' || status === 'switch' || status === 'approve' || status === 'deposit' || status === 'withdraw' || status === 'record'
   const working = num(pos?.positionValueAtomic)
-  const buffer = num(bufAtomic)
-  const hasPos = working + buffer > 0 || (pos?.shares != null && BigInt(pos.shares) > 0n)
+  const hasPos = working > 0 || (pos?.shares != null && BigInt(pos.shares) > 0n)
 
   // O-2 client-side invariant: the PM we would fund fronts EXACTLY the pool in the URL, and it came from
   // the registry (or the tagged env rig while the registry is empty). Anything else ⇒ no deposit button.
@@ -361,7 +363,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <span>⚠</span>
           <span>
             <span style={{ fontWeight: 600 }}>Out of range ~{Math.max(1, Math.round((Date.now() - Date.parse(alert.sinceIso)) / 36e5))}h — LP fees paused.</span>{' '}
-            <span style={{ color: '#9B9BAD' }}>Your USDG is still earning in Morpho; the LP leg resumes automatically when price re-enters the range.</span>
+            <span style={{ color: '#9B9BAD' }}>Your position is still fully deployed (no yield accrues while out of range); fees resume automatically when price re-enters the range.</span>
           </span>
         </div>
       )}
@@ -376,18 +378,16 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           {/* allocation */}
           <div className="text-[12px] uppercase tracking-[0.08em] font-semibold mt-6" style={{ color: '#63636F' }}>How your USDG is put to work</div>
           <div className="flex h-4 rounded-full overflow-hidden mt-3">
-            <span style={{ width: '50%', background: 'linear-gradient(90deg,#8A82F4,#6C6CF0)' }} />
-            <span style={{ width: '50%', background: 'rgba(138,130,244,0.22)' }} />
+            <span style={{ width: '100%', background: 'linear-gradient(90deg,#8A82F4,#6C6CF0)' }} />
           </div>
           <div className="flex flex-col gap-2 mt-3 text-[13px]">
-            <AllocRow color="#8A82F4" label={`Deployed in ${base}`} sub="earns trading fees" pct="≤50%" />
-            <AllocRow color="rgba(138,130,244,0.35)" label="Idle in Morpho" sub="earns lending yield · zero IL" pct="≥50%" />
+            <AllocRow color="#8A82F4" label={`Deployed as liquidity in ${base}/${quote}`} sub="your full deposit — no held-back reserve" pct="100%" />
           </div>
           <div className="relative h-9 mt-4 rounded-[10px] overflow-hidden" style={INNER}>
             <div className="absolute inset-y-0" style={{ left: '12%', right: '12%', background: 'linear-gradient(180deg,rgba(138,130,244,0.28),rgba(138,130,244,0.08))', borderLeft: '2px solid rgba(138,130,244,0.5)', borderRight: '2px solid rgba(138,130,244,0.5)' }} />
             <div className="absolute inset-y-0" style={{ left: '50%', width: '2px', background: '#F4F4FA' }} />
           </div>
-          <div className="text-[11.5px] mt-1.5" style={{ color: '#63636F' }}>Fixed wide range (~10× up / −90% down) — always in range, no rebalancing.</div>
+          <div className="text-[11.5px] mt-1.5" style={{ color: '#63636F' }}>Fixed wide range (~10× up / −90% down) — always in range, no rebalancing. Carries impermanent loss — 100% of it is yours; Mintware supplies no capital to the position.</div>
 
           {/* metadata rows */}
           <div className="mt-6 flex flex-col">
@@ -433,24 +433,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
         <div className="flex flex-col gap-5 min-[900px]:order-2 order-1">
           {/* position summary */}
           <div className="rounded-[16px] p-5" style={PANEL}>
-            <div className="grid grid-cols-2 gap-4">
-              <Sum k="Position value" v={usdg(pos?.positionValueAtomic)} />
-              {revealed ? (
-                <Sum k="Spendable buffer" v={usdg(bufAtomic)} accent />
-              ) : (
-                <div>
-                  <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Spendable buffer</div>
-                  <button
-                    onClick={reveal}
-                    disabled={revealing || !isConnected}
-                    className="font-mono font-bold text-[15px] mt-1 cursor-pointer disabled:cursor-default text-left"
-                    style={{ color: '#8A82F4' }}
-                  >
-                    {!isConnected ? 'Connect to view' : revealing ? 'Verifying…' : 'Verify to view →'}
-                  </button>
-                </div>
-              )}
-            </div>
+            <Sum k="Position value" v={usdg(pos?.positionValueAtomic)} />
             {hasPos && pos?.recorded === false && (
               <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#F0B45E' }}>
                 Position read from chain; its deposit was never recorded here, so cost basis and P&amp;L are unknown. Your funds are unaffected.
@@ -509,10 +492,10 @@ export function V1PoolDetail({ slug }: { slug: string }) {
                   <div className="mt-3 rounded-[12px] p-3" style={INNER}>
                     <div className="flex justify-between text-[12.5px]">
                       <span style={{ color: '#9B9BAD' }}>Est. fees / yr at current pace</span>
-                      <span className="font-mono font-bold" style={{ color: '#34D399' }}>~{usd(Number(amount) * (estAprPct / 100) * 0.5)}</span>
+                      <span className="font-mono font-bold" style={{ color: '#34D399' }}>~{usd(Number(amount) * (estAprPct / 100))}</span>
                     </div>
                     <div className="text-[11px] mt-1.5 leading-[1.5]" style={{ color: '#63636F' }}>
-                      On the ~50% deployed as liquidity, at the trailing-24h fee rate — an estimate, not a projection. The rest earns Morpho lending; fees are gross of impermanent loss.
+                      On your full deposit once deployed, at the trailing-24h fee rate — an estimate, not a projection. Fees are gross of impermanent loss; 100% of any IL is yours.
                     </div>
                   </div>
                 )}
@@ -595,9 +578,9 @@ export function V1PoolDetail({ slug }: { slug: string }) {
           <div className="rounded-[16px] p-5" style={PANEL}>
             <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>The loop</div>
             <div className="flex flex-col gap-3 mt-3">
-              <Loop n="01" t="Earns while staged" d="Idle USDG earns lending yield in Morpho from block one." />
-              <Loop n="02" t="Provides liquidity" d="A capped share is paired into this pool and earns trading fees." />
-              <Loop n="03" t="Spend the yield" d="Fees fill your spendable buffer — your position is never unwound." />
+              <Loop n="01" t="Briefly staged" d="A short window before the next scheduled deploy — no yield accrues here." />
+              <Loop n="02" t="Deployed as liquidity" d="Your full deposit — no held-back reserve — is paired into this pool and earns trading fees." />
+              <Loop n="03" t="Fees compound back in" d="Trading fees lift your position's value pro-rata. Withdraw anytime for both legs." />
             </div>
           </div>
         </div>

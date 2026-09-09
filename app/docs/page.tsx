@@ -70,7 +70,7 @@ function Overview({ nav }: { nav: Nav }) {
           <tr><td><b>AI Agents</b></td><td>ERC-8004 identity + agent reputation (behavior + contribution + interpretability − risk)</td><td>Live — Base mainnet</td></tr>
           <tr><td><b>Swap</b></td><td>LI.FI cross-chain routing</td><td>Live</td></tr>
           <tr><td><b>Vaults (ULV engine)</b></td><td>JIT-liquidity Uniswap V4 vaults with an Aave idle sink</td><td>Built &amp; tested — in testing on Base Sepolia</td></tr>
-          <tr><td><b>LP Gateway</b></td><td>Deposit USDG → earns as curated-pool liquidity while a spendable buffer stays liquid</td><td>Deployed &amp; deposit proven — Robinhood Chain testnet (mock, unaudited)</td></tr>
+          <tr><td><b>LP Gateway</b></td><td>Deposit USDG → your full deposit becomes curated-pool liquidity, earning trading fees compounded back in</td><td>Deployed &amp; deposit proven — Robinhood Chain testnet (mock, unaudited)</td></tr>
           <tr><td><b>Liquid Sovereign Account</b></td><td>USDC that earns yield and stays spendable</td><td>Coming — payment core on Base Sepolia</td></tr>
         </tbody>
       </table>
@@ -319,20 +319,20 @@ function LpGateway({ nav }: { nav: Nav }) {
     <>
       <div className={EY}>How it works · LP Gateway</div>
       <h1>The LP Gateway</h1>
-      <p className={SUB}>Put idle USDG to work in a curated Robinhood Chain pool — it earns while a spendable buffer stays liquid. You spend from the buffer, never your position. Mintware&rsquo;s first live product surface.</p>
+      <p className={SUB}>Put USDG to work in a curated Robinhood Chain pool — your full deposit becomes liquidity and earns trading fees, compounded back into your position. Mintware&rsquo;s first live product surface.</p>
       <Note k="Status — live on testnet">Live on <b>Robinhood Chain testnet (46630)</b>, hardened and reviewed (self-audit + a firm-grade multi-auditor pass). <b>Testnet, mock tokens, unaudited</b> — an external audit gates real value on mainnet. A separate surface: it touches none of the vault / YPN contracts.</Note>
 
       <h2>The loop</h2>
       <Pipe items={[
         ['Deposit', 'USDG → shares', 'Entry-NAV shares, marked at deposit. No par claim.'],
-        ['Stage & earn', 'Morpho adapter', 'The USDG earns immediately while it waits.'],
-        ['Deploy', 'Uniswap V4 pool', 'A capped fraction becomes curated-pool liquidity; the rest stays idle, IL-free.'],
-        ['Harvest', 'fees only', 'Trading fees collected without touching principal → a spendable buffer.'],
-        ['Spend', 'from the buffer', 'You spend the yield, not your position. Principal stays working.'],
+        ['Stage', 'brief holding step', 'A short window before the next scheduled deploy — no yield accrues here.'],
+        ['Deploy', 'Uniswap V4 pool', 'Your full deposit becomes curated-pool liquidity — no held-back reserve. Mintware supplies no capital and bears none of the IL.'],
+        ['Harvest', 'fees only', 'Trading fees collected without touching principal.'],
+        ['Compound', 'back into NAV', 'Fees lift your position’s value pro-rata. Withdraw anytime for both legs.'],
       ]} />
 
       <h2>Honest by construction</h2>
-      <p>A liquidity position is <b>not a deposit, a savings account, or a guaranteed or fixed return</b> — its value moves with the pool price and is subject to <b>impermanent loss</b>. You spend from a buffer funded by the yield, never a promised balance. IL can be <i>diminished</i> (a wide range + a capped deploy fraction), never <i>eliminated</i> for a fee-earning LP.</p>
+      <p>A liquidity position is <b>not a deposit, a savings account, or a guaranteed or fixed return</b> — its value moves with the pool price and is subject to <b>impermanent loss</b>, 100% of which is yours; Mintware supplies no capital to any position. IL can be <i>diminished</i> by a wide range, never <i>eliminated</i> for a fee-earning LP.</p>
 
       <h2>Safe on a hookless pool (no TWAP)</h2>
       <p>The deployed leg is spot-priced, and hookless meme pools have no on-chain oracle — so manipulation resistance is built in. A <b>clamped-follower reference</b> tracks spot at a bounded step per block, and NAV is marked <b>conservatively by direction</b>: a withdrawal values the LP leg at <code>min(spot, ref)</code>, a deposit at <code>max</code>. A single-block price pump can neither inflate a withdrawal claim nor cheapen a deposit — and nothing reverts on price, so <b>withdrawals never brick</b>. Fees always route to the buffer (never a withdrawer), and redemption is pro-rata across idle and LP. Deep-pool curation is the economic backstop.</p>

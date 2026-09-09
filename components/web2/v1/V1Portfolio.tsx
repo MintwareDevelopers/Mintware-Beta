@@ -2,16 +2,18 @@
 
 // Portfolio — the V1 account/profile "money home". Borrows the V2 identity layer (avatar + bio + socials,
 // via useProfileMeta) and pairs it with REAL V1 data (no mocks): a working-balance hero, a stats strip, and
-// per-pool position cards (value + net PnL + value sparkline + owner-gated spendable buffer). Cross-pool via
-// /api/gateway/positions. Dark app skin. Honest: chain-derived figures only; buffer stays private (per-pool
-// signed reveal, L-03).
+// per-pool position cards (value + net PnL + value sparkline). Cross-pool via /api/gateway/positions. Dark
+// app skin. Honest: chain-derived figures only.
+//
+// Earn-vs-LP decision (2026-09-08): the "spendable buffer" reveal this page used to show is gone — the A-4
+// buffer-credit path is dropped (harvest always restakes now), so there is nothing left to reveal. See
+// docs/developers/lp-gateway-earn-vs-lp-decision.md.
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { useMintwarePrivy } from '@/components/web2/providers'
 import { useProfileMeta } from '@/lib/rewards/useProfileMeta'
-import { useGatewayBuffer } from '@/components/web2/v1/useGatewayBuffer'
 import { TokenPair } from '@/components/web2/v1/TokenPair'
 import { Sparkline } from '@/components/web2/v1/Sparkline'
 import { V1EditProfile } from '@/components/web2/v1/V1EditProfile'
@@ -83,8 +85,8 @@ export function V1Portfolio() {
           <div className="relative max-w-[48ch]">
             <h2 className="font-atx-display font-semibold text-[clamp(1.5rem,3.6vw,2rem)] tracking-[-0.03em] leading-[1.1]">Money that never sits still.</h2>
             <p className="text-[14.5px] leading-[1.6] mt-3" style={{ color: '#9B9BAD' }}>
-              Deposit USDG — it earns from block one, provides liquidity to a curated pool, and a spendable
-              buffer fills from the yield. <b style={{ color: '#F4F4FA' }}>Spend the buffer without unwinding your position.</b>
+              Deposit USDG — your full deposit becomes liquidity in a curated pool, earning trading fees.{' '}
+              <b style={{ color: '#F4F4FA' }}>No held-back reserve. Withdraw anytime for both legs.</b>
             </p>
             <button onClick={connect} className="mt-5 text-[14px] font-semibold px-5 py-3 rounded-[14px] text-white cursor-pointer" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', boxShadow: '0 6px 20px rgba(108,108,240,0.35)' }}>Connect wallet to open your account</button>
           </div>
@@ -92,7 +94,7 @@ export function V1Portfolio() {
 
         {/* what you'll track — preview tiles (locked, no fake numbers) */}
         <div className="grid gap-3 mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
-          {[['Working & earning', 'your live LP value'], ['Spendable buffer', 'fills from the yield'], ['Net vs deposit', 'your P&L'], ['Positions', 'across curated pools']].map(([k, sub]) => (
+          {[['Working & earning', 'your live LP value'], ['Fees compounded', 'lifts your value pro-rata'], ['Net vs deposit', 'your P&L'], ['Positions', 'across curated pools']].map(([k, sub]) => (
             <div key={k} className="rounded-[14px] p-4" style={CARD}>
               <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>{k}</div>
               <div className="font-mono font-bold text-[20px] mt-1.5" style={{ color: '#3A3A46' }}>——</div>
@@ -105,9 +107,9 @@ export function V1Portfolio() {
         <div className="rounded-[16px] p-6 mt-4" style={CARD}>
           <div className="text-[12px] uppercase tracking-[0.08em] font-semibold" style={{ color: '#63636F' }}>How your account works</div>
           <div className="grid gap-4 mt-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))' }}>
-            <Step n="01" t="Earns while staged" d="Idle USDG earns lending yield in Morpho from the moment you deposit." />
-            <Step n="02" t="Provides liquidity" d="A capped share is paired into a curated pool and earns trading fees." />
-            <Step n="03" t="Spend the yield" d="Fees fill your spendable buffer — your position is never unwound." />
+            <Step n="01" t="Briefly staged" d="A short window before the next scheduled deploy — no yield accrues here." />
+            <Step n="02" t="Deployed as liquidity" d="Your full deposit — no held-back reserve — is paired into a curated pool and earns trading fees." />
+            <Step n="03" t="Fees compound back in" d="Trading fees lift your position's value pro-rata. Withdraw anytime for both legs." />
           </div>
         </div>
 
@@ -163,7 +165,7 @@ export function V1Portfolio() {
                 {totalPnl >= 0 ? '+' : ''}{fmt(Math.abs(totalPnl))} net
               </span>
             )}
-            <span className="text-[13px] max-w-[46ch]" style={{ color: '#9B9BAD' }}>Your positions earn trading fees; a spendable buffer fills from the yield — spend it without unwinding.</span>
+            <span className="text-[13px] max-w-[46ch]" style={{ color: '#9B9BAD' }}>Your positions earn trading fees, compounded back into their value — withdraw anytime for both legs.</span>
           </div>
           <div className="flex gap-2.5 mt-5 flex-wrap">
             <Link href="/v1" className="text-[13.5px] font-semibold px-5 py-2.5 rounded-full text-white no-underline" style={{ background: 'linear-gradient(135deg,#8A82F4,#5A57DE)', boxShadow: '0 6px 20px rgba(108,108,240,0.35)' }}>+ Add USDG</Link>
@@ -195,11 +197,11 @@ export function V1Portfolio() {
         <div className="rounded-[16px] p-6 text-[13.5px]" style={{ ...CARD, color: '#9B9BAD' }}>
           Nothing working yet.{' '}
           <Link href="/v1" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Pick a pool →</Link>{' '}
-          — it starts earning immediately, and your spendable buffer fills from the yield.
+          — your deposit is deployed as liquidity and earns trading fees, compounded back in.
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {positions.map((p) => <PositionCard key={p.poolAddress} p={p} address={address ?? undefined} />)}
+          {positions.map((p) => <PositionCard key={p.poolAddress} p={p} />)}
         </div>
       )}
 
@@ -208,8 +210,7 @@ export function V1Portfolio() {
   )
 }
 
-function PositionCard({ p, address }: { p: PoolPosition; address?: string }) {
-  const { buffer: bufAtomic, revealed, revealing, reveal } = useGatewayBuffer(address, p.poolAddress)
+function PositionCard({ p }: { p: PoolPosition }) {
   const pnl = num(p.unrealizedPnlAtomic)
   const { base, quote } = pairParts(p.pairLabel)
   const label = (p.pairLabel || p.poolAddress).replace(/\s*\d[\d.]*\s*%\s*$/, '')
@@ -226,7 +227,7 @@ function PositionCard({ p, address }: { p: PoolPosition; address?: string }) {
           {(p.valueSeries?.length ?? 0) >= 3 && <Sparkline series={p.valueSeries} width={80} height={26} />}
         </span>
       </div>
-      <div className="grid grid-cols-3 max-[560px]:grid-cols-2 gap-4 mt-4">
+      <div className="grid grid-cols-2 gap-4 mt-4">
         <div>
           <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Value</div>
           <div className="font-mono font-bold text-[18px] mt-1">{usdg(p.positionValueAtomic)}</div>
@@ -234,14 +235,6 @@ function PositionCard({ p, address }: { p: PoolPosition; address?: string }) {
         <div>
           <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Net vs deposit</div>
           <div className="font-mono font-bold text-[18px] mt-1" style={{ color: p.costBasisAtomic == null ? '#63636F' : pnl >= 0 ? '#34D399' : '#F0736E' }}>{p.costBasisAtomic == null ? '—' : `${pnl >= 0 ? '+' : ''}${usdg(p.unrealizedPnlAtomic)}`}</div>
-        </div>
-        <div className="max-[560px]:col-span-2">
-          <div className="text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}>Spendable buffer</div>
-          {revealed ? (
-            <div className="font-mono font-bold text-[18px] mt-1" style={{ color: '#34D399' }}>{usdg(bufAtomic)}</div>
-          ) : (
-            <button onClick={reveal} disabled={revealing} className="font-mono font-bold text-[14px] mt-1 cursor-pointer disabled:cursor-default text-left" style={{ color: '#8A82F4' }}>{revealing ? 'Verifying…' : 'Verify to view →'}</button>
-          )}
         </div>
       </div>
     </div>
@@ -298,7 +291,7 @@ function Header() {
 function Foot() {
   return (
     <p className="text-[12px] mt-6" style={{ color: '#63636F' }}>
-      Robinhood testnet · positions and values are read from chain (the dashboard record only adds cost basis); your spendable buffer is private (owner-signed reveal).{' '}
+      Robinhood testnet · positions and values are read from chain (the dashboard record only adds cost basis).{' '}
       <Link href="/legal" className="no-underline hover:underline" style={{ color: '#8A82F4', fontWeight: 600 }}>Legal →</Link>
     </p>
   )

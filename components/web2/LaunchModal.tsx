@@ -141,7 +141,7 @@ export function LaunchModalProvider({ children }: { children: ReactNode }) {
                     <span className="w-[9px] h-[9px] rounded-full shrink-0" style={{ background: 'var(--color-peri)' }} />
                     <span className="min-w-0">
                       <span className="block font-semibold text-[15px]">V1 · Live</span>
-                      <span className="block text-[12px] text-ink-mid leading-[1.4] mt-0.5">The live LP Gateway on Robinhood Chain — put USDG to work, spend from the yield.</span>
+                      <span className="block text-[12px] text-ink-mid leading-[1.4] mt-0.5">The live LP Gateway on Robinhood Chain — put USDG to work, earn trading fees.</span>
                     </span>
                   </span>
                   <span className="shrink-0 text-ink-soft">→</span>
