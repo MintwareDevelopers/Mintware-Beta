@@ -140,3 +140,19 @@ export function quoteToPairedAtSpot(quoteAmount: bigint, sqrtPriceX96: bigint, q
   const inter = mulDiv(quoteAmount, Q96, sqrtPriceX96)
   return mulDiv(inter, Q96, sqrtPriceX96)
 }
+
+/** Round-4 audit fix: exact mirror of `MintwareLpGatewayPositionManager._pairedToQuote` — the OTHER
+ *  direction from `quoteToPairedAtSpot` (not simply its inverse call — a distinct bigint computation,
+ *  matched line-for-line so off-chain quotes never drift from what the contract actually enforces). Used
+ *  by `withdrawLegsQuote` to price the LP leg in quote terms for the single-virtual-offset claim split. */
+export function pairedToQuoteAtSpot(pairedAmount: bigint, sqrtPriceX96: bigint, quoteIsCurrency0: boolean): bigint {
+  if (pairedAmount <= 0n) return 0n
+  if (quoteIsCurrency0) {
+    // paired = currency1 → value in currency0: amount · (Q96 / sqrtP)^2
+    const inter = mulDiv(pairedAmount, Q96, sqrtPriceX96)
+    return mulDiv(inter, Q96, sqrtPriceX96)
+  }
+  // paired = currency0 → value in currency1: amount · (sqrtP / Q96)^2
+  const inter = mulDiv(pairedAmount, sqrtPriceX96, Q96)
+  return mulDiv(inter, sqrtPriceX96, Q96)
+}

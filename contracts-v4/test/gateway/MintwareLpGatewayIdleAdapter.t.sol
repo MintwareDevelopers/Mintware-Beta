@@ -554,6 +554,85 @@ contract MintwareLpGatewayIdleAdapterTest is Test {
         assertEq(q, 0, "served nothing");
         assertEq(rp.sharesOf(alice), sh, "and re-credited every share (A-1)");
     }
+
+    /// IA-12 (FINDING — HIGH, UNFIXED by IA-10): IA-10/IA-10b froze the ADAPTER/STAGING custody address and
+    /// showed the idle leg now degrades gracefully. But `_withdraw()`'s idle leg has a SECOND, later transfer
+    /// that is still a bare, un-isolated `SafeERC20.safeTransfer` — the payout `quoteAsset.safeTransfer(msg.sender,
+    /// idleGot)` at MintwareLpGatewayPositionManager.sol:619. Unlike the LP leg, which is deliberately isolated
+    /// behind `try this.lpLegExit(...)` (self-call + catch) specifically so a frozen/paused counterparty "can't
+    /// take the idle leg down with it" (line 627's own comment), this idle-leg payout has NO such isolation. If
+    /// the WITHDRAWER'S OWN address — not the adapter, not staging, not a third party — is the one the USDG
+    /// issuer freezes, `_withdraw()` reverts outright: no shares burned, no partial delivery, no re-credit ever
+    /// runs, and the withdrawer is stuck as long as `fromIdle > 0` (true for almost every position). This is
+    /// the exact scenario IA-10's fix does NOT cover, because that fix lives inside `MintwareIdleYieldAdapter.
+    /// withdraw()` (the custody→PM leg), not inside the PM's own custody→withdrawer leg.
+    /// FIXED (round-4 audit): a frozen withdrawer used to brick their ENTIRE withdrawal (the idle leg had no
+    /// failure isolation, unlike the LP leg's `try this.lpLegExit(...)`). `_withdraw()` now delivers the idle
+    /// leg through the same self-call + try/catch pattern (`idleLegExit`) — a frozen recipient no longer
+    /// reverts the call; the pulled quote simply stays parked in the PM's own balance (already counted by
+    /// `_idle()`, same as a deferred re-stage) and the pre-existing re-credit math hands the withdrawer shares
+    /// back for the undelivered portion, exactly like every other best-effort leg failure in this file.
+    function test_IA12_frozenWithdrawer_gracefullyReCredited_notBricked() public {
+        // Anchor to a captured block, per this suite's own documented via-IR gotcha: a RELATIVE
+        // `vm.roll(block.number + 1)` re-evaluated later in the same test can land on the same block
+        // twice under via-IR's CSE, tripping `SameBlockAction`. Roll to explicit b0+N offsets instead.
+        uint256 b0 = block.number;
+
+        RTBlacklistERC20 fusdg = new RTBlacklistERC20("Frozen USDG", "USDG", 6);
+        (MintwareIdleYieldAdapter a, MintwareLpGatewayStaging s, MintwareLpGatewayPositionManager p) =
+            _rig(IERC20(address(fusdg)), CAP);
+        fusdg.mint(alice, 100_000e6);
+        vm.prank(alice);
+        fusdg.approve(address(p), type(uint256).max);
+        vm.prank(alice);
+        uint256 sh = p.deposit(50_000e6);
+
+        // Sanity: the adapter/staging/source are ALL healthy — this is not IA-10's scenario. The source reads
+        // fine and the PM believes it can serve the full claim.
+        assertTrue(p.sourceReadable(), "source is healthy");
+        assertEq(p.totalNav(), 50_000e6);
+        assertEq(p.sharesOf(alice), sh, "state before: alice holds her shares");
+        assertEq(fusdg.balanceOf(alice), 50_000e6, "state before: alice's remaining wallet balance");
+
+        // The USDG issuer freezes ALICE HERSELF (a real, documented, first-party capability of the quote asset
+        // — payments-ypn.md / deployments.md: "Issuer can freeze ... balances"). Nothing else about the rig
+        // changes: the adapter, staging, and PM are all untouched and fully solvent.
+        fusdg.setBlacklisted(alice, true);
+        vm.roll(b0 + 1);
+
+        // Alice tries to exit while frozen. `_withdraw()` pulls the idle leg out of staging fine, then the
+        // FINAL payout (now isolated behind `idleLegExit`, self-call + try/catch) fails because `to` (alice)
+        // is blacklisted — caught, not propagated. The call itself SUCCEEDS; nothing delivered on this leg.
+        vm.prank(alice);
+        (uint256 quoteOut, uint256 pairedOut) = p.withdraw(sh);
+        assertEq(quoteOut, 0, "nothing delivered on the idle leg -- alice can't legally receive it while frozen");
+        assertEq(pairedOut, 0, "idle-only rig, no LP leg");
+
+        // FIXED INVARIANT: "Withdrawals never brick (M-01)" now holds for this leg too, symmetric with the LP
+        // leg. The pulled quote sits in the PM's own balance (counted by _idle(), same as a deferred re-stage)
+        // and alice is fully re-credited shares for the undelivered claim — nothing is lost, nothing is stuck.
+        assertEq(p.sharesOf(alice), sh, "fully re-credited -- alice keeps her whole claim, nothing stranded");
+        assertEq(fusdg.balanceOf(address(p)), 50_000e6, "the pulled quote is parked in the PM, not lost");
+        assertTrue(p.sourceReadable(), "the source/adapter/staging remain perfectly healthy throughout");
+
+        // Not a one-off: every attempt while frozen degrades identically (graceful re-credit, no revert).
+        vm.roll(b0 + 2);
+        vm.prank(alice);
+        (uint256 quoteOut2, uint256 pairedOut2) = p.withdraw(sh);
+        assertEq(quoteOut2, 0);
+        assertEq(pairedOut2, 0);
+        assertEq(p.sharesOf(alice), sh, "still fully re-credited on a second attempt while frozen");
+
+        // Once the freeze lifts, alice can actually exit and receive her funds -- the re-credit was a real,
+        // recoverable claim the whole time, not a silent loss.
+        fusdg.setBlacklisted(alice, false);
+        vm.roll(b0 + 3);
+        vm.prank(alice);
+        (uint256 quoteOut3,) = p.withdraw(sh);
+        assertEq(quoteOut3, 50_000e6, "delivered in full once unfrozen");
+        assertEq(p.sharesOf(alice), 0, "shares finally burned once the claim was actually deliverable");
+        assertEq(fusdg.balanceOf(alice), 100_000e6, "alice made whole: her original 100k, all of it, back in her wallet");
+    }
 }
 
 /// Minimal stand-in for the `try staging.stage(…) { } catch { }` shape `deploy()` uses, so we can prove what a

@@ -302,4 +302,61 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         assertGt(pm.totalShares(), 0, "the stuck idle still has an owner");
         assertApproxEqRel(pm.totalNav(), 40_000e18, 0.05e18, "remaining NAV ~= the unserved idle (50k - 10k)");
     }
+
+    // ── PoC: deploy()'s swapAmount bound checks the REQUEST (quoteToDeploy), never what staging.unstage()
+    //    actually delivers (quoteGot). A production-realistic adapter shortfall (perBlockWithdrawCap, or an
+    //    underlying 4626 that is momentarily under-liquid — MintwareERC4626YieldAdapter.maxWithdrawable())
+    //    makes quoteGot < swapAmount, and deploy() reverts ATOMICALLY inside its own swap leg (`_paySwap`
+    //    tries to pay the pool `swapAmount` of quote while the contract holds only `quoteGot`). No funds are
+    //    lost — the revert unwinds everything, including the `unstage()` that already ran — but the staged
+    //    capital is left un-deployed, and the SAME off-chain sizing (`lib/gateway/deploy.ts`'s
+    //    `quoteToDeploy = staged` / `swapAmount = quoteToDeploy / 2`, which never reads
+    //    `staging.maxUnstageable()`) reverts identically on every retry: a persistent, self-inflicted DoS on
+    //    the only function that ever puts staged capital to work.
+    function test_fork_DeploySwapAmountUnboundedAgainstShortfall_bricksDeploy() public {
+        if (!live) return;
+        uint256 b0 = block.number;
+
+        // Fresh staged capital that still needs a deploy (setUp already deployed its own 100k for alice,
+        // and its own swap may leave a few hundred wei-scale of quote dust re-staged — baseline against
+        // THAT, not a hardcoded round number, so this proves "nothing moved", not "matches a guess").
+        vm.prank(alice);
+        pm.deposit(60_000e18);
+        vm.roll(b0 + 1);
+        uint256 stagedBefore = staging.stagedAssets();
+        uint256 principalBefore = pm.deployedPrincipal();
+
+        // A routine event for the production adapter, not an edge case: the per-block withdraw cap (or an
+        // illiquid underlying 4626) makes the reserve momentarily unable to deliver the full 60k in one block.
+        adapter.setPerBlockWithdrawCap(20_000e18);
+        assertEq(staging.maxUnstageable(), 20_000e18, "the adapter can only actually deliver 20k this block");
+
+        // Exactly `lib/gateway/deploy.ts`'s off-chain sizing: quoteToDeploy = staged, swapAmount = staged/2.
+        // Nothing on either side ever compares this against `staging.maxUnstageable()`.
+        uint256 quoteToDeploy = 60_000e18;
+        uint256 swapAmount = quoteToDeploy / 2; // 30_000e18 — exceeds the 20_000e18 the reserve can deliver
+
+        // deploy()'s ONLY swapAmount guard is `swapAmount > quoteToDeploy` (line 721) — 30k <= 60k passes.
+        // `quoteGot` comes out at ~20k (the reserve's shortfall), and `_executeSwap` tries to pay the pool
+        // the full 30k of quote out of a balance that only holds ~20k → reverts (no revert-reason match
+        // needed; a plain ERC20 insufficient-balance revert or the line-768 underflow Panic both prove it).
+        vm.expectRevert();
+        pm.deploy(quoteToDeploy, swapAmount, 0, 0, block.timestamp);
+
+        // The revert is atomic: the `unstage()` call that already ran inside the failed deploy is unwound
+        // too — nothing is lost, but nothing moved either. Capital is still fully parked, still un-deployed.
+        assertEq(staging.stagedAssets(), stagedBefore, "capital is untouched, still staged, still un-deployed");
+        assertEq(pm.deployedPrincipal(), principalBefore, "no new principal was deployed");
+
+        // The DoS is persistent, not a one-off: the exact same off-chain sizing fails identically on every
+        // cron retry, because nothing about on-chain OR off-chain state changed.
+        vm.expectRevert();
+        pm.deploy(quoteToDeploy, swapAmount, 0, 0, block.timestamp);
+        assertEq(staging.stagedAssets(), stagedBefore, "still stuck after a second identical retry");
+
+        // Only a HUMAN re-sizing swapAmount to what the reserve can actually deliver unsticks it — proving
+        // the bug is the missing on-chain/off-chain bound, not some unrelated failure.
+        pm.deploy(quoteToDeploy, 10_000e18, 0, 0, block.timestamp); // 10k <= ~20k deliverable: succeeds
+        assertGt(pm.deployedPrincipal(), principalBefore, "a smaller swapAmount finally let the capital deploy");
+    }
 }

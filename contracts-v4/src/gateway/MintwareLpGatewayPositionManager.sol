@@ -68,8 +68,16 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
     // owner-settable) by design.
     uint16 public constant MAX_DEPLOY_BPS = 10_000;
 
-    /// @notice IA-11 hardening: the honest ceiling on TOTAL depositor-relevant value this gateway will ever
-    ///         hold at once, in the SAME cost-basis terms as `deployedPrincipal` (never moves with price).
+    /// @notice IA-11 hardening: the honest ceiling on TOTAL DEPOSITOR-SUPPLIED value this gateway will ever
+    ///         admit at once, in the SAME cost-basis terms as `deployedPrincipal` (never moves with price).
+    ///         Round-4 audit fix (documentation-only — reconciles this comment with `compoundQuote()`'s own,
+    ///         which was always correct): this bounds new EXPOSURE — deposits and the depositor value that
+    ///         changes form via `deploy()`'s zap — never yield ACCRETION to holders who are already inside the
+    ///         cap. `compoundQuote()` deliberately has no principalCap check: it only ever restakes real
+    ///         harvested fee income pro-rata to EXISTING shareholders (no new share mint, no new depositor),
+    ///         so it cannot admit anyone above the risk they already carry — it can only grow the pie every
+    ///         existing holder already owns a fixed slice of. A cap check there would gate legitimate yield
+    ///         to depositors who have already cleared underwriting, not protect against new unbounded exposure.
     ///         `MAX_DEPLOY_BPS` above answers a DIFFERENT question ("what fraction of CURRENT principal may sit
     ///         in the illiquid/IL-exposed LP leg") and was never a size cap — deploying reduces idle and grows
     ///         `deployedPrincipal` by the same amount, so MAX_DEPLOY_BPS's own denominator (idle + deployedPrincipal)
@@ -210,6 +218,8 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
     error PrincipalCapExceeded(); // IA-11: idle + deployedPrincipal + deployedPairedValue would exceed principalCap
     error OnlyPoolManager(); // unlockCallback is only ever legitimately called by the pool manager itself
     error SwapExceedsQuote(); // earn-vs-lp decision: deploy()'s swapAmount can never exceed quoteToDeploy
+    error InsufficientStaged(); // round-4 audit fix: staging.unstage() under-delivered vs. what swapAmount needs
+    error DeployPriceMovedOutOfBand(); // round-4 audit fix: the swap-consumed post-swap price left the band
 
     event Deposited(address indexed user, uint256 quoteIn, uint256 sharesMinted);
     event Withdrawn(address indexed user, uint256 sharesBurned, uint256 quoteOut, uint256 pairedOut);
@@ -231,6 +241,11 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
     /// @dev The yield source could not be read during a withdrawal (C-10). Only the LP leg was delivered; the idle
     ///      entitlement (sized off `lastKnownIdle`) was re-credited as shares.
     event IdleLegUnavailable(address indexed user, uint256 idleEntitledLastKnown);
+    /// @dev Round-4 audit fix: the idle-leg quote was successfully pulled from the reserve but could not be
+    ///      DELIVERED to the withdrawer (e.g. the withdrawer's own address is frozen/blacklisted by the quote
+    ///      asset's issuer — a real, documented capability for USDG). The pulled amount stays in this contract's
+    ///      own balance (already counted by `_idle()`) and the withdrawer is re-credited shares for it.
+    event IdleLegDeliveryFailed(address indexed user, uint256 amountPulled);
     event HarvestRecipientProposed(address indexed current, address indexed proposed, uint256 eta);
     event HarvestRecipientRotated(address indexed previous, address indexed current);
     event HarvestRecipientRotationCancelled(address indexed proposed);
@@ -613,12 +628,25 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
         uint256 idleGot;
         if (fromIdle > 0) {
             uint256 payParked = Math.min(quoteAsset.balanceOf(address(this)), fromIdle);
-            idleGot = payParked;
-            if (idleOk && fromIdle > payParked) idleGot += staging.unstage(fromIdle - payParked);
-            if (idleGot > 0) {
-                quoteAsset.safeTransfer(msg.sender, idleGot);
-                quoteOut = idleGot;
-                (bool ok2, uint256 idleAfter) = _idle(); // reserve shrank — keep the C-10 fallback current
+            uint256 pulled = payParked;
+            if (idleOk && fromIdle > payParked) pulled += staging.unstage(fromIdle - payParked);
+            if (pulled > 0) {
+                // Round-4 audit fix (High): the FINAL payout to the withdrawer used to be a bare `safeTransfer`
+                // with no failure isolation — unlike the LP leg (`try this.lpLegExit(...)` below), a revert here
+                // propagated and unwound the WHOLE withdraw. If the WITHDRAWER'S OWN address is frozen by the
+                // quote asset's issuer (a real, documented, first-party capability for USDG — never a
+                // hypothetical third party), the entire exit bricked even though `pulled` was already safely
+                // sitting in this contract's own balance. Isolate it the same way the LP leg already is: a
+                // self-call + try/catch. On failure, `pulled` simply stays in this contract's balance — `_idle()`
+                // already counts it (same pattern as a deferred re-stage, R3-INV-2) — and the existing re-credit
+                // math below (keyed on `idleGot < fromIdle`) re-credits the withdrawer shares for it, unchanged.
+                try this.idleLegExit(msg.sender, pulled) {
+                    idleGot = pulled;
+                    quoteOut = idleGot;
+                } catch {
+                    emit IdleLegDeliveryFailed(msg.sender, pulled);
+                }
+                (bool ok2, uint256 idleAfter) = _idle(); // reserve shrank OR pulled is now parked here — either way, refresh
                 if (ok2) lastKnownIdle = idleAfter;
             }
         }
@@ -690,6 +718,15 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
         return _decreaseAndTake(liquidity, to, deadline);
     }
 
+    /// @dev Round-4 audit fix: the idle leg's final payout, isolated behind a self-call so `_withdraw` can `try`
+    ///      it exactly like the LP leg already is — a frozen/blacklisted withdrawer address (a real, documented
+    ///      capability of the quote asset's issuer for USDG) can no longer take the WHOLE withdrawal down with
+    ///      it. Self-only.
+    function idleLegExit(address to, uint256 amount) external {
+        if (msg.sender != address(this)) revert NotSelf();
+        quoteAsset.safeTransfer(to, amount);
+    }
+
     /// @notice Permissionless follower liveness: advance the clamped reference one bounded step toward spot.
     ///         Adds no attack surface — anyone could already do this with a dust deposit — and keeps entry marks
     ///         and the deploy band from going stale on a quiet day (F-01c / F-04).
@@ -736,28 +773,37 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
         // R3-INV-2: quote parked by an earlier deferred re-stage is consumed before touching the reserve.
         uint256 fromParked = Math.min(quoteAsset.balanceOf(address(this)), quoteToDeploy);
         uint256 quoteGot = fromParked + (quoteToDeploy > fromParked ? staging.unstage(quoteToDeploy - fromParked) : 0);
+        // Round-4 audit fix (High): `staging.unstage()` is deliberately best-effort (never reverts for a
+        // liquidity reason — it returns what it could actually deliver). The production adapter makes a
+        // shortfall routine, not an edge case (a `perBlockWithdrawCap` or a momentarily illiquid underlying
+        // 4626 both clamp it). Previously nothing checked `quoteGot` against what was requested before using
+        // it to size the swap, so a shortfall surfaced deep inside `_paySwap` as a raw ERC20-insufficient-
+        // balance/underflow revert with no named error — and the SAME off-chain sizing would resubmit the
+        // identical doomed call forever. Fail loud and cheap instead, before any swap runs.
+        if (quoteGot < quoteToDeploy) revert InsufficientStaged();
 
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(_poolKey.toId());
         // Re-audit A-3 (price): both the swap AND the mint execute only while spot is within the follower
         // band of the clamped reference, so a sandwiched deploy can't manipulate either leg. `sellQuoteLimit`
         // bounds the quote→paired zap; `sellPairedLimit` (the opposite direction) bounds the leftover
-        // paired→quote cleanup swap near the end of this function.
+        // paired→quote cleanup swap near the end of this function. `ref`/`band` are hoisted to function scope
+        // (round-4 audit fix) so the post-swap re-read below can re-verify against the SAME band, not just
+        // gate the swap's own execution — see the comment there.
         uint160 sellQuoteLimit = quoteIsCurrency0 ? TickMath.MIN_SQRT_PRICE + 1 : TickMath.MAX_SQRT_PRICE - 1;
         uint160 sellPairedLimit = quoteIsCurrency0 ? TickMath.MAX_SQRT_PRICE - 1 : TickMath.MIN_SQRT_PRICE + 1;
-        {
-            uint160 ref = _refSqrtPrice;
-            if (ref != 0) {
-                uint160 band = uint160((uint256(ref) * maxDeviationBps) / 10_000);
-                uint160 diff = sqrtPriceX96 > ref ? sqrtPriceX96 - ref : ref - sqrtPriceX96;
-                if (diff > band) revert DeployPriceOutOfBand();
-                uint160 lower = ref > band ? ref - band : TickMath.MIN_SQRT_PRICE + 1;
-                uint256 upperWide = uint256(ref) + uint256(band);
-                uint160 upper = upperWide >= uint256(TickMath.MAX_SQRT_PRICE) - 1 ? TickMath.MAX_SQRT_PRICE - 1 : uint160(upperWide);
-                // Selling quote pushes price DOWN if quote is currency0 (zeroForOne), else UP — mirror image
-                // for selling paired.
-                sellQuoteLimit = quoteIsCurrency0 ? lower : upper;
-                sellPairedLimit = quoteIsCurrency0 ? upper : lower;
-            }
+        uint160 ref = _refSqrtPrice;
+        uint160 band;
+        if (ref != 0) {
+            band = uint160((uint256(ref) * maxDeviationBps) / 10_000);
+            uint160 diff = sqrtPriceX96 > ref ? sqrtPriceX96 - ref : ref - sqrtPriceX96;
+            if (diff > band) revert DeployPriceOutOfBand();
+            uint160 lower = ref > band ? ref - band : TickMath.MIN_SQRT_PRICE + 1;
+            uint256 upperWide = uint256(ref) + uint256(band);
+            uint160 upper = upperWide >= uint256(TickMath.MAX_SQRT_PRICE) - 1 ? TickMath.MAX_SQRT_PRICE - 1 : uint160(upperWide);
+            // Selling quote pushes price DOWN if quote is currency0 (zeroForOne), else UP — mirror image
+            // for selling paired.
+            sellQuoteLimit = quoteIsCurrency0 ? lower : upper;
+            sellPairedLimit = quoteIsCurrency0 ? upper : lower;
         }
 
         uint256 pairedGot;
@@ -770,6 +816,20 @@ contract MintwareLpGatewayPositionManager is Ownable2Step, ReentrancyGuard, IUnl
         (uint256 amount0, uint256 amount1) = quoteIsCurrency0 ? (quoteForMint, pairedGot) : (pairedGot, quoteForMint);
 
         (sqrtPriceX96,,,) = poolManager.getSlot0(_poolKey.toId()); // re-read: the swap above may have moved it
+        // Round-4 audit fix (High): the pre-swap band check above only ever bounded the swap's OWN
+        // `sqrtPriceLimitX96` — it never re-verified the price actually used to size the mint below. V4's
+        // `PoolManager.unlock()` lock is a single global "is anything unlocked" boolean, not "is THIS caller
+        // the one who opened it" — so a hostile paired token's `transfer` hook (fired by `_executeSwap`'s own
+        // `poolManager.take` above, while the pool is still globally unlocked) can interleave an unbounded
+        // swap against the SAME pool and move `slot0.sqrtPriceX96` — pool-level state — before returning
+        // control here. `DeployNotTwoSided` below is self-referential (it recomputes `pairedUsedVal` from
+        // this SAME manipulated price) so it cannot catch this. Re-verify the price actually consumed against
+        // the SAME band the swap itself was bounded by, closing the interleaved-swap manipulation window
+        // regardless of what a hostile paired token does mid-callback.
+        if (ref != 0) {
+            uint160 diff2 = sqrtPriceX96 > ref ? sqrtPriceX96 - ref : ref - sqrtPriceX96;
+            if (diff2 > band) revert DeployPriceMovedOutOfBand();
+        }
         uint160 sqrtA = TickMath.getSqrtPriceAtTick(tickLower);
         uint160 sqrtB = TickMath.getSqrtPriceAtTick(tickUpper);
         uint128 liquidity = LiquidityAmounts.getLiquidityForAmounts(sqrtPriceX96, sqrtA, sqrtB, amount0, amount1);

@@ -10,6 +10,16 @@
 //   record_gateway_harvest RPC: callable by anon (EXECUTE granted to PUBLIC), insert inside → 401 42501
 //   gateway_alerts, card_spend_buffers: 404 PGRST205 (tables absent in prod — migration not applied)
 //   storage: anon list avatars → 200 [], anon upload → 403 RLS
+//
+// 2026-09-09 re-probe (round-4 audit, docs/developers/audits/round4/) — CONFIRMED STILL LIVE: the fix for
+// this (supabase/migrations/20260908000003_gateway_ledger_view_security.sql — security_invoker + REVOKE on
+// the two views, REVOKE EXECUTE on record_gateway_harvest) is correct and merged to main (commit debe2c73)
+// but was NEVER EXECUTED against the production database — same live result as 2026-09-08, re-confirmed.
+// The two tests below used to assert the VULNERABLE state (200 / anon-callable) as the expected PASSING
+// result — i.e. they would keep passing even after the fix regressed. FLIPPED to assert the FIXED state
+// instead: they will genuinely FAIL until an operator actually applies the migration to prod (`supabase db
+// push`, or paste its ALTER VIEW/REVOKE statements into the Supabase SQL editor), which is the correct
+// signal — a red test here means the fix is not live, not a broken test.
 import { describe, it, expect } from 'vitest'
 
 const URL_ = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -36,18 +46,23 @@ describe.skipIf(!LIVE)('anon-key RLS probe (live, read-only)', () => {
     }
   })
 
-  it('FINDING: the two ledger views are queryable by anon (no security_invoker) — they will expose the fee ledger once populated', async () => {
+  it('FIXED (once the migration is applied): the two ledger views must be unreadable by anon (security_invoker + grants revoked)', async () => {
     for (const v of VIEWS) {
       const s = await fetch(`${URL_}/rest/v1/${v}?select=*&limit=3`, { headers: H })
-      expect(s.status).toBe(200) // ← should be 401/403 or the view should be security_invoker + grants revoked
+      // Pre-fix (live today, 2026-09-09): 200 — the vulnerable state. This assertion is intentionally the
+      // FIXED expectation, not the observed one — it fails until an operator applies the migration.
+      expect([401, 403]).toContain(s.status)
     }
   })
 
-  it('record_gateway_harvest is anon-callable; RLS inside stops the write (defense in depth holds, exposure is unnecessary)', async () => {
+  it('FIXED (once the migration is applied): record_gateway_harvest must be refused at the EXECUTE-grant level, not just RLS inside it', async () => {
     const p_log = { chain_id: 46630, tx_hash: '0x' + 'ab'.repeat(32), log_index: 0, block_number: 1, position_manager: '0x' + '11'.repeat(20), pool_address: '0x' + '22'.repeat(32), quote_fees_atomic: '1', paired_fees_atomic: '0', recipient: '0x' + '33'.repeat(20), total_shares_at_block: '1', perf_fee_bps: 0, fee_skimmed_atomic: '0', net_quote_atomic: '1' }
     const r = await fetch(`${URL_}/rest/v1/rpc/record_gateway_harvest`, { method: 'POST', headers: { ...H, 'content-type': 'application/json' }, body: JSON.stringify({ p_log, p_credits: [], p_settlement: 'pending' }) })
+    // Pre-fix (live today): 401 with a row-level-security message — the function EXECUTED and only the
+    // table's RLS stopped the write. Post-fix: EXECUTE itself is revoked, so this should fail BEFORE the
+    // function body ever runs, with a "permission denied for function" message instead.
     expect([401, 403]).toContain(r.status)
-    expect(await r.text()).toMatch(/row-level security/)
+    expect(await r.text()).toMatch(/permission denied for function/)
   })
 
   it('storage: anon cannot upload into avatars', async () => {

@@ -107,19 +107,38 @@ describe('GET /api/gateway/meta — strict resolution', () => {
     expect(meta.adapterKind).toBe('idle')
     expect(meta.idleDepositCapAtomic).toBe('5000000')
   })
-  it('D-4: staging.adapter() reverts depositCap() (real adapter shape) → adapterKind real, no cap surfaced', async () => {
+  it("D-4 audit fix (round-4): depositCap() fails AND perBlockWithdrawCap() answers (real adapter's own shape, positively confirmed) → adapterKind real", async () => {
     state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
     const REAL_ADAPTER = '0x' + '88'.repeat(20)
     state.readContract = async (a: unknown) => {
-      const { functionName } = a as { functionName: string }
+      const { address, functionName } = a as { address: string; functionName: string }
       if (functionName === 'quoteAsset') return QUOTE
       if (functionName === 'adapter') return REAL_ADAPTER
-      throw new Error('rpc') // depositCap() unimplemented on the real adapter
+      if (functionName === 'depositCap') throw new Error('execution reverted (unknown selector)')
+      if (functionName === 'perBlockWithdrawCap' && address === REAL_ADAPTER) return 10_000_000n
+      throw new Error('rpc')
     }
     const { GET } = await import('./route')
     const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
     const { meta } = await res.json()
     expect(meta.adapterKind).toBe('real')
+    expect(meta.idleDepositCapAtomic).toBeNull()
+  })
+  it("D-4 audit fix (round-4): depositCap() fails for a TRANSIENT reason (RPC timeout, not an ABI mismatch) and perBlockWithdrawCap() ALSO fails → adapterKind unknown, never a guessed 'real' (was the bug: used to default to 'real' here)", async () => {
+    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
+    const SOME_ADAPTER = '0x' + '99'.repeat(20)
+    state.readContract = async (a: unknown) => {
+      const { functionName } = a as { functionName: string }
+      if (functionName === 'quoteAsset') return QUOTE
+      if (functionName === 'adapter') return SOME_ADAPTER
+      if (functionName === 'depositCap') throw new Error('HttpRequestError: timeout of 10000ms exceeded')
+      if (functionName === 'perBlockWithdrawCap') throw new Error('HttpRequestError: timeout of 10000ms exceeded')
+      throw new Error('rpc')
+    }
+    const { GET } = await import('./route')
+    const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
+    const { meta } = await res.json()
+    expect(meta.adapterKind).toBe('unknown')
     expect(meta.idleDepositCapAtomic).toBeNull()
   })
   it('D-4: staging.adapter() itself unreadable → adapterKind unknown (never a guessed claim)', async () => {

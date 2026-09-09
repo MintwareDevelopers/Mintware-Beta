@@ -61,6 +61,7 @@ contract MintwareERC4626YieldAdapter is IYieldAdapter, Ownable2Step, ReentrancyG
     error AssetMismatch();
     error VaultAlreadySet();
     error RenounceDisabled();
+    error NotSelf(); // round-4 audit fix: _withdrawCore is an internal-only self-call surface
 
     modifier onlyVault() {
         if (msg.sender != vault) revert OnlyVault();
@@ -113,14 +114,31 @@ contract MintwareERC4626YieldAdapter is IYieldAdapter, Ownable2Step, ReentrancyG
     }
 
     /// @inheritdoc IYieldAdapter
-    /// @dev Best-effort. Clamps to `maxWithdrawable()` (fee-net headroom ∧ per-block cap), then exits via
-    ///      the 4626 `redeem(shares, vault, this)` — NOT `withdraw(assets)`. Rationale (found live on Arc's
-    ///      XyloVault, 2026-08-18): a fee-charging 4626 makes `withdraw(assets)` need MORE shares than we
-    ///      hold (`previewWithdraw` grosses up for the fee) and revert `INSUFFICIENT_BALANCE`, whereas
-    ///      `redeem(shares)` always works and delivers the fee-net assets. Shares are sized from
-    ///      `previewWithdraw(want)`, capped at our balance and the source's `maxRedeem`, and the redeem is
-    ///      wrapped in try/catch — a stalled source degrades to "serve 0 from buffer", never a revert.
+    /// @dev Best-effort — `IYieldAdapter.withdraw()` is documented to NEVER revert for a liquidity/
+    ///      availability reason. Round-4 audit fix: the whole read-then-redeem sequence used to have only
+    ///      its LAST call (`redeem`) guarded — `previewWithdraw`/`balanceOf`/`maxRedeem` (and, transitively,
+    ///      `maxWithdrawable()`'s own `previewRedeem`/`maxWithdraw` reads) were bare external calls that
+    ///      could revert the whole `withdraw()` if the underlying 4626 gates its VIEW functions behind a
+    ///      pause/emergency-shutdown switch (a common, realistic pattern for a Morpho-shaped vault — NOT
+    ///      only the already-guarded `redeem` failure mode this file's own tests exercised). Isolated the
+    ///      ENTIRE sequence behind one self-call boundary (`_withdrawCore`) instead of patching each call
+    ///      individually, so ANY failure anywhere in it degrades to "serve 0 from buffer" uniformly.
     function withdraw(uint256 amount) external override onlyVault nonReentrant returns (uint256 withdrawn) {
+        try this._withdrawCore(amount) returns (uint256 w) {
+            withdrawn = w;
+        } catch {
+            return 0; // any failure in the read-then-redeem sequence → serve from the vault's own buffer instead
+        }
+    }
+
+    /// @dev Round-4 audit fix: the actual withdraw logic, self-call-only so `withdraw()` can try/catch the
+    ///      WHOLE sequence at once. Clamps to `maxWithdrawable()` (fee-net headroom ∧ per-block cap), then
+    ///      exits via the 4626 `redeem(shares, vault, this)` — NOT `withdraw(assets)`. Rationale (found live
+    ///      on Arc's XyloVault, 2026-08-18): a fee-charging 4626 makes `withdraw(assets)` need MORE shares
+    ///      than we hold (`previewWithdraw` grosses up for the fee) and revert `INSUFFICIENT_BALANCE`,
+    ///      whereas `redeem(shares)` always works and delivers the fee-net assets.
+    function _withdrawCore(uint256 amount) external returns (uint256 withdrawn) {
+        if (msg.sender != address(this)) revert NotSelf();
         uint256 want = amount < maxWithdrawable() ? amount : maxWithdrawable();
         if (want == 0) return 0;
         uint256 shares  = yieldSource.previewWithdraw(want); // shares to net `want` (fee-grossed by source)
@@ -129,11 +147,7 @@ contract MintwareERC4626YieldAdapter is IYieldAdapter, Ownable2Step, ReentrancyG
         uint256 srcMaxR = yieldSource.maxRedeem(address(this));
         if (shares > srcMaxR) shares = srcMaxR;              // respect source liquidity/pause ceiling
         if (shares == 0) return 0;
-        try yieldSource.redeem(shares, vault, address(this)) returns (uint256 assetsOut) {
-            withdrawn = assetsOut; // actual USDC delivered to the vault, NET of any exit fee
-        } catch {
-            return 0; // stalled source → serve from the vault's own buffer instead
-        }
+        withdrawn = yieldSource.redeem(shares, vault, address(this)); // actual USDC delivered, NET of any exit fee
         if (block.number != _lastWithdrawBlock) {
             _lastWithdrawBlock = block.number;
             _withdrawnThisBlock = 0;

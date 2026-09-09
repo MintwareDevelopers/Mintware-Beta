@@ -32,6 +32,7 @@ import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { buildGatewayDepositMessage, buildGatewayWithdrawMessage } from '@/lib/web3/signedActionMessages'
 import { depositSharesQuote, withdrawLegsQuote, parsePoolState, type SerializedPoolState } from '@/lib/gateway/positionReader'
 import { applyToleranceBps } from '@/lib/gateway/v4Math'
+import { sanitizeAmountInput } from '@/lib/gateway/amountInput'
 
 // C-6 slippage tolerance applied to every dry quote before it becomes an on-chain floor (bps).
 export const SLIPPAGE_TOLERANCE_BPS = 100
@@ -489,7 +490,7 @@ export function V1PoolDetail({ slug }: { slug: string }) {
               <>
                 <div className="rounded-[14px] p-4" style={INNER}>
                   <div className="flex justify-between text-[11px] uppercase tracking-[0.06em] font-semibold" style={{ color: '#63636F' }}><span>Enter amount</span><span>USDG</span></div>
-                  <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => { setAmount(e.target.value.replace(/[^0-9.]/g, '')); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="bg-transparent outline-none font-mono font-bold text-[26px] w-full mt-2" style={{ color: '#F4F4FA' }} />
+                  <input inputMode="decimal" placeholder="0.00" value={amount} onChange={(e) => { setAmount(sanitizeAmountInput(e.target.value)); if (status === 'review' || status === 'recorded') { setStatus('idle'); setReview(null) } }} disabled={busy} className="bg-transparent outline-none font-mono font-bold text-[26px] w-full mt-2" style={{ color: '#F4F4FA' }} />
                 </div>
                 {Number(amount) > 0 && estAprPct != null && status !== 'review' && (
                   <div className="mt-3 rounded-[12px] p-3" style={INNER}>

@@ -171,4 +171,13 @@ contract MintwareLpGatewayFactoryTest is Test {
         vm.expectRevert(MintwareLpGatewayFactory.NotFound.selector);
         factory.deactivate(bytes32(uint256(0xdead)));
     }
+
+    /// Round-4 audit fix (Medium): renouncing used to be left enabled, unlike every sibling contract in
+    /// this codebase — it would have permanently forfeited `deactivate()`, the only factory-level
+    /// incident-response lever, with no key ever able to curate/retire a pool again.
+    function test_renounceOwnership_disabled() public {
+        vm.expectRevert(MintwareLpGatewayFactory.RenounceDisabled.selector);
+        factory.renounceOwnership();
+        assertEq(factory.owner(), address(this), "ownership untouched");
+    }
 }

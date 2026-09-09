@@ -22,7 +22,7 @@ export const GET = createHandler(async (_req, ctx) => {
     .order('created_at', { ascending: true })
     .limit(100)
   return ctx.json({ success: true, queue: data ?? [] })
-})
+}, { rateLimit: { max: 30, windowMs: 60_000 } }) // round-4 audit fix (Low, HO-15): matches discover/sparklines
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // POST — curator actions: approve (optionally + register the deployed instance), reject, deactivate.

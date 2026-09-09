@@ -2,7 +2,7 @@ import { toFunctionSelector } from 'viem'
 import { createHandler } from '@/lib/web2/routeHandler'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { resolveInstanceStrict } from '@/lib/gateway/routeInstance'
-import { LP_GATEWAY_ABI, LP_STAGING_ABI, LP_IDLE_ADAPTER_PROBE_ABI } from '@/lib/web3/artifacts/lpGateway'
+import { LP_GATEWAY_ABI, LP_STAGING_ABI, LP_IDLE_ADAPTER_PROBE_ABI, LP_REAL_ADAPTER_PROBE_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { readCurrentTick, type GatewayPoolKey } from '@/lib/gateway/poolState'
 
 export const dynamic = 'force-dynamic'
@@ -89,7 +89,17 @@ export const GET = createHandler(async (req, ctx) => {
         adapterKind = 'idle'
         idleDepositCapAtomic = cap.toString()
       } catch {
-        adapterKind = 'real' // depositCap() reverted/unimplemented -- not the idle adapter's interface
+        // Round-4 audit fix: depositCap() failing is NOT proof of the real adapter's shape — it could be
+        // a transient RPC/node error just as easily as a genuine "this method doesn't exist" revert, and
+        // this file's own stated intent (line 79) is a read failure must fall back to 'unknown', never a
+        // false claim. Require the POSITIVE signal (perBlockWithdrawCap() actually answering) before ever
+        // rendering the more reassuring 'real' ("earns immediately") label; both probes failing is 'unknown'.
+        try {
+          await client.readContract({ address: adapterAddr, abi: LP_REAL_ADAPTER_PROBE_ABI, functionName: 'perBlockWithdrawCap' })
+          adapterKind = 'real'
+        } catch {
+          adapterKind = 'unknown' // neither probe succeeded -- never guess
+        }
       }
     } catch (e) {
       ctx.log.warn('gateway.meta', 'adapter-kind probe failed', { error: String(e) })

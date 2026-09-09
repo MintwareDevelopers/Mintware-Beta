@@ -149,3 +149,11 @@ export const LP_STAGING_ABI = [
 export const LP_IDLE_ADAPTER_PROBE_ABI = [
   { type: 'function', stateMutability: 'view', name: 'depositCap', inputs: [], outputs: [{ type: 'uint256' }] },
 ] as const
+
+// D-4 audit fix (round-4, 2026-09-09): the positive-confirmation half of the same probe.
+// `perBlockWithdrawCap()` exists ONLY on MintwareERC4626YieldAdapter (the idle adapter has no analog) —
+// used so `adapterKind` only ever becomes 'real' on an AFFIRMATIVE match, not merely "depositCap()
+// failed for some reason" (which could be a transient RPC error, not proof of the real adapter's shape).
+export const LP_REAL_ADAPTER_PROBE_ABI = [
+  { type: 'function', stateMutability: 'view', name: 'perBlockWithdrawCap', inputs: [], outputs: [{ type: 'uint256' }] },
+] as const

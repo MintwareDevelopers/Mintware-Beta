@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   depositSharesQuote, withdrawLegsQuote, readGatewayPoolState, serializePoolState, parsePoolState, type GatewayPoolState,
 } from './positionReader'
-import { getSqrtPriceAtTick, getAmountsForLiquidity, applyToleranceBps } from './v4Math'
+import { getSqrtPriceAtTick, getAmountsForLiquidity, applyToleranceBps, pairedToQuoteAtSpot } from './v4Math'
 
 const V = 1_000_000n
 
@@ -43,32 +43,53 @@ function state(over: Partial<GatewayPoolState> = {}): GatewayPoolState {
   }
 }
 
-describe('withdrawLegsQuote (_withdraw pro-rata mirror)', () => {
-  it('undeployed pool: only the idle leg, pro-rata with the virtual offset', () => {
+describe('withdrawLegsQuote (_withdraw pro-rata mirror — round-4 audit fix: single offset on the WHOLE claim, not each leg)', () => {
+  it('undeployed pool: only the idle leg — the single-offset formula reduces to this (navW == idle)', () => {
     const s = state({ deployed: false, liquidity: 0n, sqrtPriceX96: null })
     const q = withdrawLegsQuote(250_000_000n, s)
     expect(q.quoteOut).toBe((250_000_000n * (s.idleAtomic + V)) / (s.totalShares + V))
     expect(q.pairedOut).toBe(0n)
     expect(q.lpQuotable).toBe(true)
   })
-  it('deployed pool: idle slice + LP slice amounts at spot (quote is currency0)', () => {
+  it('deployed pool: prices the WHOLE claim once (navW = idle + lpSpotVal), then splits by value — mirrors _withdraw exactly', () => {
     const s = state()
     const shares = 500_000_000n
+    const sqrtA = getSqrtPriceAtTick(s.tickLower)
+    const sqrtB = getSqrtPriceAtTick(s.tickUpper)
+    const { amount0: fullQ, amount1: fullP } = getAmountsForLiquidity(s.sqrtPriceX96!, sqrtA, sqrtB, s.liquidity)
+    const lpSpotVal = fullQ + pairedToQuoteAtSpot(fullP, s.sqrtPriceX96!, s.quoteIsCurrency0)
+    const navW = s.idleAtomic + lpSpotVal
+    const claimTotal = (shares * (navW + V)) / (s.totalShares + V)
+    const fromIdle = (claimTotal * s.idleAtomic) / navW
+    const lpEntitled = claimTotal - fromIdle
+    const liqToRemove = (s.liquidity * lpEntitled) / lpSpotVal
+    const { amount0, amount1 } = getAmountsForLiquidity(s.sqrtPriceX96!, sqrtA, sqrtB, liqToRemove)
+
     const q = withdrawLegsQuote(shares, s)
-    const liq = (shares * (s.liquidity + V)) / (s.totalShares + V)
-    const { amount0, amount1 } = getAmountsForLiquidity(s.sqrtPriceX96!, getSqrtPriceAtTick(s.tickLower), getSqrtPriceAtTick(s.tickUpper), liq)
-    expect(q.quoteOut).toBe((shares * (s.idleAtomic + V)) / (s.totalShares + V) + amount0)
+    expect(q.quoteOut).toBe(fromIdle + amount0)
     expect(q.pairedOut).toBe(amount1)
     expect(q.pairedOut > 0n).toBe(true)
   })
-  it('swaps the legs when quote is currency1', () => {
+  it('FIX PROVEN: the new estimate no longer over-counts V on both legs like the old (pre-round-4) formula did', () => {
+    // The OLD (bugged) formula, reproduced verbatim for comparison only — applied V separately to each leg.
+    const s = state()
+    const shares = 500_000_000n
+    const oldFromIdle = (shares * (s.idleAtomic + V)) / (s.totalShares + V)
+    const oldLiqToRemove = (shares * (s.liquidity + V)) / (s.totalShares + V)
+    const { amount0: oldAmount0 } = getAmountsForLiquidity(s.sqrtPriceX96!, getSqrtPriceAtTick(s.tickLower), getSqrtPriceAtTick(s.tickUpper), oldLiqToRemove)
+    const oldQuoteOut = oldFromIdle + oldAmount0
+
+    const q = withdrawLegsQuote(shares, s)
+    expect(q.quoteOut).toBeLessThan(oldQuoteOut) // the fix no longer promises more than _withdraw() actually delivers
+  })
+  it('swaps the legs when quote is currency1 (same total claimed value, split by which side is "quote")', () => {
     const s0 = state({ quoteIsCurrency0: true })
     const s1 = state({ quoteIsCurrency0: false })
     const a = withdrawLegsQuote(100_000_000n, s0)
     const b = withdrawLegsQuote(100_000_000n, s1)
-    const idle = (100_000_000n * (s0.idleAtomic + V)) / (s0.totalShares + V)
-    expect(b.pairedOut).toBe(a.quoteOut - idle) // b's paired leg = a's LP-quote leg (amount0)
-    expect(b.quoteOut - idle).toBe(a.pairedOut) // and vice-versa
+    const totalA = a.quoteOut + pairedToQuoteAtSpot(a.pairedOut, s0.sqrtPriceX96!, true)
+    const totalB = b.quoteOut + pairedToQuoteAtSpot(b.pairedOut, s1.sqrtPriceX96!, false)
+    expect(totalA).toBe(totalB) // same pool shape, same price (1.0) — value-conserving either way round
   })
   it('last holder takes the whole idle reserve and the whole position', () => {
     const s = state()

@@ -10,7 +10,7 @@
 
 import { LP_GATEWAY_ABI, LP_GATEWAY_VIRTUAL as V, LP_STAGING_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { readCurrentTick, type GatewayPoolKey } from '@/lib/gateway/poolState'
-import { getSqrtPriceAtTick, getAmountsForLiquidity, mulDiv } from '@/lib/gateway/v4Math'
+import { getSqrtPriceAtTick, getAmountsForLiquidity, mulDiv, pairedToQuoteAtSpot } from '@/lib/gateway/v4Math'
 
 // Structural: satisfied by a viem PublicClient and by test mocks alike (viem's readContract is a
 // complex generic overload, so we accept it loosely and pin the ABI at the call site).
@@ -62,21 +62,47 @@ export type GatewayPoolState = {
   quoteIsCurrency0: boolean
 }
 
-/** Mirror of `_withdraw`'s entitlements for burning `shares`: the share fraction of the idle reserve
- *  (quote) and of the position's liquidity, the latter converted to token amounts at spot. Last holder
- *  takes everything (the offset dust clears). Returns the two legs the tx delivers when both succeed —
- *  the honest floor for `withdrawWithMin` once a tolerance is applied. `pairedOut` is in the PAIRED
- *  token's own units (not quote). */
+/** Mirror of `_withdraw`'s entitlements for burning `shares`. Round-4 audit fix: this used to apply the
+ *  SeniorSharesMath virtual offset `V` SEPARATELY to each leg (`shares·(idle+V)/(ts+V)` and
+ *  `shares·(liq+V)/(ts+V)`) — exactly the formula the round-3 fuzz-F1 fix replaced on-chain because it
+ *  over-counts by ≈ shares·V/(ts+V) per leg (≈$1 per exit at 6dp), causing a spurious `SlippageExceeded`
+ *  on `withdrawWithMin` for any typical partial exit whose 1% tolerance band is smaller than that
+ *  overshoot. Now mirrors `_withdraw` exactly: price the WHOLE claim once (`claimTotal =
+ *  toAssets(shares, navW, ts, V, Floor)`, `navW = idle + lpSpotVal`), then split proportionally with no
+ *  further offset. Last holder takes everything (the offset dust clears). Returns the two legs the tx
+ *  delivers when both succeed — the honest floor for `withdrawWithMin` once a tolerance is applied.
+ *  `pairedOut` is in the PAIRED token's own units (not quote). */
 export function withdrawLegsQuote(shares: bigint, s: GatewayPoolState): { quoteOut: bigint; pairedOut: bigint; lpQuotable: boolean } {
   if (shares <= 0n || s.totalShares <= 0n) return { quoteOut: 0n, pairedOut: 0n, lpQuotable: true }
   const last = shares >= s.totalShares
-  const fromIdle = last ? s.idleAtomic : mulDiv(shares, s.idleAtomic + V, s.totalShares + V)
-  if (!s.deployed || s.liquidity <= 0n) return { quoteOut: fromIdle, pairedOut: 0n, lpQuotable: true }
-  if (s.sqrtPriceX96 == null) return { quoteOut: fromIdle, pairedOut: 0n, lpQuotable: false }
-  const liqToRemove = last ? s.liquidity : mulDiv(shares, s.liquidity + V, s.totalShares + V)
-  const { amount0, amount1 } = getAmountsForLiquidity(
-    s.sqrtPriceX96, getSqrtPriceAtTick(s.tickLower), getSqrtPriceAtTick(s.tickUpper), liqToRemove > s.liquidity ? s.liquidity : liqToRemove,
-  )
+
+  if (!s.deployed || s.liquidity <= 0n) {
+    const fromIdle = last ? s.idleAtomic : mulDiv(shares, s.idleAtomic + V, s.totalShares + V)
+    return { quoteOut: fromIdle, pairedOut: 0n, lpQuotable: true }
+  }
+  if (s.sqrtPriceX96 == null) {
+    // No live price ⇒ the LP leg can't be valued for the single-offset split either — fall back to the
+    // idle-only per-leg estimate (still an ESTIMATE; the on-chain *WithMin floor is the real protection).
+    const fromIdle = last ? s.idleAtomic : mulDiv(shares, s.idleAtomic + V, s.totalShares + V)
+    return { quoteOut: fromIdle, pairedOut: 0n, lpQuotable: false }
+  }
+
+  const sqrtA = getSqrtPriceAtTick(s.tickLower)
+  const sqrtB = getSqrtPriceAtTick(s.tickUpper)
+  const { amount0: fullAmount0, amount1: fullAmount1 } = getAmountsForLiquidity(s.sqrtPriceX96, sqrtA, sqrtB, s.liquidity)
+  const [fullLpQuote, fullLpPaired] = s.quoteIsCurrency0 ? [fullAmount0, fullAmount1] : [fullAmount1, fullAmount0]
+  const lpSpotVal = fullLpQuote + pairedToQuoteAtSpot(fullLpPaired, s.sqrtPriceX96, s.quoteIsCurrency0)
+
+  const navW = s.idleAtomic + lpSpotVal
+  if (navW <= 0n) return { quoteOut: 0n, pairedOut: 0n, lpQuotable: true }
+  let claimTotal = last ? navW : mulDiv(shares, navW + V, s.totalShares + V)
+  if (claimTotal > navW) claimTotal = navW // a near-total loss can push the offset formula above what exists
+  const fromIdle = last ? s.idleAtomic : mulDiv(claimTotal, s.idleAtomic, navW)
+  const lpEntitled = claimTotal - fromIdle
+
+  const liqToRemoveRaw = last ? s.liquidity : (lpSpotVal <= 0n ? 0n : mulDiv(s.liquidity, lpEntitled, lpSpotVal))
+  const liqToRemove = liqToRemoveRaw > s.liquidity ? s.liquidity : liqToRemoveRaw
+  const { amount0, amount1 } = getAmountsForLiquidity(s.sqrtPriceX96, sqrtA, sqrtB, liqToRemove)
   const [lpQuote, lpPaired] = s.quoteIsCurrency0 ? [amount0, amount1] : [amount1, amount0]
   return { quoteOut: fromIdle + lpQuote, pairedOut: lpPaired, lpQuotable: true }
 }

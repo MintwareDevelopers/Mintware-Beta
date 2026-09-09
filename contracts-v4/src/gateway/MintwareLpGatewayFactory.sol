@@ -51,6 +51,9 @@ contract MintwareLpGatewayFactory is Ownable2Step {
     error AdapterAssetMismatch(); // C-9b / F-07: adapter.asset() answered, but not with the pool's quote asset
     error AdapterUnreadable(); // C-9b / F-07: adapter answers neither asset() nor totalAssets() — not an IYieldAdapter
     error AdapterAlreadyBound(); // C-9b / F-07: adapter.vault() is already wired to some other sink
+    // round-4 audit fix: renouncing would permanently forfeit `deactivate()` — the only factory-level
+    // incident-response lever — with no key able to ever curate/retire a pool again.
+    error RenounceDisabled();
 
     event GatewayCreated(
         bytes32 indexed poolId, address staging, address positionManager, address quoteAsset, address gatewayOwner
@@ -64,6 +67,14 @@ contract MintwareLpGatewayFactory is Ownable2Step {
         poolManager = pm_;
         positionManager = posm_;
         permit2 = permit2_;
+    }
+
+    /// @notice Disabled — same discipline as every sibling contract in this codebase (PositionManager,
+    ///         both yield adapters). Renouncing would permanently forfeit `deactivate()`, the only
+    ///         factory-level incident-response lever, with no key ever able to curate/retire a pool again.
+    ///         Ownership moves via the two-step `transferOwnership` → `acceptOwnership` handoff instead.
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceDisabled();
     }
 
     /// @notice Curated: deploy an isolated gateway for `key`. Reverts if one already exists for the pool.
