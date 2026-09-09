@@ -140,6 +140,7 @@ const refMaxDevBps = () => {
 export const requireRefPrice = (env: Record<string, string | undefined> = process.env) => (env.LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE ?? 'true').trim().toLowerCase() !== 'false'
 
 const ERC20_DECIMALS_ABI = [{ type: 'function', stateMutability: 'view', name: 'decimals', inputs: [], outputs: [{ type: 'uint8' }] }] as const
+const ERC20_BALANCE_ABI = [{ type: 'function', stateMutability: 'view', name: 'balanceOf', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] }] as const
 
 // L-02: per-pool-per-window idempotency window. A concurrent/retried cron run within the same window
 // claims the SAME (position_manager, chain, window_key) row — the UNIQUE index makes the second claim
@@ -193,6 +194,22 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
     return { ok: false, status: 200, error: 'staged balance below deploy threshold', reason: 'below_threshold' }
   }
 
+  // V1-03 fix (independent Codex audit, 2026-09-09): `deploy()` on-chain (PM L800) explicitly pulls
+  // quote already sitting in the PM's OWN balance FIRST (`fromParked`), before unstaking any more from
+  // staging — a deferred re-stage (staging's cap was momentarily full) or fees swept there ahead of a
+  // sweep both leave real, immediately-usable quote sitting idle in the PM. Sizing `quoteToDeploy` from
+  // `staged` alone under-requested every time that happened: not a fund-safety bug (deploying less than
+  // possible is always safe on-chain), but real value left earning nothing longer than necessary. The
+  // PM's own balance is included in the deploy amount now; the staged-only threshold check above is
+  // unchanged (matches its documented "min STAGED balance" semantics) — this only affects sizing once a
+  // deploy is already happening.
+  const quoteAssetAddr = (await publicClient.readContract({
+    address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset',
+  })) as `0x${string}`
+  const parked = (await publicClient.readContract({
+    address: quoteAssetAddr, abi: ERC20_BALANCE_ABI, functionName: 'balanceOf', args: [instance.positionManager],
+  })) as bigint
+
   let account
   try {
     account = await getOracleSigner('gateway') // dedicated gateway-owner seat (re-audit A-3), never the shared root
@@ -204,7 +221,9 @@ export async function deployGateway(opts: { supabase?: SupabaseClient; log?: Log
 
   // Earn-vs-LP decision: no held-back buffer any more — deploy the ENTIRE staged balance (subject only to
   // the dust threshold already checked above). The old ratio-of-principal-at-cost target is retired.
-  const quoteToDeploy = staged
+  // V1-03 fix: include quote already parked in the PM's own balance (see the read above) — deploy()
+  // on-chain uses it first anyway, so sizing without it just left it earning nothing for longer.
+  const quoteToDeploy = staged + parked
   if (quoteToDeploy <= 0n) {
     return { ok: false, status: 200, error: 'nothing staged to deploy', reason: 'below_threshold' }
   }

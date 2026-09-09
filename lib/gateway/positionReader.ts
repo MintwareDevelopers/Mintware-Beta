@@ -25,6 +25,9 @@ const PM_EXTRA_ABI = [
 const PERIPHERY_ABI = [
   { type: 'function', stateMutability: 'view', name: 'getPositionLiquidity', inputs: [{ name: 'tokenId', type: 'uint256' }], outputs: [{ type: 'uint128' }] },
 ] as const
+const ERC20_BALANCE_ABI = [
+  { type: 'function', stateMutability: 'view', name: 'balanceOf', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] },
+] as const
 
 export type GatewayPositionView = {
   shares: bigint
@@ -149,12 +152,24 @@ export async function readGatewayPoolState(opts: { client: Reader; positionManag
   const pm = (functionName: string, abi: unknown = LP_GATEWAY_ABI, args?: readonly unknown[]) =>
     client.readContract({ address: positionManager, abi, functionName, args })
 
-  const [totalShares, totalNav, tokenId, tickLower, tickUpper, quoteIsCurrency0, stagingAddr] = (await Promise.all([
+  const [totalShares, totalNav, tokenId, tickLower, tickUpper, quoteIsCurrency0, stagingAddr, quoteAssetAddr] = (await Promise.all([
     pm('totalShares'), pm('totalNav'), pm('tokenId'), pm('tickLower'), pm('tickUpper'),
     pm('quoteIsCurrency0', PM_EXTRA_ABI), opts.staging ? Promise.resolve(opts.staging) : pm('staging', PM_EXTRA_ABI),
-  ])) as [bigint, bigint, bigint, number | bigint, number | bigint, boolean, `0x${string}`]
+    pm('quoteAsset'),
+  ])) as [bigint, bigint, bigint, number | bigint, number | bigint, boolean, `0x${string}`, `0x${string}`]
 
-  const idleAtomic = (await client.readContract({ address: stagingAddr, abi: LP_STAGING_ABI, functionName: 'stagedAssets' })) as bigint
+  // V1-03 fix (independent Codex audit, 2026-09-09): the contract's own `_idle()` (PM L395-401) is
+  // `staging.stagedAssets() + quoteAsset.balanceOf(address(this))` — quote can sit directly in the PM's
+  // own balance (a deferred `compoundQuote` when staging's cap was full, or fees swept there ahead of a
+  // sweep) and `_idle()` counts it fully. Reading ONLY `stagedAssets()` here undercounted a withdrawer's
+  // available quote in exactly that case, understating both the dry-quote estimate AND the
+  // `withdrawWithMin` floor derived from it — a real, not just cosmetic, gap once the on-chain pro-rata
+  // payout legitimately included that parked balance.
+  const [stagedAssets, pmOwnBalance] = (await Promise.all([
+    client.readContract({ address: stagingAddr, abi: LP_STAGING_ABI, functionName: 'stagedAssets' }),
+    client.readContract({ address: quoteAssetAddr, abi: ERC20_BALANCE_ABI, functionName: 'balanceOf', args: [positionManager] }),
+  ])) as [bigint, bigint]
+  const idleAtomic = stagedAssets + pmOwnBalance
 
   const deployed = tokenId !== 0n
   let liquidity = 0n

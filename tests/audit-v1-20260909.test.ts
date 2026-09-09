@@ -34,21 +34,28 @@ import { harvestGateway } from '../lib/gateway/harvest'
 import { readGatewayPoolState, withdrawLegsQuote } from '../lib/gateway/positionReader'
 
 describe('V1 audit evidence (current defective behavior)', () => {
-  it('withdrawal quote ignores quote parked in the PM after a deferred compound', async () => {
+  // V1-03 — FIXED 2026-09-09 (lib/gateway/positionReader.ts: readGatewayPoolState now also reads the
+  // PM's own quoteAsset().balanceOf(), matching the contract's _idle() = stagedAssets() +
+  // quoteAsset.balanceOf(address(this)) exactly). Originally proved the bug (100 USDG parked directly
+  // in the PM after a deferred compound was invisible to the withdrawal quote); flipped to prove the
+  // fix. Full regression coverage lives in lib/gateway/positionQuote.test.ts.
+  it('FIXED: withdrawal quote now includes quote parked in the PM after a deferred compound', async () => {
     const pm = ('0x' + 'aa'.repeat(20)) as `0x${string}`
+    const quoteAsset = '0x' + 'ee'.repeat(20)
     const values: Record<string, unknown> = {
       totalShares: 100_000_000n, totalNav: 100_000_000n, tokenId: 0n,
       tickLower: -100, tickUpper: 100, quoteIsCurrency0: true,
       staging: '0x' + 'bb'.repeat(20), stagedAssets: 0n,
+      quoteAsset, balanceOf: 100_000_000n, // the PM's own parked 100 USDG
     }
     const state = await readGatewayPoolState({
       positionManager: pm,
       client: { readContract: async ({ functionName }: { functionName: string }) => values[functionName] } as never,
     })
-    // On-chain _idle() includes the PM's parked 100 USDG; the UI's idle read does not.
+    // On-chain _idle() includes the PM's parked 100 USDG; the UI's idle read now does too.
     expect(state.totalNav).toBe(100_000_000n)
-    expect(state.idleAtomic).toBe(0n)
-    expect(withdrawLegsQuote(state.totalShares, state)).toEqual({ quoteOut: 0n, pairedOut: 0n, lpQuotable: true })
+    expect(state.idleAtomic).toBe(100_000_000n)
+    expect(withdrawLegsQuote(state.totalShares, state)).toEqual({ quoteOut: 100_000_000n, pairedOut: 0n, lpQuotable: true })
   })
   // V1-01 — FIXED 2026-09-09 (lib/gateway/routeInstance.ts: `includeInactive` on resolveInstanceStrict,
   // listResolvableInstances now enumerates retired rows). This test originally proved the bug (a

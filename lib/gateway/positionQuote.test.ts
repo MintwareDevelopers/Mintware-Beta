@@ -127,9 +127,10 @@ describe('readGatewayPoolState', () => {
   const STAGING = '0x00000000000000000000000000000000000000cd' as const
   const PERIPHERY = '0x00000000000000000000000000000000000000ef' as const
   const POOL_MANAGER = '0x0000000000000000000000000000000000000012' as const
+  const QUOTE_ASSET = '0x0000000000000000000000000000000000000034' as const // V1-03 fix: PM's own quote balance
   const key = { currency0: '0x' + '11'.repeat(20), currency1: '0x' + '22'.repeat(20), fee: 3000, tickSpacing: 60, hooks: '0x' + '00'.repeat(20) }
 
-  function client(over: { tokenId?: bigint; slot0Throws?: boolean } = {}) {
+  function client(over: { tokenId?: bigint; slot0Throws?: boolean; pmOwnBalance?: bigint } = {}) {
     const calls: string[] = []
     return {
       calls,
@@ -147,9 +148,13 @@ describe('readGatewayPoolState', () => {
             case 'positionManager': return PERIPHERY
             case 'poolManager': return POOL_MANAGER
             case 'poolKey': return key
+            case 'quoteAsset': return QUOTE_ASSET
           }
         }
         if (address === STAGING && functionName === 'stagedAssets') return 600n
+        // V1-03 fix: the PM's own quote balance is part of idle too — 0 by default so existing
+        // idleAtomic:600n expectations (staging alone) stay exactly correct unless a test overrides it.
+        if (address === QUOTE_ASSET && functionName === 'balanceOf') { expect(args).toEqual([PM]); return over.pmOwnBalance ?? 0n }
         if (address === PERIPHERY && functionName === 'getPositionLiquidity') { expect(args).toEqual([over.tokenId ?? 7n]); return 5_000n }
         if (address === POOL_MANAGER && functionName === 'extsload') {
           if (over.slot0Throws) throw new Error('rpc')
@@ -187,5 +192,13 @@ describe('readGatewayPoolState', () => {
     const s = await readGatewayPoolState({ client: client({ slot0Throws: true }), positionManager: PM })
     expect(s.sqrtPriceX96).toBeNull()
     expect(s.liquidity).toBe(5_000n)
+  })
+  // V1-03 fix (independent Codex audit, 2026-09-09): the contract's own `_idle()` is
+  // `staging.stagedAssets() + quoteAsset.balanceOf(address(this))` — quote can sit directly in the PM's
+  // own balance (a deferred compoundQuote, or fees swept there ahead of a sweep). Reading only
+  // stagedAssets() undercounted a withdrawer's real available quote in exactly that case.
+  it('FIXED: idleAtomic includes quote parked directly in the PM, not just staging', async () => {
+    const s = await readGatewayPoolState({ client: client({ pmOwnBalance: 250n }), positionManager: PM })
+    expect(s.idleAtomic).toBe(600n + 250n) // staging's 600 + the PM's own parked 250
   })
 })
