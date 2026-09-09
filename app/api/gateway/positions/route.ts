@@ -3,8 +3,15 @@ import { createHandler } from '@/lib/web2/routeHandler'
 import { readGatewayPosition } from '@/lib/gateway/positionReader'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { listResolvableInstances } from '@/lib/gateway/routeInstance'
+import { createTokenBucket } from '@/lib/gateway/sparkline'
 
 export const dynamic = 'force-dynamic'
+
+// V1-09 fix (independent Codex audit, 2026-09-09): public, unauthenticated, and the MOST expensive of
+// the three (fans out an RPC read across every resolvable instance) — same in-memory per-IP floor as
+// discover/sparklines/meta/position (O-8); createHandler's declarative rateLimit fails open without
+// Upstash (unset in prod today).
+const ipBucket = createTokenBucket({ capacity: 30, refillPerSec: 0.5, maxKeys: 5_000 })
 
 // GET — PUBLIC (auth:'none'). The cross-pool aggregate: every LP-gateway position a wallet holds, for the
 // Portfolio view. CHAIN-FIRST (audit O-1 / HO-1): enumerate every resolvable instance (active registry
@@ -15,6 +22,9 @@ export const dynamic = 'force-dynamic'
 // the off-chain spendable-buffer reveal (POST /api/gateway/position, L-03) is no longer called by the
 // frontend — the A-4 buffer-credit path is dropped, so it would always answer 0. Left in place as inert.
 export const GET = createHandler(async (req, ctx) => {
+  const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0]?.trim() || 'unknown'
+  if (!ipBucket.take(ip)) return ctx.json({ success: false, error: 'Too many requests', code: 'RATE_LIMITED' }, 429)
+
   const cfg = gatewayConfig()
   if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
 

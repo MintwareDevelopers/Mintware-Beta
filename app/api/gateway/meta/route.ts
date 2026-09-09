@@ -4,8 +4,16 @@ import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { resolveInstanceStrict } from '@/lib/gateway/routeInstance'
 import { LP_GATEWAY_ABI, LP_STAGING_ABI, LP_IDLE_ADAPTER_PROBE_ABI, LP_REAL_ADAPTER_PROBE_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { readCurrentTick, type GatewayPoolKey } from '@/lib/gateway/poolState'
+import { createTokenBucket } from '@/lib/gateway/sparkline'
 
 export const dynamic = 'force-dynamic'
+
+// V1-09 fix (independent Codex audit, 2026-09-09): this route does several RPC reads per call and had
+// no declared rate limit at all — `createHandler`'s `rateLimit` option fails OPEN when Upstash is unset
+// (it is, in prod today — see security.md), so declaring one alone would be advisory only. Same
+// in-memory per-IP floor already proven on discover/sparklines (O-8): works with zero external deps,
+// bounded memory, real protection today regardless of Upstash.
+const ipBucket = createTokenBucket({ capacity: 30, refillPerSec: 0.5, maxKeys: 5_000 })
 
 const DYNAMIC_FEE_FLAG = 0x800000 // Uniswap V4: top bit set ⇒ dynamic fee (no fixed rate)
 
@@ -21,6 +29,9 @@ const ERC20_DECIMALS_ABI = [{ type: 'function', stateMutability: 'view', name: '
 // is 404 while the registry is populated; the env rig is served only while the registry is empty and is
 // tagged `source: 'env-fallback'`. `live` is derived — true only for an active registry row.
 export const GET = createHandler(async (req, ctx) => {
+  const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0]?.trim() || 'unknown'
+  if (!ipBucket.take(ip)) return ctx.json({ success: false, error: 'Too many requests', code: 'RATE_LIMITED' }, 429)
+
   const cfg = gatewayConfig()
   if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
 

@@ -38,8 +38,8 @@ const ENV_POOL = '0x' + 'ee'.repeat(32)
 const cfg = { chainId: 46630, rpcUrl: 'http://rpc.test', positionManager: ENV_PM, staging: null, poolAddress: ENV_POOL }
 const row = (pool: string, pm: string, status = 'active') => ({ pool_address: pool, chain_id: 46630, position_manager: pm, staging: '0x' + '11'.repeat(20), quote_asset: '0x' + '22'.repeat(20), status, pair_label: `${pool.slice(0, 6)} / USDG` })
 
-function req(url: string) {
-  const r = new Request(url)
+function req(url: string, ip = '203.0.113.1') {
+  const r = new Request(url, { headers: { 'x-forwarded-for': ip } })
   ;(r as unknown as { nextUrl: URL }).nextUrl = new URL(url)
   return r as never
 }
@@ -150,5 +150,18 @@ describe('GET /api/gateway/positions — chain-first', () => {
     const { GET } = await import('./route')
     const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
     expect(positions[0].sourceReadable).toBe(false)
+  })
+  // V1-09 fix (independent Codex audit, 2026-09-09): the MOST expensive of the three position routes
+  // (fans out across every instance) had no rate limit at all.
+  it('V1-09 fix: per-IP floor returns a 429-shaped JSON without Upstash', async () => {
+    state.supabase = fakeSupabase({ tables: { gateway_instances: [row(POOL_A, PM_A)] } }).client
+    const { GET } = await import('./route')
+    let saw429 = false
+    for (let i = 0; i < 60; i++) {
+      const r = await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`, '198.51.100.7'))
+      if (r.status === 429) { saw429 = true; expect((await r.json()).code).toBe('RATE_LIMITED'); break }
+    }
+    expect(saw429).toBe(true)
+    expect((await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`, '198.51.100.8'))).status).toBe(200)
   })
 })

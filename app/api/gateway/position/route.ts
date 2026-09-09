@@ -3,8 +3,15 @@ import { createHandler } from '@/lib/web2/routeHandler'
 import { readGatewayPosition, readGatewayPoolState, serializePoolState } from '@/lib/gateway/positionReader'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { resolveInstanceStrict } from '@/lib/gateway/routeInstance'
+import { createTokenBucket } from '@/lib/gateway/sparkline'
 
 export const dynamic = 'force-dynamic'
+
+// V1-09 fix (independent Codex audit, 2026-09-09): public, unauthenticated, several RPC reads per call
+// — same in-memory per-IP floor as discover/sparklines/meta (O-8), since createHandler's declarative
+// rateLimit fails open without Upstash (unset in prod today). The signed POST below already has a
+// per-request signature as natural friction, so only the public GET is limited here.
+const ipBucket = createTokenBucket({ capacity: 30, refillPerSec: 0.5, maxKeys: 5_000 })
 
 // GET — PUBLIC (auth:'none'). Returns only chain-derivable position figures (shares, NAV/value, cost
 // basis, PnL) for any ?address=. It deliberately does NOT disclose the off-chain spendable-buffer
@@ -16,6 +23,9 @@ export const dynamic = 'force-dynamic'
 // basis) only. Also returns `poolState` — the on-chain inputs the UI's dry quotes need to set
 // `depositWithMin` / `withdrawWithMin` floors (C-6). Pool resolution is strict (O-2): 404 on a miss.
 export const GET = createHandler(async (req, ctx) => {
+  const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0]?.trim() || 'unknown'
+  if (!ipBucket.take(ip)) return ctx.json({ success: false, error: 'Too many requests', code: 'RATE_LIMITED' }, 429)
+
   const cfg = gatewayConfig()
   if (!cfg) return ctx.json({ success: false, error: 'gateway_not_configured' }, 503)
 

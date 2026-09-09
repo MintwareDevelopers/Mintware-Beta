@@ -26,8 +26,8 @@ const QUOTE = '0x' + '22'.repeat(20)
 const cfg = { chainId: 46630, rpcUrl: 'http://rpc.test', positionManager: ENV_PM, staging: null, poolAddress: ENV_POOL }
 const registryRow = { pool_address: POOL_ID, chain_id: 46630, position_manager: REG_PM, staging: '0x' + '11'.repeat(20), quote_asset: QUOTE, status: 'active', pair_label: 'PONS / USDG' }
 
-function req(url: string) {
-  const r = new Request(url)
+function req(url: string, ip = '203.0.113.1') {
+  const r = new Request(url, { headers: { 'x-forwarded-for': ip } })
   ;(r as unknown as { nextUrl: URL }).nextUrl = new URL(url)
   return r as never
 }
@@ -155,5 +155,19 @@ describe('GET /api/gateway/meta — strict resolution', () => {
     const res = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`))
     expect(res.status).toBe(409)
     expect((await res.json()).error).toBe('instance_quote_mismatch')
+  })
+  // V1-09 fix (independent Codex audit, 2026-09-09): this route runs several RPC reads per call and had
+  // no rate limit at all — createHandler's declarative option fails open without Upstash. Now has the
+  // same in-memory per-IP floor as discover/sparklines (O-8).
+  it('V1-09 fix: per-IP floor returns a 429-shaped JSON without Upstash', async () => {
+    state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] } }).client
+    const { GET } = await import('./route')
+    let saw429 = false
+    for (let i = 0; i < 60; i++) {
+      const r = await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`, '198.51.100.7'))
+      if (r.status === 429) { saw429 = true; expect((await r.json()).code).toBe('RATE_LIMITED'); break }
+    }
+    expect(saw429).toBe(true)
+    expect((await GET(req(`https://mw.test/api/gateway/meta?pool=${POOL_ID}`, '198.51.100.8'))).status).toBe(200)
   })
 })
