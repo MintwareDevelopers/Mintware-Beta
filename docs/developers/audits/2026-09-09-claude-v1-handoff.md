@@ -81,6 +81,10 @@ Operational question: `vercel.json` schedules the snapshot route daily, while `l
 
 The requested next deliverable is an independent review document, with supporting safe local reproductions and a reconciled finding table. Implementation changes and deployment are separate from this review request. Keep the audit evidence intact and report unverified items explicitly.
 
+## Audit toolkit added after the initial review
+
+Read `tools/v1-audit/README.md` for the isolated audit tools, reproducible commands, versions and verified limitations. Browser, embedded PostgreSQL, property-testing, synthetic secret detection and a tiny Halmos proof were exercised. CI and scoped Semgrep reports are local in `.audit-output/`; their matches still require triage. These checks do not constitute new V1 proofs or remediation. Seven Trail of Bits review skills were also installed for Codex's next turn. No authenticated Claude review was initiated by this installation.
+
 ## Suggested prompt to start Claude
 
 > Read `docs/developers/audits/2026-09-09-claude-v1-handoff.md` in `/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build`. Independently review the linked V1 audit, rerun the safe local reproductions, challenge every finding, and inspect the documented gaps. Produce a confirmed/revised/rejected/needs-evidence table with exact code references and remediation priorities. Treat the PoCs as bug demonstrations, not security passes. Review the actual current checkout and distinguish source evidence from live deployment claims.

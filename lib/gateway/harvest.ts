@@ -48,7 +48,10 @@ type Reason = 'disabled' | 'config' | 'signer' | 'tx' | 'nothing' | 'duplicate' 
 export type HarvestOutcome =
   | {
       ok: true
-      collectTx: `0x${string}`
+      // V1-02 fix (independent Codex audit, 2026-09-09): optional now — a run that settles an existing
+      // pending-restake backlog WITHOUT a fresh on-chain collect() (dust floor / deterministic-revert
+      // short-circuit, see settlePendingBacklog below) has no collect tx of its own to report.
+      collectTx?: `0x${string}`
       grossAtomic: bigint
       feeAtomic: bigint
       creditedAtomic: bigint
@@ -129,6 +132,95 @@ export async function harvestAll(opts: { supabase: SupabaseClient; log?: Logger 
   return { harvested, indexed, results, indexResults }
 }
 
+/** V1-02 fix (independent Codex audit, 2026-09-09). Settles an EXISTING pending-restake backlog
+ *  (already-indexed `Harvested` logs — cron collects, or withdraw/deploy sweeps — that were never
+ *  compounded) via the same claim → approve → compoundQuote → mark two-phase flow the normal post-collect
+ *  path uses. Extracted so it can run standalone from the dust-floor / deterministic-revert
+ *  short-circuits below, WITHOUT requiring a fresh on-chain collect() — the two concerns ("is a new
+ *  collect() worth its own gas" and "is there a backlog worth settling") are independent, and the bug
+ *  this fixes was conflating them: a below-floor fresh harvest used to skip straight past this step
+ *  every time, so a real backlog (e.g. from a withdraw/deploy sweep, or a prior failed settlement) could
+ *  sit unsettled indefinitely whenever ongoing trading stayed quiet. Returns `null` when there's nothing
+ *  to settle (`amount <= 0`) — the caller decides what to do in that case. */
+async function settlePendingBacklog(opts: {
+  supabase: SupabaseClient
+  log?: Logger
+  instance: HarvestInstance
+  publicClient: ReturnType<typeof gatewayPublicClient>
+  wallet: ReturnType<typeof createWalletClient>
+  account: Awaited<ReturnType<typeof getOracleSigner>>
+  index: IndexOutcome | null
+  swappedNet?: bigint
+  collectTx?: `0x${string}`
+  swapTx?: string | null
+  grossAtomic?: bigint
+  feeAtomic?: bigint
+}): Promise<HarvestOutcome | null> {
+  const { supabase, log, instance, publicClient, wallet, account, index, swappedNet = 0n, collectTx, swapTx = null, grossAtomic = 0n, feeAtomic = 0n } = opts
+  const pending = await listPendingRestake(supabase, instance)
+  const amount = pending.netAtomic + swappedNet
+  if (amount <= 0n) return null
+
+  const record = (credited: bigint) =>
+    supabase.from('harvest_events').insert({
+      pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx ?? null, swap_tx: swapTx,
+      amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(), amount_credited_atomic: credited.toString(),
+    })
+
+  // Round-3 audit F-3 — two-phase settlement so a mined compound can never be compounded twice: claim
+  // (pending → restaking, count-verified) → compound → mark (restaking → restake + tx, count-verified);
+  // a compound that never mined releases the claim.
+  try {
+    await claimRestake(supabase, pending.ids)
+  } catch (e) {
+    log?.error('gateway.harvest', 'restake claim failed — nothing sent', { error: String(e) })
+    return { ok: false, status: 500, error: 'restake_claim_failed', reason: 'tx', index }
+  }
+  let ch: `0x${string}` | undefined
+  let mined = false
+  let compoundDeferred = false
+  try {
+    const quoteAsset = (await publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset' })) as `0x${string}`
+    const ah = await wallet.writeContract({ address: quoteAsset, abi: ERC20_APPROVE_ABI, functionName: 'approve', args: [instance.positionManager, amount], account, chain: publicClient.chain })
+    await publicClient.waitForTransactionReceipt({ hash: ah })
+    const compoundArgs = { address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'compoundQuote', args: [amount], account } as const
+    const { gas: compoundGas } = await estimateGasWithFloor(publicClient, compoundArgs, 400_000n)
+    ch = await wallet.writeContract({ ...compoundArgs, chain: publicClient.chain, gas: compoundGas })
+    const rc = await publicClient.waitForTransactionReceipt({ hash: ch })
+    mined = rc.status === 'success'
+    if (!mined) {
+      await releaseRestake(supabase, pending.ids).catch((e) => log?.error('gateway.harvest', 'restake release failed after revert', { error: String(e) }))
+      return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx', index }
+    }
+    for (const lg of rc.logs ?? []) {
+      if (lg.address?.toLowerCase() !== instance.positionManager.toLowerCase()) continue
+      try {
+        const ev = decodeEventLog({ abi: LP_GATEWAY_ABI, data: lg.data, topics: lg.topics })
+        if (ev.eventName === 'CompoundDeferred') compoundDeferred = true
+      } catch { /* not a gateway event */ }
+    }
+    if (compoundDeferred) {
+      log?.warn('gateway.harvest', 'compound deferred re-staging — yield source at capacity; harvested quote parked in the PM, NAV still lifted', { pool: instance.poolAddress, amount: amount.toString() })
+    }
+  } catch (e) {
+    log?.error('gateway.harvest', 'restake/compound failed', { error: String(e) })
+    if (ch === undefined) {
+      await releaseRestake(supabase, pending.ids).catch((e2) => log?.error('gateway.harvest', 'restake release failed', { error: String(e2) }))
+      return { ok: false, status: 502, error: 'compound_failed', reason: 'tx', index }
+    }
+    log?.error('gateway.harvest', 'compound sent but receipt unknown — rows left in `restaking`, operator must finalise', { settleTx: ch })
+    return { ok: false, status: 502, error: 'compound_receipt_unknown', reason: 'tx', index }
+  }
+  try {
+    await markRestaked(supabase, pending.ids, ch)
+  } catch (e) {
+    log?.error('gateway.harvest', 'compound mined but ledger mark failed — rows left in `restaking`, operator must finalise', { error: String(e), settleTx: ch })
+    return { ok: false, status: 500, error: 'restake_mark_failed', reason: 'tx', index }
+  }
+  await record(amount)
+  return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: amount, recipients: 0, destination: 'restake', index, compoundDeferred }
+}
+
 export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Logger; instance: HarvestInstance }): Promise<HarvestOutcome> {
   const { supabase, log, instance } = opts
   if (!harvestEnabled()) {
@@ -152,6 +244,15 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   //    to read the collectable fees, and skip the real tx when the quote leg is below the floor and there
   //    is no paired leg worth swapping. Fails OPEN (proceeds) if the simulate itself errors — it's an
   //    optimization, not a safety gate. Even when skipped, the ledger still indexes prior sweeps.
+  //
+  // V1-02 fix (independent Codex audit, 2026-09-09): a below-floor/deterministic-revert short-circuit
+  // must ALSO settle an existing pending-restake backlog before bailing — but that settlement (its own
+  // real RPC calls + a DB write) must NOT run inside this try block. It did in an earlier version of
+  // this fix, and any error from IT (even one unrelated to the pre-simulate itself) was then wrongly
+  // caught by the `catch` below and misread as "the pre-simulate failed, proceed to a real collect" —
+  // exactly the failure mode this whole guard exists to prevent. `earlyExit` just records WHY the guard
+  // wants to skip; the actual backlog settlement + return happens after the try/catch, unconditionally.
+  let earlyExit: { errorMsg: string } | null = null
   try {
     const sim = await publicClient.simulateContract({
       address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'harvest',
@@ -162,10 +263,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
       log?.info('gateway.harvest', 'below harvest floor — skipped (no gas spent)', {
         expectedQuote: eq.toString(), floor: harvestMinAtomic().toString(), pool: instance.poolAddress,
       })
-      const index = await indexHarvestLogs({
-        supabase, client: publicClient as unknown as LedgerClient, instance, log, settlement: destination === 'buffer' ? 'credited' : 'pending',
-      })
-      return { ok: false, status: 200, error: 'below harvest floor — skipped to save gas', reason: 'nothing', index }
+      earlyExit = { errorMsg: 'below harvest floor — skipped to save gas' }
     }
   } catch (e) {
     // Round-4 audit fix (Medium): a DETERMINISTIC contract-level revert (e.g. `NotDeployed()` for a pool
@@ -174,12 +272,23 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     const deterministic = isDeterministicContractRevert(e, ['NotDeployed'])
     if (deterministic) {
       log?.info('gateway.harvest', 'pre-harvest simulate hit a deterministic revert — skipped (no gas spent)', { reason: deterministic, pool: instance.poolAddress })
-      const index = await indexHarvestLogs({
-        supabase, client: publicClient as unknown as LedgerClient, instance, log, settlement: destination === 'buffer' ? 'credited' : 'pending',
-      })
-      return { ok: false, status: 200, error: `pre-harvest simulate: ${deterministic}`, reason: 'nothing', index }
+      earlyExit = { errorMsg: `pre-harvest simulate: ${deterministic}` }
+    } else {
+      log?.warn('gateway.harvest', 'pre-harvest simulate failed; proceeding', { error: String(e) })
     }
-    log?.warn('gateway.harvest', 'pre-harvest simulate failed; proceeding', { error: String(e) })
+  }
+  if (earlyExit) {
+    const index = await indexHarvestLogs({
+      supabase, client: publicClient as unknown as LedgerClient, instance, log, settlement: destination === 'buffer' ? 'credited' : 'pending',
+    })
+    // A below-floor/guaranteed-revert FRESH collect must not also skip settling an EXISTING pending
+    // backlog (a prior withdraw/deploy sweep, or a previously-failed compound) — those are two
+    // independent questions. Only actually bail with nothing done when there's truly nothing to settle.
+    if (destination === 'restake') {
+      const settled = await settlePendingBacklog({ supabase, log, instance, publicClient, wallet, account, index })
+      if (settled) return settled
+    }
+    return { ok: false, status: 200, error: earlyExit.errorMsg, reason: 'nothing', index }
   }
 
   // 1) collect fees (zero-liquidity-delta) → harvestRecipient (the oracle seat). Idempotent-safe: a
@@ -254,76 +363,15 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   //     swapped paired leg back into the PM — lifts NAV pro-rata for ALL holders on-chain, no share mint.
   //     The paired-leg proceeds are not part of any Harvested log's quote_fees, so they ride along here.
   if (destination === 'restake') {
-    const pending = await listPendingRestake(supabase, instance)
     const { netAtomic: swappedNet } = skimPerformanceFee(swappedQuote, perfFeeBps())
-    const amount = pending.netAtomic + swappedNet
-    if (amount <= 0n) {
-      await record(0n)
-      return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: 0n, recipients: 0, destination, index }
-    }
-    // Round-3 audit F-3 — two-phase settlement so a mined compound can never be compounded twice:
-    // claim (pending → restaking, count-verified) → compound → mark (restaking → restake + tx, count-verified);
-    // a compound that never mined releases the claim. A crash between compound and mark leaves `restaking` rows
-    // that are excluded from the pending pool and surfaced to the operator (listStuckRestaking).
-    try {
-      await claimRestake(supabase, pending.ids)
-    } catch (e) {
-      log?.error('gateway.harvest', 'restake claim failed — nothing sent', { error: String(e) })
-      return { ok: false, status: 500, error: 'restake_claim_failed', reason: 'tx', index }
-    }
-    let ch: `0x${string}` | undefined
-    let mined = false
-    let compoundDeferred = false
-    try {
-      const quoteAsset = (await publicClient.readContract({ address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'quoteAsset' })) as `0x${string}`
-      const ah = await wallet.writeContract({ address: quoteAsset, abi: ERC20_APPROVE_ABI, functionName: 'approve', args: [instance.positionManager, amount], account, chain: publicClient.chain })
-      await publicClient.waitForTransactionReceipt({ hash: ah })
-      // Round-4 audit fix (Medium): estimate for real instead of a fixed 400_000n literal — same class of
-      // fixed-budget starvation risk as the harvest collect call above.
-      const compoundArgs = { address: instance.positionManager, abi: LP_GATEWAY_ABI, functionName: 'compoundQuote', args: [amount], account } as const
-      const { gas: compoundGas } = await estimateGasWithFloor(publicClient, compoundArgs, 400_000n)
-      ch = await wallet.writeContract({ ...compoundArgs, chain: publicClient.chain, gas: compoundGas })
-      const rc = await publicClient.waitForTransactionReceipt({ hash: ch })
-      mined = rc.status === 'success'
-      if (!mined) {
-        await releaseRestake(supabase, pending.ids).catch((e) => log?.error('gateway.harvest', 'restake release failed after revert', { error: String(e) }))
-        return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx', index }
-      }
-      // IA-4: `compoundQuote` never reverts on a full yield-source cap — it defers the re-stage instead
-      // (`CompoundDeferred`) and the harvested quote just sits in the PM's own balance, which its own
-      // `_idle()` already counts toward NAV. Purely informational: log it so an operator can see the
-      // yield source is at capacity, but there is nothing to retry or release here.
-      for (const lg of rc.logs ?? []) {
-        if (lg.address?.toLowerCase() !== instance.positionManager.toLowerCase()) continue
-        try {
-          const ev = decodeEventLog({ abi: LP_GATEWAY_ABI, data: lg.data, topics: lg.topics })
-          if (ev.eventName === 'CompoundDeferred') compoundDeferred = true
-        } catch { /* not a gateway event */ }
-      }
-      if (compoundDeferred) {
-        log?.warn('gateway.harvest', 'compound deferred re-staging — yield source at capacity; harvested quote parked in the PM, NAV still lifted', { pool: instance.poolAddress, amount: amount.toString() })
-      }
-    } catch (e) {
-      log?.error('gateway.harvest', 'restake/compound failed', { error: String(e) })
-      // Only release if we KNOW nothing was sent; an ambiguous send (compound hash obtained, receipt unknown —
-      // e.g. the receipt wait timed out) stays `restaking` for the operator to resolve on-chain rather than
-      // risk a double compound.
-      if (ch === undefined) {
-        await releaseRestake(supabase, pending.ids).catch((e2) => log?.error('gateway.harvest', 'restake release failed', { error: String(e2) }))
-        return { ok: false, status: 502, error: 'compound_failed', reason: 'tx', index }
-      }
-      log?.error('gateway.harvest', 'compound sent but receipt unknown — rows left in `restaking`, operator must finalise', { settleTx: ch })
-      return { ok: false, status: 502, error: 'compound_receipt_unknown', reason: 'tx', index }
-    }
-    try {
-      await markRestaked(supabase, pending.ids, ch)
-    } catch (e) {
-      // The compound MINED. Do not release (that would re-compound). Leave `restaking` + loud error.
-      log?.error('gateway.harvest', 'compound mined but ledger mark failed — rows left in `restaking`, operator must finalise', { error: String(e), settleTx: ch })
-      return { ok: false, status: 500, error: 'restake_mark_failed', reason: 'tx', index }
-    }
-    await record(amount)
-    return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: amount, recipients: 0, destination, index, compoundDeferred }
+    // V1-02 fix: this collect's own logic is now shared with the dust-floor/deterministic-revert
+    // short-circuits above via settlePendingBacklog — one claim→approve→compoundQuote→mark
+    // implementation instead of two copies that could quietly drift apart.
+    const settled = await settlePendingBacklog({ supabase, log, instance, publicClient, wallet, account, index, swappedNet, collectTx, swapTx, grossAtomic, feeAtomic })
+    if (settled) return settled
+    // Nothing to compound even after this collect — still record the run (a real collect DID happen).
+    await record(0n)
+    return { ok: true, collectTx, grossAtomic, feeAtomic, creditedAtomic: 0n, recipients: 0, destination, index }
   }
 
   // 4b) BUFFER (opt-in): the index step already wrote every per-depositor credit atomically. Nothing moves

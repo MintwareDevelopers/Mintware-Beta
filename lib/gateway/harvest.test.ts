@@ -176,6 +176,9 @@ describe('harvestGateway', () => {
   it('below the dust floor: no tx, but prior sweeps are still indexed', async () => {
     publicClient.simulateContract.mockResolvedValueOnce({ result: [1n, 0n] } as never)
     indexMock.mockResolvedValue(okIndex({ harvestLogs: 1, creditedAtomic: 0n }))
+    // V1-02 fix: below the dust floor now also checks for an existing pending-restake backlog before
+    // bailing out — genuinely nothing pending here, so it should still fall through to reason:'nothing'.
+    pendingMock.mockResolvedValue({ ids: [], netAtomic: 0n })
     const { client } = fakeDb()
     const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
     expect(r).toMatchObject({ ok: false, reason: 'nothing' })
@@ -183,9 +186,29 @@ describe('harvestGateway', () => {
     expect(indexMock).toHaveBeenCalledTimes(1)
   })
 
+  // V1-02 — FIXED 2026-09-09 (independent Codex audit). Below the dust floor used to skip settling an
+  // EXISTING pending-restake backlog entirely (a prior withdraw/deploy sweep, or a previously-failed
+  // compound) — it could sit unsettled indefinitely whenever new trading stayed quiet. Now the backlog
+  // gets compounded on its own even when there's no fresh collect worth its own gas.
+  it('FIXED: below the dust floor, an EXISTING pending backlog still gets settled (no fresh collect needed)', async () => {
+    publicClient.simulateContract.mockResolvedValueOnce({ result: [1n, 0n] } as never) // below floor
+    indexMock.mockResolvedValue(okIndex({ harvestLogs: 1, creditedAtomic: 0n }))
+    pendingMock.mockResolvedValue({ ids: ['old-sweep'], netAtomic: 100_000_000n }) // a real 100 USDG backlog
+    const { client } = fakeDb()
+    const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+    expect(r.ok).toBe(true)
+    if (r.ok) expect(r.creditedAtomic).toBe(100_000_000n)
+    // No 'harvest' collect call (still below floor, still saves that gas) — but the backlog DID compound.
+    expect(writes.map((w) => w.functionName)).toEqual(['approve', 'compoundQuote'])
+    expect(claimMock).toHaveBeenCalledWith(expect.anything(), ['old-sweep'])
+    expect(markMock).toHaveBeenCalled()
+  })
+
   it('round-4 audit fix: a deterministic NotDeployed revert on the pre-simulate short-circuits (no real tx sent), instead of falling through to a guaranteed-revert real transaction', async () => {
     publicClient.simulateContract.mockRejectedValueOnce(new Error('ContractFunctionExecutionError: execution reverted: NotDeployed()'))
     indexMock.mockResolvedValue(okIndex({ harvestLogs: 0, creditedAtomic: 0n }))
+    // V1-02 fix: same "is there a backlog worth settling" check runs here too — genuinely empty.
+    pendingMock.mockResolvedValue({ ids: [], netAtomic: 0n })
     const { client } = fakeDb()
     const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
     expect(r).toMatchObject({ ok: false, reason: 'nothing', error: 'pre-harvest simulate: NotDeployed' })
