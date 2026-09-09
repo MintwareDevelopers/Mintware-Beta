@@ -106,13 +106,36 @@ fix set and each re-run found a real residual in the previous fix — never ship
 Off-chain: deploy cron pre-flights the band (`poke` + retry) and an external reference price (`ref_price_*`,
 fail-closed unless `LP_GATEWAY_DEPLOY_REQUIRE_REF_PRICE=false`); two-phase restake ledger (claim → compound →
 mark); replay set keyed on the signed message; registry pins `owner()`/`harvestRecipient()`/adapter binding;
-`ORACLE_SIGNER_PROVIDER` typo throws; ledger views `security_invoker` + revoked from anon (migration
-`20260908000003`). Still open/accepted: `compoundQuote` sandwich (Low, owner is sole depositor), read-only-
-reentrancy view windows (never read PM views from a gateway callback), USDG issuer upgrade authority (single
-key behind a 24 h timelock — disclose + monitor). **The owner paired-leg subsidy design residual is CLOSED**
-(earn-vs-lp decision, 2026-09-08) — deleted outright, not just bounded; see the status box at the top.
+`ORACLE_SIGNER_PROVIDER` typo throws; ledger views `security_invoker` + revoked from anon in the migration
+**SQL** (`20260908000003`) — ⚠ **round-4 (2026-09-09) found this migration was never actually EXECUTED against
+production** (live-reproduced: both ledger views still return 200 to the anon key) — this line previously
+claimed it as done; it is not. **Not yet fixed — apply the migration.** See round-4 below. Still open/accepted:
+`compoundQuote` sandwich (Low, owner is sole depositor), read-only-reentrancy view windows (never read PM views
+from a gateway callback), USDG issuer upgrade authority (single key behind a 24 h timelock — disclose + monitor).
+**The owner paired-leg subsidy design residual is CLOSED** (earn-vs-lp decision, 2026-09-08) — deleted outright,
+not just bounded; see the status box at the top.
 Rig **'g'** (PM `0xa52d4ffaefa586251cb36d1e05588daa89ab0a63`, staging `0x0a85…fa14`, tUSDG `0x2a8c…b848`, poolId
 `0x07340da7…dfa2`, PM code hash `0x89a53e8d…00f4`) is the round-3 deployment (smoke passed 2026-09-08); rig 'e' is superseded.
+
+**Round-4 multi-suite audit (2026-09-09 — [`../../docs/developers/audits/round4/README.md`](../../docs/developers/audits/round4/README.md)):**
+"all V1, anything V1 touches" — 24 confirmed findings (1 Critical, 6 High, 8 Medium, 6 Low, 3 Informational),
+several with PoCs executed against a live testnet fork or the real production Supabase project. **Fixed
+on-chain:** `deploy()`'s post-swap price re-read now re-checked against the deviation band (closes a hostile
+paired-token transfer-hook interleaved-swap manipulation window — V4's `unlock()` lock is global, not
+caller-scoped); `deploy()` now reverts `InsufficientStaged` before any swap when `staging.unstage()`
+under-delivers (a routine adapter-liquidity-shortfall event, not an edge case); `_withdraw()`'s idle leg is now
+isolated behind a self-call + try/catch (new `idleLegExit`, mirrors `lpLegExit`) so a frozen withdrawer no
+longer bricks their own exit; `MintwareERC4626YieldAdapter.withdraw()` now genuinely honors `IYieldAdapter`'s
+"never reverts" contract (the whole read-then-redeem sequence, not just `redeem`, moved behind one try/catch
+boundary); `MintwareLpGatewayFactory` now disables `renounceOwnership`, matching every sibling contract.
+**Fixed off-chain:** the D-4 adapter-kind probe (session-introduced) no longer defaults to `'real'` on ANY
+`depositCap()` read failure — needs a positive `perBlockWithdrawCap()` confirmation now; the deposit-amount
+input no longer silently corrupts locale-formatted numbers (`"1,25"` → `"125"`, a 100x-inflated deposit);
+`withdrawLegsQuote()` no longer double-applies the virtual offset per leg (was the stale PRE-round-3-fix
+formula, causing spurious `SlippageExceeded` on typical small withdrawals). **NOT fixed — needs operator
+action:** the Critical RLS-migration-not-applied above, and 6 lower-priority Medium/Low items recorded in the
+round-4 report rather than dropped. Verification: full vitest 1053/0 fail, full forge test 1040/0 fail (4
+pre-existing fork-test skips, unrelated).
 
 ## Off-chain ([`lib/gateway/*`](../../lib/gateway/), [`app/api/gateway/*`](../../app/api/gateway/))
 - **`registry.ts`** — the deposit-routing trust root. `registerInstance` **verifies the candidate PM on-chain**
