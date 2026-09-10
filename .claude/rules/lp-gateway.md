@@ -225,15 +225,18 @@ unrelated).
   to prod, live-verified**) · `20260909000001` (cost-basis atomic writes — **applied to prod,
   live-verified**, see round-4 above) · `_002` (registry multi-row-per-pool history, Finding D) ·
   `_004` (cost-basis EVENT-ORDER fix — replaces the two `record_gateway_*_event` RPCs with a
-  full-history-replay version that takes an EXTRA `p_block_number` arg, see the event-order note below).
-  ⚠ **This one is NOT backward-compatible like the others** — the deposit/withdraw ROUTES already call
-  the RPCs with `p_block_number` (same commit as this migration) but Postgres treats a different arg
-  count as a DIFFERENT function; until this migration is applied, there is NO matching RPC signature and
-  `/api/gateway/{deposit,withdraw}` will 500 on every call (`record_failed`) — apply this migration
-  PROMPTLY after this code deploys, the same way the two prior cost-basis/RLS migrations were. On-chain
-  funds are unaffected either way (this is display-only cost-basis bookkeeping). All **deny-all RLS**.
-  **Env vars:** every `LP_GATEWAY_*` var is tabled in [`deployments.md`](deployments.md) → "LP Gateway
-  (V1) — Robinhood Chain".
+  full-history-replay version that takes an EXTRA `p_block_number` arg, see the event-order note below) ·
+  `_005` (cost-basis MANAGER-GENERATION fix — adds `position_manager` to `gateway_positions`'/
+  `gateway_deposit_events`' identity, replaces the two RPCs again with an adopt-or-create version keyed
+  per generation, see the routeInstance.ts residual note — now CLOSED — and the position/positions read
+  routes). ⚠ **`_004` and `_005` are NOT backward-compatible like the earlier ones** — the deposit/
+  withdraw ROUTES already call the RPCs with the new args (same commits as these migrations) but Postgres
+  treats a different arg count as a DIFFERENT function; until BOTH migrations are applied (in order —
+  `_005` builds on `_004`'s signature), there is NO matching RPC signature and
+  `/api/gateway/{deposit,withdraw}` will 500 on every call (`record_failed`) — apply them PROMPTLY after
+  this code deploys, the same way the prior cost-basis/RLS migrations were. On-chain funds are unaffected
+  either way (this is display-only cost-basis bookkeeping). All **deny-all RLS**. **Env vars:** every
+  `LP_GATEWAY_*` var is tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
 
 ## Surfaces & the V1/V2 model
 - **`/v1`** ([`app/v1/page.tsx`](../../app/v1/page.tsx)) = the live product (`V1Shell` + `V1Discover` — the

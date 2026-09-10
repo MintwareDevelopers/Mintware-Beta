@@ -37,13 +37,30 @@ export const GET = createHandler(async (req, ctx) => {
   if (instances.length === 0) return ctx.json({ success: true, positions: [], complete: true, failedPools: [] })
 
   // DB enrichment: cost basis per pool (may be absent when a record call never landed).
+  //
+  // Round-4 pass-2 manager-generation fix (independent Codex audit, 2026-09-09): `instances` already
+  // enumerates a SEPARATE entry per PositionManager generation for a pool that has been through a
+  // migration (V1-01 residual) — but this map used to key by pool+chain ONLY, so a wallet with rows for
+  // TWO generations of the same pool would have the second one silently overwrite the first in the map,
+  // and both chain-enumerated instances would then read from whichever row happened to be last. Keying
+  // by pool+chain+PM (falling back to a not-yet-adopted legacy NULL-PM row when no exact match exists —
+  // same rule as the single-pool GET) makes each generation resolve its own basis correctly.
   const { data: rows } = await ctx.supabase
     .from('gateway_positions')
-    .select('pool_address, chain_id, entry_nav, shares')
+    .select('pool_address, chain_id, position_manager, entry_nav, shares')
     .eq('user_wallet', address)
-  const basisByPool = new Map<string, { entry_nav: unknown }>()
-  for (const r of (rows ?? []) as { pool_address: string; chain_id: number; entry_nav: unknown }[]) {
-    basisByPool.set(`${String(r.pool_address).toLowerCase()}:${Number(r.chain_id)}`, r)
+  type PosRow = { pool_address: string; chain_id: number; position_manager: string | null; entry_nav: unknown }
+  const byPoolChain = new Map<string, PosRow[]>()
+  for (const r of (rows ?? []) as PosRow[]) {
+    const k = `${String(r.pool_address).toLowerCase()}:${Number(r.chain_id)}`
+    const arr = byPoolChain.get(k) ?? []
+    arr.push(r)
+    byPoolChain.set(k, arr)
+  }
+  const basisFor = (poolAddress: string, chainId: number, positionManager: string): PosRow | undefined => {
+    const candidates = byPoolChain.get(`${poolAddress.toLowerCase()}:${chainId}`) ?? []
+    const pm = positionManager.toLowerCase()
+    return candidates.find((r) => (r.position_manager ?? '').toLowerCase() === pm) ?? candidates.find((r) => r.position_manager == null)
   }
 
   const client = gatewayPublicClient(cfg)
@@ -56,7 +73,7 @@ export const GET = createHandler(async (req, ctx) => {
   // signal instead of a result that looks identical to "you have nothing here."
   const outcomes = await Promise.all(
     instances.map(async (inst) => {
-      const row = basisByPool.get(`${inst.poolAddress}:${inst.chainId}`)
+      const row = basisFor(inst.poolAddress, inst.chainId, inst.positionManager)
       try {
         const view = await readGatewayPosition({
           client,

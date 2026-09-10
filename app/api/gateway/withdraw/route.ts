@@ -111,6 +111,10 @@ export const POST = createHandler(async (req, ctx) => {
   // comment — the RPC now recomputes entry_nav by replaying this identity's whole event history in
   // on-chain block order, and `p_block_number` (this withdrawal's own block, already read above to pin
   // `onChainShares`) is what makes that replay immune to which order recording calls happen to arrive in.
+  //
+  // Round-4 pass-2 manager-generation fix (independent Codex audit, 2026-09-09): `p_position_manager`
+  // scopes this write to the EXACT generation the withdrawal came from — `inst.positionManager` here is
+  // already verified against `receipt.to` above (a wallet's own tx, never a client-supplied claim).
   const { data: rpcData, error: rpcErr } = await ctx.supabase.rpc('record_gateway_withdraw_event', {
     p_tx_hash: txHash,
     p_address: address,
@@ -120,6 +124,7 @@ export const POST = createHandler(async (req, ctx) => {
     p_on_chain_shares: onChainShares.toString(),
     p_shares_burned: sharesBurned.toString(),
     p_block_number: receipt.blockNumber.toString(),
+    p_position_manager: inst.positionManager,
   })
   if (rpcErr) {
     ctx.log.error('gateway.withdraw', 'record_gateway_withdraw_event failed', { error: rpcErr.message })

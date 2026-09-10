@@ -42,12 +42,23 @@ export const GET = createHandler(async (req, ctx) => {
 
   // Cost basis comes from the DB (populated by the deposit/withdraw record flows); absent ⇒ null PnL.
   // The buffer balance is intentionally NOT read here — it is owner-gated on the POST path.
+  //
+  // Round-4 pass-2 manager-generation fix (independent Codex audit, 2026-09-09): `inst` already resolves
+  // to the EXACT PositionManager generation (via `?pm=`, see resolveInstanceStrict above) — but the
+  // basis lookup used to filter by (wallet, pool, chain) only, so a wallet with deposits in two
+  // generations of the same pool would always read whichever generation's row happened to match first,
+  // regardless of which one `inst` actually named. A legacy row (position_manager IS NULL, pre-migration
+  // 20260909000005) still matches too — it hasn't been "adopted" by a write yet, but it's the only
+  // record that identity has, so surfacing it here (rather than showing nothing) is correct.
   const { data: pos } = await ctx.supabase
     .from('gateway_positions')
     .select('id, entry_nav, shares')
     .eq('user_wallet', address)
     .eq('pool_address', inst.poolAddress)
     .eq('chain_id', inst.chainId)
+    .or(`position_manager.eq.${inst.positionManager.toLowerCase()},position_manager.is.null`)
+    .order('position_manager', { ascending: false, nullsFirst: false })
+    .limit(1)
     .maybeSingle()
 
   const client = gatewayPublicClient(cfg)
@@ -137,12 +148,17 @@ export const POST = createHandler(
     if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
     const inst = r.inst
 
+    // Round-4 pass-2 manager-generation fix: same PM-scoped lookup as the GET above (this POST path is
+    // currently inert — see positions/route.ts's comment — but kept correct rather than left stale).
     const { data: pos } = await ctx.supabase
       .from('gateway_positions')
       .select('id')
       .eq('user_wallet', owner)
       .eq('pool_address', inst.poolAddress)
       .eq('chain_id', inst.chainId)
+      .or(`position_manager.eq.${inst.positionManager.toLowerCase()},position_manager.is.null`)
+      .order('position_manager', { ascending: false, nullsFirst: false })
+      .limit(1)
       .maybeSingle()
 
     let bufferBalanceAtomic = 0n

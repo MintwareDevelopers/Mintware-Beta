@@ -1,0 +1,261 @@
+-- Cost-basis manager-generation fix (independent Codex audit, round-4 pass-2, 2026-09-09 — flagged
+-- alongside event-order accounting; documented as an accepted, narrow residual in routeInstance.ts's
+-- header comment, now actually closed).
+--
+-- gateway_positions was keyed by (user_wallet, pool_address, chain_id) — NOT position_manager. Since
+-- migration 20260909000002 (Finding D) let a pool outlive more than one PositionManager (an operator
+-- migrating to a new PM, the OLD one staying registered but retired), a wallet that deposited into BOTH
+-- a retired PM and its replacement, for the SAME pool, has its cost basis co-mingled across the two
+-- generations in ONE row — reading/writing the wrong generation's basis on both the write path
+-- (record_gateway_deposit_event/record_gateway_withdraw_event) and the read path
+-- (app/api/gateway/{position,positions}/route.ts, which already carry `?pm=`/`positionManager` per
+-- instance for this exact reason, but never actually filtered the DB row by it). On-chain shares/values
+-- were never affected — this is purely the displayed cost-basis/PnL number.
+--
+-- Fix: add `position_manager` to the identity of gateway_positions (and gateway_deposit_events, so the
+-- event-order replay from 20260909000004 can also scope correctly per generation). Existing rows are
+-- backfilled best-effort from the registry (prefer the pool's currently-ACTIVE instance; else its most
+-- recent row of any status — covers every pool that has EVER had a registered instance). A position
+-- whose pool has NO registry row at all (a pre-registry bootstrap deposit against the single-env
+-- fallback) is left with position_manager = NULL — genuinely unknowable, not guessable — and is handled
+-- as a "legacy, unclaimed" row by the RPCs below: the FIRST write for that identity that names a real PM
+-- ADOPTS the legacy row (sets its position_manager, continuing that basis) rather than starting a
+-- confusing duplicate; this is standard behavior going forward, not a special case that fades away.
+
+ALTER TABLE gateway_positions ADD COLUMN IF NOT EXISTS position_manager text;
+ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS position_manager text;
+
+-- Backfill: prefer the pool's ACTIVE instance; else its most-recently-touched row of any status. Only
+-- fills rows that don't already have one (idempotent / safe to re-run).
+UPDATE gateway_positions p SET position_manager = sub.position_manager
+FROM (
+  SELECT DISTINCT ON (pool_address, chain_id) pool_address, chain_id, position_manager
+  FROM gateway_instances
+  ORDER BY pool_address, chain_id, (status = 'active') DESC, updated_at DESC NULLS LAST, created_at DESC
+) sub
+WHERE p.pool_address = sub.pool_address AND p.chain_id = sub.chain_id AND p.position_manager IS NULL;
+
+UPDATE gateway_deposit_events e SET position_manager = p.position_manager
+FROM gateway_positions p
+WHERE e.address = p.user_wallet AND e.pool_address = p.pool_address AND e.chain_id = p.chain_id
+  AND e.position_manager IS NULL AND p.position_manager IS NOT NULL;
+
+-- Identity now includes position_manager. Postgres treats NULL as distinct in a UNIQUE constraint (two
+-- NULL-position_manager rows for the same wallet+pool+chain would NOT conflict) — by design: a
+-- genuinely-unbackfillable legacy row must never silently merge with another legacy row that happens to
+-- share its wallet+pool+chain (there should only ever be at most one per identity in practice, but this
+-- constraint intentionally does not enforce that for the NULL case — the RPCs below do, via their
+-- explicit "adopt-or-create" lookup rather than relying on ON CONFLICT for the NULL path).
+ALTER TABLE gateway_positions DROP CONSTRAINT IF EXISTS gateway_positions_user_wallet_pool_address_chain_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS gateway_positions_identity_uidx
+  ON gateway_positions (user_wallet, pool_address, chain_id, position_manager);
+
+DROP FUNCTION IF EXISTS record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint);
+DROP FUNCTION IF EXISTS record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint);
+
+CREATE OR REPLACE FUNCTION record_gateway_deposit_event(
+  p_tx_hash text,
+  p_address text,
+  p_pool_address text,
+  p_chain_id integer,
+  p_quote_in numeric,
+  p_on_chain_shares numeric,
+  p_block_number bigint DEFAULT NULL,
+  p_position_manager text DEFAULT NULL
+) RETURNS TABLE(cost_basis_atomic numeric, already_recorded boolean)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_tx text := lower(p_tx_hash);
+  v_address text := lower(p_address);
+  v_pool text := lower(p_pool_address);
+  v_pm text := lower(p_position_manager);
+  v_inserted_id uuid;
+  v_already boolean;
+  v_new_basis numeric(78,0) := 0;
+  v_prior_basis numeric(78,0) := 0;
+  v_has_legacy_gap boolean;
+  v_pos_id uuid;
+  v_ev record;
+BEGIN
+  INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, block_number, position_manager)
+  VALUES (v_tx, v_address, 'deposit', v_pool, p_chain_id, p_quote_in, p_block_number, v_pm)
+  ON CONFLICT (tx_hash) DO NOTHING
+  RETURNING id INTO v_inserted_id;
+  v_already := v_inserted_id IS NULL;
+
+  IF v_already THEN
+    -- A replay: find whichever row this identity's earlier (successful) write landed on — an exact-PM
+    -- match if one exists, else a not-yet-adopted legacy (NULL-PM) row — and return its basis unchanged.
+    SELECT entry_nav INTO v_new_basis FROM gateway_positions
+      WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id
+        AND (position_manager = v_pm OR position_manager IS NULL)
+      ORDER BY (position_manager = v_pm) DESC LIMIT 1;
+    RETURN QUERY SELECT COALESCE(v_new_basis, 0::numeric(78,0)), true;
+    RETURN;
+  END IF;
+
+  -- Adopt-or-create: an EXACT (wallet, pool, chain, PM) match continues on it; else a legacy row for
+  -- this identity with NO position_manager yet (pre-migration, or a first deposit recorded before this
+  -- migration's backfill ran) is ADOPTED — claimed for this PM going forward — rather than starting a
+  -- confusing second row; else this is genuinely this identity's first-ever deposit.
+  SELECT id, entry_nav INTO v_pos_id, v_prior_basis FROM gateway_positions
+    WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id
+      AND (position_manager = v_pm OR position_manager IS NULL)
+    ORDER BY (position_manager = v_pm) DESC LIMIT 1;
+  v_prior_basis := COALESCE(v_prior_basis, 0);
+
+  -- Same replay-blocking gap as 20260909000004 (a withdraw row with no on_chain_shares/shares_burned
+  -- persisted, from before that migration). NOT the same thing as an ambiguous NULL position_manager
+  -- tag — pre-migration events are all correctly self-consistent for THIS identity (there was only ever
+  -- one PM per pool before Finding D existed), just not yet PM-labeled; they replay fine either way, the
+  -- WHERE clause above already scopes to exactly this identity's rows regardless of their PM tag.
+  SELECT EXISTS(
+    SELECT 1 FROM gateway_deposit_events
+    WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
+      AND (position_manager = v_pm OR position_manager IS NULL)
+      AND kind = 'withdraw' AND on_chain_shares IS NULL
+      AND id <> v_inserted_id
+  ) INTO v_has_legacy_gap;
+
+  IF v_has_legacy_gap THEN
+    v_new_basis := v_prior_basis + p_quote_in;
+  ELSE
+    v_new_basis := 0;
+    FOR v_ev IN
+      SELECT kind, quote_in, on_chain_shares, shares_burned
+      FROM gateway_deposit_events
+      WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
+        AND (position_manager = v_pm OR position_manager IS NULL)
+      ORDER BY block_number NULLS FIRST, created_at
+    LOOP
+      IF v_ev.kind = 'deposit' THEN
+        v_new_basis := v_new_basis + COALESCE(v_ev.quote_in, 0);
+      ELSE
+        IF v_ev.on_chain_shares = 0 OR (v_ev.on_chain_shares + COALESCE(v_ev.shares_burned, 0)) = 0 THEN
+          v_new_basis := 0;
+        ELSE
+          v_new_basis := (v_new_basis * v_ev.on_chain_shares) / (v_ev.on_chain_shares + v_ev.shares_burned);
+        END IF;
+      END IF;
+    END LOOP;
+  END IF;
+
+  IF v_pos_id IS NOT NULL THEN
+    UPDATE gateway_positions SET
+      shares = p_on_chain_shares, entry_nav = v_new_basis, position_manager = v_pm, updated_at = now()
+      WHERE id = v_pos_id;
+  ELSE
+    INSERT INTO gateway_positions (user_wallet, pool_address, chain_id, position_manager, shares, entry_nav, updated_at)
+    VALUES (v_address, v_pool, p_chain_id, v_pm, p_on_chain_shares, v_new_basis, now());
+  END IF;
+
+  RETURN QUERY SELECT v_new_basis, false;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION record_gateway_withdraw_event(
+  p_tx_hash text,
+  p_address text,
+  p_pool_address text,
+  p_chain_id integer,
+  p_quote_out numeric,
+  p_on_chain_shares numeric,
+  p_shares_burned numeric,
+  p_block_number bigint DEFAULT NULL,
+  p_position_manager text DEFAULT NULL
+) RETURNS TABLE(cost_basis_atomic numeric, already_recorded boolean, position_found boolean)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_tx text := lower(p_tx_hash);
+  v_address text := lower(p_address);
+  v_pool text := lower(p_pool_address);
+  v_pm text := lower(p_position_manager);
+  v_inserted_id uuid;
+  v_already boolean;
+  v_new_basis numeric(78,0) := 0;
+  v_prior_basis numeric(78,0) := 0;
+  v_has_legacy_gap boolean;
+  v_pos_id uuid;
+  v_found boolean;
+  v_ev record;
+BEGIN
+  INSERT INTO gateway_deposit_events (
+    tx_hash, address, kind, pool_address, chain_id, quote_out, on_chain_shares, shares_burned, block_number, position_manager
+  )
+  VALUES (v_tx, v_address, 'withdraw', v_pool, p_chain_id, p_quote_out, p_on_chain_shares, p_shares_burned, p_block_number, v_pm)
+  ON CONFLICT (tx_hash) DO NOTHING
+  RETURNING id INTO v_inserted_id;
+  v_already := v_inserted_id IS NULL;
+
+  -- Same adopt-or-create lookup as the deposit RPC (see its comment).
+  SELECT id, entry_nav INTO v_pos_id, v_prior_basis FROM gateway_positions
+    WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id
+      AND (position_manager = v_pm OR position_manager IS NULL)
+    ORDER BY (position_manager = v_pm) DESC LIMIT 1;
+
+  IF v_pos_id IS NULL THEN
+    -- No matching position row at all ⇒ this depositor's original deposit was never recorded (a
+    -- legacy/O-1 case) — deliberately NOT synthesizing one (would fabricate a fictitious "gain" equal
+    -- to the whole position); matches the prior route behavior exactly.
+    RETURN QUERY SELECT NULL::numeric(78,0), v_already, false;
+    RETURN;
+  END IF;
+  v_found := true;
+  v_prior_basis := COALESCE(v_prior_basis, 0);
+
+  IF v_already THEN
+    RETURN QUERY SELECT v_prior_basis, true, true;
+    RETURN;
+  END IF;
+
+  SELECT EXISTS(
+    SELECT 1 FROM gateway_deposit_events
+    WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
+      AND (position_manager = v_pm OR position_manager IS NULL)
+      AND kind = 'withdraw' AND on_chain_shares IS NULL
+      AND id <> v_inserted_id
+  ) INTO v_has_legacy_gap;
+
+  IF v_has_legacy_gap THEN
+    IF p_on_chain_shares = 0 OR (p_on_chain_shares + p_shares_burned) = 0 THEN
+      v_new_basis := 0;
+    ELSE
+      v_new_basis := (v_prior_basis * p_on_chain_shares) / (p_on_chain_shares + p_shares_burned);
+    END IF;
+  ELSE
+    v_new_basis := 0;
+    FOR v_ev IN
+      SELECT kind, quote_in, on_chain_shares, shares_burned
+      FROM gateway_deposit_events
+      WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
+        AND (position_manager = v_pm OR position_manager IS NULL)
+      ORDER BY block_number NULLS FIRST, created_at
+    LOOP
+      IF v_ev.kind = 'deposit' THEN
+        v_new_basis := v_new_basis + COALESCE(v_ev.quote_in, 0);
+      ELSE
+        IF v_ev.on_chain_shares = 0 OR (v_ev.on_chain_shares + COALESCE(v_ev.shares_burned, 0)) = 0 THEN
+          v_new_basis := 0;
+        ELSE
+          v_new_basis := (v_new_basis * v_ev.on_chain_shares) / (v_ev.on_chain_shares + v_ev.shares_burned);
+        END IF;
+      END IF;
+    END LOOP;
+  END IF;
+
+  UPDATE gateway_positions SET shares = p_on_chain_shares, entry_nav = v_new_basis, position_manager = v_pm, updated_at = now()
+    WHERE id = v_pos_id;
+
+  RETURN QUERY SELECT v_new_basis, false, v_found;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text) FROM PUBLIC, anon, authenticated;
+
+COMMENT ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text) IS
+  'Atomic deposit-event idempotency claim + full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation fix). Service-role only, called from POST /api/gateway/deposit.';
+COMMENT ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text) IS
+  'Atomic withdraw-event idempotency claim + full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation fix). Service-role only, called from POST /api/gateway/withdraw.';

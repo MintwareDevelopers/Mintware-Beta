@@ -21,13 +21,17 @@
 // straight from the tx receipt itself, so it's never a caller-supplied claim) and
 // components/web2/v1/V1Portfolio.tsx / V1PoolDetail.tsx.
 //
-// Residual still open, narrower than before: `gateway_positions` (the cost-basis DB row) is keyed by
-// (user_wallet, pool_address, chain_id) — NOT positionManager. A wallet that deposited into BOTH a
-// retired and a replacement PM for the SAME pool would have its cost basis co-mingled across the two
-// generations in that one row (on-chain shares/values stay correct either way — this only affects the
-// displayed basis/PnL number). A real schema change (adding position_manager to that table's identity,
-// migrating existing rows, updating the atomic deposit/withdraw RPCs) would be needed to fully close
-// this; not implemented here given how narrow the case is — flagged, not silently left.
+// CLOSED 2026-09-09 (same day, independent Codex audit, round-4 pass-2): the residual documented here
+// used to say `gateway_positions` was keyed by (user_wallet, pool_address, chain_id) — NOT
+// positionManager — so a wallet with deposits in both a retired and a replacement PM for the SAME pool
+// had its cost basis co-mingled in one row. Migration 20260909000005 adds position_manager to that
+// table's identity (+ gateway_deposit_events, for the event-order replay from 20260909000004 to scope
+// correctly per generation too); record_gateway_deposit_event/record_gateway_withdraw_event now do an
+// adopt-or-create lookup per (wallet, pool, chain, PM) instead of a bare upsert; the position/positions
+// read routes filter by the exact PM (falling back to a not-yet-adopted legacy NULL-PM row) instead of
+// ignoring it. See app/api/gateway/{position,positions}/route.ts and that migration's header comment
+// for the full design (including the accepted, disclosed limitation that pre-migration co-mingled
+// history can't be retroactively split, since position_manager was never recorded per-event before now).
 //
 // 2026-09-09 fix (independent Codex audit, V1-01): deposit ELIGIBILITY and exit/read DISCOVERY are two
 // different questions and must not share one active-only lookup. `deactivateInstance`'s own doc comment

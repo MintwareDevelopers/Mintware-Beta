@@ -89,6 +89,12 @@ export const POST = createHandler(async (req, ctx) => {
   // earlier deposit's). Migration 20260909000004 moved the RPC to recompute entry_nav by REPLAYING this
   // identity's whole stored event history in ON-CHAIN block order — `p_block_number` (this tx's own
   // block, from the verified receipt) is what makes that replay order-independent of call arrival.
+  //
+  // Round-4 pass-2 manager-generation fix (independent Codex audit, 2026-09-09): `gateway_positions` was
+  // keyed by (wallet, pool, chain) only — a pool that has outlived more than one PositionManager (V1-01
+  // residual) co-mingled a depositor's basis across generations. `p_position_manager` (migration
+  // 20260909000005) scopes the write to the EXACT generation this deposit went to — `inst.positionManager`
+  // is already resolved on-chain (H-01), never a client-supplied claim.
   const { data: rpcData, error: rpcErr } = await ctx.supabase.rpc('record_gateway_deposit_event', {
     p_tx_hash: txHash,
     p_address: address,
@@ -97,6 +103,7 @@ export const POST = createHandler(async (req, ctx) => {
     p_quote_in: quoteIn.toString(),
     p_on_chain_shares: onChainShares.toString(),
     p_block_number: receipt.blockNumber.toString(),
+    p_position_manager: inst.positionManager,
   })
   if (rpcErr) {
     ctx.log.error('gateway.deposit', 'record_gateway_deposit_event failed', { error: rpcErr.message })

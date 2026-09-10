@@ -151,6 +151,44 @@ describe('GET /api/gateway/positions — chain-first', () => {
     const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
     expect(positions[0].sourceReadable).toBe(false)
   })
+  // Manager-generation fix (independent Codex audit, round-4 pass-2, 2026-09-09). Before this fix,
+  // basisByPool was keyed by pool+chain ONLY — two gateway_positions rows for the SAME pool (one per
+  // PositionManager generation) collapsed into whichever the Map.set() processed last, so BOTH
+  // chain-enumerated instances read from that one row's cost basis. Proves each generation now reads
+  // its OWN basis.
+  it('FIXED: two PM generations of the SAME pool each read their OWN cost basis, not one overwriting the other', async () => {
+    const PM_OLD = '0x' + '77'.repeat(20)
+    state.supabase = fakeSupabase({
+      tables: {
+        gateway_instances: [row(POOL_A, PM_OLD, 'inactive'), row(POOL_A, PM_A, 'active')],
+        gateway_positions: [
+          { user_wallet: USER, pool_address: POOL_A, chain_id: 46630, position_manager: PM_OLD, shares: '1000000', entry_nav: '999000' },
+          { user_wallet: USER, pool_address: POOL_A, chain_id: 46630, position_manager: PM_A, shares: '1000000', entry_nav: '500000' },
+        ],
+      },
+    }).client
+    state.sharesByPm[PM_OLD] = 1_000_000n
+    state.sharesByPm[PM_A] = 1_000_000n
+    const { GET } = await import('./route')
+    const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
+    expect(positions).toHaveLength(2)
+    const byPm = new Map(positions.map((p: { positionManager: string; costBasisAtomic: string }) => [p.positionManager.toLowerCase(), p.costBasisAtomic]))
+    expect(byPm.get(PM_OLD.toLowerCase())).toBe('999000')
+    expect(byPm.get(PM_A.toLowerCase())).toBe('500000') // NOT 999000 — each generation kept its own basis
+  })
+  it('FIXED: a not-yet-adopted legacy row (position_manager NULL) still enriches when no exact-PM row exists', async () => {
+    state.supabase = fakeSupabase({
+      tables: {
+        gateway_instances: [row(POOL_A, PM_A)],
+        gateway_positions: [{ user_wallet: USER, pool_address: POOL_A, chain_id: 46630, position_manager: null, shares: '1000000', entry_nav: '250000' }],
+      },
+    }).client
+    state.sharesByPm[PM_A] = 1_000_000n
+    const { GET } = await import('./route')
+    const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
+    expect(positions[0].costBasisAtomic).toBe('250000')
+    expect(positions[0].recorded).toBe(true)
+  })
   // V1-09 fix (independent Codex audit, 2026-09-09): the MOST expensive of the three position routes
   // (fans out across every instance) had no rate limit at all.
   it('V1-09 fix: per-IP floor returns a 429-shaped JSON without Upstash', async () => {
