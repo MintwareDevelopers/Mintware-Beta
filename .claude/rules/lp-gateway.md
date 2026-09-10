@@ -288,7 +288,24 @@ unrelated).
   closing a cross-PM staleness gap Codex's live review caught), then a full idempotent self-heal sweep
   (`recomputeAllResolvedIdentities`) that gates every identity on having NO remaining orphaned rows for
   that wallet/pool/chain before publishing a basis. Not run against production data by anyone yet — an
-  operator action, not something done automatically. **`costBasisComplete`** (the position routes above)
+  operator action, not something done automatically.
+  **Release verification — deployed schema state** (`scripts/verify-gateway-schema-state.mjs`, user
+  directive 2026-09-10): read-only, checks whether migrations `_004`–`_007`'s functions/columns/table
+  actually exist in a real Supabase project — no raw Postgres connection needed or used, just the same
+  service-role REST access the app itself has; classifies each PostgREST probe's error code
+  (`PGRST202`/`PGRST205`/`42883`/`42P01`-style "not found in schema cache" ⇒ missing; anything else ⇒
+  exists) rather than guessing from response shape. Never mutates anything — every function probe uses a
+  harmless dummy identity (`chain_id 999999999`) that can never match a real row, every table probe is
+  `.limit(0)`. `node --env-file=.env.local scripts/verify-gateway-schema-state.mjs`; reads
+  `SUPABASE_SERVICE_ROLE_KEY` from the OPERATOR's own env exactly like every other script here — never
+  hardcoded, logged, or printed by the script itself. Proves migrations are *applied*, not that the SQL
+  logic is *correct* (see `costBasisRpc.pglite.test.ts`/`.concurrency.test.ts` for that). ⚠ **This service
+  wasn't run against production by this session** — the `SUPABASE_SERVICE_ROLE_KEY` value was accidentally
+  exposed in the session transcript while checking `.env.local` for the credential's *presence*
+  (2026-09-10); the key must be rotated in the Supabase dashboard before anyone runs this (or any) script
+  against prod with it. Same rotation requirement as whatever the originally-flagged exposure was — treat
+  as an independent, additional reason, not a substitute investigation.
+  **`costBasisComplete`** (the position routes above)
   is wired into the V1 UI (`V1PoolDetail`/`V1Portfolio`) — a warning line, a per-card badge, and a
   portfolio-level banner when any position's basis may still be incomplete.
   **Genuine multi-connection lock verification (2026-09-10 — CLOSED):** `lib/gateway/costBasisRpc.concurrency.test.ts`
