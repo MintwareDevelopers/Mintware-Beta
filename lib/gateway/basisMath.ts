@@ -17,8 +17,7 @@
 // arrive in the same order their txs were mined — nothing guaranteed that. Migration 20260909000004
 // moved the RPCs from "apply one delta against the row's current value" to "replay the position's whole
 // stored history in on-chain block order, from zero, every time" — order-independent w.r.t. call
-// arrival. `nextDepositBasis`/`nextWithdrawBasis` are unchanged (still the single-step formulas); they're
-// now composed by `replayCostBasis` instead of applied directly against a stored running total.
+// arrival. `nextDepositBasis`/`nextWithdrawBasis` are unchanged (still the single-step formulas).
 
 /** Deposit: additive cost basis, applied at most once per deposit tx. */
 export function nextDepositBasis(priorBasis: bigint, quoteIn: bigint, alreadyRecorded: boolean): bigint {
@@ -27,8 +26,8 @@ export function nextDepositBasis(priorBasis: bigint, quoteIn: bigint, alreadyRec
 }
 
 /** Withdraw: reduce cost basis proportionally to the shares burned (full exit ⇒ 0), applied at most
- *  once per withdraw tx. `onChainShares` is the LIVE post-burn balance; `sharesBurned` is from the
- *  Withdrawn event, so priorShares = onChainShares + sharesBurned. */
+ *  once per withdraw tx. `onChainShares` is the balance immediately AFTER this specific withdrawal;
+ *  `sharesBurned` is from the Withdrawn event, so priorShares = onChainShares + sharesBurned. */
 export function nextWithdrawBasis(
   priorBasis: bigint,
   onChainShares: bigint,
@@ -41,41 +40,72 @@ export function nextWithdrawBasis(
   return (priorBasis * onChainShares) / priorShares
 }
 
-// ── Event-order fix (independent Codex audit, round-4 pass-2, 2026-09-09) ──────────────────────────────
+// ── Event-order + same-block VALUE fix (independent Codex audit, round-4 pass-2, 2026-09-09) ───────────
 //
 // nextDepositBasis/nextWithdrawBasis above are each a single STEP. The original RPCs (migration
 // 20260909000001) applied one step per HTTP recording call, against gateway_positions.entry_nav's
 // CURRENT value at write time — which is correct ONLY if recording calls for the same position always
-// arrive in the same order their underlying on-chain txs were mined in. Nothing enforced that: a
-// deposit's and a withdraw's recording calls are two independent HTTP requests (client retries, network
-// jitter, a user acting from two tabs), so the WITHDRAW's call could reach the RPC before the earlier
-// (lower-block) DEPOSIT's call had recorded — the proportional reduction would then apply to a basis
-// that hadn't yet incorporated that deposit, and the deposit's own later call would just add quoteIn on
-// top, landing on a final basis that doesn't match either transaction's actual on-chain order.
+// arrive in the same order their underlying on-chain txs were mined in. Migration 20260909000004 fixed
+// that by replaying the position's ENTIRE stored event history in on-chain block order every time.
 //
-// Fix: instead of one incremental delta per call, every recording call now replays the position's
-// ENTIRE stored event history — ordered by the events' own on-chain block number, never by call-arrival
-// order — into a fresh basis from zero. This makes the recorded cost basis a pure function of on-chain
-// history: identical no matter what order the HTTP calls happen to arrive in. `BasisEvent` mirrors what
-// migration 20260909000004 now stores per row (block_number + kind-specific fields); the SQL RPCs are a
-// line-for-line mirror of this loop (see that migration's comment).
+// That still left a subtler, deeper bug Codex's live watch confirmed with a concrete reproduction
+// (wrong basis 175 vs 150): `onChainShares` for a withdraw event used to be READ from chain
+// (`sharesOf(user, blockNumber: receipt.blockNumber)`), which returns the BLOCK-END balance — after
+// EVERY tx in that block, not just this one. Adding `tx_index` (migration 20260909000005) correctly
+// ORDERS two same-block events for replay, but the STORED `onChainShares` value for the earlier of two
+// same-block txs by the same user is still wrong (it's really the value after BOTH), regardless of
+// order — this predates every change in this file (already documented as an accepted residual in
+// withdraw/route.ts, before tonight), just now confirmed as a real, closable gap rather than a
+// theoretical one.
+//
+// Fix (this pass): stop reading `onChainShares` from chain per event entirely. Every Deposited/Withdrawn
+// event already reports its own `sharesMinted`/`sharesBurned` directly — values genuinely local to THAT
+// transaction, never ambiguous, never needing any block-level read. `replayCostBasis` now derives a
+// RUNNING share total purely from replayed mint/burn amounts (deposit: `shares += sharesMinted`;
+// withdraw: `post = shares - sharesBurned`, basis via `nextWithdrawBasis(basis, post, sharesBurned,
+// false)`, `shares = post`) — structurally immune to same-block ambiguity, cross-block ambiguity, and
+// call-arrival order alike, since it never depends on anything but each event's own on-chain-reported
+// numbers and their real chain order (block_number, then tx_index — migration 20260909000005's tiebreak).
+//
+// A history that would make `shares` go negative mid-replay (fewer minted than burned by that point —
+// a genuine data-completeness gap, e.g. an earlier deposit whose OWN recording call never landed) can't
+// be trusted to replay correctly; `replayCostBasis` reports that explicitly (`ok: false`) instead of
+// clamping or throwing, so the caller (the SQL RPC) can fall back to the single-delta behavior for that
+// one call — the same graceful-degradation shape already established for every other "can't fully
+// replay this identity's history" case in this file.
 
 export type BasisEvent =
-  | { kind: 'deposit'; quoteIn: bigint }
-  | { kind: 'withdraw'; onChainShares: bigint; sharesBurned: bigint }
+  | { kind: 'deposit'; quoteIn: bigint; sharesMinted: bigint }
+  | { kind: 'withdraw'; sharesBurned: bigint }
 
-/** Replays a position's full recorded history (already sorted into on-chain order — by block number,
- *  the caller's job) into a final cost basis. Each event is applied as a fresh (never `alreadyRecorded`)
- *  step — idempotency against a REPLAYED tx is handled upstream by never storing the same tx_hash twice
- *  (UNIQUE constraint), not by this function, which only ever sees each recorded tx once per replay. */
-export function replayCostBasis(eventsInChainOrder: BasisEvent[]): bigint {
+export type ReplayResult =
+  | { ok: true; basis: bigint; finalShares: bigint }
+  /** `shares` would have gone negative at some point — the history is incomplete for this identity
+   *  (e.g. a deposit whose recording call never succeeded); the caller must not trust a from-scratch
+   *  replay and should fall back to a single-delta update instead. */
+  | { ok: false; reason: 'insufficient_shares' }
+
+/** Replays a position's full recorded history (already sorted into on-chain order — by block number
+ *  then tx_index, the caller's job) into a final cost basis + share count. Each event is applied as a
+ *  fresh (never `alreadyRecorded`) step — idempotency against a REPLAYED tx is handled upstream by never
+ *  storing the same tx_hash twice (UNIQUE constraint), not by this function, which only ever sees each
+ *  recorded tx once per replay. Shares are DERIVED from each event's own sharesMinted/sharesBurned —
+ *  never read from chain — so this is immune to same-block/cross-block/call-order ambiguity alike. */
+export function replayCostBasis(eventsInChainOrder: BasisEvent[]): ReplayResult {
   let basis = 0n
+  let shares = 0n
   for (const e of eventsInChainOrder) {
-    basis = e.kind === 'deposit'
-      ? nextDepositBasis(basis, e.quoteIn, false)
-      : nextWithdrawBasis(basis, e.onChainShares, e.sharesBurned, false)
+    if (e.kind === 'deposit') {
+      basis = nextDepositBasis(basis, e.quoteIn, false)
+      shares += e.sharesMinted
+    } else {
+      if (shares < e.sharesBurned) return { ok: false, reason: 'insufficient_shares' }
+      const post = shares - e.sharesBurned
+      basis = nextWithdrawBasis(basis, post, e.sharesBurned, false)
+      shares = post
+    }
   }
-  return basis
+  return { ok: true, basis, finalShares: shares }
 }
 
 // ── Manager-generation fix (independent Codex audit, round-4 pass-2, 2026-09-09) ───────────────────────
@@ -95,7 +125,7 @@ export function replayCostBasis(eventsInChainOrder: BasisEvent[]): bigint {
 // those events from being matchable by any other generation's future query. `claimEvents` mirrors that
 // UPDATE; `replayForGeneration` mirrors a single RPC call's claim-then-replay-scoped-to-one-PM sequence.
 
-export type PmTaggedEvent = (BasisEvent & { positionManager: string | null; blockNumber: number })
+export type PmTaggedEvent = (BasisEvent & { positionManager: string | null; blockNumber: number; txIndex: number | null })
 
 /** Mirrors the SQL's `UPDATE gateway_deposit_events SET position_manager = pm WHERE position_manager IS
  *  NULL` — every currently-unclaimed event becomes permanently owned by `pm`. Idempotent: re-running it
@@ -107,13 +137,13 @@ export function claimEvents(events: PmTaggedEvent[], pm: string): PmTaggedEvent[
 
 /** One full record_gateway_{deposit,withdraw}_event call, PM-aware: claim any unclaimed legacy events
  *  for `pm` (mutating the returned event list, exactly like the SQL does to the real table), then replay
- *  ONLY the events now tagged `pm` — in chain order — into that generation's own basis. Returns the
- *  updated event list (so a SUBSEQUENT call, simulating a later HTTP request, sees the claim) and the
- *  basis this call computed. */
-export function replayForGeneration(events: PmTaggedEvent[], pm: string): { events: PmTaggedEvent[]; basis: bigint } {
+ *  ONLY the events now tagged `pm` — in real on-chain order (block_number, then tx_index) — into that
+ *  generation's own basis. Returns the updated event list (so a SUBSEQUENT call, simulating a later
+ *  HTTP request, sees the claim) and the replay result this call computed. */
+export function replayForGeneration(events: PmTaggedEvent[], pm: string): { events: PmTaggedEvent[]; result: ReplayResult } {
   const claimed = claimEvents(events, pm)
   const mine = claimed
     .filter((e) => e.positionManager === pm)
-    .sort((a, b) => a.blockNumber - b.blockNumber)
-  return { events: claimed, basis: replayCostBasis(mine) }
+    .sort((a, b) => a.blockNumber - b.blockNumber || (a.txIndex ?? -1) - (b.txIndex ?? -1))
+  return { events: claimed, result: replayCostBasis(mine) }
 }

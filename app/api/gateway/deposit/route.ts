@@ -100,6 +100,12 @@ export const POST = createHandler(async (req, ctx) => {
   // ties among two DIFFERENT transactions landing in the SAME block — `p_tx_index` (the receipt's own
   // `transactionIndex`, real on-chain position within the block) is the correct tiebreak, never the
   // recording call's own arrival time.
+  //
+  // Same-block VALUE fix (independent Codex audit, live watch, 2026-09-09): ordering alone wasn't enough
+  // — `onChainShares` above is a BLOCK-END read, wrong for an earlier of two same-block txs by this same
+  // user even once correctly ordered. `p_shares_minted` (this tx's OWN Deposited-event amount, already
+  // read above — never a chain read) lets the RPC derive a running share total purely from replayed
+  // mint/burn amounts instead, immune to same-block/cross-block/call-order ambiguity alike.
   const { data: rpcData, error: rpcErr } = await ctx.supabase.rpc('record_gateway_deposit_event', {
     p_tx_hash: txHash,
     p_address: address,
@@ -110,6 +116,7 @@ export const POST = createHandler(async (req, ctx) => {
     p_block_number: receipt.blockNumber.toString(),
     p_position_manager: inst.positionManager,
     p_tx_index: receipt.transactionIndex,
+    p_shares_minted: sharesMinted.toString(),
   })
   if (rpcErr) {
     ctx.log.error('gateway.deposit', 'record_gateway_deposit_event failed', { error: rpcErr.message })

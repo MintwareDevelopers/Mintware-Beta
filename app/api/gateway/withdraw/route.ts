@@ -88,8 +88,15 @@ export const POST = createHandler(async (req, ctx) => {
   // own chain history, never on recording timing or interleaved activity. (`sharesMinted` on the deposit
   // side does NOT need this — record_gateway_deposit_event's entry_nav math is purely additive on
   // `p_quote_in`, and `shares` there is an intentional live resync column, not a point-in-time value.)
-  // Residual, accepted: two of the SAME user's own transactions landing in the exact same block would
-  // still both read post-block state — an extremely rare case, unlike the cross-block race this closes.
+  // Residual, accepted, NARROWED (independent Codex audit, live watch, 2026-09-09): two of the SAME
+  // user's own transactions landing in the exact same block still both read this SAME post-block-end
+  // `onChainShares` value here — that hasn't changed. What DID change: this value is no longer what
+  // record_gateway_withdraw_event's basis math actually runs on. Migration 20260909000005 (same-block
+  // VALUE fix) derives the replay's share count purely from each event's own sharesMinted/sharesBurned
+  // instead of reading `on_chain_shares` from the stored row — so the cost-basis REPLAY is immune to this
+  // same-block ambiguity now. `onChainShares` here still only matters for two things this call passes
+  // through: `p_on_chain_shares` (still stored per-event, used only by the RPC's single-delta LEGACY
+  // fallback path, and for `gateway_positions.shares` below) and the JSON response's own `shares` field.
   // Also accepted: `gateway_positions.shares` gets written from this SAME historical read, so it can be
   // briefly stale (vs. the user's true current on-chain balance) if another of their txs interleaves
   // before this one is recorded. That column is documented elsewhere as pure enrichment, never the

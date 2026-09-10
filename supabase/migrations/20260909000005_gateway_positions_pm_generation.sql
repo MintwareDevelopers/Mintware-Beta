@@ -22,39 +22,42 @@
 -- ADOPTS the legacy row (sets its position_manager, continuing that basis) rather than starting a
 -- confusing duplicate; this is standard behavior going forward, not a special case that fades away.
 --
--- Accepted residuals (independent Codex audit, live watch, 2026-09-09 — disclosed, not silently left):
---   * Historical PM attribution: the registry backfill is best-effort (prefers the currently-active
---     instance, else the most recent row of any status) — for a pool that has ALREADY been through a PM
---     migration by the time this runs, an existing position's TRUE originating generation is genuinely
---     unrecoverable (position_manager was never recorded per-event before this migration existed). The
---     backfill's guess, and the adopt-or-create fallback for anything it misses, are the best available
---     answer, not a guarantee of perfect historical attribution.
---   * Legacy fallback: a position whose event history includes a pre-20260909000004 withdraw (missing
---     on_chain_shares/shares_burned, never persisted before that migration) can't be full-replayed from
---     scratch — falls back to the single-delta behavior for that one call, same as 20260909000004's own
---     documented residual.
+-- Accepted residuals (independent Codex audit, live watch, 2026-09-09 — disclosed, not silently left;
+-- wording tightened after Codex flagged the original phrasing as overclaiming certainty it hadn't earned):
+--   * Historical PM attribution: the registry backfill picks ONE guess per pool (prefers the currently-
+--     active instance, else the most recent row of any status) and applies it to EVERY pre-migration
+--     position for that pool. For a pool that has ALREADY been through a PM migration by the time this
+--     runs, that guess can be wrong for MANY positions, not just a rare edge case — a depositor whose
+--     shares actually went to the OLD (now-retired) PM gets backfilled to the NEW one instead, because
+--     nothing in the pre-migration data ever recorded which PM a given position's deposits went to. This
+--     is a best-effort default, not a claim of correct attribution for every already-migrated pool.
+--   * Legacy fallback: an identity whose event history includes a pre-20260909000004 withdraw (missing
+--     shares_burned, never persisted before that migration) or a pre-THIS-migration deposit (missing
+--     shares_minted) can't be full-replayed from scratch — falls back to the single-delta behavior
+--     (this call's own live-read shares) for that one call only, same shape as 20260909000004's own
+--     documented residual, now extended to cover the deposit-side derived-shares data gap too.
 --   * Concurrency: neither RPC takes an explicit row lock (no `FOR UPDATE`) on the adopt-or-create
---     SELECT — matching every other gateway RPC in this codebase, none of which do either. Replay is
---     idempotent and self-correcting on the NEXT call (it recomputes fresh from stored events every
---     time), so a lost update here just delays convergence by one call, it doesn't compound. The one
---     genuinely narrow race this doesn't self-correct instantly: two truly concurrent FIRST writes for
---     two DIFFERENT brand-new generations of the same wallet+pool+chain, arriving in the same instant,
---     racing to adopt the SAME unclaimed legacy row — an edge case requiring two simultaneous first-ever
---     deposits into two different PM generations, judged too narrow to justify explicit locking given
---     nothing else in this RPC family uses it.
---   * Same-block VALUE correctness (independent Codex audit, live watch, 2026-09-09, confirmed with a
---     concrete reproduction — genuinely deeper than the tx_index ordering fix above, and NOT introduced
---     tonight: predates every change in this file, already documented in withdraw/route.ts's own "two of
---     the SAME user's own transactions landing in the exact same block" comment). tx_index correctly
---     ORDERS two same-block events for replay — but `on_chain_shares` for EACH event is read via
---     `sharesOf(user, blockNumber: receipt.blockNumber)`, which returns the BLOCK-END balance (after
---     every tx in that block), not the balance immediately after THAT SPECIFIC tx. For a user with two of
---     their OWN txs in the same block, the earlier one's stored `on_chain_shares` is the wrong value
---     (post-BOTH, not post-itself) even once correctly ordered — reproduced as a wrong combined basis.
---     The real fix needs a different data model (deriving each event's post-tx share count from a
---     RUNNING total of on-chain-event-reported sharesMinted/sharesBurned, replayed alongside the basis,
---     instead of any block-level chain read) — a genuine redesign of this table's shares tracking, not a
---     small patch, and NOT attempted in this pass; flagged for a deliberate follow-up.
+--     SELECT — matching every other gateway RPC in this codebase, none of which do either. A replay-based
+--     design recomputes fresh from stored events every call, which corrects a STALE READ on the next
+--     call that reads a fully-committed event set — it does NOT protect against two writers racing
+--     within the same uncommitted window, and does not guarantee any particular number of calls before
+--     convergence under sustained concurrent writes. The narrowest known instance: two truly concurrent
+--     FIRST writes for two DIFFERENT brand-new generations of the same wallet+pool+chain, racing to adopt
+--     the same unclaimed legacy row — judged too narrow (requires two simultaneous first-ever deposits
+--     into two different PM generations) to justify explicit locking that nothing else in this RPC
+--     family uses, but genuinely not proven safe under all concurrent interleavings, either.
+--   * Same-block VALUE correctness — CLOSED (independent Codex audit, live watch, 2026-09-09, same day,
+--     before this migration was ever applied): tx_index correctly ORDERS two same-block events, but
+--     `on_chain_shares` used to be READ per event via `sharesOf(user, blockNumber: receipt.blockNumber)`,
+--     which returns the BLOCK-END balance (after every tx in that block) — wrong for an earlier of two
+--     same-block transactions by the SAME user, even once correctly ordered (predates every change in
+--     this file; already documented in withdraw/route.ts's own "two of the SAME user's own transactions
+--     landing in the exact same block" comment). Fix: stop reading shares from chain per event at all.
+--     Every Deposited/Withdrawn event already reports its own `sharesMinted`/`sharesBurned` — values
+--     genuinely local to THAT transaction, never ambiguous. The replay now derives a RUNNING share total
+--     purely from those numbers (mirrors lib/gateway/basisMath.ts#replayCostBasis) — structurally immune
+--     to same-block, cross-block, AND call-arrival-order ambiguity alike, since it never depends on
+--     anything but each event's own on-chain-reported numbers and their real chain order.
 
 ALTER TABLE gateway_positions ADD COLUMN IF NOT EXISTS position_manager text;
 ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS position_manager text;
@@ -67,6 +70,10 @@ ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS position_manager tex
 -- `transactionIndex` — its real position within the block, on-chain truth, never a recording artifact)
 -- is the correct tiebreak; `created_at` remains the final fallback only for a row that predates this.
 ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS tx_index integer;
+-- Same-block VALUE fix (see the accepted-residuals note above, now closed): `shares_minted` (deposit-only,
+-- from the Deposited event's own `sharesMinted`) lets the replay derive a running share total purely
+-- from each event's own on-chain-reported numbers, instead of any block-level `sharesOf` read.
+ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS shares_minted numeric(78,0);
 
 -- Backfill: prefer the pool's ACTIVE instance; else its most-recently-touched row of any status. Only
 -- fills rows that don't already have one (idempotent / safe to re-run).
@@ -93,6 +100,12 @@ ALTER TABLE gateway_positions DROP CONSTRAINT IF EXISTS gateway_positions_user_w
 CREATE UNIQUE INDEX IF NOT EXISTS gateway_positions_identity_uidx
   ON gateway_positions (user_wallet, pool_address, chain_id, position_manager);
 
+-- These target migration 20260909000004's ACTUAL deployed signatures (7 / 8 args respectively) — NOT
+-- this migration's own signature, which has been revised several times in this same session (adding
+-- position_manager, then tx_index, then shares_minted) before ever being applied. Every one of those
+-- revisions is still just the ONE eventual CREATE below; only _004's real, already-deployed function
+-- needs dropping first (a different arg count is a DIFFERENT Postgres function, so CREATE OR REPLACE
+-- alone would otherwise leave _004's signature registered as a stale, separately-callable overload).
 DROP FUNCTION IF EXISTS record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint);
 DROP FUNCTION IF EXISTS record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint);
 
@@ -105,7 +118,8 @@ CREATE OR REPLACE FUNCTION record_gateway_deposit_event(
   p_on_chain_shares numeric,
   p_block_number bigint DEFAULT NULL,
   p_position_manager text DEFAULT NULL,
-  p_tx_index integer DEFAULT NULL
+  p_tx_index integer DEFAULT NULL,
+  p_shares_minted numeric DEFAULT NULL
 ) RETURNS TABLE(cost_basis_atomic numeric, already_recorded boolean)
 LANGUAGE plpgsql
 AS $$
@@ -120,10 +134,11 @@ DECLARE
   v_prior_basis numeric(78,0) := 0;
   v_has_legacy_gap boolean;
   v_pos_id uuid;
+  v_running_shares numeric(78,0);
   v_ev record;
 BEGIN
-  INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, block_number, position_manager, tx_index)
-  VALUES (v_tx, v_address, 'deposit', v_pool, p_chain_id, p_quote_in, p_block_number, v_pm, p_tx_index)
+  INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, block_number, position_manager, tx_index, shares_minted)
+  VALUES (v_tx, v_address, 'deposit', v_pool, p_chain_id, p_quote_in, p_block_number, v_pm, p_tx_index, p_shares_minted)
   ON CONFLICT (tx_hash) DO NOTHING
   RETURNING id INTO v_inserted_id;
   v_already := v_inserted_id IS NULL;
@@ -163,22 +178,25 @@ BEGIN
   UPDATE gateway_deposit_events SET position_manager = v_pm
     WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager IS NULL;
 
-  -- Same replay-blocking gap as 20260909000004 (a withdraw row with no on_chain_shares/shares_burned
-  -- persisted, from before that migration).
+  -- Data-completeness pre-check: a withdraw missing shares_burned (pre-20260909000004), or a deposit
+  -- missing shares_minted (pre-THIS migration's same-block VALUE fix) can't feed a derived-shares
+  -- replay — neither number was persisted before its respective migration existed.
   SELECT EXISTS(
     SELECT 1 FROM gateway_deposit_events
     WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
       AND position_manager = v_pm
-      AND kind = 'withdraw' AND on_chain_shares IS NULL
+      AND ((kind = 'withdraw' AND shares_burned IS NULL) OR (kind = 'deposit' AND shares_minted IS NULL))
       AND id <> v_inserted_id
   ) INTO v_has_legacy_gap;
 
-  IF v_has_legacy_gap THEN
-    v_new_basis := v_prior_basis + p_quote_in;
-  ELSE
+  IF NOT v_has_legacy_gap THEN
+    -- Same-block VALUE fix (independent Codex audit, live watch, 2026-09-09): shares are DERIVED from
+    -- each event's own sharesMinted/sharesBurned, never read from chain — immune to same-block/
+    -- cross-block/call-order ambiguity alike. Mirrors lib/gateway/basisMath.ts#replayCostBasis exactly.
     v_new_basis := 0;
+    v_running_shares := 0;
     FOR v_ev IN
-      SELECT kind, quote_in, on_chain_shares, shares_burned
+      SELECT kind, quote_in, shares_minted, shares_burned
       FROM gateway_deposit_events
       WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
         AND position_manager = v_pm
@@ -186,14 +204,27 @@ BEGIN
     LOOP
       IF v_ev.kind = 'deposit' THEN
         v_new_basis := v_new_basis + COALESCE(v_ev.quote_in, 0);
+        v_running_shares := v_running_shares + COALESCE(v_ev.shares_minted, 0);
       ELSE
-        IF v_ev.on_chain_shares = 0 OR (v_ev.on_chain_shares + COALESCE(v_ev.shares_burned, 0)) = 0 THEN
+        -- A withdraw burning more than minted so far is a data-completeness gap discovered mid-replay
+        -- (e.g. an earlier deposit whose OWN recording call never landed) — abandon the full replay and
+        -- fall back below, exactly like a pre-existing gap the upfront check already catches.
+        IF v_running_shares < v_ev.shares_burned THEN
+          v_has_legacy_gap := true;
+          EXIT;
+        END IF;
+        v_running_shares := v_running_shares - v_ev.shares_burned;
+        IF v_running_shares = 0 THEN
           v_new_basis := 0;
         ELSE
-          v_new_basis := (v_new_basis * v_ev.on_chain_shares) / (v_ev.on_chain_shares + v_ev.shares_burned);
+          v_new_basis := (v_new_basis * v_running_shares) / (v_running_shares + v_ev.shares_burned);
         END IF;
       END IF;
     END LOOP;
+  END IF;
+
+  IF v_has_legacy_gap THEN
+    v_new_basis := v_prior_basis + p_quote_in;
   END IF;
 
   IF v_pos_id IS NOT NULL THEN
@@ -235,6 +266,7 @@ DECLARE
   v_has_legacy_gap boolean;
   v_pos_id uuid;
   v_found boolean;
+  v_running_shares numeric(78,0);
   v_ev record;
 BEGIN
   INSERT INTO gateway_deposit_events (
@@ -271,24 +303,24 @@ BEGIN
   UPDATE gateway_deposit_events SET position_manager = v_pm
     WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager IS NULL;
 
+  -- Data-completeness pre-check: same as the deposit RPC (see its comment) — a withdraw missing
+  -- shares_burned (pre-20260909000004), or a deposit missing shares_minted (pre-THIS migration's
+  -- same-block VALUE fix), can't feed a derived-shares replay.
   SELECT EXISTS(
     SELECT 1 FROM gateway_deposit_events
     WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
       AND position_manager = v_pm
-      AND kind = 'withdraw' AND on_chain_shares IS NULL
+      AND ((kind = 'withdraw' AND shares_burned IS NULL) OR (kind = 'deposit' AND shares_minted IS NULL))
       AND id <> v_inserted_id
   ) INTO v_has_legacy_gap;
 
-  IF v_has_legacy_gap THEN
-    IF p_on_chain_shares = 0 OR (p_on_chain_shares + p_shares_burned) = 0 THEN
-      v_new_basis := 0;
-    ELSE
-      v_new_basis := (v_prior_basis * p_on_chain_shares) / (p_on_chain_shares + p_shares_burned);
-    END IF;
-  ELSE
+  IF NOT v_has_legacy_gap THEN
+    -- Same-block VALUE fix (independent Codex audit, live watch, 2026-09-09) — derived running shares,
+    -- never a chain read. Mirrors lib/gateway/basisMath.ts#replayCostBasis exactly (see the deposit RPC).
     v_new_basis := 0;
+    v_running_shares := 0;
     FOR v_ev IN
-      SELECT kind, quote_in, on_chain_shares, shares_burned
+      SELECT kind, quote_in, shares_minted, shares_burned
       FROM gateway_deposit_events
       WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
         AND position_manager = v_pm
@@ -296,14 +328,29 @@ BEGIN
     LOOP
       IF v_ev.kind = 'deposit' THEN
         v_new_basis := v_new_basis + COALESCE(v_ev.quote_in, 0);
+        v_running_shares := v_running_shares + COALESCE(v_ev.shares_minted, 0);
       ELSE
-        IF v_ev.on_chain_shares = 0 OR (v_ev.on_chain_shares + COALESCE(v_ev.shares_burned, 0)) = 0 THEN
+        -- Discovered mid-replay (not caught by the upfront check) — abandon and fall back below.
+        IF v_running_shares < v_ev.shares_burned THEN
+          v_has_legacy_gap := true;
+          EXIT;
+        END IF;
+        v_running_shares := v_running_shares - v_ev.shares_burned;
+        IF v_running_shares = 0 THEN
           v_new_basis := 0;
         ELSE
-          v_new_basis := (v_new_basis * v_ev.on_chain_shares) / (v_ev.on_chain_shares + v_ev.shares_burned);
+          v_new_basis := (v_new_basis * v_running_shares) / (v_running_shares + v_ev.shares_burned);
         END IF;
       END IF;
     END LOOP;
+  END IF;
+
+  IF v_has_legacy_gap THEN
+    IF p_on_chain_shares = 0 OR (p_on_chain_shares + p_shares_burned) = 0 THEN
+      v_new_basis := 0;
+    ELSE
+      v_new_basis := (v_prior_basis * p_on_chain_shares) / (p_on_chain_shares + p_shares_burned);
+    END IF;
   END IF;
 
   UPDATE gateway_positions SET shares = p_on_chain_shares, entry_nav = v_new_basis, position_manager = v_pm, updated_at = now()
@@ -313,10 +360,10 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text, integer) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text, integer, numeric) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text, integer) FROM PUBLIC, anon, authenticated;
 
-COMMENT ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text, integer) IS
-  'Atomic deposit-event idempotency claim + full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation fix). Service-role only, called from POST /api/gateway/deposit.';
+COMMENT ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text, integer, numeric) IS
+  'Atomic deposit-event idempotency claim + derived-shares full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation + same-block-value fixes). Service-role only, called from POST /api/gateway/deposit.';
 COMMENT ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text, integer) IS
-  'Atomic withdraw-event idempotency claim + full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation fix). Service-role only, called from POST /api/gateway/withdraw.';
+  'Atomic withdraw-event idempotency claim + derived-shares full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation + same-block-value fixes). Service-role only, called from POST /api/gateway/withdraw.';
