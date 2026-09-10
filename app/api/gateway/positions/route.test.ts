@@ -193,6 +193,55 @@ describe('GET /api/gateway/positions — chain-first', () => {
     expect(positions[0].recorded).toBe(false) // never guessed as belonging to PM_A
     expect(positions[0].costBasisAtomic).toBeNull()
   })
+  // User concern (2026-09-10): "Prevent incomplete historical data from appearing as a complete cost
+  // basis." An exact-PM basis can be technically correct for what's resolved so far, while this wallet's
+  // pool/chain still has an orphaned (position_manager IS NULL) event row sitting unattributed.
+  it('costBasisComplete:true when no orphaned gateway_deposit_events rows exist for this wallet', async () => {
+    state.supabase = fakeSupabase({
+      tables: {
+        gateway_instances: [row(POOL_A, PM_A)],
+        gateway_positions: [{ user_wallet: USER, pool_address: POOL_A, chain_id: 46630, position_manager: PM_A, shares: '1000000', entry_nav: '900000' }],
+      },
+    }).client
+    state.sharesByPm[PM_A] = 1_000_000n
+    const { GET } = await import('./route')
+    const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
+    expect(positions[0].costBasisComplete).toBe(true)
+  })
+  it('costBasisComplete:false when an orphaned event row exists for this exact wallet/pool/chain', async () => {
+    state.supabase = fakeSupabase({
+      tables: {
+        gateway_instances: [row(POOL_A, PM_A)],
+        gateway_positions: [{ user_wallet: USER, pool_address: POOL_A, chain_id: 46630, position_manager: PM_A, shares: '1000000', entry_nav: '900000' }],
+        gateway_deposit_events: [{ address: USER, pool_address: POOL_A, chain_id: 46630, position_manager: null }],
+      },
+    }).client
+    state.sharesByPm[PM_A] = 1_000_000n
+    const { GET } = await import('./route')
+    const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
+    expect(positions[0].costBasisComplete).toBe(false)
+    expect(positions[0].costBasisAtomic).toBe('900000') // the basis itself is unchanged, just honestly flagged
+  })
+  it('an orphaned row for a DIFFERENT pool does not mark an unrelated pool incomplete', async () => {
+    state.supabase = fakeSupabase({
+      tables: {
+        gateway_instances: [row(POOL_A, PM_A), row(POOL_B, PM_B)],
+        gateway_positions: [
+          { user_wallet: USER, pool_address: POOL_A, chain_id: 46630, position_manager: PM_A, shares: '1000000', entry_nav: '900000' },
+          { user_wallet: USER, pool_address: POOL_B, chain_id: 46630, position_manager: PM_B, shares: '1000000', entry_nav: '400000' },
+        ],
+        gateway_deposit_events: [{ address: USER, pool_address: POOL_A, chain_id: 46630, position_manager: null }],
+      },
+    }).client
+    state.sharesByPm[PM_A] = 1_000_000n
+    state.sharesByPm[PM_B] = 1_000_000n
+    const { GET } = await import('./route')
+    const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
+    const byPool = new Map(positions.map((p: { poolAddress: string; costBasisComplete: boolean }) => [p.poolAddress, p.costBasisComplete]))
+    expect(byPool.get(POOL_A)).toBe(false)
+    expect(byPool.get(POOL_B)).toBe(true)
+  })
+
   // V1-09 fix (independent Codex audit, 2026-09-09): the MOST expensive of the three position routes
   // (fans out across every instance) had no rate limit at all.
   it('V1-09 fix: per-IP floor returns a 429-shaped JSON without Upstash', async () => {

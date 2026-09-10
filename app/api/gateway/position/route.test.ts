@@ -12,12 +12,24 @@ const PM_NEW = '0x' + '66'.repeat(20)
 const POOL = '0x' + 'ab'.repeat(32)
 
 type Row = { pool_address: string; chain_id: number; user_wallet: string; position_manager: string | null; entry_nav: string; shares: string }
+type OrphanEventRow = { address: string; pool_address: string; chain_id: number }
 
 // Minimal query-builder mock covering exactly the chain this route uses:
 // .from('gateway_positions').select(...).eq(...).eq(...).eq(...).or(...).order(...).limit(...).maybeSingle()
-function fakeSupabaseFor(rows: Row[]) {
+// .from('gateway_deposit_events').select(...).eq(...).eq(...).eq(...).is(...).limit(...)  (attributionCompleteness)
+function fakeSupabaseFor(rows: Row[], orphanEventRows: OrphanEventRow[] = []) {
   return {
     from: (table: string) => {
+      if (table === 'gateway_deposit_events') {
+        const filters: Array<(r: OrphanEventRow) => boolean> = []
+        const b = {
+          select: () => b,
+          eq: (col: string, val: unknown) => { filters.push((r) => String((r as unknown as Record<string, unknown>)[col]).toLowerCase() === String(val).toLowerCase()); return b },
+          is: (col: string, val: unknown) => { filters.push((r) => (val === null ? (r as unknown as Record<string, unknown>)[col] == null : (r as unknown as Record<string, unknown>)[col] === val)); return b },
+          limit: async (n: number) => ({ data: orphanEventRows.filter((r) => filters.every((f) => f(r))).slice(0, n), error: null }),
+        }
+        return b
+      }
       if (table !== 'gateway_positions') {
         // gateway_position_snapshots — always empty for these tests, not the point being tested.
         const b = { select: () => b, eq: () => b, order: () => b, limit: () => b, then: (res: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(res) }
@@ -144,5 +156,46 @@ describe('GET /api/gateway/position — PM-generation-scoped cost basis', () => 
     const json = await res.json()
     expect(json.position.recorded).toBe(false)
     expect(json.position.costBasisAtomic).toBe('0')
+  })
+})
+
+// User concern (2026-09-10): "Prevent incomplete historical data from appearing as a complete cost
+// basis." — an exact-PM basis is technically correct for what's been resolved, but must disclose when
+// this same wallet/pool/chain still has unattributed history sitting in an orphaned row.
+describe('GET /api/gateway/position — costBasisComplete disclosure', () => {
+  it('costBasisComplete:true when this exact wallet/pool/chain has no orphaned event rows', async () => {
+    state.supabase = fakeSupabaseFor(
+      [{ pool_address: POOL, chain_id: 46630, user_wallet: USER, position_manager: PM_NEW, entry_nav: '500000', shares: '1' }],
+      [], // no orphaned events at all
+    )
+    const { GET } = await import('./route')
+    const res = await GET(req(`https://mw.test/api/gateway/position?address=${USER}&pool=${POOL}&pm=${PM_NEW}`))
+    const json = await res.json()
+    expect(json.position.costBasisComplete).toBe(true)
+  })
+
+  it('costBasisComplete:false when an orphaned (position_manager IS NULL) event row exists for this exact wallet/pool/chain', async () => {
+    state.supabase = fakeSupabaseFor(
+      [{ pool_address: POOL, chain_id: 46630, user_wallet: USER, position_manager: PM_NEW, entry_nav: '500000', shares: '1' }],
+      [{ address: USER, pool_address: POOL, chain_id: 46630 }], // a real, still-unresolved legacy row
+    )
+    const { GET } = await import('./route')
+    const res = await GET(req(`https://mw.test/api/gateway/position?address=${USER}&pool=${POOL}&pm=${PM_NEW}`))
+    const json = await res.json()
+    expect(json.position.costBasisComplete).toBe(false)
+    // The basis itself is unchanged — it just now carries an honest completeness signal alongside it.
+    expect(json.position.costBasisAtomic).toBe('500000')
+  })
+
+  it('costBasisComplete:true when the orphaned row belongs to a DIFFERENT pool (not this wallet+pool+chain)', async () => {
+    const OTHER_POOL = '0x' + 'cd'.repeat(32)
+    state.supabase = fakeSupabaseFor(
+      [{ pool_address: POOL, chain_id: 46630, user_wallet: USER, position_manager: PM_NEW, entry_nav: '500000', shares: '1' }],
+      [{ address: USER, pool_address: OTHER_POOL, chain_id: 46630 }], // a different pool's orphan — irrelevant here
+    )
+    const { GET } = await import('./route')
+    const res = await GET(req(`https://mw.test/api/gateway/position?address=${USER}&pool=${POOL}&pm=${PM_NEW}`))
+    const json = await res.json()
+    expect(json.position.costBasisComplete).toBe(true)
   })
 })

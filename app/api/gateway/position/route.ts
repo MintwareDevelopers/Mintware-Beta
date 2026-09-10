@@ -4,6 +4,7 @@ import { readGatewayPosition, readGatewayPoolState, serializePoolState } from '@
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { resolveInstanceStrict } from '@/lib/gateway/routeInstance'
 import { createTokenBucket } from '@/lib/gateway/sparkline'
+import { hasUnresolvedHistory } from '@/lib/gateway/attributionCompleteness'
 
 export const dynamic = 'force-dynamic'
 
@@ -63,6 +64,11 @@ export const GET = createHandler(async (req, ctx) => {
     .eq('position_manager', inst.positionManager.toLowerCase())
     .maybeSingle()
 
+  // User concern (2026-09-10): an exact-PM cost basis can look complete while this exact
+  // wallet/pool/chain still has an orphaned (position_manager IS NULL) row sitting unresolved — never
+  // silently present that basis as the whole picture. See lib/gateway/attributionCompleteness.ts.
+  const costBasisIncomplete = await hasUnresolvedHistory(ctx.supabase, address, inst.poolAddress, inst.chainId)
+
   const client = gatewayPublicClient(cfg)
 
   let view
@@ -105,6 +111,10 @@ export const GET = createHandler(async (req, ctx) => {
       unrealizedPnlAtomic: view.unrealizedPnlAtomic,
       // True when the chain shows shares but no DB row exists — the deposit was never recorded (O-1).
       recorded: pos != null,
+      // False when this exact wallet/pool/chain still has an orphaned (unattributed) historical event —
+      // costBasisAtomic above reflects only what's been resolved so far, not necessarily this wallet's
+      // FULL history here. The UI must disclose this rather than present the number as final.
+      costBasisComplete: !costBasisIncomplete,
       // Off-chain private data — never disclosed on the public path (audit L-03). Owners read it via POST.
       bufferBalanceAtomic: null,
       // Unharvested fees need a V4 fee-growth read — deferred to a later pass (phase-1 shows realized).

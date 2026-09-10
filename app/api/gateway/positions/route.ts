@@ -4,6 +4,7 @@ import { readGatewayPosition } from '@/lib/gateway/positionReader'
 import { gatewayConfig, gatewayPublicClient } from '@/lib/gateway/chain'
 import { listResolvableInstances } from '@/lib/gateway/routeInstance'
 import { createTokenBucket } from '@/lib/gateway/sparkline'
+import { fetchUnresolvedPoolChainKeys } from '@/lib/gateway/attributionCompleteness'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,6 +61,15 @@ export const GET = createHandler(async (req, ctx) => {
   const basisFor = (poolAddress: string, chainId: number, positionManager: string): PosRow | undefined =>
     byExactPm.get(`${poolAddress.toLowerCase()}:${chainId}:${positionManager.toLowerCase()}`)
 
+  // User concern (2026-09-10): a specific PM's cost basis can look complete while this wallet still has
+  // an orphaned (position_manager IS NULL) row for that same pool/chain sitting unresolved. One query for
+  // every pool this wallet has an orphan in (not one query per instance) — see
+  // lib/gateway/attributionCompleteness.ts. A read failure fails CLOSED: every position is reported
+  // incomplete rather than silently treated as fully resolved.
+  const unresolvedPoolChainKeys = await fetchUnresolvedPoolChainKeys(ctx.supabase, address)
+  const costBasisCompleteFor = (poolAddress: string, chainId: number): boolean =>
+    unresolvedPoolChainKeys != null && !unresolvedPoolChainKeys.has(`${poolAddress.toLowerCase()}:${chainId}`)
+
   const client = gatewayPublicClient(cfg)
 
   // V1-08 fix (independent Codex audit, 2026-09-09): an RPC read failure for one pool used to return
@@ -96,6 +106,9 @@ export const GET = createHandler(async (req, ctx) => {
             costBasisAtomic: view.costBasisAtomic,
             unrealizedPnlAtomic: view.unrealizedPnlAtomic,
             recorded: row != null, // false ⇒ chain shows shares but no record row (O-1) — cost basis unknown
+            // False when this wallet/pool/chain still has an orphaned (unattributed) historical event —
+            // costBasisAtomic reflects only what's been resolved so far, not necessarily the full history.
+            costBasisComplete: costBasisCompleteFor(inst.poolAddress, inst.chainId),
             source: inst.source,
             live: inst.live,
             // Off-chain private data — owner-gated on POST /api/gateway/position (L-03).
