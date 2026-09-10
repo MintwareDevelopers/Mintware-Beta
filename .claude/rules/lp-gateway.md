@@ -259,14 +259,26 @@ unrelated).
   guesses; an unresolvable row (pruned node, chain reorg, event/user mismatch, hash/pool mismatch) stays
   explicitly unresolved. Dry-run by default (`node --env-file=.env.local
   scripts/verify-gateway-pm-attribution.mjs`); `--apply` calls `apply_gateway_pm_attribution` per resolved
-  row (atomic event-update + recompute, `_007`), then a full idempotent self-heal sweep
+  row (atomic event-update + recompute, `_007` — REVISED same-day to also atomically recompute every
+  SIBLING position-manager identity sharing a wallet/pool/chain the moment its last orphaned row resolves,
+  closing a cross-PM staleness gap Codex's live review caught), then a full idempotent self-heal sweep
   (`recomputeAllResolvedIdentities`) that gates every identity on having NO remaining orphaned rows for
   that wallet/pool/chain before publishing a basis. Not run against production data by anyone yet — an
-  operator action, not something done automatically. **Still open (2026-09-10, user-flagged):** genuine
-  multi-session lock-contention verification needs a real, non-embedded Postgres (PGlite is single-
-  connection/mutex-serialized by design — see the note in `lib/gateway/costBasisRpc.pglite.test.ts`) —
-  no docker/local-postgres/homebrew available in the dev sandbox this was built in; the `costBasisComplete`
-  API field (see the position routes above) needs UI wiring to actually surface to a depositor.
+  operator action, not something done automatically. **`costBasisComplete`** (the position routes above)
+  is wired into the V1 UI (`V1PoolDetail`/`V1Portfolio`) — a warning line, a per-card badge, and a
+  portfolio-level banner when any position's basis may still be incomplete.
+  **Genuine multi-connection lock verification (2026-09-10 — CLOSED):** `lib/gateway/costBasisRpc.concurrency.test.ts`
+  runs a REAL, precompiled Postgres binary (`embedded-postgres` devDependency — a real subprocess with a
+  real TCP listener, not the single-connection embedded PGlite everything else here uses) and races two
+  genuinely independent `pg` client connections against it: one test proves the exact
+  `pg_advisory_xact_lock(hashtext(wallet||':'||pool), chainId)` key every gateway RPC takes actually blocks
+  a second real connection (measured, not assumed); another launches two REAL concurrent
+  `record_gateway_deposit_event` calls for the SAME identity via `Promise.all` and proves neither is a lost
+  update (the combined basis/shares reflect BOTH deposits, both event rows persist); a third proves
+  DIFFERENT identities never block each other (the lock is per-wallet+pool, not global). Self-skips
+  (console.warn, never fails) if a real Postgres subprocess can't actually start in a given environment —
+  matches the existing Forge fork-test convention (self-skip without `BASE_RPC_URL`) rather than making the
+  whole suite fragile to sandbox differences. No Docker needed.
 
 ## Surfaces & the V1/V2 model
 - **`/v1`** ([`app/v1/page.tsx`](../../app/v1/page.tsx)) = the live product (`V1Shell` + `V1Discover` — the
