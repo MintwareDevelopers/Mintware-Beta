@@ -222,44 +222,93 @@ async function main() {
   console.log('\nDone. Unresolved rows remain untouched — re-run this script later if more historical data becomes recoverable.')
 }
 
+const PAGE_SIZE = 1000
+
+/** Page through a PostgREST query with a deterministic `id ASC` order, advancing `from` by the ACTUAL
+ *  number of rows each page returns rather than by a fixed PAGE_SIZE. This is deliberate, not merely
+ *  defensive: PostgREST/Supabase can enforce a server-side max-rows cap lower than whatever range we
+ *  request, and without a stable order there's no guarantee two range() calls even see a consistent
+ *  slice of the same rows (Codex: "pagination still lacks deterministic ORDER BY and assumes the server
+ *  cap is at least PAGE_SIZE=1000 — a lower configured cap returns a short first page and prematurely
+ *  ends traversal"). Advancing by the real returned count and stopping only on a truly EMPTY page is
+ *  correct regardless of what cap the server actually enforces. `queryFactory` must return a fresh
+ *  PostgREST query (missing only `.order()`/`.range()`) — Supabase builders are single-use per chain. */
+async function paginateAll(queryFactory, onRow) {
+  for (let from = 0; ; ) {
+    const { data: rows, error } = await queryFactory().order('id', { ascending: true }).range(from, from + PAGE_SIZE - 1)
+    if (error) return { error }
+    for (const row of rows ?? []) onRow(row)
+    if (!rows || rows.length === 0) break
+    from += rows.length
+  }
+  return {}
+}
+
+/** Every `wallet:pool:chainId` combination that STILL has at least one orphaned (position_manager IS
+ *  NULL) row right now — used to gate recompute on a genuinely complete history, not just "nothing
+ *  failed to update this run." Returns null on a read failure (caller must fail closed, never proceed
+ *  without this check). */
+async function fetchOrphanedWalletKeys(supabase) {
+  const keys = new Set()
+  const { error } = await paginateAll(
+    () => supabase.from('gateway_deposit_events').select('id, address, pool_address, chain_id').is('position_manager', null),
+    (row) => keys.add(`${row.address.toLowerCase()}:${row.pool_address.toLowerCase()}:${row.chain_id}`),
+  )
+  if (error) { console.error('Failed to check remaining orphaned rows:', error.message); return null }
+  return keys
+}
+
 /** Full, idempotent sweep: recompute EVERY distinct (address, pool_address, chain_id, position_manager)
  *  combination currently present in gateway_deposit_events with a non-null position_manager — regardless
  *  of whether this invocation resolved it or a prior (possibly interrupted) one did. Safe to call any
  *  number of times; recompute_gateway_position itself just replays that identity's full event history.
- *  `skipIdentities` (optional Set of the same `address:pool:chainId:pm` key format) excludes identities
- *  known to have an incomplete history right now (e.g. a sibling row's update just failed) — recomputing
- *  those would publish a basis from a known-partial event set. */
+ *
+ *  Before recomputing, gates each identity on a genuinely COMPLETE history: if the same
+ *  wallet/pool/chain still has ANY orphaned (position_manager IS NULL) row — whether from a receipt
+ *  that failed to resolve, one that fell outside a prior run's --limit batch, or one this run's own
+ *  UPDATE failed to write — that identity is skipped rather than recomputed, because an unresolved
+ *  sibling event could genuinely belong to this exact position manager and its absence would silently
+ *  publish an incomplete basis (Codex: "recompute enumeration... [must] gate publication on complete
+ *  identity recovery"). This single check subsumes and generalizes the narrower "did my own UPDATE
+ *  fail this run" tracking — an UPDATE failure always leaves that row NULL in the DB, so it's always
+ *  caught here too. `skipIdentities` (optional Set of `address:pool:chainId:pm` keys) is additive —
+ *  callers may still pass extra identities to skip for other reasons. */
 export async function recomputeAllResolvedIdentities(supabase, skipIdentities) {
-  // Paginate rather than one unbounded select — PostgREST caps an unqualified select at its configured
-  // default page size (commonly 1000), so a table with more resolved rows than that would silently drop
-  // identities past the cap instead of erroring (Codex: "unpaginated sweep"). Page through explicitly
-  // until a page comes back short of PAGE_SIZE.
-  const PAGE_SIZE = 1000
+  const orphanedWalletKeys = await fetchOrphanedWalletKeys(supabase)
+  if (orphanedWalletKeys === null) {
+    console.error('Aborting recompute sweep: could not verify whether any wallet/pool/chain still has unresolved orphaned rows, so completeness cannot be guaranteed.')
+    return
+  }
+
   const identities = new Map() // key -> {address, poolAddress, chainId, positionManager}
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data: rows, error } = await supabase
-      .from('gateway_deposit_events')
-      .select('address, pool_address, chain_id, position_manager')
-      .not('position_manager', 'is', null)
-      .range(from, from + PAGE_SIZE - 1)
-    if (error) { console.error('Failed to list resolved identities for recompute:', error.message); return }
-    for (const row of rows ?? []) {
+  const { error } = await paginateAll(
+    () => supabase.from('gateway_deposit_events').select('id, address, pool_address, chain_id, position_manager').not('position_manager', 'is', null),
+    (row) => {
       const key = `${row.address.toLowerCase()}:${row.pool_address.toLowerCase()}:${row.chain_id}:${row.position_manager.toLowerCase()}`
       if (!identities.has(key)) {
         identities.set(key, { address: row.address, poolAddress: row.pool_address, chainId: row.chain_id, positionManager: row.position_manager })
       }
-    }
-    if (!rows || rows.length < PAGE_SIZE) break
-  }
+    },
+  )
+  if (error) { console.error('Failed to list resolved identities for recompute:', error.message); return }
 
-  if (skipIdentities?.size) {
-    console.log(`\nSkipping recompute for ${skipIdentities.size} identity(ies) with a known-incomplete history this run (a sibling row's update failed) — re-run to retry once every row lands:`)
-    for (const key of skipIdentities) console.log(`  SKIPPED: ${key}`)
-  }
-
-  console.log(`\nRecomputing ${Math.max(0, identities.size - (skipIdentities?.size ?? 0))} resolved position(s) (full idempotent pass, self-healing any interrupted prior run)...`)
+  const skip = new Map() // key -> reason
+  for (const key of skipIdentities ?? []) skip.set(key, "a sibling row's update failed this run")
   for (const [key, id] of identities) {
-    if (skipIdentities?.has(key)) continue
+    const walletKey = `${id.address.toLowerCase()}:${id.poolAddress.toLowerCase()}:${id.chainId}`
+    if (orphanedWalletKeys.has(walletKey) && !skip.has(key)) {
+      skip.set(key, 'orphaned (position_manager IS NULL) row(s) still exist for this wallet/pool/chain — history may be incomplete')
+    }
+  }
+
+  if (skip.size) {
+    console.log(`\nSkipping recompute for ${skip.size} identity(ies) with a known-incomplete history — re-run once every sibling row resolves:`)
+    for (const [key, reason] of skip) console.log(`  SKIPPED: ${key} — ${reason}`)
+  }
+
+  console.log(`\nRecomputing ${Math.max(0, identities.size - skip.size)} resolved position(s) (full idempotent pass, self-healing any interrupted prior run)...`)
+  for (const [key, id] of identities) {
+    if (skip.has(key)) continue
     const { data, error: rpcErr } = await supabase.rpc('recompute_gateway_position', {
       p_address: id.address, p_pool_address: id.poolAddress, p_chain_id: id.chainId, p_position_manager: id.positionManager,
     })

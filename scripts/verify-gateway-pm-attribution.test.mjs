@@ -161,26 +161,34 @@ describe('main-module detection — pathToFileURL correctly handles paths contai
 })
 
 describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an interrupted prior --apply run', () => {
-  function fakeSupabase(allRows, { rpcResults = {} } = {}) {
+  // A fake Supabase client covering BOTH queries recomputeAllResolvedIdentities issues: the orphan-check
+  // (`.is('position_manager', null)`) and the resolved-identities sweep (`.not('position_manager', 'is',
+  // null)`), each followed by `.order('id', {ascending:true}).range(from,to)` — mirroring the real
+  // paginateAll helper's call shape exactly, with an `id` field on every row (used for ordering, unused
+  // otherwise) so deterministic pagination has something real to sort by.
+  function fakeSupabase(notNullRows, { nullRows = [], rpcResults = {} } = {}) {
     const rpcCalls = []
     const rangeCalls = []
+    function page(rows) {
+      return {
+        order: (col) => {
+          expect(col).toBe('id')
+          return {
+            range: (from, to) => {
+              rangeCalls.push([from, to])
+              return Promise.resolve({ data: rows.slice(from, to + 1), error: null })
+            },
+          }
+        },
+      }
+    }
     return {
       from(table) {
         expect(table).toBe('gateway_deposit_events')
         return {
           select: () => ({
-            not: (col, op, val) => {
-              expect(col).toBe('position_manager')
-              expect(op).toBe('is')
-              expect(val).toBe(null)
-              return {
-                // Mirrors real PostgREST .range(from, to) pagination — inclusive bounds.
-                range: (from, to) => {
-                  rangeCalls.push([from, to])
-                  return Promise.resolve({ data: allRows.slice(from, to + 1), error: null })
-                },
-              }
-            },
+            is: (col, val) => { expect(col).toBe('position_manager'); expect(val).toBe(null); return page(nullRows) },
+            not: (col, op, val) => { expect(col).toBe('position_manager'); expect(op).toBe('is'); expect(val).toBe(null); return page(notNullRows) },
           }),
         }
       },
@@ -202,7 +210,7 @@ describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an
     // This function takes no "identities from this run" argument at all — it queries the CURRENT state
     // of the table directly, so a stranded identity like this one is picked up regardless of which run
     // (or invocation) actually resolved it.
-    const staleResolvedRow = { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }
+    const staleResolvedRow = { id: 'r1', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }
     const supabase = fakeSupabase([staleResolvedRow])
     await recomputeAllResolvedIdentities(supabase)
     expect(supabase.__rpcCalls).toEqual([
@@ -212,8 +220,8 @@ describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an
 
   it('recomputes each distinct identity exactly once even when multiple event rows share it', async () => {
     const rows = [
-      { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() },
-      { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }, // duplicate identity
+      { id: 'a', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() },
+      { id: 'b', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }, // duplicate identity
     ]
     const supabase = fakeSupabase(rows)
     await recomputeAllResolvedIdentities(supabase)
@@ -223,8 +231,8 @@ describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an
   it('continues to the next identity when one recompute call fails, rather than aborting the whole sweep', async () => {
     const OTHER_PM = '0x' + 'cc'.repeat(20)
     const rows = [
-      { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() },
-      { address: USER, pool_address: POOL, chain_id: 46630, position_manager: OTHER_PM },
+      { id: 'a', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() },
+      { id: 'b', address: USER, pool_address: POOL, chain_id: 46630, position_manager: OTHER_PM },
     ]
     const failKey = `${USER}:${POOL}:46630:${PM.toLowerCase()}`
     const supabase = fakeSupabase(rows, { rpcResults: { [failKey]: { data: null, error: { message: 'gap in history' } } } })
@@ -234,7 +242,7 @@ describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an
   })
 
   it('skips an identity passed in skipIdentities (a sibling row failed to update this run) — never recomputes from a known-partial history', async () => {
-    const rows = [{ address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }]
+    const rows = [{ id: 'a', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }]
     const supabase = fakeSupabase(rows)
     const key = `${USER.toLowerCase()}:${POOL.toLowerCase()}:46630:${PM.toLowerCase()}`
     await recomputeAllResolvedIdentities(supabase, new Set([key]))
@@ -242,18 +250,84 @@ describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an
   })
 
   it('paginates past a single page of resolved rows (proves the sweep does not silently truncate on a large table)', async () => {
-    // Build more distinct identities than one page would hold, using a page size smaller than the
-    // production PAGE_SIZE=1000 is impractical to construct here — instead prove pagination mechanics
-    // directly: many rows across what would be multiple pages at any reasonable page size all still
-    // produce one recompute call per distinct identity, and .range() was actually invoked more than once
-    // once the returned page is non-empty and as large as requested (forcing at least one more request).
     const manyRows = Array.from({ length: 1500 }, (_, i) => ({
-      address: USER, pool_address: POOL, chain_id: 46630, position_manager: `0x${i.toString(16).padStart(40, '0')}`,
+      id: `id-${i}`, address: USER, pool_address: POOL, chain_id: 46630, position_manager: `0x${i.toString(16).padStart(40, '0')}`,
     }))
     const supabase = fakeSupabase(manyRows)
     await recomputeAllResolvedIdentities(supabase)
     expect(supabase.__rpcCalls.length).toBe(1500) // every distinct identity across every page was recomputed
     expect(supabase.__rangeCalls.length).toBeGreaterThan(1) // proves more than one page was actually fetched
+  })
+
+  it('advances pagination by the ACTUAL rows returned, not the requested page size — survives a server-enforced cap lower than PAGE_SIZE', async () => {
+    // Regression for Codex's "assumes the server cap is at least PAGE_SIZE=1000; a lower configured cap
+    // returns a short first page and prematurely ends traversal": build a rows array bigger than a single
+    // page could naively assume complete, but respond to EVERY .range() call with at most 10 rows per
+    // page regardless of what range was requested (simulating a low server-side cap) — pagination must
+    // still keep going (by advancing `from` by the actual count returned) until it truly runs dry.
+    const total = 25
+    const allRows = Array.from({ length: total }, (_, i) => ({
+      id: `id-${i}`, address: USER, pool_address: POOL, chain_id: 46630, position_manager: `0x${i.toString(16).padStart(40, '0')}`,
+    }))
+    const rpcCalls = []
+    const rangeCalls = []
+    const CAP = 10 // server enforces a hard 10-row cap, far below any range width we might request
+    const supabase = {
+      from: () => ({
+        select: () => ({
+          is: () => ({ order: () => ({ range: () => Promise.resolve({ data: [], error: null }) }) }),
+          not: () => ({
+            order: () => ({
+              range: (from, to) => {
+                rangeCalls.push([from, to])
+                const slice = allRows.slice(from, Math.min(to + 1, from + CAP))
+                return Promise.resolve({ data: slice, error: null })
+              },
+            }),
+          }),
+        }),
+      }),
+      rpc: (fn, params) => { rpcCalls.push(params); return Promise.resolve({ data: [{ cost_basis_atomic: '0', shares_atomic: '0', event_count: 0 }], error: null }) },
+    }
+    await recomputeAllResolvedIdentities(supabase)
+    expect(rpcCalls.length).toBe(total) // every identity found despite the server capping every page at 10
+    expect(rangeCalls.length).toBeGreaterThanOrEqual(Math.ceil(total / CAP))
+  })
+
+  it('skips an identity whose wallet/pool/chain STILL has an orphaned row — never publishes from an incomplete history', async () => {
+    // The core fix for Codex's "recompute enumeration... [must] gate publication on complete identity
+    // recovery": an orphaned sibling row for the SAME wallet/pool/chain (regardless of why it's still
+    // unresolved — failed receipt fetch, outside a prior run's --limit, or a failed UPDATE) must block
+    // recompute for every identity sharing that wallet/pool/chain, not just ones this run touched.
+    const resolvedRow = { id: 'a', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }
+    const orphanedSibling = { id: 'b', address: USER, pool_address: POOL, chain_id: 46630 } // still position_manager IS NULL
+    const supabase = fakeSupabase([resolvedRow], { nullRows: [orphanedSibling] })
+    await recomputeAllResolvedIdentities(supabase)
+    expect(supabase.__rpcCalls.length).toBe(0) // recompute was gated off entirely for this wallet/pool/chain
+  })
+
+  it('still recomputes an UNRELATED identity even while a different wallet/pool/chain has an orphaned row', async () => {
+    const OTHER_USER = '0x' + '33'.repeat(20)
+    const resolvedRow = { id: 'a', address: OTHER_USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }
+    const orphanedElsewhere = { id: 'b', address: USER, pool_address: POOL, chain_id: 46630 } // a DIFFERENT wallet's orphan
+    const supabase = fakeSupabase([resolvedRow], { nullRows: [orphanedElsewhere] })
+    await recomputeAllResolvedIdentities(supabase)
+    expect(supabase.__rpcCalls).toEqual([{ p_address: OTHER_USER, p_pool_address: POOL, p_chain_id: 46630, p_position_manager: PM.toLowerCase() }])
+  })
+
+  it('aborts the entire sweep (fails closed) when the orphan-check read itself fails, rather than recomputing without a completeness guarantee', async () => {
+    const rpcCalls = []
+    const supabase = {
+      from: () => ({
+        select: () => ({
+          is: () => ({ order: () => ({ range: () => Promise.resolve({ data: null, error: { message: 'connection reset' } }) }) }),
+          not: () => ({ order: () => ({ range: () => Promise.resolve({ data: [{ id: 'a', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }], error: null }) }) }),
+        }),
+      }),
+      rpc: (fn, params) => { rpcCalls.push(params); return Promise.resolve({ data: [{ cost_basis_atomic: '0', shares_atomic: '0', event_count: 0 }], error: null }) },
+    }
+    await recomputeAllResolvedIdentities(supabase)
+    expect(rpcCalls.length).toBe(0) // never proceeded to recompute without verifying completeness first
   })
 })
 
@@ -265,10 +339,15 @@ describe('main() no-orphans path — must still self-heal via recompute, never a
     // main() (not separately exported), so this test locks the exported primitive it delegates to —
     // proving a call with an EMPTY skip set still walks and recomputes every already-resolved identity,
     // exactly the scenario left behind by a run that updated events but crashed before recomputing.
-    const staleResolvedRow = { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }
+    const staleResolvedRow = { id: 'r1', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }
     const rpcCalls = []
     const supabase = {
-      from: () => ({ select: () => ({ not: () => ({ range: (from, to) => Promise.resolve({ data: from === 0 ? [staleResolvedRow] : [], error: null }) }) }) }),
+      from: () => ({
+        select: () => ({
+          is: () => ({ order: () => ({ range: () => Promise.resolve({ data: [], error: null }) }) }), // no orphans at all
+          not: () => ({ order: () => ({ range: (from) => Promise.resolve({ data: from === 0 ? [staleResolvedRow] : [], error: null }) }) }),
+        }),
+      }),
       rpc: (fn, params) => { rpcCalls.push(params); return Promise.resolve({ data: [{ cost_basis_atomic: '100', shares_atomic: '100', event_count: 1 }], error: null }) },
     }
     await recomputeAllResolvedIdentities(supabase, new Set())
