@@ -95,6 +95,11 @@ export const POST = createHandler(async (req, ctx) => {
   // residual) co-mingled a depositor's basis across generations. `p_position_manager` (migration
   // 20260909000005) scopes the write to the EXACT generation this deposit went to — `inst.positionManager`
   // is already resolved on-chain (H-01), never a client-supplied claim.
+  //
+  // Same-block ordering fix (independent Codex audit, live watch, 2026-09-09): `p_block_number` alone
+  // ties among two DIFFERENT transactions landing in the SAME block — `p_tx_index` (the receipt's own
+  // `transactionIndex`, real on-chain position within the block) is the correct tiebreak, never the
+  // recording call's own arrival time.
   const { data: rpcData, error: rpcErr } = await ctx.supabase.rpc('record_gateway_deposit_event', {
     p_tx_hash: txHash,
     p_address: address,
@@ -104,6 +109,7 @@ export const POST = createHandler(async (req, ctx) => {
     p_on_chain_shares: onChainShares.toString(),
     p_block_number: receipt.blockNumber.toString(),
     p_position_manager: inst.positionManager,
+    p_tx_index: receipt.transactionIndex,
   })
   if (rpcErr) {
     ctx.log.error('gateway.deposit', 'record_gateway_deposit_event failed', { error: rpcErr.message })

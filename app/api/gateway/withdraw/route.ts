@@ -115,6 +115,10 @@ export const POST = createHandler(async (req, ctx) => {
   // Round-4 pass-2 manager-generation fix (independent Codex audit, 2026-09-09): `p_position_manager`
   // scopes this write to the EXACT generation the withdrawal came from — `inst.positionManager` here is
   // already verified against `receipt.to` above (a wallet's own tx, never a client-supplied claim).
+  //
+  // Same-block ordering fix (independent Codex audit, live watch, 2026-09-09): `p_tx_index` (the
+  // receipt's own `transactionIndex`) tiebreaks two DIFFERENT transactions landing in the same block by
+  // their real on-chain order — see the deposit route's identical comment.
   const { data: rpcData, error: rpcErr } = await ctx.supabase.rpc('record_gateway_withdraw_event', {
     p_tx_hash: txHash,
     p_address: address,
@@ -125,6 +129,7 @@ export const POST = createHandler(async (req, ctx) => {
     p_shares_burned: sharesBurned.toString(),
     p_block_number: receipt.blockNumber.toString(),
     p_position_manager: inst.positionManager,
+    p_tx_index: receipt.transactionIndex,
   })
   if (rpcErr) {
     ctx.log.error('gateway.withdraw', 'record_gateway_withdraw_event failed', { error: rpcErr.message })

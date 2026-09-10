@@ -144,10 +144,14 @@ describe('POST /api/gateway/deposit — the UI body is now accepted and recorded
   it('sends the receipt\'s own blockNumber as p_block_number (the replay sort key)', async () => {
     const { db, client } = fakeSupabase({ tables: { gateway_instances: [registryRow] }, uniques: { gateway_deposit_events: [['tx_hash']] }, rpc: gatewayPositionRpc })
     state.supabase = client
+    state.receipt = { status: 'success', to: REG_PM, blockNumber: 500n, transactionIndex: 3, logs: [depositedLog(USER, 1_000_000n, 1_000_000n)] }
     const { POST } = await import('./route')
     await POST(post('/api/gateway/deposit', await signedDeposit()))
     const call = db.calls.find((c) => c.table === 'rpc:record_gateway_deposit_event')
     expect((call?.payload as Record<string, unknown> | undefined)?.p_block_number).toBe('500')
+    // Same-block ordering fix (independent Codex audit, live watch, 2026-09-09): the real on-chain
+    // tiebreak, not the recording call's own arrival time.
+    expect((call?.payload as Record<string, unknown> | undefined)?.p_tx_index).toBe(3)
   })
 })
 
@@ -239,7 +243,7 @@ describe('POST /api/gateway/withdraw — same binding, records the exit', () => 
     })
     state.supabase = client
     state.sharesOf = 500_000n
-    state.receipt = { status: 'success', to: REG_PM, blockNumber: 501n, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n)] }
+    state.receipt = { status: 'success', to: REG_PM, blockNumber: 501n, transactionIndex: 7, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n)] }
     const issuedAt = Date.now()
     const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
     const authSignature = await wallet.signMessage({ message: authMessage })
@@ -247,6 +251,7 @@ describe('POST /api/gateway/withdraw — same binding, records the exit', () => 
     await POST(post('/api/gateway/withdraw', { address: wallet.address, txHash: TX, pool: POOL_ID, authMessage, authSignature, issuedAt }))
     const call = db.calls.find((c) => c.table === 'rpc:record_gateway_withdraw_event')
     expect((call?.payload as Record<string, unknown> | undefined)?.p_block_number).toBe('501')
+    expect((call?.payload as Record<string, unknown> | undefined)?.p_tx_index).toBe(7)
   })
   // V1-04 — FIXED 2026-09-09 (independent Codex audit). Reproduces Codex's own arithmetic trace: a
   // withdrawal burns half of an original 1,000,000-share position (basis 1,000,000), but ANOTHER

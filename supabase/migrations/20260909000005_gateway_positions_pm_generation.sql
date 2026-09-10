@@ -21,9 +21,39 @@
 -- as a "legacy, unclaimed" row by the RPCs below: the FIRST write for that identity that names a real PM
 -- ADOPTS the legacy row (sets its position_manager, continuing that basis) rather than starting a
 -- confusing duplicate; this is standard behavior going forward, not a special case that fades away.
+--
+-- Accepted residuals (independent Codex audit, live watch, 2026-09-09 — disclosed, not silently left):
+--   * Historical PM attribution: the registry backfill is best-effort (prefers the currently-active
+--     instance, else the most recent row of any status) — for a pool that has ALREADY been through a PM
+--     migration by the time this runs, an existing position's TRUE originating generation is genuinely
+--     unrecoverable (position_manager was never recorded per-event before this migration existed). The
+--     backfill's guess, and the adopt-or-create fallback for anything it misses, are the best available
+--     answer, not a guarantee of perfect historical attribution.
+--   * Legacy fallback: a position whose event history includes a pre-20260909000004 withdraw (missing
+--     on_chain_shares/shares_burned, never persisted before that migration) can't be full-replayed from
+--     scratch — falls back to the single-delta behavior for that one call, same as 20260909000004's own
+--     documented residual.
+--   * Concurrency: neither RPC takes an explicit row lock (no `FOR UPDATE`) on the adopt-or-create
+--     SELECT — matching every other gateway RPC in this codebase, none of which do either. Replay is
+--     idempotent and self-correcting on the NEXT call (it recomputes fresh from stored events every
+--     time), so a lost update here just delays convergence by one call, it doesn't compound. The one
+--     genuinely narrow race this doesn't self-correct instantly: two truly concurrent FIRST writes for
+--     two DIFFERENT brand-new generations of the same wallet+pool+chain, arriving in the same instant,
+--     racing to adopt the SAME unclaimed legacy row — an edge case requiring two simultaneous first-ever
+--     deposits into two different PM generations, judged too narrow to justify explicit locking given
+--     nothing else in this RPC family uses it.
 
 ALTER TABLE gateway_positions ADD COLUMN IF NOT EXISTS position_manager text;
 ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS position_manager text;
+-- Same-block ordering fix (independent Codex audit, live watch, 2026-09-09, same day this migration was
+-- written — caught before it was ever applied). The replay's sort key was `block_number, created_at` —
+-- `created_at` is when the RECORDING CALL happened to run, not the transactions' real on-chain order, so
+-- two DIFFERENT transactions for the same identity landing in the SAME block (rare on a ~12s-block chain,
+-- but not impossible) could still replay in the WRONG order — reintroducing, for that narrow case, the
+-- exact call-arrival-order problem 20260909000004 exists to eliminate. `tx_index` (the receipt's own
+-- `transactionIndex` — its real position within the block, on-chain truth, never a recording artifact)
+-- is the correct tiebreak; `created_at` remains the final fallback only for a row that predates this.
+ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS tx_index integer;
 
 -- Backfill: prefer the pool's ACTIVE instance; else its most-recently-touched row of any status. Only
 -- fills rows that don't already have one (idempotent / safe to re-run).
@@ -61,7 +91,8 @@ CREATE OR REPLACE FUNCTION record_gateway_deposit_event(
   p_quote_in numeric,
   p_on_chain_shares numeric,
   p_block_number bigint DEFAULT NULL,
-  p_position_manager text DEFAULT NULL
+  p_position_manager text DEFAULT NULL,
+  p_tx_index integer DEFAULT NULL
 ) RETURNS TABLE(cost_basis_atomic numeric, already_recorded boolean)
 LANGUAGE plpgsql
 AS $$
@@ -78,8 +109,8 @@ DECLARE
   v_pos_id uuid;
   v_ev record;
 BEGIN
-  INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, block_number, position_manager)
-  VALUES (v_tx, v_address, 'deposit', v_pool, p_chain_id, p_quote_in, p_block_number, v_pm)
+  INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, block_number, position_manager, tx_index)
+  VALUES (v_tx, v_address, 'deposit', v_pool, p_chain_id, p_quote_in, p_block_number, v_pm, p_tx_index)
   ON CONFLICT (tx_hash) DO NOTHING
   RETURNING id INTO v_inserted_id;
   v_already := v_inserted_id IS NULL;
@@ -138,7 +169,7 @@ BEGIN
       FROM gateway_deposit_events
       WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
         AND position_manager = v_pm
-      ORDER BY block_number NULLS FIRST, created_at
+      ORDER BY block_number NULLS FIRST, tx_index NULLS FIRST, created_at
     LOOP
       IF v_ev.kind = 'deposit' THEN
         v_new_basis := v_new_basis + COALESCE(v_ev.quote_in, 0);
@@ -174,7 +205,8 @@ CREATE OR REPLACE FUNCTION record_gateway_withdraw_event(
   p_on_chain_shares numeric,
   p_shares_burned numeric,
   p_block_number bigint DEFAULT NULL,
-  p_position_manager text DEFAULT NULL
+  p_position_manager text DEFAULT NULL,
+  p_tx_index integer DEFAULT NULL
 ) RETURNS TABLE(cost_basis_atomic numeric, already_recorded boolean, position_found boolean)
 LANGUAGE plpgsql
 AS $$
@@ -193,9 +225,9 @@ DECLARE
   v_ev record;
 BEGIN
   INSERT INTO gateway_deposit_events (
-    tx_hash, address, kind, pool_address, chain_id, quote_out, on_chain_shares, shares_burned, block_number, position_manager
+    tx_hash, address, kind, pool_address, chain_id, quote_out, on_chain_shares, shares_burned, block_number, position_manager, tx_index
   )
-  VALUES (v_tx, v_address, 'withdraw', v_pool, p_chain_id, p_quote_out, p_on_chain_shares, p_shares_burned, p_block_number, v_pm)
+  VALUES (v_tx, v_address, 'withdraw', v_pool, p_chain_id, p_quote_out, p_on_chain_shares, p_shares_burned, p_block_number, v_pm, p_tx_index)
   ON CONFLICT (tx_hash) DO NOTHING
   RETURNING id INTO v_inserted_id;
   v_already := v_inserted_id IS NULL;
@@ -247,7 +279,7 @@ BEGIN
       FROM gateway_deposit_events
       WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
         AND position_manager = v_pm
-      ORDER BY block_number NULLS FIRST, created_at
+      ORDER BY block_number NULLS FIRST, tx_index NULLS FIRST, created_at
     LOOP
       IF v_ev.kind = 'deposit' THEN
         v_new_basis := v_new_basis + COALESCE(v_ev.quote_in, 0);
@@ -268,10 +300,10 @@ BEGIN
 END;
 $$;
 
-REVOKE EXECUTE ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text, integer) FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text, integer) FROM PUBLIC, anon, authenticated;
 
-COMMENT ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text) IS
+COMMENT ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text, integer) IS
   'Atomic deposit-event idempotency claim + full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation fix). Service-role only, called from POST /api/gateway/deposit.';
-COMMENT ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text) IS
+COMMENT ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text, integer) IS
   'Atomic withdraw-event idempotency claim + full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation fix). Service-role only, called from POST /api/gateway/withdraw.';
