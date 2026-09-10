@@ -12,10 +12,11 @@
 //   - block_number / tx_index = the receipt's own block/position (needed for correct chain-order replay)
 // A row whose tx_hash can't be resolved (pruned node, chain reorg, RPC error, event not found, the
 // decoded user doesn't match the row's own address, the receipt doesn't confirm its own tx_hash, or the
-// receiving contract isn't actually the registered gateway for row.pool_address — verified via the same
-// on-chain poolKey()/computePoolId() trust-root check lib/gateway/registry.ts uses) is reported as
-// UNRESOLVED and left untouched — this script NEVER guesses; an honest "still unknown" beats a wrong
-// number every time.
+// receiving contract's own poolKey() doesn't derive to row.pool_address) is reported as UNRESOLVED and
+// left untouched — this script NEVER guesses; an honest "still unknown" beats a wrong number every time.
+// ⚠ That poolKey() check is a CONSISTENCY check, not full registered-instance provenance — see the
+// planAttribution doc comment below for the honest boundary (registry.ts's real trust-root verification
+// is stronger and happens once, at original deposit-routing time, before any row here ever existed).
 //
 // Usage (dry-run is the default — no writes, ever, without --apply):
 //   node --env-file=.env.local scripts/verify-gateway-pm-attribution.mjs                 # dry run, prints a report
@@ -74,13 +75,23 @@ function computePoolId(k) {
  *  verified fields to write, or `resolved: false` with a reason — NEVER a guessed value either way.
  *  `configuredChainId`, when passed, guards against querying a receipt against the wrong chain's
  *  client: a row whose own `chain_id` doesn't match is reported `chain_mismatch` and never fetched.
- *  `fetchPoolId(positionManagerAddress)`, when passed, is an injected on-chain read (mirrors
- *  lib/gateway/registry.ts's own trust-root check) that must return the candidate PM's real
- *  `poolKey()`-derived poolId — a row is refused (never resolved) unless that matches the row's own
- *  `pool_address` exactly, closing the gap where an event decoded correctly but the receiving contract
- *  wasn't actually associated with the pool this row claims (Codex: "PM/pool association ... remain
- *  outstanding"). Without `fetchPoolId`, this check is skipped (back-compat for existing callers/tests
- *  that don't need live chain reads). */
+ *  `fetchPoolId(positionManagerAddress)`, when passed, is an injected on-chain read of the candidate PM's
+ *  own `poolKey()`, encoded into a poolId the identical way lib/gateway/registry.ts's `computePoolId`
+ *  does — a row is refused (never resolved) unless that poolId matches the row's own `pool_address`
+ *  exactly, closing the gap where an event decoded correctly but the receiving contract's own reported
+ *  pool doesn't match this row's stored one (Codex: "PM/pool association ... remain outstanding").
+ *  ⚠ HONEST SCOPE (Codex, 02:12 UTC): this is a self-reported `poolKey()` ECHO — the exact narrower check
+ *  registry.ts's header comment calls out as insufficient on its own for a NEW instance ("verified only
+ *  that the candidate *said* it fronted the pool"), which is why registry.ts's `registerInstance` also
+ *  requires a factory/codehash trust root plus owner/harvest-recipient seat checks before ever routing a
+ *  fresh deposit to a PM. This script does NOT replicate that full trust-root verification, and it
+ *  doesn't need to for its own job: every row it resolves already has a real, already-recorded tx_hash
+ *  from an app-side deposit/withdraw route that could only have succeeded against an ALREADY-registered,
+ *  already-trust-root-verified instance (the "Depositable rule" in .claude/rules/lp-gateway.md) — this
+ *  check exists to catch script/runtime confusion (e.g. a wrong pool_address value), not to authorize an
+ *  unknown or newly-seen PM. Do not extend this reasoning to any code path that routes a NEW deposit.
+ *  Without `fetchPoolId`, this check is skipped (back-compat for existing callers/tests that don't need
+ *  live chain reads). */
 export async function planAttribution(orphanedRows, fetchReceipt, configuredChainId, fetchPoolId) {
   const plan = []
   for (const row of orphanedRows) {
@@ -109,7 +120,15 @@ export async function planAttribution(orphanedRows, fetchReceipt, configuredChai
     }
     // The RPC endpoint could hand back the wrong receipt for the hash requested (provider bug, proxy
     // mixup) — verify the receipt actually confirms its own hash before trusting anything else in it.
-    if (receipt.transactionHash != null && String(receipt.transactionHash).toLowerCase() !== String(row.tx_hash).toLowerCase()) {
+    // Required, not optional: viem's real getTransactionReceipt always populates transactionHash, so a
+    // receipt missing it entirely is itself a signal something is wrong with how it was produced — fail
+    // closed rather than silently skip the check (Codex, 02:12 UTC: "a missing transactionHash is still
+    // accepted (only non-null mismatches are rejected)").
+    if (receipt.transactionHash == null) {
+      plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: 'missing_transaction_hash' })
+      continue
+    }
+    if (String(receipt.transactionHash).toLowerCase() !== String(row.tx_hash).toLowerCase()) {
       plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: 'receipt_hash_mismatch' })
       continue
     }

@@ -40,9 +40,13 @@ function withdrawnReceipt({ to = PM, user = USER, sharesBurned = 500_000n, quote
 }
 
 describe('planAttribution — never guesses, only ever verified on-chain data', () => {
+  // Every receipt fixture from here on carries a `transactionHash` matching its row's own `tx_hash` by
+  // default, since a receipt missing that field is now REJECTED outright (see the transactionHash-
+  // requirement tests below) — this keeps every other test's receipt "self-confirming" so it can reach
+  // whatever check it actually means to exercise.
   it('resolves a deposit row from its real receipt — position_manager, sharesMinted, block, txIndex all verified', async () => {
     const row = { id: 'r1', tx_hash: '0xdeadbeef', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
-    const fetchReceipt = vi.fn(async () => depositedReceipt())
+    const fetchReceipt = vi.fn(async () => depositedReceipt({ transactionHash: row.tx_hash }))
     const [plan] = await planAttribution([row], fetchReceipt)
     expect(plan).toMatchObject({
       resolved: true, positionManager: PM.toLowerCase(), sharesMinted: '1000000', blockNumber: '100', txIndex: 0,
@@ -52,7 +56,7 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
 
   it('resolves a withdraw row from its real receipt — sharesBurned verified, not guessed', async () => {
     const row = { id: 'r2', tx_hash: '0xcafebabe', address: USER, kind: 'withdraw', pool_address: POOL, chain_id: 46630 }
-    const [plan] = await planAttribution([row], async () => withdrawnReceipt())
+    const [plan] = await planAttribution([row], async () => withdrawnReceipt({ transactionHash: row.tx_hash }))
     expect(plan).toMatchObject({ resolved: true, positionManager: PM.toLowerCase(), sharesBurned: '500000' })
   })
 
@@ -78,13 +82,13 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
   it('leaves a row unresolved when the decoded event is for a DIFFERENT user (never attributes to the wrong wallet)', async () => {
     const row = { id: 'r6', tx_hash: '0xwronguser', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
     const otherUser = '0x' + '22'.repeat(20)
-    const [plan] = await planAttribution([row], async () => depositedReceipt({ user: otherUser }))
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ user: otherUser, transactionHash: row.tx_hash }))
     expect(plan).toMatchObject({ resolved: false, reason: 'event_not_found_or_user_mismatch' })
   })
 
   it('leaves a row unresolved when the receipt has no decodable Deposited/Withdrawn log at all', async () => {
     const row = { id: 'r7', tx_hash: '0xnoevent', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
-    const [plan] = await planAttribution([row], async () => ({ status: 'success', to: PM, blockNumber: 1n, transactionIndex: 0, logs: [] }))
+    const [plan] = await planAttribution([row], async () => ({ status: 'success', to: PM, blockNumber: 1n, transactionIndex: 0, transactionHash: row.tx_hash, logs: [] }))
     expect(plan).toMatchObject({ resolved: false, reason: 'event_not_found_or_user_mismatch' })
   })
 
@@ -93,7 +97,7 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
       { id: 'ok', tx_hash: '0xok', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 },
       { id: 'bad', tx_hash: '0xbad', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 },
     ]
-    const fetchReceipt = async (tx) => (tx === '0xok' ? depositedReceipt() : null)
+    const fetchReceipt = async (tx) => (tx === '0xok' ? depositedReceipt({ transactionHash: '0xok' }) : null)
     const plan = await planAttribution(rows, fetchReceipt)
     expect(plan[0]).toMatchObject({ resolved: true })
     expect(plan[1]).toMatchObject({ resolved: false, reason: 'receipt_not_found' })
@@ -101,7 +105,7 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
 
   it('reports chain_mismatch and never calls fetchReceipt when a row\'s chain_id differs from the configured client\'s chain', async () => {
     const row = { id: 'mismatch', tx_hash: '0xwrongchain', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 1 }
-    const fetchReceipt = vi.fn(async () => depositedReceipt())
+    const fetchReceipt = vi.fn(async () => depositedReceipt({ transactionHash: row.tx_hash }))
     const [plan] = await planAttribution([row], fetchReceipt, 46630)
     expect(plan).toMatchObject({ resolved: false, reason: expect.stringContaining('chain_mismatch') })
     expect(fetchReceipt).not.toHaveBeenCalled()
@@ -109,32 +113,42 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
 
   it('still resolves a row whose chain_id matches the configured client\'s chain', async () => {
     const row = { id: 'match', tx_hash: '0xrightchain', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
-    const [plan] = await planAttribution([row], async () => depositedReceipt(), 46630)
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionHash: row.tx_hash }), 46630)
     expect(plan).toMatchObject({ resolved: true })
   })
 
   it('skips the chain guard entirely when no configuredChainId is passed (back-compat with existing callers)', async () => {
     const row = { id: 'nocfg', tx_hash: '0xnocfg', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 999999 }
-    const [plan] = await planAttribution([row], async () => depositedReceipt())
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionHash: row.tx_hash }))
     expect(plan).toMatchObject({ resolved: true })
   })
 
   it('leaves a row unresolved when the receipt has no blockNumber — ordering metadata is required, not optional', async () => {
     const row = { id: 'noblock', tx_hash: '0xnoblock', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
-    const [plan] = await planAttribution([row], async () => depositedReceipt({ blockNumber: null }))
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ blockNumber: null, transactionHash: row.tx_hash }))
     expect(plan).toMatchObject({ resolved: false, reason: 'missing_ordering_metadata' })
   })
 
   it('leaves a row unresolved when the receipt has no transactionIndex — same requirement', async () => {
     const row = { id: 'noidx', tx_hash: '0xnoidx', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
-    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionIndex: null }))
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionIndex: null, transactionHash: row.tx_hash }))
     expect(plan).toMatchObject({ resolved: false, reason: 'missing_ordering_metadata' })
   })
 
   it('still resolves normally when transactionIndex is 0 (falsy but present — must not be confused with missing)', async () => {
     const row = { id: 'idx0', tx_hash: '0xidx0', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
-    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionIndex: 0 }))
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionIndex: 0, transactionHash: row.tx_hash }))
     expect(plan).toMatchObject({ resolved: true, txIndex: 0 })
+  })
+
+  it('leaves a row unresolved when the receipt has NO transactionHash at all — required, not optional', async () => {
+    // viem's real getTransactionReceipt always populates transactionHash; a receipt missing it entirely
+    // is itself a signal something produced it incorrectly (a hand-rolled mock, a broken provider) — fail
+    // closed rather than silently trust an unconfirmed receipt (Codex, 02:12 UTC: "a missing
+    // transactionHash is still accepted (only non-null mismatches are rejected)").
+    const row = { id: 'nohash', tx_hash: '0xnohash', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt()) // transactionHash left undefined
+    expect(plan).toMatchObject({ resolved: false, reason: 'missing_transaction_hash' })
   })
 
   it('leaves a row unresolved when the receipt reports a DIFFERENT transactionHash than the row\'s own tx_hash', async () => {
@@ -151,19 +165,14 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
     expect(plan).toMatchObject({ resolved: true })
   })
 
-  it('skips the transactionHash check entirely when the injected receipt has no transactionHash field (back-compat)', async () => {
-    const row = { id: 'nohash', tx_hash: '0xnohash', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
-    const [plan] = await planAttribution([row], async () => depositedReceipt()) // transactionHash undefined
-    expect(plan).toMatchObject({ resolved: true })
-  })
-
   it('leaves a row unresolved when the candidate position manager\'s on-chain pool does NOT match the row\'s own pool_address', async () => {
     // Closes the "PM/pool association... remain outstanding" gap: an event decoding correctly proves the
     // CONTRACT emitted the right shape of log, not that it's the specific gateway instance registered for
-    // this row's pool. fetchPoolId mirrors lib/gateway/registry.ts's own poolKey()/computePoolId() check.
+    // this row's pool. fetchPoolId mirrors lib/gateway/registry.ts's own poolKey()/computePoolId() check —
+    // as a consistency check, not full trust-root provenance (see the honest scope note on planAttribution).
     const row = { id: 'poolmismatch', tx_hash: '0xpoolmismatch', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
     const fetchPoolId = vi.fn(async () => '0x' + 'ff'.repeat(32)) // a DIFFERENT pool than row.pool_address
-    const [plan] = await planAttribution([row], async () => depositedReceipt(), undefined, fetchPoolId)
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionHash: row.tx_hash }), undefined, fetchPoolId)
     expect(plan).toMatchObject({ resolved: false, reason: 'pool_mismatch' })
     expect(fetchPoolId).toHaveBeenCalledWith(PM)
   })
@@ -171,20 +180,20 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
   it('resolves normally when fetchPoolId confirms the candidate PM really fronts the row\'s own pool', async () => {
     const row = { id: 'poolmatch', tx_hash: '0xpoolmatch', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
     const fetchPoolId = vi.fn(async () => POOL) // matches row.pool_address exactly
-    const [plan] = await planAttribution([row], async () => depositedReceipt(), undefined, fetchPoolId)
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionHash: row.tx_hash }), undefined, fetchPoolId)
     expect(plan).toMatchObject({ resolved: true })
   })
 
   it('leaves a row unresolved when fetchPoolId itself throws (on-chain read failure) — never resolves without verifying', async () => {
     const row = { id: 'poolreaderr', tx_hash: '0xpoolreaderr', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
     const fetchPoolId = async () => { throw new Error('RPC timeout') }
-    const [plan] = await planAttribution([row], async () => depositedReceipt(), undefined, fetchPoolId)
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionHash: row.tx_hash }), undefined, fetchPoolId)
     expect(plan).toMatchObject({ resolved: false, reason: expect.stringContaining('pool_verification_failed') })
   })
 
   it('skips the pool-association check entirely when no fetchPoolId is injected (back-compat with existing callers)', async () => {
     const row = { id: 'nopoolcheck', tx_hash: '0xnopoolcheck', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
-    const [plan] = await planAttribution([row], async () => depositedReceipt())
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionHash: row.tx_hash }))
     expect(plan).toMatchObject({ resolved: true })
   })
 })
