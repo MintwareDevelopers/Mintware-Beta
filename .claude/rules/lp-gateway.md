@@ -234,23 +234,39 @@ unrelated).
   `scripts/verify-gateway-pm-attribution.mjs` resolves it from a real on-chain receipt) ·
   `_006` (`recompute_gateway_position` — the second half of that recovery: called by the script AFTER it
   resolves an orphaned row's real `position_manager`, to recompute the position from its now-correctly-
-  attributed history; refuses rather than guesses over an incomplete one). ⚠ **`_004`, `_005` and `_006`
-  are NOT backward-compatible like the earlier ones** — the deposit/withdraw ROUTES already call the RPCs
-  with the new args (same commits as these migrations) but Postgres treats a different arg count as a
+  attributed history; refuses rather than guesses over an incomplete one) ·
+  `_007` (`apply_gateway_pm_attribution` — user directive 2026-09-10, "make recovery updates and
+  recomputation atomic": ONE function combining `_006`'s event-UPDATE and recompute into a SINGLE
+  transaction under the same advisory lock, closing the crash-window gap where a process killed between
+  the two separate calls used to leave an event resolved but `gateway_positions` stale. Refuses a
+  conflicting re-attribution to a different PM; reports `remaining_orphans > 0` rather than guessing when
+  sibling rows for the same wallet/pool/chain are still unresolved — the script's own full idempotent
+  sweep (`recomputeAllResolvedIdentities`) stays as a backstop for anything this doesn't close, e.g. an
+  identity stranded by a run that predates this migration). ⚠ **`_004`, `_005` and `_006` are NOT
+  backward-compatible like the earlier ones** — the deposit/withdraw ROUTES already call the RPCs with
+  the new args (same commits as these migrations) but Postgres treats a different arg count as a
   DIFFERENT function; until `_004` and `_005` are BOTH applied (in order — `_005` builds on `_004`'s
   signature), there is NO matching RPC signature and `/api/gateway/{deposit,withdraw}` will 500 on every
   call (`record_failed`) — apply them PROMPTLY after this code deploys, the same way the prior cost-basis/
-  RLS migrations were. `_006` is additive (a new function, nothing else depends on it) and can be applied
-  whenever convenient, ideally alongside `_004`/`_005`. On-chain funds are unaffected either way (this is
-  display-only cost-basis bookkeeping). All **deny-all RLS**. **Env vars:** every `LP_GATEWAY_*` var is
-  tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
+  RLS migrations were. `_006` and `_007` are additive (new functions, nothing else depends on them) and
+  can be applied whenever convenient, ideally alongside `_004`/`_005`. On-chain funds are unaffected either
+  way (this is display-only cost-basis bookkeeping). All **deny-all RLS**. **Env vars:** every
+  `LP_GATEWAY_*` var is tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
 - **Historical PM attribution recovery** (`scripts/verify-gateway-pm-attribution.mjs`, independent Codex
   audit, to-do items 3/4, 2026-09-10): resolves orphaned (`position_manager IS NULL`) `gateway_deposit_events`
-  rows from real on-chain receipts (`receipt.to`, decoded `Deposited`/`Withdrawn` event) — never guesses;
-  an unresolvable row (pruned node, chain reorg, event/user mismatch) stays explicitly unresolved. Dry-run
-  by default (`node --env-file=.env.local scripts/verify-gateway-pm-attribution.mjs`); `--apply` actually
-  writes + calls `recompute_gateway_position` for each newly-resolved identity. Not run against production
-  data by anyone yet — an operator action, not something done automatically.
+  rows from real on-chain receipts (`receipt.to`, decoded `Deposited`/`Withdrawn` event, cross-checked
+  against the receipt's own `transactionHash` and the candidate PM's on-chain `poolKey()`) — never
+  guesses; an unresolvable row (pruned node, chain reorg, event/user mismatch, hash/pool mismatch) stays
+  explicitly unresolved. Dry-run by default (`node --env-file=.env.local
+  scripts/verify-gateway-pm-attribution.mjs`); `--apply` calls `apply_gateway_pm_attribution` per resolved
+  row (atomic event-update + recompute, `_007`), then a full idempotent self-heal sweep
+  (`recomputeAllResolvedIdentities`) that gates every identity on having NO remaining orphaned rows for
+  that wallet/pool/chain before publishing a basis. Not run against production data by anyone yet — an
+  operator action, not something done automatically. **Still open (2026-09-10, user-flagged):** genuine
+  multi-session lock-contention verification needs a real, non-embedded Postgres (PGlite is single-
+  connection/mutex-serialized by design — see the note in `lib/gateway/costBasisRpc.pglite.test.ts`) —
+  no docker/local-postgres/homebrew available in the dev sandbox this was built in; the `costBasisComplete`
+  API field (see the position routes above) needs UI wiring to actually surface to a depositor.
 
 ## Surfaces & the V1/V2 model
 - **`/v1`** ([`app/v1/page.tsx`](../../app/v1/page.tsx)) = the live product (`V1Shell` + `V1Discover` — the

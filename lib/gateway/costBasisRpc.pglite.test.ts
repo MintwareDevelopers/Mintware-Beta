@@ -32,6 +32,7 @@ const MIGRATIONS = [
   '20260909000004_gateway_cost_basis_replay.sql',
   '20260909000005_gateway_positions_pm_generation.sql',
   '20260909000006_gateway_position_recompute.sql',
+  '20260909000007_gateway_attribution_atomic_apply.sql',
 ]
 
 const migrationsDir = resolve(__dirname, '../../supabase/migrations')
@@ -292,6 +293,106 @@ describe('recompute_gateway_position — historical attribution recovery', () =>
       VALUES ('over-burn', '${USER}', 'withdraw', '${POOL}', ${CHAIN}, 500000, 100, 0, '${PM_A}');
     `)
     await expect(db.query(`SELECT * FROM recompute_gateway_position($1,$2,$3,$4)`, [USER, POOL, CHAIN, PM_A]))
+      .rejects.toThrow()
+  })
+})
+
+// User directive (2026-09-10): "Make recovery updates and recomputation atomic." apply_gateway_pm_attribution
+// (migration 20260909000007) is the single-transaction function scripts/verify-gateway-pm-attribution.mjs
+// now calls per resolved row instead of a separate UPDATE + a separate recompute_gateway_position call —
+// closing the crash-window gap where a process killed between the two used to leave the event resolved
+// but gateway_positions stale.
+describe('apply_gateway_pm_attribution — atomic event-update + recompute', () => {
+  let db: PGlite
+
+  beforeAll(async () => {
+    db = new PGlite()
+    await db.exec('CREATE ROLE anon; CREATE ROLE authenticated;')
+    for (const name of MIGRATIONS) await db.exec(await readMigration(name))
+  }, 60_000)
+  afterAll(async () => { await db.close() })
+  beforeEach(async () => {
+    await db.exec('TRUNCATE gateway_positions, gateway_deposit_events RESTART IDENTITY CASCADE')
+  })
+
+  async function insertOrphan(txHash: string, kind: 'deposit' | 'withdraw', extra: Record<string, unknown> = {}) {
+    const cols = ['tx_hash', 'address', 'kind', 'pool_address', 'chain_id', ...Object.keys(extra)]
+    const vals = [txHash, USER, kind, POOL, CHAIN, ...Object.values(extra)]
+    const placeholders = cols.map((_, i) => `$${i + 1}`).join(',')
+    const { rows } = await db.query<{ id: string }>(
+      `INSERT INTO gateway_deposit_events (${cols.join(',')}) VALUES (${placeholders}) RETURNING id`,
+      vals,
+    )
+    return rows[0].id
+  }
+
+  it('applies + recomputes atomically when this is the ONLY (now-resolved) event for the identity', async () => {
+    const id = await insertOrphan('tx-solo', 'deposit', { quote_in: '1000000' })
+    const r = await db.query<{ updated: boolean; complete: boolean; cost_basis_atomic: string; shares_atomic: string; event_count: number; remaining_orphans: number }>(
+      `SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`,
+      [id, PM_A, 100, 0, '1000000', null],
+    )
+    expect(r.rows[0]).toMatchObject({ updated: true, complete: true, cost_basis_atomic: '1000000', shares_atomic: '1000000', event_count: 1, remaining_orphans: 0 })
+    const ev = await db.query<{ position_manager: string; block_number: string; tx_index: number }>(
+      `SELECT position_manager, block_number::text, tx_index FROM gateway_deposit_events WHERE id=$1`, [id],
+    )
+    expect(ev.rows[0]).toMatchObject({ position_manager: PM_A, block_number: '100', tx_index: 0 })
+    const pos = await db.query<{ entry_nav: string }>(
+      `SELECT entry_nav::text FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+      [USER, POOL, CHAIN, PM_A],
+    )
+    expect(pos.rows[0]?.entry_nav).toBe('1000000')
+  })
+
+  it('applies the event update but does NOT recompute (complete:false) when a sibling orphaned row remains for the same wallet/pool/chain', async () => {
+    const id = await insertOrphan('tx-first', 'deposit', { quote_in: '1000000' })
+    await insertOrphan('tx-sibling-still-orphaned', 'withdraw') // deliberately left unresolved
+    const r = await db.query<{ updated: boolean; complete: boolean; remaining_orphans: number }>(
+      `SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`,
+      [id, PM_A, 100, 0, '1000000', null],
+    )
+    expect(r.rows[0]).toMatchObject({ updated: true, complete: false, remaining_orphans: 1 })
+    // The event row's own attribution IS durably recorded even though recompute was skipped.
+    const ev = await db.query<{ position_manager: string }>(`SELECT position_manager FROM gateway_deposit_events WHERE id=$1`, [id])
+    expect(ev.rows[0]?.position_manager).toBe(PM_A)
+    // No position was published from the known-incomplete history.
+    const pos = await db.query(`SELECT 1 FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`, [USER, POOL, CHAIN, PM_A])
+    expect(pos.rows.length).toBe(0)
+  })
+
+  it('is idempotent: re-applying the SAME position_manager to an already-resolved row is a no-op update but still recomputes', async () => {
+    const id = await insertOrphan('tx-idem', 'deposit', { quote_in: '1000000' })
+    const first = await db.query<{ updated: boolean }>(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [id, PM_A, 100, 0, '1000000', null])
+    expect(first.rows[0].updated).toBe(true)
+    const second = await db.query<{ updated: boolean; complete: boolean }>(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [id, PM_A, 100, 0, '1000000', null])
+    expect(second.rows[0]).toMatchObject({ updated: false, complete: true }) // no-op update, but recompute still ran (self-healing)
+  })
+
+  it('refuses (raises) when re-applying a DIFFERENT position_manager to an already-resolved row', async () => {
+    const id = await insertOrphan('tx-conflict', 'deposit', { quote_in: '1000000' })
+    await db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [id, PM_A, 100, 0, '1000000', null])
+    await expect(db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [id, PM_B, 100, 0, '1000000', null]))
+      .rejects.toThrow()
+  })
+
+  it('refuses (raises) for a non-existent event id', async () => {
+    await expect(db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, ['00000000-0000-0000-0000-000000000000', PM_A, 100, 0, '1000000', null]))
+      .rejects.toThrow()
+  })
+
+  it('refuses (raises) rather than compute over a history still missing shares_minted after the update', async () => {
+    // The row being applied itself gets shares_minted via the call, but an ALREADY-resolved sibling for
+    // the same identity that's missing its own shares_minted should still block recompute.
+    const gappy = await insertOrphan('tx-gappy', 'deposit', { quote_in: '1000000', position_manager: PM_A, block_number: 50, tx_index: 0 }) // no shares_minted
+    const id = await insertOrphan('tx-fresh', 'deposit', { quote_in: '500000' })
+    await expect(db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [id, PM_A, 100, 0, '500000', null]))
+      .rejects.toThrow()
+    void gappy
+  })
+
+  it('refuses (raises) when applying would make a withdraw burn more than was ever minted', async () => {
+    const id = await insertOrphan('tx-overburn', 'withdraw', { shares_burned: '999999999' })
+    await expect(db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [id, PM_A, 100, 0, null, '999999999']))
       .rejects.toThrow()
   })
 })

@@ -375,6 +375,47 @@ describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an
     expect(supabase.__rpcCalls).toEqual([{ p_address: OTHER_USER, p_pool_address: POOL, p_chain_id: 46630, p_position_manager: PM.toLowerCase() }])
   })
 
+  it('cross-PM last-orphan regression (Codex, 2026-09-10): recomputes an EARLIER identity once the LAST sibling orphan resolves to a DIFFERENT PM in the same run', async () => {
+    // Reproduces the exact bug: two orphaned rows for the SAME wallet/pool/chain resolve to TWO DIFFERENT
+    // position managers over the course of one --apply run. At the moment the first row (PM_A) was
+    // applied, the second row was still orphaned, so PM_A's own apply_gateway_pm_attribution call
+    // correctly reported complete:false. A buggy script fed that "incomplete at the time" identity into
+    // this function's skip-set and permanently silenced it — even though by the time this sweep actually
+    // runs (after BOTH rows have been resolved, the second one to PM_B), there are NO orphaned rows left
+    // at all for this wallet/pool/chain, and PM_A's identity is now genuinely complete. The fix is that
+    // main() never builds a skip-set from mid-loop per-call results — it always calls this function with
+    // an EMPTY skip set, so completeness is decided ONLY from a fresh read of the current database state.
+    const OTHER_PM = '0x' + 'cc'.repeat(20)
+    const rows = [
+      { id: 'a', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }, // PM_A — resolved FIRST, while row 'b' was still orphaned
+      { id: 'b', address: USER, pool_address: POOL, chain_id: 46630, position_manager: OTHER_PM }, // PM_B — the LAST orphan, resolved afterward
+    ]
+    const supabase = fakeSupabase(rows, { nullRows: [] }) // by the time the sweep runs, NOTHING is orphaned any more
+    await recomputeAllResolvedIdentities(supabase, new Set()) // the fixed call shape: never a stale skip set
+    const keys = supabase.__rpcCalls.map((c) => `${c.p_address}:${c.p_pool_address}:${c.p_chain_id}:${c.p_position_manager}`)
+    expect(keys).toContain(`${USER}:${POOL}:46630:${PM.toLowerCase()}`) // PM_A — MUST be recomputed, not left stale
+    expect(keys).toContain(`${USER}:${POOL}:46630:${OTHER_PM}`) // PM_B — recomputed too
+    expect(supabase.__rpcCalls.length).toBe(2)
+  })
+
+  it('demonstrates the BUG this regression fixes: passing a stale "was incomplete at call time" skip-set wrongly silences an identity forever', async () => {
+    // This test documents what the OLD (buggy) main() effectively did — feed identities that were
+    // complete:false at SOME point during the apply loop into this function's skip-set — to make the
+    // regression concrete: it's not that recomputeAllResolvedIdentities is broken, it's that passing it
+    // stale per-call information defeats its own live orphan check.
+    const OTHER_PM = '0x' + 'cc'.repeat(20)
+    const rows = [
+      { id: 'a', address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() },
+      { id: 'b', address: USER, pool_address: POOL, chain_id: 46630, position_manager: OTHER_PM },
+    ]
+    const supabase = fakeSupabase(rows, { nullRows: [] }) // orphan-free by the time the sweep runs — genuinely complete
+    const staleSkipSet = new Set([`${USER.toLowerCase()}:${POOL.toLowerCase()}:46630:${PM.toLowerCase()}`]) // PM_A, marked incomplete BEFORE row 'b' resolved
+    await recomputeAllResolvedIdentities(supabase, staleSkipSet)
+    const keys = supabase.__rpcCalls.map((c) => `${c.p_address}:${c.p_pool_address}:${c.p_chain_id}:${c.p_position_manager}`)
+    expect(keys).not.toContain(`${USER}:${POOL}:46630:${PM.toLowerCase()}`) // PM_A wrongly stays stale forever with the buggy call shape
+    expect(keys).toContain(`${USER}:${POOL}:46630:${OTHER_PM}`)
+  })
+
   it('aborts the entire sweep (fails closed) when the orphan-check read itself fails, rather than recomputing without a completeness guarantee', async () => {
     const rpcCalls = []
     const supabase = {

@@ -269,39 +269,54 @@ async function main() {
     return
   }
 
-  console.log('\nApplying resolved rows...')
-  // Track any identity that had AT LEAST ONE row fail to update this run. If row A of an identity's
-  // history updates but row B (same wallet/pool/chain/PM) fails, recomputing from the surviving subset
-  // would silently replay an INCOMPLETE history and publish a wrong basis that looks fully resolved
-  // (Codex, 01:43 UTC: "Partial batches or one failed event update can also publish a basis from
-  // incomplete history"). So: skip recompute entirely for any identity touched by a failed update this
-  // run — its history is known-incomplete until every one of its rows actually lands.
-  const failedIdentities = new Set()
+  console.log('\nApplying resolved rows (atomic per-row: event update + recompute in one DB transaction)...')
+  // User directive (2026-09-10): "Make recovery updates and recomputation atomic." Each resolved row now
+  // goes through migration 20260909000007's apply_gateway_pm_attribution() RPC — a single Postgres
+  // function call (therefore a single transaction) that updates the event row AND recomputes the
+  // identity's gateway_positions row together, under the same advisory lock every gateway write path
+  // uses. This closes the crash window the old two-separate-round-trips design had: a process killed
+  // between the UPDATE and the recompute call used to leave the event resolved but the position stale.
+  //
+  // The RPC refuses to publish a basis when this wallet/pool/chain still has OTHER unresolved orphaned
+  // rows at the time of ITS OWN call (remaining_orphans > 0) — this is expected and purely informational
+  // here, NOT a reason to force-skip that identity in the backstop sweep below. Codex (2026-09-10):
+  // "cross-PM last-orphan recompute gap" — if row A resolves to PM_A while a sibling row B (same
+  // wallet/pool/chain) is still orphaned, PM_A's call correctly reports complete:false; but if row B is
+  // later resolved THIS SAME RUN to a DIFFERENT PM_B, PM_A's identity is now genuinely complete (zero
+  // orphans remain) and must be recomputed too — a prior draft mistakenly fed complete:false identities
+  // into recomputeAllResolvedIdentities's own skip-set, permanently silencing the very self-heal pass
+  // that was supposed to catch this. Fixed: nothing from this loop is ever passed as a forced skip — the
+  // backstop sweep re-derives orphan status FRESH from the database after every row above has been
+  // applied, so it always sees the final state, not a stale snapshot from mid-loop.
   for (const p of resolved) {
-    const identityKey = `${p.address.toLowerCase()}:${p.poolAddress.toLowerCase()}:${p.chainId}:${p.positionManager}`
-    const { error: updErr } = await supabase
-      .from('gateway_deposit_events')
-      .update({
-        position_manager: p.positionManager,
-        block_number: p.blockNumber,
-        tx_index: p.txIndex,
-        ...(p.sharesMinted != null ? { shares_minted: p.sharesMinted } : {}),
-        ...(p.sharesBurned != null ? { shares_burned: p.sharesBurned } : {}),
-      })
-      .eq('id', p.id)
-    if (updErr) {
-      console.error(`  FAILED to update ${p.tx_hash}: ${updErr.message}`)
-      failedIdentities.add(identityKey)
+    const { data, error: applyErr } = await supabase.rpc('apply_gateway_pm_attribution', {
+      p_event_id: p.id,
+      p_position_manager: p.positionManager,
+      p_block_number: p.blockNumber,
+      p_tx_index: p.txIndex,
+      p_shares_minted: p.sharesMinted,
+      p_shares_burned: p.sharesBurned,
+    })
+    if (applyErr) {
+      console.error(`  FAILED to apply ${p.tx_hash}: ${applyErr.message}`)
+      continue
+    }
+    const row = data?.[0]
+    if (row?.complete) {
+      console.log(`  ${p.tx_hash} → applied + recomputed atomically: basis=${row.cost_basis_atomic} shares=${row.shares_atomic} (${row.event_count} events)`)
+    } else {
+      console.log(`  ${p.tx_hash} → attribution applied, but not yet recomputed — ${row?.remaining_orphans ?? '?'} sibling row(s) for this wallet/pool/chain still unresolved (the backstop sweep below re-checks after every row lands)`)
     }
   }
 
-  // Recompute is a FULL, idempotent, unconditional pass over every distinct identity that currently has
-  // a resolved position_manager — not just identities touched by THIS run's resolutions. This is what
-  // makes an interrupted --apply run self-healing: if a prior invocation updated some events but crashed
-  // (or was killed) before reaching this step, those rows' position_manager is already non-null, so the
-  // orphan scan above will never find them again — but they'll still show up here every time, and get
-  // recomputed again, until recompute_gateway_position actually succeeds for them.
-  await recomputeAllResolvedIdentities(supabase, failedIdentities)
+  // Backstop: a FULL, idempotent, unconditional sweep over every distinct identity that currently has a
+  // resolved position_manager — not just identities touched by THIS run, and re-derived from the
+  // database AFTER the loop above finishes (never from stale per-call state). This is what makes an
+  // interrupted --apply run self-healing regardless of WHEN or HOW it was interrupted: a crash before
+  // this migration existed, a crash between two rows' atomic applies above, or — the cross-PM gap above —
+  // an identity whose completeness only became true once a LATER row in this same run resolved its last
+  // remaining sibling to a different PM.
+  await recomputeAllResolvedIdentities(supabase, new Set())
   console.log('\nDone. Unresolved rows remain untouched — re-run this script later if more historical data becomes recoverable.')
 }
 
