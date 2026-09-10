@@ -1,103 +1,135 @@
-// Unit tests for verify-gateway-schema-state.mjs's classification logic — a wrong classification here
-// would silently invert the whole report (a present function reported as missing, or vice versa), so this
-// is tested the same way scripts/verify-gateway-pm-attribution.mjs's own decision logic is: no live
-// Supabase project needed, an injected fake stands in for the client.
+// Unit tests for verify-gateway-schema-state.mjs, rewritten after Codex caught the original RPC-execution
+// design actually WRITING real rows (P1) and misclassifying auth errors as "found" (P2). The new design
+// makes exactly one network call (fetchOpenApiSchema, a plain GET, tested with an injected fetch) and
+// every subsequent check is a pure, zero-risk lookup against the already-fetched JSON — tested here with
+// zero network calls at all, proving the classification logic can never accidentally execute anything.
 import { describe, it, expect } from 'vitest'
-import { looksMissing, checkFunction, checkColumn } from './verify-gateway-schema-state.mjs'
+import { fetchOpenApiSchema, hasFunction, hasTable, hasColumn, runChecks } from './verify-gateway-schema-state.mjs'
 
-describe('looksMissing', () => {
-  it('returns false when there is no error at all', () => {
-    expect(looksMissing(null)).toBe(false)
-    expect(looksMissing(undefined)).toBe(false)
-  })
-
-  it('recognizes PostgREST\'s "function not found in schema cache" code', () => {
-    expect(looksMissing({ code: 'PGRST202', message: 'Could not find the function public.foo in the schema cache' })).toBe(true)
-  })
-
-  it('recognizes PostgREST\'s "table not found in schema cache" code', () => {
-    expect(looksMissing({ code: 'PGRST205', message: 'Could not find the table public.foo in the schema cache' })).toBe(true)
-  })
-
-  it('recognizes the raw Postgres undefined_function SQLSTATE', () => {
-    expect(looksMissing({ code: '42883', message: 'function foo(text) does not exist' })).toBe(true)
-  })
-
-  it('recognizes the raw Postgres undefined_table SQLSTATE', () => {
-    expect(looksMissing({ code: '42P01', message: 'relation "foo" does not exist' })).toBe(true)
-  })
-
-  it('falls back to message-text matching when the code is absent or unrecognized', () => {
-    expect(looksMissing({ code: '', message: 'Could not find the function public.bar in the schema cache' })).toBe(true)
-    expect(looksMissing({ code: '', message: 'column "bar" does not exist' })).toBe(true)
-  })
-
-  it('does NOT classify an unrelated error as "missing" — e.g. a real data/type error proves the object EXISTS', () => {
-    expect(looksMissing({ code: '22P02', message: 'invalid input syntax for type uuid' })).toBe(false)
-    expect(looksMissing({ code: '23505', message: 'duplicate key value violates unique constraint' })).toBe(false)
-    expect(looksMissing({ code: 'P0001', message: 'apply_gateway_pm_attribution: no gateway_deposit_events row with id X' })).toBe(false)
-  })
-})
-
-describe('checkFunction', () => {
-  it('reports present:true when the RPC call succeeds with no error', async () => {
-    const supabase = { rpc: async () => ({ data: [], error: null }) }
-    const r = await checkFunction(supabase, 'some_function', { a: 1 })
-    expect(r).toMatchObject({ name: 'some_function', kind: 'function', present: true })
-  })
-
-  it('reports present:true when the RPC call errors for a reason OTHER than missing (e.g. bad probe args)', async () => {
-    const supabase = { rpc: async () => ({ data: null, error: { code: '22P02', message: 'invalid input syntax for type uuid' } }) }
-    const r = await checkFunction(supabase, 'some_function', { a: 1 })
-    expect(r.present).toBe(true)
-  })
-
-  it('reports present:false when PostgREST reports the function missing from the schema cache', async () => {
-    const supabase = { rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.some_function in the schema cache' } }) }
-    const r = await checkFunction(supabase, 'some_function', { a: 1 })
-    expect(r).toMatchObject({ present: false })
-    expect(r.detail).toContain('PGRST202')
-  })
-
-  it('calls supabase.rpc with the exact name and args passed in', async () => {
-    let seen = null
-    const supabase = { rpc: async (name, args) => { seen = { name, args }; return { data: [], error: null } } }
-    await checkFunction(supabase, 'my_fn', { x: 1, y: 'z' })
-    expect(seen).toEqual({ name: 'my_fn', args: { x: 1, y: 'z' } })
-  })
-})
-
-describe('checkColumn', () => {
-  function fakeTable(result) {
-    return { select: () => ({ limit: async () => result }) }
+function fakeSchema({ functions = [], tables = {} } = {}) {
+  const paths = {}
+  for (const fn of functions) paths[`/rpc/${fn}`] = { post: {} }
+  const definitions = {}
+  for (const [table, columns] of Object.entries(tables)) {
+    paths[`/${table}`] = { get: {} }
+    definitions[table] = { properties: Object.fromEntries(columns.map((c) => [c, { type: 'string' }])) }
   }
+  return { paths, definitions }
+}
 
-  it('reports present:true when the select succeeds', async () => {
-    const supabase = { from: () => fakeTable({ data: [], error: null }) }
-    const r = await checkColumn(supabase, 'some_table', 'some_column')
-    expect(r).toMatchObject({ name: 'some_table.some_column', kind: 'column', present: true })
-  })
-
-  it('reports present:false when PostgREST reports the table missing', async () => {
-    const supabase = { from: () => fakeTable({ data: null, error: { code: 'PGRST205', message: 'Could not find the table public.some_table in the schema cache' } }) }
-    const r = await checkColumn(supabase, 'some_table', 'some_column')
-    expect(r.present).toBe(false)
-  })
-
-  it('reports present:false when the column itself does not exist on an existing table', async () => {
-    const supabase = { from: () => fakeTable({ data: null, error: { code: '42703', message: 'column some_table.some_column does not exist' } }) }
-    const r = await checkColumn(supabase, 'some_table', 'some_column')
-    expect(r.present).toBe(false)
-  })
-
-  it('queries the exact table and column requested', async () => {
-    let seenTable = null
-    let seenColumn = null
-    const supabase = {
-      from: (t) => { seenTable = t; return { select: (c) => { seenColumn = c; return { limit: async () => ({ data: [], error: null }) } } } },
+describe('fetchOpenApiSchema — the ONLY network call this script makes', () => {
+  it('returns ok:true with the parsed schema on a successful GET', async () => {
+    const schema = fakeSchema({ functions: ['foo'] })
+    const fetchImpl = async (url, opts) => {
+      expect(url).toBe('https://proj.supabase.co/rest/v1/')
+      expect(opts.headers.apikey).toBe('the-key')
+      expect(opts.headers.Authorization).toBe('Bearer the-key')
+      return { ok: true, status: 200, json: async () => schema }
     }
-    await checkColumn(supabase, 'gateway_positions', 'position_manager')
-    expect(seenTable).toBe('gateway_positions')
-    expect(seenColumn).toBe('position_manager')
+    const r = await fetchOpenApiSchema('https://proj.supabase.co', 'the-key', fetchImpl)
+    expect(r).toEqual({ ok: true, schema })
+  })
+
+  it('strips a trailing slash from the base URL before building the request', async () => {
+    let seenUrl = null
+    const fetchImpl = async (url) => { seenUrl = url; return { ok: true, status: 200, json: async () => fakeSchema() } }
+    await fetchOpenApiSchema('https://proj.supabase.co/', 'k', fetchImpl)
+    expect(seenUrl).toBe('https://proj.supabase.co/rest/v1/')
+  })
+
+  it('returns ok:false (never ok:true, never throws) on an HTTP error status — e.g. an expired/invalid credential', async () => {
+    const fetchImpl = async () => ({ ok: false, status: 401, statusText: 'Unauthorized' })
+    const r = await fetchOpenApiSchema('https://proj.supabase.co', 'bad-key', fetchImpl)
+    expect(r.ok).toBe(false)
+    expect(r.reason).toContain('401')
+  })
+
+  it('returns ok:false on a network-level failure (fetch itself throws)', async () => {
+    const fetchImpl = async () => { throw new Error('ECONNREFUSED') }
+    const r = await fetchOpenApiSchema('https://proj.supabase.co', 'k', fetchImpl)
+    expect(r.ok).toBe(false)
+    expect(r.reason).toContain('ECONNREFUSED')
+  })
+
+  it('returns ok:false when the response is not valid JSON', async () => {
+    const fetchImpl = async () => ({ ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token') } })
+    const r = await fetchOpenApiSchema('https://proj.supabase.co', 'k', fetchImpl)
+    expect(r.ok).toBe(false)
+  })
+
+  it('returns ok:false when the response is valid JSON but not a PostgREST OpenAPI document', async () => {
+    const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ some: 'unrelated json' }) })
+    const r = await fetchOpenApiSchema('https://proj.supabase.co', 'k', fetchImpl)
+    expect(r.ok).toBe(false)
+    expect(r.reason).toContain('paths')
+  })
+})
+
+describe('hasFunction / hasTable / hasColumn — pure lookups against an already-fetched schema, cannot fail or execute anything', () => {
+  it('hasFunction is true only for a function actually present in schema.paths', () => {
+    const schema = fakeSchema({ functions: ['record_gateway_deposit_event'] })
+    expect(hasFunction(schema, 'record_gateway_deposit_event')).toBe(true)
+    expect(hasFunction(schema, 'apply_gateway_pm_attribution')).toBe(false)
+  })
+
+  it('hasTable is true when the table appears in schema.definitions or schema.paths', () => {
+    const schema = fakeSchema({ tables: { gateway_positions: ['position_manager'] } })
+    expect(hasTable(schema, 'gateway_positions')).toBe(true)
+    expect(hasTable(schema, 'gateway_position_recompute_issues')).toBe(false)
+  })
+
+  it('hasColumn is true only when the column is listed under that table\'s definition', () => {
+    const schema = fakeSchema({ tables: { gateway_deposit_events: ['position_manager', 'tx_index'] } })
+    expect(hasColumn(schema, 'gateway_deposit_events', 'position_manager')).toBe(true)
+    expect(hasColumn(schema, 'gateway_deposit_events', 'shares_minted')).toBe(false)
+  })
+
+  it('hasColumn is false (not a throw) for a table that does not exist at all', () => {
+    const schema = fakeSchema()
+    expect(hasColumn(schema, 'nonexistent_table', 'some_column')).toBe(false)
+  })
+})
+
+describe('runChecks — reports every migration\'s object, present or not, from one already-fetched schema', () => {
+  it('reports every object as present when the full expected schema exists', () => {
+    const schema = fakeSchema({
+      functions: ['record_gateway_deposit_event', 'record_gateway_withdraw_event', 'recompute_gateway_position', 'apply_gateway_pm_attribution'],
+      tables: {
+        gateway_deposit_events: ['block_number', 'shares_burned', 'position_manager', 'tx_index', 'shares_minted'],
+        gateway_positions: ['position_manager'],
+        gateway_position_recompute_issues: ['reason'],
+      },
+    })
+    const results = runChecks(schema)
+    expect(results.every((r) => r.present)).toBe(true)
+    expect(results.length).toBeGreaterThan(0)
+  })
+
+  it('reports individually missing objects when the schema is only partially applied (e.g. _004/_005 but not _006/_007)', () => {
+    const schema = fakeSchema({
+      functions: ['record_gateway_deposit_event', 'record_gateway_withdraw_event'],
+      tables: {
+        gateway_deposit_events: ['block_number', 'shares_burned', 'position_manager', 'tx_index', 'shares_minted'],
+        gateway_positions: ['position_manager'],
+      },
+    })
+    const results = runChecks(schema)
+    const byLabel = new Map(results.map((r) => [r.label, r.present]))
+    expect(byLabel.get('record_gateway_deposit_event')).toBe(true)
+    expect(byLabel.get('recompute_gateway_position')).toBe(false)
+    expect(byLabel.get('apply_gateway_pm_attribution')).toBe(false)
+    expect(byLabel.get('gateway_position_recompute_issues')).toBe(false)
+  })
+
+  it('reports everything missing against a genuinely empty schema (e.g. a fresh/unrelated project)', () => {
+    const results = runChecks(fakeSchema())
+    expect(results.every((r) => !r.present)).toBe(true)
+  })
+
+  it('never calls a network function or an RPC — operates purely on the passed-in schema object', () => {
+    // If runChecks accidentally tried to execute anything, passing a schema with no `fetch`/`rpc`
+    // capability at all would throw — it doesn't, because it never calls anything, just reads properties.
+    const schema = fakeSchema({ functions: ['x'] })
+    expect(() => runChecks(schema)).not.toThrow()
   })
 })

@@ -290,20 +290,30 @@ unrelated).
   that wallet/pool/chain before publishing a basis. Not run against production data by anyone yet — an
   operator action, not something done automatically.
   **Release verification — deployed schema state** (`scripts/verify-gateway-schema-state.mjs`, user
-  directive 2026-09-10): read-only, checks whether migrations `_004`–`_007`'s functions/columns/table
-  actually exist in a real Supabase project — no raw Postgres connection needed or used, just the same
-  service-role REST access the app itself has; classifies each PostgREST probe's error code
-  (`PGRST202`/`PGRST205`/`42883`/`42P01`-style "not found in schema cache" ⇒ missing; anything else ⇒
-  exists) rather than guessing from response shape. Never mutates anything — every function probe uses a
-  harmless dummy identity (`chain_id 999999999`) that can never match a real row, every table probe is
-  `.limit(0)`. `node --env-file=.env.local scripts/verify-gateway-schema-state.mjs`; reads
-  `SUPABASE_SERVICE_ROLE_KEY` from the OPERATOR's own env exactly like every other script here — never
-  hardcoded, logged, or printed by the script itself. Proves migrations are *applied*, not that the SQL
-  logic is *correct* (see `costBasisRpc.pglite.test.ts`/`.concurrency.test.ts` for that). ⚠ **This service
-  wasn't run against production by this session** — the `SUPABASE_SERVICE_ROLE_KEY` value was accidentally
-  exposed in the session transcript while checking `.env.local` for the credential's *presence*
-  (2026-09-10); the key must be rotated in the Supabase dashboard before anyone runs this (or any) script
-  against prod with it. Same rotation requirement as whatever the originally-flagged exposure was — treat
+  directive 2026-09-10; REWRITTEN same-day after Codex's live review caught the first version doing the
+  exact thing it claimed not to): checks whether migrations `_004`–`_007`'s functions/columns/table
+  actually appear in a real Supabase project's exposed schema. Genuinely read-only by construction — the
+  script has no Supabase client import at all, only a plain `fetch` against PostgREST's own OpenAPI
+  (Swagger) schema document, served on one GET to the REST root; every function/table/column check after
+  that is a pure JSON-property lookup with no network call and nothing to execute. The FIRST version
+  instead called the actual RPCs (`record_gateway_deposit_event` etc.) with a "harmless dummy identity" —
+  Codex reproduced live that this genuinely inserted 2 `gateway_deposit_events` rows and 1
+  `gateway_positions` row against real migrations, directly contradicting its own "never mutates
+  anything" claim (a dummy identity avoids a ROW COLLISION, not the INSERT itself). It also classified any
+  error other than a recognized "not found" code as proof of existence, so an expired/invalid credential
+  reported every single check as "✅ FOUND." Both fixed by construction in the rewrite: the one network
+  call that can fail (the schema fetch) returns a distinct `unknown` outcome — printed plainly and exits
+  non-zero — never silently treated as "present." `node --env-file=.env.local
+  scripts/verify-gateway-schema-state.mjs`; reads `SUPABASE_SERVICE_ROLE_KEY` from the OPERATOR's own env
+  exactly like every other script here — never hardcoded, logged, or printed by the script itself. Proves
+  an object is *exposed in the schema*, not that its current body/constraints/RLS match this repo, nor a
+  specific migration version (a function can be redefined in place, as this session did repeatedly,
+  without its PostgREST-visible name/signature changing) — and not that the SQL logic is *correct* (see
+  `costBasisRpc.pglite.test.ts`/`.concurrency.test.ts` for that). ⚠ **Still not run against production by
+  this session** — the `SUPABASE_SERVICE_ROLE_KEY` value was accidentally exposed in the session
+  transcript while checking `.env.local` for the credential's *presence* (2026-09-10); the key must be
+  rotated in the Supabase dashboard before anyone runs this (or any) script against prod with it. Same
+  rotation requirement as whatever the originally-flagged exposure was — treat
   as an independent, additional reason, not a substitute investigation.
   **`costBasisComplete`** (the position routes above)
   is wired into the V1 UI (`V1PoolDetail`/`V1Portfolio`) — a warning line, a per-card badge, and a

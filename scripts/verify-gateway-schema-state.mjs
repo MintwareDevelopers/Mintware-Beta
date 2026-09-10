@@ -1,53 +1,106 @@
 // Read-only production schema verification (user directive, 2026-09-10 — "release verification: deployed
-// configuration and migrations checked"). Confirms whether the LP-gateway RPCs/tables this session's work
-// depends on (migrations 20260909000004 through 20260909000007) actually exist in a real Supabase project,
-// WITHOUT ever mutating anything and without this script (or the session that wrote it) ever seeing the
-// credential's value — it reads NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY from the environment
-// the OPERATOR runs it in, exactly like every other script in this repo (scripts/verify-gateway-pm-attribution.mjs,
-// scripts/deploy-lp-gateway-*.mjs) — never hardcoded, never logged, never printed.
+// configuration and migrations checked").
 //
-// How it checks existence without a raw Postgres connection (this script only has the same REST/PostgREST
-// access the app itself has — no direct DB credential, no information_schema access): it calls each RPC
-// with a harmless probe payload (a dummy chain id / null-shaped args that can never match a real row) and
-// a table select with `.limit(0)` (fetches zero rows, no data ever leaves the database), then classifies
-// PostgREST's own error code — `PGRST202`/`PGRST205`-style "function/relation not found in schema cache"
-// means MISSING; any other error (or a clean empty success) means the function/table/column DOES exist.
-// Never writes, never deletes, never reads real row contents beyond the harmless existence probe.
+// REWRITTEN same-day after Codex's live review caught two serious defects in the first version:
+//   P1 — "claimed read-only verification actually writes." The original design checked function
+//        existence by CALLING record_gateway_deposit_event/record_gateway_withdraw_event/
+//        apply_gateway_pm_attribution with a "harmless dummy identity" — but these functions perform
+//        REAL INSERTs (record_gateway_deposit_event genuinely does `INSERT INTO gateway_deposit_events
+//        ... RETURNING id`, no dry-run mode). A dummy tx_hash/chain_id prevents a COLLISION with real
+//        rows, not the INSERT itself. Reproduced live: this actually created 2 gateway_deposit_events
+//        rows and 1 gateway_positions row against real migrations. This directly contradicted the
+//        script's own "never mutates anything" claim.
+//   P2 — "unrelated errors produce false FOUND." The original looksMissing() classified ANY error that
+//        wasn't a recognized "not found" code as proof of existence — so an auth failure (expired JWT,
+//        wrong key, revoked credential — PGRST301, 401, etc.) was silently reported as "✅ FOUND" for
+//        every single check, meaning a completely broken connection could produce an all-green report.
+//
+// Fixed by switching to GENUINE schema introspection instead of execution: PostgREST serves a full
+// OpenAPI (Swagger 2.0) description of the exposed schema on a single GET to the REST root — `paths`
+// lists `/rpc/<function>` for every exposed function and `/<table>` for every exposed table;
+// `definitions.<table>.properties` lists every column. This is ONE plain read (no execution of anything,
+// ever) and turns every subsequent existence check into a pure, zero-risk JSON lookup — structurally
+// eliminating the per-check ambiguous-error problem, not just special-casing it. The one network call
+// that CAN fail (the initial schema fetch) is classified as `unknown` — distinct from both `present` and
+// `missing` — and the whole script exits non-zero rather than printing a falsely reassuring report.
+//
+// Also corrected an overstated claim Codex flagged: an object being present in the schema proves it is
+// EXPOSED to this role, not that its current body/constraints/RLS policy match what's in this repo today
+// (a function can be redefined in place — this session did that repeatedly — without its name or
+// PostgREST-visible signature changing). Report presence only; this is not proof of correct behavior
+// (see costBasisRpc.pglite.test.ts / .concurrency.test.ts for that) or of a specific migration version.
 //
 // Usage:
 //   node --env-file=.env.local scripts/verify-gateway-schema-state.mjs
 
-import { createServerClient } from '@supabase/ssr'
 import { pathToFileURL } from 'node:url'
 
-// A PostgREST "missing" signature — function/relation genuinely not found in the schema cache. Anything
-// else (a type-mismatch error, a real data error, or a clean success) proves the object DOES exist, even
-// if this specific probe call itself doesn't succeed cleanly. Exported (mirrors
-// scripts/verify-gateway-pm-attribution.mjs's own pattern) so this classification is unit-testable
-// without a live Supabase project — a wrong classification here would silently invert this whole report.
-export function looksMissing(error) {
-  if (!error) return false
-  const code = String(error.code ?? '')
-  const msg = String(error.message ?? '').toLowerCase()
-  return code === 'PGRST202' || code === 'PGRST205' || code === '42883' || code === '42P01'
-    || msg.includes('could not find the function') || msg.includes('does not exist') || msg.includes('schema cache')
+/** ONE plain GET against the PostgREST root — the only network call this script ever makes, and the only
+ *  point where anything can go wrong (auth, network, an unparsable response). Never executes a function,
+ *  never selects a row. Returns `{ ok: true, schema }` or `{ ok: false, reason }` — callers must treat
+ *  `ok: false` as "verification impossible," never as "everything is missing." */
+export async function fetchOpenApiSchema(url, key, fetchImpl = fetch) {
+  let res
+  try {
+    res = await fetchImpl(`${url.replace(/\/+$/, '')}/rest/v1/`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/openapi+json' },
+    })
+  } catch (e) {
+    return { ok: false, reason: `network error: ${e instanceof Error ? e.message : String(e)}` }
+  }
+  if (!res.ok) {
+    return { ok: false, reason: `HTTP ${res.status} ${res.statusText} — likely an auth/permission failure, not evidence of a missing object` }
+  }
+  let schema
+  try {
+    schema = await res.json()
+  } catch (e) {
+    return { ok: false, reason: `response was not valid JSON: ${e instanceof Error ? e.message : String(e)}` }
+  }
+  if (!schema || typeof schema !== 'object' || !schema.paths) {
+    return { ok: false, reason: 'response did not look like a PostgREST OpenAPI document (missing "paths")' }
+  }
+  return { ok: true, schema }
 }
 
-export async function checkFunction(supabase, name, args) {
-  const { error } = await supabase.rpc(name, args)
-  const missing = looksMissing(error)
-  return { name, kind: 'function', present: !missing, detail: error ? `${error.code ?? ''} ${error.message ?? ''}`.trim() : 'callable (no error)' }
+/** Pure, zero-risk lookups against an already-fetched schema — no network, no execution, cannot fail. */
+export function hasFunction(schema, name) {
+  return Object.prototype.hasOwnProperty.call(schema.paths ?? {}, `/rpc/${name}`)
+}
+export function hasTable(schema, table) {
+  return Object.prototype.hasOwnProperty.call(schema.definitions ?? {}, table)
+    || Object.prototype.hasOwnProperty.call(schema.paths ?? {}, `/${table}`)
+}
+export function hasColumn(schema, table, column) {
+  const props = schema.definitions?.[table]?.properties
+  return !!props && Object.prototype.hasOwnProperty.call(props, column)
 }
 
-export async function checkColumn(supabase, table, column) {
-  const { error } = await supabase.from(table).select(column).limit(0)
-  const missing = looksMissing(error)
-  return { name: `${table}.${column}`, kind: 'column', present: !missing, detail: error ? `${error.code ?? ''} ${error.message ?? ''}`.trim() : 'selectable (no error)' }
-}
+const CHECKS = [
+  { migration: '_004', kind: 'column', table: 'gateway_deposit_events', name: 'block_number' },
+  { migration: '_004', kind: 'column', table: 'gateway_deposit_events', name: 'shares_burned' },
+  { migration: '_005', kind: 'column', table: 'gateway_deposit_events', name: 'position_manager' },
+  { migration: '_005', kind: 'column', table: 'gateway_deposit_events', name: 'tx_index' },
+  { migration: '_005', kind: 'column', table: 'gateway_deposit_events', name: 'shares_minted' },
+  { migration: '_005', kind: 'column', table: 'gateway_positions', name: 'position_manager' },
+  { migration: '_005', kind: 'function', name: 'record_gateway_deposit_event' },
+  { migration: '_005', kind: 'function', name: 'record_gateway_withdraw_event' },
+  { migration: '_006', kind: 'function', name: 'recompute_gateway_position' },
+  { migration: '_007', kind: 'function', name: 'apply_gateway_pm_attribution' },
+  { migration: '_007', kind: 'table', name: 'gateway_position_recompute_issues' },
+]
 
-// Dummy identity that can never collide with a real row — chain_id 999999999 is the exact convention this
-// repo's own probe scripts already use elsewhere (see the round-4 audit memory's live-verification notes).
-const PROBE = { address: '0x0000000000000000000000000000000000000000dead', pool: '0x' + 'de'.repeat(32), chain: 999999999 }
+/** Runs every check against an already-fetched schema — exported so the report-building logic is
+ *  testable without a network call at all (only fetchOpenApiSchema needs a live/fake fetch). */
+export function runChecks(schema) {
+  return CHECKS.map((c) => {
+    const present = c.kind === 'function' ? hasFunction(schema, c.name)
+      : c.kind === 'table' ? hasTable(schema, c.name)
+        : hasColumn(schema, c.table, c.name)
+    const label = c.kind === 'column' ? `${c.table}.${c.name}` : c.name
+    return { ...c, label, present }
+  })
+}
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -56,61 +109,36 @@ async function main() {
     console.error('Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY — set them (e.g. via --env-file=.env.local) and re-run.')
     process.exit(1)
   }
-  const supabase = createServerClient(url, key, { cookies: { getAll: () => [], setAll: () => {} } })
 
-  console.log('Read-only LP-gateway schema verification — checking migrations 20260909000004 through 20260909000007\n')
-  const results = []
+  console.log('Read-only LP-gateway schema verification (genuine schema introspection — no execution, no writes)\n')
+  const fetched = await fetchOpenApiSchema(url, key)
+  if (!fetched.ok) {
+    console.error(`Could NOT verify: ${fetched.reason}`)
+    console.error('This is a verification failure, not evidence that anything is missing — fix the connection/credential and re-run.')
+    process.exit(1)
+  }
 
-  // _004: derived-shares columns on gateway_deposit_events
-  results.push(await checkColumn(supabase, 'gateway_deposit_events', 'block_number'))
-  results.push(await checkColumn(supabase, 'gateway_deposit_events', 'shares_burned'))
-
-  // _005: manager-generation columns + the two record RPCs (current 10-arg signatures)
-  results.push(await checkColumn(supabase, 'gateway_deposit_events', 'position_manager'))
-  results.push(await checkColumn(supabase, 'gateway_deposit_events', 'tx_index'))
-  results.push(await checkColumn(supabase, 'gateway_deposit_events', 'shares_minted'))
-  results.push(await checkColumn(supabase, 'gateway_positions', 'position_manager'))
-  results.push(await checkFunction(supabase, 'record_gateway_deposit_event', {
-    p_tx_hash: 'schema-probe-deposit', p_address: PROBE.address, p_pool_address: PROBE.pool, p_chain_id: PROBE.chain,
-    p_quote_in: 0, p_on_chain_shares: 0, p_block_number: null, p_position_manager: null, p_tx_index: null, p_shares_minted: null,
-  }))
-  results.push(await checkFunction(supabase, 'record_gateway_withdraw_event', {
-    p_tx_hash: 'schema-probe-withdraw', p_address: PROBE.address, p_pool_address: PROBE.pool, p_chain_id: PROBE.chain,
-    p_quote_out: 0, p_on_chain_shares: 0, p_shares_burned: 0, p_block_number: null, p_position_manager: null, p_tx_index: null,
-  }))
-
-  // _006: recompute_gateway_position
-  results.push(await checkFunction(supabase, 'recompute_gateway_position', {
-    p_address: PROBE.address, p_pool_address: PROBE.pool, p_chain_id: PROBE.chain, p_position_manager: '0x' + 'ee'.repeat(20),
-  }))
-
-  // _007: apply_gateway_pm_attribution + the new issues table
-  results.push(await checkFunction(supabase, 'apply_gateway_pm_attribution', {
-    p_event_id: '00000000-0000-0000-0000-000000000000', p_position_manager: '0x' + 'ee'.repeat(20),
-    p_block_number: 0, p_tx_index: 0, p_shares_minted: null, p_shares_burned: null,
-  }))
-  results.push(await checkColumn(supabase, 'gateway_position_recompute_issues', 'reason'))
-
-  console.log('Result'.padEnd(10), 'Object'.padEnd(45), 'Detail')
-  console.log('-'.repeat(10), '-'.repeat(45), '-'.repeat(30))
+  const results = runChecks(fetched.schema)
+  console.log('Result'.padEnd(10), 'Migration'.padEnd(11), 'Object')
+  console.log('-'.repeat(10), '-'.repeat(11), '-'.repeat(45))
   for (const r of results) {
-    console.log((r.present ? '✅ FOUND' : '❌ MISSING').padEnd(10), r.name.padEnd(45), r.detail)
+    console.log((r.present ? '✅ FOUND' : '❌ MISSING').padEnd(10), r.migration.padEnd(11), r.label)
   }
 
   const missing = results.filter((r) => !r.present)
   console.log(`\n${results.length - missing.length} / ${results.length} present.`)
   if (missing.length) {
-    console.log(`\n${missing.length} object(s) not found — the corresponding migration(s) are likely NOT applied to this project yet:`)
-    for (const m of missing) console.log(`  - ${m.name}`)
-    console.log('\nCross-reference against .claude/rules/lp-gateway.md\'s migration list to see which numbered migration(s) each missing object belongs to, and apply them via the Supabase SQL editor before relying on that functionality in production.')
-  } else {
-    console.log('\nEverything checked is present. This does not prove the SQL logic is CORRECT (see costBasisRpc.pglite.test.ts / .concurrency.test.ts for that) — only that these migrations have been applied to this specific project.')
+    console.log(`\nMigration(s) likely NOT applied to this project: ${[...new Set(missing.map((m) => m.migration))].join(', ')}`)
+    for (const m of missing) console.log(`  - ${m.label}`)
+    console.log('\nApply the missing migration(s) via the Supabase SQL editor — see .claude/rules/lp-gateway.md for the full list and deploy-ordering notes.')
+    process.exit(1)
   }
+  console.log('\nEvery checked object is exposed in this project\'s schema. This confirms PRESENCE, not correctness or an exact')
+  console.log('migration version — a function can be redefined in place without its name/signature changing, and this check')
+  console.log('cannot see RLS policies, constraints, or a function\'s actual body. It does not prove the SQL logic is correct')
+  console.log('(see lib/gateway/costBasisRpc.pglite.test.ts / .concurrency.test.ts for that).')
 }
 
-// pathToFileURL, not a naive `file://${...}` template — this repo's own absolute path contains spaces
-// ("Mintware Phase 1 app Build"), which broke an earlier script's identical check this same session
-// (scripts/verify-gateway-pm-attribution.mjs) in exactly this way; use the fixed pattern from day one here.
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main().catch((e) => { console.error(e); process.exit(1) })
 }
