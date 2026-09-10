@@ -118,6 +118,24 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
     const [plan] = await planAttribution([row], async () => depositedReceipt())
     expect(plan).toMatchObject({ resolved: true })
   })
+
+  it('leaves a row unresolved when the receipt has no blockNumber — ordering metadata is required, not optional', async () => {
+    const row = { id: 'noblock', tx_hash: '0xnoblock', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ blockNumber: null }))
+    expect(plan).toMatchObject({ resolved: false, reason: 'missing_ordering_metadata' })
+  })
+
+  it('leaves a row unresolved when the receipt has no transactionIndex — same requirement', async () => {
+    const row = { id: 'noidx', tx_hash: '0xnoidx', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionIndex: null }))
+    expect(plan).toMatchObject({ resolved: false, reason: 'missing_ordering_metadata' })
+  })
+
+  it('still resolves normally when transactionIndex is 0 (falsy but present — must not be confused with missing)', async () => {
+    const row = { id: 'idx0', tx_hash: '0xidx0', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionIndex: 0 }))
+    expect(plan).toMatchObject({ resolved: true, txIndex: 0 })
+  })
 })
 
 describe('main-module detection — pathToFileURL correctly handles paths containing spaces', () => {
@@ -143,8 +161,9 @@ describe('main-module detection — pathToFileURL correctly handles paths contai
 })
 
 describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an interrupted prior --apply run', () => {
-  function fakeSupabase(rows, { rpcResults = {} } = {}) {
+  function fakeSupabase(allRows, { rpcResults = {} } = {}) {
     const rpcCalls = []
+    const rangeCalls = []
     return {
       from(table) {
         expect(table).toBe('gateway_deposit_events')
@@ -154,7 +173,13 @@ describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an
               expect(col).toBe('position_manager')
               expect(op).toBe('is')
               expect(val).toBe(null)
-              return Promise.resolve({ data: rows, error: null })
+              return {
+                // Mirrors real PostgREST .range(from, to) pagination — inclusive bounds.
+                range: (from, to) => {
+                  rangeCalls.push([from, to])
+                  return Promise.resolve({ data: allRows.slice(from, to + 1), error: null })
+                },
+              }
             },
           }),
         }
@@ -167,6 +192,7 @@ describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an
         return Promise.resolve(result)
       },
       __rpcCalls: rpcCalls,
+      __rangeCalls: rangeCalls,
     }
   }
 
@@ -205,5 +231,47 @@ describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an
     await recomputeAllResolvedIdentities(supabase)
     // both were attempted despite the first failing
     expect(supabase.__rpcCalls.length).toBe(2)
+  })
+
+  it('skips an identity passed in skipIdentities (a sibling row failed to update this run) — never recomputes from a known-partial history', async () => {
+    const rows = [{ address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }]
+    const supabase = fakeSupabase(rows)
+    const key = `${USER.toLowerCase()}:${POOL.toLowerCase()}:46630:${PM.toLowerCase()}`
+    await recomputeAllResolvedIdentities(supabase, new Set([key]))
+    expect(supabase.__rpcCalls.length).toBe(0)
+  })
+
+  it('paginates past a single page of resolved rows (proves the sweep does not silently truncate on a large table)', async () => {
+    // Build more distinct identities than one page would hold, using a page size smaller than the
+    // production PAGE_SIZE=1000 is impractical to construct here — instead prove pagination mechanics
+    // directly: many rows across what would be multiple pages at any reasonable page size all still
+    // produce one recompute call per distinct identity, and .range() was actually invoked more than once
+    // once the returned page is non-empty and as large as requested (forcing at least one more request).
+    const manyRows = Array.from({ length: 1500 }, (_, i) => ({
+      address: USER, pool_address: POOL, chain_id: 46630, position_manager: `0x${i.toString(16).padStart(40, '0')}`,
+    }))
+    const supabase = fakeSupabase(manyRows)
+    await recomputeAllResolvedIdentities(supabase)
+    expect(supabase.__rpcCalls.length).toBe(1500) // every distinct identity across every page was recomputed
+    expect(supabase.__rangeCalls.length).toBeGreaterThan(1) // proves more than one page was actually fetched
+  })
+})
+
+describe('main() no-orphans path — must still self-heal via recompute, never a bare early return under --apply', () => {
+  it('recomputeAllResolvedIdentities is exactly what main() must call even when the orphan scan is empty', async () => {
+    // This documents the exact fix for Codex's "no-orphans early return defeats interrupted-apply
+    // repair" finding: main()'s no-orphaned-rows branch now calls recomputeAllResolvedIdentities(supabase,
+    // new Set()) whenever --apply is set, instead of returning immediately. That branch lives inside
+    // main() (not separately exported), so this test locks the exported primitive it delegates to —
+    // proving a call with an EMPTY skip set still walks and recomputes every already-resolved identity,
+    // exactly the scenario left behind by a run that updated events but crashed before recomputing.
+    const staleResolvedRow = { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }
+    const rpcCalls = []
+    const supabase = {
+      from: () => ({ select: () => ({ not: () => ({ range: (from, to) => Promise.resolve({ data: from === 0 ? [staleResolvedRow] : [], error: null }) }) }) }),
+      rpc: (fn, params) => { rpcCalls.push(params); return Promise.resolve({ data: [{ cost_basis_atomic: '100', shares_atomic: '100', event_count: 1 }], error: null }) },
+    }
+    await recomputeAllResolvedIdentities(supabase, new Set())
+    expect(rpcCalls).toEqual([{ p_address: USER, p_pool_address: POOL, p_chain_id: 46630, p_position_manager: PM.toLowerCase() }])
   })
 })

@@ -93,13 +93,20 @@ export async function planAttribution(orphanedRows, fetchReceipt, configuredChai
       plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: 'event_not_found_or_user_mismatch' })
       continue
     }
+    // Ordering metadata is REQUIRED, not optional — a row missing block_number/tx_index can't be placed
+    // correctly in chain-order replay, so it must never be marked resolved just because the event itself
+    // decoded (Codex, 01:43 UTC: "Completeness currently does not reject missing block_number/tx_index").
+    if (receipt.blockNumber == null || receipt.transactionIndex == null) {
+      plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: 'missing_ordering_metadata' })
+      continue
+    }
     plan.push({
       id: row.id,
       tx_hash: row.tx_hash,
       resolved: true,
       positionManager: receipt.to.toLowerCase(),
-      blockNumber: receipt.blockNumber != null ? receipt.blockNumber.toString() : null,
-      txIndex: receipt.transactionIndex ?? null,
+      blockNumber: receipt.blockNumber.toString(),
+      txIndex: receipt.transactionIndex,
       sharesMinted: row.kind === 'deposit' ? decoded.args.sharesMinted.toString() : null,
       sharesBurned: row.kind === 'withdraw' ? decoded.args.sharesBurned.toString() : null,
       address: row.address,
@@ -127,6 +134,17 @@ async function main() {
   const client = createPublicClient({ transport: http(rpcUrl) })
   const fetchReceipt = (txHash) => client.getTransactionReceipt({ hash: txHash }).catch(() => null)
 
+  // Verify the RPC endpoint itself is actually the configured chain — LP_GATEWAY_CHAIN_ID is a
+  // human-set env var and LP_GATEWAY_RPC_URL is a separate one; nothing upstream guarantees they agree.
+  // Fetching a receipt against the WRONG chain's RPC would silently attribute a row to a transaction
+  // hash collision on a different network (Codex, 01:43 UTC: "neither verifies RPC chain ID"). Fail
+  // closed rather than proceed on an unverified assumption.
+  const actualChainId = await client.getChainId().catch((e) => { throw new Error(`Failed to verify RPC chain id: ${e instanceof Error ? e.message : String(e)}`) })
+  if (actualChainId !== chainId) {
+    console.error(`RPC chain id mismatch: LP_GATEWAY_CHAIN_ID=${chainId} but LP_GATEWAY_RPC_URL reports chain ${actualChainId}. Refusing to fetch any receipts.`)
+    process.exit(1)
+  }
+
   console.log(`${apply ? 'LIVE (--apply)' : 'DRY RUN'} — verify-gateway-pm-attribution, limit=${limit}`)
   if (!apply) console.log('No writes will be made. Pass --apply to actually resolve rows once you have reviewed this report.\n')
 
@@ -136,7 +154,17 @@ async function main() {
     .is('position_manager', null)
     .limit(limit)
   if (error) { console.error('Failed to read gateway_deposit_events:', error.message); process.exit(1) }
-  if (!orphaned || orphaned.length === 0) { console.log('No orphaned (position_manager IS NULL) rows found. Nothing to do.'); return }
+  if (!orphaned || orphaned.length === 0) {
+    console.log('No orphaned (position_manager IS NULL) rows found.')
+    // Do NOT just return here when --apply is set: "no orphans left to resolve" is exactly the state a
+    // PRIOR --apply run leaves behind when it updated every event row but crashed/was killed before its
+    // own recompute step ran. Returning early would silently defeat this script's entire self-healing
+    // design (Codex: "no-orphans early return defeats interrupted-apply repair") — always run the full
+    // idempotent recompute sweep on --apply, even when there's nothing new to resolve this time.
+    if (apply) await recomputeAllResolvedIdentities(supabase, new Set())
+    else console.log('Nothing to do.')
+    return
+  }
 
   console.log(`Found ${orphaned.length} orphaned row(s). Fetching on-chain receipts...\n`)
   const plan = await planAttribution(orphaned, fetchReceipt, chainId)
@@ -159,7 +187,15 @@ async function main() {
   }
 
   console.log('\nApplying resolved rows...')
+  // Track any identity that had AT LEAST ONE row fail to update this run. If row A of an identity's
+  // history updates but row B (same wallet/pool/chain/PM) fails, recomputing from the surviving subset
+  // would silently replay an INCOMPLETE history and publish a wrong basis that looks fully resolved
+  // (Codex, 01:43 UTC: "Partial batches or one failed event update can also publish a basis from
+  // incomplete history"). So: skip recompute entirely for any identity touched by a failed update this
+  // run — its history is known-incomplete until every one of its rows actually lands.
+  const failedIdentities = new Set()
   for (const p of resolved) {
+    const identityKey = `${p.address.toLowerCase()}:${p.poolAddress.toLowerCase()}:${p.chainId}:${p.positionManager}`
     const { error: updErr } = await supabase
       .from('gateway_deposit_events')
       .update({
@@ -170,7 +206,10 @@ async function main() {
         ...(p.sharesBurned != null ? { shares_burned: p.sharesBurned } : {}),
       })
       .eq('id', p.id)
-    if (updErr) console.error(`  FAILED to update ${p.tx_hash}: ${updErr.message}`)
+    if (updErr) {
+      console.error(`  FAILED to update ${p.tx_hash}: ${updErr.message}`)
+      failedIdentities.add(identityKey)
+    }
   }
 
   // Recompute is a FULL, idempotent, unconditional pass over every distinct identity that currently has
@@ -179,31 +218,48 @@ async function main() {
   // (or was killed) before reaching this step, those rows' position_manager is already non-null, so the
   // orphan scan above will never find them again — but they'll still show up here every time, and get
   // recomputed again, until recompute_gateway_position actually succeeds for them.
-  await recomputeAllResolvedIdentities(supabase)
+  await recomputeAllResolvedIdentities(supabase, failedIdentities)
   console.log('\nDone. Unresolved rows remain untouched — re-run this script later if more historical data becomes recoverable.')
 }
 
 /** Full, idempotent sweep: recompute EVERY distinct (address, pool_address, chain_id, position_manager)
  *  combination currently present in gateway_deposit_events with a non-null position_manager — regardless
  *  of whether this invocation resolved it or a prior (possibly interrupted) one did. Safe to call any
- *  number of times; recompute_gateway_position itself just replays that identity's full event history. */
-export async function recomputeAllResolvedIdentities(supabase) {
-  const { data: rows, error } = await supabase
-    .from('gateway_deposit_events')
-    .select('address, pool_address, chain_id, position_manager')
-    .not('position_manager', 'is', null)
-  if (error) { console.error('Failed to list resolved identities for recompute:', error.message); return }
-
+ *  number of times; recompute_gateway_position itself just replays that identity's full event history.
+ *  `skipIdentities` (optional Set of the same `address:pool:chainId:pm` key format) excludes identities
+ *  known to have an incomplete history right now (e.g. a sibling row's update just failed) — recomputing
+ *  those would publish a basis from a known-partial event set. */
+export async function recomputeAllResolvedIdentities(supabase, skipIdentities) {
+  // Paginate rather than one unbounded select — PostgREST caps an unqualified select at its configured
+  // default page size (commonly 1000), so a table with more resolved rows than that would silently drop
+  // identities past the cap instead of erroring (Codex: "unpaginated sweep"). Page through explicitly
+  // until a page comes back short of PAGE_SIZE.
+  const PAGE_SIZE = 1000
   const identities = new Map() // key -> {address, poolAddress, chainId, positionManager}
-  for (const row of rows ?? []) {
-    const key = `${row.address.toLowerCase()}:${row.pool_address.toLowerCase()}:${row.chain_id}:${row.position_manager.toLowerCase()}`
-    if (!identities.has(key)) {
-      identities.set(key, { address: row.address, poolAddress: row.pool_address, chainId: row.chain_id, positionManager: row.position_manager })
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: rows, error } = await supabase
+      .from('gateway_deposit_events')
+      .select('address, pool_address, chain_id, position_manager')
+      .not('position_manager', 'is', null)
+      .range(from, from + PAGE_SIZE - 1)
+    if (error) { console.error('Failed to list resolved identities for recompute:', error.message); return }
+    for (const row of rows ?? []) {
+      const key = `${row.address.toLowerCase()}:${row.pool_address.toLowerCase()}:${row.chain_id}:${row.position_manager.toLowerCase()}`
+      if (!identities.has(key)) {
+        identities.set(key, { address: row.address, poolAddress: row.pool_address, chainId: row.chain_id, positionManager: row.position_manager })
+      }
     }
+    if (!rows || rows.length < PAGE_SIZE) break
   }
 
-  console.log(`\nRecomputing ${identities.size} resolved position(s) (full idempotent pass, self-healing any interrupted prior run)...`)
+  if (skipIdentities?.size) {
+    console.log(`\nSkipping recompute for ${skipIdentities.size} identity(ies) with a known-incomplete history this run (a sibling row's update failed) — re-run to retry once every row lands:`)
+    for (const key of skipIdentities) console.log(`  SKIPPED: ${key}`)
+  }
+
+  console.log(`\nRecomputing ${Math.max(0, identities.size - (skipIdentities?.size ?? 0))} resolved position(s) (full idempotent pass, self-healing any interrupted prior run)...`)
   for (const [key, id] of identities) {
+    if (skipIdentities?.has(key)) continue
     const { data, error: rpcErr } = await supabase.rpc('recompute_gateway_position', {
       p_address: id.address, p_pool_address: id.poolAddress, p_chain_id: id.chainId, p_position_manager: id.positionManager,
     })
