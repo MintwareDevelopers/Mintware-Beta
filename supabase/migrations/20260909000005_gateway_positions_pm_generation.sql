@@ -146,10 +146,19 @@ BEGIN
   IF v_already THEN
     -- A replay: find whichever row this identity's earlier (successful) write landed on — an exact-PM
     -- match if one exists, else a not-yet-adopted legacy (NULL-PM) row — and return its basis unchanged.
+    --
+    -- CAUGHT ON REVIEW (2026-09-10, Codex live watch, before this migration was ever applied): this used
+    -- to read `ORDER BY (position_manager = v_pm) DESC LIMIT 1`. `position_manager = v_pm` is a 3-valued
+    -- SQL comparison — TRUE for an exact match, but NULL (not FALSE) when position_manager IS NULL, since
+    -- `NULL = anything` is NULL. Postgres defaults DESC to NULLS FIRST (unless NULLS LAST is explicit) —
+    -- so the NULL-valued (legacy, unclaimed) row sorted BEFORE the TRUE-valued (exact match) row whenever
+    -- both existed for the same identity, exactly backwards from the intended "prefer exact match" rule.
+    -- A CASE expression sidesteps three-valued logic entirely: exact match sorts first (0), anything else
+    -- (FALSE or NULL) sorts after (1) — correct regardless of any implicit NULL-ordering default.
     SELECT entry_nav INTO v_new_basis FROM gateway_positions
       WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id
         AND (position_manager = v_pm OR position_manager IS NULL)
-      ORDER BY (position_manager = v_pm) DESC LIMIT 1;
+      ORDER BY CASE WHEN position_manager = v_pm THEN 0 ELSE 1 END LIMIT 1;
     RETURN QUERY SELECT COALESCE(v_new_basis, 0::numeric(78,0)), true;
     RETURN;
   END IF;
@@ -161,7 +170,7 @@ BEGIN
   SELECT id, entry_nav INTO v_pos_id, v_prior_basis FROM gateway_positions
     WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id
       AND (position_manager = v_pm OR position_manager IS NULL)
-    ORDER BY (position_manager = v_pm) DESC LIMIT 1;
+    ORDER BY CASE WHEN position_manager = v_pm THEN 0 ELSE 1 END LIMIT 1;
   v_prior_basis := COALESCE(v_prior_basis, 0);
 
   -- CAUGHT ON REVIEW (2026-09-09, Codex live watch, same day, before this migration was ever applied):
@@ -281,7 +290,7 @@ BEGIN
   SELECT id, entry_nav INTO v_pos_id, v_prior_basis FROM gateway_positions
     WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id
       AND (position_manager = v_pm OR position_manager IS NULL)
-    ORDER BY (position_manager = v_pm) DESC LIMIT 1;
+    ORDER BY CASE WHEN position_manager = v_pm THEN 0 ELSE 1 END LIMIT 1;
 
   IF v_pos_id IS NULL THEN
     -- No matching position row at all ⇒ this depositor's original deposit was never recorded (a
