@@ -168,11 +168,35 @@ async function settlePendingBacklog(opts: {
   const amount = pending.netAtomic + swappedNet
   if (amount <= 0n) return null
 
-  const record = (credited: bigint) =>
-    supabase.from('harvest_events').insert({
+  // Round-4 audit fix (Codex live-watch, 2026-09-10 — corrected the prior version's overstated
+  // durability claim). Two real gaps fixed here:
+  //  (a) the insert's own result is now CHECKED and logged loudly on failure — it used to be silently
+  //      swallowed (a failed write left NOTHING recording this run, with no trace it happened at all).
+  //  (b) when this run's OWN collect/swap already happened (`collectTx` set), a `harvest_events` row for
+  //      it is now written on EVERY exit path below, not just the success path. Several failure returns
+  //      used to skip record() entirely, so a real, already-submitted swap's `swapTx` could end up
+  //      recorded NOWHERE in this app's own tables if the LATER claim/compound/mark step then failed
+  //      independently — Codex: "a real, submitted swap can end up recorded nowhere in this app's own
+  //      tables." `harvest_events_collect_tx_uidx` (the existing unique index on collect_tx) is what makes
+  //      this safe to attempt from more than one exit path — at most one of these paths ever runs per
+  //      call, so at most one insert is attempted per collect_tx per invocation; a genuine retry produces
+  //      a NEW collect_tx (harvest() is a fresh transaction each call), so this never self-blocks a
+  //      legitimate future retry. A pure backlog-only settle attempt (no fresh collect this run,
+  //      `collectTx` undefined — the earlyExit call site above) has nothing new of its own to lose on
+  //      failure; its pending amounts stay protected by claimRestake/releaseRestake regardless, so
+  //      recordOnFailure is a deliberate no-op there rather than writing a useless all-null row.
+  const record = async (credited: bigint) => {
+    const { error } = await supabase.from('harvest_events').insert({
       pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx ?? null, swap_tx: swapTx,
       amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(), amount_credited_atomic: credited.toString(),
     })
+    if (error) {
+      log?.error('gateway.harvest', 'harvest_events insert failed — this run\'s record (incl. swap_tx, if any) was NOT persisted; a real on-chain event may now be untracked', {
+        error: error.message, collectTx: collectTx ?? null, swapTx,
+      })
+    }
+  }
+  const recordOnFailure = () => (collectTx ? record(0n) : Promise.resolve())
 
   // Round-3 audit F-3 — two-phase settlement so a mined compound can never be compounded twice: claim
   // (pending → restaking, count-verified) → compound → mark (restaking → restake + tx, count-verified);
@@ -181,6 +205,7 @@ async function settlePendingBacklog(opts: {
     await claimRestake(supabase, pending.ids)
   } catch (e) {
     log?.error('gateway.harvest', 'restake claim failed — nothing sent', { error: String(e) })
+    await recordOnFailure()
     return { ok: false, status: 500, error: 'restake_claim_failed', reason: 'tx', index }
   }
   let ch: `0x${string}` | undefined
@@ -197,6 +222,7 @@ async function settlePendingBacklog(opts: {
     mined = rc.status === 'success'
     if (!mined) {
       await releaseRestake(supabase, pending.ids).catch((e) => log?.error('gateway.harvest', 'restake release failed after revert', { error: String(e) }))
+      await recordOnFailure()
       return { ok: false, status: 502, error: 'compound_reverted', reason: 'tx', index }
     }
     for (const lg of rc.logs ?? []) {
@@ -213,15 +239,18 @@ async function settlePendingBacklog(opts: {
     log?.error('gateway.harvest', 'restake/compound failed', { error: String(e) })
     if (ch === undefined) {
       await releaseRestake(supabase, pending.ids).catch((e2) => log?.error('gateway.harvest', 'restake release failed', { error: String(e2) }))
+      await recordOnFailure()
       return { ok: false, status: 502, error: 'compound_failed', reason: 'tx', index }
     }
     log?.error('gateway.harvest', 'compound sent but receipt unknown — rows left in `restaking`, operator must finalise', { settleTx: ch })
+    await recordOnFailure()
     return { ok: false, status: 502, error: 'compound_receipt_unknown', reason: 'tx', index }
   }
   try {
     await markRestaked(supabase, pending.ids, ch)
   } catch (e) {
     log?.error('gateway.harvest', 'compound mined but ledger mark failed — rows left in `restaking`, operator must finalise', { error: String(e), settleTx: ch })
+    await recordOnFailure()
     return { ok: false, status: 500, error: 'restake_mark_failed', reason: 'tx', index }
   }
   await record(amount)
@@ -364,18 +393,34 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   })
   if (!index.ok) {
     log?.error('gateway.harvest', 'ledger index failed — nothing settled this run (safe to retry)', { error: index.error, pool: instance.poolAddress })
-    await supabase.from('harvest_events').insert({
+    // Round-4 audit fix (Codex live-watch, 2026-09-10): check this insert's own result — a failed write
+    // here used to be silently swallowed, losing swapTx (if a swap already happened this run) with
+    // nothing logged about it.
+    const { error: insertError } = await supabase.from('harvest_events').insert({
       pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
       amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: '0', amount_credited_atomic: '0',
     })
+    if (insertError) {
+      log?.error('gateway.harvest', 'harvest_events insert ALSO failed on the index-failure path — this run\'s record (incl. swap_tx, if any) was NOT persisted', {
+        error: insertError.message, collectTx, swapTx,
+      })
+    }
     return { ok: false, status: 502, error: `ledger_index_failed:${index.error}`, reason: 'index', index }
   }
 
-  const record = (credited: bigint) =>
-    supabase.from('harvest_events').insert({
+  // Round-4 audit fix (Codex live-watch, 2026-09-10): same insert-result check as settlePendingBacklog's
+  // own record() — a failed write here used to be silently swallowed too.
+  const record = async (credited: bigint) => {
+    const { error } = await supabase.from('harvest_events').insert({
       pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
       amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(), amount_credited_atomic: credited.toString(),
     })
+    if (error) {
+      log?.error('gateway.harvest', 'harvest_events insert failed — this run\'s record (incl. swap_tx, if any) was NOT persisted; a real on-chain event may now be untracked', {
+        error: error.message, collectTx, swapTx,
+      })
+    }
+  }
 
   // 4a) RESTAKE (default): compound Σ pending net (all un-settled logs, not just this collect) + the
   //     swapped paired leg back into the PM — lifts NAV pro-rata for ALL holders on-chain, no share mint.

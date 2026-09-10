@@ -33,7 +33,7 @@
 // two independent flags for exactly this reason (both off by default): NEXT_PUBLIC_MW_ROUTER_ENABLED and
 // LP_GATEWAY_ROUTER_ADDRESS.
 
-import { encodeAbiParameters, encodePacked } from 'viem'
+import { encodeAbiParameters, encodePacked, decodeEventLog } from 'viem'
 import { LP_GATEWAY_ABI } from '@/lib/web3/artifacts/lpGateway'
 import { readCurrentTick, type GatewayPoolKey } from '@/lib/gateway/poolState'
 import { pairedToQuoteAtSpot, applyToleranceBps } from '@/lib/gateway/v4Math'
@@ -57,6 +57,10 @@ const ERC20_ABI = [
   { type: 'function', stateMutability: 'nonpayable', name: 'approve', inputs: [{ name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' }], outputs: [{ type: 'bool' }] },
   { type: 'function', stateMutability: 'view', name: 'allowance', inputs: [{ name: 'owner', type: 'address' }, { name: 'spender', type: 'address' }], outputs: [{ type: 'uint256' }] },
   { type: 'function', stateMutability: 'view', name: 'balanceOf', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }] },
+  // The standard ERC-20 Transfer event — used to measure this swap's OWN proceeds directly from its own
+  // receipt logs (see measureSwapProceeds below), never assumed of the router's own custom events (those
+  // are unverified — see the header note) but universal for any standard ERC-20 like quoteAsset (USDG).
+  { type: 'event', name: 'Transfer', inputs: [{ name: 'from', type: 'address', indexed: true }, { name: 'to', type: 'address', indexed: true }, { name: 'value', type: 'uint256', indexed: false }] },
 ] as const
 
 // Universal Router Commands.sol: V4_SWAP. Uniswap V4 Actions.sol: SWAP_EXACT_IN_SINGLE / SETTLE_ALL /
@@ -121,6 +125,31 @@ export function buildV4SwapCalldata(opts: {
 function swapSlippageBps(): number {
   const n = Number(process.env.LP_GATEWAY_SWAP_SLIPPAGE_BPS ?? '100') // same default/knob deploy.ts's own zap uses
   return Number.isFinite(n) && n >= 0 && n < 10_000 ? n : 100
+}
+
+/** Sums standard ERC-20 `Transfer(from, to, value)` events emitted BY `quoteAsset`, TO `owner`, within
+ *  this ONE receipt's own logs — genuinely transaction-scoped, unlike a wallet-wide balance-diff (Codex
+ *  live-watch, 2026-09-10: "unrelated incoming transfers or concurrent outgoing settlement in between
+ *  contaminate the amount attributed to this PM" — a real risk here since every gateway instance shares
+ *  ONE oracle seat, `getOracleSigner('gateway')`, so a concurrent harvest/withdraw/deploy on a DIFFERENT
+ *  pool touching the same wallet during the old before/after balance-read window could misattribute
+ *  proceeds). Returns `null` (not 0n) when no qualifying Transfer log is found — distinct from "found
+ *  transfers summing to zero" — so the caller can tell "confirmed zero proceeds" apart from "this
+ *  router's actual payout mechanism doesn't emit a standard Transfer here, method unknown" and fall back
+ *  rather than silently report zero. Relies only on the ERC-20 standard, never the router's own
+ *  unverified custom event shapes. */
+function measureSwapProceeds(logs: readonly { address: string; data: `0x${string}`; topics: readonly `0x${string}`[] }[] | undefined | null, quoteAsset: `0x${string}`, owner: `0x${string}`): bigint | null {
+  let total: bigint | null = null
+  for (const lg of logs ?? []) {
+    if (lg.address.toLowerCase() !== quoteAsset.toLowerCase()) continue
+    try {
+      const ev = decodeEventLog({ abi: ERC20_ABI, data: lg.data, topics: lg.topics as [`0x${string}`, ...`0x${string}`[]] })
+      if (ev.eventName === 'Transfer' && (ev.args.to as string).toLowerCase() === owner.toLowerCase()) {
+        total = (total ?? 0n) + (ev.args.value as bigint)
+      }
+    } catch { /* not a Transfer log (or a differently-shaped event on this same token address) — skip */ }
+  }
+  return total
 }
 
 export async function swapPairedToQuote(opts: {
@@ -201,12 +230,6 @@ export async function swapPairedToQuote(opts: {
     })
     const swapArgs = { address: routerAddress, abi: UNIVERSAL_ROUTER_ABI, functionName: 'execute', args: [commands, inputs, deadline], account } as const
 
-    // Balance-diff measurement, not an event-log parse — mirrors the same discipline
-    // MintwareLpGatewayStaging.unstage() already uses elsewhere in this codebase (measure by balance
-    // delta, X-3) rather than trusting a specific Swap-event shape this modified router's real event
-    // signatures were never independently verified for.
-    const quoteBalanceBefore = (await publicClient.readContract({ address: quoteAsset, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] })) as bigint
-
     const { gas: swapGas } = await estimateGasWithFloor(publicClient, swapArgs, 400_000n)
     const swapTx = await wallet.writeContract({ ...swapArgs, chain: publicClient.chain, gas: swapGas })
 
@@ -222,9 +245,23 @@ export async function swapPairedToQuote(opts: {
         return { quoteOut: 0n, txHash: swapTx }
       }
 
-      const quoteBalanceAfter = (await publicClient.readContract({ address: quoteAsset, abi: ERC20_ABI, functionName: 'balanceOf', args: [owner] })) as bigint
-      const quoteOut = quoteBalanceAfter > quoteBalanceBefore ? quoteBalanceAfter - quoteBalanceBefore : 0n
-      return { quoteOut, txHash: swapTx }
+      // ONLY source of truth for quoteOut: sum this receipt's OWN Transfer(quoteAsset → owner) logs —
+      // genuinely transaction-scoped, immune to concurrent unrelated activity on the shared oracle seat
+      // wallet. Codex live-watch (2026-09-10) flagged an earlier version's wallet-balance-diff fallback
+      // as itself unsafe (a non-atomic before/after read, contaminable by concurrent activity, that could
+      // OVERSTATE this swap's proceeds and compound money that never came from it into NAV) — removed
+      // rather than kept as a "weaker but logged" fallback. Matches this function's own stated philosophy
+      // everywhere else (pool price unreadable, minQuoteOut rounds to zero, etc.): never guess. If the
+      // router's real payout mechanism turns out not to route through a standard Transfer here (possible —
+      // its exact behavior is unverified, see the header note), this reports quoteOut: 0 for a genuinely
+      // real, successful swap — an under-credit, recoverable later via the (currently manual, see
+      // lp-gateway.md's V1-07 note) reconciliation path — never an over-credit, which is the failure mode
+      // that actually risks other depositors' NAV.
+      const transferSum = measureSwapProceeds(swapReceipt.logs, quoteAsset, owner)
+      if (transferSum === null) {
+        log?.warn('gateway.harvest', 'swap confirmed but no ERC-20 Transfer log to owner found in its receipt — quoteOut honestly unmeasured (0), never guessed from a wallet balance diff', { swapTx })
+      }
+      return { quoteOut: transferSum ?? 0n, txHash: swapTx }
     } catch (e) {
       // The submit succeeded; only confirming it (or measuring its result) failed — e.g. an RPC drop or
       // timeout on waitForTransactionReceipt, not a revert. quoteOut is honestly unmeasured (0n, never

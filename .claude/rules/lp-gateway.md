@@ -214,50 +214,55 @@ unrelated).
   encoding is based on the router's own live-verified function selectors + a third-party integrator's
   technical docs (neither Uniswap's nor Robinhood's own docs publish this struct) — NOT a fork test, NOT
   bytecode decompilation, NOT a live test transaction (none possible in this sandbox). An operator MUST verify
-  with a small, monitored test swap before `LP_GATEWAY_ROUTER_ADDRESS` is ever set on a real deploy. 21 unit
-  tests (`routerSwap.test.ts`) cover the encoding (decoded back from its own output, not a magic hex string)
-  and every execution path incl. two Codex-caught hash-preservation cases: an error AFTER the swap tx is
-  already submitted (receipt-wait failure, post-swap balance-read failure) now always preserves the real
-  `txHash` for reconciliation instead of reporting `null` — an earlier draft lost it, making a submitted
-  on-chain swap indistinguishable from one that never happened. The raw harvested paired amount was never lost
-  either way: `lib/gateway/ledger.ts#indexHarvestLogs` already writes every `Harvested` log's `pairedFees` into
-  `gateway_harvest_logs.paired_fees_atomic` (per-log, comprehensive), `gateway_fee_ledger_reconciliation.gross_paired_atomic`
-  sums it per pool, and **`GET /api/gateway/fee-reconciliation` (bearer-gated, `ADMIN_SECRET`) already exposes
-  that view** — a prior version of this note claimed nothing reads it; that was wrong, it's live (see the
-  route's own header comment, and the "Routes" bullet above). **V1-07 is still genuinely NOT closed (Codex
-  live-watch, 2026-09-10 — corrected after Codex disputed an earlier, too-optimistic version of this note):**
-  three real gaps remain, and the earlier claim that these were optional "new scope" was wrong — the original
-  user directive to finish paired-token fee conversion explicitly covers failure/retry/idempotency and
-  ledger reconciliation, not just building the swap executor:
-  1. **Output-attribution boundary.** `swapPairedToQuote`'s balance-diff measurement (`routerSwap.ts`,
-     reading `quoteAsset.balanceOf(owner)` before submitting the swap and again after) is two SEPARATE,
-     non-atomic RPC calls, not an atomic in-contract delta. Any unrelated activity on the harvest-recipient
-     wallet between those two reads — an incoming transfer, or a concurrent outgoing settlement from the
-     SAME seat (the `gateway` oracle signer is a dedicated seat today, but nothing prevents other concurrent
-     activity against it) — contaminates the measured `quoteOut`, misattributing money to (or away from)
-     this specific harvest. Not yet fixed; needs either a transaction-specific verified-proceeds read (e.g.
-     decode the router's own settle/take amounts from the swap receipt, once its real event shape is
-     verified) or an atomic adapter-level measurement, not a wider window balance diff.
-  2. **`harvest_events.swap_tx` is NOT actually durable** — an earlier version of this note overstated this
-     ("an operator can always look the hash up") — corrected: `settlePendingBacklog`'s and `harvestGateway`'s
-     `record(...)` calls that write `swap_tx` are `await`ed but their result is never checked (a failed
-     insert is silently swallowed), AND several failure paths in `settlePendingBacklog` (claim failure,
-     compound revert, compound-receipt-unknown, restake-mark failure — see its `return` statements before
-     line 227's `record()` call) return WITHOUT ever calling `record()` at all. A real, successfully-
-     submitted swap whose surrounding claim/compound step then fails leaves its `swap_tx` recorded NOWHERE
-     in this app's own tables — discoverable only by an operator who already knows to go looking on-chain,
-     not from anything this codebase persists. Needs the insert's result checked (and logged loudly on
-     failure) at minimum; ideally the swap_tx should be recorded as soon as it's known, before the
-     claim/compound sequence that can independently fail.
-  3. **No automated reconciliation job** — nothing re-checks a `swap_tx` that was preserved-but-unconfirmed
-     (or lost per #2) and retroactively credits/corrects the real `quoteOut` once it's knowable. Recovery
-     today is fully manual.
-  Also still open (unchanged from the routerSwap.ts header disclosure): router compatibility is unverified
-  against real bytecode/a fork test/a live transaction; historical/withdraw/deploy-sweep paired-token
-  inventory predating this feature is never selected for conversion; buffer-mode harvest destination never
-  credits converted proceeds per-depositor. **Do not describe V1-07 as closed** — the executor exists and is
-  tested for its own narrow encoding/no-op correctness, but the surrounding accounting/recovery/atomicity
-  work the original directive asked for is not done.
+  with a small, monitored test swap before `LP_GATEWAY_ROUTER_ADDRESS` is ever set on a real deploy. The raw
+  harvested paired amount was never lost either way: `lib/gateway/ledger.ts#indexHarvestLogs` already writes
+  every `Harvested` log's `pairedFees` into `gateway_harvest_logs.paired_fees_atomic` (per-log, comprehensive),
+  `gateway_fee_ledger_reconciliation.gross_paired_atomic` sums it per pool, and `GET /api/gateway/fee-reconciliation`
+  (bearer-gated, `ADMIN_SECRET`) exposes that view.
+  **Multi-round Codex live-watch correction history (2026-09-10) — read this before touching `routerSwap.ts`
+  or `harvest.ts` again.** The first version claimed V1-07 was essentially closed; Codex disputed that
+  framing (the original directive to finish paired-token fee conversion explicitly covers failure/retry/
+  idempotency/reconciliation, not just building the swap executor — calling the gap "new scope" was wrong)
+  and caught real bugs across several rounds, each fixed and independently re-verified:
+  - **Hash-preservation (fixed):** an error after the swap tx was already submitted (receipt-wait failure,
+    post-swap read failure) used to discard `txHash` entirely (`null`) — indistinguishable from "never
+    submitted." Fixed: every path once submission succeeds now preserves the real hash.
+  - **Output-attribution boundary (fixed):** the original measurement was a wallet-wide balance-diff (two
+    separate RPC reads bracketing the swap) — non-atomic, and every gateway instance shares ONE oracle seat
+    (`getOracleSigner('gateway')`), so concurrent unrelated activity on that wallet (another pool's harvest/
+    withdraw/deploy) could contaminate the measured `quoteOut`. Fixed twice: first by adding the balance-diff
+    as a logged "fallback" behind a primary transaction-scoped measurement — Codex correctly flagged that
+    the fallback was ITSELF still unsafe (could overstate proceeds and compound money that never came from
+    this swap into NAV) — then by removing the fallback entirely. **Current design:** `measureSwapProceeds`
+    (`routerSwap.ts`) sums the swap receipt's OWN standard ERC-20 `Transfer(quoteAsset → owner)` logs —
+    genuinely transaction-scoped, immune to concurrent wallet activity by construction. No qualifying log
+    found ⇒ `quoteOut: 0` always (the wallet balance is never consulted at all any more) — matches this
+    function's own "never guess" posture everywhere else; an under-credit here is recoverable later, an
+    over-credit is not.
+  - **Non-durable recording (fixed):** `settlePendingBacklog`'s and `harvestGateway`'s `record(...)` inserts
+    into `harvest_events` never checked their own result (a failed write was silently swallowed), AND several
+    of `settlePendingBacklog`'s failure paths (claim failure, compound revert, compound-receipt-unknown,
+    restake-mark failure) returned WITHOUT ever calling `record()` — so a real, already-submitted swap could
+    end up recorded nowhere in this app's own tables if the LATER claim/compound step then failed
+    independently. Fixed: every insert now checks `{error}` and logs loudly on failure; every one of those
+    failure paths now also calls `record(0n)` (preserving `collect_tx`/`swap_tx`) when this run genuinely
+    collected something new (`collectTx` set) — a pure backlog-only settle attempt with nothing new this run
+    is deliberately left as a no-op (nothing new to lose; the pending amount stays protected by
+    `claimRestake`/`releaseRestake` regardless).
+  - **Still genuinely open, not built:** no automated reconciliation job exists — nothing re-checks a
+    preserved `swap_tx` whose proceeds came back unmeasured (`quoteOut: 0` with a real hash) and retroactively
+    credits it once knowable; recovery today is fully manual. Router compatibility remains unverified against
+    real bytecode/a fork test/a live transaction (can't be closed from this sandbox). Historical/withdraw/
+    deploy-sweep paired-token inventory predating this feature is never selected for conversion. Buffer-mode
+    harvest destination never credits converted proceeds per-depositor (buffer destination is currently
+    unreachable anyway — `resolveHarvestDestination` always returns `'restake'`).
+  Verification for the above: 26 unit tests in `routerSwap.test.ts` (encoding decoded back from its own
+  output, never a magic hex string; every execution + failure path; dedicated tests proving the Transfer-log
+  measurement is immune to the exact concurrent-activity contamination scenario Codex described) + 5 new
+  durability tests in `harvest.test.ts` (each of `settlePendingBacklog`'s failure paths proven to still
+  durably record `collect_tx`/`swap_tx`; a forced insert failure proven to log loudly; the backlog-only path
+  proven NOT to write a useless null row) — `pnpm exec tsc --noEmit --incremental false` clean, full
+  `pnpm test` green (1265 passed, 4 pre-existing skips, 0 failures) after every round.
 - **Depositable rule:** a pool is depositable only when `gateway_instances` holds an **`active`**, on-chain-verified
   (H-01) row for its **poolId** — the Discover `live` flag and `/earn/[pool]` must resolve through the registry, never
   through a pair label. The single-env `LP_GATEWAY_POSITION_MANAGER` fallback is bootstrap-only (O-2 closeout;

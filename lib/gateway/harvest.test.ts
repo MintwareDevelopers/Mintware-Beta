@@ -10,8 +10,14 @@ const SEAT = '0x18ae000000000000000000000000000000000663' as const
 const POOL = '0x' + 'ab'.repeat(32)
 const COLLECT_TX = ('0x' + '11'.repeat(32)) as `0x${string}`
 const COMPOUND_TX = ('0x' + '33'.repeat(32)) as `0x${string}`
+const SWAP_TX = ('0x' + '44'.repeat(32)) as `0x${string}`
 const GROSS = 10_000_000n
 let compoundDeferredNextCompound = false
+// Round-4 durability tests (Codex live-watch, 2026-09-10) need a Harvested event that reports a nonzero
+// PAIRED leg, so swapPairedToQuote actually gets called — every other existing test fixture reports 0
+// paired fees, so the swap step (and therefore its swap_tx) never enters the picture for them.
+let pairedFeesNextHarvest = 0n
+let compoundRevertsNextCompound = false
 
 const writes: Array<{ functionName: string; args?: unknown[]; gas?: bigint }> = []
 const publicClient = {
@@ -23,12 +29,12 @@ const publicClient = {
   simulateContract: vi.fn(async () => ({ result: [GROSS, 0n] })),
   estimateContractGas: vi.fn(async () => 500_000n),
   waitForTransactionReceipt: vi.fn(async ({ hash }: { hash: string }) => ({
-    status: 'success',
+    status: compoundRevertsNextCompound && hash === COMPOUND_TX ? 'reverted' : 'success',
     blockNumber: 500n,
     logs: hash === COLLECT_TX ? [{
       address: PM,
       topics: encodeEventTopics({ abi: LP_GATEWAY_ABI, eventName: 'Harvested', args: { recipient: SEAT } }),
-      data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [GROSS, 0n]),
+      data: encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }], [GROSS, pairedFeesNextHarvest]),
     }] : hash === COMPOUND_TX && compoundDeferredNextCompound ? [{
       address: PM,
       topics: encodeEventTopics({ abi: LP_GATEWAY_ABI, eventName: 'CompoundDeferred' }),
@@ -42,8 +48,9 @@ vi.mock('@/lib/gateway/chain', () => ({
   gatewayPublicClient: () => publicClient,
 }))
 vi.mock('@/lib/web3/oracleSigner', () => ({ getOracleSigner: async () => ({ address: SEAT }) }))
+const swapMock = vi.fn(async () => ({ quoteOut: 0n, txHash: null as string | null }))
 vi.mock('@/lib/gateway/routerSwap', () => ({
-  swapPairedToQuote: async () => ({ quoteOut: 0n, txHash: null }),
+  swapPairedToQuote: (...a: unknown[]) => swapMock(...(a as [])),
 }))
 vi.mock('viem', async (orig) => ({
   ...(await orig<typeof import('viem')>()),
@@ -70,7 +77,7 @@ vi.mock('@/lib/gateway/ledger', () => ({
 import { harvestGateway, harvestAll, resolveHarvestDestination } from './harvest'
 
 type Row = Record<string, unknown>
-function fakeDb() {
+function fakeDb(opts: { failInsertOn?: string } = {}) {
   const tables: Record<string, Row[]> = { harvest_events: [], card_spend_buffers: [{ id: 'buf', buffer_balance_atomic: '0' }], gateway_positions: [], gateway_instances: [] }
   const touched = new Set<string>()
   function from(table: string) {
@@ -89,6 +96,12 @@ function fakeDb() {
       update: (p: Row) => { op = 'update'; payload = p; touched.add(`${table}:update`); return b },
       maybeSingle: async () => ({ data: null, error: null }),
       then: (res: (v: unknown) => unknown) => {
+        // Round-4 durability test support (Codex live-watch, 2026-09-10): simulate a genuinely FAILED
+        // insert on the requested table, instead of always succeeding — proves the caller's own insert
+        // result is actually checked, not just that a happy-path insert lands.
+        if (op === 'insert' && opts.failInsertOn === table) {
+          return Promise.resolve({ data: null, error: { message: 'simulated insert failure' } }).then(res)
+        }
         if (op === 'insert') rows.push(payload!)
         const data = op === 'select' ? rows : op === 'update' && returning ? (inIds ?? []).map((id) => ({ id })) : null
         return Promise.resolve({ data, error: null }).then(res)
@@ -104,7 +117,10 @@ const okIndex = (over: Partial<Record<string, unknown>> = {}) => ({ ok: true, fr
 beforeEach(() => {
   writes.length = 0
   compoundDeferredNextCompound = false
+  compoundRevertsNextCompound = false
+  pairedFeesNextHarvest = 0n
   indexMock.mockReset(); pendingMock.mockReset(); markMock.mockReset(); claimMock.mockClear(); releaseMock.mockClear()
+  swapMock.mockReset(); swapMock.mockResolvedValue({ quoteOut: 0n, txHash: null })
   process.env.LP_GATEWAY_HARVEST_ENABLED = 'true'
   process.env.LP_GATEWAY_PERF_FEE_BPS = '1000'
   delete process.env.LP_GATEWAY_HARVEST_DESTINATION
@@ -248,6 +264,75 @@ describe('harvestGateway', () => {
     expect(r.ok).toBe(true) // would have needed more gas than the old 900_000n literal ever allowed
     const harvestWrite = writes.find((w) => w.functionName === 'harvest')
     expect(harvestWrite?.gas).toBeGreaterThan(900_000n)
+  })
+
+  // Round-4 durability fix (Codex live-watch, 2026-09-10 — corrected an earlier, too-optimistic claim
+  // that this was already durable): a real submitted swap_tx must survive even when the LATER
+  // claim/compound/mark sequence fails independently. Before this fix, none of these failure paths ever
+  // called record() at all, so the swap_tx ended up nowhere in harvest_events.
+  describe('durable recording of a real swap_tx even when the later restake/compound step fails (Codex live-watch, 2026-09-10)', () => {
+    it('claim failure still durably records this run\'s collect_tx + swap_tx (credited: 0)', async () => {
+      pairedFeesNextHarvest = 500_000n
+      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX })
+      claimMock.mockRejectedValueOnce(new Error('claim rpc failed'))
+      indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+      pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
+      const { client, tables } = fakeDb()
+      const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+      expect(r).toMatchObject({ ok: false, error: 'restake_claim_failed' })
+      expect(tables.harvest_events[0]).toMatchObject({ collect_tx: COLLECT_TX, swap_tx: SWAP_TX, amount_credited_atomic: '0' })
+    })
+
+    it('a reverted compound still durably records this run\'s collect_tx + swap_tx (credited: 0)', async () => {
+      pairedFeesNextHarvest = 500_000n
+      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX })
+      compoundRevertsNextCompound = true
+      indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+      pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
+      const { client, tables } = fakeDb()
+      const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+      expect(r).toMatchObject({ ok: false, error: 'compound_reverted' })
+      expect(releaseMock).toHaveBeenCalledWith(expect.anything(), ['log-1']) // claimed shares released back to pending
+      expect(tables.harvest_events[0]).toMatchObject({ collect_tx: COLLECT_TX, swap_tx: SWAP_TX, amount_credited_atomic: '0' })
+    })
+
+    it('a restake-mark failure (compound mined, but the ledger mark itself fails) still durably records collect_tx + swap_tx (credited: 0)', async () => {
+      pairedFeesNextHarvest = 500_000n
+      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX })
+      markMock.mockRejectedValueOnce(new Error('mark rpc failed'))
+      indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+      pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
+      const { client, tables } = fakeDb()
+      const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+      expect(r).toMatchObject({ ok: false, error: 'restake_mark_failed' })
+      expect(tables.harvest_events[0]).toMatchObject({ collect_tx: COLLECT_TX, swap_tx: SWAP_TX, amount_credited_atomic: '0' })
+    })
+
+    it('a FAILED harvest_events insert is logged loudly, not silently swallowed (even on the success path)', async () => {
+      indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+      pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
+      const { client } = fakeDb({ failInsertOn: 'harvest_events' })
+      const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+      const r = await harvestGateway({ supabase: client, log, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+      // The on-chain side still fully succeeded (compound mined, NAV lifted) — only the APP-LEVEL record
+      // of it failed to persist. That must be loud, not invisible.
+      expect(r.ok).toBe(true)
+      expect(log.error).toHaveBeenCalledWith('gateway.harvest', expect.stringContaining('NOT persisted'), expect.objectContaining({ error: 'simulated insert failure' }))
+    })
+
+    it('a pure backlog-only settle failure (no fresh collect this run) does NOT write a useless all-null harvest_events row', async () => {
+      // Below the dust floor (no fresh collect) but WITH an existing pending backlog — the earlyExit path.
+      publicClient.simulateContract.mockResolvedValueOnce({ result: [1n, 0n] } as never)
+      indexMock.mockResolvedValue(okIndex({ harvestLogs: 1, creditedAtomic: 0n }))
+      pendingMock.mockResolvedValue({ ids: ['old-sweep'], netAtomic: 100_000_000n })
+      claimMock.mockRejectedValueOnce(new Error('claim rpc failed'))
+      const { client, tables } = fakeDb()
+      const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+      expect(r).toMatchObject({ ok: false, error: 'restake_claim_failed' })
+      // Nothing NEW happened this run (no collectTx) — recordOnFailure is a deliberate no-op here; the
+      // pending amount itself stays protected by claimRestake/releaseRestake, not by a harvest_events row.
+      expect(tables.harvest_events).toHaveLength(0)
+    })
   })
 
   it('fails closed when disabled', async () => {

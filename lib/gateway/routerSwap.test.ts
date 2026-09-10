@@ -4,7 +4,7 @@
 // output back into components (never a hardcoded magic hex string) so the assertions stay meaningful if
 // viem's own encoding internals ever change formatting.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { decodeAbiParameters } from 'viem'
+import { decodeAbiParameters, encodeAbiParameters, encodeEventTopics } from 'viem'
 import { buildV4SwapCalldata, swapPairedToQuote } from './routerSwap'
 import { pairedToQuoteAtSpot, applyToleranceBps } from './v4Math'
 
@@ -20,6 +20,20 @@ const PAIRED = POOL_KEY.currency1
 const OWNER = ('0x' + 'cc'.repeat(20)) as `0x${string}`
 const ROUTER = ('0x' + 'dd'.repeat(20)) as `0x${string}`
 const POOL_MANAGER = ('0x' + 'ee'.repeat(20)) as `0x${string}`
+
+const TRANSFER_EVENT_ABI = [
+  { type: 'event', name: 'Transfer', inputs: [{ name: 'from', type: 'address', indexed: true }, { name: 'to', type: 'address', indexed: true }, { name: 'value', type: 'uint256', indexed: false }] },
+] as const
+
+/** Builds a real, decodable ERC-20 Transfer log — same shape a real viem TransactionReceipt.logs entry
+ *  has — so tests exercise the actual decodeEventLog path in measureSwapProceeds, not a hand-rolled stub. */
+function transferLog(token: `0x${string}`, from: `0x${string}`, to: `0x${string}`, value: bigint) {
+  return {
+    address: token,
+    topics: encodeEventTopics({ abi: TRANSFER_EVENT_ABI, eventName: 'Transfer', args: { from, to } }),
+    data: encodeAbiParameters([{ type: 'uint256' }], [value]),
+  }
+}
 
 describe('buildV4SwapCalldata — pure, deterministic; decoded back to verify, never a magic hex string', () => {
   it('encodes a single V4_SWAP command byte', () => {
@@ -150,11 +164,12 @@ describe('swapPairedToQuote', () => {
     return ('0x' + word.toString(16).padStart(64, '0')) as `0x${string}`
   }
 
-  function fakeClient(overrides: { allowance?: bigint; sqrtPriceX96?: bigint; quoteBalances?: bigint[] } = {}) {
+  function fakeClient(overrides: { allowance?: bigint; sqrtPriceX96?: bigint; quoteBalances?: bigint[]; swapLogs?: unknown[] } = {}) {
     const sqrtPriceX96 = overrides.sqrtPriceX96 ?? (1n << 96n) // price 1:1
     const allowance = overrides.allowance ?? 0n
     let balanceCallCount = 0
     const quoteBalances = overrides.quoteBalances ?? [1_000_000n, 1_500_000n] // before, after
+    const swapLogs = overrides.swapLogs ?? [] // no Transfer log by default — exercises the balance-diff fallback
 
     const readContract = vi.fn(async (args: any) => {
       if (args.functionName === 'poolKey') return POOL_KEY
@@ -171,20 +186,105 @@ describe('swapPairedToQuote', () => {
       throw new Error(`unexpected readContract call: ${args.functionName}`)
     })
     const writeContract = vi.fn(async (args: any) => (args.functionName === 'approve' ? '0xapprovetx' : '0xswaptx'))
-    const waitForTransactionReceipt = vi.fn(async ({ hash }: { hash: string }) => ({ status: 'success', transactionHash: hash }))
+    const waitForTransactionReceipt = vi.fn(async ({ hash }: { hash: string }) => ({
+      status: 'success', transactionHash: hash,
+      // Only the swap tx (not the approve tx) carries the swap's own logs.
+      logs: hash === '0xswaptx' ? swapLogs : [],
+    }))
     const estimateContractGas = vi.fn(async () => 100_000n)
     return { readContract, writeContract, waitForTransactionReceipt, estimateContractGas, chain: { id: 46630 } }
   }
 
-  it('sizes and submits a real swap end-to-end when everything resolves cleanly — measures output by balance diff', async () => {
-    const client = fakeClient({ allowance: 10n ** 30n, quoteBalances: [1_000_000n, 1_500_000n] }) // allowance already sufficient
+  it('sizes and submits a real swap end-to-end when everything resolves cleanly, and measures output from the swap receipt\'s own Transfer log', async () => {
+    const client = fakeClient({ allowance: 10n ** 30n, swapLogs: [transferLog(QUOTE, ROUTER, OWNER, 500_000n)] }) // allowance already sufficient
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
     })
-    expect(r.quoteOut).toBe(500_000n) // 1,500,000 - 1,000,000, the real balance delta — not the theoretical estimate
+    expect(r.quoteOut).toBe(500_000n)
     expect(r.txHash).toBe('0xswaptx')
     // No approve call needed — allowance was already sufficient.
     expect(client.writeContract).toHaveBeenCalledTimes(1)
+  })
+
+  // Codex live-watch finding (2026-09-10): the OLD balance-diff-only measurement was two separate RPC
+  // reads bracketing the swap — non-atomic, contaminable by any unrelated activity on the shared oracle
+  // seat wallet in between. Fixed: the PRIMARY measurement now sums the swap receipt's OWN ERC-20
+  // Transfer(quoteAsset → owner) logs — genuinely transaction-scoped. These tests prove that path is used
+  // when available, and that it is immune to exactly the contamination scenario Codex described.
+  it('measures proceeds from the swap receipt\'s own Transfer log (primary method) — ignores the wallet balance-diff entirely when a qualifying log is present', async () => {
+    const owner = OWNER
+    // Deliberately WRONG balance-diff numbers (would report 900,000 if balance-diff were used) — the
+    // Transfer log is the only correct source here, proving it takes priority.
+    const client = fakeClient({
+      allowance: 10n ** 30n, quoteBalances: [1_000_000n, 1_900_000n],
+      swapLogs: [transferLog(QUOTE, ROUTER, owner, 500_000n)],
+    })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: owner }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r.quoteOut).toBe(500_000n) // the Transfer log's own value, NOT the 900,000 balance delta
+  })
+
+  it('is immune to a concurrent, unrelated incoming transfer landing between the before/after balance reads — the exact contamination scenario Codex flagged', async () => {
+    const owner = OWNER
+    // The balance went up by 800,000 total — 500,000 from this swap (the Transfer log) plus 300,000 from
+    // some UNRELATED concurrent transfer (e.g. a different pool's harvest hitting the same shared oracle
+    // seat). A balance-diff-only measurement would wrongly attribute the full 800,000 to this swap.
+    const client = fakeClient({
+      allowance: 10n ** 30n, quoteBalances: [1_000_000n, 1_800_000n],
+      swapLogs: [transferLog(QUOTE, ROUTER, owner, 500_000n)],
+    })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: owner }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r.quoteOut).toBe(500_000n) // correctly excludes the unrelated 300,000
+  })
+
+  it('sums multiple qualifying Transfer logs in the same receipt (a multi-hop or split settlement)', async () => {
+    const owner = OWNER
+    const client = fakeClient({
+      allowance: 10n ** 30n,
+      swapLogs: [transferLog(QUOTE, ROUTER, owner, 300_000n), transferLog(QUOTE, ROUTER, owner, 200_000n)],
+    })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: owner }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r.quoteOut).toBe(500_000n)
+  })
+
+  it('ignores a Transfer log for the WRONG token or to a DIFFERENT recipient — neither qualifies, so quoteOut is 0 (never falls back to a wallet balance diff)', async () => {
+    const owner = OWNER
+    const someoneElse = ('0x' + 'ff'.repeat(20)) as `0x${string}`
+    const client = fakeClient({
+      allowance: 10n ** 30n,
+      swapLogs: [
+        transferLog(PAIRED, ROUTER, owner, 999_999n), // wrong token (the input leg, not quoteAsset) — ignored
+        transferLog(QUOTE, ROUTER, someoneElse, 999_999n), // right token, wrong recipient — ignored
+      ],
+    })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: owner }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r.quoteOut).toBe(0n) // neither log qualified — never guesses via balance-diff, reports honestly unmeasured
+  })
+
+  // Codex live-watch finding, second pass (2026-09-10): an earlier version kept the balance-diff as a
+  // "weaker but logged" fallback when no qualifying Transfer log was found — Codex flagged that fallback
+  // as itself unsafe (non-atomic, could OVERSTATE proceeds from unrelated concurrent activity on the
+  // shared oracle seat). Removed entirely: no qualifying log ⇒ quoteOut: 0, always, never a guess.
+  it('warns and reports quoteOut: 0 (never falls back to a wallet balance diff) when the receipt has logs but none is a qualifying Transfer', async () => {
+    const owner = OWNER
+    const client = fakeClient({
+      allowance: 10n ** 30n,
+      swapLogs: [transferLog(PAIRED, ROUTER, owner, 999_999n)], // some log present, just not a qualifying one
+    })
+    const log = { warn: vi.fn() }
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: owner }, wallet: client, publicClient: client, pairedAmount: 500_000n, log,
+    })
+    expect(r.quoteOut).toBe(0n)
+    expect(r.txHash).toBe('0xswaptx') // the hash is still preserved — only the proceeds are unmeasured
+    expect(log.warn).toHaveBeenCalledWith('gateway.harvest', expect.stringContaining('honestly unmeasured'), expect.objectContaining({ swapTx: '0xswaptx' }))
   })
 
   it('approves the router first when the current allowance is insufficient, then swaps', async () => {
@@ -207,22 +307,23 @@ describe('swapPairedToQuote', () => {
     expect(client.writeContract.mock.calls[0][0].functionName).toBe('execute')
   })
 
-  it('never returns more than the actual measured balance increase, even if it is less than the theoretical estimate', async () => {
-    // The pool math would suggest ~500,000 quote out at 1:1 spot, but the real balance only went up by
-    // 100,000 (e.g. a fee-on-transfer quote token, or genuine slippage) — must report the REAL number.
+  it('never guesses proceeds from a wallet balance change under any circumstance — even a real, large balance increase is ignored without a qualifying Transfer log', async () => {
+    // The pool math would suggest ~500,000 quote out at 1:1 spot, and the wallet balance genuinely DID go
+    // up by 100,000 — but with no Transfer log to prove it came from THIS swap, quoteOut must still be 0.
     const client = fakeClient({ allowance: 10n ** 30n, quoteBalances: [1_000_000n, 1_100_000n] })
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
     })
-    expect(r.quoteOut).toBe(100_000n)
+    expect(r.quoteOut).toBe(0n)
   })
 
-  it('reports quoteOut:0 (never negative) if the quote balance somehow went DOWN — a real anomaly, not a guess', async () => {
+  it('reports quoteOut:0 even if the wallet balance somehow went DOWN — confirms the balance is never consulted at all now, not even as a sanity check', async () => {
     const client = fakeClient({ allowance: 10n ** 30n, quoteBalances: [1_000_000n, 900_000n] })
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
     })
     expect(r.quoteOut).toBe(0n)
+    expect(client.readContract.mock.calls.some((c: any[]) => c[0].functionName === 'balanceOf')).toBe(false)
   })
 
   it('leaves paired fees unconverted (never guesses a size) when the pool price is unreadable', async () => {
@@ -244,7 +345,7 @@ describe('swapPairedToQuote', () => {
 
   it('does NOT swap when the router approval transaction itself reverts', async () => {
     const client = fakeClient({ allowance: 0n })
-    client.waitForTransactionReceipt = vi.fn(async () => ({ status: 'reverted', transactionHash: '0xswaptx' }))
+    client.waitForTransactionReceipt = vi.fn(async () => ({ status: 'reverted', transactionHash: '0xswaptx', logs: [] }))
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
     })
@@ -254,7 +355,7 @@ describe('swapPairedToQuote', () => {
 
   it('reports the swap tx hash but quoteOut:0 when the swap itself reverts on-chain', async () => {
     const client = fakeClient({ allowance: 10n ** 30n })
-    client.waitForTransactionReceipt = vi.fn(async () => ({ status: 'reverted', transactionHash: '0xswaptx' }))
+    client.waitForTransactionReceipt = vi.fn(async () => ({ status: 'reverted', transactionHash: '0xswaptx', logs: [] }))
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
     })
