@@ -224,7 +224,13 @@ unrelated).
   `gateway_harvest_logs.paired_fees_atomic` (per-log, comprehensive), and
   `gateway_fee_ledger_reconciliation.gross_paired_atomic` sums it per pool. **Still genuinely open:** nothing
   reads `gateway_fee_ledger_reconciliation` through any API/UI today — the data is durably tracked but not yet
-  EXPOSED to an operator or depositor.
+  EXPOSED to an operator or depositor. **A second residual, also honest (Codex live-watch, 2026-09-10): no
+  automated reconciliation job.** `swapPairedToQuote` preserves `swapTx` even when confirmation/measurement
+  fails after a real submit (see above) and `harvest.ts` durably records it in `harvest_events.swap_tx`,
+  conservatively crediting `0` proceeds for that run rather than guessing — but nothing later re-checks such
+  a pending `swap_tx` and retroactively credits the real `quoteOut` once it confirms; recovery today is
+  manual (an operator looks the hash up on-chain). Building that reconciliation cron is new scope, not part
+  of the fee-conversion work itself, and wasn't built without a separate decision to do so.
 - **Depositable rule:** a pool is depositable only when `gateway_instances` holds an **`active`**, on-chain-verified
   (H-01) row for its **poolId** — the Discover `live` flag and `/earn/[pool]` must resolve through the registry, never
   through a pair label. The single-env `LP_GATEWAY_POSITION_MANAGER` fallback is bootstrap-only (O-2 closeout;

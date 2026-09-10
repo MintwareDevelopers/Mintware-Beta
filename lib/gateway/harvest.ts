@@ -333,7 +333,14 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   const { data: dupe } = await supabase.from('harvest_events').select('id').eq('collect_tx', collectTx).maybeSingle()
   if (dupe) return { ok: false, status: 200, error: 'already recorded', reason: 'duplicate' }
 
-  // 2) convert the paired leg → quote via the MW router (seam; no-op returns 0 swapped when unavailable)
+  // 2) convert the paired leg → quote via the MW router (seam; no-op returns 0 swapped when unavailable).
+  // ⚠ Known residual (Codex live-watch, 2026-09-10): swapPairedToQuote now PRESERVES swapTx even when the
+  // submit succeeds but confirmation/measurement afterward fails (RPC drop, timeout) — see routerSwap.ts —
+  // so `harvest_events.swap_tx` below can hold a hash for a swap that later confirms on-chain with real
+  // proceeds this run recorded as 0 (conservative: amount_credited_atomic never OVERSTATES). There is no
+  // automated job that later re-checks such a pending swap_tx and retroactively credits the real quoteOut —
+  // that would be new reconciliation-cron scope, not built here. An operator can always look the hash up
+  // on-chain manually; this is the honest gap disclosed alongside the rest of the fee-conversion work.
   let swapTx: string | null = null
   let swappedQuote = 0n
   if (pairedFees > 0n) {
