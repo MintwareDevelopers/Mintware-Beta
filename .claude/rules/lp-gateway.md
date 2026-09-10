@@ -230,15 +230,18 @@ unrelated).
   - **Output-attribution boundary (fixed):** the original measurement was a wallet-wide balance-diff (two
     separate RPC reads bracketing the swap) — non-atomic, and every gateway instance shares ONE oracle seat
     (`getOracleSigner('gateway')`), so concurrent unrelated activity on that wallet (another pool's harvest/
-    withdraw/deploy) could contaminate the measured `quoteOut`. Fixed twice: first by adding the balance-diff
-    as a logged "fallback" behind a primary transaction-scoped measurement — Codex correctly flagged that
-    the fallback was ITSELF still unsafe (could overstate proceeds and compound money that never came from
-    this swap into NAV) — then by removing the fallback entirely. **Current design:** `measureSwapProceeds`
-    (`routerSwap.ts`) sums the swap receipt's OWN standard ERC-20 `Transfer(quoteAsset → owner)` logs —
-    genuinely transaction-scoped, immune to concurrent wallet activity by construction. No qualifying log
-    found ⇒ `quoteOut: 0` always (the wallet balance is never consulted at all any more) — matches this
-    function's own "never guess" posture everywhere else; an under-credit here is recoverable later, an
-    over-credit is not.
+    withdraw/deploy) could contaminate the measured `quoteOut`. Fixed across THREE rounds: (1) added the
+    balance-diff as a logged "fallback" behind a primary transaction-scoped measurement — Codex correctly
+    flagged the fallback as itself unsafe (could overstate proceeds and compound money that never came from
+    this swap into NAV) — so (2) removed the fallback entirely; then (3) Codex caught that summing gross
+    INCOMING transfers alone still overstates proceeds whenever the same transaction also moves `quoteAsset`
+    OUT of `owner` (fee-on-transfer quirk, self-transfer artifact, intermediate-hop detail — none
+    independently verified for this router). **Current design:** `measureSwapProceeds` (`routerSwap.ts`)
+    NETS incoming minus outgoing standard ERC-20 `Transfer` logs for `quoteAsset` within the swap's OWN
+    receipt — genuinely transaction-scoped, immune to concurrent wallet activity by construction, clamped
+    to never go negative. No qualifying Transfer log (incoming or outgoing) found at all ⇒ `quoteOut: 0`
+    always (the wallet balance is never consulted any more) — matches this function's own "never guess"
+    posture everywhere else; an under-credit here is recoverable later, an over-credit is not.
   - **Non-durable recording (fixed):** `settlePendingBacklog`'s and `harvestGateway`'s `record(...)` inserts
     into `harvest_events` never checked their own result (a failed write was silently swallowed), AND several
     of `settlePendingBacklog`'s failure paths (claim failure, compound revert, compound-receipt-unknown,
@@ -256,13 +259,14 @@ unrelated).
     deploy-sweep paired-token inventory predating this feature is never selected for conversion. Buffer-mode
     harvest destination never credits converted proceeds per-depositor (buffer destination is currently
     unreachable anyway — `resolveHarvestDestination` always returns `'restake'`).
-  Verification for the above: 26 unit tests in `routerSwap.test.ts` (encoding decoded back from its own
+  Verification for the above: 28 unit tests in `routerSwap.test.ts` (encoding decoded back from its own
   output, never a magic hex string; every execution + failure path; dedicated tests proving the Transfer-log
-  measurement is immune to the exact concurrent-activity contamination scenario Codex described) + 5 new
-  durability tests in `harvest.test.ts` (each of `settlePendingBacklog`'s failure paths proven to still
-  durably record `collect_tx`/`swap_tx`; a forced insert failure proven to log loudly; the backlog-only path
-  proven NOT to write a useless null row) — `pnpm exec tsc --noEmit --incremental false` clean, full
-  `pnpm test` green (1265 passed, 4 pre-existing skips, 0 failures) after every round.
+  measurement is immune to the exact concurrent-activity contamination scenario Codex described, and that it
+  correctly NETS an outgoing same-receipt transfer rather than reporting the gross inflow) + 5 new durability
+  tests in `harvest.test.ts` (each of `settlePendingBacklog`'s failure paths proven to still durably record
+  `collect_tx`/`swap_tx`; a forced insert failure proven to log loudly; the backlog-only path proven NOT to
+  write a useless null row) — `pnpm exec tsc --noEmit --incremental false` clean, full `pnpm test` green
+  (1267 passed, 4 pre-existing skips, 0 failures) after every round.
 - **Depositable rule:** a pool is depositable only when `gateway_instances` holds an **`active`**, on-chain-verified
   (H-01) row for its **poolId** — the Discover `live` flag and `/earn/[pool]` must resolve through the registry, never
   through a pair label. The single-env `LP_GATEWAY_POSITION_MANAGER` fallback is bootstrap-only (O-2 closeout;

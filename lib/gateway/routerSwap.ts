@@ -127,29 +127,36 @@ function swapSlippageBps(): number {
   return Number.isFinite(n) && n >= 0 && n < 10_000 ? n : 100
 }
 
-/** Sums standard ERC-20 `Transfer(from, to, value)` events emitted BY `quoteAsset`, TO `owner`, within
- *  this ONE receipt's own logs — genuinely transaction-scoped, unlike a wallet-wide balance-diff (Codex
- *  live-watch, 2026-09-10: "unrelated incoming transfers or concurrent outgoing settlement in between
- *  contaminate the amount attributed to this PM" — a real risk here since every gateway instance shares
- *  ONE oracle seat, `getOracleSigner('gateway')`, so a concurrent harvest/withdraw/deploy on a DIFFERENT
- *  pool touching the same wallet during the old before/after balance-read window could misattribute
- *  proceeds). Returns `null` (not 0n) when no qualifying Transfer log is found — distinct from "found
- *  transfers summing to zero" — so the caller can tell "confirmed zero proceeds" apart from "this
- *  router's actual payout mechanism doesn't emit a standard Transfer here, method unknown" and fall back
- *  rather than silently report zero. Relies only on the ERC-20 standard, never the router's own
- *  unverified custom event shapes. */
+/** NETS standard ERC-20 `Transfer(from, to, value)` events emitted BY `quoteAsset`, within this ONE
+ *  receipt's own logs — genuinely transaction-scoped, unlike a wallet-wide balance-diff (Codex live-watch,
+ *  2026-09-10: "unrelated incoming transfers or concurrent outgoing settlement in between contaminate the
+ *  amount attributed to this PM" — a real risk here since every gateway instance shares ONE oracle seat,
+ *  `getOracleSigner('gateway')`, so a concurrent harvest/withdraw/deploy on a DIFFERENT pool touching the
+ *  same wallet during the old before/after balance-read window could misattribute proceeds). Sums incoming
+ *  (`to === owner`) MINUS outgoing (`from === owner`) transfers of `quoteAsset` within this same receipt —
+ *  a second Codex live-watch pass (2026-09-10) caught that counting gross incoming alone overstates
+ *  proceeds whenever the same transaction also moves `quoteAsset` OUT of `owner` (a fee-on-transfer quirk,
+ *  a self-transfer artifact, or an intermediate-hop routing detail — none independently verified for this
+ *  router, see the file header). Returns `null` (not 0n) when NO qualifying Transfer log (incoming or
+ *  outgoing) is found at all — distinct from "found transfers netting to zero" — so the caller can tell
+ *  "confirmed zero proceeds" apart from "this router's actual payout mechanism doesn't emit a standard
+ *  Transfer here, method unknown." Relies only on the ERC-20 standard, never the router's own unverified
+ *  custom event shapes. */
 function measureSwapProceeds(logs: readonly { address: string; data: `0x${string}`; topics: readonly `0x${string}`[] }[] | undefined | null, quoteAsset: `0x${string}`, owner: `0x${string}`): bigint | null {
-  let total: bigint | null = null
+  let net: bigint | null = null
   for (const lg of logs ?? []) {
     if (lg.address.toLowerCase() !== quoteAsset.toLowerCase()) continue
     try {
       const ev = decodeEventLog({ abi: ERC20_ABI, data: lg.data, topics: lg.topics as [`0x${string}`, ...`0x${string}`[]] })
-      if (ev.eventName === 'Transfer' && (ev.args.to as string).toLowerCase() === owner.toLowerCase()) {
-        total = (total ?? 0n) + (ev.args.value as bigint)
-      }
+      if (ev.eventName !== 'Transfer') continue
+      const to = (ev.args.to as string).toLowerCase()
+      const from = (ev.args.from as string).toLowerCase()
+      const value = ev.args.value as bigint
+      if (to === owner.toLowerCase()) net = (net ?? 0n) + value
+      if (from === owner.toLowerCase()) net = (net ?? 0n) - value
     } catch { /* not a Transfer log (or a differently-shaped event on this same token address) — skip */ }
   }
-  return total
+  return net
 }
 
 export async function swapPairedToQuote(opts: {
@@ -257,11 +264,15 @@ export async function swapPairedToQuote(opts: {
       // real, successful swap — an under-credit, recoverable later via the (currently manual, see
       // lp-gateway.md's V1-07 note) reconciliation path — never an over-credit, which is the failure mode
       // that actually risks other depositors' NAV.
-      const transferSum = measureSwapProceeds(swapReceipt.logs, quoteAsset, owner)
-      if (transferSum === null) {
+      const netTransfer = measureSwapProceeds(swapReceipt.logs, quoteAsset, owner)
+      if (netTransfer === null) {
         log?.warn('gateway.harvest', 'swap confirmed but no ERC-20 Transfer log to owner found in its receipt — quoteOut honestly unmeasured (0), never guessed from a wallet balance diff', { swapTx })
       }
-      return { quoteOut: transferSum ?? 0n, txHash: swapTx }
+      // Clamp negative (never possible from a genuine swap payout, but a defensive floor in case this
+      // same transaction moved MORE quoteAsset out of owner than in, for reasons unrelated to this swap's
+      // own proceeds) — report 0 rather than a negative quoteOut, same "never guess/never overstate" rule.
+      const quoteOut = netTransfer !== null && netTransfer > 0n ? netTransfer : 0n
+      return { quoteOut, txHash: swapTx }
     } catch (e) {
       // The submit succeeded; only confirming it (or measuring its result) failed — e.g. an RPC drop or
       // timeout on waitForTransactionReceipt, not a revert. quoteOut is honestly unmeasured (0n, never

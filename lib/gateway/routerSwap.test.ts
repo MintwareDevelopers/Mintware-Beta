@@ -252,6 +252,40 @@ describe('swapPairedToQuote', () => {
     expect(r.quoteOut).toBe(500_000n)
   })
 
+  // Codex live-watch finding, third pass (2026-09-10): counting gross INCOMING transfers alone overstates
+  // proceeds whenever the SAME transaction also moves quoteAsset OUT of owner (fee-on-transfer, a
+  // self-transfer artifact, an intermediate-hop detail — none independently verified for this router).
+  // Fixed: measureSwapProceeds NETS incoming minus outgoing quoteAsset transfers within the same receipt.
+  it('nets an outgoing quoteAsset transfer within the same receipt against the incoming one, rather than reporting the gross inflow', async () => {
+    const owner = OWNER
+    const client = fakeClient({
+      allowance: 10n ** 30n,
+      swapLogs: [
+        transferLog(QUOTE, ROUTER, owner, 500_000n), // incoming: the swap's own payout
+        transferLog(QUOTE, owner, ROUTER, 50_000n), // outgoing: e.g. a fee-on-transfer skim within the same tx
+      ],
+    })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: owner }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r.quoteOut).toBe(450_000n) // net, not the gross 500,000
+  })
+
+  it('clamps a net-negative result to 0 (never reports negative proceeds) — a defensive floor, not expected in a genuine payout', async () => {
+    const owner = OWNER
+    const client = fakeClient({
+      allowance: 10n ** 30n,
+      swapLogs: [
+        transferLog(QUOTE, ROUTER, owner, 100_000n),
+        transferLog(QUOTE, owner, ROUTER, 300_000n), // more went out than in, within this same receipt
+      ],
+    })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: owner }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r.quoteOut).toBe(0n)
+  })
+
   it('ignores a Transfer log for the WRONG token or to a DIFFERENT recipient — neither qualifies, so quoteOut is 0 (never falls back to a wallet balance diff)', async () => {
     const owner = OWNER
     const someoneElse = ('0x' + 'ff'.repeat(20)) as `0x${string}`
