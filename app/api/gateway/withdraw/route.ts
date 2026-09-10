@@ -105,8 +105,12 @@ export const POST = createHandler(async (req, ctx) => {
   })) as bigint
 
   // Round-4 audit fix (Medium): same atomicity fix as the deposit route (see its comment) — one RPC
-  // does the idempotency claim + proportional basis reduction under a single transaction, with the
-  // reduction expressed against the row's CURRENT value at write time.
+  // does the idempotency claim + proportional basis reduction under a single transaction.
+  //
+  // Round-4 pass-2 event-order fix (independent Codex audit, 2026-09-09): see the deposit route's
+  // comment — the RPC now recomputes entry_nav by replaying this identity's whole event history in
+  // on-chain block order, and `p_block_number` (this withdrawal's own block, already read above to pin
+  // `onChainShares`) is what makes that replay immune to which order recording calls happen to arrive in.
   const { data: rpcData, error: rpcErr } = await ctx.supabase.rpc('record_gateway_withdraw_event', {
     p_tx_hash: txHash,
     p_address: address,
@@ -115,6 +119,7 @@ export const POST = createHandler(async (req, ctx) => {
     p_quote_out: quoteOut.toString(),
     p_on_chain_shares: onChainShares.toString(),
     p_shares_burned: sharesBurned.toString(),
+    p_block_number: receipt.blockNumber.toString(),
   })
   if (rpcErr) {
     ctx.log.error('gateway.withdraw', 'record_gateway_withdraw_event failed', { error: rpcErr.message })

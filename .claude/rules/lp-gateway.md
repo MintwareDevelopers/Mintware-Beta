@@ -222,10 +222,18 @@ unrelated).
   `gateway_harvest_logs`/`gateway_fee_credits`/`gateway_fee_payouts` + the `gateway_fee_balances`/
   `gateway_fee_ledger_reconciliation` views; **this is where paired-token fee history is ALREADY durably
   tracked** — see V1-07 below, don't re-add it elsewhere) · `_003` (fee-ledger view security — **applied
-  to prod, live-verified**) · `20260909000001` (cost-basis atomic writes — **not yet applied to prod**, see
-  round-4 above) · `_002` (registry multi-row-per-pool history, Finding D). All **deny-all RLS**. **Env
-  vars:** every `LP_GATEWAY_*` var is tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) —
-  Robinhood Chain".
+  to prod, live-verified**) · `20260909000001` (cost-basis atomic writes — **applied to prod,
+  live-verified**, see round-4 above) · `_002` (registry multi-row-per-pool history, Finding D) ·
+  `_004` (cost-basis EVENT-ORDER fix — replaces the two `record_gateway_*_event` RPCs with a
+  full-history-replay version that takes an EXTRA `p_block_number` arg, see the event-order note below).
+  ⚠ **This one is NOT backward-compatible like the others** — the deposit/withdraw ROUTES already call
+  the RPCs with `p_block_number` (same commit as this migration) but Postgres treats a different arg
+  count as a DIFFERENT function; until this migration is applied, there is NO matching RPC signature and
+  `/api/gateway/{deposit,withdraw}` will 500 on every call (`record_failed`) — apply this migration
+  PROMPTLY after this code deploys, the same way the two prior cost-basis/RLS migrations were. On-chain
+  funds are unaffected either way (this is display-only cost-basis bookkeeping). All **deny-all RLS**.
+  **Env vars:** every `LP_GATEWAY_*` var is tabled in [`deployments.md`](deployments.md) → "LP Gateway
+  (V1) — Robinhood Chain".
 
 ## Surfaces & the V1/V2 model
 - **`/v1`** ([`app/v1/page.tsx`](../../app/v1/page.tsx)) = the live product (`V1Shell` + `V1Discover` — the

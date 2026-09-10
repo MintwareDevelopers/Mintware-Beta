@@ -80,9 +80,15 @@ export const POST = createHandler(async (req, ctx) => {
   // Round-4 audit fix (Medium): the idempotency claim (gateway_deposit_events) and the cost-basis
   // increment (gateway_positions) used to be two separate round-trips — a crash between them silently
   // stranded the missed increment forever, and two concurrent calls for the same wallet+pool could lose
-  // one's contribution to a lost-update race. Now one atomic RPC (supabase/migrations/
-  // 20260909000001_gateway_position_atomic_writes.sql) does both under a single transaction, with the
-  // increment expressed against the row's CURRENT value at write time rather than a value read earlier.
+  // one's contribution to a lost-update race. One atomic RPC (supabase/migrations/
+  // 20260909000001_gateway_position_atomic_writes.sql) did both under a single transaction.
+  //
+  // Round-4 pass-2 event-order fix (independent Codex audit, 2026-09-09): that RPC still applied its
+  // delta against the row's value AT CALL TIME — correct only if recording calls arrive in the same
+  // order their txs were mined, which nothing guaranteed (a withdraw's call could race ahead of an
+  // earlier deposit's). Migration 20260909000004 moved the RPC to recompute entry_nav by REPLAYING this
+  // identity's whole stored event history in ON-CHAIN block order — `p_block_number` (this tx's own
+  // block, from the verified receipt) is what makes that replay order-independent of call arrival.
   const { data: rpcData, error: rpcErr } = await ctx.supabase.rpc('record_gateway_deposit_event', {
     p_tx_hash: txHash,
     p_address: address,
@@ -90,6 +96,7 @@ export const POST = createHandler(async (req, ctx) => {
     p_chain_id: inst.chainId,
     p_quote_in: quoteIn.toString(),
     p_on_chain_shares: onChainShares.toString(),
+    p_block_number: receipt.blockNumber.toString(),
   })
   if (rpcErr) {
     ctx.log.error('gateway.deposit', 'record_gateway_deposit_event failed', { error: rpcErr.message })

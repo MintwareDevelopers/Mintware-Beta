@@ -117,7 +117,7 @@ beforeEach(() => {
   _resetReplayGuard()
   state.cfg = cfg
   state.sharesOf = 1_000_000n
-  state.receipt = { status: 'success', to: REG_PM, logs: [depositedLog(USER, 1_000_000n, 1_000_000n)] }
+  state.receipt = { status: 'success', to: REG_PM, blockNumber: 500n, logs: [depositedLog(USER, 1_000_000n, 1_000_000n)] }
   state.supabase = fakeSupabase({ tables: { gateway_instances: [registryRow] }, uniques: { gateway_deposit_events: [['tx_hash']] }, rpc: gatewayPositionRpc }).client
 })
 
@@ -136,6 +136,18 @@ describe('POST /api/gateway/deposit — the UI body is now accepted and recorded
     const { POST } = await import('./route')
     const res = await POST(post('/api/gateway/deposit', { address: wallet.address, txHash: TX, pool: POOL_ID }))
     expect(res.status).toBe(401)
+  })
+  // Round-4 pass-2 event-order fix (independent Codex audit, 2026-09-09): the RPC's replay-based
+  // recompute (migration 20260909000004) is only order-independent because it sorts by the STORED
+  // block_number — which is only correct if the route actually sends it. Proves the wire-up, not just
+  // the pure basisMath.ts math (that's covered separately in basisMath.test.ts).
+  it('sends the receipt\'s own blockNumber as p_block_number (the replay sort key)', async () => {
+    const { db, client } = fakeSupabase({ tables: { gateway_instances: [registryRow] }, uniques: { gateway_deposit_events: [['tx_hash']] }, rpc: gatewayPositionRpc })
+    state.supabase = client
+    const { POST } = await import('./route')
+    await POST(post('/api/gateway/deposit', await signedDeposit()))
+    const call = db.calls.find((c) => c.table === 'rpc:record_gateway_deposit_event')
+    expect((call?.payload as Record<string, unknown> | undefined)?.p_block_number).toBe('500')
   })
 })
 
@@ -184,7 +196,7 @@ describe('O-2 — strict pool resolution on the record path', () => {
     expect((await res.json()).error).toBe('pool_not_live')
   })
   it('receipt.to ≠ the resolved PM → wrong_contract', async () => {
-    state.receipt = { status: 'success', to: '0x' + '77'.repeat(20), logs: [] }
+    state.receipt = { status: 'success', to: '0x' + '77'.repeat(20), blockNumber: 500n, logs: [] }
     const { POST } = await import('./route')
     const res = await POST(post('/api/gateway/deposit', await signedDeposit()))
     expect(res.status).toBe(400)
@@ -203,7 +215,7 @@ describe('POST /api/gateway/withdraw — same binding, records the exit', () => 
       rpc: gatewayPositionRpc,
     }).client
     state.sharesOf = 500_000n
-    state.receipt = { status: 'success', to: REG_PM, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n)] }
+    state.receipt = { status: 'success', to: REG_PM, blockNumber: 500n, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n)] }
     const issuedAt = Date.now()
     const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
     const authSignature = await wallet.signMessage({ message: authMessage })
@@ -213,6 +225,28 @@ describe('POST /api/gateway/withdraw — same binding, records the exit', () => 
     expect(res.status).toBe(200)
     expect(json.sharesBurned).toBe('500000')
     expect(json.costBasisAtomic).toBe('500000')
+  })
+  // Round-4 pass-2 event-order fix (independent Codex audit, 2026-09-09) — the withdraw-route half of
+  // the same wire-up check the deposit route got above.
+  it('sends the receipt\'s own blockNumber as p_block_number (the replay sort key)', async () => {
+    const { db, client } = fakeSupabase({
+      tables: {
+        gateway_instances: [registryRow],
+        gateway_positions: [{ id: 'p1', user_wallet: USER, pool_address: POOL_ID, chain_id: 46630, shares: '1000000', entry_nav: '1000000' }],
+      },
+      uniques: { gateway_deposit_events: [['tx_hash']] },
+      rpc: gatewayPositionRpc,
+    })
+    state.supabase = client
+    state.sharesOf = 500_000n
+    state.receipt = { status: 'success', to: REG_PM, blockNumber: 501n, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n)] }
+    const issuedAt = Date.now()
+    const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
+    const authSignature = await wallet.signMessage({ message: authMessage })
+    const { POST } = await import('../withdraw/route')
+    await POST(post('/api/gateway/withdraw', { address: wallet.address, txHash: TX, pool: POOL_ID, authMessage, authSignature, issuedAt }))
+    const call = db.calls.find((c) => c.table === 'rpc:record_gateway_withdraw_event')
+    expect((call?.payload as Record<string, unknown> | undefined)?.p_block_number).toBe('501')
   })
   // V1-04 — FIXED 2026-09-09 (independent Codex audit). Reproduces Codex's own arithmetic trace: a
   // withdrawal burns half of an original 1,000,000-share position (basis 1,000,000), but ANOTHER
@@ -266,7 +300,7 @@ describe('POST /api/gateway/withdraw — same binding, records the exit', () => 
     }).client
     state.sharesOf = 500_000n
     // The tx this user actually sent went to the OLD PM — receipt.to says so.
-    state.receipt = { status: 'success', to: OLD_PM, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n, OLD_PM)] }
+    state.receipt = { status: 'success', to: OLD_PM, blockNumber: 500n, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n, OLD_PM)] }
     const issuedAt = Date.now()
     const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
     const authSignature = await wallet.signMessage({ message: authMessage })
@@ -293,7 +327,7 @@ describe('POST /api/gateway/withdraw — same binding, records the exit', () => 
       rpc: gatewayPositionRpc,
     }).client
     state.sharesOf = 500_000n
-    state.receipt = { status: 'success', to: NEW_PM, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n, NEW_PM)] }
+    state.receipt = { status: 'success', to: NEW_PM, blockNumber: 500n, logs: [withdrawnLog(USER, 500_000n, 480_000n, 10n, NEW_PM)] }
     const issuedAt = Date.now()
     const authMessage = buildGatewayWithdrawMessage({ address: wallet.address, txHash: TX, pool: POOL_ID, issuedAt })
     const authSignature = await wallet.signMessage({ message: authMessage })
