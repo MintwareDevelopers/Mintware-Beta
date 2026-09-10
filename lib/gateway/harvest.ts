@@ -334,13 +334,17 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   if (dupe) return { ok: false, status: 200, error: 'already recorded', reason: 'duplicate' }
 
   // 2) convert the paired leg → quote via the MW router (seam; no-op returns 0 swapped when unavailable).
-  // ⚠ Known residual (Codex live-watch, 2026-09-10): swapPairedToQuote now PRESERVES swapTx even when the
-  // submit succeeds but confirmation/measurement afterward fails (RPC drop, timeout) — see routerSwap.ts —
-  // so `harvest_events.swap_tx` below can hold a hash for a swap that later confirms on-chain with real
-  // proceeds this run recorded as 0 (conservative: amount_credited_atomic never OVERSTATES). There is no
-  // automated job that later re-checks such a pending swap_tx and retroactively credits the real quoteOut —
-  // that would be new reconciliation-cron scope, not built here. An operator can always look the hash up
-  // on-chain manually; this is the honest gap disclosed alongside the rest of the fee-conversion work.
+  // ⚠ Known residuals, NOT fully closed (Codex live-watch, 2026-09-10 — corrected after Codex disputed an
+  // earlier, too-optimistic version of this comment; see .claude/rules/lp-gateway.md's V1-07 note for the
+  // full list). swapPairedToQuote preserves swapTx even when confirmation/measurement fails after a real
+  // submit (routerSwap.ts) — but the `record(...)` calls below and in settlePendingBacklog that would
+  // persist that hash into `harvest_events.swap_tx` (a) never check their own insert's result, and (b)
+  // several failure returns in settlePendingBacklog (claim failure, compound revert, compound-receipt-
+  // unknown, restake-mark failure) skip calling record() entirely — so a real, submitted swap can end up
+  // recorded NOWHERE in this app's own tables, not just "pending reconciliation." Recovery today is fully
+  // manual and not even reliably possible from this app's own data. No automated reconciliation job exists
+  // either way. This is a genuine gap in what "finish paired-token fee conversion" asked for, not optional
+  // follow-on scope — do not present the fee-conversion work as complete while this stands.
   let swapTx: string | null = null
   let swappedQuote = 0n
   if (pairedFees > 0n) {
