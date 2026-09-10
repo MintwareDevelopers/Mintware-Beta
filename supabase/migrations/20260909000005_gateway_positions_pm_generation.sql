@@ -13,39 +13,56 @@
 -- were never affected — this is purely the displayed cost-basis/PnL number.
 --
 -- Fix: add `position_manager` to the identity of gateway_positions (and gateway_deposit_events, so the
--- event-order replay from 20260909000004 can also scope correctly per generation). Existing rows are
--- backfilled best-effort from the registry (prefer the pool's currently-ACTIVE instance; else its most
--- recent row of any status — covers every pool that has EVER had a registered instance). A position
--- whose pool has NO registry row at all (a pre-registry bootstrap deposit against the single-env
--- fallback) is left with position_manager = NULL — genuinely unknowable, not guessable — and is handled
--- as a "legacy, unclaimed" row by the RPCs below: the FIRST write for that identity that names a real PM
--- ADOPTS the legacy row (sets its position_manager, continuing that basis) rather than starting a
--- confusing duplicate; this is standard behavior going forward, not a special case that fades away.
+-- event-order replay from 20260909000004 can also scope correctly per generation). Every deposit/withdraw
+-- route already resolves `inst.positionManager` on-chain (H-01) before recording — VERIFIED, never a
+-- client-supplied claim — so every NEW event recorded from here on is 100% correctly attributed at write
+-- time. The only genuine ambiguity is PRE-EXISTING rows that predate this column existing.
 --
--- Accepted residuals (independent Codex audit, live watch, 2026-09-09 — disclosed, not silently left;
--- wording tightened after Codex flagged the original phrasing as overclaiming certainty it hadn't earned):
---   * Historical PM attribution: the registry backfill picks ONE guess per pool (prefers the currently-
---     active instance, else the most recent row of any status) and applies it to EVERY pre-migration
---     position for that pool. For a pool that has ALREADY been through a PM migration by the time this
---     runs, that guess can be wrong for MANY positions, not just a rare edge case — a depositor whose
---     shares actually went to the OLD (now-retired) PM gets backfilled to the NEW one instead, because
---     nothing in the pre-migration data ever recorded which PM a given position's deposits went to. This
---     is a best-effort default, not a claim of correct attribution for every already-migrated pool.
+-- REVISION (independent Codex audit, to-do items 3/4, 2026-09-10 — before this migration was ever
+-- applied): the first version of this fix resolved that ambiguity by GUESSING — a migration-time
+-- backfill that stamped every pre-existing position with whichever PM currently happens to be active for
+-- its pool, plus a runtime "adopt-or-create" rule where the first write naming ANY real PM silently
+-- absorbed a wallet's entire unclaimed legacy history into that PM's basis. Codex's review: this is not
+-- a narrow best-effort default, it is actively WRONG whenever it matters — a wallet whose historical
+-- shares genuinely sit in a RETIRED PM (a real, separate, still-withdrawable position) would have that
+-- basis silently reassigned to a brand-new, unrelated deposit into the REPLACEMENT PM the moment it made
+-- one, because nothing about "this wallet is depositing into PM_A right now" implies "PM_A is also the
+-- rightful heir of this wallet's separate, older, ambiguous history."
+--
+-- Fixed design: NO guessing, anywhere, ever. Both RPCs now operate on an EXACT (wallet, pool, chain, PM)
+-- match ONLY — never `OR position_manager IS NULL`, never a migration-time heuristic backfill, never a
+-- runtime "adopt" step. A pre-existing row with position_manager IS NULL is left exactly as it was:
+-- untouched, unmerged, invisible to any specific-PM query — its basis stays displayed as unrecorded
+-- (`recorded: false`) rather than a guessed number, honoring "preserve explicit unknown/unresolved
+-- accounting rather than displaying a guessed basis." On-chain shares are NEVER affected by any of this
+-- (every real balance read is chain-first, sharesOf() regardless) — resolving it is a DISPLAY correctness
+-- problem, not a fund-safety one, and is deliberately left to a dedicated, auditable process instead of
+-- an inline guess: see scripts/verify-gateway-pm-attribution.mjs, which recovers the REAL position_manager
+-- for an orphaned row from its own stored tx_hash's on-chain receipt (VERIFIED, not inferred) and offers a
+-- reviewable dry-run before any live mutation — run it once real historical tx hashes exist to resolve.
+--
+-- Accepted residuals (independent Codex audit, live watch, 2026-09-09/10 — disclosed, not silently left):
+--   * Orphaned pre-existing rows (position_manager IS NULL) are invisible to the per-PM read/write paths
+--     until scripts/verify-gateway-pm-attribution.mjs resolves them from real on-chain data, or a row
+--     whose original tx_hash can no longer be resolved (pruned node, chain reorg edge case) stays
+--     unresolved indefinitely — an honest "we don't know" is the correct display for that case, not a
+--     guess. This trades a temporary display gap (a real depositor's OLD position looking un-recorded in
+--     the UI until resolved) for never showing a WRONG number — judged the safer default.
 --   * Legacy fallback: an identity whose event history includes a pre-20260909000004 withdraw (missing
 --     shares_burned, never persisted before that migration) or a pre-THIS-migration deposit (missing
 --     shares_minted) can't be full-replayed from scratch — falls back to the single-delta behavior
 --     (this call's own live-read shares) for that one call only, same shape as 20260909000004's own
 --     documented residual, now extended to cover the deposit-side derived-shares data gap too.
---   * Concurrency: neither RPC takes an explicit row lock (no `FOR UPDATE`) on the adopt-or-create
---     SELECT — matching every other gateway RPC in this codebase, none of which do either. A replay-based
---     design recomputes fresh from stored events every call, which corrects a STALE READ on the next
---     call that reads a fully-committed event set — it does NOT protect against two writers racing
---     within the same uncommitted window, and does not guarantee any particular number of calls before
---     convergence under sustained concurrent writes. The narrowest known instance: two truly concurrent
---     FIRST writes for two DIFFERENT brand-new generations of the same wallet+pool+chain, racing to adopt
---     the same unclaimed legacy row — judged too narrow (requires two simultaneous first-ever deposits
---     into two different PM generations) to justify explicit locking that nothing else in this RPC
---     family uses, but genuinely not proven safe under all concurrent interleavings, either.
+--   * Concurrency — CLOSED (independent Codex audit, to-do item 2, 2026-09-10): both RPCs now take
+--     `pg_advisory_xact_lock(hashtext(wallet||':'||pool), chain_id)` as their FIRST statement — every
+--     call for the same (wallet, pool, chain) genuinely serializes, across BOTH deposit and withdraw and
+--     across every generation, for the RPC's whole claim→replay→write sequence, auto-released at
+--     transaction end. A second concurrent call BLOCKS until the first fully commits, then proceeds
+--     against fresh, fully-committed state. Honest scope limit: this repo's PGlite-based SQL tests
+--     (lib/gateway/costBasisRpc.pglite.test.ts) run against a single-process embedded Postgres and
+--     cannot themselves exercise genuine multi-connection contention — they verify the SQL's
+--     correctness, not concurrent-load safety under a real multi-connection Postgres, which this fix has
+--     not been load-tested against.
 --   * Same-block VALUE correctness — CLOSED (independent Codex audit, live watch, 2026-09-09, same day,
 --     before this migration was ever applied): tx_index correctly ORDERS two same-block events, but
 --     `on_chain_shares` used to be READ per event via `sharesOf(user, blockNumber: receipt.blockNumber)`,
@@ -75,27 +92,15 @@ ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS tx_index integer;
 -- from each event's own on-chain-reported numbers, instead of any block-level `sharesOf` read.
 ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS shares_minted numeric(78,0);
 
--- Backfill: prefer the pool's ACTIVE instance; else its most-recently-touched row of any status. Only
--- fills rows that don't already have one (idempotent / safe to re-run).
-UPDATE gateway_positions p SET position_manager = sub.position_manager
-FROM (
-  SELECT DISTINCT ON (pool_address, chain_id) pool_address, chain_id, position_manager
-  FROM gateway_instances
-  ORDER BY pool_address, chain_id, (status = 'active') DESC, updated_at DESC NULLS LAST, created_at DESC
-) sub
-WHERE p.pool_address = sub.pool_address AND p.chain_id = sub.chain_id AND p.position_manager IS NULL;
-
-UPDATE gateway_deposit_events e SET position_manager = p.position_manager
-FROM gateway_positions p
-WHERE e.address = p.user_wallet AND e.pool_address = p.pool_address AND e.chain_id = p.chain_id
-  AND e.position_manager IS NULL AND p.position_manager IS NOT NULL;
+-- NO backfill here — see the revision note above. Pre-existing rows simply keep position_manager NULL
+-- until scripts/verify-gateway-pm-attribution.mjs resolves them from real on-chain receipt data; nothing
+-- in this migration guesses on their behalf.
 
 -- Identity now includes position_manager. Postgres treats NULL as distinct in a UNIQUE constraint (two
--- NULL-position_manager rows for the same wallet+pool+chain would NOT conflict) — by design: a
--- genuinely-unbackfillable legacy row must never silently merge with another legacy row that happens to
--- share its wallet+pool+chain (there should only ever be at most one per identity in practice, but this
--- constraint intentionally does not enforce that for the NULL case — the RPCs below do, via their
--- explicit "adopt-or-create" lookup rather than relying on ON CONFLICT for the NULL path).
+-- NULL-position_manager rows for the same wallet+pool+chain would NOT conflict) — by design: this table
+-- may accumulate more than one still-unresolved orphaned row per identity over time (e.g. across
+-- multiple historical generations that each predate position_manager tracking), and nothing here should
+-- force them together — the verification script resolves each on its own on-chain evidence.
 ALTER TABLE gateway_positions DROP CONSTRAINT IF EXISTS gateway_positions_user_wallet_pool_address_chain_id_key;
 CREATE UNIQUE INDEX IF NOT EXISTS gateway_positions_identity_uidx
   ON gateway_positions (user_wallet, pool_address, chain_id, position_manager);
@@ -131,12 +136,24 @@ DECLARE
   v_inserted_id uuid;
   v_already boolean;
   v_new_basis numeric(78,0) := 0;
-  v_prior_basis numeric(78,0) := 0;
   v_has_legacy_gap boolean;
   v_pos_id uuid;
   v_running_shares numeric(78,0);
   v_ev record;
 BEGIN
+  -- Concurrency fix (independent Codex audit, to-do item 2, 2026-09-10): every prior version of this
+  -- RPC read-then-wrote across several statements with no lock — two genuinely concurrent calls for the
+  -- SAME identity (a deposit and a withdraw racing) could each read a state the other was about to
+  -- invalidate, and "replay is idempotent and self-correcting on the next call" is true for a STALE READ
+  -- on a later call, not for two writers racing inside the same uncommitted window.
+  -- `pg_advisory_xact_lock` blocks until acquired and auto-releases at this transaction's end (commit or
+  -- rollback) — a second concurrent call for the SAME (wallet, pool, chain) genuinely BLOCKS here until
+  -- the first call's entire claim→replay→write sequence has committed, then proceeds against the now-
+  -- fully-current state. `hashtext` is not cryptographic and can collide, but a collision only ever costs
+  -- unrelated identities some avoidable serialization, never incorrectness — the standard accepted
+  -- trade-off for advisory locks.
+  PERFORM pg_advisory_xact_lock(hashtext(v_address || ':' || v_pool), p_chain_id);
+
   INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, block_number, position_manager, tx_index, shares_minted)
   VALUES (v_tx, v_address, 'deposit', v_pool, p_chain_id, p_quote_in, p_block_number, v_pm, p_tx_index, p_shares_minted)
   ON CONFLICT (tx_hash) DO NOTHING
@@ -144,52 +161,25 @@ BEGIN
   v_already := v_inserted_id IS NULL;
 
   IF v_already THEN
-    -- A replay: find whichever row this identity's earlier (successful) write landed on — an exact-PM
-    -- match if one exists, else a not-yet-adopted legacy (NULL-PM) row — and return its basis unchanged.
-    --
-    -- CAUGHT ON REVIEW (2026-09-10, Codex live watch, before this migration was ever applied): this used
-    -- to read `ORDER BY (position_manager = v_pm) DESC LIMIT 1`. `position_manager = v_pm` is a 3-valued
-    -- SQL comparison — TRUE for an exact match, but NULL (not FALSE) when position_manager IS NULL, since
-    -- `NULL = anything` is NULL. Postgres defaults DESC to NULLS FIRST (unless NULLS LAST is explicit) —
-    -- so the NULL-valued (legacy, unclaimed) row sorted BEFORE the TRUE-valued (exact match) row whenever
-    -- both existed for the same identity, exactly backwards from the intended "prefer exact match" rule.
-    -- A CASE expression sidesteps three-valued logic entirely: exact match sorts first (0), anything else
-    -- (FALSE or NULL) sorts after (1) — correct regardless of any implicit NULL-ordering default.
+    -- A replay: return the EXACT-PM row's current basis unchanged. Never matches a NULL-tagged orphaned
+    -- row — see the header note (no silent cross-generation merging, anywhere, ever).
     SELECT entry_nav INTO v_new_basis FROM gateway_positions
-      WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id
-        AND (position_manager = v_pm OR position_manager IS NULL)
-      ORDER BY CASE WHEN position_manager = v_pm THEN 0 ELSE 1 END LIMIT 1;
+      WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager = v_pm;
     RETURN QUERY SELECT COALESCE(v_new_basis, 0::numeric(78,0)), true;
     RETURN;
   END IF;
 
-  -- Adopt-or-create: an EXACT (wallet, pool, chain, PM) match continues on it; else a legacy row for
-  -- this identity with NO position_manager yet (pre-migration, or a first deposit recorded before this
-  -- migration's backfill ran) is ADOPTED — claimed for this PM going forward — rather than starting a
-  -- confusing second row; else this is genuinely this identity's first-ever deposit.
-  SELECT id, entry_nav INTO v_pos_id, v_prior_basis FROM gateway_positions
-    WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id
-      AND (position_manager = v_pm OR position_manager IS NULL)
-    ORDER BY CASE WHEN position_manager = v_pm THEN 0 ELSE 1 END LIMIT 1;
-  v_prior_basis := COALESCE(v_prior_basis, 0);
-
-  -- CAUGHT ON REVIEW (2026-09-09, Codex live watch, same day, before this migration was ever applied):
-  -- the adopt-or-create SELECT above found the right POSITION row, but the underlying
-  -- gateway_deposit_events rows for the ambiguous pre-migration history were left tagged
-  -- position_manager = NULL — meaning a LATER, genuinely different generation's replay (which ALSO
-  -- matches "OR position_manager IS NULL") would find those same legacy events again and double-count
-  -- them into a second generation's basis (reproduced: "PM-B basis 110 instead of 10" when PM-A had
-  -- already legitimately absorbed a 10-unit legacy history). Fix: claim the legacy events for THIS PM
-  -- right now, unconditionally — a no-op if none are left unclaimed (already claimed by an earlier write,
-  -- or there never were any), and otherwise permanently removes them from being matchable by any OTHER
-  -- generation's future query. The ambiguous pre-migration history is a one-time, first-writer-wins
-  -- resource, not a shared one.
-  UPDATE gateway_deposit_events SET position_manager = v_pm
-    WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager IS NULL;
+  -- EXACT match only (independent Codex audit, to-do items 3/4, 2026-09-10 — see the header's revision
+  -- note): no adopt-or-create, no `OR position_manager IS NULL` fallback. A pre-existing orphaned row for
+  -- this wallet+pool+chain is NEVER touched or merged here — only scripts/verify-gateway-pm-attribution.mjs
+  -- resolves it, from real on-chain evidence.
+  SELECT id INTO v_pos_id FROM gateway_positions
+    WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager = v_pm;
 
   -- Data-completeness pre-check: a withdraw missing shares_burned (pre-20260909000004), or a deposit
   -- missing shares_minted (pre-THIS migration's same-block VALUE fix) can't feed a derived-shares
-  -- replay — neither number was persisted before its respective migration existed.
+  -- replay — neither number was persisted before its respective migration existed. Scoped to THIS exact
+  -- generation's own events only, same as the replay below.
   SELECT EXISTS(
     SELECT 1 FROM gateway_deposit_events
     WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
@@ -233,12 +223,16 @@ BEGIN
   END IF;
 
   IF v_has_legacy_gap THEN
-    v_new_basis := v_prior_basis + p_quote_in;
+    -- Single-delta fallback: this exact generation's OWN prior basis (0 if this is its first event, since
+    -- there is no cross-generation inheritance any more), plus this deposit's own quoteIn.
+    SELECT entry_nav INTO v_new_basis FROM gateway_positions
+      WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager = v_pm;
+    v_new_basis := COALESCE(v_new_basis, 0) + p_quote_in;
   END IF;
 
   IF v_pos_id IS NOT NULL THEN
     UPDATE gateway_positions SET
-      shares = p_on_chain_shares, entry_nav = v_new_basis, position_manager = v_pm, updated_at = now()
+      shares = p_on_chain_shares, entry_nav = v_new_basis, updated_at = now()
       WHERE id = v_pos_id;
   ELSE
     INSERT INTO gateway_positions (user_wallet, pool_address, chain_id, position_manager, shares, entry_nav, updated_at)
@@ -278,6 +272,12 @@ DECLARE
   v_running_shares numeric(78,0);
   v_ev record;
 BEGIN
+  -- Concurrency fix (independent Codex audit, to-do item 2, 2026-09-10) — same lock as the deposit RPC
+  -- (see its comment): serializes every call for this (wallet, pool, chain) across BOTH RPCs, since a
+  -- deposit and a withdraw racing on the same identity is exactly the same hazard as two withdraws or
+  -- two deposits racing.
+  PERFORM pg_advisory_xact_lock(hashtext(v_address || ':' || v_pool), p_chain_id);
+
   INSERT INTO gateway_deposit_events (
     tx_hash, address, kind, pool_address, chain_id, quote_out, on_chain_shares, shares_burned, block_number, position_manager, tx_index
   )
@@ -286,16 +286,15 @@ BEGIN
   RETURNING id INTO v_inserted_id;
   v_already := v_inserted_id IS NULL;
 
-  -- Same adopt-or-create lookup as the deposit RPC (see its comment).
+  -- EXACT match only — see the deposit RPC's identical comment (no adopt-or-create, no NULL fallback).
   SELECT id, entry_nav INTO v_pos_id, v_prior_basis FROM gateway_positions
-    WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id
-      AND (position_manager = v_pm OR position_manager IS NULL)
-    ORDER BY CASE WHEN position_manager = v_pm THEN 0 ELSE 1 END LIMIT 1;
+    WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager = v_pm;
 
   IF v_pos_id IS NULL THEN
-    -- No matching position row at all ⇒ this depositor's original deposit was never recorded (a
-    -- legacy/O-1 case) — deliberately NOT synthesizing one (would fabricate a fictitious "gain" equal
-    -- to the whole position); matches the prior route behavior exactly.
+    -- No matching position row for THIS exact generation ⇒ this depositor's deposit into it was never
+    -- recorded (a legacy/O-1 case, OR its history sits in a still-unresolved orphaned row this PM has no
+    -- claim to) — deliberately NOT synthesizing one (would fabricate a fictitious "gain" equal to the
+    -- whole position, or wrongly attach to a different generation's history).
     RETURN QUERY SELECT NULL::numeric(78,0), v_already, false;
     RETURN;
   END IF;
@@ -306,11 +305,6 @@ BEGIN
     RETURN QUERY SELECT v_prior_basis, true, true;
     RETURN;
   END IF;
-
-  -- Same claim-the-legacy-events fix as the deposit RPC (see its comment) — otherwise a later, genuinely
-  -- different generation's replay would double-count this identity's ambiguous pre-migration history.
-  UPDATE gateway_deposit_events SET position_manager = v_pm
-    WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager IS NULL;
 
   -- Data-completeness pre-check: same as the deposit RPC (see its comment) — a withdraw missing
   -- shares_burned (pre-20260909000004), or a deposit missing shares_minted (pre-THIS migration's
@@ -362,7 +356,7 @@ BEGIN
     END IF;
   END IF;
 
-  UPDATE gateway_positions SET shares = p_on_chain_shares, entry_nav = v_new_basis, position_manager = v_pm, updated_at = now()
+  UPDATE gateway_positions SET shares = p_on_chain_shares, entry_nav = v_new_basis, updated_at = now()
     WHERE id = v_pos_id;
 
   RETURN QUERY SELECT v_new_basis, false, v_found;
@@ -373,6 +367,6 @@ REVOKE EXECUTE ON FUNCTION record_gateway_deposit_event(text, text, text, intege
 REVOKE EXECUTE ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text, integer) FROM PUBLIC, anon, authenticated;
 
 COMMENT ON FUNCTION record_gateway_deposit_event(text, text, text, integer, numeric, numeric, bigint, text, integer, numeric) IS
-  'Atomic deposit-event idempotency claim + derived-shares full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation + same-block-value fixes). Service-role only, called from POST /api/gateway/deposit.';
+  'Atomic deposit-event idempotency claim + derived-shares full-history replay, EXACT (wallet,pool,chain,PM) match only — never a cross-generation guess (round-4 pass-2 manager-generation + same-block-value fixes; to-do items 2-4 concurrency/attribution fixes). Service-role only, called from POST /api/gateway/deposit.';
 COMMENT ON FUNCTION record_gateway_withdraw_event(text, text, text, integer, numeric, numeric, numeric, bigint, text, integer) IS
-  'Atomic withdraw-event idempotency claim + derived-shares full-history replay + PM-generation-scoped adopt-or-create (round-4 pass-2 manager-generation + same-block-value fixes). Service-role only, called from POST /api/gateway/withdraw.';
+  'Atomic withdraw-event idempotency claim + derived-shares full-history replay, EXACT (wallet,pool,chain,PM) match only — never a cross-generation guess (round-4 pass-2 manager-generation + same-block-value fixes; to-do items 2-4 concurrency/attribution fixes). Service-role only, called from POST /api/gateway/withdraw.';

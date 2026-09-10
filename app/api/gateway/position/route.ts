@@ -43,22 +43,24 @@ export const GET = createHandler(async (req, ctx) => {
   // Cost basis comes from the DB (populated by the deposit/withdraw record flows); absent ⇒ null PnL.
   // The buffer balance is intentionally NOT read here — it is owner-gated on the POST path.
   //
-  // Round-4 pass-2 manager-generation fix (independent Codex audit, 2026-09-09): `inst` already resolves
-  // to the EXACT PositionManager generation (via `?pm=`, see resolveInstanceStrict above) — but the
-  // basis lookup used to filter by (wallet, pool, chain) only, so a wallet with deposits in two
-  // generations of the same pool would always read whichever generation's row happened to match first,
-  // regardless of which one `inst` actually named. A legacy row (position_manager IS NULL, pre-migration
-  // 20260909000005) still matches too — it hasn't been "adopted" by a write yet, but it's the only
-  // record that identity has, so surfacing it here (rather than showing nothing) is correct.
+  // Round-4 pass-2 manager-generation fix (independent Codex audit, 2026-09-09 → revised 2026-09-10):
+  // `inst` already resolves to the EXACT PositionManager generation (via `?pm=`, see resolveInstanceStrict
+  // above) — but the basis lookup used to filter by (wallet, pool, chain) only, so a wallet with deposits
+  // in two generations of the same pool would always read whichever generation's row happened to match
+  // first, regardless of which one `inst` actually named. Fixed with an EXACT position_manager match only
+  // — no `OR position_manager IS NULL` fallback any more (Codex's to-do items 3/4): a pre-existing
+  // orphaned (position_manager IS NULL) row is genuinely ambiguous — it might belong to THIS generation
+  // or to a completely different one — so it is never silently surfaced as if it were this generation's
+  // basis. It stays invisible (recorded: false, cost basis unknown) until
+  // scripts/verify-gateway-pm-attribution.mjs resolves it from real on-chain receipt data; showing nothing
+  // is safer than guessing.
   const { data: pos } = await ctx.supabase
     .from('gateway_positions')
     .select('id, entry_nav, shares')
     .eq('user_wallet', address)
     .eq('pool_address', inst.poolAddress)
     .eq('chain_id', inst.chainId)
-    .or(`position_manager.eq.${inst.positionManager.toLowerCase()},position_manager.is.null`)
-    .order('position_manager', { ascending: false, nullsFirst: false })
-    .limit(1)
+    .eq('position_manager', inst.positionManager.toLowerCase())
     .maybeSingle()
 
   const client = gatewayPublicClient(cfg)
@@ -148,16 +150,16 @@ export const POST = createHandler(
     if (!r.ok) return ctx.json({ success: false, error: r.error }, r.status)
     const inst = r.inst
 
-    // Round-4 pass-2 manager-generation fix: same PM-scoped lookup as the GET above (this POST path is
-    // currently inert — see positions/route.ts's comment — but kept correct rather than left stale).
+    // Round-4 pass-2 manager-generation fix (revised 2026-09-10, exact-match only — see the GET above):
+    // same PM-scoped lookup as the GET above (this POST path is currently inert — see positions/route.ts's
+    // comment — but kept correct rather than left stale).
     const { data: pos } = await ctx.supabase
       .from('gateway_positions')
       .select('id')
       .eq('user_wallet', owner)
       .eq('pool_address', inst.poolAddress)
       .eq('chain_id', inst.chainId)
-      .or(`position_manager.eq.${inst.positionManager.toLowerCase()},position_manager.is.null`)
-      .order('position_manager', { ascending: false, nullsFirst: false })
+      .eq('position_manager', inst.positionManager.toLowerCase())
       .limit(1)
       .maybeSingle()
 

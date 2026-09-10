@@ -38,30 +38,27 @@ export const GET = createHandler(async (req, ctx) => {
 
   // DB enrichment: cost basis per pool (may be absent when a record call never landed).
   //
-  // Round-4 pass-2 manager-generation fix (independent Codex audit, 2026-09-09): `instances` already
-  // enumerates a SEPARATE entry per PositionManager generation for a pool that has been through a
-  // migration (V1-01 residual) — but this map used to key by pool+chain ONLY, so a wallet with rows for
-  // TWO generations of the same pool would have the second one silently overwrite the first in the map,
-  // and both chain-enumerated instances would then read from whichever row happened to be last. Keying
-  // by pool+chain+PM (falling back to a not-yet-adopted legacy NULL-PM row when no exact match exists —
-  // same rule as the single-pool GET) makes each generation resolve its own basis correctly.
+  // Round-4 pass-2 manager-generation fix (independent Codex audit, 2026-09-09 → revised 2026-09-10):
+  // `instances` already enumerates a SEPARATE entry per PositionManager generation for a pool that has
+  // been through a migration (V1-01 residual) — but this map used to key by pool+chain ONLY, so a wallet
+  // with rows for TWO generations of the same pool would have the second one silently overwrite the
+  // first in the map, and both chain-enumerated instances would then read from whichever row happened to
+  // be last. Fixed by keying by pool+chain+PM (EXACT match only — no NULL-row fallback any more, per
+  // Codex's to-do items 3/4: an orphaned row is genuinely ambiguous and must never be silently surfaced
+  // as if it belonged to a specific generation — see scripts/verify-gateway-pm-attribution.mjs).
   const { data: rows } = await ctx.supabase
     .from('gateway_positions')
     .select('pool_address, chain_id, position_manager, entry_nav, shares')
     .eq('user_wallet', address)
   type PosRow = { pool_address: string; chain_id: number; position_manager: string | null; entry_nav: unknown }
-  const byPoolChain = new Map<string, PosRow[]>()
+  const byExactPm = new Map<string, PosRow>()
   for (const r of (rows ?? []) as PosRow[]) {
-    const k = `${String(r.pool_address).toLowerCase()}:${Number(r.chain_id)}`
-    const arr = byPoolChain.get(k) ?? []
-    arr.push(r)
-    byPoolChain.set(k, arr)
+    if (r.position_manager == null) continue // orphaned/unresolved — never surfaced against a specific generation
+    const k = `${String(r.pool_address).toLowerCase()}:${Number(r.chain_id)}:${r.position_manager.toLowerCase()}`
+    byExactPm.set(k, r)
   }
-  const basisFor = (poolAddress: string, chainId: number, positionManager: string): PosRow | undefined => {
-    const candidates = byPoolChain.get(`${poolAddress.toLowerCase()}:${chainId}`) ?? []
-    const pm = positionManager.toLowerCase()
-    return candidates.find((r) => (r.position_manager ?? '').toLowerCase() === pm) ?? candidates.find((r) => r.position_manager == null)
-  }
+  const basisFor = (poolAddress: string, chainId: number, positionManager: string): PosRow | undefined =>
+    byExactPm.get(`${poolAddress.toLowerCase()}:${chainId}:${positionManager.toLowerCase()}`)
 
   const client = gatewayPublicClient(cfg)
 

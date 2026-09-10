@@ -9,12 +9,15 @@
 // TRUE, backwards from the intended "prefer exact match" rule — NULL is a THIRD value in SQL comparison
 // logic, not FALSE, and Postgres defaults DESC to NULLS FIRST) ship in a migration that a JS mirror could
 // never have caught, since the JS mirror never modeled SQL's three-valued comparison semantics at all.
+// That ORDER BY no longer exists at all in the final design (2026-09-10, to-do items 3/4) — every
+// generation is isolated by an EXACT position_manager match, no NULL fallback anywhere.
 //
 // Scope note: PGlite is a single-process EMBEDDED Postgres — this proves the SQL logic is correct against
-// a real engine, but does NOT exercise genuine multi-connection lock contention (no `FOR UPDATE` is taken
-// anywhere in these RPCs — see the migration's own disclosed concurrency residual). That would need a
-// real multi-session Postgres (e.g. two actual client connections racing a slow transaction) and is
-// explicitly flagged as still-open, separate follow-up work, not something this suite claims to close.
+// a real engine, but does NOT exercise genuine multi-connection lock contention. Both RPCs now take a
+// `pg_advisory_xact_lock` (to-do item 2) as their first statement, but these single-process tests cannot
+// prove it actually serializes two REAL concurrent connections — that would need a genuine multi-session
+// Postgres (e.g. two actual client connections racing a slow transaction), which is explicitly flagged as
+// still-open, separate follow-up work, not something this suite claims to close.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -118,20 +121,48 @@ describe('gateway cost-basis RPCs — real PostgreSQL execution (PGlite)', () =>
     expect(await basisFor(PM_A)).toBe('500000') // NOT 1000000 or 0 — the old call-order-dependent bug's failure modes
   })
 
-  // The manager-generation double-count fix (95cb99b8), AND the NULLS-ordering fix just caught by Codex's
-  // live watch — both proven together against real SQL: a legacy (unclaimed) deposit, then PM-A adopts
-  // it, then PM-B deposits separately. PM-B must NOT see PM-A's (or the legacy) basis, and PM-A must have
-  // correctly kept the legacy history it adopted.
-  it('FIX PROVEN (real SQL): two generations competing over legacy state stay correctly isolated', async () => {
-    await deposit({ tx: 'legacy-1', quoteIn: '10000000', onChainShares: '10000000', blockNumber: 50, pm: null, sharesMinted: '10000000' }) // ambiguous pre-migration history
-    await deposit({ tx: 'pm-a-1', quoteIn: '100000000', onChainShares: '110000000', blockNumber: 100, pm: PM_A, txIndex: 0, sharesMinted: '100000000' })
-    expect(await basisFor(PM_A)).toBe('110000000') // 10 (adopted legacy) + 100 (its own) — in millionths
-    expect(await rowCount()).toBe(1) // the legacy row was ADOPTED, not duplicated
+  // Manager-generation fix, FINAL design (independent Codex audit, to-do items 3/4, 2026-09-10): two
+  // earlier designs both guessed at ambiguous legacy history — a migration-time "prefer active PM"
+  // backfill, then a runtime "first write to name any PM adopts the whole unclaimed history" rule (which
+  // fixed the immediate double-count but not the deeper flaw: whichever PM asks first still wins a guess
+  // that might be wrong — a wallet's real history could belong to a DIFFERENT, still-existing generation
+  // entirely). Final fix: no guessing anywhere — an unresolved (null-PM) legacy row is NEVER touched or
+  // merged by any RPC call, for any PM, ever. Proven here against real SQL: a legacy deposit stays its
+  // own separate, untouched row; PM-A's and PM-B's deposits each start completely fresh, at exactly their
+  // own amounts, regardless of which one asks first or whether the legacy row exists at all.
+  it('FIX PROVEN (real SQL): an unresolved legacy row is NEVER merged into any generation, in either direction', async () => {
+    // A null-PM row is never CREATED by a real RPC call any more (both routes always pass a real,
+    // on-chain-verified positionManager) — it can only exist as genuinely pre-existing data. Constructed
+    // directly here, matching how it would actually arise (not via the RPC itself).
+    await db.exec(`
+      INSERT INTO gateway_positions (user_wallet, pool_address, chain_id, position_manager, shares, entry_nav) VALUES
+        ('${USER}', '${POOL}', ${CHAIN}, NULL, 1, 999999999);
+    `)
+    await deposit({ tx: 'pm-a-1', quoteIn: '100000000', onChainShares: '100000000', blockNumber: 100, pm: PM_A, txIndex: 0, sharesMinted: '100000000' })
+    expect(await basisFor(PM_A)).toBe('100000000') // exactly its own — the legacy row contributed NOTHING
+    expect(await rowCount()).toBe(2) // a genuinely NEW, separate row for PM_A — the legacy row untouched
 
     await deposit({ tx: 'pm-b-1', quoteIn: '5000000', onChainShares: '5000000', blockNumber: 200, pm: PM_B, txIndex: 0, sharesMinted: '5000000' })
-    expect(await basisFor(PM_B)).toBe('5000000') // ONLY its own — not 15000000, not 110000000
-    expect(await basisFor(PM_A)).toBe('110000000') // unchanged by PM-B's arrival
-    expect(await rowCount()).toBe(2) // now genuinely two separate generations
+    expect(await basisFor(PM_B)).toBe('5000000') // ONLY its own — not 5000000+legacy, not PM-A's total
+    expect(await basisFor(PM_A)).toBe('100000000') // unchanged by PM-B's arrival
+    expect(await rowCount()).toBe(3) // legacy row + PM_A + PM_B, three genuinely distinct rows
+
+    // The legacy row itself is untouched, still unresolved (position_manager still NULL) — no RPC call
+    // for any real PM ever claims or merges it.
+    const legacyRow = await db.query<{ position_manager: string | null; entry_nav: string }>(
+      `SELECT position_manager, entry_nav::text FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager IS NULL`,
+      [USER, POOL, CHAIN],
+    )
+    expect(legacyRow.rows[0]).toMatchObject({ position_manager: null, entry_nav: '999999999' })
+  })
+
+  it('a withdraw naming a PM with no matching row returns position_found:false — even when an unresolved legacy row exists for the same identity', async () => {
+    await db.exec(`
+      INSERT INTO gateway_positions (user_wallet, pool_address, chain_id, position_manager, shares, entry_nav) VALUES
+        ('${USER}', '${POOL}', ${CHAIN}, NULL, 10000000, 10000000);
+    `)
+    const w = await withdraw({ tx: 'tx-w', quoteOut: '1', onChainShares: '0', sharesBurned: '1', blockNumber: 100, pm: PM_A, txIndex: 0 })
+    expect(w.rows[0]).toMatchObject({ position_found: false, cost_basis_atomic: null })
   })
 
   it('duplicate retries are idempotent — a replayed tx_hash never inflates the basis', async () => {
@@ -164,21 +195,26 @@ describe('gateway cost-basis RPCs — real PostgreSQL execution (PGlite)', () =>
   // `ORDER BY (position_manager = v_pm) DESC`, `position_manager = v_pm` is NULL (not FALSE) for the
   // NULL row — a THIRD value in SQL's comparison logic — and Postgres defaults DESC to NULLS FIRST, so
   // the NULL row sorted BEFORE the TRUE (exact-match) row, exactly backwards from the intended rule.
-  it('FIX PROVEN (real SQL): an exact-PM row is preferred over a coexisting legacy NULL row, never the reverse', async () => {
+  // Originally written to prove a specific NULLS-ordering bug (`ORDER BY (position_manager = v_pm) DESC`
+  // picking the NULL row before the exact match, since `NULL = anything` is NULL — a third SQL value —
+  // and Postgres defaults DESC to NULLS FIRST). That ORDER BY no longer exists at all: the final design
+  // (to-do items 3/4) queries `position_manager = v_pm` only, so a NULL row can never match regardless of
+  // ordering. Kept as a regression test for the same user-visible guarantee under the new mechanism.
+  it('FIX PROVEN (real SQL): an exact-PM row is read correctly, never a coexisting legacy NULL row', async () => {
     await db.exec(`
       INSERT INTO gateway_positions (user_wallet, pool_address, chain_id, position_manager, shares, entry_nav) VALUES
         ('${USER}', '${POOL}', ${CHAIN}, NULL, 1, 999999),
         ('${USER}', '${POOL}', ${CHAIN}, '${PM_A}', 1, 111);
     `)
-    // The idempotent-replay branch (IF v_already) uses the identical ORDER BY — exercise it directly via
-    // a duplicate tx_hash so the read path is covered too, not just the adopt-or-create write path.
+    // The idempotent-replay branch (IF v_already) — exercise it directly via a duplicate tx_hash so the
+    // read path is covered too, not just the write path.
     await db.exec(`
       INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, position_manager)
       VALUES ('already-seen', '${USER}', 'deposit', '${POOL}', ${CHAIN}, 1, '${PM_A}');
     `)
     const replay = await deposit({ tx: 'already-seen', quoteIn: '1', onChainShares: '1', pm: PM_A })
     expect(replay.rows[0]).toMatchObject({ already_recorded: true })
-    // Must read PM_A's row (111), never the NULL row (999999) — the exact bug Codex's live watch caught.
+    // Must read PM_A's row (111), never the NULL row (999999).
     expect(replay.rows[0]!.cost_basis_atomic).toBe('111')
   })
 

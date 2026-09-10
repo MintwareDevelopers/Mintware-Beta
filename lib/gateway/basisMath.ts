@@ -108,42 +108,23 @@ export function replayCostBasis(eventsInChainOrder: BasisEvent[]): ReplayResult 
   return { ok: true, basis, finalShares: shares }
 }
 
-// ── Manager-generation fix (independent Codex audit, round-4 pass-2, 2026-09-09) ───────────────────────
+// ── Manager-generation fix (independent Codex audit, round-4 pass-2, 2026-09-09 → revised 2026-09-10) ──
 //
-// Migration 20260909000005 scopes replay per PositionManager generation — but its FIRST version (caught
-// by Codex's live watch before it was ever applied/committed) matched an ambiguous pre-migration legacy
-// event (position_manager IS NULL) into EVERY generation's replay query, not just the one that adopted
-// it — so a wallet whose legacy history was legitimately absorbed by generation A would have that SAME
-// history double-counted into generation B's basis too, the moment B's write called in. Reproduced
-// concretely: a 10-unit legacy history + a 100-unit deposit to PM-A correctly gives PM-A a basis of 110
-// — but PM-B, with no deposits of its own, incorrectly ALSO showed 110 instead of 0 (or whatever its own
-// history actually was), because both generations' replay queries independently re-matched the same
-// still-NULL-tagged legacy row.
+// Migration 20260909000005 scopes replay per PositionManager generation. Its first two designs both
+// guessed at ambiguous history and were both caught by Codex's live watch before ever being applied:
+//   1. A migration-time backfill stamped every pre-existing position with whichever PM is CURRENTLY
+//      active for its pool — wrong whenever a wallet's real history sits in a retired PM instead.
+//   2. A runtime "adopt-or-create" rule let the first write naming ANY real PM silently absorb a
+//      wallet's entire unclaimed (position_manager IS NULL) history — which double-counted that
+//      history into a SECOND generation's basis too, the moment it also wrote (reproduced concretely:
+//      PM-A correctly got a legacy 10 + its own 100 = 110, but PM-B incorrectly ALSO showed 110). Fixing
+//      the double-count without addressing the deeper flaw just meant "whichever PM asks FIRST wins the
+//      guess" — still wrong whenever that first PM isn't actually the historical owner.
 //
-// Fix: the RPC now UPDATEs every unclaimed (position_manager IS NULL) event for this identity to the
-// CURRENT call's PM before replaying — a one-time, first-writer-wins claim that PERMANENTLY removes
-// those events from being matchable by any other generation's future query. `claimEvents` mirrors that
-// UPDATE; `replayForGeneration` mirrors a single RPC call's claim-then-replay-scoped-to-one-PM sequence.
-
-export type PmTaggedEvent = (BasisEvent & { positionManager: string | null; blockNumber: number; txIndex: number | null })
-
-/** Mirrors the SQL's `UPDATE gateway_deposit_events SET position_manager = pm WHERE position_manager IS
- *  NULL` — every currently-unclaimed event becomes permanently owned by `pm`. Idempotent: re-running it
- *  for the same or a different `pm` after everything is already claimed does nothing further to a
- *  no-longer-null row (mirrors the SQL's WHERE clause). */
-export function claimEvents(events: PmTaggedEvent[], pm: string): PmTaggedEvent[] {
-  return events.map((e) => (e.positionManager === null ? { ...e, positionManager: pm } : e))
-}
-
-/** One full record_gateway_{deposit,withdraw}_event call, PM-aware: claim any unclaimed legacy events
- *  for `pm` (mutating the returned event list, exactly like the SQL does to the real table), then replay
- *  ONLY the events now tagged `pm` — in real on-chain order (block_number, then tx_index) — into that
- *  generation's own basis. Returns the updated event list (so a SUBSEQUENT call, simulating a later
- *  HTTP request, sees the claim) and the replay result this call computed. */
-export function replayForGeneration(events: PmTaggedEvent[], pm: string): { events: PmTaggedEvent[]; result: ReplayResult } {
-  const claimed = claimEvents(events, pm)
-  const mine = claimed
-    .filter((e) => e.positionManager === pm)
-    .sort((a, b) => a.blockNumber - b.blockNumber || (a.txIndex ?? -1) - (b.txIndex ?? -1))
-  return { events: claimed, result: replayCostBasis(mine) }
-}
+// Final fix: no guessing, anywhere. Every generation is fully isolated by an EXACT (wallet, pool, chain,
+// positionManager) match — a plain filter, nothing more. An ambiguous, still-unresolved legacy event
+// (positionManager: null) is simply excluded from every generation's replay; it stays invisible until
+// something else (scripts/verify-gateway-pm-attribution.mjs, using real on-chain receipt data) resolves
+// it to a real PM. `replayCostBasis` above already does everything a single generation's replay needs —
+// filter this identity's events to the exact PM, sort by chain order, replay. No separate function
+// is needed any more: `events.filter(e => e.positionManager === pm).sort(...)` then `replayCostBasis`.

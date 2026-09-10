@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { nextDepositBasis, nextWithdrawBasis, replayCostBasis, replayForGeneration, type BasisEvent, type PmTaggedEvent, type ReplayResult } from './basisMath'
+import { nextDepositBasis, nextWithdrawBasis, replayCostBasis, type BasisEvent, type ReplayResult } from './basisMath'
 
 describe('nextDepositBasis (M-04 deposit idempotency)', () => {
   it('adds quoteIn on a first-seen deposit tx', () => {
@@ -142,61 +142,51 @@ describe('replayCostBasis (event-order + same-block VALUE fix)', () => {
   })
 })
 
-// Manager-generation fix (independent Codex audit, round-4 pass-2, 2026-09-09). Migration
-// 20260909000005's FIRST version (caught by Codex's live watch before it was ever committed) matched an
-// ambiguous pre-migration legacy event (position_manager IS NULL) into EVERY generation's replay query,
-// not just the one that adopted it — reproduced concretely as "PM-B basis 110 instead of [its own]" when
-// PM-A had already legitimately absorbed a 10-unit legacy history plus its own 100-unit deposit.
-describe('replayForGeneration / claimEvents (manager-generation fix)', () => {
+// Manager-generation fix (independent Codex audit, round-4 pass-2, 2026-09-09 → revised 2026-09-10).
+// Two prior designs both guessed at ambiguous pre-existing history and were both caught by Codex's live
+// watch before ever being applied — a migration-time "prefer the active PM" backfill, then a runtime
+// "first write to name any real PM adopts the whole unclaimed history" rule (which fixed the immediate
+// double-count but not the deeper flaw: whichever PM asks FIRST still wins a guess that might be wrong).
+// Final fix: NO guessing anywhere — every generation is isolated by a plain EXACT positionManager filter;
+// an unresolved (positionManager: null) event is simply excluded from every generation's replay, full
+// stop, until something else (real on-chain receipt lookup) resolves it to a specific PM.
+type PmTaggedEvent = (BasisEvent & { positionManager: string | null; blockNumber: number; txIndex: number | null })
+function replayExact(events: PmTaggedEvent[], pm: string): ReplayResult {
+  const mine = events
+    .filter((e) => e.positionManager === pm)
+    .sort((a, b) => a.blockNumber - b.blockNumber || (a.txIndex ?? -1) - (b.txIndex ?? -1))
+  return replayCostBasis(mine)
+}
+
+describe('exact-match generation isolation (manager-generation fix, final design)', () => {
   const PM_A = '0xaaaa'
   const PM_B = '0xbbbb'
 
-  it('a generation that adopts unclaimed legacy history gets legacy + its own deposits', () => {
-    const events: PmTaggedEvent[] = [
-      { kind: 'deposit', quoteIn: 10n, sharesMinted: 10n, positionManager: null, blockNumber: 100, txIndex: 0 }, // ambiguous pre-migration legacy
-    ]
-    const withNewDeposit: PmTaggedEvent[] = [
-      ...events,
-      { kind: 'deposit', quoteIn: 100n, sharesMinted: 100n, positionManager: PM_A, blockNumber: 200, txIndex: 0 },
-    ]
-    const { result } = replayForGeneration(withNewDeposit, PM_A)
-    expect(ok(result).basis).toBe(110n) // 10 (adopted legacy) + 100 (its own)
-  })
-
-  it('FIX PROVEN: a SEPARATE generation does NOT see the legacy history once another generation already claimed it', () => {
+  it('FIX PROVEN: an unresolved (null-PM) legacy event is invisible to EVERY generation — never guessed, never inherited', () => {
     const legacy: PmTaggedEvent = { kind: 'deposit', quoteIn: 10n, sharesMinted: 10n, positionManager: null, blockNumber: 100, txIndex: 0 }
     const pmADeposit: PmTaggedEvent = { kind: 'deposit', quoteIn: 100n, sharesMinted: 100n, positionManager: PM_A, blockNumber: 200, txIndex: 0 }
-
-    // Call 1: PM-A's deposit call lands first — claims the legacy row (10) and adds its own 100 → 110.
-    const afterA = replayForGeneration([legacy, pmADeposit], PM_A)
-    expect(ok(afterA.result).basis).toBe(110n)
-    // The legacy event is now PERMANENTLY tagged PM_A in the (simulated) stored table.
-    expect(afterA.events.find((e) => e.blockNumber === 100)?.positionManager).toBe(PM_A)
-
-    // Call 2: a genuinely SEPARATE generation (PM-B) later makes its own, unrelated 5-unit deposit.
-    // Reads the CURRENT (already-claimed) event table from call 1 — not the original `events` array.
     const pmBDeposit: PmTaggedEvent = { kind: 'deposit', quoteIn: 5n, sharesMinted: 5n, positionManager: PM_B, blockNumber: 300, txIndex: 0 }
-    const afterB = replayForGeneration([...afterA.events, pmBDeposit], PM_B)
-    expect(ok(afterB.result).basis).toBe(5n) // NOT 15 (5 + the already-claimed 10) and NOT 110 (PM-A's total)
+    const events = [legacy, pmADeposit, pmBDeposit]
+
+    // Neither generation inherits the ambiguous legacy 10 — each sees ONLY its own exact-match events.
+    expect(ok(replayExact(events, PM_A)).basis).toBe(100n) // NOT 110
+    expect(ok(replayExact(events, PM_B)).basis).toBe(5n) // NOT 15, NOT 105
+    // The legacy event itself contributes to NEITHER — it stays genuinely unresolved (a null-PM query
+    // would need a dedicated resolver, not a replay call — this file no longer has one, by design).
   })
 
-  it('the bug this reproduces: replaying WITHOUT claiming lets a later generation re-match the same legacy row', () => {
-    // This is deliberately the OLD (buggy) behavior for contrast — plain replayCostBasis has no claim
-    // step, so if a caller (incorrectly) fed it "exact-PM OR still-null" events for PM-B, the unclaimed
-    // legacy row would double-count. Proves WHY the claim step in replayForGeneration is load-bearing.
-    const legacy: BasisEvent = { kind: 'deposit', quoteIn: 10n, sharesMinted: 10n }
-    const pmBOwnDeposit: BasisEvent = { kind: 'deposit', quoteIn: 5n, sharesMinted: 5n }
-    const buggyPmBReplay = ok(replayCostBasis([legacy, pmBOwnDeposit])) // legacy re-included — the bug
-    expect(buggyPmBReplay.basis).toBe(15n) // wrong: PM-B's real basis should be just its own 5
-    // The fix (replayForGeneration, tested above) never lets this happen once PM-A has claimed `legacy`.
+  it('a brand-new generation deposit does NOT touch a coexisting unresolved legacy row for the same identity', () => {
+    const legacy: PmTaggedEvent = { kind: 'deposit', quoteIn: 999999n, sharesMinted: 1n, positionManager: null, blockNumber: 50, txIndex: 0 }
+    const pmADeposit: PmTaggedEvent = { kind: 'deposit', quoteIn: 100n, sharesMinted: 100n, positionManager: PM_A, blockNumber: 200, txIndex: 0 }
+    expect(ok(replayExact([legacy, pmADeposit], PM_A)).basis).toBe(100n) // exactly its own, nothing borrowed
   })
 
   it('same-block ordering tiebreak: txIndex, not array/insertion order, decides same-block replay order', () => {
     // Both events share block 100 — only txIndex distinguishes their real on-chain order. Fed in the
-    // WRONG array order deliberately; replayForGeneration must still sort by (blockNumber, txIndex).
+    // WRONG array order deliberately; the exact-match filter+sort must still order by (blockNumber, txIndex).
     const withdrawFirstInArray: PmTaggedEvent = { kind: 'withdraw', sharesBurned: 300n, positionManager: PM_A, blockNumber: 100, txIndex: 1 }
     const depositSecondInArray: PmTaggedEvent = { kind: 'deposit', quoteIn: 1_000n, sharesMinted: 1_000n, positionManager: PM_A, blockNumber: 100, txIndex: 0 }
-    const { result } = replayForGeneration([withdrawFirstInArray, depositSecondInArray], PM_A)
+    const result = replayExact([withdrawFirstInArray, depositSecondInArray], PM_A)
     // Correct chain order is deposit (txIndex 0) THEN withdraw (txIndex 1) — basis 1000 * 700/1000 = 700.
     expect(ok(result).basis).toBe(700n)
   })

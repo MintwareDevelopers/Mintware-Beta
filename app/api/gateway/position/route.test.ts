@@ -110,15 +110,20 @@ describe('GET /api/gateway/position — PM-generation-scoped cost basis', () => 
     expect(json.position.costBasisAtomic).toBe('999000')
   })
 
-  it('a not-yet-adopted legacy row (position_manager IS NULL) still surfaces when no exact-PM row exists', async () => {
+  // Manager-generation fix, FINAL design (independent Codex audit, to-do items 3/4, 2026-09-10): an
+  // orphaned (position_manager IS NULL) row is genuinely ambiguous — it might belong to THIS generation
+  // or a completely different one, so it must NEVER be silently surfaced as if it were this generation's
+  // basis (the earlier "adopt-or-create" design got this wrong). Stays invisible until
+  // scripts/verify-gateway-pm-attribution.mjs resolves it from real on-chain receipt data.
+  it('FIX PROVEN: an unresolved legacy row (position_manager IS NULL) is NEVER surfaced for a specific PM query', async () => {
     state.supabase = fakeSupabaseFor([
       { pool_address: POOL, chain_id: 46630, user_wallet: USER, position_manager: null, entry_nav: '250000', shares: '1' },
     ])
     const { GET } = await import('./route')
     const res = await GET(req(`https://mw.test/api/gateway/position?address=${USER}&pool=${POOL}&pm=${PM_NEW}`))
     const json = await res.json()
-    expect(json.position.costBasisAtomic).toBe('250000')
-    expect(json.position.recorded).toBe(true)
+    expect(json.position.recorded).toBe(false) // NOT surfaced — never guessed as belonging to PM_NEW
+    expect(json.position.costBasisAtomic).toBe('0')
   })
 
   it('an exact-PM row wins over a legacy NULL row when BOTH exist for this identity', async () => {

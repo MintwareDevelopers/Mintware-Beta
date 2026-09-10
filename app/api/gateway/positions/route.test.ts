@@ -71,8 +71,8 @@ describe('GET /api/gateway/positions — chain-first', () => {
       tables: {
         gateway_instances: [row(POOL_A, PM_A), row(POOL_B, PM_B)],
         gateway_positions: [
-          { user_wallet: USER, pool_address: POOL_A, chain_id: 46630, shares: '1000000', entry_nav: '900000' },
-          { user_wallet: USER, pool_address: POOL_B, chain_id: 46630, shares: '5', entry_nav: '5' }, // stale row, chain says 0
+          { user_wallet: USER, pool_address: POOL_A, chain_id: 46630, position_manager: PM_A, shares: '1000000', entry_nav: '900000' },
+          { user_wallet: USER, pool_address: POOL_B, chain_id: 46630, position_manager: PM_B, shares: '5', entry_nav: '5' }, // stale row, chain says 0
         ],
       },
     }).client
@@ -176,7 +176,11 @@ describe('GET /api/gateway/positions — chain-first', () => {
     expect(byPm.get(PM_OLD.toLowerCase())).toBe('999000')
     expect(byPm.get(PM_A.toLowerCase())).toBe('500000') // NOT 999000 — each generation kept its own basis
   })
-  it('FIXED: a not-yet-adopted legacy row (position_manager NULL) still enriches when no exact-PM row exists', async () => {
+  // Manager-generation fix, FINAL design (independent Codex audit, to-do items 3/4, 2026-09-10): an
+  // orphaned (position_manager IS NULL) row is genuinely ambiguous — never silently surfaced as if it
+  // belonged to whichever generation happens to be enumerated. On-chain shares still show (chain-first,
+  // O-1) — only the cost basis stays unknown until scripts/verify-gateway-pm-attribution.mjs resolves it.
+  it('FIX PROVEN: an unresolved legacy row (position_manager NULL) is NEVER surfaced for a specific generation', async () => {
     state.supabase = fakeSupabase({
       tables: {
         gateway_instances: [row(POOL_A, PM_A)],
@@ -186,8 +190,8 @@ describe('GET /api/gateway/positions — chain-first', () => {
     state.sharesByPm[PM_A] = 1_000_000n
     const { GET } = await import('./route')
     const { positions } = await (await GET(req(`https://mw.test/api/gateway/positions?address=${USER}`))).json()
-    expect(positions[0].costBasisAtomic).toBe('250000')
-    expect(positions[0].recorded).toBe(true)
+    expect(positions[0].recorded).toBe(false) // never guessed as belonging to PM_A
+    expect(positions[0].costBasisAtomic).toBeNull()
   })
   // V1-09 fix (independent Codex audit, 2026-09-09): the MOST expensive of the three position routes
   // (fans out across every instance) had no rate limit at all.
