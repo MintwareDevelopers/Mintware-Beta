@@ -372,8 +372,36 @@ unrelated).
   SIBLING position-manager identity sharing a wallet/pool/chain the moment its last orphaned row resolves,
   closing a cross-PM staleness gap Codex's live review caught), then a full idempotent self-heal sweep
   (`recomputeAllResolvedIdentities`) that gates every identity on having NO remaining orphaned rows for
-  that wallet/pool/chain before publishing a basis. Not run against production data by anyone yet — an
-  operator action, not something done automatically.
+  that wallet/pool/chain before publishing a basis. **Genuinely needed now** — see the deploy-ordering
+  incident directly below; the operator should run this (dry-run first) to see whether any deposits/
+  withdraws landed as orphaned rows during that window before deciding whether `--apply` is worth it.
+  ⚠ **Deploy-ordering incident (2026-09-10) — a real, live consequence of applying a migration ahead of
+  its code.** The user applied migrations `_004`–`_007` directly to production (confirmed via
+  `verify-gateway-schema-state.mjs`, 11/11) while this session's matching app code (the deposit/withdraw
+  routes that actually send `p_position_manager`/`p_block_number`/`p_tx_index`/`p_shares_minted`) was
+  still unpushed — `main` sat 40+ commits ahead of `origin/main`. In that window, production's OLD deposit/
+  withdraw routes kept calling `record_gateway_deposit_event`/`record_gateway_withdraw_event` with only
+  the pre-`_004` args; Postgres accepted the call anyway (the new args all have defaults) and silently
+  recorded every deposit/withdraw with `position_manager = NULL` — an orphaned row, per `_005`'s design
+  above. **Real funds were never at risk** (shares/value are always chain-first), but the DISPLAYED cost
+  basis for anything deposited/withdrawn in that window would show as $0/wrong on `/v1`, invisible to the
+  exact-PM read path by design. **Fixed by pushing this session's code** (`git push origin main`, landing
+  at commit `c2313ffe` and later, live on `mintware.finance` — confirmed via `vercel ls --prod` reaching
+  `Ready` and `GET /api/gateway/meta` responding from the new build) — deposit/withdraw now correctly send
+  `p_position_manager`, matching the schema the DB has had the whole time. **Independently verified
+  end-to-end** (`scripts/e2e-lp-gateway-deposit-withdraw.mjs`, new — the wallet-flow check item 3 of the
+  release-verification work asked for): a REAL Privy-signed testnet deposit + withdraw through the LIVE
+  production API (not a mock, not localhost) — `POST /api/gateway/deposit` → `GET /api/gateway/position`
+  → `POST /api/gateway/withdraw` → `GET /api/gateway/position` again — confirmed `costBasisComplete: true`
+  and the correct cost-basis amount (10 tUSDG → 5 tUSDG after a 50% withdraw) on both reads, proving the
+  orphaned-row bug is genuinely gone in the now-live code. **Still open:** any deposits/withdraws that DID
+  land orphaned during the incident window (between whenever the user applied the migrations and this
+  push) need `verify-gateway-pm-attribution.mjs` run against production to check for and resolve them —
+  not yet done; run the dry-run first to see if there's anything to actually recover. **Lesson for next
+  time:** never apply a migration to production ahead of pushing its matching code, even when the migration
+  itself is written to degrade gracefully without it (`_005`'s `EXCEPTION WHEN undefined_table` net only
+  covers `_007` not existing yet — it does NOT cover old code calling the NEW function without the new
+  args, which is exactly what happened here).
   **Release verification — deployed schema state** (`scripts/verify-gateway-schema-state.mjs`, user
   directive 2026-09-10; REWRITTEN same-day after Codex's live review caught the first version doing the
   exact thing it claimed not to): checks whether migrations `_004`–`_007`'s functions/columns/table
