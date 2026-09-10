@@ -197,22 +197,34 @@ unrelated).
   (LRU 500 + TTL, misses remembered, in-flight coalesced) and returns **429 from an in-memory per-IP floor even
   without Upstash**; `discover` has the same floor + `.eq('status','active')` for `live` (HO-11). Both declare
   `rateLimit`; the other public GETs (`instances`, `position(s)`, `leaderboard`, `meta`, `alerts`) still don't
-  (HO-15, their owners). Harvest still uses a swap seam (`routerSwap.ts#swapPairedToQuote`, fail-closed no-op
-  until a router is wired) to convert harvested paired-token fees back to quote — unrelated to deploy. **The
-  deploy-side seam (`swapQuoteToPaired`) is GONE (earn-vs-lp decision)**: `deploy()` executes that swap
-  in-contract now, so `lib/gateway/deploy.ts` only SIZES the call (`swapAmount`/`minPairedOut` from live pool
-  state via `quoteToPairedAtSpot`), it no longer runs any swap of its own. **V1-07 (independent Codex audit,
-  round-4, 2026-09-09): "paired-token fees are never converted."** True — but the raw harvested paired amount
-  is NOT lost or unrecorded: `lib/gateway/ledger.ts#indexHarvestLogs` already writes every `Harvested` log's
-  `pairedFees` into `gateway_harvest_logs.paired_fees_atomic` (per-log, comprehensive — includes withdraw/
-  deploy sweeps, not just cron collects), and `gateway_fee_ledger_reconciliation.gross_paired_atomic` sums it
-  per pool. **Reconciled by documentation, not code** — a first attempt at this fix (session 2026-09-09,
-  caught by Codex's own live watch before it was committed) added a SECOND, redundant tracking column on
-  `harvest_events` with an actual unit-mismatch bug (conflating quote-denominated swap output with
-  paired-token-denominated input); reverted in favor of pointing at the ledger that already exists. **Still
-  genuinely open:** nothing reads `gateway_fee_ledger_reconciliation` through any API/UI today — the data is
-  durably tracked but not yet EXPOSED to an operator or depositor. That, plus the actual swap execution
-  (`routerSwap.ts`'s TODO), remain the real V1-07 remediation work.
+  (HO-15, their owners). Harvest uses a swap seam (`routerSwap.ts#swapPairedToQuote`) to convert harvested
+  paired-token fees back to quote — unrelated to deploy. **The deploy-side seam (`swapQuoteToPaired`) is GONE
+  (earn-vs-lp decision)**: `deploy()` executes that swap in-contract now, so `lib/gateway/deploy.ts` only SIZES
+  the call (`swapAmount`/`minPairedOut` from live pool state via `quoteToPairedAtSpot`), it no longer runs any
+  swap of its own. **V1-07 (independent Codex audit, round-4, 2026-09-09): "paired-token fees are never
+  converted."** Was true when raised; **the actual swap execution is now IMPLEMENTED (2026-09-10)** —
+  `swapPairedToQuote` builds and submits a real Uniswap V4 exact-in single-hop swap (`buildV4SwapCalldata`)
+  through Robinhood Chain **mainnet's** modified Universal Router (`0x8876789976dEcBfCbBbe364623C63652db8C0904`
+  — testnet 46630, where the gateway is actually deployed today, has NO V4 deployment at all, confirmed
+  against Uniswap's own docs). Remains a **fail-closed no-op today**: gated behind two independent flags
+  (`NEXT_PUBLIC_MW_ROUTER_ENABLED` + `LP_GATEWAY_ROUTER_ADDRESS`), both unset on the current testnet
+  deployment, so harvested paired fees still stay unconverted in the recipient wallet exactly as before — this
+  closes the code gap, not the runtime behavior, until the gateway itself is ever deployed to a chain with a
+  real router. **Honest verification scope (see the file's own header comment for full sourcing):** the swap
+  encoding is based on the router's own live-verified function selectors + a third-party integrator's
+  technical docs (neither Uniswap's nor Robinhood's own docs publish this struct) — NOT a fork test, NOT
+  bytecode decompilation, NOT a live test transaction (none possible in this sandbox). An operator MUST verify
+  with a small, monitored test swap before `LP_GATEWAY_ROUTER_ADDRESS` is ever set on a real deploy. 21 unit
+  tests (`routerSwap.test.ts`) cover the encoding (decoded back from its own output, not a magic hex string)
+  and every execution path incl. two Codex-caught hash-preservation cases: an error AFTER the swap tx is
+  already submitted (receipt-wait failure, post-swap balance-read failure) now always preserves the real
+  `txHash` for reconciliation instead of reporting `null` — an earlier draft lost it, making a submitted
+  on-chain swap indistinguishable from one that never happened. The raw harvested paired amount was never lost
+  either way: `lib/gateway/ledger.ts#indexHarvestLogs` already writes every `Harvested` log's `pairedFees` into
+  `gateway_harvest_logs.paired_fees_atomic` (per-log, comprehensive), and
+  `gateway_fee_ledger_reconciliation.gross_paired_atomic` sums it per pool. **Still genuinely open:** nothing
+  reads `gateway_fee_ledger_reconciliation` through any API/UI today — the data is durably tracked but not yet
+  EXPOSED to an operator or depositor.
 - **Depositable rule:** a pool is depositable only when `gateway_instances` holds an **`active`**, on-chain-verified
   (H-01) row for its **poolId** — the Discover `live` flag and `/earn/[pool]` must resolve through the registry, never
   through a pair label. The single-env `LP_GATEWAY_POSITION_MANAGER` fallback is bootstrap-only (O-2 closeout;
