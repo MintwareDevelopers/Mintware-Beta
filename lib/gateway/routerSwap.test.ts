@@ -1,0 +1,340 @@
+// Unit tests for the paired-fee → quote conversion seam (user directive, 2026-09-10: "finish paired-token
+// fee conversion"). No live chain access — everything here runs against injected fake viem-shaped clients,
+// same pattern as the rest of lib/gateway/*.test.ts. buildV4SwapCalldata is tested by DECODING its own
+// output back into components (never a hardcoded magic hex string) so the assertions stay meaningful if
+// viem's own encoding internals ever change formatting.
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { decodeAbiParameters } from 'viem'
+import { buildV4SwapCalldata, swapPairedToQuote } from './routerSwap'
+import { pairedToQuoteAtSpot, applyToleranceBps } from './v4Math'
+
+const POOL_KEY = {
+  currency0: ('0x' + 'aa'.repeat(20)) as `0x${string}`,
+  currency1: ('0x' + 'bb'.repeat(20)) as `0x${string}`,
+  fee: 3000,
+  tickSpacing: 60,
+  hooks: ('0x' + '00'.repeat(20)) as `0x${string}`,
+}
+const QUOTE = POOL_KEY.currency0 // quote == currency0 in these fixtures
+const PAIRED = POOL_KEY.currency1
+const OWNER = ('0x' + 'cc'.repeat(20)) as `0x${string}`
+const ROUTER = ('0x' + 'dd'.repeat(20)) as `0x${string}`
+const POOL_MANAGER = ('0x' + 'ee'.repeat(20)) as `0x${string}`
+
+describe('buildV4SwapCalldata — pure, deterministic; decoded back to verify, never a magic hex string', () => {
+  it('encodes a single V4_SWAP command byte', () => {
+    const { commands } = buildV4SwapCalldata({
+      poolKey: POOL_KEY, zeroForOne: true, amountIn: 1000n, amountOutMinimum: 900n,
+      inputCurrency: PAIRED, outputCurrency: QUOTE, deadline: 123n,
+    })
+    expect(commands).toBe('0x10') // V4_SWAP
+  })
+
+  it('produces exactly one input blob decoding to (actions, [swapParams, settleParams, takeParams])', () => {
+    const { inputs } = buildV4SwapCalldata({
+      poolKey: POOL_KEY, zeroForOne: true, amountIn: 1000n, amountOutMinimum: 900n,
+      inputCurrency: PAIRED, outputCurrency: QUOTE, deadline: 123n,
+    })
+    expect(inputs.length).toBe(1)
+    const [actions, params] = decodeAbiParameters([{ type: 'bytes' }, { type: 'bytes[]' }], inputs[0])
+    expect(actions).toBe('0x060c0f') // SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL
+    expect(params.length).toBe(3)
+  })
+
+  it('the swap-params blob decodes to the exact ExactInputSingleParams passed in, with minHopPriceX36 disabled (0)', () => {
+    const { inputs } = buildV4SwapCalldata({
+      poolKey: POOL_KEY, zeroForOne: true, amountIn: 12345n, amountOutMinimum: 6789n,
+      inputCurrency: PAIRED, outputCurrency: QUOTE, deadline: 999n,
+    })
+    const [, params] = decodeAbiParameters([{ type: 'bytes' }, { type: 'bytes[]' }], inputs[0])
+    const [decoded] = decodeAbiParameters(
+      [{
+        type: 'tuple',
+        components: [
+          { name: 'poolKey', type: 'tuple', components: [
+            { name: 'currency0', type: 'address' }, { name: 'currency1', type: 'address' },
+            { name: 'fee', type: 'uint24' }, { name: 'tickSpacing', type: 'int24' }, { name: 'hooks', type: 'address' },
+          ] },
+          { name: 'zeroForOne', type: 'bool' }, { name: 'amountIn', type: 'uint128' }, { name: 'amountOutMinimum', type: 'uint128' },
+          { name: 'minHopPriceX36', type: 'uint256' }, { name: 'hookData', type: 'bytes' },
+        ],
+      }],
+      params[0],
+    )
+    // viem returns EIP-55 checksummed addresses on decode — compare case-insensitively rather than
+    // asserting an exact casing the encoder never promised.
+    expect({
+      ...decoded,
+      poolKey: {
+        ...decoded.poolKey,
+        currency0: decoded.poolKey.currency0.toLowerCase(),
+        currency1: decoded.poolKey.currency1.toLowerCase(),
+        hooks: decoded.poolKey.hooks.toLowerCase(),
+      },
+    }).toMatchObject({
+      zeroForOne: true, amountIn: 12345n, amountOutMinimum: 6789n, minHopPriceX36: 0n, hookData: '0x',
+      poolKey: { currency0: POOL_KEY.currency0.toLowerCase(), currency1: POOL_KEY.currency1.toLowerCase(), fee: POOL_KEY.fee, tickSpacing: POOL_KEY.tickSpacing, hooks: POOL_KEY.hooks.toLowerCase() },
+    })
+  })
+
+  it('the settle-params blob decodes to (inputCurrency, amountIn) — SETTLE_ALL pays the input leg', () => {
+    const { inputs } = buildV4SwapCalldata({
+      poolKey: POOL_KEY, zeroForOne: false, amountIn: 500n, amountOutMinimum: 400n,
+      inputCurrency: PAIRED, outputCurrency: QUOTE, deadline: 1n,
+    })
+    const [, params] = decodeAbiParameters([{ type: 'bytes' }, { type: 'bytes[]' }], inputs[0])
+    const [currency, amount] = decodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], params[1])
+    expect(currency.toLowerCase()).toBe(PAIRED.toLowerCase())
+    expect(amount).toBe(500n)
+  })
+
+  it('the take-params blob decodes to (outputCurrency, amountOutMinimum) — TAKE_ALL claims the output leg', () => {
+    const { inputs } = buildV4SwapCalldata({
+      poolKey: POOL_KEY, zeroForOne: false, amountIn: 500n, amountOutMinimum: 400n,
+      inputCurrency: PAIRED, outputCurrency: QUOTE, deadline: 1n,
+    })
+    const [, params] = decodeAbiParameters([{ type: 'bytes' }, { type: 'bytes[]' }], inputs[0])
+    const [currency, amount] = decodeAbiParameters([{ type: 'address' }, { type: 'uint256' }], params[2])
+    expect(currency.toLowerCase()).toBe(QUOTE.toLowerCase())
+    expect(amount).toBe(400n)
+  })
+
+  it('passes the deadline through unchanged (not part of the inner V4 encoding, just returned alongside)', () => {
+    const { deadline } = buildV4SwapCalldata({
+      poolKey: POOL_KEY, zeroForOne: true, amountIn: 1n, amountOutMinimum: 1n,
+      inputCurrency: PAIRED, outputCurrency: QUOTE, deadline: 777777n,
+    })
+    expect(deadline).toBe(777777n)
+  })
+})
+
+describe('swapPairedToQuote', () => {
+  const ORIGINAL_ENV = { ...process.env }
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_MW_ROUTER_ENABLED = 'true'
+    process.env.LP_GATEWAY_ROUTER_ADDRESS = ROUTER
+  })
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV }
+    vi.restoreAllMocks()
+  })
+
+  it('no-ops immediately for a non-positive paired amount, without touching the network at all', async () => {
+    const publicClient = { readContract: vi.fn() }
+    const r = await swapPairedToQuote({ positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: {}, wallet: {}, publicClient, pairedAmount: 0n })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(publicClient.readContract).not.toHaveBeenCalled()
+  })
+
+  it('no-ops when NEXT_PUBLIC_MW_ROUTER_ENABLED is not "true"', async () => {
+    process.env.NEXT_PUBLIC_MW_ROUTER_ENABLED = 'false'
+    const publicClient = { readContract: vi.fn() }
+    const r = await swapPairedToQuote({ positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: {}, wallet: {}, publicClient, pairedAmount: 1000n })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(publicClient.readContract).not.toHaveBeenCalled()
+  })
+
+  it('no-ops when LP_GATEWAY_ROUTER_ADDRESS is unset — the actual state of the current testnet deployment', async () => {
+    delete process.env.LP_GATEWAY_ROUTER_ADDRESS
+    const publicClient = { readContract: vi.fn() }
+    const r = await swapPairedToQuote({ positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: {}, wallet: {}, publicClient, pairedAmount: 1000n })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(publicClient.readContract).not.toHaveBeenCalled()
+  })
+
+  // Packs a Slot0 word the way readCurrentTick (poolState.ts) expects to unpack it: low 160 bits
+  // sqrtPriceX96, next 24 bits signed tick.
+  function packSlot0(sqrtPriceX96: bigint, tick = 0): `0x${string}` {
+    const tickBits = BigInt.asUintN(24, BigInt(tick))
+    const word = (tickBits << 160n) | sqrtPriceX96
+    return ('0x' + word.toString(16).padStart(64, '0')) as `0x${string}`
+  }
+
+  function fakeClient(overrides: { allowance?: bigint; sqrtPriceX96?: bigint; quoteBalances?: bigint[] } = {}) {
+    const sqrtPriceX96 = overrides.sqrtPriceX96 ?? (1n << 96n) // price 1:1
+    const allowance = overrides.allowance ?? 0n
+    let balanceCallCount = 0
+    const quoteBalances = overrides.quoteBalances ?? [1_000_000n, 1_500_000n] // before, after
+
+    const readContract = vi.fn(async (args: any) => {
+      if (args.functionName === 'poolKey') return POOL_KEY
+      if (args.functionName === 'poolManager') return POOL_MANAGER
+      if (args.functionName === 'quoteAsset') return QUOTE
+      if (args.functionName === 'pairedAsset') return PAIRED
+      if (args.functionName === 'extsload') return packSlot0(sqrtPriceX96)
+      if (args.functionName === 'allowance') return allowance
+      if (args.functionName === 'balanceOf') {
+        const v = quoteBalances[Math.min(balanceCallCount, quoteBalances.length - 1)]
+        balanceCallCount++
+        return v
+      }
+      throw new Error(`unexpected readContract call: ${args.functionName}`)
+    })
+    const writeContract = vi.fn(async (args: any) => (args.functionName === 'approve' ? '0xapprovetx' : '0xswaptx'))
+    const waitForTransactionReceipt = vi.fn(async ({ hash }: { hash: string }) => ({ status: 'success', transactionHash: hash }))
+    const estimateContractGas = vi.fn(async () => 100_000n)
+    return { readContract, writeContract, waitForTransactionReceipt, estimateContractGas, chain: { id: 46630 } }
+  }
+
+  it('sizes and submits a real swap end-to-end when everything resolves cleanly — measures output by balance diff', async () => {
+    const client = fakeClient({ allowance: 10n ** 30n, quoteBalances: [1_000_000n, 1_500_000n] }) // allowance already sufficient
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r.quoteOut).toBe(500_000n) // 1,500,000 - 1,000,000, the real balance delta — not the theoretical estimate
+    expect(r.txHash).toBe('0xswaptx')
+    // No approve call needed — allowance was already sufficient.
+    expect(client.writeContract).toHaveBeenCalledTimes(1)
+  })
+
+  it('approves the router first when the current allowance is insufficient, then swaps', async () => {
+    const client = fakeClient({ allowance: 0n })
+    await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(client.writeContract).toHaveBeenCalledTimes(2) // approve, then execute
+    const [approveCall] = client.writeContract.mock.calls[0]
+    expect(approveCall.functionName).toBe('approve')
+    expect(approveCall.args).toEqual([ROUTER, 500_000n])
+  })
+
+  it('skips the approve call entirely when the existing allowance already covers the amount', async () => {
+    const client = fakeClient({ allowance: 1_000_000n })
+    await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(client.writeContract).toHaveBeenCalledTimes(1) // execute only
+    expect(client.writeContract.mock.calls[0][0].functionName).toBe('execute')
+  })
+
+  it('never returns more than the actual measured balance increase, even if it is less than the theoretical estimate', async () => {
+    // The pool math would suggest ~500,000 quote out at 1:1 spot, but the real balance only went up by
+    // 100,000 (e.g. a fee-on-transfer quote token, or genuine slippage) — must report the REAL number.
+    const client = fakeClient({ allowance: 10n ** 30n, quoteBalances: [1_000_000n, 1_100_000n] })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r.quoteOut).toBe(100_000n)
+  })
+
+  it('reports quoteOut:0 (never negative) if the quote balance somehow went DOWN — a real anomaly, not a guess', async () => {
+    const client = fakeClient({ allowance: 10n ** 30n, quoteBalances: [1_000_000n, 900_000n] })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r.quoteOut).toBe(0n)
+  })
+
+  it('leaves paired fees unconverted (never guesses a size) when the pool price is unreadable', async () => {
+    const client = fakeClient()
+    client.readContract = vi.fn(async (args: any) => {
+      if (args.functionName === 'poolKey') return POOL_KEY
+      if (args.functionName === 'poolManager') return POOL_MANAGER
+      if (args.functionName === 'quoteAsset') return QUOTE
+      if (args.functionName === 'pairedAsset') return PAIRED
+      if (args.functionName === 'extsload') throw new Error('rpc unavailable')
+      throw new Error('unexpected call')
+    })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(client.writeContract).not.toHaveBeenCalled()
+  })
+
+  it('does NOT swap when the router approval transaction itself reverts', async () => {
+    const client = fakeClient({ allowance: 0n })
+    client.waitForTransactionReceipt = vi.fn(async () => ({ status: 'reverted', transactionHash: '0xswaptx' }))
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(client.writeContract).toHaveBeenCalledTimes(1) // only the approve was attempted
+  })
+
+  it('reports the swap tx hash but quoteOut:0 when the swap itself reverts on-chain', async () => {
+    const client = fakeClient({ allowance: 10n ** 30n })
+    client.waitForTransactionReceipt = vi.fn(async () => ({ status: 'reverted', transactionHash: '0xswaptx' }))
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r).toEqual({ quoteOut: 0n, txHash: '0xswaptx' })
+  })
+
+  // Codex live-watch finding (2026-09-10): an earlier draft let ANY error after the swap tx was already
+  // submitted fall through to the outer catch, which returns txHash:null — indistinguishable from "never
+  // submitted", even though a real on-chain tx exists and may confirm successfully. Fixed by a nested
+  // try/catch that guarantees the hash survives once submission has actually happened.
+  it('preserves the submitted swap tx hash when waitForTransactionReceipt itself fails (e.g. RPC drop/timeout) — never reports it as null', async () => {
+    const client = fakeClient({ allowance: 10n ** 30n })
+    client.waitForTransactionReceipt = vi.fn(async () => { throw new Error('ECONNRESET while polling for receipt') })
+    const log = { warn: vi.fn() }
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n, log,
+    })
+    expect(r).toEqual({ quoteOut: 0n, txHash: '0xswaptx' })
+    expect(log.warn).toHaveBeenCalledWith('gateway.harvest', expect.stringContaining('could not be confirmed'), expect.objectContaining({ swapTx: '0xswaptx' }))
+  })
+
+  it('preserves the submitted swap tx hash when the post-swap balance read fails, even though the swap itself confirmed', async () => {
+    const client = fakeClient({ allowance: 10n ** 30n })
+    let balanceCalls = 0
+    client.readContract = vi.fn(async (args: any) => {
+      if (args.functionName === 'poolKey') return POOL_KEY
+      if (args.functionName === 'poolManager') return POOL_MANAGER
+      if (args.functionName === 'quoteAsset') return QUOTE
+      if (args.functionName === 'pairedAsset') return PAIRED
+      if (args.functionName === 'extsload') return packSlot0(1n << 96n)
+      if (args.functionName === 'allowance') return 10n ** 30n
+      if (args.functionName === 'balanceOf') {
+        balanceCalls++
+        if (balanceCalls === 1) return 1_000_000n // pre-swap read succeeds
+        throw new Error('rpc unavailable for post-swap balance read') // post-swap read fails
+      }
+      throw new Error(`unexpected readContract call: ${args.functionName}`)
+    })
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
+    })
+    expect(r).toEqual({ quoteOut: 0n, txHash: '0xswaptx' })
+  })
+
+  it('never throws out to the caller — any unexpected error is caught and reported as a safe no-op', async () => {
+    const client = fakeClient()
+    client.readContract = vi.fn(async () => { throw new Error('totally unexpected RPC failure') })
+    const log = { warn: vi.fn() }
+    const r = await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n, log,
+    })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(log.warn).toHaveBeenCalled()
+  })
+
+  it('sizes the swap using the SAME pairedToQuoteAtSpot + applyToleranceBps math deploy.ts uses for its own zap, for consistency', async () => {
+    // Cross-check: what the swap-params blob's amountOutMinimum ends up as should equal exactly what the
+    // shared math helpers compute — proves swapPairedToQuote isn't quietly duplicating (and risking
+    // drifting from) that formula.
+    const sqrtPriceX96 = 2n * (1n << 96n) // a non-trivial, non-1:1 price
+    const client = fakeClient({ allowance: 10n ** 30n, sqrtPriceX96 })
+    process.env.LP_GATEWAY_SWAP_SLIPPAGE_BPS = '250'
+    await swapPairedToQuote({
+      positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 777_777n,
+    })
+    const executeCall = client.writeContract.mock.calls.find((c: any[]) => c[0].functionName === 'execute')?.[0]
+    const [, inputs] = executeCall.args
+    const [, params] = decodeAbiParameters([{ type: 'bytes' }, { type: 'bytes[]' }], inputs[0])
+    const [decoded] = decodeAbiParameters(
+      [{ type: 'tuple', components: [
+        { name: 'poolKey', type: 'tuple', components: [
+          { name: 'currency0', type: 'address' }, { name: 'currency1', type: 'address' },
+          { name: 'fee', type: 'uint24' }, { name: 'tickSpacing', type: 'int24' }, { name: 'hooks', type: 'address' },
+        ] },
+        { name: 'zeroForOne', type: 'bool' }, { name: 'amountIn', type: 'uint128' }, { name: 'amountOutMinimum', type: 'uint128' },
+        { name: 'minHopPriceX36', type: 'uint256' }, { name: 'hookData', type: 'bytes' },
+      ] }],
+      params[0],
+    )
+    const expected = applyToleranceBps(pairedToQuoteAtSpot(777_777n, sqrtPriceX96, true), 250)
+    expect(decoded.amountOutMinimum).toBe(expected)
+  })
+})

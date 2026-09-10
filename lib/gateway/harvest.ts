@@ -337,7 +337,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   let swapTx: string | null = null
   let swappedQuote = 0n
   if (pairedFees > 0n) {
-    const swap = await swapPairedToQuote({ cfg, account, wallet, publicClient, pairedAmount: pairedFees, log })
+    const swap = await swapPairedToQuote({ positionManager: instance.positionManager, account, wallet, publicClient, pairedAmount: pairedFees, log })
     swappedQuote = swap.quoteOut
     swapTx = swap.txHash
   }
