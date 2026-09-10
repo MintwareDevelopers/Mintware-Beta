@@ -31,6 +31,7 @@ const MIGRATIONS = [
   '20260909000002_gateway_instances_history_per_pool.sql',
   '20260909000004_gateway_cost_basis_replay.sql',
   '20260909000005_gateway_positions_pm_generation.sql',
+  '20260909000006_gateway_position_recompute.sql',
 ]
 
 const migrationsDir = resolve(__dirname, '../../supabase/migrations')
@@ -230,5 +231,67 @@ describe('gateway cost-basis RPCs — real PostgreSQL execution (PGlite)', () =>
     const w = await withdraw({ tx: 'tx-new', quoteOut: '500000', onChainShares: '500000', sharesBurned: '500000', blockNumber: 200, pm: PM_A, txIndex: 0 })
     expect(w.rows[0]).toMatchObject({ position_found: true })
     expect(await basisFor(PM_A)).toBe('500000') // single-delta fallback: 1000000 * 500000/1000000 = 500000
+  })
+})
+
+// Historical PM attribution recovery, part 2 (independent Codex audit, to-do items 3/4, 2026-09-10).
+// `recompute_gateway_position` is what scripts/verify-gateway-pm-attribution.mjs calls AFTER it resolves
+// an orphaned event's real position_manager from a verified on-chain receipt — it never guesses on its
+// own, and refuses (raises) rather than silently computing a wrong number over an incomplete history.
+describe('recompute_gateway_position — historical attribution recovery', () => {
+  let db: PGlite
+
+  beforeAll(async () => {
+    db = new PGlite()
+    await db.exec('CREATE ROLE anon; CREATE ROLE authenticated;')
+    for (const name of MIGRATIONS) await db.exec(await readMigration(name))
+  }, 60_000)
+  afterAll(async () => { await db.close() })
+  beforeEach(async () => {
+    await db.exec('TRUNCATE gateway_positions, gateway_deposit_events RESTART IDENTITY CASCADE')
+  })
+
+  it('recomputes a position from resolved events, mirroring the RPCs\' own replay exactly', async () => {
+    // Simulates two events whose position_manager the verification script has already resolved from
+    // real on-chain receipts (this test only exercises the RECOMPUTE step, not the resolution itself).
+    await db.exec(`
+      INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, shares_minted, block_number, tx_index, position_manager)
+      VALUES ('resolved-1', '${USER}', 'deposit', '${POOL}', ${CHAIN}, 1000000, 1000000, 100, 0, '${PM_A}');
+      INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, shares_burned, block_number, tx_index, position_manager)
+      VALUES ('resolved-2', '${USER}', 'withdraw', '${POOL}', ${CHAIN}, 500000, 101, 0, '${PM_A}');
+    `)
+    const r = await db.query<{ cost_basis_atomic: string; shares_atomic: string; event_count: number }>(
+      `SELECT * FROM recompute_gateway_position($1,$2,$3,$4)`,
+      [USER, POOL, CHAIN, PM_A],
+    )
+    expect(r.rows[0]).toMatchObject({ cost_basis_atomic: '500000', shares_atomic: '500000', event_count: 2 })
+    const pos = await db.query<{ entry_nav: string }>(
+      `SELECT entry_nav::text FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+      [USER, POOL, CHAIN, PM_A],
+    )
+    expect(pos.rows[0]?.entry_nav).toBe('500000')
+  })
+
+  it('refuses (raises) rather than compute over a history still missing shares_minted/shares_burned', async () => {
+    await db.exec(`
+      INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, block_number, position_manager)
+      VALUES ('unresolved-1', '${USER}', 'deposit', '${POOL}', ${CHAIN}, 1000000, 100, '${PM_A}');
+    `)
+    await expect(db.query(`SELECT * FROM recompute_gateway_position($1,$2,$3,$4)`, [USER, POOL, CHAIN, PM_A]))
+      .rejects.toThrow()
+  })
+
+  it('refuses (raises) when no events exist for the given identity', async () => {
+    await expect(db.query(`SELECT * FROM recompute_gateway_position($1,$2,$3,$4)`, [USER, POOL, CHAIN, PM_A]))
+      .rejects.toThrow()
+  })
+
+  it('refuses (raises) when a withdraw would burn more than was ever minted for this exact generation', async () => {
+    await db.exec(`
+      INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, shares_burned, block_number, tx_index, position_manager)
+      VALUES ('over-burn', '${USER}', 'withdraw', '${POOL}', ${CHAIN}, 500000, 100, 0, '${PM_A}');
+    `)
+    await expect(db.query(`SELECT * FROM recompute_gateway_position($1,$2,$3,$4)`, [USER, POOL, CHAIN, PM_A]))
+      .rejects.toThrow()
   })
 })

@@ -227,16 +227,30 @@ unrelated).
   `_004` (cost-basis EVENT-ORDER fix — replaces the two `record_gateway_*_event` RPCs with a
   full-history-replay version that takes an EXTRA `p_block_number` arg, see the event-order note below) ·
   `_005` (cost-basis MANAGER-GENERATION fix — adds `position_manager` to `gateway_positions`'/
-  `gateway_deposit_events`' identity, replaces the two RPCs again with an adopt-or-create version keyed
-  per generation, see the routeInstance.ts residual note — now CLOSED — and the position/positions read
-  routes). ⚠ **`_004` and `_005` are NOT backward-compatible like the earlier ones** — the deposit/
-  withdraw ROUTES already call the RPCs with the new args (same commits as these migrations) but Postgres
-  treats a different arg count as a DIFFERENT function; until BOTH migrations are applied (in order —
-  `_005` builds on `_004`'s signature), there is NO matching RPC signature and
-  `/api/gateway/{deposit,withdraw}` will 500 on every call (`record_failed`) — apply them PROMPTLY after
-  this code deploys, the same way the prior cost-basis/RLS migrations were. On-chain funds are unaffected
-  either way (this is display-only cost-basis bookkeeping). All **deny-all RLS**. **Env vars:** every
-  `LP_GATEWAY_*` var is tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
+  `gateway_deposit_events`' identity; FINAL design, revised 2026-09-10 per Codex to-do items 2-4: both
+  RPCs take `pg_advisory_xact_lock` first (concurrency) and operate on an EXACT `(wallet, pool, chain,
+  positionManager)` match ONLY — no adopt-or-create, no migration-time backfill guess, ever. An orphaned
+  pre-existing row (`position_manager IS NULL`) is left untouched and invisible to every generation until
+  `scripts/verify-gateway-pm-attribution.mjs` resolves it from a real on-chain receipt) ·
+  `_006` (`recompute_gateway_position` — the second half of that recovery: called by the script AFTER it
+  resolves an orphaned row's real `position_manager`, to recompute the position from its now-correctly-
+  attributed history; refuses rather than guesses over an incomplete one). ⚠ **`_004`, `_005` and `_006`
+  are NOT backward-compatible like the earlier ones** — the deposit/withdraw ROUTES already call the RPCs
+  with the new args (same commits as these migrations) but Postgres treats a different arg count as a
+  DIFFERENT function; until `_004` and `_005` are BOTH applied (in order — `_005` builds on `_004`'s
+  signature), there is NO matching RPC signature and `/api/gateway/{deposit,withdraw}` will 500 on every
+  call (`record_failed`) — apply them PROMPTLY after this code deploys, the same way the prior cost-basis/
+  RLS migrations were. `_006` is additive (a new function, nothing else depends on it) and can be applied
+  whenever convenient, ideally alongside `_004`/`_005`. On-chain funds are unaffected either way (this is
+  display-only cost-basis bookkeeping). All **deny-all RLS**. **Env vars:** every `LP_GATEWAY_*` var is
+  tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
+- **Historical PM attribution recovery** (`scripts/verify-gateway-pm-attribution.mjs`, independent Codex
+  audit, to-do items 3/4, 2026-09-10): resolves orphaned (`position_manager IS NULL`) `gateway_deposit_events`
+  rows from real on-chain receipts (`receipt.to`, decoded `Deposited`/`Withdrawn` event) — never guesses;
+  an unresolvable row (pruned node, chain reorg, event/user mismatch) stays explicitly unresolved. Dry-run
+  by default (`node --env-file=.env.local scripts/verify-gateway-pm-attribution.mjs`); `--apply` actually
+  writes + calls `recompute_gateway_position` for each newly-resolved identity. Not run against production
+  data by anyone yet — an operator action, not something done automatically.
 
 ## Surfaces & the V1/V2 model
 - **`/v1`** ([`app/v1/page.tsx`](../../app/v1/page.tsx)) = the live product (`V1Shell` + `V1Discover` — the

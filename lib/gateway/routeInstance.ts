@@ -21,17 +21,21 @@
 // straight from the tx receipt itself, so it's never a caller-supplied claim) and
 // components/web2/v1/V1Portfolio.tsx / V1PoolDetail.tsx.
 //
-// CLOSED 2026-09-09 (same day, independent Codex audit, round-4 pass-2): the residual documented here
-// used to say `gateway_positions` was keyed by (user_wallet, pool_address, chain_id) — NOT
-// positionManager — so a wallet with deposits in both a retired and a replacement PM for the SAME pool
-// had its cost basis co-mingled in one row. Migration 20260909000005 adds position_manager to that
+// CLOSED 2026-09-09/10 (independent Codex audit, round-4 pass-2, revised 2026-09-10): the residual
+// documented here used to say `gateway_positions` was keyed by (user_wallet, pool_address, chain_id) —
+// NOT positionManager — so a wallet with deposits in both a retired and a replacement PM for the SAME
+// pool had its cost basis co-mingled in one row. Migration 20260909000005 adds position_manager to that
 // table's identity (+ gateway_deposit_events, for the event-order replay from 20260909000004 to scope
-// correctly per generation too); record_gateway_deposit_event/record_gateway_withdraw_event now do an
-// adopt-or-create lookup per (wallet, pool, chain, PM) instead of a bare upsert; the position/positions
-// read routes filter by the exact PM (falling back to a not-yet-adopted legacy NULL-PM row) instead of
-// ignoring it. See app/api/gateway/{position,positions}/route.ts and that migration's header comment
-// for the full design (including the accepted, disclosed limitation that pre-migration co-mingled
-// history can't be retroactively split, since position_manager was never recorded per-event before now).
+// correctly per generation too). Its FIRST two designs both guessed at ambiguous pre-existing history
+// (a migration-time "prefer the active PM" backfill, then a runtime "first write adopts everything" rule)
+// and were both caught by Codex's live watch as actively wrong, not just imperfect — a wallet whose real
+// history sits in a RETIRED PM could have that basis silently reassigned to an unrelated new generation.
+// FINAL design: record_gateway_deposit_event/record_gateway_withdraw_event operate on an EXACT (wallet,
+// pool, chain, PM) match ONLY, no guessing anywhere; the position/positions read routes do the same. An
+// orphaned (position_manager IS NULL) row is left untouched and invisible until
+// scripts/verify-gateway-pm-attribution.mjs resolves it from a REAL on-chain receipt (never inferred) and
+// migration 20260909000006's `recompute_gateway_position` recomputes it from that verified history. See
+// app/api/gateway/{position,positions}/route.ts and 20260909000005's header comment for the full design.
 //
 // 2026-09-09 fix (independent Codex audit, V1-01): deposit ELIGIBILITY and exit/read DISCOVERY are two
 // different questions and must not share one active-only lookup. `deactivateInstance`'s own doc comment
