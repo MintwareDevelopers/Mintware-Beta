@@ -25,6 +25,7 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { createPublicClient, http, decodeEventLog } from 'viem'
+import { pathToFileURL } from 'node:url'
 
 // Minimal ABI fragment — just the two events this script needs to decode (mirrors
 // lib/web3/artifacts/lpGateway.ts's Deposited/Withdrawn definitions; duplicated here because this is a
@@ -45,10 +46,16 @@ const LP_GATEWAY_EVENTS_ABI = [
 
 /** Core decision logic — pure w.r.t. its inputs (an injected `fetchReceipt`), so it's unit-testable
  *  without a live chain connection. Returns one plan entry per input row: `resolved: true` with the
- *  verified fields to write, or `resolved: false` with a reason — NEVER a guessed value either way. */
-export async function planAttribution(orphanedRows, fetchReceipt) {
+ *  verified fields to write, or `resolved: false` with a reason — NEVER a guessed value either way.
+ *  `configuredChainId`, when passed, guards against querying a receipt against the wrong chain's
+ *  client: a row whose own `chain_id` doesn't match is reported `chain_mismatch` and never fetched. */
+export async function planAttribution(orphanedRows, fetchReceipt, configuredChainId) {
   const plan = []
   for (const row of orphanedRows) {
+    if (configuredChainId != null && row.chain_id != null && Number(row.chain_id) !== Number(configuredChainId)) {
+      plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: `chain_mismatch: row is chain ${row.chain_id}, configured client is chain ${configuredChainId}` })
+      continue
+    }
     let receipt
     try {
       receipt = await fetchReceipt(row.tx_hash)
@@ -132,7 +139,7 @@ async function main() {
   if (!orphaned || orphaned.length === 0) { console.log('No orphaned (position_manager IS NULL) rows found. Nothing to do.'); return }
 
   console.log(`Found ${orphaned.length} orphaned row(s). Fetching on-chain receipts...\n`)
-  const plan = await planAttribution(orphaned, fetchReceipt)
+  const plan = await planAttribution(orphaned, fetchReceipt, chainId)
 
   const resolved = plan.filter((p) => p.resolved)
   const unresolved = plan.filter((p) => !p.resolved)
@@ -152,7 +159,6 @@ async function main() {
   }
 
   console.log('\nApplying resolved rows...')
-  const identities = new Set() // `${address}:${pool}:${chainId}:${pm}` — recompute each exactly once
   for (const p of resolved) {
     const { error: updErr } = await supabase
       .from('gateway_deposit_events')
@@ -164,15 +170,42 @@ async function main() {
         ...(p.sharesBurned != null ? { shares_burned: p.sharesBurned } : {}),
       })
       .eq('id', p.id)
-    if (updErr) { console.error(`  FAILED to update ${p.tx_hash}: ${updErr.message}`); continue }
-    identities.add(`${p.address.toLowerCase()}:${p.poolAddress.toLowerCase()}:${p.chainId}:${p.positionManager}`)
+    if (updErr) console.error(`  FAILED to update ${p.tx_hash}: ${updErr.message}`)
   }
 
-  console.log(`\nRecomputing ${identities.size} affected position(s)...`)
-  for (const key of identities) {
-    const [address, poolAddress, chainIdStr, positionManager] = key.split(':')
+  // Recompute is a FULL, idempotent, unconditional pass over every distinct identity that currently has
+  // a resolved position_manager — not just identities touched by THIS run's resolutions. This is what
+  // makes an interrupted --apply run self-healing: if a prior invocation updated some events but crashed
+  // (or was killed) before reaching this step, those rows' position_manager is already non-null, so the
+  // orphan scan above will never find them again — but they'll still show up here every time, and get
+  // recomputed again, until recompute_gateway_position actually succeeds for them.
+  await recomputeAllResolvedIdentities(supabase)
+  console.log('\nDone. Unresolved rows remain untouched — re-run this script later if more historical data becomes recoverable.')
+}
+
+/** Full, idempotent sweep: recompute EVERY distinct (address, pool_address, chain_id, position_manager)
+ *  combination currently present in gateway_deposit_events with a non-null position_manager — regardless
+ *  of whether this invocation resolved it or a prior (possibly interrupted) one did. Safe to call any
+ *  number of times; recompute_gateway_position itself just replays that identity's full event history. */
+export async function recomputeAllResolvedIdentities(supabase) {
+  const { data: rows, error } = await supabase
+    .from('gateway_deposit_events')
+    .select('address, pool_address, chain_id, position_manager')
+    .not('position_manager', 'is', null)
+  if (error) { console.error('Failed to list resolved identities for recompute:', error.message); return }
+
+  const identities = new Map() // key -> {address, poolAddress, chainId, positionManager}
+  for (const row of rows ?? []) {
+    const key = `${row.address.toLowerCase()}:${row.pool_address.toLowerCase()}:${row.chain_id}:${row.position_manager.toLowerCase()}`
+    if (!identities.has(key)) {
+      identities.set(key, { address: row.address, poolAddress: row.pool_address, chainId: row.chain_id, positionManager: row.position_manager })
+    }
+  }
+
+  console.log(`\nRecomputing ${identities.size} resolved position(s) (full idempotent pass, self-healing any interrupted prior run)...`)
+  for (const [key, id] of identities) {
     const { data, error: rpcErr } = await supabase.rpc('recompute_gateway_position', {
-      p_address: address, p_pool_address: poolAddress, p_chain_id: Number(chainIdStr), p_position_manager: positionManager,
+      p_address: id.address, p_pool_address: id.poolAddress, p_chain_id: id.chainId, p_position_manager: id.positionManager,
     })
     if (rpcErr) {
       console.error(`  FAILED to recompute ${key}: ${rpcErr.message} — this identity's history may still have gaps; re-run once resolved further.`)
@@ -180,9 +213,8 @@ async function main() {
     }
     console.log(`  ${key} → basis=${data?.[0]?.cost_basis_atomic} shares=${data?.[0]?.shares_atomic} (${data?.[0]?.event_count} events)`)
   }
-  console.log('\nDone. Unresolved rows remain untouched — re-run this script later if more historical data becomes recoverable.')
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main().catch((e) => { console.error(e); process.exit(1) })
 }

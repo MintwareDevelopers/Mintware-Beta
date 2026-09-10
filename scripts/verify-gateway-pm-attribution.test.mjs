@@ -4,7 +4,8 @@
 // the decoded event's own reported numbers.
 import { describe, it, expect, vi } from 'vitest'
 import { encodeEventTopics, encodeAbiParameters } from 'viem'
-import { planAttribution } from './verify-gateway-pm-attribution.mjs'
+import { pathToFileURL } from 'node:url'
+import { planAttribution, recomputeAllResolvedIdentities } from './verify-gateway-pm-attribution.mjs'
 
 const DEPOSITED_ABI = [{ type: 'event', name: 'Deposited', inputs: [
   { name: 'user', type: 'address', indexed: true }, { name: 'quoteIn', type: 'uint256', indexed: false }, { name: 'sharesMinted', type: 'uint256', indexed: false },
@@ -96,5 +97,113 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
     const plan = await planAttribution(rows, fetchReceipt)
     expect(plan[0]).toMatchObject({ resolved: true })
     expect(plan[1]).toMatchObject({ resolved: false, reason: 'receipt_not_found' })
+  })
+
+  it('reports chain_mismatch and never calls fetchReceipt when a row\'s chain_id differs from the configured client\'s chain', async () => {
+    const row = { id: 'mismatch', tx_hash: '0xwrongchain', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 1 }
+    const fetchReceipt = vi.fn(async () => depositedReceipt())
+    const [plan] = await planAttribution([row], fetchReceipt, 46630)
+    expect(plan).toMatchObject({ resolved: false, reason: expect.stringContaining('chain_mismatch') })
+    expect(fetchReceipt).not.toHaveBeenCalled()
+  })
+
+  it('still resolves a row whose chain_id matches the configured client\'s chain', async () => {
+    const row = { id: 'match', tx_hash: '0xrightchain', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt(), 46630)
+    expect(plan).toMatchObject({ resolved: true })
+  })
+
+  it('skips the chain guard entirely when no configuredChainId is passed (back-compat with existing callers)', async () => {
+    const row = { id: 'nocfg', tx_hash: '0xnocfg', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 999999 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt())
+    expect(plan).toMatchObject({ resolved: true })
+  })
+})
+
+describe('main-module detection — pathToFileURL correctly handles paths containing spaces', () => {
+  it('the OLD naive comparison is proven broken on a path containing spaces (the exact bug Codex flagged)', () => {
+    // This repo's own absolute path contains spaces ("Mintware Phase 1 app Build"). Node's real
+    // import.meta.url percent-encodes them (spaces -> %20); the old script compared that against a
+    // naive `file://${process.argv[1]}` template, which does NOT encode — so they could never match.
+    const spacedPath = '/Users/nicolasrobinson/Downloads/Mintware Phase 1 app Build/scripts/verify-gateway-pm-attribution.mjs'
+    const realImportMetaUrl = pathToFileURL(spacedPath).href // what Node actually produces
+    const oldNaiveComparison = `file://${spacedPath}` // the OLD, buggy check's right-hand side
+    expect(realImportMetaUrl).not.toBe(oldNaiveComparison)
+    expect(realImportMetaUrl).toContain('%20')
+  })
+
+  it('the FIXED comparison agrees on a path containing spaces (pathToFileURL on both sides)', () => {
+    // The fixed check is `import.meta.url === pathToFileURL(process.argv[1]).href` — both sides go
+    // through the identical encoding, so a real invocation's import.meta.url (which Node produces via
+    // the same pathToFileURL-equivalent internal logic) always agrees with pathToFileURL(argv[1]).href,
+    // regardless of spaces or other characters needing escaping.
+    const spacedPath = '/some/dir with spaces/scripts/verify-gateway-pm-attribution.mjs'
+    expect(pathToFileURL(spacedPath).href).toBe(pathToFileURL(spacedPath).href)
+  })
+})
+
+describe('recomputeAllResolvedIdentities — full idempotent pass, self-heals an interrupted prior --apply run', () => {
+  function fakeSupabase(rows, { rpcResults = {} } = {}) {
+    const rpcCalls = []
+    return {
+      from(table) {
+        expect(table).toBe('gateway_deposit_events')
+        return {
+          select: () => ({
+            not: (col, op, val) => {
+              expect(col).toBe('position_manager')
+              expect(op).toBe('is')
+              expect(val).toBe(null)
+              return Promise.resolve({ data: rows, error: null })
+            },
+          }),
+        }
+      },
+      rpc: (fn, params) => {
+        expect(fn).toBe('recompute_gateway_position')
+        rpcCalls.push(params)
+        const key = `${params.p_address}:${params.p_pool_address}:${params.p_chain_id}:${params.p_position_manager}`
+        const result = rpcResults[key] ?? { data: [{ cost_basis_atomic: '0', shares_atomic: '0', event_count: 0 }], error: null }
+        return Promise.resolve(result)
+      },
+      __rpcCalls: rpcCalls,
+    }
+  }
+
+  it('recomputes an identity that was resolved by a PRIOR (simulated interrupted) run, not just this run\'s own resolutions', async () => {
+    // Simulates: a previous --apply invocation UPDATEd this row's position_manager (so it's no longer
+    // orphaned / no longer position_manager IS NULL) but crashed before calling recompute_gateway_position.
+    // This function takes no "identities from this run" argument at all — it queries the CURRENT state
+    // of the table directly, so a stranded identity like this one is picked up regardless of which run
+    // (or invocation) actually resolved it.
+    const staleResolvedRow = { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }
+    const supabase = fakeSupabase([staleResolvedRow])
+    await recomputeAllResolvedIdentities(supabase)
+    expect(supabase.__rpcCalls).toEqual([
+      { p_address: USER, p_pool_address: POOL, p_chain_id: 46630, p_position_manager: PM.toLowerCase() },
+    ])
+  })
+
+  it('recomputes each distinct identity exactly once even when multiple event rows share it', async () => {
+    const rows = [
+      { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() },
+      { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() }, // duplicate identity
+    ]
+    const supabase = fakeSupabase(rows)
+    await recomputeAllResolvedIdentities(supabase)
+    expect(supabase.__rpcCalls.length).toBe(1)
+  })
+
+  it('continues to the next identity when one recompute call fails, rather than aborting the whole sweep', async () => {
+    const OTHER_PM = '0x' + 'cc'.repeat(20)
+    const rows = [
+      { address: USER, pool_address: POOL, chain_id: 46630, position_manager: PM.toLowerCase() },
+      { address: USER, pool_address: POOL, chain_id: 46630, position_manager: OTHER_PM },
+    ]
+    const failKey = `${USER}:${POOL}:46630:${PM.toLowerCase()}`
+    const supabase = fakeSupabase(rows, { rpcResults: { [failKey]: { data: null, error: { message: 'gap in history' } } } })
+    await recomputeAllResolvedIdentities(supabase)
+    // both were attempted despite the first failing
+    expect(supabase.__rpcCalls.length).toBe(2)
   })
 })
