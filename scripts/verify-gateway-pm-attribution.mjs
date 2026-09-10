@@ -84,12 +84,17 @@ function computePoolId(k) {
  *  registry.ts's header comment calls out as insufficient on its own for a NEW instance ("verified only
  *  that the candidate *said* it fronted the pool"), which is why registry.ts's `registerInstance` also
  *  requires a factory/codehash trust root plus owner/harvest-recipient seat checks before ever routing a
- *  fresh deposit to a PM. This script does NOT replicate that full trust-root verification, and it
- *  doesn't need to for its own job: every row it resolves already has a real, already-recorded tx_hash
- *  from an app-side deposit/withdraw route that could only have succeeded against an ALREADY-registered,
- *  already-trust-root-verified instance (the "Depositable rule" in .claude/rules/lp-gateway.md) — this
- *  check exists to catch script/runtime confusion (e.g. a wrong pool_address value), not to authorize an
- *  unknown or newly-seen PM. Do not extend this reasoning to any code path that routes a NEW deposit.
+ *  fresh deposit to a PM. This script does NOT replicate that full trust-root verification. It exists to
+ *  catch script/runtime confusion (e.g. a wrong pool_address value), not to authorize an unknown or
+ *  newly-seen PM — do not extend this reasoning to any code path that routes a NEW deposit.
+ *  ⚠ CORRECTED (Codex, 02:18 UTC): an earlier version of this comment claimed every orphaned row
+ *  "could only have succeeded against an already-registered, already-trust-root-verified instance" — that
+ *  is too broad stated as a blanket fact. `.claude/rules/lp-gateway.md`'s "Depositable rule" documents a
+ *  single-env `LP_GATEWAY_POSITION_MANAGER` bootstrap fallback that predates today's registry hardening,
+ *  and genuinely pre-hardening legacy rows are exactly the population this recovery script exists for.
+ *  So: most rows likely DID pass some form of registration, but that is an evidenced assumption per
+ *  recovered population, not a guarantee this script can rely on for every row — which is precisely why
+ *  this poolKey() consistency check exists at all, rather than skipping verification altogether.
  *  Without `fetchPoolId`, this check is skipped (back-compat for existing callers/tests that don't need
  *  live chain reads). */
 export async function planAttribution(orphanedRows, fetchReceipt, configuredChainId, fetchPoolId) {
