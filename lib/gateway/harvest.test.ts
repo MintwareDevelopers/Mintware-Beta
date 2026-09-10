@@ -48,7 +48,7 @@ vi.mock('@/lib/gateway/chain', () => ({
   gatewayPublicClient: () => publicClient,
 }))
 vi.mock('@/lib/web3/oracleSigner', () => ({ getOracleSigner: async () => ({ address: SEAT }) }))
-const swapMock = vi.fn(async () => ({ quoteOut: 0n, txHash: null as string | null }))
+const swapMock = vi.fn(async () => ({ quoteOut: 0n, txHash: null as string | null, needsReconciliation: false }))
 vi.mock('@/lib/gateway/routerSwap', () => ({
   swapPairedToQuote: (...a: unknown[]) => swapMock(...(a as [])),
 }))
@@ -120,7 +120,7 @@ beforeEach(() => {
   compoundRevertsNextCompound = false
   pairedFeesNextHarvest = 0n
   indexMock.mockReset(); pendingMock.mockReset(); markMock.mockReset(); claimMock.mockClear(); releaseMock.mockClear()
-  swapMock.mockReset(); swapMock.mockResolvedValue({ quoteOut: 0n, txHash: null })
+  swapMock.mockReset(); swapMock.mockResolvedValue({ quoteOut: 0n, txHash: null, needsReconciliation: false })
   process.env.LP_GATEWAY_HARVEST_ENABLED = 'true'
   process.env.LP_GATEWAY_PERF_FEE_BPS = '1000'
   delete process.env.LP_GATEWAY_HARVEST_DESTINATION
@@ -273,7 +273,7 @@ describe('harvestGateway', () => {
   describe('durable recording of a real swap_tx even when the later restake/compound step fails (Codex live-watch, 2026-09-10)', () => {
     it('claim failure still durably records this run\'s collect_tx + swap_tx (credited: 0)', async () => {
       pairedFeesNextHarvest = 500_000n
-      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX })
+      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX, needsReconciliation: false })
       claimMock.mockRejectedValueOnce(new Error('claim rpc failed'))
       indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
       pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
@@ -285,7 +285,7 @@ describe('harvestGateway', () => {
 
     it('a reverted compound still durably records this run\'s collect_tx + swap_tx (credited: 0)', async () => {
       pairedFeesNextHarvest = 500_000n
-      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX })
+      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX, needsReconciliation: false })
       compoundRevertsNextCompound = true
       indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
       pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
@@ -298,7 +298,7 @@ describe('harvestGateway', () => {
 
     it('a restake-mark failure (compound mined, but the ledger mark itself fails) still durably records collect_tx + swap_tx (credited: 0)', async () => {
       pairedFeesNextHarvest = 500_000n
-      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX })
+      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX, needsReconciliation: false })
       markMock.mockRejectedValueOnce(new Error('mark rpc failed'))
       indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
       pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
@@ -318,6 +318,28 @@ describe('harvestGateway', () => {
       // of it failed to persist. That must be loud, not invisible.
       expect(r.ok).toBe(true)
       expect(log.error).toHaveBeenCalledWith('gateway.harvest', expect.stringContaining('NOT persisted'), expect.objectContaining({ error: 'simulated insert failure' }))
+    })
+
+    it('threads swapPairedToQuote\'s needsReconciliation signal through to the persisted row (reconciliation cron, user directive 2026-09-10: "built it")', async () => {
+      pairedFeesNextHarvest = 500_000n
+      swapMock.mockResolvedValueOnce({ quoteOut: 0n, txHash: SWAP_TX, needsReconciliation: true })
+      indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+      pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
+      const { client, tables } = fakeDb()
+      const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+      expect(r.ok).toBe(true)
+      expect(tables.harvest_events[0]).toMatchObject({ swap_tx: SWAP_TX, swap_needs_reconciliation: true })
+    })
+
+    it('leaves swap_needs_reconciliation false when the swap was fully measured', async () => {
+      pairedFeesNextHarvest = 500_000n
+      swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX, needsReconciliation: false })
+      indexMock.mockResolvedValue(okIndex({ creditedAtomic: 0n }))
+      pendingMock.mockResolvedValue({ ids: ['log-1'], netAtomic: 9_000_000n })
+      const { client, tables } = fakeDb()
+      const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+      expect(r.ok).toBe(true)
+      expect(tables.harvest_events[0]).toMatchObject({ swap_tx: SWAP_TX, swap_needs_reconciliation: false })
     })
 
     it('a pure backlog-only settle failure (no fresh collect this run) does NOT write a useless all-null harvest_events row', async () => {

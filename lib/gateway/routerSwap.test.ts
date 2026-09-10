@@ -136,7 +136,7 @@ describe('swapPairedToQuote', () => {
   it('no-ops immediately for a non-positive paired amount, without touching the network at all', async () => {
     const publicClient = { readContract: vi.fn() }
     const r = await swapPairedToQuote({ positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: {}, wallet: {}, publicClient, pairedAmount: 0n })
-    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null, needsReconciliation: false })
     expect(publicClient.readContract).not.toHaveBeenCalled()
   })
 
@@ -144,7 +144,7 @@ describe('swapPairedToQuote', () => {
     process.env.NEXT_PUBLIC_MW_ROUTER_ENABLED = 'false'
     const publicClient = { readContract: vi.fn() }
     const r = await swapPairedToQuote({ positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: {}, wallet: {}, publicClient, pairedAmount: 1000n })
-    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null, needsReconciliation: false })
     expect(publicClient.readContract).not.toHaveBeenCalled()
   })
 
@@ -152,7 +152,7 @@ describe('swapPairedToQuote', () => {
     delete process.env.LP_GATEWAY_ROUTER_ADDRESS
     const publicClient = { readContract: vi.fn() }
     const r = await swapPairedToQuote({ positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: {}, wallet: {}, publicClient, pairedAmount: 1000n })
-    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null, needsReconciliation: false })
     expect(publicClient.readContract).not.toHaveBeenCalled()
   })
 
@@ -373,7 +373,7 @@ describe('swapPairedToQuote', () => {
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
     })
-    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null, needsReconciliation: false })
     expect(client.writeContract).not.toHaveBeenCalled()
   })
 
@@ -383,65 +383,50 @@ describe('swapPairedToQuote', () => {
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
     })
-    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null, needsReconciliation: false })
     expect(client.writeContract).toHaveBeenCalledTimes(1) // only the approve was attempted
   })
 
-  it('reports the swap tx hash but quoteOut:0 when the swap itself reverts on-chain', async () => {
+  it('reports the swap tx hash but quoteOut:0 when the swap itself reverts on-chain — a definitive terminal outcome, never flagged for reconciliation', async () => {
     const client = fakeClient({ allowance: 10n ** 30n })
     client.waitForTransactionReceipt = vi.fn(async () => ({ status: 'reverted', transactionHash: '0xswaptx', logs: [] }))
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
     })
-    expect(r).toEqual({ quoteOut: 0n, txHash: '0xswaptx' })
+    expect(r).toEqual({ quoteOut: 0n, txHash: '0xswaptx', needsReconciliation: false })
   })
 
   // Codex live-watch finding (2026-09-10): an earlier draft let ANY error after the swap tx was already
   // submitted fall through to the outer catch, which returns txHash:null — indistinguishable from "never
   // submitted", even though a real on-chain tx exists and may confirm successfully. Fixed by a nested
   // try/catch that guarantees the hash survives once submission has actually happened.
-  it('preserves the submitted swap tx hash when waitForTransactionReceipt itself fails (e.g. RPC drop/timeout) — never reports it as null', async () => {
+  it('preserves the submitted swap tx hash when waitForTransactionReceipt itself fails (e.g. RPC drop/timeout) — never reports it as null, and flags it for reconciliation', async () => {
     const client = fakeClient({ allowance: 10n ** 30n })
     client.waitForTransactionReceipt = vi.fn(async () => { throw new Error('ECONNRESET while polling for receipt') })
     const log = { warn: vi.fn() }
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n, log,
     })
-    expect(r).toEqual({ quoteOut: 0n, txHash: '0xswaptx' })
+    expect(r).toEqual({ quoteOut: 0n, txHash: '0xswaptx', needsReconciliation: true })
     expect(log.warn).toHaveBeenCalledWith('gateway.harvest', expect.stringContaining('could not be confirmed'), expect.objectContaining({ swapTx: '0xswaptx' }))
   })
 
-  it('preserves the submitted swap tx hash when the post-swap balance read fails, even though the swap itself confirmed', async () => {
-    const client = fakeClient({ allowance: 10n ** 30n })
-    let balanceCalls = 0
-    client.readContract = vi.fn(async (args: any) => {
-      if (args.functionName === 'poolKey') return POOL_KEY
-      if (args.functionName === 'poolManager') return POOL_MANAGER
-      if (args.functionName === 'quoteAsset') return QUOTE
-      if (args.functionName === 'pairedAsset') return PAIRED
-      if (args.functionName === 'extsload') return packSlot0(1n << 96n)
-      if (args.functionName === 'allowance') return 10n ** 30n
-      if (args.functionName === 'balanceOf') {
-        balanceCalls++
-        if (balanceCalls === 1) return 1_000_000n // pre-swap read succeeds
-        throw new Error('rpc unavailable for post-swap balance read') // post-swap read fails
-      }
-      throw new Error(`unexpected readContract call: ${args.functionName}`)
-    })
+  it('preserves the submitted swap tx hash and flags reconciliation when the swap confirmed but no qualifying Transfer log was found', async () => {
+    const client = fakeClient({ allowance: 10n ** 30n }) // no swapLogs override — receipt has no Transfer log
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n,
     })
-    expect(r).toEqual({ quoteOut: 0n, txHash: '0xswaptx' })
+    expect(r).toEqual({ quoteOut: 0n, txHash: '0xswaptx', needsReconciliation: true })
   })
 
-  it('never throws out to the caller — any unexpected error is caught and reported as a safe no-op', async () => {
+  it('never throws out to the caller — any unexpected error is caught and reported as a safe no-op, never needing reconciliation (no tx was ever submitted)', async () => {
     const client = fakeClient()
     client.readContract = vi.fn(async () => { throw new Error('totally unexpected RPC failure') })
     const log = { warn: vi.fn() }
     const r = await swapPairedToQuote({
       positionManager: '0x' + '11'.repeat(20) as `0x${string}`, account: { address: OWNER }, wallet: client, publicClient: client, pairedAmount: 500_000n, log,
     })
-    expect(r).toEqual({ quoteOut: 0n, txHash: null })
+    expect(r).toEqual({ quoteOut: 0n, txHash: null, needsReconciliation: false })
     expect(log.warn).toHaveBeenCalled()
   })
 

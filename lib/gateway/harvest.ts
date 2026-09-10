@@ -160,10 +160,11 @@ async function settlePendingBacklog(opts: {
   swappedNet?: bigint
   collectTx?: `0x${string}`
   swapTx?: string | null
+  swapNeedsReconciliation?: boolean
   grossAtomic?: bigint
   feeAtomic?: bigint
 }): Promise<HarvestOutcome | null> {
-  const { supabase, log, instance, publicClient, wallet, account, index, swappedNet = 0n, collectTx, swapTx = null, grossAtomic = 0n, feeAtomic = 0n } = opts
+  const { supabase, log, instance, publicClient, wallet, account, index, swappedNet = 0n, collectTx, swapTx = null, swapNeedsReconciliation = false, grossAtomic = 0n, feeAtomic = 0n } = opts
   const pending = await listPendingRestake(supabase, instance)
   const amount = pending.netAtomic + swappedNet
   if (amount <= 0n) return null
@@ -189,6 +190,10 @@ async function settlePendingBacklog(opts: {
     const { error } = await supabase.from('harvest_events').insert({
       pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx ?? null, swap_tx: swapTx,
       amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(), amount_credited_atomic: credited.toString(),
+      // Reconciliation cron signal (user directive, 2026-09-10: "built it") — see swapPairedToQuote's
+      // SwapResult.needsReconciliation for exactly what this means. reconcileSwaps.ts picks up rows where
+      // this is true and re-checks the swap_tx's real on-chain outcome later.
+      swap_needs_reconciliation: swapNeedsReconciliation,
     })
     if (error) {
       log?.error('gateway.harvest', 'harvest_events insert failed — this run\'s record (incl. swap_tx, if any) was NOT persisted; a real on-chain event may now be untracked', {
@@ -363,23 +368,19 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
   if (dupe) return { ok: false, status: 200, error: 'already recorded', reason: 'duplicate' }
 
   // 2) convert the paired leg → quote via the MW router (seam; no-op returns 0 swapped when unavailable).
-  // ⚠ Known residuals, NOT fully closed (Codex live-watch, 2026-09-10 — corrected after Codex disputed an
-  // earlier, too-optimistic version of this comment; see .claude/rules/lp-gateway.md's V1-07 note for the
-  // full list). swapPairedToQuote preserves swapTx even when confirmation/measurement fails after a real
-  // submit (routerSwap.ts) — but the `record(...)` calls below and in settlePendingBacklog that would
-  // persist that hash into `harvest_events.swap_tx` (a) never check their own insert's result, and (b)
-  // several failure returns in settlePendingBacklog (claim failure, compound revert, compound-receipt-
-  // unknown, restake-mark failure) skip calling record() entirely — so a real, submitted swap can end up
-  // recorded NOWHERE in this app's own tables, not just "pending reconciliation." Recovery today is fully
-  // manual and not even reliably possible from this app's own data. No automated reconciliation job exists
-  // either way. This is a genuine gap in what "finish paired-token fee conversion" asked for, not optional
-  // follow-on scope — do not present the fee-conversion work as complete while this stands.
+  // Durably recorded (collect_tx/swap_tx survive every failure path below — this session's earlier fix)
+  // AND, when this run's own swap couldn't be measured (unconfirmed, or confirmed with no qualifying
+  // Transfer log — see routerSwap.ts#SwapResult.needsReconciliation), flagged so reconcileSwaps.ts can
+  // re-check it later and recover any real proceeds this run genuinely couldn't prove (user directive,
+  // 2026-09-10: "built it" — closing the last real V1-07 gap Codex's live-watch kept flagging).
   let swapTx: string | null = null
   let swappedQuote = 0n
+  let swapNeedsReconciliation = false
   if (pairedFees > 0n) {
     const swap = await swapPairedToQuote({ positionManager: instance.positionManager, account, wallet, publicClient, pairedAmount: pairedFees, log })
     swappedQuote = swap.quoteOut
     swapTx = swap.txHash
+    swapNeedsReconciliation = swap.needsReconciliation
   }
   const grossAtomic = quoteFees + swappedQuote
   const { feeAtomic } = skimPerformanceFee(grossAtomic, perfFeeBps())
@@ -399,6 +400,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     const { error: insertError } = await supabase.from('harvest_events').insert({
       pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
       amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: '0', amount_credited_atomic: '0',
+      swap_needs_reconciliation: swapNeedsReconciliation,
     })
     if (insertError) {
       log?.error('gateway.harvest', 'harvest_events insert ALSO failed on the index-failure path — this run\'s record (incl. swap_tx, if any) was NOT persisted', {
@@ -414,6 +416,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     const { error } = await supabase.from('harvest_events').insert({
       pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: swapTx,
       amount_harvested_atomic: grossAtomic.toString(), fee_skimmed_atomic: feeAtomic.toString(), amount_credited_atomic: credited.toString(),
+      swap_needs_reconciliation: swapNeedsReconciliation,
     })
     if (error) {
       log?.error('gateway.harvest', 'harvest_events insert failed — this run\'s record (incl. swap_tx, if any) was NOT persisted; a real on-chain event may now be untracked', {
@@ -430,7 +433,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     // V1-02 fix: this collect's own logic is now shared with the dust-floor/deterministic-revert
     // short-circuits above via settlePendingBacklog — one claim→approve→compoundQuote→mark
     // implementation instead of two copies that could quietly drift apart.
-    const settled = await settlePendingBacklog({ supabase, log, instance, publicClient, wallet, account, index, swappedNet, collectTx, swapTx, grossAtomic, feeAtomic })
+    const settled = await settlePendingBacklog({ supabase, log, instance, publicClient, wallet, account, index, swappedNet, collectTx, swapTx, swapNeedsReconciliation, grossAtomic, feeAtomic })
     if (settled) return settled
     // Nothing to compound even after this collect — still record the run (a real collect DID happen).
     await record(0n)

@@ -41,7 +41,21 @@ import { estimateGasWithFloor } from '@/lib/gateway/gasEstimate'
 
 type Logger = { warn: (tag: string, msg: string, ctx?: Record<string, unknown>) => void }
 
-export type SwapResult = { quoteOut: bigint; txHash: string | null }
+export type SwapResult = {
+  quoteOut: bigint
+  txHash: string | null
+  // Automated reconciliation (user directive, 2026-09-10: "built it" — the one remaining real gap Codex's
+  // live-watch flagged in the fee-conversion work). True ONLY when a real swap was submitted (`txHash` set)
+  // and its true proceeds could NOT be measured this run — either the confirmation itself failed (RPC
+  // drop/timeout) or the swap confirmed but no qualifying Transfer log was found. Both cases mean real
+  // on-chain proceeds may exist that this run reported as `quoteOut: 0` purely because they couldn't be
+  // proven yet — `lib/gateway/reconcileSwaps.ts` re-checks exactly these rows later. False whenever there
+  // is nothing to recover: no swap attempted, the swap reverted (a confirmed terminal failure — proceeds
+  // are definitionally zero, re-checking can never change that), or the swap's real proceeds WERE measured
+  // (whether positive or a confirmed net-zero/negative) — a definitive on-chain answer, not something a
+  // later re-check could improve on.
+  needsReconciliation: boolean
+}
 
 // Robinhood Chain's modified Universal Router — see the header note above for exactly what this encoding
 // is (and isn't) verified against.
@@ -141,8 +155,9 @@ function swapSlippageBps(): number {
  *  outgoing) is found at all — distinct from "found transfers netting to zero" — so the caller can tell
  *  "confirmed zero proceeds" apart from "this router's actual payout mechanism doesn't emit a standard
  *  Transfer here, method unknown." Relies only on the ERC-20 standard, never the router's own unverified
- *  custom event shapes. */
-function measureSwapProceeds(logs: readonly { address: string; data: `0x${string}`; topics: readonly `0x${string}`[] }[] | undefined | null, quoteAsset: `0x${string}`, owner: `0x${string}`): bigint | null {
+ *  custom event shapes. Exported so `reconcileSwaps.ts` reuses this EXACT algorithm when re-checking a
+ *  previously-unmeasured swap — never a second, potentially-drifting implementation. */
+export function measureSwapProceeds(logs: readonly { address: string; data: `0x${string}`; topics: readonly `0x${string}`[] }[] | undefined | null, quoteAsset: `0x${string}`, owner: `0x${string}`): bigint | null {
   let net: bigint | null = null
   for (const lg of logs ?? []) {
     if (lg.address.toLowerCase() !== quoteAsset.toLowerCase()) continue
@@ -175,7 +190,7 @@ export async function swapPairedToQuote(opts: {
   log?: Logger
 }): Promise<SwapResult> {
   const { positionManager, account, wallet, publicClient, pairedAmount, log } = opts
-  if (pairedAmount <= 0n) return { quoteOut: 0n, txHash: null }
+  if (pairedAmount <= 0n) return { quoteOut: 0n, txHash: null, needsReconciliation: false }
 
   // Both flags independently gate this — see the header note for why. Neither is set for the current
   // testnet deployment, so this branch (never fabricating a conversion) is what actually runs today.
@@ -185,7 +200,7 @@ export async function swapPairedToQuote(opts: {
     log?.warn('gateway.harvest', 'paired-leg swap seam not wired; leaving paired fees unconverted', {
       pairedAmount: pairedAmount.toString(),
     })
-    return { quoteOut: 0n, txHash: null }
+    return { quoteOut: 0n, txHash: null, needsReconciliation: false }
   }
 
   try {
@@ -198,7 +213,7 @@ export async function swapPairedToQuote(opts: {
     const slot0 = await readCurrentTick({ client: publicClient, poolManager, poolKey })
     if (!slot0 || slot0.sqrtPriceX96 <= 0n) {
       log?.warn('gateway.harvest', 'pool price unreadable — leaving paired fees unconverted rather than guess a swap size', {})
-      return { quoteOut: 0n, txHash: null }
+      return { quoteOut: 0n, txHash: null, needsReconciliation: false }
     }
     const quoteIsCurrency0 = quoteAsset.toLowerCase() === poolKey.currency0.toLowerCase()
     // zeroForOne: swapping the PAIRED leg → quote. If quote is currency0, paired is currency1, so this
@@ -209,7 +224,7 @@ export async function swapPairedToQuote(opts: {
     const minQuoteOut = applyToleranceBps(expectedQuoteOut, swapSlippageBps())
     if (minQuoteOut <= 0n) {
       log?.warn('gateway.harvest', 'expected swap output rounds to zero — leaving paired fees unconverted', { pairedAmount: pairedAmount.toString() })
-      return { quoteOut: 0n, txHash: null }
+      return { quoteOut: 0n, txHash: null, needsReconciliation: false }
     }
 
     const owner = (account as { address: `0x${string}` }).address
@@ -226,7 +241,7 @@ export async function swapPairedToQuote(opts: {
       const approveReceipt = await publicClient.waitForTransactionReceipt({ hash: approveTx })
       if (approveReceipt.status !== 'success') {
         log?.warn('gateway.harvest', 'router approval failed — leaving paired fees unconverted', { approveTx })
-        return { quoteOut: 0n, txHash: null }
+        return { quoteOut: 0n, txHash: null, needsReconciliation: false }
       }
     }
 
@@ -249,7 +264,9 @@ export async function swapPairedToQuote(opts: {
       const swapReceipt = await publicClient.waitForTransactionReceipt({ hash: swapTx })
       if (swapReceipt.status !== 'success') {
         log?.warn('gateway.harvest', 'router swap tx reverted — leaving paired fees unconverted', { swapTx })
-        return { quoteOut: 0n, txHash: swapTx }
+        // A confirmed revert is a DEFINITIVE terminal outcome — proceeds are zero, always; re-checking
+        // this tx later can never produce a different answer, so this does NOT need reconciliation.
+        return { quoteOut: 0n, txHash: swapTx, needsReconciliation: false }
       }
 
       // ONLY source of truth for quoteOut: sum this receipt's OWN Transfer(quoteAsset → owner) logs —
@@ -266,24 +283,30 @@ export async function swapPairedToQuote(opts: {
       // that actually risks other depositors' NAV.
       const netTransfer = measureSwapProceeds(swapReceipt.logs, quoteAsset, owner)
       if (netTransfer === null) {
-        log?.warn('gateway.harvest', 'swap confirmed but no ERC-20 Transfer log to owner found in its receipt — quoteOut honestly unmeasured (0), never guessed from a wallet balance diff', { swapTx })
+        log?.warn('gateway.harvest', 'swap confirmed but no ERC-20 Transfer log to owner found in its receipt — quoteOut honestly unmeasured (0), flagged for reconciliation, never guessed from a wallet balance diff', { swapTx })
+        // Confirmed success, but this run genuinely could not measure proceeds — a LATER re-check (e.g. an
+        // indexer lag, or this router turning out to route through a non-standard payout path this run's
+        // logs didn't capture for some other reason) is worth attempting. reconcileSwaps.ts re-runs this
+        // exact same measurement later.
+        return { quoteOut: 0n, txHash: swapTx, needsReconciliation: true }
       }
       // Clamp negative (never possible from a genuine swap payout, but a defensive floor in case this
       // same transaction moved MORE quoteAsset out of owner than in, for reasons unrelated to this swap's
       // own proceeds) — report 0 rather than a negative quoteOut, same "never guess/never overstate" rule.
-      const quoteOut = netTransfer !== null && netTransfer > 0n ? netTransfer : 0n
-      return { quoteOut, txHash: swapTx }
+      // Either way this IS a definitive, measured on-chain answer — nothing for a later re-check to improve.
+      const quoteOut = netTransfer > 0n ? netTransfer : 0n
+      return { quoteOut, txHash: swapTx, needsReconciliation: false }
     } catch (e) {
       // The submit succeeded; only confirming it (or measuring its result) failed — e.g. an RPC drop or
       // timeout on waitForTransactionReceipt, not a revert. quoteOut is honestly unmeasured (0n, never
-      // guessed), but the hash is preserved so an operator/ledger can look the tx up on-chain later rather
+      // guessed), but the hash is preserved so reconcileSwaps.ts can look the tx up on-chain later rather
       // than silently losing track of a real on-chain swap.
       log?.warn('gateway.harvest', 'router swap submitted but could not be confirmed — txHash preserved for reconciliation, not treated as failed or unconverted', { swapTx, error: String(e) })
-      return { quoteOut: 0n, txHash: swapTx }
+      return { quoteOut: 0n, txHash: swapTx, needsReconciliation: true }
     }
   } catch (e) {
     log?.warn('gateway.harvest', 'paired-leg swap failed before submission — leaving paired fees unconverted rather than fail the whole harvest', { error: String(e) })
-    return { quoteOut: 0n, txHash: null }
+    return { quoteOut: 0n, txHash: null, needsReconciliation: false }
   }
 }
 

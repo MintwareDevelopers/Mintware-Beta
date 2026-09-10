@@ -180,12 +180,14 @@ unrelated).
   (TVL/age/tx) are upstream-asserted — a wash-traded fake can still score 0; that is why the verdict is a human
   gate and the UI chip must not read as certification. Est. APR is labeled an estimate, never a
   projection/guarantee (hard copy line).
-- **Crons** (`app/api/(rewards)/cron/gateway-{discover,snapshot,harvest,deploy}`) — flag-gated OFF + fail-closed.
-  **Schedule truth (`vercel.json`): `discover` daily `0 5 * * *`, `snapshot` daily `0 6 * * *`; `harvest` and
-  `deploy` are NOT scheduled** (bearer routes, run by hand). Deploy has idempotency (L-02). Money-moving crons
-  sign via **`getOracleSigner('gateway')`** — a DEDICATED Privy seat (`GATEWAY_ORACLE_PRIVY_WALLET_ID/_ADDRESS`,
-  no shared-key fallback in app code) that is the rig's owner (`0x18AE…663c`). Prod's shared `root` is a
-  different wallet (`0x7fD8…7E06`, card/x402/treasury) and must never own a gateway (re-audit A-3 key hardening).
+- **Crons** (`app/api/(rewards)/cron/gateway-{discover,snapshot,harvest,deploy,reconcile-swaps}`) — flag-gated
+  OFF + fail-closed. **Schedule truth (`vercel.json`): `discover` daily `0 5 * * *`, `snapshot` daily
+  `0 6 * * *`; `harvest`, `deploy` and `reconcile-swaps` are NOT scheduled** (bearer routes, run by hand).
+  Deploy has idempotency (L-02); `reconcile-swaps` is idempotent per row (`swap_needs_reconciliation` gates
+  it, never reprocessed once resolved). Money-moving crons sign via **`getOracleSigner('gateway')`** — a
+  DEDICATED Privy seat (`GATEWAY_ORACLE_PRIVY_WALLET_ID/_ADDRESS`, no shared-key fallback in app code) that is
+  the rig's owner (`0x18AE…663c`). Prod's shared `root` is a different wallet (`0x7fD8…7E06`, card/x402/
+  treasury) and must never own a gateway (re-audit A-3 key hardening).
 - **Routes** (`app/api/gateway/{discover,sparklines,instances,position,positions,leaderboard,alerts,deposit,withdraw,curate,request,meta,fee-reconciliation}`) — all
   `createHandler`. `fee-reconciliation` is bearer-gated (`ADMIN_SECRET`) — an operator-only read of the
   already-durable per-log paired-fee ledger (V1-07 above). `deposit`/`withdraw` **routes** require **signed-message auth + tx-hash idempotency** (M-04 —
@@ -252,21 +254,45 @@ unrelated).
     collected something new (`collectTx` set) — a pure backlog-only settle attempt with nothing new this run
     is deliberately left as a no-op (nothing new to lose; the pending amount stays protected by
     `claimRestake`/`releaseRestake` regardless).
-  - **Still genuinely open, not built:** no automated reconciliation job exists — nothing re-checks a
-    preserved `swap_tx` whose proceeds came back unmeasured (`quoteOut: 0` with a real hash) and retroactively
-    credits it once knowable; recovery today is fully manual. Router compatibility remains unverified against
-    real bytecode/a fork test/a live transaction (can't be closed from this sandbox). Historical/withdraw/
-    deploy-sweep paired-token inventory predating this feature is never selected for conversion. Buffer-mode
-    harvest destination never credits converted proceeds per-depositor (buffer destination is currently
-    unreachable anyway — `resolveHarvestDestination` always returns `'restake'`).
+  - **Automated reconciliation — BUILT (user directive, 2026-09-10: "built it").** `lib/gateway/reconcileSwaps.ts`
+    (cron: `app/api/(rewards)/cron/gateway-reconcile-swaps`, flag-gated `LP_GATEWAY_RECONCILE_ENABLED`,
+    OFF by default) re-checks every `harvest_events` row `swapPairedToQuote` flagged
+    `needsReconciliation` (migration `20260910000001` adds `swap_needs_reconciliation`/
+    `swap_reconciled_at`/`swap_reconciliation_outcome`/`swap_reconciliation_tx` to `harvest_events`).
+    Never guesses: re-fetches the swap's own receipt from chain and re-runs the EXACT SAME
+    `measureSwapProceeds` (now exported from `routerSwap.ts` so both call sites share one algorithm, never
+    two that could drift) — receipt not found yet ⇒ left pending, retried next pass; a confirmed revert ⇒
+    resolved `'reverted'` (definitive, proceeds are zero, never retried again); confirmed success but still
+    no qualifying Transfer log ⇒ resolved `'unmeasurable'` (a permanent characteristic of that transaction,
+    flagged for manual operator review via the outcome column, not retried forever); a measured net ≤ 0 ⇒
+    resolved `'zero'`; a measured net > 0 ⇒ **real recovery** — submits a genuine `compoundQuote()` (the
+    SAME approve+compound pattern `settlePendingBacklog` already uses) to actually credit the recovered
+    proceeds into NAV, resolved `'recovered'` with the real compound tx hash recorded. The owner address to
+    check Transfer logs against comes from the SAME dedicated `gateway` oracle seat every instance shares —
+    no signer this run ⇒ the WHOLE pass skips (never guesses an owner for even the read-only outcomes). A
+    disclosed, accepted residual: if the recovery compound tx mines but the row's own status update then
+    fails, the row stays flagged pending and a later pass would attempt to recover the SAME amount again
+    (double-compound risk) — loudly logged as needing immediate manual intervention, not silently retried;
+    this mirrors the same class of accepted residual `settlePendingBacklog`'s own "compound sent but receipt
+    unknown" path already carries.
+  - **Still genuinely open, not built:** router compatibility remains unverified against real bytecode/a
+    fork test/a live transaction (can't be closed from this sandbox — needs an operator test-swap before
+    `LP_GATEWAY_ROUTER_ADDRESS` is ever set on a real deploy). Historical/withdraw/deploy-sweep paired-token
+    inventory predating this feature is never selected for conversion. Buffer-mode harvest destination never
+    credits converted proceeds per-depositor (buffer destination is currently unreachable anyway —
+    `resolveHarvestDestination` always returns `'restake'`).
   Verification for the above: 28 unit tests in `routerSwap.test.ts` (encoding decoded back from its own
   output, never a magic hex string; every execution + failure path; dedicated tests proving the Transfer-log
   measurement is immune to the exact concurrent-activity contamination scenario Codex described, and that it
-  correctly NETS an outgoing same-receipt transfer rather than reporting the gross inflow) + 5 new durability
+  correctly NETS an outgoing same-receipt transfer rather than reporting the gross inflow) + 7 durability
   tests in `harvest.test.ts` (each of `settlePendingBacklog`'s failure paths proven to still durably record
   `collect_tx`/`swap_tx`; a forced insert failure proven to log loudly; the backlog-only path proven NOT to
-  write a useless null row) — `pnpm exec tsc --noEmit --incremental false` clean, full `pnpm test` green
-  (1267 passed, 4 pre-existing skips, 0 failures) after every round.
+  write a useless null row; the `needsReconciliation` signal proven to thread through to the persisted row
+  both ways) + 15 tests in `reconcileSwaps.test.ts` (every outcome — still-pending/reverted/unmeasurable/
+  zero/recovered — against REAL Transfer-log fixtures via the actual `measureSwapProceeds`, not a re-mocked
+  stub; the compound-revert and post-recovery row-update-failure edge cases; multi-row independence) —
+  `pnpm exec tsc --noEmit --incremental false` clean, full `pnpm test` green (1284 passed, 4 pre-existing
+  skips, 0 failures) after every round.
 - **Depositable rule:** a pool is depositable only when `gateway_instances` holds an **`active`**, on-chain-verified
   (H-01) row for its **poolId** — the Discover `live` flag and `/earn/[pool]` must resolve through the registry, never
   through a pair label. The single-env `LP_GATEWAY_POSITION_MANAGER` fallback is bootstrap-only (O-2 closeout;
@@ -327,7 +353,12 @@ unrelated).
   every normal deposit/withdraw; proven directly in `costBasisRpc.pglite.test.ts` by a dedicated test
   suite that applies every migration EXCEPT `_007` and confirms a fresh deposit still succeeds. Applying
   `_006` alone (without `_007`) is likewise safe for the same reason. On-chain funds are unaffected either
-  way (this is display-only cost-basis bookkeeping). All **deny-all RLS**. **Env vars:** every
+  way (this is display-only cost-basis bookkeeping). ·
+  `20260910000001` (fee-conversion swap reconciliation — user directive, 2026-09-10: "built it"; adds
+  `swap_needs_reconciliation`/`swap_reconciled_at`/`swap_reconciliation_outcome`/`swap_reconciliation_tx`
+  to `harvest_events`, read/written by `lib/gateway/reconcileSwaps.ts`; existing rows default
+  `swap_needs_reconciliation = false` — the concept postdates them, nothing retroactively flags historical
+  rows). All **deny-all RLS**. **Env vars:** every
   `LP_GATEWAY_*` var is tabled in
   [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
 - **Historical PM attribution recovery** (`scripts/verify-gateway-pm-attribution.mjs`, independent Codex
