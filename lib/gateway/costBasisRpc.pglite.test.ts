@@ -395,4 +395,58 @@ describe('apply_gateway_pm_attribution — atomic event-update + recompute', () 
     await expect(db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [id, PM_A, 100, 0, null, '999999999']))
       .rejects.toThrow()
   })
+
+  // Codex, 2026-09-10 (second live-review pass): "cross-PM crash-before-final-sweep still falsely
+  // complete" — the FIRST version of this function only recomputed the ONE identity passed to it, so
+  // resolving the LAST orphan to a DIFFERENT PM than an earlier-resolved sibling would recompute only the
+  // later PM, leaving the earlier one stale until a SEPARATE, non-atomic script-level sweep happened to
+  // run. Fixed: the moment remaining_orphans reaches 0, this function recomputes EVERY distinct PM
+  // sharing the wallet/pool/chain, in the SAME transaction — no separate step needed.
+  it('cross-PM: resolving the LAST orphan (to a DIFFERENT PM) atomically recomputes an EARLIER sibling PM too, in the SAME call', async () => {
+    const idA = await insertOrphan('tx-cross-a', 'deposit', { quote_in: '1000000' }) // will resolve to PM_A
+    const idB = await insertOrphan('tx-cross-b', 'deposit', { quote_in: '2000000' }) // will resolve to PM_B — the LAST orphan
+
+    // Resolve PM_A FIRST, while idB is still an orphan — must report complete:false (a sibling remains).
+    const first = await db.query<{ updated: boolean; complete: boolean; remaining_orphans: number }>(
+      `SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [idA, PM_A, 100, 0, '1000000', null],
+    )
+    expect(first.rows[0]).toMatchObject({ updated: true, complete: false, remaining_orphans: 1 })
+    const posABefore = await db.query(`SELECT 1 FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`, [USER, POOL, CHAIN, PM_A])
+    expect(posABefore.rows.length).toBe(0) // not yet recomputed — correctly withheld while a sibling was orphaned
+
+    // Resolve PM_B SECOND — this is the call that eliminates the LAST orphan for this wallet/pool/chain.
+    const second = await db.query<{ updated: boolean; complete: boolean; cost_basis_atomic: string; remaining_orphans: number }>(
+      `SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [idB, PM_B, 101, 0, '2000000', null],
+    )
+    // The call's own return row reports on the REQUESTED identity (PM_B) — complete, with PM_B's basis.
+    expect(second.rows[0]).toMatchObject({ updated: true, complete: true, cost_basis_atomic: '2000000', remaining_orphans: 0 })
+
+    // The core fix: PM_A — resolved by an EARLIER, separate call — is ALSO now recomputed, atomically,
+    // as a side effect of THIS SAME call (no separate sweep, no separate transaction).
+    const posA = await db.query<{ entry_nav: string }>(`SELECT entry_nav::text FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`, [USER, POOL, CHAIN, PM_A])
+    expect(posA.rows[0]?.entry_nav).toBe('1000000')
+    const posB = await db.query<{ entry_nav: string }>(`SELECT entry_nav::text FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`, [USER, POOL, CHAIN, PM_B])
+    expect(posB.rows[0]?.entry_nav).toBe('2000000')
+  })
+
+  it('cross-PM: a SIBLING PM with its own data gap is silently skipped (not blocking the requested PM), rather than raising for someone else\'s problem', async () => {
+    // PM_A already has a gap (missing shares_minted) baked in directly — never went through the orphan
+    // flow, simulating a pre-existing incomplete identity that happens to share this wallet/pool/chain.
+    await insertOrphan('tx-gappy-sibling', 'deposit', { quote_in: '1000000', position_manager: PM_A, block_number: 50, tx_index: 0 })
+    const idB = await insertOrphan('tx-cross-b2', 'deposit', { quote_in: '2000000' })
+    const r = await db.query<{ complete: boolean; cost_basis_atomic: string }>(
+      `SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [idB, PM_B, 100, 0, '2000000', null],
+    )
+    // PM_B's own recompute succeeds despite PM_A's unrelated gap.
+    expect(r.rows[0]).toMatchObject({ complete: true, cost_basis_atomic: '2000000' })
+    // PM_A was correctly left untouched (never guessed over its own known gap).
+    const posA = await db.query(`SELECT 1 FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`, [USER, POOL, CHAIN, PM_A])
+    expect(posA.rows.length).toBe(0)
+  })
+
+  it('cross-PM: raises when the REQUESTED PM itself is the one with the gap, even if the loop reaches it after other PMs', async () => {
+    const idGappySibling = await insertOrphan('tx-gap-req', 'withdraw') // will be the requested PM, deliberately given no shares_burned
+    await expect(db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [idGappySibling, PM_A, 100, 0, null, null]))
+      .rejects.toThrow()
+  })
 })

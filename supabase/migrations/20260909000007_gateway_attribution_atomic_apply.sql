@@ -19,6 +19,23 @@
 -- the caller gets back exactly how many orphaned siblings remain, so the recovery script can report
 -- "resolved but not yet recomputed — N sibling row(s) still unattributed" honestly instead of silently
 -- retrying forever.
+--
+-- REVISED same-day, following a second Codex live-review pass ("cross-PM crash-before-final-sweep still
+-- falsely complete"): the FIRST version of this function only recomputed the ONE identity
+-- (p_position_manager) passed to it. That is correct for a wallet/pool/chain with a SINGLE PM generation,
+-- but when TWO orphaned rows for the same wallet/pool/chain resolve to TWO DIFFERENT position managers,
+-- the identity resolved FIRST (say PM_A, while a sibling row was still orphaned) reports complete:false
+-- and is correctly left unrecomputed at that moment — but once the LAST orphan resolves (to PM_B, in a
+-- LATER call), that call would only recompute PM_B's own identity, leaving PM_A stale until the script's
+-- SEPARATE, non-transactional backstop sweep (recomputeAllResolvedIdentities) happens to run — a crash
+-- between finishing the per-row apply loop and that sweep would leave PM_A stranded indefinitely (it
+-- would eventually self-heal on a LATER script invocation, but that is not the same as atomic). Fixed:
+-- the moment THIS call determines there are ZERO remaining orphans for the wallet/pool/chain, it
+-- recomputes EVERY distinct position_manager identity sharing that wallet/pool/chain — not just the one
+-- passed in — all within this SAME transaction. The script's backstop sweep still exists for staleness
+-- that predates this migration (or a crash before this specific call ever runs), but for the specific
+-- "resolving the last orphan makes multiple sibling PMs simultaneously completable" case, this closes it
+-- atomically at the SQL level with no separate script-level step required at all.
 
 CREATE OR REPLACE FUNCTION apply_gateway_pm_attribution(
   p_event_id uuid,
@@ -51,6 +68,11 @@ DECLARE
   v_running_shares numeric(78,0) := 0;
   v_event_count integer := 0;
   v_ev record;
+  v_pm_iter text;
+  v_target_basis numeric(78,0);
+  v_target_shares numeric(78,0);
+  v_target_events integer;
+  v_target_found boolean := false;
 BEGIN
   IF v_pm IS NULL THEN
     RAISE EXCEPTION 'apply_gateway_pm_attribution: position_manager must be resolved (non-null) before applying';
@@ -101,49 +123,87 @@ BEGIN
     RETURN;
   END IF;
 
-  -- Same gap-completeness gate as recompute_gateway_position — refuse rather than guess.
-  SELECT EXISTS(
-    SELECT 1 FROM gateway_deposit_events
-    WHERE address = v_address AND pool_address = v_pool AND chain_id = v_chain_id AND position_manager = v_pm
-      AND ((kind = 'withdraw' AND shares_burned IS NULL) OR (kind = 'deposit' AND shares_minted IS NULL))
-  ) INTO v_has_gap;
-  IF v_has_gap THEN
-    RAISE EXCEPTION 'apply_gateway_pm_attribution: % / % / % / % still has events missing shares_minted/shares_burned — resolve them first, refusing to guess', v_address, v_pool, v_chain_id, v_pm;
-  END IF;
-
-  FOR v_ev IN
-    SELECT kind, quote_in, shares_minted, shares_burned
-    FROM gateway_deposit_events
-    WHERE address = v_address AND pool_address = v_pool AND chain_id = v_chain_id AND position_manager = v_pm
-    ORDER BY block_number NULLS FIRST, tx_index NULLS FIRST, created_at
+  -- The last orphan for this wallet/pool/chain is now resolved (by this call or already before it) —
+  -- recompute EVERY distinct position_manager identity sharing this wallet/pool/chain, atomically, in
+  -- THIS SAME transaction. See the header note above ("REVISED same-day") for why this must cover every
+  -- sibling PM, not just the one requested.
+  FOR v_pm_iter IN
+    SELECT DISTINCT position_manager FROM gateway_deposit_events
+    WHERE address = v_address AND pool_address = v_pool AND chain_id = v_chain_id AND position_manager IS NOT NULL
   LOOP
-    v_event_count := v_event_count + 1;
-    IF v_ev.kind = 'deposit' THEN
-      v_new_basis := v_new_basis + COALESCE(v_ev.quote_in, 0);
-      v_running_shares := v_running_shares + COALESCE(v_ev.shares_minted, 0);
-    ELSE
-      IF v_running_shares < v_ev.shares_burned THEN
-        RAISE EXCEPTION 'apply_gateway_pm_attribution: % / % / % / % has a withdraw burning more shares (%) than minted so far (%) — history is still incomplete, refusing to guess', v_address, v_pool, v_chain_id, v_pm, v_ev.shares_burned, v_running_shares;
+    -- Same gap-completeness gate as recompute_gateway_position, scoped to THIS identity. The specific PM
+    -- the caller actually requested must raise loudly on a gap (never silently succeed with a wrong
+    -- answer for what the caller asked for); an unrelated SIBLING PM's own gap is its own separate,
+    -- already-flagged problem — skip recomputing it this pass rather than block the requested PM's
+    -- otherwise-legitimate atomic win. It remains recoverable later (the script's backstop sweep, or a
+    -- future call once that sibling's own gap is resolved).
+    SELECT EXISTS(
+      SELECT 1 FROM gateway_deposit_events
+      WHERE address = v_address AND pool_address = v_pool AND chain_id = v_chain_id AND position_manager = v_pm_iter
+        AND ((kind = 'withdraw' AND shares_burned IS NULL) OR (kind = 'deposit' AND shares_minted IS NULL))
+    ) INTO v_has_gap;
+    IF v_has_gap THEN
+      IF v_pm_iter = v_pm THEN
+        RAISE EXCEPTION 'apply_gateway_pm_attribution: % / % / % / % still has events missing shares_minted/shares_burned — resolve them first, refusing to guess', v_address, v_pool, v_chain_id, v_pm;
       END IF;
-      v_running_shares := v_running_shares - v_ev.shares_burned;
-      IF v_running_shares = 0 THEN
-        v_new_basis := 0;
+      CONTINUE;
+    END IF;
+
+    v_new_basis := 0;
+    v_running_shares := 0;
+    v_event_count := 0;
+    FOR v_ev IN
+      SELECT kind, quote_in, shares_minted, shares_burned
+      FROM gateway_deposit_events
+      WHERE address = v_address AND pool_address = v_pool AND chain_id = v_chain_id AND position_manager = v_pm_iter
+      ORDER BY block_number NULLS FIRST, tx_index NULLS FIRST, created_at
+    LOOP
+      v_event_count := v_event_count + 1;
+      IF v_ev.kind = 'deposit' THEN
+        v_new_basis := v_new_basis + COALESCE(v_ev.quote_in, 0);
+        v_running_shares := v_running_shares + COALESCE(v_ev.shares_minted, 0);
       ELSE
-        v_new_basis := (v_new_basis * v_running_shares) / (v_running_shares + v_ev.shares_burned);
+        IF v_running_shares < v_ev.shares_burned THEN
+          IF v_pm_iter = v_pm THEN
+            RAISE EXCEPTION 'apply_gateway_pm_attribution: % / % / % / % has a withdraw burning more shares (%) than minted so far (%) — history is still incomplete, refusing to guess', v_address, v_pool, v_chain_id, v_pm, v_ev.shares_burned, v_running_shares;
+          END IF;
+          v_event_count := 0; -- discard this sibling's partial replay — leave its position untouched
+          EXIT;
+        END IF;
+        v_running_shares := v_running_shares - v_ev.shares_burned;
+        IF v_running_shares = 0 THEN
+          v_new_basis := 0;
+        ELSE
+          v_new_basis := (v_new_basis * v_running_shares) / (v_running_shares + v_ev.shares_burned);
+        END IF;
       END IF;
+    END LOOP;
+
+    IF v_event_count = 0 THEN
+      IF v_pm_iter = v_pm THEN
+        RAISE EXCEPTION 'apply_gateway_pm_attribution: no events found for % / % / % / % — nothing to recompute', v_address, v_pool, v_chain_id, v_pm;
+      END IF;
+      CONTINUE; -- an over-burn sibling (see above) or a genuinely eventless identity — leave it untouched
+    END IF;
+
+    INSERT INTO gateway_positions (user_wallet, pool_address, chain_id, position_manager, shares, entry_nav, updated_at)
+    VALUES (v_address, v_pool, v_chain_id, v_pm_iter, v_running_shares, v_new_basis, now())
+    ON CONFLICT (user_wallet, pool_address, chain_id, position_manager) DO UPDATE SET
+      shares = EXCLUDED.shares, entry_nav = EXCLUDED.entry_nav, updated_at = now();
+
+    IF v_pm_iter = v_pm THEN
+      v_target_basis := v_new_basis;
+      v_target_shares := v_running_shares;
+      v_target_events := v_event_count;
+      v_target_found := true;
     END IF;
   END LOOP;
 
-  IF v_event_count = 0 THEN
-    RAISE EXCEPTION 'apply_gateway_pm_attribution: no events found for % / % / % / % — nothing to recompute', v_address, v_pool, v_chain_id, v_pm;
+  IF NOT v_target_found THEN
+    RAISE EXCEPTION 'apply_gateway_pm_attribution: no events found for the requested identity % / % / % / % after recompute', v_address, v_pool, v_chain_id, v_pm;
   END IF;
 
-  INSERT INTO gateway_positions (user_wallet, pool_address, chain_id, position_manager, shares, entry_nav, updated_at)
-  VALUES (v_address, v_pool, v_chain_id, v_pm, v_running_shares, v_new_basis, now())
-  ON CONFLICT (user_wallet, pool_address, chain_id, position_manager) DO UPDATE SET
-    shares = EXCLUDED.shares, entry_nav = EXCLUDED.entry_nav, updated_at = now();
-
-  RETURN QUERY SELECT v_updated, true, v_new_basis, v_running_shares, v_event_count, 0;
+  RETURN QUERY SELECT v_updated, true, v_target_basis, v_target_shares, v_target_events, 0;
 END;
 $$;
 
