@@ -72,7 +72,7 @@ describe('gateway cost-basis RPCs — real PostgreSQL execution (PGlite)', () =>
   })
 
   beforeEach(async () => {
-    await db.exec('TRUNCATE gateway_positions, gateway_deposit_events, gateway_instances RESTART IDENTITY CASCADE')
+    await db.exec('TRUNCATE gateway_positions, gateway_deposit_events, gateway_instances, gateway_position_recompute_issues RESTART IDENTITY CASCADE')
   })
 
   async function deposit(a: DepositArgs) {
@@ -232,6 +232,102 @@ describe('gateway cost-basis RPCs — real PostgreSQL execution (PGlite)', () =>
     const w = await withdraw({ tx: 'tx-new', quoteOut: '500000', onChainShares: '500000', sharesBurned: '500000', blockNumber: 200, pm: PM_A, txIndex: 0 })
     expect(w.rows[0]).toMatchObject({ position_found: true })
     expect(await basisFor(PM_A)).toBe('500000') // single-delta fallback: 1000000 * 500000/1000000 = 500000
+  })
+
+  // User directive (2026-09-10, fourth Codex live-review pass): "Finish issue-state lifecycle: if a late
+  // deposit/withdraw recording repairs the complete event replay, clear that identity's old recompute
+  // issue... Do not clear it on incremental fallback or incomplete replay."
+  describe('record_gateway_deposit_event / record_gateway_withdraw_event — recompute-issue lifecycle', () => {
+    it('a CLEAN (full-replay) deposit clears a pre-existing recompute issue for its own identity', async () => {
+      await db.exec(`
+        INSERT INTO gateway_position_recompute_issues (user_wallet, pool_address, chain_id, position_manager, reason)
+        VALUES ('${USER}', '${POOL}', ${CHAIN}, '${PM_A}', 'over_burn');
+      `)
+      await deposit({ tx: 'tx-clean-clears', quoteIn: '1000000', onChainShares: '1000000', blockNumber: 100, pm: PM_A, txIndex: 0, sharesMinted: '1000000' })
+      const issue = await db.query(
+        `SELECT 1 FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+        [USER, POOL, CHAIN, PM_A],
+      )
+      expect(issue.rows.length).toBe(0)
+    })
+
+    it('a CLEAN withdraw clears a pre-existing recompute issue for its own identity', async () => {
+      await deposit({ tx: 'tx-w-base', quoteIn: '1000000', onChainShares: '1000000', blockNumber: 100, pm: PM_A, txIndex: 0, sharesMinted: '1000000' })
+      await db.exec(`
+        INSERT INTO gateway_position_recompute_issues (user_wallet, pool_address, chain_id, position_manager, reason)
+        VALUES ('${USER}', '${POOL}', ${CHAIN}, '${PM_A}', 'data_gap');
+      `)
+      await withdraw({ tx: 'tx-w-clean-clears', quoteOut: '500000', onChainShares: '500000', sharesBurned: '500000', blockNumber: 101, pm: PM_A, txIndex: 0 })
+      const issue = await db.query(
+        `SELECT 1 FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+        [USER, POOL, CHAIN, PM_A],
+      )
+      expect(issue.rows.length).toBe(0)
+    })
+
+    it('does NOT clear the issue when the deposit falls back to the single-delta (incomplete-history) path', async () => {
+      // Same legacy-fallback setup as the test above this describe block — this deposit is forced onto
+      // the fallback path (a sibling event for this PM is missing shares_minted), so it must NOT clear.
+      await db.exec(`
+        INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, position_manager)
+        VALUES ('legacy-no-shares', '${USER}', 'deposit', '${POOL}', ${CHAIN}, 1000000, '${PM_A}');
+        INSERT INTO gateway_position_recompute_issues (user_wallet, pool_address, chain_id, position_manager, reason)
+        VALUES ('${USER}', '${POOL}', ${CHAIN}, '${PM_A}', 'data_gap');
+      `)
+      await deposit({ tx: 'tx-fallback-no-clear', quoteIn: '500000', onChainShares: '1500000', blockNumber: 101, pm: PM_A, txIndex: 0, sharesMinted: '500000' })
+      const issue = await db.query(
+        `SELECT 1 FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+        [USER, POOL, CHAIN, PM_A],
+      )
+      expect(issue.rows.length).toBe(1) // still incomplete — the fallback never proved a genuine full resolution
+    })
+
+    it('does NOT touch a DIFFERENT identity\'s recompute issue', async () => {
+      const OTHER_PM = 'pm-unrelated-record'
+      await db.exec(`
+        INSERT INTO gateway_position_recompute_issues (user_wallet, pool_address, chain_id, position_manager, reason)
+        VALUES ('${USER}', '${POOL}', ${CHAIN}, '${OTHER_PM}', 'over_burn');
+      `)
+      await deposit({ tx: 'tx-unrelated-record', quoteIn: '1000000', onChainShares: '1000000', blockNumber: 100, pm: PM_A, txIndex: 0, sharesMinted: '1000000' })
+      const issue = await db.query(
+        `SELECT 1 FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+        [USER, POOL, CHAIN, OTHER_PM],
+      )
+      expect(issue.rows.length).toBe(1) // untouched — a different identity's own issue is not this call's concern
+    })
+  })
+})
+
+// Deploy-ordering safety net: migration _005 (record_gateway_deposit_event/withdraw_event) is on the HOT
+// deposit/withdraw path — unlike the recovery-only _006/_007 functions, an operator could plausibly apply
+// _004+_005 without yet applying _006/_007 (they're documented as "additive... whenever convenient", not
+// required alongside _004/_005 the way _004+_005 require each other). If _005's new issue-clearing DELETE
+// hard-failed on the absent gateway_position_recompute_issues table in that window, EVERY normal deposit/
+// withdraw would break — proving the defensive exception wrapper actually works is the whole point of this
+// suite, run against a SEPARATE database that deliberately excludes migration _007.
+describe('record_gateway_deposit_event / record_gateway_withdraw_event — safe when migration _007 is NOT yet applied', () => {
+  let db: PGlite
+  const MIGRATIONS_WITHOUT_007 = MIGRATIONS.filter((m) => m !== '20260909000007_gateway_attribution_atomic_apply.sql')
+
+  beforeAll(async () => {
+    db = new PGlite()
+    await db.exec('CREATE ROLE anon; CREATE ROLE authenticated;')
+    for (const name of MIGRATIONS_WITHOUT_007) await db.exec(await readMigration(name))
+  }, 60_000)
+  afterAll(async () => { await db.close() })
+
+  it('a genuinely fresh deposit still succeeds normally when gateway_position_recompute_issues does not exist yet', async () => {
+    await expect(
+      db.query(
+        `SELECT * FROM record_gateway_deposit_event($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        ['tx-no-007-table', USER, POOL, CHAIN, '1000000', '1000000', 100, PM_A, 0, '1000000'],
+      ),
+    ).resolves.toMatchObject({ rows: [{ already_recorded: false }] })
+    const pos = await db.query<{ entry_nav: string }>(
+      `SELECT entry_nav::text FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+      [USER, POOL, CHAIN, PM_A],
+    )
+    expect(pos.rows[0]?.entry_nav).toBe('1000000') // the deposit itself still recorded correctly
   })
 })
 

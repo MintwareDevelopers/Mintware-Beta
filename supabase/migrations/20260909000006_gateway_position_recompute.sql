@@ -88,15 +88,21 @@ BEGIN
   -- in migration 20260909000007): this function is the ONE that scripts/verify-gateway-pm-attribution.mjs's
   -- backstop sweep (recomputeAllResolvedIdentities) calls for identities NOT touched by this run's own
   -- apply_gateway_pm_attribution calls. If one of those identities had previously been recorded in
-  -- gateway_position_recompute_issues (added by _007 — a forward dependency: this DELETE is inert until
-  -- _007 is applied, since PL/pgSQL doesn't validate referenced tables until first execution, and both
-  -- migrations ship together) as a stuck sibling (an over-burn or data-gap skip), and THIS call now
-  -- succeeds for it — proving whatever was wrong has resolved — the stale issue record must be cleared
-  -- here too, not only inside apply_gateway_pm_attribution's own cross-PM loop. Without this, an identity
-  -- recomputed successfully via the backstop sweep specifically (rather than via apply_gateway_pm_attribution
-  -- directly) would keep reading as costBasisComplete:false forever, even once its basis is fully accurate.
-  DELETE FROM gateway_position_recompute_issues
-  WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager = v_pm;
+  -- gateway_position_recompute_issues (added by _007) as a stuck sibling (an over-burn or data-gap skip),
+  -- and THIS call now succeeds for it — proving whatever was wrong has resolved — the stale issue record
+  -- must be cleared here too, not only inside apply_gateway_pm_attribution's own cross-PM loop. Without
+  -- this, an identity recomputed successfully via the backstop sweep specifically (rather than via
+  -- apply_gateway_pm_attribution directly) would keep reading as costBasisComplete:false forever, even
+  -- once its basis is fully accurate. Defensively wrapped: both migrations ship together and are meant to
+  -- be applied together, but this function (unlike _005's hot deposit/withdraw path) is only ever invoked
+  -- deliberately by the recovery script — belt-and-suspenders against an operator applying _006 without
+  -- _007 and running recovery in that gap, same safety net as _005's own clear-on-clean-replay addition.
+  BEGIN
+    DELETE FROM gateway_position_recompute_issues
+    WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager = v_pm;
+  EXCEPTION WHEN undefined_table THEN
+    NULL; -- gateway_position_recompute_issues (migration _007) not yet applied — nothing to clear yet
+  END;
 
   RETURN QUERY SELECT v_new_basis, v_running_shares, v_event_count;
 END;

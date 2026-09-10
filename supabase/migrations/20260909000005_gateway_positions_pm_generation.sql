@@ -239,6 +239,24 @@ BEGIN
     VALUES (v_address, v_pool, p_chain_id, v_pm, p_on_chain_shares, v_new_basis, now());
   END IF;
 
+  -- REVISED same-day (user directive, following a fourth Codex live-review pass — "Finish issue-state
+  -- lifecycle: if a late deposit/withdraw recording repairs the complete event replay, clear that
+  -- identity's old recompute issue... Do not clear it on incremental fallback or incomplete replay").
+  -- Only the CLEAN full-history replay (NOT v_has_legacy_gap) represents a genuine, verified-complete
+  -- basis — the single-delta fallback above is still a degraded computation and must NOT clear a
+  -- previously-recorded issue (it hasn't actually resolved anything, just computed a rough number the
+  -- old way). Wrapped in its own exception block because this migration (_005) is on the HOT deposit
+  -- path — unlike the recovery-only _006/_007 functions — so if _007's table isn't applied yet, this
+  -- must degrade to a harmless no-op rather than fail every normal deposit outright.
+  IF NOT v_has_legacy_gap THEN
+    BEGIN
+      DELETE FROM gateway_position_recompute_issues
+      WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager = v_pm;
+    EXCEPTION WHEN undefined_table THEN
+      NULL; -- gateway_position_recompute_issues (migration _007) not yet applied — nothing to clear yet
+    END;
+  END IF;
+
   RETURN QUERY SELECT v_new_basis, false;
 END;
 $$;
@@ -358,6 +376,17 @@ BEGIN
 
   UPDATE gateway_positions SET shares = p_on_chain_shares, entry_nav = v_new_basis, updated_at = now()
     WHERE id = v_pos_id;
+
+  -- Same clear-on-clean-replay-only rule as record_gateway_deposit_event above — see its comment for the
+  -- full rationale (user directive, fourth Codex pass) and the defensive exception wrapper's purpose.
+  IF NOT v_has_legacy_gap THEN
+    BEGIN
+      DELETE FROM gateway_position_recompute_issues
+      WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager = v_pm;
+    EXCEPTION WHEN undefined_table THEN
+      NULL; -- gateway_position_recompute_issues (migration _007) not yet applied — nothing to clear yet
+    END;
+  END IF;
 
   RETURN QUERY SELECT v_new_basis, false, v_found;
 END;

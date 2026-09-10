@@ -249,22 +249,32 @@ unrelated).
   the latter has every field populated and can't be found by a cheap NULL-field query, only by the actual
   replay `apply_gateway_pm_attribution` already does). Written when a sibling is skipped, cleared the
   moment that identity successfully recomputes — by `apply_gateway_pm_attribution` itself (its own cross-
-  PM loop) AND by `_006`'s `recompute_gateway_position` (amended the same day so the script's backstop
+  PM loop), by `_006`'s `recompute_gateway_position` (amended the same day so the script's backstop
   sweep, which calls that function directly for identities it didn't itself touch this run, also clears a
-  stale issue once that identity resolves through it — otherwise an identity healed via the backstop path
-  specifically would read as incomplete forever even after its basis became fully accurate). Read by
-  `lib/gateway/attributionCompleteness.ts` alongside the orphan/gap checks. ⚠ **`_004`, `_005` and `_006`
-  are NOT backward-compatible like the earlier ones** — the deposit/withdraw ROUTES already call the RPCs
-  with the new args (same commits as these migrations) but Postgres treats a different arg count as a
-  DIFFERENT function; until `_004` and `_005` are BOTH applied (in order — `_005` builds on `_004`'s
-  signature), there is NO matching RPC signature and `/api/gateway/{deposit,withdraw}` will 500 on every
-  call (`record_failed`) — apply them PROMPTLY after this code deploys, the same way the prior cost-basis/
-  RLS migrations were. `_006` and `_007` are additive (new functions/table, nothing else depends on them)
-  and can be applied whenever convenient, ideally alongside `_004`/`_005` — **apply them together, in
-  order** (`_006` before `_007`): `_006`'s amended body references `_007`'s new table, which PL/pgSQL
-  doesn't validate until first execution, so applying `_006` alone is safe but that reference stays inert
-  until `_007` lands too. On-chain funds are unaffected either way (this is display-only cost-basis
-  bookkeeping). All **deny-all RLS**. **Env vars:** every `LP_GATEWAY_*` var is tabled in
+  stale issue once that identity resolves through it), AND by `_005`'s own `record_gateway_deposit_event`/
+  `record_gateway_withdraw_event` (user directive 2026-09-10, fourth Codex pass: "if a late deposit/
+  withdraw recording repairs the complete event replay, clear that identity's old recompute issue... do
+  not clear it on incremental fallback or incomplete replay" — only the CLEAN full-history replay branch
+  clears; the pre-existing single-delta fallback never does, since it hasn't proven a genuine resolution).
+  Without all three writers, an identity healed via whichever path DIDN'T clear would read as incomplete
+  forever even after its basis became fully accurate. Read by `lib/gateway/attributionCompleteness.ts`
+  alongside the orphan/gap checks. ⚠ **`_004`, `_005` and `_006` are NOT backward-compatible like the
+  earlier ones** — the deposit/withdraw ROUTES already call the RPCs with the new args (same commits as
+  these migrations) but Postgres treats a different arg count as a DIFFERENT function; until `_004` and
+  `_005` are BOTH applied (in order — `_005` builds on `_004`'s signature), there is NO matching RPC
+  signature and `/api/gateway/{deposit,withdraw}` will 500 on every call (`record_failed`) — apply them
+  PROMPTLY after this code deploys, the same way the prior cost-basis/RLS migrations were. `_006` and
+  `_007` are additive (new functions/table, nothing else depends on them) and can be applied whenever
+  convenient. **Deploy-ordering safety net:** `_005` (on the HOT deposit/withdraw path) and `_006`
+  (recovery-only) both now reference `_007`'s new table before `_007` necessarily exists yet — each
+  DELETE is wrapped in its own `EXCEPTION WHEN undefined_table THEN NULL` block, so applying `_004`+`_005`
+  WITHOUT `_007` yet (a real, expected sequencing — `_007` is documented as "whenever convenient," not
+  required alongside `_004`/`_005`) degrades to a harmless no-op on the clear step rather than breaking
+  every normal deposit/withdraw; proven directly in `costBasisRpc.pglite.test.ts` by a dedicated test
+  suite that applies every migration EXCEPT `_007` and confirms a fresh deposit still succeeds. Applying
+  `_006` alone (without `_007`) is likewise safe for the same reason. On-chain funds are unaffected either
+  way (this is display-only cost-basis bookkeeping). All **deny-all RLS**. **Env vars:** every
+  `LP_GATEWAY_*` var is tabled in
   [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
 - **Historical PM attribution recovery** (`scripts/verify-gateway-pm-attribution.mjs`, independent Codex
   audit, to-do items 3/4, 2026-09-10): resolves orphaned (`position_manager IS NULL`) `gateway_deposit_events`
