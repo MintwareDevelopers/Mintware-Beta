@@ -10,9 +10,14 @@
 // client connections to prove the lock genuinely serializes concurrent access, not just single-session
 // sequential calls.
 //
-// Self-skips (never fails CI) if a real Postgres server can't actually start in this environment — e.g. no
-// permission to bind a TCP port or spawn a subprocess. Mirrors the existing Forge fork-test convention
-// (self-skip without BASE_RPC_URL) rather than making the whole suite fragile to sandbox differences.
+// Self-skips (via vitest's real ctx.skip() — reported as SKIPPED, never as a silent pass) if a real
+// Postgres server can't actually start in this environment — e.g. no permission to bind a TCP port or
+// spawn a subprocess. Mirrors the existing Forge fork-test convention (self-skip without BASE_RPC_URL)
+// rather than making the whole suite fragile to sandbox differences. Only the server startup step
+// (initialise/start) is allowed to trigger this — a bug in the real migration SQL or any other setup step
+// fails the suite loudly instead (Codex, 2026-09-10: "limit environmental skips to recognized startup
+// restrictions; migration/setup defects must fail, and genuine unavailability must be reported as skipped
+// rather than passed").
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -87,8 +92,12 @@ afterAll(async () => {
 })
 
 describe('gateway advisory locks — genuine multi-connection proof (real Postgres, real TCP connections)', () => {
-  it('the EXACT lock key the gateway RPCs use genuinely serializes two REAL, independent connections', async () => {
-    if (!available) { console.warn('  skipped: no real Postgres available in this environment'); return }
+  it('the EXACT lock key the gateway RPCs use genuinely serializes two REAL, independent connections', async (ctx) => {
+    // Codex (2026-09-10): "startup failure still causes test bodies to return and be reported passed
+    // rather than skipped; use actual skip reporting." ctx.skip(condition, note) marks the test SKIPPED
+    // in the reporter (distinct from a silent pass) whenever the environment genuinely can't run a real
+    // Postgres subprocess — never conflatable with a real assertion passing.
+    ctx.skip(!available, 'no real Postgres available in this environment')
     // Mirrors hashtext(v_address || ':' || v_pool), p_chain_id — the identical key derivation every
     // gateway write RPC (record_gateway_deposit_event/_withdraw_event, recompute_gateway_position,
     // apply_gateway_pm_attribution) takes as its first statement.
@@ -118,8 +127,8 @@ describe('gateway advisory locks — genuine multi-connection proof (real Postgr
     }
   }, 20_000)
 
-  it('two REAL concurrent record_gateway_deposit_event calls for the SAME identity never lose an update', async () => {
-    if (!available) { console.warn('  skipped: no real Postgres available in this environment'); return }
+  it('two REAL concurrent record_gateway_deposit_event calls for the SAME identity never lose an update', async (ctx) => {
+    ctx.skip(!available, 'no real Postgres available in this environment')
     // A meaningful proof, not an exhaustive one (Codex, 2026-09-10: "avoid the claim that one Promise.all
     // execution is the strongest possible proof of all interleavings"): if the advisory lock did NOT
     // genuinely serialize these two real, independent connections, a classic lost-update race is possible
@@ -172,8 +181,8 @@ describe('gateway advisory locks — genuine multi-connection proof (real Postgr
     }
   }, 20_000)
 
-  it('concurrent calls for DIFFERENT identities do not block each other (the lock is scoped per wallet+pool, not global)', async () => {
-    if (!available) { console.warn('  skipped: no real Postgres available in this environment'); return }
+  it('concurrent calls for DIFFERENT identities do not block each other (the lock is scoped per wallet+pool, not global)', async (ctx) => {
+    ctx.skip(!available, 'no real Postgres available in this environment')
     const clientA = await connect()
     const clientB = await connect()
     try {
