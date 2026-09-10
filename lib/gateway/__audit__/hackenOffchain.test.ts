@@ -297,7 +297,7 @@ describe('HO-7 _FIXED · Discover marks a pool live ONLY from ACTIVE gateway_ins
     const body = await res.json()
     expect(body.pools[0].live).toBe(false)
     const read = db.calls.find((c) => c.table === 'gateway_instances' && c.op === 'select')!
-    expect(read.filters.map((f) => [f.col, f.val])).toEqual(expect.arrayContaining([['chain_id', 46630], ['status', 'active']])) // was chain_id only
+    expect(read.filters.map((f) => [(f as { col: string }).col, (f as { val: unknown }).val])).toEqual(expect.arrayContaining([['chain_id', 46630], ['status', 'active']])) // was chain_id only
     // flip the row to active → live:true (the instances read is per-request; only the upstream feed is cached)
     db.tables.gateway_instances[0].status = 'active'
     expect((await (await GET(req('https://mintware.test/api/gateway/discover'))).json()).pools[0].live).toBe(true)

@@ -12,11 +12,11 @@ const PM_NEW = '0x' + '66'.repeat(20)
 const POOL = '0x' + 'ab'.repeat(32)
 
 type Row = { pool_address: string; chain_id: number; user_wallet: string; position_manager: string | null; entry_nav: string; shares: string }
-type OrphanEventRow = { address: string; pool_address: string; chain_id: number }
+type OrphanEventRow = { address: string; pool_address: string; chain_id: number; position_manager?: string | null; kind?: 'deposit' | 'withdraw'; shares_minted?: string | null; shares_burned?: string | null }
 
 // Minimal query-builder mock covering exactly the chain this route uses:
 // .from('gateway_positions').select(...).eq(...).eq(...).eq(...).or(...).order(...).limit(...).maybeSingle()
-// .from('gateway_deposit_events').select(...).eq(...).eq(...).eq(...).is(...).limit(...)  (attributionCompleteness)
+// .from('gateway_deposit_events').select(...).eq(...).eq(...).eq(...).is/not(...).or(...).limit(...)  (attributionCompleteness)
 function fakeSupabaseFor(rows: Row[], orphanEventRows: OrphanEventRow[] = []) {
   return {
     from: (table: string) => {
@@ -26,6 +26,23 @@ function fakeSupabaseFor(rows: Row[], orphanEventRows: OrphanEventRow[] = []) {
           select: () => b,
           eq: (col: string, val: unknown) => { filters.push((r) => String((r as unknown as Record<string, unknown>)[col]).toLowerCase() === String(val).toLowerCase()); return b },
           is: (col: string, val: unknown) => { filters.push((r) => (val === null ? (r as unknown as Record<string, unknown>)[col] == null : (r as unknown as Record<string, unknown>)[col] === val)); return b },
+          // `.not(col, 'is', null)` — the only shape attributionCompleteness.ts's hasGapRow() uses.
+          not: (col: string, _op: string, val: unknown) => { filters.push((r) => (val === null ? (r as unknown as Record<string, unknown>)[col] != null : true)); return b },
+          // Parses PostgREST-style "and(a.eq.x,b.is.null),and(c.eq.y,d.is.null)" — exactly what
+          // hasGapRow() emits to detect a resolved row missing its own kind-appropriate share field.
+          or: (expr: string) => {
+            const topClauses = expr.split(/,(?![^(]*\))/) // split top-level commas only (not inside and(...))
+            filters.push((r) => topClauses.some((clause) => {
+              const inner = clause.match(/^and\((.*)\)$/)?.[1] ?? clause
+              return inner.split(',').every((cond) => {
+                const [col, op, val] = cond.split('.')
+                const rv = (r as unknown as Record<string, unknown>)[col]
+                if (op === 'is') return val === 'null' ? rv == null : rv === val
+                return String(rv ?? '').toLowerCase() === String(val).toLowerCase()
+              })
+            }))
+            return b
+          },
           limit: async (n: number) => ({ data: orphanEventRows.filter((r) => filters.every((f) => f(r))).slice(0, n), error: null }),
         }
         return b

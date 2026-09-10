@@ -51,25 +51,34 @@ async function connect() {
 }
 
 beforeAll(async () => {
+  // Codex (2026-09-10): "beforeAll catches every setup error, including migration errors, then
+  // individual tests simply return and are counted as passed. Limit environmental skips to recognized
+  // startup restrictions; migration/setup defects must fail." Correct — a genuine bug here (a syntax
+  // error in one of the real migration files, a broken query) must NOT be swallowed and silently reported
+  // as a passing "skip"; only the actual environment-capability step (spawning the subprocess, binding
+  // the port) is legitimately something a sandbox might lack permission for. So: ONLY server.initialise()/
+  // server.start() are allowed to turn into a soft skip. Everything after — connecting, running the real
+  // migrations — throws normally and fails the suite loudly, exactly like any other test setup bug would.
+  if (existsSync(DATA_DIR)) rmSync(DATA_DIR, { recursive: true, force: true })
+  server = new EmbeddedPostgres({ databaseDir: DATA_DIR, user: 'postgres', password: 'postgres', port: PORT, persistent: false })
   try {
-    if (existsSync(DATA_DIR)) rmSync(DATA_DIR, { recursive: true, force: true })
-    server = new EmbeddedPostgres({ databaseDir: DATA_DIR, user: 'postgres', password: 'postgres', port: PORT, persistent: false })
     await server.initialise()
     await server.start()
-
-    const admin = await connect()
-    try {
-      await admin.query('CREATE ROLE anon; CREATE ROLE authenticated;')
-      for (const name of MIGRATIONS) await admin.query(await readMigration(name))
-    } finally {
-      await admin.end()
-    }
     available = true
   } catch (e) {
     // Environment genuinely can't run a real Postgres subprocess here (no port-bind / spawn permission,
     // etc.) — self-skip rather than fail CI for a sandbox limitation this test can't control.
     console.warn('[costBasisRpc.concurrency.test] real Postgres unavailable, self-skipping:', e instanceof Error ? e.message : String(e))
     available = false
+    return
+  }
+
+  const admin = await connect()
+  try {
+    await admin.query('CREATE ROLE anon; CREATE ROLE authenticated;')
+    for (const name of MIGRATIONS) await admin.query(await readMigration(name))
+  } finally {
+    await admin.end()
   }
 }, 60_000)
 
@@ -111,18 +120,22 @@ describe('gateway advisory locks — genuine multi-connection proof (real Postgr
 
   it('two REAL concurrent record_gateway_deposit_event calls for the SAME identity never lose an update', async () => {
     if (!available) { console.warn('  skipped: no real Postgres available in this environment'); return }
-    // The strongest possible proof: if the advisory lock did NOT genuinely serialize these two real,
-    // independent connections, a classic lost-update race is possible (both read the pre-deposit state,
-    // both compute a basis from it, the second write clobbers the first) — the final basis would be
-    // WRONG (reflecting only one deposit, not both). Launched with Promise.all — truly concurrent, not
-    // sequential — exactly what PGlite's single-connection model cannot exercise.
+    // A meaningful proof, not an exhaustive one (Codex, 2026-09-10: "avoid the claim that one Promise.all
+    // execution is the strongest possible proof of all interleavings"): if the advisory lock did NOT
+    // genuinely serialize these two real, independent connections, a classic lost-update race is possible
+    // (both read the pre-deposit state, both compute a basis from it, the second write clobbers the
+    // first) — entry_nav would be WRONG (reflecting only one deposit, not both). Launched with
+    // Promise.all — one real scheduling race, not sequential calls — exactly what PGlite's single-
+    // connection model cannot exercise at all. It does NOT cover every possible interleaving (a deposit
+    // racing a withdraw, a record racing a recovery apply, a rollback mid-race) — those remain valuable
+    // future additions, not covered here.
     const clientA = await connect()
     const clientB = await connect()
     try {
       await Promise.all([
         clientA.query(
           `SELECT * FROM record_gateway_deposit_event($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-          ['tx-concurrent-a', USER, POOL, CHAIN, '1000000', '1000000', 100, PM_A, 0, '1000000'],
+          ['tx-concurrent-a', USER, POOL, CHAIN, '1000000', '3000000', 100, PM_A, 0, '1000000'],
         ),
         clientB.query(
           `SELECT * FROM record_gateway_deposit_event($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
@@ -134,9 +147,18 @@ describe('gateway advisory locks — genuine multi-connection proof (real Postgr
         `SELECT entry_nav::text, shares::text FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
         [USER, POOL, CHAIN, PM_A],
       )
-      // Both deposits' quote_in/shares_minted must be reflected — 1,000,000 + 2,000,000 and
-      // 1,000,000 + 2,000,000 shares. A lost update would show only one deposit's contribution.
+      // entry_nav is derived by a full replay of quote_in across every stored event for this identity —
+      // order-independent, so this is the genuine lost-update proof: both deposits' quote_in (1,000,000 +
+      // 2,000,000) MUST be reflected regardless of which call's write physically landed last. A lost
+      // update would show only one deposit's contribution (1,000,000 or 2,000,000), not their sum.
       expect(rows[0]?.entry_nav).toBe('3000000')
+      // `shares` is a DIFFERENT kind of field — a raw "on-chain read at the time of THIS call" enrichment
+      // value (`p_on_chain_shares`), always overwritten wholesale by whichever call's write lands last —
+      // never a replay-derived sum. In real usage that's fine (each real deposit's own on-chain read is
+      // already up to date by construction), but for two SIMULATED concurrent calls there is no single
+      // "correct" value to assert without controlling which one wins the race — both callers passed the
+      // post-both-deposits total (3,000,000) here specifically so this assertion is deterministic
+      // regardless of ordering, not because ordering doesn't matter for this field in general.
       expect(rows[0]?.shares).toBe('3000000')
 
       const events = await clientA.query<{ count: string }>(
