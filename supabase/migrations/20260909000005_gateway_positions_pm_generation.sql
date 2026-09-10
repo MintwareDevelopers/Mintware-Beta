@@ -42,6 +42,19 @@
 --     racing to adopt the SAME unclaimed legacy row — an edge case requiring two simultaneous first-ever
 --     deposits into two different PM generations, judged too narrow to justify explicit locking given
 --     nothing else in this RPC family uses it.
+--   * Same-block VALUE correctness (independent Codex audit, live watch, 2026-09-09, confirmed with a
+--     concrete reproduction — genuinely deeper than the tx_index ordering fix above, and NOT introduced
+--     tonight: predates every change in this file, already documented in withdraw/route.ts's own "two of
+--     the SAME user's own transactions landing in the exact same block" comment). tx_index correctly
+--     ORDERS two same-block events for replay — but `on_chain_shares` for EACH event is read via
+--     `sharesOf(user, blockNumber: receipt.blockNumber)`, which returns the BLOCK-END balance (after
+--     every tx in that block), not the balance immediately after THAT SPECIFIC tx. For a user with two of
+--     their OWN txs in the same block, the earlier one's stored `on_chain_shares` is the wrong value
+--     (post-BOTH, not post-itself) even once correctly ordered — reproduced as a wrong combined basis.
+--     The real fix needs a different data model (deriving each event's post-tx share count from a
+--     RUNNING total of on-chain-event-reported sharesMinted/sharesBurned, replayed alongside the basis,
+--     instead of any block-level chain read) — a genuine redesign of this table's shares tracking, not a
+--     small patch, and NOT attempted in this pass; flagged for a deliberate follow-up.
 
 ALTER TABLE gateway_positions ADD COLUMN IF NOT EXISTS position_manager text;
 ALTER TABLE gateway_deposit_events ADD COLUMN IF NOT EXISTS position_manager text;
