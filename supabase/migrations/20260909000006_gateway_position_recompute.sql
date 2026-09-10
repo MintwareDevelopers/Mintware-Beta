@@ -84,6 +84,20 @@ BEGIN
   ON CONFLICT (user_wallet, pool_address, chain_id, position_manager) DO UPDATE SET
     shares = EXCLUDED.shares, entry_nav = EXCLUDED.entry_nav, updated_at = now();
 
+  -- REVISED same-day (user directive, following a third Codex live-review pass on the atomic-apply work
+  -- in migration 20260909000007): this function is the ONE that scripts/verify-gateway-pm-attribution.mjs's
+  -- backstop sweep (recomputeAllResolvedIdentities) calls for identities NOT touched by this run's own
+  -- apply_gateway_pm_attribution calls. If one of those identities had previously been recorded in
+  -- gateway_position_recompute_issues (added by _007 — a forward dependency: this DELETE is inert until
+  -- _007 is applied, since PL/pgSQL doesn't validate referenced tables until first execution, and both
+  -- migrations ship together) as a stuck sibling (an over-burn or data-gap skip), and THIS call now
+  -- succeeds for it — proving whatever was wrong has resolved — the stale issue record must be cleared
+  -- here too, not only inside apply_gateway_pm_attribution's own cross-PM loop. Without this, an identity
+  -- recomputed successfully via the backstop sweep specifically (rather than via apply_gateway_pm_attribution
+  -- directly) would keep reading as costBasisComplete:false forever, even once its basis is fully accurate.
+  DELETE FROM gateway_position_recompute_issues
+  WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager = v_pm;
+
   RETURN QUERY SELECT v_new_basis, v_running_shares, v_event_count;
 END;
 $$;

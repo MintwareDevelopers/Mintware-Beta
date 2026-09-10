@@ -249,7 +249,43 @@ describe('recompute_gateway_position — historical attribution recovery', () =>
   }, 60_000)
   afterAll(async () => { await db.close() })
   beforeEach(async () => {
-    await db.exec('TRUNCATE gateway_positions, gateway_deposit_events RESTART IDENTITY CASCADE')
+    await db.exec('TRUNCATE gateway_positions, gateway_deposit_events, gateway_position_recompute_issues RESTART IDENTITY CASCADE')
+  })
+
+  // User directive (2026-09-10, third Codex pass): "lifecycle... across recompute/record." The script's
+  // backstop sweep (recomputeAllResolvedIdentities) calls THIS function, not apply_gateway_pm_attribution,
+  // for identities it didn't itself touch this run — if one of those had a stale issue recorded by an
+  // EARLIER apply_gateway_pm_attribution call, and THIS call now succeeds for it, the issue must clear
+  // here too, not only inside apply_gateway_pm_attribution's own loop.
+  it('clears a pre-existing gateway_position_recompute_issues row for this identity once it successfully recomputes', async () => {
+    await db.exec(`
+      INSERT INTO gateway_position_recompute_issues (user_wallet, pool_address, chain_id, position_manager, reason)
+      VALUES ('${USER}', '${POOL}', ${CHAIN}, '${PM_A}', 'over_burn');
+      INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, shares_minted, block_number, tx_index, position_manager)
+      VALUES ('resolved-clears-issue', '${USER}', 'deposit', '${POOL}', ${CHAIN}, 1000000, 1000000, 100, 0, '${PM_A}');
+    `)
+    await db.query(`SELECT * FROM recompute_gateway_position($1,$2,$3,$4)`, [USER, POOL, CHAIN, PM_A])
+    const issues = await db.query(
+      `SELECT 1 FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+      [USER, POOL, CHAIN, PM_A],
+    )
+    expect(issues.rows.length).toBe(0)
+  })
+
+  it('does NOT touch an issue row for a DIFFERENT identity', async () => {
+    const OTHER_PM = 'pm-unrelated'
+    await db.exec(`
+      INSERT INTO gateway_position_recompute_issues (user_wallet, pool_address, chain_id, position_manager, reason)
+      VALUES ('${USER}', '${POOL}', ${CHAIN}, '${OTHER_PM}', 'over_burn');
+      INSERT INTO gateway_deposit_events (tx_hash, address, kind, pool_address, chain_id, quote_in, shares_minted, block_number, tx_index, position_manager)
+      VALUES ('resolved-unrelated', '${USER}', 'deposit', '${POOL}', ${CHAIN}, 1000000, 1000000, 100, 0, '${PM_A}');
+    `)
+    await db.query(`SELECT * FROM recompute_gateway_position($1,$2,$3,$4)`, [USER, POOL, CHAIN, PM_A])
+    const issues = await db.query(
+      `SELECT 1 FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+      [USER, POOL, CHAIN, OTHER_PM],
+    )
+    expect(issues.rows.length).toBe(1) // untouched — a DIFFERENT identity's own issue is not this call's concern
   })
 
   it('recomputes a position from resolved events, mirroring the RPCs\' own replay exactly', async () => {
@@ -312,7 +348,7 @@ describe('apply_gateway_pm_attribution — atomic event-update + recompute', () 
   }, 60_000)
   afterAll(async () => { await db.close() })
   beforeEach(async () => {
-    await db.exec('TRUNCATE gateway_positions, gateway_deposit_events RESTART IDENTITY CASCADE')
+    await db.exec('TRUNCATE gateway_positions, gateway_deposit_events, gateway_position_recompute_issues RESTART IDENTITY CASCADE')
   })
 
   async function insertOrphan(txHash: string, kind: 'deposit' | 'withdraw', extra: Record<string, unknown> = {}) {
@@ -448,5 +484,57 @@ describe('apply_gateway_pm_attribution — atomic event-update + recompute', () 
     const idGappySibling = await insertOrphan('tx-gap-req', 'withdraw') // will be the requested PM, deliberately given no shares_burned
     await expect(db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [idGappySibling, PM_A, 100, 0, null, null]))
       .rejects.toThrow()
+  })
+
+  // User directive (2026-09-10, third Codex pass): "a manager whose recorded withdrawals exceed recorded
+  // minted shares can be skipped during recovery yet still appear complete." The skip itself was already
+  // correct (never guesses); what was missing is a DURABLE record of it, since an over-burn sibling has
+  // every field populated and can't be found by the read-side gap check alone.
+  it('durably records a data_gap issue for a skipped sibling', async () => {
+    await insertOrphan('tx-gap-issue-sibling', 'deposit', { quote_in: '1000000', position_manager: PM_A, block_number: 50, tx_index: 0 }) // no shares_minted
+    const idB = await insertOrphan('tx-gap-issue-b', 'deposit', { quote_in: '2000000' })
+    await db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [idB, PM_B, 100, 0, '2000000', null])
+    const issue = await db.query<{ reason: string }>(
+      `SELECT reason FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+      [USER, POOL, CHAIN, PM_A],
+    )
+    expect(issue.rows[0]?.reason).toBe('data_gap')
+  })
+
+  it('durably records an over_burn issue for a skipped sibling', async () => {
+    // PM_A has a withdraw burning more than was ever minted for it — an over-burn identity with every
+    // field populated, undetectable by any NULL-field check.
+    await insertOrphan('tx-overburn-sibling', 'withdraw', { shares_burned: '999999999', position_manager: PM_A, block_number: 50, tx_index: 0 })
+    const idB = await insertOrphan('tx-overburn-issue-b', 'deposit', { quote_in: '2000000' })
+    await db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [idB, PM_B, 100, 0, '2000000', null])
+    const issue = await db.query<{ reason: string }>(
+      `SELECT reason FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`,
+      [USER, POOL, CHAIN, PM_A],
+    )
+    expect(issue.rows[0]?.reason).toBe('over_burn')
+  })
+
+  it('clears a previously-recorded issue for an identity once IT successfully recomputes in a LATER call', async () => {
+    // Round 1: PM_A is stuck (missing shares_minted) while PM_B resolves independently — PM_A's issue gets recorded.
+    const gappyId = await insertOrphan('tx-heals-1', 'deposit', { quote_in: '1000000', position_manager: PM_A, block_number: 50, tx_index: 0 })
+    const idB = await insertOrphan('tx-heals-b', 'deposit', { quote_in: '2000000' })
+    await db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [idB, PM_B, 100, 0, '2000000', null])
+    let issue = await db.query(`SELECT 1 FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`, [USER, POOL, CHAIN, PM_A])
+    expect(issue.rows.length).toBe(1)
+
+    // Simulates an external correction resolving PM_A's own gap (e.g. a verified receipt supplying the
+    // missing shares_minted) — direct UPDATE, mirroring how a real fix to historical data would land.
+    await db.query(`UPDATE gateway_deposit_events SET shares_minted = '1000000' WHERE id = $1`, [gappyId])
+
+    // A fresh orphan for the SAME wallet/pool/chain, resolved to a THIRD PM, triggers another full
+    // cross-PM pass — PM_A is now healthy and should recompute, clearing its stale issue.
+    const PM_C = 'pm-c'
+    const idC = await insertOrphan('tx-heals-c', 'deposit', { quote_in: '3000000' })
+    await db.query(`SELECT * FROM apply_gateway_pm_attribution($1,$2,$3,$4,$5,$6)`, [idC, PM_C, 102, 0, '3000000', null])
+
+    issue = await db.query(`SELECT 1 FROM gateway_position_recompute_issues WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`, [USER, POOL, CHAIN, PM_A])
+    expect(issue.rows.length).toBe(0) // cleared — PM_A recomputed successfully this pass
+    const posA = await db.query<{ entry_nav: string }>(`SELECT entry_nav::text FROM gateway_positions WHERE user_wallet=$1 AND pool_address=$2 AND chain_id=$3 AND position_manager=$4`, [USER, POOL, CHAIN, PM_A])
+    expect(posA.rows[0]?.entry_nav).toBe('1000000')
   })
 })

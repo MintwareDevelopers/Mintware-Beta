@@ -242,16 +242,30 @@ unrelated).
   conflicting re-attribution to a different PM; reports `remaining_orphans > 0` rather than guessing when
   sibling rows for the same wallet/pool/chain are still unresolved — the script's own full idempotent
   sweep (`recomputeAllResolvedIdentities`) stays as a backstop for anything this doesn't close, e.g. an
-  identity stranded by a run that predates this migration). ⚠ **`_004`, `_005` and `_006` are NOT
-  backward-compatible like the earlier ones** — the deposit/withdraw ROUTES already call the RPCs with
-  the new args (same commits as these migrations) but Postgres treats a different arg count as a
+  identity stranded by a run that predates this migration). `_007` also creates
+  **`gateway_position_recompute_issues`** (user directive 2026-09-10, third Codex pass: "a manager whose
+  recorded withdrawals exceed recorded minted shares can be skipped during recovery yet still appear
+  complete") — a durable per-identity record of a skipped sibling's reason (`data_gap` or `over_burn`;
+  the latter has every field populated and can't be found by a cheap NULL-field query, only by the actual
+  replay `apply_gateway_pm_attribution` already does). Written when a sibling is skipped, cleared the
+  moment that identity successfully recomputes — by `apply_gateway_pm_attribution` itself (its own cross-
+  PM loop) AND by `_006`'s `recompute_gateway_position` (amended the same day so the script's backstop
+  sweep, which calls that function directly for identities it didn't itself touch this run, also clears a
+  stale issue once that identity resolves through it — otherwise an identity healed via the backstop path
+  specifically would read as incomplete forever even after its basis became fully accurate). Read by
+  `lib/gateway/attributionCompleteness.ts` alongside the orphan/gap checks. ⚠ **`_004`, `_005` and `_006`
+  are NOT backward-compatible like the earlier ones** — the deposit/withdraw ROUTES already call the RPCs
+  with the new args (same commits as these migrations) but Postgres treats a different arg count as a
   DIFFERENT function; until `_004` and `_005` are BOTH applied (in order — `_005` builds on `_004`'s
   signature), there is NO matching RPC signature and `/api/gateway/{deposit,withdraw}` will 500 on every
   call (`record_failed`) — apply them PROMPTLY after this code deploys, the same way the prior cost-basis/
-  RLS migrations were. `_006` and `_007` are additive (new functions, nothing else depends on them) and
-  can be applied whenever convenient, ideally alongside `_004`/`_005`. On-chain funds are unaffected either
-  way (this is display-only cost-basis bookkeeping). All **deny-all RLS**. **Env vars:** every
-  `LP_GATEWAY_*` var is tabled in [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
+  RLS migrations were. `_006` and `_007` are additive (new functions/table, nothing else depends on them)
+  and can be applied whenever convenient, ideally alongside `_004`/`_005` — **apply them together, in
+  order** (`_006` before `_007`): `_006`'s amended body references `_007`'s new table, which PL/pgSQL
+  doesn't validate until first execution, so applying `_006` alone is safe but that reference stays inert
+  until `_007` lands too. On-chain funds are unaffected either way (this is display-only cost-basis
+  bookkeeping). All **deny-all RLS**. **Env vars:** every `LP_GATEWAY_*` var is tabled in
+  [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
 - **Historical PM attribution recovery** (`scripts/verify-gateway-pm-attribution.mjs`, independent Codex
   audit, to-do items 3/4, 2026-09-10): resolves orphaned (`position_manager IS NULL`) `gateway_deposit_events`
   rows from real on-chain receipts (`receipt.to`, decoded `Deposited`/`Withdrawn` event, cross-checked

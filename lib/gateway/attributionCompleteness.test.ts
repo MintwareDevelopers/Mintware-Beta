@@ -64,6 +64,29 @@ describe('hasUnresolvedHistory', () => {
     const { client } = fakeSupabase({ tables: { gateway_deposit_events: [{ address: USER, pool_address: OTHER_POOL, chain_id: 46630, position_manager: PM, kind: 'deposit', shares_minted: null }] } })
     expect(await hasUnresolvedHistory(client, USER, POOL, 46630)).toBe(false)
   })
+
+  // User directive (2026-09-10, third Codex pass): "a manager whose recorded withdrawals exceed recorded
+  // minted shares can be skipped during recovery yet still appear complete." apply_gateway_pm_attribution
+  // now durably records that skip in gateway_position_recompute_issues — the read path must check it too,
+  // since an over-burn sibling has EVERY field populated (the gap check above can't catch it at all).
+  it('returns true when gateway_position_recompute_issues holds a row for this exact wallet/pool/chain (an over-burn or gap sibling apply_gateway_pm_attribution skipped)', async () => {
+    const { client } = fakeSupabase({ tables: { gateway_position_recompute_issues: [{ user_wallet: USER, pool_address: POOL, chain_id: 46630, position_manager: PM, reason: 'over_burn' }] } })
+    expect(await hasUnresolvedHistory(client, USER, POOL, 46630)).toBe(true)
+  })
+
+  it('a recorded issue for a DIFFERENT pool does not mark THIS pool incomplete', async () => {
+    const { client } = fakeSupabase({ tables: { gateway_position_recompute_issues: [{ user_wallet: USER, pool_address: OTHER_POOL, chain_id: 46630, position_manager: PM, reason: 'over_burn' }] } })
+    expect(await hasUnresolvedHistory(client, USER, POOL, 46630)).toBe(false)
+  })
+
+  it('fails CLOSED when the recompute-issues read itself errors, even with no orphan/gap present', async () => {
+    const errChain = { eq: () => errChain, limit: async () => ({ data: null, error: { message: 'connection reset' } }) }
+    const okChain = { eq: () => okChain, is: () => okChain, not: () => okChain, or: () => okChain, limit: async () => ({ data: [], error: null }) }
+    const supabase = {
+      from: (table: string) => ({ select: () => (table === 'gateway_position_recompute_issues' ? errChain : okChain) }),
+    }
+    expect(await hasUnresolvedHistory(supabase as never, USER, POOL, 46630)).toBe(true)
+  })
 })
 
 describe('fetchUnresolvedPoolChainKeys', () => {

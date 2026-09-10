@@ -36,6 +36,34 @@
 -- that predates this migration (or a crash before this specific call ever runs), but for the specific
 -- "resolving the last orphan makes multiple sibling PMs simultaneously completable" case, this closes it
 -- atomically at the SQL level with no separate script-level step required at all.
+--
+-- REVISED again same-day (user directive, following a third Codex live-review pass): "a manager whose
+-- recorded withdrawals exceed recorded minted shares can be skipped during recovery yet still appear
+-- complete." True — when this function skips a SIBLING PM because its own replay would go negative (an
+-- "over-burn": a withdraw burning more than was ever minted for that identity) or because it has its own
+-- missing-field gap, that skip was previously silent: nothing durable recorded it, so a position READ for
+-- a DIFFERENT, genuinely-complete sibling PM in the same wallet/pool/chain had no way to know a stuck
+-- sibling existed. The read-side gap check (lib/gateway/attributionCompleteness.ts) already covers the
+-- missing-field case directly (a cheap NULL-field query), but an over-burn identity has EVERY field
+-- populated — detecting it needs an actual replay, which is exactly what this function already does and
+-- a hot read path should not repeat. Fixed: `gateway_position_recompute_issues` durably records every
+-- skip this function makes (reason: 'data_gap' or 'over_burn'), keyed by the skipped identity, and is
+-- cleared the moment that identity DOES successfully recompute (proving whatever was wrong has resolved).
+-- The read APIs check this table too (see the same-day update to lib/gateway/attributionCompleteness.ts).
+
+CREATE TABLE IF NOT EXISTS gateway_position_recompute_issues (
+  user_wallet      text        NOT NULL,
+  pool_address     text        NOT NULL,
+  chain_id         integer     NOT NULL,
+  position_manager text        NOT NULL,
+  reason           text        NOT NULL CHECK (reason IN ('data_gap', 'over_burn')),
+  detected_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_wallet, pool_address, chain_id, position_manager)
+);
+ALTER TABLE gateway_position_recompute_issues ENABLE ROW LEVEL SECURITY; -- deny-all: service-role only, mirrors every other gateway table
+COMMENT ON TABLE gateway_position_recompute_issues IS
+  'Durable record of a position-manager identity apply_gateway_pm_attribution could not recompute (a sibling PM skipped this call, or recompute_gateway_position refusing directly) — reason ''data_gap'' (missing shares_minted/shares_burned) or ''over_burn'' (a withdraw burning more than was ever minted). Row is deleted the moment that identity successfully recomputes. Read by lib/gateway/attributionCompleteness.ts so a DIFFERENT, genuinely-complete sibling PM''s position read still discloses that this one is stuck. Service-role only.';
 
 CREATE OR REPLACE FUNCTION apply_gateway_pm_attribution(
   p_event_id uuid,
@@ -146,6 +174,12 @@ BEGIN
       IF v_pm_iter = v_pm THEN
         RAISE EXCEPTION 'apply_gateway_pm_attribution: % / % / % / % still has events missing shares_minted/shares_burned — resolve them first, refusing to guess', v_address, v_pool, v_chain_id, v_pm;
       END IF;
+      -- Durably record the skip so a read for a DIFFERENT sibling in this same wallet/pool/chain still
+      -- discloses that this one is stuck (Codex, 2026-09-10: "can be skipped during recovery yet still
+      -- appear complete").
+      INSERT INTO gateway_position_recompute_issues (user_wallet, pool_address, chain_id, position_manager, reason, updated_at)
+      VALUES (v_address, v_pool, v_chain_id, v_pm_iter, 'data_gap', now())
+      ON CONFLICT (user_wallet, pool_address, chain_id, position_manager) DO UPDATE SET reason = EXCLUDED.reason, updated_at = now();
       CONTINUE;
     END IF;
 
@@ -183,13 +217,23 @@ BEGIN
       IF v_pm_iter = v_pm THEN
         RAISE EXCEPTION 'apply_gateway_pm_attribution: no events found for % / % / % / % — nothing to recompute', v_address, v_pool, v_chain_id, v_pm;
       END IF;
-      CONTINUE; -- an over-burn sibling (see above) or a genuinely eventless identity — leave it untouched
+      -- An over-burn sibling (see above) or a genuinely eventless identity — leave its position untouched,
+      -- but durably record WHY so a read for a different, genuinely-complete sibling still discloses it.
+      INSERT INTO gateway_position_recompute_issues (user_wallet, pool_address, chain_id, position_manager, reason, updated_at)
+      VALUES (v_address, v_pool, v_chain_id, v_pm_iter, 'over_burn', now())
+      ON CONFLICT (user_wallet, pool_address, chain_id, position_manager) DO UPDATE SET reason = EXCLUDED.reason, updated_at = now();
+      CONTINUE;
     END IF;
 
     INSERT INTO gateway_positions (user_wallet, pool_address, chain_id, position_manager, shares, entry_nav, updated_at)
     VALUES (v_address, v_pool, v_chain_id, v_pm_iter, v_running_shares, v_new_basis, now())
     ON CONFLICT (user_wallet, pool_address, chain_id, position_manager) DO UPDATE SET
       shares = EXCLUDED.shares, entry_nav = EXCLUDED.entry_nav, updated_at = now();
+
+    -- This identity recomputed successfully — clear any previously-recorded issue for it (whatever was
+    -- wrong before has now resolved, e.g. a later-recorded event closed the gap or corrected the history).
+    DELETE FROM gateway_position_recompute_issues
+    WHERE user_wallet = v_address AND pool_address = v_pool AND chain_id = v_chain_id AND position_manager = v_pm_iter;
 
     IF v_pm_iter = v_pm THEN
       v_target_basis := v_new_basis;
