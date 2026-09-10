@@ -10,9 +10,12 @@
 //   - shares_minted / shares_burned = the event's own reported amount (also needed by migration
 //     20260909000004's same-block derived-shares fix, for rows old enough to predate that too)
 //   - block_number / tx_index = the receipt's own block/position (needed for correct chain-order replay)
-// A row whose tx_hash can't be resolved (pruned node, chain reorg, RPC error, event not found, or the
-// decoded user doesn't match the row's own address) is reported as UNRESOLVED and left untouched —
-// this script NEVER guesses; an honest "still unknown" beats a wrong number every time.
+// A row whose tx_hash can't be resolved (pruned node, chain reorg, RPC error, event not found, the
+// decoded user doesn't match the row's own address, the receipt doesn't confirm its own tx_hash, or the
+// receiving contract isn't actually the registered gateway for row.pool_address — verified via the same
+// on-chain poolKey()/computePoolId() trust-root check lib/gateway/registry.ts uses) is reported as
+// UNRESOLVED and left untouched — this script NEVER guesses; an honest "still unknown" beats a wrong
+// number every time.
 //
 // Usage (dry-run is the default — no writes, ever, without --apply):
 //   node --env-file=.env.local scripts/verify-gateway-pm-attribution.mjs                 # dry run, prints a report
@@ -24,7 +27,7 @@
 // explicitly reading the dry-run report first and choosing --apply themselves.
 
 import { createServerClient } from '@supabase/ssr'
-import { createPublicClient, http, decodeEventLog } from 'viem'
+import { createPublicClient, http, decodeEventLog, keccak256, encodeAbiParameters } from 'viem'
 import { pathToFileURL } from 'node:url'
 
 // Minimal ABI fragment — just the two events this script needs to decode (mirrors
@@ -44,12 +47,41 @@ const LP_GATEWAY_EVENTS_ABI = [
   ] },
 ]
 
+// `poolKey()` read + poolId derivation — mirrors lib/gateway/registry.ts's own
+// LP_GATEWAY_ABI['poolKey']/computePoolId exactly (same encoding, same tuple shape), duplicated here for
+// the same reason as the events ABI above: this is a plain .mjs script, not a Next.js module.
+const LP_GATEWAY_POOL_KEY_ABI = [
+  {
+    type: 'function', stateMutability: 'view', name: 'poolKey', inputs: [],
+    outputs: [{ type: 'tuple', components: [
+      { name: 'currency0', type: 'address' }, { name: 'currency1', type: 'address' },
+      { name: 'fee', type: 'uint24' }, { name: 'tickSpacing', type: 'int24' }, { name: 'hooks', type: 'address' },
+    ] }],
+  },
+]
+function computePoolId(k) {
+  return keccak256(encodeAbiParameters(
+    [{ type: 'tuple', components: [
+      { name: 'currency0', type: 'address' }, { name: 'currency1', type: 'address' },
+      { name: 'fee', type: 'uint24' }, { name: 'tickSpacing', type: 'int24' }, { name: 'hooks', type: 'address' },
+    ] }],
+    [k],
+  ))
+}
+
 /** Core decision logic — pure w.r.t. its inputs (an injected `fetchReceipt`), so it's unit-testable
  *  without a live chain connection. Returns one plan entry per input row: `resolved: true` with the
  *  verified fields to write, or `resolved: false` with a reason — NEVER a guessed value either way.
  *  `configuredChainId`, when passed, guards against querying a receipt against the wrong chain's
- *  client: a row whose own `chain_id` doesn't match is reported `chain_mismatch` and never fetched. */
-export async function planAttribution(orphanedRows, fetchReceipt, configuredChainId) {
+ *  client: a row whose own `chain_id` doesn't match is reported `chain_mismatch` and never fetched.
+ *  `fetchPoolId(positionManagerAddress)`, when passed, is an injected on-chain read (mirrors
+ *  lib/gateway/registry.ts's own trust-root check) that must return the candidate PM's real
+ *  `poolKey()`-derived poolId — a row is refused (never resolved) unless that matches the row's own
+ *  `pool_address` exactly, closing the gap where an event decoded correctly but the receiving contract
+ *  wasn't actually associated with the pool this row claims (Codex: "PM/pool association ... remain
+ *  outstanding"). Without `fetchPoolId`, this check is skipped (back-compat for existing callers/tests
+ *  that don't need live chain reads). */
+export async function planAttribution(orphanedRows, fetchReceipt, configuredChainId, fetchPoolId) {
   const plan = []
   for (const row of orphanedRows) {
     if (configuredChainId != null && row.chain_id != null && Number(row.chain_id) !== Number(configuredChainId)) {
@@ -73,6 +105,12 @@ export async function planAttribution(orphanedRows, fetchReceipt, configuredChai
     }
     if (!receipt.to) {
       plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: 'no_receipt_to' })
+      continue
+    }
+    // The RPC endpoint could hand back the wrong receipt for the hash requested (provider bug, proxy
+    // mixup) — verify the receipt actually confirms its own hash before trusting anything else in it.
+    if (receipt.transactionHash != null && String(receipt.transactionHash).toLowerCase() !== String(row.tx_hash).toLowerCase()) {
+      plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: 'receipt_hash_mismatch' })
       continue
     }
     let decoded = null
@@ -99,6 +137,23 @@ export async function planAttribution(orphanedRows, fetchReceipt, configuredChai
     if (receipt.blockNumber == null || receipt.transactionIndex == null) {
       plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: 'missing_ordering_metadata' })
       continue
+    }
+    // Verify the candidate position manager is actually the pool this row claims — an event decoding
+    // correctly proves the CONTRACT emitted the right shape of log, not that it's the specific,
+    // registered gateway instance for row.pool_address. Same trust-root check registerInstance already
+    // does on-chain (poolKey() -> computePoolId()); refuse rather than trust receipt.to's identity alone.
+    if (fetchPoolId) {
+      let onChainPoolId
+      try {
+        onChainPoolId = await fetchPoolId(receipt.to)
+      } catch (e) {
+        plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: `pool_verification_failed: ${e instanceof Error ? e.message : String(e)}` })
+        continue
+      }
+      if (!onChainPoolId || String(onChainPoolId).toLowerCase() !== String(row.pool_address).toLowerCase()) {
+        plan.push({ id: row.id, tx_hash: row.tx_hash, resolved: false, reason: 'pool_mismatch' })
+        continue
+      }
     }
     plan.push({
       id: row.id,
@@ -133,6 +188,10 @@ async function main() {
   const supabase = createServerClient(url, key, { cookies: { getAll: () => [], setAll: () => {} } })
   const client = createPublicClient({ transport: http(rpcUrl) })
   const fetchReceipt = (txHash) => client.getTransactionReceipt({ hash: txHash }).catch(() => null)
+  const fetchPoolId = async (positionManager) => {
+    const poolKey = await client.readContract({ address: positionManager, abi: LP_GATEWAY_POOL_KEY_ABI, functionName: 'poolKey' })
+    return computePoolId(poolKey)
+  }
 
   // Verify the RPC endpoint itself is actually the configured chain — LP_GATEWAY_CHAIN_ID is a
   // human-set env var and LP_GATEWAY_RPC_URL is a separate one; nothing upstream guarantees they agree.
@@ -167,7 +226,7 @@ async function main() {
   }
 
   console.log(`Found ${orphaned.length} orphaned row(s). Fetching on-chain receipts...\n`)
-  const plan = await planAttribution(orphaned, fetchReceipt, chainId)
+  const plan = await planAttribution(orphaned, fetchReceipt, chainId, fetchPoolId)
 
   const resolved = plan.filter((p) => p.resolved)
   const unresolved = plan.filter((p) => !p.resolved)

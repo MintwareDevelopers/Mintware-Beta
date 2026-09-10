@@ -18,9 +18,9 @@ const PM = '0x' + 'aa'.repeat(20)
 const USER = '0x' + '11'.repeat(20)
 const POOL = '0x' + 'bb'.repeat(32)
 
-function depositedReceipt({ to = PM, user = USER, quoteIn = 1_000_000n, sharesMinted = 1_000_000n, status = 'success', blockNumber = 100n, transactionIndex = 0 } = {}) {
+function depositedReceipt({ to = PM, user = USER, quoteIn = 1_000_000n, sharesMinted = 1_000_000n, status = 'success', blockNumber = 100n, transactionIndex = 0, transactionHash } = {}) {
   return {
-    status, to, blockNumber, transactionIndex,
+    status, to, blockNumber, transactionIndex, transactionHash,
     logs: [{
       address: to,
       topics: encodeEventTopics({ abi: DEPOSITED_ABI, eventName: 'Deposited', args: { user } }),
@@ -28,9 +28,9 @@ function depositedReceipt({ to = PM, user = USER, quoteIn = 1_000_000n, sharesMi
     }],
   }
 }
-function withdrawnReceipt({ to = PM, user = USER, sharesBurned = 500_000n, quoteOut = 500_000n, pairedOut = 0n, status = 'success', blockNumber = 101n, transactionIndex = 0 } = {}) {
+function withdrawnReceipt({ to = PM, user = USER, sharesBurned = 500_000n, quoteOut = 500_000n, pairedOut = 0n, status = 'success', blockNumber = 101n, transactionIndex = 0, transactionHash } = {}) {
   return {
-    status, to, blockNumber, transactionIndex,
+    status, to, blockNumber, transactionIndex, transactionHash,
     logs: [{
       address: to,
       topics: encodeEventTopics({ abi: WITHDRAWN_ABI, eventName: 'Withdrawn', args: { user } }),
@@ -135,6 +135,57 @@ describe('planAttribution — never guesses, only ever verified on-chain data', 
     const row = { id: 'idx0', tx_hash: '0xidx0', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
     const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionIndex: 0 }))
     expect(plan).toMatchObject({ resolved: true, txIndex: 0 })
+  })
+
+  it('leaves a row unresolved when the receipt reports a DIFFERENT transactionHash than the row\'s own tx_hash', async () => {
+    // Guards against an RPC provider bug/proxy mixup handing back the wrong receipt for the hash
+    // requested — never trust anything else in a receipt that doesn't confirm its own identity.
+    const row = { id: 'wronghash', tx_hash: '0xrealhash', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionHash: '0xdifferenthash' }))
+    expect(plan).toMatchObject({ resolved: false, reason: 'receipt_hash_mismatch' })
+  })
+
+  it('resolves normally when the receipt confirms its own transactionHash matches the row\'s tx_hash', async () => {
+    const row = { id: 'righthash', tx_hash: '0xREALHASH', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt({ transactionHash: '0xrealhash' })) // case-insensitive match
+    expect(plan).toMatchObject({ resolved: true })
+  })
+
+  it('skips the transactionHash check entirely when the injected receipt has no transactionHash field (back-compat)', async () => {
+    const row = { id: 'nohash', tx_hash: '0xnohash', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt()) // transactionHash undefined
+    expect(plan).toMatchObject({ resolved: true })
+  })
+
+  it('leaves a row unresolved when the candidate position manager\'s on-chain pool does NOT match the row\'s own pool_address', async () => {
+    // Closes the "PM/pool association... remain outstanding" gap: an event decoding correctly proves the
+    // CONTRACT emitted the right shape of log, not that it's the specific gateway instance registered for
+    // this row's pool. fetchPoolId mirrors lib/gateway/registry.ts's own poolKey()/computePoolId() check.
+    const row = { id: 'poolmismatch', tx_hash: '0xpoolmismatch', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const fetchPoolId = vi.fn(async () => '0x' + 'ff'.repeat(32)) // a DIFFERENT pool than row.pool_address
+    const [plan] = await planAttribution([row], async () => depositedReceipt(), undefined, fetchPoolId)
+    expect(plan).toMatchObject({ resolved: false, reason: 'pool_mismatch' })
+    expect(fetchPoolId).toHaveBeenCalledWith(PM)
+  })
+
+  it('resolves normally when fetchPoolId confirms the candidate PM really fronts the row\'s own pool', async () => {
+    const row = { id: 'poolmatch', tx_hash: '0xpoolmatch', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const fetchPoolId = vi.fn(async () => POOL) // matches row.pool_address exactly
+    const [plan] = await planAttribution([row], async () => depositedReceipt(), undefined, fetchPoolId)
+    expect(plan).toMatchObject({ resolved: true })
+  })
+
+  it('leaves a row unresolved when fetchPoolId itself throws (on-chain read failure) — never resolves without verifying', async () => {
+    const row = { id: 'poolreaderr', tx_hash: '0xpoolreaderr', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const fetchPoolId = async () => { throw new Error('RPC timeout') }
+    const [plan] = await planAttribution([row], async () => depositedReceipt(), undefined, fetchPoolId)
+    expect(plan).toMatchObject({ resolved: false, reason: expect.stringContaining('pool_verification_failed') })
+  })
+
+  it('skips the pool-association check entirely when no fetchPoolId is injected (back-compat with existing callers)', async () => {
+    const row = { id: 'nopoolcheck', tx_hash: '0xnopoolcheck', address: USER, kind: 'deposit', pool_address: POOL, chain_id: 46630 }
+    const [plan] = await planAttribution([row], async () => depositedReceipt())
+    expect(plan).toMatchObject({ resolved: true })
   })
 })
 
