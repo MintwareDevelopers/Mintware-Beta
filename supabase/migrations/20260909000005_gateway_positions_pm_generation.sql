@@ -105,15 +105,26 @@ BEGIN
     ORDER BY (position_manager = v_pm) DESC LIMIT 1;
   v_prior_basis := COALESCE(v_prior_basis, 0);
 
+  -- CAUGHT ON REVIEW (2026-09-09, Codex live watch, same day, before this migration was ever applied):
+  -- the adopt-or-create SELECT above found the right POSITION row, but the underlying
+  -- gateway_deposit_events rows for the ambiguous pre-migration history were left tagged
+  -- position_manager = NULL — meaning a LATER, genuinely different generation's replay (which ALSO
+  -- matches "OR position_manager IS NULL") would find those same legacy events again and double-count
+  -- them into a second generation's basis (reproduced: "PM-B basis 110 instead of 10" when PM-A had
+  -- already legitimately absorbed a 10-unit legacy history). Fix: claim the legacy events for THIS PM
+  -- right now, unconditionally — a no-op if none are left unclaimed (already claimed by an earlier write,
+  -- or there never were any), and otherwise permanently removes them from being matchable by any OTHER
+  -- generation's future query. The ambiguous pre-migration history is a one-time, first-writer-wins
+  -- resource, not a shared one.
+  UPDATE gateway_deposit_events SET position_manager = v_pm
+    WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager IS NULL;
+
   -- Same replay-blocking gap as 20260909000004 (a withdraw row with no on_chain_shares/shares_burned
-  -- persisted, from before that migration). NOT the same thing as an ambiguous NULL position_manager
-  -- tag — pre-migration events are all correctly self-consistent for THIS identity (there was only ever
-  -- one PM per pool before Finding D existed), just not yet PM-labeled; they replay fine either way, the
-  -- WHERE clause above already scopes to exactly this identity's rows regardless of their PM tag.
+  -- persisted, from before that migration).
   SELECT EXISTS(
     SELECT 1 FROM gateway_deposit_events
     WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
-      AND (position_manager = v_pm OR position_manager IS NULL)
+      AND position_manager = v_pm
       AND kind = 'withdraw' AND on_chain_shares IS NULL
       AND id <> v_inserted_id
   ) INTO v_has_legacy_gap;
@@ -126,7 +137,7 @@ BEGIN
       SELECT kind, quote_in, on_chain_shares, shares_burned
       FROM gateway_deposit_events
       WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
-        AND (position_manager = v_pm OR position_manager IS NULL)
+        AND position_manager = v_pm
       ORDER BY block_number NULLS FIRST, created_at
     LOOP
       IF v_ev.kind = 'deposit' THEN
@@ -210,10 +221,15 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Same claim-the-legacy-events fix as the deposit RPC (see its comment) — otherwise a later, genuinely
+  -- different generation's replay would double-count this identity's ambiguous pre-migration history.
+  UPDATE gateway_deposit_events SET position_manager = v_pm
+    WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id AND position_manager IS NULL;
+
   SELECT EXISTS(
     SELECT 1 FROM gateway_deposit_events
     WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
-      AND (position_manager = v_pm OR position_manager IS NULL)
+      AND position_manager = v_pm
       AND kind = 'withdraw' AND on_chain_shares IS NULL
       AND id <> v_inserted_id
   ) INTO v_has_legacy_gap;
@@ -230,7 +246,7 @@ BEGIN
       SELECT kind, quote_in, on_chain_shares, shares_burned
       FROM gateway_deposit_events
       WHERE address = v_address AND pool_address = v_pool AND chain_id = p_chain_id
-        AND (position_manager = v_pm OR position_manager IS NULL)
+        AND position_manager = v_pm
       ORDER BY block_number NULLS FIRST, created_at
     LOOP
       IF v_ev.kind = 'deposit' THEN

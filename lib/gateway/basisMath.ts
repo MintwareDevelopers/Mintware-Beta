@@ -77,3 +77,43 @@ export function replayCostBasis(eventsInChainOrder: BasisEvent[]): bigint {
   }
   return basis
 }
+
+// ── Manager-generation fix (independent Codex audit, round-4 pass-2, 2026-09-09) ───────────────────────
+//
+// Migration 20260909000005 scopes replay per PositionManager generation — but its FIRST version (caught
+// by Codex's live watch before it was ever applied/committed) matched an ambiguous pre-migration legacy
+// event (position_manager IS NULL) into EVERY generation's replay query, not just the one that adopted
+// it — so a wallet whose legacy history was legitimately absorbed by generation A would have that SAME
+// history double-counted into generation B's basis too, the moment B's write called in. Reproduced
+// concretely: a 10-unit legacy history + a 100-unit deposit to PM-A correctly gives PM-A a basis of 110
+// — but PM-B, with no deposits of its own, incorrectly ALSO showed 110 instead of 0 (or whatever its own
+// history actually was), because both generations' replay queries independently re-matched the same
+// still-NULL-tagged legacy row.
+//
+// Fix: the RPC now UPDATEs every unclaimed (position_manager IS NULL) event for this identity to the
+// CURRENT call's PM before replaying — a one-time, first-writer-wins claim that PERMANENTLY removes
+// those events from being matchable by any other generation's future query. `claimEvents` mirrors that
+// UPDATE; `replayForGeneration` mirrors a single RPC call's claim-then-replay-scoped-to-one-PM sequence.
+
+export type PmTaggedEvent = (BasisEvent & { positionManager: string | null; blockNumber: number })
+
+/** Mirrors the SQL's `UPDATE gateway_deposit_events SET position_manager = pm WHERE position_manager IS
+ *  NULL` — every currently-unclaimed event becomes permanently owned by `pm`. Idempotent: re-running it
+ *  for the same or a different `pm` after everything is already claimed does nothing further to a
+ *  no-longer-null row (mirrors the SQL's WHERE clause). */
+export function claimEvents(events: PmTaggedEvent[], pm: string): PmTaggedEvent[] {
+  return events.map((e) => (e.positionManager === null ? { ...e, positionManager: pm } : e))
+}
+
+/** One full record_gateway_{deposit,withdraw}_event call, PM-aware: claim any unclaimed legacy events
+ *  for `pm` (mutating the returned event list, exactly like the SQL does to the real table), then replay
+ *  ONLY the events now tagged `pm` — in chain order — into that generation's own basis. Returns the
+ *  updated event list (so a SUBSEQUENT call, simulating a later HTTP request, sees the claim) and the
+ *  basis this call computed. */
+export function replayForGeneration(events: PmTaggedEvent[], pm: string): { events: PmTaggedEvent[]; basis: bigint } {
+  const claimed = claimEvents(events, pm)
+  const mine = claimed
+    .filter((e) => e.positionManager === pm)
+    .sort((a, b) => a.blockNumber - b.blockNumber)
+  return { events: claimed, basis: replayCostBasis(mine) }
+}
