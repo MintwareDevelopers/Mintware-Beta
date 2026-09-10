@@ -254,27 +254,56 @@ unrelated).
     collected something new (`collectTx` set) — a pure backlog-only settle attempt with nothing new this run
     is deliberately left as a no-op (nothing new to lose; the pending amount stays protected by
     `claimRestake`/`releaseRestake` regardless).
-  - **Automated reconciliation — BUILT (user directive, 2026-09-10: "built it").** `lib/gateway/reconcileSwaps.ts`
-    (cron: `app/api/(rewards)/cron/gateway-reconcile-swaps`, flag-gated `LP_GATEWAY_RECONCILE_ENABLED`,
-    OFF by default) re-checks every `harvest_events` row `swapPairedToQuote` flagged
-    `needsReconciliation` (migration `20260910000001` adds `swap_needs_reconciliation`/
-    `swap_reconciled_at`/`swap_reconciliation_outcome`/`swap_reconciliation_tx` to `harvest_events`).
-    Never guesses: re-fetches the swap's own receipt from chain and re-runs the EXACT SAME
-    `measureSwapProceeds` (now exported from `routerSwap.ts` so both call sites share one algorithm, never
-    two that could drift) — receipt not found yet ⇒ left pending, retried next pass; a confirmed revert ⇒
-    resolved `'reverted'` (definitive, proceeds are zero, never retried again); confirmed success but still
-    no qualifying Transfer log ⇒ resolved `'unmeasurable'` (a permanent characteristic of that transaction,
-    flagged for manual operator review via the outcome column, not retried forever); a measured net ≤ 0 ⇒
-    resolved `'zero'`; a measured net > 0 ⇒ **real recovery** — submits a genuine `compoundQuote()` (the
-    SAME approve+compound pattern `settlePendingBacklog` already uses) to actually credit the recovered
-    proceeds into NAV, resolved `'recovered'` with the real compound tx hash recorded. The owner address to
-    check Transfer logs against comes from the SAME dedicated `gateway` oracle seat every instance shares —
-    no signer this run ⇒ the WHOLE pass skips (never guesses an owner for even the read-only outcomes). A
-    disclosed, accepted residual: if the recovery compound tx mines but the row's own status update then
-    fails, the row stays flagged pending and a later pass would attempt to recover the SAME amount again
-    (double-compound risk) — loudly logged as needing immediate manual intervention, not silently retried;
-    this mirrors the same class of accepted residual `settlePendingBacklog`'s own "compound sent but receipt
-    unknown" path already carries.
+  - **Automated reconciliation — BUILT (user directive, 2026-09-10: "built it"), then closed a real
+    double-compound bug via an independent adversarial review.** `lib/gateway/reconcileSwaps.ts` (cron:
+    `app/api/(rewards)/cron/gateway-reconcile-swaps`, flag-gated `LP_GATEWAY_RECONCILE_ENABLED`, OFF by
+    default) re-checks every `harvest_events` row `swapPairedToQuote` flagged `needsReconciliation`
+    (migration `20260910000001` adds `swap_needs_reconciliation`/`swap_reconciliation_claimed_at`/
+    `swap_reconciled_at`/`swap_reconciliation_outcome`/`swap_reconciliation_tx` to `harvest_events`). Never
+    guesses: CLAIMS the row (see below), re-fetches the swap's own receipt from chain, and re-runs the
+    EXACT SAME `measureSwapProceeds` (exported from `routerSwap.ts` so both call sites share one algorithm,
+    never two that could drift) — receipt not found yet ⇒ claim released, retried next pass; a confirmed
+    revert ⇒ resolved `'reverted'` (definitive, never retried again); confirmed success but still no
+    qualifying Transfer log ⇒ resolved `'unmeasurable'` (a permanent characteristic of that transaction,
+    flagged for manual operator review, never retried forever); a measured net ≤ 0 ⇒ resolved `'zero'`; a
+    measured net > 0 ⇒ **real recovery** — skims the SAME performance fee (`perfFeeBps`, exported from
+    `harvest.ts`, never a second drifting copy) a normal harvest would, then submits a genuine
+    `compoundQuote()` for the NET amount (the same approve+compound pattern `settlePendingBacklog` already
+    uses) to credit it into NAV. Resolved `'recovered'`, with `amount_credited_atomic`/`fee_skimmed_atomic`
+    on the row updated to match — a recovered row reads identically to one credited at harvest time.
+  - **⭐ Validated the SAME day by a NEW capability, not by Codex** (user directive: "make sure we have a
+    way to reproduce" Codex's adversarial second-look after hitting the Codex usage limit — see
+    `.claude/workflows/adversarial-review.js`, a saved Workflow script modeled on Codex's own live-watch
+    pattern: diff-scoped, multi-dimension, and — the key trait — every finding gets BOTH an adversarial
+    refutation pass AND an EMPIRICAL pass that actually runs the relevant test rather than trusting
+    reasoning). First real run, against `routerSwap.ts`/`harvest.ts`/`reconcileSwaps.ts`: **15/15 raw
+    findings survived verification.** The headline one — reproduced independently across the atomicity,
+    durability, test-honesty, scope-honesty AND doc-accuracy dimensions, and confirmed with a REAL repro
+    test the review wrote and ran itself (`compoundQuote_call_count: 2` from two overlapping calls) — was
+    that `reconcileSwaps.ts` had **no claim/lock step**: it only flipped `swap_needs_reconciliation` to
+    false AFTER a recovery `compoundQuote()` confirmed, so two overlapping cron runs (or a retry racing an
+    in-flight call) could both independently recover and compound the SAME proceeds, diluting other
+    depositors' NAV — the module's own header even said it used "the SAME pattern harvest.ts's
+    settlePendingBacklog already uses," which was false; `settlePendingBacklog` genuinely claims BEFORE any
+    on-chain call, this didn't. **Fixed:** `claimRow` performs a GUARDED update (only succeeds when the row
+    is still unclaimed) before any chain read/write, mirroring `ledger.ts#claimRestake`'s
+    `.eq('settlement', from)` guard exactly; `releaseRow` reverts the claim on any failure that didn't
+    actually submit a tx (retryable); a submitted-but-unconfirmed compound deliberately stays claimed
+    (never auto-retried, matches `harvest.ts`'s own `compound_receipt_unknown` posture). **Re-verified with
+    a new test that races two truly concurrent `reconcilePendingSwaps()` calls against the same row and
+    asserts `compoundQuote` is called exactly once** — the direct, empirical proof the fix holds, not just
+    reasoning that it should. Also found and fixed in the same pass: the recovery path was compounding the
+    FULL recovered amount, silently skipping the platform's own performance fee a normal harvest always
+    applies (now skims it, same as above); `harvest.ts`'s own collect-tx confirmation-throw path (the very
+    first on-chain call in `harvestGateway`) was the one failure path the earlier durability fix missed —
+    every other path preserves a submitted tx's hash, this one didn't (now fixed, mirrors every other
+    path); a stale test comment in `routerSwap.test.ts` still described the removed balance-diff fallback
+    (fixed). **Disclosed, accepted residuals** (genuinely narrow, would need new schema/design, not a quick
+    patch — see `reconcileSwaps.ts`'s own header for the full reasoning): `owner` is re-derived from the
+    CURRENT oracle seat every reconcile run, not the seat that executed the original swap — a seat rotation
+    between harvest and reconciliation would mis-resolve recoverable proceeds as `'unmeasurable'`; a pool
+    whose PositionManager is fully DEREGISTERED (not merely deactivated) strands its pending rows in
+    `still-pending` forever with no distinct escalation path — not a normal operational event today.
   - **Still genuinely open, not built:** router compatibility remains unverified against real bytecode/a
     fork test/a live transaction (can't be closed from this sandbox — needs an operator test-swap before
     `LP_GATEWAY_ROUTER_ADDRESS` is ever set on a real deploy). Historical/withdraw/deploy-sweep paired-token
@@ -284,15 +313,17 @@ unrelated).
   Verification for the above: 28 unit tests in `routerSwap.test.ts` (encoding decoded back from its own
   output, never a magic hex string; every execution + failure path; dedicated tests proving the Transfer-log
   measurement is immune to the exact concurrent-activity contamination scenario Codex described, and that it
-  correctly NETS an outgoing same-receipt transfer rather than reporting the gross inflow) + 7 durability
+  correctly NETS an outgoing same-receipt transfer rather than reporting the gross inflow) + 8 durability
   tests in `harvest.test.ts` (each of `settlePendingBacklog`'s failure paths proven to still durably record
   `collect_tx`/`swap_tx`; a forced insert failure proven to log loudly; the backlog-only path proven NOT to
   write a useless null row; the `needsReconciliation` signal proven to thread through to the persisted row
-  both ways) + 15 tests in `reconcileSwaps.test.ts` (every outcome — still-pending/reverted/unmeasurable/
-  zero/recovered — against REAL Transfer-log fixtures via the actual `measureSwapProceeds`, not a re-mocked
-  stub; the compound-revert and post-recovery row-update-failure edge cases; multi-row independence) —
-  `pnpm exec tsc --noEmit --incremental false` clean, full `pnpm test` green (1284 passed, 4 pre-existing
-  skips, 0 failures) after every round.
+  both ways; the collect-tx confirmation-throw path proven to now durably record too) + 16 tests in
+  `reconcileSwaps.test.ts` (every outcome — still-pending/reverted/unmeasurable/zero/recovered — against
+  REAL Transfer-log fixtures via the actual `measureSwapProceeds`, not a re-mocked stub; the fee-skim math;
+  the compound-revert and post-recovery row-update-failure edge cases; multi-row independence; **and the
+  critical one: two truly concurrent `reconcilePendingSwaps()` calls racing the same row, asserting
+  `compoundQuote` fires exactly once**) — `pnpm exec tsc --noEmit --incremental false` clean, full
+  `pnpm test` green (1286 passed, 4 pre-existing skips, 0 failures) after every round.
 - **Depositable rule:** a pool is depositable only when `gateway_instances` holds an **`active`**, on-chain-verified
   (H-01) row for its **poolId** — the Discover `live` flag and `/earn/[pool]` must resolve through the registry, never
   through a pair label. The single-env `LP_GATEWAY_POSITION_MANAGER` fallback is bootstrap-only (O-2 closeout;
@@ -355,10 +386,17 @@ unrelated).
   `_006` alone (without `_007`) is likewise safe for the same reason. On-chain funds are unaffected either
   way (this is display-only cost-basis bookkeeping). ·
   `20260910000001` (fee-conversion swap reconciliation — user directive, 2026-09-10: "built it"; adds
-  `swap_needs_reconciliation`/`swap_reconciled_at`/`swap_reconciliation_outcome`/`swap_reconciliation_tx`
-  to `harvest_events`, read/written by `lib/gateway/reconcileSwaps.ts`; existing rows default
-  `swap_needs_reconciliation = false` — the concept postdates them, nothing retroactively flags historical
-  rows). All **deny-all RLS**. **Env vars:** every
+  `swap_needs_reconciliation`/`swap_reconciliation_claimed_at`/`swap_reconciled_at`/
+  `swap_reconciliation_outcome`/`swap_reconciliation_tx` to `harvest_events`, read/written by
+  `lib/gateway/reconcileSwaps.ts`; existing rows default `swap_needs_reconciliation = false` — the concept
+  postdates them, nothing retroactively flags historical rows. **Amended in place same-day** (not yet
+  applied to any database at the time) to add `swap_reconciliation_claimed_at` — an independent adversarial
+  review caught the first version had no claim/lock column, which let two overlapping reconcile-cron runs
+  both recover and double-compound the same proceeds; see the reconciliation note above for the full story.
+  ⚠ Must be applied before `LP_GATEWAY_HARVEST_ENABLED` or `LP_GATEWAY_RECONCILE_ENABLED` are ever turned
+  on — `harvest.ts`'s inserts already reference `swap_needs_reconciliation`, so a harvest run against a
+  database missing this migration would fail every `harvest_events` insert). All **deny-all RLS**. **Env
+  vars:** every
   `LP_GATEWAY_*` var is tabled in
   [`deployments.md`](deployments.md) → "LP Gateway (V1) — Robinhood Chain".
 - **Historical PM attribution recovery** (`scripts/verify-gateway-pm-attribution.mjs`, independent Codex

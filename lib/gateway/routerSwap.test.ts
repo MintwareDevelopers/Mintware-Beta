@@ -168,8 +168,12 @@ describe('swapPairedToQuote', () => {
     const sqrtPriceX96 = overrides.sqrtPriceX96 ?? (1n << 96n) // price 1:1
     const allowance = overrides.allowance ?? 0n
     let balanceCallCount = 0
-    const quoteBalances = overrides.quoteBalances ?? [1_000_000n, 1_500_000n] // before, after
-    const swapLogs = overrides.swapLogs ?? [] // no Transfer log by default — exercises the balance-diff fallback
+    // Adversarial-review finding (2026-09-10): this comment used to say "exercises the balance-diff
+    // fallback" — stale, since that fallback was removed entirely (see routerSwap.ts). `quoteBalances`
+    // now exists ONLY as a deliberate distractor: several tests set a real balance change here specifically
+    // to prove the implementation never reads it at all any more (quoteOut stays 0/unmeasured regardless).
+    const quoteBalances = overrides.quoteBalances ?? [1_000_000n, 1_500_000n] // before, after — a distractor only, never actually consulted
+    const swapLogs = overrides.swapLogs ?? [] // no Transfer log by default — proceeds report as unmeasured (quoteOut: 0), never a balance-diff guess
 
     const readContract = vi.fn(async (args: any) => {
       if (args.functionName === 'poolKey') return POOL_KEY

@@ -18,6 +18,7 @@ let compoundDeferredNextCompound = false
 // paired fees, so the swap step (and therefore its swap_tx) never enters the picture for them.
 let pairedFeesNextHarvest = 0n
 let compoundRevertsNextCompound = false
+let collectReceiptThrowsNext = false
 
 const writes: Array<{ functionName: string; args?: unknown[]; gas?: bigint }> = []
 const publicClient = {
@@ -28,7 +29,9 @@ const publicClient = {
   }),
   simulateContract: vi.fn(async () => ({ result: [GROSS, 0n] })),
   estimateContractGas: vi.fn(async () => 500_000n),
-  waitForTransactionReceipt: vi.fn(async ({ hash }: { hash: string }) => ({
+  waitForTransactionReceipt: vi.fn(async ({ hash }: { hash: string }) => {
+    if (collectReceiptThrowsNext && hash === COLLECT_TX) throw new Error('ECONNRESET while polling for collect receipt')
+    return {
     status: compoundRevertsNextCompound && hash === COMPOUND_TX ? 'reverted' : 'success',
     blockNumber: 500n,
     logs: hash === COLLECT_TX ? [{
@@ -40,7 +43,8 @@ const publicClient = {
       topics: encodeEventTopics({ abi: LP_GATEWAY_ABI, eventName: 'CompoundDeferred' }),
       data: encodeAbiParameters([{ type: 'uint256' }], [10_800_000n]),
     }] : [],
-  })),
+    }
+  }),
 }
 
 vi.mock('@/lib/gateway/chain', () => ({
@@ -118,6 +122,7 @@ beforeEach(() => {
   writes.length = 0
   compoundDeferredNextCompound = false
   compoundRevertsNextCompound = false
+  collectReceiptThrowsNext = false
   pairedFeesNextHarvest = 0n
   indexMock.mockReset(); pendingMock.mockReset(); markMock.mockReset(); claimMock.mockClear(); releaseMock.mockClear()
   swapMock.mockReset(); swapMock.mockResolvedValue({ quoteOut: 0n, txHash: null, needsReconciliation: false })
@@ -271,6 +276,18 @@ describe('harvestGateway', () => {
   // claim/compound/mark sequence fails independently. Before this fix, none of these failure paths ever
   // called record() at all, so the swap_tx ended up nowhere in harvest_events.
   describe('durable recording of a real swap_tx even when the later restake/compound step fails (Codex live-watch, 2026-09-10)', () => {
+    // Adversarial-review finding (2026-09-10): every OTHER failure path in this function was fixed to
+    // preserve a real submitted tx's hash — the collect tx's OWN confirmation-throw path (the very first
+    // on-chain call) was missed and still returned with no insert at all.
+    it('a collect tx that was submitted but whose receipt-wait throws still durably records collect_tx (swap never attempted)', async () => {
+      collectReceiptThrowsNext = true
+      const { client, tables } = fakeDb()
+      const r = await harvestGateway({ supabase: client, instance: { positionManager: PM, poolAddress: POOL, chainId: 46630 } })
+      expect(r).toMatchObject({ ok: false, error: 'harvest_failed' })
+      expect(tables.harvest_events[0]).toMatchObject({ collect_tx: COLLECT_TX, swap_tx: null, swap_needs_reconciliation: false })
+      expect(swapMock).not.toHaveBeenCalled() // never got far enough to attempt a swap
+    })
+
     it('claim failure still durably records this run\'s collect_tx + swap_tx (credited: 0)', async () => {
       pairedFeesNextHarvest = 500_000n
       swapMock.mockResolvedValueOnce({ quoteOut: 300_000n, txHash: SWAP_TX, needsReconciliation: false })

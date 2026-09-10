@@ -76,25 +76,43 @@ import { reconcilePendingSwaps } from './reconcileSwaps'
 type Row = Record<string, unknown>
 function fakeDb(rows: Row[]) {
   const tables: Record<string, Row[]> = { harvest_events: rows }
-  const updates: Array<{ id: string; payload: Row }> = []
+  const updates: Array<{ ids: string[]; payload: Row }> = []
   function from(table: string) {
     let op: 'select' | 'update' = 'select'
     let payload: Row | undefined
-    let eqId: string | undefined
+    // Real filter application (not a pass-through) — needed to genuinely exercise the claim guard: a
+    // guarded update must only affect rows matching ALL accumulated filters, exactly like real
+    // supabase-js/PostgREST semantics, so a test can prove a second claim attempt affects 0 rows.
+    const filters: Array<{ col: string; kind: 'eq' | 'is'; val: unknown }> = []
+    const matches = (row: Row) => filters.every((f) => {
+      const v = row[f.col]
+      if (f.kind === 'is') return f.val === null ? v == null : v === f.val
+      return v === f.val
+    })
     const b = {
       select: () => b,
-      eq: (col: string, val: unknown) => { if (op === 'update' && col === 'id') eqId = val as string; return b },
+      eq: (col: string, val: unknown) => { filters.push({ col, kind: 'eq', val }); return b },
+      is: (col: string, val: unknown) => { filters.push({ col, kind: 'is', val }); return b },
       order: () => b,
       limit: () => b,
       update: (p: Row) => { op = 'update'; payload = p; return b },
       then: (res: (v: unknown) => unknown) => {
         if (op === 'update') {
-          updates.push({ id: eqId!, payload: payload! })
-          const idx = tables[table].findIndex((r) => r.id === eqId)
-          if (idx >= 0) tables[table][idx] = { ...tables[table][idx], ...payload }
-          return Promise.resolve({ data: null, error: updateShouldFail ? { message: 'simulated update failure' } : null }).then(res)
+          const matched = tables[table].filter(matches)
+          // Scoped to the RESOLVE update specifically (the one setting swap_reconciliation_outcome) —
+          // not the claim/release updates, so tests can simulate "the resolve write fails after a real
+          // on-chain recovery" without also breaking the claim step itself.
+          const isResolveUpdate = payload != null && 'swap_reconciliation_outcome' in payload
+          const error = updateShouldFail && isResolveUpdate ? { message: 'simulated update failure' } : null
+          // A failed write must NOT actually mutate the row — matches real Postgres/Supabase semantics
+          // (an errored UPDATE never commits) and is what makes the "the resolve write fails" test
+          // scenarios meaningful (the row's fields must stay exactly as the claim step left them).
+          if (!error) for (const row of matched) Object.assign(row, payload)
+          updates.push({ ids: matched.map((r) => r.id as string), payload: payload! })
+          const data = error ? null : matched.map((r) => ({ id: r.id }))
+          return Promise.resolve({ data, error }).then(res)
         }
-        return Promise.resolve({ data: tables[table], error: null }).then(res)
+        return Promise.resolve({ data: tables[table].filter(matches), error: null }).then(res)
       },
     }
     return b
@@ -118,7 +136,11 @@ beforeEach(() => {
   process.env.LP_GATEWAY_RECONCILE_ENABLED = 'true'
 })
 
-const pendingRow = (over: Partial<Row> = {}) => ({ id: 'row-1', pool_address: POOL, chain_id: 46630, swap_tx: SWAP_TX, ...over })
+const pendingRow = (over: Partial<Row> = {}) => ({
+  id: 'row-1', pool_address: POOL, chain_id: 46630, swap_tx: SWAP_TX,
+  swap_needs_reconciliation: true, swap_reconciliation_claimed_at: null,
+  ...over,
+})
 
 describe('reconcilePendingSwaps', () => {
   it('fails closed when disabled (default)', async () => {
@@ -195,18 +217,24 @@ describe('reconcilePendingSwaps', () => {
     expect(writes).toHaveLength(0)
   })
 
-  it('RECOVERS real positive proceeds: approves, compounds, resolves with the recovery tx recorded', async () => {
+  // Adversarial-review finding (2026-09-10): the first version compounded the FULL recovered amount,
+  // silently skipping the platform's own performance fee a normal harvest always applies. Fixed: skims
+  // the SAME perfFeeBps (default 10%, from harvest.ts, reused not duplicated) before compounding, and
+  // persists both the net credited amount AND the skimmed fee back into the row.
+  it('RECOVERS real positive proceeds: skims the SAME performance fee a normal harvest would, compounds the NET amount, and persists both into the row', async () => {
     receiptForSwapTx = { status: 'success', logs: [transferLog(QUOTE_ASSET, ROUTER, SEAT, 500_000n)] }
     allowanceForApprove = 0n // forces an approve
     const { client, tables } = fakeDb([pendingRow()])
     const r = await reconcilePendingSwaps({ supabase: client })
     expect(r.recovered).toBe(1)
-    expect(r.results[0]).toMatchObject({ status: 'resolved', outcome: 'recovered', recoveredAtomic: '500000', recoveryTx: COMPOUND_TX })
+    // 500,000 gross - 10% default perf fee (50,000) = 450,000 net credited
+    expect(r.results[0]).toMatchObject({ status: 'resolved', outcome: 'recovered', recoveredAtomic: '450000', recoveryTx: COMPOUND_TX })
     expect(tables.harvest_events[0]).toMatchObject({
       swap_needs_reconciliation: false, swap_reconciliation_outcome: 'recovered', swap_reconciliation_tx: COMPOUND_TX,
+      amount_credited_atomic: '450000', fee_skimmed_atomic: '50000',
     })
     expect(writes.map((w) => w.functionName)).toEqual(['approve', 'compoundQuote'])
-    expect(writes[1].args).toEqual([500_000n])
+    expect(writes[1].args).toEqual([450_000n]) // compounds the NET amount, not the gross recovered amount
   })
 
   it('skips the approve call when existing allowance already covers the recovered amount', async () => {
@@ -228,15 +256,21 @@ describe('reconcilePendingSwaps', () => {
     expect(tables.harvest_events[0].swap_needs_reconciliation).not.toBe(false)
   })
 
-  it('logs a critical escalation (not silent) when the compound MINES but the row update itself fails — the exact double-compound risk window', async () => {
+  // Post-fix: this is now a BOOKKEEPING gap only, not a double-compound risk — the row stays CLAIMED
+  // (claimRow's guard means a future pass can't re-select it while claimed_at is set), so the loud log
+  // wording changed to reflect that it's a bookkeeping correction, not an active double-submission threat.
+  it('logs a loud (not silent) error when the compound MINES but the row update itself fails — row stays claimed, no double-submission risk', async () => {
     receiptForSwapTx = { status: 'success', logs: [transferLog(QUOTE_ASSET, ROUTER, SEAT, 500_000n)] }
     allowanceForApprove = 10n ** 18n
     updateShouldFail = true
-    const { client } = fakeDb([pendingRow()])
+    const { client, tables } = fakeDb([pendingRow()])
     const log = { warn: vi.fn(), error: vi.fn(), info: vi.fn() }
     const r = await reconcilePendingSwaps({ supabase: client, log })
     expect(r.recovered).toBe(1) // the on-chain recovery genuinely happened
-    expect(log.error).toHaveBeenCalledWith('gateway.reconcile', expect.stringContaining('Manual operator intervention required'), expect.objectContaining({ compoundTx: COMPOUND_TX }))
+    expect(log.error).toHaveBeenCalledWith('gateway.reconcile', expect.stringContaining('bookkeeping correction'), expect.objectContaining({ compoundTx: COMPOUND_TX }))
+    // The row stays claimed (never released) — a future pass cannot re-select it and re-submit.
+    expect(tables.harvest_events[0].swap_reconciliation_claimed_at).not.toBeNull()
+    expect(tables.harvest_events[0].swap_needs_reconciliation).toBe(true) // the resolve write failed, so this is honestly still true
   })
 
   it('processes multiple pending rows independently in one pass, continuing past an error on one row', async () => {
@@ -269,5 +303,29 @@ describe('reconcilePendingSwaps', () => {
     expect(r.results[0]).toMatchObject({ status: 'resolved', outcome: 'unmeasurable' })
     expect(tables.harvest_events[0].swap_needs_reconciliation).toBe(false)
     expect(publicClient.getTransactionReceipt).not.toHaveBeenCalled()
+  })
+
+  // THE validation test for the double-compound fix. An independent adversarial review (a Workflow
+  // reproducing this session's Codex live-watch pattern) wrote a repro test against the PRE-fix code
+  // proving two overlapping reconcile-cron calls both independently submitted compoundQuote() for the
+  // same recovered amount (empirically observed: compoundQuote_call_count: 2). This is the same shape of
+  // test against the FIXED code, proving claimRow's guarded update actually closes it: only ONE of two
+  // truly concurrent calls against the SAME pending row may claim it; the other must see 0 rows affected
+  // by its own guarded update and skip without ever calling compoundQuote.
+  it('two concurrent reconcilePendingSwaps calls racing the SAME row: only ONE claims it and submits compoundQuote — never both', async () => {
+    receiptForSwapTx = { status: 'success', logs: [transferLog(QUOTE_ASSET, ROUTER, SEAT, 500_000n)] }
+    allowanceForApprove = 10n ** 18n
+    const { client, tables } = fakeDb([pendingRow()])
+    const [r1, r2] = await Promise.all([
+      reconcilePendingSwaps({ supabase: client }),
+      reconcilePendingSwaps({ supabase: client }),
+    ])
+    const compoundCalls = writes.filter((w) => w.functionName === 'compoundQuote')
+    expect(compoundCalls).toHaveLength(1) // the empirically-critical assertion — never 2
+    expect(r1.recovered + r2.recovered).toBe(1) // exactly one run recovered it, not both, not neither
+    expect(tables.harvest_events[0]).toMatchObject({ swap_needs_reconciliation: false, swap_reconciliation_outcome: 'recovered' })
+    // The run that lost the race must report the row as already claimed, not as its own error/failure.
+    const loser = r1.recovered === 1 ? r2 : r1
+    expect(loser.results.some((x) => x.status === 'still-pending' && (x as { reason?: string }).reason === 'already_claimed')).toBe(true)
   })
 })

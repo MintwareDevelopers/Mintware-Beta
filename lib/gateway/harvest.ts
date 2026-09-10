@@ -79,7 +79,10 @@ export function resolveHarvestDestination(_env: Record<string, string | undefine
 }
 
 const big = (v: unknown) => BigInt(String(v ?? '0'))
-const perfFeeBps = () => {
+// Exported (adversarial-review finding, 2026-09-10) so reconcileSwaps.ts skims the SAME performance fee
+// on recovered proceeds a normal harvest would have — reusing this instead of a second, potentially
+// drifting copy of the env-parsing logic.
+export const perfFeeBps = () => {
   const n = Number(process.env.LP_GATEWAY_PERF_FEE_BPS ?? '1000') // default 10%
   return Number.isInteger(n) && n >= 0 && n <= 10_000 ? n : 1000
 }
@@ -334,7 +337,7 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
 
   // 1) collect fees (zero-liquidity-delta) → harvestRecipient (the oracle seat). Idempotent-safe: a
   //    revert (no fees) just yields zero, and the collect tx keys the harvest_events unique index.
-  let collectTx: `0x${string}`
+  let collectTx: `0x${string}` | undefined
   let collectBlock: bigint | undefined
   let quoteFees = 0n
   let pairedFees = 0n
@@ -360,6 +363,23 @@ export async function harvestGateway(opts: { supabase: SupabaseClient; log?: Log
     }
   } catch (e) {
     log?.error('gateway.harvest', 'harvest tx failed', { error: String(e) })
+    // Adversarial-review finding (2026-09-10, dimension: durability): every OTHER failure path in this
+    // function that has a real tx hash to lose was fixed to preserve it durably — this one, the very
+    // FIRST on-chain call, was missed. `collectTx` is only ever assigned by `wallet.writeContract` above
+    // — if THAT throws, nothing was submitted and there is genuinely nothing to record. But if it
+    // succeeded and the SUBSEQUENT `waitForTransactionReceipt` is what threw (an RPC drop/timeout — the
+    // exact "submitted but unconfirmed" class every other path here now handles), a real on-chain collect
+    // may have (or will) succeed with no record of it anywhere in this app's own tables otherwise.
+    if (collectTx) {
+      const { error: insertError } = await supabase.from('harvest_events').insert({
+        pool_address: instance.poolAddress, chain_id: instance.chainId, collect_tx: collectTx, swap_tx: null,
+        amount_harvested_atomic: '0', fee_skimmed_atomic: '0', amount_credited_atomic: '0',
+        swap_needs_reconciliation: false, // no swap was ever attempted this run — nothing to reconcile
+      })
+      if (insertError) {
+        log?.error('gateway.harvest', 'harvest_events insert ALSO failed on the collect-confirmation-failure path — collectTx recorded NOWHERE', { error: insertError.message, collectTx })
+      }
+    }
     return { ok: false, status: 502, error: 'harvest_failed', reason: 'tx' }
   }
 
