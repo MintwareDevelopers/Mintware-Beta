@@ -50,7 +50,7 @@ type Meta = {
 }
 type Metrics = { poolAddress: string; pairLabel: string; tvlUsd: number; vol24Usd: number; volTvlRatio: number | null; priceQuotePerBase: number | null; poolAgeDays: number | null; txCount24: number | null; riskScore: number; reasons: string[]; baseSymbol?: string; quoteSymbol?: string; baseLogo?: string | null; quoteLogo?: string | null; live: boolean }
 type Snapshot = { takenAt: string; positionValueAtomic: string; pnlAtomic: string }
-type Position = { shares: string; positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; recorded?: boolean; history?: Snapshot[] }
+type Position = { shares: string; positionValueAtomic: string | null; bufferBalanceAtomic: string | null; costBasisAtomic?: string | null; unrealizedPnlAtomic?: string | null; recorded?: boolean; costBasisComplete?: boolean; history?: Snapshot[] }
 type PositionResponse = { position: Position; poolState: SerializedPoolState | null }
 type Status = 'idle' | 'quote' | 'review' | 'switch' | 'approve' | 'deposit' | 'withdraw' | 'record' | 'recorded' | 'record_failed'
 type Review =
@@ -477,6 +477,11 @@ export function V1PoolDetail({ slug }: { slug: string }) {
             {hasPos && pos?.recorded === false && (
               <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#F0B45E' }}>
                 Position read from chain; its deposit was never recorded here, so cost basis and P&amp;L are unknown. Your funds are unaffected.
+              </div>
+            )}
+            {hasPos && pos?.recorded !== false && pos?.costBasisComplete === false && (
+              <div className="mt-3 text-[12px] leading-[1.5]" style={{ color: '#F0B45E' }}>
+                Cost basis may be incomplete — some of your earlier history for this pool is still being recovered. The figures below reflect only what&apos;s currently attributed. Your funds are unaffected.
               </div>
             )}
             {hasPos && pos?.costBasisAtomic != null && (

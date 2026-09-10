@@ -32,6 +32,7 @@ type PoolPosition = {
   costBasisAtomic: string | null
   unrealizedPnlAtomic: string | null
   recorded?: boolean // false ⇒ chain shows the position but its deposit was never recorded (basis unknown)
+  costBasisComplete?: boolean // false ⇒ this exact wallet/pool/chain still has unattributed historical events
   source?: 'registry' | 'env-fallback'
   live?: boolean
   valueSeries?: number[]
@@ -93,6 +94,11 @@ export function V1Portfolio() {
   const totalWorking = useMemo(() => positions.reduce((s, p) => s + num(p.positionValueAtomic), 0), [positions])
   const totalPnl = useMemo(() => positions.reduce((s, p) => s + num(p.unrealizedPnlAtomic), 0), [positions])
   const totalDeposited = useMemo(() => positions.reduce((s, p) => s + num(p.costBasisAtomic), 0), [positions])
+  // User concern (2026-09-10): "Prevent incomplete historical data from appearing as a complete cost
+  // basis." A per-position costBasisComplete:false must not just sit unused on the API response — the
+  // TOTALS above sum every position's basis/PnL indiscriminately, so a single incomplete position quietly
+  // pollutes "Net vs deposit"/"Deposited" without any indication something's still being recovered.
+  const anyCostBasisIncomplete = useMemo(() => positions.some((p) => p.costBasisComplete === false), [positions])
 
   const name = meta?.displayName || meta?.basename || (address ? shortAddr(address) : '')
   const avatarLetter = address ? address.charAt(2).toUpperCase() : '?'
@@ -188,6 +194,12 @@ export function V1Portfolio() {
           </span>
         </div>
       )}
+      {!loading && !fetchFailed && anyCostBasisIncomplete && (
+        <div className="mt-6 rounded-[14px] px-4 py-3 text-[13px] flex items-center gap-2.5" style={{ background: 'rgba(240,180,94,0.1)', border: '1px solid rgba(240,180,94,0.25)', color: '#F0B45E' }}>
+          <span>⚠</span>
+          <span>Cost basis for one or more positions is still being recovered — &quot;Net vs deposit&quot; and &quot;Deposited&quot; below reflect only what&apos;s currently attributed, not necessarily your full history. Your funds are unaffected.</span>
+        </div>
+      )}
 
       {/* 2 · working-balance hero */}
       <div className="mt-6 rounded-[18px] p-7 max-[640px]:p-5 relative overflow-hidden" style={{ background: 'linear-gradient(135deg,#191830,#12121C)', border: '1px solid rgba(138,130,244,0.22)' }}>
@@ -262,6 +274,7 @@ function PositionCard({ p }: { p: PoolPosition }) {
         <span className="flex items-center gap-2 shrink-0">
           {p.source === 'env-fallback' && <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full" style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>Dev rig</span>}
           {p.recorded === false && <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full" title="Read from chain; the deposit was never recorded here, so cost basis is unknown." style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>Unrecorded</span>}
+          {p.recorded !== false && p.costBasisComplete === false && <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full" title="This wallet's earlier history for this pool is still being recovered — cost basis reflects only what's attributed so far." style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>Basis incomplete</span>}
           {p.sourceReadable === false && <span className="text-[10.5px] font-semibold px-2 py-0.5 rounded-full" title="The yield source is temporarily unreadable — this value is a cached figure, not a live read." style={{ color: '#F0B45E', background: 'rgba(240,180,94,0.12)' }}>Stale value</span>}
           {(p.valueSeries?.length ?? 0) >= 3 && <Sparkline series={p.valueSeries} width={80} height={26} />}
         </span>
