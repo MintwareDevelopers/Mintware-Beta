@@ -251,6 +251,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/agent/[address]` | `app/(web3)/agent/[address]/page.tsx` |
 | `/agents` | `app/agents/page.tsx` |
 | `/agents/leaderboard` | `app/(web3)/agents/leaderboard/page.tsx` |
+| `/angels` | `app/angels/page.tsx` |
 | `/app` | `app/app/page.tsx` |
 | `/app/account` | `app/app/account/page.tsx` |
 | `/app/agents` | `app/app/agents/page.tsx` |

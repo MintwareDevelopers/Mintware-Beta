@@ -9,8 +9,10 @@ import { DECK_HTML } from './deckMarkup'
 // presentation layer on top — progress bar, slide counter, prev/next, keyboard nav, a
 // fullscreen "Present" mode, and print-to-PDF. Sandbox is allow-scripts plus allow-popups so
 // the in-deck "verify on-chain" links (→ /proof, /the-math, /agents) open in a new tab; the
-// deck HTML is our own trusted content. Only reached when /deck says unlocked.
-export function DeckContent() {
+// deck HTML is our own trusted content. Only reached when a gated page says unlocked.
+// Parametrized so both /deck and /angels reuse this exact shell — pass a different `html`
+// (and `title`) for each; defaults to the main investor deck.
+export function DeckContent({ html = DECK_HTML, title = 'Mintware Investor Deck' }: { html?: string; title?: string } = {}) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
 
@@ -127,8 +129,8 @@ export function DeckContent() {
 
       <iframe
         ref={frameRef}
-        title="Mintware Investor Deck"
-        srcDoc={DECK_HTML}
+        title={title}
+        srcDoc={html}
         sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
         allow="fullscreen"
         allowFullScreen
