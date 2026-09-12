@@ -37,7 +37,7 @@ export const TREASURY_HERO = {
 // ONE concentrated honesty note — the single line that carries the legal weight.
 export const TREASURY_STATUS = {
   label: 'In testing · testnet · unaudited',
-  body: 'Mintware is pre-launch. The vault, settlement, and card rails run on Circle’s Arc testnet and Base Sepolia with valueless test USDC, and are not yet audited. This page describes where we’re building to, proven end-to-end on testnet — not a live product, an offer, or investment, legal, or tax advice. Yield figures are illustrative and sourced, never a promised rate. External audit is the gate before any real value.',
+  body: 'Mintware is pre-launch. The vault, settlement, and card rails run on Base Sepolia with valueless test USDC, and are not yet audited. This page describes where we’re building to, proven end-to-end on testnet — not a live product, an offer, or investment, legal, or tax advice. Yield figures are illustrative and sourced, never a promised rate. External audit is the gate before any real value.',
 } as const
 
 // ─── Stat tiles — the landscape, dated + sourced ────────────────────────────
@@ -101,7 +101,7 @@ export const TREASURY_SOLUTION = {
     {
       index: '04',
       title: 'Native USDC settlement',
-      body: 'Payouts and card spend settle in USDC over Circle / Arc rails, with CCTP bridging across chains and a regulated card partner carrying the fiat leg. Mintware never touches fiat — licensed partners do. Your treasury pays contributors and vendors without leaving the dollar.',
+      body: 'Payouts and card spend settle in USDC over Circle rails, with CCTP bridging across chains and a regulated card partner carrying the fiat leg. Mintware never touches fiat — licensed partners do. Your treasury pays contributors and vendors without leaving the dollar.',
     },
   ],
 } as const
@@ -115,7 +115,7 @@ export const TREASURY_MECHANICS = {
     { k: 'Tranches', v: 'Your treasury sits senior: a price-free claim redeemable at par while the first-loss junior cushion covers it. Impermanent loss and market moves hit the junior tranche first — not your balance.' },
     { k: 'Spend = hold → settle', v: 'A card swipe or payout places a hold against the earning position off live NAV, then settles by burning shares to USDC. The principal is never idle between earning and spending.' },
     { k: 'Self-custody', v: 'Privy self-custody + external wallets (Safe included). Mintware holds no keys and no fiat; value lives in your wallet or in on-chain contracts you can read.' },
-    { k: 'On testnet, honestly', v: 'The full loop — deposit → earn → authorize → settle, plus a native USDC bridge — is proven on-chain with real transaction hashes on Arc testnet + Base Sepolia. Deployed ≠ audited; external audit precedes real value.' },
+    { k: 'On testnet, honestly', v: 'The full loop — deposit → earn → authorize → settle, plus a native USDC bridge — is proven on-chain with real transaction hashes on Base Sepolia. Deployed ≠ audited; external audit precedes real value.' },
   ],
 } as const
 
@@ -129,7 +129,7 @@ export const TREASURY_TRUST = {
     { k: 'Non-custodial by construction', v: 'You keep your keys. There is no Mintware account holding your treasury — only your wallet and autonomous contracts.' },
     { k: 'Self-reviewed, testnet-proven', v: 'Internal audit sweep: 0 Critical open, all High findings fixed. The whole loop ran on-chain on testnet with real hashes you can open in an explorer.' },
     { k: 'Formal verification', v: 'The money-path invariants — where solvency and share accounting live — are machine-checked (Coq) and symbolically explored (Halmos), not just unit-tested.' },
-    { k: 'Circle / Arc rails', v: 'USDC-native settlement and CCTP bridging built on Circle’s rails; the fiat and card legs are carried by licensed partners, never by Mintware.' },
+    { k: 'Circle rails', v: 'USDC-native settlement and CCTP bridging built on Circle’s rails; the fiat and card legs are carried by licensed partners, never by Mintware.' },
   ],
   note: 'Testnet + unaudited — deployed is not audited. External audit is the gate before real value. See the live run + the self-assessment on /proof.',
   proofCta: { label: 'Read the proof →', href: '/proof' },

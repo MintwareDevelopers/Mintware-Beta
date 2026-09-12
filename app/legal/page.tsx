@@ -87,7 +87,7 @@ const REGIMES: { regime: string; sub: string; trigger: string; why: string }[] =
 ]
 
 const PARTNERS: { who: string; role: string; note: string; mw?: boolean }[] = [
-  { who: 'Circle / Arc', role: 'Stablecoin & settlement rail', note: 'Issues USDC, runs CCTP bridging and USDC-native settlement on Arc. The regulated stablecoin and cross-chain value layer.' },
+  { who: 'Circle', role: 'Stablecoin & settlement rail', note: 'Issues USDC, runs CCTP bridging and USDC-native settlement. The regulated stablecoin and cross-chain value layer.' },
   { who: 'Card issuer (production tier)', role: 'Card issuance & fiat settlement', note: 'Issues the card, connects to the card networks, and settles to fiat — carrying the card-program / MSB / bank-partner obligations. (Any sandbox card today is demo-only.)' },
   { who: 'Privy', role: 'Non-custodial wallet infra', note: 'Embedded-wallet key management and auth — keys stay under the user’s control. Reinforces non-custody and shrinks Mintware’s security and data surface.' },
   { who: 'Mintware', role: 'Software · interface · analytics', note: 'Front-end, reputation analytics, and off-chain coordination (edge-auth authorises against on-chain NAV; the relayer submits protocol transactions). By design, the software layer above regulated partners.', mw: true },
