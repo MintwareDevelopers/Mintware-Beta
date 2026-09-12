@@ -18,6 +18,6 @@ export default async function AngelsPage() {
   const store = await cookies()
   const unlocked = !!DECK_PASSWORD && store.get(DECK_COOKIE)?.value === deckToken()
   return unlocked
-    ? <DeckContent html={ANGELS_HTML} title="Mintware — Angels" />
+    ? <DeckContent html={ANGELS_HTML} title="Mintware — Angels" showPdf={false} />
     : <DeckGate configured={!!DECK_PASSWORD} />
 }

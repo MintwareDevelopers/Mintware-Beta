@@ -12,7 +12,7 @@ import { DECK_HTML } from './deckMarkup'
 // deck HTML is our own trusted content. Only reached when a gated page says unlocked.
 // Parametrized so both /deck and /angels reuse this exact shell — pass a different `html`
 // (and `title`) for each; defaults to the main investor deck.
-export function DeckContent({ html = DECK_HTML, title = 'Mintware Investor Deck' }: { html?: string; title?: string } = {}) {
+export function DeckContent({ html = DECK_HTML, title = 'Mintware Investor Deck', showPdf = true }: { html?: string; title?: string; showPdf?: boolean } = {}) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
 
@@ -154,7 +154,7 @@ export function DeckContent({ html = DECK_HTML, title = 'Mintware Investor Deck'
         <button style={btn} onClick={() => goTo(current + 1)} disabled={count > 0 && current >= count - 1} aria-label="Next slide">›</button>
         <span style={{ width: 1, height: 20, background: 'rgba(22,22,44,.10)', margin: '0 2px' }} />
         <button style={btn} onClick={toggleFullscreen}>{fs ? 'Exit' : 'Present'}</button>
-        <button style={btn} onClick={printDeck}>Save PDF</button>
+        {showPdf && <button style={btn} onClick={printDeck}>Save PDF</button>}
       </div>
     </div>
   )
