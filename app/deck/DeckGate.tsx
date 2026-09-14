@@ -2,9 +2,24 @@
 
 import { useState, type FormEvent } from 'react'
 
-// On-brand password gate. Posts to /api/deck/unlock which sets the cookie; on success we
-// reload so the server component re-runs and renders the deck.
-export function DeckGate({ configured }: { configured: boolean }) {
+// On-brand password gate. Posts to `endpoint` (which sets the cookie); on success we reload so
+// the server component re-runs and renders the gated content. Parametrized so /deck, /angels and
+// /dataroom can all reuse it with their own copy + unlock endpoint + env-var name.
+export function DeckGate({
+  configured,
+  endpoint = '/api/deck/unlock',
+  eyebrow = 'Investor deck',
+  blurb = 'This deck is private. Enter the password you were sent to view it.',
+  buttonLabel = 'Unlock the deck',
+  envName = 'DECK_PASSWORD',
+}: {
+  configured: boolean
+  endpoint?: string
+  eyebrow?: string
+  blurb?: string
+  buttonLabel?: string
+  envName?: string
+}) {
   const [pw, setPw] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
   const [msg, setMsg] = useState('')
@@ -14,7 +29,7 @@ export function DeckGate({ configured }: { configured: boolean }) {
     if (status === 'loading') return
     setStatus('loading'); setMsg('')
     try {
-      const res = await fetch('/api/deck/unlock', {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: pw }),
@@ -22,7 +37,7 @@ export function DeckGate({ configured }: { configured: boolean }) {
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean }
       if (res.ok && d.ok) { window.location.reload(); return }
       setStatus('error')
-      setMsg(res.status === 503 ? 'The deck isn’t available just yet.' : 'That password didn’t work.')
+      setMsg(res.status === 503 ? 'This isn’t available just yet.' : 'That password didn’t work.')
     } catch {
       setStatus('error'); setMsg('Something went wrong — try again.')
     }
@@ -46,9 +61,9 @@ export function DeckGate({ configured }: { configured: boolean }) {
           <path d="M32,55.5 A18,18 0 0 1 68,55.5 Z" fill="#fff" />
         </svg>
         <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600, fontSize: 24, letterSpacing: '-0.03em', margin: '18px 0 4px' }}>Mintware</h1>
-        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#4C4CD6' }}>Investor deck</div>
+        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#4C4CD6' }}>{eyebrow}</div>
         <p style={{ fontSize: 13.5, color: '#494957', lineHeight: 1.5, margin: '14px 0 22px' }}>
-          This deck is private. Enter the password you were sent to view it.
+          {blurb}
         </p>
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <input
@@ -58,11 +73,11 @@ export function DeckGate({ configured }: { configured: boolean }) {
           />
           <button type="submit" disabled={status === 'loading' || !pw}
             style={{ width: '100%', padding: '13px 16px', borderRadius: 999, border: 0, background: '#4C4CD6', color: '#fff', fontSize: 15, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', opacity: status === 'loading' || !pw ? 0.6 : 1 }}>
-            {status === 'loading' ? 'Unlocking…' : 'Unlock the deck'}
+            {status === 'loading' ? 'Unlocking…' : buttonLabel}
           </button>
         </form>
         {status === 'error' && <div style={{ fontSize: 12.5, color: '#C85A38', marginTop: 12 }}>{msg}</div>}
-        {!configured && <div style={{ fontSize: 11.5, color: '#8A8A9E', marginTop: 14 }}>Not yet configured — set <code>DECK_PASSWORD</code> to open the gate.</div>}
+        {!configured && <div style={{ fontSize: 11.5, color: '#8A8A9E', marginTop: 14 }}>Not yet configured — set <code>{envName}</code> to open the gate.</div>}
         <div style={{ fontSize: 11.5, color: '#8A8A9E', marginTop: 20 }}>
           Not an investor?{' '}
           <a href="/" style={{ color: '#4C4CD6', textDecoration: 'none', fontWeight: 600 }}>mintware.finance →</a>
