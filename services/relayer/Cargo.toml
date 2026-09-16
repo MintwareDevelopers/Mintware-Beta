@@ -26,7 +26,7 @@ alloy-primitives = { version = "1", features = ["k256"] }
 # k256 for the recoverable ECDSA signature over the tx signing hash, blocking JSON-RPC for send/read.
 # The `k256` feature enables signer recovery (TxEnvelope::recover_signer) used in the signing proofs.
 alloy-consensus = { version = "1", features = ["k256"] }
-alloy-eips = "1"
+alloy-eips = "2"
 k256 = { version = "0.13", features = ["ecdsa"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
 serde_json = "1"
