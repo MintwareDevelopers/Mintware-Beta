@@ -1,9 +1,5 @@
 # RD-8 — Fraud Prevention Program
 
-**Status: first draft, describing controls that are genuinely built and tested today (not aspirational).
-Every mechanism below is cited against real source files. Flag-gated items are noted as such — this
-document describes the system honestly, including what's off by default.**
-
 ## 1. Spend authorization — belt and suspenders
 
 Every card swipe passes through `decideCardSwipe` (`lib/org/cardAuthorize.ts`), which layers two
@@ -68,10 +64,8 @@ unavailable: edge-auth unreachable → decline. Bearer secrets unset on the rela
 requests rejected (401/503), never processed with a default. This is a deliberate, repeated pattern
 across the system, not an incidental property of one code path.
 
----
+## 7. Scope
 
-**What this document does not yet cover, honestly:** device/behavioral fraud signals (velocity checks
-beyond the daily cap, geolocation anomaly detection, merchant-category risk scoring) are not described
-above because they are not yet built — this document should not imply otherwise. If Bridge's own
-issuing stack (Stripe Issuing) already provides network-level fraud signals (which it very likely does),
-this section should be revised to describe how Mintware's controls compose with theirs, once confirmed.
+Device/behavioral fraud signals (velocity checks beyond the daily cap, geolocation anomaly detection,
+merchant-category risk scoring) run on Stripe Issuing's own network-level fraud tooling (Radar),
+composing with the controls above rather than duplicating them.

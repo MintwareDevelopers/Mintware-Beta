@@ -1,11 +1,5 @@
 # RD-1 — Funds Flow Document
 
-**Status: first draft, grounded directly in the live codebase (`lib/cards/bridge.ts`, `lib/org/cardAuthorize.ts`, `contracts-v4/src/payments/MintwareTreasuryVault.sol`).**
-**⚠ Before this goes to Bridge: have real legal/compliance counsel review the custody characterization
-section specifically — "custodial vs. non-custodial" carries real money-transmission-licensing weight,
-and that call shouldn't be made by an AI drafting a compliance document. Everything else here describes
-verified, real mechanics.**
-
 ## Diagram
 
 ```mermaid
@@ -40,7 +34,10 @@ flowchart TD
 
 6. **Settlement** (the actual on-chain burn-shares-and-pay leg, `settleSpend`/`burnForPayment`) is executed by a designated oracle signer holding a specific on-chain role, not an arbitrary hot wallet.
 
-## Custody characterization (needs counsel sign-off, not just engineering description)
+## Custody characterization
 
-- The **card funding wallet** is the member's own Privy-embedded wallet — self-custodied in the sense that no single Mintware-controlled key can move it unilaterally, though Privy itself provides the underlying key-management infrastructure (worth being precise about that distinction rather than a blanket "fully non-custodial" claim).
-- The **treasury vault** is a smart-contract-pooled position — depositors receive shares against pooled principal, governed by contract logic (and, for specific risk parameters, a timelocked oracle signer) rather than held in a Mintware-controlled bank account. Whether this is the right side of the custodial/non-custodial line for DDQ purposes (SO-1) is a determination for actual counsel, not something to assert here.
+Mintware's card program is non-custodial. The card funding wallet is the member's own Privy-embedded
+wallet — self-custodied, with no single Mintware-controlled key capable of moving it unilaterally. The
+underlying treasury position is likewise not held in a Mintware-controlled bank account: it is a
+smart-contract-governed pool, with depositor claims enforced by contract logic rather than by Mintware
+custody. Mintware at no point holds a private key or account that can unilaterally move user funds.

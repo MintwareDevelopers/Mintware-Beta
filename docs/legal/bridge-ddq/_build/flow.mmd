@@ -1,0 +1,13 @@
+flowchart TD
+    A["Member's Privy embedded wallet<br/>(self-custodied, non-custodial signer)"] -->|"capped ERC-20 approve()<br/>sized to daily cap x coverage days,<br/>hard-capped at $50,000"| B["Bridge / Stripe Issuing<br/>per-program spender address"]
+    C["Mintware Treasury Vault<br/>(senior tranche, USDC, pooled)"] -->|"buffer top-up<br/>(refill, sized/tuned)"| A
+    D["Junior tranche<br/>(team-capitalized, first-loss)"] -.->|"absorbs shortfall<br/>before senior ever touched"| C
+    B -->|"pulls exact swipe amount<br/>via the allowance at auth time"| E["Card swipe at merchant"]
+    E --> F1["Belt check:<br/>role daily cap +<br/>standing tier (widen-only)"]
+    F1 -->|"within cap"| F2{"Suspenders check"}
+    F1 -->|"over cap"| X["Decline"]
+    F2 -->|"mode A:<br/>flat buffer balance"| G["Approve"]
+    F2 -->|"mode B:<br/>live edge-auth NAV hold<br/>fail-closed if unconfigured"| G
+    F2 -->|"insufficient"| X
+    G --> H["Settlement:<br/>settleSpend / burnForPayment<br/>via oracle signer, RELAYER_ROLE"]
+    H --> C
