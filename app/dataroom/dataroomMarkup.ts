@@ -210,5 +210,18 @@ b{color:var(--ink)}
   window.addEventListener('load',post);window.addEventListener('resize',post);
   if(window.ResizeObserver){try{new ResizeObserver(post).observe(document.body)}catch(e){}}
   setTimeout(post,200);setTimeout(post,800);setTimeout(post,2000);
+  // In-page TOC anchors: the iframe is full-height and the PARENT page scrolls, so a plain
+  // #hash has nowhere to scroll (and a sandboxed srcdoc can blank on it). Intercept clicks and
+  // ask the parent to scroll to the section's offset instead.
+  document.addEventListener('click',function(e){
+    var a=e.target&&e.target.closest?e.target.closest('a[href^="#"]'):null;
+    if(!a)return;
+    var id=a.getAttribute('href').slice(1);
+    var el=id&&document.getElementById(id);
+    if(!el)return;
+    e.preventDefault();
+    var y=Math.round(el.getBoundingClientRect().top+window.scrollY);
+    try{parent.postMessage({mwDataroomScrollTo:y},'*')}catch(err){}
+  });
 })();</script>
 </body></html>`
