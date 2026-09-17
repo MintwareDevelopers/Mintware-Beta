@@ -14,6 +14,13 @@
 // first-loss capital is restricted on-chain to team-controlled addresses (never sold to depositors
 // or outside investors), and protocol-native yield — including MEV/fee capture — flows in full and
 // unrestricted to every LP position that earned it, senior and junior alike.
+//
+// 2026-09-17: the Broker-dealer/exchange regime row cites the SEC's "Innovation Exemption" (5yr
+// exemption for permissioned-AMM trading of tokenized securities) as climate evidence only — the
+// sentence explicitly disclaims that Mintware operates under it, since Mintware doesn't trade
+// securities. Full reasoning + the "don't conflate this with a coverage claim" analysis lives in
+// docs/legal/priority-buffer-redesign.md's 2026-09-17 addendum + item #8 — read that before editing
+// this sentence further.
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
@@ -72,7 +79,7 @@ const REGIMES: { regime: string; sub: string; trigger: string; why: string }[] =
   {
     regime: 'Broker-dealer / exchange', sub: 'SEC',
     trigger: 'Operating a marketplace for, or effecting transactions in, securities.',
-    why: 'Not matching buyers and sellers of securities or running an exchange — it is an interface to a public AMM protocol.',
+    why: 'Not matching buyers and sellers of securities or running an exchange — it is an interface to a public AMM protocol. The SEC’s September 2026 “Innovation Exemption” for permissioned AMM trading of tokenized securities is a further signal of where the regulatory environment is heading for this market-structure paradigm generally — it is not a claim that Mintware operates under that exemption, since Mintware does not trade securities.',
   },
   {
     regime: 'Investment adviser / commodity-pool', sub: 'SEC · CFTC · NFA',
