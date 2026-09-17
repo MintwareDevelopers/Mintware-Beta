@@ -171,6 +171,18 @@ junior share — not a renaming exercise. The whole redesign is built to survive
 read: the mechanism actually changed (junior locked to team addresses, payout order fixed in code,
 usage genuinely tied to product design), not just the vocabulary around it.
 
+**Corroborating climate evidence, added 2026-09-17.** The SEC's Innovation Exemption (see the
+addendum below) is a harder data point for the same directional argument Peirce's remarks make —
+not a speech about attitude, but the SEC actually choosing permissioned AMM/liquidity-pool
+mechanics as the sanctioned structure for bringing real securities on-chain. Used narrowly: this is
+evidence the *market-structure paradigm* Mintware is built on (permissioned AMM, liquidity pools,
+priority-ordered claims) is one regulators are actively building accommodating pathways for, not
+evidence about Mintware's own facts or asset class today. It supports "we're building on a
+paradigm regulators are moving toward, not away from" — it does not support "we are covered by
+this exemption" or "our current product is more legal than it was yesterday." Those remain
+separate, and the second claim would require the actual securities-exchange analysis the addendum
+calls for before any product decision is made.
+
 ## What's being adopted now (items 1, 2, 5, 6)
 
 **1 — First-loss capital stays structurally, not just policy-wise, team-only.**
