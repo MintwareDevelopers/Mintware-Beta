@@ -14,9 +14,19 @@ export function DataRoomContent() {
 
   useEffect(() => {
     function onMessage(e: MessageEvent) {
-      const d = e.data as { mwDataroomHeight?: number } | undefined
-      if (d && typeof d.mwDataroomHeight === 'number' && d.mwDataroomHeight > 200) {
+      const d = e.data as { mwDataroomHeight?: number; mwDataroomScrollTo?: number } | undefined
+      if (!d) return
+      if (typeof d.mwDataroomHeight === 'number' && d.mwDataroomHeight > 200) {
         setHeight(Math.ceil(d.mwDataroomHeight))
+      }
+      // A TOC chip inside the iframe asked us to scroll: the iframe is full-height and the
+      // parent scrolls, so translate the in-iframe offset to a parent-window scroll.
+      if (typeof d.mwDataroomScrollTo === 'number') {
+        const frame = frameRef.current
+        if (frame) {
+          const top = frame.getBoundingClientRect().top + window.scrollY + d.mwDataroomScrollTo
+          window.scrollTo({ top: Math.max(0, top - 12), behavior: 'smooth' })
+        }
       }
     }
     window.addEventListener('message', onMessage)
