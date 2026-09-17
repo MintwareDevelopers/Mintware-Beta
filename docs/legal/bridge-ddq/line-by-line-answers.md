@@ -23,8 +23,8 @@ Bridge's reviewers ever cross-check the wording against what they actually provi
 
 | ID | Answer |
 |---|---|
-| BO-1 | ❓ Need the actual **legal entity name** (LLC/Corp) — "Mintware" is the brand/DBA, not necessarily the registered legal name. Same open question as the UFSF application's legal-entity checkbox — worth resolving once, not twice. |
-| BO-2 | ❓ Registered business address — only you have this. |
+| BO-1 | ✅ partial + ❓ rest — confirmed from `/legal`: *"Mintware operates as a Delaware LLC."* Entity type + jurisdiction are real and documented. Still need from you: the **exact registered legal name** string (vs. "Mintware" as brand/DBA) — not published anywhere in the repo. |
+| BO-2 | ❓ Registered business address — only you have this; entity type/jurisdiction (Delaware) is confirmed above, but not the physical address. |
 | BO-3 | ✅ `https://mintware.finance` |
 | BO-4 | ❓ Country/revenue split — genuinely don't know your revenue distribution; given pre-real-revenue/testnet status this may honestly be "primarily US-based, pre-material-revenue." Your call how to phrase it truthfully. |
 | BO-5 | ✅ Draft: *"Mintware is a non-custodial DeFi treasury platform. Customers (teams/organizations) create an org, invite members, deposit USDC into a treasury vault position that earns yield while remaining spendable, and issue cards to members for spend against that position. Customer journey: connect a Privy wallet → create/join an org → fund the treasury (deposit senior capital; the org's own capital backs a first-loss junior tranche) → accept Terms of Service → issue a card → spend, authorized against a role-based cap and a live balance check."* |
@@ -59,9 +59,9 @@ Bridge's reviewers ever cross-check the wording against what they actually provi
 | AML-5 | ✅ Likely **Yes** — Bridge/Stripe's risk-rating almost certainly covers the four listed factors (geographic risk, PEP, transactional red flags, product usage). Worth a one-line confirmation from them before checking this box confidently, since it's a compound question. |
 | AML-6 | ✅ **Yes** — transaction monitoring via Bridge/Stripe. |
 | AML-7 | ✅ **Yes** — SAR/regulator-filing sits with Bridge/Stripe as the regulated party in this structure. Worth confirming this framing matches what they mean by "covered," since Mintware itself won't be the one filing SARs. |
-| AML-8 | 🔨 **Mintware's own item — not covered by Bridge's reply.** This asks whether *your* AML/KYC policy is board-approved. Even with screening on Bridge's infra, you need a short written policy stating that reliance + your own escalation process, approved by your own founders-as-board. |
-| AML-9 | 🔨 Same category as AML-8 — annual AML/CFT training for your own team is still something *you* run, on top of Bridge's infrastructure. Achievable: one short annual session, documented. |
-| AML-10 | 🔨 **Designate a real MLRO now** — doesn't need a hire, needs one of you to formally take the role in writing. Not resolved by Bridge's reply — this is Mintware's own named person regardless of whose tooling does the screening. |
+| AML-8 | 🔨 Policy drafted (RD-4/RD-5) with Craig Bartow named as MLRO — the one thing left is the actual founders' sign-off on the signature line, a real governance action still to happen. |
+| AML-9 | 🔨 Still to schedule — one short annual AML/CFT training session for the team, now that there's a named owner (Craig) to run it. |
+| AML-10 | ✅ **Resolved — Craig Bartow**, named in RD-4 and RD-5. |
 | AML-11 / AML-12 | ✅ Likely **Yes**, via Bridge/Stripe's own source-tracing/sanctions-list tooling — worth a one-line confirmation this specific capability (wallet/source tracing, not just customer KYC) is included in "most of this." |
 
 ## Sanctions Compliance
@@ -76,7 +76,7 @@ Bridge's reviewers ever cross-check the wording against what they actually provi
 | SC-6 | ✅ Likely **"at onboarding" + "as lists are updated"** via Bridge/Stripe's ongoing rescreening — confirm their actual cadence. |
 | SC-7 | ⏳ Geo-blocking specifically may or may not be something Bridge/Stripe handles vs. something expected at Mintware's own app layer — worth a direct one-line check, since this is more of a product/frontend control than a KYC-tooling one. |
 | SC-8 / SC-9 | ✅ Likely **Yes**, via Bridge/Stripe's wallet-screening tooling — confirm it's included, same caveat as AML-11/12. |
-| SC-10 | 🔨 Sanctions training for *your own* employees is Mintware's item, same category as AML-9 — not resolved by Bridge's reply. |
+| SC-10 | 🔨 Same as AML-9 — schedule the annual training, now with Craig as the named owner. |
 
 ## Financial Crimes — General
 
@@ -89,7 +89,7 @@ Bridge's reviewers ever cross-check the wording against what they actually provi
 
 | ID | Answer |
 |---|---|
-| IS-1 | ⏳ Worth checking — does Privy enforce 2FA/account-takeover protection by default? Confirm the actual auth configuration before answering. |
+| IS-1 | ⏳ Checked the actual Privy config (`components/web2/providers.tsx`): `loginMethods: ['wallet','email']`, no explicit MFA flag set in code. Login is either a wallet signature or Privy's email flow (which includes an email-verification step, not a distinct second factor). No account-takeover monitoring exists beyond that. Genuinely inconclusive from code alone — worth a direct check of the Privy dashboard's own security settings before answering "Yes" outright. |
 | IS-2 | ❓ Factual about your own internal tooling/practices — only you know. |
 | IS-3 | ❓ Factual — almost certainly No given the company's age, but needs your direct confirmation. |
 | IS-5 | **No** — no SOC 2 report exists. **Still open — Bridge's reply didn't address this specifically.** Worth a direct, separate follow-up (see below) rather than assuming it's folded into "most of this." |

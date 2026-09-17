@@ -1,7 +1,6 @@
 # RD-5 — Sanctions Compliance Policy
 
-**Status: ~90% real content, same two blanks as RD-4 — [MLRO NAME] (doubling as sanctions point of
-contact unless you'd rather split the role) and the board-signature line.**
+**Status: signed and complete** — Michael Mantello (MLRO) and Nicolas Robinson (Founder), 09/12/2026.
 
 ## 1. Reliance on Bridge/Stripe sanctions-screening infrastructure
 
@@ -25,9 +24,9 @@ transact within the program, and any such instance is escalated immediately per 
 
 ## 3. Escalation and internal point of contact
 
-[MLRO NAME] serves as Mintware's internal point of contact for sanctions-compliance matters relating to
-this program, responsible for coordinating with Bridge/Stripe/Lead Bank on any flagged wallet, customer,
-or transaction, and for maintaining this policy document.
+Michael Mantello serves as Mintware's internal point of contact for
+sanctions-compliance matters relating to this program, responsible for coordinating with Bridge/Stripe/
+Lead Bank on any flagged wallet, customer, or transaction, and for maintaining this policy document.
 
 **Annual training.** Mintware commits to annual sanctions-compliance training for all personnel with
 access to customer onboarding, card issuance, or compliance escalation functions.

@@ -171,6 +171,18 @@ junior share — not a renaming exercise. The whole redesign is built to survive
 read: the mechanism actually changed (junior locked to team addresses, payout order fixed in code,
 usage genuinely tied to product design), not just the vocabulary around it.
 
+**Corroborating climate evidence, added 2026-09-17.** The SEC's Innovation Exemption (see the
+addendum below) is a harder data point for the same directional argument Peirce's remarks make —
+not a speech about attitude, but the SEC actually choosing permissioned AMM/liquidity-pool
+mechanics as the sanctioned structure for bringing real securities on-chain. Used narrowly: this is
+evidence the *market-structure paradigm* Mintware is built on (permissioned AMM, liquidity pools,
+priority-ordered claims) is one regulators are actively building accommodating pathways for, not
+evidence about Mintware's own facts or asset class today. It supports "we're building on a
+paradigm regulators are moving toward, not away from" — it does not support "we are covered by
+this exemption" or "our current product is more legal than it was yesterday." Those remain
+separate, and the second claim would require the actual securities-exchange analysis the addendum
+calls for before any product decision is made.
+
 ## What's being adopted now (items 1, 2, 5, 6)
 
 **1 — First-loss capital stays structurally, not just policy-wise, team-only.**
@@ -250,6 +262,55 @@ framing. Once items 1 and 2 land, the platform sits on the same ground those unt
 already occupy — the residual risk is background risk shared by the entire pooled-LP category, not
 a Mintware-specific exposure.
 
+## Addendum (2026-09-17) — SEC's "Innovation Exemption" for tokenized-securities AMMs
+
+**Status: strategic note, not a design decision.** Recorded here — not on the public `/legal` page —
+specifically because acting on it prematurely would cut against this doc's own reasoning. Kept in this
+file rather than a new one because the risk it raises is the mirror image of the tranche work above: get
+the framing wrong and it *reopens* exposure items 1–8 were built to close.
+
+**What was actually issued.** On 2026-09-17, the SEC (under Chairman Paul Atkins' "Project Crypto")
+issued an order granting **Tokenized Securities Venues (TSVs)** a temporary, conditional **5-year
+exemption** from the Exchange Act's definition of "exchange," to trade **tokenized NMS stock** — real,
+listed US equities — via **"permissioned automated market makers and liquidity pools."** A separate,
+parallel exemption relieves **liquidity providers** supplying tokenized-stock liquidity with their own
+capital from broker-dealer registration for the same 5 years. Two binding conditions: venues must be
+**permissioned** (access-controlled), and must **notify the issuer before listing its stock and cannot
+proceed over the issuer's objection.** Eligibility/application mechanics are not yet public — the SEC is
+soliciting comment on "possible modifications and next steps." Primary source: SEC press release
+2026-90 and Chairman Atkins' statement, "The Innovation Exemption: A Bridge Toward Durable Rulemaking"
+(2026-09-17).
+
+**Why this can't just be added to the public page as-is.** The `REGIMES` table's `Broker-dealer /
+exchange` row rests entirely on Mintware **not touching securities at all** — "an interface to a public
+AMM protocol," not a securities marketplace. That defense and the Innovation Exemption are talking about
+two different categories of activity on purpose. Discussing the exemption on the same page that
+disclaims securities exposure would invite exactly the question item 8 above (substance-over-form) warns
+about: *if you're citing a securities-AMM exemption, are you doing securities-AMM activity?* Until the
+answer to that is genuinely yes — a real product decision, not a research thread — the two should stay
+separate.
+
+**Why it's worth tracking anyway.** The exemption's core requirement — permissioned AMM liquidity pools
+— describes infrastructure Mintware already has (`MWHookCoordinator`'s dynamic fee / oracle guard /
+am-AMM MEV capture stack), not something to build from scratch. Two distinct paths, different weight:
+
+- **Operate as a TSV** — heavy: real permissioning, issuer-notification process, likely compliance
+  overhead layered on top of the Bridge card work already underway. A multi-quarter undertaking, not a
+  near-term move.
+- **Supply liquidity under the LP-side exemption** — lighter: the existing senior/junior, first-loss-
+  absorbing tranche mechanics could extend into TSV-hosted pools as a liquidity provider, without
+  Mintware itself becoming the venue. Structurally closer to what the vault products already do.
+
+**The RWA connection, stated plainly.** RWA is shelved (see `rwa_shelved` memory / `archive/rwa-surface`)
+partly because of the regulatory uncertainty this exemption now directly addresses for one specific slice
+(AMM-based tokenized-equity trading). That doesn't mean RWA should be revived — it means the reason it
+was shelved is worth re-examining with this new fact in hand, deliberately, not reflexively.
+
+**What would actually trigger a public-page update.** Only a real decision to pursue either path above —
+at which point this becomes its own legal workstream (securities-exchange and broker-dealer analysis,
+a different body of law than the Howey/Reves tranche-yield reasoning in this doc) and should get its own
+case-law treatment before any public claim is made, the same discipline items 1–8 above went through.
+
 ## Citation index
 
 Full reasoning for each is in the numbered walkthrough above; this is just the reference list.
@@ -267,3 +328,4 @@ Full reasoning for each is in the numbered walkthrough above; this is just the r
 | 8 | SEC/CFTC 2026 interpretive framework; Commissioner Peirce, "Headstands and Summervaults" (July 22, 2026) | Substance-over-form; warning against structural gymnastics |
 | — | Maple Finance / Goldfinch / Centrifuge (Reg D 506(c) + KYC tranches) | The rejected-as-default alternative path |
 | — | Nexus Mutual / Sherlock; Aave Safety Module / Umbrella | Third-party coverage and reserve-fund comparators (items #3–4) |
+| 9 | SEC press release 2026-90, "SEC Issues 'Innovation Exemption' to Facilitate the Trading of Tokenized NMS Stock" (2026-09-17); Chairman Atkins, "The Innovation Exemption: A Bridge Toward Durable Rulemaking" | The 2026-09-17 addendum — tokenized-securities AMM exemption, kept separate from the broker-dealer/exchange defense above |

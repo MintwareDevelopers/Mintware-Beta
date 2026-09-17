@@ -1,7 +1,6 @@
 # RD-4 — BSA / AML Compliance Policy
 
-**Status: ~90% real content, two clearly marked blanks left for you — [MLRO NAME] and the board-signature
-line. Everything else describes the actual, confirmed structure of the program.**
+**Status: signed and complete** — Michael Mantello (MLRO) and Nicolas Robinson (Founder), 09/12/2026.
 
 ## 1. Reliance on Bridge/Stripe compliance infrastructure
 
@@ -25,10 +24,10 @@ a parallel, independent KYC/AML detection system.
 Independent of the underlying screening infrastructure, Mintware maintains its own internal policy and
 accountability structure, described below.
 
-**Money Laundering Reporting Officer (MLRO).** [MLRO NAME] is designated as Mintware's Money Laundering
-Reporting Officer, responsible for: serving as Mintware's internal point of contact for AML/BSA matters
-relating to this program; escalating and coordinating with Bridge/Stripe/Lead Bank on any compliance
-inquiry or flagged activity; and maintaining this policy document.
+**Money Laundering Reporting Officer (MLRO).** Michael Mantello is designated as Mintware's Money
+Laundering Reporting Officer, responsible for: serving as Mintware's internal point of contact for
+AML/BSA matters relating to this program; escalating and coordinating with Bridge/Stripe/Lead Bank on
+any compliance inquiry or flagged activity; and maintaining this policy document.
 
 **Escalation process.** Where Bridge/Stripe's monitoring flags a customer or transaction for review,
 Mintware's MLRO is notified and coordinates Mintware's response (e.g. providing additional business

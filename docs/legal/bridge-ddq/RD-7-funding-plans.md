@@ -35,13 +35,10 @@ Two independent, code-enforced circuit breakers exist specifically for this scen
 Both mechanisms fail toward halting activity rather than continuing to approve against a system that may
 not be able to honor its obligations.
 
-## Access to external capital — stated honestly, not overstated
+## Access to external capital
 
-**Mintware does not currently have a committed external credit facility, backstop line, or third-party
-capital-injection arrangement for stressed scenarios.** The protection model today is architectural, not
-capital-based: first-loss absorption by the team's own junior tranche, plus the circuit breaker and
-reserve floor described above, which halt the system before it can be pushed into insolvency rather than
-relying on an external party to recapitalize it after the fact.
-
-This is an accurate reflection of an early-stage program and should be presented as such — the honest
-gap is the absence of external capital access, not the absence of any risk controls at all.
+Mintware does not currently hold a committed external credit facility, backstop line, or third-party
+capital-injection arrangement for stressed scenarios. The protection model is architectural: first-loss
+absorption by the team's own junior tranche, plus the circuit breaker and reserve floor described above,
+halt the system before it can be pushed into insolvency rather than relying on external recapitalization
+after the fact.
