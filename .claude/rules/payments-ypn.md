@@ -79,8 +79,16 @@ integration: [`../../docs/developers/arc-settlement-integration.md`](../../docs/
 ## Human org cards — Lithic sandbox (2026-08-19)
 
 The showcase loop: **issue → activate → swipe → authorize → settle**, live at `/app/org/[slug]/cards`
-(a real page — `app/app/team/cards/page.tsx` stays the illustrative mock; they are NOT the same
-surface). `lib/org/rolePresets.ts`'s `contributor` preset already said "spend up to $2,000/day from
+(a real page; `app/app/team/cards/page.tsx` is still the illustrative mock — two different files,
+different data). **Reconciled (2026-09-19 — see `TeamTerminalShell`):** they used to be two
+disconnected *surfaces* too — `/app/team/*` (its own sidebar shell) and `/app/org/[slug]/*` (built on
+the personal `MwNav`, no way back) — which is exactly what made buttons like "Get liquidity" or
+"Open treasury" feel like they dropped a team member onto a personal page. Both now render inside
+the shared `TeamTerminalShell` (`components/web2/TeamTerminalShell.tsx`), and the illustrative
+`/app/team/{page,cards,team,policy}` mocks redirect to their real `/app/org/[slug]/*` counterpart
+(`useRedirectToActiveOrg`) the moment a wallet has an active org — so the mock is only ever seen
+pre-org, never alongside a real funded treasury. `lib/org/rolePresets.ts`'s `contributor` preset
+already said "spend up to $2,000/day from
 the treasury via card / x402" — cards were always meant to draw on the same org treasury + role-cap
 system `/api/orgs/[id]/pay` uses for vendor payouts, not a separate product. **Lithic sandbox only**
 — production issuance is a separate KYB-gated Lithic tier, not a config flip, and is NOT what "CPN"

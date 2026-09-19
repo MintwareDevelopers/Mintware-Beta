@@ -4,12 +4,12 @@
 // via the vault's adapter, a live buffer keeps deposits spendable, and redeem() is buffer-first then
 // pulls from Aave for the shortfall (large withdrawals stay seamless). No tranches here — that's the
 // treasury/Vaults surface. Deposit: approve → deposit(assets, to). Withdraw: redeem(sharesForAmount).
+// Chrome comes from the shared TeamTerminalShell layout.
 
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatUnits, parseUnits } from 'viem'
 import { useAccount, useReadContract, useSignMessage, useSwitchChain, useWriteContract } from 'wagmi'
-import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
@@ -101,57 +101,54 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
 
   return (
     <MwAuthGuard>
-      <div className="min-h-screen font-atx-display bg-white text-ink">
-        <MwNav />
-        <main className="mx-auto max-w-[600px] px-6 max-[700px]:px-4 py-[44px]">
-          <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {org?.name || 'Org'}</Link>
-          <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Savings</h1>
-          <p className="text-[13px] text-ink-mid mt-2 leading-[1.5] max-w-[54ch]">Park <span className="font-semibold text-ink">USDC</span> — it earns yield in Aave, a live buffer keeps it spendable, and withdrawals come out of the buffer first (large ones pull from Aave on demand, so they stay seamless). Want to provide <span className="font-semibold text-ink">both assets</span> as liquidity instead? That's <Link href="/app/vaults" className="text-peri-deep no-underline hover:underline font-medium">Vaults</Link>.</p>
+      <div className="max-w-[600px] mx-auto">
+        <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {org?.name || 'Org'}</Link>
+        <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Savings</h1>
+        <p className="text-[13px] text-ink-mid mt-2 leading-[1.5] max-w-[54ch]">Park <span className="font-semibold text-ink">USDC</span> — it earns yield in Aave, a live buffer keeps it spendable, and withdrawals come out of the buffer first (large ones pull from Aave on demand, so they stay seamless). Want to provide <span className="font-semibold text-ink">both assets</span> as liquidity instead? That's <Link href="/app/vaults" className="text-peri-deep no-underline hover:underline font-medium">Vaults</Link>.</p>
 
-          {org && !org.vault ? (
-            <div className="soft-card p-5 mt-6">
-              <div className="text-[13.5px] font-semibold text-ink">One-time setup</div>
-              <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Savings is held by an on-chain yield vault that's provisioned once — then you just deposit. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
-              <div className="text-[10.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft mt-3 mb-1.5">Operator — deploy once</div>
-              <code className="block font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2.5 overflow-x-auto whitespace-nowrap">pnpm forge:deploy:savings:base-sepolia</code>
-              {isOwner ? (
-                <div className="flex gap-2 mt-4 max-[520px]:flex-col">
-                  <input value={recAddr} onChange={(e) => setRecAddr(e.target.value)} placeholder="0x… savings vault address" className="flex-1 rounded-[10px] border border-hair px-3 py-2.5 text-[13px] font-mono outline-none focus:border-peri" />
-                  <select value={recChain} onChange={(e) => setRecChain(Number(e.target.value))} className="rounded-[10px] border border-hair px-3 py-2.5 text-[13px] bg-white outline-none focus:border-peri">{CHAINS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-                  <button onClick={record} className="rounded-full bg-peri text-white px-4 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors">Record</button>
-                </div>
-              ) : <p className="text-[12px] text-ink-soft mt-3">Only the org owner can set up Savings.</p>}
+        {org && !org.vault ? (
+          <div className="soft-card p-5 mt-6">
+            <div className="text-[13.5px] font-semibold text-ink">One-time setup</div>
+            <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Savings is held by an on-chain yield vault that's provisioned once — then you just deposit. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
+            <div className="text-[10.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft mt-3 mb-1.5">Operator — deploy once</div>
+            <code className="block font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2.5 overflow-x-auto whitespace-nowrap">pnpm forge:deploy:savings:base-sepolia</code>
+            {isOwner ? (
+              <div className="flex gap-2 mt-4 max-[520px]:flex-col">
+                <input value={recAddr} onChange={(e) => setRecAddr(e.target.value)} placeholder="0x… savings vault address" className="flex-1 rounded-[10px] border border-hair px-3 py-2.5 text-[13px] font-mono outline-none focus:border-peri" />
+                <select value={recChain} onChange={(e) => setRecChain(Number(e.target.value))} className="rounded-[10px] border border-hair px-3 py-2.5 text-[13px] bg-white outline-none focus:border-peri">{CHAINS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+                <button onClick={record} className="rounded-full bg-peri text-white px-4 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors">Record</button>
+              </div>
+            ) : <p className="text-[12px] text-ink-soft mt-3">Only the org owner can set up Savings.</p>}
+          </div>
+        ) : org ? (
+          <>
+            <div className="grid grid-cols-2 gap-3 mt-6">
+              <div className="soft-card p-4">
+                <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft">Your savings</div>
+                <div className="text-[22px] font-semibold text-ink tabular-nums mt-1">{fmtUsd(myAssets as bigint | undefined)}</div>
+              </div>
+              <div className="soft-card p-4">
+                <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft">Available now</div>
+                <div className="text-[22px] font-semibold text-ink tabular-nums mt-1">{fmtUsd(buffer as bigint | undefined)}</div>
+                <div className="text-[11px] text-ink-soft mt-0.5">instant buffer; more unwinds from Aave on demand</div>
+              </div>
             </div>
-          ) : org ? (
-            <>
-              <div className="grid grid-cols-2 gap-3 mt-6">
-                <div className="soft-card p-4">
-                  <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft">Your savings</div>
-                  <div className="text-[22px] font-semibold text-ink tabular-nums mt-1">{fmtUsd(myAssets as bigint | undefined)}</div>
-                </div>
-                <div className="soft-card p-4">
-                  <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft">Available now</div>
-                  <div className="text-[22px] font-semibold text-ink tabular-nums mt-1">{fmtUsd(buffer as bigint | undefined)}</div>
-                  <div className="text-[11px] text-ink-soft mt-0.5">instant buffer; more unwinds from Aave on demand</div>
-                </div>
-              </div>
 
-              <div className="soft-card p-5 mt-3">
-                <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Amount (USDC)</span>
-                  <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="0.00" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[15px] tabular-nums outline-none focus:border-peri" />
-                </label>
-                <div className="flex gap-2 mt-4 max-[520px]:flex-col">
-                  <button onClick={deposit} className="flex-1 rounded-full bg-peri text-white px-4 py-3 text-[13.5px] font-semibold hover:bg-peri-deep transition-colors">Deposit</button>
-                  <button onClick={() => withdraw(false)} className="flex-1 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-4 py-3 text-[13.5px] font-semibold hover:border-peri transition-colors">Withdraw</button>
-                </div>
-                <button onClick={() => withdraw(true)} className="text-[12px] text-ink-soft mt-2.5 hover:text-peri-deep transition-colors">Withdraw all →</button>
-                <p className="text-[11.5px] text-ink-soft mt-3">Deposits earn Aave lending yield and stay spendable on the card. Withdrawals pull from the buffer first, then unwind from Aave for anything larger — no lockup.</p>
+            <div className="soft-card p-5 mt-3">
+              <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Amount (USDC)</span>
+                <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="0.00" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[15px] tabular-nums outline-none focus:border-peri" />
+              </label>
+              <div className="flex gap-2 mt-4 max-[520px]:flex-col">
+                <button onClick={deposit} className="flex-1 rounded-full bg-peri text-white px-4 py-3 text-[13.5px] font-semibold hover:bg-peri-deep transition-colors">Deposit</button>
+                <button onClick={() => withdraw(false)} className="flex-1 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-4 py-3 text-[13.5px] font-semibold hover:border-peri transition-colors">Withdraw</button>
               </div>
-            </>
-          ) : null}
+              <button onClick={() => withdraw(true)} className="text-[12px] text-ink-soft mt-2.5 hover:text-peri-deep transition-colors">Withdraw all →</button>
+              <p className="text-[11.5px] text-ink-soft mt-3">Deposits earn Aave lending yield and stay spendable on the card. Withdrawals pull from the buffer first, then unwind from Aave for anything larger — no lockup.</p>
+            </div>
+          </>
+        ) : null}
 
-          {status && <div className="mt-4 rounded-[var(--radius-card)] border border-hair bg-ground-cool p-3.5 text-[13px] text-ink">{status}</div>}
-        </main>
+        {status && <div className="mt-4 rounded-[var(--radius-card)] border border-hair bg-ground-cool p-3.5 text-[13px] text-ink">{status}</div>}
       </div>
     </MwAuthGuard>
   )

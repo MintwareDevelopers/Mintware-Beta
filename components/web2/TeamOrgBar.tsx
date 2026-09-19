@@ -6,38 +6,13 @@
 // illustrative showcase into a real, tenant-scoped treasury terminal (roadmap P1). The rich
 // KPIs/feeds below stay illustrative until a treasury is deployed + funded.
 
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
-
-interface OrgRow {
-  id: string
-  name: string
-  slug: string
-  role: string
-  isOwner: boolean
-  funded: boolean
-}
-
-const ACTIVE_KEY = 'mw_active_org_slug'
+import { useActiveOrg } from '@/components/web2/useActiveOrg'
+import Link from 'next/link'
 
 export function TeamOrgBar() {
   const { address } = useMintwareIdentity()
-  const [orgs, setOrgs] = useState<OrgRow[] | null>(null)
-
-  useEffect(() => {
-    if (!address) { setOrgs(null); return }
-    let alive = true
-    fetch(`/api/orgs/mine?address=${address}`)
-      .then((r) => r.json())
-      .then((d) => { if (alive) setOrgs((d.orgs as OrgRow[]) ?? []) })
-      .catch(() => { if (alive) setOrgs([]) })
-    return () => { alive = false }
-  }, [address])
-
-  // Pick the active org: last-used slug if still present, else the first owned/joined org.
-  const activeSlug = typeof window !== 'undefined' ? window.localStorage.getItem(ACTIVE_KEY) : null
-  const active = orgs?.find((o) => o.slug === activeSlug) ?? orgs?.[0] ?? null
+  const { orgs, active } = useActiveOrg()
 
   // ── States ────────────────────────────────────────────────────────────────
   if (!address) {

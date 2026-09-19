@@ -7,6 +7,7 @@
 // in development, nothing here is live.
 
 import { useState } from 'react'
+import { useRedirectToActiveOrg } from '@/components/web2/useActiveOrg'
 
 const SIGNERS = ['Devon R.', 'Priya S.', 'Marco L.']
 const QUORUM = 2
@@ -47,7 +48,9 @@ function Progress({ signed, need }: { signed: number; need: number }) {
 }
 
 export default function TeamPolicy() {
+  const redirecting = useRedirectToActiveOrg('/control')
   const [view, setView] = useState<'pending' | 'history'>('pending')
+  if (redirecting) return null
 
   return (
     <>

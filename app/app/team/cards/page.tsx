@@ -9,6 +9,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRedirectToActiveOrg } from '@/components/web2/useActiveOrg'
 
 const KPIS = [
   { k: 'This cycle', v: '$61.8k', s: 'of $98k limit' },
@@ -52,9 +53,11 @@ const fmt = (n: number) => n.toLocaleString('en-US', { style: 'currency', curren
 const fmtK = (n: number) => `$${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`
 
 export default function TeamCards() {
+  const redirecting = useRedirectToActiveOrg('/cards')
   const [tab, setTab] = useState<(typeof TABS)[number]>('All')
   const filter = TAB_FILTER[tab]
   const rows = filter ? TXNS.filter((t) => t.status === filter) : TXNS
+  if (redirecting) return null
 
   return (
     <>

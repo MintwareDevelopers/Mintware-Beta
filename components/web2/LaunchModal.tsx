@@ -28,9 +28,14 @@ const MODES: { mode: AppMode; title: string; sub: string; tone: 'peri' | 'coral'
 // Team intake — job-first, not a feature menu. Screen on the OUTCOME the team wants and route
 // them straight to the ready surface. Machinery (matched-liquidity vault, Aave yield, cards) stays
 // invisible; the label is the job. "Get liquidity" is the capital-constrained / staged-buffer path.
+// Every destination here stays inside the team/treasury shell (TeamTerminalShell) — none of these
+// used to be true: "Get liquidity" used to hand off to /app/liquidity, a page built entirely for an
+// individual LP (personal MwNav chrome, CTAs into /app/vault/create and /app/vaults). Route it to
+// the Team Terminal's own Vaults section instead so picking "I'm a team" never dead-ends on the
+// personal onboarding flow.
 const TEAM_JOBS: { title: string; sub: string; dest: string; tone: 'peri' | 'coral' }[] = [
   { title: 'Earn on our idle cash', sub: 'Put treasury USDC to work — yield from day one.', dest: '/app/org', tone: 'peri' },
-  { title: 'Get liquidity for our token', sub: 'Fund any share of the pair — the public matches the rest — or stage a single side.', dest: '/app/liquidity', tone: 'coral' },
+  { title: 'Get liquidity for our token', sub: 'Fund any share of the pair — the public matches the rest — or stage a single side.', dest: '/app/team/vaults', tone: 'coral' },
   { title: 'Run our money', sub: 'Spend, cards, payroll, roles — the treasury terminal.', dest: '/app/team', tone: 'peri' },
   { title: 'Fund an AI agent', sub: 'A balance that earns while your agent spends it (x402).', dest: '/app/agents', tone: 'coral' },
 ]

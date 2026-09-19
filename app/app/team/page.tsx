@@ -9,6 +9,11 @@
 // 2026-08-28 with the rest of the human-facing Attribution surface — it hit an
 // external Cloudflare Worker of unverifiable live status and fell back to a
 // hardcoded demo array. See attribution_review_2026_08_28 memory.
+//
+// Once a wallet has an active org, this mock is stale — it redirects to the real
+// /app/org/[slug] home instead of showing fake NAV numbers over a real treasury.
+
+import { useRedirectToActiveOrg } from '@/components/web2/useActiveOrg'
 
 const KPIS = [
   { k: 'Available to spend', v: '$2.41M', s: 'credit against NAV' },
@@ -47,6 +52,9 @@ const POOL: { kind: Kind; wallet: string; detail: string; amt: string; when: str
 ]
 
 export default function TreasuryOverview() {
+  const redirecting = useRedirectToActiveOrg('')
+  if (redirecting) return null
+
   return (
     <>
       <div className="flex items-center gap-3 flex-wrap">

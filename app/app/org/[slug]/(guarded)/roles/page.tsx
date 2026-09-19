@@ -1,0 +1,152 @@
+'use client'
+
+// Members & roles (#3) — the roster with an invite form and a four-preset dropdown per member. NOT a
+// policy engine: "role" is just one of owner/manager/contributor/vendor, each a canned cap. Owner-only.
+// Chrome comes from the shared TeamTerminalShell layout — this is the real "Team & Roles."
+
+import { use, useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useSignMessage } from 'wagmi'
+import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
+import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
+import { signedOrgFetch } from '@/lib/org/signedFetch'
+import { ROLE_PRESET_LIST, type RolePreset } from '@/lib/org/rolePresets'
+
+interface Member { id: string; invited_email: string | null; wallet: string | null; role: string; status: string; eas_uid: string | null }
+
+const capText = (c: bigint | null): string => c === null ? 'No spend cap' : c === 0n ? 'Receive-only' : `$${(Number(c) / 1e6).toLocaleString()}/day`
+
+export default function RolesPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = use(params)
+  const { address } = useMintwareIdentity()
+  const { signMessageAsync } = useSignMessage()
+  const [orgId, setOrgId] = useState<string | null>(null)
+  const [orgName, setOrgName] = useState('')
+  const [members, setMembers] = useState<Member[]>([])
+  const [email, setEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<RolePreset>('contributor')
+  const [busy, setBusy] = useState('')
+  const [msg, setMsg] = useState('')
+  const [lastLink, setLastLink] = useState<{ email: string; url: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [ownerWallet, setOwnerWallet] = useState<string | null>(null)
+
+  // Resolve slug -> org id + name. Pass ?address so the treasury read returns ownerWallet to the owner
+  // (gated to owner/members server-side) — lets us hide the owner-only invite/role controls from others.
+  useEffect(() => {
+    const q = address ? `?address=${address}` : ''
+    fetch(`/api/orgs/${slug}/treasury${q}`).then((r) => r.json()).then((d) => {
+      if (d?.org) { setOrgId(d.org.id); setOrgName(d.org.name); setOwnerWallet(d.org.ownerWallet ?? null) }
+    }).catch(() => {})
+  }, [slug, address])
+
+  const isOwner = !!(address && ownerWallet && address.toLowerCase() === ownerWallet.toLowerCase())
+
+  // Roster read = signed POST (owner-only, includes emails).
+  const refresh = useCallback(async () => {
+    if (!orgId || !address) return
+    const res = await signedOrgFetch({ path: `/api/orgs/${orgId}/members`, action: 'mintware-org-members', method: 'POST', address, signMessageAsync }).catch(() => null)
+    if (res && res.ok) { const d = await res.json(); if (Array.isArray(d.members)) setMembers(d.members) }
+  }, [orgId, address, signMessageAsync])
+  useEffect(() => { void refresh() }, [refresh])
+
+  const invite = async () => {
+    if (!orgId || !address || !email) return
+    setBusy('invite'); setMsg('')
+    try {
+      const res = await signedOrgFetch({ path: `/api/orgs/${orgId}/invite`, action: 'mintware-org-invite', payload: { email, role: inviteRole }, address, signMessageAsync })
+      const d = await res.json()
+      if (res.ok) {
+        const url = `${window.location.origin}/app/org/${slug}/accept?email=${encodeURIComponent(email)}`
+        setLastLink({ email, url }); setCopied(false); setMsg(''); setEmail(''); refresh()
+      } else setMsg(d.error ?? 'invite failed')
+    } catch (e) { setMsg(String(e)) } finally { setBusy('') }
+  }
+
+  const setRole = async (memberId: string, role: RolePreset) => {
+    if (!orgId || !address) return
+    setBusy(memberId)
+    try {
+      const res = await signedOrgFetch({ path: `/api/orgs/${orgId}/members`, action: 'mintware-org-members', method: 'PATCH', payload: { memberId, role }, address, signMessageAsync })
+      if (res.ok) refresh(); else { const d = await res.json(); setMsg(d.error ?? 'failed') }
+    } finally { setBusy('') }
+  }
+
+  return (
+    <MwAuthGuard>
+      <div className="max-w-[900px] mx-auto">
+        <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {orgName || 'Org'}</Link>
+        <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Members &amp; roles</h1>
+        <p className="text-[13px] text-ink-mid mt-1.5 max-w-[64ch]">Invite by email; when they sign in, their wallet is attested as an OrgMembership on-chain. Each role is a fixed spend preset — pick from four.</p>
+
+        {/* Next step in the flow: once teammates accept, secure the treasury with them as signers. Owner-only. */}
+        {isOwner && (
+        <Link href={`/app/org/${slug}/control/setup`} className="mt-4 flex items-center justify-between gap-3 rounded-[12px] border border-[rgba(108,108,240,0.3)] px-4 py-3 no-underline hover:bg-ground-cool transition-colors" style={{ background: 'linear-gradient(120deg, rgba(108,108,240,0.06), transparent)' }}>
+          <span className="text-[13px] text-ink-mid"><b className="text-ink">Secure the treasury with these people.</b> Once they&apos;ve accepted, set up an M-of-N multisig — they become your passkey signers.</span>
+          <span className="text-peri-deep font-semibold text-[13px] shrink-0">Set up multisig →</span>
+        </Link>
+        )}
+
+        {/* invite — owner-only (the invite route is owner-gated server-side; hide the form from everyone else). */}
+        {!isOwner ? (
+          <div className="soft-card p-5 mt-6 text-[13px] text-ink-mid">You're viewing this org's members. Only the <span className="font-semibold text-ink">owner</span> can invite teammates or change roles.</div>
+        ) : (<>
+        <div className="soft-card p-5 mt-6">
+          <label className="block"><span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Invite email</span>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teammate@org.xyz" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[14px] outline-none focus:border-peri" />
+          </label>
+          <div className="mt-4">
+            <span className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-soft">Role</span>
+            <div className="grid grid-cols-3 max-[640px]:grid-cols-1 gap-2 mt-1.5">
+              {ROLE_PRESET_LIST.filter((p) => p.preset !== 'owner').map((p) => {
+                const on = inviteRole === p.preset
+                return (
+                  <button key={p.preset} type="button" onClick={() => setInviteRole(p.preset)} aria-pressed={on}
+                    className={`text-left rounded-[12px] border p-3 transition-colors ${on ? 'border-peri bg-[rgba(108,108,240,0.06)]' : 'border-hair hover:border-[rgba(108,108,240,0.4)]'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13.5px] font-semibold text-ink">{p.label}</span>
+                      {on && <span className="text-peri-deep text-[13px]" aria-hidden>✓</span>}
+                    </div>
+                    <div className="text-[11px] font-mono tabular-nums text-peri-deep mt-0.5">{capText(p.dailyCapUsdc)}</div>
+                    <div className="text-[11.5px] text-ink-soft mt-1 leading-[1.4]">{p.blurb}</div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <button onClick={invite} disabled={busy === 'invite' || !email} className="mt-4 rounded-full bg-peri text-white px-5 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors disabled:opacity-50">{busy === 'invite' ? 'Signing…' : `Invite as ${ROLE_PRESET_LIST.find((p) => p.preset === inviteRole)?.label ?? 'member'}`}</button>
+        </div>
+        {msg && <div className="text-[12.5px] text-ink-mid mt-3">{msg}</div>}
+        {lastLink && (
+          <div className="soft-card p-4 mt-3 border border-[rgba(108,108,240,0.25)]">
+            <div className="text-[12.5px] text-ink"><span className="font-semibold">{lastLink.email}</span> invited. Send them this link to accept — sign-in is gated to their email, and accepting mints their membership.</div>
+            <div className="flex items-center gap-2 mt-2.5 max-[560px]:flex-col max-[560px]:items-stretch">
+              <code className="flex-1 font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2 overflow-x-auto whitespace-nowrap">{lastLink.url}</code>
+              <button onClick={() => { navigator.clipboard?.writeText(lastLink.url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }} className="shrink-0 rounded-full bg-peri text-white px-4 py-2 text-[12.5px] font-semibold hover:bg-peri-deep transition-colors">{copied ? 'Copied ✓' : 'Copy link'}</button>
+            </div>
+            <div className="text-[11px] text-ink-soft mt-2">No email is sent automatically — share the link however you like (email, Slack, DM).</div>
+          </div>
+        )}
+        </>
+        )}
+
+        {/* roster */}
+        <div className="soft-card mt-4 overflow-hidden">
+          {members.length === 0 && <div className="px-5 py-8 text-center text-[13px] text-ink-soft">No members yet — invite your first teammate.</div>}
+          {members.map((m) => (
+            <div key={m.id} className="flex items-center gap-4 px-5 py-3.5 border-b border-hair-soft last:border-b-0 max-[560px]:flex-col max-[560px]:items-start max-[560px]:gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-[13.5px] font-medium text-ink truncate">{m.wallet ? `${m.wallet.slice(0, 6)}…${m.wallet.slice(-4)}` : m.invited_email}</div>
+                <div className="text-[11.5px] text-ink-soft">{m.status}{m.eas_uid ? ' · attested ✓' : ''}</div>
+              </div>
+              <select value={(m.role || 'contributor') as RolePreset} onChange={(e) => setRole(m.id, e.target.value as RolePreset)} disabled={busy === m.id}
+                className="rounded-[10px] border border-hair px-3 py-2 text-[13px] bg-white outline-none focus:border-peri disabled:opacity-50">
+                {ROLE_PRESET_LIST.map((p) => <option key={p.preset} value={p.preset}>{p.label}</option>)}
+              </select>
+            </div>
+          ))}
+        </div>
+      </div>
+    </MwAuthGuard>
+  )
+}

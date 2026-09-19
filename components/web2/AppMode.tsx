@@ -31,7 +31,9 @@ const AppModeContext = createContext<AppModeValue | null>(null)
 export function AppModeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const mode: AppMode = pathname?.startsWith('/app/team') ? 'team' : 'user'
+  // /app/org/* is the real side of the same Team Terminal (shares TeamTerminalShell) — treat it as
+  // team mode too, or the ScopeSwitcher inside that shell mislabels itself "Personal."
+  const mode: AppMode = pathname?.startsWith('/app/team') || pathname?.startsWith('/app/org') ? 'team' : 'user'
 
   const switchTo = useCallback(
     (next: AppMode) => {

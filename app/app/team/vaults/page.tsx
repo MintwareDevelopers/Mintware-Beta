@@ -4,8 +4,6 @@
 // Curator is the create role, pulled from the User surface). ALL illustrative — the
 // ULV engine is in testing on Base Sepolia, nothing here is live or an offer.
 
-import Link from 'next/link'
-
 const SUMMARY = [
   { k: 'Allocated to vaults', v: '$5.80M', s: '73% of treasury' },
   { k: 'Idle buffer', v: '$1.14M', s: 'Aave v3 · instant' },
@@ -35,7 +33,7 @@ export default function TeamVaults() {
           <h1 className="font-atx-display font-semibold text-[clamp(1.5rem,3vw,2rem)] tracking-[-0.025em] text-ink">Vaults</h1>
           <span className="live-chip"><span className="dot" aria-hidden />Preview · illustrative</span>
         </div>
-        <Link href="/app/vault/create" className="glass-pill-primary shrink-0">+ Create vault →</Link>
+        <button disabled title="Team-scoped vault creation isn't wired up yet — coming soon" className="glass-pill-primary shrink-0 opacity-60 cursor-not-allowed">+ Create vault →</button>
       </div>
       <p className="text-ink-mid text-[14px] leading-[1.55] max-w-[64ch] mt-2.5">Allocate treasury capital across Growth ULV pools and the Aave idle buffer, and curate your own vaults. Creating a vault is a Curator action — retail LPs deposit into what you build; the strategy, lock terms, and fee split are yours to set.</p>
 
@@ -113,11 +111,11 @@ export default function TeamVaults() {
             </div>
           </div>
         ))}
-        {/* create tile */}
-        <Link href="/app/vault/create" className="rounded-[var(--radius-card)] border border-dashed border-[rgba(108,108,240,0.4)] bg-[rgba(108,108,240,0.03)] p-5 flex flex-col items-start justify-center gap-1.5 no-underline hover:bg-[rgba(108,108,240,0.06)] transition-colors min-h-[132px]">
-          <span className="font-atx-display font-semibold text-[15px] text-peri-deep">+ Create a vault</span>
-          <span className="text-[12.5px] text-ink-mid max-w-[40ch] leading-[1.45]">Seed a new ULV pool as a Curator — set the pair, chain, and lock terms. In testing on Base Sepolia.</span>
-        </Link>
+        {/* create tile — no team-scoped create flow yet; disabled rather than dropping you into the personal vault-create onboarding */}
+        <div title="Team-scoped vault creation isn't wired up yet — coming soon" className="rounded-[var(--radius-card)] border border-dashed border-hair bg-ground-cool/40 p-5 flex flex-col items-start justify-center gap-1.5 min-h-[132px] opacity-70 cursor-not-allowed">
+          <span className="font-atx-display font-semibold text-[15px] text-ink-soft">+ Create a vault</span>
+          <span className="text-[12.5px] text-ink-mid max-w-[40ch] leading-[1.45]">Seed a new ULV pool as a Curator — set the pair, chain, and lock terms. Coming soon for org treasuries.</span>
+        </div>
       </div>
 
       <p className="text-[11px] text-ink-soft mt-6">Illustrative. The ULV vault engine is in testing on Base Sepolia — allocations, curated vaults, and yields shown here are a mockup, not live positions or an offer.</p>

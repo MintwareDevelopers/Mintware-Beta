@@ -1,9 +1,15 @@
+'use client'
+
 // Team · Team & Roles — design-forward. Member roster + the role ladder
 // (Admin → Signer → Approver → Member → Viewer) converged on across Fireblocks /
 // Prime / Safe. Role-scoped visibility: members see only their own cards. ALL
 // illustrative — the org/RBAC layer is Phase 2 (Privy metadata + middleware).
+//
+// Once a wallet has an active org, this mock is stale — it redirects to the real
+// /app/org/[slug]/roles roster instead.
 
 import Link from 'next/link'
+import { useRedirectToActiveOrg } from '@/components/web2/useActiveOrg'
 
 type Role = 'Admin' | 'Signer' | 'Approver' | 'Member' | 'Viewer'
 const ROLE_CLS: Record<Role, string> = {
@@ -31,6 +37,9 @@ const LADDER: { role: Role; can: string }[] = [
 ]
 
 export default function TeamRoles() {
+  const redirecting = useRedirectToActiveOrg('/roles')
+  if (redirecting) return null
+
   return (
     <>
       <div className="flex items-center justify-between gap-3 flex-wrap">
