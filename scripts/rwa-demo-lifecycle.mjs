@@ -21,36 +21,39 @@
 // TESTNET ONLY. Demo wallets are generated once and kept in RWA_DEMO_WALLETS (gitignored); they hold only
 // valueless testnet tokens + a little testnet ETH for gas.
 //
+// Signed by the dedicated `rwa` Privy seat (scripts/lib/rwaSigner.mjs) — no raw key. Reads the unit from
+// config/rwaDemo.deployment.json (written by scripts/deploy-rwa-demo.mjs).
 // Run:
-//   DEPLOYER_PRIVATE_KEY=0x… RWA_VAULT=0x… node scripts/rwa-demo-lifecycle.mjs
-// Env: RWA_RPC_URL (Base Sepolia publicnode), RWA_DEMO_OUT (config/rwaDemo.json),
-//      RWA_DEMO_WALLETS (.rwa-demo-wallets.json), RWA_REHEARSAL=1 (local anvil: fast-forward time instead of waiting),
-//      RWA_GAS_FUND_WEI (per demo wallet, default 0.0015 ETH).
+//   node --env-file=.env.robinhood.local scripts/rwa-demo-lifecycle.mjs
+// Env: RWA_RPC_URL (https://sepolia.base.org), RWA_DEMO_OUT (config/rwaDemo.json),
+//      RWA_DEMO_WALLETS (.rwa-demo-wallets.json), RWA_GAS_FUND_WEI (per demo wallet, default 0.00012 ETH),
+//      RWA_REHEARSAL=1 + RWA_REHEARSAL_KEY (local anvil fork: throwaway key, fast-forward time instead of waiting).
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { createPublicClient, createWalletClient, http, parseUnits, formatUnits, defineChain } from 'viem'
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts'
+import { resolveRwaSigner } from './lib/rwaSigner.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 const OUT = join(ROOT, 'contracts-v4', 'out')
 
-const RPC = process.env.RWA_RPC_URL ?? 'https://base-sepolia-rpc.publicnode.com'
+const RPC = process.env.RWA_RPC_URL ?? 'https://sepolia.base.org'
 const OUT_FILE = process.env.RWA_DEMO_OUT ?? join(ROOT, 'config', 'rwaDemo.json')
+const DEPLOYMENT_FILE = process.env.RWA_DEPLOYMENT_OUT ?? join(ROOT, 'config', 'rwaDemo.deployment.json')
 const WALLETS_FILE = process.env.RWA_DEMO_WALLETS ?? join(ROOT, '.rwa-demo-wallets.json')
 const REHEARSAL = process.env.RWA_REHEARSAL === '1'
-const GAS_FUND = BigInt(process.env.RWA_GAS_FUND_WEI ?? '1500000000000000')
+const GAS_FUND = BigInt(process.env.RWA_GAS_FUND_WEI ?? '120000000000000') // 0.00012 ETH per demo wallet
 const FORCED_GAS = 600_000n
 
 function die(m) { console.error(`\n✗ ${m}`); process.exit(1) }
 const log = (m) => console.log(`  ${m}`)
 
-const pk = process.env.DEPLOYER_PRIVATE_KEY
-const vaultAddr = process.env.RWA_VAULT
-if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) die('DEPLOYER_PRIVATE_KEY (0x-prefixed) required')
-if (!vaultAddr || !/^0x[0-9a-fA-F]{40}$/.test(vaultAddr)) die('RWA_VAULT required (printed by the deploy script)')
+const deployment = existsSync(DEPLOYMENT_FILE) ? JSON.parse(readFileSync(DEPLOYMENT_FILE, 'utf8')) : null
+const vaultAddr = process.env.RWA_VAULT ?? deployment?.contracts?.vault
+if (!vaultAddr || !/^0x[0-9a-fA-F]{40}$/.test(vaultAddr)) die('no vault: run scripts/deploy-rwa-demo.mjs first (or set RWA_VAULT)')
 
 const abi = (file, name = file) => JSON.parse(readFileSync(join(OUT, `${file}.sol`, `${name}.json`), 'utf8')).abi
 const VAULT = abi('MintwareTreasuryVault')
@@ -65,7 +68,7 @@ const pub0 = createPublicClient({ transport: http(RPC) })
 const chainId = await pub0.getChainId()
 const chain = defineChain({ id: chainId, name: `chain-${chainId}`, nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [RPC] } } })
 const pub = createPublicClient({ chain, transport: http(RPC) })
-const issuer = privateKeyToAccount(pk)
+const { account: issuer, kind: signerKind } = await resolveRwaSigner().catch((e) => die(e.message))
 const wallet = (account) => createWalletClient({ account, chain, transport: http(RPC) })
 
 // ── read the unit back from the vault ──────────────────────────────────────
@@ -76,7 +79,7 @@ const adapter = await read(vaultAddr, VAULT, 'adapter')
 const hook = await read(vaultAddr, VAULT, 'jitHook')
 const poolKey = await read(vaultAddr, VAULT, 'poolKey')
 const registry = await read(property, PROP, 'registry')
-const routerAddr = process.env.RWA_ROUTER ?? die('RWA_ROUTER required (printed by the deploy script)')
+const routerAddr = process.env.RWA_ROUTER ?? deployment?.contracts?.router ?? die('no router: run scripts/deploy-rwa-demo.mjs first (or set RWA_ROUTER)')
 const key = { currency0: poolKey[0], currency1: poolKey[1], fee: poolKey[2], tickSpacing: poolKey[3], hooks: poolKey[4] }
 const propIs0 = key.currency0.toLowerCase() === property.toLowerCase()
 const propName = await read(property, PROP, 'name')
@@ -214,6 +217,9 @@ const out = {
   propertyIsCurrency0: propIs0,
   wallets: Object.fromEntries(Object.entries(W).map(([k, a]) => [k, { label: LABELS[k], address: a.address }])),
   issuer: issuer.address,
+  signerKind,
+  hookConfig: deployment?.hookConfig ?? null,
+  deployTxs: deployment?.txs ?? [],
   snapshot: snap,
   legs,
 }
