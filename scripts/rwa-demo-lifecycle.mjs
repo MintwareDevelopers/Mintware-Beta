@@ -100,19 +100,55 @@ const legs = []
 let leg = null
 function startLeg(title, desc) { leg = { n: legs.length + 1, title, desc, txs: [] }; legs.push(leg); console.log(`\n${leg.n}. ${title}`) }
 
+// Load-balanced RPCs can serve a read from a node one block behind the last receipt — retry simulations.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+async function simulateWithRetry(opts, label, tries = 6) {
+  for (let i = 1; ; i++) {
+    try { return await pub.simulateContract(opts) } catch (e) {
+      if (i >= tries) die(`${label}: simulation failed — ${e.shortMessage ?? e.message}`)
+      await sleep(2500)
+    }
+  }
+}
+
+// Resumable: every confirmed step is checkpointed by label, so a re-run replays recorded hashes instead of
+// re-sending (no double deposits / double mints). Delete the progress file to start a fresh story.
+const PROGRESS = `${OUT_FILE}.progress.json`
+const progress = existsSync(PROGRESS) ? JSON.parse(readFileSync(PROGRESS, 'utf8')) : { vault: vaultAddr, steps: {} }
+if (progress.vault?.toLowerCase() !== vaultAddr.toLowerCase()) die(`progress file ${PROGRESS} belongs to another vault — move it aside`)
+const checkpoint = () => writeFileSync(PROGRESS, JSON.stringify(progress, null, 2))
+
 async function send(account, address, a, functionName, args, label, { expectRevert = false } = {}) {
+  const done = progress.steps[label]
+  if (done) {
+    log(`· ${label} (already on-chain ${done.hash})`)
+    if (leg) leg.txs.push(done)
+    return done
+  }
   const w = wallet(account)
   const opts = { address, abi: a, functionName, args, account }
-  const hash = expectRevert
-    ? await w.writeContract({ ...opts, gas: FORCED_GAS })
-    : await w.writeContract({ ...opts, ...(await pub.simulateContract(opts).then(() => ({})).catch((e) => die(`${label}: simulation failed — ${e.shortMessage ?? e.message}`))) })
+  let gas = FORCED_GAS
+  if (!expectRevert) {
+    await simulateWithRetry(opts, label)
+    // Explicit headroom: an estimate served by a lagging node can miss state-dependent work (e.g. the
+    // lending adapter minting freshly accrued interest) and run the real tx out of gas.
+    const est = await pub.estimateContractGas(opts).catch(() => 300_000n)
+    gas = (est * 16n) / 10n + 30_000n
+  } else {
+    await sleep(3000) // let the prior state settle on every backend before the deliberate revert
+  }
+  const hash = await w.writeContract({ ...opts, gas })
   const r = await pub.waitForTransactionReceipt({ hash })
   const status = r.status === 'success' ? 'success' : 'reverted'
   if (expectRevert && status !== 'reverted') die(`${label}: expected an on-chain revert, got ${status}`)
-  if (!expectRevert && status !== 'success') die(`${label}: reverted (${hash})`)
+  if (expectRevert && r.gasUsed >= gas) die(`${label}: reverted by running out of gas, not by the rule under test (${hash})`)
+  if (!expectRevert && status !== 'success') die(`${label}: reverted (${hash}, gas ${r.gasUsed}/${gas})`)
   log(`${status === 'success' ? '✓' : '⨯ reverted (expected)'}  ${label}  ${hash}`)
-  if (leg) leg.txs.push({ label, hash, status, from: account.address, block: Number(r.blockNumber) })
-  return r
+  const rec = { label, hash, status, from: account.address, block: Number(r.blockNumber) }
+  progress.steps[label] = rec
+  checkpoint()
+  if (leg) leg.txs.push(rec)
+  return rec
 }
 
 async function fundGas(to) {
@@ -153,7 +189,7 @@ await send(issuer, registry, REG, 'setVerified', [W.danaTrader.address, farFutur
 await send(issuer, registry, REG, 'setVerified', [W.eliTrader.address, farFuture], 'Verify Eli')
 
 // ── 2. senior deposits ─────────────────────────────────────────────────────
-startLeg('Open LPs supply dUSD', 'Three unverified wallets deposit into the senior tranche. Senior is paid first, at par, in dUSD.')
+startLeg('Open LPs supply dUSD', 'Three unverified wallets supply dUSD to the senior tranche. Senior is paid first, in dUSD.')
 for (const [k, amt] of Object.entries(lpAmounts)) await send(W[k], vaultAddr, VAULT, 'depositUSDC', [D6(amt), 0n, W[k].address], `${LABELS[k]} deposits ${amt.toLocaleString()} dUSD`)
 
 // ── 3. deploy to the pool ──────────────────────────────────────────────────
@@ -195,10 +231,16 @@ await send(issuer, adapter, LEND, 'accrue', [], 'Realise accrued lending interes
 
 // ── 9. LP exit ─────────────────────────────────────────────────────────────
 startLeg('An LP exits in dUSD only', 'Chloe redeems half her senior shares and receives dUSD. She never held, and is not eligible to hold, the property token.')
-const chloeShares = await read(vaultAddr, VAULT, 'seniorShares', [W.chloeLP.address])
+let chloeShares = 0n
+for (let i = 0; i < 6 && chloeShares === 0n; i++) {
+  chloeShares = await read(vaultAddr, VAULT, 'seniorShares', [W.chloeLP.address])
+  if (chloeShares === 0n) await sleep(2500)
+}
+if (chloeShares === 0n) die('Chloe has no senior shares to redeem')
 await send(W.chloeLP, vaultAddr, VAULT, 'redeemSenior', [chloeShares / 2n, 0n], 'Chloe redeems half her senior')
 
 // ── snapshot + write ───────────────────────────────────────────────────────
+await sleep(8000) // let every RPC backend catch up to the last receipt before the snapshot read
 const snap = {
   seniorAssets: formatUnits(await read(vaultAddr, VAULT, 'totalSeniorAssets'), 6),
   deployedFromSenior: formatUnits(await read(vaultAddr, VAULT, 'deployedFromSenior'), 6),

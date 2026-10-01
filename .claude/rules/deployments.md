@@ -161,6 +161,14 @@ asset, now two separate vars — see the 2026-09-09 note on each) are in the mai
 `gateway-snapshot` = daily `0 6 * * *`. **`gateway-harvest` and `gateway-deploy` are NOT scheduled** — they
 exist as bearer routes and run only when hit manually with `CRON_SECRET` (and their `*_ENABLED` flag on).
 
+### V2-RWAs (RWA liquidity vertical — testnet demo, see `rwa-liquidity.md`)
+
+| Variable | Visibility | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_V2_RWA_ENABLED` | Public | `'true'` shows `/app/rwa*` + `/api/rwa/unit` to visitors who ALSO pass the V2 gate. **Default OFF** (pages 404). |
+| `RWA_RPC_URL` | Server-only | Base Sepolia RPC for `/api/rwa/unit` (default `https://sepolia.base.org`). |
+| `RWA_ORACLE_PRIVY_WALLET_ID` / `RWA_ORACLE_PRIVY_ADDRESS` | Server-only / scripts | The **dedicated `rwa` Privy seat** (`0xAF8E…d5ca`, created 2026-10-01) — deployer/owner/keeper of the demo unit. Lives in `.env.robinhood.local` for the scripts. No fallback to root/gateway seats. Optional `RWA_ORACLE_PRIVY_AUTH_KEY` (O-6) — not yet created. |
+
 ### Arc / parking account (idle-USDC-earns-in-place)
 
 | Variable | Visibility | Notes |

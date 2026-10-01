@@ -13,7 +13,7 @@
 //
 // Run:  node --env-file=.env.robinhood.local scripts/deploy-rwa-demo.mjs
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
@@ -59,7 +59,21 @@ const me = account.address
 console.log(`\nV2-RWAs demo deploy — chain ${chainId} — signer ${me} (${kind}) — gas ${formatEther(await pub.getBalance({ address: me }))} ETH`)
 if ((await pub.getCode({ address: POOL_MANAGER }))?.length > 2 === false) die(`no PoolManager at ${POOL_MANAGER}`)
 
-const txs = []
+// ── resumable progress: every completed step is checkpointed, so a re-run skips what is already on-chain ──
+const PROGRESS = `${DEPLOYMENT_OUT}.progress.json`
+const progress = existsSync(PROGRESS) ? JSON.parse(readFileSync(PROGRESS, 'utf8')) : { chainId, signer: me, steps: {} }
+if (progress.chainId !== chainId || progress.signer !== me) die(`progress file ${PROGRESS} belongs to another chain/signer — move it aside`)
+const checkpoint = () => writeFileSync(PROGRESS, JSON.stringify(progress, null, 2))
+
+// Load-balanced RPCs can serve a read from a node one block behind the receipt. Retry reads/simulations.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+async function retry(fn, label, tries = 6) {
+  for (let i = 1; ; i++) {
+    try { return await fn() } catch (e) { if (i >= tries) die(`${label}: ${e.shortMessage ?? e.message}`); await sleep(2500) }
+  }
+}
+
+const txs = progress.txs ?? (progress.txs = [])
 async function confirm(hash, label) {
   const r = await pub.waitForTransactionReceipt({ hash })
   if (r.status !== 'success') die(`${label} reverted (${hash})`)
@@ -68,14 +82,21 @@ async function confirm(hash, label) {
   return r
 }
 async function deploy(label, a, args = [], bytecode = a.bytecode.object) {
+  if (progress.steps[`deploy ${label}`]) { console.log(`  · ${label} already at ${progress.steps[`deploy ${label}`]}`); return progress.steps[`deploy ${label}`] }
   const hash = await w.deployContract({ abi: a.abi, bytecode, args })
   const r = await confirm(hash, `deploy ${label}`)
   console.log(`      → ${r.contractAddress}`)
+  progress.steps[`deploy ${label}`] = r.contractAddress
+  checkpoint()
   return r.contractAddress
 }
 async function call(label, address, a, functionName, args = []) {
-  await pub.simulateContract({ address, abi: a.abi, functionName, args, account }).catch((e) => die(`${label}: ${e.shortMessage ?? e.message}`))
-  return confirm(await w.writeContract({ address, abi: a.abi, functionName, args }), label)
+  if (progress.steps[label]) { console.log(`  · ${label} already done`); return }
+  await retry(() => pub.simulateContract({ address, abi: a.abi, functionName, args, account }), label)
+  const r = await confirm(await w.writeContract({ address, abi: a.abi, functionName, args }), label)
+  progress.steps[label] = r.transactionHash
+  checkpoint()
+  return r
 }
 
 const A = {
@@ -109,8 +130,10 @@ for (let i = 0n; i < 2_000_000n; i++) {
 }
 if (!salt) die('could not mine a hook salt')
 console.log(`  · mined hook address ${hookAddr}`)
-await confirm(await w.sendTransaction({ to: C2_FACTORY, data: concat([salt, hookInit]) }), 'deploy MintwareRwaAppraisalHook (CREATE2)')
-if (((await pub.getCode({ address: hookAddr })) ?? '0x').length <= 2) die('hook not at the mined address')
+if (((await pub.getCode({ address: hookAddr })) ?? '0x').length <= 2) {
+  await confirm(await w.sendTransaction({ to: C2_FACTORY, data: concat([salt, hookInit]) }), 'deploy MintwareRwaAppraisalHook (CREATE2)')
+}
+await retry(async () => { if (((await pub.getCode({ address: hookAddr })) ?? '0x').length <= 2) throw new Error('hook not at the mined address') }, 'hook code')
 
 // 3) pool key (property / dUSD, dynamic fee)
 const propIs0 = BigInt(property) < BigInt(usd)
@@ -146,8 +169,10 @@ for (const [n, a] of [['PoolManager', POOL_MANAGER], ['vault', vault], ['router'
 
 // 6) appraisal, then open the pool exactly at it
 await call(`hook.initAppraisal(${appraisal})`, hookAddr, A.hook, 'initAppraisal', [appraisal])
-const sqrt = await pub.readContract({ address: hookAddr, abi: [{ type: 'function', name: 'oracleTick', stateMutability: 'view', inputs: [], outputs: [{ type: 'int24' }, { type: 'bool' }] }], functionName: 'oracleTick' })
-if (Number(sqrt[0]) !== appraisal || !sqrt[1]) die('appraisal not live')
+await retry(async () => {
+  const o = await pub.readContract({ address: hookAddr, abi: [{ type: 'function', name: 'oracleTick', stateMutability: 'view', inputs: [], outputs: [{ type: 'int24' }, { type: 'bool' }] }], functionName: 'oracleTick' })
+  if (Number(o[0]) !== appraisal || !o[1]) throw new Error('appraisal not live')
+}, 'appraisal check')
 // The hook's beforeInitialize re-derives the tick from this price and refuses anything outside the core band.
 const sqrtPriceX96 = BigInt(process.env.INIT_SQRT_PRICE ?? sqrtAtTick(appraisal))
 await call('PoolManager.initialize (at the appraisal)', POOL_MANAGER, A.pm, 'initialize', [key, sqrtPriceX96])

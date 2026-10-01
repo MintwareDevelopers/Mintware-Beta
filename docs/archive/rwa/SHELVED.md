@@ -1,5 +1,10 @@
 # RWA surface — SHELVED (2026-08-05)
 
+> **Partly superseded (2026-10-01):** the RWA *liquidity engine* is revived as **V2-RWAs** — a V2 vertical
+> built on the unchanged `MintwareTreasuryVault` + a new `MintwareRwaAppraisalHook`, with the issuer's own
+> permissioned token as the compliance gate. See `.claude/rules/rwa-liquidity.md`. Everything else below (the
+> venue, issuer portal, campaigns / incentive layer, the old vault base) stays shelved.
+
 The Real-World-Asset (RWA) product surface was deliberately shelved off the Mintware platform to
 refocus on the reputation-first DeFi core (Attribution → rewards → social LP vaults). RWA was a
 second, separable business ("compliant tokenized-asset trading") that shared infrastructure but not

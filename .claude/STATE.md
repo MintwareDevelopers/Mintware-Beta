@@ -100,7 +100,10 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   being **removed** (`config/arc.ts`, `/app/arc`, the `5042002` chain-pickers, `x402/account`, and the Arc
   addresses in the deploy record → the AUTO tables above will drop once removed + `context:sync` re-run).
   The Arc-specific mentions in the bullets below are now historical.
-- **RWA** — shelved 2026-08-05. Archived: `docs/archive/rwa/`, branch `archive/rwa-surface`.
+- **RWA** — the 2026-08-05 venue stays shelved (archived: `docs/archive/rwa/`, branch `archive/rwa-surface`),
+  BUT the **liquidity engine is revived as "V2-RWAs"** (2026-10-01, LiquidAcre partnership): a V2 *vertical*,
+  testnet demo LIVE on Base Sepolia, unaudited, dark-launched behind `NEXT_PUBLIC_V2_RWA_ENABLED` + the V2 gate.
+  Rule: `.claude/rules/rwa-liquidity.md`.
 - **Campaigns** (token reward pools / points campaigns / MintwareDistributor / Hardhat) —
   shelved 2026-08-12. Archived: `docs/archive/campaigns/`, branch `archive/campaigns-surface`.
   Supabase campaign tables were **retained** (not dropped) but nothing writes them.
@@ -185,7 +188,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `ULVVault` | testnet · base-sepolia | `0x6c0D6460b7Eb094864F6b557506f5519B0c75132` | testnet |
 
 **29 recorded with a full address, 0 flagged as a GAP** (truncated in the rules — complete from the broadcast).
-**28 of 36 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
+**35 of 43 `src` contracts have NO deploy record** (testnet-only stack, libraries, abstracts, or genuinely undeployed — assume NOT deployed unless listed above).
 <!-- /AUTO:build-status -->
 
 ---
@@ -228,6 +231,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 - `NEXT_PUBLIC_SUPABASE_REALTIME`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_V1_MODE_ENABLED`
+- `NEXT_PUBLIC_V2_RWA_ENABLED`
 - `NEXT_PUBLIC_VAULTS_LOCKED`
 - `NEXT_PUBLIC_VAULT_ADDRESS`
 - `NEXT_PUBLIC_VAULT_CHAIN_ID`
@@ -258,19 +262,21 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/liquidity` | `app/app/liquidity/page.tsx` |
 | `/app/liquidity/launch` | `app/app/liquidity/launch/page.tsx` |
 | `/app/liquidity/staged` | `app/app/liquidity/staged/page.tsx` |
-| `/app/org` | `app/app/org/page.tsx` |
-| `/app/org/[slug]` | `app/app/org/[slug]/page.tsx` |
+| `/app/org` | `app/app/org/(guarded)/page.tsx` |
+| `/app/org/[slug]` | `app/app/org/[slug]/(guarded)/page.tsx` |
 | `/app/org/[slug]/accept` | `app/app/org/[slug]/accept/page.tsx` |
-| `/app/org/[slug]/activity` | `app/app/org/[slug]/activity/page.tsx` |
-| `/app/org/[slug]/cards` | `app/app/org/[slug]/cards/page.tsx` |
-| `/app/org/[slug]/control` | `app/app/org/[slug]/control/page.tsx` |
-| `/app/org/[slug]/control/setup` | `app/app/org/[slug]/control/setup/page.tsx` |
-| `/app/org/[slug]/fund` | `app/app/org/[slug]/fund/page.tsx` |
-| `/app/org/[slug]/pay` | `app/app/org/[slug]/pay/page.tsx` |
-| `/app/org/[slug]/payroll` | `app/app/org/[slug]/payroll/page.tsx` |
-| `/app/org/[slug]/roles` | `app/app/org/[slug]/roles/page.tsx` |
-| `/app/org/new` | `app/app/org/new/page.tsx` |
+| `/app/org/[slug]/activity` | `app/app/org/[slug]/(guarded)/activity/page.tsx` |
+| `/app/org/[slug]/cards` | `app/app/org/[slug]/(guarded)/cards/page.tsx` |
+| `/app/org/[slug]/control` | `app/app/org/[slug]/(guarded)/control/page.tsx` |
+| `/app/org/[slug]/control/setup` | `app/app/org/[slug]/(guarded)/control/setup/page.tsx` |
+| `/app/org/[slug]/fund` | `app/app/org/[slug]/(guarded)/fund/page.tsx` |
+| `/app/org/[slug]/pay` | `app/app/org/[slug]/(guarded)/pay/page.tsx` |
+| `/app/org/[slug]/payroll` | `app/app/org/[slug]/(guarded)/payroll/page.tsx` |
+| `/app/org/[slug]/roles` | `app/app/org/[slug]/(guarded)/roles/page.tsx` |
+| `/app/org/new` | `app/app/org/(guarded)/new/page.tsx` |
 | `/app/profile` | `app/app/profile/page.tsx` |
+| `/app/rwa` | `app/app/rwa/page.tsx` |
+| `/app/rwa/[unit]` | `app/app/rwa/[unit]/page.tsx` |
 | `/app/swap` | `app/app/swap/page.tsx` |
 | `/app/team` | `app/app/team/page.tsx` |
 | `/app/team/cards` | `app/app/team/cards/page.tsx` |
