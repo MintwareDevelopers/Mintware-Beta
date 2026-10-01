@@ -148,9 +148,10 @@ abstract contract EconBase is Test {
         (s,,,) = poolManager.getSlot0(key.toId());
     }
 
-    /// _refSqrtPrice is internal; slot 7 (forge inspect storage-layout; also probed by the red-team suite).
-    function _ref() internal view returns (uint160) {
-        return uint160(uint256(vm.load(address(pm), bytes32(uint256(7)))));
+    /// The clamped-follower reference via the PM's public `referencePrice()` view. (Was a hardcoded `vm.load` of
+    /// slot 7, which went stale when IA-11 storage shifted `_refSqrtPrice` to slot 9 — slot 7 is now `tokenId`.)
+    function _ref() internal view returns (uint160 r) {
+        (r,,) = pm.referencePrice();
     }
 
     function _devBps() internal view returns (uint256) {

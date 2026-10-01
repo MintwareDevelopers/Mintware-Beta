@@ -240,6 +240,12 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
         _seed();
         paired.setPaused(true);
 
+        // Earn-vs-LP re-base (2026-10-01): the idle leg is no longer a round 100k. `_seed`'s deploy zaps 100k of
+        // quote through a 2.2M-L pool (≈4.5% √P impact), so the mint can't use the whole 100k quote leg and the
+        // remainder (~8k) is re-staged by design (R3-2). The property is "the WHOLE liquid idle leg is delivered
+        // to the sole holder" — so pin it to the measured reserve, exactly, instead of a hardcoded figure.
+        uint256 idle = staging.stagedAssets();
+        assertApproxEqRel(idle, 100_000e18, 0.1e18, "sanity: idle is ~100k plus the zap's re-staged remainder");
         uint256 shares = pm.sharesOf(alice);
         uint256 q0 = quote.balanceOf(alice);
         vm.expectEmit(true, false, false, false);
@@ -247,7 +253,7 @@ contract MintwareLpGatewayAuditRound2ForkTest is Test {
         vm.prank(alice);
         (uint256 qOut, uint256 pOut) = pm.withdraw(shares); // pre-fix: reverted TOKEN_PAUSED — everything frozen
         assertEq(pOut, 0);
-        assertApproxEqRel(qOut, 100_000e18, 0.001e18, "the liquid idle leg (100k) was delivered");
+        assertEq(qOut, idle, "the whole liquid idle leg was delivered");
         assertEq(quote.balanceOf(alice) - q0, qOut);
         assertGt(pm.sharesOf(alice), 0, "LP slice re-credited as shares (claim intact)");
         assertGt(_liq(), 0, "LP untouched while the paired token is paused");

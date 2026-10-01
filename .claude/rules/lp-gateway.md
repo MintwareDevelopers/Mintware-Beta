@@ -492,16 +492,32 @@ unrelated).
   ENTIRE public site to V1 faces (it replaced the landing once → an incident, 2026-09-07). Do not flip it.
 
 ## Deploy, tests, framing
-> ⚠ **Test counts below are STALE post earn-vs-lp decision** (2026-09-08) — every `deploy()`-touching test
-> across the gateway suite is being migrated to the new swap-based signature + a seeded-liquidity real-V4 rig
-> (a fresh pool has nothing to swap against); re-run `pnpm forge:test` and update the counts here once that
-> migration lands, per the reconcile-on-change rule.
+> **Fork-suite repair (2026-10-01, branch `fix/lp-gateway-fork-suites`).** The earn-vs-lp migration left CI's
+> LP-gateway fork job red from 2026-09-08 on (33 failing tests in 5 suites; locally they self-skip, so it went unnoticed).
+> All 33 were STALE TESTS, not contract regressions. Root causes: (1) a hardcoded `vm.load(pm, slot 7)` probe of
+> `_refSqrtPrice`. IA-11 declared `principalCap`/`deployedPairedValue` above `_poolKey`, which moved it to slot 9, so
+> slot 7 is now `tokenId`. Every probe now reads the public `referencePrice()` view instead. This also covers the
+> `audit3/` suites, which are not in CI. ⚠ The comment above `harvestRecipient` in the PM still says "slot 7" and is
+> stale. (2) The deploy's in-contract zap moves spot, and on thin rigs it hits the band-edge price limit, so tests that
+> assumed spot == ref == 1.0 after deploy now derive expectations from the measured state or deepen the rig.
+> Same-block-as-construction deploys leave ref at the pre-zap anchor (one follow step per block), so the red-team
+> `_standard` now rolls a block and `poke()`s. (3) The thin-pool attack scenarios pull the 2.2M-L zap seed back out
+> after the deploy (`_removeSeed`). (4) The round-4 `InsufficientStaged` fix is now asserted by selector.
+> (5) RT-9a/9b no longer expect `DeployCapExceeded` on a crash cycle. With `MAX_DEPLOY_BPS = 10000` the guard is a pure
+> `quoteToDeploy <= idle` overdraw check, so they assert the depositor-side bounds plus the overdraw revert.
+> ⚠ **For review:** RT-3a measured an in-band deploy-sandwich PnL of ≈186 quote on a 20k deploy (≈0.93%; the old bound
+> was <20 bps, measured mint-only). Depositor NAV fell ≈480. The zap is now a sandwichable swap. The cron's `minPairedOut`
+> stops the front-run case (asserted), but a push held across the cron's spot read is bounded only by the band.
+> Fork counts (LP_FORK_RPC_URL set, CI match): Hardening 8 · AuditRound2 10 · Closeout 6 · RedTeam 22 · Hacken 11
+> fork + 5 unit = **62 / 0 fail**. Full non-fork `forge test`: **1040 pass / 0 fail / 6 skipped** (119 suites).
 - **Deploy:** pure-Privy, no raw key — `scripts/deploy-lp-gateway-robinhood.mjs` (`pnpm deploy:lp-gateway:robinhood`).
   Runbook: [`../../docs/developers/lp-gateway-testnet-runbook.md`](../../docs/developers/lp-gateway-testnet-runbook.md).
 - **Tests:** 44 gateway Forge (staging/PM/factory + `MintwareLpGatewayRealAdapter.t.sol` — the gateway composed
   with the PRODUCTION 4626 adapter: onlyVault drain-block, one-time setVault, A-1 re-credit vs per-block cap +
-  stalled source, fee-net NAV) + `MintwareLpGatewayHardeningFork.t.sol` (7 — real `PoolSwapTest` swaps prove
-  H-02/H-03 + the A-1/A-2/A-3 regressions, on the real adapter; self-skips without `LP_FORK_RPC_URL`) +
+  stalled source, fee-net NAV) + `MintwareLpGatewayHardeningFork.t.sol` (8 — real `PoolSwapTest` swaps prove
+  H-02/H-03 + the A-1/A-2/A-3 regressions + the round-4 `InsufficientStaged` guard, on the real adapter; self-skips
+  without `LP_FORK_RPC_URL`) + `MintwareLpGatewayCloseoutFork.t.sol` (6 — C-10 outage exits + harvest-recipient
+  rotation) +
   `MintwareLpGatewayAuditRound2Fork.t.sol` (10 — round-2 F-01/F-02/F-04, RT-1a/2/5a/9a regressions with real
   third-party depth) + the auditors' own PoC suites under `contracts-v4/test/audit/` (kept green as evidence, asserting
   post-fix behavior) + gateway Vitest (`lib/gateway/*`, incl. `__audit__/` PoCs; the O-7/O-8/O-12 closeout added
