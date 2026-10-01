@@ -65,7 +65,7 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   2026-09-08) is LIVE: Vercel repointed, registered in `gateway_instances` (code-hash + seat verified), `/api/gateway/meta`
   serves it with `source: registry` — the registry is now the live trust root, not the env fallback. Mainnet blocked on a
   Morpho USDG vault with capacity (all 39 at `maxDeposit == 0`). Rule: `.claude/rules/lp-gateway.md`.
-- **Marketing:** `/`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
+- **Marketing:** `/how-it-works` (the model in diagrams — V1 public, V2 section rendered only past the `lib/v2/gate` unlock), `/`, `/defi`, `/vaults`, `/teams`, `/yield-payment-network`,
   `/agents`, `/about`, `/docs`.
 - **Org treasury (new, testnet)** — the multi-tenant treasury MVP built ON the org layer
   (`orgs`/`org_members` + `attestOrgMembership`, migration `20260818000001`). Auth surface `/app/org/[slug]`
@@ -258,18 +258,18 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/liquidity` | `app/app/liquidity/page.tsx` |
 | `/app/liquidity/launch` | `app/app/liquidity/launch/page.tsx` |
 | `/app/liquidity/staged` | `app/app/liquidity/staged/page.tsx` |
-| `/app/org` | `app/app/org/page.tsx` |
-| `/app/org/[slug]` | `app/app/org/[slug]/page.tsx` |
+| `/app/org` | `app/app/org/(guarded)/page.tsx` |
+| `/app/org/[slug]` | `app/app/org/[slug]/(guarded)/page.tsx` |
 | `/app/org/[slug]/accept` | `app/app/org/[slug]/accept/page.tsx` |
-| `/app/org/[slug]/activity` | `app/app/org/[slug]/activity/page.tsx` |
-| `/app/org/[slug]/cards` | `app/app/org/[slug]/cards/page.tsx` |
-| `/app/org/[slug]/control` | `app/app/org/[slug]/control/page.tsx` |
-| `/app/org/[slug]/control/setup` | `app/app/org/[slug]/control/setup/page.tsx` |
-| `/app/org/[slug]/fund` | `app/app/org/[slug]/fund/page.tsx` |
-| `/app/org/[slug]/pay` | `app/app/org/[slug]/pay/page.tsx` |
-| `/app/org/[slug]/payroll` | `app/app/org/[slug]/payroll/page.tsx` |
-| `/app/org/[slug]/roles` | `app/app/org/[slug]/roles/page.tsx` |
-| `/app/org/new` | `app/app/org/new/page.tsx` |
+| `/app/org/[slug]/activity` | `app/app/org/[slug]/(guarded)/activity/page.tsx` |
+| `/app/org/[slug]/cards` | `app/app/org/[slug]/(guarded)/cards/page.tsx` |
+| `/app/org/[slug]/control` | `app/app/org/[slug]/(guarded)/control/page.tsx` |
+| `/app/org/[slug]/control/setup` | `app/app/org/[slug]/(guarded)/control/setup/page.tsx` |
+| `/app/org/[slug]/fund` | `app/app/org/[slug]/(guarded)/fund/page.tsx` |
+| `/app/org/[slug]/pay` | `app/app/org/[slug]/(guarded)/pay/page.tsx` |
+| `/app/org/[slug]/payroll` | `app/app/org/[slug]/(guarded)/payroll/page.tsx` |
+| `/app/org/[slug]/roles` | `app/app/org/[slug]/(guarded)/roles/page.tsx` |
+| `/app/org/new` | `app/app/org/(guarded)/new/page.tsx` |
 | `/app/profile` | `app/app/profile/page.tsx` |
 | `/app/swap` | `app/app/swap/page.tsx` |
 | `/app/team` | `app/app/team/page.tsx` |
@@ -290,6 +290,7 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/docs` | `app/docs/page.tsx` |
 | `/earn/[pool]` | `app/earn/[pool]/page.tsx` |
 | `/explorer` | `app/explorer/page.tsx` |
+| `/how-it-works` | `app/how-it-works/page.tsx` |
 | `/legal` | `app/legal/page.tsx` |
 | `/org/[slug]` | `app/org/[slug]/page.tsx` |
 | `/org/[slug]/badge` | `app/org/[slug]/badge/page.tsx` |

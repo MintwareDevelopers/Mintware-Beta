@@ -27,7 +27,9 @@ export default function V2Unlock() {
       })
       const d = (await res.json()) as { ok?: boolean; error?: string }
       if (!res.ok || !d.ok) throw new Error(d.error === 'wrong_password' ? 'Wrong password.' : d.error ?? 'Unlock failed')
-      router.push('/')
+      // Optional same-site return path (e.g. /how-it-works#v2); anything else falls back to home.
+      const next = new URLSearchParams(window.location.search).get('next') ?? ''
+      router.push(next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/\\') ? next : '/')
       router.refresh()
     } catch (e2) {
       setErr((e2 as Error).message)

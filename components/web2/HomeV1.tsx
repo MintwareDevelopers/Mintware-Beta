@@ -10,14 +10,10 @@ import Link from 'next/link'
 import { V2Nav } from '@/components/ui2/V2Nav'
 import { GradientPanel } from '@/components/ui2/GradientPanel'
 import { useLaunch } from '@/components/web2/LaunchModal'
+import { ModelDiagram } from '@/components/marketing/how/ModelDiagram'
+import { V1_LP } from '@/components/marketing/how/diagrams'
 
 const ey = 'text-[12px] uppercase tracking-[0.13em] font-semibold text-peri-deep'
-
-const STEPS: [string, string, string][] = [
-  ['01', 'Deposit USDG', 'Briefly staged, then your full deposit — no held-back reserve — is paired into a curated pool.'],
-  ['02', 'Provide liquidity', 'Your capital joins a curated Uniswap v4 pool and earns a share of every swap’s fees. 100% of any impermanent loss is yours; Mintware supplies no capital.'],
-  ['03', 'Fees compound back in', 'Harvested fees lift your position’s value pro-rata. Withdraw anytime for both legs.'],
-]
 
 export function HomeV1() {
   const { launch } = useLaunch()
@@ -45,15 +41,15 @@ export function HomeV1() {
       <section className="bg-white border-b border-hair-soft">
         <div className="mx-auto max-w-[1000px] px-7 max-[640px]:px-[18px] py-[64px]">
           <div className={ey}>How it works</div>
-          <div className="grid grid-cols-3 max-[720px]:grid-cols-1 gap-6 mt-5">
-            {STEPS.map(([n, t, d]) => (
-              <div key={n}>
-                <div className="font-mono text-[13px] font-bold text-peri-deep">{n}</div>
-                <h3 className="font-semibold text-[17px] mt-2 text-ink">{t}</h3>
-                <p className="text-[13.5px] text-ink-mid mt-1.5 leading-[1.55]">{d}</p>
-              </div>
-            ))}
-          </div>
+          <h2 className="font-atx-display font-semibold text-ink tracking-[-0.03em] leading-[1.1] text-[clamp(1.5rem,2.6vw,2.1rem)] mt-3 [text-wrap:balance]">
+            From deposit to fees, in one picture.
+          </h2>
+          <p className="text-[14.5px] text-ink-mid mt-3 max-w-[62ch] leading-[1.55]">
+            Your full deposit becomes liquidity in a curated Uniswap v4 pool, and trading fees compound back in.
+            Withdraw anytime for both legs. 100% of any impermanent loss is yours; Mintware supplies no capital.
+          </p>
+          <ModelDiagram spec={V1_LP} className="mt-7" />
+          <Link href="/how-it-works" className="inline-block mt-5 text-[14px] font-semibold text-peri-deep no-underline hover:underline">See the full model →</Link>
         </div>
       </section>
 

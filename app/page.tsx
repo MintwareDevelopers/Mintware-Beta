@@ -20,6 +20,8 @@ import { AirbrushSplash } from '@/components/ui2/AirbrushSplash'
 import { useV2Mode } from '@/components/web2/V2ModeProvider'
 import { HomeV1 } from '@/components/web2/HomeV1'
 import { LiveTodayStrip } from '@/components/web2/LiveTodayStrip'
+import { ModelDiagram } from '@/components/marketing/how/ModelDiagram'
+import { V2_TREASURY } from '@/components/marketing/how/diagrams'
 
 const ey = 'text-[12px] uppercase tracking-[0.13em] font-semibold text-peri-deep'
 
@@ -182,6 +184,7 @@ function HomeV2() {
           <h2 className="font-atx-display font-semibold text-ink tracking-[-0.035em] leading-[1.04] text-[clamp(1.8rem,3.6vw,2.9rem)] mt-3.5 [text-wrap:balance]">
             How a dollar earns while you spend it.
           </h2>
+          <ModelDiagram spec={V2_TREASURY} className="mt-[34px]" />
           <div className="grid grid-cols-3 gap-[18px] mt-[38px] max-[820px]:grid-cols-1">
             {ENGINES.map((e) => (
               <div key={e.n} className="soft-card p-[26px]">
@@ -194,6 +197,7 @@ function HomeV2() {
           <div className="mt-[26px] text-[14.5px] text-ink-mid rounded-[14px] px-5 py-4 bg-[rgba(108,108,240,0.06)] border border-[rgba(108,108,240,0.14)]">
             <b className="text-ink">You spend the yield, not the position.</b> A payment is a hold against your earning balance, settled in just enough dollars to cover it. Everything else keeps working.
           </div>
+          <Link href="/how-it-works" className="inline-block mt-5 text-[14px] font-semibold text-peri-deep no-underline hover:underline">See the full model →</Link>
         </div>
       </section>
 
