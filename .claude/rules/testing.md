@@ -5,12 +5,15 @@
 | Suite | Runner | Count | Command |
 |---|---|---|---|
 | Unit tests | Vitest | ~220 | `pnpm test` |
-| Contract tests (Forge) | Forge | 463 pass / 0 fail / 4 skipped | `pnpm forge:test` |
+| Contract tests (Forge) | Forge | 1040 pass / 0 fail / 6 skipped (119 suites, non-fork, 2026-10-01) | `pnpm forge:test` |
+| LP-gateway fork suites (Forge) | Forge | 62 pass / 0 fail (Hardening 8 · AuditRound2 10 · Closeout 6 · RedTeam 22 · Hacken 11 fork + 5 unit) | `LP_FORK_RPC_URL=https://rpc.testnet.chain.robinhood.com forge test --match-contract 'MintwareLpGateway(Hardening\|AuditRound2\|Closeout)Fork\|RedTeamOnchainFork\|HackenLpGateway'` |
 | Rust — edge-auth | cargo | 86 | `cd services/edge-auth && cargo test` |
 | Rust — relayer | cargo | 42 (39 unit + 3 self-skipping live) | `cd services/relayer && cargo test` |
 
-> **Forge skips (4):** the mainnet-fork harnesses in `contracts-v4/test/fork/` self-skip when
-> `BASE_RPC_URL` is unset (v3→v4 migrator, ULV deploy, YPN payment core). Everything else runs.
+> **Forge skips (6):** the Base mainnet-fork harnesses (`vm.skip`) self-skip when `BASE_RPC_URL` is unset:
+> the v3→v4 migrator (2), `ULVDeploymentFork` (live loop), and `MWPairVaultAmAmmFork` (ULV loop + 2 rewards-wiring). The LP-gateway
+> fork suites (`LP_FORK_RPC_URL`) instead early-return and COUNT AS PASSES when unset. That is why their CI-only
+> breakage (2026-09-08 → 2026-10-01) was invisible locally, so run the row above before touching `src/gateway/**`.
 > **Rust services** (`services/edge-auth`, `services/relayer`) are `cargo clippy -D warnings`
 > clean; run each with `cargo test` from its own dir.
 
@@ -20,7 +23,7 @@
 > `hardhat:*` / `.cjs` Mocha references below — historical. Vitest campaign suites (calc, epochProcessor,
 > swapHook, merkleBuilder, resolveQuote) were removed too; the count dropped accordingly.
 
-> Counts current on `feat/ypn-vault-convergence` (Vitest ≈220 green; Forge 463/0/4). The old
+> (Historical, superseded by the table above.) Counts current on `feat/ypn-vault-convergence` (Vitest ≈220 green; Forge 463/0/4). The old
 > "256 / 175" and "147/72/36" figures were stale. Covered now: `lib/attribution/*`,
 > `lib/rewards/universal/*`, `lib/rewards/vault/weighted*`, plus the x402 lib + auth
 > (`lib/x402/*`, `lib/auth/*`). (Removed: the RWA `holdSnapshot`/`holdLocks` and campaign

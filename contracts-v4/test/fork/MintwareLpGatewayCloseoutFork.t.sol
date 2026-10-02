@@ -10,6 +10,7 @@ import {PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
@@ -88,12 +89,17 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         swapper = new PoolSwapTest(poolManager);
         lpRouter = new PoolModifyLiquidityTest(poolManager);
 
-        // External depth so the gateway is a minority of the pool (same shape as the round-2 rig).
-        quote.mint(address(this), 10_000_000e18);
-        paired.mint(address(this), 10_000_000e18);
+        // External depth so the gateway is a minority of the pool. Earn-vs-LP re-base (2026-10-01): was 2.2M L.
+        // `_seed`'s deploy now ZAPS 100k quote → paired through this pool in-contract; at 2.2M L that swap moves
+        // √P ~4.5%, the mint at the moved price can't consume the whole 100k quote leg, and ~8.2k is re-staged
+        // (R3-2) — so the "100k idle / 200k LP at par" state every fraction below (5/7, 2/7, 7/9) is derived from
+        // no longer held. 22M L keeps the zap ~price-neutral (~0.45% √P), restoring the test's premise; the
+        // properties under test (outage re-credit, rotation) are unchanged.
+        quote.mint(address(this), 40_000_000e18);
+        paired.mint(address(this), 40_000_000e18);
         quote.approve(address(lpRouter), type(uint256).max);
         paired.approve(address(lpRouter), type(uint256).max);
-        lpRouter.modifyLiquidity(key, ModifyLiquidityParams({tickLower: TL, tickUpper: TU, liquidityDelta: 2_200_000e18, salt: 0}), "");
+        lpRouter.modifyLiquidity(key, ModifyLiquidityParams({tickLower: TL, tickUpper: TU, liquidityDelta: 22_000_000e18, salt: 0}), "");
 
         paired.approve(address(pm), type(uint256).max);
         quote.approve(address(pm), type(uint256).max);
@@ -136,6 +142,16 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         return quote.balanceOf(who) + paired.balanceOf(who); // ~1.0 price, same decimals
     }
 
+    /// Quote-terms value of (q, p) with the paired leg priced at the CURRENT pool spot (both 18dp). The par-valued
+    /// `_wealth` is only exact while spot == 1.0; since the earn-vs-LP zap moves spot a little on every deploy, the
+    /// value assertions below price at spot instead.
+    function _valueAtSpot(uint256 q, uint256 p) internal view returns (uint256) {
+        (uint160 s,,,) = poolManager.getSlot0(key.toId());
+        uint256 Q96 = 2 ** 96;
+        if (pm.quoteIsCurrency0()) return q + (p * Q96 / s) * Q96 / s;
+        return q + (p * s / Q96) * s / Q96;
+    }
+
     function _fees(address who) internal view returns (uint256) {
         return quote.balanceOf(who) + paired.balanceOf(who);
     }
@@ -149,9 +165,11 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         pm.deposit(300_000e18);
         pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         _roll(1);
-        // Approx, not exact: the zap pays the pool's own swap fee, so the mint consumes a hair less quote
-        // than 100k and the remainder is re-staged.
-        assertApproxEqRel(pm.lastKnownIdle(), 100_000e18, 0.01e18, "fallback tracks the post-deploy reserve");
+        // The C-10 property itself is EXACT: the fallback equals the live reserve after the deploy's re-stage.
+        assertEq(pm.lastKnownIdle(), staging.stagedAssets(), "fallback tracks the post-deploy reserve");
+        // ...and the reserve is ~100k (the premise of every fraction below). Approx, not exact: the zap pays the
+        // pool's swap fee + a little price impact, so the mint consumes a hair less quote and the rest re-stages.
+        assertApproxEqRel(pm.lastKnownIdle(), 100_000e18, 0.01e18, "post-deploy reserve ~100k (zap ~price-neutral on 22M L)");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════════════════════════
@@ -166,7 +184,6 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         _seed();
         uint256 navBefore = pm.totalNav(); // ≈ 300k, every wei of it alice's own deposit
         uint256 idleBefore = staging.stagedAssets();
-        uint256 w0 = _wealth(alice);
         uint256 sA = pm.sharesOf(alice);
 
         src.setRevertPreview(true);
@@ -191,9 +208,18 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         // claim = 50k idle (last known, HAIRCUT 20% → 40k, round-3 R3-1) + 100k LP; delivered = 100k LP → 100/140 = 5/7 of
         // the requested shares burned, 2/7 back. The blind exiter keeps FEWER shares than a live read would give — the
         // haircut is what stops an outage-time exit from offloading a source loss onto remaining holders.
+        // Earn-vs-LP re-base (2026-10-01): the 5/7 and "100k" figures assumed an exact 100k idle / 200k LP state at
+        // spot 1.0. The in-contract zap leaves the split a hair off that (swap fee + ~0.45% √P impact on 22M L, the
+        // remainder re-staged), so derive the SAME formulas from the measured idle / LP instead of round numbers.
+        uint256 lpBefore = navBefore - idleBefore;
         uint256 burned = sA - pm.sharesOf(alice);
-        assertApproxEqRel(burned, (sA / 2) * 5 / 7, 0.005e18, "burned = shares x delivered / (lpEntitled + 0.8 x lastKnownIdle)");
-        assertApproxEqRel(qOut + pOut, 100_000e18, 0.005e18, "LP slice ~ 100k at par");
+        assertApproxEqRel(
+            burned,
+            FullMath.mulDiv(sA / 2, lpBefore, lpBefore + (idleBefore * 8) / 10),
+            0.005e18,
+            "burned = shares x delivered / (lpEntitled + 0.8 x lastKnownIdle)"
+        );
+        assertApproxEqRel(_valueAtSpot(qOut, pOut), lpBefore / 2, 0.005e18, "LP slice = half the LP, at spot");
 
         // source recovers → the rest exits; total received ≈ the whole pre-outage NAV. No loss.
         src.setRevertPreview(false);
@@ -205,7 +231,7 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         assertEq(pm.totalShares(), 0);
         assertEq(_liq(), 0);
         assertEq(pm.deployedPrincipal(), 0);
-        assertApproxEqRel(_wealth(alice) - w0, navBefore, 0.005e18, "received the full NAV across the two exits");
+        assertApproxEqRel(_valueAtSpot(qOut + q2, pOut + p2), navBefore, 0.005e18, "received the full NAV across the two exits");
         assertLe(quote.balanceOf(address(src)), 1, "reserve drained to the last holder (dust only)");
     }
 
@@ -215,18 +241,26 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         if (!live) return;
         _seed();
         uint256 navBefore = pm.totalNav();
-        uint256 w0 = _wealth(alice);
+        uint256 idleBefore = staging.stagedAssets();
+        uint256 lpBefore = navBefore - idleBefore;
         uint256 sA = pm.sharesOf(alice);
         src.setRevertPreview(true);
 
         vm.prank(alice);
-        pm.withdraw(sA);
+        (uint256 q1, uint256 p1) = pm.withdraw(sA);
         assertEq(_liq(), 0, "full LP delivered");
         assertEq(pm.deployedPrincipal(), 0);
         assertGt(pm.sharesOf(alice), 0, "idle claim re-credited");
         assertEq(pm.totalShares(), pm.sharesOf(alice), "she is still the sole holder");
-        // 80k (haircut last-known idle, R3-1) of a 280k claim was undeliverable → 2/7 of the shares re-credited.
-        assertApproxEqRel(pm.sharesOf(alice), sA * 2 / 7, 0.005e18, "2/7 of the claim (80k of 280k) was undeliverable");
+        // The haircut last-known idle (0.8 x idle, R3-1) of a (0.8 x idle + LP) claim was undeliverable → that
+        // fraction of the shares is re-credited. On an exact 100k/200k state this is the old "80k of 280k = 2/7";
+        // earn-vs-LP re-base (2026-10-01): derived from the measured idle/LP, since the zap leaves the split a hair
+        // off round numbers.
+        uint256 haircutIdle = (idleBefore * 8) / 10;
+        assertApproxEqRel(
+            pm.sharesOf(alice), FullMath.mulDiv(sA, haircutIdle, haircutIdle + lpBefore), 0.005e18,
+            "the haircut idle fraction of the claim was undeliverable (2/7 on an exact 100k/200k state)"
+        );
 
         src.setRevertPreview(false);
         _roll(1);
@@ -234,9 +268,9 @@ contract MintwareLpGatewayCloseoutForkTest is Test {
         vm.prank(alice);
         (uint256 q2, uint256 p2) = pm.withdraw(rest);
         assertEq(p2, 0);
-        assertApproxEqRel(q2, 100_000e18, 0.001e18, "the whole idle reserve, as last holder");
+        assertApproxEqRel(q2, idleBefore, 0.001e18, "the whole idle reserve, as last holder");
         assertEq(pm.totalShares(), 0);
-        assertApproxEqRel(_wealth(alice) - w0, navBefore, 0.005e18, "no loss");
+        assertApproxEqRel(_valueAtSpot(q1 + q2, p1 + p2), navBefore, 0.005e18, "no loss");
     }
 
     /// Co-depositor fairness during an outage: Alice's LP-only exit doesn't touch Bob's idle or LP slice.

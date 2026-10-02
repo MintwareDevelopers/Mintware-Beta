@@ -74,6 +74,20 @@ via_ir         = false
 [profile.halmos]
 ast = true
 
+# CI-only Halmos profile (the advisory "Formal proofs (Halmos)" job). Halmos ALWAYS re-runs `forge build --ast
+# --extra-output storageLayout metadata` itself, and under the default profile that is a full via-IR compile of
+# the whole project (322 files) — the GitHub runner was being shut down ~13 min into it, before any proof ran.
+# MWFormalProofs only needs itself + MWDynamicFee (no imports) + forge-std, so point src/test/script at the formal
+# dir and skip the heavy LP-gateway formal file (it imports the whole gateway stack and is not run by this job).
+# Inherits everything else (solc, via_ir, remappings) from default. Run: `FOUNDRY_PROFILE=halmos-ci forge build`.
+[profile.halmos-ci]
+src          = "contracts-v4/test/formal"
+test         = "contracts-v4/test/formal"
+script       = "contracts-v4/test/formal"
+skip         = ["contracts-v4/test/formal/LpGatewayFormalProofs.t.sol"]
+ast          = true
+extra_output = ["storageLayout", "metadata"]
+
 [fmt]
 line_length    = 100
 tab_width      = 4

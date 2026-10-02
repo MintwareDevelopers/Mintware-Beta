@@ -272,11 +272,10 @@ contract ForkLpHandler is Test {
         (s,,,) = poolManager.getSlot0(key.toId());
     }
 
-    /// `_refSqrtPrice` (uint160) + `_refBlock` (uint64) pack in slot 7 — probed via vm.load.
+    /// `_refSqrtPrice` + `_refBlock` via the PM's public `referencePrice()` view (the old slot-7 `vm.load` went stale
+    /// when IA-11 storage shifted them to slot 9 — slot 7 is now `tokenId`).
     function _refRaw() internal view returns (uint160 ref, uint64 refBlock) {
-        uint256 raw = uint256(vm.load(address(pm), bytes32(uint256(7))));
-        ref = uint160(raw);
-        refBlock = uint64(raw >> 160);
+        (ref, refBlock,) = pm.referencePrice();
     }
 
     function _liq() internal view returns (uint128) {

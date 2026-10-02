@@ -23,6 +23,8 @@ import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {SqrtPriceMath} from "@uniswap/v4-core/src/libraries/SqrtPriceMath.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
@@ -331,6 +333,26 @@ contract HackenLpGatewayForkTest is Test {
         return (p * s / Q96) * s / Q96;
     }
 
+    /// Quote-terms value of the gateway's LP position with BOTH composition and paired valuation taken at `sqrtP` —
+    /// a mirror of the PM's `_deployedQuoteValueAt` (rounds down), so expected re-credits can be computed at the
+    /// exact mark the contract uses.
+    function _lpValueAt(uint160 sqrtP) internal view returns (uint256) {
+        uint128 liq = _liq();
+        if (liq == 0) return 0;
+        uint160 sA = TickMath.getSqrtPriceAtTick(TL);
+        uint160 sB = TickMath.getSqrtPriceAtTick(TU);
+        uint256 a0;
+        uint256 a1;
+        if (sqrtP <= sA) a0 = SqrtPriceMath.getAmount0Delta(sA, sB, liq, false);
+        else if (sqrtP < sB) {
+            a0 = SqrtPriceMath.getAmount0Delta(sqrtP, sB, liq, false);
+            a1 = SqrtPriceMath.getAmount1Delta(sA, sqrtP, liq, false);
+        } else a1 = SqrtPriceMath.getAmount1Delta(sA, sB, liq, false);
+        uint256 Q96 = 2 ** 96;
+        if (quoteIs0) return a0 + FullMath.mulDiv(FullMath.mulDiv(a1, Q96, sqrtP), Q96, sqrtP);
+        return a1 + FullMath.mulDiv(FullMath.mulDiv(a0, sqrtP, Q96), sqrtP, Q96);
+    }
+
     function _claimOf(address who) internal view returns (uint256) {
         uint256 ts = pm.totalShares();
         if (ts == 0) return 0;
@@ -408,6 +430,10 @@ contract HackenLpGatewayForkTest is Test {
         uint256 bobWealthBefore = quote.balanceOf(bob) + paired.balanceOf(bob) + _claimOf(bob);
         uint256 aliceFairClaim = _claimOf(alice); // pro-rata at fair 1.0 (≈ 150k: 50k idle + 100k LP)
         uint128 liqBefore = _liq();
+        // Earn-vs-LP re-base (2026-10-01): the deploy's own in-contract zap moves spot off 1.0 (~3% √P on this
+        // 3M-L rig), so "restored" means back to the PRE-PUMP spot, not SQRT_1. (The old owner-funded deploy
+        // swapped nothing, so the two were the same.)
+        uint160 spotPrePump = _spot();
 
         // Same block: pump (bob) → alice withdraws → bob reverses.
         uint256 bobQ0 = quote.balanceOf(bob);
@@ -420,8 +446,8 @@ contract HackenLpGatewayForkTest is Test {
         pm.withdraw(s);
         _sellPaired(bob, pairedBought);
         uint256 spotAfter = _spot();
-        // price is back near 1.0 (fees only)
-        assertApproxEqRel(uint256(spotAfter), uint256(SQRT_1), 0.02e18, "price restored");
+        // price is back near the pre-pump spot (fees only)
+        assertApproxEqRel(uint256(spotAfter), uint256(spotPrePump), 0.02e18, "price restored");
 
         uint256 liqRemoved = liqBefore - _liq();
         // FIXED: exactly the pro-rata 50% of liquidity, pump or no pump (share fraction, not a mark).
@@ -480,6 +506,13 @@ contract HackenLpGatewayForkTest is Test {
         uint256 idle = staging.stagedAssets();
         uint256 lpVal = pm.totalNav() - idle;
         uint128 liqBefore = _liq();
+        uint256 lpValLow;
+        {
+            (uint160 ref,,) = pm.referencePrice();
+            uint256 atSpot = _lpValueAt(_spot());
+            uint256 atRef = _lpValueAt(ref);
+            lpValLow = atSpot < atRef ? atSpot : atRef;
+        }
 
         paired.setPaused(true);
         uint256 s = pm.sharesOf(alice);
@@ -492,8 +525,14 @@ contract HackenLpGatewayForkTest is Test {
         assertEq(quote.balanceOf(alice) - aq0, idle);
         assertEq(p, 0, "no paired could be delivered");
         assertEq(_liq(), liqBefore, "LP untouched (the leg reverted atomically)");
-        // Re-credit = shares × (undelivered LP claim / total claim) = s × lpVal / (idle + lpVal).
-        uint256 expectedReCredit = s * lpVal / (idle + lpVal);
+        // Re-credit = shares × (undelivered LP claim / total claim), with the undelivered LP leg weighted at the
+        // mark LEAST favourable to the exiter, min(spot, ref) — round-3 R3-INV-1 (a pump can't inflate a failed-
+        // LP-leg re-credit). Earn-vs-LP re-base (2026-10-01): this used to be `s × lpVal / (idle + lpVal)` at spot,
+        // which only held because the old owner-funded deploy swapped nothing (spot == ref). The deploy's zap now
+        // moves spot ~3% √P while ref — anchored at construction in the SAME block, so the deploy's own follow step
+        // is a no-op — stays at 1.0, so the low mark is genuinely below spot and the re-credit is smaller.
+        // (`lpValLow` is read BEFORE the withdraw: its trailing `_anchorFollow` steps ref toward spot.)
+        uint256 expectedReCredit = s * lpValLow / (idle + lpValLow);
         assertApproxEqRel(pm.sharesOf(alice), expectedReCredit, 0.001e18, "LP slice re-credited as shares");
         assertEq(pm.totalShares(), pm.sharesOf(alice));
 
@@ -567,6 +606,12 @@ contract HackenLpGatewayForkTest is Test {
     function test_F03_deployGuard_isQuoteLegAtCost_wholePositionIsDepositorExposure() public {
         if (!live) return;
         _rig();
+        // Earn-vs-LP re-base (2026-10-01): on the bare 1.5M-L rig, zapping 100k quote is a ~6.7% √P move — PAST
+        // the 5% band — so the in-contract swap stops at its band-edge price limit, only part of the 100k is
+        // converted, the mint is quote-limited, and the unconverted quote is re-staged (79% LP-exposed, not >90%).
+        // That is the band doing its job on an over-sized zap, not a cap leak. A deep curated pool (the only kind
+        // the gateway targets) keeps a 50/50 zap inside the band; 15M L total ≈ 0.7% √P.
+        _addExternalLiquidity(13_500_000e18);
         _deposit(alice, 200_000e18);
         pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
         uint256 nav = pm.totalNav();
@@ -674,7 +719,20 @@ contract HackenLpGatewayForkTest is Test {
         _addExternalLiquidity(1_500_000e18);
         _deposit(alice, 300_000e18); // +100k: the depositor funds the paired leg since the earn-vs-lp decision
         pm.deploy(200_000e18, 100_000e18, 0, 0, block.timestamp);
-        vm.roll(block.number + 1);
+        // Earn-vs-LP re-base (2026-10-01): the deploy's zap moves spot ~3% √P, but the deploy shares a block with the
+        // PM's construction (ref anchored there), so its trailing follow step is a no-op and ref stays at the
+        // PRE-zap 1.0. `navFair` below is marked at spot; without this step it would include the owner's own zap
+        // impact — a price the follower (the deposit mark's defense) never saw, and arbitrage would revert. Let
+        // one permissionless `poke()` walk ref onto the post-zap spot (one step covers it: the zap is band-limited)
+        // so "fair" means what the defense defends. The attack below is unchanged.
+        uint256 b0 = block.number;
+        vm.roll(b0 + 1);
+        pm.poke();
+        {
+            (uint160 ref,,) = pm.referencePrice();
+            assertEq(ref, _spot(), "follower settled on the post-deploy spot");
+        }
+        vm.roll(b0 + 2);
         uint256 navFair = pm.totalNav();
         _sellPaired(bob, 400_000e18);
         assertLt(pm.totalNav(), navFair, "spot NAV deflated (sanity)");

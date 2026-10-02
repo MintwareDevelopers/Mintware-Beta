@@ -10,6 +10,7 @@ import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {FullMath} from "@uniswap/v4-core/src/libraries/FullMath.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {SwapParams, ModifyLiquidityParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
@@ -270,16 +271,31 @@ contract MintwareLpGatewayHardeningForkTest is Test {
     // A-3 (price): a deploy while spot is far from the clamped-follower reference reverts, so a
     // sandwiched deploy cannot mint at a manipulated composition. Drain first so the size cap passes
     // and only the band gates the next deploy.
+    //
+    // Earn-vs-LP re-base (2026-10-01): setUp now seeds 10M L of third-party depth (the in-contract zap needs a
+    // liquid pool). Against that depth the old 40k pump moved sqrtPrice only ~0.4% — INSIDE the 5% band — so the
+    // deploy correctly went through and the expectRevert failed. That was the test's pump being too small, not
+    // the band being weak: the pump is now sized off the live pool liquidity to land ~10% sqrtPrice away (2x the
+    // band), and the test asserts it actually left the band before expecting the revert. Block numbers are
+    // anchored to a captured `b0` (via-IR can re-read `block.number` across `vm.roll`).
     function test_fork_A3_deployPriceBandBlocksSandwich() public {
         if (!live) return;
+        uint256 b0 = block.number;
         uint256 s = pm.sharesOf(alice);
         vm.prank(alice);
         pm.withdraw(s);
-        vm.roll(block.number + 1);
+        vm.roll(b0 + 1);
         vm.prank(alice);
         pm.deposit(100_000e18);
-        _swap(false, -40_000e18); // pump spot far from the reference in one block
-        vm.roll(block.number + 1);
+        (uint160 ref,,) = pm.referencePrice();
+        // oneForZero: Δ√P = Δy / L. Target a 10% √P move — twice the 500 bps band.
+        uint128 L = poolManager.getLiquidity(key.toId());
+        uint256 pumpIn = FullMath.mulDiv(uint256(L), uint256(ref) / 10, 2 ** 96);
+        MockERC20(Currency.unwrap(key.currency1)).mint(address(this), pumpIn); // oneForZero sells currency1
+        _swap(false, -int256(pumpIn)); // pump spot far from the reference in one block
+        (uint160 spot,,,) = poolManager.getSlot0(key.toId());
+        assertGt(uint256(spot), uint256(ref) * 10_500 / 10_000, "sanity: the pump really left the 5% band");
+        vm.roll(b0 + 2);
         vm.expectRevert(MintwareLpGatewayPositionManager.DeployPriceOutOfBand.selector);
         pm.deploy(20_000e18, 10_000e18, 0, 0, block.timestamp);
     }
@@ -336,11 +352,12 @@ contract MintwareLpGatewayHardeningForkTest is Test {
         uint256 quoteToDeploy = 60_000e18;
         uint256 swapAmount = quoteToDeploy / 2; // 30_000e18 — exceeds the 20_000e18 the reserve can deliver
 
-        // deploy()'s ONLY swapAmount guard is `swapAmount > quoteToDeploy` (line 721) — 30k <= 60k passes.
-        // `quoteGot` comes out at ~20k (the reserve's shortfall), and `_executeSwap` tries to pay the pool
-        // the full 30k of quote out of a balance that only holds ~20k → reverts (no revert-reason match
-        // needed; a plain ERC20 insufficient-balance revert or the line-768 underflow Panic both prove it).
-        vm.expectRevert();
+        // ROUND-4 FIX (2026-09-09) — this PoC is now the regression for it. Pre-fix, `quoteGot` came out at ~20k
+        // and `_executeSwap` tried to pay the pool 30k out of a ~20k balance → an anonymous ERC20/underflow revert
+        // deep inside the swap. deploy() now checks `quoteGot < quoteToDeploy` right after `unstage()` and
+        // reverts the named `InsufficientStaged()` BEFORE any swap runs, so the cron can tell a reserve shortfall
+        // from a real failure and re-size. Asserting the exact selector proves the fix fires (not some other revert).
+        vm.expectRevert(MintwareLpGatewayPositionManager.InsufficientStaged.selector);
         pm.deploy(quoteToDeploy, swapAmount, 0, 0, block.timestamp);
 
         // The revert is atomic: the `unstage()` call that already ran inside the failed deploy is unwound
@@ -350,13 +367,20 @@ contract MintwareLpGatewayHardeningForkTest is Test {
 
         // The DoS is persistent, not a one-off: the exact same off-chain sizing fails identically on every
         // cron retry, because nothing about on-chain OR off-chain state changed.
-        vm.expectRevert();
+        vm.expectRevert(MintwareLpGatewayPositionManager.InsufficientStaged.selector);
         pm.deploy(quoteToDeploy, swapAmount, 0, 0, block.timestamp);
         assertEq(staging.stagedAssets(), stagedBefore, "still stuck after a second identical retry");
 
-        // Only a HUMAN re-sizing swapAmount to what the reserve can actually deliver unsticks it — proving
-        // the bug is the missing on-chain/off-chain bound, not some unrelated failure.
-        pm.deploy(quoteToDeploy, 10_000e18, 0, 0, block.timestamp); // 10k <= ~20k deliverable: succeeds
-        assertGt(pm.deployedPrincipal(), principalBefore, "a smaller swapAmount finally let the capital deploy");
+        // Post-fix, shrinking only `swapAmount` is NOT enough any more: the guard is on the WHOLE `quoteToDeploy`
+        // vs what was delivered, so a 60k request against a 20k-deliverable reserve is refused no matter how the
+        // swap is split (pre-fix this call succeeded on a partially-delivered reserve).
+        vm.expectRevert(MintwareLpGatewayPositionManager.InsufficientStaged.selector);
+        pm.deploy(quoteToDeploy, 10_000e18, 0, 0, block.timestamp);
+
+        // Re-sizing the DEPLOY itself to what the reserve can actually deliver (`staging.maxUnstageable()`) is the
+        // recovery path the named error points the cron at — and it succeeds.
+        uint256 deliverable = staging.maxUnstageable();
+        pm.deploy(deliverable, deliverable / 2, 0, 0, block.timestamp);
+        assertGt(pm.deployedPrincipal(), principalBefore, "a deploy sized to the deliverable reserve goes through");
     }
 }
