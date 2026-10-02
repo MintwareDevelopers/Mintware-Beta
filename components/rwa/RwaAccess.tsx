@@ -1,14 +1,14 @@
 'use client'
 
-// V2-RWAs partner access screen — what /app/rwa shows until the visitor enters the RWA access password
-// (POST /api/rwa/unlock → http-only cookie). Mintware-branded, light-only. Nothing about the demo markets
-// (addresses, hashes, numbers) is rendered or fetched before unlock.
+// V2-RWAs access screen — what every /app/rwa page shows until the visitor enters the V2 password
+// (POST /api/v2/unlock → the same http-only cookie the Launch modal sets; lib/v2/rwaGate.ts). Mintware-branded,
+// light-only. Nothing about the demo markets (addresses, hashes, numbers) is rendered or fetched before unlock.
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
 
-export function RwaAccess({ next }: { next?: string }) {
+export function RwaAccess() {
   const router = useRouter()
   const [pw, setPw] = useState('')
   const [state, setState] = useState<{ busy: boolean; err?: string }>({ busy: false })
@@ -17,13 +17,10 @@ export function RwaAccess({ next }: { next?: string }) {
     e.preventDefault()
     if (!pw) return
     setState({ busy: true })
-    const res = await fetch('/api/rwa/unlock', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw }) })
+    const res = await fetch('/api/v2/unlock', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pw }) })
       .catch(() => null)
     if (res?.ok) {
-      // Only same-site, in-vertical destinations.
-      const dest = next && /^\/app\/rwa(\/[a-z0-9-]+)?$/.test(next) ? next : '/app/rwa'
-      router.replace(dest)
-      router.refresh()
+      router.refresh() // the layout re-renders server-side with the unlock cookie — same URL, now open
       return
     }
     const j = res ? await res.json().catch(() => ({})) : {}
@@ -60,7 +57,7 @@ export function RwaAccess({ next }: { next?: string }) {
         <form onSubmit={submit} className="rounded-[24px] border border-hair bg-white p-8 shadow-[0_16px_48px_rgba(23,23,31,0.08)]">
           <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-soft">Partner access</div>
           <h2 className="mt-2 font-atx-display text-[24px] font-semibold tracking-[-0.02em]">Enter your access code</h2>
-          <p className="mt-2 text-[13.5px] leading-[1.55] text-ink-mid">Shared with issuer partners. It opens the live RWA markets and their on-chain proofs.</p>
+          <p className="mt-2 text-[13.5px] leading-[1.55] text-ink-mid">Use your Mintware V2 preview code. It opens the live RWA markets and their on-chain proofs.</p>
           <label htmlFor="rwa-code" className="sr-only">Access code</label>
           <input
             id="rwa-code"

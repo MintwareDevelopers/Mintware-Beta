@@ -4,7 +4,6 @@
 // deposit/create actions live on their own guarded pages. Educational Vaults page
 // lives at /vaults (marketing tier).
 
-import { MwNav } from '@/components/web2/MwNav'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { fmtUSD } from '@/lib/web2/api'
@@ -72,7 +71,6 @@ export default function AppVaultsPage() {
 
   return (
     <div className="font-atx-display bg-white min-h-screen text-ink overflow-x-clip">
-      <MwNav />
 
       {/* ── Testnet-beta notice ── */}
       <div className="border-b border-hair-soft bg-[rgba(108,108,240,0.06)]">

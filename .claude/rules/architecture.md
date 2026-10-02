@@ -51,7 +51,8 @@ app/
 components/
   marketing/  ui/  ui2/  vaults/
   web2/
-    MwNav.tsx  MwFooter.tsx  MwAuthGuard.tsx  AppMode.tsx  ScopeSwitcher.tsx
+    AppShell.tsx (ONE chrome for every /app workspace: Personal / Team / RWA)  ScopeSwitcher.tsx (workspace switcher)
+    MwNav.tsx (marketing + standalone pages only)  MwFooter.tsx  MwAuthGuard.tsx  AppMode.tsx
     TeamGuard.tsx  useTeamSession.ts  CommandPalette.tsx  LaunchModal.tsx
     providers.tsx         # Privy + wagmi provider tree (NOT RainbowKit)
   web3/  rewards/referral/
@@ -134,3 +135,9 @@ User/Team hard gate is `proxy.ts` + `TeamGuard`, flag-gated on `TEAM_HARD_GATE` 
    reface Attribution toward AI-agent reputation for the x402/ERC-8004 economy, not human display.
    `AttributionScorePreview`/`app/[address]`/`app/api/(rewards)/eas/attest-score` no longer exist —
    don't recreate them. See memory `attribution_review_2026_08_28`.
+9. **One app shell for every workspace (2026-10-02).** Personal, Team and RWA all render inside `AppShell`
+   (sidebar with the workspace switcher on top + top bar with the wallet control); only the sidebar menu changes.
+   Personal routes live in the `app/app/(personal)/` route group (URLs unchanged) with one layout; Team keeps
+   `TeamTerminalShell` (now a thin AppShell config); RWA has `app/app/rwa/layout.tsx`. The menu is visible whether or
+   not a wallet is connected. `MwNav` remains only for marketing/standalone pages (`/agents/leaderboard`, `/docs`, …,
+   and the org invite-accept page). The marketing footer is hidden on every shell route (`isAppShellPath`).

@@ -14,7 +14,6 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Copy, Check, BarChart2, Droplets, Share2 } from 'lucide-react'
-import { MwNav } from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { YourOrgs } from '@/components/web2/YourOrgs'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
@@ -303,7 +302,6 @@ function AccountContent() {
 export default function AccountPage() {
   return (
     <>
-      <MwNav />
       {/* allowDisconnected: picking "I'm a person" lands here and renders a preview
           (illustrative numbers + connect prompts) instead of bouncing to '/'. */}
       <MwAuthGuard allowDisconnected>

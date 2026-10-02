@@ -165,8 +165,7 @@ exist as bearer routes and run only when hit manually with `CRON_SECRET` (and th
 
 | Variable | Visibility | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_V2_RWA_ENABLED` | Public | `'true'` shows `/app/rwa*` + `/api/rwa/unit` to visitors who ALSO pass the V2 gate and the RWA partner-access gate. Also adds the **RWA** option to the `ScopeSwitcher`. **Default OFF** (pages 404). |
-| `RWA_ACCESS_PASSWORD` | Server-only | Partner-access password for the RWA vertical (`lib/rwa/gate.ts`). `POST /api/rwa/unlock` validates it and sets the http-only `mw_rwa` cookie (hash-derived token, 30 d). SEPARATE from `DECK_PASSWORD`/`DATAROOM_PASSWORD`. **Unset ⇒ gate closed to everyone (fail-closed).** Share out-of-band with issuer partners. |
+| `NEXT_PUBLIC_V2_RWA_ENABLED` | Public | `'true'` creates the RWA workspace (`/app/rwa*`, `/api/rwa/*`, the workspace-switcher + Launch-modal entries). Visitors also need a VALID V2 unlock (`V2_PASSWORD` → `mw_v2` cookie) — see `rwa-liquidity.md`. **Default OFF** (pages 404). |
 | `RWA_RPC_URL` | Server-only | Base Sepolia RPC for `/api/rwa/unit` + live trades (default `https://sepolia.base.org`). |
 | `RWA_LOGS_RPC_URL` | Server-only | RPC for event history (default publicnode — `sepolia.base.org` caps `eth_getLogs` at 1,000 blocks). |
 | `RWA_TRADER_PRIVY_WALLET_ID` / `RWA_TRADER_PRIVY_ADDRESS` | Server-only | The verified **demo-trader** Privy wallet (`0x6539…0bAC`) behind `POST /api/rwa/live-trade`. Needs `PRIVY_APP_ID`/`_SECRET`. Unset ⇒ 503 `trader_not_configured`. |
