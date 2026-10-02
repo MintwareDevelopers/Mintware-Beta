@@ -15,26 +15,51 @@ import { can, type Permission } from '@/lib/auth/rbac'
 
 type NavItem = ShellNavItem & { perm?: Permission }
 
-function buildNav(activeOrgSlug: string | null): { core: NavItem[]; orgOnly: NavItem[] } {
+function buildNav(activeOrgSlug: string | null): { groups: { title?: string; items: NavItem[] }[] } {
   const org = (path: string) => (activeOrgSlug ? `/app/org/${activeOrgSlug}${path ? `/${path}` : ''}` : null)
-  const core: NavItem[] = [
-    { href: org('') ?? '/app/team', label: 'Overview', exact: true },
-    { href: '/app/team/vaults', label: 'Vaults' },
-    { href: '/app/team/swap', label: 'Swap' },
-    { href: org('cards') ?? '/app/team/cards', label: 'Cards & Spend' },
-    { href: org('control') ?? '/app/team/policy', label: 'Policy & Approvals', perm: 'spend:approve' },
-    { href: org('roles') ?? '/app/team/team', label: 'Team & Roles', perm: 'roles:manage' },
-    { href: '/app/team/developers', label: 'Developers', perm: 'developers:manage' },
-  ]
-  const orgOnly: NavItem[] = activeOrgSlug
-    ? [
-        { href: org('fund')!, label: 'Savings' },
-        { href: org('pay')!, label: 'Pay a vendor' },
-        { href: org('payroll')!, label: 'Payroll' },
-        { href: org('activity')!, label: 'Activity' },
-      ]
-    : []
-  return { core, orgOnly }
+  // Items that stay illustrative even with a real org carry a "Preview" hint so mock and real never look alike.
+  const preview = activeOrgSlug ? 'Preview' : undefined
+  return {
+    groups: [
+      { items: [{ href: org('') ?? '/app/team', label: 'Overview', exact: true }] },
+      {
+        title: 'Treasury',
+        items: [
+          ...(activeOrgSlug ? [{ href: org('fund')!, label: 'Treasury yield' }] : []),
+          { href: '/app/team/vaults', label: 'Allocation', hint: preview },
+          { href: '/app/team/swap', label: 'Swap' },
+        ],
+      },
+      {
+        // IA audit 2026-10-02: the token-issuer flows moved here from Personal — they were never retail jobs.
+        title: 'Liquidity for your token',
+        items: [
+          { href: '/app/team/liquidity', label: 'Choose a model', exact: true },
+          { href: '/app/team/liquidity/launch', label: 'Community-matched launch' },
+          { href: '/app/team/liquidity/create', label: 'Seed a balanced pool' },
+          { href: '/app/team/liquidity/staged', label: 'Stage one side' },
+        ],
+      },
+      {
+        title: 'Spend',
+        items: [
+          { href: org('cards') ?? '/app/team/cards', label: 'Cards & Spend' },
+          ...(activeOrgSlug
+            ? [{ href: org('pay')!, label: 'Pay a vendor' }, { href: org('payroll')!, label: 'Payroll' }, { href: org('activity')!, label: 'Activity' }]
+            : []),
+        ],
+      },
+      {
+        title: 'Admin',
+        items: [
+          // The real page is "Treasury control" (multisig + role caps) — there is no approvals queue yet.
+          { href: org('control') ?? '/app/team/policy', label: 'Treasury controls', perm: 'spend:approve' },
+          { href: org('roles') ?? '/app/team/team', label: 'Team & Roles', perm: 'roles:manage' },
+          { href: '/app/team/developers', label: 'Developers', hint: preview, perm: 'developers:manage' },
+        ],
+      },
+    ],
+  }
 }
 
 export function TeamTerminalShell({ children }: { children: React.ReactNode }) {
@@ -44,10 +69,9 @@ export function TeamTerminalShell({ children }: { children: React.ReactNode }) {
   // Only hide sections when enforcement is actually ON; otherwise keep the full showcase.
   const enforced = session?.enforced ?? false
   const role = session?.role ?? null
-  const { core, orgOnly } = buildNav(active?.slug ?? null)
-  const visibleCore = core.filter((n) => !n.perm || !enforced || can(role, n.perm))
-  const groups: ShellNavGroup[] = [{ items: visibleCore }]
-  if (orgOnly.length) groups.push({ title: 'Payments', items: orgOnly })
+  const groups: ShellNavGroup[] = buildNav(active?.slug ?? null).groups
+    .map((g) => ({ ...g, items: g.items.filter((n) => !n.perm || !enforced || can(role, n.perm)) }))
+    .filter((g) => g.items.length > 0)
 
   return (
     <AppShell

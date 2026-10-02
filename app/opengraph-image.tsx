@@ -5,7 +5,7 @@ import { ImageResponse } from 'next/og'
 // 16.1.6) — the JSX below is pure CSS with no embedded assets, so the growth is in next/og's own
 // runtime, not this file. Node functions don't have that cap.
 export const runtime = 'nodejs'
-export const alt = 'Mintware — On-chain reputation, reputation-weighted yield'
+export const alt = 'Mintware — Never idle. Never locked. Always yours.'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
 
@@ -70,7 +70,7 @@ export default async function OgImage() {
 
           {/* rounded pill chips */}
           <div style={{ display: 'flex', gap: 12 }}>
-            {['Vaults', 'Liquid Sovereign Account', 'Attribution', 'Agents'].map((l) => (
+            {['Vaults', 'Liquid Sovereign Account', 'Treasury', 'Agents'].map((l) => (
               <div key={l} style={{
                 display: 'flex', padding: '11px 20px', borderRadius: 999,
                 border: `1px solid ${HAIR}`, fontSize: 16, fontWeight: 600,

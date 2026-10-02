@@ -27,13 +27,13 @@ export default function TeamSwap() {
 
         <div className="flex flex-col gap-3">
           {[
-            { t: 'Best-execution routing', d: 'Quotes aggregate across DEXs and bridges; the treasury takes the best net route, fees included.' },
-            { t: 'Every swap builds Attribution', d: 'Treasury trades count toward your organization’s on-chain reputation — the same signal that ranks contributors.' },
-            { t: 'Policy-gated at size', d: 'Swaps within a signer’s limit clear instantly; larger moves collect the quorum before they execute.' },
+            { t: 'Best-execution routing', d: 'Quotes aggregate across DEXs and bridges (LI.FI); you see the route and fee before you confirm.' },
+            { t: 'From your connected wallet', d: 'Today this swaps from the wallet you are signed in with, not from the org treasury address.' },
+            { t: 'Treasury-signer swaps · coming', d: 'Swapping straight from the treasury under its role caps and multisig is planned, not built yet.' },
           ].map((c) => (
             <div key={c.t} className="rounded-[var(--radius-card)] border border-hair bg-white shadow-card p-4">
               <div className="font-atx-display font-semibold text-[14px] text-ink">
-                {c.t === 'Every swap builds Attribution' ? <>Every swap <span className="text-gradient-accent">builds Attribution</span></> : c.t}
+                {c.t}
               </div>
               <p className="text-[13px] text-ink-mid leading-[1.5] mt-1.5">{c.d}</p>
             </div>

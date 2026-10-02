@@ -104,6 +104,9 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   BUT the **liquidity engine is revived as "V2-RWAs"** (2026-10-01, LiquidAcre partnership): a V2 *vertical*,
   testnet demo LIVE on Base Sepolia, unaudited, dark-launched behind `NEXT_PUBLIC_V2_RWA_ENABLED` + a real V2-password unlock
   (branded screen at `/app/rwa`). RWA is a workspace of the shared `AppShell` (Personal / Team / RWA, one chrome).
+- **V2 app gate + IA (2026-10-02):** ALL of `/app` now requires the V2 password (`V2AppGate`, `V2_PASSWORD`) — deep
+  links no longer bypass it. Token-issuer flows live in Team › Liquidity for your token (`/app/team/liquidity/*`);
+  Personal is retail-only. "Savings" was renamed "Treasury yield" (copy rule). See `architecture.md` §10.
   Rule: `.claude/rules/rwa-liquidity.md`.
   Also LIVE on XRPL EVM testnet (1449000, `RWA_NETWORK=xrpl-evm-testnet`, our own v4-core PoolManager there):
   `config/rwaDemo.xrpl*.json`; page `/app/rwa/wcp7-xrpl` (chain switcher on the market page).
@@ -262,9 +265,6 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app` | `app/app/page.tsx` |
 | `/app/account` | `app/app/(personal)/account/page.tsx` |
 | `/app/agents` | `app/app/(personal)/agents/page.tsx` |
-| `/app/liquidity` | `app/app/(personal)/liquidity/page.tsx` |
-| `/app/liquidity/launch` | `app/app/(personal)/liquidity/launch/page.tsx` |
-| `/app/liquidity/staged` | `app/app/(personal)/liquidity/staged/page.tsx` |
 | `/app/org` | `app/app/org/(guarded)/page.tsx` |
 | `/app/org/[slug]` | `app/app/org/[slug]/(guarded)/page.tsx` |
 | `/app/org/[slug]/accept` | `app/app/org/[slug]/accept/page.tsx` |
@@ -286,12 +286,15 @@ _Source: `config/deployments.json` (the one committed deploy record). **No entry
 | `/app/team` | `app/app/team/page.tsx` |
 | `/app/team/cards` | `app/app/team/cards/page.tsx` |
 | `/app/team/developers` | `app/app/team/developers/page.tsx` |
+| `/app/team/liquidity` | `app/app/team/liquidity/page.tsx` |
+| `/app/team/liquidity/create` | `app/app/team/liquidity/create/page.tsx` |
+| `/app/team/liquidity/launch` | `app/app/team/liquidity/launch/page.tsx` |
+| `/app/team/liquidity/staged` | `app/app/team/liquidity/staged/page.tsx` |
 | `/app/team/policy` | `app/app/team/policy/page.tsx` |
 | `/app/team/swap` | `app/app/team/swap/page.tsx` |
 | `/app/team/team` | `app/app/team/team/page.tsx` |
 | `/app/team/vaults` | `app/app/team/vaults/page.tsx` |
 | `/app/vault/[id]` | `app/app/(personal)/vault/[id]/page.tsx` |
-| `/app/vault/create` | `app/app/(personal)/vault/create/page.tsx` |
 | `/app/vaults` | `app/app/(personal)/vaults/page.tsx` |
 | `/cards` | `app/cards/page.tsx` |
 | `/curate` | `app/curate/page.tsx` |

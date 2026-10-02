@@ -206,7 +206,7 @@ function Vaults({ nav }: { nav: Nav }) {
         </tbody>
       </table>
       <p>Early exit pays a penalty to treasury by elapsed fraction: <b>&lt; 20% → 2.0%</b>, <b>20–50% → 1.0%</b>, <b>50–80% → 0.5%</b>. Redemption is async: <code>requestRedeem</code> (after a 24h <code>MIN_HOLD</code>) → a 7-day <code>NOTICE_PERIOD</code> → <code>executeRedeem</code>.</p>
-      <Note k="Reward routing">Reputation-weighted LP rewards use the <Ln to="rewards" nav={nav}>weighted distributor</Ln>. For the pro-rata launch variant, see <Ln to="matched" nav={nav}>Matched liquidity</Ln>.</Note>
+      <Note k="Reward routing">Vault-weighted epoch rewards use the <Ln to="rewards" nav={nav}>weighted distributor</Ln>. For the pro-rata launch variant, see <Ln to="matched" nav={nav}>Matched liquidity</Ln>.</Note>
     </>
   )
 }

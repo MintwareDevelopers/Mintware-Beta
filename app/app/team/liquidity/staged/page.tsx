@@ -1,12 +1,12 @@
 'use client'
 
-// /app/liquidity/staged — the "Get liquidity for your token" destination (team intake routes here).
+// /app/team/liquidity/staged — the "Get liquidity for your token" destination (team intake routes here).
 // Presents the staged-buffer framework for capital-constrained teams: stage your single side, it
 // EARNS while it waits, and one-click pair into a live V4 pool when you're ready with the other side.
 // The composition is real: MintwareStagedLiquidityRouter (built + Forge-tested) parks the single side
-// in an IYieldAdapter (Aave) and forms the LP via the pair vault's depositFor — opt-in, owner-only,
+// in an IYieldAdapter (a testnet mock today; Aave is the production target) and forms the LP via the pair vault's depositFor — opt-in, owner-only,
 // never automatic. Honest: testnet + unaudited, router not yet deployed; two-party COMMUNITY matching
-// is a different primitive (MintwareMatchedLiquidityVault → /app/liquidity/launch); auto-match
+// is a different primitive (MintwareMatchedLiquidityVault → /app/team/liquidity/launch); auto-match
 // notifications are the next leg. Nothing here is an offer.
 
 import Link from 'next/link'
@@ -15,23 +15,23 @@ import { StagedRouterLive } from '@/components/vaults/StagedRouterLive'
 const STEPS = [
   {
     n: 1, title: 'Stage your single side', tone: 'peri',
-    body: 'Hold $50k USDC but no ETH? Deposit the side you have. No 50/50 requirement, no forced swap — zero impermanent-loss risk while you wait.',
+    body: 'Hold $50k USDC but no ETH? Stage the side you have. No 50/50 requirement, no forced swap — zero impermanent-loss risk while you wait.',
   },
   {
-    n: 2, title: 'It earns from day one', tone: 'peri',
-    body: '100% of your staged capital is routed into Aave v3, earning baseline yield immediately — not sitting idle in a treasury wallet.',
+    n: 2, title: 'It sits in a yield adapter', tone: 'peri',
+    body: 'Your staged capital is held by a yield adapter rather than idle in a treasury wallet. On testnet that adapter is a mock; a real lending venue (e.g. Aave) is the production target.',
   },
   {
     n: 3, title: 'Pair when you’re ready — your call', tone: 'coral',
-    body: 'When you bring the other side, one passkey click atomically withdraws your staged capital (with its earned yield) from Aave, pairs both sides, and mints a live Uniswap v4 position straight to you. Owner-only and opt-in — nothing pairs until you say so.',
+    body: 'When you bring the other side, one passkey click atomically withdraws your staged capital (with any yield) from the adapter, pairs both sides, and mints a live Uniswap v4 position straight to you. Owner-only and opt-in — nothing pairs until you say so.',
   },
 ]
 
 export default function StagedBuffer() {
   return (
-    <div className="min-h-screen bg-white font-atx-display text-ink">
+    <div className="font-atx-display text-ink">
       <main className="mx-auto max-w-[880px] px-6 max-[700px]:px-4 py-[48px]">
-        <a href="/app/liquidity" className="text-[13px] text-ink-soft hover:text-ink no-underline">← Get liquidity</a>
+        <a href="/app/team/liquidity" className="text-[13px] text-ink-soft hover:text-ink no-underline">← Get liquidity</a>
         <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep mt-2">For capital-constrained teams</div>
         <h1 className="font-atx-display font-bold text-[clamp(2rem,5vw,3rem)] leading-[1.04] tracking-[-0.03em] mt-3">
           Get liquidity —<br /><span className="text-gradient-accent">even if you only hold one side.</span>
@@ -67,28 +67,28 @@ export default function StagedBuffer() {
 
         {/* The example alert — the opt-in payload */}
         <div className="mt-6 rounded-[16px] border border-[rgba(108,108,240,0.3)] p-5" style={{ background: 'linear-gradient(120deg, rgba(108,108,240,0.06), var(--color-ground-cool))' }}>
-          <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-peri-deep">What a match looks like</div>
+          <div className="text-[10px] uppercase tracking-[0.1em] font-semibold text-peri-deep">What a match could look like · illustrative</div>
           <p className="text-[14px] text-ink leading-[1.5] mt-2">
             &ldquo;Matching liquidity found — <b>50 ETH</b> to pair your <b>50,000 USDC</b> buffer. Projected LP fee yield
-            <b className="text-mw-green"> 16.8%</b> vs. your current Aave <b>4.1%</b>. Form the pool?&rdquo;
+            <b className="text-mw-green"> 16.8%</b> vs. your current lending rate <b>4.1%</b>. Form the pool?&rdquo;
           </p>
           <p className="text-[12px] text-ink-soft mt-2">You review the ratio, gas, and yield, then approve with one passkey signature — or ignore it and keep earning.</p>
         </div>
 
         {/* Live, functional on-chain demo of the built router */}
-        <StagedRouterLive />
+        <div id="staged-live"><StagedRouterLive /></div>
 
         {/* Actions */}
         <div className="mt-8 flex items-center gap-3 flex-wrap">
-          <Link href="/app/org" className="rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold no-underline hover:bg-peri-deep transition-colors">Stage your capital →</Link>
-          <Link href="/app/vaults" className="rounded-full border border-hair bg-white text-ink px-5 py-3 text-[14px] font-semibold no-underline hover:bg-ground-cool transition-colors">Browse live vaults</Link>
+          <a href="#staged-live" className="rounded-full bg-peri text-white px-5 py-3 text-[14px] font-semibold no-underline hover:bg-peri-deep transition-colors">Stage your capital ↑</a>
+          <Link href="/app/team/liquidity" className="rounded-full border border-hair bg-white text-ink px-5 py-3 text-[14px] font-semibold no-underline hover:bg-ground-cool transition-colors">Other liquidity models</Link>
         </div>
         <p className="text-[12px] text-ink-soft mt-5 max-w-[64ch]">
           Testnet &amp; unaudited. The stage → earn → pair flow is the <span className="font-mono">MintwareStagedLiquidityRouter</span>
           (built, Forge-tested, and <b>now deployed + proven on Base Sepolia</b> — try it live above).
           It parks your side in a yield adapter and forms the LP via the pair vault. Two-party
           <em> community</em> matching is a different primitive
-          (<span className="font-mono">MintwareMatchedLiquidityVault</span> → <Link href="/app/liquidity/launch" className="text-peri-deep no-underline">community-matched launch</Link>);
+          (<span className="font-mono">MintwareMatchedLiquidityVault</span> → <Link href="/app/team/liquidity/launch" className="text-peri-deep no-underline">community-matched launch</Link>);
           auto-match alerts are the next leg. Nothing here is an offer.
         </p>
       </main>

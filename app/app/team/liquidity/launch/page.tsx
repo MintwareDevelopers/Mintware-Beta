@@ -1,6 +1,6 @@
 'use client'
 
-// /app/liquidity/launch — the community-matched launch flow (MintwareMatchedLiquidityVault).
+// /app/team/liquidity/launch — the community-matched launch flow (MintwareMatchedLiquidityVault).
 //
 // The mechanic is the hero: a team commits its TOKEN as one side; the community funds the quote
 // (USDC) up to a target, and the team's token pairs PROPORTIONALLY as the fill arrives — whatever
@@ -109,9 +109,9 @@ export default function MatchedLaunch() {
   const pairedW = Math.round(fill * 100)
 
   return (
-    <div className="min-h-screen bg-white font-atx-display text-ink">
+    <div className="font-atx-display text-ink">
       <main className="mx-auto max-w-[1040px] px-6 max-[700px]:px-4 py-[44px]">
-        <Link href="/app/liquidity" className="text-[12px] text-ink-soft hover:text-ink no-underline">← All liquidity models</Link>
+        <Link href="/app/team/liquidity" className="text-[12px] text-ink-soft hover:text-ink no-underline">← All liquidity models</Link>
 
         <div className="mt-4 text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep">Community-matched launch</div>
         <h1 className="font-atx-display font-bold text-[clamp(1.8rem,4.4vw,2.6rem)] leading-[1.06] tracking-[-0.03em] mt-3 max-w-[16ch]">
@@ -250,7 +250,7 @@ export default function MatchedLaunch() {
             </button>
           )}
           {done && (
-            <Link href="/app/liquidity" className="glass-pill px-6 py-3 text-[14px] font-semibold whitespace-nowrap no-underline text-ink">Done</Link>
+            <Link href="/app/team/liquidity" className="glass-pill px-6 py-3 text-[14px] font-semibold whitespace-nowrap no-underline text-ink">Done</Link>
           )}
         </div>
       </main>

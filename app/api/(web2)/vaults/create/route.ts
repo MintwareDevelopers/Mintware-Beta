@@ -73,7 +73,10 @@ export const POST = createHandler(async (req, ctx) => {
     .insert({
       name: body.name, team_wallet: body.team_wallet.toLowerCase(), project_token: body.project_token.toLowerCase(),
       seed_amount: body.seed_amount, pool_key: body.pool_key, chain_id: body.chain_id,
-      contract_address: body.contract_address ?? null, status: body.status ?? 'seeding', tvl_usdc: 0,
+      // IA audit 2026-10-02: never trust the client for these. A request records INTENT only — an operator deploys the
+      // vault and backfills contract_address + status. (Before, any signed caller could register a row pointing at an
+      // arbitrary contract with status 'active', and the client sent the shared demo vault address for every request.)
+      contract_address: null, status: 'seeding', tvl_usdc: 0,
       // Treasury-vault tranche intent (null/defaults for the legacy pair vault).
       vault_kind: body.tranche ? 'treasury' : 'defi',
       junior_commit_usdc: body.tranche?.juniorCommitUsdc ?? null,
