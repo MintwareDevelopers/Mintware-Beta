@@ -5,7 +5,8 @@ Stack: Next.js 16 (App Router, webpack build) · TypeScript · Tailwind v4 · **
 Supabase · Foundry · Rust services. pnpm.
 
 > **▶ Read [`.claude/STATE.md`](.claude/STATE.md) first** — the single "you are here" file:
-> what's **live**, what's **shelved** (RWA + Campaigns both are), and where to look. It wins over
+> what's **live**, what's **shelved** (Campaigns and the old RWA venue are — the RWA *liquidity engine* is
+> revived as the V2-RWAs vertical, see `.claude/rules/rwa-liquidity.md`), and where to look. It wins over
 > any rule/doc it disagrees with. The through-line is *"Never idle. Never locked. Always yours."*
 > ([`docs/product/framing-and-messaging.md`](docs/product/framing-and-messaging.md)).
 >
@@ -28,6 +29,7 @@ Supabase · Foundry · Rust services. pnpm.
 | Contracts — live Forge stack (vaults, AIAttribution v3) | `.claude/rules/smart-contracts.md` |
 | Vaults — dual-sided pair vault / ULV, V4 hook | `.claude/rules/vaults.md` |
 | **LP Gateway (V1)** — live LP-gateway product: stage→earn→deploy→harvest→buffer, `/v1`, curation | `.claude/rules/lp-gateway.md` |
+| **V2-RWAs** — RWA liquidity vertical: appraisal hook, permissioned-token model, Base Sepolia demo | `.claude/rules/rwa-liquidity.md` |
 | Payments — YPN, settlement, edge-auth/relayer, Arc | `.claude/rules/payments-ypn.md` |
 | AI agents — ERC-8004, Attribution, x402 parking account | `.claude/rules/agents.md` |
 | Supabase schema, migrations, constraints | `.claude/rules/schema.md` |

@@ -6,7 +6,14 @@
 // footer stub (Phase 2 wires real orgs via Privy metadata).
 
 import { useState, useRef, useEffect } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useAppMode, type AppMode } from './AppMode'
+
+// V2-RWAs: a third context, shown only when the vertical is dark-launched on. It routes to /app/rwa (its own
+// partner-access gate) rather than re-scoping the shell.
+const RWA_ON = process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true'
+const RWA = { label: 'RWA', sub: 'Real-world assets', tone: 'var(--color-mw-teal)' }
 
 const CONTEXTS: { mode: AppMode; label: string; sub: string; tone: string }[] = [
   { mode: 'user', label: 'Personal', sub: 'Retail LP', tone: 'var(--color-peri)' },
@@ -17,7 +24,8 @@ export function ScopeSwitcher() {
   const { mode, switchTo } = useAppMode()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
-  const cur = CONTEXTS.find((c) => c.mode === mode) ?? CONTEXTS[0]
+  const inRwa = RWA_ON && (usePathname() ?? '').startsWith('/app/rwa')
+  const cur = inRwa ? RWA : CONTEXTS.find((c) => c.mode === mode) ?? CONTEXTS[0]
 
   useEffect(() => {
     if (!open) return
@@ -48,7 +56,7 @@ export function ScopeSwitcher() {
         <div role="menu" className="absolute left-0 top-[calc(100%+6px)] z-[250] w-[220px] rounded-2xl border border-hair bg-white shadow-lift overflow-hidden">
           <div className="px-3 pt-2.5 pb-1 text-[9px] uppercase tracking-[0.12em] font-semibold text-ink-soft">Switch context</div>
           {CONTEXTS.map((c) => {
-            const active = c.mode === mode
+            const active = !inRwa && c.mode === mode
             return (
               <button
                 key={c.mode}
@@ -65,6 +73,21 @@ export function ScopeSwitcher() {
               </button>
             )
           })}
+          {RWA_ON && (
+            <Link
+              href="/app/rwa"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left no-underline transition-colors ${inRwa ? 'bg-ground-cool' : 'hover:bg-ground-cool'}`}
+            >
+              <span className="w-[8px] h-[8px] rounded-full shrink-0" style={{ background: RWA.tone }} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-semibold text-ink">{RWA.label}</span>
+                <span className="block text-[10px] text-ink-soft">{RWA.sub} · partner preview</span>
+              </span>
+              {inRwa && <span className="text-peri text-[12px] shrink-0">✓</span>}
+            </Link>
+          )}
           <button
             role="menuitem"
             disabled

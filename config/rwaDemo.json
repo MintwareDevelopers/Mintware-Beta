@@ -1,0 +1,378 @@
+{
+  "generatedAt": "2026-10-02T13:26:52.562Z",
+  "chainId": 84532,
+  "rehearsal": false,
+  "property": {
+    "name": "Willow Creek Parcel 7 (demo)",
+    "symbol": "WCP7",
+    "appraisalUsdAtLaunch": 100,
+    "decimals": 18
+  },
+  "contracts": {
+    "vault": "0xf507640a7bcb17b696c9199b34e93384b9fa5136",
+    "hook": "0xaB8E64c7087A232c24658726AD3Bc363Ed6AEAC0",
+    "property": "0x916F3AD30C260e479500C638a68Ff979DAD87999",
+    "usd": "0x74fD9E4173cF4341810372b8C90258c9956bD3cf",
+    "adapter": "0x8c00A1927E65AD665D9E630F923dC5BAfF98CFeC",
+    "registry": "0xB360a0a726c294ec5F6cb48566048372A0AcE2d2",
+    "router": "0x766473d7bbcbd62c7a49667f7ed2005b493a0313",
+    "poolManager": "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408"
+  },
+  "poolKey": {
+    "currency0": "0x74fD9E4173cF4341810372b8C90258c9956bD3cf",
+    "currency1": "0x916F3AD30C260e479500C638a68Ff979DAD87999",
+    "fee": 8388608,
+    "tickSpacing": 60,
+    "hooks": "0xaB8E64c7087A232c24658726AD3Bc363Ed6AEAC0"
+  },
+  "propertyIsCurrency0": false,
+  "wallets": {
+    "aliceLP": {
+      "label": "LP · Alice",
+      "address": "0x97080449e77Bc2A4078Deb294B88ED1F51aA6699"
+    },
+    "benLP": {
+      "label": "LP · Ben",
+      "address": "0x66eA66D0293D305D71678287F96A6FC36cf2E8Fc"
+    },
+    "chloeLP": {
+      "label": "LP · Chloe",
+      "address": "0x40fbf70213e80fBe18D7Ec06602F258777384b30"
+    },
+    "danaTrader": {
+      "label": "Verified trader · Dana",
+      "address": "0x61382Bba6E71B4399dc705Dc719a3A938f3b552A"
+    },
+    "eliTrader": {
+      "label": "Verified trader · Eli",
+      "address": "0x6c460Dc6Ea8d609512Df5666e66ff07936C86668"
+    },
+    "foxUnverified": {
+      "label": "Unverified wallet · Fox",
+      "address": "0xe771475E43Ff8a222C535298a04df68bca400C28"
+    }
+  },
+  "issuer": "0xAF8ED12857DFceEEec769c2e0035f7afbDF9d5ca",
+  "signerKind": "privy-rwa-seat",
+  "hookConfig": {
+    "coreBandTicks": 300,
+    "specBandTicks": 1000,
+    "maxStepTicks": 500,
+    "minUpdateInterval": 600,
+    "maxAppraisalAge": 2592000,
+    "coreFeePips": 3000,
+    "specFeePips": 10000,
+    "maxDriftTicksPerDay": 1000,
+    "oracleGraceSecs": 604800
+  },
+  "deployTxs": [
+    {
+      "label": "deploy DemoUSD",
+      "hash": "0x704f649aeb3b50d4bb2013e13de3a20828b4c3927d61a6bedabe1ae757a6149f",
+      "block": 47589345
+    },
+    {
+      "label": "deploy MockRwaIdentityRegistry",
+      "hash": "0x0de4e100174bd52562a585005185dbaa470c2585c0b049716dcd98991684b06c",
+      "block": 47589345
+    },
+    {
+      "label": "deploy MockPermissionedPropertyToken (WCP7)",
+      "hash": "0xfb0cd88a0ffa75d5a6416422f1e6be3d9209c25c9ef191bd41d316274cb898fa",
+      "block": 47589346
+    },
+    {
+      "label": "deploy DemoLendingAdapter",
+      "hash": "0xf2cdc870c08271c7c86be2eb17d66c208f447a3b08440c8043c6f082281983cb",
+      "block": 47589347
+    },
+    {
+      "label": "DemoUSD.setMinter(adapter)",
+      "hash": "0xb454add3d7e651f6ecf0f1063660bd0fb7997c077e9d073554bdd624d3b53900",
+      "block": 47589347
+    },
+    {
+      "label": "deploy MWTreasuryPositionLib",
+      "hash": "0x6795b01a750036f7a3ae296fabad8fea0b527d76d0b8b054c72b80ab25f6dd34",
+      "block": 47589348
+    },
+    {
+      "label": "deploy MintwareTreasuryVault",
+      "hash": "0x2297b07bd9ef2625b9c4e38dc3a18865af18002f75d624c5b863a72ae147ba86",
+      "block": 47589348
+    },
+    {
+      "label": "deploy DemoSwapRouter",
+      "hash": "0x79ef15b96a5427038e392e7d07b8c5c3c54871d3c1798a5fadddcc787311c21f",
+      "block": 47589349
+    },
+    {
+      "label": "adapter.setVault",
+      "hash": "0xa1dbc60d9554b43db3496f104c9555e1d60ff13da3bc5264cce35af4faf5e701",
+      "block": 47589349
+    },
+    {
+      "label": "vault.setProtocolTreasury",
+      "hash": "0xfe341f4dc12f61431a982e87c966284f75ad895fb0fff4f54fd29544dca8c35b",
+      "block": 47589349
+    },
+    {
+      "label": "vault.setJitHook(appraisal hook = oracle)",
+      "hash": "0x0e89daf8d5479a62f6321f3d1de13d3acbd89613a9824f226af15019db70584d",
+      "block": 47589350
+    },
+    {
+      "label": "vault.setMinCoverage(1%)",
+      "hash": "0x1a407a08144900c7553c1fecb1e67044a2fbb73cdaaadf8c92b26a19b2552819",
+      "block": 47589350
+    },
+    {
+      "label": "hook.setVault",
+      "hash": "0x2a9a4d64850dd1ba38272340aa087510df27c7d4adee14357cbc5dbecfa222ca",
+      "block": 47589351
+    },
+    {
+      "label": "property.setPermittedHolder(PoolManager)",
+      "hash": "0xc029ceb1a6770aa5031a0a89dd334d83ce686a2fc25427f9ded5f3ba85012363",
+      "block": 47589351
+    },
+    {
+      "label": "property.setPermittedHolder(vault)",
+      "hash": "0xaeda5fefab6943b42ef9658a43ccc840e4223f0890949f1ecef2794b413133a5",
+      "block": 47589352
+    },
+    {
+      "label": "property.setPermittedHolder(router)",
+      "hash": "0xd2017eb346e2c6895366269b6de2b846226547311ec20edd02fa943abbf370ed",
+      "block": 47589352
+    },
+    {
+      "label": "hook.initAppraisal(230270)",
+      "hash": "0x54d56d6f5723a5b742cf2f43e54502deb7bf0f32cc3b6f52d705645bdc4827a5",
+      "block": 47589353
+    },
+    {
+      "label": "PoolManager.initialize (at the appraisal)",
+      "hash": "0x361c2d96bf5d820b5578a72ac4108a26ccb1206bea5190663ed489b9e72ff225",
+      "block": 47589355
+    },
+    {
+      "label": "property.mint(junior inventory)",
+      "hash": "0x14c48a940e35384ece018e7deac1968845c32a9bec4f8f63287608078a59e6fd",
+      "block": 47589355
+    },
+    {
+      "label": "dUSD.mint(junior buffer)",
+      "hash": "0x29a536e30ef78e1de19ce83e2f389b75e58b67976fdd018e7035bf66d14bc883",
+      "block": 47589356
+    },
+    {
+      "label": "property.approve(vault)",
+      "hash": "0x909c8c11cd4363912efcd4eeee79b78e9e06beb4d6d1925b2ea4118952b8e061",
+      "block": 47589356
+    },
+    {
+      "label": "dUSD.approve(vault)",
+      "hash": "0xe5a539fac46350173a7f85bfdae940f48cadc45a7988628540059a3ad988ba34",
+      "block": 47589357
+    },
+    {
+      "label": "vault.commitTeam (junior, 1-year lock)",
+      "hash": "0x1f7cd24721d1b62d18a24f274bc76d60a9393957b859c391aa7dca40e8babfdb",
+      "block": 47589359
+    }
+  ],
+  "snapshot": {
+    "seniorAssets": "102500.066559",
+    "deployedFromSenior": "19018.928641",
+    "lendingBalance": "82891.370892",
+    "interestMinted": "0.073796",
+    "chloePropertyBalance": "0",
+    "foxPropertyBalance": "0"
+  },
+  "legs": [
+    {
+      "n": 1,
+      "title": "Issuer verifies two traders",
+      "desc": "The identity registry marks Dana and Eli as verified holders. Fox is never verified. LPs are never verified either — they never hold the asset.",
+      "txs": [
+        {
+          "label": "Verify Dana",
+          "hash": "0x53be75e05f77d9908d8b7014620c01b13e2c63f2d6c8f4ce6f16d98b28bb0722",
+          "status": "success",
+          "from": "0xAF8ED12857DFceEEec769c2e0035f7afbDF9d5ca",
+          "block": 47589380
+        },
+        {
+          "label": "Verify Eli",
+          "hash": "0xe1b9f6f99fcac6b5f7fbe47771aecf7259c2cd33dbeb5af9138a594fc7a9f7ae",
+          "status": "success",
+          "from": "0xAF8ED12857DFceEEec769c2e0035f7afbDF9d5ca",
+          "block": 47589381
+        }
+      ]
+    },
+    {
+      "n": 2,
+      "title": "Open LPs supply dUSD",
+      "desc": "Three unverified wallets supply dUSD to the senior tranche. Senior is paid first, in dUSD.",
+      "txs": [
+        {
+          "label": "LP · Alice deposits 60,000 dUSD",
+          "hash": "0x88d16f3d6cffc3ccfcce2b6bd3fdf44aa161be88eb7d294da2257445c02e41bb",
+          "status": "success",
+          "from": "0x97080449e77Bc2A4078Deb294B88ED1F51aA6699",
+          "block": 47589381
+        },
+        {
+          "label": "LP · Ben deposits 30,000 dUSD",
+          "hash": "0xbbd74ab623fed5a2d67735cc674d85271b47dbab4ed548c65e8256a3e61be80a",
+          "status": "success",
+          "from": "0x66eA66D0293D305D71678287F96A6FC36cf2E8Fc",
+          "block": 47589382
+        },
+        {
+          "label": "LP · Chloe deposits 25,000 dUSD",
+          "hash": "0x1d3d65620d603cd98bab2836fc79d7c136a0165444862ab14a412f2e9a8d6f68",
+          "status": "success",
+          "from": "0x40fbf70213e80fBe18D7Ec06602F258777384b30",
+          "block": 47589384
+        }
+      ]
+    },
+    {
+      "n": 3,
+      "title": "A slice goes to the pool; the rest keeps earning",
+      "desc": "The vault pairs ~19% of senior with the issuer’s property inventory in the Uniswap v4 pool. The other ~81% stays in the lending venue.",
+      "txs": [
+        {
+          "label": "Deploy 22,000 dUSD of senior into the pool",
+          "hash": "0x3a2455d73f5f6bf27c987350094cb5ec4720c52c1e6bf2bc0e0aa0cdc2308b44",
+          "status": "success",
+          "from": "0xAF8ED12857DFceEEec769c2e0035f7afbDF9d5ca",
+          "block": 47589386
+        }
+      ]
+    },
+    {
+      "n": 4,
+      "title": "Verified traders trade inside the band",
+      "desc": "Dana and Eli buy and sell the property token. Every trade settles inside the appraisal band.",
+      "txs": [
+        {
+          "label": "Dana buys with 250 dUSD",
+          "hash": "0xb7a587b8ef7027b12ca94242fae8095d3a83d03dec56f3ceda9bba3e82c41e33",
+          "status": "success",
+          "from": "0x61382Bba6E71B4399dc705Dc719a3A938f3b552A",
+          "block": 47589388
+        },
+        {
+          "label": "Eli buys with 150 dUSD",
+          "hash": "0xb65e7ee33c6330770cfac354b4d76ae3d29be58eca2da735d1526f14b7001252",
+          "status": "success",
+          "from": "0x6c460Dc6Ea8d609512Df5666e66ff07936C86668",
+          "block": 47589389
+        },
+        {
+          "label": "Dana approves the router (property)",
+          "hash": "0x658ce9ef5f8f21a76e325cdd2b74a4b5f11a1a06406942d9ee582fab3e09ee84",
+          "status": "success",
+          "from": "0x61382Bba6E71B4399dc705Dc719a3A938f3b552A",
+          "block": 47589390
+        },
+        {
+          "label": "Dana sells 1 WCP7",
+          "hash": "0x923375427ebc70f79361a70523b4469fecf1dbcc33f7d8a3a735def26767584f",
+          "status": "success",
+          "from": "0x61382Bba6E71B4399dc705Dc719a3A938f3b552A",
+          "block": 47589392
+        }
+      ]
+    },
+    {
+      "n": 5,
+      "title": "An unverified wallet is refused",
+      "desc": "Fox tries to buy. The property token itself refuses to deliver to an unverified wallet, so the whole swap reverts on-chain.",
+      "txs": [
+        {
+          "label": "Fox (unverified) tries to buy with 100 dUSD",
+          "hash": "0xbc4171237dbd6abdf48f78818dcfdc78e15d6434ea7f46034268ba7389d89fc5",
+          "status": "reverted",
+          "from": "0xe771475E43Ff8a222C535298a04df68bca400C28",
+          "block": 47589394,
+          "reason": {
+            "error": "NotPermitted",
+            "target": "0x916F3AD30C260e479500C638a68Ff979DAD87999",
+            "args": [
+              "0xe771475E43Ff8a222C535298a04df68bca400C28"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "n": 6,
+      "title": "A trade beyond the band is refused",
+      "desc": "A buy large enough to push the price more than ~10% past the appraisal is rejected by the hook.",
+      "txs": [
+        {
+          "label": "Dana tries a 2,500 dUSD buy (would leave the band)",
+          "hash": "0x855bb2ec2134786a1218e79c4e0486f9ec60ff68101c48505a6f7c82af2a9dc8",
+          "status": "reverted",
+          "from": "0x61382Bba6E71B4399dc705Dc719a3A938f3b552A",
+          "block": 47589397,
+          "reason": {
+            "error": "PriceOutOfBand",
+            "target": "0xaB8E64c7087A232c24658726AD3Bc363Ed6AEAC0",
+            "args": [
+              "227882",
+              "230270"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "n": 7,
+      "title": "The appraisal moves, within its limits",
+      "desc": "The keeper posts a new appraisal: bounded to ~5% per update and at most once per interval. The band moves with it.",
+      "txs": [
+        {
+          "label": "Keeper posts appraisal +2%",
+          "hash": "0x0287c965d56203645b4d92c6d74f3067bd0c4a30faeb8a0321b04a09d129d155",
+          "status": "success",
+          "from": "0xAF8ED12857DFceEEec769c2e0035f7afbDF9d5ca",
+          "block": 47589657
+        }
+      ]
+    },
+    {
+      "n": 8,
+      "title": "Idle liquidity earns",
+      "desc": "The lending venue realises the interest accrued on the idle senior (simulated testnet yield).",
+      "txs": [
+        {
+          "label": "Realise accrued lending interest",
+          "hash": "0xbb56fb897e991b594cc3d9991d1154beae385d637685857c81994f0ccc28619a",
+          "status": "success",
+          "from": "0xAF8ED12857DFceEEec769c2e0035f7afbDF9d5ca",
+          "block": 47589658
+        }
+      ]
+    },
+    {
+      "n": 9,
+      "title": "An LP exits in dUSD only",
+      "desc": "Chloe redeems half her senior shares and receives dUSD. She never held, and is not eligible to hold, the property token.",
+      "txs": [
+        {
+          "label": "Chloe redeems half her senior",
+          "hash": "0x08b0cf9763a7f33020181cb9b5df349854fc224272d7c946b57b1d22a14867dd",
+          "status": "success",
+          "from": "0x40fbf70213e80fBe18D7Ec06602F258777384b30",
+          "block": 47589659
+        }
+      ]
+    }
+  ]
+}

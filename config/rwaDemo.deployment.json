@@ -1,0 +1,161 @@
+{
+  "generatedAt": "2026-10-02T13:16:44.355Z",
+  "chainId": 84532,
+  "signer": "0xAF8ED12857DFceEEec769c2e0035f7afbDF9d5ca",
+  "signerKind": "privy-rwa-seat",
+  "contracts": {
+    "usd": "0x74fd9e4173cf4341810372b8c90258c9956bd3cf",
+    "registry": "0xb360a0a726c294ec5f6cb48566048372a0ace2d2",
+    "property": "0x916f3ad30c260e479500c638a68ff979dad87999",
+    "adapter": "0x8c00a1927e65ad665d9e630f923dc5baff98cfec",
+    "hook": "0xaB8E64c7087A232c24658726AD3Bc363Ed6AEAC0",
+    "positionLib": "0x4076487eefacc3e78615fe8f585dd1902b4b59ff",
+    "vault": "0xf507640a7bcb17b696c9199b34e93384b9fa5136",
+    "router": "0x766473d7bbcbd62c7a49667f7ed2005b493a0313",
+    "poolManager": "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408"
+  },
+  "property": {
+    "name": "Willow Creek Parcel 7 (demo)",
+    "symbol": "WCP7",
+    "decimals": 18,
+    "appraisalUsdAtLaunch": 100
+  },
+  "hookConfig": {
+    "coreBandTicks": 300,
+    "specBandTicks": 1000,
+    "maxStepTicks": 500,
+    "minUpdateInterval": 600,
+    "maxAppraisalAge": 2592000,
+    "coreFeePips": 3000,
+    "specFeePips": 10000,
+    "maxDriftTicksPerDay": 1000,
+    "oracleGraceSecs": 604800
+  },
+  "appraisalTick": 230270,
+  "propertyIsCurrency0": false,
+  "poolKey": {
+    "currency0": "0x74fd9e4173cf4341810372b8c90258c9956bd3cf",
+    "currency1": "0x916f3ad30c260e479500c638a68ff979dad87999",
+    "fee": 8388608,
+    "tickSpacing": 60,
+    "hooks": "0xaB8E64c7087A232c24658726AD3Bc363Ed6AEAC0"
+  },
+  "hookSalt": "0x00000000000000000000000000000000000000000000000000000000000008c6",
+  "txs": [
+    {
+      "label": "deploy DemoUSD",
+      "hash": "0x704f649aeb3b50d4bb2013e13de3a20828b4c3927d61a6bedabe1ae757a6149f",
+      "block": 47589345
+    },
+    {
+      "label": "deploy MockRwaIdentityRegistry",
+      "hash": "0x0de4e100174bd52562a585005185dbaa470c2585c0b049716dcd98991684b06c",
+      "block": 47589345
+    },
+    {
+      "label": "deploy MockPermissionedPropertyToken (WCP7)",
+      "hash": "0xfb0cd88a0ffa75d5a6416422f1e6be3d9209c25c9ef191bd41d316274cb898fa",
+      "block": 47589346
+    },
+    {
+      "label": "deploy DemoLendingAdapter",
+      "hash": "0xf2cdc870c08271c7c86be2eb17d66c208f447a3b08440c8043c6f082281983cb",
+      "block": 47589347
+    },
+    {
+      "label": "DemoUSD.setMinter(adapter)",
+      "hash": "0xb454add3d7e651f6ecf0f1063660bd0fb7997c077e9d073554bdd624d3b53900",
+      "block": 47589347
+    },
+    {
+      "label": "deploy MWTreasuryPositionLib",
+      "hash": "0x6795b01a750036f7a3ae296fabad8fea0b527d76d0b8b054c72b80ab25f6dd34",
+      "block": 47589348
+    },
+    {
+      "label": "deploy MintwareTreasuryVault",
+      "hash": "0x2297b07bd9ef2625b9c4e38dc3a18865af18002f75d624c5b863a72ae147ba86",
+      "block": 47589348
+    },
+    {
+      "label": "deploy DemoSwapRouter",
+      "hash": "0x79ef15b96a5427038e392e7d07b8c5c3c54871d3c1798a5fadddcc787311c21f",
+      "block": 47589349
+    },
+    {
+      "label": "adapter.setVault",
+      "hash": "0xa1dbc60d9554b43db3496f104c9555e1d60ff13da3bc5264cce35af4faf5e701",
+      "block": 47589349
+    },
+    {
+      "label": "vault.setProtocolTreasury",
+      "hash": "0xfe341f4dc12f61431a982e87c966284f75ad895fb0fff4f54fd29544dca8c35b",
+      "block": 47589349
+    },
+    {
+      "label": "vault.setJitHook(appraisal hook = oracle)",
+      "hash": "0x0e89daf8d5479a62f6321f3d1de13d3acbd89613a9824f226af15019db70584d",
+      "block": 47589350
+    },
+    {
+      "label": "vault.setMinCoverage(1%)",
+      "hash": "0x1a407a08144900c7553c1fecb1e67044a2fbb73cdaaadf8c92b26a19b2552819",
+      "block": 47589350
+    },
+    {
+      "label": "hook.setVault",
+      "hash": "0x2a9a4d64850dd1ba38272340aa087510df27c7d4adee14357cbc5dbecfa222ca",
+      "block": 47589351
+    },
+    {
+      "label": "property.setPermittedHolder(PoolManager)",
+      "hash": "0xc029ceb1a6770aa5031a0a89dd334d83ce686a2fc25427f9ded5f3ba85012363",
+      "block": 47589351
+    },
+    {
+      "label": "property.setPermittedHolder(vault)",
+      "hash": "0xaeda5fefab6943b42ef9658a43ccc840e4223f0890949f1ecef2794b413133a5",
+      "block": 47589352
+    },
+    {
+      "label": "property.setPermittedHolder(router)",
+      "hash": "0xd2017eb346e2c6895366269b6de2b846226547311ec20edd02fa943abbf370ed",
+      "block": 47589352
+    },
+    {
+      "label": "hook.initAppraisal(230270)",
+      "hash": "0x54d56d6f5723a5b742cf2f43e54502deb7bf0f32cc3b6f52d705645bdc4827a5",
+      "block": 47589353
+    },
+    {
+      "label": "PoolManager.initialize (at the appraisal)",
+      "hash": "0x361c2d96bf5d820b5578a72ac4108a26ccb1206bea5190663ed489b9e72ff225",
+      "block": 47589355
+    },
+    {
+      "label": "property.mint(junior inventory)",
+      "hash": "0x14c48a940e35384ece018e7deac1968845c32a9bec4f8f63287608078a59e6fd",
+      "block": 47589355
+    },
+    {
+      "label": "dUSD.mint(junior buffer)",
+      "hash": "0x29a536e30ef78e1de19ce83e2f389b75e58b67976fdd018e7035bf66d14bc883",
+      "block": 47589356
+    },
+    {
+      "label": "property.approve(vault)",
+      "hash": "0x909c8c11cd4363912efcd4eeee79b78e9e06beb4d6d1925b2ea4118952b8e061",
+      "block": 47589356
+    },
+    {
+      "label": "dUSD.approve(vault)",
+      "hash": "0xe5a539fac46350173a7f85bfdae940f48cadc45a7988628540059a3ad988ba34",
+      "block": 47589357
+    },
+    {
+      "label": "vault.commitTeam (junior, 1-year lock)",
+      "hash": "0x1f7cd24721d1b62d18a24f274bc76d60a9393957b859c391aa7dca40e8babfdb",
+      "block": 47589359
+    }
+  ]
+}
