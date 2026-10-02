@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-10-01T22:10:03.169Z",
+  "generatedAt": "2026-10-02T13:16:44.355Z",
   "chainId": 84532,
   "signer": "0xAF8ED12857DFceEEec769c2e0035f7afbDF9d5ca",
   "signerKind": "privy-rwa-seat",
   "contracts": {
-    "usd": "0xc203d43999d84a317690c0507fd4178cee6e7424",
-    "registry": "0xd68bb15f9f2083a5a8dc78aa536442157f1f344a",
-    "property": "0x716c82bd49440cb3112d4a27ada8c51b99c53c44",
-    "adapter": "0xaf6fe435efeadec900e61931db6800597b86e1e8",
-    "hook": "0x75440dB3C25E4212EA78d8616f1Dc8A5AE95EAc0",
-    "positionLib": "0xc1f14781f2d764990fb22e5c2e9df276176232b8",
-    "vault": "0x7668e12726f326e7be57d7fb7b3d1808f6b0dbf1",
-    "router": "0x958d6a1ae1592dbc979843d0d2e51d0f1cb321cd",
+    "usd": "0x74fd9e4173cf4341810372b8c90258c9956bd3cf",
+    "registry": "0xb360a0a726c294ec5f6cb48566048372a0ace2d2",
+    "property": "0x916f3ad30c260e479500c638a68ff979dad87999",
+    "adapter": "0x8c00a1927e65ad665d9e630f923dc5baff98cfec",
+    "hook": "0xaB8E64c7087A232c24658726AD3Bc363Ed6AEAC0",
+    "positionLib": "0x4076487eefacc3e78615fe8f585dd1902b4b59ff",
+    "vault": "0xf507640a7bcb17b696c9199b34e93384b9fa5136",
+    "router": "0x766473d7bbcbd62c7a49667f7ed2005b493a0313",
     "poolManager": "0x05E73354cFDd6745C338b50BcFDfA3Aa6fA03408"
   },
   "property": {
@@ -27,132 +27,135 @@
     "minUpdateInterval": 600,
     "maxAppraisalAge": 2592000,
     "coreFeePips": 3000,
-    "specFeePips": 10000
+    "specFeePips": 10000,
+    "maxDriftTicksPerDay": 1000,
+    "oracleGraceSecs": 604800
   },
-  "appraisalTick": -230270,
-  "propertyIsCurrency0": true,
+  "appraisalTick": 230270,
+  "propertyIsCurrency0": false,
   "poolKey": {
-    "currency0": "0x716c82bd49440cb3112d4a27ada8c51b99c53c44",
-    "currency1": "0xc203d43999d84a317690c0507fd4178cee6e7424",
+    "currency0": "0x74fd9e4173cf4341810372b8c90258c9956bd3cf",
+    "currency1": "0x916f3ad30c260e479500c638a68ff979dad87999",
     "fee": 8388608,
     "tickSpacing": 60,
-    "hooks": "0x75440dB3C25E4212EA78d8616f1Dc8A5AE95EAc0"
+    "hooks": "0xaB8E64c7087A232c24658726AD3Bc363Ed6AEAC0"
   },
-  "hookSalt": "0x0000000000000000000000000000000000000000000000000000000000002524",
+  "hookSalt": "0x00000000000000000000000000000000000000000000000000000000000008c6",
   "txs": [
     {
       "label": "deploy DemoUSD",
-      "hash": "0x9fb1a11735a53cb73782396b7258b52111a55dda0f7acffb5598e25f0d73da43"
+      "hash": "0x704f649aeb3b50d4bb2013e13de3a20828b4c3927d61a6bedabe1ae757a6149f",
+      "block": 47589345
     },
     {
       "label": "deploy MockRwaIdentityRegistry",
-      "hash": "0x9fb79c461c9e5e7998aebab66d1e00a12d9bec9ed9dd949636f54b801d37d9ee"
+      "hash": "0x0de4e100174bd52562a585005185dbaa470c2585c0b049716dcd98991684b06c",
+      "block": 47589345
     },
     {
       "label": "deploy MockPermissionedPropertyToken (WCP7)",
-      "hash": "0x1d0a26ef26291432c11bd5f465e2bfa6dc5412f62bc9d566a492903ab8fee377"
+      "hash": "0xfb0cd88a0ffa75d5a6416422f1e6be3d9209c25c9ef191bd41d316274cb898fa",
+      "block": 47589346
     },
     {
       "label": "deploy DemoLendingAdapter",
-      "hash": "0xdabeb3719558e70b0b8de767e8c79d5a935d958468f460f560f9ceceedfe6b26"
+      "hash": "0xf2cdc870c08271c7c86be2eb17d66c208f447a3b08440c8043c6f082281983cb",
+      "block": 47589347
     },
     {
       "label": "DemoUSD.setMinter(adapter)",
-      "hash": "0xb785a95ce5bccf43e029de6a424e83a7a5e90882e9d6e769e8211704654f5fcc"
-    },
-    {
-      "label": "deploy MintwareRwaAppraisalHook (CREATE2)",
-      "hash": "0xd7e1960a693e9d364790e99e2b44cdc5b6d7cfbfd8d68c42da30de4cc5e0227b"
+      "hash": "0xb454add3d7e651f6ecf0f1063660bd0fb7997c077e9d073554bdd624d3b53900",
+      "block": 47589347
     },
     {
       "label": "deploy MWTreasuryPositionLib",
-      "hash": "0x0ffa734b0849d24bd90ebc05404d9d618af89c22221fdb8b4e23da293d769349",
-      "block": 47562147
+      "hash": "0x6795b01a750036f7a3ae296fabad8fea0b527d76d0b8b054c72b80ab25f6dd34",
+      "block": 47589348
     },
     {
       "label": "deploy MintwareTreasuryVault",
-      "hash": "0x9d0d2b01db52af3590c40e024b26e4d8cfa74f35625d1ef165c7feb3bbf25671",
-      "block": 47562148
+      "hash": "0x2297b07bd9ef2625b9c4e38dc3a18865af18002f75d624c5b863a72ae147ba86",
+      "block": 47589348
     },
     {
       "label": "deploy DemoSwapRouter",
-      "hash": "0x6d2fde58cfec415e7e805e65448f476b7373c45c7cf863b0e64a278cd91f0cf9",
-      "block": 47562148
+      "hash": "0x79ef15b96a5427038e392e7d07b8c5c3c54871d3c1798a5fadddcc787311c21f",
+      "block": 47589349
     },
     {
       "label": "adapter.setVault",
-      "hash": "0xe0a570a8587cf770fec3427f59bb77ecdf9388398eadb52caabef7ed243ceea3",
-      "block": 47562149
+      "hash": "0xa1dbc60d9554b43db3496f104c9555e1d60ff13da3bc5264cce35af4faf5e701",
+      "block": 47589349
     },
     {
       "label": "vault.setProtocolTreasury",
-      "hash": "0x6e18c1b37ed478b0929f9c15ae7b714cca38babba3f1c32a5722b7f3e7287846",
-      "block": 47562149
+      "hash": "0xfe341f4dc12f61431a982e87c966284f75ad895fb0fff4f54fd29544dca8c35b",
+      "block": 47589349
     },
     {
       "label": "vault.setJitHook(appraisal hook = oracle)",
-      "hash": "0x26b4bf9bef22236a981a9f24f161da2129f7c1eca16c2119820534b385ca64ac",
-      "block": 47562150
+      "hash": "0x0e89daf8d5479a62f6321f3d1de13d3acbd89613a9824f226af15019db70584d",
+      "block": 47589350
     },
     {
       "label": "vault.setMinCoverage(1%)",
-      "hash": "0x57b3c9b0b2afc3e054e2885129505c75597dd3ad43f05e387d087d9a8d261b81",
-      "block": 47562150
+      "hash": "0x1a407a08144900c7553c1fecb1e67044a2fbb73cdaaadf8c92b26a19b2552819",
+      "block": 47589350
     },
     {
       "label": "hook.setVault",
-      "hash": "0x338b8775b1b1db7279ea3ba935cc161ed3bbcbd567f4ff7fe777bf747c4cd03c",
-      "block": 47562151
+      "hash": "0x2a9a4d64850dd1ba38272340aa087510df27c7d4adee14357cbc5dbecfa222ca",
+      "block": 47589351
     },
     {
       "label": "property.setPermittedHolder(PoolManager)",
-      "hash": "0x111588e531331708cff43dafbae8589b371ab6359726f71e3b5bdc10b433d604",
-      "block": 47562151
+      "hash": "0xc029ceb1a6770aa5031a0a89dd334d83ce686a2fc25427f9ded5f3ba85012363",
+      "block": 47589351
     },
     {
       "label": "property.setPermittedHolder(vault)",
-      "hash": "0x33accd9c407ca999e3d6197953554fc29a8dbb73a5a4383c8ce82d5ee4758448",
-      "block": 47562152
+      "hash": "0xaeda5fefab6943b42ef9658a43ccc840e4223f0890949f1ecef2794b413133a5",
+      "block": 47589352
     },
     {
       "label": "property.setPermittedHolder(router)",
-      "hash": "0xf6b18bbf4241664571e8e439199789d2d408957adb311eaf9305febb2e9dd4c1",
-      "block": 47562152
+      "hash": "0xd2017eb346e2c6895366269b6de2b846226547311ec20edd02fa943abbf370ed",
+      "block": 47589352
     },
     {
-      "label": "hook.initAppraisal(-230270)",
-      "hash": "0x7068e8cb671665dd1728b9fc2067a144af970a634cb6023b3dc742e4b4f000e4",
-      "block": 47562153
+      "label": "hook.initAppraisal(230270)",
+      "hash": "0x54d56d6f5723a5b742cf2f43e54502deb7bf0f32cc3b6f52d705645bdc4827a5",
+      "block": 47589353
     },
     {
       "label": "PoolManager.initialize (at the appraisal)",
-      "hash": "0x0064364249cc5e15e44779fd52819e28650c984e02ec4701c154028baebba94a",
-      "block": 47562155
+      "hash": "0x361c2d96bf5d820b5578a72ac4108a26ccb1206bea5190663ed489b9e72ff225",
+      "block": 47589355
     },
     {
       "label": "property.mint(junior inventory)",
-      "hash": "0xed57e2ef04fd29bfba8c13921a817315815b3bbd72fa88419dfbde9ede8d7179",
-      "block": 47562155
+      "hash": "0x14c48a940e35384ece018e7deac1968845c32a9bec4f8f63287608078a59e6fd",
+      "block": 47589355
     },
     {
       "label": "dUSD.mint(junior buffer)",
-      "hash": "0x6b41bd4b9062b8c35c5a83bb3d34e69c73b9c7c791dad9ea1fbb31cd17db58e0",
-      "block": 47562155
+      "hash": "0x29a536e30ef78e1de19ce83e2f389b75e58b67976fdd018e7035bf66d14bc883",
+      "block": 47589356
     },
     {
       "label": "property.approve(vault)",
-      "hash": "0x308b16b7e4694e55f32c0b5e42792219530e49749273923463f021784bea4fc4",
-      "block": 47562156
+      "hash": "0x909c8c11cd4363912efcd4eeee79b78e9e06beb4d6d1925b2ea4118952b8e061",
+      "block": 47589356
     },
     {
       "label": "dUSD.approve(vault)",
-      "hash": "0xc08a52160602351ac3a15f10a79dff62e995e49af7704bb98036ca12ec6073e4",
-      "block": 47562156
+      "hash": "0xe5a539fac46350173a7f85bfdae940f48cadc45a7988628540059a3ad988ba34",
+      "block": 47589357
     },
     {
       "label": "vault.commitTeam (junior, 1-year lock)",
-      "hash": "0x3dd4d44549d179c2c0103c0f7e5254f2b40ec4ccf2d50039ada8c1288c36e7ef",
-      "block": 47562158
+      "hash": "0x1f7cd24721d1b62d18a24f274bc76d60a9393957b859c391aa7dca40e8babfdb",
+      "block": 47589359
     }
   ]
 }

@@ -70,9 +70,15 @@ export function walletLabel(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+/** Where a contract's verified source lives. The hook is verified on Blockscout (exact metadata match);
+ *  BaseScan's recompile rejects it although the on-chain metadata hash equals the build from source. */
+export const BLOCKSCOUT = 'https://base-sepolia.blockscout.com'
+export const verifiedSourceUrl = (key: string, addr: string) =>
+  key === 'hook' ? `${BLOCKSCOUT}/address/${addr}?tab=contract` : codeUrl(addr)
+
 export const RWA_CONTRACT_ROWS: { name: string; role: string; key: keyof RwaDemo['contracts'] }[] = [
   { name: 'MintwareTreasuryVault', role: 'Liquidity vault: senior USD + issuer junior, unchanged V2 code', key: 'vault' },
-  { name: 'MintwareRwaAppraisalHook', role: 'Uniswap v4 hook: appraisal band, band fee, vault oracle', key: 'hook' },
+  { name: 'MintwareRwaAppraisalHook', role: 'Uniswap v4 hook: appraisal band, band fee, vault oracle, exit window', key: 'hook' },
   { name: 'MockPermissionedPropertyToken', role: 'Property token (testnet stand-in): refuses unverified holders', key: 'property' },
   { name: 'MockRwaIdentityRegistry', role: 'Identity registry (testnet stand-in for the issuer’s)', key: 'registry' },
   { name: 'DemoLendingAdapter', role: 'Lending venue: idle senior earns (simulated testnet yield)', key: 'adapter' },

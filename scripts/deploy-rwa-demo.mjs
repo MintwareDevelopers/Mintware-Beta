@@ -111,6 +111,21 @@ async function call(label, address, a, functionName, args = []) {
   return r
 }
 
+// ── artifact freshness guard ──────────────────────────────────────────────────
+// Refuse to deploy from a stale or locally-mutated build: every source recorded in each artifact's metadata
+// must hash to the file on disk RIGHT NOW. (Learned the hard way: a mutation-test compile left a gate-less
+// hook artifact behind, and it was deployed.) Run `forge build` and retry if this fires.
+function assertFresh(name, a) {
+  const srcs = a.metadata?.sources ?? {}
+  const stale = []
+  for (const [path, { keccak256: want }] of Object.entries(srcs)) {
+    const full = join(ROOT, path)
+    if (!existsSync(full)) continue // library sources outside the repo layout are skipped
+    if (keccak256(toHex(readFileSync(full))) !== want) stale.push(path)
+  }
+  if (stale.length) die(`${name} artifact is STALE vs the source on disk (${stale.join(', ')}) — run \`forge build\` first`)
+}
+
 const A = {
   usd: art('DemoUSD'), reg: art('MockRwaIdentityRegistry'), prop: art('MockPermissionedPropertyToken'),
   lend: art('DemoLendingAdapter'), hook: art('MintwareRwaAppraisalHook'), vault: art('MintwareTreasuryVault'),
@@ -119,6 +134,19 @@ const A = {
     { name: 'currency0', type: 'address' }, { name: 'currency1', type: 'address' }, { name: 'fee', type: 'uint24' },
     { name: 'tickSpacing', type: 'int24' }, { name: 'hooks', type: 'address' }] }, { name: 'sqrtPriceX96', type: 'uint160' }], outputs: [{ type: 'int24' }] }] },
 }
+
+for (const [n, a] of Object.entries(A)) if (a.metadata) assertFresh(n, a)
+console.log('  · artifacts match the source on disk')
+
+// Progress is only resumable for the SAME build + config: a different bytecode set or hook config means a
+// different unit, so resuming would wire new code onto old contracts. Refuse instead.
+const buildFingerprint = keccak256(toHex(JSON.stringify({
+  code: Object.fromEntries(Object.entries(A).filter(([, a]) => a.bytecode).map(([n, a]) => [n, keccak256(a.bytecode.object)])),
+  config: CONFIG, tick: TICK_ABS, property: [PROPERTY_NAME, PROPERTY_SYMBOL],
+})))
+if (progress.build && progress.build !== buildFingerprint) die(`progress file ${PROGRESS} belongs to a different build/config — move it aside to deploy a fresh unit`)
+progress.build = buildFingerprint
+checkpoint()
 
 // 1) tokens, registry, simulated lending venue
 const usd = await deploy('DemoUSD', A.usd, [me])

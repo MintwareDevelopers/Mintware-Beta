@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useSignMessage } from 'wagmi'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
-import { RWA_DEMO, revertReasonText, RWA_CONTRACT_ROWS, RWA_CHAIN, txUrl, addrUrl, codeUrl, shortHash, walletLabel } from '@/lib/rwa/demo'
+import { RWA_DEMO, revertReasonText, RWA_CONTRACT_ROWS, RWA_CHAIN, txUrl, addrUrl, verifiedSourceUrl, shortHash, walletLabel } from '@/lib/rwa/demo'
 
 type Unit = {
   ok: boolean
@@ -257,7 +257,7 @@ export function RwaMarket() {
                     <td className="px-5 py-3.5"><div className="font-semibold">{r.name}</div><div className="text-[12.5px] text-ink-mid">{r.role}</div></td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
                       <a href={addrUrl(RWA_DEMO.contracts[r.key])} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-ink-mid no-underline hover:text-peri-deep">{shortHash(RWA_DEMO.contracts[r.key])}</a>
-                      <a href={codeUrl(RWA_DEMO.contracts[r.key])} target="_blank" rel="noreferrer" className="ml-3 rounded-full bg-[rgba(47,125,91,0.10)] px-2 py-0.5 text-[11.5px] font-semibold text-[#2F7D5B] no-underline">Verified source ↗</a>
+                      <a href={verifiedSourceUrl(r.key, RWA_DEMO.contracts[r.key])} target="_blank" rel="noreferrer" className="ml-3 rounded-full bg-[rgba(47,125,91,0.10)] px-2 py-0.5 text-[11.5px] font-semibold text-[#2F7D5B] no-underline">Verified source ↗</a>
                     </td>
                   </tr>
                 ))}
