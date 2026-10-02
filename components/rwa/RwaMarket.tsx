@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useSignMessage } from 'wagmi'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
-import { RWA_DEMO, revertReasonText, RWA_CONTRACT_ROWS, RWA_CHAIN, txUrl, addrUrl, verifiedSourceUrl, shortHash, walletLabel } from '@/lib/rwa/demo'
+import { getUnit, explorer, contractRows, revertReasonText, shortHash, walletLabel, RWA_UNITS, type RwaDemo } from '@/lib/rwa/demo'
 
 type Unit = {
   ok: boolean
@@ -39,16 +39,19 @@ const ago = (secs: number) => {
 }
 const displayLabel = (l: string) => l.replace(' deposits ', ' supplies ')
 
-export function RwaMarket() {
+export function RwaMarket({ slug }: { slug: string }) {
+  const u = getUnit(slug) ?? RWA_UNITS[0]
+  const D = u.demo
+  const ex = explorer(u)
   const [unit, setUnit] = useState<Unit | null>(null)
   const [failed, setFailed] = useState(false)
   const [now, setNow] = useState(() => Date.now() / 1000)
 
   const load = useCallback((fresh = false) =>
-    fetch(`/api/rwa/unit${fresh ? '?fresh=1' : ''}`, { cache: 'no-store' })
+    fetch(`/api/rwa/unit?unit=${u.slug}${fresh ? '&fresh=1' : ''}`, { cache: 'no-store' })
       .then((r) => r.json())
       .then((d: Unit) => { if (d.ok) { setUnit(d); setFailed(false) } else setFailed(true) })
-      .catch(() => setFailed(true)), [])
+      .catch(() => setFailed(true)), [u.slug])
 
   useEffect(() => {
     load()
@@ -65,7 +68,7 @@ export function RwaMarket() {
     return unit.lending.interestMintedUsd + unit.lending.pendingUsd + perSec * since
   }, [unit, now])
 
-  const p = RWA_DEMO.property
+  const p = D.property
   const status = !unit ? null
     : unit.tradingPaused ? { t: 'Trading paused', c: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]' }
     : !unit.appraisal.fresh && unit.appraisal.oracleReady ? { t: 'Appraisal stale — trading halted, LP exit window open', c: 'text-[#B4532A] bg-[rgba(232,138,103,0.14)]' }
@@ -85,8 +88,23 @@ export function RwaMarket() {
             <Link href="/app/rwa" className="text-[13px] text-ink-mid no-underline hover:text-peri-deep">RWA liquidity</Link>
             <span className="text-ink-soft">/</span>
             <span className="text-[13px] text-ink">{p.symbol}</span>
-            <span className="ml-1 rounded-full border border-hair px-2.5 py-0.5 text-[11.5px] font-semibold text-ink-mid">Testnet demo · {RWA_CHAIN.name} · unaudited</span>
+            <span className="ml-1 rounded-full border border-hair px-2.5 py-0.5 text-[11.5px] font-semibold text-ink-mid">Testnet demo · {u.chain.name} · unaudited</span>
             <LiveDot block={unit?.block} failed={failed} />
+          </div>
+
+          {/* Same liquidity unit, live on more than one chain */}
+          <div className="mt-4 inline-flex rounded-full border border-hair bg-white p-1" role="tablist" aria-label="Chain">
+            {RWA_UNITS.map((x) => (
+              <Link
+                key={x.slug}
+                href={`/app/rwa/${x.slug}`}
+                role="tab"
+                aria-selected={x.slug === u.slug}
+                className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold no-underline transition-colors ${x.slug === u.slug ? 'bg-[rgba(108,108,240,0.12)] text-peri-deep' : 'text-ink-mid hover:text-ink'}`}
+              >
+                {x.chain.name}
+              </Link>
+            ))}
           </div>
 
           <div className="mt-5 grid grid-cols-[1.4fr_1fr] gap-8 max-[860px]:grid-cols-1">
@@ -112,7 +130,7 @@ export function RwaMarket() {
                 <span>{unit ? ago(now - unit.appraisal.at) : '—'}</span>
               </div>
               {status && <div className={`mt-4 inline-flex rounded-full px-3 py-1 text-[12.5px] font-semibold ${status.c}`}>{status.t}</div>}
-              <LiveTradeButton onTraded={() => { load(true); setTimeout(() => load(true), 4000) }} />
+              {u.liveTrade ? <LiveTradeButton onTraded={() => { load(true); setTimeout(() => load(true), 4000) }} /> : <p className="mt-4 border-t border-hair-soft pt-4 text-[12.5px] text-ink-soft">Live demo trading runs on the Base Sepolia unit.</p>}
             </div>
           </div>
         </div>
@@ -144,9 +162,9 @@ export function RwaMarket() {
             )}
           </div>
           <div className="mt-5 rounded-[20px] border border-hair bg-white p-4">
-            {unit ? <PriceBandChart unit={unit} /> : <div className="h-[260px] mw-shimmer rounded-[12px]" />}
+            {unit ? <PriceBandChart unit={unit} demo={D} /> : <div className="h-[260px] mw-shimmer rounded-[12px]" />}
           </div>
-          <p className="mt-3 text-[12.5px] text-ink-soft">Each point is a swap read from the pool on {RWA_CHAIN.name}. A trade that would end outside the hard band is refused by the hook, unless it moves the price back toward the appraisal.</p>
+          <p className="mt-3 text-[12.5px] text-ink-soft">Each point is a swap read from the pool on {u.chain.name}. A trade that would end outside the hard band is refused by the hook, unless it moves the price back toward the appraisal.</p>
         </div>
       </section>
 
@@ -186,12 +204,12 @@ export function RwaMarket() {
                 {unit?.trades.length ? unit.trades.map((t) => (
                   <tr key={t.tx} className="border-b border-hair-soft last:border-0">
                     <td className="px-5 py-3 text-ink-mid">{t.ts ? ago(now - t.ts) : `block ${t.block}`}</td>
-                    <td className="px-5 py-3">{t.trader ? walletLabel(t.trader) : '—'}</td>
+                    <td className="px-5 py-3">{t.trader ? walletLabel(t.trader, D) : '—'}</td>
                     <td className="px-5 py-3"><span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${t.side === 'buy' ? 'text-[#2F7D5B] bg-[rgba(47,125,91,0.10)]' : 'text-peri-deep bg-[rgba(108,108,240,0.10)]'}`}>{t.side}</span></td>
                     <td className="px-5 py-3 text-right font-atx-mono">{t.units.toFixed(3)}</td>
                     <td className="px-5 py-3 text-right font-atx-mono">{t.usd.toFixed(2)}</td>
                     <td className="px-5 py-3 text-right font-atx-mono">{usd(t.priceUsd, 2)}</td>
-                    <td className="px-5 py-3 text-right"><a href={txUrl(t.tx)} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-peri-deep no-underline hover:underline">{shortHash(t.tx)} ↗</a></td>
+                    <td className="px-5 py-3 text-right"><a href={ex.tx(t.tx)} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-peri-deep no-underline hover:underline">{shortHash(t.tx)} ↗</a></td>
                   </tr>
                 )) : (
                   <tr><td colSpan={7} className="px-5 py-8 text-center text-ink-soft">{unit ? 'No trades yet.' : 'Reading the pool…'}</td></tr>
@@ -208,11 +226,11 @@ export function RwaMarket() {
           <div className={EY}>Proof</div>
           <h2 className={`${H2} mt-1.5`}>Every step, a transaction you can open</h2>
           <p className="mt-2 max-w-[66ch] text-[14px] leading-[1.6] text-ink-mid">
-            The full lifecycle, run on {RWA_CHAIN.name} on {new Date(RWA_DEMO.generatedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. The two refusals
+            The full lifecycle, run on {u.chain.name} on {new Date(D.generatedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. The two refusals
             are real transactions that were mined and reverted, the rule enforced by the chain, not a simulation.
           </p>
           <ol className="mt-6 grid gap-3">
-            {RWA_DEMO.legs.map((leg) => {
+            {D.legs.map((leg) => {
               const refused = leg.txs.some((t) => t.status === 'reverted')
               return (
                 <li key={leg.n} className={`rounded-[18px] border p-5 ${refused ? 'border-[rgba(232,138,103,0.45)] bg-[#FFF8F4]' : 'border-hair bg-white'}`}>
@@ -231,7 +249,7 @@ export function RwaMarket() {
                               {t.status === 'reverted' ? '⨯ ' : '✓ '}{displayLabel(t.label)}
                               {revertReasonText(t) && <span className="block text-[12px] text-[#B4532A]">{revertReasonText(t)}</span>}
                             </span>
-                            <a href={txUrl(t.hash)} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-peri-deep no-underline hover:underline">{shortHash(t.hash)} ↗</a>
+                            <a href={ex.tx(t.hash)} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-peri-deep no-underline hover:underline">{shortHash(t.hash)} ↗</a>
                           </li>
                         ))}
                       </ul>
@@ -248,16 +266,23 @@ export function RwaMarket() {
       <section className="border-b border-hair-soft bg-[#FBFBFE]">
         <div className={`${WRAP} py-10`}>
           <div className={EY}>Contracts</div>
-          <h2 className={`${H2} mt-1.5`}>Deployed and source-verified on {RWA_CHAIN.name}</h2>
+          <h2 className={`${H2} mt-1.5`}>{u.network === 'xrpl-evm-testnet' ? `Deployed on ${u.chain.name}, source proven by metadata hash` : `Deployed and source-verified on ${u.chain.name}`}</h2>
+          {u.network === 'xrpl-evm-testnet' && (
+            <p className="mt-2 max-w-[72ch] text-[13px] leading-[1.55] text-ink-mid">
+              This chain's explorer verifier does not support Solidity 0.8.26 yet, so each contract is proven instead by its on-chain
+              metadata hash matching the build from this repo's source (<span className="font-atx-mono">scripts/prove-rwa-source-match.mjs</span>, re-runnable by anyone).
+              {D.poolManagerDeployedByUs && ' There is no Uniswap v4 on this chain yet, so the PoolManager is our own testnet deployment of v4-core.'}
+            </p>
+          )}
           <div className="mt-5 overflow-x-auto rounded-[20px] border border-hair bg-white">
             <table className="w-full min-w-[640px] text-[13.5px]">
               <tbody>
-                {RWA_CONTRACT_ROWS.map((r) => (
+                {contractRows(u).map((r) => (
                   <tr key={r.key} className="border-b border-hair-soft last:border-0">
                     <td className="px-5 py-3.5"><div className="font-semibold">{r.name}</div><div className="text-[12.5px] text-ink-mid">{r.role}</div></td>
                     <td className="px-5 py-3.5 text-right whitespace-nowrap">
-                      <a href={addrUrl(RWA_DEMO.contracts[r.key])} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-ink-mid no-underline hover:text-peri-deep">{shortHash(RWA_DEMO.contracts[r.key])}</a>
-                      <a href={verifiedSourceUrl(r.key, RWA_DEMO.contracts[r.key])} target="_blank" rel="noreferrer" className="ml-3 rounded-full bg-[rgba(47,125,91,0.10)] px-2 py-0.5 text-[11.5px] font-semibold text-[#2F7D5B] no-underline">Verified source ↗</a>
+                      <a href={ex.addr(D.contracts[r.key])} target="_blank" rel="noreferrer" className="font-atx-mono text-[12.5px] text-ink-mid no-underline hover:text-peri-deep">{shortHash(D.contracts[r.key])}</a>
+                      <a href={ex.source(r.key, D.contracts[r.key])} target="_blank" rel="noreferrer" className="ml-3 rounded-full bg-[rgba(47,125,91,0.10)] px-2 py-0.5 text-[11.5px] font-semibold text-[#2F7D5B] no-underline">{u.network === 'xrpl-evm-testnet' ? 'Source match ✓' : 'Verified source ↗'}</a>
                     </td>
                   </tr>
                 ))}
@@ -271,7 +296,7 @@ export function RwaMarket() {
       <section>
         <div className={`${WRAP} py-8`}>
           <p className="max-w-[86ch] text-[12px] leading-[1.6] text-ink-soft">
-            Testnet demonstration on {RWA_CHAIN.name}. The property is fictional; dUSD and {p.symbol} are valueless test tokens; the
+            Testnet demonstration on {u.chain.name}. The property is fictional; dUSD and {p.symbol} are valueless test tokens; the
             lending yield is simulated. The contracts are unaudited. A liquidity position is not a deposit, a savings product, or a
             guaranteed or fixed return. Nothing here is an offer of securities or of any investment.{' '}
             <Link href="/legal" className="font-semibold text-peri-deep no-underline hover:underline">Legal →</Link>
@@ -318,7 +343,7 @@ function LiveTradeButton({ onTraded }: { onTraded: () => void }) {
       {state.msg && (
         <p className={`mt-2 text-[12.5px] ${state.ok === false ? 'text-[#B4532A]' : 'text-ink-mid'}`}>
           {state.msg}
-          {state.hash && <> · <a href={txUrl(state.hash)} target="_blank" rel="noreferrer" className="font-atx-mono text-peri-deep no-underline hover:underline">{shortHash(state.hash)} ↗</a></>}
+          {state.hash && <> · <a href={explorer(RWA_UNITS[0]).tx(state.hash)} target="_blank" rel="noreferrer" className="font-atx-mono text-peri-deep no-underline hover:underline">{shortHash(state.hash)} ↗</a></>}
         </p>
       )}
     </div>
@@ -362,9 +387,9 @@ function Legend({ swatch, text }: { swatch: string; text: string }) {
 /** Spot price (from on-chain swaps) against the appraisal and its core / hard bands. The x-axis is the EVENT
  *  SEQUENCE (each swap / appraisal one step, then "now") — a thin RWA market trades in bursts, so a block-scaled
  *  axis would stack every trade into one column. */
-function PriceBandChart({ unit }: { unit: Unit }) {
+function PriceBandChart({ unit, demo }: { unit: Unit; demo: RwaDemo }) {
   const W = 1000, H = 290, PL = 64, PR = 20, PT = 16, PB = 34
-  const cfg = RWA_DEMO.hookConfig
+  const cfg = demo.hookConfig
   if (!cfg || (unit.priceSeries.length === 0 && unit.appraisalSeries.length === 0)) {
     return <div className="grid h-[260px] place-items-center text-[13px] text-ink-soft">No activity yet.</div>
   }
@@ -399,7 +424,7 @@ function PriceBandChart({ unit }: { unit: Unit }) {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`${RWA_DEMO.property.symbol} spot price against its appraisal band`}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label={`${demo.property.symbol} spot price against its appraisal band`}>
         {ticks.map((v) => (
           <g key={v}>
             <line x1={PL} x2={W - PR} y1={Y(v)} y2={Y(v)} stroke="rgba(23,23,31,0.06)" />

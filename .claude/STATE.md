@@ -104,8 +104,8 @@ Liquid Sovereign Account), and is fairly earned (Attribution). Canonical narrati
   BUT the **liquidity engine is revived as "V2-RWAs"** (2026-10-01, LiquidAcre partnership): a V2 *vertical*,
   testnet demo LIVE on Base Sepolia, unaudited, dark-launched behind `NEXT_PUBLIC_V2_RWA_ENABLED` + the V2 gate.
   Rule: `.claude/rules/rwa-liquidity.md`.
-  XRPL EVM testnet (1449000): scripts chain-agnostic (`RWA_NETWORK=xrpl-evm-testnet`), fork rehearsal green,
-  **NOT broadcast** (seat unfunded there); output lands in `config/rwaDemo.xrpl*.json` once it is.
+  Also LIVE on XRPL EVM testnet (1449000, `RWA_NETWORK=xrpl-evm-testnet`, our own v4-core PoolManager there):
+  `config/rwaDemo.xrpl*.json`; page `/app/rwa/wcp7-xrpl` (chain switcher on the market page).
 - **Campaigns** (token reward pools / points campaigns / MintwareDistributor / Hardhat) —
   shelved 2026-08-12. Archived: `docs/archive/campaigns/`, branch `archive/campaigns-surface`.
   Supabase campaign tables were **retained** (not dropped) but nothing writes them.

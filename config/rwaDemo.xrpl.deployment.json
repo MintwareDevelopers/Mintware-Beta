@@ -1,0 +1,180 @@
+{
+  "generatedAt": "2026-10-02T14:40:20.934Z",
+  "chainId": 1449000,
+  "chain": {
+    "id": 1449000,
+    "name": "XRPL EVM Testnet",
+    "explorer": "https://explorer.testnet.xrplevm.org",
+    "nativeSymbol": "XRP",
+    "network": "xrpl-evm-testnet"
+  },
+  "signer": "0xAF8ED12857DFceEEec769c2e0035f7afbDF9d5ca",
+  "signerKind": "privy-rwa-seat",
+  "rehearsal": false,
+  "contracts": {
+    "usd": "0xd68bb15f9f2083a5a8dc78aa536442157f1f344a",
+    "registry": "0x716c82bd49440cb3112d4a27ada8c51b99c53c44",
+    "property": "0xaf6fe435efeadec900e61931db6800597b86e1e8",
+    "adapter": "0xcb955477182e2b591ca75fe765762312d6ba9696",
+    "hook": "0x4764cF8e5075C97958e1Ee0125De4267b3C16AC0",
+    "positionLib": "0x7668e12726f326e7be57d7fb7b3d1808f6b0dbf1",
+    "vault": "0x958d6a1ae1592dbc979843d0d2e51d0f1cb321cd",
+    "router": "0x4aebbf62e4e07ca2c2dc21369b42fddd318f40a5",
+    "poolManager": "0xc203D43999D84A317690C0507Fd4178cEE6e7424"
+  },
+  "poolManagerDeployedByUs": true,
+  "property": {
+    "name": "Willow Creek Parcel 7 (demo)",
+    "symbol": "WCP7",
+    "decimals": 18,
+    "appraisalUsdAtLaunch": 100
+  },
+  "hookConfig": {
+    "coreBandTicks": 300,
+    "specBandTicks": 1000,
+    "maxStepTicks": 500,
+    "minUpdateInterval": 600,
+    "maxAppraisalAge": 2592000,
+    "coreFeePips": 3000,
+    "specFeePips": 10000,
+    "maxDriftTicksPerDay": 1000,
+    "oracleGraceSecs": 604800
+  },
+  "appraisalTick": -230270,
+  "propertyIsCurrency0": true,
+  "poolKey": {
+    "currency0": "0xaf6fe435efeadec900e61931db6800597b86e1e8",
+    "currency1": "0xd68bb15f9f2083a5a8dc78aa536442157f1f344a",
+    "fee": 8388608,
+    "tickSpacing": 60,
+    "hooks": "0x4764cF8e5075C97958e1Ee0125De4267b3C16AC0"
+  },
+  "hookSalt": "0x000000000000000000000000000000000000000000000000000000000000496d",
+  "txs": [
+    {
+      "label": "deploy PoolManager (v4-core, BUSL-1.1, testnet)",
+      "hash": "0x49b12fe500f7109040439ba545c86f37138078b5b0284308eab9e76363ca1917",
+      "block": 8892050
+    },
+    {
+      "label": "deploy DemoUSD",
+      "hash": "0xba4f46f556ad74af11a8b43a63cbb3035ecbafc5592b9ecf726bf57b375fba37",
+      "block": 8892051
+    },
+    {
+      "label": "deploy MockRwaIdentityRegistry",
+      "hash": "0x48d0a7b2dc313dc8095dd677903f0f7ce6f1e6ad8978ce33a988b9546c6c5937",
+      "block": 8892052
+    },
+    {
+      "label": "deploy MockPermissionedPropertyToken (WCP7)",
+      "hash": "0xb59492ce14d373d88e4ff89c8641a589eb252b2cf50850155973af64bda20696",
+      "block": 8892053
+    },
+    {
+      "label": "deploy DemoLendingAdapter",
+      "hash": "0x8fd6d4750789b01941d1dd722fd18cdb9a0201fc8ef2098d3c00afc8f9ec57d1",
+      "block": 8892055
+    },
+    {
+      "label": "DemoUSD.setMinter(adapter)",
+      "hash": "0x07f997859179f8495d41b8a7eff68a5f0876f5112b67fd50ae6116bd5d91f36f",
+      "block": 8892057
+    },
+    {
+      "label": "deploy MintwareRwaAppraisalHook (CREATE2)",
+      "hash": "0x0753d291986494c6fdd4ab14be0609293ab71bbc28a7f759af1b725af7b09fc0",
+      "block": 8892059
+    },
+    {
+      "label": "deploy MWTreasuryPositionLib",
+      "hash": "0xff10f9abe7bb751952683eec595d36c663f9f1aae3f057e8fe71a34ebb32613c",
+      "block": 8892060
+    },
+    {
+      "label": "deploy MintwareTreasuryVault",
+      "hash": "0x13f39ce8e98fdb3ef585f89e608b6e9450d45b7f7b527275dac63228456e1914",
+      "block": 8892061
+    },
+    {
+      "label": "deploy DemoSwapRouter",
+      "hash": "0xd5487ed1f58c4083cbfae944d03e56aef49fbd4838d22e96064d228f801de079",
+      "block": 8892063
+    },
+    {
+      "label": "adapter.setVault",
+      "hash": "0x6d085023f86c235968dde6a334a3527a945c6f2c8b3be541edabbb06197aa16a",
+      "block": 8892064
+    },
+    {
+      "label": "vault.setProtocolTreasury",
+      "hash": "0xc9d4df217f9d943a0f2ec907b77dd211451a9983f8db8bf08da98b6e94b12154",
+      "block": 8892065
+    },
+    {
+      "label": "vault.setJitHook(appraisal hook = oracle)",
+      "hash": "0x58ad204ea545b48329e8b2e2f2c10fd150efb70bbb86edfe1fb44af40306df03",
+      "block": 8892066
+    },
+    {
+      "label": "vault.setMinCoverage(1%)",
+      "hash": "0xc010ad21f00c9e868e44533c279ee486b3938ef246f06062fa3603ae5b0fabf1",
+      "block": 8892067
+    },
+    {
+      "label": "hook.setVault",
+      "hash": "0x9aedf1b364cbb01bdab01b6c0e65c5f0e15aae2b9b609b039df04864a33185e1",
+      "block": 8892068
+    },
+    {
+      "label": "property.setPermittedHolder(PoolManager)",
+      "hash": "0x76e0c77de9c54f59e79f7bd7324f87cc72562d9384ddae245401fb187131f9a6",
+      "block": 8892069
+    },
+    {
+      "label": "property.setPermittedHolder(vault)",
+      "hash": "0xf4a7c27be1f683b3e97766342a1414bc2bd8270db87922b8bc0a3ba44845ec84",
+      "block": 8892070
+    },
+    {
+      "label": "property.setPermittedHolder(router)",
+      "hash": "0x4f504151932682f0f49aa9dcc718b0895796909110814dc842a701a881cf079b",
+      "block": 8892071
+    },
+    {
+      "label": "hook.initAppraisal(-230270)",
+      "hash": "0x480c9d597a71c498f533ad8a83beb78a29c323d7b19bb304c528e64f7fddb383",
+      "block": 8892072
+    },
+    {
+      "label": "PoolManager.initialize (at the appraisal)",
+      "hash": "0x4879fa7a74f41c473a47b56482cd87e857d2af72a30a9cf0ffa415656fa2d3cb",
+      "block": 8892073
+    },
+    {
+      "label": "property.mint(junior inventory)",
+      "hash": "0xb66001135dffc16b8d801f8a21444ba61effa3f0c3b0b4622ee87a58a4c32077",
+      "block": 8892074
+    },
+    {
+      "label": "dUSD.mint(junior buffer)",
+      "hash": "0x534a899517ee5193731c5cbede64821e08d08b951a087fdc6d031ba6b5e75ca1",
+      "block": 8892075
+    },
+    {
+      "label": "property.approve(vault)",
+      "hash": "0x7af8d2c2a869eb821f3b45620d762bdc5dfed07f377b678f280f6a1d1d804602",
+      "block": 8892077
+    },
+    {
+      "label": "dUSD.approve(vault)",
+      "hash": "0x5c563fdf7ade7e45137840205fbee964455cf02a73b0a4804ee60e5a1cadb656",
+      "block": 8892078
+    },
+    {
+      "label": "vault.commitTeam (junior, 1-year lock)",
+      "hash": "0xb72ca14fb36e2535d2c70333638b2f6329f400c506ef8a48b1a6915c43a877f3",
+      "block": 8892079
+    }
+  ]
+}

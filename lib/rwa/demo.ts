@@ -1,9 +1,11 @@
-// V2-RWAs — the one home for the demo liquidity unit's recorded facts (addresses + every proof hash).
-// Source of truth: config/rwaDemo.json, written by scripts/rwa-demo-lifecycle.mjs after a real run on
-// Base Sepolia. Re-run the scripts and this updates; never hand-edit hashes. Testnet + unaudited:
-// the hashes are real, the property is fictional, every token is valueless.
+// V2-RWAs — the one home for the demo liquidity units' recorded facts (addresses + every proof hash), one
+// unit per chain. Sources of truth (written by scripts/rwa-demo-lifecycle.mjs after a real run; never hand-edit):
+//   Base Sepolia      → config/rwaDemo.json
+//   XRPL EVM testnet  → config/rwaDemo.xrpl.json   (RWA_NETWORK=xrpl-evm-testnet)
+// Testnet + unaudited: the hashes are real, the property is fictional, every token is valueless.
 
-import demo from '@/config/rwaDemo.json'
+import baseDemo from '@/config/rwaDemo.json'
+import xrplDemo from '@/config/rwaDemo.xrpl.json'
 
 export type RwaRevertReason = { error: string; target: string | null; args: string[] }
 export type RwaProofTx = { label: string; hash: string; status: 'success' | 'reverted'; from?: string; block?: number; reason?: RwaRevertReason }
@@ -19,6 +21,7 @@ export type RwaDemo = {
   }
   poolKey: { currency0: string; currency1: string; fee: number; tickSpacing: number; hooks: string }
   propertyIsCurrency0: boolean
+  poolManagerDeployedByUs?: boolean
   wallets: Record<string, { label: string; address: string }>
   issuer: string
   hookConfig: {
@@ -31,7 +34,47 @@ export type RwaDemo = {
   legs: RwaProofLeg[]
 }
 
-export const RWA_DEMO = demo as unknown as RwaDemo
+export type RwaChain = {
+  id: number
+  name: string
+  short: string
+  explorer: string
+  /** where contract source is verified: BaseScan for most of Base, Blockscout for the hook + all of XRPL EVM */
+  blockscout: string
+  nativeSymbol: string
+}
+
+export type RwaUnit = {
+  slug: string
+  network: 'base-sepolia' | 'xrpl-evm-testnet'
+  chain: RwaChain
+  demo: RwaDemo
+  /** the "run a live trade" button + background activity run on this unit */
+  liveTrade: boolean
+}
+
+export const RWA_UNITS: RwaUnit[] = [
+  {
+    slug: 'wcp7',
+    network: 'base-sepolia',
+    chain: { id: 84532, name: 'Base Sepolia', short: 'Base', explorer: 'https://sepolia.basescan.org', blockscout: 'https://base-sepolia.blockscout.com', nativeSymbol: 'ETH' },
+    demo: baseDemo as unknown as RwaDemo,
+    liveTrade: true,
+  },
+  {
+    slug: 'wcp7-xrpl',
+    network: 'xrpl-evm-testnet',
+    chain: { id: 1449000, name: 'XRPL EVM Testnet', short: 'XRPL EVM', explorer: 'https://explorer.testnet.xrplevm.org', blockscout: 'https://explorer.testnet.xrplevm.org', nativeSymbol: 'XRP' },
+    demo: xrplDemo as unknown as RwaDemo,
+    liveTrade: false,
+  },
+]
+
+export const getUnit = (slug: string): RwaUnit | undefined => RWA_UNITS.find((u) => u.slug === slug.toLowerCase())
+
+/** Back-compat: the Base Sepolia unit (the live-trade button + activity script trade here). */
+export const RWA_DEMO = RWA_UNITS[0].demo
+export const RWA_CHAIN = RWA_UNITS[0].chain
 
 /** Plain-English text for a refusal, from the revert the lifecycle script DECODED on-chain (`tx.reason`). */
 const RULE_TEXT: Record<string, string> = {
@@ -46,11 +89,25 @@ export function revertReasonText(t: RwaProofTx): string | null {
   return `${t.reason.error}: ${RULE_TEXT[t.reason.error] ?? 'reverted on-chain'} (decoded from the chain)`
 }
 
-export const RWA_CHAIN = { id: 84532, name: 'Base Sepolia', explorer: 'https://sepolia.basescan.org' } as const
-export const txUrl = (hash: string) => `${RWA_CHAIN.explorer}/tx/${hash}`
-export const addrUrl = (addr: string) => `${RWA_CHAIN.explorer}/address/${addr}`
-export const codeUrl = (addr: string) => `${RWA_CHAIN.explorer}/address/${addr}#code`
 export const shortHash = (h: string) => (h.length > 14 ? `${h.slice(0, 8)}…${h.slice(-6)}` : h)
+
+/** Explorer links for one unit's chain. */
+export function explorer(u: RwaUnit) {
+  const isXrpl = u.network === 'xrpl-evm-testnet'
+  return {
+    tx: (hash: string) => `${u.chain.explorer}/tx/${hash}`,
+    addr: (addr: string) => `${u.chain.explorer}/address/${addr}`,
+    /** BaseScan rejects the factory-CREATE2'd hook although its metadata matches the source; Blockscout verifies it. */
+    source: (key: string, addr: string) =>
+      isXrpl || key === 'hook' ? `${u.chain.blockscout}/address/${addr}?tab=contract` : `${u.chain.explorer}/address/${addr}#code`,
+  }
+}
+
+/** Back-compat Base helpers. */
+export const txUrl = (hash: string) => explorer(RWA_UNITS[0]).tx(hash)
+export const addrUrl = (addr: string) => explorer(RWA_UNITS[0]).addr(addr)
+export const codeUrl = (addr: string) => `${RWA_CHAIN.explorer}/address/${addr}#code`
+export const verifiedSourceUrl = (key: string, addr: string) => explorer(RWA_UNITS[0]).source(key, addr)
 
 /** USD price of one property token at a pool tick (6-dp USD quote, 18-dp property). */
 export function tickToUsd(tick: number, propertyIsCurrency0 = RWA_DEMO.propertyIsCurrency0): number {
@@ -58,23 +115,17 @@ export function tickToUsd(tick: number, propertyIsCurrency0 = RWA_DEMO.propertyI
   return (propertyIsCurrency0 ? p : 1 / p) * 1e12
 }
 
-/** The verified demo-trader Privy wallet behind the "run a live trade" button + the activity script. */
+/** The verified demo-trader Privy wallet behind the "run a live trade" button + the activity script (Base). */
 export const RWA_DEMO_TRADER = '0x65398D823cB346aa4CCd4774223F96E303360bAC'
 
-/** Human label for a demo wallet, else a short address. */
-export function walletLabel(addr: string): string {
+/** Human label for a demo wallet on a unit, else a short address. */
+export function walletLabel(addr: string, demo: RwaDemo = RWA_DEMO): string {
   const a = addr.toLowerCase()
-  if (a === RWA_DEMO.issuer.toLowerCase()) return 'Issuer'
+  if (a === demo.issuer.toLowerCase()) return 'Issuer'
   if (a === RWA_DEMO_TRADER.toLowerCase()) return 'Demo trader (live)'
-  for (const w of Object.values(RWA_DEMO.wallets)) if (w.address.toLowerCase() === a) return w.label.replace(/^.* · /, '')
+  for (const w of Object.values(demo.wallets)) if (w.address.toLowerCase() === a) return w.label.replace(/^.* · /, '')
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
-
-/** Where a contract's verified source lives. The hook is verified on Blockscout (exact metadata match);
- *  BaseScan's recompile rejects it although the on-chain metadata hash equals the build from source. */
-export const BLOCKSCOUT = 'https://base-sepolia.blockscout.com'
-export const verifiedSourceUrl = (key: string, addr: string) =>
-  key === 'hook' ? `${BLOCKSCOUT}/address/${addr}?tab=contract` : codeUrl(addr)
 
 export const RWA_CONTRACT_ROWS: { name: string; role: string; key: keyof RwaDemo['contracts'] }[] = [
   { name: 'MintwareTreasuryVault', role: 'Liquidity vault: senior USD + issuer junior, unchanged V2 code', key: 'vault' },
@@ -85,3 +136,10 @@ export const RWA_CONTRACT_ROWS: { name: string; role: string; key: keyof RwaDemo
   { name: 'DemoUSD', role: 'Valueless 6-dp testnet dollar', key: 'usd' },
   { name: 'DemoSwapRouter', role: 'Demo router: stands in for the issuer’s licensed front end', key: 'router' },
 ]
+
+/** Contract rows for a unit — adds the v4 PoolManager when we deployed it ourselves (chain has no Uniswap v4). */
+export function contractRows(u: RwaUnit) {
+  return u.demo.poolManagerDeployedByUs
+    ? [...RWA_CONTRACT_ROWS, { name: 'PoolManager (v4-core)', role: 'Our testnet deployment of Uniswap v4-core (BUSL-1.1) — this chain has no Uniswap v4', key: 'poolManager' as const }]
+    : RWA_CONTRACT_ROWS
+}

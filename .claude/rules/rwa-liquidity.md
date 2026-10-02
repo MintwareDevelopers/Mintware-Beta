@@ -34,10 +34,7 @@ root or gateway seats** (`scripts/lib/rwaSigner.mjs`). All 8 contracts source-ve
 
 ## XRPL EVM testnet (1449000) — one home: `config/rwaDemo.xrpl.deployment.json` + `config/rwaDemo.xrpl.json`
 
-**Status (2026-10-02): NOT broadcast.** Fork rehearsal green; the `rwa` seat holds 0 XRP there. Fund it at
-`https://faucet.xrplevm.org` (Testnet) with ≥ 0.5 XRP (a run costs ≈ 0.17 XRP: deploy ≈ 0.02 + lifecycle gas +
-6 × 0.02 demo-wallet gas), then `RWA_NETWORK=xrpl-evm-testnet node --env-file=.env.robinhood.local scripts/deploy-rwa-demo.mjs`,
-the same for `rwa-demo-lifecycle.mjs`, then `RWA_NETWORK=xrpl-evm-testnet node scripts/verify-rwa-demo.mjs`.
+**Status (2026-10-02): LIVE (testnet).** Vault `0x958d6a1ae1592dbc979843d0d2e51d0f1cb321cd`, hook `0x4764cF8e5075C97958e1Ee0125De4267b3C16AC0`, our v4-core PoolManager `0xc203D43999D84A317690C0507Fd4178cEE6e7424`; 25 deploy + 15 proof txs (both refusals decoded on-chain). Funded by bridging faucet XRP from the XRPL testnet through Axelar ITS (the EVM faucet is behind a bot check). **Source:** XRPL EVM testnet Blockscout has no solc 0.8.26 and Sourcify lists only XRPL EVM mainnet, so explorer verification is not possible — instead `RWA_NETWORK=xrpl-evm-testnet node scripts/prove-rwa-source-match.mjs` proves on-chain metadata == build == repo source for all 9 contracts. The market page shows it at `/app/rwa/wcp7-xrpl` (chain switcher).
 
 - Chain: id `1449000`, RPC `https://rpc.testnet.xrplevm.org`, explorer (Blockscout) `https://explorer.testnet.xrplevm.org`,
   native gas **XRP** (18 dp on the EVM side), EIP-1559 (blocks carry `baseFeePerGas`, ≈ 0.6 gwei), block gas limit 21M.
