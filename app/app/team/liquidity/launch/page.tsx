@@ -218,7 +218,7 @@ export default function MatchedLaunch() {
             </div>
 
             {/* Live figures */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
               <Stat label="Community raises" value={fmtUsd(preview.matchedUsdc)} />
               <Stat label={`${tkr} paired`} value={fmt(preview.pairedTokens)} />
               <Stat label={`${tkr} refunded`} value={fmt(preview.refundTokens)} sub="if it stops here" />
