@@ -137,7 +137,7 @@ export default function ProofPage() {
             The router is the real product bytecode; the yield source + pair vault here are an open-mint mock rig
             so the loop is self-contained. The real <span className="font-mono">AaveV3YieldAdapter</span> +{' '}
             <span className="font-mono">MintwareDeFiPairVault</span> implement the same interfaces (Forge-tested).{' '}
-            <Link href="/app/liquidity/staged" className="text-peri-deep no-underline hover:underline">Try it live →</Link>
+            <Link href="/app/team/liquidity/staged" className="text-peri-deep no-underline hover:underline">Try it live →</Link>
           </p>
         </div>
 
@@ -225,7 +225,7 @@ export default function ProofPage() {
             card-originated settleSpend burned $2 of senior shares on-chain (linked above). The one
             still-dormant piece is the AUTOMATIC capture path (off by default). This same run also
             surfaced a real bug — the settle core was marking a reverted tx as settled — now fixed.{' '}
-            <Link href="/app/org" className="text-peri-deep no-underline hover:underline">The card surface →</Link>
+            <Link href="/app/team/cards" className="text-peri-deep no-underline hover:underline">The card surface →</Link>
           </p>
         </div>
 

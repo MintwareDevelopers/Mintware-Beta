@@ -26,3 +26,12 @@ export function isV2FromCookie(cookieVal: string | undefined): boolean {
   const t = v2Token()
   return !!t && cookieVal === t
 }
+
+// The visitor REALLY entered V2_PASSWORD (POST /api/v2/unlock), independent of the site-wide V1/V2 default above.
+// This is what gates /app (every workspace layout via V2AppGate) — isV2FromCookie is true for everyone while
+// NEXT_PUBLIC_V1_MODE_ENABLED is off, which made the Launch modal's password prompt bypassable by any deep link.
+// Fail-closed: V2_PASSWORD unset ⇒ nobody is in.
+export function hasV2Unlock(cookieVal: string | undefined): boolean {
+  const t = v2Token()
+  return !!t && cookieVal === t
+}

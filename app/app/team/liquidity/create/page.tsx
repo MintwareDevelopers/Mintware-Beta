@@ -505,8 +505,6 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
           seed_amount:   draft.commitAmount,
           chain_id:      draft.chainId,
           pool_key: poolKey,
-          contract_address: process.env.NEXT_PUBLIC_SOCIAL_VAULT_ADDRESS ?? null,
-          status: 'seeding',
           issuedAt,
           authMessage,
           authSignature,
@@ -529,7 +527,7 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
   const STEPS = ['Token', 'Pool', 'Structure', 'Review']
 
   if (deployed) return (
-    <div className="bg-white min-h-screen font-atx-display text-ink">
+    <div className="font-atx-display text-ink">
       <div className="max-w-[560px] mx-auto my-20 px-7 text-center">
         <div className="flex justify-center mb-4">
           <span className="w-12 h-12 rounded-2xl grid place-items-center text-white text-[22px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 6px 18px rgba(108,108,240,0.35)' }}>✴</span>
@@ -538,10 +536,10 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
           Vault created
         </div>
         <div className="text-[14px] text-ink-mid mb-7 leading-[1.6]">
-          <strong className="text-ink">{draft.name}</strong> is registered and now appears in the vault list, open for community USDC deposits once the provider provisions it on-chain.
+          <strong className="text-ink">{draft.name}</strong> is registered and now appears in the vault list, recorded as a request. It opens to community liquidity once Mintware deploys it on-chain (testnet).
         </div>
         <div className="flex gap-2.5 justify-center">
-          <Link href="/app/vaults" className="glass-pill">View all vaults</Link>
+          <Link href="/app/team/liquidity" className="glass-pill">Back to liquidity</Link>
           {deployed !== 'new' && (
             <Link href={`/app/vault/${deployed}`} className="glass-pill">View vault →</Link>
           )}
@@ -551,7 +549,7 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
   )
 
   return (
-    <div className="bg-white min-h-screen font-atx-display text-ink">
+    <div className="font-atx-display text-ink">
       <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px] max-[640px]:px-4 max-[640px]:pt-5">
 
         {/* Breadcrumb */}
@@ -630,7 +628,7 @@ function CreateVaultContent() {
 
   if (!mounted) {
     return (
-      <div className="bg-white min-h-screen font-atx-display text-ink">
+      <div className="font-atx-display text-ink">
         <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px]">
           <div className="soft-card p-7">
             <div className="text-[13px] text-ink-mid">
@@ -642,7 +640,7 @@ function CreateVaultContent() {
     )
   }
 
-  return <TreasuryCreateFlow onBack={() => { window.location.href = '/app/vaults' }} />
+  return <TreasuryCreateFlow onBack={() => { window.location.href = '/app/team/liquidity' }} />
 }
 
 // ─── page ─────────────────────────────────────────────────────────────────────

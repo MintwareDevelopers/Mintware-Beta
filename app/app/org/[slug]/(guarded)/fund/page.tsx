@@ -1,6 +1,6 @@
 'use client'
 
-// Savings — a single-asset (USDC) yield account backed by MintwareYieldVault: idle USDC earns in Aave
+// Treasury yield (renamed from "Savings" — copy rule, 2026-10-02) — a single-asset (USDC) yield account backed by MintwareYieldVault: idle USDC earns in Aave
 // via the vault's adapter, a live buffer keeps deposits spendable, and redeem() is buffer-first then
 // pulls from Aave for the shortfall (large withdrawals stay seamless). No tranches here — that's the
 // treasury/Vaults surface. Deposit: approve → deposit(assets, to). Withdraw: redeem(sharesForAmount).
@@ -55,37 +55,37 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
     setStatus('Signing…')
     const res = await signedOrgFetch({ path: `/api/orgs/${org.id}/treasury`, action: 'mintware-org-treasury', method: 'PATCH', payload: { treasuryVaultAddress: recAddr, treasuryChainId: recChain }, address, signMessageAsync })
     const d = await res.json()
-    setStatus(res.ok ? 'Savings vault recorded ✓' : d.error || 'failed')
+    setStatus(res.ok ? 'Yield vault recorded ✓' : d.error || 'failed')
     if (res.ok) reload()
   }
 
   const ensureChain = async () => { if (org && walletChain !== org.chainId) { setStatus('Switching chain…'); await switchChainAsync({ chainId: org.chainId! }) } }
 
   const deposit = async () => {
-    if (!vaultAddr || !org?.chainId || !address || !usdcAddr) return setStatus('Savings not ready.')
+    if (!vaultAddr || !org?.chainId || !address || !usdcAddr) return setStatus('Treasury yield not ready.')
     const atomic = (() => { try { return parseUnits(amount || '0', 6) } catch { return 0n } })()
     if (atomic <= 0n) return setStatus('Enter a valid amount.')
     try {
       await ensureChain()
       setStatus('Approve USDC…')
       await writeContractAsync({ abi: ERC20_ABI, address: usdcAddr as `0x${string}`, functionName: 'approve', args: [vaultAddr, atomic], chainId: org.chainId })
-      setStatus('Depositing to Savings…')
+      setStatus('Supplying…')
       await writeContractAsync({ abi: YIELD_VAULT_ABI, address: vaultAddr, functionName: 'deposit', args: [atomic, address as `0x${string}`], chainId: org.chainId })
-      setStatus(`Deposited ${amount} USDC to Savings ✓`)
+      setStatus(`Supplied ${amount} USDC ✓`)
       setAmount(''); refresh()
     } catch (e) { setStatus((e as Error)?.message?.slice(0, 140) || 'transaction failed') }
   }
 
   const withdraw = async (max = false) => {
-    if (!vaultAddr || !org?.chainId || myShares === undefined) return setStatus('Savings not ready.')
+    if (!vaultAddr || !org?.chainId || myShares === undefined) return setStatus('Treasury yield not ready.')
     const shares = myShares as bigint
-    if (shares <= 0n) return setStatus('No savings to withdraw.')
+    if (shares <= 0n) return setStatus('Nothing to withdraw.')
     let sharesToBurn = shares
     if (!max) {
       const atomic = (() => { try { return parseUnits(amount || '0', 6) } catch { return 0n } })()
       if (atomic <= 0n) return setStatus('Enter a valid amount.')
       const assets = (myAssets as bigint | undefined) ?? 0n
-      if (assets <= 0n) return setStatus('Savings balance is loading — try again.')
+      if (assets <= 0n) return setStatus('Balance is loading — try again.')
       if (atomic >= assets) sharesToBurn = shares
       else sharesToBurn = (shares * atomic) / assets // exact NAV math; floor keeps it ≤ balance
       if (sharesToBurn <= 0n) return setStatus('Amount too small.')
@@ -94,7 +94,7 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
       await ensureChain()
       setStatus('Withdrawing (buffer-first)…')
       await writeContractAsync({ abi: YIELD_VAULT_ABI, address: vaultAddr, functionName: 'redeem', args: [sharesToBurn], chainId: org.chainId })
-      setStatus(max ? 'Withdrew all savings ✓' : `Withdrew ${amount} USDC ✓`)
+      setStatus(max ? 'Withdrew everything ✓' : `Withdrew ${amount} USDC ✓`)
       setAmount(''); refresh()
     } catch (e) { setStatus((e as Error)?.message?.slice(0, 140) || 'transaction failed') }
   }
@@ -103,34 +103,34 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
     <MwAuthGuard>
       <div className="max-w-[600px] mx-auto">
         <Link href={`/app/org/${slug}`} className="text-[12.5px] text-peri-deep no-underline hover:underline">← {org?.name || 'Org'}</Link>
-        <h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em] mt-3">Savings</h1>
-        <p className="text-[13px] text-ink-mid mt-2 leading-[1.5] max-w-[54ch]">Park <span className="font-semibold text-ink">USDC</span> — it earns yield in Aave, a live buffer keeps it spendable, and withdrawals come out of the buffer first (large ones pull from Aave on demand, so they stay seamless). Want to provide <span className="font-semibold text-ink">both assets</span> as liquidity instead? That's <Link href="/app/vaults" className="text-peri-deep no-underline hover:underline font-medium">Vaults</Link>.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2"><h1 className="font-atx-display font-semibold text-[26px] tracking-[-0.03em]">Treasury yield</h1><span className="rounded-full border border-hair px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-soft">Testnet · unaudited</span></div>
+        <p className="text-[13px] text-ink-mid mt-2 leading-[1.5] max-w-[54ch]">Supply <span className="font-semibold text-ink">USDC</span> to a yield vault. Idle USDC is lent through the vault&apos;s lending adapter, a live buffer covers withdrawals, and larger withdrawals unwind from the adapter on demand. The position is held by <span className="font-semibold text-ink">your connected wallet</span>, not the org address. Want liquidity for your own token instead? See <Link href="/app/team/liquidity" className="text-peri-deep no-underline hover:underline font-medium">Liquidity for your token</Link>.</p>
 
         {org && !org.vault ? (
           <div className="soft-card p-5 mt-6">
             <div className="text-[13.5px] font-semibold text-ink">One-time setup</div>
-            <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Savings is held by an on-chain yield vault that's provisioned once — then you just deposit. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
+            <p className="text-[12.5px] text-ink-mid mt-1.5 leading-[1.5]">Treasury yield runs on an on-chain yield vault that's provisioned once — then you just supply. Today an operator deploys it and records the address below; auto-provisioning is on the roadmap.</p>
             <div className="text-[10.5px] uppercase tracking-[0.08em] font-semibold text-ink-soft mt-3 mb-1.5">Operator — deploy once</div>
             <code className="block font-mono text-[11.5px] text-ink-mid bg-ground-cool rounded-[10px] px-3 py-2.5 overflow-x-auto whitespace-nowrap">pnpm forge:deploy:savings:base-sepolia</code>
             {isOwner ? (
               <div className="flex gap-2 mt-4 max-[520px]:flex-col">
-                <input value={recAddr} onChange={(e) => setRecAddr(e.target.value)} placeholder="0x… savings vault address" className="flex-1 rounded-[10px] border border-hair px-3 py-2.5 text-[13px] font-mono outline-none focus:border-peri" />
+                <input value={recAddr} onChange={(e) => setRecAddr(e.target.value)} placeholder="0x… yield vault address" className="flex-1 rounded-[10px] border border-hair px-3 py-2.5 text-[13px] font-mono outline-none focus:border-peri" />
                 <select value={recChain} onChange={(e) => setRecChain(Number(e.target.value))} className="rounded-[10px] border border-hair px-3 py-2.5 text-[13px] bg-white outline-none focus:border-peri">{CHAINS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
                 <button onClick={record} className="rounded-full bg-peri text-white px-4 py-2.5 text-[13px] font-semibold hover:bg-peri-deep transition-colors">Record</button>
               </div>
-            ) : <p className="text-[12px] text-ink-soft mt-3">Only the org owner can set up Savings.</p>}
+            ) : <p className="text-[12px] text-ink-soft mt-3">Only the org owner can set up Treasury yield.</p>}
           </div>
         ) : org ? (
           <>
             <div className="grid grid-cols-2 gap-3 mt-6">
               <div className="soft-card p-4">
-                <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft">Your savings</div>
+                <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft">Your position (your wallet)</div>
                 <div className="text-[22px] font-semibold text-ink tabular-nums mt-1">{fmtUsd(myAssets as bigint | undefined)}</div>
               </div>
               <div className="soft-card p-4">
                 <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-ink-soft">Available now</div>
                 <div className="text-[22px] font-semibold text-ink tabular-nums mt-1">{fmtUsd(buffer as bigint | undefined)}</div>
-                <div className="text-[11px] text-ink-soft mt-0.5">instant buffer; more unwinds from Aave on demand</div>
+                <div className="text-[11px] text-ink-soft mt-0.5">instant buffer; more unwinds from the lending adapter on demand</div>
               </div>
             </div>
 
@@ -139,11 +139,11 @@ export default function SavingsPage({ params }: { params: Promise<{ slug: string
                 <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder="0.00" className="mt-1.5 w-full rounded-[10px] border border-hair px-3 py-2.5 text-[15px] tabular-nums outline-none focus:border-peri" />
               </label>
               <div className="flex gap-2 mt-4 max-[520px]:flex-col">
-                <button onClick={deposit} className="flex-1 rounded-full bg-peri text-white px-4 py-3 text-[13.5px] font-semibold hover:bg-peri-deep transition-colors">Deposit</button>
+                <button onClick={deposit} className="flex-1 rounded-full bg-peri text-white px-4 py-3 text-[13.5px] font-semibold hover:bg-peri-deep transition-colors">Supply</button>
                 <button onClick={() => withdraw(false)} className="flex-1 rounded-full bg-white border border-[rgba(108,108,240,0.3)] text-peri-deep px-4 py-3 text-[13.5px] font-semibold hover:border-peri transition-colors">Withdraw</button>
               </div>
               <button onClick={() => withdraw(true)} className="text-[12px] text-ink-soft mt-2.5 hover:text-peri-deep transition-colors">Withdraw all →</button>
-              <p className="text-[11.5px] text-ink-soft mt-3">Deposits earn Aave lending yield and stay spendable on the card. Withdrawals pull from the buffer first, then unwind from Aave for anything larger — no lockup.</p>
+              <p className="text-[11.5px] text-ink-soft mt-3">Supplied USDC earns the lending adapter&apos;s variable rate (not fixed, not guaranteed). Withdrawals pull from the buffer first, then unwind from the adapter for anything larger — no lockup. Testnet only.</p>
             </div>
           </>
         ) : null}
