@@ -508,6 +508,11 @@ unrelated).
 > ⚠ **For review:** RT-3a measured an in-band deploy-sandwich PnL of ≈186 quote on a 20k deploy (≈0.93%; the old bound
 > was <20 bps, measured mint-only). Depositor NAV fell ≈480. The zap is now a sandwichable swap. The cron's `minPairedOut`
 > stops the front-run case (asserted), but a push held across the cron's spot read is bounded only by the band.
+> **Closed off-chain (2026-10-02, decision: accept the band-derived TEST bound, tighten the CRON):** `lib/gateway/deploy.ts`
+> `conservativeMinPairedOut` now floors the zap at the BEST of spot / the on-chain follower (`referencePrice()`) / the
+> external GeckoTerminal reference, minus `LP_GATEWAY_SWAP_SLIPPAGE_BPS` — and refuses (`spot_below_reference`) when spot
+> buys more than that tolerance less paired than the best reference, instead of sending a deploy that would fill at a
+> pushed price. A pre-read push is now bounded by the slippage tolerance (≈1%), not the band (≈10%). No contract change.
 > Fork counts (LP_FORK_RPC_URL set, CI match): Hardening 8 · AuditRound2 10 · Closeout 6 · RedTeam 22 · Hacken 11
 > fork + 5 unit = **62 / 0 fail**. Full non-fork `forge test`: **1040 pass / 0 fail / 6 skipped** (119 suites).
 - **Deploy:** pure-Privy, no raw key — `scripts/deploy-lp-gateway-robinhood.mjs` (`pnpm deploy:lp-gateway:robinhood`).
