@@ -37,42 +37,35 @@ describe('V2-RWAs live-trade sizing', () => {
 
 describe('V2-RWAs gate', () => {
   afterEach(() => { vi.unstubAllEnvs(); vi.resetModules() })
-
-  it('is closed unless the flag is on', async () => {
-    vi.stubEnv('NEXT_PUBLIC_V2_RWA_ENABLED', '')
-    const { isV2RwaVisible } = await import('@/lib/v2/rwaGate')
-    expect(isV2RwaVisible(undefined)).toBe(false)
-  })
-
-  it('also requires the V2 gate when the V1/V2 split is on', async () => {
-    vi.stubEnv('NEXT_PUBLIC_V2_RWA_ENABLED', 'true')
-    vi.stubEnv('NEXT_PUBLIC_V1_MODE_ENABLED', 'true')
-    vi.stubEnv('V2_PASSWORD', 'pw')
-    const { isV2RwaVisible } = await import('@/lib/v2/rwaGate')
-    const { v2Token } = await import('@/lib/v2/gate')
-    expect(isV2RwaVisible(undefined)).toBe(false)
-    expect(isV2RwaVisible('wrong')).toBe(false)
-    expect(isV2RwaVisible(v2Token())).toBe(true)
-  })
-
   const jar = (m: Record<string, string>) => ({ get: (n: string) => (n in m ? { value: m[n] } : undefined) })
 
-  it('requires the RWA partner-access cookie on top of the flag', async () => {
-    vi.stubEnv('NEXT_PUBLIC_V2_RWA_ENABLED', 'true')
-    vi.stubEnv('RWA_ACCESS_PASSWORD', 'partner-pw')
-    const { canSeeRwa } = await import('@/lib/v2/rwaGate')
-    const { rwaToken, RWA_COOKIE } = await import('@/lib/rwa/gate')
-    expect(canSeeRwa(jar({}))).toBe(false)
-    expect(canSeeRwa(jar({ [RWA_COOKIE]: 'wrong' }))).toBe(false)
-    expect(canSeeRwa(jar({ [RWA_COOKIE]: rwaToken() }))).toBe(true)
+  it('does not exist unless the flag is on', async () => {
+    vi.stubEnv('NEXT_PUBLIC_V2_RWA_ENABLED', '')
+    vi.stubEnv('V2_PASSWORD', 'pw')
+    const { isV2RwaVisible, canSeeRwa } = await import('@/lib/v2/rwaGate')
+    const { v2Token, V2_COOKIE } = await import('@/lib/v2/gate')
+    expect(isV2RwaVisible()).toBe(false)
+    expect(canSeeRwa(jar({ [V2_COOKIE]: v2Token() }))).toBe(false)
   })
 
-  it('fails closed when the RWA access password is unset', async () => {
+  it('opens only with a real V2 unlock — even while the site-wide V1/V2 split is off (V2 shown to all)', async () => {
     vi.stubEnv('NEXT_PUBLIC_V2_RWA_ENABLED', 'true')
-    vi.stubEnv('RWA_ACCESS_PASSWORD', '')
+    vi.stubEnv('NEXT_PUBLIC_V1_MODE_ENABLED', '')
+    vi.stubEnv('V2_PASSWORD', 'pw')
     const { canSeeRwa } = await import('@/lib/v2/rwaGate')
-    const { RWA_COOKIE } = await import('@/lib/rwa/gate')
+    const { v2Token, V2_COOKIE, isV2FromCookie } = await import('@/lib/v2/gate')
+    expect(isV2FromCookie(undefined)).toBe(true) // the site default is open…
+    expect(canSeeRwa(jar({}))).toBe(false) // …but RWA is not
+    expect(canSeeRwa(jar({ [V2_COOKIE]: 'wrong' }))).toBe(false)
+    expect(canSeeRwa(jar({ [V2_COOKIE]: v2Token() }))).toBe(true)
+  })
+
+  it('fails closed when V2_PASSWORD is unset', async () => {
+    vi.stubEnv('NEXT_PUBLIC_V2_RWA_ENABLED', 'true')
+    vi.stubEnv('V2_PASSWORD', '')
+    const { canSeeRwa } = await import('@/lib/v2/rwaGate')
+    const { V2_COOKIE } = await import('@/lib/v2/gate')
     expect(canSeeRwa(jar({}))).toBe(false)
-    expect(canSeeRwa(jar({ [RWA_COOKIE]: '' }))).toBe(false)
+    expect(canSeeRwa(jar({ [V2_COOKIE]: '' }))).toBe(false)
   })
 })

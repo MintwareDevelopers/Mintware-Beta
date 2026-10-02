@@ -15,7 +15,6 @@ import { useMemo, useState, useEffect } from 'react'
 import Link from 'next/link'
 import { erc20Abi, isAddress } from 'viem'
 import { useChainId, usePublicClient, useSignMessage } from 'wagmi'
-import { MwNav } from '@/components/web2/MwNav'
 import { useMintwareIdentity } from '@/lib/web3/useMintwareIdentity'
 import { signedOrgFetch } from '@/lib/org/signedFetch'
 
@@ -111,7 +110,6 @@ export default function MatchedLaunch() {
 
   return (
     <div className="min-h-screen bg-white font-atx-display text-ink">
-      <MwNav />
       <main className="mx-auto max-w-[1040px] px-6 max-[700px]:px-4 py-[44px]">
         <Link href="/app/liquidity" className="text-[12px] text-ink-soft hover:text-ink no-underline">← All liquidity models</Link>
 

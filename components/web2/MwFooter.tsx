@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { MintwareMark } from '@/components/ui2/MintwareMark'
+import { isAppShellPath } from '@/components/web2/AppShell'
 
 // Shared platform footer. Mounted once in the root layout so it renders on every
 // page — EXCEPT the Team treasury terminal, which is a full sidebar app shell with
@@ -39,7 +40,7 @@ const SOLUTIONS_LINKS = [
 
 export function MwFooter() {
   const pathname = usePathname()
-  if (pathname?.startsWith('/app/team')) return null   // treasury terminal has its own shell
+  if (isAppShellPath(pathname)) return null   // every /app workspace renders inside AppShell (its own chrome)
   // The V1 app (LP Gateway) is a dark surface with its own <V1Footer> in V1Shell — the light marketing
   // footer must not render under it. Covers /v1, /v1/*, and the /earn/[pool] deposit pages.
   if (pathname?.startsWith('/v1') || pathname?.startsWith('/earn')) return null

@@ -10,5 +10,5 @@ export default async function AppHome() {
   const store = await cookies()
   if (!isV2FromCookie(store.get(V2_COOKIE)?.value)) redirect('/v1')
   const mode = store.get('mw_app_mode')?.value
-  redirect(mode === 'team' ? '/app/team' : '/app/account')
+  redirect(mode === 'team' ? '/app/team' : mode === 'rwa' && process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true' ? '/app/rwa' : '/app/account')
 }

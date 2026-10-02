@@ -16,7 +16,6 @@
 
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { MwNav } from '@/components/web2/MwNav'
 import { SwapWidget } from '@/components/rewards/swap/SwapWidget'
 
 const LABEL = 'text-[11px] uppercase tracking-[0.14em] font-semibold text-ink-soft'
@@ -82,7 +81,6 @@ export default function SwapPage() {
   // trade time (connect-on-action), consistent with the public vault browse.
   return (
     <>
-      <MwNav />
       <Suspense fallback={<PageFallback />}>
         <SwapContent />
       </Suspense>

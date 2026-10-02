@@ -10,7 +10,6 @@
 // notifications are the next leg. Nothing here is an offer.
 
 import Link from 'next/link'
-import { MwNav } from '@/components/web2/MwNav'
 import { StagedRouterLive } from '@/components/vaults/StagedRouterLive'
 
 const STEPS = [
@@ -31,7 +30,6 @@ const STEPS = [
 export default function StagedBuffer() {
   return (
     <div className="min-h-screen bg-white font-atx-display text-ink">
-      <MwNav />
       <main className="mx-auto max-w-[880px] px-6 max-[700px]:px-4 py-[48px]">
         <a href="/app/liquidity" className="text-[13px] text-ink-soft hover:text-ink no-underline">← Get liquidity</a>
         <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep mt-2">For capital-constrained teams</div>

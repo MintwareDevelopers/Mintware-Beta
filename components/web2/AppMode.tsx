@@ -1,19 +1,17 @@
 'use client'
 
-// AppMode — the User (Retail LP) ↔ Team (Treasury) context split. Phase 1 is a
-// SOFT, client-side mode (no hard sign-in / middleware yet) so we can showcase both
-// surfaces freely. Mode is derived from the route (/app/team/* = team, else user)
-// and mirrored to a cookie so the /app server redirect + a returning visitor land
-// in the last-picked context. Phase 2 will gate this with Privy RBAC + middleware.
+// AppMode — which WORKSPACE of the app you are in: Personal (retail), Team (treasury) or RWA (the V2-RWAs
+// partner vertical). Every workspace renders inside the same AppShell (sidebar + top bar); only the sidebar
+// menu changes. Mode is derived from the route and mirrored to a cookie so the /app server redirect and a
+// returning visitor land in the last-picked workspace. Still a SOFT split — hard gating is TEAM_HARD_GATE.
 
 import { createContext, useContext, useCallback, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 
-export type AppMode = 'user' | 'team'
+export type AppMode = 'user' | 'team' | 'rwa'
 
 export const APP_MODE_COOKIE = 'mw_app_mode'
-const USER_HOME = '/app/account'
-const TEAM_HOME = '/app/team'
+const HOMES: Record<AppMode, string> = { user: '/app/account', team: '/app/team', rwa: '/app/rwa' }
 
 export function persistAppMode(mode: AppMode) {
   if (typeof document === 'undefined') return
@@ -21,7 +19,14 @@ export function persistAppMode(mode: AppMode) {
 }
 
 export function appModeHome(mode: AppMode) {
-  return mode === 'team' ? TEAM_HOME : USER_HOME
+  return HOMES[mode] ?? HOMES.user
+}
+
+/** Route → workspace. /app/org/* is the real side of the Team workspace. */
+export function modeForPath(pathname: string | null | undefined): AppMode {
+  if (pathname?.startsWith('/app/rwa')) return 'rwa'
+  if (pathname?.startsWith('/app/team') || pathname?.startsWith('/app/org')) return 'team'
+  return 'user'
 }
 
 type AppModeValue = { mode: AppMode; switchTo: (mode: AppMode) => void }
@@ -31,9 +36,7 @@ const AppModeContext = createContext<AppModeValue | null>(null)
 export function AppModeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  // /app/org/* is the real side of the same Team Terminal (shares TeamTerminalShell) — treat it as
-  // team mode too, or the ScopeSwitcher inside that shell mislabels itself "Personal."
-  const mode: AppMode = pathname?.startsWith('/app/team') || pathname?.startsWith('/app/org') ? 'team' : 'user'
+  const mode = modeForPath(pathname)
 
   const switchTo = useCallback(
     (next: AppMode) => {

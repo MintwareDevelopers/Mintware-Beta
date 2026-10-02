@@ -84,16 +84,22 @@ estimate × 1.6; `sepolia.base.org` works for viem but rejects anvil's fork prob
 - **getLogs ranges:** `sepolia.base.org` caps `eth_getLogs` at 1,000 blocks — the live API reads history from
   `RWA_LOGS_RPC_URL` (default publicnode, ~10k ranges), incrementally (warm instances only scan new blocks).
 
-## App surface (gated)
+## App surface (gated) — the RWA workspace
 
-`/app/rwa` (overview) + `/app/rwa/[unit]` (live market) + `GET /api/rwa/unit` (live chain reads, 10 s cache).
-Three fail-closed layers (`lib/v2/rwaGate.ts#canSeeRwa`): `NEXT_PUBLIC_V2_RWA_ENABLED === 'true'` **and** the V2 gate
-(open in prod while `NEXT_PUBLIC_V1_MODE_ENABLED` is unset) **and** the **RWA partner-access cookie** (`mw_rwa`,
-`lib/rwa/gate.ts`) — set by `POST /api/rwa/unlock` when the visitor enters `RWA_ACCESS_PASSWORD` on the
-Mintware-branded access screen (`components/rwa/RwaAccess.tsx`). Its OWN password, separate from `/deck`/`/dataroom`,
-shared with issuer partners out-of-band. Flag off ⇒ pages `notFound()`; locked ⇒ `/app/rwa` renders the access screen
-(no addresses/hashes in the HTML), `/app/rwa/[unit]` redirects to it with `?next=`, `/api/rwa/{unit,live-trade}` 404.
-Password unset ⇒ nobody unlocks. Entry point: an **RWA** option in the app `ScopeSwitcher` (flag-gated). Proof data: `lib/rwa/demo.ts` (reads `config/rwaDemo.json`).
+RWA is a **workspace** of the shared app shell (`components/web2/AppShell.tsx`, same chrome as Personal and Team;
+picked from the workspace switcher or the Launch modal's "Real-world assets" option). Pages, all under
+`app/app/rwa/` and gated once in `app/app/rwa/layout.tsx`:
+`/app/rwa` overview (`RwaOverview` — live band gauge, liquidity map, the on-chain refusals) · `/app/rwa/[unit]` live
+market (`RwaMarket`) · `/app/rwa/proof?unit=` lifecycle timeline + contracts (`RwaProof`) · `/app/rwa/how` explainer.
+Live data: one hook, `components/rwa/useRwaUnit.ts` → `GET /api/rwa/unit` (10 s cache). Visuals: `RwaVisuals.tsx`.
+
+**Gate (user decision 2026-10-02 — "the V2 password is enough"):** `lib/v2/rwaGate.ts#canSeeRwa` = flag
+`NEXT_PUBLIC_V2_RWA_ENABLED === 'true'` **and** a VALID V2 unlock cookie (`mw_v2` = `v2Token()`, set by
+`POST /api/v2/unlock` from the Launch modal or the branded RWA access screen). Deliberately stricter than
+`isV2FromCookie`, which is true for everyone while `NEXT_PUBLIC_V1_MODE_ENABLED` is off — that would make RWA public.
+Flag off ⇒ 404; no unlock ⇒ every RWA URL renders `RwaAccess` instead (no demo data in the HTML) and the APIs 404;
+`V2_PASSWORD` unset ⇒ nobody gets in. The earlier separate RWA password (`RWA_ACCESS_PASSWORD`, `/api/rwa/unlock`,
+`lib/rwa/gate.ts`) was removed the same day. Proof data: `lib/rwa/demo.ts` (reads `config/rwaDemo*.json`).
 
 ## Open / not built
 

@@ -4,7 +4,6 @@ import { useAccount, useSignMessage } from 'wagmi'
 import { useParams }  from 'next/navigation'
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
-import { MwNav }       from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD, shortAddr } from '@/lib/web2/api'
 import type { SocialVault, LpDeposit, WithdrawalQueueEntry, LockTier } from '@/lib/web2/vault/types'
@@ -436,7 +435,6 @@ function VaultDetailContent() {
 
   return (
     <div className="bg-white min-h-screen font-atx-display text-ink">
-      <MwNav />
       <div className="max-w-[960px] mx-auto px-7 pt-7 pb-[60px] max-[800px]:px-4 max-[800px]:pt-5">
 
         {/* ── Breadcrumb ── */}

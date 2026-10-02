@@ -20,7 +20,6 @@
 import { useAccount, useSignMessage } from 'wagmi'
 import { useState, useEffect } from 'react'
 import Link           from 'next/link'
-import { MwNav }       from '@/components/web2/MwNav'
 import { MwAuthGuard } from '@/components/web2/MwAuthGuard'
 import { fmtUSD }      from '@/lib/web2/api'
 import { createPublicClient, http, erc20Abi, isAddress, type Chain } from 'viem'
@@ -531,7 +530,6 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
 
   if (deployed) return (
     <div className="bg-white min-h-screen font-atx-display text-ink">
-      <MwNav />
       <div className="max-w-[560px] mx-auto my-20 px-7 text-center">
         <div className="flex justify-center mb-4">
           <span className="w-12 h-12 rounded-2xl grid place-items-center text-white text-[22px]" style={{ background: 'linear-gradient(135deg, var(--color-peri-mid), var(--color-peri))', boxShadow: '0 6px 18px rgba(108,108,240,0.35)' }}>✴</span>
@@ -554,7 +552,6 @@ function TreasuryCreateFlow({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="bg-white min-h-screen font-atx-display text-ink">
-      <MwNav />
       <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px] max-[640px]:px-4 max-[640px]:pt-5">
 
         {/* Breadcrumb */}
@@ -634,7 +631,6 @@ function CreateVaultContent() {
   if (!mounted) {
     return (
       <div className="bg-white min-h-screen font-atx-display text-ink">
-        <MwNav />
         <div className="max-w-[560px] mx-auto px-7 pt-7 pb-[60px]">
           <div className="soft-card p-7">
             <div className="text-[13px] text-ink-mid">

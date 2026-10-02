@@ -23,6 +23,10 @@ export function useLaunch() {
 const MODES: { mode: AppMode; title: string; sub: string; tone: 'peri' | 'coral' }[] = [
   { mode: 'user', title: 'I’m an individual', sub: 'Deposit into vaults and earn — your personal LP portal.', tone: 'peri' },
   { mode: 'team', title: 'I’m a team', sub: 'Manage a treasury, curate vaults, and run cards.', tone: 'coral' },
+  // V2-RWAs vertical — only offered while the flag is on (the /app/rwa layout 404s otherwise).
+  ...(process.env.NEXT_PUBLIC_V2_RWA_ENABLED === 'true'
+    ? [{ mode: 'rwa' as AppMode, title: 'Real-world assets', sub: 'Live markets for tokenized property — liquidity anchored to the appraisal.', tone: 'peri' as const }]
+    : []),
 ]
 
 // Team intake — job-first, not a feature menu. Screen on the OUTCOME the team wants and route

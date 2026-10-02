@@ -8,7 +8,6 @@
 //   • Just deposit      → add to a live reputation-weighted pool                          → /vaults
 
 import Link from 'next/link'
-import { MwNav } from '@/components/web2/MwNav'
 
 const MODELS = [
   {
@@ -48,7 +47,6 @@ const MODELS = [
 export default function LiquidityRouter() {
   return (
     <div className="min-h-screen bg-white font-atx-display text-ink">
-      <MwNav />
       <main className="mx-auto max-w-[860px] px-6 max-[700px]:px-4 py-[48px]">
         <div className="text-[11px] uppercase tracking-[0.16em] font-semibold text-peri-deep">Provide liquidity</div>
         <h1 className="font-atx-display font-bold text-[clamp(1.9rem,4.6vw,2.8rem)] leading-[1.05] tracking-[-0.03em] mt-3">
